@@ -1,4 +1,4 @@
-import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
+import { useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
 import {
   CARD_GRID_COLS,
   CARD_GROWABLE_ATTRS,
@@ -25,6 +25,7 @@ import {
   TypeChip,
 } from "../items/ItemBadges";
 import { renderCardCell, type CardCellCtx } from "./card-cells";
+import { CardChildren } from "./CardChildren";
 
 interface BoardCardProps {
   item: Item;
@@ -145,6 +146,9 @@ export function BoardCard({
   const { open: openPeek } = usePeek();
   const durations = useDurationConfig();
   const open = () => openPeek(item.key);
+  // RADD-698: children expand IN the card. Collapsed is the default and is
+  // byte-identical to the pre-698 card, so a board at rest is unchanged.
+  const [childrenExpanded, setChildrenExpanded] = useState(false);
 
   const ctx: CardCellCtx = {
     item,
@@ -155,6 +159,8 @@ export function BoardCard({
     usersById,
     cfByKey,
     durations,
+    childrenExpanded,
+    onToggleChildren: () => setChildrenExpanded((value) => !value),
   };
   const lanes = lanesOf(layout);
   const headerLane = lanes.find((lane) => lane.row === CARD_HEADER_ROW);
@@ -224,6 +230,11 @@ export function BoardCard({
       {bodyLanes.map((lane, index) => (
         <CardLane key={lane.row} cells={lane.cells} marginClass={laneMargin(index)} ctx={ctx} />
       ))}
+
+      {/* Below the laid-out lanes on purpose (RADD-698): the spec-109 designer
+          owns the grid above, and an expansion is not a cell — so uniform card
+          geometry survives, and collapsing restores the exact previous height. */}
+      {childrenExpanded && <CardChildren parentId={item.id} />}
     </div>
   );
 }

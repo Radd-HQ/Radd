@@ -1,12 +1,11 @@
 import type { ReactNode } from "react";
-import { CornerDownRight } from "lucide-react";
+import { ChevronRight, CornerDownRight } from "lucide-react";
 import { CARD_TITLE_ATTR } from "../../lib/card-layout";
 import { CUSTOM_COLUMN_PREFIX } from "../../lib/columns";
 import { formatSeconds } from "../../lib/dates";
 import type { formatDuration } from "../../lib/duration";
 import { PRIORITY_META } from "../../lib/meta";
 import {
-  ItemKind,
   type FieldDef,
   type Item,
   type ItemParentRef,
@@ -106,6 +105,11 @@ export interface CardCellCtx {
   usersById?: Map<string, string>;
   cfByKey?: Map<string, FieldDef>;
   durations: Parameters<typeof formatDuration>[1];
+  /** RADD-698: supplied by real boards to make the progress cell a DISCLOSURE
+   *  (expand the card to list its children). Absent on the card designer's
+   *  preview, which renders the same chip inert — a preview must not fetch. */
+  childrenExpanded?: boolean;
+  onToggleChildren?: () => void;
 }
 
 export function renderCardCell(attr: string, ctx: CardCellCtx): ReactNode {
@@ -175,11 +179,42 @@ export function renderCardCell(attr: string, ctx: CardCellCtx): ReactNode {
     case "points":
       return item.estimate_points != null ? <PointsChip points={item.estimate_points} /> : null;
     case "progress": {
-      // Folds the old structural ChildCount in: epics show the rollup bar once
-      // the batch lands, the plain n-children count before/without it.
-      if (item.kind !== ItemKind.epic) return null;
-      if (ctx.rollup && ctx.rollup.total > 0) return <RollupRowBar rollup={ctx.rollup} />;
-      return (item.child_count ?? 0) > 0 ? <ChildCount count={item.child_count ?? 0} /> : null;
+      // Folds the old structural ChildCount in: the rollup bar once the batch
+      // lands, the plain n-children count before/without it. RADD-698 dropped
+      // the epic-only guard — an ISSUE's subtask progress is the same question
+      // asked one level down, and the lane already reserved this row's height.
+      const total = ctx.rollup?.total ?? item.child_count ?? 0;
+      if (total <= 0) return null;
+      const chip =
+        ctx.rollup && ctx.rollup.total > 0 ? (
+          <RollupRowBar rollup={ctx.rollup} />
+        ) : (
+          <ChildCount count={total} />
+        );
+      if (!ctx.onToggleChildren) return chip;
+      return (
+        <button
+          type="button"
+          // The card itself opens peek on click; this must not.
+          onClick={(event) => {
+            event.stopPropagation();
+            ctx.onToggleChildren?.();
+          }}
+          aria-expanded={ctx.childrenExpanded ?? false}
+          aria-label={`${ctx.childrenExpanded ? "Hide" : "Show"} children of ${item.key}`}
+          title={ctx.childrenExpanded ? "Hide children" : "Show children"}
+          className="flex cursor-pointer items-center gap-0.5 rounded hover:bg-surface/60 focus-visible:outline-2 focus-visible:outline-focus"
+        >
+          {chip}
+          <ChevronRight
+            size={11}
+            aria-hidden
+            className={`shrink-0 text-fg-faint transition-transform ${
+              ctx.childrenExpanded ? "rotate-90" : ""
+            }`}
+          />
+        </button>
+      );
     }
     case "logged_time": {
       const seconds = ctx.timelog?.logged_seconds ?? 0;
