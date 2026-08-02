@@ -8,7 +8,7 @@
 # a bind mount instead (compose.dev.yaml).
 
 FROM docker.io/library/node:22-slim AS web
-WORKDIR /build
+WORKDIR /build/web
 COPY web/package.json web/package-lock.json ./
 # The WORKSPACE manifests must exist before `npm ci` — web/package.json declares
 # `workspaces: [packages/*, remotes/*]`, and npm resolves `@radd/plugin-sdk` from
@@ -18,7 +18,17 @@ COPY web/package.json web/package-lock.json ./
 COPY web/packages ./packages
 RUN npm ci
 COPY web/ ./
-RUN npm run build
+# Plugin UI remotes (spec 94) live in the SERVER tree (<module>/ui) and build IN
+# PLACE to <module>/ui/dist, which the app serves at /plugins/<name>/. build-all
+# scans ../server/src/radd/modules, so the repo layout is mirrored here — a bare
+# `npm run build` produces the host only, which is how every plugin remote 404'd
+# in production while working locally (ui/dist is gitignored, so nothing was
+# copied in either). The node_modules symlinks build-all plants in each ui dir
+# point at /build/web/node_modules and would arrive dangling in the runtime
+# image — delete them after the build.
+COPY server/src/radd/modules /build/server/src/radd/modules
+RUN node scripts/build-all.mjs \
+ && find /build/server -type l -name node_modules -delete
 
 
 FROM docker.io/library/python:3.12-slim-trixie AS base
@@ -79,9 +89,13 @@ CMD ["sh", "-c", "alembic upgrade head && uvicorn --factory radd.app:create_app 
 --host 0.0.0.0 --port 8000 --reload --reload-dir /app/server/src"]
 
 
-# --- production: the built SPA, running unprivileged ---
+# --- production: the built SPA + plugin UI remotes, running unprivileged ---
 FROM base AS runtime
-COPY --from=web /build/dist /app/web/dist
+COPY --from=web /build/web/dist /app/web/dist
+# The built remotes land back where the loader looks for them: the module's own
+# ui/dist (registries.plugin_ui_dirs). The .py sources this overwrites are
+# byte-identical — both stages copy the same build context.
+COPY --from=web /build/server/src/radd/modules /app/server/src/radd/modules
 USER radd
 VOLUME /data /opt/radd/backups
 
