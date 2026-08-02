@@ -93,6 +93,25 @@ class PageVersion(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
+class PageLink(Base):
+    """Page → page reference, maintained on save (RADD-713).
+
+    A derived index, not user data: it is rebuilt from the body on every write,
+    so it can be dropped and recreated by a reindex without losing anything.
+    Both sides cascade — a deleted page should not leave a backlink pointing at
+    nothing, nor appear as one.
+    """
+
+    __tablename__ = "page_links"
+
+    source_page_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("pages.id", ondelete="CASCADE"), primary_key=True
+    )
+    target_page_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("pages.id", ondelete="CASCADE"), primary_key=True, index=True
+    )
+
+
 class ItemPageLink(Base):
     """Issue ↔ doc-page association (both directions surface it)."""
 

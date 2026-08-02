@@ -45,6 +45,17 @@ export interface PageExtensionSpec {
   icon: string;
 }
 
+/** A page that links to this one (RADD-713). Carries the space slug because a
+ *  backlink may come from another space and the URL needs both segments. */
+export interface PageBacklink {
+  id: string;
+  title: string;
+  slug: string;
+  space_id: string;
+  space_slug: string;
+  updated_at: string;
+}
+
 /** Flat tree row from GET /page-spaces/{id}/pages — the client builds the tree. */
 export interface PageSummary {
   id: string;

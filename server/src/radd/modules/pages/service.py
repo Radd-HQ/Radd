@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.events import service as events
 
-from . import core
+from . import backlinks, core
 from .core import page_slugify
 from .models import Page, PageSpace, PageVersion
 from .schemas import (
@@ -195,6 +195,7 @@ async def create_page(
     )
     session.add(page)
     await session.flush()
+    await backlinks.reindex(session, page)  # RADD-713
     await _emit_page(
         session, PageEvent.PAGE_CREATED, page, actor_id,
         {"title": page.title, "space_id": str(space.id)},
@@ -260,6 +261,11 @@ async def update_page(
         page.updated_by = actor_id
 
     await session.flush()
+    # RADD-713: only when the body moved. A rename or a reposition cannot change
+    # what this page links to, and reindexing on every save would put a delete +
+    # N inserts behind dragging a page in the tree.
+    if "body" in changed:
+        await backlinks.reindex(session, page)
     payload = {"title": page.title, "version": page.version, "changed": changed}
     if moved:
         await _emit_page(session, PageEvent.PAGE_MOVED, page, actor_id, payload)

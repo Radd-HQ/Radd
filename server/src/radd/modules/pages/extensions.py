@@ -76,4 +76,11 @@ PAGE_EXTENSIONS: tuple[PageExtensionSpec, ...] = (
             },
         },
     ),
+    PageExtensionSpec(
+        name=PageExtensionName.BACKLINKS,
+        label="Backlinks",
+        description="Every page that links to this one.",
+        icon="link",
+        params_schema={"type": "object", "properties": {}},
+    ),
 )

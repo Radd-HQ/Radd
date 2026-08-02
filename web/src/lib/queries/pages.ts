@@ -5,6 +5,7 @@ import { api } from "../api";
 import { Entity, entityMeta } from "../cache";
 import {
   ApiPath,
+  apiPageBacklinksPath,
   apiPageItemsPath,
   apiPagePath,
   apiPageVersionPath,
@@ -16,6 +17,7 @@ import { queryKeys } from "./shared";
 import type {
   PageLinkedItem,
   Page,
+  PageBacklink,
   PageExtensionSpec,
   PageSummary,
   PageSearchResponse,
@@ -45,6 +47,14 @@ export const pageExtensionsQuery = queryOptions({
   queryFn: () => api.get<PageExtensionSpec[]>(ApiPath.pageExtensions),
   staleTime: Infinity,
 });
+
+/** What links to this page (RADD-713) — an indexed lookup, not a corpus scan. */
+export const pageBacklinksQuery = (pageId: string) =>
+  queryOptions({
+    queryKey: queryKeys.pageBacklinks(pageId),
+    meta: entityMeta(Entity.page),
+    queryFn: () => api.get<PageBacklink[]>(apiPageBacklinksPath(pageId)),
+  });
 
 /** A space's flat page rows — the tree component assembles the hierarchy. */
 export const pagesQuery = (spaceId: string) =>

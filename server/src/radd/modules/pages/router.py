@@ -11,11 +11,12 @@ from radd.modules.auth.deps import CurrentUser
 from radd.modules.items import service as items_service
 from radd.modules.projects import service as projects_service
 
-from . import links, search, service, spaces
+from . import backlinks, links, search, service, spaces
 from .models import Page
 from .schemas import (
     DocLinkCreate,
     PageLinkedItem,
+    PageBacklink,
     PageCreate,
     PageExtensionRead,
     PageRead,
@@ -180,6 +181,25 @@ async def unarchive_page(
 
 
 # --- versions ---
+
+
+@router.get("/pages/{page_id}/backlinks", response_model=list[PageBacklink])
+async def list_backlinks(
+    page_id: uuid.UUID, session: Session, user: CurrentUser
+) -> list[PageBacklink]:
+    """What links to this page (RADD-713) — read from the index maintained on
+    save, not by scanning every body."""
+    await _page_guard(session, user, page_id, authz.Permission.PAGE_READ)
+    return await backlinks.backlink_reads(session, page_id)
+
+
+@router.post("/pages/reindex-links")
+async def reindex_links(session: Session, user: CurrentUser) -> dict[str, int]:
+    """Rebuild the whole backlink index. It is derived data, so running it is
+    always safe; it exists for after a bulk import, which writes pages without
+    going through the normal save path."""
+    await authz.require(session, user, authz.Permission.PAGE_MANAGE)
+    return {"pages_indexed": await backlinks.reindex_all(session)}
 
 
 @router.get("/pages/{page_id}/versions", response_model=list[PageVersionMeta])

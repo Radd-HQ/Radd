@@ -223,3 +223,6 @@ export const apiNotificationsReadPath = () => `${ApiPath.notifications}/read`;
 export const apiNotificationsReadAllPath = () => `${ApiPath.notifications}/read-all`;
 export const apiItemWatchPath = (itemId: string) => `${ApiPath.items}/${itemId}/watch`;
 export const apiItemWatchersPath = (itemId: string) => `${ApiPath.items}/${itemId}/watchers`;
+
+/** GET /pages/{id}/backlinks — what links here (RADD-713). */
+export const apiPageBacklinksPath = (pageId: string) => `/pages/${pageId}/backlinks`;

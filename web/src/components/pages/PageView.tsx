@@ -15,6 +15,7 @@ import { AiReadMenu } from "../editor/AiReadMenu";
 import { Button } from "../Button";
 import { useConfirm } from "../ConfirmDialog";
 import { PageExtensionCtx } from "../../lib/page-extensions";
+import { PageBacklinksPanel } from "./PageBacklinksPanel";
 import { PageLinkedItems } from "./PageLinkedItems";
 import { PageHistory } from "./PageHistory";
 
@@ -324,6 +325,12 @@ export function PageView({
             </h3>
             <PageLinkedItems pageId={page.id} canWrite={canWrite} />
           </section>
+
+          {/* RADD-713: shown on every page, not only where someone remembered
+              to place the extension — "what points at me" is the direction a
+              wiki is navigated, and it cannot be opt-in per page. The
+              `radd:backlinks` extension exists for putting it INLINE instead. */}
+          <PageBacklinksPanel pageId={page.id} />
         </>
       )}
       {confirmDialog}

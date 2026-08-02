@@ -69,6 +69,18 @@ class PageUpdate(BaseModel):
     expected_version: int | None = Field(default=None, ge=1)
 
 
+class PageBacklink(BaseModel):
+    """A page that links here (RADD-713). Carries the space slug because a
+    backlink may come from ANOTHER space, and the URL needs both segments."""
+
+    id: uuid.UUID
+    title: str
+    slug: str
+    space_id: uuid.UUID
+    space_slug: str
+    updated_at: UtcDatetime
+
+
 class PageExtensionRead(BaseModel):
     """One entry in the editor's insert menu (RADD-709).
 

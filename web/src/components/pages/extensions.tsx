@@ -1,7 +1,15 @@
 import { useContext } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { AlertTriangle, CheckCircle2, ChevronRight, Info, ListTree, OctagonAlert } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronRight,
+  Info,
+  Link2,
+  ListTree,
+  OctagonAlert,
+} from "lucide-react";
 import { RoutePath } from "../../lib/constants";
 import {
   ExtensionCard,
@@ -9,7 +17,7 @@ import {
   usePageExtensionContext,
   type PageExtension,
 } from "../../lib/page-extensions";
-import { pagesQuery } from "../../lib/queries";
+import { pageBacklinksQuery, pagesQuery } from "../../lib/queries";
 import { headingAnchorId, headingsOf } from "../../lib/markdown-outline";
 import type { PageSummary } from "../../lib/types";
 import { Markdown, MarkdownSourceCtx } from "../../lib/markdown";
@@ -151,6 +159,42 @@ function ChildPages({ params }: { params: Record<string, unknown> }) {
   );
 }
 
+// --- radd:backlinks --------------------------------------------------------
+
+/** Every page that links here (RADD-713). Reads the index maintained on save,
+ *  so this is one indexed lookup rather than a scan of every body. */
+export function Backlinks() {
+  const ctx = usePageExtensionContext();
+  const { data, isLoading } = useQuery({
+    ...pageBacklinksQuery(ctx.pageId ?? ""),
+    enabled: Boolean(ctx.pageId),
+  });
+  return (
+    <ExtensionCard label="Linked from">
+      {isLoading ? (
+        <p className="text-[13px] text-fg-faint">Loading…</p>
+      ) : !data?.length ? (
+        <p className="text-[13px] text-fg-faint">Nothing links to this page yet.</p>
+      ) : (
+        <ul className="flex flex-col gap-0.5">
+          {data.map((page) => (
+            <li key={page.id}>
+              <Link
+                to={RoutePath.page}
+                params={{ spaceSlug: page.space_slug, pageSlug: page.slug }}
+                className="flex items-center gap-1 text-[13px] text-accent-text hover:underline"
+              >
+                <Link2 size={11} aria-hidden className="shrink-0 text-fg-faint" />
+                {page.title}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </ExtensionCard>
+  );
+}
+
 // --- radd:callout ----------------------------------------------------------
 
 /**
@@ -233,6 +277,12 @@ const EXTENSIONS: PageExtension[] = [
     label: "Callout",
     description: "A tinted note: info, success, warning or danger.",
     render: (params) => <Callout params={params} />,
+  },
+  {
+    name: "backlinks",
+    label: "Backlinks",
+    description: "Every page that links to this one.",
+    render: () => <Backlinks />,
   },
 ];
 

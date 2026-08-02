@@ -124,6 +124,7 @@ export const queryKeys = {
   itemWatchers: (itemId: string) => ["itemWatchers", { itemId }] as const,
   pageSpaces: ["pageSpaces"] as const,
   pageExtensions: ["pageExtensions"] as const,
+  pageBacklinks: (pageId: string) => ["pageBacklinks", { pageId }] as const,
   pages: (spaceId: string) => ["pages", { spaceId }] as const,
   page: (pageId: string) => ["page", { pageId }] as const,
   pageVersions: (pageId: string) => ["pageVersions", { pageId }] as const,
