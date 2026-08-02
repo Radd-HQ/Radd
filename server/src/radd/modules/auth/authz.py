@@ -182,14 +182,29 @@ async def effective_permissions(
     if role is None:
         return frozenset()
     if InstanceRole(role) is InstanceRole.ADMIN:
-        return all_permission_keys()
-    if project is not None:
+        resolved = all_permission_keys()
+    elif project is not None:
         permission_sets = await _project_permission_sets(session, user.id, project)
-        return combine_permissions(
+        resolved = combine_permissions(
             instance_role=user.instance_role,
             permission_sets=permission_sets,
         )
-    return global_scope_permissions(role, await _global_permission_sets(session, user.id))
+    else:
+        resolved = global_scope_permissions(role, await _global_permission_sets(session, user.id))
+    return _narrow_to_key_scope(user, resolved, project.id if project is not None else None)
+
+
+def _narrow_to_key_scope(
+    user: User, permissions: frozenset[Permission], project_id: uuid.UUID | None
+) -> frozenset[Permission]:
+    """Spec 113: intersect with the scope of the API key that authenticated this
+    request, if any. Applied to EVERY resolution — including the admin shortcut,
+    because a scoped key held by an admin is the whole point. Unscoped principals
+    (session cookies, personal tokens, internal actors) are returned untouched."""
+    scope = getattr(user, "token_scope", None)
+    if scope is None:
+        return permissions
+    return scope.narrow(permissions, project_id)
 
 
 async def require(
@@ -229,7 +244,10 @@ async def permissions_for_projects(
     if role is None:
         return {project.id: frozenset() for project in projects}
     if InstanceRole(role) is InstanceRole.ADMIN:
-        return {project.id: all_permission_keys() for project in projects}
+        return {
+            project.id: _narrow_to_key_scope(user, all_permission_keys(), project.id)
+            for project in projects
+        }
 
     project_ids = [project.id for project in projects]
     granted: dict[uuid.UUID, set[uuid.UUID]] = {project_id: set() for project_id in project_ids}
@@ -263,12 +281,18 @@ async def permissions_for_projects(
         )
         permissions_by_role = dict(rows.all())
 
+    # Spec 113: the batched path must narrow too, or a scoped key would see the
+    # full set anywhere a list hydrates permissions instead of resolving one project.
     return {
-        project.id: combine_permissions(
-            instance_role=user.instance_role,
-            permission_sets=[
-                permissions_by_role.get(role_id, []) for role_id in granted[project.id]
-            ],
+        project.id: _narrow_to_key_scope(
+            user,
+            combine_permissions(
+                instance_role=user.instance_role,
+                permission_sets=[
+                    permissions_by_role.get(role_id, []) for role_id in granted[project.id]
+                ],
+            ),
+            project.id,
         )
         for project in projects
     }

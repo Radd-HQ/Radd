@@ -192,10 +192,124 @@ def build_catalog(
                 ),
             },
         ]
+    key_prop = {"type": "string", "description": "Item key, e.g. TD-42."}
+    project_prop = {"type": "string", "description": "Project key, e.g. TD."}
+    # --- spec 114 families. Each appears only for a key that may execute it; the
+    # filter (requirements.visible_catalog) reads the same permission engine the
+    # call itself does, so the catalog cannot drift from the enforcement.
+    catalog += [
+        {
+            "name": McpTool.GET_ALLOWED_TRANSITIONS.value,
+            "description": "Which workflow states this item may move to right now, and for "
+            "the ones it may not, WHY (spec-107 transition guards).",
+            "inputSchema": _schema({"key": key_prop}, ["key"]),
+        },
+        {
+            "name": McpTool.TRANSITION_ITEM.value,
+            "description": "Move an item to a workflow state by NAME. A guard refusal comes "
+            "back as the reason text, not a bare error.",
+            "inputSchema": _schema(
+                {"key": key_prop, "state": {"type": "string", "description": "Target state name."}},
+                ["key", "state"],
+            ),
+        },
+        {
+            "name": McpTool.LOG_WORK.value,
+            "description": "Log time against an item.",
+            "inputSchema": _schema(
+                {
+                    "key": key_prop,
+                    "time_spent": {"type": "string", "description": "Jira-style, e.g. '2h 30m'."},
+                    "worked_on": {"type": "string", "description": "ISO date; defaults to today."},
+                    "note": {"type": "string"},
+                },
+                ["key", "time_spent"],
+            ),
+        },
+        {
+            "name": McpTool.LIST_WORKLOGS.value,
+            "description": "Time entries, filtered with the WORKLOG SLQ dialect "
+            "(author, category, worked_on, time, note, and issue.<field> delegated to items).",
+            "inputSchema": _schema(
+                {
+                    "slq": {"type": "string"},
+                    "start": {"type": "string", "description": "ISO date; defaults to 30 days back."},
+                    "end": {"type": "string", "description": "ISO date; defaults to today."},
+                    "limit": limit_property,
+                },
+                [],
+            ),
+        },
+        {
+            "name": McpTool.LIST_RELEASES.value,
+            "description": "Releases/versions in a project, with their status.",
+            "inputSchema": _schema({"project_key": project_prop}, ["project_key"]),
+        },
+        {
+            "name": McpTool.CREATE_RELEASE.value,
+            "description": "Create a release/version in a project.",
+            "inputSchema": _schema(
+                {
+                    "project_key": project_prop,
+                    "version": {"type": "string", "description": "e.g. 0.3.0"},
+                    "name": {"type": "string"},
+                    "description": {"type": "string"},
+                },
+                ["project_key", "version"],
+            ),
+        },
+        {
+            "name": McpTool.SET_ITEM_RELEASE.value,
+            "description": "Set (or clear) the release an item ships in.",
+            "inputSchema": _schema(
+                {
+                    "key": key_prop,
+                    "version": {
+                        "type": ["string", "null"],
+                        "description": "Release version; null clears it.",
+                    },
+                },
+                ["key"],
+            ),
+        },
+        {
+            "name": McpTool.LIST_USERS.value,
+            "description": "Directory of accounts (admin).",
+            "inputSchema": _schema(
+                {"q": {"type": "string", "description": "Substring of email or name."},
+                 "limit": limit_property},
+                [],
+            ),
+        },
+        {
+            "name": McpTool.LIST_SERVICE_ACCOUNTS.value,
+            "description": "Service accounts and their key counts (admin).",
+            "inputSchema": _schema({}, []),
+        },
+        {
+            "name": McpTool.CREATE_SERVICE_ACCOUNT.value,
+            "description": "Create a service account — a principal that authenticates by API "
+            "key only. Keys are minted separately (admin).",
+            "inputSchema": _schema(
+                {"name": {"type": "string"}, "description": {"type": "string"}}, ["name"]
+            ),
+        },
+    ]
     return catalog
 
 
-async def live_catalog(session: AsyncSession) -> list[dict[str, Any]]:
-    """build_catalog fed from the live registry (same projection as OpenAPI)."""
+async def live_catalog(session: AsyncSession, user: Any = None) -> list[dict[str, Any]]:
+    """build_catalog fed from the live registry (same projection as OpenAPI), then
+    NARROWED to what this principal may execute (spec 114).
+
+    `user=None` returns the whole catalog — the shape tests and the OpenAPI
+    projection want the full surface, and an unauthenticated MCP request never
+    reaches here (the router 401s first).
+    """
     fields_openapi.refresh(await fields_service.list_fields(session))
-    return build_catalog(fields_openapi.schema_cache.properties, include_docs=docs_available())
+    catalog = build_catalog(fields_openapi.schema_cache.properties, include_docs=docs_available())
+    if user is None:
+        return catalog
+    from .requirements import visible_catalog  # deferred: requirements imports auth
+
+    return await visible_catalog(session, user, catalog)

@@ -1,17 +1,20 @@
 import uuid
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
 from radd.db import get_session
 from radd.exceptions import ForbiddenError, UnauthorizedError
 
-from . import authz, service, totp
+from . import authz, service, service_accounts, totp
 from .deps import CurrentUser
 from .models import User
 from .schemas import (
+    ServiceAccountCreate,
+    ServiceAccountRead,
+    ServiceAccountUpdate,
     DuplicateUserGroup,
     LoginRequest,
     MeRead,
@@ -264,13 +267,17 @@ async def merge_user(
 
 @token_router.post("", response_model=TokenCreated, status_code=201)
 async def create_token(data: TokenCreate, session: Session, user: CurrentUser) -> TokenCreated:
-    token, raw = await service.create_api_token(session, user, data)
+    try:
+        token, raw = await service.create_api_token(session, user, data)
+    except ValueError as exc:  # an unknown atom in the scope
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return TokenCreated(
         token=raw,
         id=token.id,
         name=token.name,
         prefix_display=token.prefix_display,
         expires_at=token.expires_at,
+        scopes=token.scopes,
     )
 
 
@@ -283,3 +290,75 @@ async def list_tokens(session: Session, user: CurrentUser) -> list[TokenRead]:
 async def delete_token(token_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
     await service.delete_api_token(session, user, token_id)
 
+
+# --- service accounts (spec 113) ---
+
+service_account_router = APIRouter(prefix="/service-accounts", tags=["service accounts"])
+
+
+async def _account_read(session: Session, account) -> ServiceAccountRead:
+    read = ServiceAccountRead.model_validate(account)
+    read.token_count = await service_accounts.token_count(session, account.id)
+    return read
+
+
+@service_account_router.post("", response_model=ServiceAccountRead, status_code=201)
+async def create_service_account(
+    data: ServiceAccountCreate, session: Session, user: CurrentUser
+) -> ServiceAccountRead:
+    await authz.require(session, user, authz.Permission.SERVICE_ACCOUNT_CREATE)
+    account = await service_accounts.create_account(session, data, actor_id=user.id)
+    return await _account_read(session, account)
+
+
+@service_account_router.get("", response_model=list[ServiceAccountRead])
+async def list_service_accounts(session: Session, user: CurrentUser) -> list[ServiceAccountRead]:
+    await authz.require(session, user, authz.Permission.GLOBAL_MANAGE)
+    return [await _account_read(session, a) for a in await service_accounts.list_accounts(session)]
+
+
+@service_account_router.patch("/{account_id}", response_model=ServiceAccountRead)
+async def update_service_account(
+    account_id: uuid.UUID, data: ServiceAccountUpdate, session: Session, user: CurrentUser
+) -> ServiceAccountRead:
+    await authz.require(session, user, authz.Permission.SERVICE_ACCOUNT_UPDATE)
+    account = await service_accounts.update_account(session, account_id, data, actor_id=user.id)
+    return await _account_read(session, account)
+
+
+@service_account_router.post("/{account_id}/keys", response_model=TokenCreated, status_code=201)
+async def create_service_account_key(
+    account_id: uuid.UUID, data: TokenCreate, session: Session, user: CurrentUser
+) -> TokenCreated:
+    """Mint a key for an account that cannot log in to mint its own. The scope is
+    validated against the atom catalog here — an unknown atom is a 422, not a
+    permission that silently never matches."""
+    await authz.require(session, user, authz.Permission.SERVICE_ACCOUNT_UPDATE)
+    try:
+        token, raw = await service_accounts.create_key(session, account_id, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return TokenCreated(
+        token=raw,
+        id=token.id,
+        name=token.name,
+        prefix_display=token.prefix_display,
+        expires_at=token.expires_at,
+        scopes=token.scopes,
+    )
+
+
+@service_account_router.get("/{account_id}/keys", response_model=list[TokenRead])
+async def list_service_account_keys(
+    account_id: uuid.UUID, session: Session, user: CurrentUser
+) -> list[TokenRead]:
+    await authz.require(session, user, authz.Permission.GLOBAL_MANAGE)
+    return [TokenRead.model_validate(t) for t in await service_accounts.list_keys(session, account_id)]
+
+
+@service_account_router.delete("/{account_id}/keys/{token_id}", status_code=204)
+async def revoke_service_account_key(
+    account_id: uuid.UUID, token_id: uuid.UUID, session: Session, user: CurrentUser
+) -> None:
+    await authz.require(session, user, authz.Permission.SERVICE_ACCOUNT_UPDATE)
+    await service_accounts.revoke_key(session, account_id, token_id)

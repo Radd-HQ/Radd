@@ -20,6 +20,7 @@ class UserSource(StrEnum):
     LDAP = "ldap"  # provisioned by a directory bind or AD import
     OIDC = "oidc"  # provisioned by the OIDC callback
     JIRA = "jira"  # placeholder provisioned by the Jira importer (spec 90 follow-up)
+    SERVICE = "service"  # spec 113 — a service account; authenticates by API key ONLY
     UNKNOWN = "unknown"  # pre-spec-84 SSO-only rows (upgraded on next login)
 
 
@@ -112,6 +113,10 @@ class Permission(StrEnum):
     CARD_PRESET_CREATE = "cardpreset.create"
     CARD_PRESET_UPDATE = "cardpreset.update"
     CARD_PRESET_DELETE = "cardpreset.delete"
+    # Spec 113 — service accounts (principals that authenticate by API key only).
+    SERVICE_ACCOUNT_CREATE = "service_account.create"
+    SERVICE_ACCOUNT_UPDATE = "service_account.update"
+    SERVICE_ACCOUNT_DELETE = "service_account.delete"
     # Spec 111 — version-control connections (Forgejo/Gitea hosts + repos).
     VCSCONN_CREATE = "vcsconn.create"
     VCSCONN_UPDATE = "vcsconn.update"
@@ -307,6 +312,12 @@ CRUD_RESOURCES: tuple[ResourceSpec, ...] = (
     # own — the umbrella is global.manage, the dashboard precedent.
     ResourceSpec(
         "vcsconn", PermissionScope.GLOBAL, "version-control connections", Permission.GLOBAL_MANAGE
+    ),
+    # Spec 113: service accounts sit beside users but are managed separately —
+    # granting someone the ability to mint agent keys is not the same as granting
+    # them the ability to edit people.
+    ResourceSpec(
+        "service_account", PermissionScope.GLOBAL, "service accounts", Permission.GLOBAL_MANAGE
     ),
 )
 

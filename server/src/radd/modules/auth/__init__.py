@@ -7,7 +7,7 @@ from .roles_router import (
     role_grant_router,
     role_router,
 )
-from .router import auth_router, token_router, user_router
+from .router import auth_router, service_account_router, token_router, user_router
 
 plugin = RaddPlugin(
     name="auth",
@@ -21,6 +21,7 @@ plugin = RaddPlugin(
         auth_router,
         user_router,
         token_router,
+        service_account_router,
         role_router,
         role_grant_router,
         permission_router,

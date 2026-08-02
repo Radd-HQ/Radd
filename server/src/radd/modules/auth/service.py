@@ -1,3 +1,4 @@
+import logging
 import time
 import uuid
 from collections.abc import Iterable
@@ -10,7 +11,7 @@ from radd.config import settings
 from radd.exceptions import ConflictError, NotFoundError, UnauthorizedError
 from radd.modules.events import service as events
 
-from . import security, totp
+from . import scopes, security, totp
 from .models import ApiToken, User, UserSession, UserTotp
 from .schemas import ProfileUpdate, TokenCreate, UserAdminUpdate, UserCreate
 from .types import (
@@ -22,6 +23,8 @@ from .types import (
     UserChange,
     UserSource,
 )
+
+logger = logging.getLogger(__name__)
 
 # Uniform for unknown email / wrong password / inactive user — reveals nothing.
 BAD_CREDENTIALS = "invalid email or password"
@@ -216,6 +219,11 @@ async def create_session(session: AsyncSession, user: User) -> str:
     Also stamps `last_login_at` (spec 84): sessions are minted exclusively by
     the login endpoints (local + TOTP, LDAP, OIDC), so this one seam covers
     every successful sign-in path."""
+    # Spec 113: a service account authenticates by API key and nothing else.
+    # Refusing here covers local, TOTP, LDAP and OIDC at once, because every one
+    # of those paths mints its session through this function.
+    if user.source == UserSource.SERVICE:
+        raise UnauthorizedError("service accounts authenticate with an API key")
     token = security.new_session_token()
     session.add(
         UserSession(
@@ -255,12 +263,16 @@ async def create_api_token(
 ) -> tuple[ApiToken, str]:
     """Returns (row, raw token). The raw token is shown exactly once."""
     raw = security.new_api_token()
+    # Spec 113: a personal token may narrow itself too — same vocabulary, same
+    # intersection. Omitted stays NULL, so existing behaviour is untouched.
+    scope = scopes.parse_scope(data.scopes)  # ValueError -> 422 at the router
     token = ApiToken(
         user_id=user.id,
         name=data.name,
         token_hash=security.hash_token(raw),
         prefix_display=raw[:PAT_PREFIX_DISPLAY_CHARS],
         expires_at=_naive_utc(data.expires_at),
+        scopes=scope.to_json() if scope is not None else None,
     )
     session.add(token)
     await session.flush()
@@ -298,6 +310,16 @@ async def user_for_api_token(session: AsyncSession, token: str) -> User | None:
     throttle = timedelta(seconds=settings.token_last_used_throttle_seconds)
     if api_token.last_used_at is None or now - api_token.last_used_at >= throttle:
         api_token.last_used_at = now
+    # Spec 113: the key's scope rides on the principal, so every downstream
+    # `authz.effective_permissions` intersects with it. A stored scope that no
+    # longer parses (an atom removed by an upgrade) must not silently widen the
+    # key — it is refused instead.
+    if api_token.scopes is not None:
+        try:
+            user.token_scope = scopes.parse_scope(api_token.scopes)
+        except ValueError:
+            logger.warning("api token %s carries an unparseable scope; refusing it", api_token.id)
+            return None
     return user
 
 

@@ -142,6 +142,10 @@ class ProfileUpdate(BaseModel):
 class TokenCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     expires_at: UtcDatetime | None = None
+    #: Spec 113 — raw permission atoms narrowing this key below its account:
+    #: {"global": [atoms], "projects": {uuid: [atoms]}}. Omitted/None = unscoped,
+    #: which is what every personal token has always been.
+    scopes: dict | None = None
 
 
 class TokenCreated(BaseModel):
@@ -150,6 +154,7 @@ class TokenCreated(BaseModel):
     name: str
     prefix_display: str
     expires_at: UtcDatetime | None
+    scopes: dict | None = None
 
 
 class TokenRead(BaseModel):
@@ -161,6 +166,35 @@ class TokenRead(BaseModel):
     expires_at: UtcDatetime | None
     last_used_at: UtcDatetime | None
     created_at: UtcDatetime
+    scopes: dict | None = None  # spec 113 — null means unscoped
+
+
+# --- service accounts (spec 113) ---
+
+
+class ServiceAccountCreate(BaseModel):
+    """A service account is a user that cannot log in. The email is synthetic and
+    generated from the name unless one is given, because nobody reads it."""
+
+    name: str = Field(min_length=1, max_length=200)
+    email: Email | None = None
+    description: str = Field(default="", max_length=500)
+
+
+class ServiceAccountUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    active: bool | None = None
+
+
+class ServiceAccountRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    email: str
+    name: str
+    active: bool
+    created_at: UtcDatetime
+    token_count: int = 0
 
 
 # --- roles as data (spec 06) ---

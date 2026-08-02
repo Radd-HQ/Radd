@@ -63,8 +63,21 @@ class McpTool(StrEnum):
     LIST_PROJECTS = "list_projects"
     GET_DOC_PAGE = "get_doc_page"
     SEARCH_DOCS = "search_docs"
+    # --- spec 114: families that appear only for keys that may use them ---
+    GET_ALLOWED_TRANSITIONS = "get_allowed_transitions"
+    TRANSITION_ITEM = "transition_item"
+    LOG_WORK = "log_work"
+    LIST_WORKLOGS = "list_worklogs"
+    LIST_RELEASES = "list_releases"
+    CREATE_RELEASE = "create_release"
+    SET_ITEM_RELEASE = "set_item_release"
+    LIST_USERS = "list_users"
+    LIST_SERVICE_ACCOUNTS = "list_service_accounts"
+    CREATE_SERVICE_ACCOUNT = "create_service_account"
 
 
 # The doc tools ride the docs module (spec 43), which may be absent or a stub.
+WORKLOG_WINDOW_DAYS = 30  # spec 114: list_worklogs default window
+
 DOC_TOOLS = frozenset({McpTool.GET_DOC_PAGE, McpTool.SEARCH_DOCS})
 DOCS_MODULE_PATH = "radd.modules.docs"

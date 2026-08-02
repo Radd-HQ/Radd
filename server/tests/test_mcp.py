@@ -36,6 +36,19 @@ TRACKER_TOOLS = {
     McpTool.UPDATE_ITEM,
     McpTool.COMMENT_ITEM,
     McpTool.LIST_PROJECTS,
+    # Spec 114 families. build_catalog still returns EVERY tool — the narrowing
+    # to what a caller may run happens in requirements.visible_catalog, which
+    # tests/test_mcp_catalog.py covers.
+    McpTool.GET_ALLOWED_TRANSITIONS,
+    McpTool.TRANSITION_ITEM,
+    McpTool.LOG_WORK,
+    McpTool.LIST_WORKLOGS,
+    McpTool.LIST_RELEASES,
+    McpTool.CREATE_RELEASE,
+    McpTool.SET_ITEM_RELEASE,
+    McpTool.LIST_USERS,
+    McpTool.LIST_SERVICE_ACCOUNTS,
+    McpTool.CREATE_SERVICE_ACCOUNT,
 }
 
 

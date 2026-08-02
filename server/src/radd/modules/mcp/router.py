@@ -98,7 +98,7 @@ async def handle_request(
         case McpMethod.PING:
             return {}
         case McpMethod.TOOLS_LIST:
-            return {"tools": await tools.live_catalog(session)}
+            return {"tools": await tools.live_catalog(session, user)}
         case McpMethod.TOOLS_CALL:
             return await _tools_call(session, user, message.params)
         case _:

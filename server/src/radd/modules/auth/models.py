@@ -22,6 +22,12 @@ from .types import InstanceRole, UserSource
 class User(Base, TimestampMixin):
     __tablename__ = "users"
 
+    #: Spec 113 — the scope of the API key this request authenticated with, set by
+    #: `service.user_for_api_token` and read by `authz.effective_permissions`. NOT a
+    #: column: it belongs to the request's principal, not to the account. None means
+    #: unscoped (a session cookie, a personal token, or an internal actor).
+    token_scope = None
+
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(320), unique=True)  # stored lowercase
     name: Mapped[str] = mapped_column(String(200))
@@ -87,6 +93,10 @@ class ApiToken(Base):
     name: Mapped[str] = mapped_column(String(200))
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)  # sha256 hex
     prefix_display: Mapped[str] = mapped_column(String(12))  # first chars, for the UI
+    #: Spec 113 — raw permission atoms narrowing what this key may do:
+    #: {"global": [atoms], "projects": {uuid: [atoms]}}. NULL = unscoped = the
+    #: account's full authority, which is what every pre-113 token carries.
+    scopes: Mapped[dict | None] = mapped_column(JSONB, default=None)
     expires_at: Mapped[datetime | None]
     last_used_at: Mapped[datetime | None]  # write throttled; see service.user_for_api_token
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())

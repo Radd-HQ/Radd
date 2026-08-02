@@ -14,9 +14,10 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import NotFoundError
-from radd.modules.auth import authz, service as auth_service
+from radd.modules.auth import authz, service as auth_service, service_accounts
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
+from radd.modules.auth.schemas import ServiceAccountCreate
 from radd.modules.auth.types import AuthEntity
 from radd.modules.comments import service as comments_service
 from radd.modules.comments.schemas import CommentCreate
@@ -25,7 +26,13 @@ from radd.modules.items import service as items_service
 from radd.modules.items.enums import ItemKind, Priority
 from radd.modules.items.filters import ItemListFilters
 from radd.modules.items.schemas import ItemCreate, ItemRead, ItemUpdate
+from radd.modules.releases import service as releases_service
+from radd.modules.releases.schemas import ReleaseCreate
+from radd.modules.timelogging import service as timelogging_service, timesheet
+from radd.modules.timelogging.slq import compile_worklog_query, parse as worklog_parse
+from radd.modules.timelogging.schemas import WorklogCreate
 from radd.modules.workflow import service as workflow_service
+from radd.modules.workflow import transitions as workflow_transitions
 from radd.modules.workflow.types import StateEntity
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.types import ProjectEntity
@@ -37,6 +44,7 @@ from .types import (
     GET_ITEM_COMMENTS_TAIL,
     SEARCH_LIMIT_DEFAULT,
     SEARCH_LIMIT_MAX,
+    WORKLOG_WINDOW_DAYS,
     McpTool,
 )
 
@@ -241,6 +249,168 @@ async def _search_docs(session: AsyncSession, actor: User, args: Mapping[str, An
 
 # --- dispatch ---
 
+
+# --- spec 114 families ---------------------------------------------------
+
+
+async def _get_allowed_transitions(
+    session: AsyncSession, actor: User, args: Mapping[str, Any]
+) -> Any:
+    read = await items_service.get_item_by_key(session, str(args["key"]), actor=actor)
+    item = await items_service.require_item(session, read.id)
+    project = await projects_service.get_project(session, read.project_id)
+    allowed = await workflow_transitions.allowed_transitions(session, project, item)
+    return allowed.model_dump(mode="json") if hasattr(allowed, "model_dump") else allowed
+
+
+async def _transition_item(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
+    """A guard refusal is a DOMAIN error carrying the reason, which the router
+    turns into an isError result with that text — the agent learns why."""
+    current = await items_service.get_item_by_key(session, str(args["key"]), actor=actor)
+    state_id = await _state_id(session, current.project_id, str(args["state"]))
+    read = await items_service.update_item(
+        session, current.id, ItemUpdate(state_id=state_id), actor=actor
+    )
+    return read.model_dump(mode="json")
+
+
+async def _log_work(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
+    from datetime import date as _date
+
+    read = await items_service.get_item_by_key(session, str(args["key"]), actor=actor)
+    worked_on = _date.fromisoformat(str(args["worked_on"])) if args.get("worked_on") else None
+    entry = await timelogging_service.create_worklog(
+        session,
+        read.id,
+        WorklogCreate(
+            time_spent=str(args["time_spent"]),
+            worked_on=worked_on,
+            note=str(args.get("note") or ""),
+        ),
+        author_id=actor.id,
+        today=_date.today(),
+    )
+    return entry.model_dump(mode="json")
+
+
+async def _list_worklogs(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
+    """The timesheet, reachable by an agent. Scope rules are the router's: without
+    `timesheet.view` you see your own time and nobody else's, and the SLQ can only
+    narrow that — it is ANDed onto the scope filters inside build()."""
+    from datetime import date as _date, timedelta as _timedelta
+
+    permissions = await authz.require(session, actor, Permission.ITEM_READ)
+    user_ids = None if Permission.TIMESHEET_VIEW in permissions else {actor.id}
+    end = _date.fromisoformat(str(args["end"])) if args.get("end") else _date.today()
+    start = (
+        _date.fromisoformat(str(args["start"]))
+        if args.get("start")
+        else end - _timedelta(days=WORKLOG_WINDOW_DAYS)
+    )
+    where = None
+    if args.get("slq") and str(args["slq"]).strip():
+        hours_per_day = await timelogging_service._hours_per_day(session)
+        where = (
+            await compile_worklog_query(
+                session,
+                worklog_parse(str(args["slq"])),
+                current_user_id=actor.id,
+                hours_per_day=hours_per_day,
+            )
+        ).where
+    sheet = await timesheet.build(session, start, end, user_ids=user_ids, where=where)
+    entries = [entry.model_dump(mode="json") for entry in sheet.entries[: _limit(args)]]
+    return {
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "total_seconds": sheet.total_seconds,
+        "entries": entries,
+    }
+
+
+async def _list_releases(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
+    project = await _project_by_key(session, str(args["project_key"]))
+    await authz.require(session, actor, Permission.ITEM_READ, project=project)
+    releases = await releases_service.list_releases(session, project.id)
+    return [
+        {"id": str(r.id), "version": r.version, "name": r.name, "status": r.status}
+        for r in releases
+    ]
+
+
+async def _create_release(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
+    project = await _project_by_key(session, str(args["project_key"]))
+    await authz.require(session, actor, Permission.RELEASE_CREATE, project=project)
+    release = await releases_service.create_release(
+        session,
+        ReleaseCreate(
+            project_id=project.id,
+            version=str(args["version"]),
+            name=str(args.get("name") or args["version"]),
+            description=str(args.get("description") or ""),
+        ),
+        actor_id=actor.id,
+    )
+    return {"id": str(release.id), "version": release.version, "status": release.status}
+
+
+async def _set_item_release(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
+    current = await items_service.get_item_by_key(session, str(args["key"]), actor=actor)
+    version = args.get("version")
+    release_id = None
+    if version:
+        releases = await releases_service.list_releases(session, current.project_id)
+        match = next((r for r in releases if r.version == str(version)), None)
+        if match is None:
+            raise NotFoundError("release", version)
+        release_id = match.id
+    read = await items_service.update_item(
+        session, current.id, ItemUpdate(release_id=release_id), actor=actor
+    )
+    return read.model_dump(mode="json")
+
+
+async def _list_users(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
+    await authz.require(session, actor, Permission.USER_MANAGE)
+    users = await auth_service.list_users(session, q=args.get("q") or None)
+    return [
+        {"id": str(u.id), "email": u.email, "name": u.name, "active": u.active,
+         "instance_role": u.instance_role, "source": u.source}
+        for u in users[: _limit(args)]
+    ]
+
+
+async def _list_service_accounts(
+    session: AsyncSession, actor: User, args: Mapping[str, Any]
+) -> Any:
+    await authz.require(session, actor, Permission.GLOBAL_MANAGE)
+    accounts = await service_accounts.list_accounts(session)
+    return [
+        {
+            "id": str(a.id),
+            "name": a.name,
+            "email": a.email,
+            "active": a.active,
+            "keys": await service_accounts.token_count(session, a.id),
+        }
+        for a in accounts
+    ]
+
+
+async def _create_service_account(
+    session: AsyncSession, actor: User, args: Mapping[str, Any]
+) -> Any:
+    await authz.require(session, actor, Permission.SERVICE_ACCOUNT_CREATE)
+    account = await service_accounts.create_account(
+        session,
+        ServiceAccountCreate(
+            name=str(args["name"]), description=str(args.get("description") or "")
+        ),
+        actor_id=actor.id,
+    )
+    return {"id": str(account.id), "name": account.name, "email": account.email}
+
+
 _HANDLERS: dict[McpTool, Callable[..., Any]] = {
     McpTool.SEARCH_ITEMS: _search_items,
     McpTool.FIND_ITEMS: _find_items,
@@ -251,6 +421,16 @@ _HANDLERS: dict[McpTool, Callable[..., Any]] = {
     McpTool.LIST_PROJECTS: _list_projects,
     McpTool.GET_DOC_PAGE: _get_doc_page,
     McpTool.SEARCH_DOCS: _search_docs,
+    McpTool.GET_ALLOWED_TRANSITIONS: _get_allowed_transitions,
+    McpTool.TRANSITION_ITEM: _transition_item,
+    McpTool.LOG_WORK: _log_work,
+    McpTool.LIST_WORKLOGS: _list_worklogs,
+    McpTool.LIST_RELEASES: _list_releases,
+    McpTool.CREATE_RELEASE: _create_release,
+    McpTool.SET_ITEM_RELEASE: _set_item_release,
+    McpTool.LIST_USERS: _list_users,
+    McpTool.LIST_SERVICE_ACCOUNTS: _list_service_accounts,
+    McpTool.CREATE_SERVICE_ACCOUNT: _create_service_account,
 }
 
 
