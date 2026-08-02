@@ -59,6 +59,10 @@ REQUIREMENTS: dict[str, ToolRequirement] = {
     ),
     McpTool.UPDATE_ITEM.value: ToolRequirement(Permission.ITEM_UPDATE, project_scoped=True),
     McpTool.COMMENT_ITEM.value: ToolRequirement(Permission.COMMENT_WRITE, project_scoped=True),
+    # RADD-739: the same atom `items/service/links.py` already requires on the
+    # SOURCE item's project, so enforcement is inherited rather than re-derived.
+    McpTool.LINK_ITEMS.value: ToolRequirement(Permission.ITEM_UPDATE, project_scoped=True),
+    McpTool.UNLINK_ITEMS.value: ToolRequirement(Permission.ITEM_UPDATE, project_scoped=True),
     McpTool.GET_PAGE.value: ToolRequirement(Permission.PAGE_READ),
     McpTool.SEARCH_PAGES.value: ToolRequirement(Permission.PAGE_READ),
     # --- spec 114 families ---

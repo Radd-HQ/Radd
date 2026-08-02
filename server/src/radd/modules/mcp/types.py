@@ -60,6 +60,8 @@ class McpTool(StrEnum):
     CREATE_ITEM = "create_item"
     UPDATE_ITEM = "update_item"
     COMMENT_ITEM = "comment_item"
+    LINK_ITEMS = "link_items"  # RADD-739
+    UNLINK_ITEMS = "unlink_items"  # RADD-739
     LIST_PROJECTS = "list_projects"
     GET_PAGE = "get_page"
     SEARCH_PAGES = "search_pages"
@@ -82,3 +84,4 @@ WORKLOG_WINDOW_DAYS = 30  # spec 114: list_worklogs default window
 
 PAGE_TOOLS = frozenset({McpTool.GET_PAGE, McpTool.SEARCH_PAGES})
 PAGES_MODULE_PATH = "radd.modules.pages"
+

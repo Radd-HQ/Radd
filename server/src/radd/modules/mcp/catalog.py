@@ -7,7 +7,7 @@ automatically. Doc tools are appended only when the pages module is live
 (feature-detected in pages_bridge).
 """
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,6 +34,22 @@ _SLQ_DOC = (
 
 _KIND_VALUES = [kind.value for kind in ItemKind]
 _PRIORITY_VALUES = [priority.value for priority in Priority]
+
+
+def _link_type_property(keys: Sequence[str]) -> dict[str, Any]:
+    """The `type` parameter for the link tools (RADD-739).
+
+    An ENUM when the catalog is known, degrading to a plain string when it is
+    not — the same shape spec 114 uses for the project parameter, and for the
+    same reason: an agent should not have to guess an instance's vocabulary.
+    """
+    base: dict[str, Any] = {
+        "type": "string",
+        "description": "Link type key, e.g. blocks. Link types are studio-defined (spec 91).",
+    }
+    if keys:
+        base["enum"] = sorted(keys)
+    return base
 
 
 def _schema(properties: dict[str, Any], required: list[str] | None = None) -> dict[str, Any]:
@@ -98,9 +114,19 @@ def _item_write_properties(custom_field_properties: Mapping[str, Any]) -> dict[s
 
 
 def build_catalog(
-    custom_field_properties: Mapping[str, Any], *, include_pages: bool
+    custom_field_properties: Mapping[str, Any],
+    *,
+    include_pages: bool,
+    link_types: Sequence[str] = (),
 ) -> list[dict[str, Any]]:
-    """The tools/list payload. Pure: the registry projection is passed in."""
+    """The tools/list payload. Pure: the registry projection is passed in.
+
+    `link_types` (RADD-739) enumerates the instance's ACTUAL link-type keys.
+    They are user-definable (spec 91), so a free-string parameter would have an
+    agent guessing whether this instance says `blocks`, `depends_on`, or
+    something a studio invented — the same argument spec 114 already makes for
+    the project parameter.
+    """
     write = _item_write_properties(custom_field_properties)
     key_property = {"type": "string", "description": "Item key, e.g. TD-42."}
     limit_property = {
@@ -137,6 +163,36 @@ def build_catalog(
                     "limit": limit_property,
                 },
                 ["query"],
+            ),
+        },
+        {
+            "name": McpTool.LINK_ITEMS.value,
+            "description": "Link two work items — e.g. one blocks another. Dependency "
+            "links are how a plan records what has to happen before what; without "
+            "them the ordering survives only as prose in a description.",
+            "inputSchema": _schema(
+                {
+                    "from_key": {
+                        "type": "string",
+                        "description": "The SOURCE item's key, e.g. TD-42 — the one that "
+                        "blocks/relates/duplicates.",
+                    },
+                    "to_key": {"type": "string", "description": "The TARGET item's key."},
+                    "type": _link_type_property(link_types),
+                },
+                ["from_key", "to_key", "type"],
+            ),
+        },
+        {
+            "name": McpTool.UNLINK_ITEMS.value,
+            "description": "Remove a link between two work items.",
+            "inputSchema": _schema(
+                {
+                    "from_key": {"type": "string", "description": "The SOURCE item's key."},
+                    "to_key": {"type": "string", "description": "The TARGET item's key."},
+                    "type": _link_type_property(link_types),
+                },
+                ["from_key", "to_key", "type"],
             ),
         },
         {
@@ -367,7 +423,14 @@ async def live_catalog(session: AsyncSession, user: Any = None) -> list[dict[str
     reaches here (the router 401s first).
     """
     fields_openapi.refresh(await fields_service.list_fields(session))
-    catalog = build_catalog(fields_openapi.schema_cache.properties, include_pages=pages_available())
+    from radd.modules.linktypes import service as linktypes_service
+
+    catalog = build_catalog(
+        fields_openapi.schema_cache.properties,
+        include_pages=pages_available(),
+        link_types=[definition.key for definition in await linktypes_service.list_types(session)
+                    if not definition.auto_managed],
+    )
     catalog += registry_catalog(frozenset(tool["name"] for tool in catalog))
     if user is None:
         return catalog

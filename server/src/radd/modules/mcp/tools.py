@@ -23,9 +23,9 @@ from radd.modules.comments import service as comments_service
 from radd.modules.comments.schemas import CommentCreate
 from radd.modules.comments.types import CommentVisibility
 from radd.modules.items import service as items_service
-from radd.modules.items.enums import ItemKind, Priority
+from radd.modules.items.enums import ItemEntity, ItemKind, Priority
 from radd.modules.items.filters import ItemListFilters
-from radd.modules.items.schemas import ItemCreate, ItemRead, ItemUpdate
+from radd.modules.items.schemas import ItemCreate, ItemLinkCreate, ItemRead, ItemUpdate
 from radd.modules.releases import service as releases_service
 from radd.modules.releases.schemas import ReleaseCreate
 from radd.modules.releases.types import ReleaseStatus
@@ -181,6 +181,61 @@ async def _find_items(session: AsyncSession, actor: User, args: Mapping[str, Any
         ],
         "count": len(hits),
     }
+
+
+async def _link_items(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
+    """Link two items by KEY (RADD-739).
+
+    Keys, not ids or per-project numbers: every other tool in the catalog
+    addresses items by key, and an agent that just created two items holds their
+    keys and nothing else. Enforcement is `items_service.add_item_link`'s own —
+    it requires `item.update` on the SOURCE item's project and validates the type
+    against the spec-91 catalog, so nothing is re-derived here.
+    """
+    source = await items_service.get_item_by_key(session, str(args["from_key"]), actor=actor)
+    target = await items_service.get_item_by_key(session, str(args["to_key"]), actor=actor)
+    read = await items_service.add_item_link(
+        session,
+        source.id,
+        ItemLinkCreate(target_id=target.id, link_type=str(args["type"])),
+        actor=actor,
+    )
+    return {
+        "key": read.key,
+        "links": {
+            "outgoing": [
+                {"type": link.link_type, "key": link.item.key, "title": link.item.title}
+                for link in read.links.outgoing
+            ],
+            "incoming": [
+                {"type": link.link_type, "key": link.item.key, "title": link.item.title}
+                for link in read.links.incoming
+            ],
+        },
+    }
+
+
+async def _unlink_items(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
+    """Remove a link, addressed the way it was created rather than by link id —
+    an agent that made a link does not keep its uuid, and asking it to list the
+    item first to find one would make removal a two-call dance."""
+    source = await items_service.get_item_by_key(session, str(args["from_key"]), actor=actor)
+    target = await items_service.get_item_by_key(session, str(args["to_key"]), actor=actor)
+    link_type = str(args["type"])
+    match = next(
+        (
+            link
+            for link in source.links.outgoing
+            if link.item.key == target.key and link.link_type == link_type
+        ),
+        None,
+    )
+    if match is None:
+        raise NotFoundError(
+            ItemEntity.LINK, f"{source.key} -{link_type}-> {target.key}"
+        )
+    await items_service.remove_item_link(session, source.id, match.id, actor=actor)
+    return {"removed": {"from": source.key, "to": target.key, "type": link_type}}
 
 
 async def _get_item(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
@@ -507,6 +562,8 @@ _HANDLERS: dict[McpTool, Callable[..., Any]] = {
     McpTool.CREATE_ITEM: _create_item,
     McpTool.UPDATE_ITEM: _update_item,
     McpTool.COMMENT_ITEM: _comment_item,
+    McpTool.LINK_ITEMS: _link_items,
+    McpTool.UNLINK_ITEMS: _unlink_items,
     McpTool.LIST_PROJECTS: _list_projects,
     McpTool.GET_PAGE: _get_page,
     McpTool.SEARCH_PAGES: _search_docs,

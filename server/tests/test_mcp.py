@@ -35,6 +35,8 @@ TRACKER_TOOLS = {
     McpTool.CREATE_ITEM,
     McpTool.UPDATE_ITEM,
     McpTool.COMMENT_ITEM,
+    McpTool.LINK_ITEMS,  # RADD-739: an agent can express its plan's ORDER
+    McpTool.UNLINK_ITEMS,
     McpTool.LIST_PROJECTS,
     # Spec 114 families. build_catalog still returns EVERY tool — the narrowing
     # to what a caller may run happens in requirements.visible_catalog, which
