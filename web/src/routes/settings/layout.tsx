@@ -5,11 +5,14 @@ import {
   Activity,
   Blocks,
   BookOpen,
+  Bot,
+  CalendarOff,
   CalendarRange,
   CircleUserRound,
   Clock,
   DatabaseBackup,
   DatabaseZap,
+  GitBranch,
   HardDrive,
   KeyRound,
   Link2,
@@ -19,7 +22,6 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
-  CalendarOff,
   Tags,
   UserRoundCog,
   UsersRound,
@@ -113,6 +115,13 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         icon: MessageSquareQuote,
         show: (g) => g.ws(Permission.cannedManage),
       },
+      {
+        // Spec 111 — version-control hosts and their repositories.
+        to: RoutePath.settingsForgejo,
+        label: "Forgejo",
+        icon: GitBranch,
+        show: (g) => g.ws(Permission.globalManage),
+      },
     ],
   },
   {
@@ -126,6 +135,13 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         label: "Users",
         icon: UserRoundCog,
         show: (g) => g.ws(Permission.globalManage) || g.instanceAdmin,
+      },
+      {
+        // Spec 113 — principals that authenticate by API key only.
+        to: RoutePath.settingsServiceAccounts,
+        label: "Service accounts",
+        icon: Bot,
+        show: (g) => g.ws(Permission.globalManage),
       },
       {
         to: RoutePath.settingsTeams,

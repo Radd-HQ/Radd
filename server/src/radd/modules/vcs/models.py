@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
@@ -23,5 +24,11 @@ class ItemVcsLink(Base, TimestampMixin):
     url: Mapped[str] = mapped_column(String(2000))
     status: Mapped[str] = mapped_column(String(40), default="")  # free-form: "open"/"merged"/"closed"
     external_id: Mapped[str] = mapped_column(String(200), default="")  # connector id for upsert dedup
+    # Spec 111 — the LATEST CI run for this ref, not a check-run history. The
+    # panel answers "is this green"; a branch with two workflows shows the last
+    # one to report.
+    ci_state: Mapped[str] = mapped_column(String(20), default="")  # CiState ("" = unknown)
+    ci_url: Mapped[str] = mapped_column(String(2000), default="")
+    ci_updated_at: Mapped[datetime | None] = mapped_column(default=None)
     # Who linked it; None for connector/system. Plain UUID (no FK) — mirrors events.actor_id.
     created_by: Mapped[uuid.UUID | None]

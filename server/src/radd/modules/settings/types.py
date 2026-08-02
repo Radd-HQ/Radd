@@ -59,6 +59,10 @@ class SettingKey(StrEnum):
     AI_NL_SLQ = "ai_nl_slq"
     AI_SIMILAR_RERANK = "ai_similar_rerank"
     AI_STREAM_RESPONSES = "ai_stream_responses"
+    # Spec 112 — the release pipeline. Both empty = the pipeline is off for
+    # the project, and neither the merge transition nor the sweep does anything.
+    RELEASE_WAITING_STATE = "release_waiting_state"
+    RELEASE_SHIPPED_STATE = "release_shipped_state"
 
 
 @dataclass(frozen=True)
@@ -85,6 +89,31 @@ class SettingSpec:
 
 
 SETTINGS_REGISTRY: dict[SettingKey, SettingSpec] = {
+    # --- spec 112: the release pipeline ---------------------------------
+    # State NAMES, not ids: a project's states are per-project rows, and a name
+    # is what an admin sees in the picker. Resolution is by name within the
+    # project, so a renamed state is a settings edit, not a broken pipeline.
+    SettingKey.RELEASE_WAITING_STATE: SettingSpec(
+        key=SettingKey.RELEASE_WAITING_STATE,
+        type=SettingType.STRING,
+        scopes=(SettingScope.INSTANCE, SettingScope.PROJECT),
+        label="Waiting-for-release state",
+        description=(
+            "The state a merged pull request moves work to: complete, not yet shipped. "
+            "Belongs to the DONE category, so throughput counts the day the work was "
+            "finished rather than the day someone cut a tag. Empty turns the pipeline off."
+        ),
+    ),
+    SettingKey.RELEASE_SHIPPED_STATE: SettingSpec(
+        key=SettingKey.RELEASE_SHIPPED_STATE,
+        type=SettingType.STRING,
+        scopes=(SettingScope.INSTANCE, SettingScope.PROJECT),
+        label="Shipped state",
+        description=(
+            "Where the release sweep moves waiting work when a version is published, "
+            "with the release recorded on each item. Empty turns the sweep off."
+        ),
+    ),
     SettingKey.WORK_WEEK_DAYS: SettingSpec(
         key=SettingKey.WORK_WEEK_DAYS,
         type=SettingType.STRING,

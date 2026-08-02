@@ -38,6 +38,8 @@ export const SettingsSection = {
   timelogging: "timelogging",
   audit: "audit",
   canned: "canned",
+  forgejo: "forgejo",
+  serviceAccounts: "service-accounts",
   docs: "docs",
   // Plugin manager (spec 93 / A4) — install/enable/disable non-core plugins. Admin.
   plugins: "plugins",
@@ -176,6 +178,8 @@ export const RoutePath = {
   settingsPlugins: `${SETTINGS_SEGMENT}/${SettingsSection.plugins}`,
   /** Canned responses admin (spec 30, global manage). */
   settingsCanned: `${SETTINGS_SEGMENT}/${SettingsSection.canned}`,
+  settingsForgejo: `${SETTINGS_SEGMENT}/${SettingsSection.forgejo}`,
+  settingsServiceAccounts: `${SETTINGS_SEGMENT}/${SettingsSection.serviceAccounts}`,
   /** Wiki (spec 43): spaces index, a space's tree, a canonical page URL. */
   docs: "/docs",
   docSpace: "/docs/$spaceId",

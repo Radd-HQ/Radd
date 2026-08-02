@@ -7,10 +7,11 @@ credential-bearing endpoint eventually inherits the wrong dependency.
 """
 
 import uuid
+from datetime import UTC, datetime
 from typing import Annotated
 
 import httpx
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
@@ -18,7 +19,7 @@ from radd.db import get_session
 from radd.modules.auth import authz
 from radd.modules.auth.deps import CurrentUser
 
-from . import service
+from . import backfill, service
 from .schemas import (
     ConnectionCreate,
     ConnectionRead,
@@ -137,3 +138,26 @@ async def delete_repo(repo_id: uuid.UUID, session: Session, user: CurrentUser) -
 
 
 __all__ = ["router", "settings"]
+
+
+@router.post("/repos/{repo_id}/backfill")
+async def backfill_repo(
+    repo_id: uuid.UUID,
+    session: Session,
+    user: CurrentUser,
+    max_commits: int | None = None,
+) -> dict:
+    """Walk the repository's existing branches, PRs and commits and link what the
+    webhook never saw. Idempotent — the upsert seam dedups by external id."""
+    await authz.require(session, user, authz.Permission.VCSCONN_UPDATE)
+    repo = await service.get_repo(session, repo_id)
+    connection = await service.get_connection(session, repo.connection_id)
+    if not connection.api_token:
+        raise HTTPException(
+            status_code=422,
+            detail="this connection has no API token; backfill reads the Forgejo API",
+        )
+    report = await backfill.run(session, connection, repo, max_commits=max_commits)
+    repo.last_backfill_at = datetime.now(UTC).replace(tzinfo=None)
+    await session.flush()
+    return report.as_dict()

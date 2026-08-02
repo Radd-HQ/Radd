@@ -9,7 +9,7 @@ from radd.modules.auth import authz
 from radd.modules.auth.deps import CurrentUser
 from radd.modules.projects import service as projects_service
 
-from . import service
+from . import pipeline, service
 from .schemas import ReleaseCreate, ReleaseRead, ReleaseUpdate
 
 router = APIRouter(prefix="/releases", tags=["releases"])
@@ -63,3 +63,15 @@ async def delete_release(release_id: uuid.UUID, session: Session, user: CurrentU
     release = await service.get_release(session, release_id)
     await _require(session, user, release.project_id, authz.Permission.RELEASE_DELETE)
     await service.delete_release(session, release_id, actor_id=user.id)
+
+
+@router.post("/{release_id}/sweep")
+async def sweep_release(release_id: uuid.UUID, session: Session, user: CurrentUser) -> dict:
+    """Ship everything waiting (spec 112). The same operation the release webhook
+    performs, on demand — so the pipeline works on an instance with no Forgejo at
+    all, and a missed webhook is one button rather than forty manual edits."""
+    release = await service.get_release(session, release_id)
+    project = await projects_service.get_project(session, release.project_id)
+    await authz.require(session, user, authz.Permission.RELEASE_UPDATE, project=project)
+    moved = await pipeline.sweep(session, project, release)
+    return {"release": release.version, "items_shipped": moved}

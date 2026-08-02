@@ -30,3 +30,6 @@ class VcsLinkRead(BaseModel):
     created_by: uuid.UUID | None
     created_at: UtcDatetime
     updated_at: UtcDatetime
+    # Spec 111 — latest CI run for the ref ("" = never reported).
+    ci_state: str = ""
+    ci_url: str = ""

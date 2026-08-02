@@ -77,3 +77,36 @@ export interface VcsLinkCreate {
   status?: string;
   external_id?: string;
 }
+
+/** Forgejo/Gitea hosts and repositories as rows (spec 111). */
+export type ForgejoConnection = {
+  id: string;
+  name: string;
+  base_url: string;
+  active: boolean;
+  verify_ssl: boolean;
+  has_token: boolean;
+  has_secret: boolean;
+  repo_count: number;
+  created_at: string;
+};
+
+export type ForgejoRepo = {
+  id: string;
+  connection_id: string;
+  full_name: string;
+  project_id: string | null;
+  default_branch: string;
+  last_backfill_at: string | null;
+  created_at: string;
+};
+
+export type ForgejoConnectionTest = { ok: boolean; version: string; detail: string };
+
+export type ForgejoBackfillReport = {
+  branches: number;
+  pull_requests: number;
+  commits: number;
+  linked: number;
+  unknown_keys: string[];
+};

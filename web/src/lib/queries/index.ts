@@ -29,3 +29,4 @@ export * from "./sso-admin";
 export * from "./storage-admin";
 export * from "./jira";
 export * from "./leave";
+export * from "./integrations";

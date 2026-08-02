@@ -164,3 +164,31 @@ export interface ApiTokenCreated {
   prefix_display: string;
   expires_at: string | null;
 }
+
+/** Service accounts + scoped keys (spec 113). */
+export type ServiceAccount = {
+  id: string;
+  email: string;
+  name: string;
+  active: boolean;
+  created_at: string;
+  token_count: number;
+};
+
+/** Raw permission atoms, per scope. `null` on a key means unscoped. */
+export type TokenScopes = {
+  global?: string[];
+  projects?: Record<string, string[]>;
+};
+
+export type ServiceAccountKey = {
+  id: string;
+  name: string;
+  prefix_display: string;
+  expires_at: string | null;
+  last_used_at: string | null;
+  created_at: string;
+  scopes: TokenScopes | null;
+};
+
+export type ServiceAccountKeyCreated = ServiceAccountKey & { token: string };

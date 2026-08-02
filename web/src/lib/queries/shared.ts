@@ -108,6 +108,10 @@ export const queryKeys = {
   attachments: (entityType: string, entityId: string) =>
     ["attachments", { entityType, entityId }] as const,
   cannedResponses: ["cannedResponses"] as const,
+  forgejoConnections: ["forgejoConnections"] as const,
+  forgejoRepos: ["forgejoRepos"] as const,
+  serviceAccounts: ["serviceAccounts"] as const,
+  serviceAccountKeys: (id: string) => ["serviceAccounts", id, "keys"] as const,
   slaPolicies: (projectId: string) => ["slaPolicies", { projectId }] as const,
   itemSla: (itemId: string) => ["itemSla", { itemId }] as const,
   slaBatch: (itemIds: readonly string[]) => ["slaBatch", { itemIds }] as const,

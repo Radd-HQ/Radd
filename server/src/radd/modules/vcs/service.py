@@ -1,4 +1,6 @@
 import uuid
+from datetime import UTC, datetime
+from collections.abc import Sequence
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -127,3 +129,33 @@ async def _emit(
             "status": link.status,
         },
     )
+
+
+async def set_ci_state(
+    session: AsyncSession,
+    *,
+    provider: str,
+    external_ids: Sequence[str],
+    ci_state: str,
+    ci_url: str = "",
+) -> int:
+    """Stamp the latest CI result onto every link for these refs (spec 111).
+
+    Keyed by (provider, external_id) rather than by item: one workflow run
+    concerns a ref, and that ref may be linked from several items — all of them
+    want the same answer.
+    """
+    if not external_ids:
+        return 0
+    rows = await session.execute(
+        select(ItemVcsLink).where(
+            ItemVcsLink.provider == provider, ItemVcsLink.external_id.in_(list(external_ids))
+        )
+    )
+    links = list(rows.scalars())
+    for link in links:
+        link.ci_state = ci_state
+        link.ci_url = ci_url
+        link.ci_updated_at = datetime.now(UTC).replace(tzinfo=None)
+    await session.flush()
+    return len(links)

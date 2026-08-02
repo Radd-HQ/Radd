@@ -196,7 +196,10 @@ class Settings(BaseSettings):
     # keeps verifying webhooks across the upgrade; rotation happens in the UI.
     forgejo_webhook_secret: str = ""
     forgejo_base_url: str = ""  # seed only: https://git.example.com
-    forgejo_merge_transition_state: str = ""  # state NAME on PR merge ("" = none)
+    forgejo_merge_transition_state: str = ""  # spec 112 replaced this with per-project settings
+    # Spec 112 cascade defaults (per-project overrides in Settings → Releases).
+    release_waiting_state: str = ""
+    release_shipped_state: str = ""
     # Backfill bounds (spec 111): how far back the API walk goes by default.
     forgejo_backfill_max_commits: int = 2000
     forgejo_api_page_size: int = 50

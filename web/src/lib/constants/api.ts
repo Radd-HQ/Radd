@@ -91,6 +91,11 @@ export const ApiPath = {
   searchSemantic: "/search/semantic",
   // Service desk (spec 30).
   cannedResponses: "/canned-responses",
+  // Spec 111 — Forgejo hosts/repos as rows.
+  forgejoConnections: "/forgejo/connections",
+  forgejoRepos: "/forgejo/repos",
+  // Spec 113 — service accounts and their scoped keys.
+  serviceAccounts: "/service-accounts",
   slaPolicies: "/sla-policies",
   // Batch SLA timers for list/board chips (spec 63).
   itemsSlaBatch: "/items/sla/batch",
@@ -184,3 +189,19 @@ export const On401 = {
   throw: "throw",
 } as const;
 export type On401Value = (typeof On401)[keyof typeof On401];
+
+/** Spec 111: one Forgejo connection. */
+export const apiForgejoConnectionPath = (id: string) => `${ApiPath.forgejoConnections}/${id}`;
+export const apiForgejoConnectionTestPath = (id: string) =>
+  `${ApiPath.forgejoConnections}/${id}/test`;
+export const apiForgejoRepoPath = (id: string) => `${ApiPath.forgejoRepos}/${id}`;
+export const apiForgejoBackfillPath = (id: string) => `${ApiPath.forgejoRepos}/${id}/backfill`;
+
+/** Spec 113: one service account, and its keys. */
+export const apiServiceAccountPath = (id: string) => `${ApiPath.serviceAccounts}/${id}`;
+export const apiServiceAccountKeysPath = (id: string) => `${ApiPath.serviceAccounts}/${id}/keys`;
+export const apiServiceAccountKeyPath = (accountId: string, keyId: string) =>
+  `${ApiPath.serviceAccounts}/${accountId}/keys/${keyId}`;
+
+/** Spec 112: ship everything waiting on a release. */
+export const apiReleaseSweepPath = (id: string) => `/releases/${id}/sweep`;

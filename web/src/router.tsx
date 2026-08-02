@@ -59,6 +59,8 @@ import { AuditSettingsPage } from "./routes/settings/audit";
 import { BackupsSettingsPage } from "./routes/settings/backups";
 import { PluginsSettingsPage } from "./routes/settings/plugins";
 import { CannedSettingsPage } from "./routes/settings/canned";
+import { ForgejoSettingsPage } from "./routes/settings/forgejo";
+import { ServiceAccountsSettingsPage } from "./routes/settings/service-accounts";
 import { AiSettingsPage } from "./routes/settings/ai";
 import { StorageSettingsPage } from "./routes/settings/storage";
 import { SignInSettingsPage } from "./routes/settings/sign-in";
@@ -447,6 +449,20 @@ const settingsCannedRoute = createRoute({
   component: CannedSettingsPage,
 });
 
+/** Forgejo hosts + repositories (spec 111). */
+const settingsForgejoRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: SettingsSection.forgejo,
+  component: ForgejoSettingsPage,
+});
+
+/** Service accounts + scoped keys (spec 113). */
+const settingsServiceAccountsRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: SettingsSection.serviceAccounts,
+  component: ServiceAccountsSettingsPage,
+});
+
 /** Doc spaces admin (spec 43). */
 const settingsDocsRoute = createRoute({
   getParentRoute: () => settingsRoute,
@@ -636,6 +652,8 @@ const routeTree = rootRoute.addChildren([
       settingsBackupsRoute,
       settingsPluginsRoute,
       settingsCannedRoute,
+      settingsForgejoRoute,
+      settingsServiceAccountsRoute,
       settingsDocsRoute,
       settingsAiRoute,
       settingsStorageRoute,
