@@ -207,6 +207,42 @@ class McpToolSpec:
     project_param: str = ""  # input property naming the project; enum-rewritten + enforced
 
 
+@dataclass(frozen=True)
+class CascadeSpec:
+    """Rows that must die with a parent the database cannot cascade from.
+
+    Three registries had independently grown the same hole. `attachments` and
+    `comments` key their rows to a POLYMORPHIC parent (`entity_type` +
+    `entity_id`), which cannot carry a foreign key, so `ON DELETE CASCADE` is
+    unavailable. `access_grants` keys to `resource_type` + `resource_id` for the
+    same reason. Each answered it differently — two head-seeded consumers and, in
+    access's case, four call sites that each have to remember.
+
+    One registry and ONE consumer instead:
+
+      - **performant** — a cascade is not worth its own cursor and its own poll
+        of the events table; there are already 18 such loops. Registering here
+        costs a dict entry, not a background task.
+      - **extensible** — a plugin registers a cascade and gets cleanup, with no
+        edit to a module it does not own. That was the point of the polymorphic
+        parent, and it was exactly what the hardcoded maps took away.
+
+    `sweep(session, parent_id)` runs in the consumer's PLANNING transaction,
+    which is committed with the cursor — so a crash between the two cannot lose
+    the work or repeat it. Whatever it returns is handed to `after_commit`, for
+    the effects that must not run inside a transaction: attachments removes bytes
+    from a storage host there, because an unreachable host must leave orphaned
+    bytes rather than a stuck consumer.
+    """
+
+    #: The event that means a parent died, e.g. "item.deleted".
+    parent_event: str
+    #: What this contribution calls the thing, for logs and tests.
+    name: str
+    sweep: Callable[..., Awaitable[Any]]
+    after_commit: Callable[[Any], Awaitable[None]] | None = None
+
+
 # --- page extensions (RADD-709: live blocks embedded in a page's markdown) ---
 @dataclass(frozen=True)
 class PageExtensionSpec:

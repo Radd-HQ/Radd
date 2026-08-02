@@ -50,6 +50,10 @@ _BINDINGS: dict[str, ParentBinding] = {}
 
 
 def register_parent(binding: ParentBinding) -> None:
+    """Register a parent. Its cleanup follows automatically: the plugin's
+    `cascades` factory is derived from THIS registry (RADD-745), so a binding
+    cannot exist without one. A binding without cleanup would leak rows AND
+    BYTES on a storage host, silently and forever."""
     _BINDINGS[binding.entity_type] = binding
 
 

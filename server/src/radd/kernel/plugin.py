@@ -21,6 +21,7 @@ from .specs import (
     EntitySpec,
     EventTypeSpec,
     IntegrationSpec,
+    CascadeSpec,
     McpToolSpec,
     PageExtensionSpec,
     PermissionSpec,
@@ -83,6 +84,12 @@ class RaddPlugin:
     widget_types: tuple[WidgetTypeSpec, ...] = ()  # custom dashboard widget types
     mcp_tools: tuple[McpToolSpec, ...] = ()  # MCP tools (RADD-640; filtered + enforced by the kernel)
     page_extensions: tuple[PageExtensionSpec, ...] = ()  # page fenced blocks (RADD-709)
+    #: Rows that die with a parent (RADD-745). A FACTORY, not a tuple: the set is
+    #: derived from a binding registry that other modules populate at import
+    #: time, so it cannot be evaluated when this manifest is constructed — and a
+    #: static tuple would also not survive the registry being cleared and
+    #: rebuilt, which the app lifespan does.
+    cascades: Callable[[], tuple[CascadeSpec, ...]] | None = None
     integrations: tuple[IntegrationSpec, ...] = ()
     ui: PluginUiManifest | None = None
 

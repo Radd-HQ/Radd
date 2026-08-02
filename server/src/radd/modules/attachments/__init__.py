@@ -32,14 +32,15 @@ def _storage_capability() -> dict[str, object]:
 async def _startup() -> None:
     await hosts.seed_from_env()
     await clients.ensure_all_ready()
-    await gc.start()
 
 
 async def _shutdown() -> None:
-    await gc.stop()
+    """Nothing to stop: orphan cleanup is a registered cascade now (RADD-745),
+    drained by the kernel's single consumer rather than a loop per module."""
 
 
 plugin = RaddPlugin(
+    cascades=lambda: gc.cascades(),
     name="attachments",
     description="File attachments on work items and wiki pages (spec 102): "
     "multiple storage hosts (filesystem/S3) as DB rows, per-host proxy or "

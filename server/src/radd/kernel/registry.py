@@ -16,6 +16,7 @@ from pathlib import Path
 from .plugin import RaddPlugin
 from .specs import (
     CapabilitySpec,
+    CascadeSpec,
     ConsumerSpec,
     CrudResourceSpec,
     EntitySpec,
@@ -45,6 +46,8 @@ class KernelRegistries:
     widget_types: dict[str, WidgetTypeSpec] = field(default_factory=dict)  # plugin dashboard widgets
     mcp_tools: dict[str, McpToolSpec] = field(default_factory=dict)  # plugin MCP tools (RADD-640)
     page_extensions: dict[str, PageExtensionSpec] = field(default_factory=dict)  # RADD-709
+    #: A LIST, not a dict: several modules cascade off the same parent event.
+    cascades: list[CascadeSpec] = field(default_factory=list)  # RADD-745
     tasks: dict[str, TaskSpec] = field(default_factory=dict)
     consumers: dict[str, ConsumerSpec] = field(default_factory=dict)
     integrations: dict[tuple[str, str], IntegrationSpec] = field(default_factory=dict)
@@ -63,6 +66,7 @@ class KernelRegistries:
             self.view_types, self.widget_types, self.mcp_tools, self.page_extensions,
         ):
             f.clear()
+        self.cascades.clear()
         self.nav.clear()
         self.entity_routers.clear()
 
@@ -89,6 +93,10 @@ class KernelRegistries:
             self.mcp_tools[mt.name] = mt
         for px in plugin.page_extensions:
             self.page_extensions[px.name] = px
+        if plugin.cascades is not None:
+            for cascade in plugin.cascades():
+                if cascade not in self.cascades:
+                    self.cascades.append(cascade)
         for t in plugin.tasks:
             self.tasks[t.name] = t
         for con in plugin.consumers:
@@ -124,6 +132,10 @@ class KernelRegistries:
             self.mcp_tools.pop(mt.name, None)
         for px in plugin.page_extensions:
             self.page_extensions.pop(px.name, None)
+        if plugin.cascades is not None:
+            for cascade in plugin.cascades():
+                if cascade in self.cascades:
+                    self.cascades.remove(cascade)
         for con in plugin.consumers:
             self.consumers.pop(con.name, None)
         for ig in plugin.integrations:
@@ -143,6 +155,10 @@ class KernelRegistries:
         module_file = getattr(module, "__file__", None)
         if module_file:
             self.plugin_ui_dirs[plugin.name] = str(Path(module_file).resolve().parent / "ui" / "dist")
+
+    def cascades_for(self, event_type: str) -> list[CascadeSpec]:
+        """Every registered cleanup for a parent event (RADD-745)."""
+        return [c for c in self.cascades if c.parent_event == event_type]
 
     # --- reads (the generic consumers) ---
     def triggers(self) -> dict[str, EventTypeSpec]:
@@ -178,6 +194,19 @@ def register_crud_resource(spec: CrudResourceSpec) -> CrudResourceSpec:
 
 def register_capability(spec: CapabilitySpec) -> CapabilitySpec:
     registries.capabilities[spec.key] = spec
+    return spec
+
+
+def register_cascade(spec: CascadeSpec) -> CascadeSpec:
+    """Register cleanup for rows that die with a parent (RADD-745).
+
+    Module-level rather than manifest-only because the natural caller is a
+    binding registration, which happens at import time — and tying the two
+    together is what makes cleanup impossible to forget: you cannot register a
+    parent without registering how its children die.
+    """
+    if spec not in registries.cascades:
+        registries.cascades.append(spec)
     return spec
 
 

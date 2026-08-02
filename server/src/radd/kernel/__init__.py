@@ -23,6 +23,7 @@ from .registry import (
 )
 from .specs import (
     CapabilitySpec,
+    CascadeSpec,
     ConsumerSpec,
     CrudResourceSpec,
     EntityFieldSpec,
@@ -57,6 +58,7 @@ __all__ = [
     "register_integration",
     "EventTypeSpec",
     "CapabilitySpec",
+    "CascadeSpec",
     "PermissionSpec",
     "SlqFieldContext",
     "SlqFieldSpec",

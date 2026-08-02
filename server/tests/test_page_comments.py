@@ -267,22 +267,35 @@ def test_every_registered_parent_declares_how_it_dies():
         assert binding.deleted_event.endswith(".deleted")
 
 
-def test_the_gc_map_covers_every_parent():
-    from radd.modules.comments.gc import _parent_deletes
+def test_registering_a_parent_registers_its_cleanup():
+    """RADD-745: registering a parent and registering how its children die is
+    one act, so it cannot be half-done."""
+    from radd.kernel.registry import registries
     from radd.modules.comments.parents import bindings
 
-    covered = set(_parent_deletes().values())
-    assert covered == {binding.entity_type for binding in bindings()}
+    names = {c.name for c in registries.cascades}
+    for binding in bindings():
+        assert f"comments:{binding.entity_type}" in names
+
+
+def test_one_consumer_serves_every_cascade():
+    """The performance half of RADD-745: 18 PeriodicLoops already poll this
+    instance, and a DELETE that usually matches nothing does not deserve
+    another. Several modules cascade off ONE event."""
+    from radd.kernel.registry import registries
+
+    on_page_delete = {c.name for c in registries.cascades_for("page.deleted")}
+    assert {"comments:page", "attachments:page"} <= on_page_delete
 
 
 async def test_the_gc_sweeps_a_comment_whose_parent_bypassed_the_delete_path(db, admin, page):
     """The case the explicit sweep cannot cover: a parent removed by something
     that never called `delete_for_parent`. Simulated by deleting the page row
     directly, which is what any future path that forgets will look like."""
-    from radd.modules.comments import gc
+    from radd.kernel.registry import registries
     from radd.modules.comments.models import Comment
     from radd.modules.events.models import Event
-    from radd.modules.pages.models import Page
+    from radd.modules.events import cascade
 
     await comments.create_comment(
         db, page.id, CommentCreate(body="orphan me"), actor=admin,
@@ -294,6 +307,6 @@ async def test_the_gc_sweeps_a_comment_whose_parent_bypassed_the_delete_path(db,
     )
     assert left.first() is not None  # no cascade — this is the gap being closed
 
-    await gc._plan(db, Event(event_type="page.deleted", entity_id=str(page.id), payload={}))
+    await cascade._plan(db, Event(event_type="page.deleted", entity_id=str(page.id), payload={}))
     swept = await db.execute(select(Comment).where(Comment.entity_id == page.id))
     assert swept.first() is None

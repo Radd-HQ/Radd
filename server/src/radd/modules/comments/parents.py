@@ -69,6 +69,10 @@ _BINDINGS: dict[str, CommentParent] = {}
 
 
 def register_parent(binding: CommentParent) -> None:
+    """Register a parent. Its cleanup follows automatically: the plugin's
+    `cascades` factory is derived from THIS registry (RADD-745), so a binding
+    cannot exist without one — and `deleted_event` being required is what makes
+    that derivation total."""
     _BINDINGS[binding.entity_type] = binding
 
 

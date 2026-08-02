@@ -189,9 +189,13 @@ def test_every_attachment_parent_declares_how_it_dies():
         assert binding.deleted_event.endswith(".deleted")
 
 
-def test_the_gc_map_covers_every_registered_parent():
+def test_registering_a_parent_registers_its_cleanup():
+    """RADD-745: the two are ONE act, so a plugin cannot register a parent and
+    leave its bytes on a storage host forever."""
     import radd.modules.pages  # noqa: F401
-    from radd.modules.attachments.gc import _parent_deletes
+    from radd.kernel.registry import registries
     from radd.modules.attachments.parents import bindings
 
-    assert set(_parent_deletes().values()) == {b.entity_type for b in bindings()}
+    names = {c.name for c in registries.cascades}
+    for binding in bindings():
+        assert f"attachments:{binding.entity_type}" in names

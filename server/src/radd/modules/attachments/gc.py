@@ -27,36 +27,41 @@ logger = logging.getLogger(__name__)
 
 CONSUMER_NAME = "attachments.gc"
 
-def _parent_deletes() -> dict[str, str]:
-    """{event type -> entity type}, live from the binding registry (RADD-744).
-
-    This was a hardcoded dict, which meant a parent registered by a PLUGIN — the
-    seam this registry exists for — got no cleanup, and its bytes stayed on the
-    storage host forever with nothing pointing at them.
-    """
+def cascades() -> tuple["CascadeSpec", ...]:
+    """One per registered parent — derived, so a plugin gets byte-collection
+    with no edit to this module."""
     from .parents import bindings
 
-    return {binding.deleted_event: binding.entity_type for binding in bindings()}
+    return tuple(_cascade_for(binding) for binding in bindings())
 
 
-async def run_once() -> int:
-    return await runner.run_head_seeded(
-        CONSUMER_NAME, batch_size=50, plan=_plan, deliver=_deliver
+def _cascade_for(binding) -> "CascadeSpec":
+    """The cleanup that ships with a parent binding (RADD-744/745).
+
+    This was a hardcoded map inside this module, which meant a parent registered
+    by a PLUGIN — the seam the binding registry exists for — got no cleanup, and
+    its bytes stayed on a storage host forever with nothing pointing at them.
+    """
+    from radd.kernel import CascadeSpec
+
+    entity_type = binding.entity_type
+
+    async def sweep(session: AsyncSession, parent_id: uuid.UUID):
+        return await _sweep(session, entity_type, parent_id)
+
+    return CascadeSpec(
+        parent_event=binding.deleted_event,
+        name=f"attachments:{entity_type}",
+        sweep=sweep,
+        after_commit=_remove_bytes,
     )
 
 
-async def _plan(
-    session: AsyncSession, event: Event
+async def _sweep(
+    session: AsyncSession, entity_type: str, parent_id: uuid.UUID
 ) -> list[tuple[uuid.UUID, uuid.UUID, str]] | None:
     """Collect (attachment_id, host_id, storage_name), delete rows + grants in
     the planning transaction (committed with the cursor); bytes go post-commit."""
-    entity_type = _parent_deletes().get(event.event_type)
-    if entity_type is None:
-        return None
-    try:
-        parent_id = uuid.UUID(str(event.entity_id))
-    except ValueError:
-        return None
     rows = list(
         (
             await session.execute(
@@ -81,30 +86,18 @@ async def _plan(
     return doomed
 
 
-async def _deliver(plans: list[list[tuple[uuid.UUID, uuid.UUID, str]]]) -> None:
+async def _remove_bytes(doomed: list[tuple[uuid.UUID, uuid.UUID, str]]) -> None:
     """Byte removal, post-commit and best-effort — an unreachable host leaves
     orphans on that host, never a stuck consumer."""
     from . import hosts
     from .clients import client_for
 
     async with SessionLocal() as session:
-        for doomed in plans:
-            for _attachment_id, host_id, storage_name in doomed:
-                try:
-                    host = await hosts.get_host(session, host_id)
-                    await client_for(host).remove(storage_name)
-                except Exception:  # noqa: BLE001
-                    logger.warning(
-                        "attachments.gc: could not remove bytes %s", storage_name, exc_info=True
-                    )
-
-
-_loop = PeriodicLoop(
-    run_once,
-    interval=lambda: settings.search_poll_interval,  # the indexers' cadence fits
-    name="attachments-gc",
-    enabled=lambda: settings.run_workers,
-)
-
-start = _loop.start
-stop = _loop.stop
+        for _attachment_id, host_id, storage_name in doomed:
+            try:
+                host = await hosts.get_host(session, host_id)
+                await client_for(host).remove(storage_name)
+            except Exception:  # noqa: BLE001
+                logger.warning(
+                    "attachments cascade: could not remove bytes %s", storage_name, exc_info=True
+                )
