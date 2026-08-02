@@ -246,3 +246,54 @@ async def test_watching_twice_is_a_double_click_not_an_error(db, admin, page):
     assert await watchers.watcher_ids(db, page.id) == [admin.id]
     await watchers.unwatch(db, page.id, admin.id)
     assert await watchers.watcher_ids(db, page.id) == []
+
+
+# --- the orphan GC: what replaces ON DELETE CASCADE ---------------------------
+
+
+def test_every_registered_parent_declares_how_it_dies():
+    """The guard that makes the polymorphic parent safe to extend.
+
+    A plugin registering a `CommentParent` gets cleanup for free — but only
+    because the GC builds its event map from the registry. A binding with no
+    `deleted_event` would leave its comments orphaned forever, invisibly. This
+    fails the build instead."""
+    from radd.modules.comments.parents import bindings
+
+    registered = bindings()
+    assert registered, "no comment parents registered at all"
+    for binding in registered:
+        assert binding.deleted_event, f"{binding.entity_type} declares no delete event"
+        assert binding.deleted_event.endswith(".deleted")
+
+
+def test_the_gc_map_covers_every_parent():
+    from radd.modules.comments.gc import _parent_deletes
+    from radd.modules.comments.parents import bindings
+
+    covered = set(_parent_deletes().values())
+    assert covered == {binding.entity_type for binding in bindings()}
+
+
+async def test_the_gc_sweeps_a_comment_whose_parent_bypassed_the_delete_path(db, admin, page):
+    """The case the explicit sweep cannot cover: a parent removed by something
+    that never called `delete_for_parent`. Simulated by deleting the page row
+    directly, which is what any future path that forgets will look like."""
+    from radd.modules.comments import gc
+    from radd.modules.comments.models import Comment
+    from radd.modules.events.models import Event
+    from radd.modules.pages.models import Page
+
+    await comments.create_comment(
+        db, page.id, CommentCreate(body="orphan me"), actor=admin,
+        entity_type=CommentParentType.PAGE.value,
+    )
+    await db.execute(text("DELETE FROM pages WHERE id = :i"), {"i": page.id})
+    left = await db.execute(
+        select(Comment).where(Comment.entity_id == page.id)
+    )
+    assert left.first() is not None  # no cascade — this is the gap being closed
+
+    await gc._plan(db, Event(event_type="page.deleted", entity_id=str(page.id), payload={}))
+    swept = await db.execute(select(Comment).where(Comment.entity_id == page.id))
+    assert swept.first() is None

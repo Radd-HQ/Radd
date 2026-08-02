@@ -6,6 +6,20 @@ from .slq import commented_by_item_ids
 from .router import router
 from .types import CommentEvent
 
+async def _startup() -> None:
+    # Deferred: `gc` -> `parents` -> `items.service`, and items imports back
+    # this way round. At startup the cycle has long since resolved.
+    from . import gc
+
+    await gc.start()
+
+
+async def _shutdown() -> None:
+    from . import gc
+
+    await gc.stop()
+
+
 plugin = RaddPlugin(
     name="comments",
     description="Comments on work items: CRUD + comment.* events; counts feed item hydration.",
@@ -15,6 +29,8 @@ plugin = RaddPlugin(
         SlqFieldSpec(name="commented_by", label="Commented by", item_ids=commented_by_item_ids),
     ),
     routers=(router,),
+    on_startup=_startup,
+    on_shutdown=_shutdown,
     event_types=(
         EventTypeSpec(CommentEvent.CREATED, "Comment added", "Comments", item_scoped=True),
         EventTypeSpec(CommentEvent.UPDATED, "Comment edited", "Comments", item_scoped=True),

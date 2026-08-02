@@ -19,6 +19,7 @@ from radd.modules.comments.parents import CommentParent, register_parent
 from radd.modules.comments.types import CommentParentType
 
 from . import service as pages_service
+from .types import PageEvent
 
 
 async def _page_project(session: AsyncSession, page_id: uuid.UUID) -> None:
@@ -43,6 +44,7 @@ async def _page_write(session, user: User, page_id: uuid.UUID, project):
 register_parent(
     CommentParent(
         entity_type=CommentParentType.PAGE.value,
+        deleted_event=PageEvent.PAGE_DELETED.value,
         project_of=_page_project,
         require_read=_page_read,
         require_write=_page_write,

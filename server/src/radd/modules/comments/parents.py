@@ -54,6 +54,15 @@ class CommentParent:
     require_write: Guard
     #: Editing or deleting SOMEONE ELSE'S comment on this parent.
     manage_permission: Permission
+    #: The event type emitted when a parent of this kind is destroyed.
+    #:
+    #: This is what replaces the foreign key's ON DELETE CASCADE. A polymorphic
+    #: column cannot carry an FK, so cleanup has to be driven by something —
+    #: and putting it on the BINDING rather than in a table inside the GC means
+    #: a plugin that registers a parent gets cleanup automatically instead of
+    #: needing an edit to a module it does not own. (attachments/gc.py keeps
+    #: that map hardcoded, which is exactly the seam a plugin cannot reach.)
+    deleted_event: str
 
 
 _BINDINGS: dict[str, CommentParent] = {}
@@ -61,6 +70,11 @@ _BINDINGS: dict[str, CommentParent] = {}
 
 def register_parent(binding: CommentParent) -> None:
     _BINDINGS[binding.entity_type] = binding
+
+
+def bindings() -> list[CommentParent]:
+    """Every registered parent — the GC builds its event map from this."""
+    return list(_BINDINGS.values())
 
 
 def binding_for(entity_type: str) -> CommentParent:
@@ -93,6 +107,7 @@ async def _item_write(session, user: User, entity_id: uuid.UUID, project):
 register_parent(
     CommentParent(
         entity_type=CommentParentType.ITEM.value,
+        deleted_event="item.deleted",
         project_of=_item_project,
         require_read=_item_read,
         require_write=_item_write,
