@@ -1,0 +1,38 @@
+{{- if not .Values.storage.s3 }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-data
+  labels:
+    {{- include "radd.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- with .Values.storage.storageClassName }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.storage.size }}
+{{- end }}
+{{- if .Values.backups.enabled }}
+---
+# Backup artifacts (spec 99). Separate from -data on purpose: the encryption
+# key lives on -data, and one stolen or lost volume must not yield both. Point
+# this at a storage class backed by a different disk from the database.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-backups
+  labels:
+    {{- include "radd.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- with .Values.backups.storageClassName }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.backups.size }}
+{{- end }}

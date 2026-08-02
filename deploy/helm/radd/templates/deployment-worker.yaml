@@ -1,0 +1,50 @@
+{{- if .Values.workers.enabled }}
+# One worker replica runs every background loop (webhooks, automations,
+# notify, search, SLA, connectors). Consumers are single-writer by
+# consumer-offset design — do not scale this deployment.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-worker
+  labels:
+    {{- include "radd.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.workers.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        {{- include "radd.labels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+    spec:
+      {{- include "radd.imagePullSecrets" . | nindent 6 }}
+      {{- with .Values.podSecurityContext }}
+      securityContext: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: radd-worker
+          image: {{ include "radd.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["uvicorn"]
+          args: ["--factory", "radd.app:create_app", "--host", "0.0.0.0", "--port", "8000"]
+          env:
+            {{- include "radd.env" . | nindent 12 }}
+            - name: RADD_RUN_WORKERS
+              value: "true"
+          {{- include "radd.envFrom" . | nindent 10 }}
+          {{- with .Values.resources }}
+          resources: {{ toYaml . | nindent 12 }}
+          {{- end }}
+          {{/* The backup scheduler is gated on run_workers (backup/scheduler.py),
+               so THIS pod takes the nightly dumps — it needs the artifact volume
+               as much as the web tier, which serves restores. */}}
+          {{- include "radd.volumeMounts" . | nindent 10 }}
+      {{- include "radd.volumes" . | nindent 6 }}
+      {{- with .Values.dnsConfig }}
+      dnsConfig: {{ toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

@@ -1,0 +1,23 @@
+# Example: putting Radd behind an EXISTING Caddy that already owns :443.
+#
+# Common when one public IP is already forwarded to a working reverse proxy and
+# you don't want to disturb it. The edge terminates TLS and forwards plain HTTP
+# to Traefik; all routing beyond that lives in Ingress resources, so this file
+# should never need editing again.
+#
+# Pin Traefik's `web` entrypoint to a known NodePort first — see
+# docs/deploy-k3s.md. Replace the address with your k3s node's.
+
+radd.example.com {
+	# Caddy appends the peer to X-Forwarded-For automatically, which is what
+	# lets Radd's clientip.py recover the real client address after the second
+	# hop — provided RADD_TRUSTED_PROXIES lists BOTH this Caddy and the pod
+	# CIDR. It also sets X-Forwarded-Proto from the incoming scheme, so the
+	# cluster sees "https" despite the inner hop being plain HTTP.
+	#
+	# Large uploads need no tuning: Caddy v2 ships no default write/idle
+	# timeout and no request body cap, and reverse_proxy streams. (Timeouts,
+	# if you ever want them, are a global `servers { timeouts { … } }` option,
+	# not a site directive.)
+	reverse_proxy 10.0.0.20:30080
+}

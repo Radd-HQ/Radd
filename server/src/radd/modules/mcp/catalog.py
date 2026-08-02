@@ -1,0 +1,201 @@
+"""The MCP tool catalog (spec 45) — tools/list payload generation.
+
+`build_catalog` is pure (testable with a stubbed registry); `live_catalog`
+feeds it the live field-registry projection — the SAME source as OpenAPI — so
+studio-defined custom fields appear as documented `custom_fields` properties
+automatically. Doc tools are appended only when the docs module is live
+(feature-detected in docs_bridge).
+"""
+
+from collections.abc import Mapping
+from typing import Any
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from radd.modules.fields import openapi as fields_openapi, service as fields_service
+from radd.modules.items.enums import ItemKind, Priority
+
+from .docs_bridge import docs_available
+from .types import GET_ITEM_COMMENTS_TAIL, SEARCH_LIMIT_DEFAULT, SEARCH_LIMIT_MAX, McpTool
+
+_SLQ_DOC = (
+    "SLQ query text. Grammar: `field op value` clauses joined with AND/OR/NOT and "
+    "parentheses, optional `ORDER BY field [ASC|DESC], ...` at the end. "
+    "Builtin fields: project (key), state (name), category, kind, priority, assignee "
+    "(email|me|none), reporter, team, label, title, key, parent, number, created, "
+    "updated, cycle, release, flagged, starred, blocks, blocked, start, target — plus "
+    "any custom field by its registry key. Operators: = != ~ (contains) > < >= <=, "
+    "IN (a, b), NOT IN, IS EMPTY, IS NOT EMPTY. Quote values with spaces "
+    "('In Progress'); `me` = the calling user; `none` = unset relation; dates are "
+    "YYYY-MM-DD. Examples: `project = TD AND state != Done ORDER BY priority DESC` · "
+    "`assignee = me AND label IN (urgent, farm)` · `title ~ render AND created >= 2026-01-01`."
+)
+
+_KIND_VALUES = [kind.value for kind in ItemKind]
+_PRIORITY_VALUES = [priority.value for priority in Priority]
+
+
+def _schema(properties: dict[str, Any], required: list[str] | None = None) -> dict[str, Any]:
+    schema: dict[str, Any] = {
+        "type": "object",
+        "properties": properties,
+        "additionalProperties": False,
+    }
+    if required:
+        schema["required"] = required
+    return schema
+
+
+def _custom_fields_schema(custom_field_properties: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": dict(custom_field_properties),
+        "description": "Studio-defined custom fields by registry key "
+        "(this schema is generated live from the field registry).",
+    }
+
+
+def _item_write_properties(custom_field_properties: Mapping[str, Any]) -> dict[str, Any]:
+    """The optional write parameters create_item and update_item share."""
+    return {
+        "description": {"type": "string", "description": "Markdown body."},
+        "state": {"type": "string", "description": "Workflow state NAME (project-specific)."},
+        "priority": {"type": "string", "enum": _PRIORITY_VALUES},
+        "assignee_email": {
+            "type": ["string", "null"],
+            "description": "Assignee's email; null clears the assignee (update only).",
+        },
+        "labels": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Full replacement label set (labels are created on demand).",
+        },
+        "custom_fields": _custom_fields_schema(custom_field_properties),
+    }
+
+
+def build_catalog(
+    custom_field_properties: Mapping[str, Any], *, include_docs: bool
+) -> list[dict[str, Any]]:
+    """The tools/list payload. Pure: the registry projection is passed in."""
+    write = _item_write_properties(custom_field_properties)
+    key_property = {"type": "string", "description": "Item key, e.g. TD-42."}
+    limit_property = {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": SEARCH_LIMIT_MAX,
+        "default": SEARCH_LIMIT_DEFAULT,
+    }
+    catalog = [
+        {
+            "name": McpTool.SEARCH_ITEMS.value,
+            "description": "Search work items with an SLQ query (results are RBAC-scoped "
+            "to projects the authenticated principal may read).",
+            "inputSchema": _schema(
+                {
+                    "slq": {"type": "string", "description": _SLQ_DOC},
+                    "limit": limit_property,
+                },
+                ["slq"],
+            ),
+        },
+        {
+            "name": McpTool.FIND_ITEMS.value,
+            "description": "Find work items by text MEANING, not just keywords: hybrid "
+            "full-text + semantic retrieval (when the instance has semantic search "
+            "configured; plain full-text otherwise). Use this for 'issues about X' "
+            "questions; use search_items with SLQ for structured filters.",
+            "inputSchema": _schema(
+                {
+                    "query": {
+                        "type": "string",
+                        "description": "Plain-language description of what to find.",
+                    },
+                    "limit": limit_property,
+                },
+                ["query"],
+            ),
+        },
+        {
+            "name": McpTool.GET_ITEM.value,
+            "description": "Fetch one work item by key: full detail including custom "
+            f"fields inline, plus the {GET_ITEM_COMMENTS_TAIL} most recent comments.",
+            "inputSchema": _schema({"key": key_property}, ["key"]),
+        },
+        {
+            "name": McpTool.CREATE_ITEM.value,
+            "description": "Create a work item in a project (addressed by project key).",
+            "inputSchema": _schema(
+                {
+                    "project_key": {"type": "string", "description": "Project key, e.g. TD."},
+                    "title": {"type": "string"},
+                    "kind": {
+                        "type": "string",
+                        "enum": _KIND_VALUES,
+                        "default": ItemKind.ISSUE.value,
+                    },
+                    **write,
+                },
+                ["project_key", "title"],
+            ),
+        },
+        {
+            "name": McpTool.UPDATE_ITEM.value,
+            "description": "Update fields of an existing work item (omitted fields are "
+            "unchanged; custom_fields merge into existing values).",
+            "inputSchema": _schema(
+                {"key": key_property, "title": {"type": "string"}, **write}, ["key"]
+            ),
+        },
+        {
+            "name": McpTool.COMMENT_ITEM.value,
+            "description": "Add a comment to a work item.",
+            "inputSchema": _schema(
+                {
+                    "key": key_property,
+                    "body": {"type": "string", "description": "Markdown comment body."},
+                    "internal": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "Team-only visibility (requires the "
+                        "internal-comments permission).",
+                    },
+                },
+                ["key", "body"],
+            ),
+        },
+        {
+            "name": McpTool.LIST_PROJECTS.value,
+            "description": "List every project on this Radd instance.",
+            "inputSchema": _schema({}),
+        },
+    ]
+    if include_docs:
+        catalog += [
+            {
+                "name": McpTool.GET_DOC_PAGE.value,
+                "description": "Fetch one wiki page by id (full markdown body).",
+                "inputSchema": _schema(
+                    {"id": {"type": "string", "description": "Doc page id (UUID)."}}, ["id"]
+                ),
+            },
+            {
+                "name": McpTool.SEARCH_DOCS.value,
+                "description": "Full-text search over wiki pages (title + body), ranked.",
+                "inputSchema": _schema(
+                    {
+                        "query": {"type": "string", "description": "Search terms."},
+                        "limit": limit_property,
+                    },
+                    ["query"],
+                ),
+            },
+        ]
+    return catalog
+
+
+async def live_catalog(session: AsyncSession) -> list[dict[str, Any]]:
+    """build_catalog fed from the live registry (same projection as OpenAPI)."""
+    fields_openapi.refresh(await fields_service.list_fields(session))
+    return build_catalog(fields_openapi.schema_cache.properties, include_docs=docs_available())

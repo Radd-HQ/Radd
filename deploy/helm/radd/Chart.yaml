@@ -1,0 +1,6 @@
+apiVersion: v2
+name: radd
+description: Radd — self-hosted issue tracker + wiki (AGPL, never open-core)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

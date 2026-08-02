@@ -1,0 +1,81 @@
+# Example Radd values for a single-node k3s install. Copy, edit, keep OUT of
+# this repo — a real deployment's values carry your hostnames and network
+# addresses and belong with your infrastructure, not with the application.
+#
+#   helm upgrade --install radd deploy/helm/radd -n radd -f my-values.yaml
+#
+# See docs/deploy-k3s.md for the walkthrough this accompanies.
+
+image:
+  # A locally built image imported with `k3s ctr images import` keeps the
+  # `localhost/` prefix podman gave it — containerd stores that exact name, and
+  # a bare `radd` would resolve to docker.io/library/radd and fail to pull.
+  # Point this at a registry once you have one.
+  repository: localhost/radd
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+# For a private registry (a Forgejo/Gitea package registry, say):
+#   kubectl -n radd create secret docker-registry my-registry \
+#     --docker-server=git.example.com --docker-username=… --docker-password=…
+imagePullSecrets: []
+
+replicas: 1
+
+env:
+  # RADD_DATABASE_URL belongs in the Secret referenced by envFromSecret, NOT
+  # here — it carries a password. Do not keep a passwordless copy in this block
+  # either: Kubernetes gives a container's `env` entry precedence over the same
+  # key arriving via `envFrom`, so the plain value silently WINS over the
+  # Secret and the app fails with "no password supplied".
+  #
+  #   postgresql+psycopg://radd:<pw>@radd-db-rw.radd.svc:5432/radd
+
+  RADD_APP_BASE_URL: "https://radd.example.com"
+  RADD_SESSION_COOKIE_SECURE: "true"
+
+  # List EVERY proxy hop. clientip.py walks X-Forwarded-For right-to-left and
+  # returns the first UNTRUSTED entry, so behind an external proxy in front of
+  # Traefik you need both its address and the pod CIDR — otherwise every user
+  # appears to come from your proxy. 10.42.0.0/16 is the k3s pod CIDR default.
+  RADD_TRUSTED_PROXIES: "10.42.0.0/16"
+
+envFromSecret: radd-secrets
+
+ingress:
+  enabled: true
+  className: traefik
+  host: radd.example.com
+  # If TLS terminates at Traefik, add cert-manager annotations and a tls block.
+  # If an external proxy already terminates it, leave both out and route only
+  # the `web` entrypoint — two ACME clients fighting over one hostname is a
+  # tedious problem to debug.
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+  tls: []
+
+# One worker pod runs every background loop (webhooks, automations, notify,
+# search indexing, SLA clock, the nightly backup). Consumers are single-writer
+# by consumer-offset design — keep replicas at 1.
+workers:
+  enabled: true
+  replicas: 1
+
+storage:
+  s3: false
+  size: 20Gi
+  storageClassName: local-path
+
+# Artifacts here; the encryption KEY lives on the -data volume above. Put this
+# on a different disk from the database — see docs/deploy-k3s.md.
+backups:
+  enabled: true
+  size: 40Gi
+  storageClassName: ""
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    memory: 2Gi

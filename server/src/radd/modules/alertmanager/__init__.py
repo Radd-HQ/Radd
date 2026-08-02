@@ -1,0 +1,22 @@
+from radd.config import settings
+from radd.kernel import CapabilitySpec
+from radd.kernel import RaddPlugin
+
+from .router import router
+
+plugin = RaddPlugin(
+    name="alertmanager",
+    core=False,  # optional plugin — disableable via the plugin manager
+    description="Alertmanager intake (spec 47): webhook turning firing alerts into "
+    "items (fingerprint-deduped via alert_items) and repeats/resolves into comments.",
+    depends_on=("projects", "auth", "workflow", "items", "comments", "automations"),
+    routers=(router,),
+    capabilities=(
+        CapabilitySpec(
+            "alertmanager",
+            "Alertmanager intake",
+            "connector",
+            check=lambda: {"enabled": bool(settings.alertmanager_token)},
+        ),
+    ),
+)

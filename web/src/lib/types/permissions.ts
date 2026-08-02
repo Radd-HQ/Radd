@@ -1,0 +1,115 @@
+/** Permissions + roles-as-data (spec 06). */
+// ---------------------------------------------------------------------------
+// Permissions + roles-as-data (spec 06)
+// ---------------------------------------------------------------------------
+
+/** Mirror of the backend `Permission` enum (GET /permissions catalog keys). */
+export const Permission = {
+  globalManage: "global.manage",
+  projectCreate: "project.create",
+  projectManage: "project.manage",
+  itemRead: "item.read",
+  itemCreate: "item.create",
+  itemUpdate: "item.update",
+  /** Spec 22: log work + manage your own worklogs (project-scoped). */
+  worklogWrite: "worklog.write",
+  /** Spec 22: see other people's timesheets across the server (global). */
+  timesheetView: "timesheet.view",
+  commentWrite: "comment.write",
+  commentReadInternal: "comment.read_internal",
+  viewManage: "view.manage",
+  teamManage: "team.manage",
+  /** Spec 87: administering ANY team. Per-team leaders are granted separately —
+   * `Team.can_manage` / `can_delete` carry the resolved answer for one team. */
+  teamCreate: "team.create",
+  teamUpdate: "team.update",
+  teamDelete: "team.delete",
+  roleManage: "role.manage",
+  roleUpdate: "role.update",
+  userManage: "user.manage",
+  cycleManage: "cycle.manage",
+  /** Spec 20: manage automation rules (global). */
+  automationManage: "automation.manage",
+  slaManage: "sla.manage",
+  stateManage: "state.manage",
+  releaseManage: "release.manage",
+  fieldManage: "field.manage",
+  labelManage: "label.manage",
+  webhookManage: "webhook.manage",
+  cannedManage: "canned.manage",
+  /** Spec 109: the shared card-layout preset library (global). */
+  cardPresetManage: "cardpreset.manage",
+  cardPresetCreate: "cardpreset.create",
+  cardPresetUpdate: "cardpreset.update",
+  cardPresetDelete: "cardpreset.delete",
+  /** Spec 20: manage a project's intake forms (project-scoped). */
+  formManage: "form.manage",
+  /** Spec 43 (wiki) — all global. */
+  docRead: "doc.read",
+  docWrite: "doc.write",
+  docManage: "doc.manage",
+  /** Spec 75: the server-wide-broadcast gate on dashboard sharing (global). */
+  dashboardCreate: "dashboard.create",
+} as const;
+// Spec 50: permissions are open-ended data now (77 CRUD atoms + custom roles).
+// The named `Permission` const above still autocompletes the ones used in gating;
+// `(string & {})` keeps that autocomplete while accepting any catalog key.
+export type PermissionValue = (typeof Permission)[keyof typeof Permission] | (string & {});
+
+export const PermissionScope = {
+  project: "project",
+  global: "global",
+  instance: "instance",
+} as const;
+export type PermissionScopeValue = (typeof PermissionScope)[keyof typeof PermissionScope];
+
+/** One row of GET /permissions — feeds the roles matrix UI. */
+export interface PermissionInfo {
+  key: PermissionValue;
+  description: string;
+  scope: PermissionScopeValue;
+  /** Spec 50: the resource half of the key (item, state, …) — matrix grouping. */
+  resource: string;
+  /** Spec 50: the verb half (create/read/update/delete/manage/…) — matrix column. */
+  action: string;
+}
+
+/** GET /roles (spec 06) — global role registry. Builtin rows are immutable. */
+export interface Role {
+  id: string;
+  key: string;
+  name: string;
+  description: string;
+  permissions: PermissionValue[];
+  is_builtin: boolean;
+  position: number;
+  created_at: string;
+}
+
+export interface RoleCreate {
+  key: string;
+  name: string;
+  description?: string;
+  permissions: PermissionValue[];
+}
+
+/** PATCH /roles/{id} — permissions patchable on non-builtin roles only. */
+export interface RoleUpdate {
+  name?: string;
+  description?: string;
+  permissions?: PermissionValue[];
+}
+
+/** Direct user↔project membership with a data-driven role (spec 06). */
+export interface ProjectMember {
+  project_id: string;
+  user_id: string;
+  role_id: string;
+  /** The role's key, hydrated for display. */
+  role: string;
+}
+
+export interface ProjectMemberUpsert {
+  user_id: string;
+  role_id: string;
+}

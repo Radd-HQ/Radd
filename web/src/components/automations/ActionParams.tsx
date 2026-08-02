@@ -1,0 +1,350 @@
+import { useId } from "react";
+import { AUTOMATION_CLEAR_VALUE } from "../../lib/constants";
+import { COMMENT_VISIBILITY_LABELS, PRIORITY_META, PRIORITY_ORDER } from "../../lib/meta";
+import {
+  ActionType,
+  CommentVisibility,
+  EmailRecipient,
+  type CustomFieldValue,
+  type RuleAction,
+} from "../../lib/types";
+import { CustomFieldControl } from "../items/CustomFieldsForm";
+import { SelectField } from "../SelectField";
+import { TextField } from "../TextField";
+import type { PickerData } from "./ActionsBuilder";
+
+interface ActionParamsProps {
+  action: RuleAction;
+  pickers: PickerData;
+  listId: string;
+  onParams: (params: Record<string, CustomFieldValue>) => void;
+}
+
+/** Clearable pickers (assignee/team/cycle) share this option. */
+const CLEAR_OPTION = <option value={AUTOMATION_CLEAR_VALUE}>— Clear (unset) —</option>;
+
+/** Type-specific param inputs for one action row (spec 20). */
+export function ActionParams({ action, pickers, listId, onParams }: ActionParamsProps) {
+  const p = action.params;
+  const set = (patch: Record<string, CustomFieldValue>) => onParams({ ...p, ...patch });
+  const str = (value: CustomFieldValue) => (typeof value === "string" ? value : "");
+
+  switch (action.type) {
+    case ActionType.setState:
+      return (
+        <TextField
+          label="State name"
+          value={str(p.state)}
+          list={`${listId}-states`}
+          placeholder="In Progress"
+          onChange={(event) => set({ state: event.target.value })}
+        />
+      );
+    case ActionType.setPriority:
+      return (
+        <SelectField
+          label="Priority"
+          value={str(p.priority)}
+          onChange={(event) => set({ priority: event.target.value })}
+        >
+          {PRIORITY_ORDER.map((value) => (
+            <option key={value} value={value}>
+              {PRIORITY_META[value].label}
+            </option>
+          ))}
+        </SelectField>
+      );
+    case ActionType.setAssignee:
+      return (
+        <SelectField
+          label="Assignee"
+          value={str(p.assignee)}
+          onChange={(event) => set({ assignee: event.target.value })}
+        >
+          <option value="">Select…</option>
+          {CLEAR_OPTION}
+          {pickers.userEmails.map((user) => (
+            <option key={user.email} value={user.email}>
+              {user.name} ({user.email})
+            </option>
+          ))}
+        </SelectField>
+      );
+    case ActionType.setTeam:
+      return (
+        <SelectField
+          label="Team"
+          value={str(p.team)}
+          onChange={(event) => set({ team: event.target.value })}
+        >
+          <option value="">Select…</option>
+          {CLEAR_OPTION}
+          {pickers.teamNames.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </SelectField>
+      );
+    case ActionType.addLabel:
+    case ActionType.removeLabel:
+      return (
+        <TextField
+          label="Label"
+          value={str(p.label)}
+          list={`${listId}-labels`}
+          placeholder="needs-triage"
+          onChange={(event) => set({ label: event.target.value })}
+        />
+      );
+    case ActionType.setCycle:
+      return (
+        <SelectField
+          label="Cycle"
+          value={str(p.cycle)}
+          onChange={(event) => set({ cycle: event.target.value })}
+        >
+          <option value="">Select…</option>
+          {CLEAR_OPTION}
+          {pickers.cycleNames.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </SelectField>
+      );
+    case ActionType.setRelease:
+      return (
+        <TextField
+          label="Release version"
+          value={str(p.release)}
+          list={`${listId}-releases`}
+          placeholder="1.2.0"
+          hint={`Type "${AUTOMATION_CLEAR_VALUE}" to clear`}
+          onChange={(event) => set({ release: event.target.value })}
+        />
+      );
+    case ActionType.setCustomField:
+      return <CustomFieldParams pickers={pickers} params={p} set={set} />;
+    case ActionType.addComment:
+      return <CommentParams params={p} set={set} str={str} />;
+    case ActionType.createItem:
+      return (
+        <div className="flex flex-col gap-2.5">
+          <SelectField
+            label="In project"
+            value={str(p.project)}
+            onChange={(event) => set({ project: event.target.value })}
+          >
+            <option value="">Select…</option>
+            {pickers.projectKeys.map((key) => (
+              <option key={key} value={key}>
+                {key}
+              </option>
+            ))}
+          </SelectField>
+          <TextField
+            label="Title"
+            value={str(p.title)}
+            placeholder="Retro for {{payload.name}}"
+            hint={TEMPLATE_HINT}
+            onChange={(event) => set({ title: event.target.value })}
+          />
+          <TextField
+            label="Description (optional)"
+            value={str(p.description)}
+            placeholder="Created by automation from {{event_type}}"
+            onChange={(event) => set({ description: event.target.value })}
+          />
+        </div>
+      );
+    case ActionType.sendWebhook:
+      return (
+        <div className="flex flex-col gap-2.5">
+          <TextField
+            label="URL"
+            value={str(p.url)}
+            placeholder="https://example.com/hooks/radd"
+            hint="POSTs the event JSON (rule, event_type, actor, item, payload)"
+            onChange={(event) => set({ url: event.target.value })}
+          />
+          <TextField
+            label="Secret (optional)"
+            value={str(p.secret)}
+            placeholder="HMAC-SHA256 → X-Radd-Signature header"
+            onChange={(event) => set({ secret: event.target.value })}
+          />
+        </div>
+      );
+    case ActionType.postChat:
+      return (
+        <div className="flex flex-col gap-2.5">
+          <TextField
+            label="Incoming-webhook URL"
+            value={str(p.webhook_url)}
+            placeholder="https://chat.googleapis.com/v1/spaces/…"
+            hint={'POSTs {"text": message} — Google Chat / Slack style'}
+            onChange={(event) => set({ webhook_url: event.target.value })}
+          />
+          <TextField
+            label="Message"
+            value={str(p.message)}
+            placeholder="{{actor.name}} moved {{item.key}} to {{payload.state.name}}"
+            hint={TEMPLATE_HINT}
+            onChange={(event) => set({ message: event.target.value })}
+          />
+        </div>
+      );
+    case ActionType.notifyUser:
+      return (
+        <div className="flex flex-col gap-2.5">
+          <SelectField
+            label="User"
+            value={str(p.user)}
+            onChange={(event) => set({ user: event.target.value })}
+          >
+            <option value="">Select…</option>
+            {pickers.userEmails.map((user) => (
+              <option key={user.email} value={user.email}>
+                {user.name} ({user.email})
+              </option>
+            ))}
+          </SelectField>
+          <TextField
+            label="Message"
+            value={str(p.message)}
+            placeholder="{{item.key}} needs your attention"
+            hint={TEMPLATE_HINT}
+            onChange={(event) => set({ message: event.target.value })}
+          />
+        </div>
+      );
+    case ActionType.sendEmail:
+      return <SendEmailParams pickers={pickers} params={p} set={set} str={str} />;
+    default:
+      return null;
+  }
+}
+
+/** Shared hint for template-capable text params (spec 58b). */
+const TEMPLATE_HINT =
+  "Templates: {{event_type}}, {{actor.name}}, {{payload.<path>}}, {{item.key}}";
+
+interface ParamsControlProps {
+  pickers: PickerData;
+  params: Record<string, CustomFieldValue>;
+  set: (patch: Record<string, CustomFieldValue>) => void;
+}
+
+/** set_custom_field: pick a registry field key, then edit the value by its type. */
+function CustomFieldParams({ pickers, params, set }: ParamsControlProps) {
+  const key = typeof params.key === "string" ? params.key : "";
+  const field = pickers.fields.find((definition) => definition.key === key);
+  return (
+    <div className="flex flex-col gap-2.5">
+      <SelectField
+        label="Field"
+        value={key}
+        onChange={(event) => set({ key: event.target.value, value: null })}
+      >
+        <option value="">Select…</option>
+        {pickers.fields.map((definition) => (
+          <option key={definition.id} value={definition.key}>
+            {definition.name}
+          </option>
+        ))}
+      </SelectField>
+      {field && (
+        <CustomFieldControl
+          field={{ ...field, name: "Value", required: false }}
+          value={params.value ?? null}
+          onChange={(value) => set({ value })}
+        />
+      )}
+    </div>
+  );
+}
+
+interface CommentControlProps {
+  params: Record<string, CustomFieldValue>;
+  set: (patch: Record<string, CustomFieldValue>) => void;
+  str: (value: CustomFieldValue) => string;
+}
+
+/** send_email (spec 66): recipient (role or literal address) + templated
+ * subject/body. The recipient is a select-or-input — a datalist offering the
+ * roles and every active user's address over a free-text field. */
+function SendEmailParams({
+  pickers,
+  params,
+  set,
+  str,
+}: ParamsControlProps & Pick<CommentControlProps, "str">) {
+  const recipientsId = useId();
+  return (
+    <div className="flex flex-col gap-2.5">
+      <datalist id={recipientsId}>
+        {Object.values(EmailRecipient).map((role) => (
+          <option key={role} value={role} />
+        ))}
+        {pickers.userEmails.map((user) => (
+          <option key={user.email} value={user.email} />
+        ))}
+      </datalist>
+      <TextField
+        label="To"
+        value={str(params.to)}
+        list={recipientsId}
+        placeholder="reporter / assignee / contact / someone@example.com"
+        hint="A role (contact = the external requester) or a literal address"
+        onChange={(event) => set({ to: event.target.value })}
+      />
+      <TextField
+        label="Subject"
+        value={str(params.subject)}
+        placeholder="[{{item.key}}] {{item.title}}"
+        hint={TEMPLATE_HINT}
+        onChange={(event) => set({ subject: event.target.value })}
+      />
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-fg-secondary">Body</label>
+        <textarea
+          value={str(params.body)}
+          onChange={(event) => set({ body: event.target.value })}
+          rows={2}
+          placeholder="{{actor.name}} updated {{item.key}}…"
+          className="rounded-md border border-strong bg-surface px-2.5 py-1.5 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
+        />
+      </div>
+    </div>
+  );
+}
+
+/** add_comment: body + public/internal visibility. */
+function CommentParams({ params, set, str }: CommentControlProps) {
+  return (
+    <div className="flex flex-col gap-2.5">
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-fg-secondary">Comment body</label>
+        <textarea
+          value={str(params.body)}
+          onChange={(event) => set({ body: event.target.value })}
+          rows={2}
+          placeholder="Auto-added by a rule…"
+          className="rounded-md border border-strong bg-surface px-2.5 py-1.5 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
+        />
+      </div>
+      <SelectField
+        label="Visibility"
+        value={str(params.visibility)}
+        onChange={(event) => set({ visibility: event.target.value })}
+      >
+        {Object.values(CommentVisibility).map((visibility) => (
+          <option key={visibility} value={visibility}>
+            {COMMENT_VISIBILITY_LABELS[visibility]}
+          </option>
+        ))}
+      </SelectField>
+    </div>
+  );
+}

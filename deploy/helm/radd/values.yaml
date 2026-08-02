@@ -1,0 +1,90 @@
+# Radd Helm values (spec 48). Defaults = all-in-one: one web deployment that
+# also runs the background workers. Set workers.enabled=true to split.
+
+image:
+  repository: radd # push the Containerfile image to your registry
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# Names of existing docker-registry Secrets, for a private registry (e.g. a
+# Forgejo/Gitea package registry): `kubectl create secret docker-registry …`.
+imagePullSecrets: []
+
+replicas: 1
+
+# The image runs as uid 10001 (Containerfile `USER radd`). Without an fsGroup
+# the PVCs mount root-owned and the app cannot write attachments or backups —
+# docs/deploy.md has always prescribed this; the chart now implements it.
+podSecurityContext:
+  fsGroup: 10001
+
+# The complete RADD_* environment (see docs/deploy.md for the reference
+# table generated from config.py). databaseUrl is REQUIRED.
+env:
+  RADD_DATABASE_URL: "" # e.g. postgresql+psycopg://radd:…@pg:5432/radd
+  RADD_APP_BASE_URL: "" # absolute URL used in emails/links
+  RADD_SESSION_COOKIE_SECURE: "true"
+
+# Extra env sourced from an existing Secret (SMTP/OIDC/LDAP/S3/AI keys…).
+envFromSecret: ""
+
+service:
+  type: ClusterIP
+  port: 8000
+
+ingress:
+  enabled: false
+  className: ""
+  host: radd.example.com
+  annotations: {} # e.g. Traefik middleware refs, cert-manager issuers
+  tls: [] # standard ingress TLS blocks
+
+# Worker split: when enabled, web pods run with RADD_RUN_WORKERS=false and a
+# single worker pod runs the background loops (consumers are single-writer
+# by consumer-offset design — keep replicas at 1).
+workers:
+  enabled: false
+  replicas: 1
+
+# Filesystem attachments need a PVC; set storage.s3=true (and the RADD_S3_*
+# env) to skip the volume entirely. /data also holds the backup ENCRYPTION KEY
+# (RADD_BACKUP_KEY_FILE), which is why it stays even on an S3 deploy.
+storage:
+  s3: false
+  size: 10Gi
+  storageClassName: ""
+
+# Backup artifacts (spec 99). The image defaults RADD_BACKUP_DIR to
+# /opt/radd/backups, and a nightly schedule is SEEDED ON FIRST BOOT — so
+# without this volume the backups write to the pod's ephemeral layer and are
+# destroyed on every restart, silently. Keep it on a DIFFERENT storage class /
+# disk from the database: a backup that dies with what it protects is not a
+# backup. Set enabled=false only if you back the database up by other means.
+backups:
+  enabled: true
+  size: 20Gi
+  storageClassName: ""
+  mountPath: /opt/radd/backups
+
+migration:
+  enabled: true # pre-install/pre-upgrade Job running `alembic upgrade head`
+
+resources: {}
+nodeSelector: {}
+tolerations: []
+
+# Pod DNS settings (passed through to podSpec.dnsConfig).
+#
+# Worth knowing about `ndots`: Kubernetes defaults it to 5, so any hostname
+# with fewer than 5 dots is FIRST tried against every search domain. If the
+# node inherits a search domain from DHCP and that domain has a wildcard
+# record, external lookups silently resolve to the wildcard's address —
+# `accounts.google.com` becomes `accounts.google.com.example.com` and the app
+# connects to entirely the wrong host. Setting ndots to 1 makes any dotted name
+# resolve absolutely first, which is almost always what a server wants.
+#
+#   dnsConfig:
+#     options:
+#       - name: ndots
+#         value: "1"
+dnsConfig: {}

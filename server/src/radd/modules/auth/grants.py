@@ -1,0 +1,247 @@
+"""Scopeable role grants (spec 87 → spec 91) — how a role reaches a user/team
+outside project membership, at global OR project scope.
+
+Spec 87 introduced instance-wide grants (`global_role_grants`). Spec 91 adds a
+nullable `project_id`: NULL = global (unchanged), set = the role held only on that
+project. One table, one resolution path, one Grant Role dialog — "grant any role
+at global or project scope". Resolution shape still mirrors
+`teams.team_granted_role_ids`: collect role ids, load their permission sets, union.
+"""
+
+import uuid
+from collections import defaultdict
+from collections.abc import Iterable
+
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from radd.exceptions import ConflictError, NotFoundError
+from radd.modules.events import service as events
+
+from .models import GlobalRoleGrant
+from .schemas import GlobalGrantEntry
+from .types import AuthEntity, AuthEvent
+
+
+async def _subject_condition(session: AsyncSession, user_id: uuid.UUID):
+    """A grant belongs to the user directly, or to one of their teams."""
+    from radd.modules.teams import service as teams  # deferred: teams loads after auth
+
+    team_ids = await teams.user_team_ids(session, user_id)
+    condition = GlobalRoleGrant.user_id == user_id
+    if team_ids:
+        condition = condition | GlobalRoleGrant.team_id.in_(team_ids)
+    return condition
+
+
+async def granted_role_ids(
+    session: AsyncSession, user_id: uuid.UUID, project_id: uuid.UUID | None = None
+) -> set[uuid.UUID]:
+    """Role ids the user holds by grant. `project_id` None = GLOBAL scope (only
+    global grants). A project id = global grants (they apply everywhere) PLUS
+    grants scoped to that project. Consumed by authz at both scopes."""
+    subject = await _subject_condition(session, user_id)
+    if project_id is None:
+        scope = GlobalRoleGrant.project_id.is_(None)
+    else:
+        scope = GlobalRoleGrant.project_id.is_(None) | (GlobalRoleGrant.project_id == project_id)
+    result = await session.execute(
+        select(GlobalRoleGrant.role_id).where(subject & scope).distinct()
+    )
+    return set(result.scalars())
+
+
+async def project_granted_role_ids(
+    session: AsyncSession, user_id: uuid.UUID, project_ids: Iterable[uuid.UUID]
+) -> dict[uuid.UUID, set[uuid.UUID]]:
+    """Batch: {project_id: role_ids} for grants SCOPED to those projects (the global
+    ones are added separately by the caller — they apply to every project)."""
+    ids = set(project_ids)
+    if not ids:
+        return {}
+    subject = await _subject_condition(session, user_id)
+    rows = await session.execute(
+        select(GlobalRoleGrant.project_id, GlobalRoleGrant.role_id).where(
+            subject & GlobalRoleGrant.project_id.in_(ids)
+        )
+    )
+    out: dict[uuid.UUID, set[uuid.UUID]] = defaultdict(set)
+    for project_id, role_id in rows.all():
+        out[project_id].add(role_id)
+    return out
+
+
+async def list_grants(session: AsyncSession, role_id: uuid.UUID) -> list[GlobalRoleGrant]:
+    """The GLOBAL grants of a role (the Roles page's global-grants editor)."""
+    result = await session.execute(
+        select(GlobalRoleGrant).where(
+            GlobalRoleGrant.role_id == role_id, GlobalRoleGrant.project_id.is_(None)
+        )
+    )
+    return list(result.scalars())
+
+
+async def grants_for_subject(
+    session: AsyncSession,
+    *,
+    user_id: uuid.UUID | None = None,
+    team_id: uuid.UUID | None = None,
+) -> list[GlobalRoleGrant]:
+    """Every grant (any role, any scope) held by one subject — the team/user Roles
+    tab. Exactly one of user_id/team_id."""
+    if (user_id is None) == (team_id is None):
+        raise ConflictError(AuthEntity.GLOBAL_GRANT, reason="exactly one subject required")
+    condition = (
+        GlobalRoleGrant.user_id == user_id if user_id else GlobalRoleGrant.team_id == team_id
+    )
+    result = await session.execute(
+        select(GlobalRoleGrant).where(condition).order_by(GlobalRoleGrant.created_at)
+    )
+    return list(result.scalars())
+
+
+async def role_referenced(session: AsyncSession, role_id: uuid.UUID) -> bool:
+    """Does any grant (global or project) still hold this role? (role-deletion guard)"""
+    row = await session.scalar(
+        select(GlobalRoleGrant.id).where(GlobalRoleGrant.role_id == role_id).limit(1)
+    )
+    return row is not None
+
+
+# --- grant-centric CRUD (the unified Grant Role dialog) -----------------------
+
+
+async def create_grant(
+    session: AsyncSession,
+    role_id: uuid.UUID,
+    *,
+    user_id: uuid.UUID | None = None,
+    team_id: uuid.UUID | None = None,
+    project_id: uuid.UUID | None = None,
+    actor_id: uuid.UUID | None = None,
+) -> GlobalRoleGrant:
+    """Grant a role to a user or team at a scope (project_id None = global)."""
+    from radd.modules.projects import service as projects_service
+    from radd.modules.teams import service as teams
+
+    from . import roles as roles_service, service as users_service
+
+    if (user_id is None) == (team_id is None):
+        raise ConflictError(AuthEntity.GLOBAL_GRANT, reason="exactly one subject required")
+    role = await roles_service.get_role(session, role_id)
+    if user_id is not None and user_id not in await users_service.users_by_ids(session, [user_id]):
+        raise ConflictError(AuthEntity.GLOBAL_GRANT, reason=f"no such user {user_id}")
+    if team_id is not None and (await teams.teams_by_ids(session, [team_id])).get(team_id) is None:
+        raise ConflictError(AuthEntity.GLOBAL_GRANT, reason=f"no such team {team_id}")
+    if project_id is not None:
+        await projects_service.get_project(session, project_id)
+    # Guard duplicates (NULL project_id isn't caught by the unique constraint).
+    existing = await session.scalar(
+        select(GlobalRoleGrant.id).where(
+            GlobalRoleGrant.role_id == role_id,
+            GlobalRoleGrant.user_id == user_id,
+            GlobalRoleGrant.team_id == team_id,
+            GlobalRoleGrant.project_id.is_(None)
+            if project_id is None
+            else GlobalRoleGrant.project_id == project_id,
+        )
+    )
+    if existing is not None:
+        raise ConflictError(AuthEntity.GLOBAL_GRANT, reason="that grant already exists")
+    grant = GlobalRoleGrant(
+        role_id=role_id, user_id=user_id, team_id=team_id, project_id=project_id
+    )
+    session.add(grant)
+    await session.flush()
+    await _emit(session, role.key, grant, "granted", actor_id)
+    return grant
+
+
+async def delete_grant(
+    session: AsyncSession, grant_id: uuid.UUID, actor_id: uuid.UUID | None = None
+) -> None:
+    from . import roles as roles_service
+
+    grant = await session.get(GlobalRoleGrant, grant_id)
+    if grant is None:
+        raise NotFoundError(AuthEntity.GLOBAL_GRANT, grant_id)
+    role = await roles_service.get_role(session, grant.role_id)
+    await _emit(session, role.key, grant, "revoked", actor_id)
+    await session.delete(grant)
+    await session.flush()
+
+
+async def _emit(
+    session: AsyncSession, role_key: str, grant: GlobalRoleGrant, action: str, actor_id: uuid.UUID | None
+) -> None:
+    await events.emit(
+        session,
+        event_type=AuthEvent.ROLE_UPDATED,
+        entity_type=AuthEntity.ROLE,
+        entity_id=grant.role_id,
+        actor_id=actor_id,
+        payload={
+            "action": f"grant_{action}",
+            "key": role_key,
+            "user_id": str(grant.user_id) if grant.user_id else None,
+            "team_id": str(grant.team_id) if grant.team_id else None,
+            "project_id": str(grant.project_id) if grant.project_id else None,
+        },
+    )
+
+
+async def replace_grants(
+    session: AsyncSession,
+    role_id: uuid.UUID,
+    entries: list[GlobalGrantEntry],
+    actor_id: uuid.UUID | None = None,
+) -> list[GlobalRoleGrant]:
+    """Full-state replace of who holds this role GLOBALLY (the Roles page editor).
+    Only global grants (project_id NULL) are touched — project-scoped grants are
+    managed grant-by-grant through the Grant Role dialog."""
+    from radd.modules.teams import service as teams  # deferred: teams loads after auth
+
+    from . import roles as roles_service, service as users_service
+
+    role = await roles_service.get_role(session, role_id)
+    seen: set[tuple[str, uuid.UUID]] = set()
+    for entry in entries:
+        key = ("user", entry.user_id) if entry.user_id else ("team", entry.team_id)
+        if key in seen:
+            raise ConflictError(AuthEntity.GLOBAL_GRANT, reason=f"duplicate subject {key[1]}")
+        seen.add(key)  # type: ignore[arg-type]
+    user_ids = [e.user_id for e in entries if e.user_id is not None]
+    found_users = await users_service.users_by_ids(session, user_ids)
+    for user_id in user_ids:
+        if user_id not in found_users:
+            raise ConflictError(AuthEntity.GLOBAL_GRANT, reason=f"no such user {user_id}")
+    team_ids = [e.team_id for e in entries if e.team_id is not None]
+    found_teams = await teams.teams_by_ids(session, team_ids)
+    for team_id in team_ids:
+        if found_teams.get(team_id) is None:
+            raise ConflictError(AuthEntity.GLOBAL_GRANT, reason=f"no such team {team_id}")
+
+    await session.execute(
+        delete(GlobalRoleGrant).where(
+            GlobalRoleGrant.role_id == role_id, GlobalRoleGrant.project_id.is_(None)
+        )
+    )
+    for entry in entries:
+        session.add(
+            GlobalRoleGrant(role_id=role_id, user_id=entry.user_id, team_id=entry.team_id)
+        )
+    await session.flush()
+    await events.emit(
+        session,
+        event_type=AuthEvent.ROLE_UPDATED,
+        entity_type=AuthEntity.ROLE,
+        entity_id=role.id,
+        actor_id=actor_id,
+        payload={
+            "action": "global_grants_replaced",
+            "key": role.key,
+            "users": [str(u) for u in user_ids],
+            "teams": [str(t) for t in team_ids],
+        },
+    )
+    return await list_grants(session, role_id)

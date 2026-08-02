@@ -1,0 +1,181 @@
+/*
+ * Radd plugin-SDK primitive styles. Stable `.radd-*` classes built entirely from the theme tokens
+ * (tokens.css) — NO Tailwind utilities — so a federated remote renders primitives identically
+ * without its own build needing to scan/emit the classes. The host imports this ONCE; every remote
+ * inherits it via the shared DOM. Plugins reference these classes (or the React primitives that
+ * apply them), never raw hex.
+ */
+
+.radd-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 2rem;
+  padding: 0 0.75rem;
+  border-radius: var(--radd-radius);
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.radd-btn:focus-visible {
+  outline: 2px solid var(--radd-focus);
+  outline-offset: 2px;
+}
+.radd-btn:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.radd-btn--primary {
+  background: var(--radd-accent);
+  color: var(--radd-accent-fg);
+}
+.radd-btn--primary:hover {
+  background: var(--radd-accent-hover);
+}
+.radd-btn--ghost {
+  color: var(--radd-text);
+  background: transparent;
+}
+.radd-btn--ghost:hover {
+  background: var(--radd-panel-hover);
+  color: var(--radd-heading);
+}
+.radd-btn--danger {
+  background: var(--radd-danger);
+  color: var(--radd-accent-fg);
+}
+.radd-btn--danger:hover {
+  background: var(--radd-danger-hover);
+}
+.radd-btn--sm {
+  height: 1.625rem;
+  padding: 0 0.5rem;
+  font-size: 12px;
+}
+
+.radd-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+.radd-field__label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--radd-text-muted);
+}
+.radd-input,
+.radd-select,
+.radd-textarea {
+  height: 2rem;
+  border-radius: var(--radd-radius);
+  border: 1px solid var(--radd-border-strong);
+  background: var(--radd-panel);
+  padding: 0 0.625rem;
+  font-size: 13px;
+  color: var(--radd-heading);
+  width: 100%;
+}
+.radd-textarea {
+  height: auto;
+  min-height: 4rem;
+  padding: 0.5rem 0.625rem;
+  resize: vertical;
+}
+.radd-input::placeholder,
+.radd-textarea::placeholder {
+  color: var(--radd-text-faint);
+}
+.radd-input:focus,
+.radd-select:focus,
+.radd-textarea:focus {
+  outline: 2px solid var(--radd-focus);
+  outline-offset: 1px;
+}
+.radd-input[aria-invalid="true"] {
+  border-color: var(--radd-danger);
+}
+.radd-field__hint {
+  font-size: 12px;
+  color: var(--radd-text-faint);
+}
+.radd-field__error {
+  font-size: 12px;
+  color: var(--radd-danger);
+}
+
+.radd-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.0625rem 0.5rem;
+  border-radius: 9999px;
+  border: 1px solid var(--radd-border-strong);
+  background: var(--radd-panel);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--radd-text-muted);
+}
+
+.radd-card {
+  border: 1px solid var(--radd-border);
+  border-radius: var(--radd-radius-lg);
+  background: color-mix(in srgb, var(--radd-panel) 55%, transparent);
+  padding: 0.75rem;
+}
+.radd-card__title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--radd-text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.radd-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--radd-text-faint);
+  font-size: 13px;
+}
+
+.radd-spinner {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--radd-border-strong);
+  border-top-color: var(--radd-accent);
+  border-radius: 9999px;
+  animation: radd-spin 0.6s linear infinite;
+}
+@keyframes radd-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.radd-modal__backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 50;
+}
+.radd-modal {
+  background: var(--radd-panel);
+  border: 1px solid var(--radd-border-strong);
+  border-radius: var(--radd-radius-lg);
+  padding: 1.25rem;
+  width: 100%;
+  max-width: 30rem;
+  max-height: 90vh;
+  overflow-y: auto;
+}

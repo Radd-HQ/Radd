@@ -1,0 +1,61 @@
+"""The resource registry (spec 92) — the plugin extension point.
+
+A module registers each protectable resource type with its access model (which
+access values exist, whether absence-of-grants means open or closed, whether the
+values are independent flags or ordered levels, which subject kinds apply, whether
+grants can be project-scoped) and an authz hook deciding who may manage its grants.
+The generic /grants router and the reusable GrantsEditor then work for it with no
+extra code — including for plugins.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+import uuid
+
+from radd.modules.auth.models import User
+
+from .types import Access, GrantSubject
+
+# (session, actor, resource_id, project_id) -> may the actor manage this resource's
+# grants at that scope? project_id None = global / "can manage at all" (list). A
+# resource that scopes authority per project (builtin fields, per-project managers)
+# uses it; one whose authority is intrinsic (a custom field's own scope) ignores it.
+CanManage = Callable[[AsyncSession, User, str, "uuid.UUID | None"], Awaitable[bool]]
+
+
+@dataclass(frozen=True)
+class ResourceSpec:
+    resource_type: str
+    can_manage: CanManage
+    accesses: tuple[str, ...] = (Access.READ.value, Access.WRITE.value)
+    # No in-scope grant of an access → is that access OPEN (fields) or CLOSED (views)?
+    default_open: bool = True
+    # Are `accesses` ordered levels (viewer<editor<owner) or independent flags (read/write)?
+    hierarchical: bool = False
+    subjects: tuple[GrantSubject, ...] = (
+        GrantSubject.USER, GrantSubject.TEAM, GrantSubject.ROLE,
+    )
+    project_scoped: bool = True
+    # For flag models: which OTHER accesses satisfy a given one (write implies read).
+    implied_by: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    label: str = ""  # human name for the UI (defaults to resource_type)
+
+
+_REGISTRY: dict[str, ResourceSpec] = {}
+
+
+def register_resource(spec: ResourceSpec) -> None:
+    _REGISTRY[spec.resource_type] = spec
+
+
+def get_spec(resource_type: str) -> ResourceSpec | None:
+    return _REGISTRY.get(resource_type)
+
+
+def all_specs() -> list[ResourceSpec]:
+    return list(_REGISTRY.values())

@@ -1,0 +1,60 @@
+# Example PostgreSQL for Radd on k3s, via the CloudNativePG operator.
+# Copy and edit; a real cluster definition belongs with your infrastructure.
+#
+#   kubectl apply --server-side -f \
+#     https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.24/releases/cnpg-1.24.0.yaml
+#   kubectl create namespace radd
+#   kubectl -n radd create secret generic radd-db-app \
+#     --type=kubernetes.io/basic-auth \
+#     --from-literal=username=radd --from-literal=password="$(openssl rand -base64 24 | tr -d '/+=')"
+#   kubectl apply -f this-file.yaml
+#
+# The Secret MUST be type kubernetes.io/basic-auth — CNPG does not accept an
+# Opaque secret with the same keys. Strip /+= from the password: it gets
+# embedded in a URL, where unescaped reserved characters produce a connection
+# error that reads like a wrong password.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: radd-db
+  namespace: radd
+spec:
+  instances: 1
+
+  # Stock CNPG images have no pgvector, which Radd's semantic search wants
+  # (spec 103). Build ./pgvector.Containerfile and import it, or drop these two
+  # lines to run upstream — search then stays plain FTS and nothing else
+  # changes, so this is a soft dependency, not a blocker.
+  imageName: localhost/cnpg-pgvector:16
+  imagePullPolicy: IfNotPresent
+
+  bootstrap:
+    initdb:
+      database: radd
+      owner: radd
+      secret:
+        name: radd-db-app
+
+  postgresql:
+    parameters:
+      shared_buffers: 512MB
+      max_connections: "200"
+
+  managed:
+    roles:
+      # Radd's startup runs `CREATE EXTENSION IF NOT EXISTS vector`, which
+      # requires superuser. Scoped to this cluster's own app role.
+      - name: radd
+        superuser: true
+        login: true
+        ensure: present
+
+  storage:
+    size: 40Gi
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      memory: 2Gi

@@ -1,0 +1,87 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Containerfile
+    environment:
+      RADD_DATABASE_URL: postgresql+psycopg://radd:radd@db:5432/radd
+    ports:
+      - "8000:8000"
+    volumes:
+      - radd-data:/data
+      # Backups (spec 99). Swap for a bind mount to keep them on the host —
+      # `- ./backups:/opt/radd/backups` — but chown it to the container user
+      # first: `sudo chown 10001:10001 ./backups`.
+      - radd-backups:/opt/radd/backups
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: docker.io/pgvector/pgvector:pg16
+    # Parallel maintenance/query workers allocate dynamic shared memory in
+    # /dev/shm; the 64MB container default aborts them at scale (DiskFull).
+    shm_size: 1g
+    environment:
+      POSTGRES_USER: radd
+      POSTGRES_PASSWORD: radd
+      POSTGRES_DB: radd
+    ports:
+      - "5455:5432"
+    volumes:
+      - radd-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U radd -d radd"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # Optional embeddings server (Hugging Face text-embeddings-inference) — the
+  # heavy-duty tier for semantic search; the in-app `radd[localembed]` CPU
+  # backend stays the zero-infra fallback. Opt-in, ONE of:
+  #   podman compose --profile embeddings up -d       # CPU
+  #   podman compose --profile embeddings-gpu up -d   # NVIDIA (CDI required)
+  # Then Settings → AI: add an OpenAI-shape provider, base_url
+  # http://embeddings/v1 (the app reaches it over the compose network; port 8081
+  # on the host is for poking it directly), model BAAI/bge-small-en-v1.5, and
+  # hand it the embeddings role. The `86-*` tag is compute capability 8.6
+  # (RTX 30xx/A10) — pick your architecture's tag per docs/deploy.md.
+  embeddings:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9
+    profiles: ["embeddings"]
+    command: --model-id ${RADD_EMBEDDINGS_MODEL:-BAAI/bge-small-en-v1.5} --max-client-batch-size 1024 --payload-limit 16000000
+    ports:
+      - "${RADD_EMBEDDINGS_PORT:-8081}:80"
+    volumes:
+      - radd-embeddings:/data
+
+  embeddings-gpu:
+    image: ghcr.io/huggingface/text-embeddings-inference:86-1.9
+    profiles: ["embeddings-gpu"]
+    command: --model-id ${RADD_EMBEDDINGS_MODEL:-BAAI/bge-small-en-v1.5} --max-client-batch-size 1024 --payload-limit 16000000
+    ports:
+      - "${RADD_EMBEDDINGS_PORT:-8081}:80"
+    volumes:
+      - radd-embeddings:/data
+    devices:
+      - nvidia.com/gpu=all
+    # The stock entrypoint prepends /usr/local/cuda/compat (forward-compat
+    # libcuda) whenever it can't parse the driver's CUDA version — and new
+    # drivers print "CUDA UMD Version", which its `nvidia-smi | awk` misses.
+    # GeForce cards don't support forward-compat mode, so CUDA init dies with
+    # CUDA_ERROR_SYSTEM_DRIVER_MISMATCH and TEI silently falls back to CPU.
+    # Exec the router directly; the CDI-injected host driver then resolves.
+    entrypoint: ["text-embeddings-router"]
+    environment:
+      LD_LIBRARY_PATH: /usr/local/cuda/lib64
+    networks:
+      # Same in-network name as the CPU variant, so the provider's base_url
+      # (http://embeddings/v1) is profile-agnostic.
+      default:
+        aliases: [embeddings]
+
+volumes:
+  radd-pgdata:
+  radd-data:
+  radd-backups:
+  radd-embeddings:

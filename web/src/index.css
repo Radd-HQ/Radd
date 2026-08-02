@@ -1,0 +1,353 @@
+@import "tailwindcss";
+
+/*
+ * Inter (OFL 1.1 — https://rsms.me/inter/) self-hosted variable font, weight
+ * axis 100–900, latin + latin-ext subsets. Files live in public/fonts
+ * (fontsource builds); unicode-range follows fontsource conventions so the
+ * browser only downloads the subset it needs.
+ */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/inter-latin-wght-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/inter-latin-ext-wght-normal.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/*
+ * Design-token foundation (UI modernization, phase A).
+ *
+ * Theming is STILL a variable remap: ~all components hardcode zinc-* and indigo-*
+ * utilities, and Tailwind v4 compiles those to `var(--color-zinc-*)` references
+ * that resolve against the per-theme values on `html` / `html.light` below.
+ * On top of that remap sit three new token layers:
+ *   1. Semantic aliases (@theme inline) — bg-surface, text-fg-secondary,
+ *      border-subtle, shadow-pop, … — inlined as var() references so they
+ *      track the remap automatically in both themes.
+ *   2. Intermediate zinc steps (850/825) for elevated/overlay surfaces.
+ *   3. Motion + radius tokens shared by every overlay.
+ */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, sans-serif;
+
+  /* Intermediate zinc steps (elevated/overlay surfaces). The `:root` copies
+     here only register the utilities; the themed values live on html below. */
+  --color-zinc-850: #26262a;
+  --color-zinc-825: #2d2d32;
+
+  /* Radii: intentionally shifts every rounded-md/lg/xl/2xl app-wide. Dialed
+     DOWN from the Dusk bump (9/12/16px read as too round in daily use) to a
+     squarer scale at-or-below the Tailwind defaults; rounded-full pills,
+     avatars and dots are deliberately untouched. */
+  --radius-md: 0.375rem; /* 6px  — buttons, inputs, tabs, menu rows */
+  --radius-lg: 0.5rem; /* 8px  — menus, popovers, panels */
+  --radius-xl: 0.625rem; /* 10px — modals, cards */
+  --radius-2xl: 0.75rem; /* 12px — the peek drawers */
+
+  /* Motion tokens: fast, subtle entrances for overlays and menus. */
+  --animate-fade-in: fade-in 140ms ease-out;
+  --animate-overlay-in: overlay-in 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-menu-in: menu-in 120ms ease-out;
+  --animate-panel-in: panel-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes overlay-in {
+    from {
+      opacity: 0;
+      transform: scale(0.98) translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes panel-in {
+    from {
+      opacity: 0;
+      transform: translateX(16px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes menu-in {
+    from {
+      opacity: 0;
+      transform: scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+/*
+ * Semantic aliases. `@theme inline` makes Tailwind inline the var() reference
+ * into each utility (`bg-surface` → `background-color: var(--color-zinc-900)`)
+ * instead of emitting a frozen `:root` variable, so the aliases resolve
+ * per-element against whichever theme remap is active. The `--shadow-*` values
+ * point at the raw per-theme shadow vars defined on html / html.light below.
+ */
+@theme inline {
+  --color-base: var(--color-zinc-950);
+  --color-surface: var(--color-zinc-900);
+  --color-elevated: var(--color-zinc-850);
+  --color-overlay: var(--color-zinc-825);
+  /* Neutral border tiers, weakest → strongest. v4 maps every `border-*`
+     utility through the `--color-*` namespace, so these are single words:
+     `border-subtle` resolves `--color-subtle`, not `--color-border-subtle`.
+       subtle    resting dividers, input borders
+       strong    chips, section rules
+       emphasis  hover + selection borders (the loudest neutral) */
+  --color-subtle: var(--color-zinc-800);
+  --color-strong: var(--color-zinc-700);
+  --color-emphasis: var(--color-zinc-600);
+  --color-heading: var(--color-zinc-100);
+  --color-fg: var(--color-zinc-200);
+  --color-fg-secondary: var(--color-zinc-400);
+  --color-fg-muted: var(--color-zinc-500);
+  --color-fg-faint: var(--color-zinc-600);
+
+  /* Accent. Unlike the neutrals these do NOT ride the zinc/indigo remap: they
+     point at the per-theme `--accent-*` vars on html / html.light below, so a
+     filled accent surface can LIGHTEN on hover in dark and DARKEN on hover in
+     light. `accent`/`accent-hover` are fills; `accent-text` is the accent as
+     legible text/icon ON a surface (≠ the SDK's `--radd-accent-fg`, which is
+     the foreground ON an accent fill); `focus` is every focus ring/outline. */
+  --color-accent: var(--accent-fill);
+  --color-accent-hover: var(--accent-fill-hover);
+  --color-accent-text: var(--accent-text);
+  --color-accent-text-strong: var(--accent-text-strong);
+  --color-focus: var(--accent-focus);
+
+  /* Workflow-state colors — ONE source of truth for the state dots, the state
+     pills, the roadmap bar fills and every report series (they are supposed to
+     mirror each other; before this they were Tailwind palette classes on one
+     side and loose hexes on the other, and had drifted).
+     The scheme is the TRAFFIC LIGHT, read literally — green means go:
+       triage      yellow      caution, nobody has judged it yet
+       backlog     light grey  dormant, still ahead of you
+       todo        blue        queued, waiting for the light
+       in_progress GREEN       moving
+       done        dark slate  out of play
+       canceled    dark slate  out of play — DELIBERATELY the same as done
+     Only three states earn a hue, because only three are things you act on.
+     Everything terminal or dormant is a neutral, separated by lightness: what
+     is ahead of you is light, what is behind you is dark. done and canceled
+     being identical is a product decision, not an oversight — at a glance both
+     mean "not my problem any more". The cost is that a stacked chart cannot
+     tell them apart by colour, and only done counts as delivered; charts that
+     need the split must label or exclude, which is the status-palette rule
+     anyway (never colour alone).
+     Stepped per theme and validated with the dataviz six-checks. The pair that
+     matters most is todo↔in_progress, and collapsing the terminal states freed
+     enough hue budget to put it on blue↔green — deutan ΔE 18.1, the strongest
+     separation available. Neutrals sit below the categorical chroma floor by
+     design; a grey is near the centre of the colour space and can never be far
+     from a hue, which is exactly why the receding states are grey. */
+  --color-chart-triage: var(--chart-triage);
+  --color-chart-backlog: var(--chart-backlog);
+  --color-chart-todo: var(--chart-todo);
+  --color-chart-progress: var(--chart-progress);
+  --color-chart-done: var(--chart-done);
+  --color-chart-canceled: var(--chart-canceled);
+  /* Ink tier: the state colour as TEXT on its own 12% pill. A fill only needs
+     3:1 (non-text); text needs 4.5:1, and on a tinted pill the fill fails that
+     badly — yellow-on-yellow was unreadable in light mode. Computed per theme,
+     not eyeballed. */
+  --color-chart-triage-ink: var(--chart-triage-ink);
+  --color-chart-backlog-ink: var(--chart-backlog-ink);
+  --color-chart-todo-ink: var(--chart-todo-ink);
+  --color-chart-progress-ink: var(--chart-progress-ink);
+  --color-chart-done-ink: var(--chart-done-ink);
+  --color-chart-canceled-ink: var(--chart-canceled-ink);
+
+  /* Token names must differ from the raw per-theme vars they reference —
+     a self-reference (`--shadow-pop: var(--shadow-pop)`) would emit a cyclic
+     variable on `:root`. */
+  --shadow-lift: var(--shadow-lift-sm);
+  --shadow-pop: var(--shadow-pop-md);
+  --shadow-modal: var(--shadow-modal-lg);
+}
+
+/* Dark-mode-first: the app ships dark. */
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-base text-fg antialiased;
+  }
+}
+
+/*
+ * Dark theme (retuned): neutral lifted grays, now with real
+ * surface separation — page #171718, panel #202022, and two intermediate
+ * steps (850 elevated, 825 overlay) between panel and borders. Text shades
+ * unchanged. These unlayered rules override the layered `:root` theme vars.
+ */
+html {
+  --color-zinc-950: #131519; /* page background */
+  --color-zinc-900: #1b1e24; /* panels, inputs, cards */
+  --color-zinc-850: #22262e; /* elevated surfaces (raised cards, hover fills) */
+  --color-zinc-825: #2a2f39; /* overlay surfaces (menus, popovers) */
+  --color-zinc-800: #272c35; /* borders, dividers */
+  --color-zinc-700: #333a46; /* stronger borders, chips */
+  --color-zinc-600: #6a7480; /* faintest text, emphasis borders */
+  --color-zinc-500: #838d9a; /* muted text */
+  --color-zinc-400: #98a1ad; /* secondary text */
+  --color-zinc-300: #bcc4ce; /* body text */
+  --color-zinc-200: #d3d9e1; /* primary text */
+  --color-zinc-100: #e6e9ee; /* headings */
+  --color-zinc-50: #f4f6f9;
+
+  /* Accent (dark): a filled accent LIGHTENS on hover, and accent text sits
+     light enough to read on dark panels. */
+  --accent-fill: #6f6ce0; /* periwinkle */
+  --accent-fill-hover: #8a88ea;
+  --accent-text: #b3b1f2;
+  --accent-text-strong: #cdccf7;
+  --accent-focus: #8a88ea;
+
+  /* Workflow-state colors (dark) — the traffic-light reading (see @theme inline). */
+  --chart-triage: #d9b43c; /* yellow — caution, not yet looked at */
+  --chart-backlog: #a3a5a9; /* light grey — dormant, still ahead of you */
+  --chart-todo: #4d8fd4; /* blue — queued, waiting for the light */
+  --chart-progress: #26804a; /* GREEN — go */
+  --chart-done: #6b7482; /* dark slate — out of play */
+  --chart-canceled: #6b7482; /* dark slate — out of play, same as done */
+
+  /* Ink tier (dark): >= 4.5:1 against each pill's own tinted background. */
+  --chart-triage-ink: #d9b43c;
+  --chart-backlog-ink: #a3a5a9;
+  --chart-todo-ink: #5896d7;
+  --chart-progress-ink: #569c72;
+  --chart-done-ink: #89909b;
+  --chart-canceled-ink: #89909b;
+
+  /* Elevation shadows tuned for dark: deep umbra + a hairline light ring to
+     keep overlay edges readable against dark surfaces. */
+  --shadow-lift-sm: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-pop-md: 0 4px 16px rgb(0 0 0 / 0.45), 0 0 0 1px rgb(255 255 255 / 0.04);
+  --shadow-modal-lg: 0 16px 48px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.05);
+}
+
+/*
+ * Light theme: same variable-remap mechanism — the zinc scale inverts and the
+ * dark-tuned accent text shades (`*-300`) deepen. Shadows get lighter umbra
+ * and a dark hairline ring instead of a light one.
+ */
+html.light {
+  color-scheme: light;
+
+  /* Inverted scale, same cool blue-shifted hue family as dark — a light theme
+     built from the SAME neutrals reads as one product in two modes; reusing the
+     old warm-grey ramp under a periwinkle accent would clash. */
+  --color-zinc-950: #f4f6f9; /* page background */
+  --color-zinc-900: #ffffff; /* panels, inputs, cards */
+  --color-zinc-850: #ffffff; /* elevated — stays white, separation via shadow */
+  --color-zinc-825: #e9edf3; /* overlay tint */
+  --color-zinc-800: #e2e7ee; /* borders, hover fills */
+  --color-zinc-700: #cfd6e0; /* stronger borders, chips */
+  --color-zinc-600: #98a1ad; /* faintest text, emphasis borders */
+  --color-zinc-500: #6f7987; /* muted text */
+  --color-zinc-400: #525c69; /* secondary text */
+  --color-zinc-300: #3a434e; /* body text */
+  --color-zinc-200: #242c36; /* primary text */
+  --color-zinc-100: #141a22; /* headings */
+  --color-zinc-50: #0a0e13;
+
+  /* Accent (light): the fill stays put so brand color is identical in both
+     themes, but hover now DARKENS (dark theme lightens), and accent text
+     deepens to stay legible on white. */
+  --accent-fill: #6f6ce0; /* periwinkle — same fill in both themes */
+  --accent-fill-hover: #5a57cc;
+  --accent-text: #4f4cc0;
+  --accent-text-strong: #3f3ca6;
+  --accent-focus: #5a57cc;
+
+  /* Workflow-state colors (light) — same reading, deepened for white. Amber sits
+     at 2.66:1, which the six-checks allow only because state fills always carry
+     a label. */
+  --chart-triage: #d1a92f;
+  --chart-backlog: #8a8d93;
+  --chart-todo: #2f6fb5;
+  --chart-progress: #1f7a45;
+  --chart-done: #5f6773;
+  --chart-canceled: #5f6773;
+
+  /* Ink tier (light). Triage is the big one: the yellow fill on a yellow pill
+     was ~1.6:1 — this deepens it to an olive-gold at 4.6:1. */
+  --chart-triage-ink: #866c1e;
+  --chart-backlog-ink: #6c6e73;
+  --chart-todo-ink: #2e6db1;
+  --chart-progress-ink: #1f7a45;
+  --chart-done-ink: #5f6773;
+  --chart-canceled-ink: #5f6773;
+
+  /* Other accent TEXT shades tuned for dark backgrounds get deepened for light
+     (hardcoded hex — Tailwind only emits variables that utilities use). */
+  --color-amber-300: #b45309; /* amber-700 */
+  --color-amber-200: #92400e; /* amber-800 */
+  --color-amber-400: #d97706; /* amber-600 */
+  --color-emerald-300: #047857; /* emerald-700 */
+  --color-emerald-400: #059669; /* emerald-600 */
+  --color-red-300: #b91c1c; /* red-700 */
+  --color-red-400: #dc2626; /* red-600 */
+  --color-sky-300: #0369a1; /* sky-700 — issue-ref chips */
+  /* These three had NO light remap, so parent/points/source badges rendered as
+     pale pastels on white (~2:1). Deepened to 700-level: 5.8 / 4.8 / 5.9:1
+     against their own tinted pill. */
+  --color-purple-300: #7e22ce; /* purple-700 — parent + child-count chips */
+  --color-teal-300: #0f766e; /* teal-700 — story-point chips */
+  --color-violet-300: #6d28d9; /* violet-700 — OIDC source badge */
+
+  --shadow-lift-sm: 0 1px 2px rgb(0 0 0 / 0.08);
+  --shadow-pop-md: 0 4px 16px rgb(0 0 0 / 0.12), 0 0 0 1px rgb(0 0 0 / 0.04);
+  --shadow-modal-lg: 0 16px 48px rgb(0 0 0 / 0.18), 0 0 0 1px rgb(0 0 0 / 0.05);
+}
+
+/* Density toggle (spec 39): compact mode scales the whole UI down a notch.
+   `zoom` is standardized and keeps px-based sizing proportional. */
+html.compact body {
+  zoom: 0.9;
+}
+
+/* Tabular figures for numeric columns (durations, counts, dates). */
+@utility tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Honor reduced motion: overlays appear instantly. Unlayered on purpose —
+   beats the layered animate-* utilities. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-overlay-in,
+  .animate-menu-in,
+  .animate-panel-in {
+    animation: none;
+  }
+}

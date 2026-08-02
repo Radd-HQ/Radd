@@ -1,0 +1,66 @@
+{{- include "radd.validate" . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-web
+  labels:
+    {{- include "radd.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: web
+  template:
+    metadata:
+      labels:
+        {{- include "radd.labels" . | nindent 8 }}
+        app.kubernetes.io/component: web
+    spec:
+      {{- include "radd.imagePullSecrets" . | nindent 6 }}
+      {{- with .Values.podSecurityContext }}
+      securityContext: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: radd
+          image: {{ include "radd.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # Migrations run via the chart Job (templates/job-migrate.yaml);
+          # the image CMD's inline upgrade is skipped by overriding command.
+          command: ["uvicorn"]
+          args: ["--factory", "radd.app:create_app", "--host", "0.0.0.0", "--port", "8000"]
+          ports:
+            - containerPort: 8000
+          env:
+            {{- include "radd.env" . | nindent 12 }}
+            {{- if .Values.workers.enabled }}
+            - name: RADD_RUN_WORKERS
+              value: "false"
+            {{- end }}
+          {{- include "radd.envFrom" . | nindent 10 }}
+          readinessProbe:
+            httpGet:
+              path: /api/v1/instance/login-options
+              port: 8000
+            initialDelaySeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /api/v1/instance/login-options
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          {{- with .Values.resources }}
+          resources: {{ toYaml . | nindent 12 }}
+          {{- end }}
+          {{- include "radd.volumeMounts" . | nindent 10 }}
+      {{- include "radd.volumes" . | nindent 6 }}
+      {{- with .Values.dnsConfig }}
+      dnsConfig: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{ toYaml . | nindent 8 }}
+      {{- end }}

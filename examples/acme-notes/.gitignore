@@ -1,0 +1,5 @@
+node_modules
+src/acme_notes/ui/node_modules
+src/acme_notes/ui/dist
+*.egg-info
+__pycache__

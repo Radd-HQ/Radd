@@ -1,0 +1,10 @@
+# Keep the image build context lean (Containerfile copies what it needs).
+.git
+**/__pycache__
+server/.venv
+server/var
+web/node_modules
+web/dist
+sdk/.venv
+docs
+research

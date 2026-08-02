@@ -1,0 +1,157 @@
+# Development stack: the API runs IN the container with the repo mounted, so it
+# has the tools the app requires (pg_dump/pg_restore, spec 99) without installing
+# a Postgres client on the host. Edits to server/src reload live.
+#
+#   podman compose -f compose.dev.yaml up          # db + API on :8000
+#   podman compose -f compose.dev.yaml up -d db    # just Postgres (host-run API)
+#
+# Self-contained on purpose — it does not layer over compose.yaml, so there are
+# no array-merge surprises about which volume wins. It has its OWN database
+# (empty on first run) published on 5456, deliberately NOT the 5455 that
+# `podman compose up -d db` uses, so the two stacks coexist instead of fighting
+# over a port. RADD_DEV_PORT / RADD_DEV_DB_PORT move them further if needed.
+#
+# The SPA is NOT built here: run `cd web && npm run build` (or `npm run dev` on
+# :5173) — web/dist is mounted in, so a rebuild is picked up on refresh.
+
+# Its OWN project name. Without this, compose derives the project from the
+# directory and this stack's containers COLLIDE with compose.yaml's — starting
+# the dev stack would replace the `tracker_db_1` your production-shaped stack is
+# using. Named separately, both can exist side by side.
+name: radd-dev
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Containerfile
+      target: dev # skips the npm stage entirely
+    # Rootless podman maps container root -> your host user, so files the
+    # container writes (alembic revisions, __pycache__) are owned by you.
+    # Under Docker, export RADD_DEV_USER="$(id -u):$(id -g)" for the same result.
+    user: "${RADD_DEV_USER:-0:0}"
+    # Corporate/split DNS. Podman's internal resolver forwards to the HOST's
+    # /etc/resolv.conf, which under systemd-resolved is the 127.0.0.53 stub — a
+    # loopback address the container cannot reach. Routing to internal networks
+    # works fine; only NAME RESOLUTION fails, so LDAP/Jira/GitLab hostnames come
+    # back "invalid server address". Put your real resolvers in a root `.env`
+    # (gitignored) as e.g. `RADD_DEV_DNS=10.0.0.2`; podman keeps its own DNS for
+    # compose service discovery alongside whatever you list here.
+    dns: ${RADD_DEV_DNS:-}
+    environment:
+      RADD_DATABASE_URL: postgresql+psycopg://radd:radd@db:5432/radd
+      # Written into the mounted ./var so artifacts and the key are inspectable
+      # from the host. In production these are separate volumes (compose.yaml).
+      RADD_BACKUP_DIR: /opt/radd/backups
+      RADD_BACKUP_KEY_FILE: /data/radd-backup.key
+      RADD_ATTACHMENTS_DIR: /data/attachments
+      RADD_WEB_DIST: /app/web/dist
+    ports:
+      - "${RADD_DEV_PORT:-8000}:8000"
+    volumes:
+      - ./server:/app/server:z # live code (the venv is at /opt/venv, unshadowed)
+      - ./web/dist:/app/web/dist:z # built SPA, refreshed by `npm run build`
+      - ./var/data:/data:z
+      - ./var/backups:/opt/radd/backups:z
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: docker.io/pgvector/pgvector:pg16
+    # Parallel maintenance/query workers allocate dynamic shared memory in
+    # /dev/shm; the 64MB container default aborts them at scale (DiskFull).
+    shm_size: 1g
+    environment:
+      POSTGRES_USER: radd
+      POSTGRES_PASSWORD: radd
+      POSTGRES_DB: radd
+    ports:
+      - "${RADD_DEV_DB_PORT:-5456}:5432"
+    volumes:
+      - radd-dev-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U radd -d radd"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # Two S3 hosts for multi-host storage work (spec 102) — opt-in:
+  #   podman compose -f compose.dev.yaml --profile storage up -d
+  #   sh deploy/garage/init.sh garage-1   # layout + bucket + fixed dev key
+  # Garage is the blessed dev/test S3 server (docs/deploy.md; MinIO CE was
+  # archived 2026-02). Endpoints: localhost:3900 and localhost:3910.
+  garage-1:
+    image: docker.io/dxflrs/garage:v2.1.0
+    profiles: ["storage"]
+    volumes:
+      - ./deploy/garage/garage.toml:/etc/garage.toml:ro,z
+      - radd-dev-garage1:/var/lib/garage
+    ports:
+      - "3900:3900"
+
+  garage-2:
+    image: docker.io/dxflrs/garage:v2.1.0
+    profiles: ["storage"]
+    volumes:
+      - ./deploy/garage/garage.toml:/etc/garage.toml:ro,z
+      - radd-dev-garage2:/var/lib/garage
+    ports:
+      - "3910:3900"
+
+  # Optional embeddings server (Hugging Face text-embeddings-inference) — the
+  # heavy-duty tier for semantic search; the in-app `radd[localembed]` CPU
+  # backend stays the zero-infra fallback. Opt-in, ONE of:
+  #   podman compose -f compose.dev.yaml --profile embeddings up -d      # CPU
+  #   podman compose -f compose.dev.yaml --profile embeddings-gpu up -d  # NVIDIA
+  # Then Settings → AI: add an OpenAI-shape provider, base_url
+  # http://localhost:8081/v1, model BAAI/bge-small-en-v1.5, and hand it the
+  # embeddings role. Serving the same model the built-in backend used keeps the
+  # already-embedded vectors valid (no re-embed). The GPU variant needs
+  # nvidia-container-toolkit + a generated CDI spec (`nvidia-ctk cdi generate`);
+  # the `86-*` tag is compute capability 8.6 (RTX 30xx/A10) — other tags per
+  # architecture in docs/deploy.md. Both variants share one model cache and one
+  # host port, so they are mutually exclusive by construction.
+  embeddings:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9
+    profiles: ["embeddings"]
+    command: --model-id ${RADD_EMBEDDINGS_MODEL:-BAAI/bge-small-en-v1.5} --max-client-batch-size 1024 --payload-limit 16000000
+    dns: ${RADD_DEV_DNS:-}
+    ports:
+      - "${RADD_EMBEDDINGS_PORT:-8081}:80"
+    volumes:
+      - radd-dev-embeddings:/data
+
+  embeddings-gpu:
+    image: ghcr.io/huggingface/text-embeddings-inference:86-1.9
+    profiles: ["embeddings-gpu"]
+    command: --model-id ${RADD_EMBEDDINGS_MODEL:-BAAI/bge-small-en-v1.5} --max-client-batch-size 1024 --payload-limit 16000000
+    dns: ${RADD_DEV_DNS:-}
+    ports:
+      - "${RADD_EMBEDDINGS_PORT:-8081}:80"
+    volumes:
+      - radd-dev-embeddings:/data
+    devices:
+      - nvidia.com/gpu=all
+    # The stock entrypoint prepends /usr/local/cuda/compat (forward-compat
+    # libcuda) whenever it can't parse the driver's CUDA version — and new
+    # drivers print "CUDA UMD Version", which its `nvidia-smi | awk` misses.
+    # GeForce cards don't support forward-compat mode, so CUDA init dies with
+    # CUDA_ERROR_SYSTEM_DRIVER_MISMATCH and TEI silently falls back to CPU.
+    # Exec the router directly; the CDI-injected host driver then resolves.
+    entrypoint: ["text-embeddings-router"]
+    environment:
+      LD_LIBRARY_PATH: /usr/local/cuda/lib64
+    networks:
+      # Same in-network name as the CPU variant, so a containerized app's
+      # provider base_url (http://embeddings/v1) is profile-agnostic.
+      default:
+        aliases: [embeddings]
+
+volumes:
+  # Separate from compose.yaml's radd-pgdata so a dev stack never writes into
+  # the data a production-shaped run is using.
+  radd-dev-pgdata:
+  radd-dev-garage1:
+  radd-dev-garage2:
+  radd-dev-embeddings:

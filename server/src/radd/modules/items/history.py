@@ -1,0 +1,137 @@
+"""Per-item activity feed (History tab / audit).
+
+Reads the append-only event log — item field-change events (with the `changes`
+diff written by `changes.py`) plus related events (comments, worklogs, web/VCS
+links) whose payload `item_id` points back at the item — and returns one merged,
+chronological, actor-attributed feed. Pure read over `events` (the same tolerated
+inward read `reporting` uses).
+"""
+
+import uuid
+from typing import Any
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from radd.modules.auth import authz, service as auth
+from radd.modules.auth.authz import Permission
+from radd.modules.auth.models import User
+from radd.modules.events import service as events
+from radd.modules.events.models import Event
+from radd.modules.teams import service as teams
+from radd.modules.projects import service as projects_service
+
+from .enums import ItemEntity, ItemEvent
+from .schemas import HistoryActor, HistoryEntry, ItemHistory
+from .service import require_item
+
+# Related-entity event types whose payload carries `item_id` back to this item.
+# Wire strings (not enum imports) so `items` doesn't take a dependency on
+# comments/worklogs/weblinks/vcs — this is a read of the event stream, exactly as
+# reporting reads it. Keep in sync with those modules' *Event enums.
+# NOTE: csat.*, approval.*, and item.participant_* (specs 65/71/72) are emitted
+# with entity_type=item DIRECTLY, so they reach the feed without an entry here.
+RELATED_EVENT_TYPES: tuple[str, ...] = (
+    "comment.created",
+    "comment.updated",
+    "comment.deleted",
+    "worklog.created",
+    "worklog.updated",
+    "worklog.deleted",
+    "weblink.created",
+    "weblink.updated",
+    "weblink.deleted",
+    "vcs.linked",
+    "vcs.updated",
+    "vcs.unlinked",
+    "attachment.created",
+    "attachment.deleted",
+)
+
+_INTERNAL = "internal"
+
+# Fields lifted from a related event's payload for the frontend's one-line summary.
+_DETAIL_KEYS = (
+    "visibility",
+    "time_spent_seconds",
+    "worked_on",
+    "url",
+    "title",
+    "category",
+    "ref_type",
+    "provider",
+    "status",
+    "filename",
+    "size_bytes",
+    "rating",  # csat.responded (spec 65) — direct item events also flow through _detail
+    "to_state",  # approval.* (spec 71): the gated target state's name
+    "verdict",  # approval.voted: approve | decline
+    "participant",  # item.participant_* (spec 72): the user/team display name
+    "team",  # item.participant_*: set (a {id,name} ref) when the subject is a team
+)
+
+
+def _detail(event: Event) -> dict[str, Any] | None:
+    payload = event.payload or {}
+    detail = {key: payload[key] for key in _DETAIL_KEYS if key in payload}
+    return detail or None
+
+
+async def item_history(session: AsyncSession, item_id: uuid.UUID, actor: User) -> ItemHistory:
+    item = await require_item(session, item_id)
+    project = await projects_service.get_project(session, item.project_id)
+    permissions = await authz.require(session, actor, Permission.ITEM_READ, project=project)
+    can_internal = Permission.COMMENT_READ_INTERNAL in permissions
+    # Spec 50: teams narrow which internal-comment activity the actor may see.
+    from radd.modules.comments.visibility import internal_comment_visible  # deferred: cycle
+
+    has_manage = Permission.PROJECT_MANAGE in permissions
+    actor_teams = (
+        set() if has_manage else await teams.user_team_ids(session, actor.id)
+    )
+
+    raw = await events.entity_activity(
+        session,
+        entity_type=ItemEntity.ITEM,
+        entity_id=item_id,
+        related_event_types=RELATED_EVENT_TYPES,
+    )
+    users = await auth.users_by_ids(session, {e.actor_id for e in raw if e.actor_id})
+
+    entries: list[HistoryEntry] = []
+    for event in raw:
+        payload = event.payload or {}
+        # Don't leak internal-comment activity: needs comment.read_internal AND (spec 50)
+        # membership in the comment's teams if it named any (author/manager bypass).
+        if event.event_type.startswith("comment.") and payload.get("visibility") == _INTERNAL:
+            teams_for = {uuid.UUID(t) for t in payload.get("visible_to_teams") or []}
+            if not internal_comment_visible(
+                is_author=event.actor_id == actor.id,
+                has_read_internal=can_internal,
+                has_manage=has_manage,
+                comment_teams=teams_for,
+                actor_teams=actor_teams,
+            ):
+                continue
+        is_update = event.event_type == ItemEvent.UPDATED
+        changes = payload.get("changes", []) if is_update else []
+        # A rank-only reorder emits item.updated with no visible field change — skip.
+        if is_update and not changes:
+            continue
+        if event.event_type == ItemEvent.CREATED:
+            detail: dict[str, Any] | None = {"title": payload.get("title")}
+        elif is_update:
+            detail = None
+        else:
+            detail = _detail(event)
+        user = users.get(event.actor_id) if event.actor_id else None
+        entries.append(
+            HistoryEntry(
+                id=event.id,
+                at=event.created_at,
+                actor=HistoryActor(id=user.id, name=user.name) if user else None,
+                type=str(event.event_type),
+                changes=changes,
+                detail=detail,
+            )
+        )
+    return ItemHistory(entries=entries)

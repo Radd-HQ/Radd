@@ -1,0 +1,57 @@
+# Build Radd's image on a version tag and push it to a Forgejo container
+# registry, so a cluster can pull a CI-built image instead of one hand-built on
+# the node (docs/deploy-k3s.md §3).
+#
+# Set the repository variable REGISTRY to your Forgejo host (e.g. git.example.com)
+# under Settings → Actions → Variables. Requires a registered act_runner with a
+# `docker` label; until one exists this workflow simply never runs.
+#
+# FORGEJO_TOKEN is injected automatically; it can push to the registry of the
+# repository's owner, so no separate registry credential is needed here.
+name: publish
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  image:
+    runs-on: docker
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Derive the version from the tag
+        id: meta
+        # refs/tags/v0.2.0 -> 0.2.0. The image is tagged with the version only;
+        # `latest` is deliberately NOT published — the cluster pins an immutable
+        # tag so a rollback is a value change, not an image race.
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to the Forgejo registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ vars.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.FORGEJO_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Containerfile
+          push: true
+          tags: ${{ vars.REGISTRY }}/${{ github.repository }}:${{ steps.meta.outputs.version }}
+          # The SPA build stage is the slow part; caching it turns a ~5 minute
+          # rebuild into well under a minute for a server-only change.
+          cache-from: type=registry,ref=${{ vars.REGISTRY }}/${{ github.repository }}:buildcache
+          cache-to: type=registry,ref=${{ vars.REGISTRY }}/${{ github.repository }}:buildcache,mode=max
+
+      - name: How to deploy it
+        run: |
+          echo "Pushed ${{ vars.REGISTRY }}/${{ github.repository }}:${{ steps.meta.outputs.version }}"
+          echo
+          echo "Deploy with:"
+          echo "  helm upgrade radd deploy/helm/radd -n radd -f <your-values.yaml> \\"
+          echo "    --set image.repository=${{ vars.REGISTRY }}/${{ github.repository }} \\"
+          echo "    --set image.tag=${{ steps.meta.outputs.version }}"

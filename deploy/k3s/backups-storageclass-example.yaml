@@ -1,0 +1,44 @@
+# Example: a storage class for backup artifacts on a SECOND disk.
+#
+# docs/deploy.md's rule is that a backup dying with the volume it protects is
+# not a backup, and k3s's default local-path class puts everything on the OS
+# disk. Attach a second device, mount it, and point the artifacts at it:
+#
+#   mkfs.ext4 /dev/sdb && mkdir -p /mnt/radd-backups
+#   # persist in /etc/fstab, then:
+#   chown 10001:10001 /mnt/radd-backups     # the image's `USER radd`
+#
+# no-provisioner plus a hand-made PV, rather than a second provisioner: one
+# node, one volume, and the binding stays explicit enough to reason about
+# during a restore.
+#
+# EDIT <K3S_NODE_NAME> (`kubectl get nodes`) before applying.
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: radd-backups
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer # the PV is node-local
+reclaimPolicy: Retain # surviving mistakes made elsewhere is the point
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: radd-backups-pv
+spec:
+  capacity:
+    storage: 40Gi # must be >= backups.size in your values
+  accessModes: [ReadWriteOnce]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: radd-backups
+  local:
+    path: /mnt/radd-backups
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - <K3S_NODE_NAME>

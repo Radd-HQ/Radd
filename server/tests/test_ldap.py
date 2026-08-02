@@ -1,0 +1,111 @@
+"""LDAP bind core (spec 42) — the pure pieces the directory login hangs on:
+base-DN derivation, the username shape gate, filter construction (injection
+safety), and entry→DirectoryUser mapping with its documented fallbacks. The
+wire bind itself is the production pipe-status pattern, checked against a real
+directory at deploy time; the provision/session path is exercised in-process
+via ASGI with a stubbed lookup (see the spec's Verification section).
+"""
+
+from radd.config import settings
+from radd.modules.ldap.service import (
+    base_dn,
+    directory_user_from_entry,
+    group_search_filter,
+    transitive_member_filter,
+)
+from radd.modules.ldap.types import LDAP_MATCHING_RULE_IN_CHAIN, USERNAME_RE
+
+
+def test_base_dn_derived_from_upn_domain(monkeypatch):
+    monkeypatch.setattr(settings, "ldap_user_domain", "ad.example.com")
+    monkeypatch.setattr(settings, "ldap_base_dn", "")
+    assert base_dn() == "DC=ad,DC=example,DC=com"
+
+
+def test_base_dn_explicit_override_wins(monkeypatch):
+    monkeypatch.setattr(settings, "ldap_user_domain", "ad.example.com")
+    monkeypatch.setattr(settings, "ldap_base_dn", "OU=people,DC=example,DC=com")
+    assert base_dn() == "OU=people,DC=example,DC=com"
+
+
+def test_username_shape_gate():
+    assert USERNAME_RE.match("j.doe-01_x")
+    assert not USERNAME_RE.match("")
+    assert not USERNAME_RE.match("a" * 65)
+    # DN / filter syntax never reaches the wire
+    for hostile in ("j doe", "*", "admin)(cn=*", "cn=x,dc=y", "user@dom"):
+        assert not USERNAME_RE.match(hostile), hostile
+
+
+def test_filters_escape_hostile_values():
+    group = group_search_filter("td-(admins)*")
+    assert "(admins)" not in group  # parens escaped
+    assert group == r"(&(objectClass=group)(cn=td-\28admins\29\2a))"
+    member = transitive_member_filter("jdoe", "CN=g(1),DC=x")
+    assert LDAP_MATCHING_RULE_IN_CHAIN in member
+    assert member.startswith("(&(sAMAccountName=jdoe)")
+    assert r"\28" in member and "g(1)" not in member
+
+
+def test_entry_mapping_prefers_directory_attributes(monkeypatch):
+    monkeypatch.setattr(settings, "ldap_user_domain", "ad.example.com")
+    # ldap3 returns attribute values as lists
+    user = directory_user_from_entry(
+        "jdoe", {"mail": ["J.Doe@Example.com"], "displayName": ["Jane Doe"]}, is_admin=True
+    )
+    assert user.email == "j.doe@example.com"  # lowered, like local auth
+    assert user.name == "Jane Doe"
+    assert user.is_admin
+
+
+def test_entry_mapping_fallbacks_upn_and_username(monkeypatch):
+    monkeypatch.setattr(settings, "ldap_user_domain", "ad.example.com")
+    user = directory_user_from_entry("jdoe", {}, is_admin=False)
+    assert user.email == "jdoe@ad.example.com"  # UPN when the mail attribute is absent
+    assert user.name == "jdoe"
+    assert not user.is_admin
+
+
+def test_bind_account_enabled_gate(monkeypatch):
+    from radd.modules.ldap.service import bind_account_enabled, user_search_base
+
+    monkeypatch.setattr(settings, "ldap_url", "ldaps://ad.example.com:636")
+    monkeypatch.setattr(settings, "ldap_bind_dn", "")
+    monkeypatch.setattr(settings, "ldap_bind_password", "")
+    assert not bind_account_enabled()
+    monkeypatch.setattr(settings, "ldap_bind_dn", "CN=svc,DC=ad,DC=example,DC=com")
+    monkeypatch.setattr(settings, "ldap_bind_password", "secret")
+    assert bind_account_enabled()
+    # search base defaults to the derived base DN when unset
+    monkeypatch.setattr(settings, "ldap_user_domain", "ad.example.com")
+    monkeypatch.setattr(settings, "ldap_user_search_base", "")
+    assert user_search_base() == "DC=ad,DC=example,DC=com"
+    monkeypatch.setattr(settings, "ldap_user_search_base", "OU=Staff,DC=ad,DC=example,DC=com")
+    assert user_search_base() == "OU=Staff,DC=ad,DC=example,DC=com"
+
+
+def test_directory_entry_mapping_skips_emailless(monkeypatch):
+    from radd.modules.ldap.service import _entry_to_directory_user
+
+    monkeypatch.setattr(settings, "ldap_user_domain", "ad.example.com")
+    monkeypatch.setattr(settings, "ldap_email_attribute", "mail")
+    monkeypatch.setattr(settings, "ldap_name_attribute", "displayName")
+    ok = _entry_to_directory_user(
+        {"sAMAccountName": ["jdoe"], "mail": ["J.Doe@Example.com"], "displayName": ["Jane Doe"]}
+    )
+    assert ok.email == "j.doe@example.com" and ok.name == "Jane Doe" and ok.is_admin is False
+    # no mail attribute -> skipped (don't invent UPNs for bulk import)
+    assert _entry_to_directory_user({"sAMAccountName": ["svc"], "displayName": ["Svc"]}) is None
+    # no sAMAccountName -> skipped
+    assert _entry_to_directory_user({"mail": ["x@example.com"]}) is None
+
+
+def test_entry_mapping_honors_configured_attributes(monkeypatch):
+    monkeypatch.setattr(settings, "ldap_user_domain", "ad.example.com")
+    monkeypatch.setattr(settings, "ldap_email_attribute", "userPrincipalName")
+    monkeypatch.setattr(settings, "ldap_name_attribute", "cn")
+    user = directory_user_from_entry(
+        "jdoe", {"userPrincipalName": ["jdoe@corp.example.com"], "cn": ["jdoe cn"]}, False
+    )
+    assert user.email == "jdoe@corp.example.com"
+    assert user.name == "jdoe cn"

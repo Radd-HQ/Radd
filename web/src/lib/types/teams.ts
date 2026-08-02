@@ -1,0 +1,221 @@
+/** Teams, directory/LDAP sync + import, and global grants (specs 84/85/87/88). */
+import type { UserSourceValue } from "./users";
+/** One instance-wide role grant (spec 87): exactly one of user_id/team_id.
+ * Roles otherwise only attach to projects, which is why every global-scope atom
+ * was ungrantable to a non-admin before this existed. */
+export interface GlobalGrant {
+  id: string;
+  role_id: string;
+  user_id: string | null;
+  team_id: string | null;
+}
+
+/** Who owns a team's MEMBERSHIP (spec 87). A `directory` team's roster belongs
+ * to its AD group and is read-only here; its NAME and its project grants stay
+ * local — deciding what an AD group may do here is the point of linking it. */
+export const TeamSource = {
+  local: "local",
+  directory: "directory",
+} as const;
+export type TeamSourceValue = (typeof TeamSource)[keyof typeof TeamSource];
+
+/** GET /teams (spec 01; directory link — spec 84; ownership — spec 87). */
+export interface Team {
+  id: string;
+  name: string;
+  created_at: string;
+  directory_group_dn: string | null;
+  directory_group_name: string | null;
+  source: TeamSourceValue;
+  /** Spec 87: set when the linked AD group stopped resolving. The team stays
+   * locked and keeps its people — unlinking is the (deliberate, human) way out. */
+  directory_missing_since: string | null;
+  owner_id: string | null;
+  managers: string[];
+  /** Resolved server-side: owner ∪ manager ∪ global-atom holder. The client
+   * never re-derives it — per-team delegation isn't visible in the permission union. */
+  can_manage: boolean;
+  can_delete: boolean;
+}
+
+export interface TeamCreate {
+  name: string;
+  owner_id?: string;
+}
+
+/** PUT /teams/{id}/managers (spec 87) — full replace, owner-gated. */
+export interface TeamManagersUpdate {
+  user_ids: string[];
+}
+
+/** PATCH /teams/{id} (spec 84): rename + set/clear the AD group link. */
+export interface TeamUpdate {
+  name?: string;
+  directory_group_dn?: string | null;
+  directory_group_name?: string | null;
+}
+
+/** How a team_members row got there (spec 84) — sync owns only directory rows. */
+export const MemberSource = {
+  manual: "manual",
+  directory: "directory",
+} as const;
+export type MemberSourceValue = (typeof MemberSource)[keyof typeof MemberSource];
+
+/** GET /teams/{id}/members (spec 01; source — spec 84). */
+export interface TeamMember {
+  user_id: string;
+  email: string;
+  name: string;
+  source: MemberSourceValue;
+}
+
+/** One AD group from GET /ldap/groups (spec 84). member_count is the DIRECT
+ * member-attribute length (display only — the sync resolves nested members). */
+export interface DirectoryGroup {
+  cn: string;
+  dn: string;
+  description: string;
+  member_count: number;
+}
+
+/** One directory user from GET /ldap/directory-users (spec 84). */
+export interface DirectoryUser {
+  username: string;
+  email: string;
+  name: string;
+}
+
+/** POST /ldap/groups/import (spec 84). */
+export interface GroupImportRequest {
+  group_dns: string[];
+  provision_members: boolean;
+}
+
+export interface GroupImportResult {
+  group_dn: string;
+  cn: string;
+  team_id: string | null;
+  created: boolean;
+  members_added: number;
+  users_provisioned: number;
+  error: string | null;
+}
+
+/** POST /ldap/directory-users/import (spec 84). */
+/** Why an incoming AD user was tied to an existing account (spec 88). Radd has
+ * no username column — identity is the email — so an AD sAMAccountName can only
+ * be compared against the local part of one. */
+export const ImportMatchKind = {
+  email: "email",
+  username: "username",
+  name: "name",
+} as const;
+export type ImportMatchKindValue = (typeof ImportMatchKind)[keyof typeof ImportMatchKind];
+
+/** What importing one AD user would run into (spec 88). */
+export const ImportStatus = {
+  new: "new",
+  linked: "linked",
+  conflict: "conflict",
+} as const;
+export type ImportStatusValue = (typeof ImportStatus)[keyof typeof ImportStatus];
+
+/** What to do about it (spec 88). Overwrite and merge both end with AD as the
+ * source of truth; they differ in how many Radd accounts are involved. */
+export const ImportResolution = {
+  create: "create",
+  skip: "skip",
+  overwrite: "overwrite",
+  merge: "merge",
+} as const;
+export type ImportResolutionValue = (typeof ImportResolution)[keyof typeof ImportResolution];
+
+export interface ExistingMatch {
+  user_id: string;
+  email: string;
+  name: string;
+  source: UserSourceValue;
+  active: boolean;
+  kind: ImportMatchKindValue;
+}
+
+/** One row of POST /ldap/directory-users/import/preview (spec 88). */
+export interface ImportCandidate {
+  username: string;
+  email: string;
+  name: string;
+  status: ImportStatusValue;
+  matches: ExistingMatch[];
+  suggested: ImportResolutionValue;
+}
+
+export interface ImportResolutionEntry {
+  email: string;
+  resolution: ImportResolutionValue;
+  target_user_id?: string | null;
+}
+
+export interface DirectoryUserImportRequest {
+  emails: string[];
+  /** Spec 88: per-person conflict decisions. Omitted = create-or-link, existing
+   * accounts untouched (the pre-88 behavior). */
+  resolutions?: ImportResolutionEntry[];
+}
+
+export interface DirectoryUserImportResult {
+  email: string;
+  user_id: string | null;
+  created: boolean;
+  resolution: ImportResolutionValue;
+  merged_user_id: string | null;
+  error: string | null;
+}
+
+/** POST /teams/{id}/directory-sync (spec 84) — what the reconcile changed. */
+export interface DirectorySyncResult {
+  added: number;
+  removed: number;
+}
+
+/** POST /ldap/sync/users (spec 85) — what one user-sync pass did. */
+export interface UserSyncResult {
+  provisioned: number;
+  updated: number;
+  deactivated: number;
+  errors: string[];
+}
+
+/** One directory_sync_state row (spec 85). `last_result` is the run summary —
+ * user_sync: {provisioned, updated, deactivated, errors}, group_sync:
+ * {teams, added, removed, errors}. */
+export interface DirectorySyncState {
+  kind: string;
+  last_run_at: string;
+  last_result: Record<string, unknown>;
+}
+
+/** GET /ldap/sync-status (spec 85) — both rows (null = never ran). */
+export interface DirectorySyncStatus {
+  user_sync: DirectorySyncState | null;
+  group_sync: DirectorySyncState | null;
+}
+
+/** project↔team attachment; role is data-driven since spec 06. */
+export interface ProjectTeam {
+  project_id: string;
+  team_id: string;
+  role_id: string;
+  /** The role's key, hydrated for display. */
+  role: string;
+}
+
+export interface ProjectTeamAttach {
+  team_id: string;
+  role_id?: string;
+}
+
+/** PATCH /projects/{project_id}/teams/{team_id} (spec 06). */
+export interface ProjectTeamUpdate {
+  role_id: string;
+}

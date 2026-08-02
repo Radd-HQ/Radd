@@ -1,0 +1,341 @@
+"""The notify outbox consumer: item/comment events → per-user notifications.
+
+Planning is pure (planner.py); this wraps it with lookups (watchers, mention
+resolution, permission filtering) and the writes. One transaction per batch;
+each event runs in a SAVEPOINT so a bad event is logged and skipped, never
+wedging the cursor.
+"""
+
+import logging
+import uuid
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from radd.config import settings
+from radd.db import SessionLocal
+from radd.modules.auth import authz, service as auth
+from radd.modules.auth.authz import Permission
+from radd.modules.comments import service as comments
+from radd.modules.comments.types import CommentEvent, CommentVisibility
+from radd.modules.comments.visibility import internal_comment_visible
+from radd.modules.teams import service as teams
+from radd.modules.events import service as events
+from radd.modules.events.models import Event
+from radd.modules.items import service as items
+from radd.modules.items.enums import ItemEvent
+from radd.modules.projects import service as projects_service
+from radd.modules.projects.models import Project
+
+from . import planner, service
+from .planner import Plan, PlannedNotification
+from .types import (
+    APPROVAL_APPROVED_EVENT,
+    APPROVAL_DECLINED_EVENT,
+    APPROVAL_REQUESTED_EVENT,
+    CONSUMER_NAME,
+    SLA_BREACHED_EVENT,
+    SLA_DUE_SOON_EVENT,
+    NotificationType,
+)
+
+logger = logging.getLogger(__name__)
+
+# Spec 71 decision events → the notification detail's "action".
+_APPROVAL_DECISIONS = {
+    APPROVAL_APPROVED_EVENT: "approved",
+    APPROVAL_DECLINED_EVENT: "declined",
+}
+
+_HANDLED = {
+    ItemEvent.CREATED.value,
+    ItemEvent.UPDATED.value,
+    CommentEvent.CREATED.value,
+    SLA_BREACHED_EVENT,
+    SLA_DUE_SOON_EVENT,
+    APPROVAL_REQUESTED_EVENT,
+    APPROVAL_APPROVED_EVENT,
+    APPROVAL_DECLINED_EVENT,
+}
+
+# SLA timer events fan out identically; only the notification type differs.
+_SLA_EVENT_TYPES = {
+    SLA_BREACHED_EVENT: NotificationType.SLA_BREACH,
+    SLA_DUE_SOON_EVENT: NotificationType.SLA_DUE_SOON,
+}
+
+
+async def run_once() -> int:
+    async with SessionLocal() as session:
+        if not await events.offset_exists(session, CONSUMER_NAME):
+            return await _bootstrap(session)
+        return await _consume(session, watch_only=False)
+
+
+async def _consume(session: AsyncSession, *, watch_only: bool) -> int:
+    offset = await events.get_offset(session, CONSUMER_NAME)
+    batch = await events.read_after(session, offset, settings.notify_batch)
+    if not batch:
+        return 0
+    for event in batch:
+        # A bulk import's events are `silent`: nobody is notified about work that
+        # happened years ago in another system. The importer sets watchers from the
+        # source data explicitly, so skipping these also keeps the watcher graph
+        # out of the bootstrap's hands rather than half-derived from imported rows.
+        if event.silent or event.event_type not in _HANDLED:
+            continue
+        try:
+            async with session.begin_nested():
+                await _handle(session, event, watch_only=watch_only)
+        except Exception:
+            logger.exception("notify: failed handling event %s (%s)", event.id, event.event_type)
+    await events.set_offset(session, CONSUMER_NAME, batch[-1].id)
+    await session.commit()
+    return len(batch)
+
+
+async def _bootstrap(session: AsyncSession) -> int:
+    """Very first run: consume the entire historical backlog WATCH-ONLY. This
+    backfills the watcher graph from real activity (creators/assignees/commenters
+    follow what they touched) without spamming notifications for old events —
+    notifications begin from the moment the module first starts."""
+    logger.info("notify: first start — backfilling watchers from the event backlog")
+    total = 0
+    while processed := await _consume(session, watch_only=True):
+        total += processed
+    return total
+
+
+async def _handle(session: AsyncSession, event: Event, *, watch_only: bool) -> None:
+    if event.event_type == CommentEvent.CREATED.value:
+        await _handle_comment_created(session, event, watch_only=watch_only)
+    elif event.event_type in _SLA_EVENT_TYPES:
+        if not watch_only:
+            await _handle_sla_event(session, event, _SLA_EVENT_TYPES[event.event_type])
+    elif event.event_type == APPROVAL_REQUESTED_EVENT or event.event_type in _APPROVAL_DECISIONS:
+        if not watch_only:  # approvals never touch the watcher graph (spec 71)
+            await _handle_approval_event(session, event)
+    else:
+        await _handle_item_event(session, event, watch_only=watch_only)
+
+
+async def _resolve_mentions(session: AsyncSession, text: str) -> frozenset[uuid.UUID]:
+    """Mention candidates in `text` resolved to real, active users."""
+    id_strings, emails = planner.parse_mention_candidates(text)
+    resolved: set[uuid.UUID] = set()
+    candidate_ids = set()
+    for value in id_strings:
+        try:
+            candidate_ids.add(uuid.UUID(value))
+        except ValueError:
+            continue
+    users = await auth.users_by_ids(session, candidate_ids)
+    resolved.update(user_id for user_id, user in users.items() if user.active)
+    for email in emails:
+        user = await auth.get_user_by_email(session, email)
+        if user is not None and user.active:
+            resolved.add(user.id)
+    return frozenset(resolved)
+
+
+async def recipient_ids(session: AsyncSession, item_id: uuid.UUID) -> frozenset[uuid.UUID]:
+    """The ambient recipient set: watchers ∪ CURRENT members of the item's
+    participant teams (spec 72 — resolved at fan-out time, so team joins/leaves
+    take effect without cleanup rows). Deferred feature-detected import: the
+    participants module loads AFTER notify and may be disabled. Every recipient
+    still passes `_allowed` (item.read + internal-comment filters) — team
+    participation never widens what someone may see."""
+    recipients = set(await service.watcher_ids(session, item_id))
+    try:
+        from radd.modules.participants import service as participants
+    except ImportError:
+        return frozenset(recipients)
+    recipients |= await participants.team_recipient_ids(session, item_id)
+    return frozenset(recipients)
+
+
+async def _handle_item_event(session: AsyncSession, event: Event, *, watch_only: bool) -> None:
+    payload = event.payload or {}
+    item_id = uuid.UUID(event.entity_id)
+    created = event.event_type == ItemEvent.CREATED.value
+    changed_fields = {change.get("field") for change in payload.get("changes", [])}
+
+    mention_ids: frozenset[uuid.UUID] = frozenset()
+    if not watch_only and (created or "description" in changed_fields):
+        mention_ids = await _resolve_mentions(session, payload.get("description", ""))
+
+    if created:
+        plan = planner.plan_item_created(payload, event.actor_id, mention_ids)
+    else:
+        watchers = await recipient_ids(session, item_id)
+        plan = planner.plan_item_updated(payload, event.actor_id, watchers, mention_ids)
+
+    project = await projects_service.get_project(session, uuid.UUID(payload["project_id"]))
+    await _apply(
+        session,
+        plan,
+        event=event,
+        item_id=item_id,
+        project=project,
+        item_key=payload.get("key", ""),
+        item_title=payload.get("title", ""),
+        watch_only=watch_only,
+    )
+
+
+async def _handle_comment_created(
+    session: AsyncSession, event: Event, *, watch_only: bool
+) -> None:
+    payload = event.payload or {}
+    item_id = uuid.UUID(payload["item_id"])
+    item = await items.require_item(session, item_id)
+    project = await projects_service.get_project(session, item.project_id)
+    mention_ids: frozenset[uuid.UUID] = frozenset()
+    if not watch_only:
+        # The event excerpt is capped — mention-scan the full body via the comments seam.
+        body = await comments.comment_body(session, uuid.UUID(event.entity_id))
+        mention_ids = await _resolve_mentions(session, body or payload.get("excerpt", ""))
+    watchers = await recipient_ids(session, item_id)
+    plan = planner.plan_comment_created(payload, event.actor_id, watchers, mention_ids)
+    await _apply(
+        session,
+        plan,
+        event=event,
+        item_id=item_id,
+        project=project,
+        item_key=f"{project.key}-{item.number}",
+        item_title=item.title,
+        watch_only=watch_only,
+    )
+
+
+async def _handle_sla_event(
+    session: AsyncSession, event: Event, type_: NotificationType
+) -> None:
+    """sla.breached and (spec 69) sla.due_soon: same fan-out, different type."""
+    payload = event.payload or {}
+    item_id = uuid.UUID(payload["item_id"])
+    item = await items.require_item(session, item_id)
+    project = await projects_service.get_project(session, item.project_id)
+    watchers = await recipient_ids(session, item_id)
+    detail = {
+        "policy": payload.get("policy_name", ""),
+        "kind": payload.get("kind", ""),
+        "due_at": payload.get("due_at"),
+    }
+    if type_ is NotificationType.SLA_DUE_SOON:
+        detail["remaining_seconds"] = payload.get("remaining_seconds")
+    plan = planner.plan_sla_breached(item.assignee_id, watchers, detail, type_)
+    await _apply(
+        session,
+        plan,
+        event=event,
+        item_id=item_id,
+        project=project,
+        item_key=payload.get("item_key", ""),
+        item_title=item.title,
+    )
+
+
+async def _handle_approval_event(session: AsyncSession, event: Event) -> None:
+    """Spec 71: requested → each eligible approver (payload-resolved ids — the
+    wire-string idiom keeps notify from importing approvals, which loads later);
+    approved/declined → the requester."""
+    payload = event.payload or {}
+    item_id = uuid.UUID(payload["item_id"])
+    item = await items.require_item(session, item_id)
+    project = await projects_service.get_project(session, item.project_id)
+    if event.event_type == APPROVAL_REQUESTED_EVENT:
+        approver_ids = frozenset(
+            uuid.UUID(value) for value in payload.get("eligible_user_ids", [])
+        )
+        plan = planner.plan_approval_requested(payload, event.actor_id, approver_ids)
+    else:
+        requester = payload.get("requester") or {}
+        requester_id = uuid.UUID(requester["id"]) if requester.get("id") else None
+        plan = planner.plan_approval_decided(
+            payload, event.actor_id, requester_id, _APPROVAL_DECISIONS[event.event_type]
+        )
+    await _apply(
+        session,
+        plan,
+        event=event,
+        item_id=item_id,
+        project=project,
+        item_key=f"{project.key}-{item.number}",
+        item_title=item.title,
+    )
+
+
+async def _allowed(
+    session: AsyncSession, planned: PlannedNotification, project: Project
+) -> bool:
+    """Recipient must exist, be active, and hold item.read (plus comment.read_internal
+    for internal-comment notifications) on the project."""
+    users = await auth.users_by_ids(session, {planned.user_id})
+    user = users.get(planned.user_id)
+    if user is None or not user.active:
+        return False
+    permissions = (await authz.permissions_for_projects(session, user, [project]))[project.id]
+    if Permission.ITEM_READ not in permissions:
+        return False
+    if planned.detail.get("visibility") == CommentVisibility.INTERNAL.value:
+        if Permission.COMMENT_READ_INTERNAL not in permissions:
+            return False
+        # Spec 50: a team-narrowed internal comment only notifies its team members.
+        teams_for = {uuid.UUID(t) for t in planned.detail.get("visible_to_teams") or []}
+        if not teams_for:
+            return True
+        has_manage = Permission.PROJECT_MANAGE in permissions
+        actor_teams = (
+            set() if has_manage else await teams.user_team_ids(session, user.id)
+        )
+        return internal_comment_visible(
+            is_author=False,
+            has_read_internal=True,
+            has_manage=has_manage,
+            comment_teams=teams_for,
+            actor_teams=actor_teams,
+        )
+    return True
+
+
+async def _apply(
+    session: AsyncSession,
+    plan: Plan,
+    *,
+    event: Event,
+    item_id: uuid.UUID,
+    project: Project,
+    item_key: str,
+    item_title: str,
+    watch_only: bool = False,
+) -> None:
+    await service.add_watchers(session, item_id, plan.watch)
+    if watch_only or not plan.notifications:
+        return
+    actor_name = None
+    if event.actor_id is not None:
+        actor = (await auth.users_by_ids(session, {event.actor_id})).get(event.actor_id)
+        actor_name = actor.name if actor else None
+    muted = await service.muted_types_by_user(
+        session, {planned.user_id for planned in plan.notifications}
+    )
+    for planned in plan.notifications:
+        if planned.type.value in muted.get(planned.user_id, ()):  # per-user preference
+            continue
+        if not await _allowed(session, planned, project):
+            continue
+        await service.create_notification(
+            session,
+            user_id=planned.user_id,
+            type_=planned.type,
+            event_id=event.id,
+            item_id=item_id,
+            actor_id=event.actor_id,
+            payload={
+                "item_key": item_key,
+                "item_title": item_title,
+                "actor_name": actor_name,
+                **planned.detail,
+            },
+        )

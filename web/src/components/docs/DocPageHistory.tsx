@@ -1,0 +1,145 @@
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArchiveRestore, ChevronLeft } from "lucide-react";
+import { api, errorMessage } from "../../lib/api";
+import { Entity, invalidateEntities } from "../../lib/cache";
+import { apiDocPageRestorePath } from "../../lib/constants";
+import { Markdown } from "../../lib/markdown";
+import { docPageVersionQuery, docPageVersionsQuery, usersQuery } from "../../lib/queries";
+import type { DocPage } from "../../lib/types";
+import { Button } from "../Button";
+import { Spinner } from "../Spinner";
+import { relativeTime } from "../../lib/dates";
+
+/**
+ * History tab (spec 43): past versions (the CURRENT content is v{page.version},
+ * not listed) → view one → Restore, which writes the old content as a NEW
+ * version (history stays linear; nothing is overwritten).
+ */
+export function DocPageHistory({ page, canWrite }: { page: DocPage; canWrite: boolean }) {
+  const [viewing, setViewing] = useState<number | null>(null);
+  const versions = useQuery(docPageVersionsQuery(page.id));
+  const { data: users } = useQuery(usersQuery);
+
+  if (versions.isPending) return <Spinner label="Loading history…" />;
+  if (versions.isError) {
+    return (
+      <p className="mt-3 text-xs text-red-400">
+        Failed to load history: {errorMessage(versions.error)}
+      </p>
+    );
+  }
+
+  if (viewing !== null) {
+    return (
+      <VersionViewer
+        page={page}
+        version={viewing}
+        canWrite={canWrite}
+        onBack={() => setViewing(null)}
+      />
+    );
+  }
+
+  const list = versions.data;
+  return (
+    <div className="mt-3">
+      <p className="mb-2 px-1 text-xs text-fg-muted">
+        v{page.version} is the current version{list.length > 0 ? "; earlier versions:" : "."}
+      </p>
+      {list.length === 0 ? (
+        <p className="px-1 text-[13px] text-fg-faint">No earlier versions yet.</p>
+      ) : (
+        <ul className="flex flex-col gap-1">
+          {list.map((version) => (
+            <li key={version.version}>
+              <button
+                type="button"
+                onClick={() => setViewing(version.version)}
+                className="flex w-full items-center gap-2 rounded-md border border-subtle bg-surface/50 px-2.5 py-1.5 text-left hover:border-strong cursor-pointer"
+              >
+                <span className="rounded bg-elevated px-1.5 py-px font-mono text-[10px] text-fg-secondary">
+                  v{version.version}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-[13px] text-fg">
+                  {version.title}
+                </span>
+                <span className="shrink-0 text-[11px] text-fg-muted">
+                  {users?.find((user) => user.id === version.author_id)?.name ?? "someone"} ·{" "}
+                  <span title={version.created_at}>{relativeTime(version.created_at)}</span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function VersionViewer({
+  page,
+  version,
+  canWrite,
+  onBack,
+}: {
+  page: DocPage;
+  version: number;
+  canWrite: boolean;
+  onBack: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const content = useQuery(docPageVersionQuery(page.id, version));
+  const restore = useMutation({
+    mutationFn: () => api.post<DocPage>(apiDocPageRestorePath(page.id), { version }),
+    onSuccess: onBack,
+    onSettled: () => void invalidateEntities(queryClient, Entity.docPage, Entity.docSpace),
+  });
+
+  return (
+    <div className="mt-3">
+      <div className="mb-2 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onBack}
+          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-fg-secondary hover:text-fg cursor-pointer"
+        >
+          <ChevronLeft size={13} aria-hidden />
+          All versions
+        </button>
+        <span className="rounded bg-elevated px-1.5 py-px font-mono text-[10px] text-fg-secondary">
+          v{version}
+        </span>
+        {canWrite && (
+          <Button
+            size="sm"
+            variant="secondary"
+            className="ml-auto"
+            onClick={() => restore.mutate()}
+            disabled={restore.isPending}
+          >
+            <ArchiveRestore size={12} aria-hidden />
+            {restore.isPending ? "Restoring…" : `Restore v${version}`}
+          </Button>
+        )}
+      </div>
+      {restore.isError && (
+        <p className="mb-2 text-xs text-red-400">{errorMessage(restore.error)}</p>
+      )}
+      {content.isPending ? (
+        <Spinner label="Loading version…" />
+      ) : content.isError ? (
+        <p className="text-xs text-red-400">{errorMessage(content.error)}</p>
+      ) : (
+        <div className="rounded-md border border-subtle bg-surface/40 px-3 py-2">
+          <h2 className="mb-2 text-base font-semibold text-heading">{content.data.title}</h2>
+          {content.data.body ? (
+            <Markdown text={content.data.body} />
+          ) : (
+            <p className="text-[13px] text-fg-faint">This version had no content.</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

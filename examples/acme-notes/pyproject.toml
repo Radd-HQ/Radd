@@ -1,0 +1,22 @@
+[project]
+name = "acme-notes"
+version = "1.0.0"
+description = "Example EXTERNAL Radd plugin — notes on issues + a Notes page. Built in its own project (own pyproject + own web build), discovered via the radd.plugins entry point, loaded at runtime with zero edits to the Radd repo (spec 94 acceptance)."
+requires-python = ">=3.12"
+dependencies = []
+
+# Discovery (docs/plugin-platform.md §10): Radd's plugin manager finds this package through the
+# `radd.plugins` entry-point group — no edit to Radd's config. Installing the package (pip/uv) is all
+# it takes for `acme.notes` to appear as an installable plugin.
+[project.entry-points."radd.plugins"]
+acme-notes = "acme_notes"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/acme_notes"]
+# The built UI bundle ships inside the package (spec 94) so `pip install` delivers the plugin's UI;
+# it's .gitignored, so force-include it (build the UI first: `vite build` in src/acme_notes/ui/).
+artifacts = ["src/acme_notes/ui/dist/**/*"]

@@ -1,0 +1,537 @@
+import {
+  CircleDashed,
+  CircleDot,
+  Diamond,
+  FileCode,
+  FileText,
+  GitBranch,
+  GitCommitHorizontal,
+  GitMerge,
+  GitPullRequest,
+  Link2,
+  ListTree,
+  OctagonAlert,
+  Palette,
+  Paperclip,
+  SignalHigh,
+  SignalLow,
+  SignalMedium,
+  type LucideIcon,
+} from "lucide-react";
+import {
+  VcsProvider,
+  VcsRefType,
+  WebLinkCategory,
+  type VcsProviderValue,
+  type VcsRefTypeValue,
+  type WebLinkCategoryValue,
+} from "./types";
+import {
+  ActionType,
+  MANUAL_TRIGGER,
+  SCHEDULE_TRIGGER,
+  CommentVisibility,
+  CycleStatus,
+  FieldAccess,
+  FieldType,
+  InstanceRole,
+  ItemKind,
+  ItemLinkType,
+  Priority,
+  ReleaseStatus,
+  ReportInterval,
+  StateCategory,
+  ViewAxis,
+  ViewType,
+  type ActionTypeValue,
+  type BuiltinRuleField,
+  type CommentVisibilityValue,
+  type CycleStatusValue,
+  type FieldAccessValue,
+  type FieldTypeValue,
+  type InstanceRoleValue,
+  type ItemKindValue,
+  type ItemLinkTypeValue,
+  type PriorityValue,
+  type ReleaseStatusValue,
+  type ReportIntervalValue,
+  type StateCategoryValue,
+  type ViewAxisValue,
+  type ViewTypeValue,
+} from "./types";
+
+/**
+ * Display metadata for backend enums — the single place mapping enum members
+ * to labels, icons, ordering, and accent classes. No component hardcodes these.
+ */
+
+export interface PriorityMeta {
+  label: string;
+  /** Compact mono tag form (board cards). */
+  short: string;
+  icon: LucideIcon;
+  className: string;
+  /** Sort weight, most urgent first. */
+  order: number;
+}
+
+export const PRIORITY_META: Record<PriorityValue, PriorityMeta> = {
+  [Priority.blocker]: { label: "Blocker", short: "BLOCK", icon: OctagonAlert, className: "text-red-400", order: 0 },
+  [Priority.high]: { label: "High", short: "HIGH", icon: SignalHigh, className: "text-orange-400", order: 1 },
+  [Priority.normal]: { label: "Normal", short: "NORM", icon: SignalMedium, className: "text-fg-secondary", order: 2 },
+  [Priority.low]: { label: "Low", short: "LOW", icon: SignalLow, className: "text-fg-muted", order: 3 },
+};
+
+export const PRIORITY_ORDER: readonly PriorityValue[] = [
+  Priority.blocker,
+  Priority.high,
+  Priority.normal,
+  Priority.low,
+];
+
+export interface CategoryMeta {
+  label: string;
+  /** Dot/accent color for column headers and state selects. */
+  dotClassName: string;
+  /** Tinted pill (border/bg/text) for the state pill on rows and cards. */
+  pillClassName: string;
+  /** Board column ordering (states also carry `position` within a project). */
+  order: number;
+}
+
+export const CATEGORY_META: Record<StateCategoryValue, CategoryMeta> = {
+  [StateCategory.triage]: {
+    label: "Triage",
+    dotClassName: "bg-chart-triage",
+    pillClassName: "border-chart-triage/40 bg-chart-triage/12 text-chart-triage-ink",
+    order: 0,
+  },
+  [StateCategory.backlog]: {
+    label: "Backlog",
+    dotClassName: "bg-chart-backlog",
+    pillClassName: "border-emphasis/60 bg-elevated/60 text-fg",
+    order: 1,
+  },
+  [StateCategory.todo]: {
+    label: "Todo",
+    dotClassName: "bg-chart-todo",
+    pillClassName: "border-chart-todo/40 bg-chart-todo/12 text-chart-todo-ink",
+    order: 2,
+  },
+  [StateCategory.in_progress]: {
+    label: "In Progress",
+    dotClassName: "bg-chart-progress",
+    pillClassName: "border-chart-progress/40 bg-chart-progress/12 text-chart-progress-ink",
+    order: 3,
+  },
+  [StateCategory.done]: {
+    label: "Done",
+    dotClassName: "bg-chart-done",
+    pillClassName: "border-strong bg-elevated/40 text-fg-muted",
+    order: 4,
+  },
+  [StateCategory.canceled]: {
+    label: "Canceled",
+    dotClassName: "bg-chart-canceled",
+    pillClassName: "border-strong bg-elevated/40 text-fg-muted",
+    order: 5,
+  },
+};
+
+export const CATEGORY_ORDER: readonly StateCategoryValue[] = [
+  StateCategory.triage,
+  StateCategory.backlog,
+  StateCategory.todo,
+  StateCategory.in_progress,
+  StateCategory.done,
+  StateCategory.canceled,
+];
+
+export interface KindMeta {
+  label: string;
+  icon: LucideIcon;
+  className: string;
+}
+
+export const KIND_META: Record<ItemKindValue, KindMeta> = {
+  [ItemKind.epic]: { label: "Epic", icon: Diamond, className: "text-purple-400" },
+  [ItemKind.issue]: { label: "Issue", icon: CircleDot, className: "text-blue-400" },
+  [ItemKind.subtask]: { label: "Subtask", icon: ListTree, className: "text-fg-secondary" },
+};
+
+export const KIND_ORDER: readonly ItemKindValue[] = [
+  ItemKind.epic,
+  ItemKind.issue,
+  ItemKind.subtask,
+];
+
+/** Fallback icon for items created before the backend `kind` field landed. */
+export const NO_KIND_ICON: LucideIcon = CircleDashed;
+
+/** Plain-language labels for the workflow enforcement modes (spec 107):
+ * Guarded = the transitions list adds checks to the moves it covers;
+ * Strict = the list is the complete map of allowed moves. */
+export const TRANSITION_MODE_LABELS: Record<string, string> = {
+  off: "Off — anyone can move items to any state",
+  guards: "Guarded — moves listed below must meet their conditions; other moves stay free",
+  strict: "Strict — ONLY the moves listed below are possible, each meeting its conditions",
+};
+
+/** Friendly option labels for ENUMERATED scoped settings, per key — the
+ * generic ScopedSettingsEditor renders these in its select (the server's
+ * `choices` carries the wire values). */
+export const SETTING_CHOICE_LABELS: Record<string, Record<string, string>> = {
+  workflow_transition_mode: TRANSITION_MODE_LABELS,
+};
+
+/** Field-type display labels + form ordering (settings/fields, spec 04 Phase 3). */
+export const FIELD_TYPE_LABELS: Record<FieldTypeValue, string> = {
+  [FieldType.text]: "Text",
+  [FieldType.number]: "Number",
+  [FieldType.boolean]: "Boolean",
+  [FieldType.date]: "Date",
+  [FieldType.select]: "Select",
+  [FieldType.multi_select]: "Multi-select",
+  [FieldType.user]: "User",
+  [FieldType.url]: "URL",
+  [FieldType.duration]: "Duration",
+};
+
+export const FIELD_TYPE_ORDER: readonly FieldTypeValue[] = [
+  FieldType.text,
+  FieldType.number,
+  FieldType.boolean,
+  FieldType.date,
+  FieldType.select,
+  FieldType.multi_select,
+  FieldType.user,
+  FieldType.url,
+  FieldType.duration,
+];
+
+/** Field types whose values come from a fixed options list. */
+export function fieldTypeHasOptions(type: FieldTypeValue): boolean {
+  return type === FieldType.select || type === FieldType.multi_select;
+}
+
+/** Display names of the builtin item fields that can carry access rules (spec 36). */
+export const BUILTIN_FIELD_LABELS: Record<BuiltinRuleField, string> = {
+  title: "Title",
+  description: "Description",
+  state: "State",
+  priority: "Priority",
+  assignee: "Assignee",
+  reporter: "Reporter",
+  team: "Team",
+  labels: "Labels",
+  parent: "Parent",
+  start_date: "Start date",
+  target_date: "Target date",
+  cycle: "Cycle",
+  release: "Release",
+  flagged: "Flag",
+};
+
+/** Field-grant access labels (settings/fields permission editor, spec 07). */
+export const FIELD_ACCESS_LABELS: Record<FieldAccessValue, string> = {
+  [FieldAccess.read]: "Read",
+  [FieldAccess.write]: "Write",
+};
+
+export const FIELD_ACCESS_ORDER: readonly FieldAccessValue[] = [
+  FieldAccess.read,
+  FieldAccess.write,
+];
+
+/** The server-wide role ladder (spec 86): `users.instance_role`. */
+export const INSTANCE_ROLE_LABELS: Record<InstanceRoleValue, string> = {
+  [InstanceRole.member]: "Member",
+  [InstanceRole.admin]: "Admin",
+};
+
+export const INSTANCE_ROLE_ORDER: readonly InstanceRoleValue[] = [
+  InstanceRole.member,
+  InstanceRole.admin,
+];
+
+/** Saved-view enum display metadata (spec 09). */
+export const VIEW_TYPE_LABELS: Record<ViewTypeValue, string> = {
+  [ViewType.board]: "Board",
+  [ViewType.list]: "List",
+  [ViewType.planning]: "Planning",
+  [ViewType.queue]: "Queue",
+  [ViewType.roadmap]: "Roadmap",
+};
+
+/** Builtin view-axis labels (custom-field axes are labeled from the registry). */
+export const VIEW_AXIS_LABELS: Record<ViewAxisValue, string> = {
+  [ViewAxis.state]: "State",
+  [ViewAxis.assignee]: "Assignee",
+  [ViewAxis.priority]: "Priority",
+  [ViewAxis.kind]: "Kind",
+  [ViewAxis.team]: "Team",
+  [ViewAxis.cycle]: "Cycle",
+};
+
+export const VIEW_AXIS_ORDER: readonly ViewAxisValue[] = [
+  ViewAxis.state,
+  ViewAxis.assignee,
+  ViewAxis.priority,
+  ViewAxis.kind,
+  ViewAxis.team,
+  ViewAxis.cycle,
+];
+
+/** Cycle status display metadata (spec 18) — status is derived from dates. */
+export interface StatusMeta {
+  label: string;
+  /** Dot/accent color. */
+  dotClassName: string;
+  /** Tinted pill (border/bg/text) — set where statuses render as pills. */
+  pillClassName?: string;
+}
+
+export const CYCLE_STATUS_META: Record<CycleStatusValue, StatusMeta> = {
+  [CycleStatus.draft]: {
+    label: "Draft",
+    dotClassName: "bg-fg-secondary",
+    pillClassName: "border-emphasis/60 bg-elevated/60 text-fg",
+  },
+  [CycleStatus.upcoming]: {
+    label: "Upcoming",
+    dotClassName: "bg-blue-400",
+    pillClassName: "border-blue-400/30 bg-blue-400/10 text-blue-200",
+  },
+  [CycleStatus.active]: {
+    label: "Active",
+    dotClassName: "bg-emerald-400",
+    pillClassName: "border-emerald-400/30 bg-emerald-400/10 text-emerald-200",
+  },
+  [CycleStatus.completed]: {
+    label: "Completed",
+    dotClassName: "bg-fg-faint",
+    pillClassName: "border-strong bg-elevated/40 text-fg-muted",
+  },
+};
+
+/**
+ * Cycle-header ordering when grouping a view by cycle (spec 23): live work
+ * first, staging next, finished last. Within a status, view-utils sorts by
+ * start date (drafts, dateless, by name).
+ */
+export const CYCLE_STATUS_ORDER: readonly CycleStatusValue[] = [
+  CycleStatus.active,
+  CycleStatus.upcoming,
+  CycleStatus.draft,
+  CycleStatus.completed,
+];
+
+export const RELEASE_STATUS_META: Record<ReleaseStatusValue, StatusMeta> = {
+  [ReleaseStatus.planned]: { label: "Planned", dotClassName: "bg-amber-400" },
+  [ReleaseStatus.released]: { label: "Released", dotClassName: "bg-emerald-400" },
+};
+
+/**
+ * Dependency-link section headings by type and direction (spec 18): outgoing =
+ * this item is the source; incoming = this item is the target. `relates` is
+ * symmetric, so both directions read the same.
+ */
+export const LINK_GROUP_LABELS: Record<
+  ItemLinkTypeValue,
+  { outgoing: string; incoming: string }
+> = {
+  [ItemLinkType.blocks]: { outgoing: "Blocks", incoming: "Blocked by" },
+  [ItemLinkType.relates]: { outgoing: "Relates to", incoming: "Relates to" },
+  [ItemLinkType.duplicates]: { outgoing: "Duplicates", incoming: "Duplicated by" },
+  [ItemLinkType.mentions]: { outgoing: "References", incoming: "Referenced by" },
+};
+
+/** Link-type options + ordering for the "add dependency" picker. `mentions` is
+ * auto-derived, so it carries a label but is intentionally left out of the order. */
+export const LINK_TYPE_LABELS: Record<ItemLinkTypeValue, string> = {
+  [ItemLinkType.blocks]: "Blocks",
+  [ItemLinkType.relates]: "Relates to",
+  [ItemLinkType.duplicates]: "Duplicates",
+  [ItemLinkType.mentions]: "References",
+};
+
+export const LINK_TYPE_ORDER: readonly ItemLinkTypeValue[] = [
+  ItemLinkType.blocks,
+  ItemLinkType.relates,
+  ItemLinkType.duplicates,
+];
+
+/**
+ * State-category fills for inline-SVG charts (spec 19), as `var()` references
+ * so they follow the theme like every other token. `dotClassName` above resolves
+ * the SAME `--chart-*` variables through Tailwind utilities, so the dots, pills,
+ * roadmap bars and report series are now genuinely one source — they used to be
+ * palette classes on one side and loose hexes on the other, and had drifted.
+ */
+export const CATEGORY_CHART_COLORS: Record<StateCategoryValue, string> = {
+  [StateCategory.triage]: "var(--chart-triage)",
+  [StateCategory.backlog]: "var(--chart-backlog)",
+  [StateCategory.todo]: "var(--chart-todo)",
+  [StateCategory.in_progress]: "var(--chart-progress)",
+  [StateCategory.done]: "var(--chart-done)",
+  [StateCategory.canceled]: "var(--chart-canceled)",
+};
+
+/** Report bucket-interval labels + ordering for the throughput/CFD toggle (spec 19). */
+export const REPORT_INTERVAL_LABELS: Record<ReportIntervalValue, string> = {
+  [ReportInterval.day]: "Day",
+  [ReportInterval.week]: "Week",
+};
+
+export const REPORT_INTERVAL_ORDER: readonly ReportIntervalValue[] = [
+  ReportInterval.day,
+  ReportInterval.week,
+];
+
+/** Burnup line colors (spec 19): scope vs completed. */
+export const BURNUP_SCOPE_COLOR = "#818cf8"; // indigo-400
+export const BURNUP_COMPLETED_COLOR = "#34d399"; // emerald-400
+
+/** Accent for single-series bar charts (throughput, velocity). */
+export const CHART_ACCENT_COLOR = "#818cf8"; // indigo-400
+
+/** SLA trend colors (spec 63): targets met vs breached per week. */
+export const SLA_MET_COLOR = "#34d399"; // emerald-400
+export const SLA_BREACHED_COLOR = "#f87171"; // red-400
+
+// ---------------------------------------------------------------------------
+// Automations + intake forms (spec 20)
+// ---------------------------------------------------------------------------
+
+/** Trigger display name: the catalog's label when known, else the raw event type.
+ * (Trigger metadata lives server-side — GET /automations/catalog, spec 58.) */
+export function triggerLabel(
+  trigger: string,
+  catalog: { triggers: { event_type: string; label: string }[] } | undefined,
+): string {
+  if (trigger === MANUAL_TRIGGER) return "Manual (editor / menu)";
+  if (trigger === SCHEDULE_TRIGGER) return "On a schedule";
+  return catalog?.triggers.find((t) => t.event_type === trigger)?.label ?? trigger;
+}
+
+/** Action-type labels for the rule builder's action-type select. */
+export const ACTION_TYPE_LABELS: Record<ActionTypeValue, string> = {
+  [ActionType.setState]: "Set state",
+  [ActionType.setPriority]: "Set priority",
+  [ActionType.setAssignee]: "Set assignee",
+  [ActionType.setTeam]: "Set team",
+  [ActionType.addLabel]: "Add label",
+  [ActionType.removeLabel]: "Remove label",
+  [ActionType.setCycle]: "Set cycle",
+  [ActionType.setRelease]: "Set release",
+  [ActionType.setCustomField]: "Set custom field",
+  [ActionType.addComment]: "Add comment",
+  [ActionType.createItem]: "Create item",
+  [ActionType.sendWebhook]: "Send webhook",
+  [ActionType.postChat]: "Post to chat",
+  [ActionType.notifyUser]: "Notify user",
+  [ActionType.sendEmail]: "Send email",
+};
+
+export const ACTION_TYPE_ORDER: readonly ActionTypeValue[] = [
+  ActionType.setState,
+  ActionType.setPriority,
+  ActionType.setAssignee,
+  ActionType.setTeam,
+  ActionType.addLabel,
+  ActionType.removeLabel,
+  ActionType.setCycle,
+  ActionType.setRelease,
+  ActionType.setCustomField,
+  ActionType.addComment,
+  ActionType.createItem,
+  ActionType.sendWebhook,
+  ActionType.postChat,
+  ActionType.notifyUser,
+  ActionType.sendEmail,
+];
+
+/** Comment-visibility labels (add_comment action + form submit is public). */
+export const COMMENT_VISIBILITY_LABELS: Record<CommentVisibilityValue, string> = {
+  [CommentVisibility.public]: "Public",
+  [CommentVisibility.internal]: "Internal",
+};
+
+/** Initials for avatar chips ("Hussein Jarrar" → "HJ"). */
+export function initials(name: string): string {
+  return (
+    name
+      .split(/\s+/)
+      .map((part) => part[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "?"
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Activity / history + related links + version control display metadata
+// ---------------------------------------------------------------------------
+
+/** Human labels for item-history change fields (`custom_field` uses the change's `name`). */
+export const HISTORY_FIELD_LABELS: Record<string, string> = {
+  title: "Title",
+  description: "Description",
+  state: "State",
+  priority: "Priority",
+  assignee: "Assignee",
+  reporter: "Reporter",
+  team: "Team",
+  parent: "Parent",
+  cycle: "Cycle",
+  release: "Release",
+  start_date: "Start date",
+  target_date: "Target date",
+  flagged: "Flag",
+  labels: "Labels",
+  links: "Dependencies",
+  custom_field: "Field",
+};
+
+interface IconMeta {
+  label: string;
+  icon: LucideIcon;
+}
+
+export const WEBLINK_CATEGORY_META: Record<WebLinkCategoryValue, IconMeta> = {
+  [WebLinkCategory.document]: { label: "Document", icon: FileText },
+  [WebLinkCategory.design]: { label: "Design", icon: Palette },
+  [WebLinkCategory.spec]: { label: "Spec", icon: FileCode },
+  [WebLinkCategory.external]: { label: "External", icon: Link2 },
+  [WebLinkCategory.other]: { label: "Other", icon: Paperclip },
+};
+
+export const WEBLINK_CATEGORY_ORDER: readonly WebLinkCategoryValue[] = [
+  WebLinkCategory.document,
+  WebLinkCategory.design,
+  WebLinkCategory.spec,
+  WebLinkCategory.external,
+  WebLinkCategory.other,
+];
+
+export const VCS_REF_TYPE_META: Record<VcsRefTypeValue, IconMeta> = {
+  [VcsRefType.branch]: { label: "Branch", icon: GitBranch },
+  [VcsRefType.commit]: { label: "Commit", icon: GitCommitHorizontal },
+  [VcsRefType.merge_request]: { label: "Merge request", icon: GitMerge },
+  [VcsRefType.pull_request]: { label: "Pull request", icon: GitPullRequest },
+};
+
+export const VCS_REF_TYPE_ORDER: readonly VcsRefTypeValue[] = [
+  VcsRefType.branch,
+  VcsRefType.commit,
+  VcsRefType.merge_request,
+  VcsRefType.pull_request,
+];
+
+export const VCS_PROVIDER_LABELS: Record<VcsProviderValue, string> = {
+  [VcsProvider.manual]: "Manual",
+  [VcsProvider.gitlab]: "GitLab",
+  [VcsProvider.github]: "GitHub",
+  [VcsProvider.forgejo]: "Forgejo",
+};

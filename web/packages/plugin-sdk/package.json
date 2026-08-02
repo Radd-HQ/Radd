@@ -1,0 +1,19 @@
+{
+  "name": "@radd/plugin-sdk",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Public frontend SDK for Radd plugins — slot registry, shared primitives, theme tokens, hooks, and the ui_api_version gate. The ONLY frontend surface a plugin imports (docs/plugin-platform.md §9).",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles.css": "./src/styles/index.css",
+    "./vite": "./vite.mjs",
+    "./package.json": "./package.json"
+  },
+  "peerDependencies": {
+    "@tanstack/react-query": "^5",
+    "react": "^19",
+    "react-dom": "^19"
+  }
+}

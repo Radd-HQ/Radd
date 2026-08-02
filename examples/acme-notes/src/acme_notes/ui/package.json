@@ -1,0 +1,18 @@
+{
+  "name": "@acme/notes-ui",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The acme-notes plugin UI — an independent module-federation remote for Radd.",
+  "scripts": {
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@radd/plugin-sdk": "file:../../../../../web/packages/plugin-sdk"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.0.3",
+    "react": "^19.2.7",
+    "vite": "^8.1.5"
+  }
+}

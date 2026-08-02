@@ -1,0 +1,82 @@
+import { Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { BookOpen, Settings } from "lucide-react";
+import { RoutePath } from "../lib/constants";
+import { usePermissions } from "../lib/hooks";
+import { docSpacesQuery } from "../lib/queries";
+import { Permission } from "../lib/types";
+import { EmptyState } from "../components/EmptyState";
+import { Spinner } from "../components/Spinner";
+import { QueryError } from "../components/QueryError";
+/** `/docs` — the wiki's spaces index (spec 43): name, description, page count. */
+export function DocsIndexPage() {
+  const perms = usePermissions();
+  const spaces = useQuery(docSpacesQuery());
+
+  if (spaces.isPending) return <Spinner label="Loading docs…" />;
+  if (spaces.isError) {
+    return (
+      <div className="p-6">
+        <QueryError label="doc spaces" error={spaces.error} />
+      </div>
+    );
+  }
+
+  const canManage = perms.global(Permission.docManage);
+  const list = spaces.data ?? [];
+
+  return (
+    <div className="flex h-full flex-col">
+      <header className="flex items-center gap-2 border-b border-subtle px-6 py-3.5">
+        <BookOpen size={15} className="text-fg-muted" aria-hidden />
+        <h1 className="text-sm font-semibold text-heading">Docs</h1>
+        {canManage && (
+          <Link
+            to={RoutePath.settingsDocs}
+            className="ml-auto flex items-center gap-1.5 rounded-md border border-strong px-2 py-1 text-xs text-fg hover:bg-elevated"
+          >
+            <Settings size={12} aria-hidden />
+            Manage spaces
+          </Link>
+        )}
+      </header>
+
+      <div className="flex-1 overflow-y-auto p-6">
+        {list.length === 0 ? (
+          <EmptyState
+            icon={BookOpen}
+            message={
+              canManage
+                ? "No doc spaces yet — create the first one under Manage spaces."
+                : "No doc spaces yet — an admin can create the first one."
+            }
+          />
+        ) : (
+          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {list.map((space) => (
+              <li key={space.id}>
+                <Link
+                  to={RoutePath.docSpace}
+                  params={{ spaceId: space.id }}
+                  className="flex h-full flex-col gap-1 rounded-lg border border-subtle bg-surface/50 p-4 hover:border-strong hover:bg-surface"
+                >
+                  <span className="flex items-baseline gap-2">
+                    <span className="text-sm font-medium text-heading">{space.name}</span>
+                    <span className="ml-auto shrink-0 text-[11px] text-fg-muted">
+                      {space.page_count} page{space.page_count === 1 ? "" : "s"}
+                    </span>
+                  </span>
+                  {space.description && (
+                    <span className="text-xs leading-relaxed text-fg-muted">
+                      {space.description}
+                    </span>
+                  )}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}

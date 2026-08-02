@@ -1,0 +1,166 @@
+import { API_BASE, On401, RoutePath, type On401Value } from "./constants";
+import { FORBIDDEN_FALLBACK_MESSAGE, pushToast } from "./toast";
+
+/**
+ * Thin typed fetch wrapper for the Radd API.
+ * - base `/api/v1` (Vite dev proxy forwards `/api` to the backend)
+ * - `credentials: "include"` so the `radd_session` cookie flows
+ * - 401 → redirect to /login unless the caller opts out (`on401: On401.throw`)
+ * - 403 → global toast (RBAC surprises surface everywhere), then rethrow
+ */
+
+export class ApiError extends Error {
+  readonly status: number;
+  /** FastAPI error payload: string detail, or a 422 list of field errors. */
+  readonly detail: unknown;
+
+  constructor(status: number, detail: unknown) {
+    super(typeof detail === "string" ? detail : `Request failed (${status})`);
+    this.name = "ApiError";
+    this.status = status;
+    this.detail = detail;
+  }
+}
+
+interface RequestOptions {
+  method?: string;
+  body?: unknown;
+  query?: Record<string, string | undefined>;
+  on401?: On401Value;
+}
+
+async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const { method = "GET", body, query, on401 = On401.redirect } = options;
+
+  const url = new URL(API_BASE + path, window.location.origin);
+  if (query) {
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== undefined) url.searchParams.set(key, value);
+    }
+  }
+
+  const response = await fetch(url, {
+    method,
+    credentials: "include",
+    headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+
+  if (!response.ok) {
+    if (
+      response.status === 401 &&
+      on401 === On401.redirect &&
+      window.location.pathname !== RoutePath.login
+    ) {
+      window.location.assign(RoutePath.login);
+    }
+    const detail = await errorDetail(response);
+    if (response.status === 403) {
+      pushToast(typeof detail === "string" && detail ? detail : FORBIDDEN_FALLBACK_MESSAGE);
+    }
+    throw new ApiError(response.status, detail);
+  }
+
+  if (response.status === 204) return undefined as T;
+  return (await response.json()) as T;
+}
+
+async function errorDetail(response: Response): Promise<unknown> {
+  try {
+    const payload = (await response.json()) as {
+      detail?: unknown;
+      errors?: unknown;
+      position?: unknown;
+    };
+    // The fields registry 422s as {detail: "...", errors: ["key: message", …]} —
+    // keep the whole payload so callers can map errors per field.
+    if (Array.isArray(payload.errors)) return payload;
+    // SLQ parse errors 422 as {detail: "...", position: <offset>} (spec 10) —
+    // keep the payload so lib/slq.ts can point at the offending spot.
+    if (typeof payload.position === "number") return payload;
+    return payload.detail ?? payload;
+  } catch {
+    return response.statusText;
+  }
+}
+
+/** Human-readable message from any thrown value, for inline error display. */
+export function errorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (typeof error.detail === "string") return error.detail;
+    if (Array.isArray(error.detail)) {
+      const first = error.detail[0] as { msg?: string } | undefined;
+      if (first?.msg) return first.msg;
+    }
+    if (error.detail && typeof error.detail === "object") {
+      const payload = error.detail as { detail?: unknown; errors?: unknown };
+      // {detail, errors: [...]} payloads (field validation, workflow transition
+      // guards — spec 61): the specific failures beat the generic headline.
+      if (Array.isArray(payload.errors)) {
+        const errors = payload.errors.filter((entry) => typeof entry === "string");
+        if (errors.length > 0) return errors.join("; ");
+      }
+      if (typeof payload.detail === "string") return payload.detail;
+    }
+    return error.message;
+  }
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
+/**
+ * Per-field messages from a fields-registry 422
+ * (`{detail, errors: ["department: required", …]}`) keyed by field key.
+ * Empty when the error has some other shape.
+ */
+export function customFieldErrors(error: unknown): Record<string, string> {
+  const result: Record<string, string> = {};
+  if (!(error instanceof ApiError) || !error.detail || typeof error.detail !== "object") {
+    return result;
+  }
+  const { errors } = error.detail as { errors?: unknown };
+  if (!Array.isArray(errors)) return result;
+  for (const entry of errors) {
+    if (typeof entry !== "string") continue;
+    const separator = entry.indexOf(": ");
+    if (separator > 0) {
+      result[entry.slice(0, separator)] = entry.slice(separator + 2);
+    }
+  }
+  return result;
+}
+
+/** Backend detail prefix for a field-grant write rejection (spec 07). */
+const DENIED_FIELDS_PREFIX = "no permission to write custom fields: ";
+
+/**
+ * Field keys named by a fields-grant 403
+ * (`"no permission to write custom fields: a, b"`). Empty for any other error —
+ * the client can't predict writability up front (grants + the user's subjects
+ * aren't exposed), so denial is surfaced inline per field after the fact.
+ */
+export function deniedCustomFieldKeys(error: unknown): string[] {
+  if (!(error instanceof ApiError) || error.status !== 403) return [];
+  const detail = errorMessage(error);
+  if (!detail.startsWith(DENIED_FIELDS_PREFIX)) return [];
+  return detail
+    .slice(DENIED_FIELDS_PREFIX.length)
+    .split(",")
+    .map((key) => key.trim())
+    .filter(Boolean);
+}
+
+export const api = {
+  get: <T>(path: string, options?: Omit<RequestOptions, "method" | "body">) =>
+    request<T>(path, options),
+  post: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, "method" | "body">) =>
+    request<T>(path, { ...options, method: "POST", body }),
+  put: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, "method" | "body">) =>
+    request<T>(path, { ...options, method: "PUT", body }),
+  patch: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, "method" | "body">) =>
+    request<T>(path, { ...options, method: "PATCH", body }),
+  // DELETE accepts an optional JSON body — TOTP disable (spec 48) requires a
+  // current code in the body so a hijacked session can't silently strip MFA.
+  delete: <T>(path: string, options?: Omit<RequestOptions, "method">) =>
+    request<T>(path, { ...options, method: "DELETE" }),
+};

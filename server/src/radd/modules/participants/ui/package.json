@@ -1,0 +1,12 @@
+{
+  "name": "@radd-plugin-ui/participants",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@radd/plugin-sdk": "*"
+  }
+}
