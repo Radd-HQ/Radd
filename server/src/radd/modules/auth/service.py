@@ -446,6 +446,7 @@ _MERGE_REPOINT: tuple[tuple[str, str], ...] = (
     ("item_doc_links", "created_by"),
     ("views", "owner_id"),
     ("item_participants", "added_by"),
+    ("view_members", "added_by"),  # roadmap wave: who pinned the item to the view
     ("dashboards", "owner_id"),
     # Spec 89: these three block a hard delete (FK NO ACTION) and were ALSO
     # missing from the merge — a merged-away account kept holding its approvals
