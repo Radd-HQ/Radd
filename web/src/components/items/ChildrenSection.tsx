@@ -5,7 +5,7 @@ import { Link } from "@tanstack/react-router";
 import { api, errorMessage } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { ApiPath, RoutePath, apiItemPath } from "../../lib/constants";
-import { usePermissions } from "../../lib/hooks";
+import { useOpenIssueRef, usePermissions } from "../../lib/hooks";
 import { CATEGORY_META } from "../../lib/meta";
 import { childItemsQuery, statesQuery } from "../../lib/queries";
 import {
@@ -19,6 +19,7 @@ import {
 import { Avatar } from "../Avatar";
 import { formatPoints } from "./ItemBadges";
 import { Spinner } from "../Spinner";
+import { compareChildrenOpenFirst } from "../../lib/view-utils";
 
 /**
  * An item's children, on the item (RADD-655, RADD-660).
@@ -144,17 +145,8 @@ function ChildList({
   checklist: boolean;
   canWrite: boolean;
 }) {
-  // Open work first, then done/canceled — CATEGORY_META.order already encodes
-  // the workflow's own sequence, so this borrows it rather than inventing one.
-  const sorted = useMemo(
-    () =>
-      [...items].sort(
-        (a, b) =>
-          CATEGORY_META[a.state.category].order - CATEGORY_META[b.state.category].order ||
-          a.key.localeCompare(b.key, undefined, { numeric: true }),
-      ),
-    [items],
-  );
+  // Open work first, then done/canceled (shared rule — see the comparator).
+  const sorted = useMemo(() => [...items].sort(compareChildrenOpenFirst), [items]);
   return (
     <ul className="flex flex-col">
       {sorted.map((child) => (
@@ -182,6 +174,7 @@ function ChildRow({
   canWrite: boolean;
 }) {
   const queryClient = useQueryClient();
+  const openRef = useOpenIssueRef();
   const states = useQuery({ ...statesQuery(project.id), enabled: checklist });
   const isDone =
     child.state.category === StateCategory.done ||
@@ -221,9 +214,14 @@ function ChildRow({
           )}
         </button>
       )}
+      {/* RADD-699: a child opens in PEEK over what you are reading — surveying an
+          epic should not cost you the epic. `useOpenIssueRef` also handles the
+          from-inside-a-peek case (promote the parent, peek the child) and leaves
+          modified clicks to the browser, which is why the real href stays. */}
       <Link
         to={RoutePath.issue}
         params={{ itemKey: child.key }}
+        onClick={(event) => void openRef(child.key, event)}
         className="flex min-w-0 flex-1 items-center gap-2 text-[13px] hover:underline"
       >
         <span className="shrink-0 font-mono text-[11px] text-fg-faint">{child.key}</span>

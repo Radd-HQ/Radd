@@ -23,6 +23,7 @@ import {
   type CycleStatusValue,
   type FieldDef,
   type Item,
+  type ItemParentRef,
   type State,
 } from "./types";
 
@@ -56,6 +57,11 @@ export interface ViewGroup {
     done: number;
     total: number;
   };
+  /** Set on epic-axis groups: the epic the lane stands for, so a drop can build
+   *  the optimistic ref from data instead of parsing the display label (a title
+   *  containing the label's separator would otherwise split wrong). Absent on
+   *  the No-epic bucket and every other axis. */
+  epicRef?: ItemParentRef;
   items: Item[];
 }
 
@@ -66,11 +72,13 @@ export const UNASSIGNED_KEY = "__unassigned__";
 export const NO_TEAM_KEY = "__no_team__";
 export const NO_VALUE_KEY = "__none__";
 export const BACKLOG_KEY = "__backlog__";
+export const NO_EPIC_KEY = "__no_epic__";
 
 export const UNASSIGNED_LABEL = "Unassigned";
 export const NO_TEAM_LABEL = "No team";
 export const NO_VALUE_LABEL = "None";
 export const BACKLOG_LABEL = "Backlog";
+export const NO_EPIC_LABEL = "No epic";
 
 /** Everything the axis groupers may need to resolve buckets. */
 export interface AxisContext {
@@ -100,6 +108,20 @@ export interface AxisContext {
  */
 export function selectableCycles(cycles: Cycle[] | undefined): Cycle[] {
   return (cycles ?? []).filter((cycle) => cycle.status !== CycleStatus.completed);
+}
+
+/**
+ * Child ordering: open work first, then done/canceled, key-numeric within a
+ * tier. `CATEGORY_META.order` already encodes the workflow's own sequence, so
+ * this borrows it rather than inventing a second opinion. Shared by the issue
+ * page's children list and the board card's expansion (RADD-698) — the rule
+ * "what is left, at the top" should not differ by surface.
+ */
+export function compareChildrenOpenFirst(a: Item, b: Item): number {
+  return (
+    CATEGORY_META[a.state.category].order - CATEGORY_META[b.state.category].order ||
+    a.key.localeCompare(b.key, undefined, { numeric: true })
+  );
 }
 
 /** True for a `cf.<key>` custom-field axis token. */
@@ -174,6 +196,8 @@ export function groupItemsForView(
         context.cycleFilter,
         context.includeCompletedCycles ?? false,
       );
+    case ViewAxis.epic:
+      return groupByEpic(items);
     default:
       return [{ key: axis, label: "All items", items }];
   }
@@ -233,6 +257,50 @@ function groupByCycle(
         item.state.category !== StateCategory.done &&
         item.state.category !== StateCategory.canceled,
     ),
+  });
+  return groups;
+}
+
+/**
+ * `epic` buckets (RADD-697): one section per epic PRESENT in the result set,
+ * key-ordered, then a trailing **No epic** bucket for work no epic governs.
+ *
+ * Unlike cycles, the buckets are not enumerated from a fetch of every epic: an
+ * exhaustive list on a broad query is hundreds of empty lanes, and a view that
+ * wants a specific epic can filter to it (`epic = RADD-696`). An epic appears
+ * in its OWN lane alongside the work it governs, because that is what `epic`
+ * means server-side (`hierarchy.nearest_epic_case`) — the axis and SLQ must not
+ * disagree about the same word.
+ */
+function groupByEpic(items: Item[]): ViewGroup[] {
+  // One pass, appending in server order — the bucket's item order is the
+  // server's ordering (SLQ ORDER BY) and must never be re-sorted here.
+  const epics = new Map<string, { epic: ItemParentRef; bucket: Item[] }>();
+  const noEpic: Item[] = [];
+  for (const item of items) {
+    if (!item.epic) {
+      noEpic.push(item);
+      continue;
+    }
+    const seen = epics.get(item.epic.id);
+    if (seen) seen.bucket.push(item);
+    else epics.set(item.epic.id, { epic: item.epic, bucket: [item] });
+  }
+  const groups: ViewGroup[] = [...epics.values()]
+    .sort((a, b) => a.epic.key.localeCompare(b.epic.key, undefined, { numeric: true }))
+    .map(({ epic, bucket }) => ({
+      key: epic.id,
+      label: `${epic.key} · ${epic.title}`,
+      // Same summary shape as a cycle group: what is left, at a glance.
+      detail: `${doneCount(bucket)}/${bucket.length} done`,
+      progress: bucket.length ? doneCount(bucket) / bucket.length : undefined,
+      epicRef: epic,
+      items: bucket,
+    }));
+  groups.push({
+    key: NO_EPIC_KEY,
+    label: NO_EPIC_LABEL,
+    items: noEpic,
   });
   return groups;
 }
