@@ -405,3 +405,27 @@ html.compact body {
     animation: none;
   }
 }
+
+
+/*
+ * Inline comment highlights (RADD-726). Painted through the CSS Custom Highlight
+ * API rather than by wrapping text in <mark>: the page body is a ProseMirror
+ * document, and inserting elements into it invites the editor to reconcile them
+ * away or serialise them into the content. ::highlight() tints ranges without
+ * touching the tree.
+ *
+ * Amber rather than the accent: the accent means "interactive" everywhere else,
+ * and a commented passage is not a link.
+ */
+::highlight(radd-inline-comment) {
+  background-color: var(--callout-warning-fill);
+  text-decoration: underline;
+  text-decoration-color: var(--callout-warning-border);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+::highlight(radd-inline-comment-focus) {
+  background-color: var(--callout-warning-border);
+  color: var(--color-zinc-950);
+}

@@ -11,9 +11,21 @@ export const CommentVisibility = {
 } as const;
 export type CommentVisibilityValue = (typeof CommentVisibility)[keyof typeof CommentVisibility];
 
+/** Where an inline comment points (RADD-726) — a text-quote selector, not an
+ *  offset. See `lib/anchoring.ts` for why. */
+export interface CommentAnchor {
+  quote: string;
+  prefix?: string;
+  suffix?: string;
+}
+
 export interface Comment {
   id: string;
-  item_id: string;
+  /** RADD-717: what this hangs off — "item" or "page". */
+  entity_type: string;
+  entity_id: string;
+  /** The entity id when the parent IS an item, else null. */
+  item_id: string | null;
   author: UserRef;
   body: string;
   visibility: CommentVisibilityValue;
@@ -21,6 +33,10 @@ export interface Comment {
   visible_to_teams: string[];
   created_at: string;
   updated_at: string;
+  /** RADD-726. Null = an ordinary thread comment. */
+  anchor: CommentAnchor | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
 }
 
 /** The authenticated actor is the author; `internal` needs comment.read_internal. */

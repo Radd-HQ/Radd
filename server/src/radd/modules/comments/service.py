@@ -1,6 +1,6 @@
 import uuid
 from collections.abc import Iterable
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,7 +18,7 @@ from radd.modules.projects.models import Project
 
 from .models import Comment, CommentVisibilityTeam
 from .parents import binding_for
-from .schemas import CommentCreate, CommentRead, CommentUpdate
+from .schemas import CommentAnchor, CommentCreate, CommentRead, CommentUpdate
 from .types import (
     EXCERPT_MAX_CHARS,
     CommentEntity,
@@ -50,6 +50,9 @@ def _to_read(
         visible_to_teams=sorted(visible_to_teams or set()),
         created_at=comment.created_at,
         updated_at=comment.updated_at,
+        anchor=CommentAnchor(**comment.anchor) if comment.anchor else None,
+        resolved_at=comment.resolved_at,
+        resolved_by=comment.resolved_by,
     )
 
 
@@ -242,6 +245,7 @@ async def create_comment(
         entity_id=entity_id,
         author_id=author_id,
         body=data.body,
+        anchor=data.anchor.model_dump() if data.anchor else None,
         visibility=data.visibility.value
     )
     if occurred_at is not None:
@@ -381,3 +385,25 @@ async def delete_for_parent(
         )
     )
     return result.rowcount or 0
+
+
+async def set_resolved(
+    session: AsyncSession, comment_id: uuid.UUID, actor: User, *, resolved: bool
+) -> CommentRead:
+    """Resolve or reopen an inline comment (RADD-726/729).
+
+    Same authorization as EDITING it — resolving is a statement about the
+    conversation, not a destructive act, and anyone who could rewrite the comment
+    can certainly close it. Idempotent: resolving a resolved comment is not an
+    error, because two people clicking at once is ordinary.
+    """
+    comment = await _get(session, comment_id)
+    binding, project = await _parent_scope(session, comment.entity_type, comment.entity_id)
+    await _require_author_or(
+        session, comment, actor, project, others=binding.manage_permission
+    )
+    comment.resolved_at = datetime.now(UTC).replace(tzinfo=None) if resolved else None
+    comment.resolved_by = actor.id if resolved else None
+    await session.flush()
+    author = await auth.get_user(session, comment.author_id)
+    return _to_read(comment, author)

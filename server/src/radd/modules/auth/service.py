@@ -429,6 +429,9 @@ _MERGE_REPOINT: tuple[tuple[str, str], ...] = (
     ("work_items", "assignee_id"),
     ("work_items", "reporter_id"),
     ("comments", "author_id"),
+    # RADD-726: who closed an inline thread. Plain attribution — a merge should
+    # show the surviving identity as having resolved it, same as authorship.
+    ("comments", "resolved_by"),
     ("worklogs", "author_id"),
     # A MERGE asserts one person, so their leave follows them. Hard DELETE
     # destroys leave first (below), same rule as worklogs — a successor must

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, ArchiveRestore, History, Pencil, Printer, Trash2 } from "lucide-react";
 import { api, ApiError, errorMessage } from "../../lib/api";
@@ -18,6 +18,7 @@ import { DropdownMenu } from "../DropdownMenu";
 import { PageExtensionCtx } from "../../lib/page-extensions";
 import { PageBacklinksPanel } from "./PageBacklinksPanel";
 import { PageComments } from "./PageComments";
+import { PageInlineComments } from "./PageInlineComments";
 import { PageLabels } from "./PageLabels";
 import { PageLinkedItems } from "./PageLinkedItems";
 import { PageHistory } from "./PageHistory";
@@ -59,6 +60,10 @@ export function PageView({
   // handed to the editor as its initial whole-document run.
   const [pendingAiRun, setPendingAiRun] = useState<AiRun | null>(null);
   const [confirmDialog, confirm] = useConfirm();
+  // The rendered body element, and a counter that ticks when it re-renders —
+  // anchors resolve against rendered text, so they must be re-scanned then.
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [bodyVersion, setBodyVersion] = useState(0);
   // Pasted/inserted page images go through the storage-choice seam (spec 102).
   const uploadFiles = useAttachmentUploader({
     entityType: AttachmentParentType.page,
@@ -312,8 +317,11 @@ export function PageView({
       ) : (
         <>
           {page.body ? (
-            <div className="group/body relative mt-3 rounded-md border border-transparent px-1.5 py-1 hover:border-subtle">
-              <PageBody text={page.body} />
+            <div
+              ref={bodyRef}
+              className="group/body relative mt-3 rounded-md border border-transparent px-1.5 py-1 hover:border-subtle"
+            >
+              <PageBody text={page.body} onReady={() => setBodyVersion((v) => v + 1)} />
               <span className="absolute right-1 top-1 hidden items-center gap-1 group-hover/body:flex">
                 {/* Read-mode AI (spec 103 follow-up): find-similar/summarize for
                     every reader; transforms only for writers. */}
@@ -377,6 +385,14 @@ export function PageView({
               to place the extension — "what points at me" is the direction a
               wiki is navigated, and it cannot be opt-in per page. The
               `radd:backlinks` extension exists for putting it INLINE instead. */}
+          {/* RADD-726: anchored threads beside the passage they are about. */}
+          <PageInlineComments
+            pageId={page.id}
+            bodyRef={bodyRef}
+            bodyVersion={bodyVersion}
+            canComment={canWrite}
+          />
+
           <PageBacklinksPanel pageId={page.id} />
 
           {/* RADD-717: a page is where a decision gets written down; the

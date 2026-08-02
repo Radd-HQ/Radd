@@ -1,6 +1,8 @@
 import uuid
+from datetime import datetime
 
-from sqlalchemy import ForeignKey, Index, String, Text
+from sqlalchemy import DateTime, ForeignKey, Index, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from radd.db import Base, TimestampMixin
@@ -26,6 +28,22 @@ class Comment(Base, TimestampMixin):
     body: Mapped[str] = mapped_column(Text)
     # CommentVisibility; internal comments require Permission.COMMENT_READ_INTERNAL.
     visibility: Mapped[str] = mapped_column(String(10), default=CommentVisibility.PUBLIC)
+
+    # --- RADD-726: inline, anchored, resolvable -------------------------------
+    #: NULL = an ordinary thread comment, which is every comment that exists
+    #: today. Set = inline: `{"quote", "prefix", "suffix"}`, a TEXT-QUOTE
+    #: selector rather than a character offset. An offset is invalidated by the
+    #: first edit made anywhere above it, so one inserted paragraph would slide
+    #: every comment on the page onto the wrong sentence; a quote is re-located
+    #: against the current body on each render. Same reason W3C Web Annotation
+    #: stores one.
+    anchor: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    #: Resolve, never delete — the argument is often the only surviving record of
+    #: why a line reads the way it does.
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    resolved_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
 
 
 class CommentVisibilityTeam(Base):

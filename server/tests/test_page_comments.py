@@ -146,3 +146,53 @@ async def test_the_stored_shape_is_the_wire_shape(db, admin, page):
         text("SELECT DISTINCT entity_type FROM comments WHERE entity_id = :i"), {"i": page.id}
     )
     assert stored.scalars().all() == ["page"]
+
+
+# --- RADD-726: inline anchors and resolution ----------------------------------
+
+
+async def test_an_inline_comment_stores_its_anchor(db, admin, page):
+    from radd.modules.comments.schemas import CommentAnchor
+
+    read = await comments.create_comment(
+        db, page.id,
+        CommentCreate(
+            body="is this still true?",
+            anchor=CommentAnchor(quote="why we chose", prefix="", suffix=" this"),
+        ),
+        actor=admin, entity_type=CommentParentType.PAGE.value,
+    )
+    assert read.anchor is not None and read.anchor.quote == "why we chose"
+    assert read.resolved_at is None
+
+
+async def test_resolve_and_reopen(db, admin, page):
+    """This exists because a NameError in `set_resolved` reached a running
+    server: nothing in the suite called it, so a green run and a 500 coexisted.
+    A test that EXECUTES the path is the only thing that catches that."""
+    from radd.modules.comments.schemas import CommentAnchor
+
+    read = await comments.create_comment(
+        db, page.id,
+        CommentCreate(body="x", anchor=CommentAnchor(quote="why", prefix="", suffix="")),
+        actor=admin, entity_type=CommentParentType.PAGE.value,
+    )
+    resolved = await comments.set_resolved(db, read.id, admin, resolved=True)
+    assert resolved.resolved_at is not None
+    assert resolved.resolved_by == admin.id
+
+    # Idempotent: two people clicking at once is ordinary, not an error.
+    again = await comments.set_resolved(db, read.id, admin, resolved=True)
+    assert again.resolved_at is not None
+
+    reopened = await comments.set_resolved(db, read.id, admin, resolved=False)
+    assert reopened.resolved_at is None and reopened.resolved_by is None
+
+
+async def test_an_ordinary_thread_comment_has_no_anchor(db, admin, page):
+    """The compatibility story: every comment that exists today is exactly this."""
+    read = await comments.create_comment(
+        db, page.id, CommentCreate(body="general remark"),
+        actor=admin, entity_type=CommentParentType.PAGE.value,
+    )
+    assert read.anchor is None and read.resolved_at is None

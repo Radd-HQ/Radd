@@ -58,6 +58,22 @@ async def update_comment(
     return await service.update_comment(session, comment_id, data, actor=user)
 
 
+@router.post("/comments/{comment_id}/resolve", response_model=CommentRead)
+async def resolve_comment(
+    comment_id: uuid.UUID, session: Session, user: CurrentUser
+) -> CommentRead:
+    """Close an inline thread (RADD-726). Resolve, never delete: a resolved
+    comment leaves the rail and the highlight layer but stays readable."""
+    return await service.set_resolved(session, comment_id, actor=user, resolved=True)
+
+
+@router.post("/comments/{comment_id}/reopen", response_model=CommentRead)
+async def reopen_comment(
+    comment_id: uuid.UUID, session: Session, user: CurrentUser
+) -> CommentRead:
+    return await service.set_resolved(session, comment_id, actor=user, resolved=False)
+
+
 @router.delete("/comments/{comment_id}", status_code=204)
 async def delete_comment(comment_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
     await service.delete_comment(session, comment_id, actor=user)
