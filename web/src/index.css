@@ -185,6 +185,26 @@
   --color-chart-done-ink: var(--chart-done-ink);
   --color-chart-canceled-ink: var(--chart-canceled-ink);
 
+  /* Callout panels (RADD-715). A separate scale from --chart-*, which encodes
+     WORKFLOW STATE: reusing "in progress" green to mean "success" would make a
+     board legend and a page callout claim the same colour means two things.
+     Computed, not eyeballed — ink clears 4.5:1 on its OWN fill in both themes
+     (text, not a fill), border clears 3:1 on the surface, and the ink keeps its
+     hue rather than collapsing to near-white, which is what a naive search for
+     "passes contrast" returns. */
+  --color-callout-info-fill: var(--callout-info-fill);
+  --color-callout-info-border: var(--callout-info-border);
+  --color-callout-info-ink: var(--callout-info-ink);
+  --color-callout-success-fill: var(--callout-success-fill);
+  --color-callout-success-border: var(--callout-success-border);
+  --color-callout-success-ink: var(--callout-success-ink);
+  --color-callout-warning-fill: var(--callout-warning-fill);
+  --color-callout-warning-border: var(--callout-warning-border);
+  --color-callout-warning-ink: var(--callout-warning-ink);
+  --color-callout-danger-fill: var(--callout-danger-fill);
+  --color-callout-danger-border: var(--callout-danger-border);
+  --color-callout-danger-ink: var(--callout-danger-ink);
+
   /* Token names must differ from the raw per-theme vars they reference —
      a self-reference (`--shadow-pop: var(--shadow-pop)`) would emit a cyclic
      variable on `:root`. */
@@ -248,6 +268,20 @@ html {
   --chart-done-ink: #89909b;
   --chart-canceled-ink: #89909b;
 
+  /* Callouts (dark) — see the @theme block above for how these were derived. */
+  --callout-info-fill: #11212c;
+  --callout-info-border: #336e99;
+  --callout-info-ink: #308dcf; /* 4.57:1 on its fill */
+  --callout-success-fill: #112c1c;
+  --callout-success-border: #287748;
+  --callout-success-ink: #2cba67; /* 5.94:1 */
+  --callout-warning-fill: #2c2311;
+  --callout-warning-border: #82652b;
+  --callout-warning-ink: #ba8a2c; /* 4.99:1 */
+  --callout-danger-fill: #2c1511;
+  --callout-danger-border: #b04a3b;
+  --callout-danger-ink: #d55f4d; /* 4.56:1 */
+
   /* Elevation shadows tuned for dark: deep umbra + a hairline light ring to
      keep overlay edges readable against dark surfaces. */
   --shadow-lift-sm: 0 1px 2px rgb(0 0 0 / 0.3);
@@ -307,6 +341,26 @@ html.light {
   --chart-progress-ink: #1f7a45;
   --chart-done-ink: #5f6773;
   --chart-canceled-ink: #5f6773;
+
+  /* Callouts (light). The old markup used `text-sky-300` and friends — tuned
+     for dark only, and unreadable on a light tint.
+     Borders are computed against the PAGE background (#f4f6f9), not the white
+     panel: a light-theme border is darker than both backdrops, so the darker
+     one is the binding constraint. Measuring against white passed at 3.04 and
+     then failed at 2.87 on the real page. (Dark is the mirror image — its
+     border is lighter than both, so the panel is what binds there.) */
+  --callout-info-fill: #ebf5fc;
+  --callout-info-border: #4f93c4;
+  --callout-info-ink: #2873a9; /* 4.62:1 on its fill */
+  --callout-success-fill: #ebfcf2;
+  --callout-success-border: #36a162;
+  --callout-success-ink: #1e8047; /* 4.66:1 */
+  --callout-warning-fill: #fcf6eb;
+  --callout-warning-border: #ac8639;
+  --callout-warning-ink: #8c6921; /* 4.70:1 */
+  --callout-danger-fill: #fcedeb;
+  --callout-danger-border: #cd776a;
+  --callout-danger-ink: #c2412e; /* 4.51:1 */
 
   /* Other accent TEXT shades tuned for dark backgrounds get deepened for light
      (hardcoded hex — Tailwind only emits variables that utilities use). */
