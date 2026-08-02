@@ -176,3 +176,20 @@ async def test_duplicate_names_and_repos_conflict(db):
         await service.create_repo(
             db, RepoCreate(connection_id=connection.id, full_name="ACME/DUP")
         )
+
+
+# --- a tag is not a version (RADD-707) ---
+
+
+def test_release_version_strips_only_a_leading_v():
+    """Tags here are `vX.Y.Z`; releases are bare. Taking the tag verbatim minted
+    a duplicate `v0.6.1` beside `0.6.1` and swept waiting work into it."""
+    from radd.modules.forgejo.router import _version_from_tag
+
+    assert _version_from_tag("v0.6.1") == "0.6.1"
+    assert _version_from_tag("V1.0.0") == "1.0.0"
+    assert _version_from_tag(" v2.3.4 ") == "2.3.4"
+    # Already bare, or a tag that merely starts with a letter v — left alone.
+    assert _version_from_tag("0.6.1") == "0.6.1"
+    assert _version_from_tag("valentine") == "valentine"
+    assert _version_from_tag("") == ""

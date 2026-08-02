@@ -143,6 +143,20 @@ async def _handle_workflow_run(session: AsyncSession, payload: dict) -> dict[str
     return {"linked": stamped, "transitioned": 0}
 
 
+def _version_from_tag(tag: str) -> str:
+    """`v0.6.1` -> `0.6.1` (RADD-707).
+
+    A git tag and a release VERSION are not the same string: tags here are
+    `vX.Y.Z` by convention, while every release recorded in the tracker is bare.
+    `ensure_release` find-or-creates by exact version, so taking the tag verbatim
+    minted a second `v0.6.1` release beside `0.6.1` and swept waiting work into
+    it. Only a leading `v` is stripped — a tag that is genuinely named something
+    else is left alone rather than guessed at.
+    """
+    tag = tag.strip()
+    return tag[1:] if len(tag) > 1 and tag[0] in "vV" and tag[1].isdigit() else tag
+
+
 async def _handle_release(
     session: AsyncSession, payload: dict, repo
 ) -> dict[str, int]:
@@ -150,7 +164,7 @@ async def _handle_release(
     a draft or a deletion must not close work."""
     action = str(payload.get("action") or "")
     release_payload = payload.get("release") or {}
-    version = str(release_payload.get("tag_name") or "").strip()
+    version = _version_from_tag(str(release_payload.get("tag_name") or ""))
     if action != "published" or not version or repo is None or repo.project_id is None:
         return {"linked": 0, "transitioned": 0}
     project = await projects_service.get_project(session, repo.project_id)
