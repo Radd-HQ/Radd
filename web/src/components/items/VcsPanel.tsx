@@ -5,7 +5,13 @@ import { api, errorMessage } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { apiItemVcsLinksPath, apiVcsLinkPath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
-import { VCS_PROVIDER_LABELS, VCS_REF_TYPE_META, VCS_REF_TYPE_ORDER } from "../../lib/meta";
+import {
+  CI_STATE_META,
+  VCS_PROVIDER_LABELS,
+  VCS_REF_TYPE_META,
+  VCS_REF_TYPE_ORDER,
+  vcsRefVisual,
+} from "../../lib/meta";
 import { itemVcsLinksQuery } from "../../lib/queries";
 import {
   Permission,
@@ -44,7 +50,8 @@ export function VcsPanel({ item, project }: { item: Item; project: Project }) {
             No branches or pull requests linked yet.
           </p>
           <p className="mt-1">
-            A GitLab/GitHub integration will populate this automatically once connected
+            Branches, commits and pull requests link themselves when a connected host
+            mentions this issue&rsquo;s key
             {canWrite ? " — or add one manually below." : "."}
           </p>
         </div>
@@ -62,26 +69,52 @@ export function VcsPanel({ item, project }: { item: Item; project: Project }) {
 
 function VcsRow({ link, canWrite }: { link: VcsLink; canWrite: boolean }) {
   const queryClient = useQueryClient();
-  const meta = VCS_REF_TYPE_META[link.ref_type];
-  const Icon = meta?.icon ?? GitBranch;
+  // Type AND state pick the glyph: a merged pull request is not an open one with
+  // a different word next to it (RADD-650).
+  const visual = vcsRefVisual(link.ref_type, link.status ?? "");
+  const Icon = visual.icon;
+  const ci = link.ci_state ? CI_STATE_META[link.ci_state] : undefined;
+  const CiIcon = ci?.icon;
   const remove = useMutation({
     mutationFn: () => api.delete<void>(apiVcsLinkPath(link.id)),
     onSettled: () => void invalidateEntities(queryClient, Entity.vcsLink),
   });
   return (
     <li className="group/vcs flex items-center gap-2 rounded-md border border-subtle bg-surface/50 px-2.5 py-1.5">
-      <Icon size={14} className="shrink-0 text-fg-muted" aria-hidden />
+      <Icon
+        size={14}
+        className={`shrink-0 ${visual.iconClassName}`}
+        aria-hidden
+      />
+      <span className="sr-only">{visual.label}</span>
       <a
         href={link.url}
         target="_blank"
         rel="noreferrer"
+        title={visual.label}
         className="flex min-w-0 flex-1 items-center gap-2 text-[13px] hover:underline"
       >
         <span className="truncate text-fg">{link.title}</span>
         <ExternalLink size={11} className="shrink-0 text-fg-faint" aria-hidden />
       </a>
+      {ci && CiIcon && (
+        // Absent ci_state renders nothing at all: an unreported build must not
+        // look like a failed one.
+        <a
+          href={link.ci_url || link.url}
+          target="_blank"
+          rel="noreferrer"
+          title={ci.label}
+          className={`flex shrink-0 items-center gap-1 rounded border px-1.5 py-px text-[11px] ${ci.className}`}
+        >
+          <CiIcon size={11} aria-hidden />
+          <span className="sr-only">{ci.label}</span>
+        </a>
+      )}
       {link.status && (
-        <span className="shrink-0 rounded bg-elevated px-1.5 py-px text-[11px] text-fg">
+        <span
+          className={`shrink-0 rounded border px-1.5 py-px text-[11px] ${visual.pillClassName}`}
+        >
           {link.status}
         </span>
       )}

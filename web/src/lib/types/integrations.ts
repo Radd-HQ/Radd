@@ -67,6 +67,9 @@ export interface VcsLink {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  /** Spec 111 — latest CI run for this ref ("" = never reported). */
+  ci_state: string;
+  ci_url: string;
 }
 
 export interface VcsLinkCreate {

@@ -1,6 +1,9 @@
 import {
+  CircleCheck,
   CircleDashed,
   CircleDot,
+  CircleSlash,
+  CircleX,
   Diamond,
   FileCode,
   FileText,
@@ -8,6 +11,7 @@ import {
   GitCommitHorizontal,
   GitMerge,
   GitPullRequest,
+  GitPullRequestClosed,
   Link2,
   ListTree,
   OctagonAlert,
@@ -520,6 +524,89 @@ export const VCS_REF_TYPE_META: Record<VcsRefTypeValue, IconMeta> = {
   [VcsRefType.commit]: { label: "Commit", icon: GitCommitHorizontal },
   [VcsRefType.merge_request]: { label: "Merge request", icon: GitMerge },
   [VcsRefType.pull_request]: { label: "Pull request", icon: GitPullRequest },
+};
+
+/**
+ * A version-control link's glyph and colour depend on its TYPE and its STATE
+ * together (RADD-650): a merged pull request is not an open one with a different
+ * word beside it, so it does not get the same icon. Colour carries at a glance —
+ * the status chip stays for the exact term.
+ *
+ * Reuses the `--chart-*` state scale rather than inventing colours: `progress`
+ * for work in flight (open), `done` for merged, muted for closed. Those tokens
+ * already carry a validated ink tier, so the text on them clears contrast.
+ */
+export interface VcsRefVisual {
+  icon: LucideIcon;
+  label: string;
+  /** Tint for the leading glyph. */
+  iconClassName: string;
+  /** Pill classes for the status word, when there is one. */
+  pillClassName: string;
+}
+
+export function vcsRefVisual(refType: VcsRefTypeValue, status: string): VcsRefVisual {
+  const base = VCS_REF_TYPE_META[refType];
+  const state = status.trim().toLowerCase();
+  const isRequest =
+    refType === VcsRefType.pull_request || refType === VcsRefType.merge_request;
+
+  if (isRequest && state === "merged") {
+    return {
+      icon: GitMerge,
+      label: `${base.label} · merged`,
+      iconClassName: "text-chart-done",
+      pillClassName: "border-chart-done/40 bg-chart-done/12 text-chart-done-ink",
+    };
+  }
+  if (isRequest && (state === "closed" || state === "declined")) {
+    return {
+      icon: GitPullRequestClosed,
+      label: `${base.label} · closed`,
+      iconClassName: "text-fg-faint",
+      pillClassName: "border-strong bg-elevated/40 text-fg-muted",
+    };
+  }
+  if (isRequest) {
+    return {
+      icon: base.icon,
+      label: state ? `${base.label} · ${state}` : base.label,
+      iconClassName: "text-chart-progress",
+      pillClassName: "border-chart-progress/40 bg-chart-progress/12 text-chart-progress-ink",
+    };
+  }
+  // Branches and commits have no lifecycle of their own — the glyph is the whole
+  // signal, so it stays neutral rather than borrowing a state colour it does not have.
+  return {
+    icon: base.icon,
+    label: base.label,
+    iconClassName: refType === VcsRefType.commit ? "text-fg-muted" : "text-accent-text",
+    pillClassName: "border-strong bg-elevated/40 text-fg-muted",
+  };
+}
+
+/** CI result for a ref (spec 111): latest run, not a history. */
+export const CI_STATE_META: Record<string, { label: string; icon: LucideIcon; className: string }> = {
+  success: {
+    label: "Build passed",
+    icon: CircleCheck,
+    className: "border-chart-done/40 bg-chart-done/12 text-chart-done-ink",
+  },
+  failure: {
+    label: "Build failed",
+    icon: CircleX,
+    className: "border-red-400/40 bg-red-400/12 text-red-400",
+  },
+  running: {
+    label: "Build running",
+    icon: CircleDashed,
+    className: "border-chart-progress/40 bg-chart-progress/12 text-chart-progress-ink",
+  },
+  cancelled: {
+    label: "Build cancelled",
+    icon: CircleSlash,
+    className: "border-strong bg-elevated/40 text-fg-muted",
+  },
 };
 
 export const VCS_REF_TYPE_ORDER: readonly VcsRefTypeValue[] = [
