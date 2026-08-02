@@ -118,7 +118,9 @@ async def create_project(data: ProjectCreate, session: Session, user: CurrentUse
 
 @project_router.get("", response_model=list[ProjectRead])
 async def list_projects(session: Session, user: CurrentUser) -> list[ProjectRead]:
-    await authz.require(session, user, authz.Permission.ITEM_READ)
-    projects = await service.list_projects(session)
-    permissions = await authz.permissions_for_projects(session, user, projects)
-    return [_project_read(p, permissions[p.id]) for p in projects]
+    # RADD-672: the projects where the caller holds item.read — a member's floor
+    # matches every project (unchanged), a spec-113 scoped key sees exactly what
+    # it may read instead of a global-atom 403.
+    per_project = await authz.require_anywhere(session, user, authz.Permission.ITEM_READ)
+    projects = [p for p in await service.list_projects(session) if p.id in per_project]
+    return [_project_read(p, per_project[p.id]) for p in projects]

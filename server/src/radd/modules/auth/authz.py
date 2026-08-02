@@ -298,6 +298,32 @@ async def permissions_for_projects(
     }
 
 
+async def require_anywhere(
+    session: AsyncSession, user: User, permission: Permission
+) -> dict[uuid.UUID, frozenset[Permission]]:
+    """The per-project permission map for every project where `permission` holds.
+
+    The cross-project gate (RADD-672). `require(permission)` with no project asks
+    for the GLOBAL atom, which a spec-113 key scoped to one project never holds —
+    so every cross-project read (GET /projects, un-scoped item listing, MCP
+    search_items) refused exactly the principals the spec-114 catalog was built
+    for. Holding the permission in ANY project satisfies this gate; the caller
+    constrains its query to the returned project ids.
+
+    Raises ForbiddenError only when the permission holds NOWHERE — including
+    globally, so a member on a zero-project instance gets an empty map (an empty
+    list at the surface), not a 403.
+    """
+    from radd.modules.projects import service as projects_service  # deferred: projects loads after auth
+
+    projects = await projects_service.list_projects(session)
+    per_project = await permissions_for_projects(session, user, projects)
+    held = {pid: permissions for pid, permissions in per_project.items() if permission in permissions}
+    if not held and permission not in await effective_permissions(session, user):
+        raise ForbiddenError(f"permission '{permission}' denied")
+    return held
+
+
 @dataclass(frozen=True)
 class Subjects:
     """The grant subjects a user brings to a project — spec 07 (field grants) consumes this."""

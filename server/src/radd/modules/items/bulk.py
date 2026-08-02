@@ -321,21 +321,14 @@ async def _visible_ids_query(
         scoped_project = await projects_service.get_project(session, filters.project_id)
         await authz.require(session, actor, Permission.ITEM_READ, project=scoped_project)
     else:
-        await authz.require(session, actor, Permission.ITEM_READ)
+        readable = await authz.require_anywhere(session, actor, Permission.ITEM_READ)
 
     query = select(WorkItem.id)
     if scoped_project is None:
         # Cross-project: constrain to projects the actor can read UP FRONT so
-        # both the count and the ids honor visibility.
-        all_projects = await projects_service.list_projects(session)
-        readable = [
-            pid
-            for pid, permission_set in (
-                await authz.permissions_for_projects(session, actor, all_projects)
-            ).items()
-            if Permission.ITEM_READ in permission_set
-        ]
-        query = query.where(WorkItem.project_id.in_(readable))
+        # both the count and the ids honor visibility (RADD-672: item.read
+        # anywhere, not the global atom a scoped key never holds).
+        query = query.where(WorkItem.project_id.in_(readable.keys()))
     query = await apply_filters(session, query, filters, scoped_project)
     order: tuple = ()
     if q and q.strip():

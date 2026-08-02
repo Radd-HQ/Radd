@@ -72,11 +72,17 @@ async def list_items(
             session, actor, Permission.ITEM_READ, project=project
         )
     else:
-        # Cross-project listing: must at least be an active member;
-        # per-project visibility is applied to the result below.
-        await authz.require(session, actor, Permission.ITEM_READ)
+        # Cross-project listing (RADD-672): item.read ANYWHERE — the global atom
+        # would refuse a spec-113 key scoped to one project — and the query is
+        # constrained to the readable projects UP FRONT, so LIMIT counts only
+        # rows the actor may see (the visibility post-filter below used to run
+        # after pagination, so a scoped principal could page through nothing but
+        # unreadable rows while readable items sat past the limit).
+        readable = await authz.require_anywhere(session, actor, Permission.ITEM_READ)
 
     query = select(WorkItem)
+    if not filters.project_id:
+        query = query.where(WorkItem.project_id.in_(readable.keys()))
     query = await apply_filters(session, query, filters, projects.get(filters.project_id))
     order: tuple = ()
     if q and q.strip():
