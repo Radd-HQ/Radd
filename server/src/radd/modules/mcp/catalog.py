@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.modules.fields import openapi as fields_openapi, service as fields_service
 from radd.modules.items.enums import ItemKind, Priority
+from radd.modules.releases.types import ReleaseStatus
 
 from .docs_bridge import docs_available
 from .types import GET_ITEM_COMMENTS_TAIL, SEARCH_LIMIT_DEFAULT, SEARCH_LIMIT_MAX, McpTool
@@ -57,11 +58,32 @@ def _custom_fields_schema(custom_field_properties: Mapping[str, Any]) -> dict[st
 
 
 def _item_write_properties(custom_field_properties: Mapping[str, Any]) -> dict[str, Any]:
-    """The optional write parameters create_item and update_item share."""
+    """The optional write parameters create_item and update_item share. Names in,
+    ids resolved server-side (RADD-673) — the tracking workflow needs type,
+    parent, estimate and cycle without a REST detour for id lookups."""
     return {
         "description": {"type": "string", "description": "Markdown body."},
         "state": {"type": "string", "description": "Workflow state NAME (project-specific)."},
         "priority": {"type": "string", "enum": _PRIORITY_VALUES},
+        "type": {
+            "type": "string",
+            "description": "Issue type NAME (project-specific, spec 51), e.g. Bug or Feature.",
+        },
+        "parent": {
+            "type": ["string", "null"],
+            "description": "Parent item KEY (an epic for an issue, an issue for a subtask); "
+            "null clears it (update only).",
+        },
+        "estimate_points": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "maximum": 999,
+            "description": "Estimate in points; null clears it (update only).",
+        },
+        "cycle": {
+            "type": ["string", "null"],
+            "description": "Cycle NAME (cycles span projects); null clears it (update only).",
+        },
         "assignee_email": {
             "type": ["string", "null"],
             "description": "Assignee's email; null clears the assignee (update only).",
@@ -221,6 +243,10 @@ def build_catalog(
                     "key": key_prop,
                     "time_spent": {"type": "string", "description": "Jira-style, e.g. '2h 30m'."},
                     "worked_on": {"type": "string", "description": "ISO date; defaults to today."},
+                    "category": {
+                        "type": "string",
+                        "description": "Work category NAME, e.g. Development (RADD-673).",
+                    },
                     "note": {"type": "string"},
                 },
                 ["key", "time_spent"],
@@ -254,6 +280,25 @@ def build_catalog(
                     "version": {"type": "string", "description": "e.g. 0.3.0"},
                     "name": {"type": "string"},
                     "description": {"type": "string"},
+                    "status": {
+                        "type": "string",
+                        "enum": [status.value for status in ReleaseStatus],
+                        "description": "planned (default) or released — released stamps "
+                        "released_at server-side (RADD-673).",
+                    },
+                },
+                ["project_key", "version"],
+            ),
+        },
+        {
+            "name": McpTool.SWEEP_RELEASE.value,
+            "description": "Ship everything waiting (spec 112): move every item in the "
+            "'waiting for release' state into the shipped state with this release set. "
+            "The same operation a published Forgejo release performs, on demand.",
+            "inputSchema": _schema(
+                {
+                    "project_key": project_prop,
+                    "version": {"type": "string", "description": "Release version to sweep into."},
                 },
                 ["project_key", "version"],
             ),
@@ -298,9 +343,24 @@ def build_catalog(
     return catalog
 
 
+def registry_catalog(builtin_names: frozenset[str]) -> list[dict[str, Any]]:
+    """Plugin-contributed tools (RADD-640), read live from the kernel registry so
+    a disabled plugin's tools vanish with it. A name colliding with a builtin is
+    skipped: the dispatcher resolves builtins first, so listing the plugin's
+    schema would advertise a tool that can never run."""
+    from radd.kernel import registries  # deferred: the kernel must not be a hard import cycle
+
+    return [
+        {"name": spec.name, "description": spec.description, "inputSchema": dict(spec.input_schema)}
+        for spec in registries.mcp_tools.values()
+        if spec.name not in builtin_names
+    ]
+
+
 async def live_catalog(session: AsyncSession, user: Any = None) -> list[dict[str, Any]]:
-    """build_catalog fed from the live registry (same projection as OpenAPI), then
-    NARROWED to what this principal may execute (spec 114).
+    """build_catalog fed from the live registry (same projection as OpenAPI), plus
+    plugin-contributed tools (RADD-640), then NARROWED to what this principal may
+    execute (spec 114).
 
     `user=None` returns the whole catalog — the shape tests and the OpenAPI
     projection want the full surface, and an unauthenticated MCP request never
@@ -308,6 +368,7 @@ async def live_catalog(session: AsyncSession, user: Any = None) -> list[dict[str
     """
     fields_openapi.refresh(await fields_service.list_fields(session))
     catalog = build_catalog(fields_openapi.schema_cache.properties, include_docs=docs_available())
+    catalog += registry_catalog(frozenset(tool["name"] for tool in catalog))
     if user is None:
         return catalog
     from .requirements import visible_catalog  # deferred: requirements imports auth

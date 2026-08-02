@@ -45,6 +45,7 @@ TRACKER_TOOLS = {
     McpTool.LIST_WORKLOGS,
     McpTool.LIST_RELEASES,
     McpTool.CREATE_RELEASE,
+    McpTool.SWEEP_RELEASE,  # RADD-673: the spec-112 pipeline step, agent-reachable
     McpTool.SET_ITEM_RELEASE,
     McpTool.LIST_USERS,
     McpTool.LIST_SERVICE_ACCOUNTS,

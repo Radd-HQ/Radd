@@ -176,6 +176,37 @@ class ConsumerSpec:
     description: str = ""
 
 
+# --- MCP tools (RADD-640: the spec-114 catalog becomes plugin-registerable) ---
+@dataclass(frozen=True)
+class McpToolSpec:
+    """An MCP tool a plugin contributes. The last hardcoded contribution type:
+    every other kind was plugin-registerable since spec 93, while the MCP catalog
+    was a closed enum — a plugin could not expose a tool at all, and one that
+    somehow did would have bypassed the spec-114 caller filter.
+
+    A registered tool inherits BOTH halves with no extra code: `visible_catalog`
+    hides it from keys lacking `permission` (and enum-rewrites `project_param`,
+    spec 114), and the MCP dispatcher REQUIRES the atom before the handler runs —
+    so a plugin cannot accidentally expose an unfiltered tool. Disabling the
+    plugin unregisters it (the spec-94 unmount path): it leaves the catalog and
+    stops dispatching in the same breath.
+
+    `handler(session, actor, args) -> jsonable` — the tool result, serialized by
+    the MCP router. `permission` is an RBAC atom KEY (a plugin's registered atom
+    or a builtin value like "item.read"; kernel purity forbids importing the auth
+    enum here); "" means any authenticated principal. When `project_param` names
+    an input property carrying a project KEY, enforcement resolves it and
+    requires the atom on THAT project."""
+
+    name: str
+    description: str
+    input_schema: dict[str, Any]  # JSON Schema for the tool's arguments
+    handler: Callable[..., Awaitable[Any]]
+    permission: str = ""
+    project_scoped: bool = False  # visibility: show only where the atom holds (spec 114)
+    project_param: str = ""  # input property naming the project; enum-rewritten + enforced
+
+
 # --- sockets (§4a: typed plugin-to-plugin integration points) ---
 @dataclass(frozen=True)
 class IntegrationSpec:

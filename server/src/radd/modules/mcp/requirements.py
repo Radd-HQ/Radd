@@ -9,12 +9,18 @@ project it may not write to.
 
 Hiding is presentation, not enforcement: every tool still calls `authz.require`,
 and a tool invoked without being listed fails exactly as it always did.
+
+Plugin-contributed tools (RADD-640) carry their requirement ON the spec, so the
+registry path is annotated by construction — which is what let the old
+show-unannotated-tools fallback become a hide-and-log: a tool in neither
+REQUIREMENTS nor the kernel registry is a wiring bug, not a contribution.
 """
 
+import logging
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,12 +33,13 @@ from radd.modules.projects.models import Project
 
 from .types import McpTool
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True)
 class ToolRequirement:
     """`permission=None` means the tool is available to anyone who can
-    authenticate (list_projects answers "what can I see", which is already
-    per-actor)."""
+    authenticate."""
 
     permission: Permission | None = None
     project_scoped: bool = False
@@ -42,7 +49,8 @@ class ToolRequirement:
 
 
 REQUIREMENTS: dict[str, ToolRequirement] = {
-    McpTool.LIST_PROJECTS.value: ToolRequirement(),
+    # "What can I see" — item.read SOMEWHERE, exactly the handler's gate (RADD-672).
+    McpTool.LIST_PROJECTS.value: ToolRequirement(Permission.ITEM_READ, project_scoped=True),
     McpTool.SEARCH_ITEMS.value: ToolRequirement(Permission.ITEM_READ, project_scoped=True),
     McpTool.FIND_ITEMS.value: ToolRequirement(Permission.ITEM_READ, project_scoped=True),
     McpTool.GET_ITEM.value: ToolRequirement(Permission.ITEM_READ, project_scoped=True),
@@ -66,11 +74,37 @@ REQUIREMENTS: dict[str, ToolRequirement] = {
     McpTool.CREATE_RELEASE.value: ToolRequirement(
         Permission.RELEASE_CREATE, project_scoped=True, project_param="project_key"
     ),
+    # Same atom as POST /releases/{id}/sweep (spec 112).
+    McpTool.SWEEP_RELEASE.value: ToolRequirement(
+        Permission.RELEASE_UPDATE, project_scoped=True, project_param="project_key"
+    ),
     McpTool.SET_ITEM_RELEASE.value: ToolRequirement(Permission.ITEM_UPDATE, project_scoped=True),
     McpTool.LIST_USERS.value: ToolRequirement(Permission.USER_MANAGE),
     McpTool.LIST_SERVICE_ACCOUNTS.value: ToolRequirement(Permission.GLOBAL_MANAGE),
     McpTool.CREATE_SERVICE_ACCOUNT.value: ToolRequirement(Permission.SERVICE_ACCOUNT_CREATE),
 }
+
+
+def requirement_for(name: str) -> ToolRequirement | None:
+    """The requirement for a tool by name: the builtin table first, else the
+    kernel registry (a plugin's spec IS its annotation, RADD-640). None means
+    the name is in neither — a wiring bug the caller should treat as hidden."""
+    builtin = REQUIREMENTS.get(name)
+    if builtin is not None:
+        return builtin
+    from radd.kernel import registries  # deferred: keep the kernel import lazy
+
+    spec = registries.mcp_tools.get(name)
+    if spec is None:
+        return None
+    return ToolRequirement(
+        # Plugin atoms are registered KEYS, not Permission members; the sets they
+        # are checked against hold plain strings (combine_permissions), so a str
+        # atom participates in every membership test a builtin does.
+        permission=cast(Permission, spec.permission) if spec.permission else None,
+        project_scoped=spec.project_scoped,
+        project_param=spec.project_param or None,
+    )
 
 
 async def _project_permissions(
@@ -119,12 +153,13 @@ async def visible_catalog(
 
     visible: list[dict[str, Any]] = []
     for tool in catalog:
-        requirement = REQUIREMENTS.get(tool["name"])
+        requirement = requirement_for(tool["name"])
         if requirement is None:
-            # An unannotated tool (a plugin's, before it declares one) stays
-            # visible: silently hiding a contribution would be worse than showing
-            # one the caller may not run.
-            visible.append(tool)
+            # In neither the builtin table nor the kernel registry: a wiring bug.
+            # Since RADD-640 every legitimate tool is annotated by construction,
+            # so hide it — advertising a tool whose requirement nobody can state
+            # is how an unfiltered tool would slip out.
+            logger.warning("mcp tool %r has no requirement; hiding it", tool["name"])
             continue
         if requirement.permission is None:
             visible.append(tool)

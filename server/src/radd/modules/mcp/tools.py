@@ -9,7 +9,7 @@ docs-module feature detection in docs_bridge.py.
 
 import uuid
 from collections.abc import Callable, Mapping
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,6 +28,7 @@ from radd.modules.items.filters import ItemListFilters
 from radd.modules.items.schemas import ItemCreate, ItemRead, ItemUpdate
 from radd.modules.releases import service as releases_service
 from radd.modules.releases.schemas import ReleaseCreate
+from radd.modules.releases.types import ReleaseStatus
 from radd.modules.timelogging import service as timelogging_service, timesheet
 from radd.modules.timelogging.slq import compile_worklog_query, parse as worklog_parse
 from radd.modules.timelogging.schemas import WorklogCreate
@@ -88,6 +89,36 @@ async def _user_id_by_email(session: AsyncSession, email: str) -> uuid.UUID:
     if user is None:
         raise NotFoundError(AuthEntity.USER, email)
     return user.id
+
+
+# --- name -> id resolvers (RADD-673: names in, ids resolved server-side) ---
+
+
+async def _type_id(session: AsyncSession, project_id: uuid.UUID, name: str) -> uuid.UUID:
+    from radd.modules.itemtypes import service as itemtypes_service
+
+    for issue_type in await itemtypes_service.list_types(session, project_id):
+        if issue_type.name.lower() == name.lower():
+            return issue_type.id
+    raise NotFoundError("issue type", name)
+
+
+async def _cycle_id(session: AsyncSession, name: str) -> uuid.UUID:
+    from radd.modules.cycles import service as cycles_service
+
+    for cycle in await cycles_service.list_cycles(session):
+        if cycle.name.lower() == name.lower():
+            return cycle.id
+    raise NotFoundError("cycle", name)
+
+
+async def _category_id(session: AsyncSession, name: str) -> uuid.UUID:
+    from radd.modules.timelogging import categories as timelogging_categories
+
+    for category in await timelogging_categories.list_categories(session):
+        if category.name.lower() == name.lower():
+            return category.id
+    raise NotFoundError("work category", name)
 
 
 def _item_summary(read: ItemRead) -> dict[str, Any]:
@@ -163,6 +194,33 @@ async def _get_item(session: AsyncSession, actor: User, args: Mapping[str, Any])
     }
 
 
+async def _resolve_relational_writes(
+    session: AsyncSession,
+    actor: User,
+    project_id: uuid.UUID,
+    args: Mapping[str, Any],
+    values: dict[str, Any],
+) -> None:
+    """type/parent/cycle/estimate shared by create+update (RADD-673). Present-and-
+    null clears, like assignee_email — pydantic's model_fields_set carries the
+    distinction through to the service."""
+    if args.get("type") is not None:
+        values["type_id"] = await _type_id(session, project_id, str(args["type"]))
+    if "parent" in args:
+        parent_key = args["parent"]
+        values["parent_id"] = (
+            (await items_service.get_item_by_key(session, str(parent_key), actor=actor)).id
+            if parent_key
+            else None
+        )
+    if "cycle" in args:
+        cycle_name = args["cycle"]
+        values["cycle_id"] = await _cycle_id(session, str(cycle_name)) if cycle_name else None
+    if "estimate_points" in args:
+        raw_points = args["estimate_points"]
+        values["estimate_points"] = float(raw_points) if raw_points is not None else None
+
+
 async def _create_item(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
     project = await _project_by_key(session, str(args["project_key"]))
     values = _item_write_fields(args)
@@ -174,6 +232,7 @@ async def _create_item(session: AsyncSession, actor: User, args: Mapping[str, An
         values["state_id"] = await _state_id(session, project.id, str(args["state"]))
     if args.get("assignee_email"):
         values["assignee_id"] = await _user_id_by_email(session, str(args["assignee_email"]))
+    await _resolve_relational_writes(session, actor, project.id, args, values)
     read = await items_service.create_item(session, ItemCreate(**values), actor=actor)
     return read.model_dump(mode="json")
 
@@ -186,6 +245,7 @@ async def _update_item(session: AsyncSession, actor: User, args: Mapping[str, An
     if "assignee_email" in args:  # present-and-null clears the assignee
         email = args["assignee_email"]
         values["assignee_id"] = await _user_id_by_email(session, str(email)) if email else None
+    await _resolve_relational_writes(session, actor, current.project_id, args, values)
     read = await items_service.update_item(session, current.id, ItemUpdate(**values), actor=actor)
     return read.model_dump(mode="json")
 
@@ -203,9 +263,10 @@ async def _comment_item(session: AsyncSession, actor: User, args: Mapping[str, A
 
 
 async def _list_projects(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
-    # Same gate as GET /projects: any active user with item.read (spec 86).
-    await authz.require(session, actor, Permission.ITEM_READ)
-    projects = await projects_service.list_projects(session)
+    # Same gate as GET /projects (RADD-672): the projects where the caller holds
+    # item.read anywhere — never a global-atom refusal for a scoped key.
+    per_project = await authz.require_anywhere(session, actor, Permission.ITEM_READ)
+    projects = [p for p in await projects_service.list_projects(session) if p.id in per_project]
     return {
         "projects": [
             {"key": project.key, "name": project.name, "id": str(project.id)}
@@ -279,12 +340,16 @@ async def _log_work(session: AsyncSession, actor: User, args: Mapping[str, Any])
 
     read = await items_service.get_item_by_key(session, str(args["key"]), actor=actor)
     worked_on = _date.fromisoformat(str(args["worked_on"])) if args.get("worked_on") else None
+    category_id = (
+        await _category_id(session, str(args["category"])) if args.get("category") else None
+    )
     entry = await timelogging_service.create_worklog(
         session,
         read.id,
         WorklogCreate(
             time_spent=str(args["time_spent"]),
             worked_on=worked_on,
+            category_id=category_id,
             note=str(args.get("note") or ""),
         ),
         author_id=actor.id,
@@ -299,8 +364,12 @@ async def _list_worklogs(session: AsyncSession, actor: User, args: Mapping[str, 
     narrow that — it is ANDed onto the scope filters inside build()."""
     from datetime import date as _date, timedelta as _timedelta
 
-    permissions = await authz.require(session, actor, Permission.ITEM_READ)
-    user_ids = None if Permission.TIMESHEET_VIEW in permissions else {actor.id}
+    # RADD-672: item.read anywhere admits the caller; the broad-view check stays
+    # GLOBAL — timesheet.view is instance-wide, and a scoped key without it
+    # defaults to its own time, which the SLQ below can only narrow.
+    await authz.require_anywhere(session, actor, Permission.ITEM_READ)
+    global_permissions = await authz.effective_permissions(session, actor)
+    user_ids = None if Permission.TIMESHEET_VIEW in global_permissions else {actor.id}
     end = _date.fromisoformat(str(args["end"])) if args.get("end") else _date.today()
     start = (
         _date.fromisoformat(str(args["start"]))
@@ -341,6 +410,9 @@ async def _list_releases(session: AsyncSession, actor: User, args: Mapping[str, 
 async def _create_release(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
     project = await _project_by_key(session, str(args["project_key"]))
     await authz.require(session, actor, Permission.RELEASE_CREATE, project=project)
+    values: dict[str, Any] = {}
+    if args.get("status") is not None:  # RADD-673: a by-hand "released" is one call
+        values["status"] = ReleaseStatus(str(args["status"]))
     release = await releases_service.create_release(
         session,
         ReleaseCreate(
@@ -348,10 +420,27 @@ async def _create_release(session: AsyncSession, actor: User, args: Mapping[str,
             version=str(args["version"]),
             name=str(args.get("name") or args["version"]),
             description=str(args.get("description") or ""),
+            **values,
         ),
         actor_id=actor.id,
     )
     return {"id": str(release.id), "version": release.version, "status": release.status}
+
+
+async def _sweep_release(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
+    """The spec-112 pipeline step, agent-reachable (RADD-673): same atom and same
+    service call as POST /releases/{id}/sweep."""
+    from radd.modules.releases import pipeline as releases_pipeline
+
+    project = await _project_by_key(session, str(args["project_key"]))
+    await authz.require(session, actor, Permission.RELEASE_UPDATE, project=project)
+    version = str(args["version"])
+    releases = await releases_service.list_releases(session, project.id)
+    release = next((r for r in releases if r.version == version), None)
+    if release is None:
+        raise NotFoundError("release", version)
+    moved = await releases_pipeline.sweep(session, project, release)
+    return {"release": release.version, "items_shipped": moved}
 
 
 async def _set_item_release(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
@@ -427,6 +516,7 @@ _HANDLERS: dict[McpTool, Callable[..., Any]] = {
     McpTool.LIST_WORKLOGS: _list_worklogs,
     McpTool.LIST_RELEASES: _list_releases,
     McpTool.CREATE_RELEASE: _create_release,
+    McpTool.SWEEP_RELEASE: _sweep_release,
     McpTool.SET_ITEM_RELEASE: _set_item_release,
     McpTool.LIST_USERS: _list_users,
     McpTool.LIST_SERVICE_ACCOUNTS: _list_service_accounts,
@@ -434,16 +524,38 @@ _HANDLERS: dict[McpTool, Callable[..., Any]] = {
 }
 
 
+async def _call_registry_tool(
+    session: AsyncSession, actor: User, spec: Any, arguments: Mapping[str, Any]
+) -> Any:
+    """A plugin tool inherits ENFORCEMENT, not just catalog filtering (RADD-640):
+    the kernel requires the declared atom before the handler runs, so a plugin
+    cannot accidentally expose an unfiltered tool. When the spec names a project
+    parameter and the call carries it, the atom is required on THAT project."""
+    project = None
+    if spec.project_param and arguments.get(spec.project_param):
+        project = await _project_by_key(session, str(arguments[spec.project_param]))
+    if spec.permission:
+        await authz.require(session, actor, cast(Permission, spec.permission), project=project)
+    return await spec.handler(session, actor, arguments)
+
+
 async def call_tool(
     session: AsyncSession, actor: User, name: str, arguments: Mapping[str, Any]
 ) -> Any:
-    """Dispatch one tools/call. Raises UnknownToolError for names outside the
-    (currently available) catalog; RaddError subclasses bubble up for the router
-    to shape into `isError: true` results."""
+    """Dispatch one tools/call: builtins first, then kernel-registered plugin
+    tools (RADD-640 — a live lookup, so a disabled plugin's tools stop
+    dispatching the moment they leave the catalog). Raises UnknownToolError for
+    names in neither; RaddError subclasses bubble up for the router to shape
+    into `isError: true` results."""
     try:
         tool = McpTool(name)
     except ValueError:
-        raise UnknownToolError(name) from None
+        from radd.kernel import registries  # deferred: keep the kernel import lazy
+
+        spec = registries.mcp_tools.get(name)
+        if spec is None:
+            raise UnknownToolError(name) from None
+        return await _call_registry_tool(session, actor, spec, arguments)
     if tool in DOC_TOOLS and not docs_bridge.docs_available():
         raise UnknownToolError(name)
     return await _HANDLERS[tool](session, actor, arguments)

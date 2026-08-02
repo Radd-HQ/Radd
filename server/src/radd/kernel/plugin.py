@@ -21,6 +21,7 @@ from .specs import (
     EntitySpec,
     EventTypeSpec,
     IntegrationSpec,
+    McpToolSpec,
     PermissionSpec,
     PluginUiManifest,
     SettingSectionSpec,
@@ -79,6 +80,7 @@ class RaddPlugin:
     slq_fields: tuple[SlqFieldSpec, ...] = ()  # custom SLQ query fields (e.g. `note ~ "x"`)
     view_types: tuple[ViewTypeSpec, ...] = ()  # custom saved-view types
     widget_types: tuple[WidgetTypeSpec, ...] = ()  # custom dashboard widget types
+    mcp_tools: tuple[McpToolSpec, ...] = ()  # MCP tools (RADD-640; filtered + enforced by the kernel)
     integrations: tuple[IntegrationSpec, ...] = ()
     ui: PluginUiManifest | None = None
 

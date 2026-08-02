@@ -77,8 +77,8 @@ async def _names(db, user) -> set[str]:
 
 
 async def test_every_tool_declares_what_it_needs():
-    """A tool nobody annotated stays visible by design; this test is what keeps
-    that fallback from quietly becoming the norm."""
+    """Every BUILTIN tool has a REQUIREMENTS row; registry tools carry theirs on
+    the spec (RADD-640), and anything in neither is hidden as a wiring bug."""
     catalog = build_catalog({}, include_docs=True)
     assert {tool["name"] for tool in catalog} <= set(REQUIREMENTS)
 
@@ -162,6 +162,44 @@ async def test_a_hidden_tool_is_still_refused_when_called(db, project):
         await tools.call_tool(db, admin, McpTool.CREATE_SERVICE_ACCOUNT.value, {"name": "sneaky"})
 
 
+# --- cross-project reads admit scoped keys (RADD-672) ---
+
+
+async def test_a_scoped_key_lists_exactly_its_projects(db, project):
+    """list_projects/search_items were LISTED for a project-scoped key while the
+    handlers demanded the GLOBAL item.read — a catalog/enforcement disagreement
+    in exactly the direction spec 114 promises cannot happen. The gate is now
+    item.read ANYWHERE, and the answer is scoped to where it holds."""
+    admin = await _user(db, InstanceRole.ADMIN)
+    await projects_service.create_project(
+        db, ProjectCreate(key=f"ME{uuid.uuid4().hex[:4].upper()}", name="Elsewhere")
+    )
+    admin.token_scope = scopes.parse_scope({"projects": {str(project.id): ["item.read"]}})
+
+    listed = await tools.call_tool(db, admin, McpTool.LIST_PROJECTS.value, {})
+    assert [p["key"] for p in listed["projects"]] == [project.key]
+
+
+async def test_a_scoped_key_searches_without_the_global_atom(db, project):
+    admin = await _user(db, InstanceRole.ADMIN)
+    admin.token_scope = scopes.parse_scope({"projects": {str(project.id): ["item.read"]}})
+
+    result = await tools.call_tool(
+        db, admin, McpTool.SEARCH_ITEMS.value, {"slq": f"project = {project.key}"}
+    )
+    assert result["count"] == 0  # the fixture project is empty; the refusal was the bug
+
+
+async def test_item_read_nowhere_is_still_refused(db, project):
+    """require_anywhere is a gate, not a bypass: a key with no item.read at all
+    stays refused."""
+    admin = await _user(db, InstanceRole.ADMIN)
+    admin.token_scope = scopes.parse_scope({"projects": {str(project.id): ["comment.write"]}})
+
+    with pytest.raises(ForbiddenError):
+        await tools.call_tool(db, admin, McpTool.LIST_PROJECTS.value, {})
+
+
 async def test_an_anonymous_principal_sees_nothing(db):
     assert await visible_catalog(db, None, build_catalog({}, include_docs=True)) == []
 
@@ -172,3 +210,167 @@ async def test_unscoped_admin_keeps_the_whole_catalog(db, project):
     assert admin.token_scope is None
     full = {tool["name"] for tool in build_catalog({}, include_docs=True)}
     assert await _names(db, admin) == full
+
+
+# --- the tracking workflow end to end (RADD-673: names in, ids resolved) ---
+
+
+async def test_the_tracking_workflow_runs_entirely_over_mcp(db, project):
+    """File an epic + child with type/points, log categorized time, create a
+    released version, sweep the child into it — zero REST, zero raw ids. This is
+    the CLAUDE.md loop, which is why these parameters exist."""
+    from radd.modules.itemtypes import service as itemtypes_service
+    from radd.modules.timelogging import categories as timelogging_categories, enablement
+    from radd.modules.timelogging.schemas import WorkCategoryCreate
+
+    admin = await _user(db, InstanceRole.ADMIN)
+    await enablement.set_enabled(db, project.id, True)  # timelogging is per-project-optional
+    types = {t.name for t in await itemtypes_service.list_types(db, project.id)}
+    assert {"Epic", "Bug"} <= types  # seeded defaults; the names the tool resolves
+    if not any(
+        c.name == "Development" for c in await timelogging_categories.list_categories(db)
+    ):
+        await timelogging_categories.create_category(db, WorkCategoryCreate(name="Development"))
+
+    epic = await tools.call_tool(
+        db,
+        admin,
+        McpTool.CREATE_ITEM.value,
+        {"project_key": project.key, "title": "The wave", "kind": "epic", "type": "Epic"},
+    )
+    child = await tools.call_tool(
+        db,
+        admin,
+        McpTool.CREATE_ITEM.value,
+        {
+            "project_key": project.key,
+            "title": "One unit of it",
+            "type": "Bug",
+            "parent": epic["key"],
+            "estimate_points": 3,
+        },
+    )
+    assert child["parent"]["key"] == epic["key"]
+    assert child["type"]["name"] == "Bug"
+    assert child["estimate_points"] == 3.0
+
+    logged = await tools.call_tool(
+        db,
+        admin,
+        McpTool.LOG_WORK.value,
+        {"key": child["key"], "time_spent": "45m", "category": "Development"},
+    )
+    assert logged["category"]["name"] == "Development"
+
+    release = await tools.call_tool(
+        db,
+        admin,
+        McpTool.CREATE_RELEASE.value,
+        {"project_key": project.key, "version": "9.9.9", "status": "released"},
+    )
+    assert release["status"] == "released"
+
+    # The pipeline's own invariants live in test_release_pipeline.py; here the
+    # claim is the TOOL: resolve by version, same atom as the REST sweep, and a
+    # project with no waiting state configured sweeps nothing rather than erroring.
+    swept = await tools.call_tool(
+        db,
+        admin,
+        McpTool.SWEEP_RELEASE.value,
+        {"project_key": project.key, "version": "9.9.9"},
+    )
+    assert swept == {"release": "9.9.9", "items_shipped": 0}
+
+
+# --- plugin-contributed tools ride the kernel registry (RADD-640) ---
+
+
+@pytest.fixture
+def registry_tool():
+    """A minimal plugin tool registered directly (the loader does exactly this
+    when a plugin manifest carries mcp_tools). Cleaned up so no other test sees
+    the catalog grow."""
+    from radd.kernel import registries
+    from radd.kernel.specs import McpToolSpec
+
+    async def handler(session, actor, args):
+        return {"echo": args.get("project_key"), "ran": True}
+
+    spec = McpToolSpec(
+        name="fake_plugin_tool",
+        description="test tool",
+        input_schema={
+            "type": "object",
+            "properties": {"project_key": {"type": "string"}},
+            "required": ["project_key"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+        permission="item.create",
+        project_scoped=True,
+        project_param="project_key",
+    )
+    registries.mcp_tools[spec.name] = spec
+    yield spec
+    registries.mcp_tools.pop(spec.name, None)
+
+
+async def test_a_registered_tool_is_filtered_like_a_builtin(db, project, registry_tool):
+    """The spec IS the annotation: visible with the atom (project enum rewritten),
+    hidden without — no REQUIREMENTS entry, no plugin-side filter code."""
+    from radd.modules.mcp.catalog import registry_catalog
+
+    extra = registry_catalog(frozenset())
+    catalog = build_catalog({}, include_docs=True) + extra
+
+    admin = await _user(db, InstanceRole.ADMIN)
+    admin.token_scope = scopes.parse_scope(
+        {"projects": {str(project.id): ["item.read", "item.create"]}}
+    )
+    visible = await visible_catalog(db, admin, catalog)
+    tool = next(t for t in visible if t["name"] == registry_tool.name)
+    assert tool["inputSchema"]["properties"]["project_key"]["enum"] == [project.key]
+
+    reader = await _user(db, InstanceRole.ADMIN)
+    reader.token_scope = scopes.parse_scope({"projects": {str(project.id): ["item.read"]}})
+    assert registry_tool.name not in {t["name"] for t in await visible_catalog(db, reader, catalog)}
+
+
+async def test_a_registered_tool_is_enforced_before_its_handler_runs(db, project, registry_tool):
+    """The kernel requires the declared atom — the handler holds no authz call, and
+    a key without the atom is refused before it runs."""
+    reader = await _user(db, InstanceRole.ADMIN)
+    reader.token_scope = scopes.parse_scope({"projects": {str(project.id): ["item.read"]}})
+    with pytest.raises(ForbiddenError):
+        await tools.call_tool(db, reader, registry_tool.name, {"project_key": project.key})
+
+    writer = await _user(db, InstanceRole.ADMIN)
+    writer.token_scope = scopes.parse_scope(
+        {"projects": {str(project.id): ["item.read", "item.create"]}}
+    )
+    result = await tools.call_tool(db, writer, registry_tool.name, {"project_key": project.key})
+    assert result == {"echo": project.key, "ran": True}
+
+
+async def test_an_unregistered_tool_stops_dispatching(db, project, registry_tool):
+    """The spec-94 unmount promise for MCP: leaving the registry removes the tool
+    from catalog AND dispatch in the same breath."""
+    from radd.kernel import registries
+    from radd.modules.mcp.catalog import registry_catalog
+
+    registries.mcp_tools.pop(registry_tool.name)
+    assert registry_tool.name not in {t["name"] for t in registry_catalog(frozenset())}
+    admin = await _user(db, InstanceRole.ADMIN)
+    with pytest.raises(tools.UnknownToolError):
+        await tools.call_tool(db, admin, registry_tool.name, {"project_key": project.key})
+
+
+async def test_a_colliding_name_cannot_shadow_a_builtin(registry_tool):
+    """A plugin tool named like a builtin is skipped from the catalog: dispatch
+    resolves builtins first, so listing it would advertise a tool that never runs."""
+    from radd.modules.mcp.catalog import registry_catalog
+
+    assert registry_tool.name in {t["name"] for t in registry_catalog(frozenset())}
+    assert registry_tool.name not in {
+        t["name"] for t in registry_catalog(frozenset({registry_tool.name}))
+    }

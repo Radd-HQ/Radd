@@ -30,6 +30,7 @@ from radd.kernel import (
     EntitySpec,
     EventTypeSpec,
     IntegrationSpec,
+    McpToolSpec,
     NavItemSpec,
     PermissionSpec,
     PluginUiManifest,

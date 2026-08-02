@@ -91,3 +91,38 @@ of facts that exist, not a new policy.
 - The admin family is deliberately small at first: reads plus the few writes an
   agent has a real reason to make. It is easier to add a tool than to explain one
   that turned out to be a mistake.
+
+## Addendum — RADD-640/672/673: the registry, the gate, and the workflow (0.4.0)
+
+Three follow-ups landed together, closing the promises this spec made:
+
+**RADD-640 — plugins contribute MCP tools through the kernel.** The acceptance
+line "a plugin-contributed tool is filtered by the same rule as a builtin one"
+is now real: `McpToolSpec` (kernel spec: name, description, inputSchema,
+handler, permission ATOM, project_param) rides the plugin manifest into
+`registries.mcp_tools`. `live_catalog` appends registry tools (a builtin name
+cannot be shadowed), `requirements.requirement_for` treats the spec as the
+annotation, and the dispatcher requires the declared atom — scoped to the
+`project_param` project when the call names one — BEFORE the handler runs, so a
+plugin cannot ship an unfiltered tool even by omission. Unmount removes catalog
+and dispatch together. The old show-unannotated-tools fallback is reversed: a
+tool in neither `REQUIREMENTS` nor the registry is hidden and logged. North
+star: `milestones/mcptool.py` contributes `list_milestones` with zero authz
+code of its own.
+
+**RADD-672 — the catalog/enforcement disagreement this spec forbade.**
+`search_items`, `list_projects` and `list_worklogs` (and `GET /projects` +
+cross-project `list_items`/`bulk` under them) demanded GLOBAL `item.read`,
+which a spec-113 key scoped to one project never holds — while
+`visible_catalog` listed those tools for exactly that key. New authz seam
+`require_anywhere`: the atom held in ANY project admits the caller, the answer
+narrows to where it holds, and item listing constrains its query up front
+(also fixing LIMIT-before-visibility pagination). Found dogfooding the Radd
+Agent key; admin keys masked it because they hold the global atom.
+
+**RADD-673 — the tracking workflow, tool-complete.** Names in, ids resolved
+server-side: `type`/`parent`/`estimate_points`/`cycle` on create/update,
+`category` on `log_work`, `status` on `create_release`, and `sweep_release`
+(the spec-112 pipeline step, `release.update`). Pinned by
+`test_the_tracking_workflow_runs_entirely_over_mcp`: epic + typed child with
+points, categorized worklog, released version, sweep — zero REST calls.

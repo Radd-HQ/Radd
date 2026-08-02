@@ -70,6 +70,7 @@ class McpTool(StrEnum):
     LIST_WORKLOGS = "list_worklogs"
     LIST_RELEASES = "list_releases"
     CREATE_RELEASE = "create_release"
+    SWEEP_RELEASE = "sweep_release"  # RADD-673: the spec-112 pipeline step, agent-reachable
     SET_ITEM_RELEASE = "set_item_release"
     LIST_USERS = "list_users"
     LIST_SERVICE_ACCOUNTS = "list_service_accounts"
