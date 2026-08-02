@@ -36,6 +36,14 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_LOCAL_MODEL = "BAAI/bge-small-en-v1.5"  # 384d, fastembed's own default
 
+#: Texts per ONNX forward pass (RADD-724). The CALLER's batch is tuned for a GPU
+#: model server — `ai_embed_batch` defaults to 256 — and ONNX activations for
+#: that many sequences are gigabytes, which OOM-killed the worker within seconds
+#: of the model finally loading. The in-process backend chunks to a size a CPU
+#: can hold regardless of what it is handed; throughput barely changes, because
+#: CPU inference is compute-bound rather than batch-bound.
+LOCAL_BATCH = 32
+
 _models: dict[str, Any] = {}
 _lock = threading.Lock()
 
@@ -125,7 +133,12 @@ async def embed_texts(model: str, texts: Sequence[str]) -> list[list[float]]:
 
     def _run() -> list[list[float]]:
         instance = _instance(name)
-        return [[float(v) for v in vector] for vector in instance.embed(list(texts))]
+        ordered = list(texts)
+        vectors: list[list[float]] = []
+        for start in range(0, len(ordered), LOCAL_BATCH):
+            chunk = ordered[start : start + LOCAL_BATCH]
+            vectors.extend([float(v) for v in vector] for vector in instance.embed(chunk))
+        return vectors
 
     return await asyncio.to_thread(_run)
 
