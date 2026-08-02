@@ -1,0 +1,157 @@
+/*
+ * Print stylesheet for the page export (RADD-733/735).
+ *
+ * Two jobs: make the on-screen preview look like the sheet, and make the sheet
+ * itself legible on paper. The rules that matter are the break rules — a code
+ * block or a table split across a page boundary is the difference between a
+ * document someone reads and one they ask you to resend.
+ */
+
+.radd-print {
+  /* Forced light: printing a dark theme wastes toner and reads worse. The app's
+     tokens are variable-remapped, so overriding the surface family here is
+     enough — nothing hardcodes a hex. */
+  background: #ffffff;
+  color: #16181d;
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+  font-size: 11pt;
+  line-height: 1.55;
+}
+
+.radd-print-head {
+  border-bottom: 1px solid #d9dee6;
+  padding-bottom: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.radd-print-space {
+  font-size: 9pt;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #5f6773;
+  margin: 0 0 0.25rem;
+}
+
+.radd-print h1 {
+  font-size: 20pt;
+  font-weight: 600;
+  margin: 0 0 0.35rem;
+}
+
+.radd-print-meta {
+  font-size: 9pt;
+  color: #5f6773;
+  margin: 0;
+}
+
+.radd-print-contents {
+  margin: 0 0 1.5rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #d9dee6;
+  border-radius: 8px;
+  /* The contents list belongs with the front matter, never orphaned onto its
+     own sheet ahead of the document. */
+  break-inside: avoid;
+}
+
+.radd-print-contents h2 {
+  font-size: 10pt;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #5f6773;
+  margin: 0 0 0.5rem;
+}
+
+.radd-print-contents ol {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 10pt;
+}
+
+.radd-print-footer {
+  margin-top: 2rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #d9dee6;
+  font-size: 8pt;
+  color: #5f6773;
+  word-break: break-all;
+}
+
+@media print {
+  @page {
+    margin: 18mm 16mm;
+  }
+
+  /* Anything that is not the document. The route is already outside the app
+     layout, so this is belt-and-braces for portals (toasts, dialogs) that mount
+     onto document.body. */
+  body > *:not(#root),
+  [role="dialog"],
+  [role="menu"],
+  [data-toast] {
+    display: none !important;
+  }
+
+  .radd-print {
+    max-width: none;
+    padding: 0;
+  }
+
+  /* A subpage starts on a fresh sheet — that is what makes "include subpages"
+     a handbook rather than a run-on. */
+  .radd-print-break {
+    break-before: page;
+  }
+
+  /* The break rules. A heading stranded at the foot of a sheet with its section
+     overleaf, or a code block cut in half, is the usual way a printed page
+     stops being readable. */
+  h1, h2, h3, h4, h5, h6 {
+    break-after: avoid;
+    break-inside: avoid;
+  }
+
+  pre,
+  table,
+  blockquote,
+  .cm-editor,
+  .milkdown-code-block,
+  [data-callout-kind],
+  [data-extension] {
+    break-inside: avoid;
+  }
+
+  img {
+    max-width: 100%;
+    break-inside: avoid;
+  }
+
+  /* Orphans and widows: a single trailing line of a paragraph alone on a sheet. */
+  p, li {
+    orphans: 3;
+    widows: 3;
+  }
+
+  /* A link is a colour on screen and nothing at all on paper, so external
+     targets get spelled out. INTERNAL ones deliberately do not — a page full of
+     "(/pages/eng/runbook)" is noise, and those are the majority. */
+  a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 8pt;
+    color: #5f6773;
+    word-break: break-all;
+  }
+
+  /* Issue chips print as their key rather than as a bare highlight. */
+  [data-issue-chip]::after {
+    content: attr(data-issue-chip);
+  }
+
+  .radd-print-footer {
+    /* Repeated per sheet would need a running element; one at the end is honest
+       and needs no engine-specific hacks. */
+    break-inside: avoid;
+  }
+}

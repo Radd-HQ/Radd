@@ -187,6 +187,9 @@ export const RoutePath = {
   pages: "/pages",
   pageSpace: "/pages/$spaceSlug",
   page: "/pages/$spaceSlug/$pageSlug",
+  /** RADD-733: the print view — a TOP-LEVEL route, outside the app layout,
+   *  because the layout is exactly what must not be in the output. */
+  pagePrint: "/pages/$spaceSlug/$pageSlug/print",
   /** Pre-702 UUID URLs — kept as routes so they REDIRECT rather than 404. */
   legacyDocs: "/docs",
   legacyDocSpace: "/docs/$spaceSlug",

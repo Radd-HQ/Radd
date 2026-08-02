@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, ArchiveRestore, History, Pencil, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, History, Pencil, Printer, Trash2 } from "lucide-react";
 import { api, ApiError, errorMessage } from "../../lib/api";
 import { useAttachmentUploader } from "../../lib/useAttachmentUploader";
 import { Entity, invalidateEntities } from "../../lib/cache";
@@ -14,6 +14,7 @@ import type { AiRun } from "../editor/ai";
 import { AiReadMenu } from "../editor/AiReadMenu";
 import { Button } from "../Button";
 import { useConfirm } from "../ConfirmDialog";
+import { DropdownMenu } from "../DropdownMenu";
 import { PageExtensionCtx } from "../../lib/page-extensions";
 import { PageBacklinksPanel } from "./PageBacklinksPanel";
 import { PageLabels } from "./PageLabels";
@@ -103,6 +104,14 @@ export function PageView({
   const author = users?.find((user) => user.id === page.updated_by);
   const archived = page.archived_at !== null;
 
+  /** RADD-733: a new tab, so the reader keeps their place — the print view
+   *  replaces the whole document and the browser's print dialog blocks it. */
+  const openPrint = (subpages: boolean) => {
+    if (!spaceSlug) return;
+    const query = subpages ? "?subpages=1" : "";
+    window.open(`/pages/${spaceSlug}/${page.slug}/print${query}`, "_blank", "noopener");
+  };
+
   const extensionContext = useMemo(
     () => ({ pageId: page.id, spaceId: page.space_id, spaceSlug: spaceSlug ?? null }),
     [page.id, page.space_id, spaceSlug],
@@ -160,6 +169,40 @@ export function PageView({
             onClick={() => setTab(Tab.history)}
             label="History"
             icon={<History size={11} aria-hidden />}
+          />
+          {/* RADD-738: the export entry point, with the subpages choice offered
+              WHERE the action is taken rather than buried in settings. */}
+          <DropdownMenu
+            label="Export this page"
+            align="end"
+            className="ml-1"
+            widthClass="w-56"
+            trigger={({ ref, toggle }) => (
+              <button
+                ref={ref}
+                type="button"
+                onClick={toggle}
+                title="Export as PDF"
+                aria-label="Export this page"
+                className="flex rounded p-1 text-fg-faint hover:bg-elevated hover:text-fg cursor-pointer"
+              >
+                <Printer size={13} aria-hidden />
+              </button>
+            )}
+            items={[
+              {
+                kind: "action" as const,
+                label: "Export as PDF",
+                icon: Printer,
+                onSelect: () => openPrint(false),
+              },
+              {
+                kind: "action" as const,
+                label: "Export as PDF, with subpages",
+                icon: Printer,
+                onSelect: () => openPrint(true),
+              },
+            ]}
           />
           {canWrite && !archived && (
             <button

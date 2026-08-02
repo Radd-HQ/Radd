@@ -72,6 +72,7 @@ import { PagesSettingsPage } from "./routes/settings/pages";
 import { ViewPage } from "./routes/view";
 import { PagesIndexPage } from "./routes/pages-index";
 import { PageSpacePage } from "./routes/page-space";
+import { PagePrintPage } from "./routes/page-print";
 import { DashboardPage } from "./routes/dashboard";
 
 /**
@@ -321,6 +322,24 @@ const pageRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.page,
   component: PageSpacePage,
+});
+
+/** RADD-733. Parented to the ROOT, not the app layout: the top bar, pins bar,
+ *  sidebar and tree rail are precisely what a printed page must not contain. */
+const pagePrintRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: RoutePath.pagePrint,
+  component: PagePrintPage,
+  // The router JSON-parses search values, so `?subpages=1` arrives as the
+  // NUMBER 1 — comparing against the string silently dropped the key and the
+  // router then rewrote the address bar without it, so "export with subpages"
+  // exported one page. Normalise to a boolean and accept every spelling.
+  validateSearch: (search: Record<string, unknown>) => ({
+    subpages:
+      search.subpages === true || search.subpages === 1 || search.subpages === "1"
+        ? true
+        : undefined,
+  }),
 });
 
 /**
@@ -659,6 +678,7 @@ const routeTree = rootRoute.addChildren([
   publicKbIndexRoute,
   publicKbSpaceRoute,
   publicKbPageRoute,
+  pagePrintRoute,
   legacyKbIndexRoute,
   legacyKbSpaceRoute,
   legacyKbPageRoute,
