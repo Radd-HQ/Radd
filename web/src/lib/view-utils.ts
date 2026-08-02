@@ -183,9 +183,10 @@ export function groupItemsForView(
  * `cycle` buckets (spec 23): one section per cycle — the FULL cycle
  * list (so empty staging cycles appear), MINUS completed cycles unless the
  * surface asks for them, optionally narrowed by a name glob, ordered
- * active → upcoming → draft → completed then by start date. Items with
- * no cycle collect under a trailing **Backlog** bucket; items whose cycle is
- * filtered out are omitted (that is what the pattern means).
+ * active → upcoming → draft → completed then by start date. UNFINISHED items
+ * with no cycle collect under a trailing **Backlog** bucket (the plannable
+ * pool — done/canceled work is excluded from it, RADD-695); items whose cycle
+ * is filtered out are omitted (that is what the pattern means).
  */
 function groupByCycle(
   items: Item[],
@@ -218,11 +219,20 @@ function groupByCycle(
       items: bucket,
     };
   });
-  // Backlog is always present and rendered last, even when empty.
+  // Backlog is always present and rendered last, even when empty. It is the
+  // PLANNABLE pool, so the finished categories are excluded: a done/canceled
+  // item with no cycle is history, not something to drag into a sprint —
+  // while cycles above keep their finished items, which ARE the record of the
+  // cycle and feed the "3/8 done" summary (RADD-695).
   groups.push({
     key: BACKLOG_KEY,
     label: BACKLOG_LABEL,
-    items: items.filter((item) => !item.cycle),
+    items: items.filter(
+      (item) =>
+        !item.cycle &&
+        item.state.category !== StateCategory.done &&
+        item.state.category !== StateCategory.canceled,
+    ),
   });
   return groups;
 }
