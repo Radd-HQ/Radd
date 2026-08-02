@@ -40,6 +40,11 @@ from .schemas import (
 # comment-count hydration soft-imports it and degrades to 0 when the module is disabled.
 COMMENTS_MODULE_PATH = "radd.modules.comments"
 
+# Rungs walked looking for an item's epic: itself, its parent, its grandparent.
+# That is the whole hierarchy (epic <- issue <- subtask), so the walk terminates
+# by shape rather than by trusting the data to be acyclic.
+_EPIC_LOOKUP_RUNGS = len(ItemKind)
+
 
 def _user_ref(user) -> UserRef:
     return UserRef(
@@ -196,6 +201,13 @@ async def hydrate(
     item_ids = [i.id for i in items]
     starred = await _starred_ids(session, actor_id, item_ids)
     parents = await _parents_by_id(session, {i.parent_id for i in items if i.parent_id})
+    # RADD-697: the epic axis needs the epic an item BELONGS TO, which is at most
+    # two hops up (hierarchy: epic <- issue <- subtask). One extra batched
+    # lookup for the grandparents, merged into the same map — a subtask's epic
+    # is its parent-issue's parent, and no client can derive that from `parent`.
+    parents |= await _parents_by_id(
+        session, {p.parent_id for p in parents.values() if p.parent_id} - set(parents)
+    )
     project_ids = {i.project_id for i in items} | {p.project_id for p in parents.values()}
     keys = await projects_service.project_keys(session, project_ids)
     states = await workflow.states_by_ids(session, {i.state_id for i in items})
@@ -227,6 +239,26 @@ async def hydrate(
         return ParentRef(
             id=parent.id, key=f"{keys[parent.project_id]}-{parent.number}", title=parent.title
         )
+
+    def epic_ref(item: WorkItem) -> ParentRef | None:
+        """The epic this item belongs to — ITSELF, else its parent, else its
+        grandparent (RADD-697). The Python mirror of `hierarchy.nearest_epic_case`,
+        which is what SLQ's `epic` field compiles to: the axis and the query
+        language must agree on what "the epic of an item" means, or a board
+        grouped by epic would disagree with `epic = X` over the same rows.
+        """
+        node: WorkItem | None = item
+        for _ in range(_EPIC_LOOKUP_RUNGS):
+            if node is None:
+                return None
+            if node.kind == ItemKind.EPIC.value:
+                return ParentRef(
+                    id=node.id,
+                    key=f"{keys[node.project_id]}-{node.number}",
+                    title=node.title,
+                )
+            node = parents.get(node.parent_id) if node.parent_id else None
+        return None
 
     def cycle_ref(cycle_id: uuid.UUID | None) -> CycleRef | None:
         if cycle_id is None:
@@ -266,6 +298,7 @@ async def hydrate(
             state=StateRef.model_validate(states[i.state_id]),
             priority=i.priority,
             parent=parent_ref(i.parent_id),
+            epic=epic_ref(i),
             assignee=(
                 _user_ref(users[i.assignee_id])
                 if i.assignee_id

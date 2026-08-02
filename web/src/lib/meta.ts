@@ -275,6 +275,7 @@ export const VIEW_AXIS_LABELS: Record<ViewAxisValue, string> = {
   [ViewAxis.kind]: "Kind",
   [ViewAxis.team]: "Team",
   [ViewAxis.cycle]: "Cycle",
+  [ViewAxis.epic]: "Epic",
 };
 
 export const VIEW_AXIS_ORDER: readonly ViewAxisValue[] = [
@@ -284,6 +285,7 @@ export const VIEW_AXIS_ORDER: readonly ViewAxisValue[] = [
   ViewAxis.kind,
   ViewAxis.team,
   ViewAxis.cycle,
+  ViewAxis.epic,
 ];
 
 /** Cycle status display metadata (spec 18) — status is derived from dates. */

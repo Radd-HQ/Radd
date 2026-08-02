@@ -1,14 +1,16 @@
 import {
   CF_AXIS_PREFIX,
+  ItemKind,
   ViewAxis,
   type Cycle,
   type Item,
+  type ItemParentRef,
   type ItemKindValue,
   type ItemUpdate,
   type PriorityValue,
   type State,
 } from "./types";
-import { BACKLOG_KEY, NO_TEAM_KEY, NO_VALUE_KEY, UNASSIGNED_KEY } from "./view-utils";
+import { BACKLOG_KEY, NO_EPIC_KEY, NO_TEAM_KEY, NO_VALUE_KEY, UNASSIGNED_KEY } from "./view-utils";
 
 /**
  * Cross-bucket drag-and-drop (spec 24): dropping an item on a bucket sets the
@@ -32,6 +34,9 @@ export interface AxisDndContext {
 export interface BucketRef {
   key: string;
   label: string;
+  /** Epic-axis lanes carry the epic itself, so an epic drop builds its
+   *  optimistic ref from data rather than from the display label. */
+  epicRef?: ItemParentRef;
 }
 
 /**
@@ -50,6 +55,7 @@ export function dragEnabledForAxis(axis: string | null | undefined): boolean {
     case ViewAxis.assignee:
     case ViewAxis.team:
     case ViewAxis.cycle:
+    case ViewAxis.epic: // re-parents; the planner refuses illegal hierarchy moves
       return true;
     default: // kind, or anything unknown
       return false;
@@ -127,6 +133,22 @@ export function bucketMovePlan(
         optimistic: {
           cycle: cycle ? { id: cycle.id, name: cycle.name, status: cycle.status } : null,
         },
+      };
+    }
+    case ViewAxis.epic: {
+      // Dropping on an epic lane RE-PARENTS (RADD-697). The hierarchy is
+      // epic <- issue <- subtask, so only an ISSUE may take an epic as its
+      // parent: an epic has no parent at all, and a subtask's parent is its
+      // issue — re-homing it to an epic would be a silent demotion of its
+      // issue. Both are refused here rather than by a 409 the user must read.
+      if (item.kind !== ItemKind.issue) return null;
+      const ref = bucket.key === NO_EPIC_KEY ? null : (bucket.epicRef ?? null);
+      if ((item.epic?.id ?? null) === (ref?.id ?? null)) return null;
+      // An issue's epic IS its parent (one hop), so the patch is parent_id and
+      // the optimistic merge updates both refs — they are the same row.
+      return {
+        patch: { parent_id: ref?.id ?? null },
+        optimistic: { parent: ref, epic: ref },
       };
     }
     default:

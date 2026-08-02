@@ -107,6 +107,10 @@ export interface Item {
   kind?: ItemKindValue;
   type?: TypeRef | null; // spec 51 — issue-type classification
   parent?: ItemParentRef | null;
+  /** The epic this item BELONGS TO — itself if it is one, else its parent, else
+   *  its grandparent (RADD-697, server-resolved: the client cannot see two hops
+   *  up). Null for work no epic governs. Drives the `epic` view axis. */
+  epic?: ItemParentRef | null;
   assignee?: UserRef | null;
   /** Who raised the issue (service-desk requester, spec 30) — defaults to creator. */
   reporter?: UserRef | null;

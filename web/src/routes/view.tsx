@@ -58,6 +58,7 @@ import {
   bucketMovePlan,
   dragEnabledForAxis,
   type BucketCreatePreset,
+  type BucketRef,
 } from "../lib/axis-dnd";
 import {
   FieldType,
@@ -656,7 +657,7 @@ export function ViewPage() {
   const stateColumns = columnAxis === ViewAxis.state;
   const canSetWipLimit = stateColumns && projectScoped && Boolean(view?.can_edit);
 
-  const moveToBucket = (item: Item, bucket: { key: string; label: string }) => {
+  const moveToBucket = (item: Item, bucket: BucketRef) => {
     if (!columnAxis) return;
     const plan = bucketMovePlan(item, columnAxis, bucket, dndCtx);
     if (plan) {
@@ -671,11 +672,7 @@ export function ViewPage() {
       pushToast(`${item.key.split("-")[0]} has no "${bucket.label}" state`);
     }
   };
-  const moveToCell = (
-    item: Item,
-    column: { key: string; label: string },
-    lane: { key: string; label: string },
-  ) => {
+  const moveToCell = (item: Item, column: BucketRef, lane: BucketRef) => {
     const columnPlan = columnAxis ? bucketMovePlan(item, columnAxis, column, dndCtx) : null;
     const lanePlan = laneAxis ? bucketMovePlan(item, laneAxis, lane, dndCtx) : null;
     const patch = { ...columnPlan?.patch, ...lanePlan?.patch };

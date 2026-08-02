@@ -281,6 +281,11 @@ class ItemRead(BaseModel):
     state: StateRef
     priority: Priority
     parent: ParentRef | None
+    # The epic this item BELONGS TO — itself if it is one, else its parent, else
+    # its grandparent (RADD-697; same rule as SLQ's `epic` field). Null for work
+    # no epic governs. Carried on every item so a client can group by epic
+    # without walking the hierarchy it cannot see.
+    epic: ParentRef | None = None
     assignee: UserRef | None
     reporter: UserRef | None = None
     team: TeamRef | None

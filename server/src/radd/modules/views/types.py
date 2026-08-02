@@ -29,6 +29,11 @@ class ViewAxis(StrEnum):
     KIND = "kind"
     TEAM = "team"
     CYCLE = "cycle"  # buckets = workspace cycles (+ a Backlog bucket); see spec 23
+    # Buckets = the epics PRESENT in the result set (+ a No-epic bucket), RADD-697.
+    # "The epic an item belongs to" is the server's own notion (itself, else its
+    # parent, else its grandparent — `items.hierarchy.nearest_epic_case`), carried
+    # to the client as `ItemRead.epic` so grouping cannot invent a second rule.
+    EPIC = "epic"
 
 
 # Axis token prefix addressing a select-type custom field by registry key.

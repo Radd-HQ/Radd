@@ -1,5 +1,6 @@
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { Plus } from "lucide-react";
+import type { BucketRef } from "../../lib/axis-dnd";
 import { useBucketDrop } from "../../lib/bucket-drop";
 import type { CardLayout } from "../../lib/card-layout";
 import type {
@@ -44,7 +45,7 @@ interface ViewBoardProps {
   onSetWipLimit?: (bucketKey: string, limit: number | null) => void;
   /** When set, cards are draggable and columns are drop targets (spec 24) —
    *  dropping sets the grouping axis's field on the item. */
-  onMoveToBucket?: (item: Item, bucket: { key: string; label: string }) => void;
+  onMoveToBucket?: (item: Item, bucket: BucketRef) => void;
   /** Right-click quick-actions on a card (spec 24). */
   onContextMenu?: (item: Item, event: ReactMouseEvent) => void;
   /** Multi-select (spec 68) — card checkboxes when provided. */

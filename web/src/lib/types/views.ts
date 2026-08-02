@@ -25,6 +25,7 @@ export const ViewAxis = {
   kind: "kind",
   team: "team",
   cycle: "cycle",
+  epic: "epic",
 } as const;
 export type ViewAxisValue = (typeof ViewAxis)[keyof typeof ViewAxis];
 

@@ -1,5 +1,6 @@
 import { useState, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import type { BucketRef } from "../../lib/axis-dnd";
 import { useBucketDrop } from "../../lib/bucket-drop";
 import { usePeek } from "../../lib/hooks";
 import {
@@ -71,7 +72,7 @@ interface ViewListProps {
   cycleStatsProjectId?: string;
   /** When set, rows are draggable and sections are drop targets (spec 24) —
    *  dropping onto another section sets the grouping axis's field on the item. */
-  onMoveToBucket?: (item: Item, bucket: { key: string; label: string }) => void;
+  onMoveToBucket?: (item: Item, bucket: BucketRef) => void;
   /** Right-click quick-actions on a row (spec 24). */
   onContextMenu?: (item: Item, event: ReactMouseEvent) => void;
   /** When set, rows show a selection checkbox (multi-select + bulk, spec 24). */

@@ -327,3 +327,40 @@ async def test_suggest_bare_epic_offers_none_then_item_keys(db, actor):
     listed = [s.value for s in response.suggestions]
     assert listed[0] == "none"
     assert epic_key in listed
+
+
+# --- the hydrated `epic` ref (RADD-697) ---
+
+
+async def test_hydrated_epic_ref_matches_the_slq_epic_field(db, actor):
+    """The board's epic AXIS and SLQ's `epic` field must name the same epic for
+    the same row — the axis groups client-side off `ItemRead.epic`, the query
+    compiles `hierarchy.nearest_epic_case` in SQL, and two definitions of "the
+    epic of an item" would silently disagree (a subtask is two hops from its
+    epic, which no client can walk).
+    """
+    project, states = await _project_with_states(db)
+    await _ladder(db, actor, project, states)
+
+    reads = {
+        r.title: r
+        for r in await items.list_items(
+            db, actor=actor, filters=ItemListFilters(project_id=project.id), limit=50, offset=0
+        )
+    }
+    epic_key = reads["epic"].key
+
+    # Self, parent, grandparent — and null for work no epic governs.
+    assert reads["epic"].epic is not None and reads["epic"].epic.key == epic_key
+    assert reads["issue"].epic is not None and reads["issue"].epic.key == epic_key
+    assert reads["subtask"].epic is not None and reads["subtask"].epic.key == epic_key
+    assert reads["loner"].epic is None
+    assert reads["issue2"].epic is not None and reads["issue2"].epic.title == "epic2"
+
+    # The agreement itself: everything the hydrator attributes to this epic is
+    # exactly what `epic = <key>` returns.
+    by_ref = {title for title, read in reads.items() if read.epic and read.epic.key == epic_key}
+    assert by_ref == await _titles(db, actor, project, f"epic = {epic_key}")
+    assert {t for t, r in reads.items() if r.epic is None} == await _titles(
+        db, actor, project, "epic IS EMPTY"
+    )
