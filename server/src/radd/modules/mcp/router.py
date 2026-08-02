@@ -36,6 +36,7 @@ from . import catalog, tools
 from .protocol import JsonRpcError, JsonRpcRequest, error_envelope, parse_request, result_envelope
 from .types import (
     HTTP_ACCEPTED,
+    SSE_HEADERS,
     MCP_PROTOCOL_VERSION,
     MCP_SERVER_NAME,
     JsonRpcErrorCode,
@@ -86,6 +87,7 @@ async def _catalog_change_stream(user: User) -> AsyncIterator[str]:
     holding one open for the life of a long-lived stream would pin a connection
     per connected agent.
     """
+    yield ": connected\n\n"  # flush headers; also what makes this route testable
     last: str | None = None
     idle = 0.0
     while True:

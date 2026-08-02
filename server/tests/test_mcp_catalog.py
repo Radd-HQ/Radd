@@ -419,3 +419,24 @@ async def test_mounting_a_plugin_tool_moves_the_fingerprint(db):
     finally:
         registries.mcp_tools.pop("radd740_probe", None)
     assert await catalog_fingerprint(db, admin) == before
+
+
+async def test_the_change_stream_actually_serves(db):
+    """RADD-740 shipped BROKEN because nothing here opened the stream.
+
+    `_initialize_result()` does not touch `SSE_HEADERS`, and no test called the
+    GET route, so a missing import passed every check I ran and then 500'd in
+    production on the first connection. This pulls the first frame, which is the
+    cheapest thing that exercises the response construction end to end.
+    """
+    import asyncio
+
+    from radd.modules.mcp.router import mcp_stream
+
+    admin = await _user(db, InstanceRole.ADMIN)
+    response = await mcp_stream(admin)
+    assert response.media_type == "text/event-stream"
+    assert response.headers["cache-control"].startswith("no-cache")
+    first = await asyncio.wait_for(response.body_iterator.__anext__(), timeout=5)
+    assert first.startswith(":")  # the connect flush
+    await response.body_iterator.aclose()
