@@ -16,6 +16,7 @@ import { queryKeys } from "./shared";
 import type {
   PageLinkedItem,
   Page,
+  PageExtensionSpec,
   PageSummary,
   PageSearchResponse,
   PageSpace,
@@ -35,6 +36,15 @@ export const pageSpacesQuery = () =>
     meta: entityMeta(Entity.docSpace),
     queryFn: () => api.get<PageSpace[]>(ApiPath.pageSpaces),
   });
+
+/** What the editor's insert menu offers. A function of what is INSTALLED, so it
+ *  is fetched rather than hardcoded — and cached indefinitely, because the set
+ *  only changes when a plugin is mounted or unmounted. */
+export const pageExtensionsQuery = queryOptions({
+  queryKey: queryKeys.pageExtensions,
+  queryFn: () => api.get<PageExtensionSpec[]>(ApiPath.pageExtensions),
+  staleTime: Infinity,
+});
 
 /** A space's flat page rows — the tree component assembles the hierarchy. */
 export const pagesQuery = (spaceId: string) =>

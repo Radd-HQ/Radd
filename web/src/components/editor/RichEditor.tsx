@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Crepe, CrepeFeature, type CrepeConfig } from "@milkdown/crepe";
+import { editorViewCtx } from "@milkdown/kit/core";
 import { diffDecorationPlugin } from "@milkdown/kit/component/diff";
 import { useQuery } from "@tanstack/react-query";
 import { aiErrorText, isAiGone } from "../../lib/ai";
@@ -16,6 +17,11 @@ import {
   type AiRun,
 } from "./ai";
 import { AiActionPicker } from "./AiActionPicker";
+import {
+  EXTENSION_TOOLBAR_ICON,
+  ExtensionPicker,
+  insertExtensionBlock,
+} from "./ExtensionPicker";
 import { raddDiffDecoration } from "./diff/decoration-plugin";
 import {
   insertMention,
@@ -27,11 +33,17 @@ import {
 import { mentionChipsPlugin } from "./chips";
 import { PlainEditor, type PlainEditorApi } from "./PlainEditor";
 import type { QuickAction } from "../items/quick-actions";
+import type { PageExtensionSpec } from "../../lib/types";
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/classic-dark.css";
 import "./rich-editor.css";
 
 interface RichEditorProps {
+  /** Show the "Insert extension" toolbar button (RADD-709). Pages only: an
+   *  extension block is page-relative — a `toc` inside an issue comment has no
+   *  page whose headings it could list — so the button is opt-in rather than
+   *  everywhere. */
+  extensions?: boolean;
   /** Initial markdown — the editor is uncontrolled after mount. To reseed with new
    * content (switch doc / clear after submit), remount via a changing `key`. */
   value: string;
@@ -87,6 +99,7 @@ export function RichEditor({
   quickActions,
   initialAiRun,
   anonymous = false,
+  extensions = false,
   className = "",
   autoFocus = false,
 }: RichEditorProps) {
@@ -131,9 +144,20 @@ export function RichEditor({
   const crepeRef = useRef<Crepe | null>(null);
   // The toolbar AI popover, anchored under the TopBar's AI button when open.
   const [aiMenu, setAiMenu] = useState<{ left: number; top: number } | null>(null);
+  // The extension insert popover, anchored under its own TopBar button.
+  const [extensionMenu, setExtensionMenu] = useState<{ left: number; top: number } | null>(null);
   // Consumed once — survives the gate-flip recreate (the first instance often
   // mounts before the AI queries resolve, without the AI feature).
   const initialAiRunRef = useRef(initialAiRun ?? null);
+  // Read inside the create effect, which must not re-run when the flag changes
+  // identity — it is a static per-surface choice, not live state.
+  const extensionsRef = useRef(extensions);
+  extensionsRef.current = extensions;
+
+  const insertExtension = (spec: PageExtensionSpec) => {
+    setExtensionMenu(null);
+    crepeRef.current?.editor.action((ctx) => insertExtensionBlock(ctx.get(editorViewCtx), spec));
+  };
 
   const dispatchAiRun = (run: AiRun) => {
     setAiMenu(null);
@@ -237,6 +261,7 @@ export function RichEditor({
     // The floating selection Toolbar rides the AI gate: it is where Crepe puts the
     // AI entry point (spec 103); without AI it would only duplicate the TopBar.
     const aiOn = ai !== null;
+    const extensionsOn = extensionsRef.current;
     const topBarConfig: NonNullable<
       NonNullable<CrepeConfig["featureConfigs"]>[CrepeFeature.TopBar]
     > = {
@@ -263,6 +288,29 @@ export function RichEditor({
             const rect = anchor?.getBoundingClientRect();
             if (!rect) return;
             setAiMenu({
+              left: Math.min(rect.left, window.innerWidth - 300),
+              top: rect.bottom + 4,
+            });
+          },
+        });
+      };
+    }
+    // AFTER the AI block on purpose: that one ASSIGNS buildTopBar, so an
+    // extensions button installed before it would be silently overwritten.
+    if (extensionsOn) {
+      const previous = topBarConfig.buildTopBar;
+      topBarConfig.buildTopBar = (builder) => {
+        previous?.(builder);
+        builder.getGroup("heading").addItem("radd-extension", {
+          icon: EXTENSION_TOOLBAR_ICON,
+          active: () => false,
+          onRun: () => {
+            const anchor = root
+              .querySelector("svg.radd-extension-toolbar-icon")
+              ?.closest("button");
+            const rect = anchor?.getBoundingClientRect();
+            if (!rect) return;
+            setExtensionMenu({
               left: Math.min(rect.left, window.innerWidth - 300),
               top: rect.bottom + 4,
             });
@@ -433,6 +481,16 @@ export function RichEditor({
               className="z-[60] w-72 rounded-md border border-strong bg-surface p-1.5 shadow-pop animate-menu-in"
             >
               <AiActionPicker actions={ai.actions} onPick={dispatchAiRun} autoFocus />
+            </div>
+          </>,
+          document.body,
+        )}
+      {extensionMenu &&
+        createPortal(
+          <>
+            <div className="fixed inset-0 z-[59]" onMouseDown={() => setExtensionMenu(null)} />
+            <div className="z-[60]">
+              <ExtensionPicker at={extensionMenu} onPick={insertExtension} />
             </div>
           </>,
           document.body,

@@ -23,6 +23,7 @@ from .specs import (
     IntegrationSpec,
     McpToolSpec,
     NavItemSpec,
+    PageExtensionSpec,
     PermissionSpec,
     SlqFieldSpec,
     ViewTypeSpec,
@@ -43,6 +44,7 @@ class KernelRegistries:
     view_types: dict[str, ViewTypeSpec] = field(default_factory=dict)  # plugin saved-view types
     widget_types: dict[str, WidgetTypeSpec] = field(default_factory=dict)  # plugin dashboard widgets
     mcp_tools: dict[str, McpToolSpec] = field(default_factory=dict)  # plugin MCP tools (RADD-640)
+    page_extensions: dict[str, PageExtensionSpec] = field(default_factory=dict)  # RADD-709
     tasks: dict[str, TaskSpec] = field(default_factory=dict)
     consumers: dict[str, ConsumerSpec] = field(default_factory=dict)
     integrations: dict[tuple[str, str], IntegrationSpec] = field(default_factory=dict)
@@ -58,7 +60,7 @@ class KernelRegistries:
             self.plugins, self.entities, self.event_types, self.permissions,
             self.crud_resources, self.capabilities, self.tasks, self.consumers,
             self.integrations, self.plugin_ui_dirs, self.slq_fields,
-            self.view_types, self.widget_types, self.mcp_tools,
+            self.view_types, self.widget_types, self.mcp_tools, self.page_extensions,
         ):
             f.clear()
         self.nav.clear()
@@ -85,6 +87,8 @@ class KernelRegistries:
             self.widget_types[wt.key] = wt
         for mt in plugin.mcp_tools:
             self.mcp_tools[mt.name] = mt
+        for px in plugin.page_extensions:
+            self.page_extensions[px.name] = px
         for t in plugin.tasks:
             self.tasks[t.name] = t
         for con in plugin.consumers:
@@ -118,6 +122,8 @@ class KernelRegistries:
             self.widget_types.pop(wt.key, None)
         for mt in plugin.mcp_tools:
             self.mcp_tools.pop(mt.name, None)
+        for px in plugin.page_extensions:
+            self.page_extensions.pop(px.name, None)
         for con in plugin.consumers:
             self.consumers.pop(con.name, None)
         for ig in plugin.integrations:

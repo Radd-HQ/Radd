@@ -69,6 +69,22 @@ class PageUpdate(BaseModel):
     expected_version: int | None = Field(default=None, ge=1)
 
 
+class PageExtensionRead(BaseModel):
+    """One entry in the editor's insert menu (RADD-709).
+
+    A projection of the kernel's `PageExtensionSpec`. No handler crosses the
+    wire because there is none: rendering is client-side by design, and this
+    endpoint exists so the menu is a function of what is INSTALLED rather than a
+    list hardcoded in the SPA.
+    """
+
+    name: str
+    label: str
+    description: str
+    params_schema: dict = Field(default_factory=dict)
+    icon: str = ""
+
+
 class PageSummary(BaseModel):
     """Flat tree row — the client assembles the hierarchy."""
 

@@ -22,6 +22,7 @@ from .specs import (
     EventTypeSpec,
     IntegrationSpec,
     McpToolSpec,
+    PageExtensionSpec,
     PermissionSpec,
     PluginUiManifest,
     SettingSectionSpec,
@@ -81,6 +82,7 @@ class RaddPlugin:
     view_types: tuple[ViewTypeSpec, ...] = ()  # custom saved-view types
     widget_types: tuple[WidgetTypeSpec, ...] = ()  # custom dashboard widget types
     mcp_tools: tuple[McpToolSpec, ...] = ()  # MCP tools (RADD-640; filtered + enforced by the kernel)
+    page_extensions: tuple[PageExtensionSpec, ...] = ()  # page fenced blocks (RADD-709)
     integrations: tuple[IntegrationSpec, ...] = ()
     ui: PluginUiManifest | None = None
 

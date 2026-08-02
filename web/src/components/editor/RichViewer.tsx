@@ -13,8 +13,23 @@ import "./rich-editor.css";
  * tables, code blocks with copy button, images, chips). No toolbar/menu chrome;
  * `@`/`#` chips + link routing come from the shared `mentionChipsPlugin`.
  */
-export function RichViewer({ text, className = "" }: { text: string; className?: string }) {
+export function RichViewer({
+  text,
+  className = "",
+  onReady,
+}: {
+  text: string;
+  className?: string;
+  /** Fires once the editor has actually rendered into the DOM.
+   *
+   *  Crepe creates ASYNCHRONOUSLY, so anything that reads the rendered output —
+   *  assigning heading anchors (RADD-710), printing (RADD-736) — sees an empty
+   *  container if it runs on mount. This is that signal. */
+  onReady?: () => void;
+}) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const onReadyStable = useRef(onReady);
+  onReadyStable.current = onReady;
   // RADD-711: an issue chip opens the PEEK panel over what you are reading
   // rather than navigating away. A wiki page is usually the thing you were
   // reading FOR the references, and the issue view already works this way for
@@ -48,8 +63,14 @@ export function RichViewer({ text, className = "" }: { text: string; className?:
       }),
     );
     crepe.setReadonly(true);
-    const created = crepe.create();
+    let live = true;
+    const created = crepe.create().then(() => {
+      // `live` guards the unmount race: create resolving after teardown must not
+      // announce a viewer that is no longer on the page.
+      if (live) onReadyStable.current?.();
+    });
     return () => {
+      live = false;
       // Destroy only after create resolves, so an unmount mid-init can't race.
       void created.then(() => crepe.destroy());
     };

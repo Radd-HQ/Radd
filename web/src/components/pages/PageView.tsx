@@ -6,7 +6,7 @@ import { useAttachmentUploader } from "../../lib/useAttachmentUploader";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { apiPagePath, apiPageUnarchivePath, attachmentUrl } from "../../lib/constants";
 import { relativeTime } from "../../lib/dates";
-import { LazyRichViewer as RichViewer } from "../editor/LazyRichViewer";
+import { PageBody } from "./PageBody";
 import { usersQuery } from "../../lib/queries";
 import { AttachmentParentType, type Page, type PageUpdate } from "../../lib/types";
 import { LazyRichEditor as RichEditor } from "../editor/LazyRichEditor";
@@ -230,6 +230,7 @@ export function PageView({
           <RichEditor
             value={draft}
             onChange={setDraft}
+            extensions
             onUploadImage={async (file) => {
               const [attachment] = await uploadFiles([file]);
               return attachmentUrl(attachment.id);
@@ -264,7 +265,7 @@ export function PageView({
         <>
           {page.body ? (
             <div className="group/body relative mt-3 rounded-md border border-transparent px-1.5 py-1 hover:border-subtle">
-              <RichViewer text={page.body} />
+              <PageBody text={page.body} />
               <span className="absolute right-1 top-1 hidden items-center gap-1 group-hover/body:flex">
                 {/* Read-mode AI (spec 103 follow-up): find-similar/summarize for
                     every reader; transforms only for writers. */}

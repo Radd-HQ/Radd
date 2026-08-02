@@ -40,6 +40,18 @@ class PageEvent(StrEnum):
     LINK_DELETED = "page_link.deleted"
 
 
+class PageExtensionName(StrEnum):
+    """The fence suffix of each first-party extension (RADD-709).
+
+    A member here is the wire format — it appears in page bodies in the database
+    — so renaming one is a data migration, not a rename.
+    """
+
+    TOC = "toc"
+    CHILDREN = "children"
+    CALLOUT = "callout"
+
+
 class RestoreKind(StrEnum):
     """`action` values in page.restored event payloads."""
 

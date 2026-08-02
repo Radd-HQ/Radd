@@ -123,6 +123,7 @@ export const queryKeys = {
   notificationsBadge: ["notificationsBadge"] as const,
   itemWatchers: (itemId: string) => ["itemWatchers", { itemId }] as const,
   pageSpaces: ["pageSpaces"] as const,
+  pageExtensions: ["pageExtensions"] as const,
   pages: (spaceId: string) => ["pages", { spaceId }] as const,
   page: (pageId: string) => ["page", { pageId }] as const,
   pageVersions: (pageId: string) => ["pageVersions", { pageId }] as const,

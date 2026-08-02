@@ -9,7 +9,6 @@ import { Permission } from "../lib/types";
 import { EmptyState } from "../components/EmptyState";
 import { Spinner } from "../components/Spinner";
 import { PageView } from "../components/pages/PageView";
-import "../components/pages/extensions"; // registers the first-party page extensions
 import { PageTree } from "../components/pages/PageTree";
 import { PublicBadge } from "../components/pages/PublicBadge";
 import { QueryError } from "../components/QueryError";

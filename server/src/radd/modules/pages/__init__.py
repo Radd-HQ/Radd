@@ -10,6 +10,7 @@ from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
 
 from . import attachments_binding  # registers the page parent (spec 102)
+from .extensions import PAGE_EXTENSIONS
 from .public_router import router as public_router
 from .router import router
 from .types import PageEvent
@@ -38,4 +39,5 @@ plugin = RaddPlugin(
         EventTypeSpec(PageEvent.LINK_CREATED, "Page↔issue link added", "Pages", item_scoped=True),
         EventTypeSpec(PageEvent.LINK_DELETED, "Page↔issue link removed", "Pages", item_scoped=True),
     ),
+    page_extensions=PAGE_EXTENSIONS,
 )

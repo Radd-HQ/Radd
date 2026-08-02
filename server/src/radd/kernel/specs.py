@@ -10,7 +10,7 @@ kernel never depends on a plugin. Specs carry data + light callables only.
 
 from collections.abc import Awaitable, Callable
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -205,6 +205,39 @@ class McpToolSpec:
     permission: str = ""
     project_scoped: bool = False  # visibility: show only where the atom holds (spec 114)
     project_param: str = ""  # input property naming the project; enum-rewritten + enforced
+
+
+# --- page extensions (RADD-709: live blocks embedded in a page's markdown) ---
+@dataclass(frozen=True)
+class PageExtensionSpec:
+    """An extension a page can embed as a fenced block — ```` ```radd:<name> ````.
+
+    The kernel half is DECLARATION only: the name, how to describe it in the
+    editor's insert menu, and the shape of its parameters. Rendering is entirely
+    client-side (the SPA dispatches by name through its own registry), which is
+    why there is no handler here — the server never renders a page body, so a
+    server-side renderer would be a second implementation of something nothing
+    calls.
+
+    What this registry buys is the INSERT MENU: `GET /pages/extensions` is a
+    function of what is installed, so a plugin's extension appears in the menu of
+    a running Radd with no edit to the pages module, and disabling that plugin
+    removes it from the menu in the same breath (the spec-94 unmount path). A
+    page still holding a block whose name has gone renders an honest "unknown
+    extension" card rather than raw JSON — degrading is the client's job, not a
+    reason to keep a dead entry in the registry.
+
+    `params_schema` is JSON Schema, used by the insert menu to build a small form
+    and by the renderer to report a malformed block against the field that is
+    wrong. It is advisory, not enforcement: a body is markdown, and markdown a
+    user typed by hand must never fail to render because a parameter was spelled
+    oddly."""
+
+    name: str  # the fence suffix: `toc` for ```radd:toc
+    label: str  # insert-menu title
+    description: str = ""  # one line, insert-menu subtitle
+    params_schema: dict[str, Any] = field(default_factory=dict)
+    icon: str = ""  # lucide icon name, for the insert menu
 
 
 # --- sockets (§4a: typed plugin-to-plugin integration points) ---

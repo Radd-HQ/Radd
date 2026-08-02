@@ -34,6 +34,17 @@ export interface PageSpaceUpdate {
   public?: boolean;
 }
 
+/** One entry in the editor's insert menu (RADD-709), from the kernel registry.
+ *  `params_schema` is JSON Schema — the picker reads `properties`/`required`/
+ *  `default` from it to pre-fill an inserted block. */
+export interface PageExtensionSpec {
+  name: string;
+  label: string;
+  description: string;
+  params_schema: { properties?: Record<string, unknown>; required?: string[] };
+  icon: string;
+}
+
 /** Flat tree row from GET /page-spaces/{id}/pages — the client builds the tree. */
 export interface PageSummary {
   id: string;

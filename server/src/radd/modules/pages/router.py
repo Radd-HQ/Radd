@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
+from radd.kernel.registry import registries
 from radd.modules.auth import authz
 from radd.modules.auth.deps import CurrentUser
 from radd.modules.items import service as items_service
@@ -16,6 +17,7 @@ from .schemas import (
     DocLinkCreate,
     PageLinkedItem,
     PageCreate,
+    PageExtensionRead,
     PageRead,
     PageSummary,
     PageUpdate,
@@ -102,6 +104,30 @@ async def create_page(data: PageCreate, session: Session, user: CurrentUser) -> 
     await authz.require(session, user, authz.Permission.PAGE_WRITE)
     page = await service.create_page(session, data, user.id)
     return await service.page_read(session, page)
+
+
+@router.get("/pages/extensions", response_model=list[PageExtensionRead])
+async def list_page_extensions(session: Session, user: CurrentUser) -> list[PageExtensionRead]:
+    """What the editor's insert menu offers (RADD-709).
+
+    Registered BEFORE `/pages/{page_id}` for the same reason `by-path` is: a
+    literal segment declared after a UUID path would never be reached.
+
+    Read from the kernel registry rather than a constant, so a plugin's
+    extension appears here the moment it mounts and disappears when it is
+    disabled — which is the whole point of the registry.
+    """
+    await authz.require(session, user, authz.Permission.PAGE_READ)
+    return [
+        PageExtensionRead(
+            name=spec.name,
+            label=spec.label,
+            description=spec.description,
+            params_schema=spec.params_schema,
+            icon=spec.icon,
+        )
+        for spec in sorted(registries.page_extensions.values(), key=lambda s: s.label)
+    ]
 
 
 @router.get("/pages/by-path/{space_slug}/{page_slug}", response_model=PageRead)
