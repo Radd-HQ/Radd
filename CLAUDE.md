@@ -73,6 +73,28 @@ building — a bug the type checker could not catch, a design that had to be mer
 than added — that belongs on the issue, because it is the part nobody can reconstruct
 later.
 
+### Logging time
+
+A session with Hussein is his working time, so it is logged against the issues it
+produced — when work ships, not as a separate chore.
+
+**Derive it; never estimate it.** The session's own artefacts are timestamped: the
+scratchpad directory says when it started, `git log` gives a boundary per issue, and
+`now` ends it. Allocate the stretch before each commit to the issue that commit names,
+split evenly when a stretch covers several.
+
+Three rules that keep it honest:
+
+- **Never log more than the session lasted.** Sum the entries and check against the
+  span; trim the largest if it overshoots. An allocation that exceeds wall clock is a
+  fabrication with arithmetic on top.
+- **Say what it is in the note** — elapsed wall clock is an UPPER bound on attention,
+  not a measurement, and the note should admit that.
+- **Attribute it to the person, not the agent.** `author_id` on the worklog needs
+  `project.manage`, which is one of the documented reasons to use the owner key.
+
+Categories: `Development`, `Documentation`, `Testing`, `Investigation`, `Code Review`.
+
 ### Attribution
 
 | Identity | Writes | When |
