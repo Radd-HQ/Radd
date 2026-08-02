@@ -251,10 +251,20 @@ def render_markdown(log: Changelog, base_url: str, repo_url: str = "") -> str:
     return "\n".join(lines)
 
 
+#: Categories that are already mass nouns — "2 Documentations" reads as a bug.
+UNCOUNTED = {"Documentation", "Uncategorized"}
+
+
+def _plural(category: str, count: int) -> str:
+    if count == 1 or category in UNCOUNTED:
+        return category
+    return f"{category}es" if category.endswith("x") else f"{category}s"
+
+
 def _headline(log: Changelog, grouped: dict, counted: int) -> str:
     """One sentence of shape before the detail: how much, and of what."""
     parts = [f"**{counted} change{'s' if counted != 1 else ''}**"]
-    parts.append(", ".join(f"{len(v)} {k.lower()}" for k, v in grouped.items()))
+    parts.append(", ".join(f"{len(v)} {_plural(k, len(v))}" for k, v in grouped.items()))
     points = sum(e.points or 0 for entries in grouped.values() for e in entries)
     if points:
         parts.append(f"{points:g} points")
