@@ -153,3 +153,37 @@ The migration hook runs before the new pods. `helm rollback radd` reverses the
 release, but **not** the migration — for anything schema-breaking, restore from
 a backup or a VM snapshot instead. Restores are single-node and single-replica:
 scale web to 1 first (see `docs/deploy.md`).
+
+## Object storage: two Garage instances (spec 102)
+
+`garage.yaml` in the deployment repo runs **two independent single-node Garage
+instances** — `garage-content` and `garage-general` — each with its own 20Gi
+volume, bucket and credentials.
+
+Two instances, not one replicated cluster, and the reason matters: this is a
+single-node box. Two Garage nodes replicating to each other would write both
+copies to the same disk. What two hosts actually buy is Radd's routing chain —
+content routed to one, general uploads to the other, each with its own lifecycle.
+
+```bash
+# CD applies the manifests; the buckets and keys are a ONE-SHOT, on the host:
+GARAGE_ACCESS_KEY=GK... GARAGE_SECRET_KEY=... ./garage-init.sh garage-content
+GARAGE_ACCESS_KEY=GK... GARAGE_SECRET_KEY=... ./garage-init.sh garage-general
+```
+
+Then register each in **Settings → Storage** as an `s3` host:
+
+| | |
+|---|---|
+| endpoint | `garage-content.radd.svc.cluster.local:3900` |
+| bucket | `radd-content` / `radd-general` |
+| region | `garage` — **must** match `s3_region` in `garage.yaml` |
+| secure | off (plain HTTP inside the cluster) |
+| delivery | proxy |
+
+A region mismatch does not report itself as a region mismatch: it surfaces as an
+opaque signature error. That is the first thing to check when uploads fail.
+
+Delivery is **proxy** deliberately — bytes flow through the app, which is what
+keeps spec-102 per-attachment read grants enforceable at a single seam.
+Presigned delivery would need a public S3 hostname per host, plus TLS and CORS.
