@@ -8,23 +8,23 @@ import {
   PALETTE_SEARCH_LIMIT,
   RoutePath,
   SEARCH_DEBOUNCE_MS,
-  apiDocPageItemPath,
-  apiDocPageItemsPath,
+  apiPageItemPath,
+  apiPageItemsPath,
 } from "../../lib/constants";
 import { useDebounced, usePermissions } from "../../lib/hooks";
-import { docsSearchQuery, itemDocsQuery } from "../../lib/queries";
-import { Permission, type DocLinkedItem, type Item } from "../../lib/types";
+import { pageSearchQuery, itemPagesQuery } from "../../lib/queries";
+import { Permission, type PageLinkedItem, type Item } from "../../lib/types";
 
 /**
- * Docs block INSIDE the Related links card (spec 43): wiki pages linked to
+ * Docs block INSIDE the Related links card (spec 43): pages pages linked to
  * this item, with unlink and a search-to-link picker (doc FTS) for doc
  * writers. Feature-detects the docs module by swallowing the list query error
- * — no docs module, no Docs block, and the card is web links only.
+ * — no pages module, no Pages block, and the card is web links only.
  */
-export function ItemDocsSection({ item }: { item: Item }) {
+export function ItemPagesSection({ item }: { item: Item }) {
   const perms = usePermissions();
-  const canWrite = perms.global(Permission.docWrite);
-  const docs = useQuery(itemDocsQuery(item.id));
+  const canWrite = perms.global(Permission.pageWrite);
+  const docs = useQuery(itemPagesQuery(item.id));
 
   if (docs.isError || docs.isPending) return null;
   const list = docs.data;
@@ -32,7 +32,7 @@ export function ItemDocsSection({ item }: { item: Item }) {
 
   return (
     <section className="mt-3 border-t border-subtle pt-3">
-      <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-faint">Docs</p>
+      <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-faint">Pages</p>
       <div className="flex flex-col gap-2">
         {list.length === 0 ? (
           <p className="text-[13px] text-fg-faint">No linked docs yet.</p>
@@ -45,7 +45,7 @@ export function ItemDocsSection({ item }: { item: Item }) {
               >
                 <BookOpen size={14} className="shrink-0 text-fg-muted" aria-hidden />
                 <Link
-                  to={RoutePath.docPage}
+                  to={RoutePath.page}
                   params={{ spaceId: ref.space_id, pageId: ref.page_id }}
                   className="min-w-0 flex-1 truncate text-[13px] text-fg hover:underline"
                 >
@@ -66,8 +66,8 @@ export function ItemDocsSection({ item }: { item: Item }) {
 function UnlinkButton({ pageId, item }: { pageId: string; item: Item }) {
   const queryClient = useQueryClient();
   const remove = useMutation({
-    mutationFn: () => api.delete<void>(apiDocPageItemPath(pageId, item.id)),
-    onSettled: () => void invalidateEntities(queryClient, Entity.docPage),
+    mutationFn: () => api.delete<void>(apiPageItemPath(pageId, item.id)),
+    onSettled: () => void invalidateEntities(queryClient, Entity.page),
   });
   return (
     <button
@@ -88,16 +88,16 @@ function LinkDocPicker({ item }: { item: Item }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const debounced = useDebounced(query, SEARCH_DEBOUNCE_MS);
-  const results = useQuery(docsSearchQuery(debounced, PALETTE_SEARCH_LIMIT));
+  const results = useQuery(pageSearchQuery(debounced, PALETTE_SEARCH_LIMIT));
 
   const link = useMutation({
     mutationFn: (pageId: string) =>
-      api.post<DocLinkedItem>(apiDocPageItemsPath(pageId), { item_key: item.key }),
+      api.post<PageLinkedItem>(apiPageItemsPath(pageId), { item_key: item.key }),
     onSuccess: () => {
       setQuery("");
       setOpen(false);
     },
-    onSettled: () => void invalidateEntities(queryClient, Entity.docPage),
+    onSettled: () => void invalidateEntities(queryClient, Entity.page),
   });
 
   if (!open) {
@@ -108,7 +108,7 @@ function LinkDocPicker({ item }: { item: Item }) {
         className="flex w-fit items-center gap-1.5 rounded border border-strong px-2 py-1 text-xs text-fg hover:bg-elevated cursor-pointer"
       >
         <Plus size={12} aria-hidden />
-        Link a doc
+        Link a page
       </button>
     );
   }
@@ -120,8 +120,8 @@ function LinkDocPicker({ item }: { item: Item }) {
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search docs…"
-          aria-label="Search docs"
+          placeholder="Search pages…"
+          aria-label="Search pages"
           autoFocus
           className="h-8 flex-1 rounded-md border border-strong bg-surface px-2.5 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
         />

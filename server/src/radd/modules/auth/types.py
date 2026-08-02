@@ -62,9 +62,9 @@ class Permission(StrEnum):
     CANNED_MANAGE = "canned.manage"  # canned responses (global)
     CARD_PRESET_MANAGE = "cardpreset.manage"  # card-layout preset library (global, spec 109)
     # Wiki (spec 43) — all global-scoped; per-space ACLs are a later seam.
-    DOC_READ = "doc.read"  # read doc spaces/pages + doc search
-    DOC_WRITE = "doc.write"  # create/edit/move/archive pages, link items
-    DOC_MANAGE = "doc.manage"  # manage spaces, hard-delete + restore pages
+    PAGE_READ = "page.read"  # read page spaces/pages + doc search
+    PAGE_WRITE = "page.write"  # create/edit/move/archive pages, link items
+    PAGE_MANAGE = "page.manage"  # manage spaces, hard-delete + restore pages
     # --- Full CRUD atoms (spec 50) -----------------------------------------
     # Every resource exposes create/update/delete as independently grantable
     # atoms; the coarse verbs above are retained as umbrellas that expand to
@@ -77,7 +77,7 @@ class Permission(StrEnum):
     ITEM_DELETE = "item.delete"  # hard-delete work items (was project.manage)
     COMMENT_DELETE = "comment.delete"  # delete others' comments (author deletes own)
     WORKLOG_DELETE = "worklog.delete"  # delete others' worklogs (author deletes own)
-    DOC_DELETE = "doc.delete"  # hard-delete doc pages (rides doc.manage)
+    PAGE_DELETE = "page.delete"  # hard-delete pages (rides page.manage)
     # Project-scoped config C/U/D (state/field/release/form/view/project-access):
     STATE_CREATE = "state.create"
     STATE_UPDATE = "state.update"
@@ -198,9 +198,9 @@ PERMISSION_SCOPES: dict[Permission, PermissionScope] = {
     Permission.WEBHOOK_MANAGE: PermissionScope.GLOBAL,
     Permission.CANNED_MANAGE: PermissionScope.GLOBAL,
     Permission.CARD_PRESET_MANAGE: PermissionScope.GLOBAL,
-    Permission.DOC_READ: PermissionScope.GLOBAL,
-    Permission.DOC_WRITE: PermissionScope.GLOBAL,
-    Permission.DOC_MANAGE: PermissionScope.GLOBAL,
+    Permission.PAGE_READ: PermissionScope.GLOBAL,
+    Permission.PAGE_WRITE: PermissionScope.GLOBAL,
+    Permission.PAGE_MANAGE: PermissionScope.GLOBAL,
 }
 
 PERMISSION_DESCRIPTIONS: dict[Permission, str] = {
@@ -229,9 +229,9 @@ PERMISSION_DESCRIPTIONS: dict[Permission, str] = {
     Permission.WEBHOOK_MANAGE: "Manage webhook endpoints (global).",
     Permission.CANNED_MANAGE: "Manage canned responses (global).",
     Permission.CARD_PRESET_MANAGE: "Manage the shared card-layout preset library (global).",
-    Permission.DOC_READ: "Read doc spaces and pages (global).",
-    Permission.DOC_WRITE: "Create and edit doc pages; link them to issues.",
-    Permission.DOC_MANAGE: "Manage doc spaces; hard-delete and restore pages.",
+    Permission.PAGE_READ: "Read page spaces and pages (global).",
+    Permission.PAGE_WRITE: "Create and edit pages; link them to issues.",
+    Permission.PAGE_MANAGE: "Manage page spaces; hard-delete and restore pages.",
 }
 
 # Umbrella permissions imply their per-entity actions (spec 36) — so pre-existing
@@ -349,8 +349,8 @@ for _perm, _scope, _desc, _umbrella in (
      Permission.PROJECT_MANAGE),
     (Permission.WORKLOG_DELETE, PermissionScope.PROJECT, "Delete other people's worklogs.",
      Permission.PROJECT_MANAGE),
-    (Permission.DOC_DELETE, PermissionScope.GLOBAL, "Hard-delete doc pages.",
-     Permission.DOC_MANAGE),
+    (Permission.PAGE_DELETE, PermissionScope.GLOBAL, "Hard-delete pages.",
+     Permission.PAGE_MANAGE),
 ):
     PERMISSION_SCOPES[_perm] = _scope
     PERMISSION_DESCRIPTIONS[_perm] = _desc
@@ -488,7 +488,7 @@ BUILTIN_ROLES: tuple[BuiltinRole, ...] = (
         name="Admin",
         description="Full control of the project, including settings, views, and internal comments.",
         # Every project-scoped atom, plus dashboard.create as a global-scoped
-        # rider (spec 75 — the doc.write-on-member precedent; display parity
+        # rider (spec 75 — the page.write-on-member precedent; display parity
         # with the migration backfill, mirrored into stored rows by 75's
         # migration). Spec 87 dropped the update/delete riders along with the
         # atoms. Since spec 87 a global rider is no longer inert: an
@@ -509,7 +509,7 @@ BUILTIN_ROLES: tuple[BuiltinRole, ...] = (
             Permission.COMMENT_READ_INTERNAL,
             Permission.VIEW_MANAGE,
             Permission.FORM_MANAGE,
-            Permission.DOC_WRITE,  # members write docs (spec 43; global-scoped rider)
+            Permission.PAGE_WRITE,  # members write docs (spec 43; global-scoped rider)
         ),
         position=1,
     ),
@@ -517,9 +517,9 @@ BUILTIN_ROLES: tuple[BuiltinRole, ...] = (
         key=BuiltinRoleKey.VIEWER,
         name="Viewer",
         description="Read-only access to the project's items.",
-        # doc.read rides on the viewer set so it flows into the member floor
+        # page.read rides on the viewer set so it flows into the member floor
         # (spec 43) — any active user can read the wiki.
-        permissions=(Permission.ITEM_READ, Permission.DOC_READ),
+        permissions=(Permission.ITEM_READ, Permission.PAGE_READ),
         position=2,
     ),
 )

@@ -1,7 +1,7 @@
-"""Doc pages + version history (spec 43). Space CRUD lives in spaces.py.
+"""Pages + version history (spec 43). Space CRUD lives in spaces.py.
 
 Optimistic concurrency: a PATCH carrying `expected_version` 409s when stale;
-content changes snapshot the PREVIOUS content into doc_page_versions and bump
+content changes snapshot the PREVIOUS content into page_versions and bump
 `version`. Parent moves run the pure cycle guard in core.py.
 """
 
@@ -15,17 +15,17 @@ from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.events import service as events
 
 from . import core
-from .models import DocPage, DocPageVersion
+from .models import Page, PageVersion
 from .schemas import (
     DocBreadcrumb,
-    DocPageCreate,
-    DocPageRead,
-    DocPageSummary,
-    DocPageUpdate,
-    DocSpaceRead,
+    PageCreate,
+    PageRead,
+    PageSummary,
+    PageUpdate,
+    PageSpaceRead,
 )
 from .spaces import get_space
-from .types import DocEntity, DocEvent, RestoreKind
+from .types import PageEntity, PageEvent, RestoreKind
 
 __all__ = ["get_space"]  # re-exported: the space half of the module's seam
 
@@ -37,38 +37,38 @@ def _now() -> datetime:
 
 async def _emit_page(
     session: AsyncSession,
-    event_type: DocEvent,
-    page: DocPage,
+    event_type: PageEvent,
+    page: Page,
     actor_id: uuid.UUID,
     payload: dict,
 ) -> None:
     await events.emit(
         session,
         event_type=event_type,
-        entity_type=DocEntity.PAGE,
+        entity_type=PageEntity.PAGE,
         entity_id=page.id,
         actor_id=actor_id,
         payload=payload,
     )
 
 
-async def get_page(session: AsyncSession, page_id: uuid.UUID) -> DocPage:
-    page = await session.get(DocPage, page_id)
+async def get_page(session: AsyncSession, page_id: uuid.UUID) -> Page:
+    page = await session.get(Page, page_id)
     if page is None:
-        raise NotFoundError(DocEntity.PAGE, page_id)
+        raise NotFoundError(PageEntity.PAGE, page_id)
     return page
 
 
-async def _space_rows(session: AsyncSession, space_id: uuid.UUID) -> list[DocPage]:
-    result = await session.execute(select(DocPage).where(DocPage.space_id == space_id))
+async def _space_rows(session: AsyncSession, space_id: uuid.UUID) -> list[Page]:
+    result = await session.execute(select(Page).where(Page.space_id == space_id))
     return list(result.scalars())
 
 
 async def list_pages(
     session: AsyncSession, space_id: uuid.UUID, *, include_archived: bool = False
-) -> list[DocPageSummary]:
+) -> list[PageSummary]:
     """Flat tree rows (client builds the hierarchy). Archived subtrees are
-    pruned unless `include_archived` (the doc.manage restore listing)."""
+    pruned unless `include_archived` (the page.manage restore listing)."""
     rows = await _space_rows(session, space_id)
     parent_of = {row.id: row.parent_id for row in rows}
     if include_archived:
@@ -81,7 +81,7 @@ async def list_pages(
     }
     return sorted(
         (
-            DocPageSummary(
+            PageSummary(
                 id=row.id,
                 parent_id=row.parent_id,
                 title=row.title,
@@ -100,27 +100,27 @@ async def _next_position(
     session: AsyncSession, space_id: uuid.UUID, parent_id: uuid.UUID | None
 ) -> float:
     highest = await session.scalar(
-        select(func.max(DocPage.position)).where(
-            DocPage.space_id == space_id, DocPage.parent_id == parent_id
+        select(func.max(Page.position)).where(
+            Page.space_id == space_id, Page.parent_id == parent_id
         )
     )
     return (highest or 0) + 1
 
 
 async def create_page(
-    session: AsyncSession, data: DocPageCreate, actor_id: uuid.UUID
-) -> DocPage:
+    session: AsyncSession, data: PageCreate, actor_id: uuid.UUID
+) -> Page:
     space = await get_space(session, data.space_id)
     if data.parent_id is not None:
         parent = await get_page(session, data.parent_id)
         if parent.space_id != space.id:
-            raise ConflictError(DocEntity.PAGE, reason="parent page is in a different space")
+            raise ConflictError(PageEntity.PAGE, reason="parent page is in a different space")
     position = (
         data.position
         if data.position is not None
         else await _next_position(session, space.id, data.parent_id)
     )
-    page = DocPage(
+    page = Page(
         space_id=space.id,
         parent_id=data.parent_id,
         title=data.title,
@@ -132,19 +132,19 @@ async def create_page(
     session.add(page)
     await session.flush()
     await _emit_page(
-        session, DocEvent.PAGE_CREATED, page, actor_id,
+        session, PageEvent.PAGE_CREATED, page, actor_id,
         {"title": page.title, "space_id": str(space.id)},
     )
     return page
 
 
 async def update_page(
-    session: AsyncSession, page_id: uuid.UUID, data: DocPageUpdate, actor_id: uuid.UUID
-) -> DocPage:
+    session: AsyncSession, page_id: uuid.UUID, data: PageUpdate, actor_id: uuid.UUID
+) -> Page:
     page = await get_page(session, page_id)
     if data.expected_version is not None and data.expected_version != page.version:
         raise ConflictError(
-            DocEntity.PAGE,
+            PageEntity.PAGE,
             reason=f"version conflict: page is at version {page.version}",
         )
 
@@ -154,12 +154,12 @@ async def update_page(
         if data.parent_id is not None:
             parent = await get_page(session, data.parent_id)
             if parent.space_id != page.space_id:
-                raise ConflictError(DocEntity.PAGE, reason="parent page is in a different space")
+                raise ConflictError(PageEntity.PAGE, reason="parent page is in a different space")
             parent_of = {
                 row.id: row.parent_id for row in await _space_rows(session, page.space_id)
             }
             if core.would_create_cycle(page.id, data.parent_id, parent_of):
-                raise ConflictError(DocEntity.PAGE, reason="move would create a cycle")
+                raise ConflictError(PageEntity.PAGE, reason="move would create a cycle")
         page.parent_id = data.parent_id
         changed.append("parent_id")
         moved = True
@@ -170,7 +170,7 @@ async def update_page(
 
     if core.should_snapshot(page.title, page.body, data.title, data.body):
         session.add(
-            DocPageVersion(
+            PageVersion(
                 page_id=page.id,
                 version=page.version,
                 title=page.title,
@@ -190,9 +190,9 @@ async def update_page(
     await session.flush()
     payload = {"title": page.title, "version": page.version, "changed": changed}
     if moved:
-        await _emit_page(session, DocEvent.PAGE_MOVED, page, actor_id, payload)
+        await _emit_page(session, PageEvent.PAGE_MOVED, page, actor_id, payload)
     if set(changed) - {"parent_id", "position"}:
-        await _emit_page(session, DocEvent.PAGE_UPDATED, page, actor_id, payload)
+        await _emit_page(session, PageEvent.PAGE_UPDATED, page, actor_id, payload)
     return page
 
 
@@ -202,20 +202,20 @@ async def archive_page(session: AsyncSession, page_id: uuid.UUID, actor_id: uuid
         page.archived_at = _now()
         await session.flush()
         await _emit_page(
-            session, DocEvent.PAGE_DELETED, page, actor_id,
+            session, PageEvent.PAGE_DELETED, page, actor_id,
             {"title": page.title, "hard": False},
         )
 
 
 async def unarchive_page(
     session: AsyncSession, page_id: uuid.UUID, actor_id: uuid.UUID
-) -> DocPage:
+) -> Page:
     page = await get_page(session, page_id)
     if page.archived_at is not None:
         page.archived_at = None
         await session.flush()
         await _emit_page(
-            session, DocEvent.PAGE_RESTORED, page, actor_id,
+            session, PageEvent.PAGE_RESTORED, page, actor_id,
             {"title": page.title, "action": RestoreKind.UNARCHIVE},
         )
     return page
@@ -226,23 +226,23 @@ async def hard_delete_page(
 ) -> None:
     page = await get_page(session, page_id)
     live_children = await session.scalar(
-        select(func.count()).select_from(DocPage).where(
-            DocPage.parent_id == page.id, DocPage.archived_at.is_(None)
+        select(func.count()).select_from(Page).where(
+            Page.parent_id == page.id, Page.archived_at.is_(None)
         )
     )
     if live_children:
         raise ConflictError(
-            DocEntity.PAGE, reason=f"page has {live_children} non-archived child page(s)"
+            PageEntity.PAGE, reason=f"page has {live_children} non-archived child page(s)"
         )
     await session.delete(page)  # versions/links/archived subtree go via FK CASCADE
     await session.flush()
     await _emit_page(
-        session, DocEvent.PAGE_DELETED, page, actor_id,
+        session, PageEvent.PAGE_DELETED, page, actor_id,
         {"title": page.title, "hard": True},
     )
 
 
-async def page_read(session: AsyncSession, page: DocPage) -> DocPageRead:
+async def page_read(session: AsyncSession, page: Page) -> PageRead:
     """Full page + its space + the ancestor breadcrumb trail (root first)."""
     space = await get_space(session, page.space_id)
     by_id = {row.id: row for row in await _space_rows(session, page.space_id)}
@@ -256,7 +256,7 @@ async def page_read(session: AsyncSession, page: DocPage) -> DocPageRead:
             break
         trail.append(DocBreadcrumb(id=ancestor.id, title=ancestor.title))
         current = ancestor.parent_id
-    return DocPageRead(
+    return PageRead(
         id=page.id,
         space_id=page.space_id,
         parent_id=page.parent_id,
@@ -269,7 +269,7 @@ async def page_read(session: AsyncSession, page: DocPage) -> DocPageRead:
         archived_at=page.archived_at,
         created_at=page.created_at,
         updated_at=page.updated_at,
-        space=DocSpaceRead.model_validate(space),
+        space=PageSpaceRead.model_validate(space),
         breadcrumb=list(reversed(trail)),
     )
 
@@ -277,37 +277,37 @@ async def page_read(session: AsyncSession, page: DocPage) -> DocPageRead:
 # --- versions ---
 
 
-async def list_versions(session: AsyncSession, page_id: uuid.UUID) -> list[DocPageVersion]:
+async def list_versions(session: AsyncSession, page_id: uuid.UUID) -> list[PageVersion]:
     await get_page(session, page_id)
     result = await session.execute(
-        select(DocPageVersion)
-        .where(DocPageVersion.page_id == page_id)
-        .order_by(DocPageVersion.version.desc())
+        select(PageVersion)
+        .where(PageVersion.page_id == page_id)
+        .order_by(PageVersion.version.desc())
     )
     return list(result.scalars())
 
 
 async def get_version(
     session: AsyncSession, page_id: uuid.UUID, version: int
-) -> DocPageVersion:
+) -> PageVersion:
     row = await session.scalar(
-        select(DocPageVersion).where(
-            DocPageVersion.page_id == page_id, DocPageVersion.version == version
+        select(PageVersion).where(
+            PageVersion.page_id == page_id, PageVersion.version == version
         )
     )
     if row is None:
-        raise NotFoundError(DocEntity.PAGE, f"{page_id} v{version}")
+        raise NotFoundError(PageEntity.PAGE, f"{page_id} v{version}")
     return row
 
 
 async def restore_version(
     session: AsyncSession, page_id: uuid.UUID, version: int, actor_id: uuid.UUID
-) -> DocPage:
+) -> Page:
     """Restore = a NEW version whose content is the old one (history is linear)."""
     page = await get_page(session, page_id)
     snapshot = await get_version(session, page_id, version)
     session.add(
-        DocPageVersion(
+        PageVersion(
             page_id=page.id,
             version=page.version,
             title=page.title,
@@ -321,7 +321,7 @@ async def restore_version(
     page.updated_by = actor_id
     await session.flush()
     await _emit_page(
-        session, DocEvent.PAGE_RESTORED, page, actor_id,
+        session, PageEvent.PAGE_RESTORED, page, actor_id,
         {
             "title": page.title,
             "action": RestoreKind.VERSION,

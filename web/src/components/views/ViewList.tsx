@@ -212,7 +212,9 @@ export function ViewList({
             // Section drop fires for drops NOT captured by a row (empty area,
             // header) → cross-section move. Row drops stopPropagation.
             {...drop.targetProps(group.key, (dragged) =>
-              onMoveToBucket?.(dragged, { key: group.key, label: group.label }),
+              // The GROUP is the bucket ref — it carries the axis's structural
+              // extras (an epic lane's `epicRef`) that {key,label} would drop.
+              onMoveToBucket?.(dragged, group),
             )}
           >
             {!flat && (

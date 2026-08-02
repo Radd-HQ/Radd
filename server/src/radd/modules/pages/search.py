@@ -1,4 +1,4 @@
-"""Live FTS over doc pages (spec 43).
+"""Live FTS over pages (spec 43).
 
 No outbox indexer: the corpus is written only through this module, so querying
 the live rows via the migration's expression GIN index —
@@ -11,7 +11,7 @@ from sqlalchemy import func, literal, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .core import build_tsquery
-from .models import DocPage, DocSpace
+from .models import Page, PageSpace
 from .schemas import DocSearchResult
 from .types import DOCS_TS_CONFIG, MAX_QUERY_CHARS
 
@@ -34,7 +34,7 @@ async def search_pages(
         return []
     tsquery = func.to_tsquery(DOCS_TS_CONFIG, tsquery_text)
     # The concatenation MUST mirror the index expression for the GIN scan.
-    document = DocPage.title + literal(" ") + DocPage.body
+    document = Page.title + literal(" ") + Page.body
     tsv = func.to_tsvector(DOCS_TS_CONFIG, document)
     snippet = func.ts_headline(
         DOCS_TS_CONFIG,
@@ -43,16 +43,16 @@ async def search_pages(
         text("'MaxWords=18, MinWords=6, MaxFragments=1'"),
     )
     stmt = (
-        select(DocPage, snippet)
-        .join(DocSpace, DocSpace.id == DocPage.space_id)
-        .where(DocPage.archived_at.is_(None), tsv.op("@@")(tsquery))
-        .order_by(func.ts_rank_cd(tsv, tsquery).desc(), DocPage.updated_at.desc())
+        select(Page, snippet)
+        .join(PageSpace, PageSpace.id == Page.space_id)
+        .where(Page.archived_at.is_(None), tsv.op("@@")(tsquery))
+        .order_by(func.ts_rank_cd(tsv, tsquery).desc(), Page.updated_at.desc())
         .limit(limit)
     )
     if public_only:
-        stmt = stmt.where(DocSpace.public.is_(True))
+        stmt = stmt.where(PageSpace.public.is_(True))
     if space_id is not None:
-        stmt = stmt.where(DocPage.space_id == space_id)
+        stmt = stmt.where(Page.space_id == space_id)
     return [
         DocSearchResult(
             page_id=page.id, space_id=page.space_id, title=page.title, snippet=headline
@@ -71,10 +71,10 @@ async def pages_by_ids(
     not trust it for a space flipped private since."""
     if not page_ids:
         return []
-    stmt = select(DocPage).where(DocPage.id.in_(page_ids), DocPage.archived_at.is_(None))
+    stmt = select(Page).where(Page.id.in_(page_ids), Page.archived_at.is_(None))
     if public_only:
-        stmt = stmt.join(DocSpace, DocSpace.id == DocPage.space_id).where(
-            DocSpace.public.is_(True)
+        stmt = stmt.join(PageSpace, PageSpace.id == Page.space_id).where(
+            PageSpace.public.is_(True)
         )
     return [
         DocSearchResult(page_id=page.id, space_id=page.space_id, title=page.title, snippet="")
@@ -99,9 +99,9 @@ async def pages_for_embedding(
     own table shape (the mirror of search.rows_for_embedding)."""
     if page_ids is not None:
         stmt = (
-            select(DocPage.id, DocSpace.public, DocPage.title, DocPage.body)
-            .join(DocSpace, DocSpace.id == DocPage.space_id)
-            .where(DocPage.id.in_(page_ids), DocPage.archived_at.is_(None))
+            select(Page.id, PageSpace.public, Page.title, Page.body)
+            .join(PageSpace, PageSpace.id == Page.space_id)
+            .where(Page.id.in_(page_ids), Page.archived_at.is_(None))
             .limit(limit)
         )
         return [tuple(row) for row in (await session.execute(stmt)).all()]
@@ -111,8 +111,8 @@ async def pages_for_embedding(
         raise ValueError(f"unusable table name: {missing_from!r}")
     result = await session.execute(
         text(
-            "SELECT p.id, s.public, p.title, p.body FROM doc_pages p"
-            " JOIN doc_spaces s ON s.id = p.space_id"
+            "SELECT p.id, s.public, p.title, p.body FROM pages p"
+            " JOIN page_spaces s ON s.id = p.space_id"
             f" LEFT JOIN {missing_from} e ON e.page_id = p.id AND e.model = :model"
             " WHERE p.archived_at IS NULL AND e.page_id IS NULL"
             " ORDER BY p.updated_at DESC LIMIT :limit"

@@ -111,9 +111,9 @@ export const apiPublicFormDeflectPath = (token: string) =>
 export const publicFormUrl = (token: string) =>
   `${window.location.origin}/public/forms/${encodeURIComponent(token)}`;
 /** Public KB paths (spec 74): a public space's tree + one page's body. */
-export const apiPublicKbTreePath = (spaceId: string) =>
+export const apiPublicPagesTreePath = (spaceId: string) =>
   `${ApiPath.publicKbSpaces}/${spaceId}/tree`;
-export const apiPublicKbPagePath = (pageId: string) => `/public/kb/pages/${pageId}`;
+export const apiPublicPagesPagePath = (pageId: string) => `/public/kb/pages/${pageId}`;
 /** The shareable public-KB URL shown next to a space's Public toggle (spec 74). */
 export const publicKbSpaceUrl = (spaceId: string) => `${window.location.origin}/kb/${spaceId}`;
 /** The item's external requester (spec 62) — 404 when the item has none. */
@@ -163,21 +163,21 @@ export const apiCannedRenderPath = (responseId: string) =>
 export const apiSlaPolicyPath = (policyId: string) => `${ApiPath.slaPolicies}/${policyId}`;
 export const apiItemSlaPath = (itemId: string) => `${ApiPath.items}/${itemId}/sla`;
 
-/** Wiki paths (spec 43). */
-export const apiDocSpacePath = (spaceId: string) => `${ApiPath.docSpaces}/${spaceId}`;
-export const apiDocSpacePagesPath = (spaceId: string) => `${ApiPath.docSpaces}/${spaceId}/pages`;
-export const apiDocPagePath = (pageId: string) => `${ApiPath.docPages}/${pageId}`;
-export const apiDocPageUnarchivePath = (pageId: string) =>
-  `${ApiPath.docPages}/${pageId}/unarchive`;
-export const apiDocPageVersionsPath = (pageId: string) =>
-  `${ApiPath.docPages}/${pageId}/versions`;
-export const apiDocPageVersionPath = (pageId: string, version: number) =>
-  `${ApiPath.docPages}/${pageId}/versions/${version}`;
-export const apiDocPageRestorePath = (pageId: string) => `${ApiPath.docPages}/${pageId}/restore`;
-export const apiDocPageItemsPath = (pageId: string) => `${ApiPath.docPages}/${pageId}/items`;
-export const apiDocPageItemPath = (pageId: string, itemId: string) =>
-  `${ApiPath.docPages}/${pageId}/items/${itemId}`;
-/** Pages linked to an issue (the issue page's Docs row). */
+/** Pages paths (spec 43). */
+export const apiPageSpacePath = (spaceId: string) => `${ApiPath.pageSpaces}/${spaceId}`;
+export const apiPageSpacePagesPath = (spaceId: string) => `${ApiPath.pageSpaces}/${spaceId}/pages`;
+export const apiPagePath = (pageId: string) => `${ApiPath.pages}/${pageId}`;
+export const apiPageUnarchivePath = (pageId: string) =>
+  `${ApiPath.pages}/${pageId}/unarchive`;
+export const apiPageVersionsPath = (pageId: string) =>
+  `${ApiPath.pages}/${pageId}/versions`;
+export const apiPageVersionPath = (pageId: string, version: number) =>
+  `${ApiPath.pages}/${pageId}/versions/${version}`;
+export const apiPageRestorePath = (pageId: string) => `${ApiPath.pages}/${pageId}/restore`;
+export const apiPageItemsPath = (pageId: string) => `${ApiPath.pages}/${pageId}/items`;
+export const apiPageItemPath = (pageId: string, itemId: string) =>
+  `${ApiPath.pages}/${pageId}/items/${itemId}`;
+/** Pages linked to an issue (the issue page's Pages row). */
 export const apiItemDocsPath = (itemId: string) => `${ApiPath.items}/${itemId}/docs`;
 
 /** AI paths (spec 46): on-demand summary + candidate duplicates for an item. */

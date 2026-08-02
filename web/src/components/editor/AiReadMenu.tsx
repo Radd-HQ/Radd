@@ -55,7 +55,7 @@ export function AiReadMenu({
   const status = useQuery(aiStatusQuery);
   const editorAi = useEditorAi();
   // On the issue page, query answers open in the reading-area results pane
-  // (the dead-space fix); elsewhere (wiki pages) they answer in this popover.
+  // (the dead-space fix); elsewhere (pages pages) they answer in this popover.
   const openResults = useOpenAiResults();
   const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null);
   const [view, setView] = useState<View>("menu");

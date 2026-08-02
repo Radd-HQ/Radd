@@ -1,6 +1,6 @@
 /** The slim (collapsed) sidebar: icon-only destinations, no sections.
  *
- *  Sections (Views / Dashboards / Docs / Cycles / project trees) are dropped on
+ *  Sections (Views / Dashboards / Pages / Cycles / project trees) are dropped on
  *  purpose — they are lists of NAMES, and a name does not survive being reduced
  *  to a 20px glyph. What stays is the fixed set of destinations, which is what
  *  a rail is good at. Everything else is one click away via ⌘K, which is why

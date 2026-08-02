@@ -113,65 +113,65 @@
     "item_scoped": false,
     "label": "Cycle series updated"
   },
-  "doc_link.created": {
-    "group": "Docs",
+  "page_link.created": {
+    "group": "Pages",
     "has_changes": false,
     "item_scoped": true,
-    "label": "Doc\u2194issue link added"
+    "label": "Page↔issue link added"
   },
-  "doc_link.deleted": {
-    "group": "Docs",
+  "page_link.deleted": {
+    "group": "Pages",
     "has_changes": false,
     "item_scoped": true,
-    "label": "Doc\u2194issue link removed"
+    "label": "Page↔issue link removed"
   },
-  "doc_page.created": {
-    "group": "Docs",
+  "page.created": {
+    "group": "Pages",
     "has_changes": false,
     "item_scoped": false,
-    "label": "Doc page created"
+    "label": "Page created"
   },
-  "doc_page.deleted": {
-    "group": "Docs",
+  "page.deleted": {
+    "group": "Pages",
     "has_changes": false,
     "item_scoped": false,
-    "label": "Doc page deleted"
+    "label": "Page deleted"
   },
-  "doc_page.moved": {
-    "group": "Docs",
+  "page.moved": {
+    "group": "Pages",
     "has_changes": false,
     "item_scoped": false,
-    "label": "Doc page moved"
+    "label": "Page moved"
   },
-  "doc_page.restored": {
-    "group": "Docs",
+  "page.restored": {
+    "group": "Pages",
     "has_changes": false,
     "item_scoped": false,
-    "label": "Doc page restored"
+    "label": "Page restored"
   },
-  "doc_page.updated": {
-    "group": "Docs",
+  "page.updated": {
+    "group": "Pages",
     "has_changes": false,
     "item_scoped": false,
-    "label": "Doc page updated"
+    "label": "Page updated"
   },
-  "doc_space.created": {
-    "group": "Docs",
+  "page_space.created": {
+    "group": "Pages",
     "has_changes": false,
     "item_scoped": false,
-    "label": "Doc space created"
+    "label": "Page space created"
   },
-  "doc_space.deleted": {
-    "group": "Docs",
+  "page_space.deleted": {
+    "group": "Pages",
     "has_changes": false,
     "item_scoped": false,
-    "label": "Doc space deleted"
+    "label": "Page space deleted"
   },
-  "doc_space.updated": {
-    "group": "Docs",
+  "page_space.updated": {
+    "group": "Pages",
     "has_changes": false,
     "item_scoped": false,
-    "label": "Doc space updated"
+    "label": "Page space updated"
   },
   "field.created": {
     "group": "Admin",

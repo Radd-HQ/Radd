@@ -17,7 +17,7 @@ export class UploadCanceledError extends Error {
 
 /**
  * The one attachment-upload seam (spec 102). Every surface that uploads —
- * attachment grid, description/comment/wiki image paste — goes through here so
+ * attachment grid, description/comment/pages image paste — goes through here so
  * the storage prompt behaves identically everywhere:
  * - one gesture = ONE prompt covering all its files; dismiss cancels them all
  *   (rejects with UploadCanceledError so editor inserts abort cleanly);

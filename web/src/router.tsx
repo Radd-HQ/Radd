@@ -21,7 +21,7 @@ import { ProjectHomePage } from "./routes/project-home";
 import { ProjectsIndexPage } from "./routes/projects-index";
 import { PublicCsatPage } from "./routes/public-csat";
 import { PublicFormPage } from "./routes/public-form";
-import { PublicKbIndexPage, PublicKbSpacePage } from "./routes/public-kb";
+import { PublicPagesIndexPage, PublicPageSpacePage } from "./routes/public-pages";
 import { RoadmapPage } from "./routes/roadmap";
 import { ReportsPage } from "./routes/reports";
 import { GlobalReportsPage } from "./routes/global-reports";
@@ -68,10 +68,10 @@ import { MonitoringSettingsPage } from "./routes/settings/monitoring";
 import { HolidaysSettingsPage } from "./routes/settings/holidays";
 import { ProfileSettingsPage } from "./routes/settings/profile";
 import { InstanceSettingsPage } from "./routes/settings/instance";
-import { DocsSettingsPage } from "./routes/settings/docs";
+import { PagesSettingsPage } from "./routes/settings/pages";
 import { ViewPage } from "./routes/view";
-import { DocsIndexPage } from "./routes/docs-index";
-import { DocSpacePage } from "./routes/doc-space";
+import { PagesIndexPage } from "./routes/pages-index";
+import { PageSpacePage } from "./routes/page-space";
 import { DashboardPage } from "./routes/dashboard";
 
 /**
@@ -116,24 +116,24 @@ const publicCsatRoute = createRoute({
   component: PublicCsatPage,
 });
 
-/** PUBLIC knowledge base (spec 74) — same idiom: root-level, no auth gate.
+/** PUBLIC pages (spec 74) — same idiom: root-level, no auth gate.
  * Space cards, a space's tree (first page auto-selected), a canonical page. */
 const publicKbIndexRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: RoutePath.kb,
-  component: PublicKbIndexPage,
+  path: RoutePath.publicPages,
+  component: PublicPagesIndexPage,
 });
 
 const publicKbSpaceRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: RoutePath.kbSpace,
-  component: PublicKbSpacePage,
+  path: RoutePath.publicPageSpace,
+  component: PublicPageSpacePage,
 });
 
 const publicKbPageRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: RoutePath.kbPage,
-  component: PublicKbSpacePage,
+  path: RoutePath.publicPage,
+  component: PublicPageSpacePage,
 });
 
 /** Pathless layout: auth gate + app shell for every in-app route. */
@@ -277,23 +277,23 @@ const dashboardRoute = createRoute({
   component: DashboardPage,
 });
 
-/** Wiki (spec 43): spaces index, a space's two-pane tree, the canonical page URL. */
+/** Pages (spec 43): spaces index, a space's two-pane tree, the canonical page URL. */
 const docsIndexRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
-  path: RoutePath.docs,
-  component: DocsIndexPage,
+  path: RoutePath.pages,
+  component: PagesIndexPage,
 });
 
 const docSpaceRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
-  path: RoutePath.docSpace,
-  component: DocSpacePage,
+  path: RoutePath.pageSpace,
+  component: PageSpacePage,
 });
 
-const docPageRoute = createRoute({
+const pageRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
-  path: RoutePath.docPage,
-  component: DocSpacePage,
+  path: RoutePath.page,
+  component: PageSpacePage,
 });
 
 const settingsRoute = createRoute({
@@ -463,11 +463,11 @@ const settingsServiceAccountsRoute = createRoute({
   component: ServiceAccountsSettingsPage,
 });
 
-/** Doc spaces admin (spec 43). */
+/** Page spaces admin (spec 43). */
 const settingsDocsRoute = createRoute({
   getParentRoute: () => settingsRoute,
-  path: SettingsSection.docs,
-  component: DocsSettingsPage,
+  path: SettingsSection.pages,
+  component: PagesSettingsPage,
 });
 
 /** AI providers/roles/toggles/presets (spec 101) — instance-admin only. */
@@ -617,7 +617,7 @@ const routeTree = rootRoute.addChildren([
     dashboardRoute,
     docsIndexRoute,
     docSpaceRoute,
-    docPageRoute,
+    pageRoute,
     projectSettingsRoute.addChildren([
       projectSettingsIndexRoute,
       projectSettingsGeneralRoute,

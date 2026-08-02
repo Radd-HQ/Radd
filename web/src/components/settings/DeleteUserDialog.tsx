@@ -17,7 +17,7 @@ const MOVES: [keyof UserContentSummary, string][] = [
   ["reported_items", "issues reported"],
   ["assigned_items", "issues assigned"],
   ["comments", "comments"],
-  ["documents", "wiki pages"],
+  ["documents", "pages pages"],
   ["views", "saved views"],
   ["dashboards", "dashboards"],
   ["owned_teams", "teams owned"],

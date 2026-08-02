@@ -41,7 +41,7 @@ class AttachmentParentType(StrEnum):
     """Kernel entity vocabulary — matches event entity types, not table names."""
 
     ITEM = "item"
-    DOC_PAGE = "doc_page"
+    PAGE = "page"
 
 
 class RuleType(StrEnum):

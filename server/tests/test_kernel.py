@@ -91,7 +91,7 @@ def test_real_config_loads_bootstrap_plugins():
     by_id = {p.id: p for p in plugins}
     for foundational in ("events", "projects", "auth", "items", "workflow", "pluginmgr"):
         assert by_id[foundational].core is True, foundational
-    for optional in ("ldap", "sso", "ai", "gitlab", "docs"):
+    for optional in ("ldap", "sso", "ai", "gitlab", "pages"):
         assert by_id[optional].core is False, optional
     # every plugin registered
     assert set(registries.plugins) == {p.id for p in plugins}

@@ -72,7 +72,7 @@ export const similarToTextQuery = (seedKey: string, text: string, excludeItemId?
     staleTime: 30_000,
   });
 
-/** KB deflection (spec 66): wiki pages + previously RESOLVED items for a
+/** KB deflection (spec 66): pages pages + previously RESOLVED items for a
  * half-typed issue title. The DeflectionPanel debounces `q` before this. */
 export const deflectQuery = (q: string, projectId: string) =>
   queryOptions({

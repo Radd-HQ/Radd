@@ -34,11 +34,11 @@ def test_plan_for_event_mapping():
         "drop_item",
         uuid.UUID(item_id),
     )
-    assert embedder.plan_for_event("doc_page.updated", page_id, {}) == (
+    assert embedder.plan_for_event("page.updated", page_id, {}) == (
         "doc",
         uuid.UUID(page_id),
     )
-    assert embedder.plan_for_event("doc_page.deleted", page_id, {}) == (
+    assert embedder.plan_for_event("page.deleted", page_id, {}) == (
         "drop_doc",
         uuid.UUID(page_id),
     )

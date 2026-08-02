@@ -1,4 +1,4 @@
-"""Unit tests for the docs module's pure core (spec 43) — repo style: only the
+"""Unit tests for the pages module's pure core (spec 43) — repo style: only the
 invariants many flows depend on (tree cycle guard, version-snapshot decision,
 tsquery builder, archived-subtree visibility). Everything else is verified by
 in-process ASGI runs against the live app.
@@ -6,7 +6,7 @@ in-process ASGI runs against the live app.
 
 import uuid
 
-from radd.modules.docs.core import (
+from radd.modules.pages.core import (
     build_tsquery,
     should_snapshot,
     slugify,

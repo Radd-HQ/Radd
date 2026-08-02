@@ -1,7 +1,7 @@
 /** localStorage keys for persisted UI prefs (tree/sidebar/swimlane/section/roadmap collapse state). */
 
-/** localStorage key for a doc space's expanded tree node ids (JSON string[]). */
-export const docTreeExpandStorageKey = (spaceId: string) => `radd.docs.${spaceId}.expanded`;
+/** localStorage key for a page space's expanded tree node ids (JSON string[]). */
+export const pageTreeExpandStorageKey = (spaceId: string) => `radd.docs.${spaceId}.expanded`;
 
 /** localStorage key for a view's collapsed swimlane bucket keys (JSON string[]). */
 export const swimlaneCollapseStorageKey = (viewId: string) =>

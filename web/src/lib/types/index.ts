@@ -35,7 +35,7 @@ export * from "./attachments";
 export * from "./storage";
 export * from "./service-desk";
 export * from "./search";
-export * from "./docs";
+export * from "./pages";
 export * from "./ai";
 export * from "./sso";
 export * from "./leave";

@@ -4,29 +4,29 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, X } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
-import { RoutePath, apiDocPageItemPath, apiDocPageItemsPath } from "../../lib/constants";
+import { RoutePath, apiPageItemPath, apiPageItemsPath } from "../../lib/constants";
 import { CATEGORY_META } from "../../lib/meta";
-import { docPageItemsQuery } from "../../lib/queries";
-import type { DocLinkedItem, StateCategoryValue } from "../../lib/types";
+import { pageItemsQuery } from "../../lib/queries";
+import type { PageLinkedItem, StateCategoryValue } from "../../lib/types";
 
 /**
- * Linked-issues panel on a doc page (spec 43): key chip + title + state dot,
+ * Linked-issues panel on a page (spec 43): key chip + title + state dot,
  * plus an add-by-key input (`TD-123`) when the caller may write docs.
  */
-export function DocLinkedItems({ pageId, canWrite }: { pageId: string; canWrite: boolean }) {
+export function PageLinkedItems({ pageId, canWrite }: { pageId: string; canWrite: boolean }) {
   const queryClient = useQueryClient();
-  const items = useQuery(docPageItemsQuery(pageId));
+  const items = useQuery(pageItemsQuery(pageId));
   const [key, setKey] = useState("");
 
-  const invalidate = () => void invalidateEntities(queryClient, Entity.docPage, Entity.item);
+  const invalidate = () => void invalidateEntities(queryClient, Entity.page, Entity.item);
   const add = useMutation({
     mutationFn: (itemKey: string) =>
-      api.post<DocLinkedItem>(apiDocPageItemsPath(pageId), { item_key: itemKey }),
+      api.post<PageLinkedItem>(apiPageItemsPath(pageId), { item_key: itemKey }),
     onSuccess: () => setKey(""),
     onSettled: invalidate,
   });
   const remove = useMutation({
-    mutationFn: (itemId: string) => api.delete<void>(apiDocPageItemPath(pageId, itemId)),
+    mutationFn: (itemId: string) => api.delete<void>(apiPageItemPath(pageId, itemId)),
     onSettled: invalidate,
   });
 

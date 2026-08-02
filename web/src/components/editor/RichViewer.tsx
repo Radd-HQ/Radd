@@ -25,7 +25,7 @@ export function RichViewer({ text, className = "" }: { text: string; className?:
     if (!root) return;
     const crepe = new Crepe({
       root,
-      // Backwards-compat: old Jira wiki markup renders as markdown (no-op on native).
+      // Backwards-compat: old Jira pages markup renders as markdown (no-op on native).
       defaultValue: jiraToMarkdown(text),
       features: {
         [CrepeFeature.TopBar]: false,

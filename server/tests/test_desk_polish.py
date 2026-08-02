@@ -19,8 +19,8 @@ from radd.modules.automations import engine
 from radd.modules.automations.types import ActionType
 from radd.modules.canned import service as canned_service
 from radd.modules.canned.render import render_canned
-from radd.modules.docs import service as docs_service, spaces as docs_spaces
-from radd.modules.docs.schemas import DocPageCreate, DocSpaceCreate
+from radd.modules.pages import service as docs_service, spaces as docs_spaces
+from radd.modules.pages.schemas import PageCreate, PageSpaceCreate
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate
 from radd.modules.mailintake import service as mail_service
@@ -224,11 +224,11 @@ async def test_deflect_items_returns_resolved_only(db, admin, project):
 
 async def test_deflect_docs_finds_wiki_pages_with_space_names(db, admin):
     space = await docs_spaces.create_space(
-        db, DocSpaceCreate(name="Handbook"), admin.id
+        db, PageSpaceCreate(name="Handbook"), admin.id
     )
     page = await docs_service.create_page(
         db,
-        DocPageCreate(space_id=space.id, title="Printer troubleshooting", body="turn it off and on"),
+        PageCreate(space_id=space.id, title="Printer troubleshooting", body="turn it off and on"),
         admin.id,
     )
     docs = await deflect.deflect_docs(db, "printer troubleshooting")

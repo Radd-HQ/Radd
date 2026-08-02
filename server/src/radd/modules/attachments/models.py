@@ -94,7 +94,7 @@ class Attachment(Base):
     __table_args__ = (Index("ix_attachments_entity", "entity_type", "entity_id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    # Polymorphic parent — kernel entity vocabulary ("item" | "doc_page"), no FK;
+    # Polymorphic parent — kernel entity vocabulary ("item" | "page"), no FK;
     # the GC consumer removes rows AND bytes when the parent dies.
     entity_type: Mapped[str] = mapped_column(String(50))  # AttachmentParentType
     entity_id: Mapped[uuid.UUID] = mapped_column()

@@ -59,8 +59,8 @@ REQUIREMENTS: dict[str, ToolRequirement] = {
     ),
     McpTool.UPDATE_ITEM.value: ToolRequirement(Permission.ITEM_UPDATE, project_scoped=True),
     McpTool.COMMENT_ITEM.value: ToolRequirement(Permission.COMMENT_WRITE, project_scoped=True),
-    McpTool.GET_DOC_PAGE.value: ToolRequirement(Permission.DOC_READ),
-    McpTool.SEARCH_DOCS.value: ToolRequirement(Permission.DOC_READ),
+    McpTool.GET_PAGE.value: ToolRequirement(Permission.PAGE_READ),
+    McpTool.SEARCH_PAGES.value: ToolRequirement(Permission.PAGE_READ),
     # --- spec 114 families ---
     McpTool.GET_ALLOWED_TRANSITIONS.value: ToolRequirement(
         Permission.ITEM_READ, project_scoped=True

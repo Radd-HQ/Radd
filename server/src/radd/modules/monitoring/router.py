@@ -27,7 +27,7 @@ _COUNTED_TABLES: tuple[tuple[str, str, str], ...] = (
     ("users", "users", "Users"),
     ("comments", "comments", "Comments"),
     ("worklogs", "worklogs", "Worklogs"),
-    ("doc_pages", "doc_pages", "Wiki pages"),
+    ("pages", "pages", "Wiki pages"),
     ("attachments", "attachments", "Attachments"),
     ("events", "events", "Events"),
     ("search_index", "search_index", "Search index rows"),

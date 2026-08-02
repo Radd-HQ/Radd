@@ -1,4 +1,4 @@
-"""The doc_page attachment parent (spec 102): wiki pages own files.
+"""The page attachment parent (spec 102): wiki pages own files.
 
 Registered from the docs plugin so `attachments` never learns this module
 exists (its ParentBinding registry is the seam). Doc permissions are global
@@ -25,17 +25,17 @@ from . import service
 
 async def _page_read(session: AsyncSession, user: User, page_id: uuid.UUID) -> None:
     await service.get_page(session, page_id)  # 404 before 403, like the doc router
-    await authz.require(session, user, Permission.DOC_READ)
+    await authz.require(session, user, Permission.PAGE_READ)
 
 
 async def _page_write(session: AsyncSession, user: User, page_id: uuid.UUID) -> None:
     await service.get_page(session, page_id)
-    await authz.require(session, user, Permission.DOC_WRITE)
+    await authz.require(session, user, Permission.PAGE_WRITE)
 
 
 async def _page_admin(session: AsyncSession, user: User, page_id: uuid.UUID) -> None:
     await service.get_page(session, page_id)
-    await authz.require(session, user, Permission.DOC_MANAGE)
+    await authz.require(session, user, Permission.PAGE_MANAGE)
 
 
 async def _no_project(session: AsyncSession, page_id: uuid.UUID) -> uuid.UUID | None:
@@ -44,7 +44,7 @@ async def _no_project(session: AsyncSession, page_id: uuid.UUID) -> uuid.UUID | 
 
 parents.register_parent(
     parents.ParentBinding(
-        entity_type=AttachmentParentType.DOC_PAGE.value,
+        entity_type=AttachmentParentType.PAGE.value,
         require_read=_page_read,
         require_write=_page_write,
         require_admin=_page_admin,

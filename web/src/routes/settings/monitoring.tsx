@@ -154,7 +154,7 @@ export function MonitoringSettingsPage() {
               value={`${coverage.data.items_embedded.toLocaleString()} / ${coverage.data.items_total.toLocaleString()}`}
             />
             <StatRow
-              label="Wiki pages embedded"
+              label="Pages pages embedded"
               value={`${coverage.data.docs_embedded.toLocaleString()} / ${coverage.data.docs_total.toLocaleString()}`}
             />
             {(coverage.data.items_embedded < coverage.data.items_total ||

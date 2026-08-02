@@ -9,7 +9,7 @@ SLUG_PATTERN = r"^[a-z0-9][a-z0-9-]{0,99}$"
 # --- spaces ---
 
 
-class DocSpaceCreate(BaseModel):
+class PageSpaceCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     # Omitted -> derived from the name (slugs are cosmetic; URLs use ids).
     slug: str | None = Field(default=None, pattern=SLUG_PATTERN)
@@ -17,16 +17,16 @@ class DocSpaceCreate(BaseModel):
     position: float = 0
 
 
-class DocSpaceUpdate(BaseModel):
+class PageSpaceUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     slug: str | None = Field(default=None, pattern=SLUG_PATTERN)
     description: str | None = None
     position: float | None = None
-    # Spec 74: toggle no-login readability via /public/kb (doc.manage).
+    # Spec 74: toggle no-login readability via /public/pages (page.manage).
     public: bool | None = None
 
 
-class DocSpaceRead(BaseModel):
+class PageSpaceRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
@@ -43,7 +43,7 @@ class DocSpaceRead(BaseModel):
 # --- pages ---
 
 
-class DocPageCreate(BaseModel):
+class PageCreate(BaseModel):
     space_id: uuid.UUID
     parent_id: uuid.UUID | None = None
     title: str = Field(min_length=1, max_length=500)
@@ -51,7 +51,7 @@ class DocPageCreate(BaseModel):
     position: float | None = None  # omitted -> appended after current siblings
 
 
-class DocPageUpdate(BaseModel):
+class PageUpdate(BaseModel):
     """Omitted = unchanged; `parent_id: null` moves to root (model_fields_set
     tri-state). `expected_version` (when sent) must match the current version
     or the PATCH 409s instead of clobbering a concurrent edit."""
@@ -63,7 +63,7 @@ class DocPageUpdate(BaseModel):
     expected_version: int | None = Field(default=None, ge=1)
 
 
-class DocPageSummary(BaseModel):
+class PageSummary(BaseModel):
     """Flat tree row — the client assembles the hierarchy."""
 
     id: uuid.UUID
@@ -79,7 +79,7 @@ class DocBreadcrumb(BaseModel):
     title: str
 
 
-class DocPageRead(BaseModel):
+class PageRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
@@ -94,14 +94,14 @@ class DocPageRead(BaseModel):
     archived_at: UtcDatetime | None
     created_at: UtcDatetime
     updated_at: UtcDatetime
-    space: DocSpaceRead
+    space: PageSpaceRead
     breadcrumb: list[DocBreadcrumb]  # ancestors, root first (excludes the page)
 
 
 # --- versions ---
 
 
-class DocVersionMeta(BaseModel):
+class PageVersionMeta(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     version: int
@@ -110,7 +110,7 @@ class DocVersionMeta(BaseModel):
     created_at: UtcDatetime
 
 
-class DocVersionRead(DocVersionMeta):
+class PageVersionRead(PageVersionMeta):
     body: str
 
 
@@ -125,7 +125,7 @@ class DocLinkCreate(BaseModel):
     item_key: str = Field(min_length=1, max_length=30)  # e.g. "TD-123"
 
 
-class DocLinkedItem(BaseModel):
+class PageLinkedItem(BaseModel):
     """An issue linked to a page, hydrated for display (key chip + title + state)."""
 
     item_id: uuid.UUID
@@ -135,7 +135,7 @@ class DocLinkedItem(BaseModel):
     state_category: str
 
 
-class ItemDocRef(BaseModel):
+class ItemPageRef(BaseModel):
     """A page linked to an issue (the issue page's Docs row)."""
 
     page_id: uuid.UUID
@@ -154,15 +154,15 @@ class DocSearchResult(BaseModel):
     snippet: str | None
 
 
-class DocSearchResponse(BaseModel):
+class PageSearchResponse(BaseModel):
     results: list[DocSearchResult]
 
 
 # --- public KB (spec 74) — the deliberately TRIMMED no-login shapes ---
 
 
-class PublicKbSpace(BaseModel):
-    """GET /public/kb/spaces — a public space's card, nothing internal."""
+class PublicPageSpace(BaseModel):
+    """GET /public/pages/spaces — a public space's card, nothing internal."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -172,8 +172,8 @@ class PublicKbSpace(BaseModel):
     description: str
 
 
-class PublicKbPageNode(BaseModel):
-    """GET /public/kb/spaces/{id}/tree — one non-archived tree row."""
+class PublicPageNode(BaseModel):
+    """GET /public/pages/spaces/{id}/tree — one non-archived tree row."""
 
     id: uuid.UUID
     parent_id: uuid.UUID | None
@@ -181,8 +181,8 @@ class PublicKbPageNode(BaseModel):
     position: float
 
 
-class PublicKbPageRead(BaseModel):
-    """GET /public/kb/pages/{id} — body + breadcrumb only (no versions/links/
+class PublicPageRead(BaseModel):
+    """GET /public/pages/pages/{id} — body + breadcrumb only (no versions/links/
     authors; markdown renders client-side)."""
 
     id: uuid.UUID

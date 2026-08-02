@@ -3,36 +3,36 @@ import { useQuery } from "@tanstack/react-query";
 import { BookOpen, Settings } from "lucide-react";
 import { RoutePath } from "../lib/constants";
 import { usePermissions } from "../lib/hooks";
-import { docSpacesQuery } from "../lib/queries";
+import { pageSpacesQuery } from "../lib/queries";
 import { Permission } from "../lib/types";
 import { EmptyState } from "../components/EmptyState";
 import { Spinner } from "../components/Spinner";
 import { QueryError } from "../components/QueryError";
-/** `/docs` — the wiki's spaces index (spec 43): name, description, page count. */
-export function DocsIndexPage() {
+/** `/docs` — Pages's spaces index (spec 43): name, description, page count. */
+export function PagesIndexPage() {
   const perms = usePermissions();
-  const spaces = useQuery(docSpacesQuery());
+  const spaces = useQuery(pageSpacesQuery());
 
   if (spaces.isPending) return <Spinner label="Loading docs…" />;
   if (spaces.isError) {
     return (
       <div className="p-6">
-        <QueryError label="doc spaces" error={spaces.error} />
+        <QueryError label="page spaces" error={spaces.error} />
       </div>
     );
   }
 
-  const canManage = perms.global(Permission.docManage);
+  const canManage = perms.global(Permission.pageManage);
   const list = spaces.data ?? [];
 
   return (
     <div className="flex h-full flex-col">
       <header className="flex items-center gap-2 border-b border-subtle px-6 py-3.5">
         <BookOpen size={15} className="text-fg-muted" aria-hidden />
-        <h1 className="text-sm font-semibold text-heading">Docs</h1>
+        <h1 className="text-sm font-semibold text-heading">Pages</h1>
         {canManage && (
           <Link
-            to={RoutePath.settingsDocs}
+            to={RoutePath.settingsPages}
             className="ml-auto flex items-center gap-1.5 rounded-md border border-strong px-2 py-1 text-xs text-fg hover:bg-elevated"
           >
             <Settings size={12} aria-hidden />
@@ -47,8 +47,8 @@ export function DocsIndexPage() {
             icon={BookOpen}
             message={
               canManage
-                ? "No doc spaces yet — create the first one under Manage spaces."
-                : "No doc spaces yet — an admin can create the first one."
+                ? "No page spaces yet — create the first one under Manage spaces."
+                : "No page spaces yet — an admin can create the first one."
             }
           />
         ) : (
@@ -56,7 +56,7 @@ export function DocsIndexPage() {
             {list.map((space) => (
               <li key={space.id}>
                 <Link
-                  to={RoutePath.docSpace}
+                  to={RoutePath.pageSpace}
                   params={{ spaceId: space.id }}
                   className="flex h-full flex-col gap-1 rounded-lg border border-subtle bg-surface/50 p-4 hover:border-strong hover:bg-surface"
                 >

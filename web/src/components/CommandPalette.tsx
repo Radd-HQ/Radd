@@ -21,7 +21,7 @@ import { PALETTE_SEARCH_LIMIT, RoutePath, SEARCH_DEBOUNCE_MS } from "../lib/cons
 import { usePermissions } from "../lib/hooks";
 import {
   aiStatusQuery,
-  docsSearchQuery,
+  pageSearchQuery,
   projectsQuery,
   searchQuery,
   semanticSearchQuery,
@@ -29,7 +29,7 @@ import {
 import {
   AiFeature,
   Permission,
-  type DocSearchResult,
+  type PageSearchResult,
   type Project,
   type SearchResult,
   type SemanticDoc,
@@ -70,7 +70,7 @@ interface GotoEntry {
  * the Ask-mode entry point, or a semantic match. */
 type PaletteEntry =
   | { kind: "issue"; result: SearchResult }
-  | { kind: "doc"; result: DocSearchResult }
+  | { kind: "doc"; result: PageSearchResult }
   | { kind: "goto"; entry: GotoEntry }
   | { kind: "action"; label: string; project: Project }
   | { kind: "ask" }
@@ -120,9 +120,9 @@ export function CommandPalette() {
   const { data: searchData } = useQuery(
     searchQuery(open && mode === PaletteMode.search ? debounced : "", PALETTE_SEARCH_LIMIT),
   );
-  // Doc results merged in (spec 43) — a second query, section-headed "Docs".
+  // Doc results merged in (spec 43) — a second query, section-headed "Pages".
   const { data: docsData } = useQuery(
-    docsSearchQuery(open && mode === PaletteMode.search ? debounced : "", PALETTE_SEARCH_LIMIT),
+    pageSearchQuery(open && mode === PaletteMode.search ? debounced : "", PALETTE_SEARCH_LIMIT),
   );
   // Ask mode (spec 103): the affordance gates on the semantic_search feature
   // flag; the response's own `enabled` catches it going dormant mid-session.
@@ -256,12 +256,12 @@ export function CommandPalette() {
       void navigate({ to: RoutePath.issue, params: { itemKey: entry.result.key } });
     } else if (entry.kind === "doc") {
       void navigate({
-        to: RoutePath.docPage,
+        to: RoutePath.page,
         params: { spaceId: entry.result.space_id, pageId: entry.result.page_id },
       });
     } else if (entry.kind === "semantic-doc") {
       void navigate({
-        to: RoutePath.docPage,
+        to: RoutePath.page,
         params: { spaceId: entry.result.space_id, pageId: entry.result.page_id },
       });
     } else if (entry.kind === "action") {
@@ -426,7 +426,7 @@ export function CommandPalette() {
             </PaletteRow>
           ))}
 
-          {docEntries.length > 0 && <SectionLabel>Docs</SectionLabel>}
+          {docEntries.length > 0 && <SectionLabel>Pages</SectionLabel>}
           {docEntries.map((entry, index) => {
             const flatIndex = issueEntries.length + index;
             return (

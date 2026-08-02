@@ -43,7 +43,7 @@ class TokenScope:
         self, permissions: frozenset[Permission], project_id: uuid.UUID | None
     ) -> frozenset[Permission]:
         """The intersection. Global atoms also apply inside a project, because a
-        global-scoped atom (doc.read, timesheet.view) is checked with project=None
+        global-scoped atom (page.read, timesheet.view) is checked with project=None
         in some paths and inside a project in others; a scope that granted it
         globally but not per project would behave differently depending on which
         code path asked, which is exactly the sort of subtlety a permission system

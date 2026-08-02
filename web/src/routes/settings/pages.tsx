@@ -3,38 +3,38 @@ import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen, Check, Copy, Pencil, Plus, Trash2, X } from "lucide-react";
 import { api, ApiError, errorMessage } from "../../lib/api";
-import { ApiPath, RoutePath, apiDocSpacePath, publicKbSpaceUrl } from "../../lib/constants";
+import { ApiPath, RoutePath, apiPageSpacePath, publicKbSpaceUrl } from "../../lib/constants";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { usePermissions } from "../../lib/hooks";
-import { docSpacesQuery } from "../../lib/queries";
+import { pageSpacesQuery } from "../../lib/queries";
 import {
   Permission,
-  type DocSpace,
-  type DocSpaceCreate,
-  type DocSpaceUpdate,
+  type PageSpace,
+  type PageSpaceCreate,
+  type PageSpaceUpdate,
 } from "../../lib/types";
 import { Button } from "../../components/Button";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { EmptyState } from "../../components/EmptyState";
-import { PublicBadge } from "../../components/docs/PublicBadge";
+import { PublicBadge } from "../../components/pages/PublicBadge";
 import { TableSkeleton } from "../../components/TableSkeleton";
 import { TextField } from "../../components/TextField";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { QueryError } from "../../components/QueryError";
 
-/** Doc spaces admin (spec 43, doc.manage): create/rename/delete wiki spaces. */
-export function DocsSettingsPage() {
+/** Page spaces admin (spec 43, doc.manage): create/rename/delete pages spaces. */
+export function PagesSettingsPage() {
   const perms = usePermissions();
-  const canManage = perms.global(Permission.docManage);
-  const spaces = useQuery(docSpacesQuery());
+  const canManage = perms.global(Permission.pageManage);
+  const spaces = useQuery(pageSpacesQuery());
   const queryClient = useQueryClient();
-  const [editing, setEditing] = useState<DocSpace | null>(null);
+  const [editing, setEditing] = useState<PageSpace | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [confirmDialog, confirm] = useConfirm();
 
   const remove = useMutation({
     mutationFn: ({ spaceId, force }: { spaceId: string; force: boolean }) =>
-      api.delete<void>(apiDocSpacePath(spaceId), {
+      api.delete<void>(apiPageSpacePath(spaceId), {
         query: { force: force ? "true" : undefined },
       }),
     onMutate: () => setDeleteError(null),
@@ -53,25 +53,25 @@ export function DocsSettingsPage() {
         setDeleteError(errorMessage(error));
       }
     },
-    onSettled: () => invalidateEntities(queryClient, Entity.docSpace, Entity.docPage),
+    onSettled: () => invalidateEntities(queryClient, Entity.docSpace, Entity.page),
   });
 
   const list = spaces.data ?? [];
 
   return (
     <SettingsPage
-      title="Doc spaces"
-      description="The wiki's spaces (each one holds a page tree). Any member can read; members write pages; managing spaces needs doc.manage."
+      title="Page spaces"
+      description="Pages's spaces (each one holds a page tree). Any member can read; members write pages; managing spaces needs doc.manage."
     >
       {spaces.isPending ? (
         <TableSkeleton rows={3} />
       ) : spaces.isError ? (
-        <QueryError label="doc spaces" error={spaces.error} />
+        <QueryError label="page spaces" error={spaces.error} />
       ) : (
         <>
           {deleteError && <p className="mb-3 text-xs text-red-400">{deleteError}</p>}
           {list.length === 0 ? (
-            <EmptyState icon={BookOpen} message="No doc spaces yet — create the first one below." />
+            <EmptyState icon={BookOpen} message="No page spaces yet — create the first one below." />
           ) : (
             <ul className="rounded-lg border border-subtle">
               {list.map((space) => (
@@ -81,7 +81,7 @@ export function DocsSettingsPage() {
                 >
                   <div className="flex items-center gap-2">
                     <Link
-                      to={RoutePath.docSpace}
+                      to={RoutePath.pageSpace}
                       params={{ spaceId: space.id }}
                       className="text-[13px] font-medium text-heading hover:underline"
                     >
@@ -132,7 +132,7 @@ export function DocsSettingsPage() {
 }
 
 /** The shareable /kb URL + a copy button (the spec-62 PublicLinkRow idiom). */
-function PublicKbLinkRow({ spaceId }: { spaceId: string }) {
+function PublicPagesLinkRow({ spaceId }: { spaceId: string }) {
   const [copied, setCopied] = useState(false);
   const url = publicKbSpaceUrl(spaceId);
   const copy = async () => {
@@ -160,7 +160,7 @@ function SpaceForm({
   existing,
   onDone,
 }: {
-  existing?: DocSpace;
+  existing?: PageSpace;
   onDone?: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -171,15 +171,15 @@ function SpaceForm({
   const save = useMutation({
     mutationFn: () =>
       existing
-        ? api.patch<DocSpace>(apiDocSpacePath(existing.id), {
+        ? api.patch<PageSpace>(apiPageSpacePath(existing.id), {
             name: name.trim(),
             description,
             public: isPublic,
-          } satisfies DocSpaceUpdate)
-        : api.post<DocSpace>(ApiPath.docSpaces, {
+          } satisfies PageSpaceUpdate)
+        : api.post<PageSpace>(ApiPath.pageSpaces, {
             name: name.trim(),
             description,
-          } satisfies DocSpaceCreate),
+          } satisfies PageSpaceCreate),
     onSuccess: () => {
       if (!existing) {
         setName("");
@@ -225,7 +225,7 @@ function SpaceForm({
             Archived pages stay hidden. Use external image URLs in public pages — attachment
             links still need a login.
           </p>
-          {isPublic && <PublicKbLinkRow spaceId={existing.id} />}
+          {isPublic && <PublicPagesLinkRow spaceId={existing.id} />}
         </div>
       )}
       <div className="flex items-center gap-2">

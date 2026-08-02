@@ -5,7 +5,7 @@ With the polymorphic parent there is no FK cascade — and the old cascade only
 ever deleted rows, orphaning bytes forever (the spec-29 known gap). This
 consumer is therefore the correctness mechanism, not an optimization. It is
 head-seeded (the historical backlog must not replay as deletes) and processes
-`item.deleted` / `doc_page.deleted` events.
+`item.deleted` / `page.deleted` events.
 """
 
 import logging
@@ -29,7 +29,7 @@ CONSUMER_NAME = "attachments.gc"
 
 _PARENT_DELETES = {
     "item.deleted": AttachmentParentType.ITEM.value,
-    "doc_page.deleted": AttachmentParentType.DOC_PAGE.value,
+    "page.deleted": AttachmentParentType.PAGE.value,
 }
 
 

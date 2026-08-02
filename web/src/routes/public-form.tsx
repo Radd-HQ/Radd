@@ -23,7 +23,7 @@ import {
   PublicFormFieldList,
   collectValues,
 } from "../components/forms/PublicFormFields";
-import { DeflectDocsSection } from "../components/items/DeflectionPanel";
+import { DeflectPagesSection } from "../components/items/DeflectionPanel";
 import { Button } from "../components/Button";
 import { RaddTile } from "../components/RaddMark";
 import { Spinner } from "../components/Spinner";
@@ -72,7 +72,7 @@ export function PublicFormPage() {
 
 /**
  * KB deflection for the anonymous visitor (spec 74; semantic-fused server-side
- * when available — spec 106): while they type a title, surface PUBLIC wiki
+ * when available — spec 106): while they type a title, surface PUBLIC pages
  * pages that may already answer it via the tokened
  * `/public/forms/{token}/deflect` endpoint (docs only — resolved issues stay
  * internal). Same debounce/gating as the authed panels; links open the public
@@ -97,7 +97,7 @@ function PublicDeflectionPanel({ token, query }: { token: string; query: string 
 
   return (
     <div className="flex flex-col gap-1 rounded-md border border-subtle bg-surface/40 p-2.5">
-      <DeflectDocsSection docs={docs} kb />
+      <DeflectPagesSection docs={docs} kb />
     </div>
   );
 }

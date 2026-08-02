@@ -51,7 +51,7 @@ async def search_deflect(
 ) -> DeflectResponse:
     """KB deflection for the new-issue flow (spec 66): wiki pages that may
     already answer it + previously RESOLVED items in the project. The docs
-    half only renders for callers who also hold doc.read (no title leaks)."""
+    half only renders for callers who also hold page.read (no title leaks)."""
     project = await projects_service.get_project(session, project_id)
     permissions = await authz.require(session, user, Permission.ITEM_READ, project=project)
     q = q.strip()
@@ -59,7 +59,7 @@ async def search_deflect(
         return DeflectResponse(docs=[], items=[])
     docs = (
         await deflect.deflect_docs(session, q)
-        if Permission.DOC_READ in permissions
+        if Permission.PAGE_READ in permissions
         else []
     )
     return DeflectResponse(docs=docs, items=await deflect.deflect_items(session, project, q))
@@ -73,6 +73,6 @@ async def search_semantic(
 ) -> SemanticResponse:
     """Pure meaning-based retrieval over items + docs (spec 103, the palette's
     Ask mode). `enabled: false` — never an error — when semantic search is not
-    configured; RBAC scoping matches /search (items) and doc.read (docs)."""
+    configured; RBAC scoping matches /search (items) and page.read (docs)."""
     await authz.require(session, user, Permission.ITEM_READ)
     return await semantic.semantic_search(session, user, q)

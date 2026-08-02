@@ -3,26 +3,26 @@ import { useQuery } from "@tanstack/react-query";
 import { BookOpen, ChevronRight } from "lucide-react";
 import { RoutePath } from "../lib/constants";
 import { usePermissions } from "../lib/hooks";
-import { docPageQuery, docPagesQuery, docSpacesQuery } from "../lib/queries";
+import { pageQuery, pagesQuery, pageSpacesQuery } from "../lib/queries";
 import { Permission } from "../lib/types";
 import { EmptyState } from "../components/EmptyState";
 import { Spinner } from "../components/Spinner";
-import { DocPageView } from "../components/docs/DocPageView";
-import { PageTree } from "../components/docs/PageTree";
-import { PublicBadge } from "../components/docs/PublicBadge";
+import { PageView } from "../components/pages/PageView";
+import { PageTree } from "../components/pages/PageTree";
+import { PublicBadge } from "../components/pages/PublicBadge";
 import { QueryError } from "../components/QueryError";
 
 /**
  * `/docs/$spaceId` (+ `/docs/$spaceId/$pageId`, the canonical page URL) —
- * two-pane wiki view (spec 43): the collapsible page tree beside the selected
+ * two-pane pages view (spec 43): the collapsible page tree beside the selected
  * page. With no page selected, a hint (or the empty-space CTA) shows instead.
  */
-export function DocSpacePage() {
+export function PageSpacePage() {
   const { spaceId = "", pageId } = useParams({ strict: false });
   const perms = usePermissions();
-  const spaces = useQuery(docSpacesQuery());
-  const pages = useQuery({ ...docPagesQuery(spaceId), enabled: spaceId !== "" });
-  const page = useQuery({ ...docPageQuery(pageId ?? ""), enabled: Boolean(pageId) });
+  const spaces = useQuery(pageSpacesQuery());
+  const pages = useQuery({ ...pagesQuery(spaceId), enabled: spaceId !== "" });
+  const page = useQuery({ ...pageQuery(pageId ?? ""), enabled: Boolean(pageId) });
 
   if (spaces.isPending || pages.isPending) {
     return <Spinner label="Loading docs…" />;
@@ -32,7 +32,7 @@ export function DocSpacePage() {
     return (
       <div className="p-6">
         {!space ? (
-          <p className="text-sm text-red-400">Doc space not found.</p>
+          <p className="text-sm text-red-400">Page space not found.</p>
         ) : (
           <QueryError label="pages" error={pages.error} />
         )}
@@ -40,15 +40,15 @@ export function DocSpacePage() {
     );
   }
 
-  const canWrite = perms.global(Permission.docWrite);
-  const canManage = perms.global(Permission.docManage);
+  const canWrite = perms.global(Permission.pageWrite);
+  const canManage = perms.global(Permission.pageManage);
   const rows = pages.data ?? [];
 
   return (
     <div className="flex h-full flex-col">
       <header className="flex items-center gap-1.5 border-b border-subtle px-5 py-3 text-sm">
         <Link
-          to={RoutePath.docs}
+          to={RoutePath.pages}
           className="flex items-center gap-1.5 text-fg-secondary hover:text-fg"
         >
           <BookOpen size={14} aria-hidden />
@@ -56,7 +56,7 @@ export function DocSpacePage() {
         </Link>
         <ChevronRight size={13} className="text-fg-faint" aria-hidden />
         <Link
-          to={RoutePath.docSpace}
+          to={RoutePath.pageSpace}
           params={{ spaceId }}
           className="font-medium text-heading hover:underline"
         >
@@ -67,7 +67,7 @@ export function DocSpacePage() {
           <span key={crumb.id} className="flex min-w-0 items-center gap-1.5">
             <ChevronRight size={13} className="shrink-0 text-fg-faint" aria-hidden />
             <Link
-              to={RoutePath.docPage}
+              to={RoutePath.page}
               params={{ spaceId, pageId: crumb.id }}
               className="truncate text-fg-secondary hover:text-fg"
             >
@@ -94,7 +94,7 @@ export function DocSpacePage() {
                 <QueryError label="page" error={page.error} />
               </div>
             ) : (
-              <DocPageView
+              <PageView
                 key={page.data.id}
                 page={page.data}
                 canWrite={canWrite}

@@ -81,18 +81,18 @@ async def _items(session: AsyncSession, user: User, q: str, candidates) -> list[
 
 async def _docs(session: AsyncSession, user: User, q: str, candidates) -> list[SemanticDoc]:
     perms = await authz.effective_permissions(session, user)
-    if Permission.DOC_READ not in perms:
+    if Permission.PAGE_READ not in perms:
         return []
     ranked = await candidates.doc_candidates(session, q, public_only=False, limit=_ASK_LIMIT)
     if not ranked:
         return []
-    from radd.modules.docs.models import DocPage
+    from radd.modules.pages.models import Page
 
     pages = {
         page.id: page
         for page in (
             await session.execute(
-                select(DocPage).where(DocPage.id.in_([page_id for page_id, _ in ranked]))
+                select(Page).where(Page.id.in_([page_id for page_id, _ in ranked]))
             )
         ).scalars()
     }

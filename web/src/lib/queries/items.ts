@@ -88,7 +88,7 @@ export const commentsQuery = (itemId: string) =>
     retry: false,
   });
 
-/** Files attached to a parent — item or doc page (spec 29; polymorphic). */
+/** Files attached to a parent — item or page (spec 29; polymorphic). */
 export const attachmentsQuery = (target: AttachmentTarget) =>
   queryOptions({
     queryKey: queryKeys.attachments(target.entityType, target.entityId),

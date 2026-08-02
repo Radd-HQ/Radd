@@ -11,7 +11,7 @@ import { useDebounced } from "../../lib/hooks";
 import { aiStatusQuery, deflectQuery } from "../../lib/queries";
 import type { SimilarResponse } from "../../lib/types";
 import { SimilarCandidatesList } from "../items/AiSection";
-import { DeflectDocsSection, DeflectItemsSection } from "../items/DeflectionPanel";
+import { DeflectPagesSection, DeflectItemsSection } from "../items/DeflectionPanel";
 
 interface FormAssistPanelProps {
   /** The draft title — seeds deflection alone (FTS wants short, dense text). */
@@ -83,7 +83,7 @@ export function FormAssistPanel({
         "flex flex-col gap-2.5 rounded-md border border-subtle bg-surface/40 p-2.5 " + className
       }
     >
-      <DeflectDocsSection docs={docs} />
+      <DeflectPagesSection docs={docs} />
       <DeflectItemsSection items={resolved} />
       {candidates.length > 0 && (
         <section className="flex flex-col gap-1">

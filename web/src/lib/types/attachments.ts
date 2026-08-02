@@ -1,4 +1,4 @@
-/** Attachments (spec 29; polymorphic parents — item or wiki page). */
+/** Attachments (spec 29; polymorphic parents — item or pages page). */
 // ---------------------------------------------------------------------------
 // Attachments (attachments module — spec 29)
 // ---------------------------------------------------------------------------
@@ -6,7 +6,7 @@
 /** What an attachment can be parented to. Values are the server's entity keys. */
 export const AttachmentParentType = {
   item: "item",
-  docPage: "doc_page",
+  page: "doc_page",
 } as const;
 export type AttachmentParentTypeValue =
   (typeof AttachmentParentType)[keyof typeof AttachmentParentType];

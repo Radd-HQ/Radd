@@ -189,10 +189,10 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         show: (g) => g.instanceAdmin,
       },
       {
-        to: RoutePath.settingsDocs,
-        label: "Doc spaces",
+        to: RoutePath.settingsPages,
+        label: "Page spaces",
         icon: BookOpen,
-        show: (g) => g.ws(Permission.docManage),
+        show: (g) => g.ws(Permission.pageManage),
       },
       {
         // AI provider registry + roles + feature toggles + presets (spec 101).

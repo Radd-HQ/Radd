@@ -46,7 +46,7 @@ const SERVER_ENTITY_TAGS: Record<string, EntityTag[]> = {
   sla_policy: [Entity.slaPolicy],
   doc_space: [Entity.docSpace],
   // A page change also touches its space's page_count in the spaces index.
-  doc_page: [Entity.docPage, Entity.docSpace],
+  doc_page: [Entity.page, Entity.docSpace],
   dashboard: [Entity.dashboard],
 };
 

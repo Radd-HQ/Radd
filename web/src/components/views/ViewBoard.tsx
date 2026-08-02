@@ -121,7 +121,9 @@ export function ViewBoard({
               (isOver ? "bg-accent/5 ring-2 ring-accent/30" : "")
             }
             {...drop.targetProps(group.key, (dragged) =>
-              onMoveToBucket?.(dragged, { key: group.key, label: group.label }),
+              // The GROUP is the bucket ref — it carries the axis's structural
+              // extras (an epic lane's `epicRef`) that {key,label} would drop.
+              onMoveToBucket?.(dragged, group),
             )}
           >
             <header className="px-1.5 pb-1.5 pt-0.5">

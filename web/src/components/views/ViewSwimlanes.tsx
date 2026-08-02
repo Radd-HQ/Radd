@@ -10,10 +10,9 @@ import type {
   SlaBatchResponse,
   TimelogBatchResponse,
 } from "../../lib/types";
+import type { BucketRef } from "../../lib/axis-dnd";
 import type { ViewGroup } from "../../lib/view-utils";
 import { BoardCard } from "../board/BoardCard";
-
-type BucketRef = { key: string; label: string };
 
 interface ViewSwimlanesProps {
   /** Column buckets over ALL items — identical across every swimlane. */
@@ -167,8 +166,11 @@ export function ViewSwimlanes({
                         {...drop.targetProps(cellKey, (dragged) =>
                           onMoveToCell?.(
                             dragged,
-                            { key: column.key, label: column.label },
-                            { key: lane.key, label: lane.label },
+                            // The GROUP is the bucket ref (it carries the axis's
+                            // structural extras, e.g. an epic lane's `epicRef`);
+                            // rebuilding {key,label} here dropped them.
+                            column,
+                            lane,
                           ),
                         )}
                         className={

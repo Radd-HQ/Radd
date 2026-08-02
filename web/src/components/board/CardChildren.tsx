@@ -1,7 +1,9 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { errorMessage } from "../../lib/api";
-import { usePeek } from "../../lib/hooks";
+import { RoutePath } from "../../lib/constants";
+import { useOpenIssueRef } from "../../lib/hooks";
 import { CATEGORY_META } from "../../lib/meta";
 import { childItemsQuery } from "../../lib/queries";
 import { compareChildrenOpenFirst } from "../../lib/view-utils";
@@ -17,15 +19,16 @@ import { Spinner } from "../Spinner";
  *
  * Deliberately NOT the issue page's `ChildRow`: that row carries a tick box, an
  * assignee and a per-project states query, which on a 200-card board would be
- * 200 idle queries. What the two surfaces share is the ORDERING RULE (open work
- * first — `compareChildrenOpenFirst`), which is the part that would actually
- * drift if it were written twice.
+ * 200 idle queries. What the two surfaces share is what would actually drift if
+ * written twice — the ORDERING RULE (`compareChildrenOpenFirst`) and the CLICK
+ * RULE (`useOpenIssueRef`, RADD-699). The rows are real links for the same
+ * reason the issue page's are: a child should be cmd-clickable into a new tab.
  *
  * Children are fetched only once expanded: a listed item carries `child_count`,
  * not its children.
  */
 export function CardChildren({ parentId }: { parentId: string }) {
-  const { open: openPeek } = usePeek();
+  const openRef = useOpenIssueRef();
   const children = useQuery(childItemsQuery(parentId));
   const sorted = useMemo(
     () => [...(children.data ?? [])].sort(compareChildrenOpenFirst),
@@ -52,9 +55,10 @@ export function CardChildren({ parentId }: { parentId: string }) {
             const finished = meta.order >= CATEGORY_META.done.order;
             return (
               <li key={child.id}>
-                <button
-                  type="button"
-                  onClick={() => openPeek(child.key)}
+                <Link
+                  to={RoutePath.issue}
+                  params={{ itemKey: child.key }}
+                  onClick={(event) => void openRef(child.key, event)}
                   title={`${child.key} · ${child.state.name}`}
                   className="flex w-full min-w-0 cursor-pointer items-center gap-1.5 rounded py-0.5 text-left hover:bg-surface/60 focus-visible:outline-2 focus-visible:outline-focus"
                 >
@@ -70,7 +74,7 @@ export function CardChildren({ parentId }: { parentId: string }) {
                   >
                     {child.title}
                   </span>
-                </button>
+                </Link>
               </li>
             );
           })}

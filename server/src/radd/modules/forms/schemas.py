@@ -179,7 +179,7 @@ class PublicDeflectDoc(BaseModel):
     SPA panel can reuse its rendering. Defined here, not imported: forms must
     not depend on the search module."""
 
-    id: uuid.UUID  # doc page id
+    id: uuid.UUID  # page id
     space_id: uuid.UUID
     title: str
     space_name: str

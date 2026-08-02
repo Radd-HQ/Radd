@@ -40,7 +40,7 @@ export const SettingsSection = {
   canned: "canned",
   forgejo: "forgejo",
   serviceAccounts: "service-accounts",
-  docs: "docs",
+  pages: "pages",
   // Plugin manager (spec 93 / A4) — install/enable/disable non-core plugins. Admin.
   plugins: "plugins",
   // Backups (spec 99) — schedules, artifacts, restore. Instance admin only.
@@ -180,16 +180,16 @@ export const RoutePath = {
   settingsCanned: `${SETTINGS_SEGMENT}/${SettingsSection.canned}`,
   settingsForgejo: `${SETTINGS_SEGMENT}/${SettingsSection.forgejo}`,
   settingsServiceAccounts: `${SETTINGS_SEGMENT}/${SettingsSection.serviceAccounts}`,
-  /** Wiki (spec 43): spaces index, a space's tree, a canonical page URL. */
-  docs: "/docs",
-  docSpace: "/docs/$spaceId",
-  docPage: "/docs/$spaceId/$pageId",
-  /** Doc spaces admin (spec 43, doc.manage). */
-  settingsDocs: `${SETTINGS_SEGMENT}/${SettingsSection.docs}`,
-  /** PUBLIC knowledge base (spec 74) — root-level, outside the auth gate. */
-  kb: "/kb",
-  kbSpace: "/kb/$spaceId",
-  kbPage: "/kb/$spaceId/$pageId",
+  /** Pages (spec 43): spaces index, a space's tree, a canonical page URL. */
+  pages: "/docs",
+  pageSpace: "/docs/$spaceId",
+  page: "/docs/$spaceId/$pageId",
+  /** Page spaces admin (spec 43, doc.manage). */
+  settingsPages: `${SETTINGS_SEGMENT}/${SettingsSection.pages}`,
+  /** PUBLIC pages (spec 74) — root-level, outside the auth gate. */
+  publicPages: "/kb",
+  publicPageSpace: "/kb/$spaceId",
+  publicPage: "/kb/$spaceId/$pageId",
   /** A composable dashboard's widget grid (spec 75). */
   dashboard: "/dashboards/$dashboardId",
 } as const;

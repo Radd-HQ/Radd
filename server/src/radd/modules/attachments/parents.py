@@ -2,7 +2,7 @@
 
 A binding maps an `entity_type` to the permission checks and context of its
 owner. attachments registers the `item` binding itself (below); other modules
-register theirs at their own plugin init — `docs` registers `doc_page` — so
+register theirs at their own plugin init — `docs` registers `page` — so
 attachments never learns those modules exist (dev rule 1).
 """
 

@@ -4,7 +4,7 @@ Every handler resolves the PAT-authed actor's request through the ordinary
 service/authz seams — an agent can do exactly what its principal may do,
 nothing more. Domain failures (RaddError subclasses) bubble up for the router
 to shape into `isError: true` results; the catalog itself lives in catalog.py,
-docs-module feature detection in docs_bridge.py.
+pages-module feature detection in pages_bridge.py.
 """
 
 import uuid
@@ -38,10 +38,10 @@ from radd.modules.workflow.types import StateEntity
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.types import ProjectEntity
 
-from . import docs_bridge
+from . import pages_bridge
 from .catalog import build_catalog, live_catalog  # re-export: the module's tool surface
 from .types import (
-    DOC_TOOLS,
+    PAGE_TOOLS,
     GET_ITEM_COMMENTS_TAIL,
     SEARCH_LIMIT_DEFAULT,
     SEARCH_LIMIT_MAX,
@@ -49,9 +49,9 @@ from .types import (
     McpTool,
 )
 
-__all__ = ["UnknownToolError", "build_catalog", "call_tool", "docs_available", "live_catalog"]
+__all__ = ["UnknownToolError", "build_catalog", "call_tool", "pages_available", "live_catalog"]
 
-docs_available = docs_bridge.docs_available
+pages_available = pages_bridge.pages_available
 
 
 class UnknownToolError(Exception):
@@ -275,26 +275,26 @@ async def _list_projects(session: AsyncSession, actor: User, args: Mapping[str, 
     }
 
 
-# --- doc tool handlers (feature-detected, see docs_bridge) ---
+# --- doc tool handlers (feature-detected, see pages_bridge) ---
 
 
-async def _get_doc_page(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
-    functions = docs_bridge.docs_functions()
+async def _get_page(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
+    functions = pages_bridge.pages_functions()
     if functions is None:
-        raise UnknownToolError(McpTool.GET_DOC_PAGE)
+        raise UnknownToolError(McpTool.GET_PAGE)
     page_id = uuid.UUID(str(args["id"]))
-    result = await docs_bridge.call_docs(functions[0], session, actor, page_id=page_id, id=page_id)
-    return docs_bridge.jsonable(result)
+    result = await pages_bridge.call_pages(functions[0], session, actor, page_id=page_id, id=page_id)
+    return pages_bridge.jsonable(result)
 
 
 async def _search_docs(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
-    functions = docs_bridge.docs_functions()
+    functions = pages_bridge.pages_functions()
     if functions is None:
-        raise UnknownToolError(McpTool.SEARCH_DOCS)
+        raise UnknownToolError(McpTool.SEARCH_PAGES)
     query = str(args["query"])
     limit = _limit(args)
     # Spec 86: docs are global — a single search over every space.
-    result = await docs_bridge.call_docs(
+    result = await pages_bridge.call_pages(
         functions[1],
         session,
         actor,
@@ -303,7 +303,7 @@ async def _search_docs(session: AsyncSession, actor: User, args: Mapping[str, An
         text=query,
         limit=limit,
     )
-    jsonable = docs_bridge.jsonable(result)
+    jsonable = pages_bridge.jsonable(result)
     results = jsonable if isinstance(jsonable, list) else [jsonable]
     return results[:limit]
 
@@ -508,8 +508,8 @@ _HANDLERS: dict[McpTool, Callable[..., Any]] = {
     McpTool.UPDATE_ITEM: _update_item,
     McpTool.COMMENT_ITEM: _comment_item,
     McpTool.LIST_PROJECTS: _list_projects,
-    McpTool.GET_DOC_PAGE: _get_doc_page,
-    McpTool.SEARCH_DOCS: _search_docs,
+    McpTool.GET_PAGE: _get_page,
+    McpTool.SEARCH_PAGES: _search_docs,
     McpTool.GET_ALLOWED_TRANSITIONS: _get_allowed_transitions,
     McpTool.TRANSITION_ITEM: _transition_item,
     McpTool.LOG_WORK: _log_work,
@@ -556,6 +556,6 @@ async def call_tool(
         if spec is None:
             raise UnknownToolError(name) from None
         return await _call_registry_tool(session, actor, spec, arguments)
-    if tool in DOC_TOOLS and not docs_bridge.docs_available():
+    if tool in PAGE_TOOLS and not pages_bridge.pages_available():
         raise UnknownToolError(name)
     return await _HANDLERS[tool](session, actor, arguments)

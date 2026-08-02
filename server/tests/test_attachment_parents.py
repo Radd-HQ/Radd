@@ -27,8 +27,8 @@ from radd.modules.attachments.types import (
 )
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
-from radd.modules.docs import service as docs_service, spaces as docs_spaces
-from radd.modules.docs.schemas import DocPageCreate, DocSpaceCreate
+from radd.modules.pages import service as docs_service, spaces as docs_spaces
+from radd.modules.pages.schemas import PageCreate, PageSpaceCreate
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate
 from radd.modules.projects import service as projects_service
@@ -95,10 +95,10 @@ async def _item(db, admin):
 
 async def _page(db, admin):
     space = await docs_spaces.create_space(
-        db, DocSpaceCreate(name=f"Space {uuid.uuid4().hex[:6]}"), actor_id=admin.id
+        db, PageSpaceCreate(name=f"Space {uuid.uuid4().hex[:6]}"), actor_id=admin.id
     )
     return await docs_service.create_page(
-        db, DocPageCreate(space_id=space.id, title="Runbook"), actor_id=admin.id
+        db, PageCreate(space_id=space.id, title="Runbook"), actor_id=admin.id
     )
 
 
@@ -126,17 +126,17 @@ async def test_item_parent_round_trip_with_bytes_on_disk(db, admin, host, tmp_pa
     assert not stored.exists()  # bytes go with the row
 
 
-async def test_doc_page_parent_has_no_item_id(db, admin, host):
+async def test_page_parent_has_no_item_id(db, admin, host):
     page = await _page(db, admin)
     attachment = await service.save_upload(
         db,
-        entity_type=AttachmentParentType.DOC_PAGE.value,
+        entity_type=AttachmentParentType.PAGE.value,
         entity_id=page.id,
         upload=_upload("diagram.png"),
         actor_id=admin.id,
     )
     assert attachment.item_id is None
-    listed = await service.list_for_entity(db, AttachmentParentType.DOC_PAGE.value, page.id)
+    listed = await service.list_for_entity(db, AttachmentParentType.PAGE.value, page.id)
     assert [a.id for a in listed] == [attachment.id]
     # Wiki files never appear in an item listing.
     assert await service.list_for_item(db, page.id) == []
@@ -144,9 +144,9 @@ async def test_doc_page_parent_has_no_item_id(db, admin, host):
 
 async def test_doc_binding_enforces_the_global_doc_atoms(db, admin, member, host):
     page = await _page(db, admin)
-    binding = parents.binding_for(AttachmentParentType.DOC_PAGE.value)
+    binding = parents.binding_for(AttachmentParentType.PAGE.value)
     # Every active user writes docs (spec 43 — a read-only wiki is useless), so
-    # a plain member may upload; doc.manage (delete anyone's file) stays closed.
+    # a plain member may upload; page.manage (delete anyone's file) stays closed.
     await binding.require_write(db, member, page.id)
     with pytest.raises(ForbiddenError):
         await binding.require_admin(db, member, page.id)
@@ -165,6 +165,6 @@ async def test_item_binding_project_id_feeds_routing_context(db, admin, host):
     project, item = await _item(db, admin)
     binding = parents.binding_for(AttachmentParentType.ITEM.value)
     assert await binding.project_id_of(db, item.id) == project.id
-    doc_binding = parents.binding_for(AttachmentParentType.DOC_PAGE.value)
+    doc_binding = parents.binding_for(AttachmentParentType.PAGE.value)
     page = await _page(db, admin)
     assert await doc_binding.project_id_of(db, page.id) is None

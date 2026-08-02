@@ -87,7 +87,7 @@ def patch_lookups(monkeypatch, *, permission_sets=(), global_permission_sets=())
 def test_builtin_admin_holds_every_project_scoped_permission():
     admin = set(builtin_role(BuiltinRoleKey.ADMIN).permissions)
     # Every project-scoped atom, plus dashboard.create as a global-scoped rider
-    # (spec 75 — the doc.write-on-member precedent). Spec 87 dropped the
+    # (spec 75 — the page.write-on-member precedent). Spec 87 dropped the
     # update/delete riders with their atoms: dashboards decide those by
     # ownership, so no atom was ever consulted.
     assert admin == set(PROJECT_PERMISSIONS) | {Permission.DASHBOARD_CREATE}
@@ -110,11 +110,11 @@ def test_builtin_member_and_viewer_sets():
         Permission.COMMENT_READ_INTERNAL,
         Permission.VIEW_MANAGE,
         Permission.FORM_MANAGE,  # members author intake forms (spec 36)
-        Permission.DOC_WRITE,  # members write docs (spec 43)
+        Permission.PAGE_WRITE,  # members write docs (spec 43)
     }
     assert set(builtin_role(BuiltinRoleKey.VIEWER).permissions) == {
         Permission.ITEM_READ,
-        Permission.DOC_READ,  # the wiki-read floor rider (spec 43)
+        Permission.PAGE_READ,  # the wiki-read floor rider (spec 43)
     }
 
 
@@ -173,13 +173,13 @@ def test_builtin_sets_are_strictly_nested():
     # (spec 43) are global-scoped riders on viewer/member — they feed the
     # member floor/scope sets, not the project hierarchy — so they're
     # excluded here and pinned separately.
-    doc = {Permission.DOC_READ, Permission.DOC_WRITE, Permission.DOC_MANAGE}
+    doc = {Permission.PAGE_READ, Permission.PAGE_WRITE, Permission.PAGE_MANAGE}
     viewer = set(builtin_role(BuiltinRoleKey.VIEWER).permissions)
     member = set(builtin_role(BuiltinRoleKey.MEMBER).permissions)
     admin = set(builtin_role(BuiltinRoleKey.ADMIN).permissions)
     assert (viewer - doc) < (member - doc) < (admin - doc)
-    assert viewer & doc == {Permission.DOC_READ}
-    assert member & doc == {Permission.DOC_WRITE}
+    assert viewer & doc == {Permission.PAGE_READ}
+    assert member & doc == {Permission.PAGE_WRITE}
 
 
 def test_every_builtin_key_is_defined_once():
@@ -208,7 +208,7 @@ def test_combine_unions_across_role_sets_plus_member_floor():
     )
     assert combined == {
         Permission.ITEM_READ,  # the floor
-        Permission.DOC_READ,  # rides the floor via the viewer set (spec 43)
+        Permission.PAGE_READ,  # rides the floor via the viewer set (spec 43)
         Permission.ITEM_UPDATE,
         Permission.COMMENT_WRITE,
     }
@@ -248,7 +248,7 @@ def test_global_scope_permissions():
     member = global_scope_permissions(InstanceRole.MEMBER.value)
     assert member == expand_permissions(
         MEMBER_FLOOR
-        | {Permission.CYCLE_MANAGE, Permission.TIMESHEET_VIEW, Permission.DOC_WRITE}
+        | {Permission.CYCLE_MANAGE, Permission.TIMESHEET_VIEW, Permission.PAGE_WRITE}
     )
     assert {
         Permission.CYCLE_CREATE,
@@ -275,7 +275,7 @@ async def test_effective_union_of_direct_team_and_floor(monkeypatch):
     # Any ACTIVE user holds the member floor — no membership row involved.
     patch_lookups(monkeypatch, permission_sets=[TRIAGER, [Permission.ITEM_CREATE]])
     permissions = await effective_permissions(SESSION, StubUser(), project=StubProject())
-    assert permissions == set(TRIAGER) | {Permission.ITEM_CREATE, Permission.DOC_READ}
+    assert permissions == set(TRIAGER) | {Permission.ITEM_CREATE, Permission.PAGE_READ}
 
 
 async def test_effective_inactive_user_has_no_permissions(monkeypatch):
@@ -302,7 +302,7 @@ async def test_require_returns_the_effective_union(monkeypatch):
     patch_lookups(monkeypatch, permission_sets=[[Permission.ITEM_READ, Permission.ITEM_CREATE]])
     permissions = await require(SESSION, StubUser(), Permission.ITEM_CREATE, project=StubProject())
     # The active-user floor (viewer set) rides along with the granted role.
-    assert permissions == {Permission.ITEM_READ, Permission.ITEM_CREATE, Permission.DOC_READ}
+    assert permissions == {Permission.ITEM_READ, Permission.ITEM_CREATE, Permission.PAGE_READ}
 
 
 async def test_require_custom_role_allows_update_but_not_create(monkeypatch):

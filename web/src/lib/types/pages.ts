@@ -1,9 +1,9 @@
-/** Wiki (docs, spec 43) + public knowledge base (spec 74) + KB deflection (spec 66). */
+/** Pages (docs, spec 43) + public pages (spec 74) + KB deflection (spec 66). */
 // ---------------------------------------------------------------------------
-// Wiki (docs module — spec 43)
+// Pages (docs module — spec 43)
 // ---------------------------------------------------------------------------
 
-export interface DocSpace {
+export interface PageSpace {
   id: string;
   name: string;
   slug: string;
@@ -17,7 +17,7 @@ export interface DocSpace {
   updated_at: string;
 }
 
-export interface DocSpaceCreate {
+export interface PageSpaceCreate {
   name: string;
   /** Omitted -> derived from the name (slugs are cosmetic; URLs use ids). */
   slug?: string;
@@ -25,7 +25,7 @@ export interface DocSpaceCreate {
   position?: number;
 }
 
-export interface DocSpaceUpdate {
+export interface PageSpaceUpdate {
   name?: string;
   slug?: string;
   description?: string;
@@ -34,8 +34,8 @@ export interface DocSpaceUpdate {
   public?: boolean;
 }
 
-/** Flat tree row from GET /doc-spaces/{id}/pages — the client builds the tree. */
-export interface DocPageSummary {
+/** Flat tree row from GET /page-spaces/{id}/pages — the client builds the tree. */
+export interface PageSummary {
   id: string;
   parent_id: string | null;
   title: string;
@@ -49,7 +49,7 @@ export interface DocBreadcrumb {
   title: string;
 }
 
-export interface DocPage {
+export interface Page {
   id: string;
   space_id: string;
   parent_id: string | null;
@@ -63,12 +63,12 @@ export interface DocPage {
   archived_at: string | null;
   created_at: string;
   updated_at: string;
-  space: DocSpace;
+  space: PageSpace;
   /** Ancestors, root first (excludes the page itself). */
   breadcrumb: DocBreadcrumb[];
 }
 
-export interface DocPageCreate {
+export interface PageCreate {
   space_id: string;
   parent_id?: string | null;
   title: string;
@@ -76,7 +76,7 @@ export interface DocPageCreate {
 }
 
 /** Omitted = unchanged; parent_id null moves to root; a stale expected_version 409s. */
-export interface DocPageUpdate {
+export interface PageUpdate {
   title?: string;
   body?: string;
   parent_id?: string | null;
@@ -84,19 +84,19 @@ export interface DocPageUpdate {
   expected_version?: number;
 }
 
-export interface DocVersionMeta {
+export interface PageVersionMeta {
   version: number;
   title: string;
   author_id: string;
   created_at: string;
 }
 
-export interface DocVersion extends DocVersionMeta {
+export interface DocVersion extends PageVersionMeta {
   body: string;
 }
 
 /** An issue linked to a page, hydrated for display. */
-export interface DocLinkedItem {
+export interface PageLinkedItem {
   item_id: string;
   key: string;
   title: string;
@@ -104,15 +104,15 @@ export interface DocLinkedItem {
   state_category: string;
 }
 
-/** A page linked to an issue (the issue page's Docs row). */
-export interface ItemDocRef {
+/** A page linked to an issue (the issue page's Pages row). */
+export interface ItemPageRef {
   page_id: string;
   space_id: string;
   title: string;
   space_name: string;
 }
 
-export interface DocSearchResult {
+export interface PageSearchResult {
   page_id: string;
   space_id: string;
   title: string;
@@ -120,16 +120,16 @@ export interface DocSearchResult {
   snippet: string | null;
 }
 
-export interface DocSearchResponse {
-  results: DocSearchResult[];
+export interface PageSearchResponse {
+  results: PageSearchResult[];
 }
 
 // ---------------------------------------------------------------------------
-// Public knowledge base (spec 74) — trimmed no-login shapes under /public/kb
+// Public pages (spec 74) — trimmed no-login shapes under /public/kb
 // ---------------------------------------------------------------------------
 
 /** GET /public/kb/spaces — a public space's card. */
-export interface PublicKbSpace {
+export interface PublicPageSpace {
   id: string;
   name: string;
   slug: string;
@@ -137,7 +137,7 @@ export interface PublicKbSpace {
 }
 
 /** GET /public/kb/spaces/{id}/tree — one non-archived flat tree row. */
-export interface PublicKbPageNode {
+export interface PublicPageNode {
   id: string;
   parent_id: string | null;
   title: string;
@@ -145,7 +145,7 @@ export interface PublicKbPageNode {
 }
 
 /** GET /public/kb/pages/{id} — body + breadcrumb only (markdown renders client-side). */
-export interface PublicKbPage {
+export interface PublicPagesPage {
   id: string;
   space_id: string;
   title: string;
@@ -158,12 +158,12 @@ export interface PublicKbPage {
 /** GET /public/forms/{token}/deflect (spec 74) — public-KB docs ONLY (the
  * authed DeflectResponse's docs shape; resolved issues stay internal). */
 export interface PublicDeflectResponse {
-  docs: DeflectDoc[];
+  docs: DeflectPage[];
 }
 
 /** GET /search/deflect (spec 66) — KB deflection under the new-issue title:
- * wiki pages that may already answer it + previously RESOLVED items. */
-export interface DeflectDoc {
+ * pages pages that may already answer it + previously RESOLVED items. */
+export interface DeflectPage {
   id: string;
   space_id: string;
   title: string;
@@ -176,6 +176,6 @@ export interface DeflectItem {
 }
 
 export interface DeflectResponse {
-  docs: DeflectDoc[];
+  docs: DeflectPage[];
   items: DeflectItem[];
 }

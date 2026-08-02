@@ -1,4 +1,4 @@
-"""Pure decision helpers for the docs module (unit-tested, no DB).
+"""Pure decision helpers for the pages module (unit-tested, no DB).
 
 The service layer feeds these plain values so the invariants many flows depend
 on — no page-tree cycles, when an edit snapshots a version — stay testable

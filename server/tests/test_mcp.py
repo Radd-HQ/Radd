@@ -3,7 +3,7 @@
 Pure tests: JSON-RPC envelope handling (parse -> -32700/-32600, result/error
 shapes), method routing (initialize / ping / unknown -> -32601), tools/call
 shaping (domain error -> isError:true + rollback, unknown tool -> -32602),
-tool-catalog generation from a stubbed field registry, and docs-module feature
+tool-catalog generation from a stubbed field registry, and pages-module feature
 detection. HTTP-level auth gates (401/403) ride an in-process ASGI client that
 never touches the DB. The full PAT round trip is an integration step, not a
 unit test (repo rule: tests only where they earn their keep).
@@ -22,7 +22,7 @@ from radd.modules.mcp.protocol import JsonRpcError, JsonRpcRequest, parse_reques
 from radd.modules.mcp.router import handle_request
 from radd.modules.mcp.types import (
     MCP_PROTOCOL_VERSION,
-    DOCS_MODULE_PATH,
+    PAGES_MODULE_PATH,
     JsonRpcErrorCode,
     McpMethod,
     McpTool,
@@ -236,7 +236,7 @@ STUB_REGISTRY = {
 
 
 def test_catalog_names_and_required_fields():
-    catalog = tools.build_catalog(STUB_REGISTRY, include_docs=False)
+    catalog = tools.build_catalog(STUB_REGISTRY, include_pages=False)
     assert {tool["name"] for tool in catalog} == {t.value for t in TRACKER_TOOLS}
     by_name = {tool["name"]: tool for tool in catalog}
     assert by_name[McpTool.SEARCH_ITEMS]["inputSchema"]["required"] == ["slq"]
@@ -247,7 +247,7 @@ def test_catalog_names_and_required_fields():
 
 
 def test_catalog_custom_fields_schema_comes_from_registry():
-    catalog = tools.build_catalog(STUB_REGISTRY, include_docs=False)
+    catalog = tools.build_catalog(STUB_REGISTRY, include_pages=False)
     by_name = {tool["name"]: tool for tool in catalog}
     for name in (McpTool.CREATE_ITEM, McpTool.UPDATE_ITEM):
         custom = by_name[name]["inputSchema"]["properties"]["custom_fields"]
@@ -256,9 +256,9 @@ def test_catalog_custom_fields_schema_comes_from_registry():
 
 
 def test_catalog_doc_tools_appear_only_when_docs_live():
-    without = {t["name"] for t in tools.build_catalog({}, include_docs=False)}
-    with_docs = {t["name"] for t in tools.build_catalog({}, include_docs=True)}
-    assert with_docs - without == {McpTool.GET_DOC_PAGE.value, McpTool.SEARCH_DOCS.value}
+    without = {t["name"] for t in tools.build_catalog({}, include_pages=False)}
+    with_docs = {t["name"] for t in tools.build_catalog({}, include_pages=True)}
+    assert with_docs - without == {McpTool.GET_PAGE.value, McpTool.SEARCH_PAGES.value}
 
 
 # --- docs feature detection ---
@@ -266,13 +266,13 @@ def test_catalog_doc_tools_appear_only_when_docs_live():
 
 def test_docs_unavailable_when_module_not_enabled(monkeypatch):
     monkeypatch.setattr(
-        settings, "modules", tuple(m for m in settings.modules if m != DOCS_MODULE_PATH)
+        settings, "modules", tuple(m for m in settings.modules if m != PAGES_MODULE_PATH)
     )
-    assert tools.docs_available() is False
+    assert tools.pages_available() is False
 
 
-def test_docs_available_when_service_exposes_functions(monkeypatch):
-    fake = types.ModuleType(f"{DOCS_MODULE_PATH}.service")
+def test_pages_available_when_service_exposes_functions(monkeypatch):
+    fake = types.ModuleType(f"{PAGES_MODULE_PATH}.service")
 
     async def get_page(session, page_id, actor):
         return {"id": str(page_id), "title": "Farm runbook"}
@@ -282,10 +282,10 @@ def test_docs_available_when_service_exposes_functions(monkeypatch):
 
     fake.get_page = get_page
     fake.search_pages = search_pages
-    monkeypatch.setitem(__import__("sys").modules, f"{DOCS_MODULE_PATH}.service", fake)
-    if DOCS_MODULE_PATH not in settings.modules:
-        monkeypatch.setattr(settings, "modules", settings.modules + (DOCS_MODULE_PATH,))
-    assert tools.docs_available() is True
+    monkeypatch.setitem(__import__("sys").modules, f"{PAGES_MODULE_PATH}.service", fake)
+    if PAGES_MODULE_PATH not in settings.modules:
+        monkeypatch.setattr(settings, "modules", settings.modules + (PAGES_MODULE_PATH,))
+    assert tools.pages_available() is True
 
 
 async def test_doc_handler_binds_by_parameter_name(monkeypatch):
@@ -295,15 +295,15 @@ async def test_doc_handler_binds_by_parameter_name(monkeypatch):
         seen["page_id"] = page_id
         return {"title": "Farm runbook"}
 
-    fake = types.ModuleType(f"{DOCS_MODULE_PATH}.service")
+    fake = types.ModuleType(f"{PAGES_MODULE_PATH}.service")
     fake.get_page = get_page
     fake.search = get_page  # anything callable satisfies detection
-    monkeypatch.setitem(__import__("sys").modules, f"{DOCS_MODULE_PATH}.service", fake)
-    if DOCS_MODULE_PATH not in settings.modules:
-        monkeypatch.setattr(settings, "modules", settings.modules + (DOCS_MODULE_PATH,))
+    monkeypatch.setitem(__import__("sys").modules, f"{PAGES_MODULE_PATH}.service", fake)
+    if PAGES_MODULE_PATH not in settings.modules:
+        monkeypatch.setattr(settings, "modules", settings.modules + (PAGES_MODULE_PATH,))
     page_id = "0d9f2c66-1cd5-4b25-9a90-1b1f4a2f3c11"
     result = await tools.call_tool(
-        None, None, McpTool.GET_DOC_PAGE.value, {"id": page_id}
+        None, None, McpTool.GET_PAGE.value, {"id": page_id}
     )
     assert result == {"title": "Farm runbook"}
     assert str(seen["page_id"]) == page_id

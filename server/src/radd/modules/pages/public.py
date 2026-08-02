@@ -1,6 +1,6 @@
 """Public (no-login) knowledge-base reads — spec 74.
 
-The `public` flag on a DocSpace IS the credential: everything here 404s unless
+The `public` flag on a PageSpace IS the credential: everything here 404s unless
 the page's space is public, and archived pages (or pages under an archived
 ancestor) never leak. Bodies only — versions/history/links stay authenticated.
 
@@ -18,57 +18,57 @@ from radd.config import settings
 from radd.exceptions import NotFoundError
 
 from . import search, service
-from .models import DocPage, DocSpace
+from .models import Page, PageSpace
 from .schemas import (
     DocSearchResult,
-    PublicKbPageNode,
-    PublicKbPageRead,
-    PublicKbSpace,
+    PublicPageNode,
+    PublicPageRead,
+    PublicPageSpace,
 )
-from .types import DocEntity
+from .types import PageEntity
 
 
-async def list_public_spaces(session: AsyncSession) -> list[PublicKbSpace]:
+async def list_public_spaces(session: AsyncSession) -> list[PublicPageSpace]:
     """Every public space, instance-wide (spec 74: `public` means public)."""
     result = await session.execute(
-        select(DocSpace).where(DocSpace.public.is_(True)).order_by(DocSpace.position, DocSpace.name)
+        select(PageSpace).where(PageSpace.public.is_(True)).order_by(PageSpace.position, PageSpace.name)
     )
-    return [PublicKbSpace.model_validate(space) for space in result.scalars()]
+    return [PublicPageSpace.model_validate(space) for space in result.scalars()]
 
 
-async def get_public_space(session: AsyncSession, space_id: uuid.UUID) -> DocSpace:
+async def get_public_space(session: AsyncSession, space_id: uuid.UUID) -> PageSpace:
     """404 for unknown AND non-public alike — existence must not leak."""
-    space = await session.get(DocSpace, space_id)
+    space = await session.get(PageSpace, space_id)
     if space is None or not space.public:
-        raise NotFoundError(DocEntity.SPACE, space_id)
+        raise NotFoundError(PageEntity.SPACE, space_id)
     return space
 
 
-async def public_tree(session: AsyncSession, space_id: uuid.UUID) -> list[PublicKbPageNode]:
+async def public_tree(session: AsyncSession, space_id: uuid.UUID) -> list[PublicPageNode]:
     """The non-archived page tree of a public space (archived subtrees pruned
     by the same visibility rules as the authed listing)."""
     await get_public_space(session, space_id)
     return [
-        PublicKbPageNode(id=row.id, parent_id=row.parent_id, title=row.title, position=row.position)
+        PublicPageNode(id=row.id, parent_id=row.parent_id, title=row.title, position=row.position)
         for row in await service.list_pages(session, space_id)
     ]
 
 
-async def public_page(session: AsyncSession, page_id: uuid.UUID) -> PublicKbPageRead:
+async def public_page(session: AsyncSession, page_id: uuid.UUID) -> PublicPageRead:
     """One page's body + breadcrumb — 404 unless its space is public and the
     page is visible (not archived, no archived ancestor). Every failure mode is
     the SAME page-404 so nothing about internal content leaks."""
-    page = await session.get(DocPage, page_id)
+    page = await session.get(Page, page_id)
     if page is None:
-        raise NotFoundError(DocEntity.PAGE, page_id)
-    space = await session.get(DocSpace, page.space_id)
+        raise NotFoundError(PageEntity.PAGE, page_id)
+    space = await session.get(PageSpace, page.space_id)
     if space is None or not space.public:
-        raise NotFoundError(DocEntity.PAGE, page_id)
+        raise NotFoundError(PageEntity.PAGE, page_id)
     visible = {row.id for row in await service.list_pages(session, page.space_id)}
     if page.id not in visible:
-        raise NotFoundError(DocEntity.PAGE, page_id)
+        raise NotFoundError(PageEntity.PAGE, page_id)
     read = await service.page_read(session, page)
-    return PublicKbPageRead(
+    return PublicPageRead(
         id=read.id,
         space_id=read.space_id,
         title=read.title,

@@ -247,7 +247,7 @@ async def test_forgejo_endpoint_ignores_unhandled_event_kinds(monkeypatch):
 
 # --- googlechat: pure message formatting ---
 
-SELECTED = frozenset({"item.created", "sla.breached", "doc_page.created"})
+SELECTED = frozenset({"item.created", "sla.breached", "page.created"})
 
 
 def _event(event_type: str, payload: dict) -> SimpleNamespace:
@@ -277,13 +277,13 @@ def test_googlechat_formats_sla_breached():
     assert "https://radd.example.com/issues/TD-12" in text
 
 
-def test_googlechat_formats_doc_page_created():
+def test_googlechat_formats_page_created():
     text = format_message(
-        _event("doc_page.created", {"title": "Render farm runbook"}),
+        _event("page.created", {"title": "Render farm runbook"}),
         selected=SELECTED,
         base_url="https://radd.example.com",
     )
-    assert text == "New doc page: Render farm runbook\nhttps://radd.example.com"
+    assert text == "New page: Render farm runbook\nhttps://radd.example.com"
 
 
 def test_googlechat_returns_none_for_unselected_or_unknown():

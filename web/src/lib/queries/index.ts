@@ -22,7 +22,7 @@ export * from "./activity";
 export * from "./notifications";
 export * from "./service-desk";
 export * from "./batches";
-export * from "./docs";
+export * from "./pages";
 export * from "./ai-search";
 export * from "./ai-admin";
 export * from "./sso-admin";

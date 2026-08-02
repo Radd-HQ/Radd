@@ -9,38 +9,38 @@ from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.events import service as events
 
 from . import core
-from .models import DocPage, DocSpace
-from .schemas import DocSpaceCreate, DocSpaceRead, DocSpaceUpdate
-from .types import DocEntity, DocEvent
+from .models import Page, PageSpace
+from .schemas import PageSpaceCreate, PageSpaceRead, PageSpaceUpdate
+from .types import PageEntity, PageEvent
 
 
-async def get_space(session: AsyncSession, space_id: uuid.UUID) -> DocSpace:
-    space = await session.get(DocSpace, space_id)
+async def get_space(session: AsyncSession, space_id: uuid.UUID) -> PageSpace:
+    space = await session.get(PageSpace, space_id)
     if space is None:
-        raise NotFoundError(DocEntity.SPACE, space_id)
+        raise NotFoundError(PageEntity.SPACE, space_id)
     return space
 
 
 async def _slug_clash(
     session: AsyncSession, slug: str, exclude: uuid.UUID | None = None
 ) -> bool:
-    stmt = select(DocSpace.id).where(DocSpace.slug == slug)
+    stmt = select(PageSpace.id).where(PageSpace.slug == slug)
     if exclude is not None:
-        stmt = stmt.where(DocSpace.id != exclude)
+        stmt = stmt.where(PageSpace.id != exclude)
     return (await session.scalar(stmt)) is not None
 
 
 async def _emit_space(
     session: AsyncSession,
-    event_type: DocEvent,
-    space: DocSpace,
+    event_type: PageEvent,
+    space: PageSpace,
     actor_id: uuid.UUID,
     payload: dict,
 ) -> None:
     await events.emit(
         session,
         event_type=event_type,
-        entity_type=DocEntity.SPACE,
+        entity_type=PageEntity.SPACE,
         entity_id=space.id,
         actor_id=actor_id,
         payload=payload,
@@ -48,12 +48,12 @@ async def _emit_space(
 
 
 async def create_space(
-    session: AsyncSession, data: DocSpaceCreate, actor_id: uuid.UUID
-) -> DocSpace:
+    session: AsyncSession, data: PageSpaceCreate, actor_id: uuid.UUID
+) -> PageSpace:
     slug = data.slug or core.slugify(data.name)
     if await _slug_clash(session, slug):
-        raise ConflictError(DocEntity.SPACE, slug)
-    space = DocSpace(
+        raise ConflictError(PageEntity.SPACE, slug)
+    space = PageSpace(
         name=data.name,
         slug=slug,
         description=data.description,
@@ -62,15 +62,15 @@ async def create_space(
     session.add(space)
     await session.flush()
     await _emit_space(
-        session, DocEvent.SPACE_CREATED, space, actor_id,
+        session, PageEvent.SPACE_CREATED, space, actor_id,
         {"name": space.name, "slug": space.slug},
     )
     return space
 
 
 async def update_space(
-    session: AsyncSession, space_id: uuid.UUID, data: DocSpaceUpdate, actor_id: uuid.UUID
-) -> DocSpace:
+    session: AsyncSession, space_id: uuid.UUID, data: PageSpaceUpdate, actor_id: uuid.UUID
+) -> PageSpace:
     space = await get_space(session, space_id)
     changed: list[str] = []
     for field in ("name", "slug", "description", "position", "public"):
@@ -79,13 +79,13 @@ async def update_space(
             if field == "slug" and await _slug_clash(
                 session, value, exclude=space.id
             ):
-                raise ConflictError(DocEntity.SPACE, value)
+                raise ConflictError(PageEntity.SPACE, value)
             setattr(space, field, value)
             changed.append(field)
     await session.flush()
     if changed:
         await _emit_space(
-            session, DocEvent.SPACE_UPDATED, space, actor_id,
+            session, PageEvent.SPACE_UPDATED, space, actor_id,
             {"name": space.name, "changed": changed},
         )
     return space
@@ -96,40 +96,40 @@ async def delete_space(
 ) -> None:
     space = await get_space(session, space_id)
     count = await session.scalar(
-        select(func.count()).select_from(DocPage).where(DocPage.space_id == space_id)
+        select(func.count()).select_from(Page).where(Page.space_id == space_id)
     )
     if count and not force:
         raise ConflictError(
-            DocEntity.SPACE,
+            PageEntity.SPACE,
             reason=f"space has {count} page(s) — delete them or pass force=true",
         )
     await session.delete(space)  # pages/versions/links go via FK CASCADE
     await session.flush()
     await _emit_space(
-        session, DocEvent.SPACE_DELETED, space, actor_id,
+        session, PageEvent.SPACE_DELETED, space, actor_id,
         {"name": space.name, "page_count": count or 0},
     )
 
 
-async def list_spaces(session: AsyncSession) -> list[DocSpaceRead]:
+async def list_spaces(session: AsyncSession) -> list[PageSpaceRead]:
     result = await session.execute(
-        select(DocSpace).order_by(DocSpace.position, DocSpace.name)
+        select(PageSpace).order_by(PageSpace.position, PageSpace.name)
     )
     spaces = list(result.scalars())
     counts: dict[uuid.UUID, int] = dict(
         (
             await session.execute(
-                select(DocPage.space_id, func.count())
+                select(Page.space_id, func.count())
                 .where(
-                    DocPage.space_id.in_([s.id for s in spaces]),
-                    DocPage.archived_at.is_(None),
+                    Page.space_id.in_([s.id for s in spaces]),
+                    Page.archived_at.is_(None),
                 )
-                .group_by(DocPage.space_id)
+                .group_by(Page.space_id)
             )
         ).all()
     ) if spaces else {}
     return [
-        DocSpaceRead.model_validate(space).model_copy(
+        PageSpaceRead.model_validate(space).model_copy(
             update={"page_count": counts.get(space.id, 0)}
         )
         for space in spaces

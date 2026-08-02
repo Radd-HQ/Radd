@@ -441,9 +441,9 @@ _MERGE_REPOINT: tuple[tuple[str, str], ...] = (
     ("item_web_links", "created_by"),
     ("item_vcs_links", "created_by"),
     ("attachments", "created_by"),
-    ("doc_pages", "created_by"),
-    ("doc_page_versions", "author_id"),
-    ("item_doc_links", "created_by"),
+    ("pages", "created_by"),
+    ("page_versions", "author_id"),
+    ("item_page_links", "created_by"),
     ("views", "owner_id"),
     ("item_participants", "added_by"),
     ("view_members", "added_by"),  # roadmap wave: who pinned the item to the view
@@ -453,7 +453,7 @@ _MERGE_REPOINT: tuple[tuple[str, str], ...] = (
     # and doc edits. Found by diffing this list against every FK to users.id.
     ("approval_requests", "requested_by"),
     ("approval_votes", "user_id"),
-    ("doc_pages", "updated_by"),
+    ("pages", "updated_by"),
     # Teams the person owns follow them; the column is ON DELETE SET NULL, so
     # without this a delete would silently leave those teams ownerless.
     ("teams", "owner_id"),
@@ -664,7 +664,7 @@ _CONTENT_COUNTS: tuple[tuple[str, str, str], ...] = (
     ("reported_items", "work_items", "reporter_id"),
     ("assigned_items", "work_items", "assignee_id"),
     ("comments", "comments", "author_id"),
-    ("documents", "doc_pages", "created_by"),
+    ("documents", "pages", "created_by"),
     ("views", "views", "owner_id"),
     ("dashboards", "dashboards", "owner_id"),
     ("owned_teams", "teams", "owner_id"),

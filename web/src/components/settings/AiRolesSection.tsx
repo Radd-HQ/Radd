@@ -213,7 +213,7 @@ function EmbeddingCoverageLine({ assigned }: { assigned: boolean }) {
   return (
     <p className="mt-2 text-xs text-fg-muted">
       Semantic index: {items_embedded.toLocaleString()} / {items_total.toLocaleString()} items,{" "}
-      {docs_embedded.toLocaleString()} / {docs_total.toLocaleString()} wiki pages embedded.
+      {docs_embedded.toLocaleString()} / {docs_total.toLocaleString()} pages pages embedded.
     </p>
   );
 }

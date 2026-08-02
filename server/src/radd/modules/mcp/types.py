@@ -51,7 +51,7 @@ class McpContentType(StrEnum):
 
 
 class McpTool(StrEnum):
-    """The v1 tool catalog. Doc tools appear only when the docs module is
+    """The v1 tool catalog. Doc tools appear only when the pages module is
     enabled AND exposes the service functions we need (feature-detected)."""
 
     SEARCH_ITEMS = "search_items"
@@ -61,8 +61,8 @@ class McpTool(StrEnum):
     UPDATE_ITEM = "update_item"
     COMMENT_ITEM = "comment_item"
     LIST_PROJECTS = "list_projects"
-    GET_DOC_PAGE = "get_doc_page"
-    SEARCH_DOCS = "search_docs"
+    GET_PAGE = "get_page"
+    SEARCH_PAGES = "search_pages"
     # --- spec 114: families that appear only for keys that may use them ---
     GET_ALLOWED_TRANSITIONS = "get_allowed_transitions"
     TRANSITION_ITEM = "transition_item"
@@ -77,8 +77,8 @@ class McpTool(StrEnum):
     CREATE_SERVICE_ACCOUNT = "create_service_account"
 
 
-# The doc tools ride the docs module (spec 43), which may be absent or a stub.
+# The doc tools ride the pages module (spec 43), which may be absent or a stub.
 WORKLOG_WINDOW_DAYS = 30  # spec 114: list_worklogs default window
 
-DOC_TOOLS = frozenset({McpTool.GET_DOC_PAGE, McpTool.SEARCH_DOCS})
-DOCS_MODULE_PATH = "radd.modules.docs"
+PAGE_TOOLS = frozenset({McpTool.GET_PAGE, McpTool.SEARCH_PAGES})
+PAGES_MODULE_PATH = "radd.modules.pages"

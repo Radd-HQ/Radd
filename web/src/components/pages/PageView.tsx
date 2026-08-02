@@ -4,34 +4,34 @@ import { Archive, ArchiveRestore, History, Pencil, Trash2 } from "lucide-react";
 import { api, ApiError, errorMessage } from "../../lib/api";
 import { useAttachmentUploader } from "../../lib/useAttachmentUploader";
 import { Entity, invalidateEntities } from "../../lib/cache";
-import { apiDocPagePath, apiDocPageUnarchivePath, attachmentUrl } from "../../lib/constants";
+import { apiPagePath, apiPageUnarchivePath, attachmentUrl } from "../../lib/constants";
 import { relativeTime } from "../../lib/dates";
 import { LazyRichViewer as RichViewer } from "../editor/LazyRichViewer";
 import { usersQuery } from "../../lib/queries";
-import { AttachmentParentType, type DocPage, type DocPageUpdate } from "../../lib/types";
+import { AttachmentParentType, type Page, type PageUpdate } from "../../lib/types";
 import { LazyRichEditor as RichEditor } from "../editor/LazyRichEditor";
 import type { AiRun } from "../editor/ai";
 import { AiReadMenu } from "../editor/AiReadMenu";
 import { Button } from "../Button";
 import { useConfirm } from "../ConfirmDialog";
-import { DocLinkedItems } from "./DocLinkedItems";
-import { DocPageHistory } from "./DocPageHistory";
+import { PageLinkedItems } from "./PageLinkedItems";
+import { PageHistory } from "./PageHistory";
 
 const Tab = { content: "content", history: "history" } as const;
 type TabValue = (typeof Tab)[keyof typeof Tab];
 
 /**
- * A doc page (spec 43): inline-editable title, rendered markdown body with an
+ * A page (spec 43): inline-editable title, rendered markdown body with an
  * Edit mode (optimistic concurrency: Save sends expected_version; a 409 offers
  * reload-or-overwrite instead of clobbering), History tab, archive controls,
  * and the linked-issues panel.
  */
-export function DocPageView({
+export function PageView({
   page,
   canWrite,
   canManage,
 }: {
-  page: DocPage;
+  page: Page;
   canWrite: boolean;
   canManage: boolean;
 }) {
@@ -52,16 +52,16 @@ export function DocPageView({
   const [confirmDialog, confirm] = useConfirm();
   // Pasted/inserted page images go through the storage-choice seam (spec 102).
   const uploadFiles = useAttachmentUploader({
-    entityType: AttachmentParentType.docPage,
+    entityType: AttachmentParentType.page,
     entityId: page.id,
   });
 
   // A concurrent editor may rename the page while we view it — track it.
   useEffect(() => setTitle(page.title), [page.title]);
 
-  const invalidate = () => void invalidateEntities(queryClient, Entity.docPage, Entity.docSpace);
+  const invalidate = () => void invalidateEntities(queryClient, Entity.page, Entity.docSpace);
   const save = useMutation({
-    mutationFn: (body: DocPageUpdate) => api.patch<DocPage>(apiDocPagePath(page.id), body),
+    mutationFn: (body: PageUpdate) => api.patch<Page>(apiPagePath(page.id), body),
     onSuccess: () => {
       setEditing(false);
       setConflict(false);
@@ -72,15 +72,15 @@ export function DocPageView({
     onSettled: invalidate,
   });
   const archive = useMutation({
-    mutationFn: () => api.delete<void>(apiDocPagePath(page.id)),
+    mutationFn: () => api.delete<void>(apiPagePath(page.id)),
     onSettled: invalidate,
   });
   const unarchive = useMutation({
-    mutationFn: () => api.post<DocPage>(apiDocPageUnarchivePath(page.id)),
+    mutationFn: () => api.post<Page>(apiPageUnarchivePath(page.id)),
     onSettled: invalidate,
   });
   const hardDelete = useMutation({
-    mutationFn: () => api.delete<void>(apiDocPagePath(page.id), { query: { hard: "true" } }),
+    mutationFn: () => api.delete<void>(apiPagePath(page.id), { query: { hard: "true" } }),
     onSettled: invalidate,
   });
 
@@ -187,7 +187,7 @@ export function DocPageView({
       ) : null}
 
       {tab === Tab.history ? (
-        <DocPageHistory page={page} canWrite={canWrite} />
+        <PageHistory page={page} canWrite={canWrite} />
       ) : editing ? (
         <div className="mt-3 flex flex-col gap-2">
           {conflict && (
@@ -310,7 +310,7 @@ export function DocPageView({
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-fg-muted">
               Linked issues
             </h3>
-            <DocLinkedItems pageId={page.id} canWrite={canWrite} />
+            <PageLinkedItems pageId={page.id} canWrite={canWrite} />
           </section>
         </>
       )}

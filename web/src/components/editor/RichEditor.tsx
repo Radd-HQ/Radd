@@ -45,7 +45,7 @@ interface RichEditorProps {
   onUploadImage?: (file: File) => Promise<string>;
   /** `/` quick-action menu entries (assign, state, labels, manual automations…) —
    * actions on the issue in context, NOT text inserts (the toolbar covers those).
-   * Omit where there's no issue context (wiki, new-item modal): `/` stays inert. */
+   * Omit where there's no issue context (pages, new-item modal): `/` stays inert. */
   quickActions?: QuickAction[];
   /** Run this AI transform over the whole document as soon as the editor is
    * ready (read-mode AI menu → edit-with-pending-diff). Consumed once. */
@@ -76,7 +76,7 @@ const MENTION_LIMIT = 6;
  * live, but the value in and out is always **markdown** — so nothing else in the app
  * (storage, rendering, search) has to change. A fixed TopBar toolbar inserts blocks;
  * `@` autocompletes people, `#` autocompletes issues (emitting the same
- * `@[Name](uuid)` / `#[KEY](KEY)` tokens the reader renders). Reused by wiki + comments.
+ * `@[Name](uuid)` / `#[KEY](KEY)` tokens the reader renders). Reused by pages + comments.
  */
 export function RichEditor({
   value,
@@ -98,7 +98,7 @@ export function RichEditor({
   onSubmitRef.current = onSubmitShortcut;
   const uploadRef = useRef(onUploadImage);
   uploadRef.current = onUploadImage;
-  // The CURRENT markdown (seeded from `value` with Jira wiki markup converted so old
+  // The CURRENT markdown (seeded from `value` with Jira pages markup converted so old
   // content edits as proper WYSIWYG; updated on every edit) — the source of truth
   // when switching between rich and plain modes.
   const contentRef = useRef(jiraToMarkdown(value));
@@ -240,7 +240,7 @@ export function RichEditor({
     const topBarConfig: NonNullable<
       NonNullable<CrepeConfig["featureConfigs"]>[CrepeFeature.TopBar]
     > = {
-      // H4–H6 add noise, not structure, at issue/wiki scale.
+      // H4–H6 add noise, not structure, at issue/pages scale.
       headingOptions: [
         { label: "Paragraph", level: null },
         { label: "Heading 1", level: 1 },

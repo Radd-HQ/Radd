@@ -27,7 +27,7 @@ import {
   capabilitiesQuery,
   cyclesQuery,
   dashboardsQuery,
-  docSpacesQuery,
+  pageSpacesQuery,
   projectsQuery,
   viewsQuery,
 } from "../../lib/queries";
@@ -73,9 +73,9 @@ export function Sidebar() {
   const { data: projects } = useQuery(projectsQuery());
   const { data: views } = useQuery(viewsQuery());
   const { data: cycles } = useQuery(cyclesQuery());
-  const { data: docSpaces } = useQuery({
-    ...docSpacesQuery(),
-    enabled: perms.global(Permission.docRead),
+  const { data: pageSpaces } = useQuery({
+    ...pageSpacesQuery(),
+    enabled: perms.global(Permission.pageRead),
   });
   const { data: dashboards } = useQuery(dashboardsQuery());
   /** Project the "New item" modal was opened for (from its sidebar row). */
@@ -308,20 +308,20 @@ export function Sidebar() {
           </div>
         )}
 
-        {/* Docs (spec 43): the wiki's spaces, between Views and Cycles. */}
-        {perms.global(Permission.docRead) && (
+        {/* Pages (spec 43): page spaces, between Views and Cycles. */}
+        {perms.global(Permission.pageRead) && (
           <div className="mt-3">
             <SectionHeader
-              label="Docs"
-              labelTo={RoutePath.docs}
-              collapsed={sectionCollapsed("docs")}
-              onToggle={() => toggleSection("docs")}
+              label="Pages"
+              labelTo={RoutePath.pages}
+              collapsed={sectionCollapsed("pages")}
+              onToggle={() => toggleSection("pages")}
               actions={
-                perms.global(Permission.docManage) && (
+                perms.global(Permission.pageManage) && (
                   <Link
-                    to={RoutePath.settingsDocs}
-                    aria-label="Manage doc spaces"
-                    title="Manage doc spaces"
+                    to={RoutePath.settingsPages}
+                    aria-label="Manage page spaces"
+                    title="Manage page spaces"
                     className="ml-auto rounded p-0.5 text-fg-faint hover:bg-overlay hover:text-fg focus-visible:outline-2 focus-visible:outline-focus"
                   >
                     <Settings size={12} />
@@ -329,15 +329,15 @@ export function Sidebar() {
                 )
               }
             />
-            {!sectionCollapsed("docs") &&
-              ((docSpaces ?? []).length === 0 ? (
+            {!sectionCollapsed("pages") &&
+              ((pageSpaces ?? []).length === 0 ? (
                 <p className="px-2 pb-1 text-xs text-fg-faint">No spaces yet.</p>
               ) : (
                 <ul>
-                  {(docSpaces ?? []).map((space) => (
+                  {(pageSpaces ?? []).map((space) => (
                     <li key={space.id}>
                       <Link
-                        to={RoutePath.docSpace}
+                        to={RoutePath.pageSpace}
                         params={{ spaceId: space.id }}
                         className={navLinkClasses}
                       >

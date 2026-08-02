@@ -25,8 +25,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger(__name__)
 
 ITEM_TABLE = "item_embeddings"
-DOC_TABLE = "doc_embeddings"
-_INDEX_NAMES = {ITEM_TABLE: "ix_item_embeddings_hnsw", DOC_TABLE: "ix_doc_embeddings_hnsw"}
+PAGE_TABLE = "page_embeddings"
+_INDEX_NAMES = {ITEM_TABLE: "ix_item_embeddings_hnsw", PAGE_TABLE: "ix_page_embeddings_hnsw"}
 
 # Model names land inside index predicates; keep them boring.
 _MODEL_RE = re.compile(r"^[A-Za-z0-9/_.:-]{1,200}$")
@@ -42,15 +42,15 @@ CREATE TABLE IF NOT EXISTS {ITEM_TABLE} (
 );
 CREATE INDEX IF NOT EXISTS ix_item_embeddings_project_id ON {ITEM_TABLE} (project_id);
 CREATE INDEX IF NOT EXISTS ix_item_embeddings_model ON {ITEM_TABLE} (model);
-CREATE TABLE IF NOT EXISTS {DOC_TABLE} (
-    page_id uuid PRIMARY KEY REFERENCES doc_pages(id) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS {PAGE_TABLE} (
+    page_id uuid PRIMARY KEY REFERENCES pages(id) ON DELETE CASCADE,
     public boolean NOT NULL DEFAULT false,
     model varchar(200) NOT NULL,
     content_hash varchar(64) NOT NULL,
     embedding halfvec NOT NULL,
     updated_at timestamp NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS ix_doc_embeddings_model ON {DOC_TABLE} (model);
+CREATE INDEX IF NOT EXISTS ix_page_embeddings_model ON {PAGE_TABLE} (model);
 """
 
 _available: bool | None = None  # process cache; extension presence can't change mid-run
@@ -165,7 +165,7 @@ async def upsert_doc(
 ) -> None:
     await session.execute(
         text(
-            f"INSERT INTO {DOC_TABLE} (page_id, public, model, content_hash, embedding)"
+            f"INSERT INTO {PAGE_TABLE} (page_id, public, model, content_hash, embedding)"
             " VALUES (:page_id, :public, :model, :hash, (:vec)::halfvec)"
             " ON CONFLICT (page_id) DO UPDATE SET public = :public, model = :model,"
             " content_hash = :hash, embedding = (:vec)::halfvec, updated_at = now()"
@@ -187,7 +187,7 @@ async def delete_item(session: AsyncSession, item_id: uuid.UUID) -> None:
 
 
 async def delete_doc(session: AsyncSession, page_id: uuid.UUID) -> None:
-    await session.execute(text(f"DELETE FROM {DOC_TABLE} WHERE page_id = :id"), {"id": page_id})
+    await session.execute(text(f"DELETE FROM {PAGE_TABLE} WHERE page_id = :id"), {"id": page_id})
 
 
 async def item_embedding(
@@ -257,7 +257,7 @@ async def nearest_docs(
     rows = await session.execute(
         text(
             f"SELECT page_id, (embedding::halfvec({dim})) <=> (:vec)::halfvec({dim}) AS distance"
-            f" FROM {DOC_TABLE}"
+            f" FROM {PAGE_TABLE}"
             " WHERE model = :model AND (NOT :public_only OR public)"
             " ORDER BY distance LIMIT :limit"
         ),
@@ -281,12 +281,12 @@ async def coverage(session: AsyncSession, *, model: str) -> dict[str, int]:
     ).scalar()
     docs_total = (
         await session.execute(
-            text("SELECT count(*) FROM doc_pages WHERE archived_at IS NULL")
+            text("SELECT count(*) FROM pages WHERE archived_at IS NULL")
         )
     ).scalar()
     docs_done = (
         await session.execute(
-            text(f"SELECT count(*) FROM {DOC_TABLE} WHERE model = :m"), {"m": model}
+            text(f"SELECT count(*) FROM {PAGE_TABLE} WHERE model = :m"), {"m": model}
         )
     ).scalar()
     return {

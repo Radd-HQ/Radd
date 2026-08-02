@@ -179,7 +179,7 @@ const components = {
 };
 
 export function Markdown({ text }: { text: string }) {
-  // Backwards-compat: render any Jira wiki markup (imported/pasted) as markdown too.
+  // Backwards-compat: render any Jira pages markup (imported/pasted) as markdown too.
   // No-op on native markdown (none of the Jira patterns occur there).
   const md = useMemo(() => jiraToMarkdown(text), [text]);
   return (

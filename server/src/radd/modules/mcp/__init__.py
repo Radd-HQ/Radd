@@ -7,7 +7,7 @@ plugin = RaddPlugin(
     core=False,  # optional plugin — disableable via the plugin manager
     description="Embedded MCP server (spec 45): hand-rolled Streamable-HTTP JSON-RPC at "
     "POST {api_prefix}/mcp — PAT-authed agents drive the same RBAC'd service layer as "
-    "humans. Doc tools appear automatically when the docs module is live.",
+    "humans. Doc tools appear automatically when the pages module is live.",
     depends_on=("auth", "projects", "workflow", "fields", "items", "comments"),
     routers=(router,),
 )

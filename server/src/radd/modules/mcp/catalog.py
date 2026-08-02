@@ -3,8 +3,8 @@
 `build_catalog` is pure (testable with a stubbed registry); `live_catalog`
 feeds it the live field-registry projection — the SAME source as OpenAPI — so
 studio-defined custom fields appear as documented `custom_fields` properties
-automatically. Doc tools are appended only when the docs module is live
-(feature-detected in docs_bridge).
+automatically. Doc tools are appended only when the pages module is live
+(feature-detected in pages_bridge).
 """
 
 from collections.abc import Mapping
@@ -16,7 +16,7 @@ from radd.modules.fields import openapi as fields_openapi, service as fields_ser
 from radd.modules.items.enums import ItemKind, Priority
 from radd.modules.releases.types import ReleaseStatus
 
-from .docs_bridge import docs_available
+from .pages_bridge import pages_available
 from .types import GET_ITEM_COMMENTS_TAIL, SEARCH_LIMIT_DEFAULT, SEARCH_LIMIT_MAX, McpTool
 
 _SLQ_DOC = (
@@ -98,7 +98,7 @@ def _item_write_properties(custom_field_properties: Mapping[str, Any]) -> dict[s
 
 
 def build_catalog(
-    custom_field_properties: Mapping[str, Any], *, include_docs: bool
+    custom_field_properties: Mapping[str, Any], *, include_pages: bool
 ) -> list[dict[str, Any]]:
     """The tools/list payload. Pure: the registry projection is passed in."""
     write = _item_write_properties(custom_field_properties)
@@ -193,17 +193,17 @@ def build_catalog(
             "inputSchema": _schema({}),
         },
     ]
-    if include_docs:
+    if include_pages:
         catalog += [
             {
-                "name": McpTool.GET_DOC_PAGE.value,
+                "name": McpTool.GET_PAGE.value,
                 "description": "Fetch one wiki page by id (full markdown body).",
                 "inputSchema": _schema(
                     {"id": {"type": "string", "description": "Doc page id (UUID)."}}, ["id"]
                 ),
             },
             {
-                "name": McpTool.SEARCH_DOCS.value,
+                "name": McpTool.SEARCH_PAGES.value,
                 "description": "Full-text search over wiki pages (title + body), ranked.",
                 "inputSchema": _schema(
                     {
@@ -367,7 +367,7 @@ async def live_catalog(session: AsyncSession, user: Any = None) -> list[dict[str
     reaches here (the router 401s first).
     """
     fields_openapi.refresh(await fields_service.list_fields(session))
-    catalog = build_catalog(fields_openapi.schema_cache.properties, include_docs=docs_available())
+    catalog = build_catalog(fields_openapi.schema_cache.properties, include_pages=pages_available())
     catalog += registry_catalog(frozenset(tool["name"] for tool in catalog))
     if user is None:
         return catalog

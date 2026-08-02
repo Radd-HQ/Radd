@@ -58,7 +58,7 @@ MEMBER_FLOOR: frozenset[Permission] = frozenset(builtin_role(BuiltinRoleKey.VIEW
 # admin-only — rules execute as the SYSTEM actor, so authoring them is
 # privilege-bearing.
 MEMBER_GLOBAL_SCOPE: frozenset[Permission] = MEMBER_FLOOR | frozenset(
-    {Permission.CYCLE_MANAGE, Permission.TIMESHEET_VIEW, Permission.DOC_WRITE}
+    {Permission.CYCLE_MANAGE, Permission.TIMESHEET_VIEW, Permission.PAGE_WRITE}
 )
 
 

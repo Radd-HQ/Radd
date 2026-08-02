@@ -1,5 +1,5 @@
 /**
- * Convert Jira wiki markup to Markdown — the frontend twin of the importer's
+ * Convert Jira pages markup to Markdown — the frontend twin of the importer's
  * `scripts/jira_markup.py`. KEEP THE TWO IN LOCKSTEP: same rules, same order.
  * Makes the editor + viewer backwards-compatible with Jira: imported (or pasted)
  * Jira content renders and edits correctly, while native Markdown passes through

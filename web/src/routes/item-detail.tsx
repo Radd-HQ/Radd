@@ -9,7 +9,7 @@ import { useArchiveItem, useDeleteItem, useToggleStarOnItem, useUpdateItem } fro
 import { useItemWritability, usePermissions, usePointsEnabled } from "../lib/hooks";
 import {
   fieldsQuery,
-  itemDocsQuery,
+  itemPagesQuery,
   itemWebLinksQuery,
   projectTimeloggingQuery,
   statesQuery,
@@ -47,7 +47,7 @@ import { AiSection } from "../components/items/AiSection";
 import { AiResultsPanel } from "../components/items/AiResultsPanel";
 import { AiResultsContext, type AiResultRequest } from "../components/items/ai-results";
 import { RelatedLinksSection } from "../components/items/RelatedLinksSection";
-import { ItemDocsSection } from "../components/items/ItemDocsSection";
+import { ItemPagesSection } from "../components/items/ItemPagesSection";
 
 /** Debounce for text-ish custom-field edits before PATCHing. */
 const CUSTOM_FIELD_SAVE_DELAY_MS = 600;
@@ -78,7 +78,7 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
   // Counts for the collapsed Related-links card (web links + linked docs) —
   // the same cache entries the sections read, so this costs nothing extra.
   const webLinks = useQuery(itemWebLinksQuery(item.id));
-  const itemDocs = useQuery(itemDocsQuery(item.id));
+  const itemPages = useQuery(itemPagesQuery(item.id));
   const updateItem = useUpdateItem(project.id);
   const quickActions = useIssueQuickActions(item, project.id);
   const toggleStar = useToggleStarOnItem();
@@ -454,12 +454,12 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
 
             <CollapsibleCard
               title="Related links"
-              count={(webLinks.data?.length ?? 0) + (itemDocs.data?.length ?? 0)}
+              count={(webLinks.data?.length ?? 0) + (itemPages.data?.length ?? 0)}
             >
               <RelatedLinksSection item={item} project={project} />
-              {/* Wiki pages linked to this issue (spec 43) — a block inside the
+              {/* Pages pages linked to this issue (spec 43) — a block inside the
                   card, not its own section; absent when the docs module is. */}
-              <ItemDocsSection item={item} />
+              <ItemPagesSection item={item} />
             </CollapsibleCard>
 
             {/* The conversation card absorbs the leftover height (it stretches

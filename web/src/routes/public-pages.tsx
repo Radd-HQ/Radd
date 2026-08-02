@@ -5,33 +5,33 @@ import { api, errorMessage } from "../lib/api";
 import {
   ApiPath,
   RoutePath,
-  apiPublicKbPagePath,
-  apiPublicKbTreePath,
+  apiPublicPagesPagePath,
+  apiPublicPagesTreePath,
 } from "../lib/constants";
-import type { PublicKbPage, PublicKbPageNode, PublicKbSpace } from "../lib/types";
+import type { PublicPagesPage, PublicPageNode, PublicPageSpace } from "../lib/types";
 import { Markdown } from "../lib/markdown";
 import { EmptyState } from "../components/EmptyState";
-import { PageTree } from "../components/docs/PageTree";
+import { PageTree } from "../components/pages/PageTree";
 import { RaddTile } from "../components/RaddMark";
 import { Spinner } from "../components/Spinner";
 
 /**
- * PUBLIC knowledge base (spec 74) — routes `/kb`, `/kb/$spaceId`,
+ * PUBLIC pages (spec 74) — routes `/kb`, `/kb/$spaceId`,
  * `/kb/$spaceId/$pageId`, root-level and OUTSIDE the auth gate (like
  * /public/forms/$token): anyone can read spaces an admin marked public.
- * Read-only siblings of the authed wiki pages: the same PageTree + the safe
+ * Read-only siblings of the authed pages pages: the same PageTree + the safe
  * markdown renderer, driven by queries local to this file (the public
  * endpoints are the credential — a non-public space simply 404s).
  */
 
 /** The minimal public chrome: Radd mark + a "Sign in" link (spec 74). */
-function PublicKbHeader({ children }: { children?: React.ReactNode }) {
+function PublicPagesHeader({ children }: { children?: React.ReactNode }) {
   return (
     <header className="flex items-center gap-2.5 border-b border-subtle px-5 py-3">
-      <Link to={RoutePath.kb} className="flex items-center gap-2.5">
+      <Link to={RoutePath.publicPages} className="flex items-center gap-2.5">
         <RaddTile className="size-7 rounded-lg" />
         <span className="text-sm font-semibold text-heading">Radd</span>
-        <span className="text-xs text-fg-muted">Knowledge base</span>
+        <span className="text-xs text-fg-muted">Pages</span>
       </Link>
       {children}
       <Link
@@ -46,22 +46,22 @@ function PublicKbHeader({ children }: { children?: React.ReactNode }) {
 }
 
 /** `/kb` — the public space cards. */
-export function PublicKbIndexPage() {
+export function PublicPagesIndexPage() {
   const spaces = useQuery({
     queryKey: ["public-kb", "spaces"],
-    queryFn: () => api.get<PublicKbSpace[]>(ApiPath.publicKbSpaces),
+    queryFn: () => api.get<PublicPageSpace[]>(ApiPath.publicKbSpaces),
     retry: false,
   });
 
   return (
     <main className="flex min-h-screen flex-col bg-base">
-      <PublicKbHeader />
+      <PublicPagesHeader />
       <div className="flex-1 overflow-y-auto p-6">
         {spaces.isPending ? (
-          <Spinner label="Loading knowledge base…" />
+          <Spinner label="Loading pages…" />
         ) : spaces.isError ? (
           <p className="text-sm text-fg-secondary">
-            The knowledge base isn't available: {errorMessage(spaces.error)}
+            The pages isn't available: {errorMessage(spaces.error)}
           </p>
         ) : spaces.data.length === 0 ? (
           <EmptyState icon={BookOpen} message="Nothing has been published yet." />
@@ -70,7 +70,7 @@ export function PublicKbIndexPage() {
             {spaces.data.map((space) => (
               <li key={space.id}>
                 <Link
-                  to={RoutePath.kbSpace}
+                  to={RoutePath.publicPageSpace}
                   params={{ spaceId: space.id }}
                   className="flex h-full flex-col gap-1 rounded-lg border border-subtle bg-surface/50 p-4 hover:border-strong hover:bg-surface"
                 >
@@ -95,16 +95,16 @@ export function PublicKbIndexPage() {
 
 /** `/kb/$spaceId` (+ `/kb/$spaceId/$pageId`) — tree rail + rendered page; with
  * no page in the URL the first root page is auto-selected. */
-export function PublicKbSpacePage() {
+export function PublicPageSpacePage() {
   const { spaceId = "", pageId } = useParams({ strict: false });
   const spaces = useQuery({
     queryKey: ["public-kb", "spaces"],
-    queryFn: () => api.get<PublicKbSpace[]>(ApiPath.publicKbSpaces),
+    queryFn: () => api.get<PublicPageSpace[]>(ApiPath.publicKbSpaces),
     retry: false,
   });
   const tree = useQuery({
     queryKey: ["public-kb", "tree", spaceId],
-    queryFn: () => api.get<PublicKbPageNode[]>(apiPublicKbTreePath(spaceId)),
+    queryFn: () => api.get<PublicPageNode[]>(apiPublicPagesTreePath(spaceId)),
     retry: false,
     enabled: spaceId !== "",
   });
@@ -114,7 +114,7 @@ export function PublicKbSpacePage() {
   const activePageId = pageId ?? rows.find((row) => row.parent_id === null)?.id;
   const page = useQuery({
     queryKey: ["public-kb", "page", activePageId ?? ""],
-    queryFn: () => api.get<PublicKbPage>(apiPublicKbPagePath(activePageId ?? "")),
+    queryFn: () => api.get<PublicPagesPage>(apiPublicPagesPagePath(activePageId ?? "")),
     retry: false,
     enabled: Boolean(activePageId),
   });
@@ -123,12 +123,12 @@ export function PublicKbSpacePage() {
 
   return (
     <main className="flex h-screen flex-col bg-base">
-      <PublicKbHeader>
+      <PublicPagesHeader>
         {space && (
           <span className="flex min-w-0 items-center gap-1.5 text-sm">
             <ChevronRight size={13} className="shrink-0 text-fg-faint" aria-hidden />
             <Link
-              to={RoutePath.kbSpace}
+              to={RoutePath.publicPageSpace}
               params={{ spaceId }}
               className="truncate font-medium text-heading hover:underline"
             >
@@ -138,7 +138,7 @@ export function PublicKbSpacePage() {
               <span key={crumb.id} className="flex min-w-0 items-center gap-1.5">
                 <ChevronRight size={13} className="shrink-0 text-fg-faint" aria-hidden />
                 <Link
-                  to={RoutePath.kbPage}
+                  to={RoutePath.publicPage}
                   params={{ spaceId, pageId: crumb.id }}
                   className="truncate text-fg-secondary hover:text-fg"
                 >
@@ -148,13 +148,13 @@ export function PublicKbSpacePage() {
             ))}
           </span>
         )}
-      </PublicKbHeader>
+      </PublicPagesHeader>
 
       {tree.isPending ? (
-        <Spinner label="Loading knowledge base…" />
+        <Spinner label="Loading pages…" />
       ) : tree.isError ? (
         <p className="p-6 text-sm text-fg-secondary">
-          This knowledge base isn't available: {errorMessage(tree.error)}
+          This pages isn't available: {errorMessage(tree.error)}
         </p>
       ) : (
         <div className="flex min-h-0 flex-1">
@@ -167,7 +167,7 @@ export function PublicKbSpacePage() {
               rows={rows}
               selectedId={activePageId}
               canWrite={false}
-              pageRoute={RoutePath.kbPage}
+              pageRoute={RoutePath.publicPage}
             />
           </nav>
 

@@ -41,7 +41,7 @@ export function SectionHeader({
   actions,
 }: {
   label: string;
-  /** When set, the label itself navigates (Docs) — the chevron still folds. */
+  /** When set, the label itself navigates (Pages) — the chevron still folds. */
   labelTo?: string;
   collapsed: boolean;
   onToggle: () => void;

@@ -8,7 +8,7 @@ CONSUMER_NAME = "googlechat.notifier"
 # enabled (same precedent as notify.types.SLA_BREACHED_EVENT).
 ITEM_CREATED_EVENT = "item.created"  # ItemEvent.CREATED
 SLA_BREACHED_EVENT = "sla.breached"  # SlaEvent.BREACHED
-DOC_PAGE_CREATED_EVENT = "doc_page.created"  # docs module (spec 43)
+PAGE_CREATED_EVENT = "page.created"  # pages module (spec 43)
 
 # Events read per consumer iteration (the poll interval is a config setting).
 BATCH_SIZE = 100

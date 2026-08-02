@@ -18,16 +18,16 @@ from radd.modules.items import service as items_service
 from radd.modules.workflow import service as workflow_service
 from radd.modules.projects import service as projects_service
 
-from .models import DocPage, DocSpace, ItemDocLink
-from .schemas import DocLinkedItem, ItemDocRef
+from .models import Page, PageSpace, ItemPageLink
+from .schemas import PageLinkedItem, ItemPageRef
 from .service import get_page
-from .types import DocEntity, DocEvent
+from .types import PageEntity, PageEvent
 
 
 async def _emit_link(
     session: AsyncSession,
-    event_type: DocEvent,
-    page: DocPage,
+    event_type: PageEvent,
+    page: Page,
     item_id: uuid.UUID,
     item_key: str,
     actor_id: uuid.UUID,
@@ -35,7 +35,7 @@ async def _emit_link(
     await events.emit(
         session,
         event_type=event_type,
-        entity_type=DocEntity.PAGE,
+        entity_type=PageEntity.PAGE,
         entity_id=page.id,
         actor_id=actor_id,
         payload={"title": page.title, "item_id": str(item_id), "item_key": item_key},
@@ -44,26 +44,26 @@ async def _emit_link(
 
 async def link_item(
     session: AsyncSession, page_id: uuid.UUID, item_key: str, actor: User
-) -> DocLinkedItem:
+) -> PageLinkedItem:
     """Link an item by its display key. Requires item.read on the item's project
-    (checked here — the router has already checked doc.write on the page)."""
+    (checked here — the router has already checked page.write on the page)."""
     page = await get_page(session, page_id)
     item = await items_service.find_item_by_key(session, item_key)
     if item is None:
         raise NotFoundError("item", item_key)
     project = await projects_service.get_project(session, item.project_id)
     await authz.require(session, actor, authz.Permission.ITEM_READ, project=project)
-    existing = await session.get(ItemDocLink, (item.id, page.id))
+    existing = await session.get(ItemPageLink, (item.id, page.id))
     if existing is not None:
-        raise ConflictError("doc_link", item_key)
-    session.add(ItemDocLink(item_id=item.id, page_id=page.id, created_by=actor.id))
+        raise ConflictError("page_link", item_key)
+    session.add(ItemPageLink(item_id=item.id, page_id=page.id, created_by=actor.id))
     await session.flush()
     key = f"{project.key}-{item.number}"
     await _emit_link(
-        session, DocEvent.LINK_CREATED, page, item.id, key, actor.id
+        session, PageEvent.LINK_CREATED, page, item.id, key, actor.id
     )
     state = await workflow_service.get_state(session, item.state_id)
-    return DocLinkedItem(
+    return PageLinkedItem(
         item_id=item.id,
         key=key,
         title=item.title,
@@ -76,26 +76,26 @@ async def unlink_item(
     session: AsyncSession, page_id: uuid.UUID, item_id: uuid.UUID, actor_id: uuid.UUID
 ) -> None:
     page = await get_page(session, page_id)
-    link = await session.get(ItemDocLink, (item_id, page_id))
+    link = await session.get(ItemPageLink, (item_id, page_id))
     if link is None:
-        raise NotFoundError("doc_link", item_id)
+        raise NotFoundError("page_link", item_id)
     await session.delete(link)
     await session.flush()
     await _emit_link(
-        session, DocEvent.LINK_DELETED, page, item_id, "", actor_id
+        session, PageEvent.LINK_DELETED, page, item_id, "", actor_id
     )
 
 
 async def linked_items(
     session: AsyncSession, page_id: uuid.UUID, actor: User
-) -> list[DocLinkedItem]:
+) -> list[PageLinkedItem]:
     """Items linked to a page, hydrated for display and filtered to projects
     the caller may read (item.read)."""
     await get_page(session, page_id)
     item_ids = list(
         (
             await session.execute(
-                select(ItemDocLink.item_id).where(ItemDocLink.page_id == page_id)
+                select(ItemPageLink.item_id).where(ItemPageLink.page_id == page_id)
             )
         ).scalars()
     )
@@ -113,7 +113,7 @@ async def linked_items(
     states = await workflow_service.states_by_ids(
         session, {item.state_id for item in items.values()}
     )
-    results: list[DocLinkedItem] = []
+    results: list[PageLinkedItem] = []
     for item_id in item_ids:
         item = items.get(item_id)
         if item is None:
@@ -123,7 +123,7 @@ async def linked_items(
         project = projects[item.project_id]
         state = states.get(item.state_id)
         results.append(
-            DocLinkedItem(
+            PageLinkedItem(
                 item_id=item.id,
                 key=f"{project.key}-{item.number}",
                 title=item.title,
@@ -134,17 +134,17 @@ async def linked_items(
     return sorted(results, key=lambda linked: linked.key)
 
 
-async def pages_for_item(session: AsyncSession, item_id: uuid.UUID) -> list[ItemDocRef]:
+async def pages_for_item(session: AsyncSession, item_id: uuid.UUID) -> list[ItemPageRef]:
     """Live (non-archived) pages linked to an item — the issue page's Docs row."""
     rows = await session.execute(
-        select(DocPage, DocSpace.name)
-        .join(ItemDocLink, ItemDocLink.page_id == DocPage.id)
-        .join(DocSpace, DocSpace.id == DocPage.space_id)
-        .where(ItemDocLink.item_id == item_id, DocPage.archived_at.is_(None))
-        .order_by(DocPage.title)
+        select(Page, PageSpace.name)
+        .join(ItemPageLink, ItemPageLink.page_id == Page.id)
+        .join(PageSpace, PageSpace.id == Page.space_id)
+        .where(ItemPageLink.item_id == item_id, Page.archived_at.is_(None))
+        .order_by(Page.title)
     )
     return [
-        ItemDocRef(
+        ItemPageRef(
             page_id=page.id, space_id=page.space_id, title=page.title, space_name=space_name
         )
         for page, space_name in rows.all()

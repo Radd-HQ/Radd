@@ -38,7 +38,7 @@ from .types import FormEntity, PUBLIC_DEFLECT_LIMIT
 logger = logging.getLogger(__name__)
 
 MAILINTAKE_MODULE = "radd.modules.mailintake"
-DOCS_MODULE = "radd.modules.docs"
+DOCS_MODULE = "radd.modules.pages"
 
 
 def _mailintake() -> ModuleType | None:
@@ -119,7 +119,7 @@ async def deflect_public_form(
     q = q.strip()
     if not q or DOCS_MODULE not in settings.modules:
         return PublicDeflectResponse(docs=[])
-    from radd.modules.docs import public as docs_public
+    from radd.modules.pages import public as docs_public
 
     results = await docs_public.deflect_public(session, q, limit=PUBLIC_DEFLECT_LIMIT)
     if not results:

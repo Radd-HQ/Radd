@@ -51,7 +51,7 @@ export const Entity = {
   cardLayoutPreset: "cardLayoutPreset",
   slaPolicy: "slaPolicy",
   docSpace: "docSpace",
-  docPage: "docPage",
+  page: "page",
   dashboard: "dashboard",
 } as const;
 

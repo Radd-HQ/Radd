@@ -1,7 +1,7 @@
 import { createContext, useContext } from "react";
 
 /** Where "Find similar issues" seeds from: the item itself (uses its stored
- * embedding + LLM rerank) or a text seed (comments, wiki pages — the text IS
+ * embedding + LLM rerank) or a text seed (comments, pages pages — the text IS
  * the subject and has no vector of its own). */
 export type SimilarSeed = { itemId: string } | { seedKey: string; excludeItemId?: string };
 
@@ -14,7 +14,7 @@ export type AiResultRequest =
 /**
  * Provided by the issue detail body: opens the AI results pane beside the
  * reading column (the dead space) instead of answering in a cramped popover
- * or the w-72 rail. Null outside the issue page (wiki pages, plain editors) —
+ * or the w-72 rail. Null outside the issue page (pages pages, plain editors) —
  * callers fall back to their local presentation.
  */
 export const AiResultsContext = createContext<((request: AiResultRequest) => void) | null>(null);

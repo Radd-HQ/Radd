@@ -108,10 +108,10 @@ async def test_the_batched_path_narrows_too(db, admin, project):
 async def test_global_atoms_apply_inside_a_project(db, admin, project):
     """A global-scoped atom is checked with project=None on some paths and inside
     a project on others; the scope must not make the answer depend on which."""
-    admin.token_scope = scopes.parse_scope({"global": ["doc.read", "item.read"]})
+    admin.token_scope = scopes.parse_scope({"global": ["page.read", "item.read"]})
 
-    assert Permission.DOC_READ in await authz.effective_permissions(db, admin)
-    assert Permission.DOC_READ in await authz.effective_permissions(db, admin, project=project)
+    assert Permission.PAGE_READ in await authz.effective_permissions(db, admin)
+    assert Permission.PAGE_READ in await authz.effective_permissions(db, admin, project=project)
 
 
 async def test_unscoped_is_unchanged(db, admin, project):
@@ -194,16 +194,16 @@ async def test_synthetic_emails_are_slugged_and_undeliverable():
 def test_scope_round_trips_and_reports_its_projects():
     project_id = uuid.uuid4()
     scope = scopes.parse_scope(
-        {"global": ["doc.read"], "projects": {str(project_id): ["item.create"]}}
+        {"global": ["page.read"], "projects": {str(project_id): ["item.create"]}}
     )
     assert scope.to_json() == {
-        "global": ["doc.read"],
+        "global": ["page.read"],
         "projects": {str(project_id): ["item.create"]},
     }
     assert scope.projects_allowing(Permission.ITEM_CREATE) == {project_id}
     assert scope.projects_allowing(Permission.ITEM_DELETE) == set()
     # a globally scoped atom applies in every project the scope names
-    assert scope.projects_allowing(Permission.DOC_READ) == {project_id}
+    assert scope.projects_allowing(Permission.PAGE_READ) == {project_id}
 
 
 def test_scope_shape_is_validated():

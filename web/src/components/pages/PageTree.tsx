@@ -4,11 +4,11 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, FileText, Plus } from "lucide-react";
 import { api } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
-import { ApiPath, RoutePath, docTreeExpandStorageKey } from "../../lib/constants";
-import type { DocPage, DocPageCreate } from "../../lib/types";
+import { ApiPath, RoutePath, pageTreeExpandStorageKey } from "../../lib/constants";
+import type { Page, PageCreate } from "../../lib/types";
 
 /** The bits a row must carry to render in the tree — satisfied by the authed
- * DocPageSummary AND the public-KB PublicKbPageNode (spec 74). */
+ * PageSummary AND the public-KB PublicPageNode (spec 74). */
 interface PageTreeRow {
   id: string;
   parent_id: string | null;
@@ -16,9 +16,9 @@ interface PageTreeRow {
   position: number;
 }
 
-/** Where a row's link points: the authed wiki (default) or the public KB. Both
+/** Where a row's link points: the authed pages (default) or the public KB. Both
  * routes carry the same $spaceId/$pageId params, so `Link` stays typed. */
-type PageRoutePath = typeof RoutePath.docPage | typeof RoutePath.kbPage;
+type PageRoutePath = typeof RoutePath.page | typeof RoutePath.publicPage;
 
 interface TreeNode {
   row: PageTreeRow;
@@ -39,7 +39,7 @@ export function buildTree(rows: PageTreeRow[]): TreeNode[] {
 
 function loadExpanded(spaceId: string): Set<string> {
   try {
-    const raw = localStorage.getItem(docTreeExpandStorageKey(spaceId));
+    const raw = localStorage.getItem(pageTreeExpandStorageKey(spaceId));
     return new Set(raw ? (JSON.parse(raw) as string[]) : []);
   } catch {
     return new Set();
@@ -47,7 +47,7 @@ function loadExpanded(spaceId: string): Set<string> {
 }
 
 /**
- * Collapsible page tree for a doc space (spec 43). Expand/collapse state is
+ * Collapsible page tree for a page space (spec 43). Expand/collapse state is
  * persisted per space in localStorage; "+ page" appears at the root and per
  * node when the caller may write docs.
  */
@@ -56,13 +56,13 @@ export function PageTree({
   rows,
   selectedId,
   canWrite,
-  pageRoute = RoutePath.docPage,
+  pageRoute = RoutePath.page,
 }: {
   spaceId: string;
   rows: PageTreeRow[];
   selectedId?: string;
   canWrite: boolean;
-  /** Public-KB trees (spec 74) link to /kb instead of the authed wiki. */
+  /** Public-KB trees (spec 74) link to /kb instead of the authed pages. */
   pageRoute?: PageRoutePath;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(() => loadExpanded(spaceId));
@@ -73,7 +73,7 @@ export function PageTree({
       const next = new Set(current);
       if (next.has(pageId)) next.delete(pageId);
       else next.add(pageId);
-      localStorage.setItem(docTreeExpandStorageKey(spaceId), JSON.stringify([...next]));
+      localStorage.setItem(pageTreeExpandStorageKey(spaceId), JSON.stringify([...next]));
       return next;
     });
   };
@@ -190,14 +190,14 @@ function NewPageButton({
   const navigate = useNavigate();
   const create = useMutation({
     mutationFn: () =>
-      api.post<DocPage>(ApiPath.docPages, {
+      api.post<Page>(ApiPath.pages, {
         space_id: spaceId,
         parent_id: parentId,
         title: "Untitled",
-      } satisfies DocPageCreate),
+      } satisfies PageCreate),
     onSuccess: (page) =>
-      void navigate({ to: RoutePath.docPage, params: { spaceId, pageId: page.id } }),
-    onSettled: () => void invalidateEntities(queryClient, Entity.docPage, Entity.docSpace),
+      void navigate({ to: RoutePath.page, params: { spaceId, pageId: page.id } }),
+    onSettled: () => void invalidateEntities(queryClient, Entity.page, Entity.docSpace),
   });
 
   if (iconOnly) {

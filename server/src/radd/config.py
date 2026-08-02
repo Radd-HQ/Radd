@@ -227,7 +227,7 @@ class Settings(BaseSettings):
 
     # Google Chat notifier (see radd/modules/googlechat). Empty URL = disabled.
     googlechat_webhook_url: str = ""
-    googlechat_event_types: str = "item.created,sla.breached,doc_page.created"
+    googlechat_event_types: str = "item.created,sla.breached,page.created"
     googlechat_poll_interval: float = 2.0
 
     # Alertmanager intake (see radd/modules/alertmanager). Empty token = disabled.
@@ -348,7 +348,7 @@ class Settings(BaseSettings):
         "radd.modules.gitlab",
         "radd.modules.sso",
         "radd.modules.ldap",
-        "radd.modules.docs",
+        "radd.modules.pages",
         "radd.modules.ai",
         "radd.modules.mcp",
         "radd.modules.forgejo",

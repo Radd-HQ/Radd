@@ -131,11 +131,11 @@ export const ApiPath = {
   // Builtin-field write rules (spec 36).
   // Approvals on workflow transitions (spec 71): my pending-approvals queue.
   approvalsPending: "/approvals/pending",
-  // Wiki (spec 43).
-  docSpaces: "/doc-spaces",
-  docPages: "/doc-pages",
+  // Pages (spec 43).
+  pageSpaces: "/page-spaces",
+  pages: "/pages",
   docsSearch: "/docs/search",
-  // PUBLIC knowledge base (spec 74) — no login; a space's `public` flag gates.
+  // PUBLIC pages (spec 74) — no login; a space's `public` flag gates.
   publicKbSpaces: "/public/kb/spaces",
   publicKbSearch: "/public/kb/search",
   // AI layer (spec 46) — the status gate + natural-language → SLQ.

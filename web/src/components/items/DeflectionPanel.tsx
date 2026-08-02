@@ -4,7 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { DEFLECT_DEBOUNCE_MS, DEFLECT_MIN_QUERY_CHARS, RoutePath } from "../../lib/constants";
 import { useDebounced, useOpenIssueRef } from "../../lib/hooks";
 import { deflectQuery } from "../../lib/queries";
-import type { DeflectDoc, DeflectItem } from "../../lib/types";
+import type { DeflectPage, DeflectItem } from "../../lib/types";
 
 interface DeflectionPanelProps {
   /** The half-typed issue title driving the lookup. */
@@ -13,7 +13,7 @@ interface DeflectionPanelProps {
 }
 
 /**
- * KB deflection (spec 66): while the reporter types a title, surface wiki
+ * KB deflection (spec 66): while the reporter types a title, surface pages
  * pages that may already answer it and previously RESOLVED issues, so they can
  * stop filing. Debounced; renders nothing until the query is long enough and
  * something matches. Issue rows open in the PEEK (the half-typed form survives
@@ -32,15 +32,15 @@ export function DeflectionPanel({ query, projectId }: DeflectionPanelProps) {
 
   return (
     <div className="flex flex-col gap-2.5 rounded-md border border-subtle bg-surface/40 p-2.5">
-      <DeflectDocsSection docs={docs} />
+      <DeflectPagesSection docs={docs} />
       <DeflectItemsSection items={items} />
     </div>
   );
 }
 
-/** Wiki pages that may already answer it — shared by the authed panels and,
+/** Pages pages that may already answer it — shared by the authed panels and,
  * with `kb`, the public form's panel (which links the public /kb routes). */
-export function DeflectDocsSection({ docs, kb = false }: { docs: DeflectDoc[]; kb?: boolean }) {
+export function DeflectPagesSection({ docs, kb = false }: { docs: DeflectPage[]; kb?: boolean }) {
   if (docs.length === 0) return null;
   return (
     <section className="flex flex-col gap-1">
@@ -52,7 +52,7 @@ export function DeflectDocsSection({ docs, kb = false }: { docs: DeflectDoc[]; k
         {docs.map((doc) => (
           <li key={doc.id}>
             <Link
-              to={kb ? RoutePath.kbPage : RoutePath.docPage}
+              to={kb ? RoutePath.publicPage : RoutePath.page}
               params={{ spaceId: doc.space_id, pageId: doc.id }}
               target="_blank"
               rel="noreferrer"

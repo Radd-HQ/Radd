@@ -2,7 +2,7 @@
 item aliases every pre-102 consumer (SDK/MCP/importer) still calls.
 
 Permission checks delegate to the parent binding (parents.py): item parents ->
-project-scoped item perms; doc_page parents -> the global doc atoms. Delete
+project-scoped item perms; page parents -> the global doc atoms. Delete
 keeps the comments mirror: uploaders remove their own, admins remove anyone's.
 """
 

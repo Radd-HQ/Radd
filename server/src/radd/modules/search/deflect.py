@@ -25,7 +25,7 @@ from .schemas import DeflectDoc, DeflectItem
 from .service import build_tsquery
 from .types import DEFLECT_LIMIT, SEARCH_TS_CONFIG
 
-DOCS_MODULE = "radd.modules.docs"
+DOCS_MODULE = "radd.modules.pages"
 
 # An item counts as "previously resolved" in these state categories.
 RESOLVED_CATEGORIES = (StateCategory.DONE, StateCategory.CANCELED)
@@ -37,7 +37,7 @@ async def deflect_docs(session: AsyncSession, q: str) -> list[DeflectDoc]:
     docs is disabled; plain FTS when semantic isn't configured."""
     if DOCS_MODULE not in settings.modules:
         return []
-    from radd.modules.docs import search as docs_search, spaces as docs_spaces
+    from radd.modules.pages import search as docs_search, spaces as docs_spaces
 
     results = await docs_search.search_pages(session, q, limit=DEFLECT_LIMIT)
     ordered_ids = [result.page_id for result in results]

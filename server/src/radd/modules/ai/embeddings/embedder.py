@@ -38,9 +38,9 @@ CONSUMER_NAME = "ai.embedder"
 
 _ITEM_EVENTS = {"item.created", "item.updated"}
 _COMMENT_EVENTS = {"comment.created", "comment.updated", "comment.deleted"}
-_DOC_EVENTS = {"doc_page.created", "doc_page.updated", "doc_page.restored", "doc_page.moved"}
+_PAGE_EVENTS = {"page.created", "page.updated", "page.restored", "page.moved"}
 _ITEM_DELETE = "item.deleted"
-_DOC_DELETE = "doc_page.deleted"
+_PAGE_DELETE = "page.deleted"
 
 
 @dataclass(frozen=True)
@@ -69,9 +69,9 @@ def plan_for_event(
         return ("item", _coerce(payload.get("item_id")))
     if event_type == _ITEM_DELETE:
         return ("drop_item", _coerce(entity_id))
-    if event_type in _DOC_EVENTS:
+    if event_type in _PAGE_EVENTS:
         return ("doc", _coerce(entity_id))
-    if event_type == _DOC_DELETE:
+    if event_type == _PAGE_DELETE:
         return ("drop_doc", _coerce(entity_id))
     return None
 
@@ -147,7 +147,7 @@ async def _deliver(tasks: list[EmbedTask]) -> None:
             rows = await search_service.rows_for_embedding(session, item_ids=item_ids)
             await _embed_items(session, resolved, rows)
         if page_ids:
-            from radd.modules.docs import search as docs_search
+            from radd.modules.pages import search as docs_search
 
             pages = await docs_search.pages_for_embedding(session, page_ids=page_ids)
             await _embed_docs(session, resolved, pages)
@@ -172,11 +172,11 @@ async def _sweep() -> int:
         if rows:
             done += await _embed_items(session, resolved, rows)
         else:
-            from radd.modules.docs import search as docs_search
+            from radd.modules.pages import search as docs_search
 
             pages = await docs_search.pages_for_embedding(
                 session,
-                missing_from=store.DOC_TABLE,
+                missing_from=store.PAGE_TABLE,
                 model=resolved.model,
                 limit=settings.ai_embed_batch,
             )
@@ -224,7 +224,7 @@ async def _embed_docs(session: AsyncSession, resolved, pages) -> int:
     texts = [embed_text("", title, body) for _, _, title, body in pages]
     hashes = [content_hash(t) for t in texts]
     fresh = await _fresh_indexes(
-        session, store.DOC_TABLE, "page_id", [p[0] for p in pages], hashes, resolved.model
+        session, store.PAGE_TABLE, "page_id", [p[0] for p in pages], hashes, resolved.model
     )
     if not fresh:
         return 0
@@ -232,7 +232,7 @@ async def _embed_docs(session: AsyncSession, resolved, pages) -> int:
     dim = len(vectors[0]) if vectors and vectors[0] else 0
     if not dim:
         return 0
-    await store.sync_index(session, store.DOC_TABLE, model=resolved.model, dim=dim)
+    await store.sync_index(session, store.PAGE_TABLE, model=resolved.model, dim=dim)
     for position, index in enumerate(fresh):
         page_id, public, _, _ = pages[index]
         await store.upsert_doc(

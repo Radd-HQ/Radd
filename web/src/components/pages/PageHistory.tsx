@@ -3,10 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArchiveRestore, ChevronLeft } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
-import { apiDocPageRestorePath } from "../../lib/constants";
+import { apiPageRestorePath } from "../../lib/constants";
 import { Markdown } from "../../lib/markdown";
-import { docPageVersionQuery, docPageVersionsQuery, usersQuery } from "../../lib/queries";
-import type { DocPage } from "../../lib/types";
+import { pageVersionQuery, pageVersionsQuery, usersQuery } from "../../lib/queries";
+import type { Page } from "../../lib/types";
 import { Button } from "../Button";
 import { Spinner } from "../Spinner";
 import { relativeTime } from "../../lib/dates";
@@ -16,9 +16,9 @@ import { relativeTime } from "../../lib/dates";
  * not listed) → view one → Restore, which writes the old content as a NEW
  * version (history stays linear; nothing is overwritten).
  */
-export function DocPageHistory({ page, canWrite }: { page: DocPage; canWrite: boolean }) {
+export function PageHistory({ page, canWrite }: { page: Page; canWrite: boolean }) {
   const [viewing, setViewing] = useState<number | null>(null);
-  const versions = useQuery(docPageVersionsQuery(page.id));
+  const versions = useQuery(pageVersionsQuery(page.id));
   const { data: users } = useQuery(usersQuery);
 
   if (versions.isPending) return <Spinner label="Loading history…" />;
@@ -83,17 +83,17 @@ function VersionViewer({
   canWrite,
   onBack,
 }: {
-  page: DocPage;
+  page: Page;
   version: number;
   canWrite: boolean;
   onBack: () => void;
 }) {
   const queryClient = useQueryClient();
-  const content = useQuery(docPageVersionQuery(page.id, version));
+  const content = useQuery(pageVersionQuery(page.id, version));
   const restore = useMutation({
-    mutationFn: () => api.post<DocPage>(apiDocPageRestorePath(page.id), { version }),
+    mutationFn: () => api.post<Page>(apiPageRestorePath(page.id), { version }),
     onSuccess: onBack,
-    onSettled: () => void invalidateEntities(queryClient, Entity.docPage, Entity.docSpace),
+    onSettled: () => void invalidateEntities(queryClient, Entity.page, Entity.docSpace),
   });
 
   return (

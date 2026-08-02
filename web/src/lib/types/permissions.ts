@@ -44,10 +44,10 @@ export const Permission = {
   cardPresetDelete: "cardpreset.delete",
   /** Spec 20: manage a project's intake forms (project-scoped). */
   formManage: "form.manage",
-  /** Spec 43 (wiki) — all global. */
-  docRead: "doc.read",
-  docWrite: "doc.write",
-  docManage: "doc.manage",
+  /** Spec 43 (pages) — all global. */
+  pageRead: "page.read",
+  pageWrite: "page.write",
+  pageManage: "page.manage",
   /** Spec 75: the server-wide-broadcast gate on dashboard sharing (global). */
   dashboardCreate: "dashboard.create",
 } as const;

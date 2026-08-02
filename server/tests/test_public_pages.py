@@ -17,9 +17,9 @@ from radd.config import settings
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
-from radd.modules.docs import public as kb, service as docs_service, spaces as docs_spaces
-from radd.modules.docs.models import DocSpace
-from radd.modules.docs.schemas import DocPageCreate, DocSpaceCreate, DocSpaceUpdate
+from radd.modules.pages import public as kb, service as docs_service, spaces as docs_spaces
+from radd.modules.pages.models import PageSpace
+from radd.modules.pages.schemas import PageCreate, PageSpaceCreate, PageSpaceUpdate
 from radd.modules.forms import public as forms_public, service as forms_service
 from radd.modules.forms.schemas import FormCreate, FormUpdate
 from radd.modules.projects import service as projects_service
@@ -48,21 +48,21 @@ async def admin(db) -> User:
     return user
 
 
-async def _space(db, admin, *, public: bool, name: str) -> DocSpace:
+async def _space(db, admin, *, public: bool, name: str) -> PageSpace:
     space = await docs_spaces.create_space(
         db,
-        DocSpaceCreate(name=f"{name} {uuid.uuid4().hex[:6]}"),
+        PageSpaceCreate(name=f"{name} {uuid.uuid4().hex[:6]}"),
         admin.id,
     )
     if public:
-        await docs_spaces.update_space(db, space.id, DocSpaceUpdate(public=True), admin.id)
+        await docs_spaces.update_space(db, space.id, PageSpaceUpdate(public=True), admin.id)
     return space
 
 
 async def _page(db, admin, space, title: str, body: str = "", parent_id=None):
     return await docs_service.create_page(
         db,
-        DocPageCreate(space_id=space.id, parent_id=parent_id, title=title, body=body),
+        PageCreate(space_id=space.id, parent_id=parent_id, title=title, body=body),
         admin.id,
     )
 
@@ -126,7 +126,7 @@ async def test_toggling_public_off_immediately_404s(db, admin):
     page = await _page(db, admin, space, "Setup guide", "how to set up")
     assert await kb.public_page(db, page.id)  # readable while public
 
-    await docs_spaces.update_space(db, space.id, DocSpaceUpdate(public=False), admin.id)
+    await docs_spaces.update_space(db, space.id, PageSpaceUpdate(public=False), admin.id)
     with pytest.raises(NotFoundError):
         await kb.public_tree(db, space.id)
     with pytest.raises(NotFoundError):

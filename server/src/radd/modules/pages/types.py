@@ -22,26 +22,26 @@ SLUG_MAX_CHARS = 100
 SLUG_SEPARATOR_RE = re.compile(r"[^a-z0-9]+")
 
 
-class DocEntity(StrEnum):
-    SPACE = "doc_space"
-    PAGE = "doc_page"
+class PageEntity(StrEnum):
+    SPACE = "page_space"
+    PAGE = "page"
 
 
-class DocEvent(StrEnum):
-    SPACE_CREATED = "doc_space.created"
-    SPACE_UPDATED = "doc_space.updated"
-    SPACE_DELETED = "doc_space.deleted"
-    PAGE_CREATED = "doc_page.created"
-    PAGE_UPDATED = "doc_page.updated"
-    PAGE_DELETED = "doc_page.deleted"
-    PAGE_MOVED = "doc_page.moved"
-    PAGE_RESTORED = "doc_page.restored"
-    LINK_CREATED = "doc_link.created"
-    LINK_DELETED = "doc_link.deleted"
+class PageEvent(StrEnum):
+    SPACE_CREATED = "page_space.created"
+    SPACE_UPDATED = "page_space.updated"
+    SPACE_DELETED = "page_space.deleted"
+    PAGE_CREATED = "page.created"
+    PAGE_UPDATED = "page.updated"
+    PAGE_DELETED = "page.deleted"
+    PAGE_MOVED = "page.moved"
+    PAGE_RESTORED = "page.restored"
+    LINK_CREATED = "page_link.created"
+    LINK_DELETED = "page_link.deleted"
 
 
 class RestoreKind(StrEnum):
-    """`action` values in doc_page.restored event payloads."""
+    """`action` values in page.restored event payloads."""
 
     VERSION = "version"  # an old version's content restored as a NEW version
-    UNARCHIVE = "unarchive"  # archived_at cleared (doc.manage)
+    UNARCHIVE = "unarchive"  # archived_at cleared (page.manage)

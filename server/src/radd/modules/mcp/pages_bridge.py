@@ -1,9 +1,9 @@
-"""Feature detection + adaptation for the docs module's service (spec 43).
+"""Feature detection + adaptation for the pages module's service (spec 43).
 
-The doc tools (`get_doc_page`/`search_docs`) exist only when the docs module is
+The doc tools (`get_page`/`search_docs`) exist only when the pages module is
 enabled in `settings.modules` AND its service exposes the functions we need — a
 stub or absent module simply omits them. Detection is resolved per call, never
-cached, so a parallel-built docs module lights the tools up without a restart.
+cached, so a parallel-built pages module lights the tools up without a restart.
 The binding is tolerant of the exact signature the docs service ships
 (parameters are matched by name).
 """
@@ -20,22 +20,22 @@ from radd.config import settings
 from radd.exceptions import ConflictError
 from radd.modules.auth.models import User
 
-from .types import DOCS_MODULE_PATH
+from .types import PAGES_MODULE_PATH
 
-_DOC_GET_FUNCTIONS = ("get_page", "get_doc_page")
-_DOC_SEARCH_FUNCTIONS = ("search_pages", "search_docs", "search")
+_PAGE_GET_FUNCTIONS = ("get_page",)
+_PAGE_SEARCH_FUNCTIONS = ("search_pages", "search")
 
 
-def docs_functions() -> tuple[Callable[..., Any], Callable[..., Any]] | None:
+def pages_functions() -> tuple[Callable[..., Any], Callable[..., Any]] | None:
     """(get_page, search) from the docs service, or None while the module is
     disabled, absent, or still a stub."""
-    if DOCS_MODULE_PATH not in settings.modules:
+    if PAGES_MODULE_PATH not in settings.modules:
         return None
-    # The docs module keeps FTS in its own `search` submodule; probe both.
+    # The pages module keeps FTS in its own `search` submodule; probe both.
     sources = []
     for submodule in ("service", "search"):
         try:
-            sources.append(importlib.import_module(f"{DOCS_MODULE_PATH}.{submodule}"))
+            sources.append(importlib.import_module(f"{PAGES_MODULE_PATH}.{submodule}"))
         except Exception:
             continue
 
@@ -47,18 +47,18 @@ def docs_functions() -> tuple[Callable[..., Any], Callable[..., Any]] | None:
                     return fn
         return None
 
-    get_page = _find(_DOC_GET_FUNCTIONS)
-    search = _find(_DOC_SEARCH_FUNCTIONS)
+    get_page = _find(_PAGE_GET_FUNCTIONS)
+    search = _find(_PAGE_SEARCH_FUNCTIONS)
     if get_page is None or search is None:
         return None
     return get_page, search
 
 
-def docs_available() -> bool:
-    return docs_functions() is not None
+def pages_available() -> bool:
+    return pages_functions() is not None
 
 
-async def call_docs(
+async def call_pages(
     fn: Callable[..., Any], session: AsyncSession, actor: User, **values: Any
 ) -> Any:
     """Bind (session, actor, **values) onto the docs function by parameter name."""

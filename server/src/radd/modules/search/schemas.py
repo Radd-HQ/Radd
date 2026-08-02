@@ -20,7 +20,7 @@ class SearchResponse(BaseModel):
 
 
 class DeflectDoc(BaseModel):
-    id: uuid.UUID  # doc page id
+    id: uuid.UUID  # page id
     # space_id rides along beyond the spec shape — the doc-page route needs it.
     space_id: uuid.UUID
     title: str

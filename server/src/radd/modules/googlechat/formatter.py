@@ -3,7 +3,7 @@ tests/test_connectors.py. Returns None for events the notifier does not post."""
 
 from typing import Any, Protocol
 
-from .types import DOC_PAGE_CREATED_EVENT, ITEM_CREATED_EVENT, SLA_BREACHED_EVENT
+from .types import PAGE_CREATED_EVENT, ITEM_CREATED_EVENT, SLA_BREACHED_EVENT
 
 
 class EventLike(Protocol):
@@ -36,9 +36,9 @@ def format_message(event: EventLike, *, selected: frozenset[str], base_url: str)
         policy = payload.get("policy_name", "")
         kind = payload.get("kind", "")
         return f"SLA breached ({kind}) on {key} — policy {policy}\n{_issue_url(base_url, key)}"
-    if event.event_type == DOC_PAGE_CREATED_EVENT:
+    if event.event_type == PAGE_CREATED_EVENT:
         title = payload.get("title", "")
         if not title:
             return None
-        return f"New doc page: {title}\n{base_url}"
+        return f"New page: {title}\n{base_url}"
     return None
