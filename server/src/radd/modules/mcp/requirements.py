@@ -72,6 +72,12 @@ REQUIREMENTS: dict[str, ToolRequirement] = {
     McpTool.TRANSITION_ITEM.value: ToolRequirement(Permission.ITEM_UPDATE, project_scoped=True),
     McpTool.LOG_WORK.value: ToolRequirement(Permission.WORKLOG_WRITE, project_scoped=True),
     McpTool.LIST_WORKLOGS.value: ToolRequirement(Permission.WORKLOG_WRITE, project_scoped=True),
+    # RADD-741: worklog.write is the CATALOG floor — anyone who may log time may
+    # correct their own entry. Editing someone else's still needs project.manage
+    # and deleting still needs worklog.delete, enforced per row by
+    # `timelogging.service.authorize_mutation`, which the REST router also uses.
+    McpTool.UPDATE_WORKLOG.value: ToolRequirement(Permission.WORKLOG_WRITE, project_scoped=True),
+    McpTool.DELETE_WORKLOG.value: ToolRequirement(Permission.WORKLOG_WRITE, project_scoped=True),
     McpTool.LIST_RELEASES.value: ToolRequirement(
         Permission.ITEM_READ, project_scoped=True, project_param="project_key"
     ),

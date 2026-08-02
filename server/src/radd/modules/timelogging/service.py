@@ -12,7 +12,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
-from radd.exceptions import ConflictError, NotFoundError
+from radd.exceptions import ForbiddenError, ConflictError, NotFoundError
 from radd.modules.auth import authz, service as auth_service
 from radd.modules.auth.models import User
 from radd.modules.events import service as events
@@ -272,6 +272,47 @@ async def create_general_worklog(
     await session.flush()
     await _emit(session, WorklogEvent.CREATED, worklog, author_id)
     return (await hydrate(session, [worklog], hpd))[0]
+
+
+async def can_log_general(session: AsyncSession, user) -> bool:
+    """May log itemless general time: holds worklog.write on >= 1 project (spec 59).
+
+    Public because MCP needs the same answer the router does (RADD-741) — two
+    copies of "who may touch this worklog" is exactly the drift that lets an
+    agent do something the UI forbids, or vice versa.
+    """
+    from radd.modules.auth import authz
+    from radd.modules.projects import service as projects_service
+
+    projects = await projects_service.list_projects(session)
+    perms_by_project = await authz.permissions_for_projects(session, user, projects)
+    return any(authz.Permission.WORKLOG_WRITE in perms for perms in perms_by_project.values())
+
+
+async def authorize_mutation(session: AsyncSession, user, worklog, *, others) -> None:
+    """Author (with worklog.write) or a holder of `others` may edit/delete a
+    worklog (spec 50: worklog.delete to delete, project.manage to edit another's;
+    spec 59: itemless entries need the general-log gate for the author and
+    `others` at global scope for anyone else).
+
+    Lives in the service, not the router, so the MCP tools enforce the SAME rule
+    rather than a second reading of it.
+    """
+    from radd.modules.auth import authz
+
+    project = await worklog_scope(session, worklog)
+    is_author = worklog.author_id == user.id
+    if project is not None:
+        perms = await authz.effective_permissions(session, user, project=project)
+        if (is_author and authz.Permission.WORKLOG_WRITE in perms) or (others in perms):
+            return
+    else:
+        if is_author and await can_log_general(session, user):
+            return
+        perms = await authz.effective_permissions(session, user)
+        if others in perms:
+            return
+    raise ForbiddenError("only the worklog's author or a project manager may change it")
 
 
 async def update_worklog(

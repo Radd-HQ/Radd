@@ -98,16 +98,6 @@ async def clear_estimate(
     return await service.item_summary(session, item_id, project)
 
 
-async def _can_log_general(session: AsyncSession, user) -> bool:
-    """May log itemless general time: holds worklog.write on ≥1 project (spec 59
-    — mirrors the settings-nav any-project gate)."""
-    projects = await projects_service.list_projects(session)
-    perms_by_project = await authz.permissions_for_projects(session, user, projects)
-    return any(
-        authz.Permission.WORKLOG_WRITE in perms for perms in perms_by_project.values()
-    )
-
-
 @router.post("/worklogs", response_model=WorklogRead, status_code=201)
 async def log_general_work(
     data: GeneralWorklogCreate, session: Session, user: CurrentUser
@@ -117,31 +107,9 @@ async def log_general_work(
     if data.project_id is not None:
         project = await projects_service.get_project(session, data.project_id)
         await authz.require(session, user, authz.Permission.WORKLOG_WRITE, project=project)
-    elif not await _can_log_general(session, user):
+    elif not await service.can_log_general(session, user):
         raise ForbiddenError("logging general time needs worklog.write on some project")
     return await service.create_general_worklog(session, data, user.id, today=date.today())
-
-
-async def _authorize_mutation(
-    session: AsyncSession, user, worklog, *, others: authz.Permission
-) -> None:
-    """Author (with worklog.write) or a holder of `others` may edit/delete a worklog
-    (spec 50: worklog.delete for deletion, project.manage for editing another's).
-    Spec 59: itemless entries — the author needs the general-log gate; others need
-    `others` at global scope (admins)."""
-    project = await service.worklog_scope(session, worklog)
-    is_author = worklog.author_id == user.id
-    if project is not None:
-        perms = await authz.effective_permissions(session, user, project=project)
-        if (is_author and authz.Permission.WORKLOG_WRITE in perms) or (others in perms):
-            return
-    else:
-        if is_author and await _can_log_general(session, user):
-            return
-        perms = await authz.effective_permissions(session, user)
-        if others in perms:
-            return
-    raise ForbiddenError("only the worklog's author or a project manager may change it")
 
 
 @router.patch("/worklogs/{worklog_id}", response_model=WorklogRead)
@@ -149,7 +117,7 @@ async def update_worklog(
     worklog_id: uuid.UUID, data: WorklogUpdate, session: Session, user: CurrentUser
 ) -> WorklogRead:
     worklog = await service.get_worklog(session, worklog_id)
-    await _authorize_mutation(session, user, worklog, others=authz.Permission.PROJECT_MANAGE)
+    await service.authorize_mutation(session, user, worklog, others=authz.Permission.PROJECT_MANAGE)
     return await service.update_worklog(session, worklog, data, user.id)
 
 
@@ -158,5 +126,5 @@ async def delete_worklog(
     worklog_id: uuid.UUID, session: Session, user: CurrentUser
 ) -> None:
     worklog = await service.get_worklog(session, worklog_id)
-    await _authorize_mutation(session, user, worklog, others=authz.Permission.WORKLOG_DELETE)
+    await service.authorize_mutation(session, user, worklog, others=authz.Permission.WORKLOG_DELETE)
     await service.delete_worklog(session, worklog, user.id)

@@ -71,6 +71,8 @@ class McpTool(StrEnum):
     TRANSITION_ITEM = "transition_item"
     LOG_WORK = "log_work"
     LIST_WORKLOGS = "list_worklogs"
+    UPDATE_WORKLOG = "update_worklog"  # RADD-741
+    DELETE_WORKLOG = "delete_worklog"  # RADD-741
     LIST_RELEASES = "list_releases"
     CREATE_RELEASE = "create_release"
     SWEEP_RELEASE = "sweep_release"  # RADD-673: the spec-112 pipeline step, agent-reachable

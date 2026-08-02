@@ -311,6 +311,35 @@ def build_catalog(
             ),
         },
         {
+            "name": McpTool.UPDATE_WORKLOG.value,
+            "description": "Correct a time entry — the amount, the date, the note or the "
+            "category. Find the id with list_worklogs. Editing someone else's entry needs "
+            "project.manage; deleting is a separate tool.",
+            "inputSchema": _schema(
+                {
+                    "worklog_id": {
+                        "type": "string",
+                        "description": "The entry's id, as returned by list_worklogs.",
+                    },
+                    "time_spent": {"type": "string", "description": "Jira-style, e.g. '2h 30m'."},
+                    "worked_on": {"type": "string", "description": "ISO date."},
+                    "category": {"type": "string", "description": "Work category NAME."},
+                    "note": {"type": "string"},
+                },
+                ["worklog_id"],
+            ),
+        },
+        {
+            "name": McpTool.DELETE_WORKLOG.value,
+            "description": "Delete a time entry. Its own tool rather than an update flag, "
+            "because destroying logged time is not a correction — it needs worklog.delete "
+            "when the entry is someone else's.",
+            "inputSchema": _schema(
+                {"worklog_id": {"type": "string", "description": "The entry's id."}},
+                ["worklog_id"],
+            ),
+        },
+        {
             "name": McpTool.LIST_WORKLOGS.value,
             "description": "Time entries, filtered with the WORKLOG SLQ dialect "
             "(author, category, worked_on, time, note, and issue.<field> delegated to items).",

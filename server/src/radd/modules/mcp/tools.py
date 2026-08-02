@@ -31,7 +31,7 @@ from radd.modules.releases.schemas import ReleaseCreate
 from radd.modules.releases.types import ReleaseStatus
 from radd.modules.timelogging import service as timelogging_service, timesheet
 from radd.modules.timelogging.slq import compile_worklog_query, parse as worklog_parse
-from radd.modules.timelogging.schemas import WorklogCreate
+from radd.modules.timelogging.schemas import WorklogCreate, WorklogUpdate
 from radd.modules.workflow import service as workflow_service
 from radd.modules.workflow import transitions as workflow_transitions
 from radd.modules.workflow.types import StateEntity
@@ -413,6 +413,51 @@ async def _log_work(session: AsyncSession, actor: User, args: Mapping[str, Any])
     return entry.model_dump(mode="json")
 
 
+async def _update_worklog(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
+    """Correct a time entry (RADD-741).
+
+    The gap this closes was found by hitting it: an allocation came out two
+    minutes over the session's wall clock, and trimming it had to go to REST
+    because MCP could log time but never correct it. Logged time is the one thing
+    the working agreement insists must be derived rather than estimated, which
+    makes "I got it slightly wrong" a routine event, not an edge case.
+
+    Row-level authorization is `timelogging.service.authorize_mutation` — the
+    same function the REST router calls, so an agent can do exactly what a person
+    can and nothing more. The catalog atom is only the floor.
+    """
+    from datetime import date as _date
+
+    worklog = await timelogging_service.get_worklog(session, uuid.UUID(str(args["worklog_id"])))
+    await timelogging_service.authorize_mutation(
+        session, actor, worklog, others=Permission.PROJECT_MANAGE
+    )
+    values: dict[str, Any] = {}
+    if args.get("time_spent"):
+        values["time_spent"] = str(args["time_spent"])
+    if args.get("worked_on"):
+        values["worked_on"] = _date.fromisoformat(str(args["worked_on"]))
+    if args.get("note") is not None:
+        values["note"] = str(args["note"])
+    if args.get("category"):
+        values["category_id"] = await _category_id(session, str(args["category"]))
+    read = await timelogging_service.update_worklog(
+        session, worklog, WorklogUpdate(**values), actor.id
+    )
+    return read.model_dump(mode="json")
+
+
+async def _delete_worklog(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
+    """Destroying logged time is not a correction, so it takes the stricter atom
+    when the entry is someone else's — the same split spec 50 already makes."""
+    worklog = await timelogging_service.get_worklog(session, uuid.UUID(str(args["worklog_id"])))
+    await timelogging_service.authorize_mutation(
+        session, actor, worklog, others=Permission.WORKLOG_DELETE
+    )
+    await timelogging_service.delete_worklog(session, worklog, actor.id)
+    return {"deleted": str(worklog.id)}
+
+
 async def _list_worklogs(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
     """The timesheet, reachable by an agent. Scope rules are the router's: without
     `timesheet.view` you see your own time and nobody else's, and the SLQ can only
@@ -571,6 +616,8 @@ _HANDLERS: dict[McpTool, Callable[..., Any]] = {
     McpTool.TRANSITION_ITEM: _transition_item,
     McpTool.LOG_WORK: _log_work,
     McpTool.LIST_WORKLOGS: _list_worklogs,
+    McpTool.UPDATE_WORKLOG: _update_worklog,
+    McpTool.DELETE_WORKLOG: _delete_worklog,
     McpTool.LIST_RELEASES: _list_releases,
     McpTool.CREATE_RELEASE: _create_release,
     McpTool.SWEEP_RELEASE: _sweep_release,
