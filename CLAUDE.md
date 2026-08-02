@@ -61,9 +61,30 @@ uv run pytest                    # self-contained: re-creates + migrates a throw
 
 Migrations after model changes: `uv run alembic revision --autogenerate -m "..."` (review the generated file), then `upgrade head`. Parallel agents may create sibling heads — merge with `alembic merge`.
 
+## Releasing & deploying (the live instance)
+
+Radd runs itself in public at **project.radd-hq.com**, hosted beside a Forgejo at
+**git.radd-hq.com**. Contributor-facing setup, conventions and PR rules: `docs/contributing.md`.
+
+**Two repos, two pipelines, and they are not interchangeable.** This repo builds an
+IMAGE; a separate private deployment repo decides WHICH image runs. Tag a version here
+(`git tag -a v0.2.0 && git push origin v0.2.0`) → CI publishes
+`git.radd-hq.com/radd/radd:0.2.0` → bump `image.tag` in the deployment repo → CD runs
+`helm upgrade`. There is **no `latest` tag**: deployments pin an immutable version, so a
+rollback is editing that value back, not a race over what a moving tag points at.
+
+**Never change the cluster by hand.** `kubectl edit` in production is reverted the next
+time CD runs; the deployment repo is the source of truth. The end-to-end procedure —
+pre-flight checks, the failures that have actually happened, and rollback — lives in the
+`release` skill (`.claude/skills/release/`, local only: it carries machine-specific paths).
+
+`main` is protected: direct pushes and merges are whitelisted to the owner. CI does not
+run on pull requests, and cannot be made to — Forgejo executes the TARGET branch's
+workflows for fork PRs, so a workflow added in a PR never runs.
+
 ## Repo layout
 
 - `server/` — Python 3.12+ / FastAPI / SQLAlchemy 2 backend (uv project); modules in `src/radd/modules/`
 - `web/` — React 19 + TS + Vite SPA (built; `npm run build` output in `web/dist` is served by the API)
-- `PLAN.md` — status (§8), design, decisions · `docs/modules.md` — module map (keep current) · `docs/specs/` — per-feature build specs (historical record)
+- `PLAN.md` — status (§8), design, decisions · `docs/modules.md` — module map (keep current) · `docs/specs/` — per-feature build specs (historical record) · `docs/contributing.md` — setup, conventions, PR rules · `docs/deploy.md` + `docs/deploy-k3s.md` — running it
 - `compose.yaml` — dev Postgres (app Dockerfile/compose services + Helm chart are still to build)

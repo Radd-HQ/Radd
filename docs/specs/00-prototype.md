@@ -2,7 +2,7 @@
 
 Goal: navigable prototype — web UI (login → projects → boards → item detail), teams +
 individual assignment, epics, comments, full action RBAC + field-level visibility, Jira
-sample importer. Read `<repo>/CLAUDE.md` (non-negotiable dev rules)
+sample importer. Read `CLAUDE.md` (non-negotiable dev rules)
 and `docs/modules.md` first.
 
 ## Hard rules for every build agent
