@@ -256,19 +256,22 @@ The original M0–M5 milestone plan was overtaken by fast iteration: the **track
 - Full admin/settings suite: fields (+ permission-grant editor), states, labels, teams, workspace members, per-project access, roles matrix, tokens, cycles, releases, automations rule builder, intake-form builder + submit page.
 - SLQ query editor with autocomplete, view/board builder, permission-gated affordances.
 
-### 🔲 What remains (no unbuilt pillars — depth & follow-ups)
-Every pillar from the original vision now has a shipped first implementation. **The active thread
-right now is the settings/UX polish pass from specs 50–52 — see §11 for the concrete next steps
-(field default values, the settings-UI sweep, and the spec-50/51/52 follow-ups).** The longer-running
-depth list:
-1. **Deferred-by-environment** — ~~WYSIWYG editor~~ SHIPPED: the box has no preinstalled npm but DOES have node + network, so npm is bootstrappable from the registry tarball (see §11 ops notes) — the `RichEditor` (**Milkdown/Crepe**, WYSIWYG, markdown-in/out) is lazy-loaded and used in the wiki + comments + issue description, with `@`/`#` mention autocomplete + image paste-upload; read-mode rendering uses remark/react-markdown (see §11). Still deferred: Yjs/pycrdt wiki *co-editing* (real-time multi-user — separate from WYSIWYG); pgvector semantic search (needs a pgvector Postgres image; the ai seam + outbox-indexer make it drop-in).
-2. **Security depth** — TOTP recovery codes; security-checklist pass before OSS release.
-3. **Extensions depth** — hoist the in-process GitLab connector onto the sdk runner; ftrack + air-gapped Chat relay as the canonical external extensions; per-workspace connector config.
-4. **UI depth** — j/k keyboard nav, board WIP limits, issue templates, comment reactions.
-5. **Smaller gaps** — Confluence importer, per-user notification/email preferences, ~~business-hours SLA calendars~~ (shipped, spec 63), board/view pagination beyond 200, storage GC for orphaned attachment bytes, replacing the real-content sample data with synthetic before OSS release. (Running list: `docs/modules.md` → "Known simplifications".)
+### 🔲 What remains — the roadmap lives in the tracker (RADD-603)
+Every pillar from the original vision has a shipped first implementation. The depth list that
+used to sit here is now **filed as issues in the RADD project on project.radd-hq.com** — the
+roadmap view there is the plan, and this document stops being a second source of truth that
+drifts (two entries here had already shipped — pgvector in spec 103, storage GC in spec 102 —
+while still listed as open):
 
-### Before any public/OSS release
-Delete `server/scripts/sample_data/` (real internal Jira content) + replace with synthetic data; license/trademark check on the name; security review; the "never open-core" pledge in the README.
+- **RADD-676…687** — the depth items: wiki co-editing (Yjs/pycrdt), TOTP recovery codes,
+  GitLab connector on the SDK runner, ftrack + air-gapped Chat relay, per-project connector
+  config, j/k navigation, board WIP limits, issue templates, comment reactions, Confluence
+  importer, per-user notification preferences, board/view pagination beyond 200.
+- **RADD-688** (epic) — open-source release readiness: synthetic sample data (RADD-689),
+  the security checklist pass (RADD-690), license/trademark clearance (RADD-691), the
+  never-open-core pledge in the README (RADD-692).
+
+(Running list of known simplifications stays in `docs/modules.md`.)
 
 ## 9. Risks & mitigations
 
