@@ -19,9 +19,13 @@ from . import (
     search,
     service,
     spaces,
+    templates as page_templates,
     watchers as page_watchers,
 )
-from .models import Page
+from radd.exceptions import NotFoundError
+
+from .models import Page, PageTemplate
+from .types import PageEntity
 from .schemas import (
     DocLinkCreate,
     PageLinkedItem,
@@ -29,6 +33,9 @@ from .schemas import (
     PageCreate,
     PageLabelled,
     PageLabelsUpdate,
+    PageTemplateCreate,
+    PageTemplateRead,
+    PageTemplateUpdate,
     PageExtensionRead,
     PageRead,
     PageSummary,
@@ -116,6 +123,54 @@ async def create_page(data: PageCreate, session: Session, user: CurrentUser) -> 
     await authz.require(session, user, authz.Permission.PAGE_WRITE)
     page = await service.create_page(session, data, user.id)
     return await service.page_read(session, page)
+
+
+@router.get("/page-templates", response_model=list[PageTemplateRead])
+async def list_templates(
+    session: Session, user: CurrentUser, space_id: uuid.UUID | None = None
+) -> list[PageTemplateRead]:
+    """Templates usable here: the space's own, plus the global ones (RADD-712)."""
+    await authz.require(session, user, authz.Permission.PAGE_READ)
+    return [
+        PageTemplateRead.model_validate(t)
+        for t in await page_templates.list_templates(session, space_id)
+    ]
+
+
+@router.post("/page-templates", response_model=PageTemplateRead, status_code=201)
+async def create_template(
+    data: PageTemplateCreate, session: Session, user: CurrentUser
+) -> PageTemplateRead:
+    await authz.require(session, user, authz.Permission.PAGE_MANAGE)
+    row = PageTemplate(**data.model_dump(), created_by=user.id)
+    session.add(row)
+    await session.flush()
+    return PageTemplateRead.model_validate(row)
+
+
+@router.patch("/page-templates/{template_id}", response_model=PageTemplateRead)
+async def update_template(
+    template_id: uuid.UUID, data: PageTemplateUpdate, session: Session, user: CurrentUser
+) -> PageTemplateRead:
+    await authz.require(session, user, authz.Permission.PAGE_MANAGE)
+    row = await session.get(PageTemplate, template_id)
+    if row is None:
+        raise NotFoundError(PageEntity.PAGE, template_id)
+    for field, value in data.model_dump(exclude_unset=True).items():
+        setattr(row, field, value)
+    await session.flush()
+    return PageTemplateRead.model_validate(row)
+
+
+@router.delete("/page-templates/{template_id}", status_code=204)
+async def delete_template(
+    template_id: uuid.UUID, session: Session, user: CurrentUser
+) -> None:
+    await authz.require(session, user, authz.Permission.PAGE_MANAGE)
+    row = await session.get(PageTemplate, template_id)
+    if row is not None:
+        await session.delete(row)
+        await session.flush()
 
 
 @router.get("/pages/extensions", response_model=list[PageExtensionRead])

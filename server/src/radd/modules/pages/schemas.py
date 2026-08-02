@@ -52,6 +52,9 @@ class PageCreate(BaseModel):
     slug: str | None = Field(default=None, max_length=120)
     body: str = ""
     position: float | None = None  # omitted -> appended after current siblings
+    #: RADD-712: start from a template's shape. Ignored when `body` is given —
+    #: an explicit body is a deliberate choice and must win.
+    template: str | None = None
 
 
 class PageUpdate(BaseModel):
@@ -95,6 +98,34 @@ class PageLabelsUpdate(BaseModel):
     """Full replacement — a set has no sensible partial update."""
 
     labels: list[str] = Field(default_factory=list)
+
+
+class PageTemplateCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    description: str = ""
+    icon: str = Field(default="", max_length=40)
+    body: str = ""
+    #: None = available in every space.
+    space_id: uuid.UUID | None = None
+
+
+class PageTemplateUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    description: str | None = None
+    icon: str | None = Field(default=None, max_length=40)
+    body: str | None = None
+    space_id: uuid.UUID | None = None
+
+
+class PageTemplateRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    description: str
+    icon: str
+    body: str
+    space_id: uuid.UUID | None
 
 
 class PageExtensionRead(BaseModel):

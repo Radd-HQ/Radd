@@ -65,6 +65,16 @@ export interface PageLabelled {
   updated_at: string;
 }
 
+/** A shape a recurring page starts from (RADD-712). */
+export interface PageTemplate {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  body: string;
+  space_id: string | null;
+}
+
 /** Flat tree row from GET /page-spaces/{id}/pages — the client builds the tree. */
 export interface PageSummary {
   id: string;

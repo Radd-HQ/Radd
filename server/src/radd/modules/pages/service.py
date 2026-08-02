@@ -14,7 +14,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.events import service as events
 
-from . import backlinks, core, labels as page_labels, watchers as page_watchers
+from . import (
+    backlinks,
+    core,
+    labels as page_labels,
+    templates as page_templates,
+    watchers as page_watchers,
+)
 from .core import page_slugify
 from .models import Page, PageSpace, PageVersion
 from .schemas import (
@@ -187,12 +193,20 @@ async def create_page(
         if data.position is not None
         else await _next_position(session, space.id, data.parent_id)
     )
+    body = data.body
+    if not body and data.template:
+        # RADD-712. An explicit body wins — naming a template AND supplying a
+        # body means the caller has decided, and silently overwriting it would be
+        # the surprising behaviour.
+        template = await page_templates.by_name(session, data.template)
+        author = await _actor_name(session, actor_id)
+        body = page_templates.render(template.body, title=data.title, author=author)
     page = Page(
         space_id=space.id,
         parent_id=data.parent_id,
         title=data.title,
         slug=await _free_slug(session, space.id, data.slug or page_slugify(data.title)),
-        body=data.body,
+        body=body,
         position=position,
         created_by=actor_id,
         updated_by=actor_id,
@@ -429,3 +443,12 @@ async def restore_version(
         },
     )
     return page
+
+
+async def _actor_name(session: AsyncSession, actor_id: uuid.UUID) -> str:
+    """For the `{{author}}` placeholder. Falls back to the empty string rather
+    than raising: a template should still render for a service account."""
+    from radd.modules.auth.models import User
+
+    user = await session.get(User, actor_id)
+    return user.name if user else ""

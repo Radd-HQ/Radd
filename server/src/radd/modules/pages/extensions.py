@@ -116,4 +116,22 @@ PAGE_EXTENSIONS: tuple[PageExtensionSpec, ...] = (
             },
         },
     ),
+    PageExtensionSpec(
+        name=PageExtensionName.NEW_FROM_TEMPLATE,
+        label="New page from template",
+        description="A button that creates a child page from a template.",
+        icon="file-plus",
+        params_schema={
+            "type": "object",
+            "required": ["template"],
+            "properties": {
+                "template": {"type": "string", "description": "The template's name."},
+                "label": {"type": "string", "description": "Button text."},
+                "title_prompt": {
+                    "type": "string",
+                    "description": "What to ask for when naming the new page.",
+                },
+            },
+        },
+    ),
 )

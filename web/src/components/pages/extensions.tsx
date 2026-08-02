@@ -23,6 +23,7 @@ import { headingAnchorId, headingsOf } from "../../lib/markdown-outline";
 import type { PageSummary } from "../../lib/types";
 import { Markdown, MarkdownSourceCtx } from "../../lib/markdown";
 import { IncludedPage } from "./IncludedPage";
+import { NewFromTemplate } from "./NewFromTemplate";
 
 /**
  * The first-party page extensions (RADD-710 / RADD-715).
@@ -351,6 +352,12 @@ const EXTENSIONS: PageExtension[] = [
     label: "Pages by label",
     description: "Every page carrying a label — an index that maintains itself.",
     render: (params) => <LabelList params={params} />,
+  },
+  {
+    name: "new-from-template",
+    label: "New page from template",
+    description: "A button that creates a child page from a template.",
+    render: (params) => <NewFromTemplate params={params} />,
   },
 ];
 

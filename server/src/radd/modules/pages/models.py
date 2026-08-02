@@ -131,6 +131,29 @@ class PageLabel(Base):
     )
 
 
+class PageTemplate(Base, TimestampMixin):
+    """A shape a recurring page starts from (RADD-712).
+
+    `space_id` NULL = available everywhere; set = that space only. Scoping by
+    absence rather than by a join table, because a template belongs to one place
+    or to all — there is no third case, and the association table would be two
+    rows of ceremony per template.
+    """
+
+    __tablename__ = "page_templates"
+    __table_args__ = (UniqueConstraint("name", name="uq_page_templates_name"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(100))
+    description: Mapped[str] = mapped_column(Text, default="")
+    icon: Mapped[str] = mapped_column(String(40), default="")
+    body: Mapped[str] = mapped_column(Text, default="")
+    space_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("page_spaces.id", ondelete="CASCADE"), nullable=True
+    )
+    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+
+
 class PageWatcher(Base):
     """Someone following a page (RADD-719).
 

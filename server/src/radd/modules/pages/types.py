@@ -53,6 +53,7 @@ class PageExtensionName(StrEnum):
     BACKLINKS = "backlinks"
     INCLUDE = "include"
     LABEL_LIST = "label-list"
+    NEW_FROM_TEMPLATE = "new-from-template"
 
 
 class RestoreKind(StrEnum):

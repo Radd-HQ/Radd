@@ -134,6 +134,7 @@ export const ApiPath = {
   // Pages (spec 43).
   pageSpaces: "/page-spaces",
   pageExtensions: "/pages/extensions",
+  pageTemplates: "/page-templates",
   pageReindexLinks: "/pages/reindex-links",
   pages: "/pages",
   docsSearch: "/docs/search",

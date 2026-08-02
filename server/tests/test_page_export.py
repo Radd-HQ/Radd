@@ -99,3 +99,31 @@ async def test_a_hostile_title_still_produces_a_usable_file_name():
     copied onto another filesystem."""
     assert "/" not in export.safe_name("Ops: incident 3/4", "x")
     assert export.safe_name("///", "fallback") == "fallback"
+
+
+# --- RADD-712: templates ------------------------------------------------------
+
+
+def test_the_three_placeholders_substitute():
+    from datetime import date
+    from radd.modules.pages import templates
+
+    out = templates.render(
+        "# {{title}}\n\nBy {{author}} on {{date}}.",
+        title="Runbook: payments", author="Hussein Jarrar", today=date(2026, 8, 3),
+    )
+    assert out == "# Runbook: payments\n\nBy Hussein Jarrar on 2026-08-03."
+
+
+def test_an_unknown_placeholder_survives():
+    """`{{customer}}` in a template is an INSTRUCTION to whoever fills it in.
+    Blanking it would delete the instruction."""
+    from radd.modules.pages import templates
+
+    assert templates.render("Hi {{customer}} — {{title}}", title="X", author="Y") == "Hi {{customer}} — X"
+
+
+def test_whitespace_inside_a_placeholder_is_tolerated():
+    from radd.modules.pages import templates
+
+    assert templates.render("{{ title }}", title="ok", author="") == "ok"
