@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, FileText, Plus } from "lucide-react";
@@ -72,6 +72,46 @@ export function PageTree({
   const [expanded, setExpanded] = useState<Set<string>>(() => loadExpanded(spaceId));
   const tree = useMemo(() => buildTree(rows), [rows]);
 
+  // RADD-714: open to the selected page on load. Landing on a deep page from
+  // search or a link previously showed a collapsed tree that gave no clue where
+  // you were — the one cue the rail exists to provide.
+  const parentOf = useMemo(
+    () => new Map(rows.map((row) => [row.id, row.parent_id])),
+    [rows],
+  );
+  useEffect(() => {
+    if (!selectedId) return;
+    setExpanded((current) => {
+      const next = new Set(current);
+      let cursor = parentOf.get(selectedId) ?? null;
+      let added = false;
+      // Bounded by the tree's depth — a cycle is impossible (the move guard
+      // rejects one) but a bad row must not hang the rail.
+      for (let guard = 0; cursor && guard < rows.length; guard++) {
+        if (!next.has(cursor)) {
+          next.add(cursor);
+          added = true;
+        }
+        cursor = parentOf.get(cursor) ?? null;
+      }
+      if (!added) return current;
+      localStorage.setItem(pageTreeExpandStorageKey(spaceId), JSON.stringify([...next]));
+      return next;
+    });
+  }, [selectedId, parentOf, rows.length, spaceId]);
+
+  // The trail from the root to the selected page, so the rail shows WHERE you
+  // are and not merely what is open.
+  const ancestorsOfSelected = useMemo(() => {
+    const trail = new Set<string>();
+    let cursor = selectedId ? (parentOf.get(selectedId) ?? null) : null;
+    for (let guard = 0; cursor && guard < rows.length; guard++) {
+      trail.add(cursor);
+      cursor = parentOf.get(cursor) ?? null;
+    }
+    return trail;
+  }, [selectedId, parentOf, rows.length]);
+
   const toggle = (pageId: string) => {
     setExpanded((current) => {
       const next = new Set(current);
@@ -94,6 +134,7 @@ export function PageTree({
           expanded={expanded}
           onToggle={toggle}
           selectedId={selectedId}
+          ancestors={ancestorsOfSelected}
           canWrite={canWrite}
           pageRoute={pageRoute}
         />
@@ -109,6 +150,7 @@ function TreeRow({
   node,
   depth,
   expanded,
+  ancestors,
   onToggle,
   selectedId,
   canWrite,
@@ -118,6 +160,7 @@ function TreeRow({
   node: TreeNode;
   depth: number;
   expanded: Set<string>;
+  ancestors: Set<string>;
   onToggle: (pageId: string) => void;
   selectedId?: string;
   canWrite: boolean;
@@ -134,7 +177,9 @@ function TreeRow({
           "group/docrow flex items-center gap-1 rounded-md pr-1 text-[13px] " +
           (row.id === selectedId
             ? "bg-elevated text-heading"
-            : "text-fg-secondary hover:bg-elevated/60 hover:text-fg")
+            : ancestors.has(row.id)
+              ? "text-fg hover:bg-elevated/60"
+              : "text-fg-secondary hover:bg-elevated/60 hover:text-fg")
         }
         style={{ paddingLeft: `${depth * 14 + 4}px` }}
       >
@@ -157,6 +202,12 @@ function TreeRow({
         >
           {row.title}
         </Link>
+        {/* RADD-714: how big is this section, without expanding it. */}
+        {children.length > 0 && !isOpen && (
+          <span className="shrink-0 rounded bg-elevated px-1 font-mono text-[10px] text-fg-faint">
+            {children.length}
+          </span>
+        )}
         {canWrite && (
           <span className="opacity-0 transition-opacity focus-within:opacity-100 group-hover/docrow:opacity-100">
             <NewPageButton spaceId={spaceId} spaceSlug={spaceSlug} parentId={row.id} depth={depth} iconOnly />
@@ -172,6 +223,7 @@ function TreeRow({
             node={child}
             depth={depth + 1}
             expanded={expanded}
+            ancestors={ancestors}
             onToggle={onToggle}
             selectedId={selectedId}
             canWrite={canWrite}

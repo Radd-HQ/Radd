@@ -9,6 +9,7 @@ import { Permission } from "../lib/types";
 import { EmptyState } from "../components/EmptyState";
 import { Spinner } from "../components/Spinner";
 import { PageView } from "../components/pages/PageView";
+import { BreadcrumbCrumb } from "../components/pages/BreadcrumbCrumb";
 import { PageTree } from "../components/pages/PageTree";
 import { PublicBadge } from "../components/pages/PublicBadge";
 import { QueryError } from "../components/QueryError";
@@ -95,13 +96,9 @@ export function PageSpacePage() {
         {page.data?.breadcrumb.map((crumb) => (
           <span key={crumb.id} className="flex min-w-0 items-center gap-1.5">
             <ChevronRight size={13} className="shrink-0 text-fg-faint" aria-hidden />
-            <Link
-              to={RoutePath.page}
-              params={{ spaceSlug: space.slug, pageSlug: crumb.slug }}
-              className="truncate text-fg-secondary hover:text-fg"
-            >
-              {crumb.title}
-            </Link>
+            {/* RADD-714: each ancestor carries its siblings, so moving sideways
+                does not mean hunting in the tree. */}
+            <BreadcrumbCrumb crumb={crumb} spaceId={space.id} spaceSlug={space.slug} />
           </span>
         ))}
       </header>

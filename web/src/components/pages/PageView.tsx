@@ -30,6 +30,7 @@ import { useConfirm } from "../ConfirmDialog";
 import { DropdownMenu } from "../DropdownMenu";
 import { PageExtensionCtx } from "../../lib/page-extensions";
 import { PageBacklinksPanel } from "./PageBacklinksPanel";
+import { PageChildIndex } from "./PageChildIndex";
 import { PageComments } from "./PageComments";
 import { PageWatchButton } from "./PageWatchButton";
 import { PageInlineComments } from "./PageInlineComments";
@@ -411,6 +412,15 @@ export function PageView({
               to place the extension — "what points at me" is the direction a
               wiki is navigated, and it cannot be opt-in per page. The
               `radd:backlinks` extension exists for putting it INLINE instead. */}
+          {/* RADD-714: what is under this page, for anyone who arrived from
+              search or a link rather than the tree. */}
+          <PageChildIndex
+            pageId={page.id}
+            spaceId={page.space_id}
+            spaceSlug={spaceSlug ?? ""}
+            body={page.body}
+          />
+
           {/* RADD-726: anchored threads beside the passage they are about. */}
           <PageInlineComments
             pageId={page.id}
