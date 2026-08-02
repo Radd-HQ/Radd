@@ -18,12 +18,12 @@ prefix off the subject would be inventing a second, worse source of truth.
     Feature/Story + a UI label       -> New UI Feature
     Feature/Story                    -> New Feature
     Task/Chore                       -> Chore
-    any type + a docs label          -> Documentation
+    any type + `documentation` label -> Documentation
     unreachable / unfiled            -> Uncategorized
 
 A tag must publish even when the tracker is down or a key was never filed, so
-every lookup failure degrades to Uncategorized carrying the raw subject rather
-than aborting the release.
+every lookup failure degrades to Uncategorized carrying the commit subject
+(minus its key prefix) rather than aborting the release.
 
 Usage:
     changelog.py --from v0.5.0 --to v0.6.0 [--format markdown|json]
@@ -74,6 +74,15 @@ class Entry:
     sha: str
     title: str = ""
     category: str = "Uncategorized"
+
+    def text(self) -> str:
+        """What to print after the key link. Falls back to the commit subject
+        when the tracker was unreachable — with the `[RADD-###]` prefix stripped,
+        because the renderer has already emitted the key as a link and printing
+        it twice is how the first real degraded release read (RADD-706)."""
+        if self.title:
+            return self.title
+        return KEY_RE.sub("", self.subject, count=1).strip()
 
 
 @dataclass
@@ -173,7 +182,7 @@ def render_markdown(log: Changelog, base_url: str) -> str:
         lines.append(f"### {category}")
         lines.append("")
         for entry in entries:
-            text = entry.title or entry.subject
+            text = entry.text()
             if entry.key:
                 lines.append(f"- [{entry.key}]({base_url}/issues/{entry.key}) {text}")
             else:
@@ -205,7 +214,7 @@ def main() -> int:
                     "previous": log.previous,
                     "categories": {
                         name: [
-                            {"key": e.key, "title": e.title or e.subject, "sha": e.sha}
+                            {"key": e.key, "title": e.text(), "sha": e.sha}
                             for e in entries
                         ]
                         for name, entries in log.by_category().items()
