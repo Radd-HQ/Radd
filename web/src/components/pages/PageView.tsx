@@ -1,10 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, ArchiveRestore, History, Pencil, Printer, Trash2 } from "lucide-react";
+import {
+  Archive,
+  ArchiveRestore,
+  Download,
+  History,
+  Pencil,
+  Printer,
+  Trash2,
+} from "lucide-react";
 import { api, ApiError, errorMessage } from "../../lib/api";
 import { useAttachmentUploader } from "../../lib/useAttachmentUploader";
 import { Entity, invalidateEntities } from "../../lib/cache";
-import { apiPagePath, apiPageUnarchivePath, attachmentUrl } from "../../lib/constants";
+import {
+  apiPageExportPath,
+  apiPagePath,
+  apiPageUnarchivePath,
+  attachmentUrl,
+} from "../../lib/constants";
 import { relativeTime } from "../../lib/dates";
 import { PageBody } from "./PageBody";
 import { usersQuery } from "../../lib/queries";
@@ -207,6 +220,17 @@ export function PageView({
                 label: "Export as PDF, with subpages",
                 icon: Printer,
                 onSelect: () => openPrint(true),
+              },
+              { kind: "separator" as const },
+              {
+                kind: "action" as const,
+                label: "Download as markdown (.zip)",
+                icon: Download,
+                // RADD-721: a plain navigation, so the browser's own download
+                // handling applies — Content-Disposition names the file.
+                onSelect: () => {
+                  window.location.href = `/api/v1${apiPageExportPath(page.id)}`;
+                },
               },
             ]}
           />

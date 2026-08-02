@@ -1,7 +1,7 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
@@ -11,7 +11,7 @@ from radd.modules.auth.deps import CurrentUser
 from radd.modules.items import service as items_service
 from radd.modules.projects import service as projects_service
 
-from . import backlinks, labels as page_labels, links, search, service, spaces
+from . import backlinks, export as page_export, labels as page_labels, links, search, service, spaces
 from .models import Page
 from .schemas import (
     DocLinkCreate,
@@ -183,6 +183,32 @@ async def unarchive_page(
 
 
 # --- versions ---
+
+
+@router.get("/page-spaces/{space_id}/export")
+async def export_space(space_id: uuid.UUID, session: Session, user: CurrentUser) -> Response:
+    """A whole space as a zip of markdown (RADD-721)."""
+    await authz.require(session, user, authz.Permission.PAGE_READ)
+    space = await spaces.get_space(session, space_id)
+    name, blob = await page_export.export_zip(session, space)
+    return _zip_response(name, blob)
+
+
+@router.get("/pages/{page_id}/export")
+async def export_page(page_id: uuid.UUID, session: Session, user: CurrentUser) -> Response:
+    """One page and everything beneath it, as a zip of markdown."""
+    page = await _page_guard(session, user, page_id, authz.Permission.PAGE_READ)
+    space = await spaces.get_space(session, page.space_id)
+    name, blob = await page_export.export_zip(session, space, root=page)
+    return _zip_response(name, blob)
+
+
+def _zip_response(name: str, blob: bytes) -> Response:
+    return Response(
+        content=blob,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )
 
 
 @router.get("/pages/by-label/{name}", response_model=list[PageLabelled])

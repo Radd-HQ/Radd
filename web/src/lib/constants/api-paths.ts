@@ -236,3 +236,6 @@ export const apiPageLabelsPath = (pageId: string) => `/pages/${pageId}/labels`;
 /** GET /pages/by-label/{name} — the self-maintaining index (RADD-718). */
 export const apiPagesByLabelPath = (name: string) =>
   `/pages/by-label/${encodeURIComponent(name)}`;
+
+/** GET /pages/{id}/export — the page and its subtree as a markdown zip (RADD-721). */
+export const apiPageExportPath = (pageId: string) => `/pages/${pageId}/export`;
