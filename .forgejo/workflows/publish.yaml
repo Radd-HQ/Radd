@@ -1,57 +1,96 @@
-# Build Radd's image on a version tag and push it to a Forgejo container
-# registry, so a cluster can pull a CI-built image instead of one hand-built on
-# the node (docs/deploy-k3s.md §3).
+# Build the app image on a version tag and push it to the Forgejo registry, so
+# deployments pull an immutable, CI-built artifact instead of one hand-built on
+# the node.
 #
-# Set the repository variable REGISTRY to your Forgejo host (e.g. git.example.com)
-# under Settings → Actions → Variables. Requires a registered act_runner with a
-# `docker` label; until one exists this workflow simply never runs.
+#   git tag v0.2.0 && git push --tags     -> git.radd-hq.com/radd/radd:0.2.0
 #
-# FORGEJO_TOKEN is injected automatically; it can push to the registry of the
-# repository's owner, so no separate registry credential is needed here.
+# Plain `docker` commands rather than docker/build-push-action: Forgejo resolves
+# actions from its own mirror, third-party GitHub actions are not guaranteed to
+# be there, and a build that fails on a missing action is a confusing way to
+# find that out.
 name: publish
 
 on:
   push:
     tags:
       - "v*"
+  # Rebuild a version without moving a tag (e.g. after a base-image CVE).
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build, without the leading v (e.g. 0.2.0)"
+        required: true
+
+env:
+  REGISTRY: git.radd-hq.com
 
 jobs:
   image:
     runs-on: docker
+    container:
+      # node, because actions/checkout is a JavaScript action. The docker CLI
+      # is added below — an image with docker but no node cannot check out.
+      image: node:22-bookworm
     steps:
       - uses: actions/checkout@v4
 
-      - name: Derive the version from the tag
-        id: meta
-        # refs/tags/v0.2.0 -> 0.2.0. The image is tagged with the version only;
-        # `latest` is deliberately NOT published — the cluster pins an immutable
-        # tag so a rollback is a value change, not an image race.
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-
-      - name: Log in to the Forgejo registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ vars.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.FORGEJO_TOKEN }}
-
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Containerfile
-          push: true
-          tags: ${{ vars.REGISTRY }}/${{ github.repository }}:${{ steps.meta.outputs.version }}
-          # The SPA build stage is the slow part; caching it turns a ~5 minute
-          # rebuild into well under a minute for a server-only change.
-          cache-from: type=registry,ref=${{ vars.REGISTRY }}/${{ github.repository }}:buildcache
-          cache-to: type=registry,ref=${{ vars.REGISTRY }}/${{ github.repository }}:buildcache,mode=max
-
-      - name: How to deploy it
+      - name: Install the docker CLI
         run: |
-          echo "Pushed ${{ vars.REGISTRY }}/${{ github.repository }}:${{ steps.meta.outputs.version }}"
+          set -e
+          curl -sSL https://download.docker.com/linux/static/stable/x86_64/docker-27.5.1.tgz \
+            | tar xz -C /tmp docker/docker
+          install -m 0755 /tmp/docker/docker /usr/local/bin/docker
+          docker --version
+
+      - name: Resolve version and image name
+        id: meta
+        run: |
+          set -e
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"      # refs/tags/v0.2.0 -> 0.2.0
+          fi
+          # Container repository names MUST be lowercase; the Forgejo repo is
+          # "Radd/Radd", which docker rejects verbatim.
+          REPO="$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')"
+          echo "version=$VERSION"            >> "$GITHUB_OUTPUT"
+          echo "image=$REGISTRY/$REPO"       >> "$GITHUB_OUTPUT"
+          echo "Building $REGISTRY/$REPO:$VERSION"
+
+      - name: Log in to the registry
+        run: |
+          echo "${{ secrets.REGISTRY_TOKEN || secrets.FORGEJO_TOKEN }}" \
+            | docker login "$REGISTRY" -u "${{ github.actor }}" --password-stdin
+
+      - name: Build
+        # DOCKER_HOST points at the runner's DinD sidecar over its bridge
+        # gateway — job containers sit on that bridge, so localhost is not it.
+        env:
+          DOCKER_HOST: tcp://172.17.0.1:2375
+        run: |
+          set -e
+          docker build -f Containerfile \
+            -t "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}" .
+          docker images "${{ steps.meta.outputs.image }}" --format '  {{.Repository}}:{{.Tag}}  {{.Size}}'
+
+      - name: Push
+        env:
+          DOCKER_HOST: tcp://172.17.0.1:2375
+        run: |
+          docker push "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}"
+
+      - name: Deploy instructions
+        run: |
+          IMG="${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}"
+          echo "Pushed $IMG"
           echo
-          echo "Deploy with:"
-          echo "  helm upgrade radd deploy/helm/radd -n radd -f <your-values.yaml> \\"
-          echo "    --set image.repository=${{ vars.REGISTRY }}/${{ github.repository }} \\"
-          echo "    --set image.tag=${{ steps.meta.outputs.version }}"
+          echo "To deploy, set the tag in the deployment repo's values-radd.yaml:"
+          echo "    image:"
+          echo "      repository: ${{ steps.meta.outputs.image }}"
+          echo "      tag: \"${{ steps.meta.outputs.version }}\""
+          echo "…then push that repo; its CD applies the change."
+          echo
+          echo "No 'latest' tag is published on purpose — the cluster pins an"
+          echo "immutable version, so a rollback is a value change in git rather"
+          echo "than a race over what a moving tag currently points at."
