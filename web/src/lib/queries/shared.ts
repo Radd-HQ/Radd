@@ -126,6 +126,7 @@ export const queryKeys = {
   pageExtensions: ["pageExtensions"] as const,
   pageBacklinks: (pageId: string) => ["pageBacklinks", { pageId }] as const,
   pageComments: (pageId: string) => ["pageComments", { pageId }] as const,
+  pageWatch: (pageId: string) => ["pageWatch", { pageId }] as const,
   pagesByLabel: (name: string, space: string) =>
     ["pagesByLabel", { name, space }] as const,
   pages: (spaceId: string) => ["pages", { spaceId }] as const,

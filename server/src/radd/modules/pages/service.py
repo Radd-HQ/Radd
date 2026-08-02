@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.events import service as events
 
-from . import backlinks, core, labels as page_labels
+from . import backlinks, core, labels as page_labels, watchers as page_watchers
 from .core import page_slugify
 from .models import Page, PageSpace, PageVersion
 from .schemas import (
@@ -275,6 +275,14 @@ async def update_page(
         await _emit_page(session, PageEvent.PAGE_MOVED, page, actor_id, payload)
     if set(changed) - {"parent_id", "position"}:
         await _emit_page(session, PageEvent.PAGE_UPDATED, page, actor_id, payload)
+        # RADD-719. Auto-watch on edit, like items: touching something is the
+        # strongest signal you care what happens to it next, and a watch feature
+        # nobody opts into has no watchers.
+        space = await get_space(session, page.space_id)
+        await page_watchers.notify_watchers(
+            session, page, actor_id, space.slug, page.version
+        )
+        await page_watchers.watch(session, page.id, actor_id)
     return page
 
 

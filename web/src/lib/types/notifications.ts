@@ -16,6 +16,9 @@ export const NotificationType = {
   /** Spec 71: approval requests (to approvers) + decisions (to the requester) —
    * detail: {action: requested|approved|declined, to_state, required}. */
   approval: "approval",
+  /** RADD-719: a watched wiki page changed. Carries no item — `detail` holds the
+   *  page's slugs so the row can link without a join. */
+  pageUpdated: "page_updated",
 } as const;
 export type NotificationTypeValue = (typeof NotificationType)[keyof typeof NotificationType];
 
@@ -52,6 +55,14 @@ export interface Notification {
     to_state?: string;
     required?: number;
     approved_count?: number;
+  /** RADD-719 (page_updated): everything the row needs to render and link
+   *  without a join — resolved at write time, so a later rename cannot make the
+   *  entry lie about what it told you at the time. */
+  page_id?: string;
+  page_slug?: string;
+  space_slug?: string;
+  title?: string;
+  version?: number;
   };
   read: boolean;
   created_at: string;

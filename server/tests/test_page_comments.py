@@ -196,3 +196,53 @@ async def test_an_ordinary_thread_comment_has_no_anchor(db, admin, page):
         actor=admin, entity_type=CommentParentType.PAGE.value,
     )
     assert read.anchor is None and read.resolved_at is None
+
+
+# --- RADD-719: watching a page ------------------------------------------------
+
+
+async def test_editing_a_page_notifies_its_watchers_but_not_the_editor(db, admin, page):
+    """The point of the feature: a silently changed runbook is the failure mode
+    for a wiki that documents operations. And nobody wants an inbox entry telling
+    them about their own edit."""
+    from radd.modules.notify.models import Notification
+    from radd.modules.pages import watchers
+    from radd.modules.pages.schemas import PageUpdate
+
+    watcher = User(email=f"w-{uuid.uuid4().hex[:8]}@example.com", name="Watcher")
+    db.add(watcher)
+    await db.flush()
+    await watchers.watch(db, page.id, watcher.id)
+    await watchers.watch(db, page.id, admin.id)
+
+    await pages_service.update_page(db, page.id, PageUpdate(body="rewritten"), admin.id)
+
+    rows = await db.execute(
+        select(Notification).where(Notification.user_id == watcher.id)
+    )
+    delivered = rows.scalars().all()
+    assert len(delivered) == 1
+    assert delivered[0].payload["title"] == page.title
+    assert delivered[0].payload["page_slug"] == page.slug
+
+    mine = await db.execute(select(Notification).where(Notification.user_id == admin.id))
+    assert mine.first() is None  # the editor is not told about their own edit
+
+
+async def test_editing_auto_watches_the_editor(db, admin, page):
+    from radd.modules.pages import watchers
+    from radd.modules.pages.schemas import PageUpdate
+
+    assert await watchers.is_watching(db, page.id, admin.id) is False
+    await pages_service.update_page(db, page.id, PageUpdate(body="touched"), admin.id)
+    assert await watchers.is_watching(db, page.id, admin.id) is True
+
+
+async def test_watching_twice_is_a_double_click_not_an_error(db, admin, page):
+    from radd.modules.pages import watchers
+
+    await watchers.watch(db, page.id, admin.id)
+    await watchers.watch(db, page.id, admin.id)
+    assert await watchers.watcher_ids(db, page.id) == [admin.id]
+    await watchers.unwatch(db, page.id, admin.id)
+    assert await watchers.watcher_ids(db, page.id) == []

@@ -239,3 +239,6 @@ export const apiPagesByLabelPath = (name: string) =>
 
 /** GET /pages/{id}/export — the page and its subtree as a markdown zip (RADD-721). */
 export const apiPageExportPath = (pageId: string) => `/pages/${pageId}/export`;
+
+/** GET/PUT/DELETE /pages/{id}/watch (RADD-719). */
+export const apiPageWatchPath = (pageId: string) => `/pages/${pageId}/watch`;

@@ -18,6 +18,9 @@ class NotificationType(StrEnum):
     # Spec 71: approval requests (to each eligible approver) and decisions (to
     # the requester) — detail carries {"action", "to_state", ...}. Muteable.
     APPROVAL = "approval"
+    # RADD-719: a watched wiki page changed. Carries no item — the payload
+    # holds the page's slugs so the inbox row can link without a join.
+    PAGE_UPDATED = "page_updated"
 
 
 # Wire strings for the slas module's timer events (specs 30/69). Constants, not

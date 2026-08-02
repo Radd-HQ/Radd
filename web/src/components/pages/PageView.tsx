@@ -31,6 +31,7 @@ import { DropdownMenu } from "../DropdownMenu";
 import { PageExtensionCtx } from "../../lib/page-extensions";
 import { PageBacklinksPanel } from "./PageBacklinksPanel";
 import { PageComments } from "./PageComments";
+import { PageWatchButton } from "./PageWatchButton";
 import { PageInlineComments } from "./PageInlineComments";
 import { PageLabels } from "./PageLabels";
 import { PageLinkedItems } from "./PageLinkedItems";
@@ -189,6 +190,7 @@ export function PageView({
             label="History"
             icon={<History size={11} aria-hidden />}
           />
+          <PageWatchButton pageId={page.id} />
           {/* RADD-738: the export entry point, with the subpages choice offered
               WHERE the action is taken rather than buried in settings. */}
           <DropdownMenu

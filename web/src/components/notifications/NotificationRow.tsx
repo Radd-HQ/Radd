@@ -2,6 +2,7 @@ import {
   AlarmClock,
   AtSign,
   CircleDot,
+  FileText,
   MessageSquare,
   ShieldCheck,
   Timer,
@@ -38,6 +39,8 @@ export function notificationSummary(notification: Notification): string {
           return `${actor} requested your approval to move to ${target}`;
       }
     }
+    case NotificationType.pageUpdated:
+      return `${actor} edited ${notification.detail.title ?? "a page"}`;
     default:
       return `${actor} commented`;
   }
@@ -52,6 +55,7 @@ const TYPE_ICONS = {
   [NotificationType.slaDueSoon]: AlarmClock,
   [NotificationType.automation]: Zap,
   [NotificationType.approval]: ShieldCheck,
+  [NotificationType.pageUpdated]: FileText,
 } as const;
 
 /** One notification row (shared by the Inbox page and the top-bar peek). */

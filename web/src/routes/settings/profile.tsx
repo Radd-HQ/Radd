@@ -270,6 +270,7 @@ const NOTIFY_TYPE_LABELS: Record<NotificationTypeValue, string> = {
   [NotificationType.slaBreach]: "SLA breaches",
   [NotificationType.slaDueSoon]: "SLA due-soon warnings",
   [NotificationType.automation]: "Automation rules",
+  [NotificationType.pageUpdated]: "Changes to pages I watch",
   [NotificationType.approval]: "Approval requests & decisions",
 };
 

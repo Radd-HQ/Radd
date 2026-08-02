@@ -11,7 +11,16 @@ from radd.modules.auth.deps import CurrentUser
 from radd.modules.items import service as items_service
 from radd.modules.projects import service as projects_service
 
-from . import backlinks, export as page_export, labels as page_labels, links, search, service, spaces
+from . import (
+    backlinks,
+    export as page_export,
+    labels as page_labels,
+    links,
+    search,
+    service,
+    spaces,
+    watchers as page_watchers,
+)
 from .models import Page
 from .schemas import (
     DocLinkCreate,
@@ -229,6 +238,27 @@ async def set_page_labels(
     await _page_guard(session, user, page_id, authz.Permission.PAGE_WRITE)
     labels = await page_labels.set_labels(session, page_id, data.labels, user.id)
     return [label.name for label in labels]
+
+
+@router.get("/pages/{page_id}/watch")
+async def get_watch(page_id: uuid.UUID, session: Session, user: CurrentUser) -> dict[str, bool]:
+    await _page_guard(session, user, page_id, authz.Permission.PAGE_READ)
+    return {"watching": await page_watchers.is_watching(session, page_id, user.id)}
+
+
+@router.put("/pages/{page_id}/watch")
+async def set_watch(page_id: uuid.UUID, session: Session, user: CurrentUser) -> dict[str, bool]:
+    """Watch a page (RADD-719). Idempotent — watching twice is a double click."""
+    await _page_guard(session, user, page_id, authz.Permission.PAGE_READ)
+    await page_watchers.watch(session, page_id, user.id)
+    return {"watching": True}
+
+
+@router.delete("/pages/{page_id}/watch")
+async def clear_watch(page_id: uuid.UUID, session: Session, user: CurrentUser) -> dict[str, bool]:
+    await _page_guard(session, user, page_id, authz.Permission.PAGE_READ)
+    await page_watchers.unwatch(session, page_id, user.id)
+    return {"watching": False}
 
 
 @router.get("/pages/{page_id}/backlinks", response_model=list[PageBacklink])

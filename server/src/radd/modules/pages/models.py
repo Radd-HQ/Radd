@@ -131,6 +131,25 @@ class PageLabel(Base):
     )
 
 
+class PageWatcher(Base):
+    """Someone following a page (RADD-719).
+
+    Pages own this rather than notify: `notify.ItemWatcher` is keyed to
+    work_items by foreign key, and the alternative — making watchers polymorphic
+    too — is a second migration of a hot table for one extra parent. The
+    NOTIFICATION side is shared; only the subscription list is local.
+    """
+
+    __tablename__ = "page_watchers"
+
+    page_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("pages.id", ondelete="CASCADE"), primary_key=True
+    )
+    #: Plain UUID, no FK — the same convention notify uses for watchers.
+    user_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
 class ItemPageLink(Base):
     """Issue ↔ doc-page association (both directions surface it)."""
 

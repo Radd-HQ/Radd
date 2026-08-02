@@ -6,6 +6,7 @@ import { Entity, entityMeta } from "../cache";
 import {
   ApiPath,
   apiPageBacklinksPath,
+  apiPageWatchPath,
   apiParentCommentsPath,
   apiPagesByLabelPath,
   apiPageItemsPath,
@@ -75,6 +76,13 @@ export const pageCommentsQuery = (pageId: string) =>
     queryKey: queryKeys.pageComments(pageId),
     meta: entityMeta(Entity.comment),
     queryFn: () => api.get<Comment[]>(apiParentCommentsPath("page", pageId)),
+  });
+
+/** Whether the current user is watching this page (RADD-719). */
+export const pageWatchQuery = (pageId: string) =>
+  queryOptions({
+    queryKey: queryKeys.pageWatch(pageId),
+    queryFn: () => api.get<{ watching: boolean }>(apiPageWatchPath(pageId)),
   });
 
 /** A space's flat page rows — the tree component assembles the hierarchy. */
