@@ -97,27 +97,25 @@ Categories: `Development`, `Documentation`, `Testing`, `Investigation`, `Code Re
 
 ### Attribution
 
-| Identity | Writes | When |
-|---|---|---|
-| **Radd Agent** (service account) | Issues, comments, state changes | Everything an agent does — the default |
-| **A person's token** | Rarely | Only operations an agent's scope excludes (`release.create`, storage/connector admin) — and say so when used |
-| **Automation** (`SYSTEM_ACTOR_ID`) | Sweeps, connector links | Genuinely automated flows only |
-
-Never file or comment as a human for convenience. The audit log is the one record that
-cannot be reconstructed from anything else.
+**Attribution is the owner (RADD-694, decided 2026-08-02, superseding the earlier
+agent-by-default rule):** every tracker write — issues, comments, transitions,
+releases, worklogs — is made with the owner's key and appears as the person.
+One person, one key; no per-person service accounts. `SYSTEM_ACTOR_ID` remains
+for genuinely automated flows (webhook sweeps, connector links), which are not a
+person's writes. The spec-113 scoped-key machinery stays for external/CI agents;
+this project's own workflow simply doesn't use it.
 
 ### MCP first (RADD-693)
 
-The instance embeds an MCP server built for exactly this work (specs 45/114), and
-`.mcp.json` registers it twice: **`radd`** (the agent key — the default for
-everything) and **`radd-owner`** (the owner key — releases, sweeps, and the
-session's time, where actor = author so the hours attribute to the person with no
-extra parameter). **Work the tracker through those tools.** REST is the fallback
+The instance embeds an MCP server built for exactly this work (specs 45/114);
+`.mcp.json` registers it once as **`radd`**, with the owner PAT in
+`RADD_API_TOKEN`. **Work the tracker through those tools.** REST is the fallback
 for what the MCP surface cannot yet express — and every such fallback is an MCP
 gap: say so when you take it, and file it (that habit is how RADD-672 and
 RADD-673 were found). Since 0.4.0 the whole loop — file with type/parent/points,
 transition, comment, log categorized time, create a released version, sweep —
-runs over MCP with zero REST calls.
+runs over MCP with zero REST calls, and the actor being the worklog author is
+what makes time attribute correctly with no extra parameter.
 
 The operational side — which token, which endpoint, the snippets — is in the local
 `track` skill (`.claude/skills/track/`), which carries machine-specific paths and is
