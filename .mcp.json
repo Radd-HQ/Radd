@@ -6,6 +6,13 @@
       "headers": {
         "Authorization": "Bearer ${RADD_API_TOKEN}"
       }
+    },
+    "radd-owner": {
+      "type": "http",
+      "url": "https://project.radd-hq.com/api/v1/mcp",
+      "headers": {
+        "Authorization": "Bearer ${RADD_OWNER_API_TOKEN}"
+      }
     }
   }
 }
