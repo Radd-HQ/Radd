@@ -61,6 +61,7 @@ RUN uv sync --locked --no-dev --extra localembed
 
 ENV RADD_WEB_DIST=/app/web/dist \
     RADD_ATTACHMENTS_DIR=/data/attachments \
+    RADD_AI_LOCAL_EMBED_CACHE=/data/models \
     RADD_BACKUP_DIR=/opt/radd/backups \
     RADD_BACKUP_KEY_FILE=/data/radd-backup.key \
     PATH="/opt/venv/bin:$PATH"
@@ -74,7 +75,7 @@ ENV RADD_WEB_DIST=/app/web/dist \
 # The backup key deliberately lives on /data, NOT with the backups: one stolen
 # volume should not be both the ciphertext and the key.
 RUN useradd --create-home --uid 10001 --user-group radd \
- && mkdir -p /data/attachments /opt/radd/backups \
+ && mkdir -p /data/attachments /data/models /opt/radd/backups \
  && chown -R radd:radd /data /opt/radd \
  && chmod 700 /opt/radd/backups
 EXPOSE 8000

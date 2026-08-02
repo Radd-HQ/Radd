@@ -21,9 +21,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import tempfile
 import threading
 import time
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any
 
 from radd.config import settings
@@ -63,6 +65,40 @@ def supported_models() -> list[dict[str, Any]]:
     ]
 
 
+def cache_dir() -> str:
+    """A writable directory for downloaded weights (RADD-722).
+
+    The configured path is RESOLVED and created here rather than handed to
+    fastembed as-is. The default is relative, and in the container the working
+    directory belongs to root while the process runs as an unprivileged user —
+    so `var/models` raised PermissionError on every single iteration and the
+    built-in backend could never work in the shipped image.
+
+    A model cache is an optimisation. Being unable to write one must degrade to
+    "download again next boot", never to a crash loop — so an unusable path
+    falls back to a temp dir with a warning.
+    """
+    configured = Path(settings.ai_local_embed_cache).expanduser()
+    try:
+        configured.mkdir(parents=True, exist_ok=True)
+        probe = configured / ".write-test"
+        probe.touch()
+        probe.unlink()
+        return str(configured)
+    except OSError as exc:
+        fallback = Path(tempfile.gettempdir()) / "radd-localembed"
+        fallback.mkdir(parents=True, exist_ok=True)
+        logger.warning(
+            "localembed: cache %s is not writable (%s); using %s — weights will be "
+            "re-downloaded after a restart. Set RADD_AI_LOCAL_EMBED_CACHE to a "
+            "writable path to keep them.",
+            configured,
+            exc,
+            fallback,
+        )
+        return str(fallback)
+
+
 def _instance(model: str) -> Any:
     """The cached TextEmbedding for a model — creation downloads weights on
     first use, so it happens at most once per process per model."""
@@ -72,7 +108,7 @@ def _instance(model: str) -> Any:
         cached = _models.get(model)
         if cached is None:
             logger.info("localembed: loading %s (downloads on first use)", model)
-            cached = TextEmbedding(model_name=model, cache_dir=settings.ai_local_embed_cache)
+            cached = TextEmbedding(model_name=model, cache_dir=cache_dir())
             _models[model] = cached
     return cached
 
