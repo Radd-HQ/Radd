@@ -33,11 +33,34 @@ is filed as it happens.
 
 1. **Before building**, file the item (or find it) and put it In Progress. A one-line
    ask ("fix the board scroll") is still an item — small is fine, absent is not.
-2. **Reference the key in the commit**: `fix(web): board columns scroll (RADD-412)`.
+2. **Every commit message starts with its issue key in brackets**:
+   `[RADD-412] board columns scroll instead of clipping`. That prefix is what
+   auto-links the commit into the issue's Version control tab — the connector's key
+   regex matches inside brackets, so nothing else is needed.
 3. **Close it when the work lands**, and record what shipped: a comment naming the
    commit, or the version if it went out in a release.
 4. **Plans** (a spec, a multi-session wave) are an epic with its children filed up
    front — the plan lives in the tracker, not only in `PLAN.md`.
+
+**Two rules about granularity, because they pull against each other:**
+
+- **Never commit against an epic key.** An epic is a container, not a unit of work.
+  A large body of work lands as SEVERAL commits, one per issue, each naming its own.
+- **Prefer fewer, meaningful issues with subtasks** over many tiny ones. Splitting work
+  into separate issues just to have something to reference is bureaucracy; the subtask
+  checklist on one issue is where the steps belong. File the issue at the granularity
+  a person would want to read about, then break it down inside.
+
+**Write descriptions someone else can act on.** An issue whose body is one sentence is
+not filed, it is mentioned. State what is wrong or wanted, what should change, where in
+the code, and what "done" looks like. The same goes for comments: say what happened and
+what it means, not that something happened.
+
+**Attribution.** Work an agent does is attributed to the **Radd Agent** service account,
+never to a person's token. A human's identity is for operations an agent's scope
+deliberately excludes (creating releases, storage and connector administration) — and
+when that happens, say so. `SYSTEM_ACTOR_ID` ("Automation") is for genuinely automated
+flows only: the release sweep, connector-created links, automation rules.
 
 **How to reach it.** `.mcp.json` registers Radd's own MCP server (spec 45), so the
 tools are available in-session once a token is exported:
