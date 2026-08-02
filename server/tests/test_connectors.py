@@ -22,7 +22,7 @@ from radd.exceptions import ForbiddenError
 from radd.modules.alertmanager import planner, service as alert_service
 from radd.modules.alertmanager.router import router as alertmanager_router
 from radd.modules.alertmanager.types import AlertAction
-from radd.modules.forgejo import parsing as forgejo_parsing
+from radd.modules.forgejo import parsing as forgejo_parsing, service as forgejo_service
 from radd.modules.forgejo.router import router as forgejo_router, verify_signature
 from radd.modules.googlechat.formatter import format_message
 from radd.modules.mailintake.parsing import extract_reply_key, parse_email
@@ -174,12 +174,28 @@ def _client() -> httpx.AsyncClient:
     )
 
 
+def _connections(monkeypatch, *secrets: str, active: bool = True) -> None:
+    """Spec 111: the receiver takes its secret from a CONNECTION row, so a test
+    that used to set `settings.forgejo_webhook_secret` stubs the row list. The
+    payloads here carry no repository name, so resolution falls through to the
+    active-connection scan — which is the path being exercised."""
+    rows = [
+        SimpleNamespace(id=index, name=f"c{index}", webhook_secret=secret, active=active)
+        for index, secret in enumerate(secrets)
+    ]
+
+    async def fake_list(session):
+        return rows
+
+    monkeypatch.setattr(forgejo_service, "list_connections", fake_list)
+
+
 # A push referencing no item keys: the endpoint accepts it without touching the DB.
 KEYLESS_PUSH = json.dumps({"ref": "refs/heads/main", "commits": [], "repository": {}}).encode()
 
 
-async def test_forgejo_endpoint_disabled_without_secret(monkeypatch):
-    monkeypatch.setattr(settings, "forgejo_webhook_secret", "")
+async def test_forgejo_endpoint_refuses_when_no_connection_verifies(monkeypatch):
+    _connections(monkeypatch)  # no rows at all — the connector is not configured
     async with _client() as client:
         response = await client.post(
             f"{settings.api_prefix}/integrations/forgejo",
@@ -190,7 +206,7 @@ async def test_forgejo_endpoint_disabled_without_secret(monkeypatch):
 
 
 async def test_forgejo_endpoint_rejects_bad_signature(monkeypatch):
-    monkeypatch.setattr(settings, "forgejo_webhook_secret", "s3cret")
+    _connections(monkeypatch, "s3cret")
     async with _client() as client:
         response = await client.post(
             f"{settings.api_prefix}/integrations/forgejo",
@@ -205,7 +221,7 @@ async def test_forgejo_endpoint_rejects_bad_signature(monkeypatch):
 
 @pytest.mark.parametrize("header", ["X-Forgejo-Signature", "X-Gitea-Signature"])
 async def test_forgejo_endpoint_accepts_either_signature_header(monkeypatch, header):
-    monkeypatch.setattr(settings, "forgejo_webhook_secret", "s3cret")
+    _connections(monkeypatch, "s3cret")
     async with _client() as client:
         response = await client.post(
             f"{settings.api_prefix}/integrations/forgejo",
@@ -217,7 +233,7 @@ async def test_forgejo_endpoint_accepts_either_signature_header(monkeypatch, hea
 
 
 async def test_forgejo_endpoint_ignores_unhandled_event_kinds(monkeypatch):
-    monkeypatch.setattr(settings, "forgejo_webhook_secret", "s3cret")
+    _connections(monkeypatch, "s3cret")
     body = json.dumps({"anything": True}).encode()
     async with _client() as client:
         response = await client.post(

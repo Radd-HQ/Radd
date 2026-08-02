@@ -1,5 +1,3 @@
-import hashlib
-import hmac
 import json
 import logging
 from typing import Annotated, Any
@@ -18,7 +16,7 @@ from radd.modules.vcs import service as vcs
 from radd.modules.vcs.types import VcsProvider
 from radd.modules.workflow import service as workflow
 
-from . import parsing
+from . import parsing, service
 from .types import ForgejoEventKind
 
 logger = logging.getLogger(__name__)
@@ -28,11 +26,11 @@ router = APIRouter(tags=["forgejo"])
 Session = Annotated[AsyncSession, Depends(get_session)]
 
 
-def verify_signature(raw_body: bytes, signature: str, secret: str) -> bool:
-    """Constant-time check of the hex HMAC-SHA256 the X-Forgejo-Signature /
-    X-Gitea-Signature header carries against the shared secret."""
-    expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(signature, expected)
+# Signature verification moved to service.verify_signature in spec 111 — the
+# receiver no longer knows which secret to use until it has resolved the
+# connection, so the check belongs next to that lookup. Re-exported because
+# tests/test_connectors.py imports it from here.
+verify_signature = service.verify_signature
 
 
 @router.post("/integrations/forgejo")
@@ -44,18 +42,24 @@ async def forgejo_webhook(
     x_forgejo_event: Annotated[str, Header()] = "",
     x_gitea_event: Annotated[str, Header()] = "",
 ) -> dict[str, int]:
-    """Forgejo/Gitea webhook receiver (spec 47). Auth = HMAC-SHA256 of the RAW
-    body vs the signature header; the write path is the vcs connector seam,
-    attributed to the system actor. Mirrors the gitlab connector (spec 31)."""
-    secret = settings.forgejo_webhook_secret
-    if not secret:
-        raise ForbiddenError("forgejo connector is disabled (RADD_FORGEJO_WEBHOOK_SECRET unset)")
+    """Forgejo/Gitea webhook receiver (specs 47, 111). Auth = HMAC-SHA256 of the
+    RAW body vs the signature header, checked against the secret of the CONNECTION
+    this payload came from; the write path is the vcs connector seam, attributed
+    to the system actor. Mirrors the gitlab connector (spec 31)."""
     raw_body = await request.body()
     signature = x_forgejo_signature or x_gitea_signature
-    if not verify_signature(raw_body, signature, secret):
-        raise ForbiddenError("bad forgejo webhook signature")
+    try:
+        payload = json.loads(raw_body)
+    except ValueError:
+        raise ForbiddenError("forgejo webhook body is not JSON") from None
 
-    payload = json.loads(raw_body)
+    resolved = await service.resolve_for_payload(session, payload, raw_body, signature)
+    if resolved is None:
+        # No active connection signed this. Covers three cases with one answer:
+        # nothing configured, the wrong secret, and an inactive host.
+        raise ForbiddenError("bad forgejo webhook signature")
+    _connection, _repo = resolved
+
     kind = x_forgejo_event or x_gitea_event
     merged = False
     if kind == ForgejoEventKind.PUSH:

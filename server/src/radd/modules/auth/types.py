@@ -112,6 +112,10 @@ class Permission(StrEnum):
     CARD_PRESET_CREATE = "cardpreset.create"
     CARD_PRESET_UPDATE = "cardpreset.update"
     CARD_PRESET_DELETE = "cardpreset.delete"
+    # Spec 111 — version-control connections (Forgejo/Gitea hosts + repos).
+    VCSCONN_CREATE = "vcsconn.create"
+    VCSCONN_UPDATE = "vcsconn.update"
+    VCSCONN_DELETE = "vcsconn.delete"
     AUTOMATION_CREATE = "automation.create"
     AUTOMATION_UPDATE = "automation.update"
     AUTOMATION_DELETE = "automation.delete"
@@ -298,6 +302,11 @@ CRUD_RESOURCES: tuple[ResourceSpec, ...] = (
         "dashboards",
         Permission.GLOBAL_MANAGE,
         actions=(CrudAction.CREATE,),
+    ),
+    # Spec 111: Forgejo/Gitea hosts and their repositories. No coarse verb of its
+    # own — the umbrella is global.manage, the dashboard precedent.
+    ResourceSpec(
+        "vcsconn", PermissionScope.GLOBAL, "version-control connections", Permission.GLOBAL_MANAGE
     ),
 )
 

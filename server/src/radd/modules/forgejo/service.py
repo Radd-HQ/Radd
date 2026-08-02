@@ -1,0 +1,228 @@
+"""Connection + repository CRUD, env seeding, and webhook connection resolution (spec 111).
+
+The interesting function here is `resolve_for_payload`: which host signed this
+body. Spec 47 had one secret and one answer. With rows, the payload names its
+repository, so the answer is a lookup — with a fallback that keeps a hook working
+before anyone records its repository.
+"""
+
+import hashlib
+import hmac
+import logging
+import uuid
+
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from radd.config import settings
+from radd.db import SessionLocal
+from radd.exceptions import ConflictError, NotFoundError
+
+from .models import ForgejoConnection, ForgejoRepo
+from .schemas import ConnectionCreate, ConnectionUpdate, RepoCreate, RepoUpdate
+from .types import ForgejoEntity
+
+logger = logging.getLogger(__name__)
+
+
+def verify_signature(raw_body: bytes, signature: str, secret: str) -> bool:
+    """Constant-time check of the hex HMAC-SHA256 the X-Forgejo-Signature /
+    X-Gitea-Signature header carries against a shared secret."""
+    if not secret or not signature:
+        return False
+    expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(signature, expected)
+
+
+# --- connections ---
+
+
+async def list_connections(session: AsyncSession) -> list[ForgejoConnection]:
+    rows = await session.execute(select(ForgejoConnection).order_by(ForgejoConnection.name))
+    return list(rows.scalars())
+
+
+async def get_connection(session: AsyncSession, connection_id: uuid.UUID) -> ForgejoConnection:
+    connection = await session.get(ForgejoConnection, connection_id)
+    if connection is None:
+        raise NotFoundError(ForgejoEntity.CONNECTION, connection_id)
+    return connection
+
+
+async def create_connection(session: AsyncSession, data: ConnectionCreate) -> ForgejoConnection:
+    existing = await session.execute(
+        select(ForgejoConnection).where(ForgejoConnection.name == data.name)
+    )
+    if existing.scalar_one_or_none() is not None:
+        raise ConflictError(ForgejoEntity.CONNECTION, data.name)
+    connection = ForgejoConnection(
+        name=data.name,
+        base_url=data.base_url.rstrip("/"),
+        api_token=data.api_token,
+        webhook_secret=data.webhook_secret,
+        active=data.active,
+        verify_ssl=data.verify_ssl,
+    )
+    session.add(connection)
+    await session.flush()
+    return connection
+
+
+async def update_connection(
+    session: AsyncSession, connection_id: uuid.UUID, data: ConnectionUpdate
+) -> ForgejoConnection:
+    connection = await get_connection(session, connection_id)
+    if data.name is not None:
+        connection.name = data.name
+    if data.base_url is not None:
+        connection.base_url = data.base_url.rstrip("/")
+    # Empty string = keep the stored credential (the ai_providers convention): a
+    # form that round-trips a redacted value must not blank the secret.
+    if data.api_token:
+        connection.api_token = data.api_token
+    if data.webhook_secret:
+        connection.webhook_secret = data.webhook_secret
+    if data.active is not None:
+        connection.active = data.active
+    if data.verify_ssl is not None:
+        connection.verify_ssl = data.verify_ssl
+    await session.flush()
+    return connection
+
+
+async def delete_connection(session: AsyncSession, connection_id: uuid.UUID) -> None:
+    connection = await get_connection(session, connection_id)
+    await session.delete(connection)
+    await session.flush()
+
+
+async def repo_count(session: AsyncSession, connection_id: uuid.UUID) -> int:
+    rows = await session.execute(
+        select(func.count()).select_from(ForgejoRepo).where(ForgejoRepo.connection_id == connection_id)
+    )
+    return int(rows.scalar_one())
+
+
+# --- repositories ---
+
+
+async def list_repos(
+    session: AsyncSession, connection_id: uuid.UUID | None = None
+) -> list[ForgejoRepo]:
+    query = select(ForgejoRepo).order_by(ForgejoRepo.full_name)
+    if connection_id is not None:
+        query = query.where(ForgejoRepo.connection_id == connection_id)
+    return list((await session.execute(query)).scalars())
+
+
+async def get_repo(session: AsyncSession, repo_id: uuid.UUID) -> ForgejoRepo:
+    repo = await session.get(ForgejoRepo, repo_id)
+    if repo is None:
+        raise NotFoundError(ForgejoEntity.REPO, repo_id)
+    return repo
+
+
+async def find_repo(session: AsyncSession, full_name: str) -> ForgejoRepo | None:
+    """By `owner/repo`, case-insensitively — Forgejo treats names that way."""
+    rows = await session.execute(
+        select(ForgejoRepo).where(func.lower(ForgejoRepo.full_name) == full_name.lower())
+    )
+    return rows.scalars().first()
+
+
+async def create_repo(session: AsyncSession, data: RepoCreate) -> ForgejoRepo:
+    await get_connection(session, data.connection_id)  # 404s an unknown connection
+    existing = await session.execute(
+        select(ForgejoRepo).where(
+            ForgejoRepo.connection_id == data.connection_id,
+            func.lower(ForgejoRepo.full_name) == data.full_name.lower(),
+        )
+    )
+    if existing.scalar_one_or_none() is not None:
+        raise ConflictError(ForgejoEntity.REPO, data.full_name)
+    repo = ForgejoRepo(
+        connection_id=data.connection_id,
+        full_name=data.full_name,
+        project_id=data.project_id,
+        default_branch=data.default_branch,
+    )
+    session.add(repo)
+    await session.flush()
+    return repo
+
+
+async def update_repo(session: AsyncSession, repo_id: uuid.UUID, data: RepoUpdate) -> ForgejoRepo:
+    repo = await get_repo(session, repo_id)
+    if "project_id" in data.model_fields_set:  # explicit null clears the mapping
+        repo.project_id = data.project_id
+    if data.default_branch is not None:
+        repo.default_branch = data.default_branch
+    await session.flush()
+    return repo
+
+
+async def delete_repo(session: AsyncSession, repo_id: uuid.UUID) -> None:
+    repo = await get_repo(session, repo_id)
+    await session.delete(repo)
+    await session.flush()
+
+
+# --- webhook routing ---
+
+
+async def resolve_for_payload(
+    session: AsyncSession, payload: dict, raw_body: bytes, signature: str
+) -> tuple[ForgejoConnection, ForgejoRepo | None] | None:
+    """The connection that signed this body, and the repository row if we know it.
+
+    Order matters. A recorded repository names its connection, so its secret is
+    the only one tried — that is what makes two hosts with different secrets
+    unambiguous. An unrecorded repository falls back to trying every ACTIVE
+    connection, so a webhook registered before anyone added the repo row still
+    works. Returns None when nothing verifies, which the router turns into a 403.
+    """
+    full_name = ((payload.get("repository") or {}).get("full_name") or "").strip()
+    if full_name:
+        repo = await find_repo(session, full_name)
+        if repo is not None:
+            connection = await session.get(ForgejoConnection, repo.connection_id)
+            if connection is None or not connection.active:
+                return None
+            if verify_signature(raw_body, signature, connection.webhook_secret):
+                return connection, repo
+            return None  # the repo's own host did not sign this — do not guess further
+
+    for connection in await list_connections(session):
+        if connection.active and verify_signature(raw_body, signature, connection.webhook_secret):
+            return connection, None
+    return None
+
+
+# --- env seed (spec-101 rule: the env key seeds ONE row, once) ---
+
+
+async def seed_from_env() -> None:
+    """Turn spec 47's `RADD_FORGEJO_WEBHOOK_SECRET` into a connection row, ONCE.
+
+    Runs only when the table is empty, so an admin who deletes or renames the
+    seeded row never has it reappear. The base URL is unknown to the env config
+    (spec 47 only ever needed the secret), so it is left blank for an admin to
+    fill in — the row exists so that webhooks keep verifying across the upgrade.
+    """
+    secret = settings.forgejo_webhook_secret.strip()
+    if not secret:
+        return
+    async with SessionLocal() as session:
+        rows = await session.execute(select(func.count()).select_from(ForgejoConnection))
+        if int(rows.scalar_one()) > 0:
+            return
+        session.add(
+            ForgejoConnection(
+                name="Forgejo",
+                base_url=settings.forgejo_base_url.rstrip("/"),
+                webhook_secret=secret,
+                active=True,
+            )
+        )
+        await session.commit()
+        logger.info("forgejo: seeded one connection from RADD_FORGEJO_WEBHOOK_SECRET")

@@ -186,9 +186,16 @@ class Settings(BaseSettings):
     # Embedded MCP server (see radd/modules/mcp) — POST {api_prefix}/mcp.
     mcp_enabled: bool = True
 
-    # Forgejo/Gitea connector (see radd/modules/forgejo). Empty secret = disabled.
+    # Forgejo/Gitea connector (see radd/modules/forgejo). Spec 111 moved hosts into
+    # the database (`forgejo_connections`), so these SEED one connection on first
+    # startup and are inert afterwards — the spec-100/101 rule. An existing deploy
+    # keeps verifying webhooks across the upgrade; rotation happens in the UI.
     forgejo_webhook_secret: str = ""
+    forgejo_base_url: str = ""  # seed only: https://git.example.com
     forgejo_merge_transition_state: str = ""  # state NAME on PR merge ("" = none)
+    # Backfill bounds (spec 111): how far back the API walk goes by default.
+    forgejo_backfill_max_commits: int = 2000
+    forgejo_api_page_size: int = 50
 
     # Jira import connector (see radd/modules/jiraimport, specs 90/100).
     # Spec 100 moved connections into the database (`jira_connections`), so these
