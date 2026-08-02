@@ -21,6 +21,7 @@ import { pageBacklinksQuery, pagesQuery } from "../../lib/queries";
 import { headingAnchorId, headingsOf } from "../../lib/markdown-outline";
 import type { PageSummary } from "../../lib/types";
 import { Markdown, MarkdownSourceCtx } from "../../lib/markdown";
+import { IncludedPage } from "./IncludedPage";
 
 /**
  * The first-party page extensions (RADD-710 / RADD-715).
@@ -283,6 +284,12 @@ const EXTENSIONS: PageExtension[] = [
     label: "Backlinks",
     description: "Every page that links to this one.",
     render: () => <Backlinks />,
+  },
+  {
+    name: "include",
+    label: "Include a page",
+    description: "Render another page's body inline, live.",
+    render: (params) => <IncludedPage params={params} />,
   },
 ];
 

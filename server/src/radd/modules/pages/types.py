@@ -51,6 +51,7 @@ class PageExtensionName(StrEnum):
     CHILDREN = "children"
     CALLOUT = "callout"
     BACKLINKS = "backlinks"
+    INCLUDE = "include"
 
 
 class RestoreKind(StrEnum):

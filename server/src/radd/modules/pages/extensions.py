@@ -83,4 +83,20 @@ PAGE_EXTENSIONS: tuple[PageExtensionSpec, ...] = (
         icon="link",
         params_schema={"type": "object", "properties": {}},
     ),
+    PageExtensionSpec(
+        name=PageExtensionName.INCLUDE,
+        label="Include a page",
+        description="Render another page's body inline, live.",
+        icon="between-horizontal-start",
+        params_schema={
+            "type": "object",
+            "required": ["page"],
+            "properties": {
+                "page": {
+                    "type": "string",
+                    "description": "The page's slug, or <space-slug>/<page-slug>.",
+                }
+            },
+        },
+    ),
 )
