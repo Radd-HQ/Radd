@@ -54,9 +54,37 @@ keeps the module boundaries real:
   on, not a unit test per endpoint.
 - **The change exists on the tracker first.** Work is filed in the **RADD**
   project at <https://project.radd-hq.com> — a bug as a `Bug`, a feature as a
-  `Feature`, a spec as an epic with its children — and the commit carries the
-  key: `fix(web): board columns scroll (RADD-412)`. The project's own history
-  is there, five months of it, and the point is to keep it that way.
+  `Feature`, a spec as an epic with its children.
+
+## Working in the tracker
+
+Radd tracks its own development, and the project is public. Two consequences.
+
+**Every commit names its issue, in brackets, at the front:**
+
+```
+[RADD-412] board columns scroll instead of clipping
+```
+
+One commit per issue — never against an epic, which is a container rather than a
+unit of work. The bracket form auto-links: the Forgejo connector matches the key
+and the commit appears in the issue's Version control tab with no extra step. If a
+change genuinely spans two issues it is two commits; if it cannot be split, those
+were one issue.
+
+**Prefer fewer, meaningful issues with subtasks** over many tiny issues. The
+subtask checklist on one issue is where steps belong; splitting work apart to have
+something to reference is bureaucracy.
+
+**Write the issue for someone who was not there.** What is wrong or wanted (with
+the actual symptom or number), what changes and what you rejected, where in the
+code, and the observable condition that means it is done. A one-sentence body is a
+mention, not a filed issue.
+
+**The lifecycle:** In Progress while you work → `Waiting for release` when it lands
+(finished, not shipped — it sits in the `done` category, so throughput counts the
+day the work was done) → a published release sweeps it to `Done` with the version
+recorded.
 
 ## Pull requests
 

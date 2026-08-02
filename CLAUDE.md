@@ -15,66 +15,78 @@ Self-hosted, AI-native issue tracker + wiki. **Branch `kernel-plugin-platform` (
 
 ## Tracking work on the live instance
 
-`project.radd-hq.com` runs this project. Its **RADD** project is the record: the first
-five months are backfilled from the git history and `docs/specs/`, and everything since
-is filed as it happens.
+`project.radd-hq.com` runs this project, and its **RADD** project is the record: the
+first five months are backfilled from the git history and `docs/specs/`, everything
+since is filed as it happens.
 
-**What gets an item, and at which level** (the hierarchy is `epic ← issue ← subtask`):
+**This project is also the product's demonstration.** People land on it to decide
+whether Radd is worth using, and what they see is whichever features this project
+actually exercises. A tracker whose own project ignores half the tracker is not a
+convincing argument. So: use the feature that fits the work — cycles for cadence,
+releases for what shipped, subtask checklists for steps, dashboards for reporting —
+rather than reducing everything to a flat list of tickets. Never with invented data:
+a fabricated worklog makes the timesheet a lie in order to make a screenshot prettier.
 
-| Work | Item |
-|---|---|
-| A spec, or a wave spanning several specs | **Epic** (type `Epic`), one issue per spec beneath it |
-| A feature, a spec, a self-contained change | **Issue** (type `Feature`/`Story`) |
-| A bug — anything that behaved wrongly | **Issue** or **Subtask**, type `Bug`, priority `high` |
-| A step inside a larger issue (a commit's worth) | **Subtask** (type `Task`) |
-| Docs, refactors, test work | type `Task`, priority `low` |
+### The shape of work
 
-**The loop.**
+| Level | Is | Rule |
+|---|---|---|
+| **Epic** | A spec, or a wave spanning several | A container. **Never commit against one.** |
+| **Issue** | One meaningful unit someone would want to read about | What a commit names |
+| **Subtask** | A step inside it — a checklist line | Cheap to add, ticked off, no ceremony |
 
-1. **Before building**, file the item (or find it) and put it In Progress. A one-line
-   ask ("fix the board scroll") is still an item — small is fine, absent is not.
-2. **Every commit message starts with its issue key in brackets**:
-   `[RADD-412] board columns scroll instead of clipping`. That prefix is what
-   auto-links the commit into the issue's Version control tab — the connector's key
-   regex matches inside brackets, so nothing else is needed.
-3. **Close it when the work lands**, and record what shipped: a comment naming the
-   commit, or the version if it went out in a release.
-4. **Plans** (a spec, a multi-session wave) are an epic with its children filed up
-   front — the plan lives in the tracker, not only in `PLAN.md`.
+**Prefer fewer, meaningful issues with subtasks** over many tiny issues. Splitting work
+apart just to have something to reference is bureaucracy; the subtask list is where the
+steps belong. If two "issues" turn out to be one component, that was over-decomposition
+— say so on the issue rather than closing both quietly.
 
-**Two rules about granularity, because they pull against each other:**
+### The loop
 
-- **Never commit against an epic key.** An epic is a container, not a unit of work.
-  A large body of work lands as SEVERAL commits, one per issue, each naming its own.
-- **Prefer fewer, meaningful issues with subtasks** over many tiny ones. Splitting work
-  into separate issues just to have something to reference is bureaucracy; the subtask
-  checklist on one issue is where the steps belong. File the issue at the granularity
-  a person would want to read about, then break it down inside.
+1. **File it before building.** A one-line ask ("fix the board scroll") is still an
+   item. Small is fine; absent is not. Put it In Progress when you start.
+2. **Commit with the key in brackets**: `[RADD-412] board columns scroll instead of
+   clipping`. **One commit per issue.** The bracket form auto-links — the connector's
+   key regex matches inside brackets — so the commit appears in the issue's Version
+   control tab with no extra step. Never hand-add a VCS link for something the
+   connector will find.
+3. **Move it to `Waiting for release`** when the work lands. It is finished, it has not
+   shipped; that state is in the `done` category, so throughput counts the day the work
+   was done.
+4. **A release sweeps it to Done** with the version recorded — automatically from a
+   published Forgejo release, or `POST /releases/{id}/sweep` by hand.
+5. **Plans** (a spec, a multi-session wave) are an epic with its children filed up
+   front. The plan lives in the tracker, not only in `PLAN.md`.
 
-**Write descriptions someone else can act on.** An issue whose body is one sentence is
-not filed, it is mentioned. State what is wrong or wanted, what should change, where in
-the code, and what "done" looks like. The same goes for comments: say what happened and
-what it means, not that something happened.
+### Descriptions and comments
 
-**Attribution.** Work an agent does is attributed to the **Radd Agent** service account,
-never to a person's token. A human's identity is for operations an agent's scope
-deliberately excludes (creating releases, storage and connector administration) — and
-when that happens, say so. `SYSTEM_ACTOR_ID` ("Automation") is for genuinely automated
-flows only: the release sweep, connector-created links, automation rules.
+An issue whose body is one sentence is not filed, it is mentioned. Write what someone
+who was not there needs:
 
-**How to reach it.** `.mcp.json` registers Radd's own MCP server (spec 45), so the
-tools are available in-session once a token is exported:
+- **What is wrong or wanted**, with the evidence — the actual symptom, the actual number.
+- **What changes**, including the decision you made and the option you rejected.
+- **Where** in the code.
+- **Done when** — the observable condition, not "it works".
 
-```bash
-export RADD_API_TOKEN=radd_pat_…      # Profile → API tokens on the live instance
-```
+Comments follow the same bar. "Shipped in 0.3.0" is a receipt, not a comment; say what
+shipped, what it cost, and what you found on the way. If something surprised you while
+building — a bug the type checker could not catch, a design that had to be merged rather
+than added — that belongs on the issue, because it is the part nobody can reconstruct
+later.
 
-Tools: `list_projects`, `search_items` (SLQ), `find_items` (text/meaning), `get_item`,
-`create_item`, `update_item`, `comment_item`, `search_docs`, `get_doc_page`. Without
-the variable the server simply fails to authenticate — nothing else breaks. The same
-token works against the REST API (`Authorization: Bearer …`) when a tool is missing
-something, e.g. `POST /api/v1/items` with `created_at` (import-only, `project.manage`)
-to restate history.
+### Attribution
+
+| Identity | Writes | When |
+|---|---|---|
+| **Radd Agent** (service account) | Issues, comments, state changes | Everything an agent does — the default |
+| **A person's token** | Rarely | Only operations an agent's scope excludes (`release.create`, storage/connector admin) — and say so when used |
+| **Automation** (`SYSTEM_ACTOR_ID`) | Sweeps, connector links | Genuinely automated flows only |
+
+Never file or comment as a human for convenience. The audit log is the one record that
+cannot be reconstructed from anything else.
+
+The operational side — which token, which endpoint, the snippets — is in the local
+`track` skill (`.claude/skills/track/`), which carries machine-specific paths and is
+therefore not committed.
 
 ## Frontend conventions (post-modernization)
 
