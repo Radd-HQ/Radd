@@ -9,10 +9,10 @@
  * in the unrendered JSON of the block. So every assertion here is written to
  * fail when a block is left as source:
  *
- *   - the callout title must be in an element that is NOT inside a <pre>;
- *   - no <pre> anywhere may contain the parameter JSON;
+ *   - the callout title must be in an element that is NOT inside a code block;
+ *   - no code block anywhere may contain the parameter JSON;
  *   - and, in the other direction, an ordinary ```python block and a ```markdown
- *     block that merely QUOTES a radd fence must both still be <pre> code.
+ *     block that merely QUOTES a radd fence must both still render as code.
  *
  * Usage: node scripts/page-extensions-proof.mjs <baseUrl> <spaceSlug> <pageSlug> <email> <password>
  */
@@ -72,11 +72,19 @@ async function evalInPage(sessionId, expression) {
 const PROBE = `(() => {
   const body = document.querySelector('[data-page-body]');
   if (!body) return { mounted: false };
-  const inPre = (el) => !!el.closest('pre');
+  // A code block is a <pre> only until Crepe's CodeMirror mode finishes loading,
+  // after which it is a .cm-editor with no <pre> at all. Asserting on <pre>
+  // alone made this proof time-dependent: it passed when it happened to read
+  // the page before the swap and failed after. Cover both.
+  const CODE = 'pre, .cm-editor, .milkdown-code-block';
+  const inPre = (el) => !!el.closest(CODE);
   const texts = (sel) => [...body.querySelectorAll(sel)].map((e) => e.textContent || "");
-  const pres = texts('pre');
+  const pres = texts(CODE);
   const callout = [...body.querySelectorAll('[data-extension="callout"]')];
-  const toc = body.querySelector('[data-extension="toc"]');
+  const tocs = [...body.querySelectorAll('[data-extension="toc"]')];
+  const toc = tocs[0];
+  // The second toc on the proof page carries {"subpages": true} (RADD-710).
+  const tocSubpages = tocs[1];
   const children = body.querySelector('[data-extension="children"]');
   const unknown = body.querySelector('[data-extension-unknown]');
   const error = body.querySelector('[data-extension-error]');
@@ -85,6 +93,9 @@ const PROBE = `(() => {
   }));
   return {
     mounted: true,
+    codeBlockCount: pres.length,
+    viewerCount: body.querySelectorAll(".radd-rich-viewer").length,
+    fallbackCount: body.querySelectorAll(".whitespace-pre-wrap").length,
     // Extensions rendered as ELEMENTS, and provably not as source.
     calloutCount: callout.length,
     calloutTitleOutsidePre: callout.some(
@@ -93,6 +104,9 @@ const PROBE = `(() => {
     calloutRendersMarkdown: callout.some((c) => !!c.querySelector('em, i')),
     tocPresent: !!toc,
     tocLinks: toc ? [...toc.querySelectorAll('a[href^="#"]')].map((a) => a.getAttribute('href')) : [],
+    tocSubpageLinks: tocSubpages
+      ? [...tocSubpages.querySelectorAll('a[href^="/pages/"]')].map((a) => a.textContent || "")
+      : [],
     childrenPresent: !!children,
     childrenText: children ? (children.textContent || "") : "",
     unknownPresent: !!unknown,
@@ -138,6 +152,11 @@ async function main() {
   const { sessionId } = await send("Target.attachToTarget", { targetId, flatten: true });
   await send("Page.enable", {}, sessionId);
   await send("Runtime.enable", {}, sessionId);
+  // The profile dir persists between runs, so Chrome happily serves the PREVIOUS
+  // bundle — which made this proof report failures against fixed code and passes
+  // against broken code, depending on what was cached. Always fetch fresh.
+  await send("Network.enable", {}, sessionId);
+  await send("Network.setCacheDisabled", { cacheDisabled: true }, sessionId);
   await send("Emulation.setDeviceMetricsOverride",
     { width: 1440, height: 1000, deviceScaleFactor: 2, mobile: false }, sessionId);
 
@@ -148,11 +167,26 @@ async function main() {
 
   await send("Page.navigate", { url: `${baseUrl}/pages/${spaceSlug}/${pageSlug}` }, sessionId);
 
+  // Wait for EVERY piece, not just the first one to arrive. CodeMirror blocks
+  // mount later than the extension cards, so breaking on "toc is present" left
+  // the code-block assertions racing — they passed by luck until a rebuild
+  // shifted the timing.
   let probe = { mounted: false };
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 60; i++) {
     await sleep(500);
     probe = await evalInPage(sessionId, PROBE);
-    if (probe.mounted && probe.tocPresent && probe.headings.length) break;
+    if (
+      probe.mounted &&
+      probe.tocPresent &&
+      probe.headings.length &&
+      probe.childrenPresent &&
+      probe.calloutCount === 3 &&
+      probe.tocSubpageLinks?.length &&
+      probe.pythonStillCode &&
+      probe.quotedFenceStillCode
+    ) {
+      break;
+    }
   }
 
   // The ToC's first link must actually move the page to its heading.
@@ -169,17 +203,50 @@ async function main() {
     })()`);
   }
 
+  // RADD-715: measure the callout's COMPUTED colours in each theme and compute
+  // the contrast here, rather than trusting the values in the stylesheet.
+  const CONTRAST = `(() => {
+    const lum = (css) => {
+      const [r, g, b] = css.match(/[0-9.]+/g).slice(0, 3).map(Number).map((v) => v / 255);
+      const ch = (c) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+      return 0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(b);
+    };
+    const ratio = (a, b) => {
+      const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+      return (x + 0.05) / (y + 0.05);
+    };
+    const out = {};
+    for (const el of document.querySelectorAll('[data-callout-kind]')) {
+      const panel = getComputedStyle(el);
+      const title = el.querySelector("[data-callout-title]");
+      if (!title) continue;
+      out[el.dataset.calloutKind] = {
+        ink: Math.round(ratio(getComputedStyle(title).color, panel.backgroundColor) * 100) / 100,
+        border: Math.round(ratio(panel.borderTopColor, getComputedStyle(document.body).backgroundColor) * 100) / 100,
+      };
+    }
+    return out;
+  })()`;
+  const contrastDark = await evalInPage(sessionId, CONTRAST);
+  await evalInPage(sessionId, `document.documentElement.classList.add("light")`);
+  await sleep(400);
+  const contrastLight = await evalInPage(sessionId, CONTRAST);
+  await evalInPage(sessionId, `document.documentElement.classList.remove("light")`);
+  await sleep(300);
+
   const shot = await send("Page.captureScreenshot", { format: "png" }, sessionId);
 
   const checks = {
     "page body mounted": probe.mounted === true,
     // Three callout blocks on the proof page: two valid, one deliberately malformed.
     "every callout block became an element": probe.calloutCount === 3,
-    "callout title is NOT inside a <pre>": probe.calloutTitleOutsidePre === true,
+    "callout title is NOT inside a code block": probe.calloutTitleOutsidePre === true,
     "callout body renders markdown (<em>)": probe.calloutRendersMarkdown === true,
     "no params JSON leaked into a code block": probe.paramsLeakedIntoCode === false,
     "toc rendered": probe.tocPresent === true,
     "toc has anchor links": (probe.tocLinks?.length ?? 0) >= 3,
+    "toc with subpages:true lists the tree beneath it":
+      (probe.tocSubpageLinks ?? []).some((t) => t.includes("A child page")),
     "headings carry ids": probe.headings.every((h) => !!h.id),
     "clicking a toc entry jumps to its heading": anchorWorks === true,
     "children extension lists the child page": probe.childrenText.includes("A child page"),
@@ -187,10 +254,16 @@ async function main() {
     "malformed params render an error card": probe.errorPresent === true,
     "ordinary python block is still code": probe.pythonStillCode === true,
     "a quoted radd fence is still code": probe.quotedFenceStillCode === true,
+    "callout ink clears 4.5:1 in DARK": Object.values(contrastDark).length > 0
+      && Object.values(contrastDark).every((c) => c.ink >= 4.5),
+    "callout ink clears 4.5:1 in LIGHT": Object.values(contrastLight).length > 0
+      && Object.values(contrastLight).every((c) => c.ink >= 4.5),
+    "callout border clears 3:1 in both themes":
+      [...Object.values(contrastDark), ...Object.values(contrastLight)].every((c) => c.border >= 3),
     "no console errors": consoleErrors.length === 0,
   };
 
-  console.log(JSON.stringify({ probe, anchorWorks, consoleErrors }, null, 2));
+  console.log(JSON.stringify({ probe, anchorWorks, contrastDark, contrastLight, consoleErrors }, null, 2));
   console.log("");
   let failed = 0;
   for (const [label, ok] of Object.entries(checks)) {

@@ -91,6 +91,11 @@ async function main() {
   const { sessionId } = await send("Target.attachToTarget", { targetId, flatten: true });
   await send("Page.enable", {}, sessionId);
   await send("Runtime.enable", {}, sessionId);
+  // The profile dir persists between runs, so Chrome happily serves the PREVIOUS
+  // bundle — which made this proof report failures against fixed code and passes
+  // against broken code, depending on what was cached. Always fetch fresh.
+  await send("Network.enable", {}, sessionId);
+  await send("Network.setCacheDisabled", { cacheDisabled: true }, sessionId);
   await send("Emulation.setDeviceMetricsOverride",
     { width: 1440, height: 1000, deviceScaleFactor: 2, mobile: false }, sessionId);
 

@@ -29,11 +29,19 @@ export function PageBody({
   text,
   className = "",
   onReady,
+  // A page body is ONE document with a handful of prose runs, not an issue's
+  // hundred-comment thread — which is what LazyRichViewer's viewport gate was
+  // built for. Deferring here buys nothing and costs correctness: anything
+  // below the fold shows raw markdown, `radd:toc` links to heading ids that
+  // were never assigned, and printing emits placeholder text.
+  eager = true,
 }: {
   text: string;
   className?: string;
   /** Fires once every segment has rendered — the print route waits on it. */
   onReady?: () => void;
+  /** Defaults to true, and should almost always stay that way — see below. */
+  eager?: boolean;
 }) {
   const segments = useMemo(() => splitExtensionBlocks(text), [text]);
   const proseCount = segments.filter((segment) => segment.kind === "markdown").length;
@@ -47,18 +55,26 @@ export function PageBody({
 
   const markReady = useCallback(() => setReadyCount((count) => count + 1), []);
 
+  // Re-walk on EVERY readiness tick, not once all segments are ready. Prose runs
+  // mount lazily as they near the viewport, so on a long page the tail may not
+  // mount for minutes — gating the anchor pass on the total meant a `radd:toc`
+  // on a long page linked to ids that were never assigned. Each pass rebuilds
+  // the whole map in document order, so it is idempotent and converges.
   useEffect(() => {
-    if (readyCount < proseCount) return;
     const root = containerRef.current;
-    if (root) {
-      const seen = new Map<string, number>();
-      for (const heading of root.querySelectorAll("h1, h2, h3, h4, h5, h6")) {
-        heading.id = headingAnchorId(heading.textContent ?? "", seen);
-        // Anchor links land the heading under the sticky app header otherwise.
-        (heading as HTMLElement).style.scrollMarginTop = "5rem";
-      }
+    if (!root) return;
+    const seen = new Map<string, number>();
+    for (const heading of root.querySelectorAll("h1, h2, h3, h4, h5, h6")) {
+      heading.id = headingAnchorId(heading.textContent ?? "", seen);
+      // Anchor links land the heading under the sticky app header otherwise.
+      (heading as HTMLElement).style.scrollMarginTop = "5rem";
     }
-    onReadyStable.current?.();
+  }, [readyCount, text]);
+
+  // `onReady` still means ALL of it — the print route may not fire until the
+  // last segment has rendered.
+  useEffect(() => {
+    if (proseCount === 0 || readyCount >= proseCount) onReadyStable.current?.();
   }, [readyCount, proseCount, text]);
 
   if (!segments.length) return null;
@@ -68,7 +84,12 @@ export function PageBody({
       <div ref={containerRef} data-page-body className={className}>
         {segments.map((segment, index) =>
           segment.kind === "markdown" ? (
-            <RichViewer key={`md-${index}`} text={segment.text} onReady={markReady} />
+            <RichViewer
+              key={`md-${index}`}
+              text={segment.text}
+              eager={eager}
+              onReady={markReady}
+            />
           ) : (
             <ExtensionBlock key={`ext-${index}`} name={segment.name} body={segment.body} />
           ),

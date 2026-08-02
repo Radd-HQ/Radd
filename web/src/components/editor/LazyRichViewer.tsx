@@ -21,13 +21,21 @@ function PlainFallback({ text }: { text: string }) {
  * hundreds of comments, and hundreds of eager ProseMirror instances would jank
  * the page. Until then the raw markdown holds the layout.
  */
-export function LazyRichViewer(props: ComponentProps<typeof RichViewer>) {
+export function LazyRichViewer({
+  eager = false,
+  ...props
+}: ComponentProps<typeof RichViewer> & {
+  /** Mount immediately, ignoring the viewport. For surfaces that READ the
+   *  rendered output rather than just show it — printing (RADD-736) must not
+   *  emit a page of raw markdown because a section was below the fold. */
+  eager?: boolean;
+}) {
   const hostRef = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(eager);
 
   useEffect(() => {
     const host = hostRef.current;
-    if (!host) return;
+    if (!host || eager) return;
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) {
@@ -39,7 +47,7 @@ export function LazyRichViewer(props: ComponentProps<typeof RichViewer>) {
     );
     observer.observe(host);
     return () => observer.disconnect();
-  }, []);
+  }, [eager]);
 
   return (
     <div ref={hostRef}>
