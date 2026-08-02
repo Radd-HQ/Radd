@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArchiveRestore, ChevronLeft } from "lucide-react";
+import { ArchiveRestore, ChevronLeft, GitCompare } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { apiPageRestorePath } from "../../lib/constants";
@@ -8,6 +8,7 @@ import { Markdown } from "../../lib/markdown";
 import { pageVersionQuery, pageVersionsQuery, usersQuery } from "../../lib/queries";
 import type { Page } from "../../lib/types";
 import { Button } from "../Button";
+import { PageVersionDiff } from "./PageVersionDiff";
 import { Spinner } from "../Spinner";
 import { relativeTime } from "../../lib/dates";
 
@@ -18,6 +19,10 @@ import { relativeTime } from "../../lib/dates";
  */
 export function PageHistory({ page, canWrite }: { page: Page; canWrite: boolean }) {
   const [viewing, setViewing] = useState<number | null>(null);
+  // RADD-720: which version to diff against its SUCCESSOR — the comparison a
+  // reader wants from a history list is "what did this edit change", so each row
+  // offers exactly that rather than making them pick two ends.
+  const [diffing, setDiffing] = useState<number | null>(null);
   const versions = useQuery(pageVersionsQuery(page.id));
   const { data: users } = useQuery(usersQuery);
 
@@ -27,6 +32,19 @@ export function PageHistory({ page, canWrite }: { page: Page; canWrite: boolean 
       <p className="mt-3 text-xs text-red-400">
         Failed to load history: {errorMessage(versions.error)}
       </p>
+    );
+  }
+
+  if (diffing !== null) {
+    const list = versions.data;
+    const successor = list.find((v) => v.version === diffing + 1);
+    return (
+      <PageVersionDiff
+        page={page}
+        from={diffing}
+        to={successor ? successor.version : page.version}
+        onBack={() => setDiffing(null)}
+      />
     );
   }
 
@@ -52,11 +70,11 @@ export function PageHistory({ page, canWrite }: { page: Page; canWrite: boolean 
       ) : (
         <ul className="flex flex-col gap-1">
           {list.map((version) => (
-            <li key={version.version}>
+            <li key={version.version} className="group/version flex items-center gap-1">
               <button
                 type="button"
                 onClick={() => setViewing(version.version)}
-                className="flex w-full items-center gap-2 rounded-md border border-subtle bg-surface/50 px-2.5 py-1.5 text-left hover:border-strong cursor-pointer"
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-subtle bg-surface/50 px-2.5 py-1.5 text-left hover:border-strong cursor-pointer"
               >
                 <span className="rounded bg-elevated px-1.5 py-px font-mono text-[10px] text-fg-secondary">
                   v{version.version}
@@ -68,6 +86,17 @@ export function PageHistory({ page, canWrite }: { page: Page; canWrite: boolean 
                   {users?.find((user) => user.id === version.author_id)?.name ?? "someone"} ·{" "}
                   <span title={version.created_at}>{relativeTime(version.created_at)}</span>
                 </span>
+              </button>
+              {/* RADD-720: restore was a guess without this — you could roll back
+                  to a version you had no way to read the difference of. */}
+              <button
+                type="button"
+                onClick={() => setDiffing(version.version)}
+                title={`Compare v${version.version} with what came next`}
+                aria-label={`Compare version ${version.version} with the next version`}
+                className="shrink-0 rounded p-1.5 text-fg-faint hover:bg-elevated hover:text-fg cursor-pointer"
+              >
+                <GitCompare size={13} aria-hidden />
               </button>
             </li>
           ))}
