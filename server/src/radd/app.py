@@ -121,7 +121,7 @@ def _mount_plugin_assets(app: FastAPI) -> None:
                 # Ensure ESM bundles get a JS media type regardless of the platform mimetypes db.
                 media = "text/javascript" if candidate.suffix in (".js", ".mjs") else None
                 return FileResponse(candidate, media_type=media, headers=_REVALIDATE)
-        raise NotFoundError(f"plugin asset not found: {name}/{file}")
+        raise NotFoundError("plugin asset", f"{name}/{file}")
 
 
 def _mount_spa(app: FastAPI) -> None:
