@@ -6,7 +6,7 @@ without a database.
 """
 
 import uuid
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 
 from .types import MAX_QUERY_CHARS, SLUG_MAX_CHARS, SLUG_SEPARATOR_RE, TSQUERY_TOKEN_RE
 
@@ -65,6 +65,33 @@ def slugify(name: str) -> str:
     """Space name → a cosmetic slug: lowercase, dash-separated, bounded."""
     slug = SLUG_SEPARATOR_RE.sub("-", name.lower()).strip("-")
     return slug[:SLUG_MAX_CHARS] or "space"
+
+
+#: A page slug may be longer than a space slug — page titles are sentences.
+PAGE_SLUG_MAX_CHARS = 120
+
+
+def page_slugify(title: str) -> str:
+    """Page title → the URL segment (RADD-702). `page` is the fallback for a
+    title that is entirely punctuation or non-Latin: a URL still has to exist,
+    and the per-space uniqueness pass will make it `page-2`, `page-3`, …"""
+    slug = SLUG_SEPARATOR_RE.sub("-", title.lower()).strip("-")
+    return slug[:PAGE_SLUG_MAX_CHARS] or "page"
+
+
+def unique_slug(candidate: str, taken: Collection[str]) -> str:
+    """`candidate`, or the first free `candidate-2`, `candidate-3`, … .
+
+    Pure so the collision rule is testable without a database, and shared by
+    creation and the explicit rename — two implementations of "what happens when
+    two pages want the same URL" would eventually disagree.
+    """
+    if candidate not in taken:
+        return candidate
+    suffix = 2
+    while f"{candidate}-{suffix}" in taken:
+        suffix += 1
+    return f"{candidate}-{suffix}"
 
 
 def visible_page_ids(

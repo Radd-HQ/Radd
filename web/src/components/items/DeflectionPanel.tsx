@@ -53,7 +53,7 @@ export function DeflectPagesSection({ docs, kb = false }: { docs: DeflectPage[];
           <li key={doc.id}>
             <Link
               to={kb ? RoutePath.publicPage : RoutePath.page}
-              params={{ spaceId: doc.space_id, pageId: doc.id }}
+              params={{ spaceSlug: doc.space_id, pageSlug: doc.id }}
               target="_blank"
               rel="noreferrer"
               className="group flex items-baseline gap-1.5 text-xs text-fg hover:text-accent-text"

@@ -13,11 +13,12 @@ interface PageTreeRow {
   id: string;
   parent_id: string | null;
   title: string;
+  slug: string;
   position: number;
 }
 
-/** Where a row's link points: the authed pages (default) or the public KB. Both
- * routes carry the same $spaceId/$pageId params, so `Link` stays typed. */
+/** Where a row's link points: the authed pages (default) or the public ones.
+ * Both routes carry the same $spaceSlug/$pageSlug params, so `Link` stays typed. */
 type PageRoutePath = typeof RoutePath.page | typeof RoutePath.publicPage;
 
 interface TreeNode {
@@ -53,16 +54,19 @@ function loadExpanded(spaceId: string): Set<string> {
  */
 export function PageTree({
   spaceId,
+  spaceSlug,
   rows,
   selectedId,
   canWrite,
   pageRoute = RoutePath.page,
 }: {
   spaceId: string;
+  /** The space's URL segment — rows build `/pages/<space>/<page>` (RADD-702). */
+  spaceSlug: string;
   rows: PageTreeRow[];
   selectedId?: string;
   canWrite: boolean;
-  /** Public-KB trees (spec 74) link to /kb instead of the authed pages. */
+  /** Public trees (spec 74) link to /public-pages instead of the authed pages. */
   pageRoute?: PageRoutePath;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(() => loadExpanded(spaceId));
@@ -84,6 +88,7 @@ export function PageTree({
         <TreeRow
           key={node.row.id}
           spaceId={spaceId}
+          spaceSlug={spaceSlug}
           node={node}
           depth={0}
           expanded={expanded}
@@ -93,13 +98,14 @@ export function PageTree({
           pageRoute={pageRoute}
         />
       ))}
-      {canWrite && <NewPageButton spaceId={spaceId} parentId={null} depth={0} />}
+      {canWrite && <NewPageButton spaceId={spaceId} spaceSlug={spaceSlug} parentId={null} depth={0} />}
     </div>
   );
 }
 
 function TreeRow({
   spaceId,
+  spaceSlug,
   node,
   depth,
   expanded,
@@ -116,6 +122,7 @@ function TreeRow({
   selectedId?: string;
   canWrite: boolean;
   pageRoute: PageRoutePath;
+  spaceSlug: string;
 }) {
   const { row, children } = node;
   const isOpen = expanded.has(row.id);
@@ -145,14 +152,14 @@ function TreeRow({
         )}
         <Link
           to={pageRoute}
-          params={{ spaceId, pageId: row.id }}
+          params={{ spaceSlug, pageSlug: row.slug }}
           className="min-w-0 flex-1 truncate py-1"
         >
           {row.title}
         </Link>
         {canWrite && (
           <span className="opacity-0 transition-opacity focus-within:opacity-100 group-hover/docrow:opacity-100">
-            <NewPageButton spaceId={spaceId} parentId={row.id} depth={depth} iconOnly />
+            <NewPageButton spaceId={spaceId} spaceSlug={spaceSlug} parentId={row.id} depth={depth} iconOnly />
           </span>
         )}
       </div>
@@ -161,6 +168,7 @@ function TreeRow({
           <TreeRow
             key={child.row.id}
             spaceId={spaceId}
+            spaceSlug={spaceSlug}
             node={child}
             depth={depth + 1}
             expanded={expanded}
@@ -177,11 +185,13 @@ function TreeRow({
 /** Creates an untitled page (at root or under a node) and navigates to it. */
 function NewPageButton({
   spaceId,
+  spaceSlug,
   parentId,
   depth,
   iconOnly = false,
 }: {
   spaceId: string;
+  spaceSlug: string;
   parentId: string | null;
   depth: number;
   iconOnly?: boolean;
@@ -196,7 +206,7 @@ function NewPageButton({
         title: "Untitled",
       } satisfies PageCreate),
     onSuccess: (page) =>
-      void navigate({ to: RoutePath.page, params: { spaceId, pageId: page.id } }),
+      void navigate({ to: RoutePath.page, params: { spaceSlug, pageSlug: page.slug } }),
     onSettled: () => void invalidateEntities(queryClient, Entity.page, Entity.docSpace),
   });
 

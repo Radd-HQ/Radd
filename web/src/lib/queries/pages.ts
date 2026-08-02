@@ -53,6 +53,18 @@ export const pageQuery = (pageId: string) =>
     retry: false,
   });
 
+/** A page addressed the way the URL addresses it (RADD-702): `<space>/<page>`,
+ *  where either segment may be a slug OR an id — which is what lets a pre-702
+ *  UUID link resolve so the view can redirect it to the canonical slug URL. */
+export const pageByPathQuery = (spaceSlug: string, pageSlug: string) =>
+  queryOptions({
+    queryKey: queryKeys.pageByPath(spaceSlug, pageSlug),
+    meta: entityMeta(Entity.page),
+    queryFn: () =>
+      api.get<Page>(`${ApiPath.pages}/by-path/${encodeURIComponent(spaceSlug)}/${encodeURIComponent(pageSlug)}`),
+    retry: false,
+  });
+
 /** Version history metadata (newest first). */
 export const pageVersionsQuery = (pageId: string) =>
   queryOptions({

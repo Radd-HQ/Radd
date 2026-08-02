@@ -46,7 +46,13 @@ class Page(Base, TimestampMixin):
     # The tree loads per space and expands per parent; the FTS expression GIN
     # index (to_tsvector('english', title || ' ' || body)) lives in the
     # migration — SQLAlchemy models can't express it declaratively.
-    __table_args__ = (Index("ix_pages_space_parent", "space_id", "parent_id"),)
+    # `slug` is unique PER SPACE, not globally: two spaces may each have a
+    # `getting-started`, and forcing global uniqueness would make the second one
+    # `getting-started-2` for no reason a reader could see (RADD-702).
+    __table_args__ = (
+        Index("ix_pages_space_parent", "space_id", "parent_id"),
+        UniqueConstraint("space_id", "slug", name="uq_pages_space_slug"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     space_id: Mapped[uuid.UUID] = mapped_column(
@@ -56,6 +62,10 @@ class Page(Base, TimestampMixin):
         ForeignKey("pages.id", ondelete="CASCADE"), nullable=True
     )
     title: Mapped[str] = mapped_column(String(500))
+    # The URL segment (RADD-702). Derived from the title at CREATE and then
+    # FROZEN: renaming a page must not break links that already exist, so the
+    # only thing that rewrites a slug is an explicit request to.
+    slug: Mapped[str] = mapped_column(String(120))
     body: Mapped[str] = mapped_column(Text, default="")
     position: Mapped[float] = mapped_column(Float, default=0, server_default="0")
     version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")

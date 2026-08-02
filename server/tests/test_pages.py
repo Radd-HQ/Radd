@@ -8,8 +8,10 @@ import uuid
 
 from radd.modules.pages.core import (
     build_tsquery,
+    page_slugify,
     should_snapshot,
     slugify,
+    unique_slug,
     visible_page_ids,
     would_create_cycle,
 )
@@ -92,3 +94,21 @@ def test_slugify_is_lowercase_dashed_and_bounded():
     assert slugify("Render Farm — Ops!") == "render-farm-ops"
     assert slugify("---") == "space"  # never empty
     assert len(slugify("x" * 500)) <= 100
+
+
+# --- page slugs: the URL segment (RADD-702) ---
+
+
+def test_page_slugify_falls_back_rather_than_producing_an_empty_url():
+    assert page_slugify("Deploy Runbook — v2") == "deploy-runbook-v2"
+    assert page_slugify("###") == "page"  # a URL still has to exist
+    assert page_slugify("日本語") == "page"
+    assert len(page_slugify("x" * 500)) <= 120
+
+
+def test_unique_slug_suffixes_only_on_collision():
+    assert unique_slug("setup", set()) == "setup"
+    assert unique_slug("setup", {"setup"}) == "setup-2"
+    assert unique_slug("setup", {"setup", "setup-2", "setup-3"}) == "setup-4"
+    # The suffix search must not stop at the first gap it did not create.
+    assert unique_slug("setup", {"setup", "setup-3"}) == "setup-2"

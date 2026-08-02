@@ -180,16 +180,26 @@ export const RoutePath = {
   settingsCanned: `${SETTINGS_SEGMENT}/${SettingsSection.canned}`,
   settingsForgejo: `${SETTINGS_SEGMENT}/${SettingsSection.forgejo}`,
   settingsServiceAccounts: `${SETTINGS_SEGMENT}/${SettingsSection.serviceAccounts}`,
-  /** Pages (spec 43): spaces index, a space's tree, a canonical page URL. */
-  pages: "/docs",
-  pageSpace: "/docs/$spaceId",
-  page: "/docs/$spaceId/$pageId",
+  /** Pages (spec 43; RADD-702): spaces index, a space's tree, and the canonical
+   *  page URL — `/pages/<space>/<page>`. Either segment may carry a SLUG or an
+   *  id: links built from an id still resolve, and the page view rewrites the
+   *  URL to the canonical slug form, so no link ever shared can rot. */
+  pages: "/pages",
+  pageSpace: "/pages/$spaceSlug",
+  page: "/pages/$spaceSlug/$pageSlug",
+  /** Pre-702 UUID URLs — kept as routes so they REDIRECT rather than 404. */
+  legacyDocs: "/docs",
+  legacyDocSpace: "/docs/$spaceSlug",
+  legacyDocPage: "/docs/$spaceSlug/$pageSlug",
   /** Page spaces admin (spec 43, doc.manage). */
   settingsPages: `${SETTINGS_SEGMENT}/${SettingsSection.pages}`,
   /** PUBLIC pages (spec 74) — root-level, outside the auth gate. */
-  publicPages: "/kb",
-  publicPageSpace: "/kb/$spaceId",
-  publicPage: "/kb/$spaceId/$pageId",
+  publicPages: "/public-pages",
+  publicPageSpace: "/public-pages/$spaceSlug",
+  publicPage: "/public-pages/$spaceSlug/$pageSlug",
+  legacyKb: "/kb",
+  legacyKbSpace: "/kb/$spaceSlug",
+  legacyKbPage: "/kb/$spaceSlug/$pageSlug",
   /** A composable dashboard's widget grid (spec 75). */
   dashboard: "/dashboards/$dashboardId",
 } as const;

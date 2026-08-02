@@ -39,14 +39,16 @@ export interface PageSummary {
   id: string;
   parent_id: string | null;
   title: string;
+  slug: string;
   position: number;
   has_children: boolean;
   updated_at: string;
 }
 
-export interface DocBreadcrumb {
+export interface PageBreadcrumb {
   id: string;
   title: string;
+  slug: string;
 }
 
 export interface Page {
@@ -54,6 +56,7 @@ export interface Page {
   space_id: string;
   parent_id: string | null;
   title: string;
+  slug: string;
   body: string;
   position: number;
   /** Optimistic-concurrency guard: PATCH sends it back as expected_version. */
@@ -65,7 +68,7 @@ export interface Page {
   updated_at: string;
   space: PageSpace;
   /** Ancestors, root first (excludes the page itself). */
-  breadcrumb: DocBreadcrumb[];
+  breadcrumb: PageBreadcrumb[];
 }
 
 export interface PageCreate {
@@ -128,7 +131,7 @@ export interface PageSearchResponse {
 // Public pages (spec 74) — trimmed no-login shapes under /public/kb
 // ---------------------------------------------------------------------------
 
-/** GET /public/kb/spaces — a public space's card. */
+/** GET /public/pages/spaces — a public space's card. */
 export interface PublicPageSpace {
   id: string;
   name: string;
@@ -136,22 +139,23 @@ export interface PublicPageSpace {
   description: string;
 }
 
-/** GET /public/kb/spaces/{id}/tree — one non-archived flat tree row. */
+/** GET /public/pages/spaces/{id}/tree — one non-archived flat tree row. */
 export interface PublicPageNode {
   id: string;
   parent_id: string | null;
   title: string;
+  slug: string;
   position: number;
 }
 
-/** GET /public/kb/pages/{id} — body + breadcrumb only (markdown renders client-side). */
+/** GET /public/pages/pages/{id} — body + breadcrumb only (markdown renders client-side). */
 export interface PublicPagesPage {
   id: string;
   space_id: string;
   title: string;
   body: string;
   /** Ancestors, root first (excludes the page itself). */
-  breadcrumb: DocBreadcrumb[];
+  breadcrumb: PageBreadcrumb[];
   updated_at: string;
 }
 

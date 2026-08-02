@@ -47,6 +47,9 @@ class PageCreate(BaseModel):
     space_id: uuid.UUID
     parent_id: uuid.UUID | None = None
     title: str = Field(min_length=1, max_length=500)
+    # Omitted -> derived from the title (RADD-702). Supplying one is for
+    # importers that must preserve an existing URL.
+    slug: str | None = Field(default=None, max_length=120)
     body: str = ""
     position: float | None = None  # omitted -> appended after current siblings
 
@@ -57,6 +60,9 @@ class PageUpdate(BaseModel):
     or the PATCH 409s instead of clobbering a concurrent edit."""
 
     title: str | None = Field(default=None, min_length=1, max_length=500)
+    # The URL segment. Editing the TITLE never touches it (RADD-702) — changing
+    # a page's URL is an explicit act, because it breaks every existing link.
+    slug: str | None = Field(default=None, min_length=1, max_length=120)
     body: str | None = None
     parent_id: uuid.UUID | None = None
     position: float | None = None
@@ -69,14 +75,19 @@ class PageSummary(BaseModel):
     id: uuid.UUID
     parent_id: uuid.UUID | None
     title: str
+    slug: str
     position: float
     has_children: bool
     updated_at: UtcDatetime
 
 
-class DocBreadcrumb(BaseModel):
+class PageBreadcrumb(BaseModel):
+    """An ancestor in the trail. Carries the slug so the client can build the
+    ancestor's URL without a second fetch (RADD-702)."""
+
     id: uuid.UUID
     title: str
+    slug: str
 
 
 class PageRead(BaseModel):
@@ -86,6 +97,7 @@ class PageRead(BaseModel):
     space_id: uuid.UUID
     parent_id: uuid.UUID | None
     title: str
+    slug: str
     body: str
     position: float
     version: int
@@ -95,7 +107,7 @@ class PageRead(BaseModel):
     created_at: UtcDatetime
     updated_at: UtcDatetime
     space: PageSpaceRead
-    breadcrumb: list[DocBreadcrumb]  # ancestors, root first (excludes the page)
+    breadcrumb: list[PageBreadcrumb]  # ancestors, root first (excludes the page)
 
 
 # --- versions ---
@@ -178,6 +190,7 @@ class PublicPageNode(BaseModel):
     id: uuid.UUID
     parent_id: uuid.UUID | None
     title: str
+    slug: str  # RADD-702: the public tree builds /public-pages/<space>/<page> too
     position: float
 
 
@@ -189,5 +202,5 @@ class PublicPageRead(BaseModel):
     space_id: uuid.UUID
     title: str
     body: str
-    breadcrumb: list[DocBreadcrumb]  # ancestors, root first
+    breadcrumb: list[PageBreadcrumb]  # ancestors, root first
     updated_at: UtcDatetime

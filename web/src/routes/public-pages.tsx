@@ -16,8 +16,8 @@ import { RaddTile } from "../components/RaddMark";
 import { Spinner } from "../components/Spinner";
 
 /**
- * PUBLIC pages (spec 74) — routes `/kb`, `/kb/$spaceId`,
- * `/kb/$spaceId/$pageId`, root-level and OUTSIDE the auth gate (like
+ * PUBLIC pages (spec 74) — routes `/kb`, `/kb/$spaceSlug`,
+ * `/kb/$spaceSlug/$pageSlug`, root-level and OUTSIDE the auth gate (like
  * /public/forms/$token): anyone can read spaces an admin marked public.
  * Read-only siblings of the authed pages pages: the same PageTree + the safe
  * markdown renderer, driven by queries local to this file (the public
@@ -71,7 +71,7 @@ export function PublicPagesIndexPage() {
               <li key={space.id}>
                 <Link
                   to={RoutePath.publicPageSpace}
-                  params={{ spaceId: space.id }}
+                  params={{ spaceSlug: space.slug }}
                   className="flex h-full flex-col gap-1 rounded-lg border border-subtle bg-surface/50 p-4 hover:border-strong hover:bg-surface"
                 >
                   <span className="flex items-center gap-2">
@@ -93,25 +93,25 @@ export function PublicPagesIndexPage() {
   );
 }
 
-/** `/kb/$spaceId` (+ `/kb/$spaceId/$pageId`) — tree rail + rendered page; with
+/** `/public-pages/$spaceSlug` (+ `/public-pages/$spaceSlug/$pageSlug`) — tree rail + rendered page; with
  * no page in the URL the first root page is auto-selected. */
 export function PublicPageSpacePage() {
-  const { spaceId = "", pageId } = useParams({ strict: false });
+  const { spaceSlug = "", pageSlug } = useParams({ strict: false });
   const spaces = useQuery({
     queryKey: ["public-kb", "spaces"],
     queryFn: () => api.get<PublicPageSpace[]>(ApiPath.publicKbSpaces),
     retry: false,
   });
   const tree = useQuery({
-    queryKey: ["public-kb", "tree", spaceId],
-    queryFn: () => api.get<PublicPageNode[]>(apiPublicPagesTreePath(spaceId)),
+    queryKey: ["public-kb", "tree", spaceSlug],
+    queryFn: () => api.get<PublicPageNode[]>(apiPublicPagesTreePath(spaceSlug)),
     retry: false,
-    enabled: spaceId !== "",
+    enabled: spaceSlug !== "",
   });
 
   const rows = tree.data ?? [];
   // First page auto-selected: the top root row (rows arrive position-sorted).
-  const activePageId = pageId ?? rows.find((row) => row.parent_id === null)?.id;
+  const activePageId = pageSlug ?? rows.find((row) => row.parent_id === null)?.id;
   const page = useQuery({
     queryKey: ["public-kb", "page", activePageId ?? ""],
     queryFn: () => api.get<PublicPagesPage>(apiPublicPagesPagePath(activePageId ?? "")),
@@ -119,7 +119,9 @@ export function PublicPageSpacePage() {
     enabled: Boolean(activePageId),
   });
 
-  const space = spaces.data?.find((entry) => entry.id === spaceId);
+  const space = spaces.data?.find(
+    (entry) => entry.slug === spaceSlug || entry.id === spaceSlug,
+  );
 
   return (
     <main className="flex h-screen flex-col bg-base">
@@ -129,7 +131,7 @@ export function PublicPageSpacePage() {
             <ChevronRight size={13} className="shrink-0 text-fg-faint" aria-hidden />
             <Link
               to={RoutePath.publicPageSpace}
-              params={{ spaceId }}
+              params={{ spaceSlug }}
               className="truncate font-medium text-heading hover:underline"
             >
               {space.name}
@@ -139,7 +141,7 @@ export function PublicPageSpacePage() {
                 <ChevronRight size={13} className="shrink-0 text-fg-faint" aria-hidden />
                 <Link
                   to={RoutePath.publicPage}
-                  params={{ spaceId, pageId: crumb.id }}
+                  params={{ spaceSlug, pageSlug: crumb.slug }}
                   className="truncate text-fg-secondary hover:text-fg"
                 >
                   {crumb.title}
@@ -163,7 +165,8 @@ export function PublicPageSpacePage() {
             className="w-64 shrink-0 overflow-y-auto border-r border-subtle p-2"
           >
             <PageTree
-              spaceId={spaceId}
+              spaceId={space?.id ?? spaceSlug}
+              spaceSlug={space?.slug ?? spaceSlug}
               rows={rows}
               selectedId={activePageId}
               canWrite={false}

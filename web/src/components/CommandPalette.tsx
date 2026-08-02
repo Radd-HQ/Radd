@@ -257,12 +257,12 @@ export function CommandPalette() {
     } else if (entry.kind === "doc") {
       void navigate({
         to: RoutePath.page,
-        params: { spaceId: entry.result.space_id, pageId: entry.result.page_id },
+        params: { spaceSlug: entry.result.space_id, pageSlug: entry.result.page_id },
       });
     } else if (entry.kind === "semantic-doc") {
       void navigate({
         to: RoutePath.page,
-        params: { spaceId: entry.result.space_id, pageId: entry.result.page_id },
+        params: { spaceSlug: entry.result.space_id, pageSlug: entry.result.page_id },
       });
     } else if (entry.kind === "action") {
       setNewItemProject(entry.project);

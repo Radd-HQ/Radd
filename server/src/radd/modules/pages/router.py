@@ -104,6 +104,18 @@ async def create_page(data: PageCreate, session: Session, user: CurrentUser) -> 
     return await service.page_read(session, page)
 
 
+@router.get("/pages/by-path/{space_slug}/{page_slug}", response_model=PageRead)
+async def get_page_by_path(
+    space_slug: str, page_slug: str, session: Session, user: CurrentUser
+) -> PageRead:
+    """`/pages/<space>/<page>` (RADD-702). Registered BEFORE `/pages/{page_id}`
+    so `by-path` is never parsed as a UUID. Either segment may be an id, which
+    is what lets a pre-702 UUID link resolve and redirect instead of rotting."""
+    await authz.require(session, user, authz.Permission.PAGE_READ)
+    page = await service.resolve_page_by_slug(session, space_slug, page_slug)
+    return await service.page_read(session, page)
+
+
 @router.get("/pages/{page_id}", response_model=PageRead)
 async def get_page(page_id: uuid.UUID, session: Session, user: CurrentUser) -> PageRead:
     page = await _page_guard(session, user, page_id, authz.Permission.PAGE_READ)

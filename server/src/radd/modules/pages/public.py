@@ -49,7 +49,13 @@ async def public_tree(session: AsyncSession, space_id: uuid.UUID) -> list[Public
     by the same visibility rules as the authed listing)."""
     await get_public_space(session, space_id)
     return [
-        PublicPageNode(id=row.id, parent_id=row.parent_id, title=row.title, position=row.position)
+        PublicPageNode(
+            id=row.id,
+            parent_id=row.parent_id,
+            title=row.title,
+            slug=row.slug,
+            position=row.position,
+        )
         for row in await service.list_pages(session, space_id)
     ]
 

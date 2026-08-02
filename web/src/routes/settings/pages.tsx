@@ -82,7 +82,7 @@ export function PagesSettingsPage() {
                   <div className="flex items-center gap-2">
                     <Link
                       to={RoutePath.pageSpace}
-                      params={{ spaceId: space.id }}
+                      params={{ spaceSlug: space.slug }}
                       className="text-[13px] font-medium text-heading hover:underline"
                     >
                       {space.name}

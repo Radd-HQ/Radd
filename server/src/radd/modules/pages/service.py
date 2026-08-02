@@ -15,9 +15,10 @@ from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.events import service as events
 
 from . import core
-from .models import Page, PageVersion
+from .core import page_slugify
+from .models import Page, PageSpace, PageVersion
 from .schemas import (
-    DocBreadcrumb,
+    PageBreadcrumb,
     PageCreate,
     PageRead,
     PageSummary,
@@ -85,6 +86,7 @@ async def list_pages(
                 id=row.id,
                 parent_id=row.parent_id,
                 title=row.title,
+                slug=row.slug,
                 position=row.position,
                 has_children=row.id in children,
                 updated_at=row.updated_at,
@@ -107,6 +109,67 @@ async def _next_position(
     return (highest or 0) + 1
 
 
+async def _free_slug(
+    session: AsyncSession,
+    space_id: uuid.UUID,
+    candidate: str,
+    *,
+    exclude_id: uuid.UUID | None = None,
+) -> str:
+    """`candidate` made unique within the space (RADD-702). The taken set is read
+    per call rather than caught as an IntegrityError: a 409 on 'a page over there
+    already uses this URL' would be a strange thing to show someone who only
+    typed a title."""
+    query = select(Page.slug).where(Page.space_id == space_id)
+    if exclude_id is not None:
+        query = query.where(Page.id != exclude_id)
+    taken = set((await session.execute(query)).scalars())
+    return core.unique_slug(page_slugify(candidate), taken)
+
+
+async def resolve_page_by_slug(session: AsyncSession, space_slug: str, page_slug: str) -> Page:
+    """`/pages/<space>/<page>` → the page. Both segments accept an ID as well as
+    a slug, which is what keeps every UUID URL ever shared alive (RADD-702)."""
+    space = await _space_by_slug_or_id(session, space_slug)
+    page = (
+        await session.execute(
+            select(Page).where(Page.space_id == space.id, Page.slug == page_slug)
+        )
+    ).scalar_one_or_none()
+    if page is None:
+        page = await _page_by_id_text(session, page_slug, space.id)
+    if page is None:
+        raise NotFoundError(PageEntity.PAGE, f"{space_slug}/{page_slug}")
+    return page
+
+
+async def _space_by_slug_or_id(session: AsyncSession, value: str) -> PageSpace:
+    space = (
+        await session.execute(select(PageSpace).where(PageSpace.slug == value))
+    ).scalar_one_or_none()
+    if space is not None:
+        return space
+    try:
+        return await get_space(session, uuid.UUID(value))
+    except (ValueError, AttributeError):
+        raise NotFoundError(PageEntity.SPACE, value) from None
+
+
+async def _page_by_id_text(
+    session: AsyncSession, value: str, space_id: uuid.UUID
+) -> Page | None:
+    try:
+        page_id = uuid.UUID(value)
+    except ValueError:
+        return None
+    page = (
+        await session.execute(
+            select(Page).where(Page.id == page_id, Page.space_id == space_id)
+        )
+    ).scalar_one_or_none()
+    return page
+
+
 async def create_page(
     session: AsyncSession, data: PageCreate, actor_id: uuid.UUID
 ) -> Page:
@@ -124,6 +187,7 @@ async def create_page(
         space_id=space.id,
         parent_id=data.parent_id,
         title=data.title,
+        slug=await _free_slug(session, space.id, data.slug or page_slugify(data.title)),
         body=data.body,
         position=position,
         created_by=actor_id,
@@ -167,6 +231,14 @@ async def update_page(
         page.position = data.position
         changed.append("position")
         moved = True
+    # RADD-702: the slug changes ONLY when asked. A title edit deliberately does
+    # not touch it — the URL is a promise to whoever already has the link, and
+    # "fixed a typo in the heading" is not a reason to break it.
+    if data.slug is not None and data.slug != page.slug:
+        page.slug = await _free_slug(
+            session, page.space_id, page_slugify(data.slug), exclude_id=page.id
+        )
+        changed.append("slug")
 
     if core.should_snapshot(page.title, page.body, data.title, data.body):
         session.add(
@@ -246,7 +318,7 @@ async def page_read(session: AsyncSession, page: Page) -> PageRead:
     """Full page + its space + the ancestor breadcrumb trail (root first)."""
     space = await get_space(session, page.space_id)
     by_id = {row.id: row for row in await _space_rows(session, page.space_id)}
-    trail: list[DocBreadcrumb] = []
+    trail: list[PageBreadcrumb] = []
     current = page.parent_id
     for _ in range(len(by_id) + 1):
         if current is None:
@@ -254,13 +326,14 @@ async def page_read(session: AsyncSession, page: Page) -> PageRead:
         ancestor = by_id.get(current)
         if ancestor is None:
             break
-        trail.append(DocBreadcrumb(id=ancestor.id, title=ancestor.title))
+        trail.append(PageBreadcrumb(id=ancestor.id, title=ancestor.title, slug=ancestor.slug))
         current = ancestor.parent_id
     return PageRead(
         id=page.id,
         space_id=page.space_id,
         parent_id=page.parent_id,
         title=page.title,
+        slug=page.slug,
         body=page.body,
         position=page.position,
         version=page.version,

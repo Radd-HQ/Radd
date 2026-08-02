@@ -338,7 +338,7 @@ export function Sidebar() {
                     <li key={space.id}>
                       <Link
                         to={RoutePath.pageSpace}
-                        params={{ spaceId: space.id }}
+                        params={{ spaceSlug: space.slug }}
                         className={navLinkClasses}
                       >
                         <BookOpen size={14} aria-hidden />

@@ -46,7 +46,7 @@ export function ItemPagesSection({ item }: { item: Item }) {
                 <BookOpen size={14} className="shrink-0 text-fg-muted" aria-hidden />
                 <Link
                   to={RoutePath.page}
-                  params={{ spaceId: ref.space_id, pageId: ref.page_id }}
+                  params={{ spaceSlug: ref.space_id, pageSlug: ref.page_id }}
                   className="min-w-0 flex-1 truncate text-[13px] text-fg hover:underline"
                 >
                   {ref.title}

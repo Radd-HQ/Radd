@@ -57,7 +57,7 @@ export function PagesIndexPage() {
               <li key={space.id}>
                 <Link
                   to={RoutePath.pageSpace}
-                  params={{ spaceId: space.id }}
+                  params={{ spaceSlug: space.slug }}
                   className="flex h-full flex-col gap-1 rounded-lg border border-subtle bg-surface/50 p-4 hover:border-strong hover:bg-surface"
                 >
                   <span className="flex items-baseline gap-2">

@@ -113,7 +113,7 @@ export const publicFormUrl = (token: string) =>
 /** Public KB paths (spec 74): a public space's tree + one page's body. */
 export const apiPublicPagesTreePath = (spaceId: string) =>
   `${ApiPath.publicKbSpaces}/${spaceId}/tree`;
-export const apiPublicPagesPagePath = (pageId: string) => `/public/kb/pages/${pageId}`;
+export const apiPublicPagesPagePath = (pageId: string) => `/public/pages/pages/${pageId}`;
 /** The shareable public-KB URL shown next to a space's Public toggle (spec 74). */
 export const publicKbSpaceUrl = (spaceId: string) => `${window.location.origin}/kb/${spaceId}`;
 /** The item's external requester (spec 62) — 404 when the item has none. */

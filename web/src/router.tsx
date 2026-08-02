@@ -130,6 +130,33 @@ const publicKbSpaceRoute = createRoute({
   component: PublicPageSpacePage,
 });
 
+const legacyKbIndexRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: RoutePath.legacyKb,
+  beforeLoad: () => {
+    throw redirect({ to: RoutePath.publicPages, replace: true });
+  },
+  component: () => null,
+});
+
+const legacyKbSpaceRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: RoutePath.legacyKbSpace,
+  beforeLoad: ({ params }) => {
+    throw redirect({ to: RoutePath.publicPageSpace, params, replace: true });
+  },
+  component: () => null,
+});
+
+const legacyKbPageRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: RoutePath.legacyKbPage,
+  beforeLoad: ({ params }) => {
+    throw redirect({ to: RoutePath.publicPage, params, replace: true });
+  },
+  component: () => null,
+});
+
 const publicKbPageRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: RoutePath.publicPage,
@@ -294,6 +321,40 @@ const pageRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.page,
   component: PageSpacePage,
+});
+
+/**
+ * Pre-RADD-702 URLs. `/docs/<uuid>/<uuid>` was the canonical page address for
+ * every version up to 0.5.0, so those links are in issues, chat logs and
+ * bookmarks. They REDIRECT rather than 404 — and because the new route resolves
+ * a segment that is an id, the redirect is a straight hand-off; PageSpacePage
+ * then rewrites the address bar to the slug form.
+ */
+const legacyDocsRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: RoutePath.legacyDocs,
+  beforeLoad: () => {
+    throw redirect({ to: RoutePath.pages, replace: true });
+  },
+  component: () => null,
+});
+
+const legacyDocSpaceRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: RoutePath.legacyDocSpace,
+  beforeLoad: ({ params }) => {
+    throw redirect({ to: RoutePath.pageSpace, params, replace: true });
+  },
+  component: () => null,
+});
+
+const legacyDocPageRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: RoutePath.legacyDocPage,
+  beforeLoad: ({ params }) => {
+    throw redirect({ to: RoutePath.page, params, replace: true });
+  },
+  component: () => null,
 });
 
 const settingsRoute = createRoute({
@@ -598,6 +659,9 @@ const routeTree = rootRoute.addChildren([
   publicKbIndexRoute,
   publicKbSpaceRoute,
   publicKbPageRoute,
+  legacyKbIndexRoute,
+  legacyKbSpaceRoute,
+  legacyKbPageRoute,
   appLayoutRoute.addChildren([
     myWorkRoute,
     projectsIndexRoute,
@@ -618,6 +682,9 @@ const routeTree = rootRoute.addChildren([
     docsIndexRoute,
     docSpaceRoute,
     pageRoute,
+    legacyDocsRoute,
+    legacyDocSpaceRoute,
+    legacyDocPageRoute,
     projectSettingsRoute.addChildren([
       projectSettingsIndexRoute,
       projectSettingsGeneralRoute,
