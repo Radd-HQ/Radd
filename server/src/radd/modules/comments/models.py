@@ -1,20 +1,27 @@
 import uuid
 
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from radd.db import Base, TimestampMixin
 
-from .types import CommentVisibility
+from .types import CommentParentType, CommentVisibility
 
 
 class Comment(Base, TimestampMixin):
     __tablename__ = "comments"
+    # The read that matters: every comment on one parent, in order.
+    __table_args__ = (Index("ix_comments_parent", "entity_type", "entity_id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    item_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("work_items.id", ondelete="CASCADE"), index=True
+    # RADD-717: polymorphic parent. No FK, because it points at several tables —
+    # which costs the ON DELETE CASCADE the item column had, so each parent's
+    # delete path calls `service.delete_for_parent`. An orphaned comment is
+    # worse than a slightly noisier delete: it is invisible and undeletable.
+    entity_type: Mapped[str] = mapped_column(
+        String(30), default=CommentParentType.ITEM.value, server_default=CommentParentType.ITEM.value
     )
+    entity_id: Mapped[uuid.UUID] = mapped_column(index=True)
     author_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
     body: Mapped[str] = mapped_column(Text)
     # CommentVisibility; internal comments require Permission.COMMENT_READ_INTERNAL.

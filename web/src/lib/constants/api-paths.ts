@@ -8,6 +8,9 @@ export const apiItemPath = (itemId: string) => `${ApiPath.items}/${itemId}`;
 export const apiItemByKeyPath = (key: string) =>
   `${ApiPath.items}/by-key/${encodeURIComponent(key)}`;
 export const apiItemCommentsPath = (itemId: string) => `${ApiPath.items}/${itemId}/comments`;
+/** RADD-717: comments on any registered parent, e.g. ("page", id). */
+export const apiParentCommentsPath = (entityType: string, entityId: string) =>
+  `/${entityType}/${entityId}/comments`;
 export const apiCommentPath = (commentId: string) => `${ApiPath.comments}/${commentId}`;
 export const apiStatePath = (stateId: string) => `${ApiPath.states}/${stateId}`;
 export const apiTransitionPath = (transitionId: string) =>

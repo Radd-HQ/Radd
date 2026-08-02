@@ -10,6 +10,7 @@ from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
 
 from . import attachments_binding  # registers the page parent (spec 102)
+from . import comments_binding  # registers the page comment parent (RADD-717)
 from .extensions import PAGE_EXTENSIONS
 from .public_router import router as public_router
 from .router import router
@@ -25,7 +26,7 @@ plugin = RaddPlugin(
         "spaces readable without login under /public/pages (trees, page bodies, "
         "public-only FTS)."
     ),
-    depends_on=("events", "projects", "auth", "workflow", "items", "attachments", "labels"),
+    depends_on=("events", "projects", "auth", "workflow", "items", "attachments", "labels", "comments"),
     routers=(router, public_router),
     event_types=(
         EventTypeSpec(PageEvent.SPACE_CREATED, "Page space created", "Pages"),

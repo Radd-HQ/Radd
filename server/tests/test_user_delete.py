@@ -91,7 +91,7 @@ async def test_delete_reassigns_work_and_discards_worklogs(db):
     )
     assert reporter == successor.id
     author = await db.scalar(
-        text("SELECT author_id FROM comments WHERE item_id = :i"), {"i": item.id}
+        text("SELECT author_id FROM comments WHERE entity_type = 'item' AND entity_id = :i"), {"i": item.id}
     )
     assert author == successor.id
     # …but their hours are gone, not credited to anyone.

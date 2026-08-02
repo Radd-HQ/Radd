@@ -17,8 +17,15 @@ from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 
 from .models import Comment, CommentVisibilityTeam
+from .parents import binding_for
 from .schemas import CommentCreate, CommentRead, CommentUpdate
-from .types import EXCERPT_MAX_CHARS, CommentEntity, CommentEvent, CommentVisibility
+from .types import (
+    EXCERPT_MAX_CHARS,
+    CommentEntity,
+    CommentEvent,
+    CommentParentType,
+    CommentVisibility,
+)
 from .visibility import internal_comment_visible
 
 
@@ -27,7 +34,11 @@ def _to_read(
 ) -> CommentRead:
     return CommentRead(
         id=comment.id,
-        item_id=comment.item_id,
+        entity_type=comment.entity_type,
+        entity_id=comment.entity_id,
+        # Kept so every existing issue-side caller is untouched: it is the
+        # entity id when the parent IS an item, and null otherwise.
+        item_id=comment.entity_id if comment.entity_type == CommentParentType.ITEM else None,
         author=UserRef(
             id=author.id,
             name=author.name,
@@ -89,7 +100,8 @@ async def public_bodies_for_item(session: AsyncSession, item_id: uuid.UUID) -> l
     result = await session.execute(
         select(Comment.body)
         .where(
-            Comment.item_id == item_id,
+            Comment.entity_type == CommentParentType.ITEM,
+            Comment.entity_id == item_id,
             Comment.visibility == CommentVisibility.PUBLIC.value,
         )
         .order_by(Comment.created_at)
@@ -106,9 +118,10 @@ async def public_comment_times(
     if not ids:
         return []
     result = await session.execute(
-        select(Comment.item_id, Comment.author_id, Comment.created_at)
+        select(Comment.entity_id, Comment.author_id, Comment.created_at)
         .where(
-            Comment.item_id.in_(ids),
+            Comment.entity_type == CommentParentType.ITEM,
+            Comment.entity_id.in_(ids),
             Comment.visibility == CommentVisibility.PUBLIC.value,
         )
         .order_by(Comment.created_at)
@@ -130,9 +143,17 @@ async def _get(session: AsyncSession, comment_id: uuid.UUID) -> Comment:
     return comment
 
 
-async def _project(session: AsyncSession, item_id: uuid.UUID) -> Project:
-    item = await items.require_item(session, item_id)
-    return await projects_service.get_project(session, item.project_id)
+async def _parent_scope(
+    session: AsyncSession, entity_type: str, entity_id: uuid.UUID
+) -> tuple[object, Project | None]:
+    """The binding for this parent and the project it lives in, if any.
+
+    None is a legitimate answer, not a failure: a wiki page is global, so the
+    permission checks below run at global scope — which is exactly how page
+    atoms are granted.
+    """
+    binding = binding_for(entity_type)
+    return binding, await binding.project_of(session, entity_id)
 
 
 def _check_internal(permissions: frozenset[Permission], visibility: str) -> None:
@@ -147,7 +168,12 @@ def _check_internal(permissions: frozenset[Permission], visibility: str) -> None
 
 
 async def _require_author_or(
-    session: AsyncSession, comment: Comment, actor: User, project: Project, *, others: Permission
+    session: AsyncSession,
+    comment: Comment,
+    actor: User,
+    project: Project | None,
+    *,
+    others: Permission,
 ) -> frozenset[Permission]:
     """Authors act on their own comments (comment.write); others need `others`
     (spec 50: comment.delete for deletion, project.manage for editing another's)."""
@@ -173,7 +199,16 @@ async def _emit(
         entity_id=comment.id,
         actor_id=actor_id,
         payload={
-            "item_id": str(comment.item_id),
+            # Both shapes: `item_id` keeps every existing consumer (notify,
+            # webhooks, automations, the extensions SDK) working untouched, and
+            # is null when the parent is not an item.
+            "entity_type": comment.entity_type,
+            "entity_id": str(comment.entity_id),
+            "item_id": (
+                str(comment.entity_id)
+                if comment.entity_type == CommentParentType.ITEM
+                else None
+            ),
             "author_id": str(comment.author_id),
             "visibility": comment.visibility,
             "excerpt": comment.body[:EXCERPT_MAX_CHARS],
@@ -184,10 +219,14 @@ async def _emit(
 
 
 async def create_comment(
-    session: AsyncSession, item_id: uuid.UUID, data: CommentCreate, actor: User
+    session: AsyncSession,
+    entity_id: uuid.UUID,
+    data: CommentCreate,
+    actor: User,
+    entity_type: str = CommentParentType.ITEM.value,
 ) -> CommentRead:
-    project = await _project(session, item_id)
-    permissions = await authz.require(session, actor, Permission.COMMENT_WRITE, project=project)
+    binding, project = await _parent_scope(session, entity_type, entity_id)
+    permissions = await binding.require_write(session, actor, entity_id, project)
     _check_internal(permissions, data.visibility)
     # Import overrides (author/timestamp) are honored only for a project manager.
     can_import = Permission.PROJECT_MANAGE in permissions
@@ -199,7 +238,11 @@ async def create_comment(
     author_id = data.author_id if (can_import and "author_id" in data.model_fields_set) else actor.id
     occurred_at = data.created_at if (can_import and data.created_at) else None
     comment = Comment(
-        item_id=item_id, author_id=author_id, body=data.body, visibility=data.visibility.value
+        entity_type=entity_type,
+        entity_id=entity_id,
+        author_id=author_id,
+        body=data.body,
+        visibility=data.visibility.value
     )
     if occurred_at is not None:
         comment.created_at = occurred_at.replace(tzinfo=None)
@@ -247,10 +290,19 @@ async def _visible_comments(
     ]
 
 
-async def list_comments(session: AsyncSession, item_id: uuid.UUID, actor: User) -> list[CommentRead]:
-    project = await _project(session, item_id)
+async def list_comments(
+    session: AsyncSession,
+    entity_id: uuid.UUID,
+    actor: User,
+    entity_type: str = CommentParentType.ITEM.value,
+) -> list[CommentRead]:
+    binding, project = await _parent_scope(session, entity_type, entity_id)
     permissions = await authz.require(session, actor, Permission.ITEM_READ, project=project)
-    query = select(Comment).where(Comment.item_id == item_id).order_by(Comment.created_at, Comment.id)
+    query = (
+        select(Comment)
+        .where(Comment.entity_type == entity_type, Comment.entity_id == entity_id)
+        .order_by(Comment.created_at, Comment.id)
+    )
     comments = list((await session.execute(query)).scalars())
     restrictions = await _team_restrictions(
         session, [c.id for c in comments if c.visibility == CommentVisibility.INTERNAL.value]
@@ -264,7 +316,7 @@ async def update_comment(
     session: AsyncSession, comment_id: uuid.UUID, data: CommentUpdate, actor: User
 ) -> CommentRead:
     comment = await _get(session, comment_id)
-    project = await _project(session, comment.item_id)
+    binding, project = await _parent_scope(session, comment.entity_type, comment.entity_id)
     permissions = await _require_author_or(
         session, comment, actor, project, others=Permission.PROJECT_MANAGE
     )
@@ -284,7 +336,7 @@ async def update_comment(
 
 async def delete_comment(session: AsyncSession, comment_id: uuid.UUID, actor: User) -> None:
     comment = await _get(session, comment_id)
-    project = await _project(session, comment.item_id)
+    binding, project = await _parent_scope(session, comment.entity_type, comment.entity_id)
     permissions = await _require_author_or(
         session, comment, actor, project, others=Permission.COMMENT_DELETE
     )
@@ -304,8 +356,28 @@ async def comment_counts(
     ids = set(item_ids)
     if not ids:
         return {}
-    query = select(Comment.item_id, func.count()).where(Comment.item_id.in_(ids))
+    query = select(Comment.entity_id, func.count()).where(
+        Comment.entity_type == CommentParentType.ITEM, Comment.entity_id.in_(ids)
+    )
     if not include_internal:
         query = query.where(Comment.visibility == CommentVisibility.PUBLIC.value)
-    rows = await session.execute(query.group_by(Comment.item_id))
+    rows = await session.execute(query.group_by(Comment.entity_id))
     return dict(rows.all())
+
+
+async def delete_for_parent(
+    session: AsyncSession, entity_type: str, entity_id: uuid.UUID
+) -> int:
+    """Remove every comment on a parent that is being destroyed (RADD-717).
+
+    The polymorphic column cannot carry a foreign key, so the ON DELETE CASCADE
+    the old `item_id` had is gone and each parent's hard-delete path calls this
+    instead. Left undone, a deleted item or page leaves comments that nothing
+    can reach and nothing can remove.
+    """
+    result = await session.execute(
+        delete(Comment).where(
+            Comment.entity_type == entity_type, Comment.entity_id == entity_id
+        )
+    )
+    return result.rowcount or 0

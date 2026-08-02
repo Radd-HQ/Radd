@@ -182,8 +182,13 @@ async def _cleanup(keys: list[str]) -> None:
             await s.execute(
                 text("DELETE FROM jira_pending_refs WHERE source_item_id IN "
                      "(SELECT id FROM work_items WHERE project_id=:p)"), {"p": proj})
-            for t in ("worklogs", "comments", "item_web_links"):
+            for t in ("worklogs", "item_web_links"):
                 await s.execute(text(f"DELETE FROM {t} WHERE {items}"), {"p": proj})
+            # RADD-717: comments are polymorphic now — `item_id` is gone, and the
+            # parent type has to be part of the predicate.
+            await s.execute(
+                text("DELETE FROM comments WHERE entity_type = 'item' AND entity_id IN "
+                     "(SELECT id FROM work_items WHERE project_id=:p)"), {"p": proj})
             await s.execute(
                 text("DELETE FROM item_links WHERE source_item_id IN (SELECT id FROM work_items WHERE project_id=:p) "
                      "OR target_item_id IN (SELECT id FROM work_items WHERE project_id=:p)"), {"p": proj})
@@ -356,7 +361,7 @@ async def test_an_import_preserves_keys_dates_and_authorship_and_is_silent(db):
 
             # The comment kept its original author and date.
             author, created = (await s.execute(
-                text("SELECT author_id, created_at FROM comments WHERE item_id=:i"),
+                text("SELECT author_id, created_at FROM comments WHERE entity_type = 'item' AND entity_id = :i"),
                 {"i": item.id})).first()
             assert author is not None and author != actor_id
             assert str(created).startswith("2021-05-05")
@@ -393,7 +398,7 @@ async def test_a_reimport_refreshes_rather_than_duplicating(db):
             # Comments are deduplicated by Jira's own id — spec 90 stored no id,
             # so its only defence was to skip comments on a re-import entirely.
             assert (await s.execute(
-                text("SELECT count(*) FROM comments WHERE item_id=:i"), {"i": item.id}
+                text("SELECT count(*) FROM comments WHERE entity_type = 'item' AND entity_id=:i"), {"i": item.id}
             )).scalar() == 1
         assert second.counts.get("items_updated") == 1
     finally:

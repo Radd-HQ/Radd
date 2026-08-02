@@ -4,6 +4,15 @@ from enum import StrEnum
 EXCERPT_MAX_CHARS = 200
 
 
+class CommentParentType(StrEnum):
+    """What a comment hangs off (RADD-717). A WIRE FORMAT — it is stored in the
+    `comments.entity_type` column and appears in event payloads — so a member
+    here is renamed by migration, not by editing."""
+
+    ITEM = "item"
+    PAGE = "page"
+
+
 class CommentVisibility(StrEnum):
     """Spec 07: internal comments are gated by Permission.COMMENT_READ_INTERNAL."""
 

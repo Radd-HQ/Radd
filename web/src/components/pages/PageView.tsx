@@ -17,6 +17,7 @@ import { useConfirm } from "../ConfirmDialog";
 import { DropdownMenu } from "../DropdownMenu";
 import { PageExtensionCtx } from "../../lib/page-extensions";
 import { PageBacklinksPanel } from "./PageBacklinksPanel";
+import { PageComments } from "./PageComments";
 import { PageLabels } from "./PageLabels";
 import { PageLinkedItems } from "./PageLinkedItems";
 import { PageHistory } from "./PageHistory";
@@ -377,6 +378,10 @@ export function PageView({
               wiki is navigated, and it cannot be opt-in per page. The
               `radd:backlinks` extension exists for putting it INLINE instead. */}
           <PageBacklinksPanel pageId={page.id} />
+
+          {/* RADD-717: a page is where a decision gets written down; the
+              argument about it needs somewhere to live besides chat. */}
+          <PageComments pageId={page.id} canComment={canWrite} />
         </>
       )}
       {confirmDialog}

@@ -132,7 +132,7 @@ async def test_commented_by_matches_the_commented_item(db):
     bob = await _user(db, "Bob Silent")
     commented, quiet = await _two_items(db, alice)
 
-    db.add(Comment(item_id=commented.id, author_id=alice.id, body="looks good"))
+    db.add(Comment(entity_id=commented.id, author_id=alice.id, body="looks good"))
     await db.flush()
 
     assert await _run(db, "commented_by = me", alice) == {commented.id}
@@ -163,7 +163,7 @@ async def test_relational_fields_compose_with_builtins_and_each_other(db):
             worked_on=date(2026, 7, 22),
         )
     )
-    db.add(Comment(item_id=both.id, author_id=alice.id, body="reviewed"))
+    db.add(Comment(entity_id=both.id, author_id=alice.id, body="reviewed"))
     await db.flush()
 
     assert await _run(db, "logged_by = me AND commented_by = me", alice) == {both.id}

@@ -270,7 +270,11 @@ async def delete_item(session: AsyncSession, item_id: uuid.UUID, actor: User) ->
     """Hard delete (spec 38): gated by `item.delete` (spec 50 — was project.manage,
     which still implies it), children must be gone first (the parent FK restricts),
     dependents CASCADE. The event log's rows for the item remain — the audit trail
-    survives the row."""
+    survives the row.
+
+    RADD-717: comments no longer carry a foreign key to work_items (the column is
+    polymorphic), so the CASCADE that used to take them is gone and they are
+    removed explicitly. Missing this leaves rows nothing can reach."""
     item = await require_item(session, item_id)
     project = await projects_service.get_project(session, item.project_id)
     await authz.require(session, actor, Permission.ITEM_DELETE, project=project)
@@ -291,6 +295,13 @@ async def delete_item(session: AsyncSession, item_id: uuid.UUID, actor: User) ->
         actor_id=actor.id,
         payload={"key": key, "title": item.title, "project_id": str(project.id)},
     )
+    # RADD-717: the polymorphic comment column carries no FK, so its rows do not
+    # cascade with the item. Deferred import — items must not depend on comments
+    # at module scope (comments already depends on items).
+    from radd.modules.comments import service as comments_service
+    from radd.modules.comments.types import CommentParentType
+
+    await comments_service.delete_for_parent(session, CommentParentType.ITEM.value, item.id)
     await session.delete(item)
     await session.flush()
 

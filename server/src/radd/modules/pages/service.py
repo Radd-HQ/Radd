@@ -316,6 +316,12 @@ async def hard_delete_page(
         raise ConflictError(
             PageEntity.PAGE, reason=f"page has {live_children} non-archived child page(s)"
         )
+    # RADD-717: page comments are polymorphic and carry no FK, so they do not
+    # cascade — remove them with the page rather than orphaning them.
+    from radd.modules.comments import service as comments_service
+    from radd.modules.comments.types import CommentParentType
+
+    await comments_service.delete_for_parent(session, CommentParentType.PAGE.value, page.id)
     await session.delete(page)  # versions/links/archived subtree go via FK CASCADE
     await session.flush()
     await _emit_page(

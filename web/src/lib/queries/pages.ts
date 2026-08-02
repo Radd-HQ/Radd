@@ -6,6 +6,7 @@ import { Entity, entityMeta } from "../cache";
 import {
   ApiPath,
   apiPageBacklinksPath,
+  apiParentCommentsPath,
   apiPagesByLabelPath,
   apiPageItemsPath,
   apiPagePath,
@@ -19,6 +20,7 @@ import type {
   PageLinkedItem,
   Page,
   PageBacklink,
+  Comment,
   PageLabelled,
   PageExtensionSpec,
   PageSummary,
@@ -65,6 +67,14 @@ export const pagesByLabelQuery = (name: string, space = "") =>
     meta: entityMeta(Entity.page),
     queryFn: () =>
       api.get<PageLabelled[]>(apiPagesByLabelPath(name), space ? { query: { space } } : undefined),
+  });
+
+/** A page's discussion (RADD-717) — the same comments table issues use. */
+export const pageCommentsQuery = (pageId: string) =>
+  queryOptions({
+    queryKey: queryKeys.pageComments(pageId),
+    meta: entityMeta(Entity.comment),
+    queryFn: () => api.get<Comment[]>(apiParentCommentsPath("page", pageId)),
   });
 
 /** A space's flat page rows — the tree component assembles the hierarchy. */
