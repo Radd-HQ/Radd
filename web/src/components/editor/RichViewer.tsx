@@ -1,8 +1,7 @@
 import { useEffect, useRef } from "react";
-import { useNavigate } from "@tanstack/react-router";
 import { Crepe, CrepeFeature } from "@milkdown/crepe";
 import { jiraToMarkdown } from "../../lib/jira-markup";
-import { RoutePath } from "../../lib/constants";
+import { useOpenIssueRef } from "../../lib/hooks";
 import { mentionChipsPlugin } from "./chips";
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/classic-dark.css";
@@ -16,9 +15,13 @@ import "./rich-editor.css";
  */
 export function RichViewer({ text, className = "" }: { text: string; className?: string }) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const navigate = useNavigate();
-  const navigateRef = useRef(navigate);
-  navigateRef.current = navigate;
+  // RADD-711: an issue chip opens the PEEK panel over what you are reading
+  // rather than navigating away. A wiki page is usually the thing you were
+  // reading FOR the references, and the issue view already works this way for
+  // its own child rows (RADD-699) — same helper, so one rule covers both.
+  const openRef = useOpenIssueRef();
+  const openRefStable = useRef(openRef);
+  openRefStable.current = openRef;
 
   useEffect(() => {
     const root = rootRef.current;
@@ -41,8 +44,7 @@ export function RichViewer({ text, className = "" }: { text: string; className?:
     crepe.editor.use(
       mentionChipsPlugin({
         readonly: true,
-        openIssue: (key) =>
-          void navigateRef.current({ to: RoutePath.issue, params: { itemKey: key } }),
+        openIssue: (key) => void openRefStable.current(key),
       }),
     );
     crepe.setReadonly(true);
