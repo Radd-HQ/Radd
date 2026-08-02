@@ -80,6 +80,26 @@ jobs:
         run: |
           docker push "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}"
 
+      # RADD-703/704: the tag also publishes its changelog — a categorized
+      # Forgejo release and a page under Radd -> Release notes. The LOGIC lives
+      # in scripts/changelog.py (categories come from each [RADD-###] issue's
+      # type + labels, never from a parsed commit prefix); this step is three
+      # lines on purpose, because a shell pipeline in YAML cannot be tested and
+      # would drift from the page generator immediately.
+      #
+      # Never fails the build: the image is already pushed and deployable, and a
+      # tracker or wiki that happens to be down must not turn a good release
+      # into a red one. The script says which half failed.
+      - name: Publish the changelog
+        continue-on-error: true
+        env:
+          RADD_API_TOKEN: ${{ secrets.RADD_API_TOKEN }}
+          FORGEJO_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.FORGEJO_TOKEN }}
+          FORGEJO_REPO: ${{ github.repository }}
+        run: |
+          git fetch --tags --force --unshallow 2>/dev/null || git fetch --tags --force
+          python3 scripts/release_notes.py --tag "v${{ steps.meta.outputs.version }}"
+
       - name: Deploy instructions
         run: |
           IMG="${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}"
