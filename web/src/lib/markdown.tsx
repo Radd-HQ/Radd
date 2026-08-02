@@ -1,8 +1,17 @@
-import { useMemo, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { visit } from "unist-util-visit";
 import { jiraToMarkdown } from "./jira-markup";
+import { headingAnchorId } from "./markdown-outline";
+import { useOpenIssueRef } from "./hooks";
+import {
+  ExtensionError,
+  UnknownExtension,
+  extensionNameOf,
+  lookupPageExtension,
+  parseExtensionParams,
+} from "./page-extensions";
 
 /**
  * Read-mode markdown renderer. Built on **remark** — the exact parser Milkdown/Crepe
@@ -64,29 +73,52 @@ const HEADING = {
   h6: "mt-2 mb-0.5 text-xs font-semibold uppercase tracking-wide text-fg-muted",
 } as const;
 
-const heading = (cls: string) =>
+/**
+ * Real heading elements (they were spans), each carrying an anchor id derived
+ * from its text — which is what lets `radd:toc` link INTO the document and what
+ * gives the page an outline for screen readers (RADD-710). The id must be
+ * allocated by the same walk the outline uses, so duplicate headings agree.
+ */
+const heading = (cls: string, level: number) =>
   function Heading({ children }: { children?: ReactNode }) {
-    return <span className={"block " + cls}>{children}</span>;
+    const seen = useContext(HeadingIdCtx);
+    const text = textOf(children);
+    const id = useMemo(() => headingAnchorId(text, seen), [text, seen]);
+    const Tag = `h${level}` as "h1";
+    return (
+      <Tag id={id} className={"block scroll-mt-16 " + cls}>
+        {children}
+      </Tag>
+    );
   };
 
+/** Flatten a React children tree to its text, for the anchor id. */
+function textOf(node: ReactNode): string {
+  if (node === null || node === undefined || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(textOf).join("");
+  const props = (node as { props?: { children?: ReactNode } }).props;
+  return props ? textOf(props.children) : "";
+}
+
+/** Per-render duplicate counter, so `## Setup` twice yields setup / setup-2. */
+const HeadingIdCtx = createContext<Map<string, number>>(new Map());
+
+/** The markdown SOURCE of the current render — `radd:toc` reads headings from
+ *  it, because the rendered tree does not exist yet when the block renders. */
+export const MarkdownSourceCtx = createContext<string>("");
+
 const components = {
-  h1: heading(HEADING.h1),
-  h2: heading(HEADING.h2),
-  h3: heading(HEADING.h3),
-  h4: heading(HEADING.h4),
-  h5: heading(HEADING.h5),
-  h6: heading(HEADING.h6),
+  h1: heading(HEADING.h1, 1),
+  h2: heading(HEADING.h2, 2),
+  h3: heading(HEADING.h3, 3),
+  h4: heading(HEADING.h4, 4),
+  h5: heading(HEADING.h5, 5),
+  h6: heading(HEADING.h6, 6),
   p: ({ children }: { children?: ReactNode }) => <p className="my-1.5">{children}</p>,
   a: ({ href, className, children }: { href?: string; className?: string; children?: ReactNode }) => {
     if (className?.includes("radd-issue-ref")) {
-      return (
-        <a
-          href={href}
-          className="rounded bg-sky-500/15 px-1 py-px font-medium text-sky-300 no-underline hover:bg-sky-500/25"
-        >
-          {children}
-        </a>
-      );
+      return <IssueRefChip href={href}>{children}</IssueRefChip>;
     }
     return (
       <a
@@ -117,11 +149,17 @@ const components = {
       <code className={className}>{children}</code>
     );
   },
-  pre: ({ children }: { children?: ReactNode }) => (
-    <pre className="my-2 overflow-x-auto rounded-md border border-subtle bg-surface p-2.5 font-mono text-xs text-fg">
-      {children}
-    </pre>
-  ),
+  // A ```radd:<name> fence is an EXTENSION (RADD-709), not code: intercepted
+  // here rather than in `code` so the <pre> chrome never wraps it.
+  pre: ({ children }: { children?: ReactNode }) => {
+    const block = extensionBlockOf(children);
+    if (block) return <ExtensionBlock name={block.name} body={block.body} />;
+    return (
+      <pre className="my-2 overflow-x-auto rounded-md border border-subtle bg-surface p-2.5 font-mono text-xs text-fg">
+        {children}
+      </pre>
+    );
+  },
   blockquote: ({ children }: { children?: ReactNode }) => (
     <blockquote className="my-2 border-l-2 border-strong pl-3 text-fg-secondary">{children}</blockquote>
   ),
@@ -178,15 +216,66 @@ const components = {
   ),
 };
 
+/**
+ * Pull `{name, body}` out of a <pre>'s single <code> child when its language is
+ * `radd:<name>`. Returns null for ordinary code, which is the common case.
+ */
+function extensionBlockOf(
+  children: ReactNode,
+): { name: string; body: string } | null {
+  const only = Array.isArray(children) ? children[0] : children;
+  const props = (only as { props?: { className?: string; children?: ReactNode } })?.props;
+  if (!props) return null;
+  const name = extensionNameOf(props.className);
+  if (!name) return null;
+  return { name, body: textOf(props.children) };
+}
+
+function ExtensionBlock({ name, body }: { name: string; body: string }) {
+  const extension = lookupPageExtension(name);
+  if (!extension) return <UnknownExtension name={name} />;
+  const parsed = parseExtensionParams(body);
+  if (!parsed.ok) return <ExtensionError name={name} error={parsed.error} />;
+  return <>{extension.render(parsed.params)}</>;
+}
+
+/**
+ * An issue reference inside rendered markdown (RADD-711). A plain click opens
+ * the PEEK panel over whatever you are reading — a wiki page is usually the
+ * thing you were reading *for* the references, so following one should not cost
+ * you the page. It keeps its real href, so cmd/middle-click still opens a tab.
+ *
+ * Same rule as the issue page's child rows (RADD-699), via the same helper.
+ */
+function IssueRefChip({ href, children }: { href?: string; children?: ReactNode }) {
+  const openRef = useOpenIssueRef();
+  const key = (href ?? "").replace(/^\/issues\//, "");
+  return (
+    <a
+      href={href}
+      onClick={(event) => void openRef(key, event)}
+      className="cursor-pointer rounded bg-sky-500/15 px-1 py-px font-medium text-sky-300 no-underline hover:bg-sky-500/25"
+    >
+      {children}
+    </a>
+  );
+}
+
 export function Markdown({ text }: { text: string }) {
   // Backwards-compat: render any Jira pages markup (imported/pasted) as markdown too.
   // No-op on native markdown (none of the Jira patterns occur there).
   const md = useMemo(() => jiraToMarkdown(text), [text]);
+  // One counter per render pass, so duplicate headings get stable -2/-3 ids.
+  const headingIds = useMemo(() => new Map<string, number>(), [md]);
   return (
-    <div className="radd-markdown break-words text-[13px] leading-relaxed text-fg">
-      <ReactMarkdown remarkPlugins={[remarkGfm, remarkRaddTokens]} components={components}>
-        {md}
-      </ReactMarkdown>
-    </div>
+    <MarkdownSourceCtx.Provider value={md}>
+      <HeadingIdCtx.Provider value={headingIds}>
+        <div className="radd-markdown break-words text-[13px] leading-relaxed text-fg">
+          <ReactMarkdown remarkPlugins={[remarkGfm, remarkRaddTokens]} components={components}>
+            {md}
+          </ReactMarkdown>
+        </div>
+      </HeadingIdCtx.Provider>
+    </MarkdownSourceCtx.Provider>
   );
 }

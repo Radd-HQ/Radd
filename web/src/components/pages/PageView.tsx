@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, ArchiveRestore, History, Pencil, Trash2 } from "lucide-react";
 import { api, ApiError, errorMessage } from "../../lib/api";
@@ -14,6 +14,7 @@ import type { AiRun } from "../editor/ai";
 import { AiReadMenu } from "../editor/AiReadMenu";
 import { Button } from "../Button";
 import { useConfirm } from "../ConfirmDialog";
+import { PageExtensionCtx } from "../../lib/page-extensions";
 import { PageLinkedItems } from "./PageLinkedItems";
 import { PageHistory } from "./PageHistory";
 
@@ -30,10 +31,14 @@ export function PageView({
   page,
   canWrite,
   canManage,
+  spaceSlug,
 }: {
   page: Page;
   canWrite: boolean;
   canManage: boolean;
+  /** For page-relative extensions (RADD-709) — a `radd:toc` with subpages has
+   *  to build links, and only the route knows the space's URL segment. */
+  spaceSlug?: string;
 }) {
   const queryClient = useQueryClient();
   const { data: users } = useQuery(usersQuery);
@@ -96,7 +101,13 @@ export function PageView({
   const author = users?.find((user) => user.id === page.updated_by);
   const archived = page.archived_at !== null;
 
+  const extensionContext = useMemo(
+    () => ({ pageId: page.id, spaceId: page.space_id, spaceSlug: spaceSlug ?? null }),
+    [page.id, page.space_id, spaceSlug],
+  );
+
   return (
+    <PageExtensionCtx.Provider value={extensionContext}>
     <div className="px-6 py-5">
       {archived && (
         <p className="mb-3 flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
@@ -316,6 +327,7 @@ export function PageView({
       )}
       {confirmDialog}
     </div>
+    </PageExtensionCtx.Provider>
   );
 }
 
