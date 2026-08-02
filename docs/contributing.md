@@ -52,6 +52,11 @@ keeps the module boundaries real:
   `zinc-*` or `indigo-*` class in `web/src` is a review finding.
 - **Tests where they earn their keep** — core invariants many modules depend
   on, not a unit test per endpoint.
+- **The change exists on the tracker first.** Work is filed in the **RADD**
+  project at <https://project.radd-hq.com> — a bug as a `Bug`, a feature as a
+  `Feature`, a spec as an epic with its children — and the commit carries the
+  key: `fix(web): board columns scroll (RADD-412)`. The project's own history
+  is there, five months of it, and the point is to keep it that way.
 
 ## Pull requests
 

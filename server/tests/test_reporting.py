@@ -9,7 +9,7 @@ event id, not the clock, so segment/transition order is still exact.)
 """
 
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -153,3 +153,34 @@ async def test_throughput_counts_items_that_entered_done(db, admin, project):
         db, uuid.uuid4(), date.today() - timedelta(days=1), date.today(), ReportInterval.DAY
     )
     assert all(row.count == 0 for row in empty)
+
+
+async def test_imported_completion_reports_in_its_historical_bucket(db, admin, project):
+    """An import (project.manage) restates `created_at`/`updated_at`; the EVENTS
+    must carry those times too, or every report files the whole import under today."""
+    done = _state(await workflow.list_states(db, project.id), StateCategory.DONE)
+    raised = datetime(2024, 5, 6, 9, 30)
+    closed = datetime(2024, 5, 8, 16, 0)
+
+    item = await items_service.create_item(
+        db,
+        ItemCreate(project_id=project.id, title="imported", created_at=raised),
+        admin,
+    )
+    await items_service.update_item(
+        db, item.id, ItemUpdate(state_id=done.id, updated_at=closed), admin
+    )
+
+    tl = (await timeline.build_item_timelines(db, [item.id]))[item.id]
+    assert [entry.at.date() for entry in tl.done_entries] == [closed.date()]
+
+    rows = await reporting.throughput(
+        db, project.id, raised.date(), closed.date(), ReportInterval.DAY
+    )
+    counted = {row.bucket: row.count for row in rows if row.count}
+    assert counted == {closed.date().isoformat(): 1}
+    # ...and nothing lands in the present, which is where it used to go
+    today = await reporting.throughput(
+        db, project.id, date.today() - timedelta(days=1), date.today(), ReportInterval.DAY
+    )
+    assert all(row.count == 0 for row in today)

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "radd": {
+      "type": "http",
+      "url": "https://project.radd-hq.com/api/v1/mcp",
+      "headers": {
+        "Authorization": "Bearer ${RADD_API_TOKEN}"
+      }
+    }
+  }
+}

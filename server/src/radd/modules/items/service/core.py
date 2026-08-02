@@ -221,8 +221,10 @@ async def update_item(
     # the attribute puts it in the UPDATE's SET clause, which is what suppresses
     # the column's `onupdate=now()` — otherwise a re-import would silently stamp
     # every issue as touched today.
+    occurred_at = None
     if data.updated_at is not None and Permission.PROJECT_MANAGE in permissions:
-        item.updated_at = data.updated_at.replace(tzinfo=None)
+        occurred_at = data.updated_at.replace(tzinfo=None)
+        item.updated_at = occurred_at
 
     await session.flush()
     if item.state_id != old_state_id:
@@ -236,8 +238,13 @@ async def update_item(
             await approvals_service.consume(session, item.id, item.state_id)
     if data.title is not None or data.description is not None:
         await sync_mention_links(session, item)  # text changed → re-derive #[…] backlinks
+    # The EVENT carries the historical time too, not just the row: item history,
+    # the audit log and every report (throughput, CFD, time-in-state) are built
+    # from the event stream, so a restated `updated_at` that left its event
+    # stamped `now()` would file the whole import under today. Mirrors create.
     return await _finish(
-        session, item, project, ItemEvent.UPDATED, actor, ctx, definitions, permissions, before=before
+        session, item, project, ItemEvent.UPDATED, actor, ctx, definitions, permissions,
+        before=before, occurred_at=occurred_at,
     )
 
 

@@ -11,6 +11,47 @@ Self-hosted, AI-native issue tracker + wiki. **Branch `kernel-plugin-platform` (
 3. **Document the connections.** `docs/modules.md` is the map: every new module, event type, or cross-module dependency gets a row/line there in the same change. A new contributor (or future session) must be able to navigate from that file alone.
 4. **Tests only where they earn their keep.** No per-endpoint unit tests. Test core invariants that many modules depend on (custom-field validation, event emission, permission checks when they land). Everything else is verified by running the demo flows.
 5. **Ship small, viewable slices.** Every work session should end with something you can run and see (`scripts/demo.sh`, the API docs, the UI). Prefer many small files/modules over big ones; if a file pushes past ~300 lines, split it. No speculative frameworks.
+6. **The work is tracked in Radd itself.** Every bugfix, feature and plan exists as an item in the **RADD** project on <https://project.radd-hq.com> before it is built — see the section below. Radd is the tracker; a change that only exists in a commit message is untracked work.
+
+## Tracking work on the live instance
+
+`project.radd-hq.com` runs this project. Its **RADD** project is the record: the first
+five months are backfilled from the git history and `docs/specs/`, and everything since
+is filed as it happens.
+
+**What gets an item, and at which level** (the hierarchy is `epic ← issue ← subtask`):
+
+| Work | Item |
+|---|---|
+| A spec, or a wave spanning several specs | **Epic** (type `Epic`), one issue per spec beneath it |
+| A feature, a spec, a self-contained change | **Issue** (type `Feature`/`Story`) |
+| A bug — anything that behaved wrongly | **Issue** or **Subtask**, type `Bug`, priority `high` |
+| A step inside a larger issue (a commit's worth) | **Subtask** (type `Task`) |
+| Docs, refactors, test work | type `Task`, priority `low` |
+
+**The loop.**
+
+1. **Before building**, file the item (or find it) and put it In Progress. A one-line
+   ask ("fix the board scroll") is still an item — small is fine, absent is not.
+2. **Reference the key in the commit**: `fix(web): board columns scroll (RADD-412)`.
+3. **Close it when the work lands**, and record what shipped: a comment naming the
+   commit, or the version if it went out in a release.
+4. **Plans** (a spec, a multi-session wave) are an epic with its children filed up
+   front — the plan lives in the tracker, not only in `PLAN.md`.
+
+**How to reach it.** `.mcp.json` registers Radd's own MCP server (spec 45), so the
+tools are available in-session once a token is exported:
+
+```bash
+export RADD_API_TOKEN=radd_pat_…      # Profile → API tokens on the live instance
+```
+
+Tools: `list_projects`, `search_items` (SLQ), `find_items` (text/meaning), `get_item`,
+`create_item`, `update_item`, `comment_item`, `search_docs`, `get_doc_page`. Without
+the variable the server simply fails to authenticate — nothing else breaks. The same
+token works against the REST API (`Authorization: Bearer …`) when a tool is missing
+something, e.g. `POST /api/v1/items` with `created_at` (import-only, `project.manage`)
+to restate history.
 
 ## Frontend conventions (post-modernization)
 
