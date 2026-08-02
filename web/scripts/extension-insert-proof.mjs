@@ -61,6 +61,45 @@ async function evalInPage(sessionId, expression) {
   return result.value;
 }
 
+/**
+ * Click an element the way a person does: real mouse events at its centre,
+ * dispatched through the browser's input pipeline so HIT-TESTING applies.
+ *
+ * This is the whole reason the proof is written this way. The first version
+ * called `element.click()`, which delivers the event straight to the node and
+ * ignores what is painted on top of it. That passed against a menu sitting
+ * UNDER its own click-away overlay — a real click closed the menu and inserted
+ * nothing, and the proof said "all passed". Element.click() cannot see a
+ * z-index bug; Input.dispatchMouseEvent can.
+ *
+ * Returns what was actually hit, so a mis-targeted click fails loudly rather
+ * than silently doing nothing.
+ */
+async function clickAt(sessionId, selector, match) {
+  const box = await evalInPage(sessionId, `(() => {
+    const nodes = [...document.querySelectorAll(${JSON.stringify(selector)})];
+    const el = ${match ? `nodes.find((n) => (${match.toString()})(n.textContent || ""))` : "nodes[0]"};
+    if (!el) return null;
+    const target = el.closest("button") || el;
+    const r = target.getBoundingClientRect();
+    const x = r.left + r.width / 2;
+    const y = r.top + r.height / 2;
+    // What is actually painted at that point — the hit-test the DOM .click()
+    // method skips.
+    const top = document.elementFromPoint(x, y);
+    return { x, y, hitIsInsideTarget: target.contains(top), hitTag: top ? top.tagName : null,
+             hitClass: top ? String(top.className).slice(0, 60) : null };
+  })()`);
+  if (!box) throw new Error(`clickAt: nothing matched ${selector}`);
+  for (const type of ["mousePressed", "mouseReleased"]) {
+    await send("Input.dispatchMouseEvent", {
+      type, x: box.x, y: box.y, button: "left", clickCount: 1,
+    }, sessionId);
+  }
+  return box;
+}
+
+
 async function main() {
   let version;
   for (let i = 0; i < 40 && !version; i++) {
@@ -139,30 +178,29 @@ async function main() {
   const toolbarButtonPresent = await evalInPage(sessionId,
     `!!document.querySelector("svg.radd-extension-toolbar-icon")`);
 
-  // A bare .click() does NOT open it: Crepe's toolbar items act on mousedown,
-  // so the first version of this proof reported an empty menu against working
-  // code. Fire the whole pointer sequence.
-  await evalInPage(sessionId, `(() => {
-    const b = document.querySelector("svg.radd-extension-toolbar-icon")?.closest("button");
-    if (!b) return;
-    for (const type of ["pointerdown", "mousedown", "mouseup", "click"]) {
-      b.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
-    }
-  })()`);
+  await clickAt(sessionId, "svg.radd-extension-toolbar-icon");
   await sleep(900);
 
-  const menu = await evalInPage(sessionId, `(() => {
+  // Compare against what the SERVER offers rather than a number baked in here —
+  // the registry grows as extensions land, and a hardcoded threshold just goes
+  // stale and starts failing correct code.
+  const menu = await evalInPage(sessionId, `(async () => {
     const items = [...document.querySelectorAll('[role="menu"] [role="menuitem"]')];
-    return { count: items.length, labels: items.map((i) => i.textContent.trim().slice(0, 40)) };
+    const declared = await (await fetch("/api/v1/pages/extensions", {credentials:"include"})).json();
+    return {
+      count: items.length,
+      declared: declared.length,
+      labels: items.map((i) => i.textContent.trim().slice(0, 40)),
+    };
   })()`);
 
   // Pick "Callout" — it has a schema with defaults, so the inserted block must
-  // arrive pre-filled rather than empty.
-  await evalInPage(sessionId, `(() => {
-    const item = [...document.querySelectorAll('[role="menu"] [role="menuitem"]')]
-      .find((i) => i.textContent.includes("Callout"));
-    item && item.click();
-  })()`);
+  // arrive pre-filled rather than empty. Real input, at real coordinates.
+  const picked = await clickAt(
+    sessionId,
+    '[role="menu"] [role="menuitem"]',
+    (t) => t.includes("Callout"),
+  );
   await sleep(900);
 
   // Save, then read the persisted markdown back from the API — the only proof
@@ -179,14 +217,18 @@ async function main() {
   const checks = {
     "entered edit mode": enteredEdit === true,
     "extension toolbar button is present": toolbarButtonPresent === true,
-    "picker lists the registry": menu.count >= 7,
+    "the picker lists exactly what the registry declares":
+      menu.declared > 0 && menu.count === menu.declared,
     "picker shows the Callout entry": menu.labels.some((l) => l.includes("Callout")),
+    // The assertion that would have caught the overlay bug: what is PAINTED at
+    // the click point has to be the menu item itself.
+    "the menu item is what is painted at the click point": picked.hitIsInsideTarget === true,
     "a radd:callout fence was inserted and saved": /```radd:callout/.test(saved || ""),
     "the block arrived pre-filled from the schema defaults": /"kind":\s*"info"/.test(saved || ""),
     "no console errors": consoleErrors.length === 0,
   };
 
-  console.log(JSON.stringify({ menu, saved, consoleErrors }, null, 2));
+  console.log(JSON.stringify({ menu, picked, saved, consoleErrors }, null, 2));
   console.log("");
   let failed = 0;
   for (const [label, ok] of Object.entries(checks)) {

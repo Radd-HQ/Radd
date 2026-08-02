@@ -489,9 +489,7 @@ export function RichEditor({
         createPortal(
           <>
             <div className="fixed inset-0 z-[59]" onMouseDown={() => setExtensionMenu(null)} />
-            <div className="z-[60]">
-              <ExtensionPicker at={extensionMenu} onPick={insertExtension} />
-            </div>
+            <ExtensionPicker at={extensionMenu} onPick={insertExtension} />
           </>,
           document.body,
         )}

@@ -36,7 +36,11 @@ export function ExtensionPicker({
 
   return (
     <div
-      className="fixed z-50 w-72 overflow-hidden rounded-lg border border-strong bg-overlay shadow-modal animate-menu-in"
+      // z-[60] deliberately: the click-away overlay behind it is z-[59]. At
+      // z-50 the overlay sat ON TOP of this menu and swallowed the mousedown,
+      // so a real click closed the menu and inserted nothing — while a
+      // synthesised .click() in the proof bypassed hit-testing and "passed".
+      className="fixed z-[60] w-72 overflow-hidden rounded-lg border border-strong bg-overlay shadow-modal animate-menu-in"
       style={{ left: at.left, top: at.top }}
       role="menu"
     >
