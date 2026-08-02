@@ -112,6 +112,25 @@ class PageLink(Base):
     )
 
 
+class PageLabel(Base):
+    """Page <-> label (RADD-718).
+
+    The association lives HERE, in pages, while the label rows stay the `labels`
+    module's — the same split items uses. A page label and an issue label are the
+    same label on purpose: "runbook" meaning one thing on an issue and another on
+    a page is how a tag vocabulary rots.
+    """
+
+    __tablename__ = "page_labels"
+
+    page_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("pages.id", ondelete="CASCADE"), primary_key=True
+    )
+    label_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("labels.id", ondelete="CASCADE"), primary_key=True, index=True
+    )
+
+
 class ItemPageLink(Base):
     """Issue ↔ doc-page association (both directions surface it)."""
 

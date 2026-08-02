@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.events import service as events
 
-from . import backlinks, core
+from . import backlinks, core, labels as page_labels
 from .core import page_slugify
 from .models import Page, PageSpace, PageVersion
 from .schemas import (
@@ -80,6 +80,9 @@ async def list_pages(
     children: set[uuid.UUID] = {
         row.parent_id for row in rows if row.parent_id is not None and row.id in visible
     }
+    # RADD-718: one query for the whole tree. A query per row is how a 200-page
+    # space becomes slow the moment labels are shown in the rail.
+    label_names = await page_labels.labels_for_pages(session, [row.id for row in rows])
     return sorted(
         (
             PageSummary(
@@ -90,6 +93,7 @@ async def list_pages(
                 position=row.position,
                 has_children=row.id in children,
                 updated_at=row.updated_at,
+                labels=label_names.get(row.id, []),
             )
             for row in rows
             if row.id in visible
@@ -334,8 +338,10 @@ async def page_read(session: AsyncSession, page: Page) -> PageRead:
             break
         trail.append(PageBreadcrumb(id=ancestor.id, title=ancestor.title, slug=ancestor.slug))
         current = ancestor.parent_id
+    label_names = [label.name for label in await page_labels.labels_of(session, page.id)]
     return PageRead(
         id=page.id,
+        labels=label_names,
         space_id=page.space_id,
         parent_id=page.parent_id,
         title=page.title,

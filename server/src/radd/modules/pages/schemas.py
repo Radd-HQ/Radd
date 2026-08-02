@@ -81,6 +81,22 @@ class PageBacklink(BaseModel):
     updated_at: UtcDatetime
 
 
+class PageLabelled(BaseModel):
+    """A page carrying a label (RADD-718), for `radd:label-list`."""
+
+    id: uuid.UUID
+    title: str
+    slug: str
+    space_slug: str
+    updated_at: UtcDatetime
+
+
+class PageLabelsUpdate(BaseModel):
+    """Full replacement — a set has no sensible partial update."""
+
+    labels: list[str] = Field(default_factory=list)
+
+
 class PageExtensionRead(BaseModel):
     """One entry in the editor's insert menu (RADD-709).
 
@@ -107,6 +123,7 @@ class PageSummary(BaseModel):
     position: float
     has_children: bool
     updated_at: UtcDatetime
+    labels: list[str] = Field(default_factory=list)  # RADD-718
 
 
 class PageBreadcrumb(BaseModel):
@@ -136,6 +153,7 @@ class PageRead(BaseModel):
     updated_at: UtcDatetime
     space: PageSpaceRead
     breadcrumb: list[PageBreadcrumb]  # ancestors, root first (excludes the page)
+    labels: list[str] = Field(default_factory=list)  # RADD-718
 
 
 # --- versions ---

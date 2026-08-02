@@ -99,4 +99,21 @@ PAGE_EXTENSIONS: tuple[PageExtensionSpec, ...] = (
             },
         },
     ),
+    PageExtensionSpec(
+        name=PageExtensionName.LABEL_LIST,
+        label="Pages by label",
+        description="Every page carrying a label — an index that maintains itself.",
+        icon="tags",
+        params_schema={
+            "type": "object",
+            "required": ["label"],
+            "properties": {
+                "label": {"type": "string", "description": "The label name."},
+                "space": {
+                    "type": "string",
+                    "description": "Limit to one space slug; omit for every space.",
+                },
+            },
+        },
+    ),
 )

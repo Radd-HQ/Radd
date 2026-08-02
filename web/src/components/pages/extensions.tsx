@@ -8,6 +8,7 @@ import {
   Info,
   Link2,
   ListTree,
+  Tags,
   OctagonAlert,
 } from "lucide-react";
 import { RoutePath } from "../../lib/constants";
@@ -17,7 +18,7 @@ import {
   usePageExtensionContext,
   type PageExtension,
 } from "../../lib/page-extensions";
-import { pageBacklinksQuery, pagesQuery } from "../../lib/queries";
+import { pageBacklinksQuery, pagesByLabelQuery, pagesQuery } from "../../lib/queries";
 import { headingAnchorId, headingsOf } from "../../lib/markdown-outline";
 import type { PageSummary } from "../../lib/types";
 import { Markdown, MarkdownSourceCtx } from "../../lib/markdown";
@@ -196,6 +197,60 @@ export function Backlinks() {
   );
 }
 
+// --- radd:label-list -------------------------------------------------------
+
+/**
+ * Every page carrying a label (RADD-718) — Confluence's "content by label".
+ *
+ * This is how an index page maintains itself: the landing page declares the
+ * label, and any page tagged with it appears without anyone editing a list.
+ */
+function LabelList({ params }: { params: Record<string, unknown> }) {
+  const label = typeof params.label === "string" ? params.label.trim() : "";
+  const space = typeof params.space === "string" ? params.space.trim() : "";
+  const { data, isLoading } = useQuery({
+    ...pagesByLabelQuery(label, space),
+    enabled: Boolean(label),
+  });
+
+  if (!label) {
+    return (
+      <ExtensionCard label="Pages by label">
+        <p className="text-[13px] text-fg-secondary">
+          Set <code className="font-mono">label</code> to the label to list.
+        </p>
+      </ExtensionCard>
+    );
+  }
+  return (
+    <ExtensionCard label={`Pages labelled ${label}`}>
+      {isLoading ? (
+        <p className="text-[13px] text-fg-faint">Loading…</p>
+      ) : !data?.length ? (
+        <p className="text-[13px] text-fg-faint">
+          No pages carry <span className="font-medium">{label}</span>
+          {space ? ` in ${space}` : ""} yet.
+        </p>
+      ) : (
+        <ul className="flex flex-col gap-0.5">
+          {data.map((page) => (
+            <li key={page.id}>
+              <Link
+                to={RoutePath.page}
+                params={{ spaceSlug: page.space_slug, pageSlug: page.slug }}
+                className="flex items-center gap-1 text-[13px] text-accent-text hover:underline"
+              >
+                <Tags size={11} aria-hidden className="shrink-0 text-fg-faint" />
+                {page.title}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </ExtensionCard>
+  );
+}
+
 // --- radd:callout ----------------------------------------------------------
 
 /**
@@ -290,6 +345,12 @@ const EXTENSIONS: PageExtension[] = [
     label: "Include a page",
     description: "Render another page's body inline, live.",
     render: (params) => <IncludedPage params={params} />,
+  },
+  {
+    name: "label-list",
+    label: "Pages by label",
+    description: "Every page carrying a label — an index that maintains itself.",
+    render: (params) => <LabelList params={params} />,
   },
 ];
 

@@ -11,13 +11,15 @@ from radd.modules.auth.deps import CurrentUser
 from radd.modules.items import service as items_service
 from radd.modules.projects import service as projects_service
 
-from . import backlinks, links, search, service, spaces
+from . import backlinks, labels as page_labels, links, search, service, spaces
 from .models import Page
 from .schemas import (
     DocLinkCreate,
     PageLinkedItem,
     PageBacklink,
     PageCreate,
+    PageLabelled,
+    PageLabelsUpdate,
     PageExtensionRead,
     PageRead,
     PageSummary,
@@ -181,6 +183,26 @@ async def unarchive_page(
 
 
 # --- versions ---
+
+
+@router.get("/pages/by-label/{name}", response_model=list[PageLabelled])
+async def pages_by_label(
+    name: str, session: Session, user: CurrentUser, space: str = ""
+) -> list[PageLabelled]:
+    """Every page carrying a label (RADD-718) — the "content by label" pattern
+    that lets an index page maintain itself. Declared before `/pages/{page_id}`
+    so the literal segment is reachable."""
+    await authz.require(session, user, authz.Permission.PAGE_READ)
+    return await page_labels.pages_with_label(session, name, space_slug=space)
+
+
+@router.put("/pages/{page_id}/labels", response_model=list[str])
+async def set_page_labels(
+    page_id: uuid.UUID, data: PageLabelsUpdate, session: Session, user: CurrentUser
+) -> list[str]:
+    await _page_guard(session, user, page_id, authz.Permission.PAGE_WRITE)
+    labels = await page_labels.set_labels(session, page_id, data.labels, user.id)
+    return [label.name for label in labels]
 
 
 @router.get("/pages/{page_id}/backlinks", response_model=list[PageBacklink])

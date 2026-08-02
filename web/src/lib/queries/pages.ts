@@ -6,6 +6,7 @@ import { Entity, entityMeta } from "../cache";
 import {
   ApiPath,
   apiPageBacklinksPath,
+  apiPagesByLabelPath,
   apiPageItemsPath,
   apiPagePath,
   apiPageVersionPath,
@@ -18,6 +19,7 @@ import type {
   PageLinkedItem,
   Page,
   PageBacklink,
+  PageLabelled,
   PageExtensionSpec,
   PageSummary,
   PageSearchResponse,
@@ -54,6 +56,15 @@ export const pageBacklinksQuery = (pageId: string) =>
     queryKey: queryKeys.pageBacklinks(pageId),
     meta: entityMeta(Entity.page),
     queryFn: () => api.get<PageBacklink[]>(apiPageBacklinksPath(pageId)),
+  });
+
+/** Every page carrying a label (RADD-718) — optionally scoped to one space. */
+export const pagesByLabelQuery = (name: string, space = "") =>
+  queryOptions({
+    queryKey: queryKeys.pagesByLabel(name, space),
+    meta: entityMeta(Entity.page),
+    queryFn: () =>
+      api.get<PageLabelled[]>(apiPagesByLabelPath(name), space ? { query: { space } } : undefined),
   });
 
 /** A space's flat page rows — the tree component assembles the hierarchy. */

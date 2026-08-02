@@ -56,6 +56,15 @@ export interface PageBacklink {
   updated_at: string;
 }
 
+/** A page carrying a label (RADD-718), for `radd:label-list`. */
+export interface PageLabelled {
+  id: string;
+  title: string;
+  slug: string;
+  space_slug: string;
+  updated_at: string;
+}
+
 /** Flat tree row from GET /page-spaces/{id}/pages — the client builds the tree. */
 export interface PageSummary {
   id: string;
@@ -65,6 +74,8 @@ export interface PageSummary {
   position: number;
   has_children: boolean;
   updated_at: string;
+  /** RADD-718 — hydrated in one query for the whole tree. */
+  labels: string[];
 }
 
 export interface PageBreadcrumb {
@@ -91,6 +102,8 @@ export interface Page {
   space: PageSpace;
   /** Ancestors, root first (excludes the page itself). */
   breadcrumb: PageBreadcrumb[];
+  /** RADD-718 */
+  labels: string[];
 }
 
 export interface PageCreate {

@@ -16,6 +16,7 @@ import { Button } from "../Button";
 import { useConfirm } from "../ConfirmDialog";
 import { PageExtensionCtx } from "../../lib/page-extensions";
 import { PageBacklinksPanel } from "./PageBacklinksPanel";
+import { PageLabels } from "./PageLabels";
 import { PageLinkedItems } from "./PageLinkedItems";
 import { PageHistory } from "./PageHistory";
 
@@ -191,6 +192,8 @@ export function PageView({
           )}
         </span>
       </div>
+
+      <PageLabels pageId={page.id} labels={page.labels ?? []} canWrite={canWrite} />
 
       {(save.isError && !conflict) || archive.isError || hardDelete.isError ? (
         <p className="mt-2 text-xs text-red-400">

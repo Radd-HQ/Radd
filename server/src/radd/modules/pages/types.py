@@ -52,6 +52,7 @@ class PageExtensionName(StrEnum):
     CALLOUT = "callout"
     BACKLINKS = "backlinks"
     INCLUDE = "include"
+    LABEL_LIST = "label-list"
 
 
 class RestoreKind(StrEnum):

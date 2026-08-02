@@ -226,3 +226,10 @@ export const apiItemWatchersPath = (itemId: string) => `${ApiPath.items}/${itemI
 
 /** GET /pages/{id}/backlinks — what links here (RADD-713). */
 export const apiPageBacklinksPath = (pageId: string) => `/pages/${pageId}/backlinks`;
+
+/** PUT /pages/{id}/labels — full replacement (RADD-718). */
+export const apiPageLabelsPath = (pageId: string) => `/pages/${pageId}/labels`;
+
+/** GET /pages/by-label/{name} — the self-maintaining index (RADD-718). */
+export const apiPagesByLabelPath = (name: string) =>
+  `/pages/by-label/${encodeURIComponent(name)}`;
