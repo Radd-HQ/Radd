@@ -130,8 +130,12 @@ async def embeddings_coverage(session: Session, user: CurrentUser) -> EmbeddingC
     resolved = await registry.resolve_role(session, _AiRole.EMBEDDINGS)
     if resolved is None:
         return EmbeddingCoverage(enabled=False)
+    from .embeddings import embedder as embeddings_embedder
+
     counts = await embeddings_service.coverage(session, model=resolved.model)
-    return EmbeddingCoverage(enabled=True, **counts)
+    return EmbeddingCoverage(
+        enabled=True, last_error=embeddings_embedder.last_error(), **counts
+    )
 
 
 class LocalEmbedInfo(BaseModel):

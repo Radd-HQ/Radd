@@ -133,6 +133,28 @@ async def list_roles(session: AsyncSession) -> list[tuple[AiModelRole, AiProvide
     return [(role, provider) for role, provider in result.all()]
 
 
+def _check_local_model(model: str) -> None:
+    """Refuse a model the built-in backend cannot load (RADD-723).
+
+    `BAA/bge-small-en-v1.5` — one character short of `BAAI/…` — was accepted,
+    and then raised on EVERY embedder iteration for the life of the instance
+    while every dashboard read healthy. The supported list is already published
+    for the admin UI; checking against it one step earlier turns a permanent
+    silent outage into a 422 naming the valid models.
+    """
+    from . import localembed
+
+    if not model or not localembed.available():
+        return  # the extra is absent; embed_texts raises a clear error of its own
+    supported = {entry["model"] for entry in localembed.supported_models()}
+    if model not in supported:
+        raise AiConfigError(
+            f"the built-in backend has no model {model!r}. Available: "
+            + ", ".join(sorted(supported)[:8])
+            + ("…" if len(supported) > 8 else "")
+        )
+
+
 async def set_role(session: AsyncSession, role: AiRole, data: AiRoleAssign) -> AiModelRole:
     provider = await get_provider(session, data.provider_id)
     if role is AiRole.EMBEDDINGS and provider.wire_shape == AiWireShape.ANTHROPIC.value:
@@ -144,6 +166,8 @@ async def set_role(session: AsyncSession, role: AiRole, data: AiRoleAssign) -> A
         raise AiConfigError(
             "the built-in local backend only embeds — chat and vision need a real endpoint"
         )
+    if provider.wire_shape == AiWireShape.LOCAL.value:
+        _check_local_model(data.model or provider.default_model)
     row = await session.get(AiModelRole, role.value)
     if row is None:
         row = AiModelRole(role=role.value, provider_id=provider.id, model=data.model)

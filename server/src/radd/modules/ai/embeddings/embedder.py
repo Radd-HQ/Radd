@@ -95,6 +95,16 @@ def content_hash(text_value: str) -> str:
     return hashlib.sha256(text_value.encode()).hexdigest()
 
 
+#: Why the last embedder iteration failed, or None (RADD-723). Module state
+#: rather than a table: it describes THIS process's most recent attempt, and a
+#: worker restart should forget it — a stale "it broke" is worse than silence.
+_last_error: str | None = None
+
+
+def last_error() -> str | None:
+    return _last_error
+
+
 async def run_once() -> int:
     """One tick: quick gates, one consumer batch, else one sweep batch."""
     async with SessionLocal() as session:
@@ -106,15 +116,26 @@ async def run_once() -> int:
     if resolved is None:
         return 0
 
-    consumed = await runner.run_head_seeded(
-        CONSUMER_NAME,
-        batch_size=settings.ai_embed_batch,
-        plan=_plan,
-        deliver=_deliver,
-    )
-    if consumed:
-        return consumed
-    return await _sweep()
+    # RADD-723: remember why an iteration failed and clear it on the next
+    # success, so the AI settings page can say WHY coverage is zero. The caller
+    # (the task loop) still owns logging and retry; this only records.
+    global _last_error
+    try:
+        consumed = await runner.run_head_seeded(
+            CONSUMER_NAME,
+            batch_size=settings.ai_embed_batch,
+            plan=_plan,
+            deliver=_deliver,
+        )
+        if consumed:
+            _last_error = None
+            return consumed
+        swept = await _sweep()
+    except Exception as exc:
+        _last_error = f"{type(exc).__name__}: {exc}"
+        raise
+    _last_error = None
+    return swept
 
 
 async def _plan(session: AsyncSession, event: Event) -> EmbedTask | None:

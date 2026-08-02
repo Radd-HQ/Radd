@@ -12,6 +12,7 @@ cleans up explicitly.
 """
 
 import uuid
+from pathlib import Path
 
 import pytest
 from sqlalchemy import text
@@ -206,6 +207,67 @@ async def test_seed_from_env_creates_provider_and_chat_role_once(monkeypatch):
             await session.execute(text("DELETE FROM ai_model_roles"))
             await session.execute(text("DELETE FROM ai_providers"))
             await session.commit()
+
+
+# --- the built-in backend's model name is checked at WRITE time (RADD-723) ---
+
+
+async def test_a_misspelled_local_model_is_refused_with_the_valid_names(db):
+    """`BAA/bge-small-en-v1.5` (one character short of `BAAI/…`) was accepted on
+    the live instance and then raised on EVERY embedder iteration for the life of
+    the instance, while every dashboard read healthy. Catching it here is the
+    difference between a 422 and a permanent silent outage."""
+    from radd.modules.ai import localembed
+
+    if not localembed.available():
+        pytest.skip("localembed extra not installed")
+    provider = await registry.create_provider(
+        db, _create(wire_shape=AiWireShape.LOCAL, base_url="", api_key="", default_model="")
+    )
+    with pytest.raises(AiConfigError) as info:
+        await registry.set_role(
+            db,
+            AiRole.EMBEDDINGS,
+            AiRoleAssign(provider_id=provider.id, model="BAA/bge-small-en-v1.5"),
+        )
+    # The refusal must NAME the alternatives; "invalid model" alone would leave
+    # the admin exactly as stuck as the silent failure did.
+    assert "BAAI/bge-small-en-v1.5" in str(info.value)
+
+
+async def test_a_supported_local_model_is_accepted(db):
+    from radd.modules.ai import localembed
+
+    if not localembed.available():
+        pytest.skip("localembed extra not installed")
+    provider = await registry.create_provider(
+        db, _create(wire_shape=AiWireShape.LOCAL, base_url="", api_key="", default_model="")
+    )
+    row = await registry.set_role(
+        db,
+        AiRole.EMBEDDINGS,
+        AiRoleAssign(provider_id=provider.id, model="BAAI/bge-small-en-v1.5"),
+    )
+    assert row.model == "BAAI/bge-small-en-v1.5"
+
+
+def test_the_local_embed_cache_never_hands_back_an_unwritable_path(monkeypatch, tmp_path):
+    """A model cache is an optimisation. The shipped image defaulted it to a
+    RELATIVE path the unprivileged user could not create, which turned it into a
+    crash loop (RADD-722) — it must degrade to a temp dir instead."""
+    from radd.modules.ai import localembed
+
+    monkeypatch.setattr(settings, "ai_local_embed_cache", str(tmp_path / "nested" / "models"))
+    resolved = localembed.cache_dir()
+    assert (tmp_path / "nested" / "models").is_dir()  # created, not merely returned
+
+    unwritable = tmp_path / "locked"
+    unwritable.mkdir()
+    unwritable.chmod(0o500)
+    monkeypatch.setattr(settings, "ai_local_embed_cache", str(unwritable / "models"))
+    fallback = localembed.cache_dir()
+    assert fallback != resolved and Path(fallback).is_dir()
+    unwritable.chmod(0o700)  # so tmp_path cleanup can remove it
 
 
 async def test_seed_from_env_is_inert_without_configuration(monkeypatch):
