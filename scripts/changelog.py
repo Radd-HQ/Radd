@@ -74,6 +74,11 @@ class Entry:
     sha: str
     title: str = ""
     category: str = "Uncategorized"
+    #: Extra facts the tracker knows and a commit subject cannot say (RADD-725).
+    issue_type: str = ""
+    labels: tuple[str, ...] = ()
+    points: float | None = None
+    summary: str = ""  # the issue's opening line, trimmed
 
     def text(self) -> str:
         """What to print after the key link. Falls back to the commit subject
@@ -111,6 +116,55 @@ def categorize(issue_type: str, labels: list[str]) -> str:
     if kind in {"task", "chore"}:
         return "Chore"
     return "Uncategorized"
+
+
+#: How much of an issue's body to carry into the notes. Long enough for the
+#: "what changed and why" sentence these bodies open with, short enough that a
+#: release page stays scannable.
+SUMMARY_CHARS = 320
+
+#: Opening labels the body template uses; stripped so the summary starts at the
+#: actual claim (see _lead).
+LEAD_LABELS = (
+    "what is wrong.",
+    "what is wrong:",
+    "what is wanted.",
+    "what is wanted:",
+    "what changes.",
+    "what changes:",
+    "what is missing.",
+    "what is missing:",
+)
+
+
+def _lead(description: str) -> str:
+    """The issue's opening statement, as one line.
+
+    The house style opens a body with **What is wrong** / **What is wanted**
+    followed by the actual claim, so the first non-heading sentence is the most
+    informative line available — far better than a commit subject, which is a
+    label rather than an explanation.
+    """
+    for block in description.split("\n\n"):
+        text = " ".join(block.split())
+        if not text:
+            continue
+        # Skip a lone bold heading; take the paragraph that carries the point.
+        stripped = text.strip("*_ ")
+        if stripped.lower().rstrip(".:") in {"what is wrong", "what is wanted", "what changes"}:
+            continue
+        text = text.replace("**", "")
+        # The house style opens with a bold label on the SAME line as the claim
+        # ("**What is wrong.** The role was set to…"). The label is structure,
+        # not information, once the entry is already under a category heading.
+        for label in LEAD_LABELS:
+            if text.lower().startswith(label):
+                text = text[len(label) :].lstrip(" .:—-")
+                break
+        if len(text) > SUMMARY_CHARS:
+            text = text[: SUMMARY_CHARS].rsplit(" ", 1)[0] + "…"
+        return text
+    return ""
 
 
 def git(*args: str) -> str:
@@ -167,29 +221,64 @@ def enrich(entries: list[Entry], base_url: str, token: str) -> None:
         if not item:
             continue
         entry.title = item.get("title", "")
-        entry.category = categorize(
-            (item.get("type") or {}).get("name", ""), item.get("labels") or []
-        )
+        entry.issue_type = (item.get("type") or {}).get("name", "")
+        entry.labels = tuple(item.get("labels") or ())
+        entry.points = item.get("estimate_points")
+        entry.summary = _lead(item.get("description") or "")
+        entry.category = categorize(entry.issue_type, list(entry.labels))
 
 
-def render_markdown(log: Changelog, base_url: str) -> str:
-    lines = [f"## {log.version}", ""]
+def render_markdown(log: Changelog, base_url: str, repo_url: str = "") -> str:
+    """The release body. Each entry carries what the TRACKER knows — the issue's
+    own opening statement, its labels, its points — because a commit subject is
+    a label and the issue is the explanation (RADD-725)."""
     grouped = log.by_category()
+    counted = sum(len(v) for v in grouped.values())
+    lines = [f"## {log.version}", ""]
     if not grouped:
         lines.append("_No commits in this range._")
         return "\n".join(lines)
+
+    lines.append(_headline(log, grouped, counted))
+    lines.append("")
     for category, entries in grouped.items():
         lines.append(f"### {category}")
         lines.append("")
         for entry in entries:
-            text = entry.text()
-            if entry.key:
-                lines.append(f"- [{entry.key}]({base_url}/issues/{entry.key}) {text}")
-            else:
-                lines.append(f"- {text} (`{entry.sha}`)")
+            lines.extend(_entry_lines(entry, base_url, repo_url))
         lines.append("")
     lines.append(f"_Changes from {log.previous} to {log.version}._")
     return "\n".join(lines)
+
+
+def _headline(log: Changelog, grouped: dict, counted: int) -> str:
+    """One sentence of shape before the detail: how much, and of what."""
+    parts = [f"**{counted} change{'s' if counted != 1 else ''}**"]
+    parts.append(", ".join(f"{len(v)} {k.lower()}" for k, v in grouped.items()))
+    points = sum(e.points or 0 for entries in grouped.values() for e in entries)
+    if points:
+        parts.append(f"{points:g} points")
+    return " · ".join(parts) + "."
+
+
+def _entry_lines(entry: Entry, base_url: str, repo_url: str) -> list[str]:
+    text = entry.text()
+    head = (
+        f"- [{entry.key}]({base_url}/issues/{entry.key}) **{text}**"
+        if entry.key
+        else f"- **{text}**"
+    )
+    meta = []
+    if entry.labels:
+        meta.append(" ".join(f"`{label}`" for label in sorted(entry.labels)))
+    if entry.points:
+        meta.append(f"{entry.points:g} pts")
+    commit = f"[`{entry.sha}`]({repo_url}/commit/{entry.sha})" if repo_url else f"`{entry.sha}`"
+    meta.append(commit)
+    lines = [head, f"  <sub>{' · '.join(meta)}</sub>"]
+    if entry.summary:
+        lines.append(f"  {entry.summary}")
+    return lines
 
 
 def main() -> int:
@@ -199,6 +288,12 @@ def main() -> int:
     parser.add_argument("--format", choices=("markdown", "json"), default="markdown")
     parser.add_argument("--base-url", default=os.environ.get("RADD_BASE_URL", DEFAULT_BASE_URL))
     parser.add_argument("--token", default=os.environ.get("RADD_API_TOKEN", ""))
+    parser.add_argument(
+        "--repo-url",
+        default=os.environ.get("FORGEJO_BASE_URL", "https://git.radd-hq.com").rstrip("/")
+        + "/"
+        + os.environ.get("FORGEJO_REPO", "Radd/Radd"),
+    )
     args = parser.parse_args()
 
     tag = args.to or git("describe", "--tags", "--abbrev=0")
@@ -224,7 +319,7 @@ def main() -> int:
             )
         )
     else:
-        print(render_markdown(log, args.base_url.rstrip("/")))
+        print(render_markdown(log, args.base_url.rstrip("/"), args.repo_url))
     return 0
 
 

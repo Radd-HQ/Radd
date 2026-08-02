@@ -173,7 +173,7 @@ def main() -> int:
     previous = args.from_ or previous_tag(tag)
     log = Changelog(version=tag, previous=previous, entries=commits(previous, tag))
     enrich(log.entries, radd_base, radd_token)
-    markdown = render_markdown(log, radd_base)
+    markdown = render_markdown(log, radd_base, f"{forgejo_base}/{forgejo_repo}")
 
     if args.dry_run:
         print(markdown)
