@@ -189,6 +189,11 @@ class Settings(BaseSettings):
     # degrades from an enum to a plain string — a 300-entry enum costs the agent
     # more context than the precision buys it.
     mcp_project_enum_max: int = 25
+    # RADD-740: how often the tools/list_changed stream re-checks the caller's
+    # catalog, and how often it emits a keepalive comment so proxies do not drop
+    # an idle connection. Seconds.
+    mcp_catalog_poll_seconds: float = 15.0
+    mcp_stream_keepalive_seconds: float = 25.0
 
     # Forgejo/Gitea connector (see radd/modules/forgejo). Spec 111 moved hosts into
     # the database (`forgejo_connections`), so these SEED one connection on first

@@ -374,3 +374,48 @@ async def test_a_colliding_name_cannot_shadow_a_builtin(registry_tool):
     assert registry_tool.name not in {
         t["name"] for t in registry_catalog(frozenset({registry_tool.name}))
     }
+
+
+# --- RADD-740: the fingerprint the change-stream watches -----------------------
+
+
+async def test_the_fingerprint_differs_between_principals(db):
+    """It has to be per-CALLER, not per-deploy. Spec 114 makes the catalog a
+    function of the key, so a global digest would tell a scoped agent nothing
+    changed when its own scopes were widened."""
+    from radd.modules.mcp.catalog import catalog_fingerprint
+
+    admin = await _user(db, InstanceRole.ADMIN)
+    member = await _user(db, InstanceRole.MEMBER)
+    assert await catalog_fingerprint(db, admin) != await catalog_fingerprint(db, member)
+
+
+async def test_the_fingerprint_is_stable_when_nothing_changed(db):
+    from radd.modules.mcp.catalog import catalog_fingerprint
+
+    admin = await _user(db, InstanceRole.ADMIN)
+    assert await catalog_fingerprint(db, admin) == await catalog_fingerprint(db, admin)
+
+
+async def test_mounting_a_plugin_tool_moves_the_fingerprint(db):
+    """The reason the stream polls a digest rather than subscribing to events:
+    a plugin mounting is not an event this process would otherwise notice."""
+    from radd.kernel.registry import registries
+    from radd.kernel.specs import McpToolSpec
+    from radd.modules.mcp.catalog import catalog_fingerprint
+
+    admin = await _user(db, InstanceRole.ADMIN)
+    before = await catalog_fingerprint(db, admin)
+
+    async def _handler(session, actor, args):
+        return {}
+
+    registries.mcp_tools["radd740_probe"] = McpToolSpec(
+        name="radd740_probe", description="probe", input_schema={"type": "object"},
+        handler=_handler,
+    )
+    try:
+        assert await catalog_fingerprint(db, admin) != before
+    finally:
+        registries.mcp_tools.pop("radd740_probe", None)
+    assert await catalog_fingerprint(db, admin) == before

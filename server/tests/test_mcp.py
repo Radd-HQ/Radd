@@ -144,7 +144,10 @@ async def test_initialize_result_shape():
         None, None, JsonRpcRequest(method=McpMethod.INITIALIZE, id=1)
     )
     assert result["protocolVersion"] == MCP_PROTOCOL_VERSION
-    assert result["capabilities"] == {"tools": {}}
+    # RADD-740: listChanged is TRUE and honest — GET /mcp is the channel. It was
+    # `{}`, which told every client the tool list was fixed for the life of the
+    # connection while spec 114 made the catalog a function of the caller.
+    assert result["capabilities"] == {"tools": {"listChanged": True}}
     assert result["serverInfo"]["name"] == "radd"
     assert result["serverInfo"]["version"]
 

@@ -7,6 +7,8 @@ automatically. Doc tools are appended only when the pages module is live
 (feature-detected in pages_bridge).
 """
 
+import hashlib
+import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -411,6 +413,19 @@ def registry_catalog(builtin_names: frozenset[str]) -> list[dict[str, Any]]:
         for spec in registries.mcp_tools.values()
         if spec.name not in builtin_names
     ]
+
+
+async def catalog_fingerprint(session: AsyncSession, user: Any) -> str:
+    """A short digest of the catalog THIS principal can see (RADD-740).
+
+    Covers every reason the surface can move — a deploy adding a tool, a plugin
+    mounting or unmounting, and the caller's own scopes changing — because it is
+    computed from the finished, already-filtered catalog rather than from a
+    counter that each mutation site would have to remember to bump.
+    """
+    catalog = await live_catalog(session, user)
+    canonical = json.dumps(catalog, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode()).hexdigest()[:16]
 
 
 async def live_catalog(session: AsyncSession, user: Any = None) -> list[dict[str, Any]]:

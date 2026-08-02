@@ -39,6 +39,7 @@ class McpMethod(StrEnum):
 
     INITIALIZE = "initialize"
     INITIALIZED = "notifications/initialized"
+    TOOLS_LIST_CHANGED = "notifications/tools/list_changed"  # RADD-740 (server -> client)
     PING = "ping"
     TOOLS_LIST = "tools/list"
     TOOLS_CALL = "tools/call"
@@ -85,3 +86,11 @@ WORKLOG_WINDOW_DAYS = 30  # spec 114: list_worklogs default window
 PAGE_TOOLS = frozenset({McpTool.GET_PAGE, McpTool.SEARCH_PAGES})
 PAGES_MODULE_PATH = "radd.modules.pages"
 
+
+#: Same headers the AI streams use: no buffering anywhere between here and the
+#: client, or a notification sits in a proxy until the next byte.
+SSE_HEADERS = {
+    "Cache-Control": "no-cache, no-transform",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no",
+}

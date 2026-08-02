@@ -16,21 +16,23 @@ Layering:
   mutation is not committed by the request teardown.
 """
 
+import asyncio
 import json
+from collections.abc import AsyncIterator
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd import __version__
 from radd.config import settings
-from radd.db import get_session
+from radd.db import SessionLocal, get_session
 from radd.exceptions import ForbiddenError, RaddError, UnauthorizedError
 from radd.modules.auth.deps import OptionalUser
 from radd.modules.auth.models import User
 
-from . import tools
+from . import catalog, tools
 from .protocol import JsonRpcError, JsonRpcRequest, error_envelope, parse_request, result_envelope
 from .types import (
     HTTP_ACCEPTED,
@@ -52,11 +54,74 @@ _TOOL_ERROR_TYPES = (RaddError, ValueError)
 
 
 def _initialize_result() -> dict[str, Any]:
+    """RADD-740: `listChanged` is TRUE, and it is honest — `GET /mcp` below is
+    the channel the notification travels down.
+
+    Before this it was `{}`, which told every client the tool list was fixed for
+    the life of the connection. Spec 114 made that false by construction: the
+    catalog is a function of the CALLER, and it also moves when a plugin mounts
+    or unmounts and on any deploy that adds a tool. A client that connected
+    before a deploy went on offering the old, smaller surface, and the agent on
+    the other end concluded the missing tools did not exist.
+    """
     return {
         "protocolVersion": MCP_PROTOCOL_VERSION,
-        "capabilities": {"tools": {}},
+        "capabilities": {"tools": {"listChanged": True}},
         "serverInfo": {"name": MCP_SERVER_NAME, "version": __version__},
     }
+
+
+async def _catalog_change_stream(user: User) -> AsyncIterator[str]:
+    """Emit `notifications/tools/list_changed` whenever this principal's catalog
+    stops matching what they were last shown.
+
+    Polling a FINGERPRINT rather than subscribing to mutation events is the
+    deliberate choice. The surface moves for three unrelated reasons — a deploy,
+    a plugin mounting, the caller's own scopes changing — and only the last is
+    even an event this process sees. Re-deriving the finished, already-filtered
+    catalog covers all three uniformly, and cannot drift the way a counter that
+    every mutation site must remember to bump would.
+
+    Each tick opens its OWN session: this generator outlives the request's, and
+    holding one open for the life of a long-lived stream would pin a connection
+    per connected agent.
+    """
+    last: str | None = None
+    idle = 0.0
+    while True:
+        async with SessionLocal() as session:
+            current = await catalog.catalog_fingerprint(session, user)
+        if last is None:
+            last = current
+        elif current != last:
+            last = current
+            idle = 0.0
+            yield f"data: {json.dumps({'jsonrpc': '2.0', 'method': McpMethod.TOOLS_LIST_CHANGED.value})}\n\n"
+        if idle >= settings.mcp_stream_keepalive_seconds:
+            idle = 0.0
+            yield ": keepalive\n\n"  # a comment frame; proxies drop idle streams
+        await asyncio.sleep(settings.mcp_catalog_poll_seconds)
+        idle += settings.mcp_catalog_poll_seconds
+
+
+@router.get("")
+async def mcp_stream(user: OptionalUser) -> Response:
+    """The server->client half of Streamable HTTP (RADD-740).
+
+    The transport was POST-only, so there was nowhere to push a notification —
+    which is why `listChanged` had to be false. A client that opens this stream
+    is told when its tool list changes and can re-issue `tools/list`; a client
+    that never opens it loses nothing it had before.
+    """
+    if not settings.mcp_enabled:
+        raise ForbiddenError("MCP server is disabled (RADD_MCP_ENABLED=false)")
+    if user is None:
+        raise UnauthorizedError(
+            "MCP requires a personal access token: Authorization: Bearer radd_pat_…"
+        )
+    return StreamingResponse(
+        _catalog_change_stream(user), media_type="text/event-stream", headers=SSE_HEADERS
+    )
 
 
 async def _tools_call(session: AsyncSession, user: User, params: dict[str, Any]) -> dict[str, Any]:
