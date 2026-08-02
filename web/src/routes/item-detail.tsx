@@ -36,7 +36,8 @@ import { LazyRichEditor as RichEditor } from "../components/editor/LazyRichEdito
 import { useAttachmentUploader } from "../lib/useAttachmentUploader";
 import { attachmentUrl } from "../lib/constants";
 import { ActivityPanel } from "../components/items/ActivityPanel";
-import { EpicProgressBlock, useRollupBatch } from "../components/items/RollupBar";
+import { useRollupBatch } from "../components/items/RollupBar";
+import { ChildrenSection } from "../components/items/ChildrenSection";
 import { CollapsibleCard } from "../components/CollapsibleCard";
 import { DependenciesSection, dependencyLinkCount } from "../components/items/DependenciesSection";
 import { MentionsSection } from "../components/items/MentionsSection";
@@ -100,9 +101,12 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
   const navigate = useNavigate();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const archived = Boolean(item.archived_at);
-  // Epic progress (spec 76): the rollup batch for just this item, epics only.
+  // Epic progress (spec 76): the rollup batch for just this item. Fetched for
+  // ANY item that has children, not only epics — the subtask checklist shows
+  // "2/5 done" and without the rollup it could only ever say 0 (RADD-660).
   const isEpic = item.kind === ItemKind.epic;
-  const rollupByItem = useRollupBatch([item.id], isEpic);
+  const hasChildren = (item.child_count ?? 0) > 0;
+  const rollupByItem = useRollupBatch([item.id], isEpic || hasChildren);
   const pointsEnabled = usePointsEnabled(project.id);
 
   // Local drafts (seeded per item via the `key` on ItemDetailBody).
@@ -425,15 +429,18 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
             <AttachmentsSection item={item} canEdit={canEditItem} />
             </section>
 
-            {/* Epic progress (spec 76): rollup over ALL descendants — sits
-                above the children/dependency lists on epic-kind items. */}
-            {isEpic && (
-              <section className="rounded-xl border border-subtle bg-surface p-4 shadow-lift">
-                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-                  Epic progress
-                </h3>
-                <EpicProgressBlock rollup={rollupByItem?.[item.id]} showPoints={pointsEnabled} />
-              </section>
+            {/* Epic progress (spec 76) is now the HEADER of an expandable list
+                (RADD-655): the bar answers "how much is left", and one click
+                answers "which items" — previously that meant leaving the page
+                and filtering a board by parent. Subtask children render as a
+                checklist instead of rows (RADD-660). */}
+            {item.kind !== ItemKind.subtask && (
+              <ChildrenSection
+                item={item}
+                project={project}
+                rollup={rollupByItem?.[item.id]}
+                showPoints={pointsEnabled}
+              />
             )}
 
             {/* Reference material, not first-glance info: collapsed cards with

@@ -98,3 +98,15 @@ export const attachmentsQuery = (target: AttachmentTarget) =>
       }),
     meta: entityMeta(Entity.attachment),
   });
+
+/**
+ * One item's DIRECT children (RADD-655): an epic's issues, or an issue's
+ * subtasks. Scoped by the same RBAC every other item read uses — the filter is
+ * `parent_id`, which the items list already supports.
+ */
+export const childItemsQuery = (parentId: string) =>
+  queryOptions({
+    queryKey: queryKeys.childItems(parentId),
+    meta: entityMeta(Entity.item),
+    queryFn: () => api.get<Item[]>(ApiPath.items, { query: { parent_id: parentId } }),
+  });

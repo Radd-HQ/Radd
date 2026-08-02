@@ -108,6 +108,7 @@ export const queryKeys = {
   attachments: (entityType: string, entityId: string) =>
     ["attachments", { entityType, entityId }] as const,
   cannedResponses: ["cannedResponses"] as const,
+  childItems: (parentId: string) => ["items", "children", parentId] as const,
   forgejoConnections: ["forgejoConnections"] as const,
   forgejoRepos: ["forgejoRepos"] as const,
   serviceAccounts: ["serviceAccounts"] as const,
