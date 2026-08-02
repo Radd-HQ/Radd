@@ -27,10 +27,16 @@ logger = logging.getLogger(__name__)
 
 CONSUMER_NAME = "attachments.gc"
 
-_PARENT_DELETES = {
-    "item.deleted": AttachmentParentType.ITEM.value,
-    "page.deleted": AttachmentParentType.PAGE.value,
-}
+def _parent_deletes() -> dict[str, str]:
+    """{event type -> entity type}, live from the binding registry (RADD-744).
+
+    This was a hardcoded dict, which meant a parent registered by a PLUGIN — the
+    seam this registry exists for — got no cleanup, and its bytes stayed on the
+    storage host forever with nothing pointing at them.
+    """
+    from .parents import bindings
+
+    return {binding.deleted_event: binding.entity_type for binding in bindings()}
 
 
 async def run_once() -> int:
@@ -44,7 +50,7 @@ async def _plan(
 ) -> list[tuple[uuid.UUID, uuid.UUID, str]] | None:
     """Collect (attachment_id, host_id, storage_name), delete rows + grants in
     the planning transaction (committed with the cursor); bytes go post-commit."""
-    entity_type = _PARENT_DELETES.get(event.event_type)
+    entity_type = _parent_deletes().get(event.event_type)
     if entity_type is None:
         return None
     try:

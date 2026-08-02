@@ -32,6 +32,18 @@ class ParentBinding:
     require_write: Guard  # upload + delete-own
     require_admin: Guard  # delete anyone's
     project_id_of: ProjectOf  # feeds routing context + ACL SubjectContext; None = global
+    #: The event emitted when a parent of this kind is destroyed (RADD-744).
+    #:
+    #: The polymorphic parent has no FK, so `gc.py` is what collects the rows AND
+    #: THE BYTES. It used to decide from a hardcoded map, which meant a parent
+    #: registered by a PLUGIN — the seam this registry exists for — got no
+    #: cleanup at all, and its files sat on a storage host forever with nothing
+    #: pointing at them.
+    #:
+    #: Required, not defaulted: `""` would reintroduce the same bug in a quieter
+    #: form, a binding that looks complete and silently leaks. Failing loudly at
+    #: import is the better failure.
+    deleted_event: str
 
 
 _BINDINGS: dict[str, ParentBinding] = {}
@@ -39,6 +51,11 @@ _BINDINGS: dict[str, ParentBinding] = {}
 
 def register_parent(binding: ParentBinding) -> None:
     _BINDINGS[binding.entity_type] = binding
+
+
+def bindings() -> list[ParentBinding]:
+    """Every registered parent — the GC builds its event map from this."""
+    return list(_BINDINGS.values())
 
 
 def binding_for(entity_type: str) -> ParentBinding:
@@ -79,6 +96,7 @@ async def _item_project_id(session: AsyncSession, item_id: uuid.UUID) -> uuid.UU
 register_parent(
     ParentBinding(
         entity_type=AttachmentParentType.ITEM.value,
+        deleted_event="item.deleted",
         require_read=_item_read,
         require_write=_item_write,
         require_admin=_item_admin,

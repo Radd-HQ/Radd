@@ -168,3 +168,30 @@ async def test_item_binding_project_id_feeds_routing_context(db, admin, host):
     doc_binding = parents.binding_for(AttachmentParentType.PAGE.value)
     page = await _page(db, admin)
     assert await doc_binding.project_id_of(db, page.id) is None
+
+
+# --- RADD-744: the GC's parent map comes from the registry --------------------
+
+
+def test_every_attachment_parent_declares_how_it_dies():
+    """The polymorphic parent has no FK, so `gc.py` is what removes the rows AND
+    THE BYTES. It used to decide from a hardcoded dict, which meant a parent
+    registered by a PLUGIN — the seam this registry exists for — got no cleanup,
+    and its files stayed on a storage host forever with nothing pointing at
+    them. A binding with no delete event now fails the build instead."""
+    import radd.modules.pages  # noqa: F401 — registers the `page` binding
+    from radd.modules.attachments.parents import bindings
+
+    registered = bindings()
+    assert registered, "no attachment parents registered at all"
+    for binding in registered:
+        assert binding.deleted_event, f"{binding.entity_type} declares no delete event"
+        assert binding.deleted_event.endswith(".deleted")
+
+
+def test_the_gc_map_covers_every_registered_parent():
+    import radd.modules.pages  # noqa: F401
+    from radd.modules.attachments.gc import _parent_deletes
+    from radd.modules.attachments.parents import bindings
+
+    assert set(_parent_deletes().values()) == {b.entity_type for b in bindings()}

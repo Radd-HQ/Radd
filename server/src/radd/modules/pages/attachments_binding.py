@@ -18,6 +18,8 @@ from radd.modules.attachments import parents
 from radd.modules.attachments.types import AttachmentParentType
 from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
+
+from .types import PageEvent
 from radd.modules.auth.models import User
 
 from . import service
@@ -45,6 +47,7 @@ async def _no_project(session: AsyncSession, page_id: uuid.UUID) -> uuid.UUID | 
 parents.register_parent(
     parents.ParentBinding(
         entity_type=AttachmentParentType.PAGE.value,
+        deleted_event=PageEvent.PAGE_DELETED.value,
         require_read=_page_read,
         require_write=_page_write,
         require_admin=_page_admin,
