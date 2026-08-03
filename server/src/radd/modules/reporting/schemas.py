@@ -34,11 +34,37 @@ class CycleBrief(BaseModel):
     name: str
 
 
+class ReportScope(BaseModel):
+    """Which projects a CROSS-PROJECT figure was actually computed over (RADD-789).
+
+    A filtered LIST is visibly shorter. A filtered AVERAGE is just a different
+    number, with nothing on the page saying so — two people looking at the same
+    dashboard would read different velocities and have no way to tell why. So the
+    figure carries its own scope and the header states it.
+
+    `covered` is what the actor may read; `total` is how many projects the report
+    nominally spans. Equal means the reader is seeing everything, and the UI says
+    nothing at all — a label on every report would be noise that stops being read.
+    """
+
+    covered: list[str]  # project KEYS, sorted — what the number was computed from
+    total: int  # projects on the instance
+
+    @property
+    def partial(self) -> bool:
+        return len(self.covered) < self.total
+
+
 class VelocityRow(BaseModel):
     # int for measure=count (exact pre-70 shape); a one-decimal float point sum
     # for measure=points (spec 70).
     cycle: CycleBrief
     completed: int | float  # items (or points) that entered done while assigned
+
+
+class VelocityReport(BaseModel):
+    rows: list[VelocityRow]
+    scope: ReportScope
 
 
 class CycleWindow(CycleBrief):
@@ -56,6 +82,7 @@ class BurnupPoint(BaseModel):
 class BurnupSeries(BaseModel):
     cycle: CycleWindow
     series: list[BurnupPoint]
+    scope: ReportScope
 
 
 class SlaReportBucket(BaseModel):
@@ -77,3 +104,8 @@ class SlaReportBucket(BaseModel):
     avg_resolution_seconds: float | None
     csat_avg: float | None  # mean rating of responses landing in the week (spec 65)
     csat_count: int  # responses landing in the week
+
+
+class SlaReport(BaseModel):
+    buckets: list[SlaReportBucket]
+    scope: ReportScope

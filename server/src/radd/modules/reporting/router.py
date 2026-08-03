@@ -16,10 +16,10 @@ from . import service
 from .schemas import (
     BurnupSeries,
     CumulativeFlowBucket,
-    SlaReportBucket,
+    SlaReport,
     ThroughputBucket,
     TimeInStateRow,
-    VelocityRow,
+    VelocityReport,
 )
 from .service import DEFAULT_WINDOW_DAYS, SLA_REPORT_DEFAULT_WEEKS, SLA_REPORT_MAX_WEEKS
 from .types import ReportInterval, ReportMeasure
@@ -83,15 +83,17 @@ async def time_in_state(
     return await service.time_in_state(session, project_id, kind, actor=user, q=q)
 
 
-@router.get("/velocity", response_model=list[VelocityRow])
+@router.get("/velocity", response_model=VelocityReport)
 async def velocity(
     session: Session,
     user: CurrentUser,
     last: Annotated[int, Query(ge=1, le=50)] = 5,
     measure: ReportMeasure = ReportMeasure.COUNT,
     q: str | None = None,
-) -> list[VelocityRow]:
-    await authz.require(session, user, authz.Permission.ITEM_READ)
+) -> VelocityReport:
+    # Cross-project: the member floor, and the figure carries the scope it was
+    # computed over (RADD-788/789).
+    await authz.require_member(session, user)
     return await service.velocity(session, last, measure, actor=user, q=q)
 
 
@@ -104,18 +106,22 @@ async def burnup(
     q: str | None = None,
 ) -> BurnupSeries:
     cycle = await cycles_service.get_cycle(session, cycle_id)
-    await authz.require(session, user, authz.Permission.ITEM_READ)
+    await authz.require_member(session, user)
     return await service.burnup(session, cycle_id, measure, actor=user, q=q)
 
 
-@router.get("/sla", response_model=list[SlaReportBucket])
+@router.get("/sla", response_model=SlaReport)
 async def sla(
     session: Session,
     user: CurrentUser,
     project_id: uuid.UUID | None = None,
     weeks: Annotated[int, Query(ge=1, le=SLA_REPORT_MAX_WEEKS)] = SLA_REPORT_DEFAULT_WEEKS,
     q: str | None = None,
-) -> list[SlaReportBucket]:
+) -> SlaReport:
     """Service-desk SLA outcomes per item-created week (spec 63)."""
-    await authz.require(session, user, authz.Permission.ITEM_READ)
+    if project_id is not None:
+        project = await projects_service.get_project(session, project_id)
+        await authz.require(session, user, authz.Permission.ITEM_READ, project=project)
+    else:
+        await authz.require_member(session, user)
     return await service.sla_report(session, project_id, weeks, actor=user, q=q)

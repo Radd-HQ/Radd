@@ -12,6 +12,7 @@ from datetime import date, datetime, time, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError
+from radd.modules.auth import authz
 from radd.modules.auth.models import User
 # Submodule with model-only imports (the slas/report.py idiom) — csat loads
 # AFTER reporting in RADD_MODULES, so this must never touch its service layer.
@@ -33,9 +34,12 @@ from .schemas import (
     CumulativeFlowBucket,
     CycleBrief,
     CycleWindow,
+    ReportScope,
+    SlaReport,
     SlaReportBucket,
     ThroughputBucket,
     TimeInStateRow,
+    VelocityReport,
     VelocityRow,
 )
 from .types import ReportInterval, ReportMeasure
@@ -88,11 +92,37 @@ async def _matching_ids(
     q: str | None,
     project_id: uuid.UUID | None = None,
 ) -> set[uuid.UUID] | None:
-    """None = unfiltered; otherwise the match set to intersect against."""
-    if actor is None or q is None or not q.strip():
+    """The item ids a report may range over. None = unfiltered (no actor).
+
+    This used to return None whenever `q` was absent, which meant the ONLY thing
+    narrowing a cross-project report was the dashboard query — and without one,
+    `sla_report(project_id=None)` folded every project's bookkeeping rows into
+    the average (RADD-789). The global `item.read` gate was all that stood in
+    front of it, and RADD-788 relaxed that gate, so the two land together.
+
+    Now visibility is always applied and the query is intersected on top: one
+    mechanism, and the RBAC half cannot be skipped by omitting `q`.
+    `visible_matching_ids` already constrains a cross-project read to the
+    readable projects up front (RADD-672), so this is the same rule `GET /items`
+    follows rather than a second copy of it.
+    """
+    if actor is None:
         return None
     return await items_bulk.visible_matching_ids(
-        session, actor=actor, q=q.strip(), project_id=project_id
+        session, actor=actor, q=(q or "").strip() or None, project_id=project_id
+    )
+
+
+async def _scope_of(session: AsyncSession, actor: User | None) -> ReportScope:
+    """What a cross-project figure was computed over, for the header (RADD-789)."""
+    from radd.modules.projects import service as projects_service
+
+    projects = await projects_service.list_projects(session)
+    if actor is None:
+        return ReportScope(covered=sorted(p.key for p in projects), total=len(projects))
+    readable = await authz.readable_projects(session, actor)
+    return ReportScope(
+        covered=sorted(p.key for p in projects if p.id in readable), total=len(projects)
     )
 
 
@@ -218,9 +248,12 @@ async def velocity(
     *,
     actor: User | None = None,
     q: str | None = None,
-) -> list[VelocityRow]:
+) -> VelocityReport:
     """For the last N completed cycles, items that entered done while assigned to
-    them — counted, or summed as story points (spec 70, `measure=points`)."""
+    them — counted, or summed as story points (spec 70, `measure=points`).
+
+    Cycles span projects, so the figure is cross-project and carries the scope it
+    was computed over (RADD-789)."""
     matches = await _matching_ids(session, actor, q)
     today = date.today()
     completed = await cycles_service.list_cycles(
@@ -243,7 +276,7 @@ async def velocity(
                 completed=_measure_of(done_ids, points),
             )
         )
-    return rows
+    return VelocityReport(rows=rows, scope=await _scope_of(session, actor))
 
 
 async def burnup(
@@ -295,6 +328,7 @@ async def burnup(
             id=cycle.id, name=cycle.name, start_date=cycle.start_date, end_date=cycle.end_date
         ),
         series=series,
+        scope=await _scope_of(session, actor),
     )
 
 
@@ -346,7 +380,7 @@ async def sla_report(
     *,
     actor: User | None = None,
     q: str | None = None,
-) -> list[SlaReportBucket]:
+) -> SlaReport:
     """Weekly SLA outcomes over the engine's bookkeeping rows, bucketed by the
     week each ITEM was created. "Met" = met without a breach stamp ("met late"
     counts as breached); averages are wall-clock from item creation to the met
@@ -416,7 +450,14 @@ async def sla_report(
         session, project_id, since=datetime.combine(first_week, time.min)
     )
     for csat_row in csat_rows:
+        # Same visibility intersection as the SLA counters above (RADD-789) — a
+        # rating is as project-scoped as the item it was given about.
+        if matches is not None and csat_row.item_id not in matches:
+            continue
         fold = folds.get(_bucket_start(csat_row.responded_at.date(), ReportInterval.WEEK))
         if fold is not None:
             fold.csat_ratings.append(csat_row.rating)
-    return [fold.to_bucket(week) for week, fold in sorted(folds.items())]
+    return SlaReport(
+        buckets=[fold.to_bucket(week) for week, fold in sorted(folds.items())],
+        scope=await _scope_of(session, actor),
+    )

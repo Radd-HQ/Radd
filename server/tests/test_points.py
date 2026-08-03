@@ -156,10 +156,10 @@ async def _seeded_completed_cycle(db, actor):
 async def test_velocity_measures(db, actor):
     _, cycle = await _seeded_completed_cycle(db, actor)
     by_count = await reporting.velocity(db, last=5)
-    row = next(r for r in by_count if r.cycle.id == cycle.id)
+    row = next(r for r in by_count.rows if r.cycle.id == cycle.id)
     assert row.completed == 2
     by_points = await reporting.velocity(db, last=5, measure=ReportMeasure.POINTS)
-    row = next(r for r in by_points if r.cycle.id == cycle.id)
+    row = next(r for r in by_points.rows if r.cycle.id == cycle.id)
     assert row.completed == 4.5  # 3 + 1.5; the open 8-pointer doesn't count
 
 

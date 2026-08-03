@@ -47,10 +47,30 @@ export interface CycleBrief {
   name: string;
 }
 
+/**
+ * Which projects a CROSS-PROJECT figure was actually computed over (RADD-789).
+ *
+ * A filtered list is visibly shorter; a filtered average is just a different
+ * number. `covered.length < total` means the reader is seeing a subset, and the
+ * report header says so — equal means everything, and the label stays off.
+ */
+export interface ReportScope {
+  /** Project KEYS, sorted. */
+  covered: string[];
+  /** Projects on the instance. */
+  total: number;
+}
+
 /** One row of GET /reports/velocity — items completed in a finished cycle. */
 export interface VelocityRow {
   cycle: CycleBrief;
   completed: number;
+}
+
+/** GET /reports/velocity — the rows plus the scope they were computed over. */
+export interface VelocityReport {
+  rows: VelocityRow[];
+  scope: ReportScope;
 }
 
 /** The cycle window a burnup series ranges over. */
@@ -72,4 +92,5 @@ export interface BurnupPoint {
 export interface BurnupSeries {
   cycle: CycleWindow;
   series: BurnupPoint[];
+  scope: ReportScope;
 }

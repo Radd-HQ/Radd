@@ -20,10 +20,16 @@ from .models import CsatSurvey
 
 @dataclass(frozen=True)
 class CsatResponseRow:
-    """One answered survey: what rating landed, and when."""
+    """One answered survey: what rating landed, when, and on which item.
+
+    `item_id` exists so the caller can intersect these rows with the item ids the
+    reader may actually see (RADD-789) — without it, a cross-project SLA report's
+    csat average was folded over every project's ratings regardless of access.
+    """
 
     rating: int
     responded_at: datetime
+    item_id: uuid.UUID
 
 
 async def responded_rows(
@@ -34,7 +40,7 @@ async def responded_rows(
     """Answered surveys whose RESPONSE arrived since `since`, optionally scoped
     to one project."""
     query = (
-        select(CsatSurvey.rating, CsatSurvey.responded_at)
+        select(CsatSurvey.rating, CsatSurvey.responded_at, CsatSurvey.item_id)
         .join(WorkItem, WorkItem.id == CsatSurvey.item_id)
         .where(
             CsatSurvey.rating.is_not(None),

@@ -1,5 +1,6 @@
 /** Service desk: canned responses, SLA policies/timers, builtin-field write rules, rollups (specs 30/36/63/76/78). */
 import type { PriorityValue } from "./items";
+import type { ReportScope } from "./reporting";
 // ---------------------------------------------------------------------------
 // Service desk (canned + slas modules — spec 30)
 // ---------------------------------------------------------------------------
@@ -161,4 +162,10 @@ export interface SlaReportBucket {
   /** Spec 65 — bucketed by the week the RESPONSE arrived, not item creation. */
   csat_avg: number | null;
   csat_count: number;
+}
+
+/** GET /reports/sla — the weekly buckets plus the scope they cover (RADD-789). */
+export interface SlaReport {
+  buckets: SlaReportBucket[];
+  scope: ReportScope;
 }

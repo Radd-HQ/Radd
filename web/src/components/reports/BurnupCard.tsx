@@ -14,7 +14,7 @@ import { LineChart } from "../charts/LineChart";
 import { ReportCard } from "../charts/ReportCard";
 import { Select } from "../Select";
 import { shortDate } from "../charts/chart-utils";
-import { CardBody, Segmented } from "./report-state";
+import { CardBody, ScopeNote, Segmented } from "./report-state";
 import { MEASURE_OPTIONS } from "./measure";
 
 /** The cycle a burnup should default to: the active one, else the most recent. */
@@ -91,6 +91,7 @@ export function BurnupCard({
     <ReportCard
       title="Burnup"
       description="Scope vs completed over a cycle's window"
+      note={<ScopeNote scope={query.data?.scope} />}
       controls={
         cycleList.length > 0 && (
           <>

@@ -262,11 +262,11 @@ async def test_sla_report_carries_csat_by_responded_week(db, admin, project):
         )
         await csat_service.record_response(db, survey.token, PublicCsatSubmit(rating=rating))
 
-    buckets = await reporting.sla_report(db, None, weeks=2)
+    buckets = (await reporting.sla_report(db, None, weeks=2)).buckets
     assert sum(b.csat_count for b in buckets) == 2
     week = next(b for b in buckets if b.csat_count)
     assert week.csat_avg == pytest.approx(4.0)
     # Weeks without responses stay None/0, and other projects see nothing.
     assert all(b.csat_avg is None for b in buckets if b.csat_count == 0)
-    empty = await reporting.sla_report(db, uuid.uuid4(), weeks=2)
+    empty = (await reporting.sla_report(db, uuid.uuid4(), weeks=2)).buckets
     assert sum(b.csat_count for b in empty) == 0

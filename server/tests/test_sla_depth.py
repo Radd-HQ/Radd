@@ -201,7 +201,7 @@ async def test_sla_report_smoke(db, admin):
     await db.flush()
 
     # Spec 86: project_id=None is now truly global — scope to this test's project.
-    buckets = await reporting.sla_report(db, project.id, weeks=2)
+    buckets = (await reporting.sla_report(db, project.id, weeks=2)).buckets
     assert len(buckets) == 2
     assert sum(b.items for b in buckets) == 2
     assert sum(b.response_met for b in buckets) == 1
@@ -212,5 +212,5 @@ async def test_sla_report_smoke(db, admin):
     assert week.avg_response_seconds == pytest.approx(30 * 60)
     assert week.avg_resolution_seconds == pytest.approx(4 * 3600)
     # Project scoping: an unrelated project sees an all-zero window.
-    empty = await reporting.sla_report(db, uuid.uuid4(), weeks=2)
+    empty = (await reporting.sla_report(db, uuid.uuid4(), weeks=2)).buckets
     assert sum(b.items for b in empty) == 0

@@ -13,10 +13,10 @@ import type {
   ItemKindValue,
   ReportIntervalValue,
   ReportMeasureValue,
-  SlaReportBucket,
+  SlaReport,
   ThroughputBucket,
   TimeInStateRow,
-  VelocityRow,
+  VelocityReport,
 } from "../types";
 
 // ---------------------------------------------------------------------------
@@ -74,7 +74,7 @@ export const velocityQuery = (last: number, measure: ReportMeasureValue, q?: str
   queryOptions({
     queryKey: queryKeys.reportVelocity(last, measure, q),
     queryFn: () =>
-      api.get<VelocityRow[]>(ApiReportPath.velocity, {
+      api.get<VelocityReport>(ApiReportPath.velocity, {
         query: { last: String(last), measure, q: q || undefined },
       }),
     staleTime: REPORT_STALE_MS,
@@ -96,7 +96,7 @@ export const slaReportQuery = (projectId: string | null, weeks: number, q?: stri
   queryOptions({
     queryKey: queryKeys.reportSla(projectId, weeks, q),
     queryFn: () =>
-      api.get<SlaReportBucket[]>(ApiReportPath.sla, {
+      api.get<SlaReport>(ApiReportPath.sla, {
         query: { project_id: projectId ?? undefined, weeks: String(weeks), q: q || undefined },
       }),
     staleTime: REPORT_STALE_MS,

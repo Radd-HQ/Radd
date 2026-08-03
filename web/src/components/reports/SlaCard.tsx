@@ -11,7 +11,7 @@ import { ReportCard } from "../charts/ReportCard";
 import { Select } from "../Select";
 import { StackedBarChart, type StackedBar } from "../charts/StackedBarChart";
 import { shortDate } from "../charts/chart-utils";
-import { CardBody } from "./report-state";
+import { CardBody, ScopeNote } from "./report-state";
 
 /** CSAT (spec 65) renders amber — the star color, distinct from met/breached. */
 const CSAT_COLOR = "#fbbf24"; // amber-400
@@ -84,7 +84,8 @@ export function SlaCard({
 }) {
   const [weeks, setWeeks] = useState(initialWeeks ?? SLA_REPORT_DEFAULT_WEEKS);
   const query = useQuery(slaReportQuery(projectId ?? null, weeks, q));
-  const buckets = query.data ?? [];
+  // RADD-789: the buckets plus the projects they were computed over.
+  const buckets = query.data?.buckets ?? [];
   const window = totals(buckets);
 
   const bars: StackedBar[] = buckets.map((bucket) => ({
@@ -109,6 +110,7 @@ export function SlaCard({
     <ReportCard
       title="Service desk"
       description="SLA targets met vs breached, by the week the item was raised"
+      note={<ScopeNote scope={query.data?.scope} />}
       controls={
         <label className="flex items-center gap-1.5 text-xs text-fg-muted">
           Last

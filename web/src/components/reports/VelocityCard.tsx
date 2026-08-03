@@ -8,7 +8,7 @@ import { ReportMeasure, type ReportMeasureValue } from "../../lib/types";
 import { BarChart } from "../charts/BarChart";
 import { ReportCard } from "../charts/ReportCard";
 import { Select } from "../Select";
-import { CardBody, Segmented } from "./report-state";
+import { CardBody, ScopeNote, Segmented } from "./report-state";
 import { MEASURE_OPTIONS } from "./measure";
 
 /** Velocity: completed items (or story points, spec 70) per finished cycle. */
@@ -34,7 +34,9 @@ export function VelocityCard({
   const inPoints = effective === ReportMeasure.points;
   const unit = inPoints ? "pts" : "completed";
   const query = useQuery(velocityQuery(last, effective, q));
-  const rows = query.data ?? [];
+  // Cross-project: cycles span projects, so the figure carries the scope it was
+  // computed over (RADD-789) and the header states it when that is a subset.
+  const rows = query.data?.rows ?? [];
   const data = rows.map((row) => ({
     label: row.cycle.name,
     value: row.completed,
@@ -53,6 +55,7 @@ export function VelocityCard({
           ? `${inPoints ? "Points" : "Completed"} per cycle — avg ${average}`
           : "Completed items per finished cycle"
       }
+      note={<ScopeNote scope={query.data?.scope} />}
       controls={
         <>
           {showPoints && (

@@ -223,6 +223,25 @@ async def test_entitled_to_nothing_gets_emptiness_not_a_wall_of_errors(client, w
         assert response.json() == [], f"{path} leaked rows to an unentitled actor"
 
 
+async def test_cross_project_reports_cover_only_readable_projects(client, world):
+    """RADD-789. The SLA report used to fold EVERY project's bookkeeping rows into
+    its averages whenever no SLQ `q` was passed — the global item.read gate was
+    the only thing in front of it, and RADD-788 relaxed that gate.
+
+    The figure now carries the scope it was computed over, so a filtered average
+    is never silently a different number.
+    """
+    response = await client.get("/api/v1/reports/velocity", headers=_auth(world["member_token"]))
+    assert response.status_code == 200
+    scope = response.json()["scope"]
+    assert scope["covered"] == [world["granted_key"]], "velocity reached past the grant"
+    assert scope["total"] > len(scope["covered"]), "the fixture needs an unreadable project"
+
+    sla = await client.get("/api/v1/reports/sla", headers=_auth(world["member_token"]))
+    assert sla.status_code == 200
+    assert sla.json()["scope"]["covered"] == [world["granted_key"]]
+
+
 async def test_single_resource_reads_still_refuse_the_unentitled(client, world):
     """Where emptiness is not an available answer, the refusal stays — a cycle
     either comes back or it does not."""
