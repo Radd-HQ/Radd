@@ -375,7 +375,7 @@ async def permissions_for_projects(
 
 
 async def require_anywhere(
-    session: AsyncSession, user: User, permission: Permission
+    session: AsyncSession, user: User, permission: Permission, *, refuse_when_empty: bool = False
 ) -> dict[uuid.UUID, frozenset[Permission]]:
     """The per-project permission map for every project where `permission` holds.
 
@@ -386,18 +386,116 @@ async def require_anywhere(
     for. Holding the permission in ANY project satisfies this gate; the caller
     constrains its query to the returned project ids.
 
-    Raises ForbiddenError only when the permission holds NOWHERE — including
-    globally, so a member on a zero-project instance gets an empty map (an empty
-    list at the surface), not a 403.
+    **Does not raise by default** (RADD-774). An actor entitled to no project
+    gets an empty map, which every list surface renders as an empty state. "There
+    is nothing here for you" and "you did something you are not allowed to do"
+    are different answers, and only the second deserves an error.
+
+    `refuse_when_empty=True` restores the refusal, and the MCP tools pass it. The
+    audiences genuinely differ: a person looking at an empty projects list can
+    see that it is empty, whereas an AGENT handed `{"projects": []}` will
+    conclude the instance has none and act on it. A refusal is the only way to
+    tell a caller that has no eyes apart "you may not look" from "there is
+    nothing there".
+
+    This used to raise when the permission held nowhere, and that branch was
+    unreachable: `item.read` sat in the hardcoded member floor, so every active
+    user held it on every project. RADD-773 made the floor an editable Baseline
+    role, and the first admin to remove `item.read` from it got a 403 on
+    `GET /projects` — a permission toast as the greeting on a viewer-restricted
+    instance.
+
+    Nothing becomes readable: the atom still gates each project's contents. The
+    only change is whether "you may see none of them" arrives as a result or as
+    a failure.
     """
     from radd.modules.projects import service as projects_service  # deferred: projects loads after auth
 
     projects = await projects_service.list_projects(session)
     per_project = await permissions_for_projects(session, user, projects)
-    held = {pid: permissions for pid, permissions in per_project.items() if permission in permissions}
-    if not held and permission not in await effective_permissions(session, user):
+    held = {
+        pid: permissions
+        for pid, permissions in per_project.items()
+        if permission in permissions
+    }
+    if refuse_when_empty and not held and permission not in await effective_permissions(session, user):
         raise ForbiddenError(f"permission '{permission}' denied")
     return held
+
+
+@dataclass(frozen=True)
+class PermissionSource:
+    """Where one atom came from (RADD-779).
+
+    `effective_permissions` collapses every contributor into a set, which is the
+    right answer for enforcement and the wrong one for "why can this person do
+    that?" — the question that took reading `authz.py`, querying the live
+    database and doing the union by hand, including the spec-50 umbrella
+    expansions that turn one granted atom into four held ones.
+    """
+
+    #: The atom, e.g. "cycle.create".
+    permission: str
+    #: "baseline" | "role" | "instance-admin"
+    kind: str
+    #: The role that supplied it, when kind == "role".
+    role_name: str | None = None
+    #: True when the atom was not granted directly but implied by an umbrella
+    #: (project.manage -> state.manage -> state.create). Without this the
+    #: inspector would claim a role grants atoms its checkboxes never showed.
+    implied: bool = False
+
+
+async def permission_sources(
+    session: AsyncSession, user: User, *, project: Project | None = None
+) -> list[PermissionSource]:
+    """Every atom the user holds in the scope, each with its provenance.
+
+    Deliberately a SECOND pass over the same inputs rather than a richer
+    `effective_permissions`: enforcement runs on every request and must stay a
+    set union, while this runs when an admin opens one person's row. Keeping
+    them apart means the explanation can never slow the check down — and the
+    explanation is derived from the same helpers, so it cannot describe a rule
+    the resolver does not follow.
+    """
+    if not user.active:
+        return []
+    if InstanceRole(user.instance_role) is InstanceRole.ADMIN:
+        # One row, not ninety. An admin holds everything BECAUSE they are an
+        # admin; listing each atom as though it were granted would bury that.
+        return [PermissionSource(permission="*", kind="instance-admin")]
+
+    baseline = await baseline_permissions(session)
+    sources: dict[str, PermissionSource] = {}
+
+    def record(atoms: Iterable[str], source: PermissionSource) -> None:
+        direct = {str(a) for a in atoms}
+        for atom in sorted(expand_permissions(direct)):
+            key = str(atom)
+            if key in sources:
+                continue
+            sources[key] = PermissionSource(
+                permission=key,
+                kind=source.kind,
+                role_name=source.role_name,
+                implied=key not in direct,
+            )
+
+    record(baseline, PermissionSource(permission="", kind="baseline"))
+
+    role_ids = (
+        await _granted_role_ids(session, user.id, project)
+        if project is not None
+        else await grants.granted_role_ids(session, user.id)
+    )
+    if role_ids:
+        rows = await session.execute(
+            select(Role.name, Role.permissions).where(Role.id.in_(role_ids))
+        )
+        for name, permissions in rows.all():
+            record(permissions, PermissionSource(permission="", kind="role", role_name=name))
+
+    return sorted(sources.values(), key=lambda s: s.permission)
 
 
 @dataclass(frozen=True)

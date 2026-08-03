@@ -85,6 +85,16 @@ export interface PermissionInfo {
  */
 export const BASELINE_ROLE_KEY = "baseline";
 
+/** One atom a person holds, and where it came from (RADD-779). */
+export interface PermissionSource {
+  permission: string;
+  /** "baseline" | "role" | "instance-admin". */
+  kind: string;
+  role_name: string | null;
+  /** Implied by an umbrella rather than ticked on a role. */
+  implied: boolean;
+}
+
 export interface Role {
   id: string;
   key: string;

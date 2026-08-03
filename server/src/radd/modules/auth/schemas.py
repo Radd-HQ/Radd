@@ -102,6 +102,23 @@ class UserDirectoryEntry(BaseModel):
     avatar_emoji: str | None = None
 
 
+class PermissionSourceRead(BaseModel):
+    """One atom the user holds, and where it came from (RADD-779).
+
+    `kind` is `baseline` | `role` | `instance-admin`. The admin case answers a
+    single row with `permission="*"`: an instance admin holds everything BECAUSE
+    they are an admin, and enumerating ninety atoms as though each were granted
+    would hide the one fact that matters.
+    """
+
+    permission: str
+    kind: str
+    role_name: str | None = None
+    #: Held via an umbrella (project.manage implies state.create), not granted
+    #: directly — so the inspector never claims a role's checkbox was ticked.
+    implied: bool = False
+
+
 class UserAdminUpdate(BaseModel):
     """PATCH /users/{id} (specs 84/86, instance admin): rename, activate/
     deactivate, and set instance_role (admin|member — the only role ladder

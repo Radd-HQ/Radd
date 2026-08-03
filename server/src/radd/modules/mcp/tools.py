@@ -320,7 +320,9 @@ async def _comment_item(session: AsyncSession, actor: User, args: Mapping[str, A
 async def _list_projects(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
     # Same gate as GET /projects (RADD-672): the projects where the caller holds
     # item.read anywhere — never a global-atom refusal for a scoped key.
-    per_project = await authz.require_anywhere(session, actor, Permission.ITEM_READ)
+    per_project = await authz.require_anywhere(
+        session, actor, Permission.ITEM_READ, refuse_when_empty=True
+    )
     projects = [p for p in await projects_service.list_projects(session) if p.id in per_project]
     return {
         "projects": [
@@ -467,7 +469,7 @@ async def _list_worklogs(session: AsyncSession, actor: User, args: Mapping[str, 
     # RADD-672: item.read anywhere admits the caller; the broad-view check stays
     # GLOBAL — timesheet.view is instance-wide, and a scoped key without it
     # defaults to its own time, which the SLQ below can only narrow.
-    await authz.require_anywhere(session, actor, Permission.ITEM_READ)
+    await authz.require_anywhere(session, actor, Permission.ITEM_READ, refuse_when_empty=True)
     global_permissions = await authz.effective_permissions(session, actor)
     user_ids = None if Permission.TIMESHEET_VIEW in global_permissions else {actor.id}
     end = _date.fromisoformat(str(args["end"])) if args.get("end") else _date.today()

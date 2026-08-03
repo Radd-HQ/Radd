@@ -7,6 +7,7 @@ import { customFieldErrors, deniedCustomFieldKeys, errorMessage } from "../lib/a
 import { RoutePath } from "../lib/constants";
 import { useArchiveItem, useDeleteItem, useToggleStarOnItem, useUpdateItem } from "../lib/item-mutations";
 import { useItemWritability, usePermissions, usePointsEnabled } from "../lib/hooks";
+import { useCan } from "../lib/can";
 import {
   fieldsQuery,
   itemPagesQuery,
@@ -83,6 +84,7 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
   const quickActions = useIssueQuickActions(item, project.id);
   const toggleStar = useToggleStarOnItem();
   const perms = usePermissions();
+  const can = useCan();
   const canEditItem = perms.project(project, Permission.itemUpdate);
   const canManageProject = perms.project(project, Permission.projectManage);
   // Per-field writability (spec 92): title/description/flag are grant-restrictable builtins, so gate
@@ -101,6 +103,14 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
   const navigate = useNavigate();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const archived = Boolean(item.archived_at);
+  // Archiving is an item.update (RADD-778): `set_archived` gates on ITEM_UPDATE,
+  // NOT item.delete — only the hard delete wants that, and its button already
+  // sits behind project.manage, which implies it. This button was enabled for
+  // everyone and answered a permission toast.
+  const archiveGate = can(Permission.itemUpdate, {
+    project,
+    verb: archived ? "unarchive this issue" : "archive this issue",
+  });
   // Epic progress (spec 76): the rollup batch for just this item. Fetched for
   // ANY item that has children, not only epics — the subtask checklist shows
   // "2/5 done" and without the rollup it could only ever say 0 (RADD-660).
@@ -208,7 +218,14 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
           variant="secondary"
           size="sm"
           onClick={() => archiveItem.mutate({ itemId: item.id, archived: !archived })}
-          title={archived ? "Unarchive" : "Archive — hidden from lists until restored"}
+          {...archiveGate.props}
+          title={
+            archiveGate.allowed
+              ? archived
+                ? "Unarchive"
+                : "Archive — hidden from lists until restored"
+              : archiveGate.reason
+          }
         >
           {archived ? <ArchiveRestore size={13} aria-hidden /> : <Archive size={13} aria-hidden />}
           {archived ? "Unarchive" : "Archive"}

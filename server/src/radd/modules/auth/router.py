@@ -27,6 +27,7 @@ from .schemas import (
     TotpSetupRead,
     TotpStatusRead,
     UserAdminUpdate,
+    PermissionSourceRead,
     UserContentSummary,
     UserCreate,
     UserDirectoryEntry,
@@ -167,6 +168,34 @@ async def put_preferences(
 async def create_user(data: UserCreate, session: Session, actor: CurrentUser) -> UserRead:
     await authz.require(session, actor, authz.Permission.USER_CREATE)
     return UserRead.model_validate(await service.create_user(session, data, actor_id=actor.id))
+
+
+@user_router.get("/{user_id}/permissions", response_model=list[PermissionSourceRead])
+async def user_permissions(
+    user_id: uuid.UUID,
+    session: Session,
+    actor: CurrentUser,
+    project_id: uuid.UUID | None = None,
+) -> list[PermissionSourceRead]:
+    """What this person can do here, and WHY (RADD-779).
+
+    The question the whole access-control epic started from — "why can this
+    member delete cycles?" — previously needed a read of `authz.py`, a query
+    against the database and a hand-computed union. It is answerable from one
+    request now, and from the Users page that raised it.
+
+    Gated on `user.manage`: it describes another account's authority, which is
+    administrative even though every atom in it is already enforced elsewhere.
+    """
+    await authz.require(session, actor, authz.Permission.USER_MANAGE)
+    target = await service.get_user(session, user_id)
+    project = None
+    if project_id is not None:
+        from radd.modules.projects import service as projects_service
+
+        project = await projects_service.get_project(session, project_id)
+    sources = await authz.permission_sources(session, target, project=project)
+    return [PermissionSourceRead.model_validate(s, from_attributes=True) for s in sources]
 
 
 @user_router.get("/directory", response_model=list[UserDirectoryEntry])

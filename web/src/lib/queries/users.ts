@@ -6,6 +6,7 @@ import {
   ApiPath,
   apiTeamMembersPath,
   apiUserContentPath,
+  apiUserPermissionsPath,
 } from "../constants";
 import { queryKeys } from "./shared";
 import type {
@@ -16,6 +17,7 @@ import type {
   DuplicateUserGroup,
   Team,
   TeamMember,
+  PermissionSource,
   User,
   UserContentSummary,
   UserSummary,
@@ -60,6 +62,16 @@ export const usersAdminQuery = (filters: { q?: string; source?: string; active?:
     placeholderData: keepPreviousData,
   });
 };
+
+/** What one person can do, and why (RADD-779). Fetched when their row opens —
+ *  it is an admin explaining a specific account, not something to prefetch. */
+export const userPermissionsQuery = (userId: string) =>
+  queryOptions({
+    queryKey: [...queryKeys.users, userId, "permissions"] as const,
+    queryFn: () => api.get<PermissionSource[]>(apiUserPermissionsPath(userId)),
+    staleTime: 30_000,
+  });
+
 
 /** Duplicate-account candidates (spec 84, instance admin) — merge UI feed. */
 export const userDuplicatesQuery = queryOptions({

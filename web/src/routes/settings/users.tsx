@@ -5,8 +5,8 @@ import { Link } from "@tanstack/react-router";
 import { ApiError, api, errorMessage } from "../../lib/api";
 import { RoutePath, SEARCH_DEBOUNCE_MS, apiUserPath } from "../../lib/constants";
 import { useCurrentUser, useDebounced, usePermissions } from "../../lib/hooks";
-import { INSTANCE_ROLE_LABELS, INSTANCE_ROLE_ORDER } from "../../lib/meta";
-import { queryKeys, usersAdminQuery } from "../../lib/queries";
+import { INSTANCE_ROLE_LABELS } from "../../lib/meta";
+import { queryKeys, userPermissionsQuery, usersAdminQuery } from "../../lib/queries";
 import {
   InstanceRole,
   Permission,
@@ -24,7 +24,6 @@ import { SettingsPage } from "../../components/settings/SettingsPage";
 import { DeleteUserDialog } from "../../components/settings/DeleteUserDialog";
 import { DuplicatesSection } from "../../components/settings/UserDuplicates";
 import { SOURCE_LABELS, SourceBadge } from "../../components/settings/UserSourceBadge";
-import { Select } from "../../components/Select";
 import { Table, TBody, Td, THead, Th } from "../../components/Table";
 import { RoleGrantsSection } from "../../components/settings/RoleGrantsSection";
 
@@ -231,17 +230,29 @@ function UsersTable({
                 </Td>
                 <Td>
                   {isInstanceAdmin && !self ? (
-                    <Select
-                      aria-label={`Instance access of ${user.name}`}
-                      value={user.instance_role}
-                      onChange={(role) => onChangeRole(user.id, role as InstanceRoleValue)}
-                      disabled={busy}
-                      size="sm"
-                      options={INSTANCE_ROLE_ORDER.map((value) => ({
-                        value,
-                        label: INSTANCE_ROLE_LABELS[value],
-                      }))}
-                    />
+                    // A switch, not a dropdown (RADD-776). The column has two
+                    // values and behaves as a boolean; naming them invited
+                    // reading it as a role ladder with more rungs, which is
+                    // exactly the confusion RADD-775 set out to remove.
+                    <label className="inline-flex cursor-pointer items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={user.instance_role === InstanceRole.admin}
+                        disabled={busy}
+                        onChange={(event) =>
+                          onChangeRole(
+                            user.id,
+                            (event.target.checked
+                              ? InstanceRole.admin
+                              : InstanceRole.member) as InstanceRoleValue,
+                          )
+                        }
+                        aria-label={`Instance administrator: ${user.name}`}
+                        title="An instance administrator bypasses every permission check."
+                        className="size-3.5 cursor-pointer accent-[var(--accent-fill)]"
+                      />
+                      <span className="text-[11px] text-fg-secondary">Administrator</span>
+                    </label>
                   ) : (
                     <span
                       className={
@@ -318,6 +329,7 @@ function UsersTable({
                         subject={{ userId: user.id }}
                         canManage={isInstanceAdmin}
                       />
+                      <EffectivePermissions userId={user.id} />
                     </div>
                   </Td>
                 </tr>
@@ -327,6 +339,91 @@ function UsersTable({
           })}
         </TBody>
       </Table>
+    </div>
+  );
+}
+
+
+/**
+ * What this person can actually do, and why (RADD-779).
+ *
+ * The listed grants above say what was HANDED OUT. This says what it RESOLVES
+ * to — including the spec-50 umbrella expansions that turn one ticked
+ * `cycle.manage` into four held atoms, which is the step that made "why can this
+ * member delete cycles?" unanswerable by reading the screen.
+ *
+ * Resolved on the server, never here: re-implementing umbrella expansion, the
+ * admin short-circuit and key-scope narrowing in the client would produce a
+ * second opinion, and the one that disagrees with the resolver is the one
+ * people would be reading.
+ */
+function EffectivePermissions({ userId }: { userId: string }) {
+  const { data, isPending, isError, error } = useQuery(userPermissionsQuery(userId));
+
+  if (isPending) return <p className="text-xs text-fg-muted">Resolving permissions…</p>;
+  if (isError) return <p className="text-xs text-red-400">{errorMessage(error)}</p>;
+
+  const rows = data ?? [];
+  const admin = rows.find((row) => row.kind === "instance-admin");
+  if (admin) {
+    return (
+      <p className="rounded-md border border-accent/40 bg-accent/5 px-3 py-2 text-xs text-fg-secondary">
+        <strong className="text-heading">Everything.</strong> An instance administrator bypasses
+        every permission check, so no role or grant applies — switch Administrator off to make
+        the rules below take effect.
+      </p>
+    );
+  }
+
+  // Group by where it came from, so the answer reads as "Baseline gives them X,
+  // the Member role adds Y" rather than an undifferentiated wall of atoms.
+  const bySource = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const key = row.kind === "baseline" ? "Baseline" : (row.role_name ?? "Granted role");
+    const list = bySource.get(key) ?? [];
+    list.push(row);
+    bySource.set(key, list);
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
+        Effective permissions ({rows.length})
+      </p>
+      {rows.length === 0 ? (
+        <p className="text-xs text-fg-muted">
+          None — this account cannot do anything until Baseline or a granted role gives it
+          something.
+        </p>
+      ) : (
+        [...bySource.entries()].map(([source, atoms]) => (
+          <div key={source} className="flex flex-wrap items-baseline gap-1.5">
+            <span className="shrink-0 text-[11px] font-medium text-fg-secondary">{source}</span>
+            {atoms.map((atom) => (
+              <span
+                key={atom.permission}
+                title={
+                  atom.implied
+                    ? `Implied by an umbrella permission, not ticked directly on ${source}.`
+                    : `Granted directly by ${source}.`
+                }
+                className={
+                  "rounded border px-1 font-mono text-[10px] " +
+                  (atom.implied
+                    ? "border-subtle text-fg-muted"
+                    : "border-strong text-fg-secondary")
+                }
+              >
+                {atom.permission}
+              </span>
+            ))}
+          </div>
+        ))
+      )}
+      <p className="text-[10px] text-fg-faint">
+        Dimmed atoms are implied by an umbrella (project.manage implies state.create), not
+        ticked on the role itself.
+      </p>
     </div>
   );
 }

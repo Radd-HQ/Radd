@@ -21,6 +21,9 @@ export const apiItemAllowedTransitionsPath = (itemId: string) =>
   `${ApiPath.items}/${itemId}/allowed-transitions`;
 export const apiTokenPath = (tokenId: string) => `${ApiPath.tokens}/${tokenId}`;
 export const apiUserPath = (userId: string) => `${ApiPath.users}/${userId}`;
+/** GET — every atom this person holds, and which source supplied it (RADD-779). */
+export const apiUserPermissionsPath = (userId: string) =>
+  `${ApiPath.users}/${userId}/permissions`;
 /** POST — fold the path user (the duplicate) into `into_user_id` (spec 84). */
 export const apiUserMergePath = (userId: string) => `${ApiPath.users}/${userId}/merge`;
 /** GET — what an account owns (spec 89); drives the delete dialog. */
