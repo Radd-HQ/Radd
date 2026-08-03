@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { EditorView } from "@milkdown/prose/view";
 import { pageExtensionsQuery } from "../../lib/queries";
 import type { PageExtensionSpec } from "../../lib/types";
-import { RADD_EXTENSION_NODE } from "./extension-node";
+import { configOnInsertKey, RADD_EXTENSION_NODE } from "./extension-node";
 
 /**
  * The editor's insert menu for page extensions (RADD-709).
@@ -102,7 +102,21 @@ export function insertExtensionBlock(view: EditorView, spec: PageExtensionSpec):
         )
       : null;
   if (!node) return;
-  view.dispatch(state.tr.replaceSelectionWith(node).scrollIntoView());
+  const tr = state.tr.replaceSelectionWith(node).scrollIntoView();
+  // Ask the new block to open its config form (RADD-747). The position is found
+  // by node IDENTITY rather than arithmetic on the selection: `replaceSelectionWith`
+  // may replace an empty parent paragraph instead of inserting inside it, so
+  // "selection minus nodeSize" is right only some of the time.
+  let inserted = -1;
+  tr.doc.descendants((candidate, pos) => {
+    if (candidate === node) {
+      inserted = pos;
+      return false;
+    }
+    return inserted === -1;
+  });
+  if (inserted >= 0) tr.setMeta(configOnInsertKey, inserted);
+  view.dispatch(tr);
   view.focus();
 }
 

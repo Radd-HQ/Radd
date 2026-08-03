@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNodeViewContext } from "@prosemirror-adapter/react";
 import { Pencil, Trash2 } from "lucide-react";
+import { CONFIG_ON_INSERT, configOnInsertKey } from "./extension-node";
 import {
   ExtensionError,
   UnknownExtension,
@@ -25,8 +26,24 @@ import "../pages/extensions"; // side-effect: registers the first-party extensio
  * source, and the assertion should read the same on both surfaces.
  */
 export function ExtensionNodeView() {
-  const { node, view, getPos, setAttrs, selected } = useNodeViewContext();
+  const { node, view, getPos, setAttrs, selected, decorations } = useNodeViewContext();
   const [editing, setEditing] = useState(false);
+  // Inserted from the menu a moment ago: open the form, so "what can this take?"
+  // is answered at the point of asking rather than by guessing at JSON (RADD-747).
+  const requestedOnInsert = decorations.some(
+    (decoration) => (decoration.spec as Record<string, unknown>)[CONFIG_ON_INSERT] === true,
+  );
+  useEffect(() => {
+    if (!requestedOnInsert) return;
+    setEditing(true);
+    // Clear the request in its own transaction, so the decoration goes and this
+    // cannot re-fire. Deferred: dispatching during ProseMirror's own update
+    // would re-enter the view it is in the middle of building.
+    const timer = setTimeout(() => {
+      view.dispatch(view.state.tr.setMeta(configOnInsertKey, null));
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [requestedOnInsert, view]);
   const name = String(node.attrs.name ?? "");
   const body = String(node.attrs.body ?? "");
   const extension = lookupPageExtension(name);

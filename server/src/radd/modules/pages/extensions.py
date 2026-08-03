@@ -72,7 +72,15 @@ PAGE_EXTENSIONS: tuple[PageExtensionSpec, ...] = (
                     "default": "info",
                 },
                 "title": {"type": "string", "description": "Optional bold first line."},
-                "text": {"type": "string", "description": "Markdown body of the callout."},
+                # `format` is what tells the generated form (RADD-747) to offer a
+                # textarea rather than a one-line input. A hint in the schema, not
+                # a name the SPA special-cases — a plugin's extension gets the same
+                # treatment by declaring the same format.
+                "text": {
+                    "type": "string",
+                    "format": "markdown",
+                    "description": "Markdown body of the callout.",
+                },
             },
         },
     ),

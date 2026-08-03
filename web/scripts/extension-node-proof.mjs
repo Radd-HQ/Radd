@@ -51,7 +51,7 @@ async function main() {
   });
   const { consoleErrors } = session;
 
-    await session.navigate(baseUrl + "/", 1200);
+  await session.navigate(baseUrl + "/", 1200);
   await session.login(baseUrl, email, password);
 
   const created = await session.eval(`(async () => {
@@ -137,10 +137,15 @@ async function main() {
   const configureHit = await session.click('button[aria-label^="Configure radd:"]');
   await sleep(700);
 
+  // The dialog opens as the GENERATED form (RADD-747); its internals are that
+  // issue's proof. What this one needs is the raw view, because the assertions
+  // below are about the fence's bytes — so switch to it and read the JSON.
+  await session.click('[role="dialog"] button', (t) => t.trim() === "Edit as JSON");
+  await sleep(300);
   const dialog = await session.eval(`(() => {
     const d = document.querySelector('[role="dialog"]');
     if (!d) return null;
-    const ta = d.querySelector("textarea");
+    const ta = d.querySelector('textarea[aria-label="Parameters as JSON"]');
     return {
       label: d.getAttribute("aria-label"),
       // The dialog must open on the block's ACTUAL parameters, not on defaults.
@@ -153,7 +158,7 @@ async function main() {
   // missing textarea is a RESULT this proof should report, not a crash that
   // hides every assertion after it.
   const retyped = await session.eval(`(() => {
-    const ta = document.querySelector('[role="dialog"] textarea');
+    const ta = document.querySelector('[role="dialog"] textarea[aria-label="Parameters as JSON"]');
     if (!ta) return false;
     const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set;
     setter.call(ta, JSON.stringify({ kind: "danger", title: "Mind the gap", text: "Body text.", unknown_param: 7 }));

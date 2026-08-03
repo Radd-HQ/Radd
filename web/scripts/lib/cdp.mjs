@@ -141,6 +141,13 @@ export async function clickAt(send, selector, match) {
     const el = ${match ? `nodes.find((n) => (${match.toString()})(n.textContent || ""))` : "nodes[0]"};
     if (!el) return null;
     const target = el.closest("button") || el;
+    // Scroll it into view first, as a person would. An element inside a scrolling
+    // container still reports a rect when it is below the fold, so clicking its
+    // centre lands wherever that point happens to be — usually on a click-away
+    // overlay, which then reads as the z-index bug of RADD-742 rather than as
+    // "the list scrolled". The extension picker's max-h-80 list hit exactly this
+    // once it grew past four entries.
+    target.scrollIntoView({ block: "nearest", inline: "nearest" });
     const r = target.getBoundingClientRect();
     const x = r.left + r.width / 2;
     const y = r.top + r.height / 2;

@@ -26,7 +26,11 @@ import {
   insertExtensionBlock,
 } from "./ExtensionPicker";
 import { raddDiffDecoration } from "./diff/decoration-plugin";
-import { raddExtensionRemark, raddExtensionSchema } from "./extension-node";
+import {
+  raddExtensionConfigOnInsert,
+  raddExtensionRemark,
+  raddExtensionSchema,
+} from "./extension-node";
 import { ExtensionNodeView } from "./ExtensionNodeView";
 import {
   insertMention,
@@ -404,6 +408,7 @@ function RichEditorInner({
       crepe.editor
         .use(raddExtensionRemark)
         .use(raddExtensionSchema)
+        .use(raddExtensionConfigOnInsert)
         .use(
           $view(raddExtensionSchema.node, () =>
             nodeViewFactory({

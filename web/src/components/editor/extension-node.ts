@@ -1,4 +1,6 @@
-import { $nodeSchema, $remark } from "@milkdown/kit/utils";
+import { $nodeSchema, $prose, $remark } from "@milkdown/kit/utils";
+import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
+import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import { visit } from "unist-util-visit";
 import type { Node as UnistNode, Parent } from "unist";
 import { extensionNameOfInfo } from "../../lib/page-extensions";
@@ -119,3 +121,48 @@ export const raddExtensionSchema = $nodeSchema(RADD_EXTENSION_NODE, () => ({
     },
   },
 }));
+
+/** Carries "configure the block at this position" from the insert menu to the
+ *  node view that will render it (RADD-747). */
+export const configOnInsertKey = new PluginKey<number | null>("raddExtensionConfigOnInsert");
+
+/** Spec flag on the decoration a waiting block carries. */
+export const CONFIG_ON_INSERT = "raddConfigOnInsert";
+
+/**
+ * Open the config form on a block that was just inserted (RADD-747).
+ *
+ * A DECORATION rather than a callback or a shared variable, because the node
+ * view is created by ProseMirror and rendered through a portal: it has no
+ * constructor the menu could reach, and a module-level flag would address the
+ * wrong editor as soon as two are mounted. A decoration is already the channel
+ * ProseMirror gives a plugin for saying something about ONE node, and it
+ * survives the position moving under concurrent edits because the state is
+ * mapped through every transaction.
+ */
+export const raddExtensionConfigOnInsert = $prose(
+  () =>
+    new Plugin<number | null>({
+      key: configOnInsertKey,
+      state: {
+        init: () => null,
+        apply(tr, value) {
+          const requested = tr.getMeta(configOnInsertKey);
+          if (requested !== undefined) return requested as number | null;
+          if (value === null) return null;
+          return tr.docChanged ? tr.mapping.map(value) : value;
+        },
+      },
+      props: {
+        decorations(state) {
+          const pos = configOnInsertKey.getState(state);
+          if (pos === null || pos === undefined) return null;
+          const node = state.doc.nodeAt(pos);
+          if (!node || node.type.name !== RADD_EXTENSION_NODE) return null;
+          return DecorationSet.create(state.doc, [
+            Decoration.node(pos, pos + node.nodeSize, {}, { [CONFIG_ON_INSERT]: true }),
+          ]);
+        },
+      },
+    }),
+);
