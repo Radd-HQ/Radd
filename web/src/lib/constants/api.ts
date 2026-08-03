@@ -73,6 +73,9 @@ export const ApiPath = {
   forms: "/forms",
   // Requester portal (spec 73): eligibility-gated form directory, any authed user.
   portalForms: "/portal/forms",
+  /** Requests you filed (RADD-785) — a SIBLING prefix, never /portal/forms/requests:
+   *  a literal after `/{form_id}` is shadowed by it (RADD-761). */
+  portalRequests: "/portal/requests",
   // Spec 22 consumers (time logging):
   workCategories: "/work-categories",
   timesheet: "/timesheet",

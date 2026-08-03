@@ -210,3 +210,51 @@ async def test_sharing_put_validation_and_full_replace(db, admin):
         db, form.id, FormSharingUpdate(shares=[FormShareEntry(team_id=team.id)]), admin
     )
     assert [(s.user_id, s.team_id) for s in read.shares] == [(None, team.id)]
+
+
+async def test_my_requests_is_scoped_by_reporter_not_by_permission(db, admin):
+    """RADD-785: your own request is yours to see, with no `item.read` involved.
+
+    That is the whole point. The configuration that makes a clean requester —
+    a Baseline carrying no read at all — is exactly the one that would otherwise
+    leave them unable to see the ticket they just filed.
+    """
+    project = await _project(db)
+    sharee = await _member(db, "Requester")
+    other = await _member(db, "Someone else")
+    form = await _form(db, admin, project, "Access request")
+    await forms_service.update_sharing(
+        db, form.id, FormSharingUpdate(shares=[FormShareEntry(user_id=sharee.id)]), admin
+    )
+
+    await portal.submit_portal_form(db, form.id, FormSubmit(title="A new laptop"), sharee)
+
+    mine = await portal.list_my_requests(db, sharee)
+    assert [r.title for r in mine] == ["A new laptop"]
+    assert mine[0].key.startswith(project.key)
+    assert mine[0].project.key == project.key
+    assert mine[0].state  # the workflow state, for "where has it got to"
+
+    # Someone else's portal shows nothing of it.
+    assert await portal.list_my_requests(db, other) == []
+
+
+async def test_my_requests_exposes_no_issue_contents(db, admin):
+    """The trimming is the security boundary, so it is asserted rather than assumed.
+
+    A requester is scoped by their RELATIONSHIP to the row, not by `item.read`,
+    so this read model must never grow into a back door: no description, no
+    comments, no assignee, no labels, no custom fields.
+    """
+    project = await _project(db)
+    sharee = await _member(db, "Requester")
+    form = await _form(db, admin, project, "Access request")
+    await forms_service.update_sharing(
+        db, form.id, FormSharingUpdate(shares=[FormShareEntry(user_id=sharee.id)]), admin
+    )
+    await portal.submit_portal_form(
+        db, form.id, FormSubmit(title="Secret-ish", description="internal details"), sharee
+    )
+
+    fields = set(type((await portal.list_my_requests(db, sharee))[0]).model_fields)
+    assert fields == {"key", "title", "state", "state_category", "project", "created_at", "updated_at"}

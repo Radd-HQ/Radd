@@ -180,3 +180,20 @@ export interface PortalForm extends PublicForm {
   id: string;
   project: PortalProjectRef;
 }
+
+/**
+ * One request you filed, as the portal shows it (RADD-785).
+ *
+ * Deliberately narrow — no description, comments, assignee or fields. A
+ * requester is scoped by their RELATIONSHIP to the row (`reporter_id`), not by
+ * `item.read`, so this must not become a back door into an issue's contents.
+ */
+export interface PortalRequest {
+  key: string;
+  title: string;
+  state: string;
+  state_category: string;
+  project: { id: string; key: string; name: string };
+  created_at: string;
+  updated_at: string;
+}

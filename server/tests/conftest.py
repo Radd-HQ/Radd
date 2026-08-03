@@ -85,10 +85,40 @@ def _migrate_database() -> None:
     command.upgrade(cfg, "head")
 
 
+def _seed_builtin_roles() -> None:
+    """Seed the builtin roles, exactly as app startup does.
+
+    Not optional since RADD-773. What every active user holds is the BASELINE
+    role row now, not a constant — so a database without it gives every actor an
+    empty permission set, and tests that touch a real session then behave
+    differently depending on whether some earlier test happened to seed it.
+
+    That is not hypothetical: `pytest tests/test_portal.py` alone failed with
+    "item.read denied" while the full suite passed, because another module's
+    fixture had seeded the row first. A suite whose result depends on which
+    subset you run is worse than one that fails.
+    """
+    import asyncio
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from radd.modules.auth import roles
+
+    async def run() -> None:
+        engine = create_async_engine(settings.database_url)
+        async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+            await roles.ensure_builtin_roles(session)
+            await session.commit()
+        await engine.dispose()
+
+    asyncio.run(run())
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _fresh_test_database():
     _recreate_database()
     _migrate_database()
+    _seed_builtin_roles()
     yield
 
 

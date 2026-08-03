@@ -1,4 +1,6 @@
 import { Link } from "@tanstack/react-router";
+import { MyForms } from "../components/forms/MyForms";
+import { MyRequests } from "../components/forms/MyRequests";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarClock, History, Inbox, ShieldCheck, Star, UserRound } from "lucide-react";
 import { listRecentItems } from "../lib/recent";
@@ -67,6 +69,12 @@ export function MyWorkPage() {
       <h1 className="mb-5 text-lg font-semibold text-heading">My Work</h1>
 
       <div className="flex flex-col gap-6">
+        {/* Requester surfaces first (RADD-785/786): for someone whose only
+            relationship with Radd is filing requests, these are the whole page,
+            and both render nothing when they are empty. */}
+        <MyForms />
+        <MyRequests compact />
+
         <AwaitingApprovalSection />
 
         <Section

@@ -218,6 +218,27 @@ class PortalGroup(BaseModel):
     forms: list[PortalFormCard]
 
 
+class PortalRequestRead(BaseModel):
+    """One request the actor filed, as a requester may see it (RADD-785).
+
+    Deliberately narrow. A requester is scoped by their RELATIONSHIP to the row
+    (`reporter_id`), not by `item.read`, so this must not become a back door
+    into an issue's contents: no description, no comments, no assignee, no
+    labels, no custom fields. What is here is what "where has my request got to"
+    needs — its key, its title, and the state it is in.
+    """
+
+    key: str
+    title: str
+    state: str
+    #: Workflow category (todo/in_progress/done/canceled) — enough to render
+    #: progress without exposing the project's state vocabulary as a filter.
+    state_category: str
+    project: PortalProjectRef
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
+
+
 class PortalFormRead(PublicFormRead):
     """GET /portal/forms/{id} — the spec-62 public trimming plus the ids an
     AUTHED page needs: the form id and the project ref (header chip + the KB

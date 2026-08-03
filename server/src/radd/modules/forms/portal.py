@@ -28,6 +28,7 @@ from .schemas import (
     PortalFormRead,
     PortalGroup,
     PortalProjectRef,
+    PortalRequestRead,
     PublicSubmitResult,
 )
 from .types import FormEntity
@@ -100,6 +101,60 @@ async def render_portal_form(
         project=PortalProjectRef(id=project.id, key=project.key, name=project.name),
         **base.model_dump(),
     )
+
+
+async def list_my_requests(
+    session: AsyncSession, actor: User, limit: int = 50
+) -> list[PortalRequestRead]:
+    """What this person has filed (RADD-785).
+
+    Scoped by RELATIONSHIP, not by permission: the filter is
+    `reporter_id == actor.id` and no `item.read` is asked of anyone. That is the
+    same trust the submit path already extends — your own request is yours to
+    see — and it is why a requester can be given a Baseline with no read at all
+    and still track what they raised.
+
+    Reaching into `work_items` from here is the tolerated inward read this
+    module already does for submits; the trimming lives in `PortalRequestRead`,
+    which carries no description, comments, assignee or fields. Being the
+    reporter must not become a back door into an issue's contents.
+    """
+    from radd.modules.items.models import WorkItem
+    from radd.modules.workflow.models import State
+
+    rows = await session.execute(
+        select(WorkItem, State)
+        .join(State, State.id == WorkItem.state_id, isouter=True)
+        .where(WorkItem.reporter_id == actor.id)
+        .where(WorkItem.archived_at.is_(None))
+        .order_by(WorkItem.created_at.desc())
+        .limit(limit)
+    )
+    pairs = list(rows.all())
+    if not pairs:
+        return []
+    project_ids = {item.project_id for item, _ in pairs}
+    projects = {
+        p.id: p for p in await projects_service.list_projects(session) if p.id in project_ids
+    }
+    keys = await projects_service.project_keys(session, list(project_ids))
+    out: list[PortalRequestRead] = []
+    for item, state in pairs:
+        project = projects.get(item.project_id)
+        if project is None:  # a project removed under them — not their problem
+            continue
+        out.append(
+            PortalRequestRead(
+                key=f"{keys[project.id]}-{item.number}",
+                title=item.title,
+                state=state.name if state else "",
+                state_category=state.category if state else "",
+                project=PortalProjectRef(id=project.id, key=project.key, name=project.name),
+                created_at=item.created_at,
+                updated_at=item.updated_at,
+            )
+        )
+    return out
 
 
 async def submit_portal_form(

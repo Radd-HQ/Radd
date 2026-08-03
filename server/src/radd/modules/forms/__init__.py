@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
 
-from .portal_router import router as portal_router
+from .portal_router import requests_router as portal_requests_router, router as portal_router
 from .public_router import router as public_router
 from .router import router
 from .types import FormEvent
@@ -31,7 +31,7 @@ plugin = RaddPlugin(
         "projects", "auth", "teams", "fields", "workflow", "labels", "cycles", "releases",
         "items", "events",
     ),
-    routers=(router, public_router, portal_router),
+    routers=(router, public_router, portal_router, portal_requests_router),
     exception_handlers=((FormValidationError, _form_validation_handler),),
     event_types=(
         EventTypeSpec(FormEvent.CREATED, "Intake form created", "Admin"),

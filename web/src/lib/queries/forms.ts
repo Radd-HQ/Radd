@@ -14,6 +14,7 @@ import {
 } from "../constants";
 import { queryKeys } from "./shared";
 import type {
+  PortalRequest,
   Form,
   ItemCsat,
   MailContact,
@@ -46,6 +47,14 @@ export const portalFormsQuery = queryOptions({
   queryKey: queryKeys.portalForms,
   queryFn: () => api.get<PortalGroup[]>(ApiPath.portalForms),
   meta: entityMeta(Entity.form),
+});
+
+/** What this person has filed (RADD-785) — reporter-scoped, so it answers for
+ *  a requester whose Baseline carries no read at all. */
+export const portalRequestsQuery = queryOptions({
+  queryKey: [...queryKeys.portalForms, "requests"] as const,
+  queryFn: () => api.get<PortalRequest[]>(ApiPath.portalRequests),
+  staleTime: 30_000,
 });
 
 /** One eligible form's portal render payload (spec 73) — field definitions
