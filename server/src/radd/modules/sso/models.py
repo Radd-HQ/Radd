@@ -79,6 +79,25 @@ class SsoProvider(Base, TimestampMixin):
     # claim) would demote the AD admin it just linked to.
     admin_groups: Mapped[str] = mapped_column(String(1000), default="")
 
+    # --- what a NEW account starts with (RADD-777) ----------------------------
+    # A role granted the moment this provider CREATES an account, and never
+    # again. Nullable = the account starts on the Baseline alone.
+    #
+    # It is a GRANT (a `global_role_grants` row), not a field written on the
+    # user, and that is what makes "never undo an admin's later change" a
+    # property of the data rather than a rule someone has to remember: nothing
+    # reconciles grants, so revoking it, rescoping it or adding others is simply
+    # never re-read.
+    #
+    # Creation-only is not a nicety either. Spec 40 wrote `instance_role` on
+    # EVERY login, so an AD-provisioned admin signing in through Google — which
+    # ships no group claim — was silently demoted each time; `_syncs_roles`
+    # exists to stop exactly that. Re-applying a default grant per login would
+    # be the same mistake wearing a different hat.
+    default_role_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("roles.id", ondelete="SET NULL"), nullable=True
+    )
+
     source: Mapped[str] = mapped_column(String(10), default=SsoProviderSource.USER.value)
 
     @property

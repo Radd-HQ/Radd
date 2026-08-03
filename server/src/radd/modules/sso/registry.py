@@ -121,6 +121,11 @@ async def create_provider(
         allowed_signup_domains=_clean_domains(data.allowed_signup_domains),
         require_verified_email=data.require_verified_email,
         group_claim=(data.group_claim or "groups").strip(),
+        # RADD-777. An explicit field list means a new column is silently
+        # dropped on create until it is added here — which is exactly what
+        # happened, and what made two of the new tests pass VACUOUSLY: they
+        # asserted "no grant" against a provider that had never stored a role.
+        default_role_id=data.default_role_id,
         admin_groups=(data.admin_groups or "").strip(),
         source=source.value,
     )
@@ -143,6 +148,13 @@ async def update_provider(
     for field in ("enabled", "position", "auto_provision", "require_verified_email"):
         if field in patch:
             setattr(provider, field, patch[field])
+    # An explicit null CLEARS it (RADD-777) — the house PATCH semantics, and the
+    # only way to say "new accounts get nothing extra" once a role was chosen.
+    # `exclude_unset` is what makes that expressible: an omitted key leaves the
+    # value alone, a key set to None removes it. Left out of the loop above only
+    # because these fields all coerce and this one must not.
+    if "default_role_id" in patch:
+        provider.default_role_id = patch["default_role_id"]
     if "allowed_signup_domains" in patch:
         provider.allowed_signup_domains = _clean_domains(patch["allowed_signup_domains"] or [])
     # An EMPTY secret on update means "keep the stored one" — the read model

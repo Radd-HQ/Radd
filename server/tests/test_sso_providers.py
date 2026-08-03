@@ -308,3 +308,87 @@ async def test_duplicate_names_are_rejected(db):
 
     with pytest.raises(ConflictError):
         await _provider(db, name=name)
+
+
+# --- the provider's default role grant (RADD-777) -----------------------------
+
+
+async def _member_role(db):
+    """The seeded Member row.
+
+    Seeded here rather than assumed: `ensure_builtin_roles` runs on app startup,
+    and these tests talk to the session directly without one. It is idempotent,
+    so calling it costs nothing when another test got there first.
+    """
+    from radd.modules.auth import roles as roles_service
+    from radd.modules.auth.models import Role
+
+    await roles_service.ensure_builtin_roles(db)
+    await db.flush()
+    return (await db.execute(select(Role).where(Role.key == "member"))).scalar_one()
+
+
+async def _grants_for(db, user_id):
+    from radd.modules.auth.models import GlobalRoleGrant
+
+    rows = await db.execute(select(GlobalRoleGrant).where(GlobalRoleGrant.user_id == user_id))
+    return rows.scalars().all()
+
+
+async def test_default_role_is_granted_when_the_provider_creates_the_account(db):
+    role = await _member_role(db)
+    provider = await _provider(db, default_role_id=role.id)
+
+    user = await service.provision(db, provider, _claims(f"new-{uuid.uuid4().hex[:6]}@radd-hq.com"))
+
+    held = await _grants_for(db, user.id)
+    assert [(g.role_id, g.project_id) for g in held] == [(role.id, None)]
+
+
+async def test_the_default_grant_is_never_re_applied(db):
+    """The whole point, and the reason it is a GRANT rather than a field.
+
+    Spec 40 wrote `instance_role` on EVERY login, so an AD-provisioned admin
+    signing in through Google — which ships no group claim — was silently
+    demoted each time; `_syncs_roles` exists to stop that. A default grant
+    re-applied per login would be the same bug wearing a different hat: an admin
+    revokes it, the person signs in, it comes back.
+    """
+    from radd.modules.auth import grants
+
+    role = await _member_role(db)
+    provider = await _provider(db, default_role_id=role.id)
+    email = f"new-{uuid.uuid4().hex[:6]}@radd-hq.com"
+    user = await service.provision(db, provider, _claims(email))
+
+    for grant in await _grants_for(db, user.id):
+        await grants.delete_grant(db, grant.id)
+    await db.flush()
+
+    await service.provision(db, provider, _claims(email))
+
+    assert await _grants_for(db, user.id) == []
+
+
+async def test_linking_an_existing_account_grants_nothing(db):
+    """A Google login onto an AD account is a LINK, not a creation.
+
+    The account already has whatever access it was given; handing it the
+    provider's starting role because it used a different door would be a silent
+    privilege change nobody asked for.
+    """
+    role = await _member_role(db)
+    provider = await _provider(db, default_role_id=role.id)
+    email = f"existing-{uuid.uuid4().hex[:6]}@radd-hq.com"
+    existing = await _user(db, email)
+
+    linked = await service.provision(db, provider, _claims(email, sub="google-sub-link"))
+
+    assert linked.id == existing.id
+    assert await _grants_for(db, linked.id) == []
+
+
+async def test_no_default_role_configured_grants_nothing(db):
+    provider = await _provider(db)  # default_role_id is None
+    user = await service.provision(db, provider, _claims(f"new-{uuid.uuid4().hex[:6]}@radd-hq.com"))
+    assert await _grants_for(db, user.id) == []

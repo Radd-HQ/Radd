@@ -222,6 +222,32 @@ async def identities_for_user(session: AsyncSession, user_id: uuid.UUID) -> list
     return list(result.scalars())
 
 
+
+async def _grant_default_role(session: AsyncSession, provider: SsoProvider, user: User) -> None:
+    """Give a freshly created account the provider's default role, once.
+
+    A `global_role_grants` row rather than anything written on the user: grants
+    are additive and nothing reconciles them, so "this must never undo a later
+    admin change" needs no enforcement — no code path reads this setting again
+    for this account.
+
+    A role deleted since the provider was configured leaves `default_role_id`
+    NULL (the FK is ON DELETE SET NULL) and this is a no-op, which is the right
+    answer: a signup should not fail because an admin tidied the role list.
+    """
+    if provider.default_role_id is None:
+        return
+    from radd.modules.auth import grants
+
+    await grants.create_grant(session, provider.default_role_id, user_id=user.id)
+    logger.info(
+        "sso: granted default role %s to new %s account %s",
+        provider.default_role_id,
+        provider.name,
+        user.email,
+    )
+
+
 async def provision(session: AsyncSession, provider: SsoProvider, claims: dict) -> User:
     """Resolve verified claims to a local account, linking or creating as policy allows."""
     subject = str(claims.get("sub") or "").strip()
@@ -258,6 +284,14 @@ async def provision(session: AsyncSession, provider: SsoProvider, claims: dict) 
             user = User(email=email, name=name, password_hash=None, source=UserSource.OIDC)
             session.add(user)
             await session.flush()
+            # The provider's starting grant (RADD-777) — HERE and nowhere else.
+            #
+            # This branch is the only one that CREATES an account. The `linked`
+            # branch below is an existing account gaining another door, and a
+            # returning login reaches neither. Putting the grant on any of the
+            # others would re-apply it, which is spec 40's demotion bug in a new
+            # costume: an admin revokes it, the person signs in, it is back.
+            await _grant_default_role(session, provider, user)
         else:
             # The account already exists under another sign-in method (usually AD).
             # It keeps its `source`, its role and its history — this login just

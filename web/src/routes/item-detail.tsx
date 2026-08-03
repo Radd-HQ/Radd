@@ -269,6 +269,12 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
           ))}
         <button
           type="button"
+          // The spec-96 field gate decides; `data-needs` DECLARES the atom
+          // behind it so the restricted-access proof can check the claim
+          // (RADD-778). Without it a correct gate and a missing one look the
+          // same to the run.
+          data-needs={Permission.itemUpdate}
+          data-needs-project={project.id}
           disabled={!writ.fieldWritable("flagged")}
           onClick={() => patch({ flagged: !item.flagged })}
           aria-pressed={Boolean(item.flagged)}

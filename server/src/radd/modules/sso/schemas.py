@@ -24,6 +24,9 @@ class SsoProviderBase(BaseModel):
     require_verified_email: bool = True
     group_claim: str = "groups"
     admin_groups: str = ""
+    #: A role granted the moment this provider CREATES an account, and never
+    #: again (RADD-777). Null = new accounts start on the Baseline alone.
+    default_role_id: uuid.UUID | None = None
 
 
 class SsoProviderCreate(SsoProviderBase):
@@ -48,6 +51,7 @@ class SsoProviderUpdate(BaseModel):
     require_verified_email: bool | None = None
     group_claim: str | None = None
     admin_groups: str | None = None
+    default_role_id: uuid.UUID | None = None
 
 
 class SsoProviderRead(SsoProviderBase):

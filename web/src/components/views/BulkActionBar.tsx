@@ -18,6 +18,7 @@ import {
   usersQuery,
 } from "../../lib/queries";
 import { pushToast, ToastKind } from "../../lib/toast";
+import { Permission } from "../../lib/types";
 import type {
   BulkMoveResult,
   BulkSkipReasonValue,
@@ -29,6 +30,7 @@ import type {
 } from "../../lib/types";
 import { BACKLOG_KEY, selectableCycles } from "../../lib/view-utils";
 import { Button } from "../Button";
+import { useCan } from "../../lib/can";
 import { Modal } from "../Modal";
 import { Select } from "../Select";
 
@@ -82,6 +84,12 @@ export function BulkActionBar({
   // a reason. Cross-project selections (project === null) can't be pre-resolved per item, so they
   // keep the server's per-item skip-and-report path.
   const writ = useItemWritability(project);
+  // Already gated correctly by spec 96 — what was missing is the DECLARATION.
+  // Without `data-needs` the restricted-access proof cannot tell a disabled
+  // control from an absent one, so a correct gate and a missing gate looked
+  // identical to it (RADD-778).
+  const can = useCan();
+  const editGate = can(Permission.itemUpdate, { project, verb: "edit these issues" });
   const locked = (field: string) => project != null && !writ.fieldWritable(field);
 
   // Option sources are fetched lazily — the bar only mounts with a selection.
@@ -274,8 +282,9 @@ export function BulkActionBar({
         </Button>
         <Button
           variant="ghost"
-          disabled={project != null && !writ.canEdit}
-          title={project != null && !writ.canEdit ? writ.reasonFor("archived") : undefined}
+          {...editGate.props}
+          disabled={editGate.props.disabled || (project != null && !writ.canEdit)}
+          title={project != null && !writ.canEdit ? writ.reasonFor("archived") : editGate.props.title}
           onClick={() => apply({ archived: true })}
         >
           <Archive size={13} aria-hidden />

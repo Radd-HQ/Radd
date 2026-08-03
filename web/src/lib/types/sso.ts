@@ -28,6 +28,10 @@ export interface SsoProviderRead {
   require_verified_email: boolean;
   group_claim: string;
   admin_groups: string;
+  /** Role granted ONCE, when this provider creates an account (RADD-777).
+   *  Null = new accounts start on the Baseline alone. Never re-applied, so an
+   *  admin's later change to that person's roles is never undone. */
+  default_role_id?: string | null;
   source: string;
   /** False when the row can't complete a flow yet — explains its absence from login. */
   configured: boolean;
@@ -50,6 +54,7 @@ export interface SsoProviderPayload {
   require_verified_email?: boolean;
   group_claim?: string;
   admin_groups?: string;
+  default_role_id?: string | null;
 }
 
 /** GET /sso/kinds — what the "add a provider" form prefills itself with. */
