@@ -5,6 +5,7 @@ import {
   ArchiveRestore,
   Download,
   History,
+  Lock,
   Pencil,
   Printer,
   Trash2,
@@ -19,6 +20,8 @@ import {
   attachmentUrl,
 } from "../../lib/constants";
 import { relativeTime } from "../../lib/dates";
+import { AccessGrantsEditor } from "../settings/AccessGrantsEditor";
+import { Modal } from "../Modal";
 import { PageBody } from "./PageBody";
 import { usersQuery } from "../../lib/queries";
 import { AttachmentParentType, type Page, type PageUpdate } from "../../lib/types";
@@ -70,6 +73,7 @@ export function PageView({
   const [tab, setTab] = useState<TabValue>(Tab.content);
   const [title, setTitle] = useState(page.title);
   const [editing, setEditing] = useState(false);
+  const [restricting, setRestricting] = useState(false);
   const [draft, setDraft] = useState(page.body);
   /** The version the edit session was OPENED at — the optimistic-concurrency
    * anchor. A realtime refetch may bump page.version mid-edit; saving must
@@ -242,6 +246,20 @@ export function PageView({
               },
             ]}
           />
+          {/* RADD-792/793: restrict this ONE page, over the generic spec-92
+              editor. Offered where the page is, not in settings — the decision
+              is about this page and is made while reading it. */}
+          {canManage && (
+            <button
+              type="button"
+              onClick={() => setRestricting(true)}
+              title="Restrict who can see this page"
+              aria-label="Restrict page"
+              className="ml-1 rounded p-1 text-fg-faint hover:bg-elevated hover:text-fg cursor-pointer"
+            >
+              <Lock size={13} aria-hidden />
+            </button>
+          )}
           {canWrite && !archived && (
             <button
               type="button"
@@ -442,6 +460,21 @@ export function PageView({
         </>
       )}
       {confirmDialog}
+      {restricting && (
+        <Modal title={`Restrict "${page.title}"`} onClose={() => setRestricting(false)}>
+          <AccessGrantsEditor
+            resourceType="page"
+            resourceId={page.id}
+            description={
+              <>
+                Unrestricted, this page is visible to everyone with access to its space.
+                Naming anyone below closes it to everyone else — and a grant here can only
+                narrow: it never gives access to a space someone was not already given.
+              </>
+            }
+          />
+        </Modal>
+      )}
     </div>
     </PageExtensionCtx.Provider>
   );

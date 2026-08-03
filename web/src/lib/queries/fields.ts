@@ -33,16 +33,28 @@ export const grantsQuery = (resourceType: string, resourceId: string) =>
   });
 
 /** Role grants (spec 91) held by one subject — the team/user Roles section. */
-export const roleGrantsQuery = (subject: { teamId?: string; userId?: string }) =>
-  queryOptions({
-    queryKey: [...queryKeys.roleGrants, subject.teamId ?? subject.userId ?? ""] as const,
-    queryFn: () =>
-      api.get<RoleGrant[]>(
-        `${ApiPath.roleGrants}?${subject.teamId ? `team_id=${subject.teamId}` : `user_id=${subject.userId}`}`,
-      ),
-    enabled: Boolean(subject.teamId || subject.userId),
+/** Role grants by SUBJECT (a team/user's Roles tab) or by SPACE (RADD-793 —
+ *  "who was given access to this space", the question an admin actually asks). */
+export const roleGrantsQuery = (subject: {
+  teamId?: string;
+  userId?: string;
+  spaceId?: string;
+}) => {
+  const key = subject.teamId
+    ? `team_id=${subject.teamId}`
+    : subject.userId
+      ? `user_id=${subject.userId}`
+      : `space_id=${subject.spaceId}`;
+  return queryOptions({
+    queryKey: [
+      ...queryKeys.roleGrants,
+      subject.teamId ?? subject.userId ?? subject.spaceId ?? "",
+    ] as const,
+    queryFn: () => api.get<RoleGrant[]>(`${ApiPath.roleGrants}?${key}`),
+    enabled: Boolean(subject.teamId || subject.userId || subject.spaceId),
     staleTime: 30_000,
   });
+};
 
 /** Issue link types (spec 91). No projectId = every type (admin); a projectId =
  * the manual types offered on an item in that project (global + project-scoped). */

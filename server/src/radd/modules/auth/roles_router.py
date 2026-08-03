@@ -115,13 +115,24 @@ async def list_role_grants(
     user: CurrentUser,
     team_id: uuid.UUID | None = None,
     user_id: uuid.UUID | None = None,
+    space_id: uuid.UUID | None = None,
 ) -> list[GlobalGrantRead]:
-    """Every role grant (any role, global or project) held by one subject — the
-    team/user Roles tab. Exactly one of team_id/user_id."""
+    """Role grants, by SUBJECT (the team/user Roles tab) or by SPACE (RADD-793).
+
+    Exactly one of team_id/user_id/space_id. The space direction is the one an
+    admin actually asks — "who has access to this space?" — and asking it by
+    walking every user was not an answer.
+    """
     await authz.require_member(session, user)
-    if (team_id is None) == (user_id is None):
-        raise ConflictError(AuthEntity.GLOBAL_GRANT, reason="exactly one of team_id/user_id")
-    rows = await grants.grants_for_subject(session, user_id=user_id, team_id=team_id)
+    named = [x for x in (team_id, user_id, space_id) if x is not None]
+    if len(named) != 1:
+        raise ConflictError(
+            AuthEntity.GLOBAL_GRANT, reason="exactly one of team_id/user_id/space_id"
+        )
+    if space_id is not None:
+        rows = await grants.grants_for_space(session, space_id)
+    else:
+        rows = await grants.grants_for_subject(session, user_id=user_id, team_id=team_id)
     return [GlobalGrantRead.model_validate(g) for g in rows]
 
 

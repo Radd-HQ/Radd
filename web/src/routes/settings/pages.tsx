@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, Check, Copy, Pencil, Plus, Trash2, X } from "lucide-react";
+import { BookOpen, Check, Copy, Pencil, Plus, ShieldCheck, Trash2, X } from "lucide-react";
 import { api, ApiError, errorMessage } from "../../lib/api";
 import { ApiPath, RoutePath, apiPageSpacePath, publicKbSpaceUrl } from "../../lib/constants";
 import { Entity, invalidateEntities } from "../../lib/cache";
@@ -20,6 +20,7 @@ import { PublicBadge } from "../../components/pages/PublicBadge";
 import { TableSkeleton } from "../../components/TableSkeleton";
 import { TextField } from "../../components/TextField";
 import { SettingsPage } from "../../components/settings/SettingsPage";
+import { SpaceAccessPanel } from "../../components/settings/SpaceAccessPanel";
 import { QueryError } from "../../components/QueryError";
 
 /** Page spaces admin (spec 43, doc.manage): create/rename/delete pages spaces. */
@@ -29,6 +30,7 @@ export function PagesSettingsPage() {
   const spaces = useQuery(pageSpacesQuery());
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<PageSpace | null>(null);
+  const [showingAccess, setShowingAccess] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [confirmDialog, confirm] = useConfirm();
 
@@ -61,7 +63,7 @@ export function PagesSettingsPage() {
   return (
     <SettingsPage
       title="Page spaces"
-      description="Pages's spaces (each one holds a page tree). Any member can read; members write pages; managing spaces needs doc.manage."
+      description="Wiki spaces, each holding a page tree. A space is a grant SCOPE (RADD-791): who reads, writes and comments in it is a role granted there. Managing a space needs page.manage in it."
     >
       {spaces.isPending ? (
         <TableSkeleton rows={3} />
@@ -92,6 +94,17 @@ export function PagesSettingsPage() {
                     <span className="flex-1 text-right text-[11px] text-fg-muted">
                       {space.page_count} page{space.page_count === 1 ? "" : "s"}
                     </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setShowingAccess(showingAccess === space.id ? null : space.id)
+                      }
+                      aria-label={`Access for ${space.name}`}
+                      aria-expanded={showingAccess === space.id}
+                      className="rounded p-1 text-fg-muted hover:bg-elevated hover:text-fg cursor-pointer"
+                    >
+                      <ShieldCheck size={13} aria-hidden />
+                    </button>
                     {canManage && (
                       <>
                         <button
@@ -118,6 +131,13 @@ export function PagesSettingsPage() {
                   )}
                   {editing?.id === space.id && (
                     <SpaceForm existing={space} onDone={() => setEditing(null)} />
+                  )}
+                  {showingAccess === space.id && (
+                    <SpaceAccessPanel
+                      spaceId={space.id}
+                      spaceName={space.name}
+                      canManage={canManage}
+                    />
                   )}
                 </li>
               ))}

@@ -150,6 +150,23 @@ async def grants_for_subject(
     return list(result.scalars())
 
 
+async def grants_for_space(
+    session: AsyncSession, space_id: uuid.UUID
+) -> list[GlobalRoleGrant]:
+    """Every grant bound to one wiki space (RADD-793) — the space's Access panel.
+
+    Deliberately NOT including the instance-wide grants that also apply here: the
+    panel answers "who was given access to THIS space", and folding in everyone
+    with a global wiki role would make revoking look possible where it is not.
+    """
+    result = await session.execute(
+        select(GlobalRoleGrant)
+        .where(GlobalRoleGrant.space_id == space_id)
+        .order_by(GlobalRoleGrant.created_at)
+    )
+    return list(result.scalars())
+
+
 async def role_referenced(session: AsyncSession, role_id: uuid.UUID) -> bool:
     """Does any grant (global or project) still hold this role? (role-deletion guard)"""
     row = await session.scalar(
