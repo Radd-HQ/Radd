@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Lock, UserRound } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronRight, Lock, UserRound } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { ApiError, api, errorMessage } from "../../lib/api";
 import { RoutePath, SEARCH_DEBOUNCE_MS, apiUserPath } from "../../lib/constants";
@@ -26,6 +26,7 @@ import { DuplicatesSection } from "../../components/settings/UserDuplicates";
 import { SOURCE_LABELS, SourceBadge } from "../../components/settings/UserSourceBadge";
 import { Select } from "../../components/Select";
 import { Table, TBody, Td, THead, Th } from "../../components/Table";
+import { RoleGrantsSection } from "../../components/settings/RoleGrantsSection";
 
 /**
  * THE people page (spec 84; spec 86 collapsed the membership layer): every
@@ -179,15 +180,20 @@ function UsersTable({
   onDelete: (user: User) => void;
   busy: boolean;
 }) {
+  // Which person's roles are open. One at a time: the grants editor fetches
+  // per subject, and a table of them expanded at once would be a query per row.
+  const [openId, setOpenId] = useState<string | null>(null);
+
   return (
     <div className="overflow-x-auto rounded-lg border border-subtle">
       <Table>
         <THead>
           <tr>
+            <Th />
             <Th>Email</Th>
             <Th>Name</Th>
             <Th>Source</Th>
-            <Th>Role</Th>
+            <Th>Instance access</Th>
             <Th>Status</Th>
             <Th>Last login</Th>
             {isInstanceAdmin && <Th />}
@@ -196,8 +202,28 @@ function UsersTable({
         <TBody>
           {users.map((user) => {
             const self = user.id === meId;
+            const open = openId === user.id;
             return (
-              <tr key={user.id}>
+              <Fragment key={user.id}>
+              <tr>
+                <Td className="w-6">
+                  {/* RADD-775: roles a person HOLDS live here — instance access
+                      (the column beside) is a different thing from a role. */}
+                  <button
+                    type="button"
+                    onClick={() => setOpenId(open ? null : user.id)}
+                    aria-expanded={open}
+                    aria-label={`Roles held by ${user.name}`}
+                    title="Roles held"
+                    className="rounded p-0.5 text-fg-muted hover:bg-elevated hover:text-fg cursor-pointer"
+                  >
+                    {open ? (
+                      <ChevronDown size={14} aria-hidden />
+                    ) : (
+                      <ChevronRight size={14} aria-hidden />
+                    )}
+                  </button>
+                </Td>
                 <Td className="text-heading">{user.email}</Td>
                 <Td>{user.name}</Td>
                 <Td>
@@ -206,7 +232,7 @@ function UsersTable({
                 <Td>
                   {isInstanceAdmin && !self ? (
                     <Select
-                      aria-label={`Role of ${user.name}`}
+                      aria-label={`Instance access of ${user.name}`}
                       value={user.instance_role}
                       onChange={(role) => onChangeRole(user.id, role as InstanceRoleValue)}
                       disabled={busy}
@@ -275,6 +301,28 @@ function UsersTable({
                   </Td>
                 )}
               </tr>
+              {open && (
+                <tr>
+                  <Td colSpan={isInstanceAdmin ? 7 : 6} className="bg-surface/40">
+                    <div className="flex flex-col gap-3 px-2 py-3">
+                      <p className="text-xs text-fg-muted">
+                        Roles this person holds, each applying instance-wide or on the projects
+                        you pick. Separate from <strong>instance access</strong> above (an admin
+                        bypasses every permission check) and from the{" "}
+                        <strong>Baseline</strong> role, which everyone holds without being
+                        granted anything.
+                      </p>
+                      {/* The same editor the Teams panel uses — its `subject`
+                          has always accepted a userId; nothing mounted it. */}
+                      <RoleGrantsSection
+                        subject={{ userId: user.id }}
+                        canManage={isInstanceAdmin}
+                      />
+                    </div>
+                  </Td>
+                </tr>
+              )}
+              </Fragment>
             );
           })}
         </TBody>
