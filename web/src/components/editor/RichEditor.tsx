@@ -24,6 +24,9 @@ import {
   toggleStrikethroughCommand,
 } from "@milkdown/kit/preset/gfm";
 import { upload, uploadConfig } from "@milkdown/kit/plugin/upload";
+import { cursor } from "@milkdown/kit/plugin/cursor";
+import { linkTooltipPlugin } from "@milkdown/kit/component/link-tooltip";
+import { listItemBlockComponent } from "@milkdown/kit/component/list-item-block";
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import { diffComponent, diffDecorationPlugin } from "@milkdown/kit/component/diff";
 import { diff } from "@milkdown/kit/plugin/diff";
@@ -43,6 +46,7 @@ import { AiSelectionToolbar } from "./AiSelectionToolbar";
 import { reviewPending, runAi } from "./ai-run";
 import { NO_SELECTION, selectionRectPlugin, type SelectionRect } from "./selection-state";
 import { CodeBlockView } from "./CodeBlockView";
+import { placeholderPlugin } from "./placeholder";
 import { ImageNodeView } from "./ImageNodeView";
 import { TableGridPicker } from "./TableGridPicker";
 import { TableNodeView } from "./TableNodeView";
@@ -66,8 +70,7 @@ import { mentionChipsPlugin } from "./chips";
 import { PlainEditor, type PlainEditorApi } from "./PlainEditor";
 import type { QuickAction } from "../items/quick-actions";
 import type { PageExtensionSpec } from "../../lib/types";
-import "@milkdown/crepe/theme/common/style.css";
-import "@milkdown/crepe/theme/classic-dark.css";
+import "./editor.css";
 import "./rich-editor.css";
 
 interface RichEditorProps {
@@ -487,9 +490,13 @@ function RichEditorInner({
         // Ours now (RADD-750). The ENGINE is untouched: prosemirror-tables is
         // what every ProseMirror editor uses. Only the chrome changes.
         [CrepeFeature.Table]: false,
-      },
-      featureConfigs: {
-        [CrepeFeature.Placeholder]: { text: placeholder ?? "Write…" },
+        // The last four (RADD-754). Each is replaced below by the KIT component
+        // Crepe was wrapping — same code, one less wrapper — except the
+        // placeholder, which is a decoration small enough to own outright.
+        [CrepeFeature.Placeholder]: false,
+        [CrepeFeature.LinkTooltip]: false,
+        [CrepeFeature.Cursor]: false,
+        [CrepeFeature.ListItem]: false,
       },
     });
     // @/#/"/" triggers (before create) — not on anonymous pages: the popups
@@ -500,6 +507,12 @@ function RichEditorInner({
     // Feeds the toolbar's active state (RADD-749). A plugin view, so the snapshot
     // is recomputed from the editor's own updates rather than polled.
     crepe.editor.use(toolbarStatePlugin(setSnapshot));
+    // The chrome Crepe used to wrap, taken from the kit directly (RADD-754).
+    crepe.editor
+      .use(cursor)
+      .use(linkTooltipPlugin)
+      .use(listItemBlockComponent)
+      .use(placeholderPlugin(placeholder ?? "Write…"));
     // Our code block (RADD-752), in BOTH modes — the same view read-only is what
     // keeps code identical in the viewer, which is what RichViewer is for.
     crepe.editor.use(

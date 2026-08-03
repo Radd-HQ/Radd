@@ -2,14 +2,14 @@ import { useEffect, useRef } from "react";
 import { Crepe, CrepeFeature } from "@milkdown/crepe";
 import { $view } from "@milkdown/kit/utils";
 import { codeBlockSchema, imageSchema } from "@milkdown/kit/preset/commonmark";
+import { listItemBlockComponent } from "@milkdown/kit/component/list-item-block";
 import { ProsemirrorAdapterProvider, useNodeViewFactory } from "@prosemirror-adapter/react";
 import { jiraToMarkdown } from "../../lib/jira-markup";
 import { useOpenIssueRef } from "../../lib/hooks";
 import { mentionChipsPlugin } from "./chips";
 import { CodeBlockView } from "./CodeBlockView";
 import { ImageNodeView } from "./ImageNodeView";
-import "@milkdown/crepe/theme/common/style.css";
-import "@milkdown/crepe/theme/classic-dark.css";
+import "./editor.css";
 import "./rich-editor.css";
 
 /**
@@ -78,6 +78,7 @@ function RichViewerInner({
         // match — so read mode rendered a bare <img> and the width in the URL
         // was applied by the server while the layout ignored it.
         [CrepeFeature.ImageBlock]: false,
+        [CrepeFeature.ListItem]: false, // the kit component instead (RADD-754)
       },
     });
     crepe.editor.use(
@@ -98,6 +99,9 @@ function RichViewerInner({
     crepe.editor.use(
       $view(imageSchema.node, () => nodeViewFactory({ component: ImageNodeView })),
     );
+    // Read mode renders lists through the same component as the editor, or the
+    // two disagree about what a list looks like (RADD-754).
+    crepe.editor.use(listItemBlockComponent);
     crepe.setReadonly(true);
     let live = true;
     const created = crepe.create().then(() => {

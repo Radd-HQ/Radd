@@ -1,37 +1,20 @@
-/* Retint Milkdown/Crepe's classic-dark theme to the app's palette. Values come
-   from the SAME Tailwind variables the rest of the app reads, so the editor
-   follows the app theme (Obsidian-gray dark AND the spec-39 light remap) —
-   never a hardcoded dark island. Theme vars live on `.milkdown`; we override
-   at higher specificity. */
-.radd-rich-editor .milkdown {
-  --crepe-color-background: var(--color-zinc-900);
-  --crepe-color-on-background: var(--color-zinc-200);
-  --crepe-color-surface: var(--color-zinc-800); /* menus/toolbars */
-  --crepe-color-surface-low: var(--color-zinc-900);
-  --crepe-color-on-surface: var(--color-zinc-100);
-  --crepe-color-on-surface-variant: var(--color-zinc-400); /* icons/secondary */
-  --crepe-color-outline: var(--color-zinc-700);
-  --crepe-color-primary: var(--accent-text); /* links/accents — theme-aware */
-  --crepe-color-secondary: var(--color-indigo-800);
-  --crepe-color-on-secondary: var(--color-indigo-100);
-  --crepe-color-inverse: var(--color-zinc-200);
-  --crepe-color-on-inverse: var(--color-zinc-900);
-  --crepe-color-hover: var(--color-zinc-800);
-  --crepe-color-selected: rgba(99, 102, 241, 0.28);
-  --crepe-color-inline-code: var(--color-red-300);
-  --crepe-color-inline-area: var(--color-zinc-800);
-  --crepe-color-error: var(--color-red-400);
-  --crepe-font-default: inherit;
-  --crepe-font-title: inherit;
-  --crepe-font-code: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  /* AI diff review (spec 103): set only the BASE hues — Crepe's diff.css derives
-     the -text/-bg tiers from them via color-mix with --crepe-color-on-background
-     (remapped above), so both themes come out legible. Palette vars, not raw hex:
-     the light remap deepens emerald-400/red-400 for white surfaces. */
-  --crepe-color-diff-added: var(--color-emerald-400);
-  --crepe-color-diff-removed: var(--color-red-400);
-}
-
+/* The editor's app-facing styling (RADD-754).
+ *
+ * This file used to be a RETINT: it remapped Crepe's `--crepe-color-*` scale
+ * onto the app palette and then corrected the chrome Crepe drew on top of it —
+ * an 18px/8:1 pass over its toolbar glyphs, an accent pill for an `.active`
+ * state it styled not at all. Every one of those surfaces is now a React
+ * component of ours, so the remap and the corrections are gone with them, and
+ * this is the styling rather than a layer over someone else's.
+ *
+ * `editor.css` carries what Crepe's stylesheets provided (the editable surface,
+ * lists, quotes, tables, the diff decorations); this carries what the app
+ * decided (typography scale, chips, the AI diff reading).
+ *
+ * The CLAUDE.md exception letting this file read raw `--color-zinc-*` existed
+ * only because Crepe's variables had to be fed from somewhere. It is no longer
+ * used: every value below is a semantic token.
+ */
 .radd-rich-editor .milkdown {
   background: transparent;
 }
@@ -61,60 +44,6 @@
 /* Deleted text inside the new block: the − line above already shows it. */
 .radd-rich-editor .milkdown .radd-diff-hidden {
   display: none;
-}
-
-/* Tighter toolbar spacing: Crepe's stock 12px item margins overflow the row at
-   comment-editor width once the AI button joins, wrapping the tail item onto a
-   second line. Halving the horizontal air keeps the whole row on one line. */
-.radd-rich-editor .milkdown .milkdown-top-bar .top-bar-item {
-  margin: 6px 2px;
-}
-.radd-rich-editor .milkdown .milkdown-top-bar .top-bar-divider {
-  margin: 10px 6px;
-}
-
-/* Toolbar glyphs: Crepe tints every icon with --crepe-color-outline — which
-   our remap points at the BORDER grey (zinc-700), near-invisible on the
-   toolbar surface — and draws them 24px, dwarfing the app's 13px icon
-   language. ONE override for BOTH bars (the fixed top bar and the selection
-   popup) so every editor surface — description, comments, docs, new-item —
-   is identical: 18px glyphs, secondary-text tint, brighter on hover, accent
-   when active. The zinc steps are theme-remapped, so light mode holds too. */
-.radd-rich-editor .milkdown .milkdown-top-bar .top-bar-item svg,
-.radd-rich-editor .milkdown .milkdown-toolbar .toolbar-item svg {
-  width: 18px;
-  height: 18px;
-  color: var(--color-zinc-300);
-  fill: var(--color-zinc-300);
-}
-.radd-rich-editor .milkdown .milkdown-top-bar .top-bar-item:hover svg,
-.radd-rich-editor .milkdown .milkdown-toolbar .toolbar-item:hover svg {
-  color: var(--color-zinc-100);
-  fill: var(--color-zinc-100);
-}
-/* ON state must be unmistakable, not a hue nudge: the active mark's button
-   gets the app's toggle treatment — an accent-tinted pill + accent glyph.
-   (Crepe's top bar sets the `active` class but ships NO styling for it, so
-   Bold-on and Bold-off rendered identically there.) */
-.radd-rich-editor .milkdown .milkdown-top-bar .top-bar-item.active,
-.radd-rich-editor .milkdown .milkdown-toolbar .toolbar-item.active {
-  background: color-mix(in srgb, var(--accent-fill) 24%, transparent);
-  border-radius: 6px;
-}
-.radd-rich-editor .milkdown .milkdown-top-bar .top-bar-item.active svg,
-.radd-rich-editor .milkdown .milkdown-toolbar .toolbar-item.active svg,
-.radd-rich-editor .milkdown .milkdown-top-bar .top-bar-item.active:hover svg,
-.radd-rich-editor .milkdown .milkdown-toolbar .toolbar-item.active:hover svg {
-  color: var(--accent-text-strong);
-  fill: var(--accent-text-strong);
-}
-/* The Paragraph selector's label + chevron join the same tint tier. */
-.radd-rich-editor .milkdown .milkdown-top-bar .top-bar-heading-button {
-  color: var(--color-zinc-300);
-}
-.radd-rich-editor .milkdown .milkdown-top-bar .top-bar-heading-button .top-bar-chevron svg {
-  color: var(--color-zinc-300);
-  stroke: var(--color-zinc-300);
 }
 
 /* The editable surface: comfortable measure + padding, no focus ring (the wrapper
@@ -208,57 +137,16 @@
 
 /* Tables: the themed borders (--crepe-color-outline) are near-invisible on our dark
    bg, so draw explicit visible cell lines + a distinct header row. */
-.radd-rich-editor .milkdown table {
-  border-collapse: collapse;
-  width: 100%;
-}
-.radd-rich-editor .milkdown th,
-.radd-rich-editor .milkdown td {
-  border: 1px solid var(--color-zinc-600); /* clearly visible cell lines */
-  padding: 0.4rem 0.6rem;
-}
-.radd-rich-editor .milkdown th {
-  background: var(--color-zinc-800); /* header row */
-  font-weight: 600;
-  text-align: left;
-}
-/* The row/column add + drag handles and the selection band ride on the accent. */
+/* A selected cell's wash rides the accent, like every other selection. */
 .radd-rich-editor .milkdown .ProseMirror .selectedCell::after {
-  background: rgba(129, 140, 248, 0.22); /* indigo-400 wash on a selected cell */
-}
-
-/* Calmer table widget. The stock handles fade in/out over 0.2s while tracking the
-   hovered cell, which reads as laggy, floaty chrome — make show/hide instant. */
-.radd-rich-editor .milkdown .milkdown-table-block .handle,
-.radd-rich-editor .milkdown .milkdown-table-block .cell-handle {
-  transition: none;
-}
-/* The col/row action popup (align/delete) opens 52px above its drag pill with only
-   an 8px hover bridge, so the pointer "falls off" crossing the gap and the popup
-   vanishes mid-travel. Tighten the gap and bridge the whole of it. */
-.radd-rich-editor .milkdown .milkdown-table-block .cell-handle .button-group {
-  top: -44px;
-}
-.radd-rich-editor .milkdown .milkdown-table-block .cell-handle .button-group::after {
-  bottom: -14px;
-  height: 14px;
-}
-
-/* Fixed toolbar (TopBar): pin it to the top of the editor and give it a solid
-   background so content scrolling under it stays legible. */
-.radd-rich-editor .milkdown .milkdown-top-bar {
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  background: var(--color-zinc-900);
-  border-bottom: 1px solid var(--crepe-color-outline);
-  border-top-left-radius: 0.375rem;
-  border-top-right-radius: 0.375rem;
+  background: color-mix(in srgb, var(--accent-fill) 22%, transparent);
 }
 
 /* Extension-block chrome (RADD-746).
-   Crepe's reset.css carries `.milkdown button { border: none; background: none }`
-   and is UNLAYERED, so it beats every Tailwind utility regardless of specificity
+   Kept after Crepe's reset.css went (RADD-754): a fixed 24px box is the right
+   target size whatever the surrounding stylesheet does, and stating it here
+   rather than in utilities is what stopped it being a 13x13 hit area once.
+   The original reason — an UNLAYERED `.milkdown button { border: none }` that
    — unlayered normal declarations outrank anything in @layer utilities. Our
    node-view chrome is React we own, so its styling lives here rather than in a
    class the reset silently strips.

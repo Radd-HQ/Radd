@@ -1,0 +1,251 @@
+/*
+ * The editor's own stylesheet (RADD-754).
+ *
+ * Replaces `@milkdown/crepe/theme/common/style.css` + `classic-dark.css`. Those
+ * shipped fifteen files of chrome — a top bar, a floating toolbar, a table
+ * block, an image block, a code-mirror skin, an AI panel, a block-edit menu, a
+ * LaTeX widget — and this build renders none of them: every one is now a React
+ * component of ours. What remains is the editable SURFACE and the parts of the
+ * content Crepe styled that `rich-editor.css` never covered.
+ *
+ * Deliberately NOT a second copy of the typography. `rich-editor.css` already
+ * owns headings, paragraphs and links; duplicating them here produced 116 moved
+ * values on the first attempt, because two files disagreed and load order
+ * decided the winner. The split is: this file is what Crepe used to provide,
+ * `rich-editor.css` is what we always decided.
+ *
+ * ProseMirror's own stylesheets are IMPORTED from `@milkdown/kit`, not copied.
+ * They are upstream's contract for the editable surface (selection, gap cursor,
+ * table column resizing); reimplementing them would be forking ProseMirror
+ * rather than owning our chrome.
+ *
+ * `scripts/editor-style-proof.mjs` records every value this affects in BOTH
+ * themes, so a change here reports what moved instead of being taken on trust.
+ */
+
+@import "@milkdown/kit/prose/view/style/prosemirror.css";
+@import "@milkdown/kit/prose/gapcursor/style/gapcursor.css";
+@import "@milkdown/kit/prose/tables/style/tables.css";
+
+/* --- the surface (Crepe's reset.css) -------------------------------------- */
+
+.radd-rich-editor .milkdown {
+  position: relative;
+}
+
+.radd-rich-editor .milkdown * {
+  box-sizing: border-box;
+}
+
+.radd-rich-editor .milkdown .ProseMirror,
+.radd-rich-editor .milkdown .ProseMirror-focused {
+  outline: none;
+}
+
+.radd-rich-editor .milkdown .ProseMirror ::selection,
+.radd-rich-editor .milkdown .ProseMirror::selection {
+  background: color-mix(in srgb, var(--accent-fill) 30%, transparent);
+}
+
+.radd-rich-editor .milkdown .ProseMirror-selectednode {
+  outline: 2px solid var(--accent-focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* --- content Crepe styled and rich-editor.css does not -------------------- */
+
+/* Lists carry NO padding or marker of their own: `listItemBlockComponent`
+   renders the bullet or number itself. Adding a list-style here indents twice
+   and paints two markers — which is what the style proof caught. */
+.radd-rich-editor .milkdown .ProseMirror ul,
+.radd-rich-editor .milkdown .ProseMirror ol {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.radd-rich-editor .milkdown .ProseMirror li > p { margin: 0; }
+
+/* A rounded bar rather than a border, matching what this replaced: a border-left
+   sits flush against the text top and bottom, and the inset bar reads as a pull
+   quote instead of a table rule. */
+.radd-rich-editor .milkdown .ProseMirror blockquote {
+  position: relative;
+  padding-left: 40px;
+  margin: 4px 0;
+  box-sizing: content-box;
+}
+.radd-rich-editor .milkdown .ProseMirror blockquote::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 4px;
+  border-radius: 100px;
+  background: color-mix(in srgb, var(--accent-fill) 28%, transparent);
+}
+
+/* Plain links. `rich-editor.css` styles only CHIP links (`a:has(> .radd-chip)`),
+   so an ordinary link's colour and underline came from Crepe and had to come
+   back — the style proof caught them turning into body text. */
+.radd-rich-editor .milkdown .ProseMirror a {
+  color: var(--accent-text);
+  text-decoration: underline;
+}
+
+/* Inline code keeps the red it has always had — `--code-string` is for a
+   highlighted STRING token inside a code block, and reusing it here would make
+   `code` mean two different things a few pixels apart. */
+.radd-rich-editor .milkdown .ProseMirror code {
+  font-family: var(--radd-code-font);
+  font-size: 0.875em;
+  padding: 0 2px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-overlay), transparent 40%);
+  color: var(--color-red-300);
+}
+/* Inside our code block the text is CodeMirror's, already styled and already
+   monospace — the inline-code chrome would paint a chip around every token. */
+.radd-rich-editor .milkdown [data-code-block] code {
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+}
+
+/* Drawn as a background inside vertical padding, so the rule is thin while the
+   NODE stays tall enough to click and select. */
+.radd-rich-editor .milkdown .ProseMirror hr {
+  border: none;
+  height: 1px;
+  padding: 6px 0;
+  background-color: color-mix(in srgb, var(--color-strong), transparent 80%);
+  background-clip: content-box;
+}
+
+.radd-rich-editor .milkdown .ProseMirror img {
+  vertical-align: bottom;
+  max-width: 100%;
+}
+
+/* --- tables --------------------------------------------------------------- */
+
+.radd-rich-editor .milkdown .ProseMirror table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0;
+}
+.radd-rich-editor .milkdown .ProseMirror th,
+.radd-rich-editor .milkdown .ProseMirror td {
+  border: 1px solid var(--color-emphasis);
+  padding: 6.4px 9.6px;
+  vertical-align: top;
+  position: relative;
+}
+.radd-rich-editor .milkdown .ProseMirror th {
+  /* `--color-overlay`, not `--color-elevated`: elevated is WHITE in the light
+     theme, so a header row on a white surface would not read as one. */
+  background: var(--color-overlay);
+  color: var(--color-heading);
+  font-weight: 600;
+  text-align: left;
+}
+.radd-rich-editor .milkdown .ProseMirror th > p,
+.radd-rich-editor .milkdown .ProseMirror td > p { margin: 0; }
+/* prosemirror-tables paints these itself; they need our palette, not its defaults. */
+.radd-rich-editor .milkdown .ProseMirror .column-resize-handle {
+  background: var(--accent-fill);
+  width: 2px;
+}
+.radd-rich-editor .milkdown .ProseMirror .selectedCell::after {
+  background: color-mix(in srgb, var(--accent-fill) 20%, transparent);
+}
+
+/* --- placeholder ---------------------------------------------------------- */
+
+/* On a ::before so it can never be selected, copied, or counted by anything
+   reading textContent — which a real element would be. */
+.radd-rich-editor .milkdown .ProseMirror .radd-placeholder::before {
+  content: attr(data-placeholder);
+  color: var(--color-fg-faint);
+  pointer-events: none;
+  height: 0;
+  float: left;
+}
+
+/* --- AI diff review (Crepe's diff.css) ------------------------------------ */
+
+/* Our fork emits upstream's `milkdown-diff-*` classes (see
+   diff/decoration-plugin.ts). Green for what a run proposes, slate struck
+   through for what it removes — the traffic-light reading the rest of the app
+   uses, over the chart tokens so both themes stay legible. */
+.radd-rich-editor .milkdown .milkdown-diff-insert,
+.radd-rich-editor .milkdown .milkdown-diff-block-insert {
+  background: color-mix(in srgb, var(--chart-progress) 22%, transparent);
+  border-radius: 3px;
+}
+.radd-rich-editor .milkdown .milkdown-diff-delete,
+.radd-rich-editor .milkdown .milkdown-diff-block-delete {
+  background: color-mix(in srgb, var(--chart-canceled) 22%, transparent);
+  text-decoration: line-through;
+  color: var(--color-fg-muted);
+}
+.radd-rich-editor .milkdown .milkdown-diff-controls {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.radd-rich-editor .milkdown .milkdown-diff-controls button {
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 7px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid var(--color-strong);
+  background: var(--color-elevated);
+  color: var(--color-fg-secondary);
+}
+.radd-rich-editor .milkdown .milkdown-diff-controls button:hover {
+  color: var(--color-heading);
+  border-color: var(--color-emphasis);
+}
+
+/* --- link tooltip + list item (kit components) ---------------------------- */
+
+.radd-rich-editor milkdown-link-preview,
+.radd-rich-editor milkdown-link-edit {
+  font-family: inherit;
+  font-size: 12px;
+}
+.radd-rich-editor milkdown-link-preview .link-preview,
+.radd-rich-editor milkdown-link-edit .link-edit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--color-strong);
+  background: var(--color-overlay);
+  box-shadow: var(--shadow-pop-md);
+  color: var(--color-fg);
+}
+.radd-rich-editor milkdown-link-edit input {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: none;
+  outline: none;
+  min-width: 14rem;
+}
+.radd-rich-editor .milkdown milkdown-list-item-block .list-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.radd-rich-editor .milkdown milkdown-list-item-block .label-wrapper {
+  color: var(--color-fg-muted);
+  user-select: none;
+}
