@@ -126,7 +126,27 @@ export async function openBrowser({ port, profile, width = 1440, height = 1000, 
  * expression that produced it is the difference between "page eval threw" and
  * knowing which selector came back null.
  */
+/**
+ * Page-eval expressions are built as TEMPLATE LITERALS, so a backtick anywhere
+ * inside one — most easily in a comment, writing `foo` for emphasis — closes
+ * the literal early. The result is a syntax error reported against the HARNESS
+ * at some unrelated line, which reads as "my proof file is broken" rather than
+ * "I typed a backtick". It cost two debugging rounds in one session, so the
+ * check is here rather than in anybody's memory.
+ */
+function assertNoStrayBacktick(expression) {
+  for (const line of expression.split("\n")) {
+    const code = line.trim();
+    if (code.startsWith("//") && code.includes("`")) {
+      throw new Error(
+        "BACKTICK in a page-eval comment terminates the template literal: " + code,
+      );
+    }
+  }
+}
+
 export async function evalInPage(send, expression) {
+  assertNoStrayBacktick(expression);
   const { result, exceptionDetails } = await send(
     "Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true },
   );

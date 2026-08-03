@@ -11,6 +11,7 @@ import {
 } from "../../lib/constants";
 import { removeRecentItem } from "../../lib/recent";
 import { ItemDetailBody } from "../../routes/item-detail";
+import { RequestPanelBody } from "../requests/RequestPanelBody";
 import { Button } from "../Button";
 import { Spinner } from "../Spinner";
 
@@ -123,11 +124,18 @@ function PanelBody({ itemKey }: { itemKey: string }) {
   useEffect(() => {
     if (isError) removeRecentItem(itemKey);
   }, [isError, itemKey]);
-  if (isError || project === null) {
-    return <p className="p-6 text-sm text-fg-muted">Item {itemKey} not found.</p>;
-  }
-  if (isPending || !project || !item) {
-    return <Spinner label="Loading item…" />;
+  if (isPending) return <Spinner label="Loading item…" />;
+  if (isError || !project || !item) {
+    // Not readable as an ISSUE — but it may still be a request this person
+    // filed, or one shared with their team (RADD-803). A requester holds no
+    // `item.read`, so the issue fetch failing is the NORMAL path for them, not
+    // an error: fall through to the requester body rather than telling somebody
+    // their own request does not exist.
+    //
+    // This is why there is one peek and not two panels. The drawer, the
+    // `?peek=` param and the dismiss behaviour are the same object; only what
+    // goes inside it depends on who is looking.
+    return <RequestPanelBody requestKey={itemKey} />;
   }
   return <ItemDetailBody key={item.id} project={project} item={item} />;
 }

@@ -1,11 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Inbox, Users } from "lucide-react";
 import { errorMessage } from "../../lib/api";
 import { portalRequestsQuery } from "../../lib/queries";
 import type { PortalRequest } from "../../lib/types";
+import { usePeek } from "../../lib/hooks";
 import { ListSection } from "./ListSection";
-import { RequestPeek } from "./RequestPeek";
 import { RequestRow } from "./RequestRow";
 
 /**
@@ -22,7 +22,10 @@ import { RequestRow } from "./RequestRow";
  */
 export function MyRequests({ compact = false }: { compact?: boolean }) {
   const requests = useQuery(portalRequestsQuery);
-  const [openKey, setOpenKey] = useState<string | null>(null);
+  // The app's ONE way to open a row (RADD-803): `?peek=<key>`, the same drawer
+  // an issue opens in. The first version used a modal, which was a new
+  // interaction pattern nobody asked for.
+  const { open } = usePeek();
 
   const groups = useMemo(() => split(requests.data ?? []), [requests.data]);
 
@@ -33,21 +36,18 @@ export function MyRequests({ compact = false }: { compact?: boolean }) {
   if (!groups.length) return null;
 
   return (
-    <>
-      <div className="flex flex-col gap-5">
-        {groups.map((group) => (
-          <Section
-            key={group.label}
-            label={group.label}
-            icon={group.mine ? Inbox : Users}
-            rows={group.rows}
-            compact={compact}
-            onOpen={setOpenKey}
-          />
-        ))}
-      </div>
-      {openKey && <RequestPeek requestKey={openKey} onClose={() => setOpenKey(null)} />}
-    </>
+    <div className="flex flex-col gap-5">
+      {groups.map((group) => (
+        <Section
+          key={group.label}
+          label={group.label}
+          icon={group.mine ? Inbox : Users}
+          rows={group.rows}
+          compact={compact}
+          onOpen={open}
+        />
+      ))}
+    </div>
   );
 }
 
