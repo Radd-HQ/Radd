@@ -1,8 +1,12 @@
 import { useEffect, useRef } from "react";
 import { Crepe, CrepeFeature } from "@milkdown/crepe";
+import { $view } from "@milkdown/kit/utils";
+import { codeBlockSchema } from "@milkdown/kit/preset/commonmark";
+import { ProsemirrorAdapterProvider, useNodeViewFactory } from "@prosemirror-adapter/react";
 import { jiraToMarkdown } from "../../lib/jira-markup";
 import { useOpenIssueRef } from "../../lib/hooks";
 import { mentionChipsPlugin } from "./chips";
+import { CodeBlockView } from "./CodeBlockView";
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/classic-dark.css";
 import "./rich-editor.css";
@@ -13,7 +17,19 @@ import "./rich-editor.css";
  * tables, code blocks with copy button, images, chips). No toolbar/menu chrome;
  * `@`/`#` chips + link routing come from the shared `mentionChipsPlugin`.
  */
-export function RichViewer({
+export function RichViewer(props: {
+  text: string;
+  className?: string;
+  onReady?: () => void;
+}) {
+  return (
+    <ProsemirrorAdapterProvider>
+      <RichViewerInner {...props} />
+    </ProsemirrorAdapterProvider>
+  );
+}
+
+function RichViewerInner({
   text,
   className = "",
   onReady,
@@ -37,6 +53,7 @@ export function RichViewer({
   const openRef = useOpenIssueRef();
   const openRefStable = useRef(openRef);
   openRefStable.current = openRef;
+  const nodeViewFactory = useNodeViewFactory();
 
   useEffect(() => {
     const root = rootRef.current;
@@ -54,6 +71,7 @@ export function RichViewer({
         [CrepeFeature.Cursor]: false,
         [CrepeFeature.AI]: false,
         [CrepeFeature.Latex]: false,
+        [CrepeFeature.CodeMirror]: false, // ours (RADD-752)
       },
     });
     crepe.editor.use(
@@ -61,6 +79,13 @@ export function RichViewer({
         readonly: true,
         openIssue: (key) => void openRefStable.current(key),
       }),
+    );
+    // The SAME node view as the editor, non-editable. Two components that merely
+    // agree today is how read and edit drift apart.
+    crepe.editor.use(
+      $view(codeBlockSchema.node, () =>
+        nodeViewFactory({ component: CodeBlockView, stopEvent: () => true }),
+      ),
     );
     crepe.setReadonly(true);
     let live = true;

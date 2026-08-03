@@ -16,6 +16,7 @@ import {
   wrapInHeadingCommand,
   wrapInOrderedListCommand,
 } from "@milkdown/kit/preset/commonmark";
+import { codeBlockSchema } from "@milkdown/kit/preset/commonmark";
 import { insertTableCommand, toggleStrikethroughCommand } from "@milkdown/kit/preset/gfm";
 import { diffDecorationPlugin } from "@milkdown/kit/component/diff";
 import { ProsemirrorAdapterProvider, useNodeViewFactory } from "@prosemirror-adapter/react";
@@ -36,6 +37,7 @@ import {
 import { AiActionPicker } from "./AiActionPicker";
 import { ExtensionPicker, insertExtensionBlock } from "./ExtensionPicker";
 import { raddDiffDecoration } from "./diff/decoration-plugin";
+import { CodeBlockView } from "./CodeBlockView";
 import { EditorToolbar, ToolbarAction, type ToolbarActionValue } from "./Toolbar";
 import { EMPTY_SNAPSHOT, toolbarStatePlugin, type ToolbarSnapshot } from "./toolbar-state";
 import {
@@ -411,6 +413,9 @@ function RichEditorInner({
         [CrepeFeature.ImageBlock]: Boolean(uploadRef.current), // no upload → no image UI
         [CrepeFeature.AI]: aiOn,
         [CrepeFeature.Latex]: false,
+        // Ours now (RADD-752) — CodeMirror wired directly, so we own when a
+        // <pre> becomes a .cm-editor rather than discovering it in a proof.
+        [CrepeFeature.CodeMirror]: false,
       },
       featureConfigs: {
         [CrepeFeature.Placeholder]: { text: placeholder ?? "Write…" },
@@ -440,6 +445,18 @@ function RichEditorInner({
     // Feeds the toolbar's active state (RADD-749). A plugin view, so the snapshot
     // is recomputed from the editor's own updates rather than polled.
     crepe.editor.use(toolbarStatePlugin(setSnapshot));
+    // Our code block (RADD-752), in BOTH modes — the same view read-only is what
+    // keeps code identical in the viewer, which is what RichViewer is for.
+    crepe.editor.use(
+      $view(codeBlockSchema.node, () =>
+        nodeViewFactory({
+          component: CodeBlockView,
+          // CodeMirror owns every key inside the block; ProseMirror must not
+          // also try to interpret them. The escape keys are handled inside.
+          stopEvent: () => true,
+        }),
+      ),
+    );
     // `radd:*` fences become a real node with a live React view (RADD-746).
     // Registered only where extensions are offered: a comment has no page whose
     // headings a `toc` could list, and turning its fences into rendered blocks

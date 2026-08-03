@@ -230,6 +230,8 @@
  * unchanged. These unlayered rules override the layered `:root` theme vars.
  */
 html {
+  /* One monospace stack for every code surface (RADD-752). */
+  --radd-code-font: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --color-zinc-950: #131519; /* page background */
   --color-zinc-900: #1b1e24; /* panels, inputs, cards */
   --color-zinc-850: #22262e; /* elevated surfaces (raised cards, hover fills) */
@@ -281,6 +283,22 @@ html {
   --callout-danger-fill: #2c1511;
   --callout-danger-border: #b04a3b;
   --callout-danger-ink: #d55f4d; /* 4.56:1 */
+
+  /* Code syntax (dark) — RADD-752. Every colour measured against the code
+     block's own background (--color-base #131519), not eyeballed: code text
+     clears 4.5:1, the gutter (supporting, non-essential) clears 3:1.
+     keyword 7.18  string 10.08  comment 5.04  number 8.74  function 7.80
+     type 9.20  property 13.40  punct 6.99  invalid 5.49  gutter 3.05 */
+  --code-keyword: #c08cf0;
+  --code-string: #8fd08f;
+  --code-comment: #7d8798;
+  --code-number: #e0a878;
+  --code-function: #68b0e8;
+  --code-type: #5ec8c8;
+  --code-property: #d8dde5;
+  --code-punct: #98a1ad;
+  --code-invalid: #e0685c;
+  --code-gutter: #5a6472;
 
   /* Elevation shadows tuned for dark: deep umbra + a hairline light ring to
      keep overlay edges readable against dark surfaces. */
@@ -382,6 +400,21 @@ html.light {
   --shadow-lift-sm: 0 1px 2px rgb(0 0 0 / 0.08);
   --shadow-pop-md: 0 4px 16px rgb(0 0 0 / 0.12), 0 0 0 1px rgb(0 0 0 / 0.04);
   --shadow-modal-lg: 0 16px 48px rgb(0 0 0 / 0.18), 0 0 0 1px rgb(0 0 0 / 0.05);
+
+  /* Code syntax (light) — same measurement against #f4f6f9.
+     keyword 7.20  string 6.05  comment 5.07  number 5.77  function 6.81
+     type 5.81  property 13.03  punct 6.27  invalid 6.21  gutter 3.11 */
+  --code-keyword: #7a25ad;
+  --code-string: #1e6b34;
+  --code-comment: #5f6a7a;
+  --code-number: #9a4a10;
+  --code-function: #1354a6;
+  --code-type: #116b6b;
+  --code-property: #242c36;
+  --code-punct: #525c69;
+  --code-invalid: #b1231a;
+  --code-gutter: #828d9c;
+
 }
 
 /* Density toggle (spec 39): compact mode scales the whole UI down a notch.
