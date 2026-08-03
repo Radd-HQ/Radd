@@ -29,7 +29,7 @@ import { linkTooltipPlugin } from "@milkdown/kit/component/link-tooltip";
 import { listItemBlockComponent } from "@milkdown/kit/component/list-item-block";
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import { diffComponent, diffDecorationPlugin } from "@milkdown/kit/component/diff";
-import { diff } from "@milkdown/kit/plugin/diff";
+import { acceptAllDiffsCmd, clearDiffReviewCmd, diff } from "@milkdown/kit/plugin/diff";
 import { ProsemirrorAdapterProvider, useNodeViewFactory } from "@prosemirror-adapter/react";
 import { Blocks, Sparkles, type LucideIcon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -41,9 +41,11 @@ import { pushToast } from "../../lib/toast";
 import { useEditorAi, type AiRun } from "./ai";
 import { AiActionPicker } from "./AiActionPicker";
 import { ExtensionPicker, insertExtensionBlock } from "./ExtensionPicker";
-import { raddDiffDecoration } from "./diff/decoration-plugin";
+import { DIFF_CONTROLS_SELECTOR, raddDiffDecoration } from "./diff/decoration-plugin";
+import { NO_REVIEW, reviewStatePlugin, type ReviewState } from "./diff/review-state";
 import { AiSelectionToolbar } from "./AiSelectionToolbar";
-import { reviewPending, runAi } from "./ai-run";
+import { AiRunPanel, AiRunStatus, type AiRunView } from "./AiRunPanel";
+import { AiRunOutcome, reviewPending, runAi } from "./ai-run";
 import { NO_SELECTION, selectionRectPlugin, type SelectionRect } from "./selection-state";
 import { makeEditor } from "./create-editor";
 import { CodeBlockView } from "./CodeBlockView";
@@ -125,21 +127,27 @@ function ToolbarExtraButton({
   title,
   className,
   onPick,
+  disabled = false,
 }: {
   icon: LucideIcon;
   title: string;
   className: string;
   onPick: (anchor: DOMRect) => void;
+  /** A run or review already owns the editor — a second one is refused
+   *  downstream anyway, and a button that only ever earns a toast is worse
+   *  than one that says it is unavailable. */
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       title={title}
       aria-label={title}
+      disabled={disabled}
       // Keep the editor's selection: an AI run applies to it.
       onMouseDown={(event) => event.preventDefault()}
       onClick={(event) => onPick(event.currentTarget.getBoundingClientRect())}
-      className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-fg-secondary transition-colors hover:bg-elevated hover:text-heading focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus"
+      className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-fg-secondary transition-colors hover:bg-elevated hover:text-heading focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus disabled:pointer-events-none disabled:opacity-40"
     >
       <Icon size={16} className={className} aria-hidden />
     </button>
@@ -265,8 +273,12 @@ function RichEditorInner({
   const [snapshot, setSnapshot] = useState<ToolbarSnapshot>(EMPTY_SNAPSHOT);
   // Where the selection is, for the floating AI surface (RADD-753).
   const [selectionRect, setSelectionRect] = useState<SelectionRect>(NO_SELECTION);
-  // Text so far while a transform streams; null when idle.
-  const [streaming, setStreaming] = useState<string | null>(null);
+  // The live AI run — streaming, then reviewing — or null when there is none.
+  const [aiRun, setAiRun] = useState<AiRunView | null>(null);
+  // What the diff plugin has pending, published from the editor (RADD-762).
+  const [review, setReview] = useState<ReviewState>(NO_REVIEW);
+  // Which Accept/Reject pair the panel has stepped to; -1 = none yet.
+  const [current, setCurrent] = useState(-1);
   const aiHandleRef = useRef<{ cancel: () => void } | null>(null);
   // The table size picker, anchored under the toolbar's table button.
   const [tableMenu, setTableMenu] = useState<{ left: number; top: number } | null>(null);
@@ -366,18 +378,66 @@ function RichEditorInner({
       }
       const handle = runAi(ctx, run, range);
       aiHandleRef.current = handle;
-      setStreaming("");
-      handle.onChunk(setStreaming);
+      setAiRun({ label: run.label, status: AiRunStatus.streaming, text: "" });
+      setCurrent(-1);
+      handle.onChunk((text) =>
+        setAiRun((live) => (live === null ? live : { ...live, text })),
+      );
       handle.done
+        .then((outcome) => {
+          if (outcome === AiRunOutcome.review) {
+            setAiRun((live) =>
+              live === null ? live : { ...live, status: AiRunStatus.reviewing },
+            );
+            return;
+          }
+          // Stopped, or a reply with nothing in it — either way there is no
+          // review to hand over, and the panel should not sit there implying one.
+          setAiRun(null);
+          if (outcome === AiRunOutcome.empty) pushToast("The AI suggested no changes.");
+        })
         .catch((error) => {
+          setAiRun(null);
           pushToast(isAiGone(error) ? "AI editor actions are unavailable." : aiErrorText(error));
         })
         .finally(() => {
           aiHandleRef.current = null;
-          setStreaming(null);
         });
     });
   };
+
+  /**
+   * Step to a pending change and mark it as the one being looked at.
+   *
+   * By DOM rather than by document position: the pairs are widget decorations,
+   * so what a person navigates between is the rendered element, and the nth
+   * `.milkdown-diff-controls` in the editor is exactly the nth decoration the
+   * fork emitted. `data-current` is what lifts it out of the resting state the
+   * CSS otherwise keeps them in.
+   */
+  const navigateReview = (index: number) => {
+    const nodes = rootRef.current?.querySelectorAll<HTMLElement>(DIFF_CONTROLS_SELECTOR);
+    if (!nodes || nodes.length === 0) return;
+    const at = ((index % nodes.length) + nodes.length) % nodes.length;
+    nodes.forEach((node, i) => node.toggleAttribute("data-current", i === at));
+    nodes[at]?.scrollIntoView({ block: "center", behavior: "smooth" });
+    setCurrent(at);
+  };
+
+  // The review ending is what closes the panel — including when it ends because
+  // someone accepted the last pair by hand rather than pressing Accept all.
+  //
+  // A changed COUNT invalidates where `current` pointed, in the DOM as well as
+  // in state: every accept or reject rebuilds the decoration set from scratch,
+  // so the marked element is not the one the number now refers to.
+  useEffect(() => {
+    setCurrent(-1);
+    rootRef.current
+      ?.querySelectorAll<HTMLElement>(DIFF_CONTROLS_SELECTOR)
+      .forEach((node) => node.removeAttribute("data-current"));
+    if (!review.active)
+      setAiRun((live) => (live?.status === AiRunStatus.reviewing ? null : live));
+  }, [review.active, review.changes]);
 
   const users = useQuery({ ...usersQuery, enabled: mention?.type === "@" });
   const issues = useQuery({
@@ -610,7 +670,10 @@ function RichEditorInner({
         // for ours.
         editor.use(diff).use(diffComponent);
         await editor.remove(diffDecorationPlugin);
-        editor.use(raddDiffDecoration).use(selectionRectPlugin(setSelectionRect));
+        editor
+          .use(raddDiffDecoration)
+          .use(reviewStatePlugin(setReview))
+          .use(selectionRectPlugin(setSelectionRect));
       }
       await editor.create();
       if (autoFocus) root.querySelector<HTMLElement>(".ProseMirror")?.focus();
@@ -691,45 +754,63 @@ function RichEditorInner({
           />
         ) : (
           <>
-            {/* Ours (RADD-749). Outside the editor root: ProseMirror owns that
-                node's DOM, so React children inside it would be fought over. */}
-            <EditorToolbar
-              snapshot={snapshot}
-              onAction={onToolbarAction}
-              onHeading={onHeading}
-              images={Boolean(onUploadImage)}
-              tables
-              extra={
-                <>
-                  {ai && (
-                    <ToolbarExtraButton
-                      icon={Sparkles}
-                      title="AI"
-                      className="radd-ai-toolbar-icon"
-                      onPick={(rect) =>
-                        setAiMenu({
-                          left: Math.min(rect.left, window.innerWidth - 300),
-                          top: rect.bottom + 4,
-                        })
-                      }
-                    />
-                  )}
-                  {extensions && (
-                    <ToolbarExtraButton
-                      icon={Blocks}
-                      title="Insert extension"
-                      className="radd-extension-toolbar-icon"
-                      onPick={(rect) =>
-                        setExtensionMenu({
-                          left: Math.min(rect.left, window.innerWidth - 300),
-                          top: rect.bottom + 4,
-                        })
-                      }
-                    />
-                  )}
-                </>
-              }
-            />
+            {/* Toolbar + AI band travel together, so both stay reachable in a
+                long document. The wrapper carries the stickiness: the toolbar's
+                own `sticky top-0` then has no room to move inside it, which is
+                what keeps the two from sliding over each other. */}
+            <div className="sticky top-0 z-[5]">
+              {/* Ours (RADD-749). Outside the editor root: ProseMirror owns that
+                  node's DOM, so React children inside it would be fought over. */}
+              <EditorToolbar
+                snapshot={snapshot}
+                onAction={onToolbarAction}
+                onHeading={onHeading}
+                images={Boolean(onUploadImage)}
+                tables
+                extra={
+                  <>
+                    {ai && (
+                      <ToolbarExtraButton
+                        icon={Sparkles}
+                        title="AI"
+                        className="radd-ai-toolbar-icon"
+                        disabled={aiRun !== null}
+                        onPick={(rect) =>
+                          setAiMenu({
+                            left: Math.min(rect.left, window.innerWidth - 300),
+                            top: rect.bottom + 4,
+                          })
+                        }
+                      />
+                    )}
+                    {extensions && (
+                      <ToolbarExtraButton
+                        icon={Blocks}
+                        title="Insert extension"
+                        className="radd-extension-toolbar-icon"
+                        onPick={(rect) =>
+                          setExtensionMenu({
+                            left: Math.min(rect.left, window.innerWidth - 300),
+                            top: rect.bottom + 4,
+                          })
+                        }
+                      />
+                    )}
+                  </>
+                }
+              />
+              {ai && aiRun && (
+                <AiRunPanel
+                  run={aiRun}
+                  changes={review.changes}
+                  current={current}
+                  onNavigate={navigateReview}
+                  onStop={() => aiHandleRef.current?.cancel()}
+                  onAcceptAll={() => run(acceptAllDiffsCmd.key)}
+                  onRejectAll={() => run(clearDiffReviewCmd.key)}
+                />
+              )}
+            </div>
             {/* ProseMirror owns this node's DOM — keep it free of React children (popup is portaled). */}
             <div ref={rootRef} />
           </>
@@ -761,6 +842,7 @@ function RichEditorInner({
             <div
               style={{ position: "fixed", left: aiMenu.left, top: aiMenu.top }}
               className="z-[60] w-72 rounded-md border border-strong bg-surface p-1.5 shadow-pop animate-menu-in"
+              data-ai-toolbar-menu
             >
               <AiActionPicker actions={ai.actions} onPick={dispatchAiRun} autoFocus />
             </div>
@@ -772,8 +854,7 @@ function RichEditorInner({
           rect={selectionRect}
           actions={ai.actions}
           onRun={dispatchAiRun}
-          streaming={streaming}
-          onCancel={() => aiHandleRef.current?.cancel()}
+          busy={aiRun !== null}
         />
       )}
       {tableMenu &&

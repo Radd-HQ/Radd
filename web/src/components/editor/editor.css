@@ -197,6 +197,13 @@
   margin-left: 6px;
   vertical-align: middle;
 }
+/* Per-block Accept/Reject is the EXCEPTION path (RADD-762): the run panel
+   offers Accept all / Reject all, and these are for the one paragraph you
+   disagree with. So at rest they lose the chip — no fill, no border — and take
+   it back when the block is hovered, when one of them holds focus, or when the
+   panel has stepped to this pair. The text colour does NOT change at rest: a
+   quieter button still has to be readable, which is why this is a weight
+   change rather than an opacity one. */
 .radd-rich-editor .milkdown .milkdown-diff-controls button {
   font-family: inherit;
   font-size: 11px;
@@ -204,13 +211,23 @@
   padding: 3px 7px;
   border-radius: 4px;
   cursor: pointer;
-  border: 1px solid var(--color-strong);
-  background: var(--color-elevated);
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--color-fg-secondary);
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
 }
-.radd-rich-editor .milkdown .milkdown-diff-controls button:hover {
+.radd-rich-editor .milkdown .radd-diff-new-block:hover .milkdown-diff-controls button,
+.radd-rich-editor .milkdown .milkdown-diff-controls:hover button,
+.radd-rich-editor .milkdown .milkdown-diff-controls:focus-within button,
+.radd-rich-editor .milkdown .milkdown-diff-controls[data-current] button {
+  border-color: var(--color-strong);
+  background: var(--color-elevated);
+}
+.radd-rich-editor .milkdown .milkdown-diff-controls button:hover,
+.radd-rich-editor .milkdown .milkdown-diff-controls button:focus-visible {
   color: var(--color-heading);
   border-color: var(--color-emphasis);
+  background: var(--color-elevated);
 }
 
 /* --- link tooltip + list item (kit components) ---------------------------- */

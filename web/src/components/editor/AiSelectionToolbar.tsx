@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Sparkles, X } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { AiActionPicker } from "./AiActionPicker";
 import type { AiRun } from "./ai";
 import type { SelectionRect } from "./selection-state";
@@ -13,21 +13,25 @@ import type { AiEditorAction } from "../../lib/types";
  * was this one. Two states: a button while idle, and the action picker once
  * opened. The picker is the same component the toolbar's document-wide button
  * uses, so the curated list and the freeform prompt cannot drift between them.
+ *
+ * It no longer reports PROGRESS (RADD-762). It used to, and that was the bug:
+ * the indicator was positioned off this component's selection rect, so every
+ * run without a selection painted it off the left edge of the screen. Progress
+ * belongs to the run, not to the selection — see `AiRunPanel`.
  */
 export function AiSelectionToolbar({
   rect,
   actions,
   onRun,
-  streaming,
-  onCancel,
+  busy,
 }: {
   rect: SelectionRect;
   actions: AiEditorAction[];
   /** The range is passed WITH the run, captured when this opened. */
   onRun: (run: AiRun, range: { from: number; to: number }) => void;
-  /** Text so far, while a run is in flight. Null when idle. */
-  streaming: string | null;
-  onCancel: () => void;
+  /** A run or review already owns the editor — offering a second one would
+   *  only earn a "finish the current review first" toast. */
+  busy: boolean;
 }) {
   // What was selected WHEN THIS OPENED, not what is selected now.
   //
@@ -45,32 +49,7 @@ export function AiSelectionToolbar({
     if (!rect.empty) setAnchor(null);
   }, [rect.from, rect.to]);
 
-  if (streaming !== null) {
-    return createPortal(
-      <div
-        style={{ position: "fixed", left: rect.left - 110, top: rect.bottom + 8 }}
-        className="z-[60] flex w-56 items-center gap-2 rounded-md border border-strong bg-surface px-2.5 py-1.5 shadow-pop"
-        role="status"
-        data-ai-streaming
-      >
-        <Loader2 size={14} className="shrink-0 animate-spin text-accent-text" />
-        <span className="min-w-0 flex-1 truncate text-[11px] text-fg-muted">
-          {streaming.trim().slice(-40) || "Thinking…"}
-        </span>
-        <button
-          type="button"
-          onClick={onCancel}
-          aria-label="Stop"
-          title="Stop"
-          className="cursor-pointer rounded p-0.5 text-fg-muted hover:text-heading"
-        >
-          <X size={13} />
-        </button>
-      </div>,
-      document.body,
-    );
-  }
-
+  if (busy) return null;
   if (!open && (rect.empty || !rect.focused)) return null;
 
   return createPortal(

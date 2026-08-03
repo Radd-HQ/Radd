@@ -57,7 +57,31 @@ import {
 } from "./doc-utils";
 import { groupInlineChanges } from "./word-groups";
 
-const raddDiffDecorationKey = new PluginKey<DecorationSet>("RADD_DIFF_DECORATION");
+export const raddDiffDecorationKey = new PluginKey<DecorationSet>("RADD_DIFF_DECORATION");
+
+/**
+ * Marks a decoration as one of the Accept/Reject pairs (RADD-762).
+ *
+ * The run panel counts REVIEW UNITS — what a person has to click through — and
+ * that is not the pending-change count: the whole point of this fork is that it
+ * merges a changeset's chunks into one pair per changed block. Counting the
+ * decorations we actually emit is the only number that matches the screen, and
+ * a flag on the spec says so out loud where a `key.startsWith("controls-")`
+ * test would be a naming coincidence waiting to break.
+ */
+export const DIFF_CONTROLS_SPEC = "raddDiffControls";
+
+/** The rendered pairs, for chrome that scrolls between them. */
+export const DIFF_CONTROLS_SELECTOR = `.${DIFF_CLASS_PREFIX}-controls`;
+
+/** How many Accept/Reject pairs a state is currently rendering. */
+export function countReviewUnits(decorations: DecorationSet): number {
+  return decorations.find(
+    undefined,
+    undefined,
+    (spec: Record<string, unknown>) => spec[DIFF_CONTROLS_SPEC] === true,
+  ).length;
+}
 
 export const raddDiffDecoration = $prose((ctx) => {
   return new Plugin<DecorationSet>({
@@ -167,7 +191,7 @@ function buildDecorations(ctx: Ctx, doc: Node, diffState: DiffState): Decoration
       Decoration.widget(
         widgetPos,
         () => createControlsWidget(commands, true, change, config),
-        { side: -1, key: `controls-${i}` },
+        { side: -1, key: `controls-${i}`, [DIFF_CONTROLS_SPEC]: true },
       ),
     );
   }
@@ -230,7 +254,7 @@ function buildDecorations(ctx: Ctx, doc: Node, diffState: DiffState): Decoration
       Decoration.widget(
         group.controlsPos,
         () => createControlsWidget(commands, false, group.range, config),
-        { side: 1, key: `group-controls-${g}` },
+        { side: 1, key: `group-controls-${g}`, [DIFF_CONTROLS_SPEC]: true },
       ),
     );
   }
@@ -316,7 +340,7 @@ function addCrossBoundaryDecorations(
     Decoration.widget(
       snapToBlockBoundary(doc, lastSegEnd),
       () => createControlsWidget(commands, true, change, config),
-      { side: -1, key: `controls-${changeIndex}` },
+      { side: -1, key: `controls-${changeIndex}`, [DIFF_CONTROLS_SPEC]: true },
     ),
   );
 }

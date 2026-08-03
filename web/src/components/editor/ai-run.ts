@@ -1,6 +1,11 @@
 import { commandsCtx, editorViewCtx, parserCtx, serializerCtx } from "@milkdown/kit/core";
 import type { Ctx } from "@milkdown/kit/ctx";
-import { diffPluginKey, startDiffReviewFromDocCmd } from "@milkdown/kit/plugin/diff";
+import {
+  clearDiffReviewCmd,
+  diffPluginKey,
+  getPendingChanges,
+  startDiffReviewFromDocCmd,
+} from "@milkdown/kit/plugin/diff";
 import { ApiPath } from "../../lib/constants";
 import { streamSse } from "../../lib/sse";
 import { INSTRUCTION_ACTION_PREFIX, type AiRun } from "./ai";
@@ -69,9 +74,27 @@ export function scopeOf(ctx: Ctx, range?: { from: number; to: number }): RunScop
 export const reviewPending = (ctx: Ctx): boolean =>
   diffPluginKey.getState(ctx.get(editorViewCtx).state) != null;
 
+/**
+ * How a run ended — the three outcomes the progress surface has to tell apart
+ * (RADD-762). They used to be indistinguishable: `done` resolved `void` for
+ * both "there is a review waiting" and "the model sent nothing", and REJECTED
+ * for a cancel, so pressing Stop reported that the AI had failed.
+ */
+export const AiRunOutcome = {
+  /** A diff review is open and waiting to be accepted or rejected. */
+  review: "review",
+  /** The run finished with nothing to change — no review was opened. */
+  empty: "empty",
+  /** Stopped by the person who started it. Not a failure. */
+  aborted: "aborted",
+} as const;
+
+export type AiRunOutcomeValue = (typeof AiRunOutcome)[keyof typeof AiRunOutcome];
+
 export interface AiRunHandle {
-  /** Resolves when the stream ends and the diff has been handed over. */
-  done: Promise<void>;
+  /** Resolves with the outcome once the stream ends and any diff is handed
+   *  over; rejects only on a real failure (never on cancel). */
+  done: Promise<AiRunOutcomeValue>;
   /** Text so far, for the progress surface. */
   onChunk: (listener: (text: string) => void) => void;
   cancel: () => void;
@@ -101,14 +124,23 @@ export function runAi(
       }
     : { instruction: run.instruction, document: scope.document, selection: scope.selection };
 
-  const done = (async () => {
+  const done = (async (): Promise<AiRunOutcomeValue> => {
     let text = "";
-    for await (const chunk of streamSse(ApiPath.aiEditorStream, body, controller.signal)) {
-      text += chunk;
-      for (const listener of listeners) listener(text);
+    try {
+      for await (const chunk of streamSse(ApiPath.aiEditorStream, body, controller.signal)) {
+        text += chunk;
+        for (const listener of listeners) listener(text);
+      }
+    } catch (error) {
+      // Cancelling is the only way the fetch can reject with the signal already
+      // flagged, and it is not a failure — reporting it as one is how Stop came
+      // to raise "AI provider unavailable" at the person who pressed it.
+      if (controller.signal.aborted) return AiRunOutcome.aborted;
+      throw error;
     }
-    if (!text.trim() || controller.signal.aborted) return;
-    applyAsDiff(ctx, scope, text);
+    if (controller.signal.aborted) return AiRunOutcome.aborted;
+    if (!text.trim()) return AiRunOutcome.empty;
+    return applyAsDiff(ctx, scope, text) ? AiRunOutcome.review : AiRunOutcome.empty;
   })();
 
   return {
@@ -118,12 +150,13 @@ export function runAi(
   };
 }
 
-/** Splice the result over the selection and open the review. */
-function applyAsDiff(ctx: Ctx, scope: RunScope, replacement: string): void {
+/** Splice the result over the selection and open the review. False when the
+ *  reply parsed to nothing, so the caller can say so rather than go quiet. */
+function applyAsDiff(ctx: Ctx, scope: RunScope, replacement: string): boolean {
   const view = ctx.get(editorViewCtx);
   const parser = ctx.get(parserCtx);
   const parsed = parser(replacement);
-  if (!parsed) return;
+  if (!parsed) return false;
   const { state } = view;
   const newDoc =
     scope.selection === ""
@@ -132,5 +165,15 @@ function applyAsDiff(ctx: Ctx, scope: RunScope, replacement: string): void {
         // all the diff needs. The editor keeps showing the original until the
         // reviewer accepts something.
         state.tr.replaceWith(scope.from, scope.to, parsed.content).doc;
-  ctx.get(commandsCtx).call(startDiffReviewFromDocCmd.key, newDoc);
+  const commands = ctx.get(commandsCtx);
+  commands.call(startDiffReviewFromDocCmd.key, newDoc);
+  const opened = diffPluginKey.getState(view.state);
+  if (opened && getPendingChanges(opened).length > 0) return true;
+  // A rewrite that changed nothing still opens an ACTIVE review — `start` is the
+  // one action the plugin's reducer does not run its "no pending changes" check
+  // over. An active review blocks every document transaction (its
+  // `filterTransaction`), so leaving one standing would answer "the AI changed
+  // nothing" by making the editor read-only until a reload.
+  if (opened) commands.call(clearDiffReviewCmd.key);
+  return false;
 }
