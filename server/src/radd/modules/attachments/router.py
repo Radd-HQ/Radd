@@ -91,17 +91,27 @@ async def list_attachments(
 
 @router.get("/attachments/{attachment_id}")
 async def download_attachment(
-    attachment_id: uuid.UUID, session: Session, user: CurrentUser
+    attachment_id: uuid.UUID,
+    session: Session,
+    user: CurrentUser,
+    w: Annotated[int | None, Query(ge=1, le=4096, description="Display width in CSS pixels")] = None,
 ) -> Response:
     """Bytes for proxy-delivery hosts; a 307 to a short presigned URL otherwise.
 
     THE ACL chokepoint (spec 102): both delivery modes mint here, so a deny
     means no bytes AND no presigned URL ever exist for this caller.
+
+    `w` is the image-width convention of RADD-751 — markdown has nowhere to put
+    a size, so `![alt](…?w=640)` is how a document says how big to draw it, and
+    honouring it here is what makes a resized screenshot ship fewer bytes rather
+    than merely look smaller. It is ADVISORY: anything that cannot be resized
+    (a PDF, an animated GIF, a width at or above the original) serves the
+    original, because a picture that cannot be resized must still arrive.
     """
     attachment = await service.get_attachment(session, attachment_id)
     if not await acl.attachment_readable(session, user, attachment):
         raise ForbiddenError("you do not have access to this attachment")
-    return await service.download_response(session, attachment)
+    return await service.download_response(session, attachment, width=w)
 
 
 @router.delete("/attachments/{attachment_id}", status_code=204)

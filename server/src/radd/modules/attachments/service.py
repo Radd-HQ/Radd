@@ -8,14 +8,14 @@ import logging
 import uuid
 from dataclasses import dataclass
 
-from fastapi import UploadFile
+from fastapi import Response, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import NotFoundError
 from radd.modules.events import service as events
 
-from . import hosts
+from . import hosts, thumbnails
 from .clients import buffer_upload, client_for
 from .models import Attachment, StorageHost
 from .types import (
@@ -143,10 +143,35 @@ async def list_for_item(session: AsyncSession, item_id: uuid.UUID) -> list[Attac
     return await list_for_entity(session, AttachmentParentType.ITEM.value, item_id)
 
 
-async def download_response(session: AsyncSession, attachment: Attachment):
-    """Bytes (proxy hosts) or a 307 presigned redirect (presigned hosts)."""
+async def download_response(
+    session: AsyncSession, attachment: Attachment, *, width: int | None = None
+):
+    """Bytes (proxy hosts) or a 307 presigned redirect (presigned hosts).
+
+    `width` is the `?w=` convention of RADD-751. When it is honoured the response
+    is always PROXIED, whatever the host's delivery mode: a presigned URL points
+    the browser straight at the object store, which will hand back the original
+    bytes — so redirecting would silently ignore the width the document asked
+    for. Serving fewer bytes is the point, and it is worth the proxy hop.
+    """
     host = await hosts.get_host(session, attachment.storage_host_id)
-    return await client_for(host).response(attachment)
+    client = client_for(host)
+    if width and thumbnails.can_resize(attachment.content_type):
+        data = await client.read(attachment.storage_name)
+        smaller = await thumbnails.resized(data, attachment.content_type, width)
+        if smaller is not None:
+            body, content_type = smaller
+            return Response(
+                content=body,
+                media_type=content_type,
+                headers={
+                    "X-Content-Type-Options": "nosniff",
+                    "Content-Disposition": "inline",
+                    # Immutable: a bucket's bytes for one attachment never change.
+                    "Cache-Control": "private, max-age=31536000, immutable",
+                },
+            )
+    return await client.response(attachment)
 
 
 async def delete_attachment(

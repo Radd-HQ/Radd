@@ -16,13 +16,15 @@ import {
   wrapInHeadingCommand,
   wrapInOrderedListCommand,
 } from "@milkdown/kit/preset/commonmark";
-import { codeBlockSchema } from "@milkdown/kit/preset/commonmark";
+import { codeBlockSchema, imageSchema } from "@milkdown/kit/preset/commonmark";
 import {
   columnResizingPlugin,
   insertTableCommand,
   tableSchema,
   toggleStrikethroughCommand,
 } from "@milkdown/kit/preset/gfm";
+import { upload, uploadConfig } from "@milkdown/kit/plugin/upload";
+import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import { diffDecorationPlugin } from "@milkdown/kit/component/diff";
 import { ProsemirrorAdapterProvider, useNodeViewFactory } from "@prosemirror-adapter/react";
 import { Blocks, Sparkles, type LucideIcon } from "lucide-react";
@@ -43,6 +45,7 @@ import { AiActionPicker } from "./AiActionPicker";
 import { ExtensionPicker, insertExtensionBlock } from "./ExtensionPicker";
 import { raddDiffDecoration } from "./diff/decoration-plugin";
 import { CodeBlockView } from "./CodeBlockView";
+import { ImageNodeView } from "./ImageNodeView";
 import { TableGridPicker } from "./TableGridPicker";
 import { TableNodeView } from "./TableNodeView";
 import { tableCommands } from "./table-commands";
@@ -438,7 +441,11 @@ function RichEditorInner({
         [CrepeFeature.TopBar]: false,
         [CrepeFeature.Toolbar]: aiOn,
         [CrepeFeature.BlockEdit]: false,
-        [CrepeFeature.ImageBlock]: Boolean(uploadRef.current), // no upload → no image UI
+        // Ours now (RADD-751): the image node view carries the resize handle, and
+        // paste/drop upload moves to @milkdown/plugin-upload below. Crepe's block
+        // image was a second node type for the same markdown, which is one more
+        // thing that would have had to be untangled at removal time.
+        [CrepeFeature.ImageBlock]: false,
         [CrepeFeature.AI]: aiOn,
         [CrepeFeature.Latex]: false,
         // Ours now (RADD-752) — CodeMirror wired directly, so we own when a
@@ -459,12 +466,6 @@ function RichEditorInner({
             const cause = error.cause ?? error;
             pushToast(isAiGone(cause) ? "AI editor actions are unavailable." : aiErrorText(cause));
           },
-        },
-        [CrepeFeature.ImageBlock]: {
-          // Route image inserts (incl. paste) through the app's attachment upload.
-          onUpload: (file: File) => uploadRef.current?.(file) ?? Promise.resolve(""),
-          blockOnUpload: (file: File) => uploadRef.current?.(file) ?? Promise.resolve(""),
-          inlineOnUpload: (file: File) => uploadRef.current?.(file) ?? Promise.resolve(""),
         },
       },
     });
@@ -488,6 +489,32 @@ function RichEditorInner({
         }),
       ),
     );
+    // Resizable images (RADD-751), plus paste/drop upload. Registered whether or
+    // not this surface can upload: an image that ARRIVED some other way still
+    // resizes, and a comment is as likely to hold a screenshot as a page is.
+    crepe.editor.use(
+      $view(imageSchema.node, () => nodeViewFactory({ component: ImageNodeView })),
+    );
+    if (uploadRef.current) {
+      crepe.editor
+        .use(upload)
+        .config((ctx) =>
+          ctx.update(uploadConfig.key, (base) => ({
+            ...base,
+            uploader: async (files, schema) => {
+              const nodes: ProseNode[] = [];
+              for (const file of Array.from(files)) {
+                if (!file.type.startsWith("image/")) continue;
+                const src = await uploadRef.current?.(file);
+                if (!src) continue;
+                const node = schema.nodes.image?.createAndFill({ src, alt: file.name });
+                if (node) nodes.push(node);
+              }
+              return nodes;
+            },
+          })),
+        );
+    }
     // Table chrome (RADD-750), plus the column-resizing plugin preset-gfm ships
     // but does not compose. Resized widths are a session-only affordance: GFM
     // cannot express a column width, and this body is markdown by design.

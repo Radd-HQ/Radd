@@ -17,6 +17,12 @@ dependencies = [
     "minio>=7.2.20",
     "pyjwt[crypto]>=2.13.0",
     "ldap3>=2.9.1",
+    # Image resizing for the `?w=` convention (RADD-751). A core dependency, not
+    # an extra: markdown cannot express an image size, so serving one at the
+    # width the document asks for is how a 4 MB screenshot shown at 600px stops
+    # shipping 4 MB to every reader. It arrived transitively via the optional
+    # `localembed` extra before, which meant a default install did not have it.
+    "pillow>=11.0",
 ]
 
 [project.optional-dependencies]

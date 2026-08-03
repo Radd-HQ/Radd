@@ -1,12 +1,13 @@
 import { useEffect, useRef } from "react";
 import { Crepe, CrepeFeature } from "@milkdown/crepe";
 import { $view } from "@milkdown/kit/utils";
-import { codeBlockSchema } from "@milkdown/kit/preset/commonmark";
+import { codeBlockSchema, imageSchema } from "@milkdown/kit/preset/commonmark";
 import { ProsemirrorAdapterProvider, useNodeViewFactory } from "@prosemirror-adapter/react";
 import { jiraToMarkdown } from "../../lib/jira-markup";
 import { useOpenIssueRef } from "../../lib/hooks";
 import { mentionChipsPlugin } from "./chips";
 import { CodeBlockView } from "./CodeBlockView";
+import { ImageNodeView } from "./ImageNodeView";
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/classic-dark.css";
 import "./rich-editor.css";
@@ -72,6 +73,11 @@ function RichViewerInner({
         [CrepeFeature.AI]: false,
         [CrepeFeature.Latex]: false,
         [CrepeFeature.CodeMirror]: false, // ours (RADD-752)
+        // Ours (RADD-751). Not listing it here left Crepe's image view winning
+        // by registration order — ProseMirror resolves a node view by FIRST
+        // match — so read mode rendered a bare <img> and the width in the URL
+        // was applied by the server while the layout ignored it.
+        [CrepeFeature.ImageBlock]: false,
       },
     });
     crepe.editor.use(
@@ -86,6 +92,11 @@ function RichViewerInner({
       $view(codeBlockSchema.node, () =>
         nodeViewFactory({ component: CodeBlockView, stopEvent: () => true }),
       ),
+    );
+    // Images too (RADD-751): the width lives in the URL, so read mode has to
+    // apply it or a resized image would be resized only while editing.
+    crepe.editor.use(
+      $view(imageSchema.node, () => nodeViewFactory({ component: ImageNodeView })),
     );
     crepe.setReadonly(true);
     let live = true;
