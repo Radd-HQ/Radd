@@ -5,7 +5,7 @@ import {
   PRIORITY_META,
   PRIORITY_ORDER,
 } from "../../lib/meta";
-import { cyclesQuery, releasesQuery, statesQuery, usersQuery } from "../../lib/queries";
+import { cyclesQuery, releasesQuery, statesQuery, usersAdminQuery } from "../../lib/queries";
 import {
   type FormDefaults,
   type ItemKindValue,
@@ -34,7 +34,10 @@ export function FormDefaultsEditor({
   const states = useQuery(statesQuery(projectId));
   const cycles = useQuery(cyclesQuery());
   const releases = useQuery(releasesQuery(projectId));
-  const users = useQuery(usersQuery);
+  // The ADMIN directory (RADD-769): a form default stores `assignee_email`,
+  // so the address is the option's VALUE and cannot come from the member-floor
+  // list. Form building is already a `form.manage` surface.
+  const users = useQuery(usersAdminQuery({}));
   const set = (patch: Partial<FormDefaults>) => onChange({ ...value, ...patch });
 
   return (

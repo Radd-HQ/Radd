@@ -67,7 +67,9 @@ export function useIssueQuickActions(item: Item, projectId: string): QuickAction
       actions.push({
         id: `assign-${user.id}`,
         label: `Assign: ${user.name}`,
-        keywords: `assignee ${user.email}`,
+        // No email to search on (RADD-769) — the member-floor directory does not
+        // carry one. `/assign <name>` still matches, which is what people type.
+        keywords: "assignee",
         run: () => patch({ assignee_id: user.id }),
       });
     }

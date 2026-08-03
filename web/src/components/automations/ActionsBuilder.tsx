@@ -10,7 +10,7 @@ import {
   releasesQuery,
   statesQuery,
   teamsQuery,
-  usersQuery,
+  usersAdminQuery,
 } from "../../lib/queries";
 import {
   ActionType,
@@ -40,7 +40,10 @@ const uniqueSorted = (values: string[]) => [...new Set(values)].sort((a, b) => a
 
 /** Fetch the global pickers plus per-project state/release names. */
 function usePickerData(): PickerData {
-  const users = useQuery(usersQuery);
+  // The ADMIN directory (RADD-769): an automation stores its assignee by
+  // EMAIL, so this picker needs the address as a VALUE, not as decoration —
+  // which is the half of the directory that stays behind `user.manage`.
+  const users = useQuery(usersAdminQuery({}));
   const teams = useQuery(teamsQuery());
   const labels = useQuery(labelsQuery());
   const cycles = useQuery(cyclesQuery());

@@ -70,6 +70,38 @@ class UserRead(BaseModel):
     last_login_at: UtcDatetime | None = None
 
 
+class UserDirectoryEntry(BaseModel):
+    """One person, as everyone with an account may see them (RADD-769).
+
+    The narrow half of a directory split by AUDIENCE. `UserRead` carries `email`,
+    `source`, `instance_role` and `last_login_at` — administrative facts, and the
+    reason `GET /users` is gated on `user.manage`. But naming a colleague is not
+    an administrative act: assigning work, `@`-mentioning someone and rendering
+    "edited by" all need a list of who exists, and gating those behind
+    `user.manage` meant an ordinary member met a 403 on nearly every issue and
+    page they opened.
+
+    What is left is what a picker draws: who they are, what to render, and
+    whether they are still around. Email is deliberately absent — it was the
+    pickers' disambiguator, and keeping it would have published every address in
+    the instance to every account in it, which is a larger change than the bug
+    it fixes.
+
+    Service accounts (spec 113) are NOT filtered out. They cannot log in, but
+    they can author a page version or a comment, and a directory that omits them
+    would leave those bylines unresolvable — a hole in the read path in exchange
+    for tidier pickers, which already filter on `active`.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    active: bool
+    avatar_color: str | None = None
+    avatar_emoji: str | None = None
+
+
 class UserAdminUpdate(BaseModel):
     """PATCH /users/{id} (specs 84/86, instance admin): rename, activate/
     deactivate, and set instance_role (admin|member — the only role ladder

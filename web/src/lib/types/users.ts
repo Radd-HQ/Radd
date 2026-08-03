@@ -88,6 +88,25 @@ export interface User {
   last_login_at: string | null;
 }
 
+/**
+ * One person as the member-floor directory returns them (RADD-769) —
+ * `GET /users/directory`.
+ *
+ * Everything that only needs to NAME somebody reads this: assignee and reporter
+ * pickers, `@`-mention autocomplete, "edited by" bylines. It is deliberately not
+ * a `User`: no email, no instance role, no source. Those are administrative
+ * facts, they are why `GET /users` is gated on `user.manage`, and requiring that
+ * atom to draw an assignee dropdown is what put a 403 toast on nearly every
+ * issue and page an ordinary member opened.
+ */
+export interface UserSummary {
+  id: string;
+  name: string;
+  active: boolean;
+  avatar_color?: string | null;
+  avatar_emoji?: string | null;
+}
+
 /** POST /users (spec 01). */
 export interface UserCreate {
   email: string;

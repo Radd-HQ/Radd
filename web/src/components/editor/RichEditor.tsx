@@ -448,14 +448,13 @@ function RichEditorInner({
   const candidates = useMemo<Candidate[]>(() => {
     if (mention?.type === "@") {
       const needle = mention.query.toLowerCase();
+      // Name only (RADD-769): `@` autocomplete reads the member-floor directory,
+      // which carries no email. Matching on the address was a nicety; being able
+      // to mention a colleague at all without holding `user.manage` is not.
       return (users.data ?? [])
-        .filter(
-          (user) =>
-            user.active !== false &&
-            (user.name.toLowerCase().includes(needle) || user.email.toLowerCase().includes(needle)),
-        )
+        .filter((user) => user.active !== false && user.name.toLowerCase().includes(needle))
         .slice(0, MENTION_LIMIT)
-        .map((user) => ({ label: user.name, href: user.id, sub: user.email }));
+        .map((user) => ({ label: user.name, href: user.id, sub: "" }));
     }
     if (mention?.type === "#") {
       return (issues.data?.results ?? [])

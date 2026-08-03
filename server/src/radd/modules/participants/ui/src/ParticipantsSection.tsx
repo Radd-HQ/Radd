@@ -45,7 +45,13 @@ export function ParticipantsSection({ item }: { item: Item }) {
   const canManage = Boolean(data?.can_manage);
   const users = useQuery({
     queryKey: ["radd-remote", "participants-users"],
-    queryFn: () => api.get<UserLite[]>("/users"),
+    // The member-floor directory (RADD-769), not `/users` — that one is gated on
+    // `user.manage`, which nobody needs in order to add a participant. This was
+    // gated correctly on `can_manage` and still 403'd, because the gate that
+    // mattered was on the endpoint rather than on the affordance. A plugin
+    // remote reaches the API the same way the host does, so it inherits the
+    // same rule.
+    queryFn: () => api.get<UserLite[]>("/users/directory"),
     enabled: canManage,
   });
   const teams = useQuery({

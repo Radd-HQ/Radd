@@ -817,7 +817,9 @@ function ConditionValues({
     case "user":
       options = (users.data ?? [])
         .filter((user) => user.active !== false)
-        .map((user) => ({ value: user.id, label: user.name, hint: user.email }));
+        // No hint: the member-floor directory carries no email (RADD-769), and
+        // the address was decoration here rather than the stored value.
+        .map((user) => ({ value: user.id, label: user.name }));
       break;
     case "team":
       options = (teams.data ?? []).map((team) => ({ value: team.id, label: team.name }));

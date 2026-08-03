@@ -14,6 +14,10 @@ export const ApiPath = {
   totpSetup: "/auth/totp/setup",
   totpConfirm: "/auth/totp/confirm",
   users: "/users",
+  /** The member-floor people list (RADD-769) — `/users` is the ADMIN directory
+   *  and stays behind `user.manage`. Everything that merely needs to name
+   *  somebody (pickers, `@`-mentions, "edited by") reads this one. */
+  userDirectory: "/users/directory",
   // Duplicate-account candidates for the merge UI (spec 84, instance admin).
   usersDuplicates: "/users/duplicates",
   // Directory administration (spec 84, instance admin + bind account).

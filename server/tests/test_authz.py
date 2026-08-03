@@ -379,3 +379,31 @@ def test_role_delete_rules():
 
 
 # Field-level visibility moved to per-role/team grants (spec 07) — see test_field_grants.py.
+
+
+# --- the member-floor people directory (RADD-769) ---------------------------
+
+
+def test_user_directory_entry_exposes_no_administrative_fields():
+    """The directory is safe because of its SHAPE, not because of a gate.
+
+    `GET /users/directory` is open to anyone with an account — the finding
+    behind RADD-769 is that naming a colleague is not an administrative act, and
+    gating it on `user.manage` put a 403 on nearly every issue and page an
+    ordinary member opened. What keeps that from becoming the admin directory in
+    disguise is that this model carries none of what `UserRead` does.
+
+    So this asserts the EXCLUSION, not the inclusion: adding `email` (or the
+    instance role, or the account source, or sign-in history) back onto the
+    entry would publish it to every account in the instance, and would do it
+    silently.
+    """
+    from radd.modules.auth.schemas import UserDirectoryEntry, UserRead
+
+    exposed = set(UserDirectoryEntry.model_fields)
+    assert exposed == {"id", "name", "active", "avatar_color", "avatar_emoji"}
+    administrative = {"email", "instance_role", "source", "last_login_at", "timezone"}
+    assert exposed & administrative == set()
+    # The administrative shape still carries them: this is a split by audience,
+    # not a trim — `GET /users` keeps both the fields and `user.manage`.
+    assert administrative <= set(UserRead.model_fields)

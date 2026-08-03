@@ -141,7 +141,6 @@ function MembersSection({ project, roles }: { project: Project; roles: Role[] })
                 className="flex items-center gap-3 border-b border-subtle/60 px-4 py-2.5 text-[13px] last:border-b-0"
               >
                 <span className="text-heading">{user?.name ?? member.user_id}</span>
-                <span className="truncate text-xs text-fg-muted">{user?.email ?? ""}</span>
                 <Select
                   aria-label={`Role of ${user?.name ?? member.user_id}`}
                   value={member.role_id}
@@ -176,7 +175,7 @@ function MembersSection({ project, roles }: { project: Project; roles: Role[] })
               <option value="">Choose a user…</option>
               {candidates.map((user) => (
                 <option key={user.id} value={user.id}>
-                  {user.name} — {user.email}
+                  {user.name}
                 </option>
               ))}
             </SelectField>

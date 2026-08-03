@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, CircleAlert, UserPlus } from "lucide-react";
-import { usersQuery } from "../../../lib/queries";
+import { usersAdminQuery } from "../../../lib/queries";
 import {
   USER_ACTION_LABELS,
   UserAction,
@@ -37,7 +37,9 @@ export function UsersTable({
   onBulk: (patch: (row: UserMapping, index: number) => Partial<UserMapping> | null) => void;
   onDomainChange: (domain: string) => void;
 }) {
-  const users = useQuery(usersQuery);
+  // The ADMIN directory (RADD-769): mapping Jira accounts onto local ones is
+  // matching by ADDRESS, and the whole importer is instance-admin only.
+  const users = useQuery(usersAdminQuery({}));
   const [fallbackId, setFallbackId] = useState("");
 
   const unmatched = useMemo(

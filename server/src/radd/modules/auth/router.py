@@ -29,6 +29,7 @@ from .schemas import (
     UserAdminUpdate,
     UserContentSummary,
     UserCreate,
+    UserDirectoryEntry,
     UserMergeRequest,
     UserRead,
 )
@@ -166,6 +167,29 @@ async def put_preferences(
 async def create_user(data: UserCreate, session: Session, actor: CurrentUser) -> UserRead:
     await authz.require(session, actor, authz.Permission.USER_CREATE)
     return UserRead.model_validate(await service.create_user(session, data, actor_id=actor.id))
+
+
+@user_router.get("/directory", response_model=list[UserDirectoryEntry])
+async def list_user_directory(session: Session, actor: CurrentUser) -> list[UserDirectoryEntry]:
+    """Who exists, for anyone with an account (RADD-769).
+
+    Authentication IS the gate, and that is the finding rather than a shortcut.
+    Every atom in the system describes what someone may do to an *entity* —
+    there is none for "is a person here", because being able to sign in already
+    answers it. Requiring one would mean minting an atom and backfilling it onto
+    every builtin role so that it always held, which is a gate in name only.
+
+    What makes that safe is the SHAPE, not a permission: `UserDirectoryEntry`
+    carries no email, no instance role, no source, no sign-in history. The
+    administrative directory keeps all of that behind `user.manage` below.
+
+    **Declared above `/users/{user_id}` on purpose (RADD-761):** Starlette
+    matches in declaration order, so a literal segment written after a `{uuid}`
+    route is answered by that route — this would 422 about parsing "directory"
+    as a UUID while appearing, correctly, in the schema and at /docs.
+    `tests/test_route_shadowing.py` asserts it for the whole app.
+    """
+    return [UserDirectoryEntry.model_validate(u) for u in await service.list_users(session)]
 
 
 @user_router.get("", response_model=list[UserRead])

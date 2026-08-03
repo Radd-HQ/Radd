@@ -18,11 +18,24 @@ import type {
   TeamMember,
   User,
   UserContentSummary,
+  UserSummary,
 } from "../types";
 
+/**
+ * Who exists, for naming them (RADD-769).
+ *
+ * Points at the member-floor directory, NOT `GET /users` — that one is gated on
+ * `user.manage`, and this query is mounted by the assignee and reporter pickers,
+ * the create modal, the bulk bar, `@`-mention autocomplete, the `/` quick
+ * actions and page-history bylines. Every one of those fired a 403 for an
+ * ordinary member, which is most of the toasts a member ever saw.
+ *
+ * The admin Users table keeps `usersAdminQuery` below, with the full shape and
+ * the spec-84 filters.
+ */
 export const usersQuery = queryOptions({
   queryKey: queryKeys.users,
-  queryFn: () => api.get<User[]>(ApiPath.users),
+  queryFn: () => api.get<UserSummary[]>(ApiPath.userDirectory),
   staleTime: 60_000,
 });
 
