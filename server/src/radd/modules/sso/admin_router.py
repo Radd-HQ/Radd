@@ -20,7 +20,7 @@ from radd.modules.auth.types import InstanceRole
 
 from . import registry, service
 from .models import SsoProvider
-from .schemas import SsoDefaultGrant, SsoProviderCreate, SsoProviderRead, SsoProviderUpdate
+from .schemas import SsoDefaultGrant, SsoProvisioningRule, SsoProviderCreate, SsoProviderRead, SsoProviderUpdate
 from .types import KIND_DEFAULTS, SsoKind
 
 router = APIRouter(prefix="/sso", tags=["sso admin"])
@@ -40,11 +40,20 @@ async def _read(session: AsyncSession, provider: SsoProvider) -> SsoProviderRead
         update={
             "configured": registry.configured(provider),
             "redirect_uri": service.redirect_uri(),
-            "default_grants": [
-                SsoDefaultGrant(role_id=g.role_id, project_id=g.project_id)
-                for g in await registry.default_grants(session, provider.id)
+            "provisioning_rules": [
+                SsoProvisioningRule(
+                    name=rule.name,
+                    domains=rule.domains,
+                    grants=[
+                        SsoDefaultGrant(role_id=g.role_id, project_id=g.project_id)
+                        for g in grants
+                    ],
+                    team_ids=team_ids,
+                )
+                for rule, grants, team_ids in await registry.provisioning_rules(
+                    session, provider.id
+                )
             ],
-            "default_team_ids": await registry.default_teams(session, provider.id),
         }
     )
 

@@ -8,7 +8,7 @@ import {
   SIGNUP_DOMAIN_WILDCARD,
   SsoKind,
   type SsoKindValue,
-  type SsoDefaultGrant,
+  type SsoProvisioningRule,
   type SsoProviderPayload,
   type SsoProviderRead,
 } from "../../../lib/types";
@@ -112,12 +112,9 @@ export function ProviderDialog({
   const [requireVerified, setRequireVerified] = useState(existing?.require_verified_email ?? true);
   const [groupClaim, setGroupClaim] = useState(existing?.group_claim ?? "groups");
   const [adminGroups, setAdminGroups] = useState(existing?.admin_groups ?? "");
-  // What a NEW account starts with (RADD-780/781): scoped role grants + teams.
-  const [defaultGrants, setDefaultGrants] = useState<SsoDefaultGrant[]>(
-    existing?.default_grants ?? [],
-  );
-  const [defaultTeamIds, setDefaultTeamIds] = useState<string[]>(
-    existing?.default_team_ids ?? [],
+  // What a NEW account starts with, per matching rule (RADD-782).
+  const [rules, setRules] = useState<SsoProvisioningRule[]>(
+    existing?.provisioning_rules ?? [],
   );
   const [error, setError] = useState("");
 
@@ -137,8 +134,7 @@ export function ProviderDialog({
         require_verified_email: requireVerified,
         group_claim: groupClaim.trim() || "groups",
         admin_groups: adminGroups.trim(),
-        default_grants: defaultGrants,
-        default_team_ids: defaultTeamIds,
+        provisioning_rules: rules,
       };
       // An empty secret on update means "keep the stored one" — send it only
       // when the admin actually typed a replacement.
@@ -279,12 +275,7 @@ export function ProviderDialog({
           <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted">
             Starting access for new accounts (optional)
           </div>
-          <StartingAccess
-            grants={defaultGrants}
-            onGrantsChange={setDefaultGrants}
-            teamIds={defaultTeamIds}
-            onTeamIdsChange={setDefaultTeamIds}
-          />
+          <StartingAccess rules={rules} onChange={setRules} />
         </div>
 
         <div className="border-t border-subtle pt-4">

@@ -26,6 +26,21 @@ class SsoDefaultGrant(BaseModel):
     project_id: uuid.UUID | None = None
 
 
+class SsoProvisioningRule(BaseModel):
+    """One "who gets what" rule on a provider (RADD-782).
+
+    EMPTY `domains` matches every address — the catch-all. Every rule whose
+    domains match is applied, so rules compose by union rather than racing.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    name: str = ""
+    domains: list[str] = Field(default_factory=list)
+    grants: list[SsoDefaultGrant] = Field(default_factory=list)
+    team_ids: list[uuid.UUID] = Field(default_factory=list)
+
+
 class SsoProviderBase(BaseModel):
     name: str = ""  # "" = the kind's default label ("Google")
     enabled: bool = True
@@ -38,12 +53,9 @@ class SsoProviderBase(BaseModel):
     require_verified_email: bool = True
     group_claim: str = "groups"
     admin_groups: str = ""
-    #: What a NEW account gets from this provider (RADD-780): any number of
-    #: roles, each global or scoped to one project. Empty = the Baseline alone.
-    default_grants: list["SsoDefaultGrant"] = Field(default_factory=list)
-    #: Teams a new account joins (RADD-781). LOCAL teams only — a
-    #: directory-linked team's membership belongs to its AD group.
-    default_team_ids: list[uuid.UUID] = Field(default_factory=list)
+    #: What a NEW account gets, per matching rule (RADD-782). A rule with no
+    #: domains matches everyone; every matching rule is applied.
+    provisioning_rules: list["SsoProvisioningRule"] = Field(default_factory=list)
 
 
 class SsoProviderCreate(SsoProviderBase):
@@ -70,9 +82,8 @@ class SsoProviderUpdate(BaseModel):
     admin_groups: str | None = None
     #: Full replacement when present, omitted = leave alone (the views/sharing
     #: idiom). An empty list therefore CLEARS them, which is how "new accounts
-    #: get nothing extra" is said once grants have been configured.
-    default_grants: list["SsoDefaultGrant"] | None = None
-    default_team_ids: list[uuid.UUID] | None = None
+    #: get nothing extra" is said once rules have been configured.
+    provisioning_rules: list["SsoProvisioningRule"] | None = None
 
 
 class SsoProviderRead(SsoProviderBase):

@@ -1,5 +1,19 @@
 /** One role a new account receives, at one scope (RADD-780). `project_id`
  *  null = instance-wide, exactly as in a role grant. */
+/**
+ * One "who gets what" rule on a provider (RADD-782).
+ *
+ * EMPTY `domains` matches every address — the catch-all. Every rule whose
+ * domains match is applied, so a catch-all and a domain rule compose by union
+ * rather than racing.
+ */
+export interface SsoProvisioningRule {
+  name: string;
+  domains: string[];
+  grants: SsoDefaultGrant[];
+  team_ids: string[];
+}
+
 export interface SsoDefaultGrant {
   role_id: string;
   project_id: string | null;
@@ -35,12 +49,10 @@ export interface SsoProviderRead {
   require_verified_email: boolean;
   group_claim: string;
   admin_groups: string;
-  /** What a NEW account gets from this provider (RADD-780/781) — any number of
-   *  roles, each global or scoped to a project, plus teams to join. Applied
-   *  ONCE, at account creation, and never re-applied, so an admin's later
-   *  change to that person's access is never undone. */
-  default_grants: SsoDefaultGrant[];
-  default_team_ids: string[];
+  /** What a NEW account gets, per matching rule (RADD-782). Applied ONCE at
+   *  account creation and never re-applied, so an admin's later change to that
+   *  person's access is never undone. */
+  provisioning_rules: SsoProvisioningRule[];
   source: string;
   /** False when the row can't complete a flow yet — explains its absence from login. */
   configured: boolean;
@@ -63,8 +75,7 @@ export interface SsoProviderPayload {
   require_verified_email?: boolean;
   group_claim?: string;
   admin_groups?: string;
-  default_grants?: SsoDefaultGrant[];
-  default_team_ids?: string[];
+  provisioning_rules?: SsoProvisioningRule[];
 }
 
 /** GET /sso/kinds — what the "add a provider" form prefills itself with. */

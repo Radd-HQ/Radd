@@ -223,52 +223,75 @@ async def identities_for_user(session: AsyncSession, user_id: uuid.UUID) -> list
 
 
 
+def _rule_matches(domains: list[str], email: str) -> bool:
+    """Does this rule apply to that address? (RADD-782)
+
+    Empty domains = the catch-all, matching everyone. Otherwise an exact match
+    on the lowercased domain, the same normalization `allowed_signup_domains`
+    uses — deliberately not a regex and not a subdomain wildcard, both of which
+    are ways to write a rule that matches more than its author believed. This
+    decides what a stranger gets on arrival.
+    """
+    if not domains:
+        return True
+    _, _, domain = email.partition("@")
+    return domain.strip().lower() in {d.strip().lower() for d in domains}
+
+
 async def _apply_provisioning_template(
     session: AsyncSession, provider: SsoProvider, user: User
 ) -> None:
-    """Give a freshly created account the provider's starting access, once.
+    """Give a freshly created account the access its rules say it gets, once.
 
-    Roles are `global_role_grants` ROWS and teams are ordinary memberships —
+    EVERY matching rule applies, so a catch-all and a domain rule compose rather
+    than race. Grants are additive rows, so a union is the only composition that
+    cannot surprise — adding a rule can widen access but never silently remove
+    another's.
+
+    Roles become `global_role_grants` rows and teams become memberships:
     additive facts nothing reconciles. That is what makes "this must never undo
     an admin's later change" a property of the data rather than a rule someone
-    has to remember: no code path reads this template again for this account.
+    has to remember — no code path reads these rules again for this account.
 
-    Every failure here is swallowed to a log line, deliberately. A template is
-    an admin convenience configured weeks earlier; a role deleted since, or a
-    team that has been linked to an AD group in the meantime, must not turn into
-    a failed sign-in for a person who did nothing wrong. They land on the
-    Baseline and an admin can grant the rest.
+    Every failure here is swallowed to a log line, deliberately. A rule is
+    configured weeks before it is used; a team linked to an AD group in the
+    meantime (whose membership then belongs to the directory) must not turn a
+    sign-in into an error for someone who did nothing wrong. They land on the
+    Baseline and an admin grants the rest.
     """
     from radd.modules.auth import grants
     from radd.modules.teams import service as teams_service
 
-    for template in await registry.default_grants(session, provider.id):
-        try:
-            await grants.create_grant(
-                session,
-                template.role_id,
-                user_id=user.id,
-                project_id=template.project_id,
-            )
-        except Exception:  # noqa: BLE001 — a stale template must not break a login
-            logger.warning(
-                "sso: skipped default role %s (project %s) for %s",
-                template.role_id,
-                template.project_id,
-                user.email,
-                exc_info=True,
-            )
-
-    for team_id in await registry.default_teams(session, provider.id):
-        try:
-            # Directory-linked teams answer 409 here (spec 87 — their membership
-            # belongs to the AD group), which is exactly the stale-template case
-            # above: skip, log, carry on.
-            await teams_service.add_team_member(session, team_id, user.id)
-        except Exception:  # noqa: BLE001
-            logger.warning(
-                "sso: skipped default team %s for %s", team_id, user.email, exc_info=True
-            )
+    for rule, rule_grants, team_ids in await registry.provisioning_rules(session, provider.id):
+        if not _rule_matches(rule.domains, user.email):
+            continue
+        for template in rule_grants:
+            try:
+                await grants.create_grant(
+                    session, template.role_id, user_id=user.id, project_id=template.project_id
+                )
+            except Exception:  # noqa: BLE001 — a stale rule must not break a login
+                logger.warning(
+                    "sso: skipped role %s (project %s) from rule %s for %s",
+                    template.role_id,
+                    template.project_id,
+                    rule.name or rule.id,
+                    user.email,
+                    exc_info=True,
+                )
+        for team_id in team_ids:
+            try:
+                # Directory-linked teams answer 409 (spec 87 — their membership
+                # belongs to the AD group): the same stale-rule case, skipped.
+                await teams_service.add_team_member(session, team_id, user.id)
+            except Exception:  # noqa: BLE001
+                logger.warning(
+                    "sso: skipped team %s from rule %s for %s",
+                    team_id,
+                    rule.name or rule.id,
+                    user.email,
+                    exc_info=True,
+                )
 
 
 

@@ -1,144 +1,214 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Globe, Plus, ShieldCheck, Users, X } from "lucide-react";
+import { Globe, Plus, ShieldCheck, Trash2, Users, X } from "lucide-react";
 import { projectsQuery, rolesQuery, teamsQuery } from "../../../lib/queries";
-import { BASELINE_ROLE_KEY, type Project, type SsoDefaultGrant } from "../../../lib/types";
+import {
+  BASELINE_ROLE_KEY,
+  type Project,
+  type SsoDefaultGrant,
+  type SsoProvisioningRule,
+} from "../../../lib/types";
 import { Button } from "../../Button";
 import { Modal } from "../../Modal";
 import { SelectField } from "../../SelectField";
+import { TokenMultiSelect } from "../../TokenMultiSelect";
 import { ScopePicker } from "../ScopePicker";
 
 /**
- * What a NEW account gets from this provider (RADD-780/781).
+ * What a NEW account gets from this provider, per rule (RADD-782).
  *
- * The same interaction as granting a role on the Users and Teams panels — a
- * list of "Role · Global" / "Role · KEY" rows with a remove ×, and an Add
- * button opening the role picker plus the `ScopePicker`. RADD-777 shipped a
- * single `<select>` for one global role, which could express "everyone gets
- * Member everywhere" and nothing else; a grant is (role, scope), and dropping
- * the scope made the setting unable to say the thing it exists for.
+ * One provider serves several populations: `@example.com` and `@radd-hq.com`
+ * arrive through the same Google button and should not land with the same
+ * access. So the starting access is a list of RULES, each matching on the email
+ * domain and carrying its own roles and teams.
  *
- * The one difference from `RoleGrantsSection`: that one writes immediately
- * against an existing subject, and a provider being CREATED has no id yet. So
- * this is local state saved with the rest of the form.
+ * **Every matching rule applies** — the copy says so, because it is the one
+ * thing an admin can get wrong here. Grants are additive rows, so a union is
+ * the only composition that cannot surprise; first-match-wins would let a
+ * catch-all at the top silently disable everything below it.
+ *
+ * Local state saved with the provider, not written immediately like
+ * `RoleGrantsSection` — a provider being CREATED has no id to hang rules off.
  */
 export function StartingAccess({
-  grants,
-  onGrantsChange,
-  teamIds,
-  onTeamIdsChange,
+  rules,
+  onChange,
 }: {
-  grants: SsoDefaultGrant[];
-  onGrantsChange: (next: SsoDefaultGrant[]) => void;
-  teamIds: string[];
-  onTeamIdsChange: (next: string[]) => void;
+  rules: SsoProvisioningRule[];
+  onChange: (next: SsoProvisioningRule[]) => void;
 }) {
   const roles = useQuery(rolesQuery());
   const projects = useQuery(projectsQuery());
   const teams = useQuery(teamsQuery());
-  const [adding, setAdding] = useState<"role" | "team" | null>(null);
 
-  const roleName = new Map((roles.data ?? []).map((r) => [r.id, r.name]));
-  const projectKey = new Map((projects.data ?? []).map((p) => [p.id, p.key]));
-  const teamName = new Map((teams.data ?? []).map((t) => [t.id, t.name]));
+  const patch = (index: number, next: Partial<SsoProvisioningRule>) =>
+    onChange(rules.map((rule, i) => (i === index ? { ...rule, ...next } : rule)));
 
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <div className="mb-1.5 flex items-center justify-between">
-          <p className="text-xs font-medium text-fg-secondary">Roles</p>
-          <Button variant="ghost" size="sm" onClick={() => setAdding("role")}>
-            <Plus size={12} aria-hidden />
-            Add role
-          </Button>
-        </div>
-        {grants.length === 0 ? (
-          <p className="text-[11px] text-fg-muted">
-            No roles — new accounts start on the Baseline alone.
-          </p>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {grants.map((grant, index) => (
-              <li
-                key={`${grant.role_id}:${grant.project_id ?? "global"}`}
-                className="flex items-center gap-2 text-[13px]"
-              >
-                <ShieldCheck size={12} className="text-fg-faint" aria-hidden />
-                <span className="text-fg">{roleName.get(grant.role_id) ?? "role"}</span>
-                {grant.project_id ? (
-                  <span className="rounded bg-elevated px-1 font-mono text-[11px] text-fg">
-                    {projectKey.get(grant.project_id) ?? "?"}
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 rounded border border-emerald-500/30 px-1.5 py-px text-[11px] text-emerald-300">
-                    <Globe size={10} aria-hidden /> Global
-                  </span>
-                )}
-                <button
-                  type="button"
-                  aria-label="Remove role"
-                  onClick={() => onGrantsChange(grants.filter((_, i) => i !== index))}
-                  className="ml-auto rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer"
-                >
-                  <X size={13} aria-hidden />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+      {rules.length === 0 && (
+        <p className="text-[11px] text-fg-muted">
+          No rules — new accounts start on the Baseline alone.
+        </p>
+      )}
+
+      {rules.map((rule, index) => (
+        <RuleCard
+          key={index}
+          rule={rule}
+          roles={(roles.data ?? []).filter((role) => role.key !== BASELINE_ROLE_KEY)}
+          projects={projects.data ?? []}
+          teams={teams.data ?? []}
+          onChange={(next) => patch(index, next)}
+          onRemove={() => onChange(rules.filter((_, i) => i !== index))}
+        />
+      ))}
+
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] text-fg-faint">
+          Every rule whose domains match is applied — a rule with no domains matches everyone.
+          Applied once, when this provider CREATES an account, and never re-applied.
+        </p>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onChange([...rules, { name: "", domains: [], grants: [], team_ids: [] }])}
+        >
+          <Plus size={12} aria-hidden />
+          Add rule
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function RuleCard({
+  rule,
+  roles,
+  projects,
+  teams,
+  onChange,
+  onRemove,
+}: {
+  rule: SsoProvisioningRule;
+  roles: { id: string; name: string; key: string }[];
+  projects: Project[];
+  teams: { id: string; name: string; source?: string }[];
+  onChange: (next: Partial<SsoProvisioningRule>) => void;
+  onRemove: () => void;
+}) {
+  const [adding, setAdding] = useState<"role" | "team" | null>(null);
+  const roleName = new Map(roles.map((r) => [r.id, r.name]));
+  const projectKey = new Map(projects.map((p) => [p.id, p.key]));
+  const teamName = new Map(teams.map((t) => [t.id, t.name]));
+
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-subtle bg-base p-3">
+      <div className="flex items-center gap-2">
+        <input
+          value={rule.name}
+          onChange={(event) => onChange({ name: event.target.value })}
+          placeholder="Rule name (optional)"
+          aria-label="Rule name"
+          className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-[13px] text-heading hover:border-subtle focus:border-strong focus:outline-none"
+        />
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label="Remove rule"
+          className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer"
+        >
+          <Trash2 size={13} aria-hidden />
+        </button>
       </div>
 
       <div>
-        <div className="mb-1.5 flex items-center justify-between">
-          <p className="text-xs font-medium text-fg-secondary">Teams</p>
-          <Button variant="ghost" size="sm" onClick={() => setAdding("team")}>
-            <Plus size={12} aria-hidden />
-            Add team
-          </Button>
-        </div>
-        {teamIds.length === 0 ? (
-          <p className="text-[11px] text-fg-muted">No teams.</p>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {teamIds.map((id) => (
-              <li key={id} className="flex items-center gap-2 text-[13px]">
-                <Users size={12} className="text-fg-faint" aria-hidden />
-                <span className="text-fg">{teamName.get(id) ?? "team"}</span>
-                <button
-                  type="button"
-                  aria-label="Remove team"
-                  onClick={() => onTeamIdsChange(teamIds.filter((entry) => entry !== id))}
-                  className="ml-auto rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer"
-                >
-                  <X size={13} aria-hidden />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+        <div className="mb-1 text-[11px] font-medium text-fg-secondary">Email domains</div>
+        <TokenMultiSelect
+          value={rule.domains}
+          onChange={(domains) => onChange({ domains })}
+          options={[]}
+          allowCreate
+          placeholder="example.com — leave empty to match everyone"
+          createLabel={(term) => `Match ${term.replace(/^@/, "")}`}
+          ariaLabel="Rule email domains"
+        />
       </div>
 
-      <p className="text-[11px] text-fg-faint">
-        Applied once, when this provider CREATES an account — never re-applied. Revoke or change
-        any of it later and no future sign-in will put it back, which is the difference between a
-        starting point and a policy the provider keeps enforcing.
-      </p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-[11px] font-medium text-fg-secondary">Roles</span>
+        {rule.grants.length === 0 && <span className="text-[11px] text-fg-muted">none</span>}
+        {rule.grants.map((grant, i) => (
+          <span
+            key={`${grant.role_id}:${grant.project_id ?? "global"}`}
+            className="inline-flex items-center gap-1 rounded border border-strong px-1.5 py-px text-[11px] text-fg"
+          >
+            <ShieldCheck size={10} aria-hidden className="text-fg-faint" />
+            {roleName.get(grant.role_id) ?? "role"}
+            {grant.project_id ? (
+              <span className="font-mono text-fg-secondary">
+                {projectKey.get(grant.project_id) ?? "?"}
+              </span>
+            ) : (
+              <Globe size={10} aria-hidden className="text-emerald-300" />
+            )}
+            <button
+              type="button"
+              aria-label="Remove role"
+              onClick={() => onChange({ grants: rule.grants.filter((_, j) => j !== i) })}
+              className="cursor-pointer text-fg-faint hover:text-red-400"
+            >
+              <X size={10} aria-hidden />
+            </button>
+          </span>
+        ))}
+        <Button variant="ghost" size="sm" onClick={() => setAdding("role")}>
+          <Plus size={11} aria-hidden />
+          Add role
+        </Button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-[11px] font-medium text-fg-secondary">Teams</span>
+        {rule.team_ids.length === 0 && <span className="text-[11px] text-fg-muted">none</span>}
+        {rule.team_ids.map((id) => (
+          <span
+            key={id}
+            className="inline-flex items-center gap-1 rounded border border-strong px-1.5 py-px text-[11px] text-fg"
+          >
+            <Users size={10} aria-hidden className="text-fg-faint" />
+            {teamName.get(id) ?? "team"}
+            <button
+              type="button"
+              aria-label="Remove team"
+              onClick={() => onChange({ team_ids: rule.team_ids.filter((t) => t !== id) })}
+              className="cursor-pointer text-fg-faint hover:text-red-400"
+            >
+              <X size={10} aria-hidden />
+            </button>
+          </span>
+        ))}
+        <Button variant="ghost" size="sm" onClick={() => setAdding("team")}>
+          <Plus size={11} aria-hidden />
+          Add team
+        </Button>
+      </div>
 
       {adding === "role" && (
         <AddRoleDialog
-          roles={(roles.data ?? []).filter((role) => role.key !== BASELINE_ROLE_KEY)}
-          projects={projects.data ?? []}
+          roles={roles}
+          projects={projects}
           onClose={() => setAdding(null)}
           onAdd={(roleId, projectIds) => {
-            // A scope picker with no projects means GLOBAL — one row with a null
-            // project, exactly as POST /role-grants treats an empty list.
+            // No projects picked means GLOBAL — one row with a null project,
+            // exactly as POST /role-grants treats an empty list.
             const additions: SsoDefaultGrant[] =
               projectIds.length === 0
                 ? [{ role_id: roleId, project_id: null }]
                 : projectIds.map((projectId) => ({ role_id: roleId, project_id: projectId }));
             const key = (g: SsoDefaultGrant) => `${g.role_id}:${g.project_id ?? "global"}`;
-            const seen = new Set(grants.map(key));
-            onGrantsChange([...grants, ...additions.filter((g) => !seen.has(key(g)))]);
+            const seen = new Set(rule.grants.map(key));
+            onChange({ grants: [...rule.grants, ...additions.filter((g) => !seen.has(key(g)))] });
             setAdding(null);
           }}
         />
@@ -146,14 +216,12 @@ export function StartingAccess({
       {adding === "team" && (
         <AddTeamDialog
           // Directory-linked teams are excluded: their membership belongs to the
-          // AD group (spec 87), so a template pointing at one could only ever be
-          // skipped at login. Offering it would be offering a no-op.
-          teams={(teams.data ?? []).filter(
-            (team) => team.source !== "directory" && !teamIds.includes(team.id),
-          )}
+          // AD group (spec 87), so a rule naming one could only ever be skipped
+          // at login. Offering it would be offering a no-op.
+          teams={teams.filter((t) => t.source !== "directory" && !rule.team_ids.includes(t.id))}
           onClose={() => setAdding(null)}
           onAdd={(teamId) => {
-            onTeamIdsChange([...teamIds, teamId]);
+            onChange({ team_ids: [...rule.team_ids, teamId] });
             setAdding(null);
           }}
         />

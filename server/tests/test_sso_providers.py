@@ -313,6 +313,21 @@ async def test_duplicate_names_are_rejected(db):
 # --- the provider's default role grant (RADD-777) -----------------------------
 
 
+async def _builtin_role(db, key: str):
+    """A seeded builtin role by key.
+
+    Seeded here rather than assumed: `ensure_builtin_roles` runs on app startup
+    and these tests talk to the session directly. Idempotent, so calling it
+    costs nothing when another test got there first.
+    """
+    from radd.modules.auth import roles as roles_service
+    from radd.modules.auth.models import Role
+
+    await roles_service.ensure_builtin_roles(db)
+    await db.flush()
+    return (await db.execute(select(Role).where(Role.key == key))).scalar_one()
+
+
 async def _member_role(db):
     """The seeded Member row.
 
@@ -337,7 +352,7 @@ async def _grants_for(db, user_id):
 
 async def test_default_role_is_granted_when_the_provider_creates_the_account(db):
     role = await _member_role(db)
-    provider = await _provider(db, default_grants=[{"role_id": role.id}])
+    provider = await _provider(db, provisioning_rules=[{"grants": [{"role_id": role.id}]}])
 
     user = await service.provision(db, provider, _claims(f"new-{uuid.uuid4().hex[:6]}@radd-hq.com"))
 
@@ -357,7 +372,7 @@ async def test_the_default_grant_is_never_re_applied(db):
     from radd.modules.auth import grants
 
     role = await _member_role(db)
-    provider = await _provider(db, default_grants=[{"role_id": role.id}])
+    provider = await _provider(db, provisioning_rules=[{"grants": [{"role_id": role.id}]}])
     email = f"new-{uuid.uuid4().hex[:6]}@radd-hq.com"
     user = await service.provision(db, provider, _claims(email))
 
@@ -378,7 +393,7 @@ async def test_linking_an_existing_account_grants_nothing(db):
     privilege change nobody asked for.
     """
     role = await _member_role(db)
-    provider = await _provider(db, default_grants=[{"role_id": role.id}])
+    provider = await _provider(db, provisioning_rules=[{"grants": [{"role_id": role.id}]}])
     email = f"existing-{uuid.uuid4().hex[:6]}@radd-hq.com"
     existing = await _user(db, email)
 
@@ -410,9 +425,13 @@ async def test_default_grants_are_scoped_per_project(db):
     )
     provider = await _provider(
         db,
-        default_grants=[
-            {"role_id": role.id, "project_id": project.id},
-            {"role_id": role.id},  # and globally
+        provisioning_rules=[
+            {
+                "grants": [
+                    {"role_id": role.id, "project_id": project.id},
+                    {"role_id": role.id},  # and globally
+                ]
+            }
         ],
     )
 
@@ -427,7 +446,7 @@ async def test_default_teams_are_joined_on_first_login(db):
     from radd.modules.teams.schemas import TeamCreate
 
     team = await teams_service.create_team(db, TeamCreate(name=f"Squad {uuid.uuid4().hex[:5]}"))
-    provider = await _provider(db, default_team_ids=[team.id])
+    provider = await _provider(db, provisioning_rules=[{"team_ids": [team.id]}])
 
     user = await service.provision(db, provider, _claims(f"new-{uuid.uuid4().hex[:6]}@radd-hq.com"))
 
@@ -455,7 +474,7 @@ async def test_a_stale_template_never_breaks_a_sign_in(db):
     from radd.modules.teams.types import TeamSource
 
     team = await teams_service.create_team(db, TeamCreate(name=f"Linked {uuid.uuid4().hex[:5]}"))
-    provider = await _provider(db, default_team_ids=[team.id])
+    provider = await _provider(db, provisioning_rules=[{"team_ids": [team.id]}])
     # The directory takes ownership after the template was configured.
     team.source = TeamSource.DIRECTORY.value
     await db.flush()
@@ -464,3 +483,68 @@ async def test_a_stale_template_never_breaks_a_sign_in(db):
 
     assert user.id is not None  # the sign-in completed
     assert user.id not in {m.id for m in await teams_service.list_team_members(db, team.id)}
+
+
+async def test_rules_route_by_email_domain(db):
+    """The point of RADD-782: one provider, different populations.
+
+    `@example.com` and `@radd-hq.com` arrive through the same button and must
+    not land with the same access.
+    """
+    member = await _member_role(db)
+    viewer = await _builtin_role(db, "viewer")
+    provider = await _provider(
+        db,
+        allowed_signup_domains=["example.com", "radd-hq.com"],
+        provisioning_rules=[
+            {"name": "the studio", "domains": ["example.com"], "grants": [{"role_id": member.id}]},
+            {"name": "Radd HQ", "domains": ["radd-hq.com"], "grants": [{"role_id": viewer.id}]},
+        ],
+    )
+
+    studio = await service.provision(
+        db, provider, _claims(f"a-{uuid.uuid4().hex[:6]}@example.com", sub="s-cs")
+    )
+    raddhq = await service.provision(
+        db, provider, _claims(f"b-{uuid.uuid4().hex[:6]}@radd-hq.com", sub="s-rh")
+    )
+
+    assert {g.role_id for g in await _grants_for(db, studio.id)} == {member.id}
+    assert {g.role_id for g in await _grants_for(db, raddhq.id)} == {viewer.id}
+
+
+async def test_a_catch_all_rule_composes_with_a_domain_rule(db):
+    """Every MATCHING rule applies — not first-match-wins.
+
+    Grants are additive rows, so a union is the only composition that cannot
+    surprise: adding a rule widens access and never silently removes another's.
+    First-match would make the catch-all useless the moment a domain rule
+    existed, forcing every rule to restate the common part.
+    """
+    member = await _member_role(db)
+    viewer = await _builtin_role(db, "viewer")
+    provider = await _provider(
+        db,
+        provisioning_rules=[
+            {"name": "Everyone", "domains": [], "grants": [{"role_id": viewer.id}]},
+            {"name": "Staff", "domains": ["radd-hq.com"], "grants": [{"role_id": member.id}]},
+        ],
+    )
+
+    user = await service.provision(db, provider, _claims(f"c-{uuid.uuid4().hex[:6]}@radd-hq.com"))
+
+    assert {g.role_id for g in await _grants_for(db, user.id)} == {viewer.id, member.id}
+
+
+async def test_a_rule_that_matches_nobody_grants_nothing(db):
+    member = await _member_role(db)
+    provider = await _provider(
+        db,
+        provisioning_rules=[
+            {"name": "Other", "domains": ["example.org"], "grants": [{"role_id": member.id}]}
+        ],
+    )
+
+    user = await service.provision(db, provider, _claims(f"d-{uuid.uuid4().hex[:6]}@radd-hq.com"))
+
+    assert await _grants_for(db, user.id) == []

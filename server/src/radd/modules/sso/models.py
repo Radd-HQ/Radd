@@ -86,6 +86,46 @@ class SsoProvider(Base, TimestampMixin):
         return bool(self.client_secret)
 
 
+class SsoProvisioningRule(Base, TimestampMixin):
+    """Who gets what when this provider creates an account (RADD-782).
+
+    One provider serves several populations — `@example.com` and
+    `@radd-hq.com` sign in through the same Google button and should not land
+    with the same access. RADD-780/781 gave a provider ONE template; this puts a
+    rule between them, and the grants and teams hang off the rule.
+
+    **Every matching rule applies.** Not first-match-wins: grants are additive
+    rows, so a union is the only composition that cannot surprise — adding a
+    rule can widen access but never silently remove another's. It is also what
+    makes a catch-all useful ("everyone gets Viewer, the studio additionally gets
+    Member") instead of forcing every rule to restate the common part. The
+    spec-102 storage chain picks ONE host because a file lands in one place;
+    access is a union, and borrowing that ordering would let a catch-all at the
+    top disable everything below it.
+
+    An EMPTY `domains` list matches every address. That is what makes the
+    migration behaviour-free: each provider's existing flat template becomes one
+    unnamed catch-all rule.
+    """
+
+    __tablename__ = "sso_provisioning_rules"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    provider_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("sso_providers.id", ondelete="CASCADE"), index=True
+    )
+    #: Admin-facing label. "" is fine — the domains say what it does.
+    name: Mapped[str] = mapped_column(String(200), default="")
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    #: Lowercased bare domains ("example.com"). EMPTY = matches everyone.
+    #:
+    #: Exact match on the address's domain, the same normalization
+    #: `allowed_signup_domains` uses. Deliberately not a regex and not a
+    #: subdomain wildcard: both are ways to write a rule that matches more than
+    #: its author believed, and this decides what a stranger gets on arrival.
+    domains: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")
+
+
 class SsoProviderDefaultGrant(Base, TimestampMixin):
     """One role a NEW account gets from this provider, at one scope (RADD-780).
 
@@ -109,14 +149,12 @@ class SsoProviderDefaultGrant(Base, TimestampMixin):
 
     __tablename__ = "sso_provider_default_grants"
     __table_args__ = (
-        UniqueConstraint(
-            "provider_id", "role_id", "project_id", name="uq_sso_default_grant"
-        ),
+        UniqueConstraint("rule_id", "role_id", "project_id", name="uq_sso_default_grant"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    provider_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("sso_providers.id", ondelete="CASCADE"), index=True
+    rule_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("sso_provisioning_rules.id", ondelete="CASCADE"), index=True
     )
     role_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("roles.id", ondelete="CASCADE"))
     #: NULL = granted instance-wide, exactly as in `global_role_grants`.
@@ -140,11 +178,11 @@ class SsoProviderDefaultTeam(Base, TimestampMixin):
     """
 
     __tablename__ = "sso_provider_default_teams"
-    __table_args__ = (UniqueConstraint("provider_id", "team_id", name="uq_sso_default_team"),)
+    __table_args__ = (UniqueConstraint("rule_id", "team_id", name="uq_sso_default_team"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    provider_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("sso_providers.id", ondelete="CASCADE"), index=True
+    rule_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("sso_provisioning_rules.id", ondelete="CASCADE"), index=True
     )
     team_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"))
 
