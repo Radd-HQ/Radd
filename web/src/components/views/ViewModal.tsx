@@ -55,9 +55,11 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
   const navigate = useNavigate();
   const perms = usePermissions();
 
+  // All-projects scope resolves "anywhere", not globally (RADD-788) — the
+  // server's `_require_scope` makes the same call.
   const canShare = project
     ? perms.project(project, Permission.viewManage)
-    : perms.global(Permission.viewManage);
+    : perms.anyProject(Permission.viewManage);
 
   const fields = useQuery(fieldsQuery());
 

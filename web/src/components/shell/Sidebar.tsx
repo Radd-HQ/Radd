@@ -103,9 +103,10 @@ export function Sidebar() {
     (views ?? []).filter(
       (view) => view.project_id === project.id && view.view_type !== ViewType.queue,
     );
-  // New-view affordances are gated on view.manage in scope. (Personal views
-  // only need item.read server-side — API-only for pure viewers, known gap.)
-  const canCreateView = perms.global(Permission.viewManage);
+  // New-view affordances are gated on view.manage in scope. The all-projects
+  // scope means "anywhere", not "globally" (RADD-788). (Personal views only need
+  // item.read server-side — API-only for pure viewers, known gap.)
+  const canCreateView = perms.anyProject(Permission.viewManage);
   const cycleList = cycles ?? [];
   const liveCycles = selectableCycles(cycleList);
   const canManageCycles = perms.global(Permission.cycleManage);

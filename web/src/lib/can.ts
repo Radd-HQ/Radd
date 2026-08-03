@@ -54,6 +54,12 @@ export interface Gate {
 export interface CanOptions {
   /** Resolve against this project. Omit for a global-scope atom. */
   project?: Pick<Project, "id" | "permissions"> | null;
+  /**
+   * Resolve against ANY project the caller can see (RADD-788) — for surfaces
+   * that span projects and so have no single one to check. Ignored when
+   * `project` is given, which is the more specific question.
+   */
+  anyProject?: boolean;
   /** Human phrase for the tooltip: "You can't <verb>." Falls back to the atom. */
   verb?: string;
   /** An extra condition that must ALSO hold — an archived item, a closed cycle.
@@ -69,10 +75,12 @@ export function useCan(): CanFn {
 
   return useMemo<CanFn>(
     () => (permission, options = {}) => {
-      const { project, verb, unless } = options;
+      const { project, anyProject, verb, unless } = options;
       const held = project
         ? perms.project(project, permission as never)
-        : perms.global(permission as never);
+        : anyProject
+          ? perms.anyProject(permission as never)
+          : perms.global(permission as never);
       const blocked = unless?.when === true;
       const allowed = held && !blocked;
       const reason = allowed

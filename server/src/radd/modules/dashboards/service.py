@@ -40,10 +40,13 @@ from .schemas import (
 )
 from .types import DashboardEntity, DashboardEvent, ShareLevel, WidgetType
 
-# Personal use (create private, edit own/granted) needs only the global member
-# floor (item.read at global scope); the dashboard.* atoms gate the server-wide
-# broadcast — the views PERSONAL_VIEW_PERMISSION idiom.
-PERSONAL_DASHBOARD_PERMISSION = Permission.ITEM_READ
+# Personal use (create private, edit own/granted) needs only the member floor —
+# `authz.require_member`; the dashboard.* atoms gate the server-wide broadcast.
+#
+# That floor used to be spelled as a constant naming `item.read` at GLOBAL scope,
+# which RADD-788 showed is not the same question: a person whose access is
+# project-scoped is a member and holds nothing globally. The constant is gone
+# rather than repointed, because its whole job was to name a scope that was wrong.
 
 
 def _read_widget_type(value: str) -> WidgetType | str:
@@ -250,9 +253,7 @@ async def require_edit(
     Visible-but-viewer → 403. Public within the module (widgets.py gates on it)."""
     dashboard, grant = await _load_visible(session, dashboard_id, actor)
     if dashboard.owner_id == actor.id or grant in (ShareLevel.EDITOR, ShareLevel.OWNER):
-        await authz.require(
-            session, actor, PERSONAL_DASHBOARD_PERMISSION
-        )
+        await authz.require_member(session, actor)  # RADD-788
         return dashboard
     raise ForbiddenError(
         "dashboard is shared with you as a viewer — ask the owner for edit access"
@@ -340,12 +341,10 @@ async def create_dashboard(
     global_access = _validate_global_access(data.global_access)
     # Server-wide visibility is a broadcast — the dashboard.create atom gates
     # it. Sharing with specific people/teams is a personal act: membership suffices.
-    permission = (
-        Permission.DASHBOARD_CREATE
-        if global_access is not None
-        else PERSONAL_DASHBOARD_PERMISSION
-    )
-    await authz.require(session, actor, permission)
+    if global_access is not None:
+        await authz.require(session, actor, Permission.DASHBOARD_CREATE)
+    else:
+        await authz.require_member(session, actor)  # RADD-788
     dashboard = Dashboard(
         name=data.name,
         description=data.description,
@@ -367,7 +366,9 @@ async def create_dashboard(
 async def list_dashboards(
     session: AsyncSession, *, actor: User
 ) -> list[DashboardRead]:
-    await authz.require(session, actor, Permission.ITEM_READ)
+    # Member floor (RADD-788): item.read in SOME project, not the global atom.
+    if not await authz.readable_projects(session, actor):
+        return []
     candidates = list(
         (
             await session.execute(

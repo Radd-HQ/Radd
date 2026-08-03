@@ -27,8 +27,10 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 
 @router.get("/canned-responses", response_model=list[CannedResponseRead])
 async def list_responses(session: Session, user: CurrentUser) -> list[CannedResponseRead]:
-    # Any active member may read (they insert these while replying).
-    await authz.require(session, user, Permission.ITEM_READ)
+    # Any member may read (they insert these while replying) — the floor is
+    # item.read in SOME project (RADD-788), not the global atom.
+    if not await authz.readable_projects(session, user):
+        return []
     return [
         CannedResponseRead.model_validate(response)
         for response in await service.list_responses(session)

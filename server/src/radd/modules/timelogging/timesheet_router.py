@@ -37,8 +37,13 @@ async def get_timesheet(
 ) -> Timesheet:
     if start > end:
         raise HTTPException(status_code=422, detail="start must be on or before end")
-    perms = await authz.require(session, user, authz.Permission.ITEM_READ)
-    can_view_all = authz.Permission.TIMESHEET_VIEW in perms
+    # Member floor (RADD-788). Seeing OTHER people's time stays a global
+    # authority — holding timesheet.view on one project must not expose the
+    # whole instance's hours — so that check is unchanged.
+    await authz.require_member(session, user)
+    can_view_all = (
+        authz.Permission.TIMESHEET_VIEW in await authz.effective_permissions(session, user)
+    )
 
     requested: set[uuid.UUID] | None = set(user_id) if user_id else None
     if team_id is not None:

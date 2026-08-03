@@ -94,9 +94,12 @@ async def list_rules(session: Session, user: CurrentUser) -> list[RuleRead]:
 
 @router.get("/runnable", response_model=list[RunnableRuleRead])
 async def list_runnable_rules(session: Session, user: CurrentUser) -> list[RunnableRuleRead]:
-    """Enabled MANUAL rules, member-visible (item.read) — the editor `/` menu's custom
-    actions. Only names leak; conditions/actions stay behind automation.manage."""
-    await authz.require(session, user, authz.Permission.ITEM_READ)
+    """Enabled MANUAL rules, member-visible — the editor `/` menu's custom actions.
+    Only names leak; conditions/actions stay behind automation.manage.
+
+    Member floor (RADD-788): item.read in SOME project, not the global atom."""
+    if not await authz.readable_projects(session, user):
+        return []
     rules = await service.rules_for_trigger(session, MANUAL_TRIGGER)
     return [RunnableRuleRead.model_validate(rule) for rule in rules]
 

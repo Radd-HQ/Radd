@@ -81,7 +81,14 @@ async def create_team(data: TeamCreate, session: Session, user: CurrentUser) -> 
 
 @team_router.get("", response_model=list[TeamRead])
 async def list_teams(session: Session, user: CurrentUser) -> list[TeamRead]:
-    permissions = await authz.require(session, user, authz.Permission.ITEM_READ)
+    # Member floor (RADD-788): item.read in SOME project, not the global atom.
+    readable = await authz.readable_projects(session, user)
+    if not readable:
+        return []
+    # Team rows carry per-team manage flags; resolve those against the actor's
+    # widest project permissions rather than a global union that is now empty for
+    # anyone whose access is project-scoped.
+    permissions = frozenset().union(*readable.values())
     return [
         await _team_read(session, t, user, permissions)
         for t in await service.list_teams(session)
@@ -162,7 +169,7 @@ async def list_team_members(
     team_id: uuid.UUID, session: Session, user: CurrentUser
 ) -> list[TeamMemberRead]:
     await service.get_team(session, team_id)
-    await authz.require(session, user, authz.Permission.ITEM_READ)
+    await authz.require_member(session, user)
     users = await service.list_team_members(session, team_id)
     sources = {
         row.user_id: MemberSource(row.source)

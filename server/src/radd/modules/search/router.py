@@ -74,5 +74,5 @@ async def search_semantic(
     """Pure meaning-based retrieval over items + docs (spec 103, the palette's
     Ask mode). `enabled: false` — never an error — when semantic search is not
     configured; RBAC scoping matches /search (items) and page.read (docs)."""
-    await authz.require(session, user, Permission.ITEM_READ)
+    await authz.require_member(session, user)  # RADD-788; results are RBAC-scoped below
     return await semantic.semantic_search(session, user, q)

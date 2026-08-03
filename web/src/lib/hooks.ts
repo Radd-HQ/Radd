@@ -148,10 +148,29 @@ export interface PermissionChecks {
     project: Pick<Project, "permissions"> | null | undefined,
     permission: PermissionValue,
   ) => boolean;
+  /**
+   * The caller holds `permission` on AT LEAST ONE project they can see — the
+   * client mirror of `authz.require_anywhere` (RADD-788).
+   *
+   * Use it for surfaces that span projects, where there is no single project to
+   * resolve against: an all-projects view, the New-view affordance for the
+   * all-projects scope. `global` is the wrong question there and looked like the
+   * right one — a grant on this instance is normally SCOPED to a project, which
+   * contributes nothing to the global union, so every such gate was false for
+   * ordinary members the moment the Baseline role was emptied.
+   *
+   * The server still enforces per row; this only decides whether the affordance
+   * is offered at all.
+   */
+  anyProject: (permission: PermissionValue) => boolean;
 }
 
 export function usePermissions(): PermissionChecks {
   const authState = useAuthState();
+  // Already fetched app-wide (the sidebar renders the project tree), so this is
+  // a cache read rather than a request. `permissions` on each row is the
+  // backend's per-project union for the current user.
+  const { data: projects } = useQuery(projectsQuery());
 
   return useMemo(() => {
     const allowAll =
@@ -169,8 +188,12 @@ export function usePermissions(): PermissionChecks {
       global: (permission) => allowAll || globalPermissions.has(permission),
       project: (project, permission) =>
         allowAll || Boolean(project?.permissions?.includes(permission)),
+      anyProject: (permission) =>
+        allowAll ||
+        globalPermissions.has(permission) ||
+        (projects ?? []).some((p) => p.permissions?.includes(permission)),
     };
-  }, [authState]);
+  }, [authState, projects]);
 }
 
 /**

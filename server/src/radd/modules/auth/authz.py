@@ -196,6 +196,9 @@ async def _global_permission_sets(
 #: Key under which the request's baseline lookup is memoised on the session.
 _BASELINE_CACHE_KEY = "radd.baseline_permissions"
 
+#: Key prefix for the per-request memo of `readable_projects` (per actor).
+_READABLE_CACHE_KEY = "radd.readable_projects"
+
 
 async def baseline_permissions(session: AsyncSession) -> frozenset[Permission]:
     """What every active user holds without being granted anything (RADD-773).
@@ -421,6 +424,72 @@ async def require_anywhere(
     if refuse_when_empty and not held and permission not in await effective_permissions(session, user):
         raise ForbiddenError(f"permission '{permission}' denied")
     return held
+
+
+async def readable_projects(
+    session: AsyncSession, user: User
+) -> dict[uuid.UUID, frozenset[Permission]]:
+    """THE member floor: the projects this actor may read items in (RADD-788).
+
+    Ask this — never `require(ITEM_READ)` with no project — whenever a surface
+    needs to know "is this an ordinary member of this instance?".
+
+    ## Why the global check was wrong
+
+    Roughly 28 endpoints used to gate on `item.read` at GLOBAL scope as a stand-in
+    for membership. That check could not fail: `item.read` sat in the hardcoded
+    `MEMBER_FLOOR`, so every active user held it globally and the gate was
+    decoration — the same vacuous-gate class RADD-770 found on `page.write`.
+
+    RADD-773 made the floor an editable Baseline role and made an absent one fail
+    closed, both correctly. But a grant on this instance is normally SCOPED to a
+    project, and a project-scoped grant contributes nothing at global scope — so
+    the first admin to empty the Baseline turned every one of those gates into a
+    hard 403 for people who were, in fact, members. `GET /views` was the one that
+    decided the experience: specs 61–67 deleted the builtin board/list/planning
+    pages, so refusing that list leaves a project with nothing in it.
+
+    ## What callers do with the answer
+
+    - **Rows scoped to a project** (views, dashboards, reports, worklogs): filter
+      to these ids. That is the RADD-672 pattern and it is what makes an
+      all-projects view show exactly the issues the viewer may see.
+    - **Instance-wide catalogs** (labels, roles, teams, fields, cycles, work
+      categories, canned responses): serve the catalog, and return an EMPTY list
+      when this map is empty.
+
+    Empty means "entitled to nothing anywhere", and it answers with emptiness
+    rather than a refusal — RADD-774's rule. "There is nothing here for you" and
+    "you did something you are not allowed to do" are different answers, and a
+    new account landing on a wall of permission toasts is neither useful nor true.
+
+    Memoised per request like `baseline_permissions`, and for the same reason: a
+    page load hits several of these surfaces, each of which would otherwise repeat
+    a projects listing plus a batched permission resolution.
+    """
+    key = f"{_READABLE_CACHE_KEY}:{user.id}"
+    cached: dict[uuid.UUID, frozenset[Permission]] | None = session.info.get(key)
+    if cached is not None:
+        return cached
+    resolved = await require_anywhere(session, user, Permission.ITEM_READ)
+    session.info[key] = resolved
+    return resolved
+
+
+async def require_member(
+    session: AsyncSession, user: User
+) -> dict[uuid.UUID, frozenset[Permission]]:
+    """`readable_projects`, but REFUSES when the actor is entitled to nothing.
+
+    The same floor; the difference is what an empty answer can be expressed as.
+    A LIST endpoint says "nothing here for you" by returning nothing, so it calls
+    `readable_projects` and returns `[]`. A single-resource read has no such
+    answer — a cycle either comes back or it does not — so this one raises.
+    """
+    readable = await readable_projects(session, user)
+    if not readable:
+        raise ForbiddenError(f"permission '{Permission.ITEM_READ}' denied")
+    return readable
 
 
 @dataclass(frozen=True)

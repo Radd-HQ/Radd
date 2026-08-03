@@ -45,7 +45,9 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 
 @role_router.get("", response_model=list[RoleRead])
 async def list_roles(session: Session, user: CurrentUser) -> list[RoleRead]:
-    await authz.require(session, user, Permission.ITEM_READ)
+    # Member floor (RADD-788): item.read in SOME project, not the global atom.
+    if not await authz.readable_projects(session, user):
+        return []
     return [RoleRead.model_validate(r) for r in await roles.list_roles(session)]
 
 
@@ -83,7 +85,7 @@ async def list_global_grants(
     role_id: uuid.UUID, session: Session, user: CurrentUser
 ) -> list[GlobalGrantRead]:
     await roles.get_role(session, role_id)
-    await authz.require(session, user, Permission.ITEM_READ)
+    await authz.require_member(session, user)
     return [GlobalGrantRead.model_validate(g) for g in await grants.list_grants(session, role_id)]
 
 
@@ -114,7 +116,7 @@ async def list_role_grants(
 ) -> list[GlobalGrantRead]:
     """Every role grant (any role, global or project) held by one subject — the
     team/user Roles tab. Exactly one of team_id/user_id."""
-    await authz.require(session, user, Permission.ITEM_READ)
+    await authz.require_member(session, user)
     if (team_id is None) == (user_id is None):
         raise ConflictError(AuthEntity.GLOBAL_GRANT, reason="exactly one of team_id/user_id")
     rows = await grants.grants_for_subject(session, user_id=user_id, team_id=team_id)
@@ -152,7 +154,7 @@ async def delete_role_grant(grant_id: uuid.UUID, session: Session, user: Current
 @permission_router.get("", response_model=list[PermissionRead])
 async def permission_catalog(session: Session, user: CurrentUser) -> list[PermissionRead]:
     """Every permission the system knows, with scope — for the admin role-matrix UI."""
-    await authz.require(session, user, Permission.ITEM_READ)
+    await authz.require_member(session, user)
     # Builtins first, in enum order (parity), then any plugin-registered atoms
     # (spec 93/A2 — a plugin's atoms appear in the matrix with no edit to auth).
     builtin = [p.value for p in Permission]

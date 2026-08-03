@@ -44,7 +44,7 @@ async def validate_slq(
         project = await projects_service.get_project(session, project_id)
         await authz.require(session, actor, Permission.ITEM_READ, project=project)
     else:
-        await authz.require(session, actor, Permission.ITEM_READ)
+        await authz.require_member(session, actor)  # RADD-788
     await slq.compile_query(
         session,
         slq.parse(q),

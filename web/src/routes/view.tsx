@@ -638,9 +638,14 @@ export function ViewPage() {
   const rankOrdered =
     !/\border\s+by\b/i.test(viewQuery) || /\border\s+by\s+rank\b/i.test(viewQuery);
   const projectScoped = Boolean(view?.project_id);
+  // An ALL-PROJECTS view has no single project to resolve against. It asked the
+  // GLOBAL atom, which a project-scoped grant never satisfies (RADD-788), so
+  // drag-to-rank was dead on every cross-project view for ordinary members.
+  // "Holds it somewhere" is the honest client-side bar; the server re-checks the
+  // item's own project on every reorder.
   const canUpdate = projectScoped
     ? Boolean(project) && perms.project(project, Permission.itemUpdate)
-    : perms.global(Permission.itemUpdate);
+    : perms.anyProject(Permission.itemUpdate);
   const dndCtx = useMemo(
     () => ({
       projectScoped,

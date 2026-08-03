@@ -74,7 +74,7 @@ async def suggest(
         scope = SuggestScope(project=project)
         definitions = await fields_service.definitions_for_project(session, project)
     else:
-        await authz.require(session, actor, Permission.ITEM_READ)
+        await authz.require_member(session, actor)  # RADD-788
         scope = SuggestScope()
         definitions = await fields_service.list_fields(session)
     definitions_by_key: dict[str, FieldDefinition] = {}

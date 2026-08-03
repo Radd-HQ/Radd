@@ -394,7 +394,11 @@ const settingsIndexRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: "/",
   beforeLoad: () => {
-    throw redirect({ to: RoutePath.settingsFields });
+    // Profile, not Fields (RADD-788). Fields is gated on `field.manage`, which
+    // most people do not hold — so the first click into Settings answered with a
+    // permission toast. Profile is the one section every signed-in account can
+    // open, which is what an index redirect has to land on.
+    throw redirect({ to: RoutePath.settingsProfile });
   },
 });
 

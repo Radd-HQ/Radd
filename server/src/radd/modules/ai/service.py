@@ -628,7 +628,7 @@ async def nl_to_slq(
     `dialect` targets the surface the caller filters (spec 98: the timesheet's
     rows are worklogs — item fields ride `issue.` there)."""
     await features.require_feature(session, AiFeature.NL_SLQ)
-    await authz.require(session, actor, Permission.ITEM_READ)
+    await authz.require_member(session, actor)  # RADD-788
     definitions = await fields_service.list_fields(session)
     # Small live value sets ride in the prompt (types/categories are a handful;
     # users/labels are not — those resolve via the repair pass instead).

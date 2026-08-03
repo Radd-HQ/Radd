@@ -67,8 +67,10 @@ async def view_counts(
 
 @router.get("/card-presets", response_model=list[CardPresetRead])
 async def list_card_presets(session: Session, user: CurrentUser) -> list[CardPresetRead]:
-    # Any active member may browse (they apply these from the card designer).
-    await authz.require(session, user, Permission.ITEM_READ)
+    # Any member may browse (they apply these from the card designer) — the floor
+    # is item.read in SOME project, not the global atom (RADD-788).
+    if not await authz.readable_projects(session, user):
+        return []
     return [
         CardPresetRead.model_validate(preset)
         for preset in await service.list_card_presets(session)

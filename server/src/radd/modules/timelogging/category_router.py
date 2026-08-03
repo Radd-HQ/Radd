@@ -34,7 +34,9 @@ async def list_categories(
     user: CurrentUser,
     include_archived: Annotated[bool, Query()] = False,
 ) -> list[WorkCategoryRead]:
-    await authz.require(session, user, authz.Permission.ITEM_READ)
+    # Member floor (RADD-788): item.read in SOME project, not the global atom.
+    if not await authz.readable_projects(session, user):
+        return []
     cats = await categories.list_categories(session, include_archived=include_archived)
     return [_read(c) for c in cats]
 

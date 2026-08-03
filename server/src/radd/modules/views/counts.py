@@ -16,12 +16,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.modules.auth import authz
-from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
 from radd.modules.items import slq
 from radd.modules.items.models import WorkItem
 from radd.modules.teams import service as teams_service
-from radd.modules.projects import service as projects_service
 
 from .models import View
 from .service import _grant_level, _scope_definitions, _shares_by_view
@@ -47,16 +45,15 @@ async def view_counts(
     )
     if not views:
         return {}
-    global_perms = await authz.effective_permissions(session, actor)
-    if Permission.ITEM_READ not in global_perms:
-        return {}  # not a member — same bar as list_views
+    # The member floor, same bar as list_views (RADD-788). This used to read the
+    # GLOBAL item.read atom and return {} when it was absent — which for a
+    # project-scoped member meant every queue badge silently vanished rather than
+    # erroring, the harder failure to notice.
+    readable_ids = set(await authz.readable_projects(session, actor))
+    if not readable_ids:
+        return {}
     shares_map = await _shares_by_view(session, [v.id for v in views])
     team_ids = await teams_service.user_team_ids(session, actor.id)
-    projects = await projects_service.list_projects(session)
-    project_perms = await authz.permissions_for_projects(session, actor, projects)
-    readable_ids = {
-        pid for pid, held in project_perms.items() if Permission.ITEM_READ in held
-    }
 
     counts: dict[uuid.UUID, int] = {}
     for view in views:

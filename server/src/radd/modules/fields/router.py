@@ -119,7 +119,9 @@ async def delete_field(field_id: uuid.UUID, session: Session, user: CurrentUser)
 
 @router.get("", response_model=list[FieldDefinitionRead])
 async def list_fields(session: Session, user: CurrentUser) -> list[FieldDefinitionRead]:
-    await authz.require(session, user, authz.Permission.ITEM_READ)
+    # Member floor (RADD-788): item.read in SOME project, not the global atom.
+    if not await authz.readable_projects(session, user):
+        return []
     restricted_ids = await service.restricted_field_ids(session)
     return [_to_read(f, restricted_ids) for f in await service.list_fields(session)]
 

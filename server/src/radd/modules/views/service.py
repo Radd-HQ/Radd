@@ -448,12 +448,18 @@ async def _require_scope(
     *,
     project_id: uuid.UUID | None,
 ) -> None:
-    """Enforce `permission` in the view's scope: its project, else globally."""
+    """Enforce `permission` in the view's scope: its project, else across projects.
+
+    An ALL-PROJECTS view has no single scope to check against, so a global-atom
+    check was standing in for one — and a project-scoped grant never satisfies a
+    global check (RADD-788). Holding the atom in any project is the honest bar for
+    a view that spans them: the rows it returns are filtered per project anyway.
+    """
     if project_id is not None:
         project = await projects_service.get_project(session, project_id)
         await authz.require(session, actor, permission, project=project)
-    else:
-        await authz.require(session, actor, permission)
+    elif not await authz.require_anywhere(session, actor, permission):
+        raise ForbiddenError(f"permission '{permission}' denied")
 
 
 async def get_view(session: AsyncSession, view_id: uuid.UUID) -> View:
@@ -603,7 +609,12 @@ async def list_views(
     actor: User,
     project_id: uuid.UUID | None,
 ) -> list[ViewRead]:
-    await authz.require(session, actor, Permission.ITEM_READ)
+    # The member floor (RADD-788). Views are the ONLY way into a project since
+    # specs 61–67 deleted the builtin board/list/planning pages, so refusing this
+    # list on a global atom emptied every project for anyone whose access is
+    # project-scoped. Entitled to nothing anywhere -> no views, not a 403.
+    if not await authz.readable_projects(session, actor):
+        return []
     query = select(View).order_by(View.position, View.name)
     if project_id is not None:
         # A project's board picker also surfaces all-projects views.
@@ -704,11 +715,14 @@ async def transfer_ownership(
     if view.project_id is not None:
         project = await projects_service.get_project(session, view.project_id)
         target_perms = await authz.effective_permissions(session, target, project=project)
+        can_use = Permission.ITEM_READ in target_perms
     else:
-        target_perms = await authz.effective_permissions(
-            session, target
-        )
-    if Permission.ITEM_READ not in target_perms:
+        # All-projects view: the recipient needs item.read SOMEWHERE, not globally
+        # (RADD-788) — otherwise handing a shared view to a colleague whose access
+        # is project-scoped answered "they cannot use views in this scope" about a
+        # person who uses views every day.
+        can_use = bool(await authz.readable_projects(session, target))
+    if not can_use:
         raise ConflictError(
             ViewEntity.VIEW, reason=f"{target.email} cannot use views in this scope"
         )
