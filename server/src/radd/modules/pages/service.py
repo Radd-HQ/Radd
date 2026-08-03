@@ -7,6 +7,7 @@ content changes snapshot the PREVIOUS content into page_versions and bump
 
 import uuid
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +24,9 @@ from . import (
 )
 from .core import page_slugify
 from .models import Page, PageSpace, PageVersion
+
+if TYPE_CHECKING:  # deferred: auth loads before pages
+    from radd.modules.auth.models import User
 from .schemas import (
     PageBreadcrumb,
     PageCreate,
@@ -72,11 +76,26 @@ async def _space_rows(session: AsyncSession, space_id: uuid.UUID) -> list[Page]:
 
 
 async def list_pages(
-    session: AsyncSession, space_id: uuid.UUID, *, include_archived: bool = False
+    session: AsyncSession,
+    space_id: uuid.UUID,
+    *,
+    include_archived: bool = False,
+    actor: "User | None" = None,
 ) -> list[PageSummary]:
     """Flat tree rows (client builds the hierarchy). Archived subtrees are
-    pruned unless `include_archived` (the page.manage restore listing)."""
+    pruned unless `include_archived` (the page.manage restore listing).
+
+    `actor` drops the pages they may not read (RADD-792). Optional so internal
+    callers (export, backlinks) keep the unfiltered tree; every ACTOR-facing
+    caller passes one, because a restricted page listed in the rail would leak
+    its title, which is usually the part worth restricting.
+    """
     rows = await _space_rows(session, space_id)
+    if actor is not None:
+        from . import page_access
+
+        readable = await page_access.readable_page_ids(session, actor, list(rows))
+        rows = [row for row in rows if row.id in readable]
     parent_of = {row.id: row.parent_id for row in rows}
     if include_archived:
         visible = set(parent_of)
@@ -452,3 +471,42 @@ async def _actor_name(session: AsyncSession, actor_id: uuid.UUID) -> str:
 
     user = await session.get(User, actor_id)
     return user.name if user else ""
+
+
+# --- restricted-row filters for the list surfaces (RADD-792) -----------------
+
+
+async def drop_restricted_results(session: AsyncSession, actor: "User", results: list):
+    """FTS hits the actor may not read, removed. Search is the surface where a
+    restriction leaks most cheaply: the snippet and the title are the content."""
+    if not results:
+        return results
+    from . import page_access
+
+    pages = list(
+        (
+            await session.execute(
+                select(Page).where(Page.id.in_([r.page_id for r in results]))
+            )
+        ).scalars()
+    )
+    readable = await page_access.readable_page_ids(session, actor, pages)
+    return [r for r in results if r.page_id in readable]
+
+
+async def drop_restricted_labelled(session: AsyncSession, actor: "User", rows: list):
+    """The same, for a label index — `radd:label-list` renders these into a page
+    that anyone in the space can open."""
+    if not rows:
+        return rows
+    from . import page_access
+
+    pages = list(
+        (
+            await session.execute(
+                select(Page).where(Page.id.in_([row.page_id for row in rows]))
+            )
+        ).scalars()
+    )
+    readable = await page_access.readable_page_ids(session, actor, pages)
+    return [row for row in rows if row.page_id in readable]

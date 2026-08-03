@@ -13,6 +13,7 @@ from radd.modules.projects import service as projects_service
 
 from . import (
     access,
+    page_access,
     backlinks,
     export as page_export,
     labels as page_labels,
@@ -26,6 +27,7 @@ from . import (
 from radd.exceptions import NotFoundError
 
 from .models import Page, PageTemplate
+from radd.modules.access.types import Access
 from .types import PageEntity
 from .schemas import (
     DocLinkCreate,
@@ -68,6 +70,10 @@ async def _page_guard(
     """
     page = await service.get_page(session, page_id)
     await authz.require(session, user, permission, space_id=page.space_id)
+    # ...then the page's OWN restriction, which can only narrow (RADD-792).
+    wanted = Access.WRITE.value if permission is not authz.Permission.PAGE_READ else Access.READ.value
+    if not await page_access.page_access(session, user, page, wanted):
+        raise NotFoundError(PageEntity.PAGE, page_id)
     return page
 
 
@@ -127,7 +133,9 @@ async def list_pages(
         authz.Permission.PAGE_MANAGE if include_archived else authz.Permission.PAGE_READ
     )
     await authz.require(session, user, permission, space_id=space.id)
-    return await service.list_pages(session, space_id, include_archived=include_archived)
+    return await service.list_pages(
+        session, space_id, include_archived=include_archived, actor=user
+    )
 
 
 @router.post("/pages", response_model=PageRead, status_code=201)
@@ -228,8 +236,11 @@ async def get_page_by_path(
     page = await service.resolve_page_by_slug(session, space_slug, page_slug)
     # Resolve FIRST, then check the space it turned out to live in — a slug pair
     # is not a permission, and checking before the lookup would have been the
-    # global question again.
+    # global question again. Then the page's own restriction (RADD-792); a
+    # restricted page 404s rather than 403ing, so its EXISTENCE stays private.
     await authz.require(session, user, authz.Permission.PAGE_READ, space_id=page.space_id)
+    if not await page_access.page_access(session, user, page):
+        raise NotFoundError(PageEntity.PAGE, page.id)
     return await service.page_read(session, page)
 
 
@@ -250,8 +261,11 @@ async def search_docs(
     if not readable:
         return PageSearchResponse(results=[])
     limit = max(1, min(limit, 50))
+    results = await search.search_pages(session, q, limit=limit, space_ids=set(readable))
+    # A restricted page's TITLE is usually the sensitive part, so a search hit
+    # would defeat the restriction on its own (RADD-792).
     return PageSearchResponse(
-        results=await search.search_pages(session, q, limit=limit, space_ids=set(readable))
+        results=await service.drop_restricted_results(session, user, results)
     )
 
 
@@ -331,9 +345,10 @@ async def pages_by_label(
     readable = await access.readable_spaces(session, user)
     if not readable:
         return []
-    return await page_labels.pages_with_label(
+    rows = await page_labels.pages_with_label(
         session, name, space_slug=space, space_ids=set(readable)
     )
+    return await service.drop_restricted_labelled(session, user, rows)
 
 
 @router.put("/pages/{page_id}/labels", response_model=list[str])
