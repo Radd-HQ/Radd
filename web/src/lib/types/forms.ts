@@ -39,6 +39,8 @@ export interface Form {
   description_enabled: boolean;
   description_prompt: string;
   description_required: boolean;
+  /** RADD-798 — offer the submitter a picker of their own teams. */
+  team_picker_enabled: boolean;
   /** Spec 62: the tokened no-login submit path. The token is minted on first
    * enable and KEPT on disable (re-enabling restores the same link). */
   allow_public: boolean;
@@ -79,6 +81,7 @@ export interface FormCreate {
   description_enabled?: boolean;
   description_prompt?: string;
   description_required?: boolean;
+  team_picker_enabled?: boolean;
 }
 
 /** PATCH /forms/{id} — omitted keys untouched. */
@@ -92,6 +95,7 @@ export interface FormUpdate {
   description_enabled?: boolean;
   description_prompt?: string;
   description_required?: boolean;
+  team_picker_enabled?: boolean;
   /** Spec 62: toggle the public link (token minted server-side on first enable). */
   allow_public?: boolean;
 }
@@ -101,6 +105,9 @@ export interface FormSubmit {
   title: string;
   description?: string;
   values: CustomFields;
+  /** RADD-798 — share with one of MY teams. Only offered when the form enables
+   *  the picker; the server re-checks membership either way. */
+  team_id?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -179,6 +186,9 @@ export interface PortalGroup {
 export interface PortalForm extends PublicForm {
   id: string;
   project: PortalProjectRef;
+  /** The teams THIS submitter may share with (RADD-798). Empty when the form
+   *  has no picker or the person belongs to no team — either way, no control. */
+  teams: PortalTeamOption[];
 }
 
 /**
@@ -194,6 +204,38 @@ export interface PortalRequest {
   state: string;
   state_category: string;
   project: { id: string; key: string; name: string };
+  /** RADD-797 — the status a requester needs. Each of these is inside the
+   *  relationship boundary: a directory NAME, a version string, and counts
+   *  derived from PUBLIC comments only. */
+  assignee: string | null;
+  release: string | null;
+  /** RADD-798 — the team it was shared with; the key both surfaces group by. */
+  team: string | null;
+  team_id: string | null;
+  comment_count: number;
+  /** The last PUBLIC comment was not the reporter's — "someone answered you". */
+  awaiting_requester: boolean;
   created_at: string;
   updated_at: string;
+}
+
+/** One public comment on a request (RADD-796). Internal notes never appear. */
+export interface PortalRequestComment {
+  id: string;
+  author: string;
+  author_is_me: boolean;
+  body: string;
+  created_at: string;
+}
+
+/** GET /portal/requests/{key} — the row plus what you opened it for. */
+export interface PortalRequestDetail extends PortalRequest {
+  description: string;
+  comments: PortalRequestComment[];
+}
+
+/** A team the SUBMITTER belongs to — the only teams a form may offer. */
+export interface PortalTeamOption {
+  id: string;
+  name: string;
 }

@@ -15,6 +15,7 @@ import {
 import { queryKeys } from "./shared";
 import type {
   PortalRequest,
+  PortalRequestDetail,
   Form,
   ItemCsat,
   MailContact,
@@ -52,7 +53,7 @@ export const portalFormsQuery = queryOptions({
 /** What this person has filed (RADD-785) — reporter-scoped, so it answers for
  *  a requester whose Baseline carries no read at all. */
 export const portalRequestsQuery = queryOptions({
-  queryKey: [...queryKeys.portalForms, "requests"] as const,
+  queryKey: queryKeys.portalRequests,
   queryFn: () => api.get<PortalRequest[]>(ApiPath.portalRequests),
   staleTime: 30_000,
 });
@@ -127,4 +128,13 @@ export const itemCsatQuery = (itemId: string) =>
     },
     meta: entityMeta(Entity.item),
     retry: false,
+  });
+
+/** One request opened (RADD-796) — the requester's view, never the issue peek:
+ *  that one resolves through `item.read`, which a requester holds nowhere. */
+export const portalRequestDetailQuery = (key: string) =>
+  queryOptions({
+    queryKey: queryKeys.portalRequest(key),
+    queryFn: () => api.get<PortalRequestDetail>(`${ApiPath.portalRequests}/${key}`),
+    enabled: Boolean(key),
   });

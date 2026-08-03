@@ -81,6 +81,11 @@ export const queryKeys = {
   form: (formId: string) => ["form", { formId }] as const,
   publicForm: (token: string) => ["publicForm", { token }] as const,
   portalForms: ["portalForms"] as const,
+  //: RADD-796 — the requester's own requests, and one opened. Separate from
+  //: `portalForms` because replying invalidates the LIST (a reply clears the
+  //: row's marker) without needing to refetch the form directory.
+  portalRequests: ["portalRequests"] as const,
+  portalRequest: (key: string) => ["portalRequests", key] as const,
   portalForm: (formId: string) => ["portalForm", { formId }] as const,
   mailContact: (itemId: string) => ["mailContact", { itemId }] as const,
   itemApprovals: (itemId: string) => ["itemApprovals", { itemId }] as const,
