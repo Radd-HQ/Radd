@@ -478,6 +478,12 @@ _MERGE_REPOINT: tuple[tuple[str, str], ...] = (
     # _MERGE_DEDUPE: uniqueness is (provider_id, subject), so a survivor holding
     # two identities from one provider is legal and correct — it just means the
     # person had two accounts there, and now both open the same Radd user.
+    #
+    # MERGE ONLY (RADD-783). `delete_user` shares this list and must NOT repoint
+    # identities: a merge says "these two are one person", a delete says "this
+    # person is gone, give their work to someone else" — and handing over the
+    # credential with the work let the deleted address sign in AS the successor.
+    # `delete_user` destroys them before the loop runs.
     ("user_identities", "user_id"),
 )
 # (entity_col, user_col) unique pairs: drop source rows the target already has,
@@ -768,6 +774,20 @@ async def delete_user(
     # Leave follows the worklog rule: destroyed, never inherited — a successor
     # repointed onto someone's vacation would render as "on leave" everywhere.
     await session.execute(sql("DELETE FROM leave_periods WHERE user_id = :u"), {"u": user_id})
+    # RADD-783: federated identities are DESTROYED, never inherited.
+    #
+    # `user_identities` sits in `_MERGE_REPOINT` because for a MERGE it belongs
+    # there — folding a duplicate into the real account must not cost either
+    # door its ability to open. But a delete is not a merge. The person is gone
+    # and their work goes to a successor; their CREDENTIALS must not.
+    #
+    # Left in the repoint list, the deleted account's (provider, subject) pair
+    # was handed to the successor, so the next SSO login with the deleted
+    # address signed in AS the successor — a live account takeover by anyone who
+    # still controls that IdP subject. Same shape of argument as worklogs, one
+    # step more serious: crediting the wrong hours corrupts a report, inheriting
+    # a credential hands over an account.
+    await session.execute(sql("DELETE FROM user_identities WHERE user_id = :u"), {"u": user_id})
     if successor is not None:
         for table, entity_cols, user_col in _MERGE_DEDUPE:
             await session.execute(sql(_dedupe_sql(table, entity_cols, user_col)),

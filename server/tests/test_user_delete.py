@@ -173,3 +173,54 @@ async def test_every_blocking_reference_is_covered(db):
         (t, c) for t, _e, c in auth_service._MERGE_DEDUPE
     } | {("worklogs", "author_id")}  # deleted outright
     assert blocking <= handled, f"unhandled blocking FK columns: {sorted(blocking - handled)}"
+
+
+async def test_delete_destroys_federated_identities_rather_than_handing_them_over(db):
+    """RADD-783: a successor inherits the WORK, never the credentials.
+
+    `user_identities` sits in `_MERGE_REPOINT` because a MERGE should move it —
+    folding a duplicate into the real account must not cost either door its
+    ability to open. `delete_user` shares that list, so the deleted account's
+    (provider, subject) pair was handed to the successor, and the next SSO login
+    with the deleted address signed in AS the successor.
+
+    That is an account takeover by anyone who still controls the IdP subject,
+    and it was reported from the live instance by the person it happened to.
+    Same shape of argument as worklogs, one step more serious: crediting the
+    wrong hours corrupts a report, inheriting a credential hands over an account.
+    """
+    from sqlalchemy import text as sql
+
+    from radd.modules.sso.models import SsoProvider, UserIdentity
+    from radd.modules.sso.types import SsoKind
+
+    doomed = await _user(db, "doomed")
+    successor = await _user(db, "heir")
+    provider = SsoProvider(
+        name=f"idp-{uuid.uuid4().hex[:6]}",
+        kind=SsoKind.OIDC.value,
+        issuer="https://idp.test",
+        client_id="c",
+        client_secret="s",
+    )
+    db.add(provider)
+    await db.flush()
+    db.add(
+        UserIdentity(
+            provider_id=provider.id,
+            user_id=doomed.id,
+            subject="the-deleted-persons-subject",
+            email=doomed.email,
+        )
+    )
+    await db.flush()
+
+    await auth_service.delete_user(db, doomed.id, successor.id, actor=successor)
+
+    survivors = (
+        await db.execute(
+            sql("SELECT user_id FROM user_identities WHERE subject = :s"),
+            {"s": "the-deleted-persons-subject"},
+        )
+    ).all()
+    assert survivors == [], "the deleted account's identity must not survive the delete"
