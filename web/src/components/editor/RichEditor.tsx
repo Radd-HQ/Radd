@@ -17,7 +17,12 @@ import {
   wrapInOrderedListCommand,
 } from "@milkdown/kit/preset/commonmark";
 import { codeBlockSchema } from "@milkdown/kit/preset/commonmark";
-import { insertTableCommand, toggleStrikethroughCommand } from "@milkdown/kit/preset/gfm";
+import {
+  columnResizingPlugin,
+  insertTableCommand,
+  tableSchema,
+  toggleStrikethroughCommand,
+} from "@milkdown/kit/preset/gfm";
 import { diffDecorationPlugin } from "@milkdown/kit/component/diff";
 import { ProsemirrorAdapterProvider, useNodeViewFactory } from "@prosemirror-adapter/react";
 import { Blocks, Sparkles, type LucideIcon } from "lucide-react";
@@ -38,6 +43,9 @@ import { AiActionPicker } from "./AiActionPicker";
 import { ExtensionPicker, insertExtensionBlock } from "./ExtensionPicker";
 import { raddDiffDecoration } from "./diff/decoration-plugin";
 import { CodeBlockView } from "./CodeBlockView";
+import { TableGridPicker } from "./TableGridPicker";
+import { TableNodeView } from "./TableNodeView";
+import { tableCommands } from "./table-commands";
 import { EditorToolbar, ToolbarAction, type ToolbarActionValue } from "./Toolbar";
 import { EMPTY_SNAPSHOT, toolbarStatePlugin, type ToolbarSnapshot } from "./toolbar-state";
 import {
@@ -250,6 +258,23 @@ function RichEditorInner({
   // What the toolbar lights up. Published by a plugin view only when it CHANGES,
   // so typing inside one paragraph does not re-render the chrome per keystroke.
   const [snapshot, setSnapshot] = useState<ToolbarSnapshot>(EMPTY_SNAPSHOT);
+  // The table size picker, anchored under the toolbar's table button.
+  const [tableMenu, setTableMenu] = useState<{ left: number; top: number } | null>(null);
+  // Table operations bound to whichever instance is live. A stable identity, so
+  // the node view is not rebuilt when the editor is recreated.
+  const tableRun = useMemo(
+    () => tableCommands(() => crepeRef.current?.editor ?? null),
+    [],
+  );
+  // The node view takes no props of its own; the runner is closed over here so
+  // the component stays a plain `ComponentType<Record<string, never>>`, which is
+  // what the adapter's factory expects.
+  const TableView = useMemo(
+    () => function BoundTableView() {
+      return <TableNodeView run={tableRun} />;
+    },
+    [tableRun],
+  );
 
   const insertExtension = (spec: PageExtensionSpec) => {
     setExtensionMenu(null);
@@ -289,9 +314,12 @@ function RichEditorInner({
       case ToolbarAction.image:
         return run(insertImageCommand.key);
       case ToolbarAction.table:
-        return run(insertTableCommand.key);
-      default:
-        void anchor;
+        // Not an immediate insert: sweep a grid for the size (RADD-750). A fixed
+        // default is a shape you then have to correct.
+        return setTableMenu({
+          left: Math.min(anchor.left, window.innerWidth - 240),
+          top: anchor.bottom + 4,
+        });
     }
   };
 
@@ -416,6 +444,9 @@ function RichEditorInner({
         // Ours now (RADD-752) — CodeMirror wired directly, so we own when a
         // <pre> becomes a .cm-editor rather than discovering it in a proof.
         [CrepeFeature.CodeMirror]: false,
+        // Ours now (RADD-750). The ENGINE is untouched: prosemirror-tables is
+        // what every ProseMirror editor uses. Only the chrome changes.
+        [CrepeFeature.Table]: false,
       },
       featureConfigs: {
         [CrepeFeature.Placeholder]: { text: placeholder ?? "Write…" },
@@ -454,6 +485,21 @@ function RichEditorInner({
           // CodeMirror owns every key inside the block; ProseMirror must not
           // also try to interpret them. The escape keys are handled inside.
           stopEvent: () => true,
+        }),
+      ),
+    );
+    // Table chrome (RADD-750), plus the column-resizing plugin preset-gfm ships
+    // but does not compose. Resized widths are a session-only affordance: GFM
+    // cannot express a column width, and this body is markdown by design.
+    crepe.editor.use(columnResizingPlugin).use(
+      $view(tableSchema.node, () =>
+        nodeViewFactory({
+          component: TableView,
+          // The handles are React; the CELLS are ProseMirror's. Only stop what
+          // originates in our own chrome, or typing in a cell stops working.
+          stopEvent: (event) =>
+            event.target instanceof HTMLElement &&
+            Boolean(event.target.closest("[data-table-handle]")),
         }),
       ),
     );
@@ -653,6 +699,21 @@ function RichEditorInner({
               <AiActionPicker actions={ai.actions} onPick={dispatchAiRun} autoFocus />
             </div>
           </>,
+          document.body,
+        )}
+      {tableMenu &&
+        createPortal(
+          <TableGridPicker
+            at={tableMenu}
+            onDismiss={() => setTableMenu(null)}
+            onPick={(rows, cols) => {
+              setTableMenu(null);
+              // `row` is the TOTAL row count, header included — `createTable`
+              // makes row 0 the header. One swept square, one table cell, which
+              // is what the grid looks like it is promising.
+              run(insertTableCommand.key, { row: rows, col: cols });
+            }}
+          />,
           document.body,
         )}
       {extensionMenu &&
