@@ -23,6 +23,28 @@ export function TableNodeView({ run }: { run: TableCommandRunner }) {
   const { node, view, getPos, contentRef, selected } = useNodeViewContext();
   const wrapRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
+  /**
+   * The `<table>` takes BOTH refs, and that is the whole of RADD-759.
+   *
+   * `contentRef` does not turn the element it is placed on into the content DOM
+   * — it APPENDS the adapter's own content element into it. Placed on a
+   * `<tbody>`, it therefore nested `<div data-node-view-content>` inside that
+   * tbody and put every `<tr>` in the div, which is not a valid table child: the
+   * rows formed their own anonymous, shrink-to-fit table and inherited neither
+   * the colgroup nor `width: 100%`. Cells measured 20px under 213px columns.
+   *
+   * Registering `contentAs: "tbody"` makes the appended element a real tbody, so
+   * putting the ref here yields `table > colgroup + tbody` — byte-for-byte the
+   * structure `prosemirror-tables`' own TableView builds. The colgroup is
+   * React's and stays first; the adapter appends after it.
+   */
+  const setTable = useCallback(
+    (element: HTMLTableElement | null) => {
+      tableRef.current = element;
+      contentRef(element);
+    },
+    [contentRef],
+  );
   const [cols, setCols] = useState<{ left: number; width: number }[]>([]);
   const [rows, setRows] = useState<{ top: number; height: number }[]>([]);
   const editable = view.editable;
@@ -93,7 +115,7 @@ export function TableNodeView({ run }: { run: TableCommandRunner }) {
           ))}
         </>
       )}
-      <table ref={tableRef} className="w-full border-collapse">
+      <table ref={setTable} className="w-full border-collapse">
         {/* prosemirror-tables' resizing plugin writes widths into cell
             `colwidth` attrs and expects a <colgroup> to apply them — its own
             table view renders one, and replacing that view meant the plugin had
@@ -108,7 +130,8 @@ export function TableNodeView({ run }: { run: TableCommandRunner }) {
             <col key={index} style={width ? { width: `${width}px` } : undefined} />
           ))}
         </colgroup>
-        <tbody ref={contentRef} />
+        {/* The <tbody> is the adapter's (contentAs: "tbody"), appended here by
+            `setTable` — rendering one would nest it inside the real thing. */}
       </table>
     </div>
   );

@@ -46,6 +46,21 @@ const SHAPE = `(() => {
     // prosemirror-tables' own resizing plugin, which preset-gfm ships but does
     // not compose — its presence is a <col> element per column.
     hasColgroup: !!t.querySelector("colgroup"),
+    // --- GEOMETRY (RADD-759) -------------------------------------------------
+    // A table can have the right rows, columns, text, handles and colgroup and
+    // still be unusable. It was: the adapter's content element defaults to a
+    // <div>, and a <div> inside <tbody> is not a row group — the rows fell into
+    // an anonymous shrink-to-fit table and every cell rendered at 20px under
+    // 213px columns. Every assertion above passed throughout.
+    tableWidth: Math.round(t.getBoundingClientRect().width),
+    rowWidth: rows[0] ? Math.round(rows[0].getBoundingClientRect().width) : 0,
+    cellWidths: rows[0]
+      ? [...rows[0].children].map((c) => Math.round(c.getBoundingClientRect().width))
+      : [],
+    // The structural statement of the same thing, which does not depend on any
+    // particular viewport width.
+    rowParentTag: rows[0] ? rows[0].parentElement.tagName : null,
+    contentElementTag: t.querySelector("[data-node-view-content]")?.tagName ?? null,
   };
 })()`;
 
@@ -180,6 +195,16 @@ async function main() {
     "the table renders in our node view": opened.present === true && opened.crepeTables === 0,
     "the seeded shape is read correctly": opened.rows === 3 && opened.cols === 3,
     "column resizing is wired (a colgroup exists)": opened.hasColgroup === true,
+    // RADD-759 — the table has to LAY OUT, not merely parse.
+    "the rows sit directly in the tbody": opened.rowParentTag === "TBODY",
+    "the content element is the tbody, not a div": opened.contentElementTag === "TBODY",
+    "a row spans the whole table": Math.abs(opened.rowWidth - opened.tableWidth) <= 2,
+    "the cells fill the table's width": Math.abs(
+      opened.cellWidths.reduce((a, b) => a + b, 0) - opened.tableWidth,
+    ) <= 4,
+    "no column is collapsed to a sliver": opened.cellWidths.every(
+      (w) => w > opened.tableWidth / Math.max(opened.cols, 1) - 4,
+    ),
     "handles exist, one per line": opened.columnHandles === 3 && opened.rowHandles === 3,
     "hovering the table reveals them": hovered?.opacity === "1" && (hovered?.w ?? 0) > 0,
     // The assertion that protects every reader of this markdown.

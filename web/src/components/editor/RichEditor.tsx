@@ -539,6 +539,11 @@ function RichEditorInner({
       $view(tableSchema.node, () =>
         nodeViewFactory({
           component: TableView,
+          // The content element must be a real <tbody> (RADD-759). The adapter
+          // defaults it to a <div>, which inside a table is not a row group at
+          // all: the rows fell into an anonymous shrink-to-fit table and every
+          // table rendered squished, cells at 20px under 213px columns.
+          contentAs: "tbody",
           // The handles are React; the CELLS are ProseMirror's. Only stop what
           // originates in our own chrome, or typing in a cell stops working.
           stopEvent: (event) =>
