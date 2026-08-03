@@ -1,10 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Crepe, CrepeFeature, type CrepeConfig } from "@milkdown/crepe";
+import { Crepe, CrepeFeature } from "@milkdown/crepe";
 import { editorViewCtx } from "@milkdown/kit/core";
-import { $view } from "@milkdown/kit/utils";
+import { $view, callCommand } from "@milkdown/kit/utils";
+import {
+  createCodeBlockCommand,
+  insertImageCommand,
+  toggleEmphasisCommand,
+  toggleInlineCodeCommand,
+  toggleLinkCommand,
+  toggleStrongCommand,
+  turnIntoTextCommand,
+  wrapInBlockquoteCommand,
+  wrapInBulletListCommand,
+  wrapInHeadingCommand,
+  wrapInOrderedListCommand,
+} from "@milkdown/kit/preset/commonmark";
+import { insertTableCommand, toggleStrikethroughCommand } from "@milkdown/kit/preset/gfm";
 import { diffDecorationPlugin } from "@milkdown/kit/component/diff";
 import { ProsemirrorAdapterProvider, useNodeViewFactory } from "@prosemirror-adapter/react";
+import { Blocks, Sparkles, type LucideIcon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { aiErrorText, isAiGone } from "../../lib/ai";
 import { jiraToMarkdown } from "../../lib/jira-markup";
@@ -12,7 +27,6 @@ import { MarkdownSourceCtx } from "../../lib/markdown";
 import { searchQuery, usersQuery } from "../../lib/queries";
 import { pushToast } from "../../lib/toast";
 import {
-  AI_TOOLBAR_ICON,
   buildSuggestions,
   createAiProvider,
   runAiOnEditor,
@@ -20,12 +34,10 @@ import {
   type AiRun,
 } from "./ai";
 import { AiActionPicker } from "./AiActionPicker";
-import {
-  EXTENSION_TOOLBAR_ICON,
-  ExtensionPicker,
-  insertExtensionBlock,
-} from "./ExtensionPicker";
+import { ExtensionPicker, insertExtensionBlock } from "./ExtensionPicker";
 import { raddDiffDecoration } from "./diff/decoration-plugin";
+import { EditorToolbar, ToolbarAction, type ToolbarActionValue } from "./Toolbar";
+import { EMPTY_SNAPSHOT, toolbarStatePlugin, type ToolbarSnapshot } from "./toolbar-state";
 import {
   raddExtensionConfigOnInsert,
   raddExtensionRemark,
@@ -83,6 +95,41 @@ interface RichEditorProps {
 
 /** GitLab-style editing-mode preference, sticky across all editors + sessions. */
 const PLAIN_PREF_KEY = "radd.editor.plainText";
+
+/**
+ * A toolbar button that opens a popover rather than running a command.
+ *
+ * The class is the handle its popover anchors to, and the handle the render
+ * proofs already look for — `svg.radd-ai-toolbar-icon` and
+ * `svg.radd-extension-toolbar-icon` were the selectors when these were raw SVG
+ * strings handed to a third-party toolbar builder. Keeping them means the proofs
+ * assert the same rendered output across the change, which is the point of them.
+ */
+function ToolbarExtraButton({
+  icon: Icon,
+  title,
+  className,
+  onPick,
+}: {
+  icon: LucideIcon;
+  title: string;
+  className: string;
+  onPick: (anchor: DOMRect) => void;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      // Keep the editor's selection: an AI run applies to it.
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={(event) => onPick(event.currentTarget.getBoundingClientRect())}
+      className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-fg-secondary transition-colors hover:bg-elevated hover:text-heading focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus"
+    >
+      <Icon size={16} className={className} aria-hidden />
+    </button>
+  );
+}
 
 interface Candidate {
   label: string;
@@ -198,11 +245,57 @@ function RichEditorInner({
   // character is work nobody can see.
   const onSourceChangeRef = useRef(onSourceChange);
   onSourceChangeRef.current = onSourceChange;
+  // What the toolbar lights up. Published by a plugin view only when it CHANGES,
+  // so typing inside one paragraph does not re-render the chrome per keystroke.
+  const [snapshot, setSnapshot] = useState<ToolbarSnapshot>(EMPTY_SNAPSHOT);
 
   const insertExtension = (spec: PageExtensionSpec) => {
     setExtensionMenu(null);
     crepeRef.current?.editor.action((ctx) => insertExtensionBlock(ctx.get(editorViewCtx), spec));
   };
+
+  /** Run one of Milkdown's own commands and give the editor its focus back. */
+  const run = (command: Parameters<typeof callCommand>[0], payload?: unknown) => {
+    const crepe = crepeRef.current;
+    if (!crepe) return;
+    crepe.editor.action(callCommand(command, payload));
+    crepe.editor.action((ctx) => ctx.get(editorViewCtx).focus());
+  };
+
+  const onToolbarAction = (action: ToolbarActionValue, anchor: DOMRect) => {
+    switch (action) {
+      case ToolbarAction.bold:
+        return run(toggleStrongCommand.key);
+      case ToolbarAction.italic:
+        return run(toggleEmphasisCommand.key);
+      case ToolbarAction.strike:
+        return run(toggleStrikethroughCommand.key);
+      case ToolbarAction.inlineCode:
+        return run(toggleInlineCodeCommand.key);
+      case ToolbarAction.link:
+        // An empty href on purpose: the link tooltip is what asks for the URL,
+        // and pre-filling it with a placeholder would have to be deleted first.
+        return run(toggleLinkCommand.key, { href: "" });
+      case ToolbarAction.bulletList:
+        return run(wrapInBulletListCommand.key);
+      case ToolbarAction.orderedList:
+        return run(wrapInOrderedListCommand.key);
+      case ToolbarAction.quote:
+        return run(wrapInBlockquoteCommand.key);
+      case ToolbarAction.codeBlock:
+        return run(createCodeBlockCommand.key);
+      case ToolbarAction.image:
+        return run(insertImageCommand.key);
+      case ToolbarAction.table:
+        return run(insertTableCommand.key);
+      default:
+        void anchor;
+    }
+  };
+
+  /** 0 = paragraph, 1–3 = heading. */
+  const onHeading = (level: number) =>
+    level === 0 ? run(turnIntoTextCommand.key) : run(wrapInHeadingCommand.key, level);
 
   const dispatchAiRun = (run: AiRun) => {
     setAiMenu(null);
@@ -307,67 +400,12 @@ function RichEditorInner({
     // AI entry point (spec 103); without AI it would only duplicate the TopBar.
     const aiOn = ai !== null;
     const extensionsOn = extensionsRef.current;
-    const topBarConfig: NonNullable<
-      NonNullable<CrepeConfig["featureConfigs"]>[CrepeFeature.TopBar]
-    > = {
-      // H4–H6 add noise, not structure, at issue/pages scale.
-      headingOptions: [
-        { label: "Paragraph", level: null },
-        { label: "Heading 1", level: 1 },
-        { label: "Heading 2", level: 2 },
-        { label: "Heading 3", level: 3 },
-      ],
-    };
-    if (aiOn) {
-      // The AI entry point that needs NO selection: the popover run applies to
-      // the selection when there is one, else the whole document. The floating
-      // selection toolbar keeps Crepe's own tooltip for ranged runs. It rides
-      // in the FIRST group (next to the heading selector): a group appended
-      // last wraps onto a second toolbar row once the row is full.
-      topBarConfig.buildTopBar = (builder) => {
-        builder.getGroup("heading").addItem("ai", {
-          icon: AI_TOOLBAR_ICON,
-          active: () => false,
-          onRun: () => {
-            const anchor = root.querySelector("svg.radd-ai-toolbar-icon")?.closest("button");
-            const rect = anchor?.getBoundingClientRect();
-            if (!rect) return;
-            setAiMenu({
-              left: Math.min(rect.left, window.innerWidth - 300),
-              top: rect.bottom + 4,
-            });
-          },
-        });
-      };
-    }
-    // AFTER the AI block on purpose: that one ASSIGNS buildTopBar, so an
-    // extensions button installed before it would be silently overwritten.
-    if (extensionsOn) {
-      const previous = topBarConfig.buildTopBar;
-      topBarConfig.buildTopBar = (builder) => {
-        previous?.(builder);
-        builder.getGroup("heading").addItem("radd-extension", {
-          icon: EXTENSION_TOOLBAR_ICON,
-          active: () => false,
-          onRun: () => {
-            const anchor = root
-              .querySelector("svg.radd-extension-toolbar-icon")
-              ?.closest("button");
-            const rect = anchor?.getBoundingClientRect();
-            if (!rect) return;
-            setExtensionMenu({
-              left: Math.min(rect.left, window.innerWidth - 300),
-              top: rect.bottom + 4,
-            });
-          },
-        });
-      };
-    }
     const crepe = new Crepe({
       root,
       defaultValue: contentRef.current,
       features: {
-        [CrepeFeature.TopBar]: true, // one fixed toolbar, in every editor
+        // Ours now (RADD-749) — rendered above this root as real React.
+        [CrepeFeature.TopBar]: false,
         [CrepeFeature.Toolbar]: aiOn,
         [CrepeFeature.BlockEdit]: false,
         [CrepeFeature.ImageBlock]: Boolean(uploadRef.current), // no upload → no image UI
@@ -386,7 +424,6 @@ function RichEditorInner({
             pushToast(isAiGone(cause) ? "AI editor actions are unavailable." : aiErrorText(cause));
           },
         },
-        [CrepeFeature.TopBar]: topBarConfig,
         [CrepeFeature.ImageBlock]: {
           // Route image inserts (incl. paste) through the app's attachment upload.
           onUpload: (file: File) => uploadRef.current?.(file) ?? Promise.resolve(""),
@@ -400,6 +437,9 @@ function RichEditorInner({
     if (!anonymous) crepe.editor.use(mentionProsePlugin(store));
     // Same chip rendering as the read-mode viewer (clicks consumed while editing).
     crepe.editor.use(mentionChipsPlugin({ readonly: false, openIssue: () => {} }));
+    // Feeds the toolbar's active state (RADD-749). A plugin view, so the snapshot
+    // is recomputed from the editor's own updates rather than polled.
+    crepe.editor.use(toolbarStatePlugin(setSnapshot));
     // `radd:*` fences become a real node with a live React view (RADD-746).
     // Registered only where extensions are offered: a comment has no page whose
     // headings a `toc` could list, and turning its fences into rendered blocks
@@ -521,8 +561,49 @@ function RichEditorInner({
             apiRef={plainApiRef}
           />
         ) : (
-          /* Crepe owns this node's DOM — keep it free of React children (popup is portaled). */
-          <div ref={rootRef} />
+          <>
+            {/* Ours (RADD-749). Outside the editor root: Crepe owns that node's
+                DOM, so React children inside it would be fought over. */}
+            <EditorToolbar
+              snapshot={snapshot}
+              onAction={onToolbarAction}
+              onHeading={onHeading}
+              images={Boolean(onUploadImage)}
+              tables
+              extra={
+                <>
+                  {ai && (
+                    <ToolbarExtraButton
+                      icon={Sparkles}
+                      title="AI"
+                      className="radd-ai-toolbar-icon"
+                      onPick={(rect) =>
+                        setAiMenu({
+                          left: Math.min(rect.left, window.innerWidth - 300),
+                          top: rect.bottom + 4,
+                        })
+                      }
+                    />
+                  )}
+                  {extensions && (
+                    <ToolbarExtraButton
+                      icon={Blocks}
+                      title="Insert extension"
+                      className="radd-extension-toolbar-icon"
+                      onPick={(rect) =>
+                        setExtensionMenu({
+                          left: Math.min(rect.left, window.innerWidth - 300),
+                          top: rect.bottom + 4,
+                        })
+                      }
+                    />
+                  )}
+                </>
+              }
+            />
+            {/* Crepe owns this node's DOM — keep it free of React children (popup is portaled). */}
+            <div ref={rootRef} />
+          </>
         )}
         {/* GitLab-style mode bar: same markdown either way, pick your editing surface. */}
         <div className="flex items-center justify-between border-t border-subtle px-2.5 py-1">

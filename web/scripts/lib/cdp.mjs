@@ -22,6 +22,26 @@ export { HOVER_CAPABLE_PROBE };
  * `sessionId` through its own code.
  */
 export async function openBrowser({ port, profile, width = 1440, height = 1000, scale = 2 }) {
+  // A browser already listening on this port is a LEFTOVER from a previous run,
+  // and connecting to it is silent poison: it was launched from different code,
+  // possibly with different flags, and every assertion then describes a browser
+  // this run did not configure. It cost an hour once — a proof reported
+  // `(hover: hover)` false while the flag that sets it was right there in the
+  // launch arguments, because the flag went to a process nobody connected to.
+  // Fail loudly instead of inheriting it.
+  try {
+    const stale = await fetch(`http://127.0.0.1:${port}/json/version`);
+    if (stale.ok) {
+      throw new Error(
+        `a browser is already listening on ${port} — a previous run leaked one. ` +
+          `Kill it (pkill -f "remote-debugging-port=${port}") and try again.`,
+      );
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("already listening")) throw error;
+    // Connection refused is the good case: nothing there.
+  }
+
   const chrome = spawn(findChrome(), chromeArgs({ port, profile }), { stdio: "ignore" });
   // The harness owns the browser's life, not the caller. A proof that throws
   // before its own cleanup used to leak a headless Chrome per run, and every
