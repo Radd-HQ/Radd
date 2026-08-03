@@ -43,6 +43,10 @@ export interface PageExtensionSpec {
   description: string;
   params_schema: { properties?: Record<string, unknown>; required?: string[] };
   icon: string;
+  /** The plugin that contributed it — the insert menu's grouping (RADD-748).
+   *  The SERVER says where each came from; the client must not guess from a
+   *  plugin name it may never have seen. */
+  source: string;
 }
 
 /** A page that links to this one (RADD-713). Carries the space slug because a

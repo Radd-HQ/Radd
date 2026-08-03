@@ -1,8 +1,35 @@
 import { useQuery } from "@tanstack/react-query";
 import type { EditorView } from "@milkdown/prose/view";
+import { iconOrFallback } from "../../lib/icons";
 import { pageExtensionsQuery } from "../../lib/queries";
 import type { PageExtensionSpec } from "../../lib/types";
 import { configOnInsertKey, RADD_EXTENSION_NODE } from "./extension-node";
+
+/**
+ * The entries, grouped by the plugin that contributed them.
+ *
+ * By CONTRIBUTOR, not "built in versus plugin". That split was the first cut and
+ * it was wrong twice over: `core` means "cannot be disabled" rather than "ships
+ * with Radd" (`pages` is itself `core=false`, so every first-party extension
+ * landed under a plugin heading), and development rule 1 says everything IS a
+ * plugin — so the distinction was being manufactured rather than reported.
+ *
+ * Headings appear only once there is more than one contributor. With a single
+ * one they would label the entire list, which tells nobody anything.
+ */
+function groupsOf(specs: PageExtensionSpec[]) {
+  const byPlugin = new Map<string, PageExtensionSpec[]>();
+  for (const spec of specs) {
+    const key = spec.source || "Other";
+    byPlugin.set(key, [...(byPlugin.get(key) ?? []), spec]);
+  }
+  const many = byPlugin.size > 1;
+  return [...byPlugin].map(([plugin, entries]) => ({
+    title: plugin.replace(/[_-]+/g, " ").replace(/^./, (c) => c.toUpperCase()),
+    specs: entries,
+    showTitle: many,
+  }));
+}
 
 /**
  * The editor's insert menu for page extensions (RADD-709).
@@ -53,20 +80,44 @@ export function ExtensionPicker({
       ) : !data?.length ? (
         <p className="px-3 py-2 text-[13px] text-fg-faint">No extensions are installed.</p>
       ) : (
-        <ul className="max-h-80 overflow-y-auto py-1">
-          {data.map((spec) => (
-            <li key={spec.name}>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => insert(spec)}
-                className="flex w-full flex-col items-start gap-0.5 px-3 py-1.5 text-left hover:bg-elevated cursor-pointer"
-              >
-                <span className="text-[13px] text-heading">{spec.label}</span>
-                {spec.description && (
-                  <span className="text-[11px] text-fg-muted">{spec.description}</span>
-                )}
-              </button>
+        <ul className="max-h-96 overflow-y-auto py-1">
+          {groupsOf(data).map((group) => (
+            <li key={group.title}>
+              {/* A heading only once there is something to separate. With
+                  built-ins alone it would be a label on the whole list. */}
+              {group.showTitle && (
+                <p className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-fg-faint">
+                  {group.title}
+                </p>
+              )}
+              <ul>
+                {group.specs.map((spec) => {
+                  const Icon = iconOrFallback(spec.icon);
+                  return (
+                    <li key={spec.name}>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => insert(spec)}
+                        title={spec.description}
+                        className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left hover:bg-elevated cursor-pointer"
+                      >
+                        <Icon size={15} className="shrink-0 text-fg-muted" aria-hidden />
+                        <span className="flex min-w-0 flex-col">
+                          <span className="text-[13px] leading-tight text-heading">
+                            {spec.label}
+                          </span>
+                          {spec.description && (
+                            <span className="truncate text-[11px] leading-tight text-fg-muted">
+                              {spec.description}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
             </li>
           ))}
         </ul>

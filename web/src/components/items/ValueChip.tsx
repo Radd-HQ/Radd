@@ -1,14 +1,4 @@
-import { Bookmark, Bug, Gem, Shapes, Sparkles, SquareCheckBig, type LucideIcon } from "lucide-react";
-
-/** Lucide keys the backend seeds for issue types → the component to render. */
-const ICONS: Record<string, LucideIcon> = {
-  "square-check-big": SquareCheckBig,
-  bug: Bug,
-  bookmark: Bookmark,
-  sparkles: Sparkles,
-  gem: Gem,
-  shapes: Shapes,
-};
+import { iconFor } from "../../lib/icons";
 
 /** Pick black or white text for legibility on a given hex background. */
 function textOn(hex: string): string {
@@ -36,7 +26,9 @@ export function ValueChip({
   icon?: string | null;
   size?: number;
 }) {
-  const Icon = icon ? ICONS[icon] : undefined;
+  // `iconFor`, not `iconOrFallback`: a chip with no icon falls back to the
+  // value's first LETTER, which reads better in 16px than a placeholder glyph.
+  const Icon = iconFor(icon);
   return (
     <span
       title={label}

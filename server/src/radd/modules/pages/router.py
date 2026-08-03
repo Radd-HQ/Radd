@@ -185,6 +185,7 @@ async def list_page_extensions(session: Session, user: CurrentUser) -> list[Page
     disabled — which is the whole point of the registry.
     """
     await authz.require(session, user, authz.Permission.PAGE_READ)
+    sources = registries.page_extension_sources
     return [
         PageExtensionRead(
             name=spec.name,
@@ -192,6 +193,7 @@ async def list_page_extensions(session: Session, user: CurrentUser) -> list[Page
             description=spec.description,
             params_schema=spec.params_schema,
             icon=spec.icon,
+            source=(source.plugin if (source := sources.get(spec.name)) else ""),
         )
         for spec in sorted(registries.page_extensions.values(), key=lambda s: s.label)
     ]

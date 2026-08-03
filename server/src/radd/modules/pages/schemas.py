@@ -142,6 +142,11 @@ class PageExtensionRead(BaseModel):
     description: str
     params_schema: dict = Field(default_factory=dict)
     icon: str = ""
+    #: The plugin that contributes it (RADD-748). The insert menu groups on this,
+    #: so an installed plugin's extensions arrive under their own heading with no
+    #: frontend change — and the SERVER is what says where each came from, rather
+    #: than the client guessing from a name it may never have seen.
+    source: str = ""
 
 
 class PageSummary(BaseModel):

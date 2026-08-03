@@ -33,6 +33,27 @@ from .specs import (
 )
 
 
+@dataclass(frozen=True)
+class ContributionSource:
+    """Which plugin contributed a thing, as the registry saw it register.
+
+    Recorded here rather than on the spec because the spec is authored BY the
+    plugin: a self-declared `source` could disagree with reality, and only the
+    registry is in a position to know the truth.
+
+    Deliberately just the plugin's NAME. The first cut carried a `core` flag so
+    the editor's insert menu could group "built in" apart from "from a plugin"
+    (RADD-748) — but `core` means "cannot be disabled", not "ships with Radd",
+    and `pages` is itself `core=False`, so first-party extensions landed under a
+    plugin heading. The deeper point is that development rule 1 says everything
+    IS a plugin, so a built-in/plugin split was fighting the architecture to
+    produce a distinction that is not real. Grouping by contributor is both
+    simpler and true.
+    """
+
+    plugin: str
+
+
 @dataclass
 class KernelRegistries:
     plugins: dict[str, RaddPlugin] = field(default_factory=dict)
@@ -46,6 +67,11 @@ class KernelRegistries:
     widget_types: dict[str, WidgetTypeSpec] = field(default_factory=dict)  # plugin dashboard widgets
     mcp_tools: dict[str, McpToolSpec] = field(default_factory=dict)  # plugin MCP tools (RADD-640)
     page_extensions: dict[str, PageExtensionSpec] = field(default_factory=dict)  # RADD-709
+    #: Which plugin contributed each page extension (RADD-748). The registry is
+    #: the only thing that knows — the spec is authored BY the plugin, so a
+    #: `source` field on it would be self-declared and could disagree with
+    #: reality. Kept beside the specs rather than inside them for that reason.
+    page_extension_sources: dict[str, ContributionSource] = field(default_factory=dict)
     #: A LIST, not a dict: several modules cascade off the same parent event.
     cascades: list[CascadeSpec] = field(default_factory=list)  # RADD-745
     tasks: dict[str, TaskSpec] = field(default_factory=dict)
@@ -64,6 +90,7 @@ class KernelRegistries:
             self.crud_resources, self.capabilities, self.tasks, self.consumers,
             self.integrations, self.plugin_ui_dirs, self.slq_fields,
             self.view_types, self.widget_types, self.mcp_tools, self.page_extensions,
+            self.page_extension_sources,
         ):
             f.clear()
         self.cascades.clear()
@@ -93,6 +120,7 @@ class KernelRegistries:
             self.mcp_tools[mt.name] = mt
         for px in plugin.page_extensions:
             self.page_extensions[px.name] = px
+            self.page_extension_sources[px.name] = ContributionSource(plugin=plugin.name)
         if plugin.cascades is not None:
             for cascade in plugin.cascades():
                 if cascade not in self.cascades:
@@ -132,6 +160,7 @@ class KernelRegistries:
             self.mcp_tools.pop(mt.name, None)
         for px in plugin.page_extensions:
             self.page_extensions.pop(px.name, None)
+            self.page_extension_sources.pop(px.name, None)
         if plugin.cascades is not None:
             for cascade in plugin.cascades():
                 if cascade in self.cascades:

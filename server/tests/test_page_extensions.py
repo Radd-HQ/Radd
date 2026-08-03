@@ -72,3 +72,47 @@ def test_the_kernel_declares_nothing_the_spa_cannot_render():
     the insert menu offering an entry that lands as an "unknown extension" card."""
     declared = {spec.name for spec in PAGE_EXTENSIONS}
     assert declared <= _web_registered_names()
+
+
+# --- where an extension came from (RADD-748) ---------------------------------
+#
+# The insert menu groups built-ins apart from what a plugin contributed. Nothing
+# shipped contributes a page extension from a NON-core plugin yet, so these
+# mount a stand-in: the registry path they exercise — record the source on
+# register, drop it on unregister — is the same one a real plugin would take,
+# and it is the half the SPA cannot verify for itself.
+
+
+def _stand_in_plugin():
+    from radd.kernel import PageExtensionSpec, RaddPlugin
+
+    return RaddPlugin(
+        name="acme-notes",
+        description="Acme Notes",
+        core=False,
+        page_extensions=(
+            PageExtensionSpec(name="acme-note", label="Acme note", icon="sparkles"),
+        ),
+    )
+
+
+def test_a_plugins_extension_records_which_plugin_contributed_it():
+    plugin = _stand_in_plugin()
+    registries.register_plugin(plugin)
+    try:
+        assert registries.page_extension_sources["acme-note"].plugin == "acme-notes"
+        # And the first-party ones still name theirs, so the menu can separate
+        # the two without the client guessing from names it has never seen.
+        assert registries.page_extension_sources["toc"].plugin == "pages"
+    finally:
+        registries.unregister_plugin(plugin)
+
+
+def test_disabling_a_plugin_forgets_where_its_extension_came_from():
+    """A stale source outlives its spec and would label the NEXT extension that
+    reuses the name with a plugin that is no longer mounted."""
+    plugin = _stand_in_plugin()
+    registries.register_plugin(plugin)
+    registries.unregister_plugin(plugin)
+    assert "acme-note" not in registries.page_extensions
+    assert "acme-note" not in registries.page_extension_sources
