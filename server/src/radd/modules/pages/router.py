@@ -211,6 +211,26 @@ async def get_page_by_path(
     return await service.page_read(session, page)
 
 
+@router.get("/pages/search", response_model=PageSearchResponse)
+async def search_docs(
+    q: str, session: Session, user: CurrentUser, limit: int = 20
+) -> PageSearchResponse:
+    """Also BEFORE `/pages/{page_id}`, and for the same reason as `by-path`.
+
+    FastAPI matches in DECLARATION order, so a literal that shares a shape with
+    an earlier `{param}` route is simply never reached. RADD-701 moved this here
+    from `/docs/search` and left it at the bottom of the file, where
+    `/pages/search` parsed as `page_id="search"` and answered 422 — a route that
+    exists, is registered, appears in the OpenAPI schema, and cannot be called
+    (RADD-761). Anything added as `/pages/<literal>` belongs in this block.
+    """
+    await authz.require(session, user, authz.Permission.PAGE_READ)
+    limit = max(1, min(limit, 50))
+    return PageSearchResponse(
+        results=await search.search_pages(session, q, limit=limit)
+    )
+
+
 @router.get("/pages/{page_id}", response_model=PageRead)
 async def get_page(page_id: uuid.UUID, session: Session, user: CurrentUser) -> PageRead:
     page = await _page_guard(session, user, page_id, authz.Permission.PAGE_READ)
@@ -399,14 +419,7 @@ async def item_docs(item_id: uuid.UUID, session: Session, user: CurrentUser) -> 
 
 
 # --- search ---
-
-
-@router.get("/pages/search", response_model=PageSearchResponse)
-async def search_docs(
-    q: str, session: Session, user: CurrentUser, limit: int = 20
-) -> PageSearchResponse:
-    await authz.require(session, user, authz.Permission.PAGE_READ)
-    limit = max(1, min(limit, 50))
-    return PageSearchResponse(
-        results=await search.search_pages(session, q, limit=limit)
-    )
+#
+# `/pages/search` is declared UP with the other literal `/pages/<word>` routes,
+# above `/pages/{page_id}` — see the note there. It used to live here, where
+# FastAPI's first-match-wins ordering made it unreachable (RADD-761).

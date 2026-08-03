@@ -44,9 +44,12 @@ const SERVER_ENTITY_TAGS: Record<string, EntityTag[]> = {
   attachment: [Entity.attachment, Entity.item],
   canned_response: [Entity.cannedResponse],
   sla_policy: [Entity.slaPolicy],
-  doc_space: [Entity.docSpace],
+  // These keys are the SERVER's entity types — the broadcaster pushes
+  // `event.entity_type` verbatim. RADD-701 renamed them to page_space/page and
+  // these two were left behind, so nothing on a page ever refreshed (RADD-761).
+  page_space: [Entity.docSpace],
   // A page change also touches its space's page_count in the spaces index.
-  doc_page: [Entity.page, Entity.docSpace],
+  page: [Entity.page, Entity.docSpace],
   dashboard: [Entity.dashboard],
 };
 

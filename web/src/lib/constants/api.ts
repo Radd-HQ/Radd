@@ -137,10 +137,10 @@ export const ApiPath = {
   pageTemplates: "/page-templates",
   pageReindexLinks: "/pages/reindex-links",
   pages: "/pages",
-  docsSearch: "/docs/search",
+  docsSearch: "/pages/search",
   // PUBLIC pages (spec 74) — no login; a space's `public` flag gates.
-  publicKbSpaces: "/public/kb/spaces",
-  publicKbSearch: "/public/kb/search",
+  publicKbSpaces: "/public/pages/spaces",
+  publicKbSearch: "/public/pages/search",
   // AI layer (spec 46) — the status gate + natural-language → SLQ.
   aiStatus: "/ai/status",
   // Similar issues for a TEXT seed (read-mode AI menu on comments).

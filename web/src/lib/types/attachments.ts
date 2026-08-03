@@ -3,10 +3,13 @@
 // Attachments (attachments module — spec 29)
 // ---------------------------------------------------------------------------
 
-/** What an attachment can be parented to. Values are the server's entity keys. */
+/** What an attachment can be parented to. Values are the server's entity keys —
+ *  `AttachmentParentType` in `attachments/types.py`, which the upload endpoint
+ *  validates as an enum. RADD-701 renamed this key from `docPage` to `page` and
+ *  left the VALUE at `doc_page`, so every page upload 422'd for a day (RADD-761). */
 export const AttachmentParentType = {
   item: "item",
-  page: "doc_page",
+  page: "page",
 } as const;
 export type AttachmentParentTypeValue =
   (typeof AttachmentParentType)[keyof typeof AttachmentParentType];
