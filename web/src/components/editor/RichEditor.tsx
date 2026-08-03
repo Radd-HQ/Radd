@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Crepe, CrepeFeature } from "@milkdown/crepe";
 import { editorViewCtx } from "@milkdown/kit/core";
+import type { Editor } from "@milkdown/kit/core";
 import { $view, callCommand } from "@milkdown/kit/utils";
 import {
   createCodeBlockCommand,
@@ -45,6 +45,7 @@ import { raddDiffDecoration } from "./diff/decoration-plugin";
 import { AiSelectionToolbar } from "./AiSelectionToolbar";
 import { reviewPending, runAi } from "./ai-run";
 import { NO_SELECTION, selectionRectPlugin, type SelectionRect } from "./selection-state";
+import { makeEditor } from "./create-editor";
 import { CodeBlockView } from "./CodeBlockView";
 import { placeholderPlugin } from "./placeholder";
 import { ImageNodeView } from "./ImageNodeView";
@@ -157,7 +158,7 @@ const MENTION_LIMIT = 6;
 const SOURCE_DEBOUNCE_MS = 300;
 
 /**
- * Obsidian-style WYSIWYG editor (Milkdown/Crepe): you type markdown and it renders
+ * Obsidian-style WYSIWYG editor (Milkdown/ProseMirror): you type markdown and it renders
  * live, but the value in and out is always **markdown** — so nothing else in the app
  * (storage, rendering, search) has to change. A fixed TopBar toolbar inserts blocks;
  * `@` autocompletes people, `#` autocompletes issues (emitting the same
@@ -233,13 +234,13 @@ function RichEditorInner({
   // preference AND the fetched action menu all line up (see useEditorAi).
   // Anonymous pages never even ask — the gate queries are authenticated.
   const ai = useEditorAi(!anonymous);
-  // Suggestions bind at Crepe create time, so the instance must be rebuilt when
+  // The AI chrome binds at create time, so the instance must be rebuilt when
   // the gate flips or the curated menu changes — content survives via contentRef.
   const aiSignature = ai
     ? "on:" + ai.actions.map((action) => `${action.id}:${action.label}`).join(",")
     : "off";
-  // The live Crepe instance, for dispatching AI runs from React chrome.
-  const crepeRef = useRef<Crepe | null>(null);
+  // The live editor, for dispatching AI runs and inserts from React chrome.
+  const editorRef = useRef<Editor | null>(null);
   // The toolbar AI popover, anchored under the TopBar's AI button when open.
   const [aiMenu, setAiMenu] = useState<{ left: number; top: number } | null>(null);
   // The extension insert popover, anchored under its own TopBar button.
@@ -272,7 +273,7 @@ function RichEditorInner({
   // Table operations bound to whichever instance is live. A stable identity, so
   // the node view is not rebuilt when the editor is recreated.
   const tableRun = useMemo(
-    () => tableCommands(() => crepeRef.current?.editor ?? null),
+    () => tableCommands(() => editorRef.current ?? null),
     [],
   );
   // The node view takes no props of its own; the runner is closed over here so
@@ -287,15 +288,15 @@ function RichEditorInner({
 
   const insertExtension = (spec: PageExtensionSpec) => {
     setExtensionMenu(null);
-    crepeRef.current?.editor.action((ctx) => insertExtensionBlock(ctx.get(editorViewCtx), spec));
+    editorRef.current?.action((ctx) => insertExtensionBlock(ctx.get(editorViewCtx), spec));
   };
 
   /** Run one of Milkdown's own commands and give the editor its focus back. */
   const run = (command: Parameters<typeof callCommand>[0], payload?: unknown) => {
-    const crepe = crepeRef.current;
-    if (!crepe) return;
-    crepe.editor.action(callCommand(command, payload));
-    crepe.editor.action((ctx) => ctx.get(editorViewCtx).focus());
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.action(callCommand(command, payload));
+    editor.action((ctx) => ctx.get(editorViewCtx).focus());
   };
 
   const onToolbarAction = (action: ToolbarActionValue, anchor: DOMRect) => {
@@ -347,9 +348,9 @@ function RichEditorInner({
    */
   const dispatchAiRun = (run: AiRun, range?: { from: number; to: number }) => {
     setAiMenu(null);
-    const crepe = crepeRef.current;
-    if (!crepe) return;
-    crepe.editor.action((ctx) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.action((ctx) => {
       if (reviewPending(ctx)) {
         pushToast("Finish the current AI review first.");
         return;
@@ -456,66 +457,46 @@ function RichEditorInner({
 
   useEffect(() => {
     const root = rootRef.current;
-    if (!root || plain) return; // plain mode: the textarea below, no Crepe instance
+    if (!root || plain) return; // plain mode: the textarea below, no editor instance
     // Feature-flag choices cascade into Crepe's own menus: TopBar entries for image,
     // table and math only render when their feature is enabled. Crepe's BlockEdit
     // slash menu stays OFF: it only duplicated the toolbar's inserts — our own `/`
     // menu (mention.ts trigger + `quickActions`) acts on the ISSUE instead.
-    // The floating selection Toolbar rides the AI gate: it is where Crepe puts the
-    // AI entry point (spec 103); without AI it would only duplicate the TopBar.
     const aiOn = ai !== null;
     const extensionsOn = extensionsRef.current;
-    const crepe = new Crepe({
+    let sourceTimer: ReturnType<typeof setTimeout> | undefined;
+    // Milkdown directly (RADD-755). Every feature this used to switch off is a
+    // React component of ours now, so the wrapper was configuring nothing.
+    const editor = makeEditor({
       root,
-      defaultValue: contentRef.current,
-      features: {
-        // Ours now (RADD-749) — rendered above this root as real React.
-        [CrepeFeature.TopBar]: false,
-        // Ours now (RADD-753). Its only entry we used was the AI one, and the
-        // rest duplicated the top bar.
-        [CrepeFeature.Toolbar]: false,
-        [CrepeFeature.BlockEdit]: false,
-        // Ours now (RADD-751): the image node view carries the resize handle, and
-        // paste/drop upload moves to @milkdown/plugin-upload below. Crepe's block
-        // image was a second node type for the same markdown, which is one more
-        // thing that would have had to be untangled at removal time.
-        [CrepeFeature.ImageBlock]: false,
-        // Ours now (RADD-753) — same endpoint, same reviewable diff, and no
-        // dispatch through a name lookup to dodge a duplicate module instance.
-        [CrepeFeature.AI]: false,
-        [CrepeFeature.Latex]: false,
-        // Ours now (RADD-752) — CodeMirror wired directly, so we own when a
-        // <pre> becomes a .cm-editor rather than discovering it in a proof.
-        [CrepeFeature.CodeMirror]: false,
-        // Ours now (RADD-750). The ENGINE is untouched: prosemirror-tables is
-        // what every ProseMirror editor uses. Only the chrome changes.
-        [CrepeFeature.Table]: false,
-        // The last four (RADD-754). Each is replaced below by the KIT component
-        // Crepe was wrapping — same code, one less wrapper — except the
-        // placeholder, which is a decoration small enough to own outright.
-        [CrepeFeature.Placeholder]: false,
-        [CrepeFeature.LinkTooltip]: false,
-        [CrepeFeature.Cursor]: false,
-        [CrepeFeature.ListItem]: false,
+      value: contentRef.current,
+      editable: true,
+      onMarkdown: (markdown) => {
+        contentRef.current = markdown;
+        onChangeRef.current(markdown);
+        if (extensionsOn) {
+          clearTimeout(sourceTimer);
+          sourceTimer = setTimeout(() => onSourceChangeRef.current(markdown), SOURCE_DEBOUNCE_MS);
+        }
       },
     });
     // @/#/"/" triggers (before create) — not on anonymous pages: the popups
     // query the user directory / issue search, both logged-in surfaces.
-    if (!anonymous) crepe.editor.use(mentionProsePlugin(store));
+    if (!anonymous) editor.use(mentionProsePlugin(store));
     // Same chip rendering as the read-mode viewer (clicks consumed while editing).
-    crepe.editor.use(mentionChipsPlugin({ readonly: false, openIssue: () => {} }));
+    editor.use(mentionChipsPlugin({ readonly: false, openIssue: () => {} }));
     // Feeds the toolbar's active state (RADD-749). A plugin view, so the snapshot
     // is recomputed from the editor's own updates rather than polled.
-    crepe.editor.use(toolbarStatePlugin(setSnapshot));
+    editor.use(toolbarStatePlugin(setSnapshot));
     // The chrome Crepe used to wrap, taken from the kit directly (RADD-754).
-    crepe.editor
+    editor
       .use(cursor)
       .use(linkTooltipPlugin)
       .use(listItemBlockComponent)
       .use(placeholderPlugin(placeholder ?? "Write…"));
     // Our code block (RADD-752), in BOTH modes — the same view read-only is what
     // keeps code identical in the viewer, which is what RichViewer is for.
-    crepe.editor.use(
+    editor.use(
       $view(codeBlockSchema.node, () =>
         nodeViewFactory({
           component: CodeBlockView,
@@ -528,11 +509,11 @@ function RichEditorInner({
     // Resizable images (RADD-751), plus paste/drop upload. Registered whether or
     // not this surface can upload: an image that ARRIVED some other way still
     // resizes, and a comment is as likely to hold a screenshot as a page is.
-    crepe.editor.use(
+    editor.use(
       $view(imageSchema.node, () => nodeViewFactory({ component: ImageNodeView })),
     );
     if (uploadRef.current) {
-      crepe.editor
+      editor
         .use(upload)
         .config((ctx) =>
           ctx.update(uploadConfig.key, (base) => ({
@@ -554,7 +535,7 @@ function RichEditorInner({
     // Table chrome (RADD-750), plus the column-resizing plugin preset-gfm ships
     // but does not compose. Resized widths are a session-only affordance: GFM
     // cannot express a column width, and this body is markdown by design.
-    crepe.editor.use(columnResizingPlugin).use(
+    editor.use(columnResizingPlugin).use(
       $view(tableSchema.node, () =>
         nodeViewFactory({
           component: TableView,
@@ -571,7 +552,7 @@ function RichEditorInner({
     // headings a `toc` could list, and turning its fences into rendered blocks
     // there would change what a comment does, not just how it looks.
     if (extensionsOn) {
-      crepe.editor
+      editor
         .use(raddExtensionRemark)
         .use(raddExtensionSchema)
         .use(raddExtensionConfigOnInsert)
@@ -587,18 +568,7 @@ function RichEditorInner({
           ),
         );
     }
-    let sourceTimer: ReturnType<typeof setTimeout> | undefined;
-    crepe.on((listener) => {
-      listener.markdownUpdated((_ctx, markdown) => {
-        contentRef.current = markdown;
-        onChangeRef.current(markdown);
-        if (extensionsOn) {
-          clearTimeout(sourceTimer);
-          sourceTimer = setTimeout(() => onSourceChangeRef.current(markdown), SOURCE_DEBOUNCE_MS);
-        }
-      });
-    });
-    crepeRef.current = crepe;
+    editorRef.current = editor;
     const created = (async () => {
       if (aiOn) {
         // The review machinery, registered by us now that Crepe's AI feature is
@@ -613,11 +583,11 @@ function RichEditorInner({
         // can even create. Its defaults are already Accept/Reject, so it is
         // registered for the SLICE and then has its decoration plugin swapped
         // for ours.
-        crepe.editor.use(diff).use(diffComponent);
-        await crepe.editor.remove(diffDecorationPlugin);
-        crepe.editor.use(raddDiffDecoration).use(selectionRectPlugin(setSelectionRect));
+        editor.use(diff).use(diffComponent);
+        await editor.remove(diffDecorationPlugin);
+        editor.use(raddDiffDecoration).use(selectionRectPlugin(setSelectionRect));
       }
-      await crepe.create();
+      await editor.create();
       if (autoFocus) root.querySelector<HTMLElement>(".ProseMirror")?.focus();
       // Read-mode transform hand-off: run once, on the first instance that has
       // AI (the first mount often precedes the AI gate queries resolving).
@@ -630,8 +600,8 @@ function RichEditorInner({
     return () => {
       clearTimeout(sourceTimer);
       // Destroy only after create resolves, so an unmount mid-init can't race.
-      void created.then(() => crepe.destroy());
-      if (crepeRef.current === crepe) crepeRef.current = null;
+      void created.then(() => editor.destroy());
+      if (editorRef.current === editor) editorRef.current = null;
     };
     // Recreated on mode switch + AI gate/menu changes — `value` changes are
     // ignored (remount to reseed).
@@ -643,7 +613,7 @@ function RichEditorInner({
       const next = !current;
       localStorage.setItem(PLAIN_PREF_KEY, next ? "1" : "0");
       if (next) setPlainDraft(contentRef.current); // rich → plain: show live markdown
-      return next; // plain → rich: the effect reseeds Crepe from contentRef
+      return next; // plain → rich: the effect reseeds the editor from contentRef
     });
   };
 
@@ -696,8 +666,8 @@ function RichEditorInner({
           />
         ) : (
           <>
-            {/* Ours (RADD-749). Outside the editor root: Crepe owns that node's
-                DOM, so React children inside it would be fought over. */}
+            {/* Ours (RADD-749). Outside the editor root: ProseMirror owns that
+                node's DOM, so React children inside it would be fought over. */}
             <EditorToolbar
               snapshot={snapshot}
               onAction={onToolbarAction}
@@ -735,7 +705,7 @@ function RichEditorInner({
                 </>
               }
             />
-            {/* Crepe owns this node's DOM — keep it free of React children (popup is portaled). */}
+            {/* ProseMirror owns this node's DOM — keep it free of React children (popup is portaled). */}
             <div ref={rootRef} />
           </>
         )}

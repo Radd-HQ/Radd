@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { ComponentProps } from "react";
 import type { RichViewer } from "./RichViewer";
 
-// Same heavy Crepe/ProseMirror chunk as the editor — loaded on demand.
+// Same heavy Milkdown/ProseMirror chunk as the editor — loaded on demand.
 const RichViewerImpl = lazy(() =>
   import("./RichViewer").then((module) => ({ default: module.RichViewer })),
 );

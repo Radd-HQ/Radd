@@ -1,8 +1,8 @@
 /*
  * The editor's own stylesheet (RADD-754).
  *
- * Replaces `@milkdown/crepe/theme/common/style.css` + `classic-dark.css`. Those
- * shipped fifteen files of chrome — a top bar, a floating toolbar, a table
+ * Replaces the two Crepe stylesheets this used to import. Those shipped
+ * fifteen files of chrome — a top bar, a floating toolbar, a table
  * block, an image block, a code-mirror skin, an AI panel, a block-edit menu, a
  * LaTeX widget — and this build renders none of them: every one is now a React
  * component of ours. What remains is the editable SURFACE and the parts of the

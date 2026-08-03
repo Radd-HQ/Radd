@@ -22,22 +22,24 @@
 /* Unified AI diff review (the code-diff reading): per changed paragraph, the
    OLD text stacks above as a red "− line", the paragraph itself is the NEW
    text as a green "+ line" — word-level emphasis INSIDE each, never the two
-   texts interleaved. Hues come from the themed --crepe-color-diff-* bases. */
+   texts interleaved. Semantic tokens, not the `--crepe-color-diff-*` bases these
+   used to read: RADD-754 deleted the block that DEFINED those, which left every
+   colour here undefined — a rule that still parses and paints nothing. */
 .radd-rich-editor .milkdown .radd-diff-old-block {
-  background: color-mix(in srgb, var(--crepe-color-diff-removed) 9%, transparent);
-  border-left: 3px solid var(--crepe-color-diff-removed);
+  background: color-mix(in srgb, var(--color-red-400) 9%, transparent);
+  border-left: 3px solid var(--color-red-400);
   border-radius: 4px;
   padding: 2px 10px;
   margin: 6px 0 2px;
   opacity: 0.8;
 }
 .radd-rich-editor .milkdown .radd-diff-old-hl {
-  background: color-mix(in srgb, var(--crepe-color-diff-removed) 28%, transparent);
+  background: color-mix(in srgb, var(--color-red-400) 28%, transparent);
   border-radius: 3px;
 }
 .radd-rich-editor .milkdown .radd-diff-new-block {
-  background: color-mix(in srgb, var(--crepe-color-diff-added) 9%, transparent);
-  border-left: 3px solid var(--crepe-color-diff-added);
+  background: color-mix(in srgb, var(--color-emerald-400) 9%, transparent);
+  border-left: 3px solid var(--color-emerald-400);
   border-radius: 4px;
   padding: 2px 10px;
 }
@@ -135,7 +137,7 @@
   pointer-events: none; /* task lists are display-only in read mode */
 }
 
-/* Tables: the themed borders (--crepe-color-outline) are near-invisible on our dark
+/* Tables: the default borders are near-invisible on our dark
    bg, so draw explicit visible cell lines + a distinct header row. */
 /* A selected cell's wash rides the accent, like every other selection. */
 .radd-rich-editor .milkdown .ProseMirror .selectedCell::after {
@@ -159,10 +161,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--color-border-strong, var(--crepe-color-outline));
-  background: var(--crepe-color-surface);
+  border: 1px solid var(--color-strong);
+  background: var(--color-elevated);
   border-radius: 6px;
 }
 .radd-rich-editor .milkdown .radd-extension-chrome button:hover {
-  background: var(--crepe-color-hover);
+  background: var(--color-overlay);
 }

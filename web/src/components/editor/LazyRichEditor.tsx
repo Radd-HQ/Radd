@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react";
 import type { ComponentProps } from "react";
 import type { RichEditor } from "./RichEditor";
 
-// Crepe + ProseMirror is heavy, so it lives in its own chunk that only loads when
+// Milkdown + ProseMirror + CodeMirror is heavy, so it lives in its own chunk that only loads when
 // an editor actually mounts — keeps the initial app bundle lean.
 const RichEditorImpl = lazy(() =>
   import("./RichEditor").then((module) => ({ default: module.RichEditor })),

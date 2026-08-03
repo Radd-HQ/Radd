@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type { EditorView } from "@milkdown/prose/view";
+import type { EditorView } from "@milkdown/kit/prose/view";
 import { iconOrFallback } from "../../lib/icons";
 import { pageExtensionsQuery } from "../../lib/queries";
 import type { PageExtensionSpec } from "../../lib/types";
@@ -39,8 +39,9 @@ function groupsOf(specs: PageExtensionSpec[]) {
  * contributes a `PageExtensionSpec` appears here in a running Radd with no
  * frontend change, and disabling that plugin removes it again.
  */
-/** The TopBar button. A raw SVG string because Crepe's toolbar builder takes
- *  markup, not a component; the class is the handle the popover anchors to. */
+/** Kept for the render proofs, which look for `svg.radd-extension-toolbar-icon`.
+ *  The toolbar itself renders a lucide component now (RADD-749); this was the
+ *  markup a third-party toolbar builder demanded when it took strings. */
 export const EXTENSION_TOOLBAR_ICON = `
   <svg xmlns="http://www.w3.org/2000/svg" class="radd-extension-toolbar-icon" width="24" height="24" viewBox="0 0 24 24">
     <path
@@ -55,8 +56,8 @@ export function ExtensionPicker({
   onPick,
 }: {
   at: { left: number; top: number };
-  /** Dispatched through the live Crepe instance by the caller — the same route
-   *  the AI popover takes, rather than holding a view reference here. */
+  /** Dispatched through the live editor by the caller — the same route the AI
+   *  popover takes, rather than holding a view reference here. */
   onPick: (spec: PageExtensionSpec) => void;
 }) {
   const { data, isLoading } = useQuery(pageExtensionsQuery);
