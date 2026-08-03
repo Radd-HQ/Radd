@@ -45,6 +45,8 @@ class FormCreate(BaseModel):
     description_enabled: bool = True
     description_prompt: str = Field(default="Description", min_length=1, max_length=200)
     description_required: bool = False
+    #: RADD-798 — offer a team picker on the submit page (off by default).
+    team_picker_enabled: bool = False
 
 
 class FormUpdate(BaseModel):
@@ -57,6 +59,7 @@ class FormUpdate(BaseModel):
     description_enabled: bool | None = None
     description_prompt: str | None = Field(default=None, min_length=1, max_length=200)
     description_required: bool | None = None
+    team_picker_enabled: bool | None = None
     # Spec 62: toggle the tokened no-login submit path (token minted on first enable).
     allow_public: bool | None = None
 
@@ -106,6 +109,7 @@ class FormRead(BaseModel):
     description_enabled: bool
     description_prompt: str
     description_required: bool
+    team_picker_enabled: bool
     allow_public: bool
     public_token: str | None
     # Portal shares (spec 73) — populated on the form.manage surfaces (list/
@@ -121,6 +125,9 @@ class FormSubmit(BaseModel):
     title: str = Field(min_length=1, max_length=500)
     description: str = ""  # ignored unless the form's description area is enabled
     values: dict[str, Any] = Field(default_factory=dict)
+    #: RADD-798 — share this request with one of MY teams. Membership is checked
+    #: server-side at submit: the picker is UI, and UI is not enforcement.
+    team_id: uuid.UUID | None = None
 
 
 # --- public, unauthenticated path (spec 62) ---
@@ -235,8 +242,59 @@ class PortalRequestRead(BaseModel):
     #: progress without exposing the project's state vocabulary as a filter.
     state_category: str
     project: PortalProjectRef
+    #: RADD-797 — the status a requester actually needs. Each of these is inside
+    #: the relationship boundary above: a NAME from the member-floor people
+    #: directory, a version string, and two numbers derived from PUBLIC comments.
+    assignee: str | None = None  # None = unassigned, which is itself an answer
+    release: str | None = None  # the version that shipped it
+    #: RADD-798 — the team it was shared with, and the key the surfaces group by.
+    team: str | None = None
+    team_id: uuid.UUID | None = None
+    #: PUBLIC comments only. A count over the unfiltered set would leak that
+    #: internal discussion exists and how much of it there is.
+    comment_count: int = 0
+    #: The last PUBLIC comment was not the reporter's — "someone answered you".
+    #: The single reason a requester has to come back to this list.
+    awaiting_requester: bool = False
     created_at: UtcDatetime
     updated_at: UtcDatetime
+
+
+class PortalRequestComment(BaseModel):
+    """One PUBLIC comment on a request, as a requester may see it."""
+
+    id: uuid.UUID
+    author: str  # name only — the directory shape (RADD-769)
+    author_is_me: bool
+    body: str
+    created_at: UtcDatetime
+
+
+class PortalRequestDetail(PortalRequestRead):
+    """One request opened (RADD-796): the row, plus what you came to read.
+
+    Everything omitted is omitted deliberately — no labels, no custom fields, no
+    worklogs, no history, and no internal comments. A requester is admitted by
+    relationship, and the relationship entitles them to their own conversation,
+    not to the project's working notes.
+    """
+
+    description: str = ""
+    comments: list[PortalRequestComment] = Field(default_factory=list)
+
+
+class PortalRequestReply(BaseModel):
+    """A requester's reply. Visibility is not a field: it is forced public at the
+    seam, so this cannot be a way to write into the internal thread."""
+
+    body: str = Field(min_length=1, max_length=20_000)
+
+
+class PortalTeamOption(BaseModel):
+    """A team the SUBMITTER belongs to — the only teams a picker may offer."""
+
+    id: uuid.UUID
+    name: str
 
 
 class PortalFormRead(PublicFormRead):
@@ -246,3 +304,7 @@ class PortalFormRead(PublicFormRead):
 
     id: uuid.UUID
     project: PortalProjectRef
+    #: RADD-798 — the teams THIS submitter may share with. Empty when the form
+    #: has no picker, or when the person belongs to no team; either way the
+    #: client renders nothing, and the server re-checks whatever comes back.
+    teams: list[PortalTeamOption] = Field(default_factory=list)

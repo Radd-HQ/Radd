@@ -10,10 +10,8 @@ from radd.modules.auth import authz, service as auth
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
 from radd.modules.events import service as events
-from radd.modules.items import service as items
 from radd.modules.items.schemas import UserRef
 from radd.modules.teams import service as teams
-from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 
 from .models import Comment, CommentVisibilityTeam
@@ -230,6 +228,38 @@ async def create_comment(
 ) -> CommentRead:
     binding, project = await _parent_scope(session, entity_type, entity_id)
     permissions = await binding.require_write(session, actor, entity_id, project)
+    return await create_authorized_comment(
+        session, entity_id, data, actor, entity_type=entity_type, permissions=permissions
+    )
+
+
+async def create_authorized_comment(
+    session: AsyncSession,
+    entity_id: uuid.UUID,
+    data: CommentCreate,
+    actor: User,
+    *,
+    entity_type: str = CommentParentType.ITEM.value,
+    permissions: frozenset[Permission] = frozenset(),
+) -> CommentRead:
+    """Write a comment whose authorisation the CALLER has already decided.
+
+    `create_comment` is the ordinary door and asks the parent binding. This one
+    exists for a caller that authorises by a different rule entirely: the
+    requester portal admits by RELATIONSHIP (you reported it, or it was filed for
+    your team — RADD-796), and a requester holds `comment.write` nowhere. The
+    submit path already extends exactly that trust to create the item.
+
+    It is a separate, named function rather than a `bypass_authz=True` flag on
+    the one above, because a boolean that skips permission checks is the kind of
+    parameter that gets copied into a caller which had no business skipping
+    anything. Passing an EMPTY permission set is deliberate too: an unprivileged
+    caller then cannot reach the import overrides or write an internal comment,
+    because both are gated on what is in that set.
+
+    Everything downstream is shared — one write path, so events, mentions,
+    notifications and watchers behave identically however the comment arrived.
+    """
     _check_internal(permissions, data.visibility)
     # Import overrides (author/timestamp) are honored only for a project manager.
     can_import = Permission.PROJECT_MANAGE in permissions

@@ -18,7 +18,7 @@ from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
-from radd.modules.forms import portal, service as forms_service
+from radd.modules.forms import portal, requests as requests_service, service as forms_service
 from radd.modules.forms.schemas import (
     FormCreate,
     FormShareEntry,
@@ -229,22 +229,30 @@ async def test_my_requests_is_scoped_by_reporter_not_by_permission(db, admin):
 
     await portal.submit_portal_form(db, form.id, FormSubmit(title="A new laptop"), sharee)
 
-    mine = await portal.list_my_requests(db, sharee)
+    mine = await requests_service.list_my_requests(db, sharee)
     assert [r.title for r in mine] == ["A new laptop"]
     assert mine[0].key.startswith(project.key)
     assert mine[0].project.key == project.key
     assert mine[0].state  # the workflow state, for "where has it got to"
 
     # Someone else's portal shows nothing of it.
-    assert await portal.list_my_requests(db, other) == []
+    assert await requests_service.list_my_requests(db, other) == []
 
 
 async def test_my_requests_exposes_no_issue_contents(db, admin):
     """The trimming is the security boundary, so it is asserted rather than assumed.
 
     A requester is scoped by their RELATIONSHIP to the row, not by `item.read`,
-    so this read model must never grow into a back door: no description, no
-    comments, no assignee, no labels, no custom fields.
+    so this read model must never grow into a back door.
+
+    RADD-797 widened the row deliberately, and this list is the record of what
+    was allowed in and why: a status a requester needs, never issue CONTENT.
+    `assignee` is a name from the member-floor directory (RADD-769), `release` is
+    a version string, and the two numbers are derived from PUBLIC comments only.
+    Still absent, and the point of asserting an EXACT set: description, labels,
+    custom fields, worklogs, history, and anything internal. The description and
+    the public thread moved to `PortalRequestDetail`, behind the same admission
+    rule but as an explicit act of opening one request.
     """
     project = await _project(db)
     sharee = await _member(db, "Requester")
@@ -256,5 +264,9 @@ async def test_my_requests_exposes_no_issue_contents(db, admin):
         db, form.id, FormSubmit(title="Secret-ish", description="internal details"), sharee
     )
 
-    fields = set(type((await portal.list_my_requests(db, sharee))[0]).model_fields)
-    assert fields == {"key", "title", "state", "state_category", "project", "created_at", "updated_at"}
+    fields = set(type((await requests_service.list_my_requests(db, sharee))[0]).model_fields)
+    assert fields == {
+        "key", "title", "state", "state_category", "project",
+        "assignee", "release", "team", "team_id", "comment_count",
+        "awaiting_requester", "created_at", "updated_at",
+    }

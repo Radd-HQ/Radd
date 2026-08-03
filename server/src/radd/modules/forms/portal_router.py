@@ -12,12 +12,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.db import get_session
 from radd.modules.auth.deps import CurrentUser
 
-from . import portal
+from . import portal, requests as requests_service
 from .schemas import (
     FormSubmit,
     PortalFormRead,
     PortalGroup,
+    PortalRequestComment,
+    PortalRequestDetail,
     PortalRequestRead,
+    PortalRequestReply,
     PublicSubmitResult,
 )
 
@@ -59,10 +62,31 @@ async def submit_portal_form(
 
 @requests_router.get("", response_model=list[PortalRequestRead])
 async def my_requests(session: Session, user: CurrentUser) -> list[PortalRequestRead]:
-    """The requests this person filed (RADD-785).
+    """The requests this person may follow (RADD-785 → RADD-796/798).
 
-    Any signed-in user, because the answer is already scoped to them — the query
-    filters on `reporter_id`. Someone who has filed nothing gets an empty list,
-    which is the correct answer rather than a refusal.
+    Any signed-in user, because the answer is already scoped to them: the query
+    filters on `reporter_id == me OR team_id IN my teams`. Someone with no
+    requests gets an empty list, which is the correct answer rather than a
+    refusal.
     """
-    return await portal.list_my_requests(session, actor=user)
+    return await requests_service.list_my_requests(session, actor=user)
+
+
+@requests_router.get("/{key}", response_model=PortalRequestDetail)
+async def get_request(key: str, session: Session, user: CurrentUser) -> PortalRequestDetail:
+    """One request, opened (RADD-796).
+
+    404 — never 403 — when the actor is neither the reporter nor in the request's
+    team. A refusal would confirm the key names a real issue, which is the thing
+    someone guessing keys is trying to learn.
+    """
+    return await requests_service.get_request(session, user, key)
+
+
+@requests_router.post("/{key}/comments", response_model=PortalRequestComment, status_code=201)
+async def reply_to_request(
+    key: str, data: PortalRequestReply, session: Session, user: CurrentUser
+) -> PortalRequestComment:
+    """Answer a question asked of you. Forced PUBLIC at the service seam — the
+    schema has no visibility field, so this cannot reach the internal thread."""
+    return await requests_service.add_request_comment(session, user, key, data.body)
