@@ -20,7 +20,7 @@ from radd.modules.auth.types import InstanceRole
 
 from . import registry, service
 from .models import SsoProvider
-from .schemas import SsoProviderCreate, SsoProviderRead, SsoProviderUpdate
+from .schemas import SsoDefaultGrant, SsoProviderCreate, SsoProviderRead, SsoProviderUpdate
 from .types import KIND_DEFAULTS, SsoKind
 
 router = APIRouter(prefix="/sso", tags=["sso admin"])
@@ -33,11 +33,18 @@ def _require_instance_admin(actor: User) -> None:
         raise ForbiddenError("sign-in settings require an instance admin")
 
 
-def _read(provider: SsoProvider) -> SsoProviderRead:
+async def _read(session: AsyncSession, provider: SsoProvider) -> SsoProviderRead:
+    """Async now (RADD-780/781): the starting-access template lives in two child
+    tables, so a read has to fetch them rather than reflect off the row."""
     return SsoProviderRead.model_validate(provider).model_copy(
         update={
             "configured": registry.configured(provider),
             "redirect_uri": service.redirect_uri(),
+            "default_grants": [
+                SsoDefaultGrant(role_id=g.role_id, project_id=g.project_id)
+                for g in await registry.default_grants(session, provider.id)
+            ],
+            "default_team_ids": await registry.default_teams(session, provider.id),
         }
     )
 
@@ -63,7 +70,7 @@ async def list_kinds(user: CurrentUser) -> list[SsoKindInfo]:
 @router.get("/providers", response_model=list[SsoProviderRead])
 async def list_providers(session: Session, user: CurrentUser) -> list[SsoProviderRead]:
     _require_instance_admin(user)
-    return [_read(p) for p in await registry.list_providers(session)]
+    return [await _read(session, p) for p in await registry.list_providers(session)]
 
 
 @router.post("/providers", response_model=SsoProviderRead, status_code=201)
@@ -73,7 +80,7 @@ async def create_provider(
     _require_instance_admin(user)
     provider = await registry.create_provider(session, data)
     await registry.refresh_snapshot(session)
-    return _read(provider)
+    return await _read(session, provider)
 
 
 @router.patch("/providers/{provider_id}", response_model=SsoProviderRead)
@@ -84,7 +91,7 @@ async def update_provider(
     provider = await registry.update_provider(session, provider_id, data)
     service.invalidate_caches(provider_id)
     await registry.refresh_snapshot(session)
-    return _read(provider)
+    return await _read(session, provider)
 
 
 @router.delete("/providers/{provider_id}", status_code=204)

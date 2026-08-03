@@ -223,29 +223,53 @@ async def identities_for_user(session: AsyncSession, user_id: uuid.UUID) -> list
 
 
 
-async def _grant_default_role(session: AsyncSession, provider: SsoProvider, user: User) -> None:
-    """Give a freshly created account the provider's default role, once.
+async def _apply_provisioning_template(
+    session: AsyncSession, provider: SsoProvider, user: User
+) -> None:
+    """Give a freshly created account the provider's starting access, once.
 
-    A `global_role_grants` row rather than anything written on the user: grants
-    are additive and nothing reconciles them, so "this must never undo a later
-    admin change" needs no enforcement — no code path reads this setting again
-    for this account.
+    Roles are `global_role_grants` ROWS and teams are ordinary memberships —
+    additive facts nothing reconciles. That is what makes "this must never undo
+    an admin's later change" a property of the data rather than a rule someone
+    has to remember: no code path reads this template again for this account.
 
-    A role deleted since the provider was configured leaves `default_role_id`
-    NULL (the FK is ON DELETE SET NULL) and this is a no-op, which is the right
-    answer: a signup should not fail because an admin tidied the role list.
+    Every failure here is swallowed to a log line, deliberately. A template is
+    an admin convenience configured weeks earlier; a role deleted since, or a
+    team that has been linked to an AD group in the meantime, must not turn into
+    a failed sign-in for a person who did nothing wrong. They land on the
+    Baseline and an admin can grant the rest.
     """
-    if provider.default_role_id is None:
-        return
     from radd.modules.auth import grants
+    from radd.modules.teams import service as teams_service
 
-    await grants.create_grant(session, provider.default_role_id, user_id=user.id)
-    logger.info(
-        "sso: granted default role %s to new %s account %s",
-        provider.default_role_id,
-        provider.name,
-        user.email,
-    )
+    for template in await registry.default_grants(session, provider.id):
+        try:
+            await grants.create_grant(
+                session,
+                template.role_id,
+                user_id=user.id,
+                project_id=template.project_id,
+            )
+        except Exception:  # noqa: BLE001 — a stale template must not break a login
+            logger.warning(
+                "sso: skipped default role %s (project %s) for %s",
+                template.role_id,
+                template.project_id,
+                user.email,
+                exc_info=True,
+            )
+
+    for team_id in await registry.default_teams(session, provider.id):
+        try:
+            # Directory-linked teams answer 409 here (spec 87 — their membership
+            # belongs to the AD group), which is exactly the stale-template case
+            # above: skip, log, carry on.
+            await teams_service.add_team_member(session, team_id, user.id)
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "sso: skipped default team %s for %s", team_id, user.email, exc_info=True
+            )
+
 
 
 async def provision(session: AsyncSession, provider: SsoProvider, claims: dict) -> User:
@@ -291,7 +315,7 @@ async def provision(session: AsyncSession, provider: SsoProvider, claims: dict) 
             # returning login reaches neither. Putting the grant on any of the
             # others would re-apply it, which is spec 40's demotion bug in a new
             # costume: an admin revokes it, the person signs in, it is back.
-            await _grant_default_role(session, provider, user)
+            await _apply_provisioning_template(session, provider, user)
         else:
             # The account already exists under another sign-in method (usually AD).
             # It keeps its `source`, its role and its history — this login just

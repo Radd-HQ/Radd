@@ -3,18 +3,19 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Check } from "lucide-react";
 import { api, errorMessage } from "../../../lib/api";
 import { ApiPath, apiSsoProviderPath } from "../../../lib/constants";
-import { instanceStatusQuery, queryKeys, rolesQuery, ssoKindsQuery } from "../../../lib/queries";
+import { instanceStatusQuery, queryKeys, ssoKindsQuery } from "../../../lib/queries";
 import {
-  BASELINE_ROLE_KEY,
   SIGNUP_DOMAIN_WILDCARD,
   SsoKind,
   type SsoKindValue,
+  type SsoDefaultGrant,
   type SsoProviderPayload,
   type SsoProviderRead,
 } from "../../../lib/types";
 import { Button } from "../../Button";
 import { Modal } from "../../Modal";
 import { SelectField } from "../../SelectField";
+import { StartingAccess } from "./StartingAccess";
 import { TextField } from "../../TextField";
 import { TokenMultiSelect } from "../../TokenMultiSelect";
 
@@ -98,7 +99,6 @@ export function ProviderDialog({
 }) {
   const editing = existing !== null;
   const kinds = useQuery(ssoKindsQuery());
-  const roles = useQuery(rolesQuery());
   const queryClient = useQueryClient();
 
   const [kind, setKind] = useState<SsoKindValue>(existing?.kind ?? SsoKind.google);
@@ -112,8 +112,13 @@ export function ProviderDialog({
   const [requireVerified, setRequireVerified] = useState(existing?.require_verified_email ?? true);
   const [groupClaim, setGroupClaim] = useState(existing?.group_claim ?? "groups");
   const [adminGroups, setAdminGroups] = useState(existing?.admin_groups ?? "");
-  // The role a NEW account starts with (RADD-777). "" = the Baseline alone.
-  const [defaultRoleId, setDefaultRoleId] = useState(existing?.default_role_id ?? "");
+  // What a NEW account starts with (RADD-780/781): scoped role grants + teams.
+  const [defaultGrants, setDefaultGrants] = useState<SsoDefaultGrant[]>(
+    existing?.default_grants ?? [],
+  );
+  const [defaultTeamIds, setDefaultTeamIds] = useState<string[]>(
+    existing?.default_team_ids ?? [],
+  );
   const [error, setError] = useState("");
 
   const kindInfo = (kinds.data ?? []).find((k) => k.kind === kind);
@@ -132,7 +137,8 @@ export function ProviderDialog({
         require_verified_email: requireVerified,
         group_claim: groupClaim.trim() || "groups",
         admin_groups: adminGroups.trim(),
-        default_role_id: defaultRoleId || null,
+        default_grants: defaultGrants,
+        default_team_ids: defaultTeamIds,
       };
       // An empty secret on update means "keep the stored one" — send it only
       // when the admin actually typed a replacement.
@@ -271,6 +277,18 @@ export function ProviderDialog({
 
         <div className="border-t border-subtle pt-4">
           <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted">
+            Starting access for new accounts (optional)
+          </div>
+          <StartingAccess
+            grants={defaultGrants}
+            onGrantsChange={setDefaultGrants}
+            teamIds={defaultTeamIds}
+            onTeamIdsChange={setDefaultTeamIds}
+          />
+        </div>
+
+        <div className="border-t border-subtle pt-4">
+          <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted">
             Admin group sync (optional)
           </div>
           <div className="flex flex-col gap-3">
@@ -280,21 +298,6 @@ export function ProviderDialog({
               onChange={(event) => setGroupClaim(event.target.value)}
               placeholder="groups"
             />
-            <SelectField
-              label="Role for new accounts"
-              value={defaultRoleId}
-              onChange={(event) => setDefaultRoleId(event.target.value)}
-              hint="Granted once, when this provider CREATES an account — never re-applied. Revoke it or change it later and no future sign-in will put it back, which is the difference between a starting point and a policy the provider keeps enforcing."
-            >
-              <option value="">No role — start on the Baseline only</option>
-              {(roles.data ?? [])
-                .filter((role) => role.key !== BASELINE_ROLE_KEY)
-                .map((role) => (
-                  <option key={role.id} value={role.id}>
-                    {role.name}
-                  </option>
-                ))}
-            </SelectField>
             <TextField
               label="Admin groups"
               value={adminGroups}

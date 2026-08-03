@@ -12,6 +12,20 @@ from pydantic import BaseModel, ConfigDict, Field
 from .types import SsoKind
 
 
+class SsoDefaultGrant(BaseModel):
+    """One role a new account receives, at one scope (RADD-780).
+
+    Mirrors `global_role_grants`: `project_id` null = instance-wide. The same
+    (role, scope) pair the Grant Role dialog produces everywhere else, because
+    these are a template for exactly those rows.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    role_id: uuid.UUID
+    project_id: uuid.UUID | None = None
+
+
 class SsoProviderBase(BaseModel):
     name: str = ""  # "" = the kind's default label ("Google")
     enabled: bool = True
@@ -24,9 +38,12 @@ class SsoProviderBase(BaseModel):
     require_verified_email: bool = True
     group_claim: str = "groups"
     admin_groups: str = ""
-    #: A role granted the moment this provider CREATES an account, and never
-    #: again (RADD-777). Null = new accounts start on the Baseline alone.
-    default_role_id: uuid.UUID | None = None
+    #: What a NEW account gets from this provider (RADD-780): any number of
+    #: roles, each global or scoped to one project. Empty = the Baseline alone.
+    default_grants: list["SsoDefaultGrant"] = Field(default_factory=list)
+    #: Teams a new account joins (RADD-781). LOCAL teams only — a
+    #: directory-linked team's membership belongs to its AD group.
+    default_team_ids: list[uuid.UUID] = Field(default_factory=list)
 
 
 class SsoProviderCreate(SsoProviderBase):
@@ -51,7 +68,11 @@ class SsoProviderUpdate(BaseModel):
     require_verified_email: bool | None = None
     group_claim: str | None = None
     admin_groups: str | None = None
-    default_role_id: uuid.UUID | None = None
+    #: Full replacement when present, omitted = leave alone (the views/sharing
+    #: idiom). An empty list therefore CLEARS them, which is how "new accounts
+    #: get nothing extra" is said once grants have been configured.
+    default_grants: list["SsoDefaultGrant"] | None = None
+    default_team_ids: list[uuid.UUID] | None = None
 
 
 class SsoProviderRead(SsoProviderBase):

@@ -9,15 +9,15 @@ a database round trip.
 import logging
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
 from radd.db import SessionLocal
 from radd.exceptions import ConflictError, NotFoundError
 
-from .models import SsoProvider
-from .schemas import SsoProviderCreate, SsoProviderUpdate
+from .models import SsoProvider, SsoProviderDefaultGrant, SsoProviderDefaultTeam
+from .schemas import SsoDefaultGrant, SsoProviderCreate, SsoProviderUpdate
 from .types import KIND_DEFAULTS, WILDCARD_DOMAIN, SsoEntity, SsoKind, SsoProviderSource
 
 logger = logging.getLogger(__name__)
@@ -125,13 +125,75 @@ async def create_provider(
         # dropped on create until it is added here — which is exactly what
         # happened, and what made two of the new tests pass VACUOUSLY: they
         # asserted "no grant" against a provider that had never stored a role.
-        default_role_id=data.default_role_id,
+
         admin_groups=(data.admin_groups or "").strip(),
         source=source.value,
     )
     session.add(provider)
     await session.flush()
+    await _replace_default_grants(session, provider, data.default_grants)
+    await _replace_default_teams(session, provider, data.default_team_ids)
     return provider
+
+
+async def _replace_default_grants(
+    session: AsyncSession, provider: SsoProvider, grants: list[SsoDefaultGrant]
+) -> None:
+    """Full replacement — the views/sharing idiom (RADD-780).
+
+    Delete-then-insert rather than diffing: the set is tiny, the write is one
+    admin action, and a diff would need a stable identity for rows whose whole
+    content IS their identity (provider, role, scope).
+    """
+    await session.execute(
+        delete(SsoProviderDefaultGrant).where(
+            SsoProviderDefaultGrant.provider_id == provider.id
+        )
+    )
+    seen: set[tuple[uuid.UUID, uuid.UUID | None]] = set()
+    for grant in grants:
+        key = (grant.role_id, grant.project_id)
+        if key in seen:  # the same role twice on one scope is one grant
+            continue
+        seen.add(key)
+        session.add(
+            SsoProviderDefaultGrant(
+                provider_id=provider.id, role_id=grant.role_id, project_id=grant.project_id
+            )
+        )
+    await session.flush()
+
+
+async def _replace_default_teams(
+    session: AsyncSession, provider: SsoProvider, team_ids: list[uuid.UUID]
+) -> None:
+    """Full replacement, same idiom as the grants above (RADD-781)."""
+    await session.execute(
+        delete(SsoProviderDefaultTeam).where(SsoProviderDefaultTeam.provider_id == provider.id)
+    )
+    for team_id in dict.fromkeys(team_ids):  # order-preserving dedupe
+        session.add(SsoProviderDefaultTeam(provider_id=provider.id, team_id=team_id))
+    await session.flush()
+
+
+async def default_teams(session: AsyncSession, provider_id: uuid.UUID) -> list[uuid.UUID]:
+    rows = await session.execute(
+        select(SsoProviderDefaultTeam.team_id).where(
+            SsoProviderDefaultTeam.provider_id == provider_id
+        )
+    )
+    return list(rows.scalars())
+
+
+async def default_grants(
+    session: AsyncSession, provider_id: uuid.UUID
+) -> list[SsoProviderDefaultGrant]:
+    rows = await session.execute(
+        select(SsoProviderDefaultGrant).where(
+            SsoProviderDefaultGrant.provider_id == provider_id
+        )
+    )
+    return list(rows.scalars())
 
 
 async def update_provider(
@@ -153,8 +215,10 @@ async def update_provider(
     # `exclude_unset` is what makes that expressible: an omitted key leaves the
     # value alone, a key set to None removes it. Left out of the loop above only
     # because these fields all coerce and this one must not.
-    if "default_role_id" in patch:
-        provider.default_role_id = patch["default_role_id"]
+    if data.default_grants is not None:
+        await _replace_default_grants(session, provider, data.default_grants)
+    if data.default_team_ids is not None:
+        await _replace_default_teams(session, provider, data.default_team_ids)
     if "allowed_signup_domains" in patch:
         provider.allowed_signup_domains = _clean_domains(patch["allowed_signup_domains"] or [])
     # An EMPTY secret on update means "keep the stored one" — the read model

@@ -1,3 +1,10 @@
+/** One role a new account receives, at one scope (RADD-780). `project_id`
+ *  null = instance-wide, exactly as in a role grant. */
+export interface SsoDefaultGrant {
+  role_id: string;
+  project_id: string | null;
+}
+
 /** SSO provider registry (spec 110): providers, signup policy, login buttons. */
 
 /** Which IdP a provider talks to. Every kind runs the same OIDC code+PKCE flow. */
@@ -28,10 +35,12 @@ export interface SsoProviderRead {
   require_verified_email: boolean;
   group_claim: string;
   admin_groups: string;
-  /** Role granted ONCE, when this provider creates an account (RADD-777).
-   *  Null = new accounts start on the Baseline alone. Never re-applied, so an
-   *  admin's later change to that person's roles is never undone. */
-  default_role_id?: string | null;
+  /** What a NEW account gets from this provider (RADD-780/781) — any number of
+   *  roles, each global or scoped to a project, plus teams to join. Applied
+   *  ONCE, at account creation, and never re-applied, so an admin's later
+   *  change to that person's access is never undone. */
+  default_grants: SsoDefaultGrant[];
+  default_team_ids: string[];
   source: string;
   /** False when the row can't complete a flow yet — explains its absence from login. */
   configured: boolean;
@@ -54,7 +63,8 @@ export interface SsoProviderPayload {
   require_verified_email?: boolean;
   group_claim?: string;
   admin_groups?: string;
-  default_role_id?: string | null;
+  default_grants?: SsoDefaultGrant[];
+  default_team_ids?: string[];
 }
 
 /** GET /sso/kinds — what the "add a provider" form prefills itself with. */

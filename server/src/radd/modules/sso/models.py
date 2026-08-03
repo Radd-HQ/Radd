@@ -79,30 +79,74 @@ class SsoProvider(Base, TimestampMixin):
     # claim) would demote the AD admin it just linked to.
     admin_groups: Mapped[str] = mapped_column(String(1000), default="")
 
-    # --- what a NEW account starts with (RADD-777) ----------------------------
-    # A role granted the moment this provider CREATES an account, and never
-    # again. Nullable = the account starts on the Baseline alone.
-    #
-    # It is a GRANT (a `global_role_grants` row), not a field written on the
-    # user, and that is what makes "never undo an admin's later change" a
-    # property of the data rather than a rule someone has to remember: nothing
-    # reconciles grants, so revoking it, rescoping it or adding others is simply
-    # never re-read.
-    #
-    # Creation-only is not a nicety either. Spec 40 wrote `instance_role` on
-    # EVERY login, so an AD-provisioned admin signing in through Google — which
-    # ships no group claim — was silently demoted each time; `_syncs_roles`
-    # exists to stop exactly that. Re-applying a default grant per login would
-    # be the same mistake wearing a different hat.
-    default_role_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("roles.id", ondelete="SET NULL"), nullable=True
-    )
-
     source: Mapped[str] = mapped_column(String(10), default=SsoProviderSource.USER.value)
 
     @property
     def has_client_secret(self) -> bool:
         return bool(self.client_secret)
+
+
+class SsoProviderDefaultGrant(Base, TimestampMixin):
+    """One role a NEW account gets from this provider, at one scope (RADD-780).
+
+    Deliberately the same shape as `global_role_grants` — (role, project_id
+    NULL = global) — because these rows ARE the template the provisioner copies
+    into that table. RADD-777 shipped a single `default_role_id` instead, which
+    could say "everyone gets Member everywhere" and nothing else; a grant is
+    (role, scope), and dropping the scope made the setting unable to express the
+    thing it existed for.
+
+    Real foreign keys, both CASCADE: a deleted role or project takes its
+    template row with it. The alternative considered was a JSONB list on the
+    provider, which stores ids nothing enforces — and a template that mints a
+    grant to a role that no longer exists is a login-time failure caused by an
+    admin tidying a list weeks earlier.
+
+    Applied at account CREATION only and never reconciled; see
+    `service.provision`. That property is what makes "this must never undo an
+    admin's later change" free rather than enforced.
+    """
+
+    __tablename__ = "sso_provider_default_grants"
+    __table_args__ = (
+        UniqueConstraint(
+            "provider_id", "role_id", "project_id", name="uq_sso_default_grant"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    provider_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("sso_providers.id", ondelete="CASCADE"), index=True
+    )
+    role_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("roles.id", ondelete="CASCADE"))
+    #: NULL = granted instance-wide, exactly as in `global_role_grants`.
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=True
+    )
+
+
+class SsoProviderDefaultTeam(Base, TimestampMixin):
+    """A team a NEW account from this provider joins (RADD-781).
+
+    Sibling of `SsoProviderDefaultGrant` and deliberately a separate table: a
+    team membership is not a (role, scope) pair, and folding both into one row
+    shape would mean a nullable column that is meaningful for exactly half the
+    rows.
+
+    Only LOCAL teams belong here. A directory-linked team's membership is owned
+    by the AD group (spec 87 — `ensure_membership_editable` answers 409), so a
+    template pointing at one could only ever fail at login. The provisioner
+    skips those rather than letting a stale template break a sign-in.
+    """
+
+    __tablename__ = "sso_provider_default_teams"
+    __table_args__ = (UniqueConstraint("provider_id", "team_id", name="uq_sso_default_team"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    provider_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("sso_providers.id", ondelete="CASCADE"), index=True
+    )
+    team_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"))
 
 
 class UserIdentity(Base, TimestampMixin):

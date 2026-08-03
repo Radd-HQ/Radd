@@ -337,7 +337,7 @@ async def _grants_for(db, user_id):
 
 async def test_default_role_is_granted_when_the_provider_creates_the_account(db):
     role = await _member_role(db)
-    provider = await _provider(db, default_role_id=role.id)
+    provider = await _provider(db, default_grants=[{"role_id": role.id}])
 
     user = await service.provision(db, provider, _claims(f"new-{uuid.uuid4().hex[:6]}@radd-hq.com"))
 
@@ -357,7 +357,7 @@ async def test_the_default_grant_is_never_re_applied(db):
     from radd.modules.auth import grants
 
     role = await _member_role(db)
-    provider = await _provider(db, default_role_id=role.id)
+    provider = await _provider(db, default_grants=[{"role_id": role.id}])
     email = f"new-{uuid.uuid4().hex[:6]}@radd-hq.com"
     user = await service.provision(db, provider, _claims(email))
 
@@ -378,7 +378,7 @@ async def test_linking_an_existing_account_grants_nothing(db):
     privilege change nobody asked for.
     """
     role = await _member_role(db)
-    provider = await _provider(db, default_role_id=role.id)
+    provider = await _provider(db, default_grants=[{"role_id": role.id}])
     email = f"existing-{uuid.uuid4().hex[:6]}@radd-hq.com"
     existing = await _user(db, email)
 
@@ -389,6 +389,78 @@ async def test_linking_an_existing_account_grants_nothing(db):
 
 
 async def test_no_default_role_configured_grants_nothing(db):
-    provider = await _provider(db)  # default_role_id is None
+    provider = await _provider(db)  # no template configured
     user = await service.provision(db, provider, _claims(f"new-{uuid.uuid4().hex[:6]}@radd-hq.com"))
     assert await _grants_for(db, user.id) == []
+
+
+async def test_default_grants_are_scoped_per_project(db):
+    """The shape RADD-780 fixed: several roles, each at its own scope.
+
+    RADD-777 shipped one global role, which could say "everyone gets Member
+    everywhere" and nothing else — not "Viewer on this project, Member
+    globally", which is what the setting exists for.
+    """
+    from radd.modules.projects import service as projects_service
+    from radd.modules.projects.schemas import ProjectCreate
+
+    role = await _member_role(db)
+    project = await projects_service.create_project(
+        db, ProjectCreate(key=f"SS{uuid.uuid4().hex[:4].upper()}", name="Scoped")
+    )
+    provider = await _provider(
+        db,
+        default_grants=[
+            {"role_id": role.id, "project_id": project.id},
+            {"role_id": role.id},  # and globally
+        ],
+    )
+
+    user = await service.provision(db, provider, _claims(f"new-{uuid.uuid4().hex[:6]}@radd-hq.com"))
+
+    held = {(g.role_id, g.project_id) for g in await _grants_for(db, user.id)}
+    assert held == {(role.id, project.id), (role.id, None)}
+
+
+async def test_default_teams_are_joined_on_first_login(db):
+    from radd.modules.teams import service as teams_service
+    from radd.modules.teams.schemas import TeamCreate
+
+    team = await teams_service.create_team(db, TeamCreate(name=f"Squad {uuid.uuid4().hex[:5]}"))
+    provider = await _provider(db, default_team_ids=[team.id])
+
+    user = await service.provision(db, provider, _claims(f"new-{uuid.uuid4().hex[:6]}@radd-hq.com"))
+
+    members = await teams_service.list_team_members(db, team.id)
+    assert user.id in {m.id for m in members}
+
+
+async def test_a_stale_template_never_breaks_a_sign_in(db):
+    """A template is configured weeks before it is used.
+
+    For ROLES this turns out to be unreachable, and the failing first draft of
+    this test is what showed it: the FK refuses to store a template pointing at
+    a role that does not exist, and CASCADE removes the row if one is deleted
+    later. The database makes the case impossible rather than the code handling
+    it.
+
+    Teams are different, and this is the case that survives: a team can be
+    LINKED to an AD group after the template was written, and its membership
+    then belongs to the directory (spec 87 — `add_team_member` answers 409).
+    Someone signing in must not meet that failure; they land on the Baseline and
+    an admin grants the rest.
+    """
+    from radd.modules.teams import service as teams_service
+    from radd.modules.teams.schemas import TeamCreate
+    from radd.modules.teams.types import TeamSource
+
+    team = await teams_service.create_team(db, TeamCreate(name=f"Linked {uuid.uuid4().hex[:5]}"))
+    provider = await _provider(db, default_team_ids=[team.id])
+    # The directory takes ownership after the template was configured.
+    team.source = TeamSource.DIRECTORY.value
+    await db.flush()
+
+    user = await service.provision(db, provider, _claims(f"new-{uuid.uuid4().hex[:6]}@radd-hq.com"))
+
+    assert user.id is not None  # the sign-in completed
+    assert user.id not in {m.id for m in await teams_service.list_team_members(db, team.id)}
