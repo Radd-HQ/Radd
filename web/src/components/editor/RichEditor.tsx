@@ -285,6 +285,15 @@ function RichEditorInner({
     },
     [tableRun],
   );
+  // Same shape for the image view, which needs the surface's uploader to fill an
+  // empty node (RADD-760). Read through the ref rather than captured, so a
+  // handler that arrives late still works without rebuilding the editor.
+  const ImageView = useMemo(
+    () => function BoundImageView() {
+      return <ImageNodeView upload={uploadRef.current} />;
+    },
+    [],
+  );
 
   const insertExtension = (spec: PageExtensionSpec) => {
     setExtensionMenu(null);
@@ -510,7 +519,18 @@ function RichEditorInner({
     // not this surface can upload: an image that ARRIVED some other way still
     // resizes, and a comment is as likely to hold a screenshot as a page is.
     editor.use(
-      $view(imageSchema.node, () => nodeViewFactory({ component: ImageNodeView })),
+      $view(imageSchema.node, () =>
+        nodeViewFactory({
+          component: ImageView,
+          // The empty state is a form (RADD-760) — a file button and a URL
+          // field. Without this ProseMirror reads every keystroke aimed at that
+          // field as a keystroke on the document. Scoped to our own chrome, so
+          // a click on the image itself still selects the node.
+          stopEvent: (event) =>
+            event.target instanceof HTMLElement &&
+            Boolean(event.target.closest("[data-image-chrome]")),
+        }),
+      ),
     );
     if (uploadRef.current) {
       editor
