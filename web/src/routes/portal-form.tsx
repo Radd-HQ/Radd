@@ -1,10 +1,12 @@
 import { useState, type FormEvent } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useAttachmentUploader } from "../lib/useAttachmentUploader";
 import { ArrowLeft, CheckCircle2, ClipboardList } from "lucide-react";
 import { api, customFieldErrors, errorMessage } from "../lib/api";
-import { RoutePath, apiPortalFormSubmitPath } from "../lib/constants";
-import { portalFormQuery } from "../lib/queries";
+import { RoutePath, apiPortalFormSubmitPath, attachmentUrl } from "../lib/constants";
+import { portalFormQuery, portalStagingAreaQuery } from "../lib/queries";
+import { AttachmentParentType } from "../lib/types";
 import {
   type CustomFields,
   type FormSubmit as FormSubmitBody,
@@ -69,6 +71,20 @@ function PortalSubmitForm({ form }: { form: PortalForm }) {
   const [description, setDescription] = useState("");
   const [values, setValues] = useState<CustomFields>({});
   const [teamId, setTeamId] = useState("");
+  // RADD-800 — files uploaded BEFORE the item exists land on this person's
+  // staging area; the submission then names the ones it is claiming, so a
+  // second tab's uploads are not dragged in.
+  const staging = useQuery(portalStagingAreaQuery);
+  const [attachmentIds, setAttachmentIds] = useState<string[]>([]);
+  const uploadToStaging = useAttachmentUploader({
+    entityType: AttachmentParentType.formSubmission,
+    entityId: staging.data?.entity_id ?? "",
+  });
+  const onUploadImage = async (file: File) => {
+    const [attachment] = await uploadToStaging([file]);
+    setAttachmentIds((ids) => [...ids, attachment.id]);
+    return attachmentUrl(attachment.id);
+  };
   const [created, setCreated] = useState<PublicSubmitResult | null>(null);
 
   const submit = useMutation({
@@ -80,6 +96,7 @@ function PortalSubmitForm({ form }: { form: PortalForm }) {
         // RADD-798 — share it with one of MY teams. The server re-checks the
         // membership; this picker only ever offers teams the person is in.
         team_id: teamId || null,
+        attachment_ids: attachmentIds,
       };
       return api.post<PublicSubmitResult>(apiPortalFormSubmitPath(form.id), body);
     },
@@ -103,6 +120,7 @@ function PortalSubmitForm({ form }: { form: PortalForm }) {
     setDescription("");
     setValues({});
     setTeamId("");
+    setAttachmentIds([]);
     setCreated(null);
     submit.reset();
   };
@@ -186,6 +204,7 @@ function PortalSubmitForm({ form }: { form: PortalForm }) {
               )}
               {form.description_enabled && (
                 <FormDescriptionArea
+                  onUploadImage={staging.data ? onUploadImage : undefined}
                   prompt={form.description_prompt}
                   required={form.description_required}
                   value={description}

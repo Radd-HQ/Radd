@@ -115,6 +115,8 @@ export interface FormSubmit {
   /** RADD-798 — share with one of MY teams. Only offered when the form enables
    *  the picker; the server re-checks membership either way. */
   team_id?: string | null;
+  /** RADD-800 — staged attachments this submission is claiming. */
+  attachment_ids?: string[];
 }
 
 // ---------------------------------------------------------------------------

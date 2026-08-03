@@ -42,6 +42,9 @@ class AttachmentParentType(StrEnum):
 
     ITEM = "item"
     PAGE = "page"
+    #: RADD-800 — a per-person staging area, so a submission can carry files
+    #: before the item it will hang off exists. Repointed to ITEM at submit.
+    FORM_SUBMISSION = "form_submission"
 
 
 class RuleType(StrEnum):

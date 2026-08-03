@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
 
+from . import staging  # noqa: F401 — registers the staging attachment parent (RADD-800)
 from .portal_router import requests_router as portal_requests_router, router as portal_router
 from .public_router import router as public_router
 from .router import router
@@ -36,5 +37,15 @@ plugin = RaddPlugin(
     event_types=(
         EventTypeSpec(FormEvent.CREATED, "Intake form created", "Admin"),
         EventTypeSpec(FormEvent.UPDATED, "Intake form updated", "Admin"),
+        # `trigger=False` — housekeeping, not something anyone writes a rule on.
+        # "When unclaimed attachments are reclaimed, then…" is noise in the
+        # automation dropdown, and the catalog is a parity oracle (67 triggers)
+        # that should only move when the AUTOMATABLE surface really changes.
+        EventTypeSpec(
+            FormEvent.STAGING_DELETED,
+            "Unclaimed submission attachments reclaimed",
+            "Admin",
+            trigger=False,
+        ),
     ),
 )

@@ -163,4 +163,9 @@ async def submit_portal_form(
     item = await service.submit_form(
         session, form.id, data, system, reporter_id=actor.id, team_id=team_id
     )
+    # RADD-800 — the files were uploaded before the item existed; move the ones
+    # this submission claims onto it now.
+    from . import staging
+
+    await staging.claim(session, actor, item.id, data.attachment_ids)
     return PublicSubmitResult(key=item.key, title=item.title)

@@ -189,6 +189,10 @@ class FormSubmit(BaseModel):
     #: RADD-798 — share this request with one of MY teams. Membership is checked
     #: server-side at submit: the picker is UI, and UI is not enforcement.
     team_id: uuid.UUID | None = None
+    #: RADD-800 — staged attachments this submission is CLAIMING. Named rather
+    #: than swept wholesale, so a second tab's uploads are not dragged in; each
+    #: is verified to sit on the caller's own staging area before it moves.
+    attachment_ids: list[uuid.UUID] = Field(default_factory=list)
 
 
 # --- public, unauthenticated path (spec 62) ---

@@ -10,6 +10,9 @@
 export const AttachmentParentType = {
   item: "item",
   page: "page",
+  /** RADD-800 — a person's staging area, for files attached to a submission
+   *  before the item they will hang off exists. */
+  formSubmission: "form_submission",
 } as const;
 export type AttachmentParentTypeValue =
   (typeof AttachmentParentType)[keyof typeof AttachmentParentType];

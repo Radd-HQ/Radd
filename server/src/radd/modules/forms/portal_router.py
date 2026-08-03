@@ -42,6 +42,21 @@ async def list_portal_forms(session: Session, user: CurrentUser) -> list[PortalG
     return await portal.list_portal_forms(session, actor=user)
 
 
+@router.get("/staging-area", response_model=dict[str, uuid.UUID])
+async def staging_area(user: CurrentUser) -> dict[str, uuid.UUID]:
+    """Where to upload a submission's files BEFORE the item exists (RADD-800).
+
+    Derived from the caller, never accepted from them — that is what lets the
+    attachment guard verify it with a comparison instead of trusting an id it
+    was handed. Declared above `/{form_id}` so the literal segment is reachable
+    (RADD-761: Starlette matches in declaration order, and a literal after a
+    `{uuid}` route answers a 422 about parsing it as a UUID).
+    """
+    from . import staging
+
+    return {"entity_id": staging.staging_id_for(user)}
+
+
 @router.get("/{form_id}", response_model=PortalFormRead)
 async def render_portal_form(
     form_id: uuid.UUID, session: Session, user: CurrentUser

@@ -138,3 +138,11 @@ export const portalRequestDetailQuery = (key: string) =>
     queryFn: () => api.get<PortalRequestDetail>(`${ApiPath.portalRequests}/${key}`),
     enabled: Boolean(key),
   });
+
+/** Where to upload a submission's files before the item exists (RADD-800).
+ *  DERIVED from the caller server-side — the client never picks this id. */
+export const portalStagingAreaQuery = queryOptions({
+  queryKey: [...queryKeys.portalForms, "staging-area"] as const,
+  queryFn: () => api.get<{ entity_id: string }>(`${ApiPath.portalForms}/staging-area`),
+  staleTime: Infinity,
+});

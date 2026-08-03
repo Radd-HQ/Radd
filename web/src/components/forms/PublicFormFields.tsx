@@ -85,12 +85,20 @@ interface FormDescriptionAreaProps {
   /** The public tokened page has no session — the editor mounts formatting
    * only (no AI gate probes, no @/# lookups). See RichEditor's `anonymous`. */
   anonymous?: boolean;
+  /** Upload a pasted/dropped image and return its URL. Omit to disable image
+   *  insertion entirely — the anonymous path (RADD-802). */
+  onUploadImage?: (file: File) => Promise<string>;
 }
 
 /** The ITEM-description editor (distinct from the form's own blurb): the same
  * rich markdown editor as the rest of the app — descriptions land in
- * `ItemCreate.description`, which is markdown everywhere. No image upload:
- * the item doesn't exist yet, so there's nothing to attach to. */
+ * `ItemCreate.description`, which is markdown everywhere.
+ *
+ * `onUploadImage` arrives on the AUTHENTICATED portal path (RADD-800): the file
+ * goes to the submitter's staging area and is repointed onto the item at
+ * submit. Omitted on the anonymous public form, which has no session to upload
+ * with — RADD-802 — and the editor then hides its file button and offers a URL
+ * field instead, so nothing dead-ends. */
 export function FormDescriptionArea({
   prompt,
   required,
@@ -99,6 +107,7 @@ export function FormDescriptionArea({
   placeholder,
   onChange,
   anonymous = false,
+  onUploadImage,
 }: FormDescriptionAreaProps) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -111,6 +120,7 @@ export function FormDescriptionArea({
         onChange={onChange}
         placeholder={placeholder}
         anonymous={anonymous}
+        onUploadImage={onUploadImage}
         className="[&_.ProseMirror]:min-h-[8rem]"
       />
       {error && <p className="text-xs text-red-400">{error}</p>}
