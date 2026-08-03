@@ -6,16 +6,23 @@ A user's effective permissions on a project are the UNION of:
 - the role their direct `project_members` row grants,
 - the roles their teams' `project_teams` attachments grant,
 - the roles granted to them instance-wide (`global_role_grants`, spec 87),
-- the member floor — the builtin `viewer` set — held by EVERY ACTIVE user
+- the **Baseline role**, held by EVERY ACTIVE user without being granted
   (spec 86: being an active user of the server IS membership).
+
+That last term used to be two hardcoded frozensets, and RADD-773 made it a
+role. The difference that matters: an admin can now SEE it and change it. The
+old constants meant three sources fed every check while Settings showed one, so
+a member granted nothing anywhere could still edit any wiki page and delete any
+cycle — and unchecking a permission in a role did nothing, because the floor was
+unioned in afterwards.
 
 Admins hold every permission. "Admin" means `users.instance_role == admin` —
 THE one admin predicate (spec 86 stage 3 dropped the membership compat tier).
-GLOBAL-scope checks (no project): admin -> all, active user -> the member
-global set PLUS whatever their instance-wide role grants add, inactive ->
-nothing. Spec 87 added that last term: before it, a global-scope check read
-`instance_role` alone, so every global atom the roles matrix offered
-(label.create, team.update, sla.*, …) was ungrantable to a non-admin.
+GLOBAL-scope checks (no project): admin -> all, active user -> the baseline
+PLUS whatever their instance-wide role grants add, inactive -> nothing. Spec 87
+added that last term: before it, a global-scope check read `instance_role`
+alone, so every global atom the roles matrix offered (label.create,
+team.update, sla.*, …) was ungrantable to a non-admin.
 
 The decision core is pure (`combine_permissions`, `global_scope_permissions`); the
 DB lookups are thin and monkeypatched in `tests/test_authz.py`.
@@ -38,7 +45,6 @@ from .types import (
     InstanceRole,
     Permission,  # noqa: F401  — re-exported: every module imports Permission from here
     all_permission_keys,
-    builtin_role,
     expand_permissions,
 )
 
@@ -47,19 +53,28 @@ from .types import (
 # this in the default config and grows as plugins register atoms.
 ALL_PERMISSIONS: frozenset[Permission] = frozenset(Permission)
 
-# Open-visibility floor: what being an active user grants on every project.
-# Builtin permission sets are immutable (PATCH -> 409), so the seeded viewer
-# definition IS the builtin viewer row — no per-scope query needed.
-MEMBER_FLOOR: frozenset[Permission] = frozenset(builtin_role(BuiltinRoleKey.VIEWER).permissions)
-
-# What an active user holds at GLOBAL scope (spec 36 widening): the floor plus
-# running cycles, seeing team timesheets, and writing docs (spec 43 — a
-# read-only-for-members wiki is useless). automation/sla manage stay
-# admin-only — rules execute as the SYSTEM actor, so authoring them is
-# privilege-bearing.
-MEMBER_GLOBAL_SCOPE: frozenset[Permission] = MEMBER_FLOOR | frozenset(
-    {Permission.CYCLE_MANAGE, Permission.TIMESHEET_VIEW, Permission.PAGE_WRITE}
-)
+# The floor is a ROLE now, not a constant (RADD-773).
+#
+# There used to be two frozensets here: MEMBER_FLOOR (what an active user held
+# on every project) and MEMBER_GLOBAL_SCOPE (the same plus cycle.manage,
+# timesheet.view and page.write at global scope). They were policy living in the
+# kernel, and they were invisible: three sources of permission fed every check —
+# the per-project floor, the global widening set, and actual role grants — while
+# Settings showed only the third. A member who had been granted nothing anywhere
+# could still delete cycles and edit any wiki page, and unchecking `item.read`
+# in a role did nothing at all, because the floor was unioned in afterwards.
+#
+# What survives here is the MECHANISM — every active user holds a baseline. WHAT
+# the baseline contains is `BuiltinRoleKey.BASELINE`, an ordinary editable row,
+# which is why the combiners below take it as an argument instead of reading a
+# constant. The seeded value is read-only (item.read + page.read); the three
+# atoms it dropped are grantable through any role.
+#
+# The fallback below is used only when no baseline row exists yet — a database
+# mid-migration, or a unit test exercising the pure core. It is deliberately the
+# most restrictive answer rather than the old permissive one: a missing baseline
+# must not silently reinstate the floor this change exists to remove.
+EMPTY_BASELINE: frozenset[Permission] = frozenset()
 
 
 # --- pure decision core (unit-tested) ---
@@ -69,36 +84,50 @@ def combine_permissions(
     *,
     instance_role: str,
     permission_sets: Iterable[Iterable[str]],
+    baseline: Iterable[str] = EMPTY_BASELINE,
 ) -> frozenset[Permission]:
-    """Union of the granted role permission sets, plus the member floor. Admins get all.
+    """Union of the granted role permission sets, plus the baseline. Admins get all.
+
+    `baseline` is the Baseline role's permissions (RADD-773) — what every active
+    user holds without being granted anything. Passed in rather than read from a
+    constant so that the answer is editable data and this stays a pure function.
 
     Atoms flow as strings (spec 93/A2): a role may grant a plugin-contributed atom
     that isn't a builtin `Permission` enum member, so we no longer coerce to the enum."""
     if InstanceRole(instance_role) is InstanceRole.ADMIN:
         return all_permission_keys()
     granted = {str(value) for permissions in permission_sets for value in permissions}
-    granted |= {str(p) for p in MEMBER_FLOOR}
+    granted |= {str(p) for p in baseline}
     return expand_permissions(granted)
 
 
 def global_scope_permissions(
     instance_role: str | None,
     permission_sets: Iterable[Iterable[str]] = (),
+    baseline: Iterable[str] = EMPTY_BASELINE,
 ) -> frozenset[Permission]:
     """Global-scope checks (spec 86): admin -> all, member (any active user) ->
-    the member set, None (inactive) -> none.
+    the baseline plus instance-wide grants, None (inactive) -> none.
 
     `permission_sets` (spec 87) are the sets of the roles granted to the user
-    instance-wide — the only way a non-admin holds a global atom.
+    instance-wide — the only way a non-admin holds a global atom beyond the
+    baseline.
+
+    The SAME baseline feeds this and `combine_permissions` (RADD-773). There used
+    to be a second, wider constant here, which is how `page.write` and
+    `cycle.manage` came to be free for everyone with nothing on any screen saying
+    so. One set, applied at both scopes: a project-scoped atom in it is inert
+    globally and vice versa, which costs nothing and removes the pair that could
+    drift apart.
     """
     if instance_role is None:
         return frozenset()
     if InstanceRole(instance_role) is InstanceRole.ADMIN:
         return all_permission_keys()
     granted = {str(value) for permissions in permission_sets for value in permissions}
-    # Expand umbrellas (spec 50): a member holding cycle.manage at global scope
+    # Expand umbrellas (spec 50): a user holding cycle.manage at global scope
     # gets cycle.create/update/delete so the granular endpoint checks resolve.
-    return expand_permissions(granted | {str(p) for p in MEMBER_GLOBAL_SCOPE})
+    return expand_permissions(granted | {str(p) for p in baseline})
 
 
 def _active_role(user: User) -> str | None:
@@ -164,6 +193,46 @@ async def _global_permission_sets(
     return await _permission_sets_for_roles(session, await grants.granted_role_ids(session, user_id))
 
 
+#: Key under which the request's baseline lookup is memoised on the session.
+_BASELINE_CACHE_KEY = "radd.baseline_permissions"
+
+
+async def baseline_permissions(session: AsyncSession) -> frozenset[Permission]:
+    """What every active user holds without being granted anything (RADD-773).
+
+    Read from the Baseline role row, so an admin editing it in Settings changes
+    the answer — that is the entire point of the change. Memoised on
+    `session.info`, i.e. for the life of one request: a permission check can run
+    several times per request (a list hydrating per-project permissions runs it
+    per project), and this must not become a query per check.
+
+    An absent row answers EMPTY rather than falling back to the old floor. A
+    missing baseline should fail closed; reinstating a permissive default here
+    would quietly restore exactly what this replaced.
+    """
+    cached: frozenset[Permission] | None = session.info.get(_BASELINE_CACHE_KEY)
+    if cached is not None:
+        return cached
+    row = (
+        await session.execute(
+            select(Role.permissions).where(Role.key == BuiltinRoleKey.BASELINE.value)
+        )
+    ).scalar_one_or_none()
+    resolved = frozenset(row) if row else EMPTY_BASELINE
+    session.info[_BASELINE_CACHE_KEY] = resolved
+    return resolved
+
+
+def forget_baseline(session: AsyncSession) -> None:
+    """Drop the memo — call after editing the Baseline role.
+
+    Without this, the request that CHANGES the baseline goes on answering with
+    the value it read before the write, so an admin's own confirming read would
+    show the old set and the edit would look like it had not applied.
+    """
+    session.info.pop(_BASELINE_CACHE_KEY, None)
+
+
 # --- the seam ---
 
 
@@ -188,9 +257,14 @@ async def effective_permissions(
         resolved = combine_permissions(
             instance_role=user.instance_role,
             permission_sets=permission_sets,
+            baseline=await baseline_permissions(session),
         )
     else:
-        resolved = global_scope_permissions(role, await _global_permission_sets(session, user.id))
+        resolved = global_scope_permissions(
+            role,
+            await _global_permission_sets(session, user.id),
+            baseline=await baseline_permissions(session),
+        )
     return _narrow_to_key_scope(user, resolved, project.id if project is not None else None)
 
 
@@ -283,6 +357,7 @@ async def permissions_for_projects(
 
     # Spec 113: the batched path must narrow too, or a scoped key would see the
     # full set anywhere a list hydrates permissions instead of resolving one project.
+    baseline = await baseline_permissions(session)
     return {
         project.id: _narrow_to_key_scope(
             user,
@@ -291,6 +366,7 @@ async def permissions_for_projects(
                 permission_sets=[
                     permissions_by_role.get(role_id, []) for role_id in granted[project.id]
                 ],
+                baseline=baseline,
             ),
             project.id,
         )

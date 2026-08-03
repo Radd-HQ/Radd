@@ -19,14 +19,23 @@ from radd.modules.projects.models import Project
 from .models import ProjectMember, Role
 from .schemas import ProjectMemberUpsert, RoleCreate, RoleUpdate
 from .service import get_user
-from .types import BUILTIN_ROLES, AuthEntity, AuthEvent, UserChange
+from .types import BUILTIN_ROLES, AuthEntity, AuthEvent, BuiltinRoleKey, UserChange
 
 
 # --- pure guards (unit-tested) ---
 
 
 def ensure_permissions_mutable(role: Role) -> None:
-    if role.is_builtin:
+    """Builtin permission sets are fixed — except Baseline's, which exists to be
+    edited (RADD-773).
+
+    Baseline is what every active user holds without being granted anything. It
+    was two frozensets in `authz.py` before, which is precisely why nobody could
+    see or change it. Making the row editable IS the feature; it stays builtin so
+    it cannot be deleted (see `ensure_deletable`) — a missing baseline would
+    silently drop every non-admin to no access at all.
+    """
+    if role.is_builtin and role.key != BuiltinRoleKey.BASELINE.value:
         raise ConflictError(
             AuthEntity.ROLE, reason=f"builtin role '{role.key}' has an immutable permission set"
         )
@@ -123,6 +132,13 @@ async def update_role(
     if data.permissions is not None:
         ensure_permissions_mutable(role)
         role.permissions = list(data.permissions)  # spec 93/A2: validated strings
+        if role.key == BuiltinRoleKey.BASELINE.value:
+            # This request already read the old baseline and memoised it
+            # (RADD-773). Drop it, or the admin's own confirming read answers
+            # with the value from before their edit.
+            from . import authz
+
+            authz.forget_baseline(session)
     if data.name is not None:
         role.name = data.name
     if data.description is not None:

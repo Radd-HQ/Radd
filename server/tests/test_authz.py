@@ -16,7 +16,6 @@ from radd.exceptions import ConflictError, ForbiddenError
 from radd.modules.auth import authz, roles
 from radd.modules.auth.authz import (
     ALL_PERMISSIONS,
-    MEMBER_FLOOR,
     Permission,
     combine_permissions,
     effective_permissions,
@@ -66,10 +65,15 @@ SESSION = object()  # never touched once the lookup is patched
 TRIAGER = [Permission.ITEM_READ, Permission.ITEM_UPDATE, Permission.COMMENT_WRITE]
 
 
-def patch_lookups(monkeypatch, *, permission_sets=(), global_permission_sets=()):
-    """Two DB lookups to stub: the per-project role grants, and (spec 87) the
-    instance-wide ones. Admin is instance_role and the member floor needs no
-    query, so nothing else touches the session."""
+def patch_lookups(monkeypatch, *, permission_sets=(), global_permission_sets=(), baseline=None):
+    """THREE DB lookups to stub: the per-project role grants, (spec 87) the
+    instance-wide ones, and (RADD-773) the Baseline role's permissions.
+
+    That third one is new, and it is the change in a sentence: the floor used to
+    be a constant that needed no query, and is now a row an admin can edit.
+    `baseline=` defaults to the seeded set so these tests describe a stock
+    instance; pass your own to model an admin who has retuned it.
+    """
 
     async def fake_permission_sets(session, user_id, project):
         return [list(permissions) for permissions in permission_sets]
@@ -77,8 +81,14 @@ def patch_lookups(monkeypatch, *, permission_sets=(), global_permission_sets=())
     async def fake_global_permission_sets(session, user_id):
         return [list(permissions) for permissions in global_permission_sets]
 
+    seeded = frozenset(builtin_role(BuiltinRoleKey.BASELINE).permissions)
+
+    async def fake_baseline(session):
+        return seeded if baseline is None else frozenset(baseline)
+
     monkeypatch.setattr(authz, "_project_permission_sets", fake_permission_sets)
     monkeypatch.setattr(authz, "_global_permission_sets", fake_global_permission_sets)
+    monkeypatch.setattr(authz, "baseline_permissions", fake_baseline)
 
 
 # --- builtin role definitions (global, immutable rows) ---
@@ -194,43 +204,88 @@ def test_permission_catalog_is_total():
     assert all(PERMISSION_DESCRIPTIONS[p] for p in Permission)
 
 
-def test_member_floor_is_the_builtin_viewer_set():
-    assert MEMBER_FLOOR == frozenset(builtin_role(BuiltinRoleKey.VIEWER).permissions)
+#: The seeded Baseline set (RADD-773) — item.read + page.read. The tests below
+#: pass it EXPLICITLY, because that is now the contract: the combiners take the
+#: baseline as an argument and hold no opinion of their own about it.
+BASELINE = frozenset(builtin_role(BuiltinRoleKey.BASELINE).permissions)
+
+
+def test_baseline_is_seeded_read_only():
+    """The seed is a policy decision, so it is worth asserting rather than assuming.
+
+    RADD-773 deliberately narrowed it: `page.write`, `cycle.manage` and
+    `timesheet.view` used to be free for every active user via a second hardcoded
+    set, which is how a member with no grants anywhere could edit any wiki page
+    and delete any cycle. Anything beyond reading now has to be granted.
+    """
+    assert BASELINE == {Permission.ITEM_READ, Permission.PAGE_READ}
+    assert Permission.PAGE_WRITE not in BASELINE
+    assert Permission.CYCLE_MANAGE not in BASELINE
+    assert Permission.TIMESHEET_VIEW not in BASELINE
+
+
+def test_combiners_hold_no_opinion_without_a_baseline():
+    """No baseline argument -> no floor. The default fails CLOSED.
+
+    An absent Baseline row (a database mid-migration) must not silently
+    reinstate the permissive floor this replaced, so the default is empty rather
+    than the old viewer set.
+    """
+    assert combine_permissions(instance_role=InstanceRole.MEMBER, permission_sets=[]) == frozenset()
+    assert global_scope_permissions(InstanceRole.MEMBER.value) == frozenset()
 
 
 # --- pure decision core ---
 
 
-def test_combine_unions_across_role_sets_plus_member_floor():
+def test_combine_unions_across_role_sets_plus_baseline():
     combined = combine_permissions(
         instance_role=InstanceRole.MEMBER,
         permission_sets=[[Permission.ITEM_UPDATE], [Permission.COMMENT_WRITE]],
+        baseline=BASELINE,
     )
     assert combined == {
-        Permission.ITEM_READ,  # the floor
-        Permission.PAGE_READ,  # rides the floor via the viewer set (spec 43)
+        Permission.ITEM_READ,  # the baseline
+        Permission.PAGE_READ,  # the baseline
         Permission.ITEM_UPDATE,
         Permission.COMMENT_WRITE,
     }
 
 
-def test_combine_custom_role_grants_its_permissions_plus_the_member_floor():
-    # Spec 86: every active user holds the member floor, so a custom role's
-    # grants ride ON TOP of the viewer floor — never below it.
+def test_combine_custom_role_grants_its_permissions_plus_the_baseline():
+    # A custom role's grants ride ON TOP of the baseline — never below it.
     combined = combine_permissions(
-        instance_role=InstanceRole.MEMBER, permission_sets=[TRIAGER]
+        instance_role=InstanceRole.MEMBER, permission_sets=[TRIAGER], baseline=BASELINE
     )
-    assert combined == set(TRIAGER) | MEMBER_FLOOR
+    assert combined == set(TRIAGER) | BASELINE
     assert Permission.ITEM_CREATE not in combined
 
 
-def test_combine_no_grants_is_the_member_floor():
-    # An active user with no project grants still holds the floor (spec 86 —
+def test_combine_no_grants_is_the_baseline():
+    # An active user with no project grants still holds the baseline (spec 86 —
     # being an active user of the server IS membership).
     assert (
-        combine_permissions(instance_role=InstanceRole.MEMBER, permission_sets=[])
-        == MEMBER_FLOOR
+        combine_permissions(
+            instance_role=InstanceRole.MEMBER, permission_sets=[], baseline=BASELINE
+        )
+        == BASELINE
     )
+
+
+def test_editing_the_baseline_changes_what_everyone_holds():
+    """The point of the whole change: the floor is an argument, so an admin
+    editing the Baseline row moves it. Under the old constants this was
+    unexpressible — unchecking a permission anywhere left the floor untouched."""
+    widened = combine_permissions(
+        instance_role=InstanceRole.MEMBER,
+        permission_sets=[],
+        baseline=BASELINE | {Permission.VIEW_MANAGE},
+    )
+    assert Permission.VIEW_CREATE in widened  # umbrella expansion still applies
+    narrowed = combine_permissions(
+        instance_role=InstanceRole.MEMBER, permission_sets=[], baseline={Permission.PAGE_READ}
+    )
+    assert Permission.ITEM_READ not in narrowed
 
 
 def test_combine_instance_admin_gets_everything():
@@ -245,16 +300,26 @@ def test_global_scope_permissions():
     # Spec 36: members additionally run cycles + see timesheets at global
     # scope; spec 43 adds writing docs. Spec 50: cycle.manage expands to its
     # create/update/delete atoms so the granular cycle endpoints resolve.
-    member = global_scope_permissions(InstanceRole.MEMBER.value)
-    assert member == expand_permissions(
-        MEMBER_FLOOR
-        | {Permission.CYCLE_MANAGE, Permission.TIMESHEET_VIEW, Permission.PAGE_WRITE}
+    # RADD-773: the same baseline feeds both scopes, and it no longer carries
+    # cycle.manage / timesheet.view / page.write — those must be granted.
+    member = global_scope_permissions(InstanceRole.MEMBER.value, baseline=BASELINE)
+    assert member == expand_permissions(BASELINE)
+    assert not {
+        Permission.CYCLE_CREATE,
+        Permission.CYCLE_UPDATE,
+        Permission.CYCLE_DELETE,
+        Permission.PAGE_WRITE,
+        Permission.TIMESHEET_VIEW,
+    } & member
+    # Granted instance-wide, the umbrella still expands (spec 50).
+    with_cycles = global_scope_permissions(
+        InstanceRole.MEMBER.value, [[Permission.CYCLE_MANAGE]], baseline=BASELINE
     )
     assert {
         Permission.CYCLE_CREATE,
         Permission.CYCLE_UPDATE,
         Permission.CYCLE_DELETE,
-    } <= member
+    } <= with_cycles
     assert global_scope_permissions(None) == frozenset()  # inactive
     assert Permission.ROLE_MANAGE in global_scope_permissions(InstanceRole.ADMIN.value)
     assert Permission.ROLE_MANAGE not in member

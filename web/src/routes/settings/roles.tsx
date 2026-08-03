@@ -6,6 +6,7 @@ import { apiRolePath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
 import { permissionsCatalogQuery, queryKeys, rolesQuery } from "../../lib/queries";
 import {
+  BASELINE_ROLE_KEY,
   Permission,
   type PermissionInfo,
   type PermissionValue,
@@ -35,7 +36,7 @@ export function RolesSettingsPage() {
   return (
     <SettingsPage
       title="Roles"
-      description="Named permission sets granted to project members and team attachments. Builtin roles are immutable."
+      description="Named permission sets granted to project members and team attachments. Builtin roles are immutable — except Baseline, which is what everyone holds before any role is granted."
       actions={
         canManage && (
           <Button onClick={() => setCreating(true)}>
@@ -72,10 +73,19 @@ export function RolesSettingsPage() {
                   <span className="rounded bg-elevated px-1 font-mono text-[11px] text-fg-secondary">
                     {role.key}
                   </span>
-                  {role.is_builtin && (
-                    <span className="rounded border border-accent/50 px-1.5 py-px text-[11px] text-accent-text">
-                      Builtin
+                  {role.key === BASELINE_ROLE_KEY ? (
+                    <span
+                      className="rounded border border-accent/50 bg-accent/10 px-1.5 py-px text-[11px] text-accent-text"
+                      title="Held by every active user, on every project, without being granted"
+                    >
+                      Everyone, always
                     </span>
+                  ) : (
+                    role.is_builtin && (
+                      <span className="rounded border border-accent/50 px-1.5 py-px text-[11px] text-accent-text">
+                        Builtin
+                      </span>
+                    )
                   )}
                   <span className="ml-auto text-xs text-fg-faint">
                     {role.permissions.length}{" "}
@@ -114,7 +124,13 @@ interface RolePanelProps {
 /** Expanded role row: matrix (editable on custom roles), save + delete. */
 function RolePanel({ role, catalog, canManage }: RolePanelProps) {
   const queryClient = useQueryClient();
+  // Baseline is builtin AND editable — the one exception, and the point of
+  // RADD-773: it is what every active user holds without being granted
+  // anything, so an admin has to be able to change it. Name/description stay
+  // fixed (it is a builtin); the permission matrix does not.
+  const isBaseline = role.key === BASELINE_ROLE_KEY;
   const editable = canManage && !role.is_builtin;
+  const permissionsEditable = canManage && (editable || isBaseline);
   const [name, setName] = useState(role.name);
   const [description, setDescription] = useState(role.description);
   const [selected, setSelected] = useState<PermissionValue[]>(role.permissions);
@@ -163,10 +179,18 @@ function RolePanel({ role, catalog, canManage }: RolePanelProps) {
           />
         </div>
       )}
+      {isBaseline && (
+        <p className="rounded-md border border-accent/40 bg-accent/5 px-3 py-2 text-xs text-fg-secondary">
+          Everyone with an account holds these, on every project, without being granted a role
+          — so this is the floor under every other role rather than one you assign. Narrowing
+          it takes access away instance-wide; widening it hands the permission to every signed-in
+          person, including anyone who joins later.
+        </p>
+      )}
       <PermissionMatrix
         catalog={catalog}
         selected={selected}
-        onToggle={editable ? toggle : undefined}
+        onToggle={permissionsEditable ? toggle : undefined}
       />
       {/* Spec 87: builtin roles are immutable but still grantable instance-wide,
           so this is gated on role.manage, not on `editable`. */}
@@ -174,15 +198,21 @@ function RolePanel({ role, catalog, canManage }: RolePanelProps) {
       {(save.isError || remove.isError) && (
         <p className="text-xs text-red-400">{errorMessage(save.error ?? remove.error)}</p>
       )}
-      {editable && (
+      {(editable || (isBaseline && canManage)) && (
         <div className="flex items-center gap-2">
           <Button
             onClick={() =>
-              save.mutate({ name: name.trim(), description: description.trim(), permissions: selected })
+              // Baseline's name and description are the builtin's; only its
+              // permissions travel, which is what the server will accept.
+              save.mutate(
+                isBaseline
+                  ? { permissions: selected }
+                  : { name: name.trim(), description: description.trim(), permissions: selected },
+              )
             }
-            disabled={!dirty || !name.trim() || save.isPending}
+            disabled={!dirty || (!isBaseline && !name.trim()) || save.isPending}
           >
-            {save.isPending ? "Saving…" : "Save role"}
+            {save.isPending ? "Saving…" : isBaseline ? "Save baseline" : "Save role"}
           </Button>
           <span className="ml-auto" />
           {confirmingDelete ? (

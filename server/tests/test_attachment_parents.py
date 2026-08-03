@@ -25,8 +25,10 @@ from radd.modules.attachments.types import (
     DeliveryMode,
     StorageHostType,
 )
-from radd.modules.auth.models import User
-from radd.modules.auth.types import InstanceRole
+from radd.modules.auth import roles as auth_roles
+from radd.modules.auth.models import Role, User
+from radd.modules.auth.schemas import RoleUpdate
+from radd.modules.auth.types import BuiltinRoleKey, InstanceRole, Permission
 from radd.modules.pages import service as docs_service, spaces as docs_spaces
 from radd.modules.pages.schemas import PageCreate, PageSpaceCreate
 from radd.modules.items import service as items_service
@@ -142,12 +144,39 @@ async def test_page_parent_has_no_item_id(db, admin, host):
     assert await service.list_for_item(db, page.id) == []
 
 
+async def _grant_globally(db, user, permission):
+    """Give every active user an atom by widening the Baseline role (RADD-773).
+
+    Deliberately the production path — `update_role` — rather than poking the
+    row: it is what an admin does in Settings, and it exercises the memo
+    invalidation that makes the change visible inside the same request.
+    """
+    del user  # baseline applies to everyone; the parameter documents the intent
+    from sqlalchemy import select
+
+    role = (
+        await db.execute(select(Role).where(Role.key == BuiltinRoleKey.BASELINE.value))
+    ).scalar_one()
+    await auth_roles.update_role(
+        db, role.id, RoleUpdate(permissions=[*role.permissions, permission.value])
+    )
+
+
 async def test_doc_binding_enforces_the_global_doc_atoms(db, admin, member, host):
     page = await _page(db, admin)
     binding = parents.binding_for(AttachmentParentType.PAGE.value)
-    # Every active user writes docs (spec 43 — a read-only wiki is useless), so
-    # a plain member may upload; page.manage (delete anyone's file) stays closed.
+    # RADD-773 reversed what this used to assert. `page.write` was free for
+    # every active user (spec 43, "a read-only wiki is useless") via a hardcoded
+    # global set — which is how a member granted nothing anywhere could edit any
+    # page on the instance, with no screen saying so. It is an ordinary grant
+    # now: absent by default, present when the Baseline role or any granted role
+    # carries it. This test is the one place in the suite that behaviour change
+    # is visible, which is the right number.
+    with pytest.raises(ForbiddenError):
+        await binding.require_write(db, member, page.id)
+    await _grant_globally(db, member, Permission.PAGE_WRITE)
     await binding.require_write(db, member, page.id)
+    # page.manage (delete anyone's file) is still a separate, admin-tier atom.
     with pytest.raises(ForbiddenError):
         await binding.require_admin(db, member, page.id)
     await binding.require_admin(db, admin, page.id)

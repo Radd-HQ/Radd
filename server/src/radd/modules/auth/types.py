@@ -464,8 +464,13 @@ def permission_description_of(key: "Permission | str") -> str:
 
 
 class BuiltinRoleKey(StrEnum):
-    """Keys of the seeded builtin roles (rows are immutable: is_builtin)."""
+    """Keys of the seeded builtin roles (rows are immutable: is_builtin —
+    except BASELINE, whose whole purpose is being edited; see below)."""
 
+    #: What every active user holds, everywhere, without being granted anything
+    #: (RADD-773). Undeletable like the others, but its permission set is the
+    #: one an admin may change.
+    BASELINE = "baseline"
     ADMIN = "admin"
     MEMBER = "member"
     VIEWER = "viewer"
@@ -483,6 +488,26 @@ class BuiltinRole:
 
 
 BUILTIN_ROLES: tuple[BuiltinRole, ...] = (
+    BuiltinRole(
+        key=BuiltinRoleKey.BASELINE,
+        name="Baseline",
+        description=(
+            "What everyone with an account gets, on every project, without being "
+            "granted anything. Edit this to widen or narrow the floor."
+        ),
+        # Read-only on purpose (RADD-773). This used to be MEMBER_FLOOR plus a
+        # wider global set carrying page.write, cycle.manage and timesheet.view
+        # — so every member could edit any wiki page and delete any cycle, and
+        # no screen anywhere said so. Those three are no longer free; grant them
+        # through a role, or add them back here deliberately.
+        #
+        # item.read is project-scoped and page.read is global; the baseline is
+        # applied at BOTH scopes, so each lands where it means something and the
+        # other is inert. That is what preserves "any signed-in user can read the
+        # wiki and see the projects" without a second constant to keep in step.
+        permissions=(Permission.ITEM_READ, Permission.PAGE_READ),
+        position=-1,
+    ),
     BuiltinRole(
         key=BuiltinRoleKey.ADMIN,
         name="Admin",

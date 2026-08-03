@@ -75,6 +75,16 @@ export interface PermissionInfo {
 }
 
 /** GET /roles (spec 06) — global role registry. Builtin rows are immutable. */
+/**
+ * The Baseline role's key (RADD-773).
+ *
+ * The one builtin whose permission set is editable, because it is what every
+ * active user holds without being granted anything. It used to be two hardcoded
+ * frozensets in the server's `authz.py`, which is why a member could edit any
+ * wiki page and delete any cycle while Settings showed nothing to explain it.
+ */
+export const BASELINE_ROLE_KEY = "baseline";
+
 export interface Role {
   id: string;
   key: string;
