@@ -111,6 +111,25 @@ async function main() {
 
   await session.navigate(baseUrl + "/portal", 600);
   await sleep(3500);
+  const layout = await session.eval(`(() => {
+    // RADD-804: the forms lead. Compared by DOCUMENT POSITION of the actual
+    // elements, not by matching heading text — the first version matched a
+    // TEAM heading ("Proof Team") that legitimately sits below My requests, and
+    // reported a correct layout as broken.
+    const cards = document.querySelectorAll('a[href*="/portal/forms/"]');
+    const mine = [...document.querySelectorAll("h2")]
+      .find((h) => /My requests/i.test(h.textContent || ""));
+    const formsFirst = cards[0] && mine
+      ? Boolean(cards[0].compareDocumentPosition(mine) & Node.DOCUMENT_POSITION_FOLLOWING)
+      : false;
+    const grid = cards[0] ? cards[0].closest("ul") : null;
+    return {
+      formsBeforeRequests: formsFirst,
+      formCards: cards.length,
+      // The card grid must not overflow its container at this width.
+      gridOverflows: grid ? grid.scrollWidth > grid.clientWidth + 1 : false,
+    };
+  })()`);
   const portalBefore = await session.eval(`(() => {
     const rows = [...document.querySelectorAll('ul button[type="button"]')]
       .filter((b) => /${seeded.projectKey}-/.test(b.textContent || ""));
@@ -134,11 +153,19 @@ async function main() {
       .find((b) => (b.textContent || "").includes("${filed.mineKey}"));
     if (!row) return { clicked: false };
     row.click();
-    await new Promise((r) => setTimeout(r, 1500));
-    const dialog = document.querySelector('[role="dialog"]') || document.body;
-    const text = (dialog.textContent || "").replace(/\\s+/g, " ");
+    await new Promise((r) => setTimeout(r, 1800));
+    // RADD-803: it must be the app's PEEK, not a modal. Two things prove that
+    // rather than one: the URL carries the peek param, and the surface is the
+    // right-anchored aside the issue peek uses, not a centred dialog.
+    const panel = document.querySelector('aside[role="dialog"]');
+    const text = ((panel || document.body).textContent || "").replace(/\\s+/g, " ");
+    const box = panel ? panel.getBoundingClientRect() : null;
     return {
       clicked: true,
+      isPeek: Boolean(panel),
+      urlHasPeek: location.search.includes("peek="),
+      // Right-anchored: the drawer's right edge sits at the viewport edge.
+      rightAnchored: box ? window.innerWidth - box.right < 20 : false,
       showsKey: text.includes("${filed.mineKey}"),
       showsDescription: text.includes("Details here"),
       hasReplyBox: Boolean(document.querySelector('textarea[aria-label="Reply to this request"]')),
@@ -179,6 +206,7 @@ async function main() {
   await sleep(3500);
   const myWork = await session.eval(`(() => {
     const heads = [...document.querySelectorAll("h2")];
+    const formCards = document.querySelectorAll('a[href*="/portal/forms/"]');
     const mine = heads.find((h) => h.textContent.includes("My requests"));
     return {
       hasMyRequests: Boolean(mine),
@@ -188,6 +216,8 @@ async function main() {
       headingTransform: mine ? getComputedStyle(mine).textTransform : null,
       rowCount: [...document.querySelectorAll('ul button[type="button"]')]
         .filter((b) => /${seeded.projectKey}-/.test(b.textContent || "")).length,
+      // RADD-804 — the same cards the Portal shows, not a bare list.
+      formCards: formCards.length,
     };
   })()`);
 
@@ -245,7 +275,10 @@ async function main() {
     "and holds nothing at global scope": actor.global.length === 0,
     // RADD-796 — the headline: the rows do something now.
     "the request rows are clickable": portalBefore.rowCount >= 2 && portalBefore.clickable,
-    "clicking opens the request": opened.clicked && opened.showsKey,
+    // RADD-803 — the ordinary peek, not the modal I shipped first.
+    "clicking opens the PEEK drawer": opened.isPeek === true && opened.urlHasPeek === true,
+    "the drawer is right-anchored like the issue peek": opened.rightAnchored === true,
+    "it shows the request": opened.clicked && opened.showsKey,
     "the description is shown": opened.showsDescription === true,
     "there is a way to reply": opened.hasReplyBox === true,
     // RADD-797
@@ -261,13 +294,18 @@ async function main() {
     "My Work shows requests": myWork.hasMyRequests && myWork.rowCount >= 1,
     "with Portal's section chrome": myWork.headingSize === "11px"
       && myWork.headingTransform === "uppercase",
+    // RADD-804
+    "the Portal leads with the forms": layout.formsBeforeRequests === true,
+    "the form cards render and do not overflow":
+      layout.formCards >= 1 && layout.gridOverflows === false,
+    "My Work shows the same form cards": myWork.formCards >= 1,
     "no console errors": consoleErrors.length === 0,
     "the Baseline was restored": restored.patch === 200
       && JSON.stringify(restored.baseline) === JSON.stringify(seeded.previousBaseline),
     "the seeded accounts were removed": restored.userDel === 204,
   };
 
-  return report(checks, { actor, portalBefore, opened, afterReply, myWork, teammate, restored,
+  return report(checks, { actor, layout, portalBefore, opened, afterReply, myWork, teammate, restored,
     consoleErrors: consoleErrors.slice(0, 5) });
 }
 

@@ -42,7 +42,7 @@ interface RailDestination {
 /** Mirrors the primary destinations of the full sidebar, in the same order. */
 const DESTINATIONS: RailDestination[] = [
   { to: RoutePath.home, icon: House, label: "My Work", exact: true },
-  { to: RoutePath.portal, icon: ConciergeBell, label: "Portal" },
+  { to: RoutePath.portal, icon: ConciergeBell, label: "Submission Portal" },
   { to: RoutePath.projects, icon: Layers, label: "Projects", exact: true },
   { to: RoutePath.reports, icon: BarChart3, label: "Reports" },
   { to: RoutePath.timesheet, icon: Clock, label: "Timesheet" },

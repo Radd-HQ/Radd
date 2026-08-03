@@ -1,8 +1,7 @@
-import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ConciergeBell } from "lucide-react";
-import { RoutePath } from "../../lib/constants";
 import { portalFormsQuery } from "../../lib/queries";
+import { FormCard, FormCardGrid } from "../requests/FormCard";
 
 /**
  * The request forms this person may submit (RADD-786).
@@ -35,27 +34,21 @@ export function MyForms() {
         <ConciergeBell size={12} aria-hidden />
         Submit a request
       </h2>
-      <ul className="flex flex-col rounded-lg border border-subtle bg-surface">
+      {/* The SAME cards the Submission Portal shows (RADD-804). This was a bare
+          list, which made the two surfaces draw one thing two ways — the
+          RADD-799 complaint, one section over. */}
+      <FormCardGrid>
         {rows.map(({ form, project }) => (
-          <li key={form.id} className="border-b border-subtle/60 last:border-b-0">
-            <Link
-              to={RoutePath.portalForm}
-              params={{ formId: form.id }}
-              className="flex items-baseline gap-2 px-3 py-2 text-[13px] hover:bg-elevated"
-            >
-              <span className="shrink-0 rounded bg-elevated px-1 font-mono text-[11px] text-fg-secondary">
-                {project.key}
-              </span>
-              <span className="min-w-0 flex-1 truncate text-fg">{form.name}</span>
-              {form.description && (
-                <span className="hidden min-w-0 max-w-[45%] truncate text-[11px] text-fg-muted @2xl:block">
-                  {form.description}
-                </span>
-              )}
-            </Link>
-          </li>
+          <FormCard
+            key={form.id}
+            form={form}
+            project={project}
+            // My Work spans every project someone can file into, so the key
+            // earns its place here in a way it does not on a per-project block.
+            showProject={new Set(rows.map((r) => r.project.id)).size > 1}
+          />
         ))}
-      </ul>
+      </FormCardGrid>
     </section>
   );
 }

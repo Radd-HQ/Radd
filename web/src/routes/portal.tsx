@@ -1,12 +1,11 @@
-import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ClipboardList, ConciergeBell } from "lucide-react";
 import { errorMessage } from "../lib/api";
-import { RoutePath } from "../lib/constants";
 import { portalFormsQuery } from "../lib/queries";
 import { type PortalGroup } from "../lib/types";
 import { EmptyState } from "../components/EmptyState";
 import { Spinner } from "../components/Spinner";
+import { FormCard, FormCardGrid } from "../components/requests/FormCard";
 import { MyRequests } from "../components/requests/RequestSection";
 
 /**
@@ -31,8 +30,8 @@ export function PortalPage() {
         </p>
       </header>
 
-      <MyRequests />
-
+      {/* Forms FIRST (RADD-804). The page is called "Submit a request"; a
+          directory whose directory sits below the fold is not one. */}
       {groups.isPending ? (
         <Spinner label="Loading forms…" />
       ) : groups.isError ? (
@@ -47,6 +46,8 @@ export function PortalPage() {
       ) : (
         groups.data.map((group) => <ProjectGroup key={group.project.id} group={group} />)
       )}
+
+      <MyRequests />
     </div>
   );
 }
@@ -61,25 +62,11 @@ function ProjectGroup({ group }: { group: PortalGroup }) {
         </span>
         {group.project.name}
       </h2>
-      <ul className="grid gap-2 sm:grid-cols-2">
+      <FormCardGrid>
         {group.forms.map((form) => (
-          <li key={form.id}>
-            <Link
-              to={RoutePath.portalForm}
-              params={{ formId: form.id }}
-              className="flex h-full flex-col gap-1 rounded-lg border border-subtle bg-surface/40 p-3 hover:border-emphasis hover:bg-surface focus-visible:outline-2 focus-visible:outline-focus"
-            >
-              <span className="flex items-center gap-1.5 text-[13px] font-medium text-heading">
-                <ClipboardList size={14} className="shrink-0 text-accent-text" aria-hidden />
-                {form.name}
-              </span>
-              {form.description && (
-                <span className="line-clamp-2 text-xs text-fg-muted">{form.description}</span>
-              )}
-            </Link>
-          </li>
+          <FormCard key={form.id} form={form} project={group.project} />
         ))}
-      </ul>
+      </FormCardGrid>
     </section>
   );
 }

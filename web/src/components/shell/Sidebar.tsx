@@ -176,7 +176,7 @@ export function Sidebar() {
             checked server-side, so no permission gate here. */}
         <Link to={RoutePath.portal} className={navLinkClasses}>
           <ConciergeBell size={14} aria-hidden />
-          Portal
+          Submission Portal
         </Link>
 
         <Link to={RoutePath.projects} className={navLinkClasses} activeOptions={{ exact: true }}>
