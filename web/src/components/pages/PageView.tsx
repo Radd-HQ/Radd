@@ -50,11 +50,16 @@ type TabValue = (typeof Tab)[keyof typeof Tab];
 export function PageView({
   page,
   canWrite,
+  canComment,
   canManage,
   spaceSlug,
 }: {
   page: Page;
   canWrite: boolean;
+  /** `comment.write`, NOT `page.write` (RADD-770). Separate atoms on the server,
+   *  and `page.write` is held unconditionally by every active user — so passing
+   *  `canWrite` here was a gate that could never close. */
+  canComment: boolean;
   canManage: boolean;
   /** For page-relative extensions (RADD-709) — a `radd:toc` with subpages has
    *  to build links, and only the route knows the space's URL segment. */
@@ -426,14 +431,14 @@ export function PageView({
             pageId={page.id}
             bodyRef={bodyRef}
             bodyVersion={bodyVersion}
-            canComment={canWrite}
+            canComment={canComment}
           />
 
           <PageBacklinksPanel pageId={page.id} />
 
           {/* RADD-717: a page is where a decision gets written down; the
               argument about it needs somewhere to live besides chat. */}
-          <PageComments pageId={page.id} canComment={canWrite} />
+          <PageComments pageId={page.id} canComment={canComment} />
         </>
       )}
       {confirmDialog}

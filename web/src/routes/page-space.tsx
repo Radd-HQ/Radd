@@ -72,6 +72,17 @@ export function PageSpacePage() {
 
   const canWrite = perms.global(Permission.pageWrite);
   const canManage = perms.global(Permission.pageManage);
+  // A SEPARATE atom (RADD-770). The server gates a page comment on `page.read`
+  // + `comment.write`, and says why: "the point of a page discussion is that
+  // people who cannot edit the page can still argue about it".
+  //
+  // The composer used to be handed `canWrite` — and `page.write` is in
+  // MEMBER_GLOBAL_SCOPE, held by every active user unconditionally. So that
+  // check was not mis-scoped, it was a CONSTANT: the composer rendered for
+  // everyone and refused everyone who lacked `comment.write`, which no builtin
+  // role grants at global scope. A gate whose input is always true is worse than
+  // no gate, because it reads as handled.
+  const canComment = perms.global(Permission.commentWrite);
   const rows = pages.data ?? [];
 
   return (
@@ -131,6 +142,7 @@ export function PageSpacePage() {
                 page={page.data}
                 spaceSlug={space.slug}
                 canWrite={canWrite}
+                canComment={canComment}
                 canManage={canManage}
               />
             )
