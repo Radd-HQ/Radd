@@ -12,6 +12,7 @@ from radd.modules.items import service as items_service
 from radd.modules.projects import service as projects_service
 
 from . import (
+    access,
     backlinks,
     export as page_export,
     labels as page_labels,
@@ -58,9 +59,15 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 async def _page_guard(
     session: AsyncSession, user, page_id: uuid.UUID, permission: authz.Permission
 ) -> Page:
-    """Resolve a page and enforce a global doc permission."""
+    """Resolve a page and enforce the atom IN ITS SPACE (RADD-791).
+
+    The single edit that rescopes most of this router: ~20 endpoints go through
+    here, and they were all asking a global question about a page that lives
+    somewhere. `page.space_id` is the scope, so a role granted on one space
+    reaches its pages and no others.
+    """
     page = await service.get_page(session, page_id)
-    await authz.require(session, user, permission)
+    await authz.require(session, user, permission, space_id=page.space_id)
     return page
 
 
@@ -69,8 +76,14 @@ async def _page_guard(
 
 @router.get("/page-spaces", response_model=list[PageSpaceRead])
 async def list_spaces(session: Session, user: CurrentUser) -> list[PageSpaceRead]:
-    await authz.require(session, user, authz.Permission.PAGE_READ)
-    return await spaces.list_spaces(session)
+    """The spaces this actor may read (RADD-791) — an empty list, never a 403.
+
+    Same rule as `readable_projects`: being entitled to no space is not doing
+    anything wrong, so the wiki nav renders empty instead of greeting a new
+    account with a permission toast.
+    """
+    readable = await access.readable_spaces(session, user)
+    return [s for s in await spaces.list_spaces(session) if s.id in readable]
 
 
 @router.post("/page-spaces", response_model=PageSpaceRead, status_code=201)
@@ -86,7 +99,7 @@ async def update_space(
     space_id: uuid.UUID, data: PageSpaceUpdate, session: Session, user: CurrentUser
 ) -> PageSpaceRead:
     space = await spaces.get_space(session, space_id)
-    await authz.require(session, user, authz.Permission.PAGE_MANAGE)
+    await authz.require(session, user, authz.Permission.PAGE_MANAGE, space_id=space.id)
     return PageSpaceRead.model_validate(await spaces.update_space(session, space_id, data, user.id))
 
 
@@ -95,7 +108,7 @@ async def delete_space(
     space_id: uuid.UUID, session: Session, user: CurrentUser, force: bool = False
 ) -> None:
     space = await spaces.get_space(session, space_id)
-    await authz.require(session, user, authz.Permission.PAGE_MANAGE)
+    await authz.require(session, user, authz.Permission.PAGE_MANAGE, space_id=space.id)
     await spaces.delete_space(session, space_id, force=force, actor_id=user.id)
 
 
@@ -113,14 +126,14 @@ async def list_pages(
     permission = (
         authz.Permission.PAGE_MANAGE if include_archived else authz.Permission.PAGE_READ
     )
-    await authz.require(session, user, permission)
+    await authz.require(session, user, permission, space_id=space.id)
     return await service.list_pages(session, space_id, include_archived=include_archived)
 
 
 @router.post("/pages", response_model=PageRead, status_code=201)
 async def create_page(data: PageCreate, session: Session, user: CurrentUser) -> PageRead:
     space = await spaces.get_space(session, data.space_id)
-    await authz.require(session, user, authz.Permission.PAGE_WRITE)
+    await authz.require(session, user, authz.Permission.PAGE_WRITE, space_id=space.id)
     page = await service.create_page(session, data, user.id)
     return await service.page_read(session, page)
 
@@ -130,7 +143,10 @@ async def list_templates(
     session: Session, user: CurrentUser, space_id: uuid.UUID | None = None
 ) -> list[PageTemplateRead]:
     """Templates usable here: the space's own, plus the global ones (RADD-712)."""
-    await authz.require(session, user, authz.Permission.PAGE_READ)
+    if space_id is not None:
+        await authz.require(session, user, authz.Permission.PAGE_READ, space_id=space_id)
+    elif not await access.readable_spaces(session, user):
+        return []
     return [
         PageTemplateRead.model_validate(t)
         for t in await page_templates.list_templates(session, space_id)
@@ -184,7 +200,10 @@ async def list_page_extensions(session: Session, user: CurrentUser) -> list[Page
     extension appears here the moment it mounts and disappears when it is
     disabled — which is the whole point of the registry.
     """
-    await authz.require(session, user, authz.Permission.PAGE_READ)
+    # Extension DESCRIPTORS are instance-wide, not a space's content: the floor
+    # is "may read some space at all" (RADD-791).
+    if not await access.readable_spaces(session, user):
+        return []
     sources = registries.page_extension_sources
     return [
         PageExtensionRead(
@@ -206,8 +225,11 @@ async def get_page_by_path(
     """`/pages/<space>/<page>` (RADD-702). Registered BEFORE `/pages/{page_id}`
     so `by-path` is never parsed as a UUID. Either segment may be an id, which
     is what lets a pre-702 UUID link resolve and redirect instead of rotting."""
-    await authz.require(session, user, authz.Permission.PAGE_READ)
     page = await service.resolve_page_by_slug(session, space_slug, page_slug)
+    # Resolve FIRST, then check the space it turned out to live in — a slug pair
+    # is not a permission, and checking before the lookup would have been the
+    # global question again.
+    await authz.require(session, user, authz.Permission.PAGE_READ, space_id=page.space_id)
     return await service.page_read(session, page)
 
 
@@ -224,10 +246,12 @@ async def search_docs(
     exists, is registered, appears in the OpenAPI schema, and cannot be called
     (RADD-761). Anything added as `/pages/<literal>` belongs in this block.
     """
-    await authz.require(session, user, authz.Permission.PAGE_READ)
+    readable = await access.readable_spaces(session, user)
+    if not readable:
+        return PageSearchResponse(results=[])
     limit = max(1, min(limit, 50))
     return PageSearchResponse(
-        results=await search.search_pages(session, q, limit=limit)
+        results=await search.search_pages(session, q, limit=limit, space_ids=set(readable))
     )
 
 
@@ -274,8 +298,8 @@ async def unarchive_page(
 @router.get("/page-spaces/{space_id}/export")
 async def export_space(space_id: uuid.UUID, session: Session, user: CurrentUser) -> Response:
     """A whole space as a zip of markdown (RADD-721)."""
-    await authz.require(session, user, authz.Permission.PAGE_READ)
     space = await spaces.get_space(session, space_id)
+    await authz.require(session, user, authz.Permission.PAGE_READ, space_id=space.id)
     name, blob = await page_export.export_zip(session, space)
     return _zip_response(name, blob)
 
@@ -304,8 +328,12 @@ async def pages_by_label(
     """Every page carrying a label (RADD-718) — the "content by label" pattern
     that lets an index page maintain itself. Declared before `/pages/{page_id}`
     so the literal segment is reachable."""
-    await authz.require(session, user, authz.Permission.PAGE_READ)
-    return await page_labels.pages_with_label(session, name, space_slug=space)
+    readable = await access.readable_spaces(session, user)
+    if not readable:
+        return []
+    return await page_labels.pages_with_label(
+        session, name, space_slug=space, space_ids=set(readable)
+    )
 
 
 @router.put("/pages/{page_id}/labels", response_model=list[str])

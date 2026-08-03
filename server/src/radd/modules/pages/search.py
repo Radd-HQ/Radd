@@ -23,6 +23,7 @@ async def search_pages(
     limit: int = 20,
     public_only: bool = False,
     space_id: uuid.UUID | None = None,
+    space_ids: "set[uuid.UUID] | None" = None,
 ) -> list[DocSearchResult]:
     """Ranked live FTS over non-archived pages (docs are global — spec 86). The
     public KB (spec 74) passes `public_only=True` (PUBLIC spaces only) and
@@ -53,6 +54,11 @@ async def search_pages(
         stmt = stmt.where(PageSpace.public.is_(True))
     if space_id is not None:
         stmt = stmt.where(Page.space_id == space_id)
+    # RADD-791: constrain to the spaces the reader may see, BEFORE the limit —
+    # filtering afterwards would let unreadable hits eat the result budget and
+    # return a short page of nothing, the pagination bug RADD-672 fixed on items.
+    if space_ids is not None:
+        stmt = stmt.where(Page.space_id.in_(space_ids))
     return [
         DocSearchResult(
             page_id=page.id, space_id=page.space_id, title=page.title, snippet=headline

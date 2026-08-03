@@ -34,17 +34,35 @@ async def _subject_condition(session: AsyncSession, user_id: uuid.UUID):
     return condition
 
 
+def _unscoped():
+    """The instance-wide grants — no scope of any kind. They apply everywhere."""
+    return GlobalRoleGrant.project_id.is_(None) & GlobalRoleGrant.space_id.is_(None)
+
+
 async def granted_role_ids(
-    session: AsyncSession, user_id: uuid.UUID, project_id: uuid.UUID | None = None
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    project_id: uuid.UUID | None = None,
+    *,
+    space_id: uuid.UUID | None = None,
 ) -> set[uuid.UUID]:
-    """Role ids the user holds by grant. `project_id` None = GLOBAL scope (only
-    global grants). A project id = global grants (they apply everywhere) PLUS
-    grants scoped to that project. Consumed by authz at both scopes."""
+    """Role ids the user holds by grant, in one scope.
+
+    Neither id = GLOBAL scope: only the unscoped grants. A project id, or a space
+    id (RADD-791), = the unscoped grants (they apply everywhere) PLUS the ones
+    bound to that thing. Consumed by authz at every scope.
+
+    A space resolves through exactly this function and no other, which is the
+    point: `page.read` on the Render space is the same kind of fact as
+    `item.read` on a project, resolved by the same code, and a second path would
+    be a second set of rules to keep in step.
+    """
     subject = await _subject_condition(session, user_id)
-    if project_id is None:
-        scope = GlobalRoleGrant.project_id.is_(None)
-    else:
-        scope = GlobalRoleGrant.project_id.is_(None) | (GlobalRoleGrant.project_id == project_id)
+    scope = _unscoped()
+    if project_id is not None:
+        scope = scope | (GlobalRoleGrant.project_id == project_id)
+    if space_id is not None:
+        scope = scope | (GlobalRoleGrant.space_id == space_id)
     result = await session.execute(
         select(GlobalRoleGrant.role_id).where(subject & scope).distinct()
     )
@@ -71,12 +89,44 @@ async def project_granted_role_ids(
     return out
 
 
+async def space_granted_role_ids(
+    session: AsyncSession, user_id: uuid.UUID, space_ids: Iterable[uuid.UUID]
+) -> dict[uuid.UUID, set[uuid.UUID]]:
+    """Batch: {space_id: role_ids} for grants SCOPED to those spaces (RADD-791).
+
+    The `project_granted_role_ids` shape, for the other scope — the unscoped
+    grants apply everywhere and are added once by the caller rather than joined
+    per row. Listing spaces resolves every space at once, so the per-space
+    lookup would otherwise be a query per row of the wiki nav.
+    """
+    ids = set(space_ids)
+    if not ids:
+        return {}
+    subject = await _subject_condition(session, user_id)
+    rows = await session.execute(
+        select(GlobalRoleGrant.space_id, GlobalRoleGrant.role_id).where(
+            subject & GlobalRoleGrant.space_id.in_(ids)
+        )
+    )
+    out: dict[uuid.UUID, set[uuid.UUID]] = defaultdict(set)
+    for space_id, role_id in rows.all():
+        out[space_id].add(role_id)
+    return out
+
+
+async def unscoped_role_ids(session: AsyncSession, user_id: uuid.UUID) -> set[uuid.UUID]:
+    """The instance-wide role ids — the ones that apply in every scope."""
+    subject = await _subject_condition(session, user_id)
+    result = await session.execute(
+        select(GlobalRoleGrant.role_id).where(subject & _unscoped()).distinct()
+    )
+    return set(result.scalars())
+
+
 async def list_grants(session: AsyncSession, role_id: uuid.UUID) -> list[GlobalRoleGrant]:
     """The GLOBAL grants of a role (the Roles page's global-grants editor)."""
     result = await session.execute(
-        select(GlobalRoleGrant).where(
-            GlobalRoleGrant.role_id == role_id, GlobalRoleGrant.project_id.is_(None)
-        )
+        select(GlobalRoleGrant).where(GlobalRoleGrant.role_id == role_id, _unscoped())
     )
     return list(result.scalars())
 
@@ -118,9 +168,11 @@ async def create_grant(
     user_id: uuid.UUID | None = None,
     team_id: uuid.UUID | None = None,
     project_id: uuid.UUID | None = None,
+    space_id: uuid.UUID | None = None,
     actor_id: uuid.UUID | None = None,
 ) -> GlobalRoleGrant:
-    """Grant a role to a user or team at a scope (project_id None = global)."""
+    """Grant a role to a user or team at a scope. No scope id = instance-wide;
+    a project id or a space id (RADD-791) binds it to that one thing."""
     from radd.modules.projects import service as projects_service
     from radd.modules.teams import service as teams
 
@@ -128,6 +180,10 @@ async def create_grant(
 
     if (user_id is None) == (team_id is None):
         raise ConflictError(AuthEntity.GLOBAL_GRANT, reason="exactly one subject required")
+    if project_id is not None and space_id is not None:
+        raise ConflictError(
+            AuthEntity.GLOBAL_GRANT, reason="a grant has at most one scope"
+        )
     role = await roles_service.get_role(session, role_id)
     if user_id is not None and user_id not in await users_service.users_by_ids(session, [user_id]):
         raise ConflictError(AuthEntity.GLOBAL_GRANT, reason=f"no such user {user_id}")
@@ -135,7 +191,13 @@ async def create_grant(
         raise ConflictError(AuthEntity.GLOBAL_GRANT, reason=f"no such team {team_id}")
     if project_id is not None:
         await projects_service.get_project(session, project_id)
-    # Guard duplicates (NULL project_id isn't caught by the unique constraint).
+    if space_id is not None:
+        # Deferred: pages loads after auth, and auth must not import it at module
+        # scope. The FK guarantees the row exists; this turns a 500 into a 409.
+        from radd.modules.pages import spaces as pages_spaces
+
+        await pages_spaces.get_space(session, space_id)
+    # Guard duplicates (NULL scope columns aren't caught by the unique constraint).
     existing = await session.scalar(
         select(GlobalRoleGrant.id).where(
             GlobalRoleGrant.role_id == role_id,
@@ -144,12 +206,16 @@ async def create_grant(
             GlobalRoleGrant.project_id.is_(None)
             if project_id is None
             else GlobalRoleGrant.project_id == project_id,
+            GlobalRoleGrant.space_id.is_(None)
+            if space_id is None
+            else GlobalRoleGrant.space_id == space_id,
         )
     )
     if existing is not None:
         raise ConflictError(AuthEntity.GLOBAL_GRANT, reason="that grant already exists")
     grant = GlobalRoleGrant(
-        role_id=role_id, user_id=user_id, team_id=team_id, project_id=project_id
+        role_id=role_id, user_id=user_id, team_id=team_id,
+        project_id=project_id, space_id=space_id,
     )
     session.add(grant)
     await session.flush()
@@ -186,6 +252,7 @@ async def _emit(
             "user_id": str(grant.user_id) if grant.user_id else None,
             "team_id": str(grant.team_id) if grant.team_id else None,
             "project_id": str(grant.project_id) if grant.project_id else None,
+            "space_id": str(grant.space_id) if grant.space_id else None,
         },
     )
 
@@ -222,9 +289,7 @@ async def replace_grants(
             raise ConflictError(AuthEntity.GLOBAL_GRANT, reason=f"no such team {team_id}")
 
     await session.execute(
-        delete(GlobalRoleGrant).where(
-            GlobalRoleGrant.role_id == role_id, GlobalRoleGrant.project_id.is_(None)
-        )
+        delete(GlobalRoleGrant).where(GlobalRoleGrant.role_id == role_id, _unscoped())
     )
     for entry in entries:
         session.add(

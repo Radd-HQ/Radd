@@ -332,25 +332,34 @@ class GlobalGrantRead(BaseModel):
     role_id: uuid.UUID
     user_id: uuid.UUID | None = None
     team_id: uuid.UUID | None = None
-    # NULL = global; set = scoped to that project (spec 91).
+    # Both NULL = global; one set = scoped to that project (spec 91) or that
+    # wiki space (RADD-791). Never both — see the `one_scope` CHECK.
     project_id: uuid.UUID | None = None
+    space_id: uuid.UUID | None = None
 
 
 class RoleGrantCreate(BaseModel):
-    """POST /role-grants — the unified Grant Role dialog (spec 91). Grant a role to a
-    user OR team, at global scope (empty project_ids) or to one/more projects."""
+    """POST /role-grants — the unified Grant Role dialog (spec 91 → RADD-791).
+
+    Grant a role to a user OR team: instance-wide (both id lists empty), or on
+    any number of projects, or any number of wiki spaces. ONE dialog covers every
+    scope; growing a second one for spaces is how two scopes drift into two sets
+    of rules.
+    """
 
     role_id: uuid.UUID
     user_id: uuid.UUID | None = None
     team_id: uuid.UUID | None = None
-    # Empty = a single GLOBAL grant; each id = one project-scoped grant.
+    # Both empty = a single GLOBAL grant; each id = one scoped grant.
     project_ids: list[uuid.UUID] = Field(default_factory=list)
+    space_ids: list[uuid.UUID] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _one_subject(self) -> "RoleGrantCreate":
         if (self.user_id is None) == (self.team_id is None):
             raise ValueError("exactly one of user_id/team_id is required")
         self.project_ids = list(dict.fromkeys(self.project_ids))
+        self.space_ids = list(dict.fromkeys(self.space_ids))
         return self
 
 

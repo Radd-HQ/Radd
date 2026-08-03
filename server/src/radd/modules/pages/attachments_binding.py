@@ -1,9 +1,10 @@
 """The page attachment parent (spec 102): wiki pages own files.
 
 Registered from the docs plugin so `attachments` never learns this module
-exists (its ParentBinding registry is the seam). Doc permissions are global
-atoms, so `project_id_of` is None — attachment routing/ACL context for a wiki
-file has no project.
+exists (its ParentBinding registry is the seam). `project_id_of` is None — a
+wiki file has no project for attachment routing/ACL context — but the page's
+SPACE is a scope since RADD-791, and that is what the guards below resolve
+against, so "who may attach in the render space" is an ordinary role grant.
 
 Known follow-up (documented in the spec): PUBLIC kb spaces render without a
 session, but downloads require one — public pages need a public mint path on
@@ -25,19 +26,23 @@ from radd.modules.auth.models import User
 from . import service
 
 
+async def _guard(
+    session: AsyncSession, user: User, page_id: uuid.UUID, permission: Permission
+) -> None:
+    page = await service.get_page(session, page_id)  # 404 before 403, like the router
+    await authz.require(session, user, permission, space_id=page.space_id)
+
+
 async def _page_read(session: AsyncSession, user: User, page_id: uuid.UUID) -> None:
-    await service.get_page(session, page_id)  # 404 before 403, like the doc router
-    await authz.require(session, user, Permission.PAGE_READ)
+    await _guard(session, user, page_id, Permission.PAGE_READ)
 
 
 async def _page_write(session: AsyncSession, user: User, page_id: uuid.UUID) -> None:
-    await service.get_page(session, page_id)
-    await authz.require(session, user, Permission.PAGE_WRITE)
+    await _guard(session, user, page_id, Permission.PAGE_WRITE)
 
 
 async def _page_admin(session: AsyncSession, user: User, page_id: uuid.UUID) -> None:
-    await service.get_page(session, page_id)
-    await authz.require(session, user, Permission.PAGE_MANAGE)
+    await _guard(session, user, page_id, Permission.PAGE_MANAGE)
 
 
 async def _no_project(session: AsyncSession, page_id: uuid.UUID) -> uuid.UUID | None:

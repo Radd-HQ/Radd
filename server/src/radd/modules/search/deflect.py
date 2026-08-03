@@ -31,15 +31,22 @@ DOCS_MODULE = "radd.modules.pages"
 RESOLVED_CATEGORIES = (StateCategory.DONE, StateCategory.CANCELED)
 
 
-async def deflect_docs(session: AsyncSession, q: str) -> list[DeflectDoc]:
+async def deflect_docs(
+    session: AsyncSession, q: str, *, space_ids: "set[uuid.UUID] | None" = None
+) -> list[DeflectDoc]:
     """Top wiki pages: docs FTS fused with semantic candidates when available
     (spec 103) — KB questions rarely reuse the answer's exact words. Empty when
-    docs is disabled; plain FTS when semantic isn't configured."""
+    docs is disabled; plain FTS when semantic isn't configured.
+
+    `space_ids` is the reader's readable spaces (RADD-791). Deflection is the
+    one page surface an ISSUE reader reaches, so without it a service-desk
+    reply could surface a title out of a space they cannot open.
+    """
     if DOCS_MODULE not in settings.modules:
         return []
     from radd.modules.pages import search as docs_search, spaces as docs_spaces
 
-    results = await docs_search.search_pages(session, q, limit=DEFLECT_LIMIT)
+    results = await docs_search.search_pages(session, q, limit=DEFLECT_LIMIT, space_ids=space_ids)
     ordered_ids = [result.page_id for result in results]
     by_id = {result.page_id: result for result in results}
     semantic_ids = await _semantic_doc_ids(session, q)

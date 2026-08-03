@@ -3,9 +3,15 @@
 Registered here rather than in `comments`, so the comments module never learns
 that pages exist — the same inversion `attachments_binding.py` uses for files.
 
-A page is GLOBAL: it has no project, so `project_of` returns None and every
-check below runs at global scope. That is not a gap in the model, it is how page
-atoms are already granted.
+A page has no PROJECT, so `project_of` returns None — but it does have a SPACE,
+and since RADD-791 that is a scope. The checks below resolve against it.
+
+The previous version of this file said the global check "is not a gap in the
+model, it is how page atoms are already granted", and that was wrong in a way
+worth recording: `comment.write` is a PROJECT-scoped atom, so resolving it at
+global scope meant a project-scoped grant never reached it and page commenting
+was dead for everyone but an admin or a holder of a global grant. A gate that
+consults the wrong scope reads exactly like a gate that works.
 """
 
 import uuid
@@ -23,22 +29,32 @@ from .types import PageEvent
 
 
 async def _page_project(session: AsyncSession, page_id: uuid.UUID) -> None:
-    """None: pages are global. The page must EXIST though — commenting on a
-    missing page should 404, not create an unreachable thread."""
+    """None: a page belongs to no project. The page must EXIST though —
+    commenting on a missing page should 404, not create an unreachable thread."""
     await pages_service.get_page(session, page_id)
     return None
 
 
+async def _space_of(session: AsyncSession, page_id: uuid.UUID) -> uuid.UUID:
+    return (await pages_service.get_page(session, page_id)).space_id
+
+
 async def _page_read(session, user: User, page_id: uuid.UUID, project):
-    return await authz.require(session, user, Permission.PAGE_READ, project=project)
+    del project  # a page has no project; its space is the scope (RADD-791)
+    return await authz.require(
+        session, user, Permission.PAGE_READ, space_id=await _space_of(session, page_id)
+    )
 
 
 async def _page_write(session, user: User, page_id: uuid.UUID, project):
-    """Reading the page plus the ordinary comment atom. Writing a page is NOT
-    required — the point of a page discussion is that people who cannot edit the
-    page can still argue about it."""
-    await authz.require(session, user, Permission.PAGE_READ, project=project)
-    return await authz.require(session, user, Permission.COMMENT_WRITE, project=project)
+    """Reading the page plus the ordinary comment atom, both IN ITS SPACE.
+    Writing a page is NOT required — the point of a page discussion is that
+    people who cannot edit the page can still argue about it. Which is precisely
+    what did not work while these resolved globally (RADD-791)."""
+    del project
+    space_id = await _space_of(session, page_id)
+    await authz.require(session, user, Permission.PAGE_READ, space_id=space_id)
+    return await authz.require(session, user, Permission.COMMENT_WRITE, space_id=space_id)
 
 
 register_parent(

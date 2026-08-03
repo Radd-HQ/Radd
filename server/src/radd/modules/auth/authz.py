@@ -244,17 +244,37 @@ async def effective_permissions(
     user: User,
     *,
     project: Project | None = None,
+    space_id: uuid.UUID | None = None,
 ) -> frozenset[Permission]:
     """The permission union the user effectively holds in the scope (empty = no access).
 
-    Spec 86: two scopes only — a project, or global (project=None). Every
+    Three scopes: a project, a wiki SPACE (RADD-791), or global (neither). Every
     active user is a member; inactive users hold nothing anywhere.
+
+    The space scope exists because a page had none. Every `page.*` atom was
+    checked globally, which made "let the render team read the render space"
+    inexpressible and dropped page commenting entirely — the comments binding
+    resolved `comment.write` with project=None, so a project-scoped grant never
+    reached it. A space is a scope the way a project is; the difference is that a
+    project also has membership rows and team attachments, while a space is
+    reached by grant alone.
     """
+    if project is not None and space_id is not None:
+        raise ValueError("resolve against a project or a space, not both")
     role = _active_role(user)
     if role is None:
         return frozenset()
     if InstanceRole(role) is InstanceRole.ADMIN:
         resolved = all_permission_keys()
+    elif space_id is not None:
+        permission_sets = await _permission_sets_for_roles(
+            session, await grants.granted_role_ids(session, user.id, space_id=space_id)
+        )
+        resolved = combine_permissions(
+            instance_role=user.instance_role,
+            permission_sets=permission_sets,
+            baseline=await baseline_permissions(session),
+        )
     elif project is not None:
         permission_sets = await _project_permission_sets(session, user.id, project)
         resolved = combine_permissions(
@@ -290,16 +310,21 @@ async def require(
     permission: Permission,
     *,
     project: Project | None = None,
+    space_id: uuid.UUID | None = None,
 ) -> frozenset[Permission]:
     """Raise ForbiddenError (-> 403) unless the user holds `permission` in the scope.
 
     Returns the full effective-permission union so callers can reuse it (field-level
     visibility, response shaping) without a second lookup.
     """
-    permissions = await effective_permissions(session, user, project=project)
+    permissions = await effective_permissions(
+        session, user, project=project, space_id=space_id
+    )
     if permission not in permissions:
         if project is not None:
             raise ForbiddenError(f"permission '{permission}' denied on project {project.key}")
+        if space_id is not None:
+            raise ForbiddenError(f"permission '{permission}' denied in this space")
         raise ForbiddenError(f"permission '{permission}' denied")
     return permissions
 

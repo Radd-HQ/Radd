@@ -43,20 +43,25 @@ export interface ResourceGrantSpec {
 // Scopeable role grants (spec 91 — the unified Grant Role dialog)
 // ---------------------------------------------------------------------------
 
-/** One role grant to a user or team; project_id null = global, set = that project. */
+/** One role grant to a user or team. Both scope ids null = instance-wide; one
+ *  set = that project, or that wiki space (RADD-791). Never both. */
 export interface RoleGrant {
   id: string;
   role_id: string;
   user_id: string | null;
   team_id: string | null;
   project_id: string | null;
+  space_id: string | null;
 }
 
-/** POST /role-grants — grant a role to a subject at global (empty project_ids) or
- * project scope (one grant per project). */
+/** POST /role-grants — grant a role to a subject instance-wide (no ids), on
+ * projects, or in wiki spaces (one grant per id). */
 export interface RoleGrantCreate {
   role_id: string;
   user_id?: string | null;
   team_id?: string | null;
+  /** Each id = one project-scoped grant. */
   project_ids?: string[];
+  /** Each id = one SPACE-scoped grant (RADD-791). Both empty = one global grant. */
+  space_ids?: string[];
 }

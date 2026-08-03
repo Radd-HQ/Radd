@@ -68,7 +68,11 @@ async def set_labels(
 
 
 async def pages_with_label(
-    session: AsyncSession, name: str, space_slug: str = ""
+    session: AsyncSession,
+    name: str,
+    space_slug: str = "",
+    *,
+    space_ids: "set[uuid.UUID] | None" = None,
 ) -> list[PageLabelled]:
     """Every live page carrying `name`, optionally within one space.
 
@@ -85,6 +89,11 @@ async def pages_with_label(
     )
     if space_slug:
         query = query.where(PageSpace.slug == space_slug)
+    # RADD-791: only spaces the reader may see. A self-maintaining index page
+    # that listed titles out of a space someone cannot open would leak exactly
+    # what the space boundary exists to hold.
+    if space_ids is not None:
+        query = query.where(Page.space_id.in_(space_ids))
     rows = await session.execute(query)
     return [
         PageLabelled(

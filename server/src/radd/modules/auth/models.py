@@ -138,9 +138,15 @@ class GlobalRoleGrant(Base, TimestampMixin):
     __table_args__ = (
         # project_id in the key so the same role can be held globally AND per-project;
         # NULLs are distinct in Postgres, so duplicate GLOBAL grants are guarded in code.
-        UniqueConstraint("role_id", "user_id", "project_id"),
-        UniqueConstraint("role_id", "team_id", "project_id"),
+        UniqueConstraint("role_id", "user_id", "project_id", "space_id"),
+        UniqueConstraint("role_id", "team_id", "project_id", "space_id"),
         CheckConstraint("(user_id IS NULL) <> (team_id IS NULL)", name="one_subject"),
+        # A grant has AT MOST one scope: no scope = instance-wide. Two would be an
+        # unanswerable question ("this role, on that project, but only in that
+        # space") rather than a useful one.
+        CheckConstraint(
+            "project_id IS NULL OR space_id IS NULL", name="one_scope"
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -154,6 +160,18 @@ class GlobalRoleGrant(Base, TimestampMixin):
     # NULL = global (every project); set = scoped to that project only.
     project_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    # RADD-791 — the second scope: a wiki space, which behaves like a project.
+    #
+    # A typed column with its own FK rather than a polymorphic
+    # `(scope_type, scope_id)` pair. Polymorphic would absorb a third scope with
+    # no migration, and it cannot carry a foreign key — so a deleted space would
+    # leave grants behind, and the permission table would keep rows that
+    # reference nothing. Trading referential integrity on THIS table for a scope
+    # nobody has asked for is the speculative kind of framework dev rule 5 rules
+    # out; adding one later is this column again plus ten lines in grants.py.
+    space_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("page_spaces.id", ondelete="CASCADE"), index=True
     )
 
 

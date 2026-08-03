@@ -61,7 +61,8 @@ class Permission(StrEnum):
     WEBHOOK_MANAGE = "webhook.manage"  # webhook endpoints (global)
     CANNED_MANAGE = "canned.manage"  # canned responses (global)
     CARD_PRESET_MANAGE = "cardpreset.manage"  # card-layout preset library (global, spec 109)
-    # Wiki (spec 43) — all global-scoped; per-space ACLs are a later seam.
+    # Wiki (spec 43) — SPACE-scoped since RADD-791 (they were global; a page had
+    # no scope, which is why per-space access was inexpressible).
     PAGE_READ = "page.read"  # read page spaces/pages + doc search
     PAGE_WRITE = "page.write"  # create/edit/move/archive pages, link items
     PAGE_MANAGE = "page.manage"  # manage spaces, hard-delete + restore pages
@@ -179,6 +180,29 @@ class PermissionScope(StrEnum):
     PROJECT = "project"
     GLOBAL = "global"
     INSTANCE = "instance"
+    #: RADD-791 — checked against a WIKI SPACE. The page atoms moved here from
+    #: GLOBAL: a space is a scope the way a project is, so "read-only space" and
+    #: "who may comment here" are ordinary role grants rather than new vocabulary.
+    SPACE = "space"
+
+
+class GrantScopeKind(StrEnum):
+    """What a role grant can be scoped TO (RADD-791).
+
+    A grant is either instance-wide (no scope) or bound to one scoped thing. Two
+    kinds exist: a project, and a wiki space.
+
+    Spelled as an enum rather than left implicit in column names because a scope
+    names a behaviour, and dev rule 2 puts those in a StrEnum. The columns stay
+    typed and foreign-keyed (`project_id`, `space_id`) rather than collapsing to
+    a polymorphic `(scope_type, scope_id)` pair: a polymorphic column cannot
+    carry an FK, and trading referential integrity on the permission table for a
+    third scope nobody has asked for is a speculative framework (dev rule 5).
+    Adding one later is a column and ten lines here.
+    """
+
+    PROJECT = "project"
+    SPACE = "space"
 
 
 PERMISSION_SCOPES: dict[Permission, PermissionScope] = {
@@ -207,9 +231,14 @@ PERMISSION_SCOPES: dict[Permission, PermissionScope] = {
     Permission.WEBHOOK_MANAGE: PermissionScope.GLOBAL,
     Permission.CANNED_MANAGE: PermissionScope.GLOBAL,
     Permission.CARD_PRESET_MANAGE: PermissionScope.GLOBAL,
-    Permission.PAGE_READ: PermissionScope.GLOBAL,
-    Permission.PAGE_WRITE: PermissionScope.GLOBAL,
-    Permission.PAGE_MANAGE: PermissionScope.GLOBAL,
+    # RADD-791: the page atoms are SPACE-scoped now. They were global because a
+    # page had no scope to be checked against, which made per-space access
+    # inexpressible and dropped page commenting on the floor — the comments
+    # binding resolved `comment.write` with project=None, so a project-scoped
+    # grant never reached it. A grant with no scope still applies everywhere.
+    Permission.PAGE_READ: PermissionScope.SPACE,
+    Permission.PAGE_WRITE: PermissionScope.SPACE,
+    Permission.PAGE_MANAGE: PermissionScope.SPACE,
 }
 
 PERMISSION_DESCRIPTIONS: dict[Permission, str] = {
@@ -238,9 +267,9 @@ PERMISSION_DESCRIPTIONS: dict[Permission, str] = {
     Permission.WEBHOOK_MANAGE: "Manage webhook endpoints (global).",
     Permission.CANNED_MANAGE: "Manage canned responses (global).",
     Permission.CARD_PRESET_MANAGE: "Manage the shared card-layout preset library (global).",
-    Permission.PAGE_READ: "Read page spaces and pages (global).",
-    Permission.PAGE_WRITE: "Create and edit pages; link them to issues.",
-    Permission.PAGE_MANAGE: "Manage page spaces; hard-delete and restore pages.",
+    Permission.PAGE_READ: "Read a wiki space and its pages.",
+    Permission.PAGE_WRITE: "Create and edit pages in a space; link them to issues.",
+    Permission.PAGE_MANAGE: "Manage a space; hard-delete and restore its pages.",
 }
 
 # Umbrella permissions imply their per-entity actions (spec 36) — so pre-existing
@@ -366,7 +395,7 @@ for _perm, _scope, _desc, _umbrella in (
      Permission.PROJECT_MANAGE),
     (Permission.WORKLOG_DELETE, PermissionScope.PROJECT, "Delete other people's worklogs.",
      Permission.PROJECT_MANAGE),
-    (Permission.PAGE_DELETE, PermissionScope.GLOBAL, "Hard-delete pages.",
+    (Permission.PAGE_DELETE, PermissionScope.SPACE, "Hard-delete pages.",
      Permission.PAGE_MANAGE),
     # RADD-790. Project-scoped like the item they hang off; both ride
     # project.manage, and `item.update` implies them too (see below) so no role

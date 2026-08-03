@@ -101,9 +101,11 @@ async def replace_global_grants(
 
 
 _GRANT_DIALOG_DOC = (
-    "The unified Grant Role dialog (spec 91): grant a role to a user OR team at global "
-    "scope (empty project_ids) or to specific projects. Like editing a role, handing out "
-    "grants is escalation-equivalent — gated on role.update."
+    "The unified Grant Role dialog (spec 91 → RADD-791): grant a role to a user OR team "
+    "at global scope (no ids), on specific projects, or in specific wiki spaces. One "
+    "dialog for every scope — a second one for spaces is how two scopes become two sets "
+    "of rules. Like editing a role, handing out grants is escalation-equivalent — gated "
+    "on role.update."
 )
 
 
@@ -130,7 +132,12 @@ async def create_role_grant(
     data: RoleGrantCreate, session: Session, user: CurrentUser
 ) -> list[GlobalGrantRead]:
     await authz.require(session, user, Permission.ROLE_UPDATE)
-    scopes: list[uuid.UUID | None] = list(data.project_ids) or [None]
+    # (project_id, space_id) pairs — at most one of each is ever set. No ids at
+    # all means one instance-wide grant, which is the spec-87 behaviour.
+    scopes: list[tuple[uuid.UUID | None, uuid.UUID | None]] = [
+        *((project_id, None) for project_id in data.project_ids),
+        *((None, space_id) for space_id in data.space_ids),
+    ] or [(None, None)]
     rows = [
         await grants.create_grant(
             session,
@@ -138,9 +145,10 @@ async def create_role_grant(
             user_id=data.user_id,
             team_id=data.team_id,
             project_id=project_id,
+            space_id=space_id,
             actor_id=user.id,
         )
-        for project_id in scopes
+        for project_id, space_id in scopes
     ]
     return [GlobalGrantRead.model_validate(g) for g in rows]
 

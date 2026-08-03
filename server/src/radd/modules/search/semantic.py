@@ -80,8 +80,13 @@ async def _items(session: AsyncSession, user: User, q: str, candidates) -> list[
 
 
 async def _docs(session: AsyncSession, user: User, q: str, candidates) -> list[SemanticDoc]:
-    perms = await authz.effective_permissions(session, user)
-    if Permission.PAGE_READ not in perms:
+    # RADD-791: page.read is SPACE-scoped, so the readable spaces ARE the answer
+    # to "which pages may this person be shown". Asking globally returned
+    # nothing at all for anyone whose grant was scoped.
+    from radd.modules.pages import access as pages_access
+
+    readable = set(await pages_access.readable_spaces(session, user))
+    if not readable:
         return []
     ranked = await candidates.doc_candidates(session, q, public_only=False, limit=_ASK_LIMIT)
     if not ranked:
@@ -92,7 +97,10 @@ async def _docs(session: AsyncSession, user: User, q: str, candidates) -> list[S
         page.id: page
         for page in (
             await session.execute(
-                select(Page).where(Page.id.in_([page_id for page_id, _ in ranked]))
+                select(Page).where(
+                    Page.id.in_([page_id for page_id, _ in ranked]),
+                    Page.space_id.in_(readable),
+                )
             )
         ).scalars()
     }

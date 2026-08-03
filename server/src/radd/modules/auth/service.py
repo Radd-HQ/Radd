@@ -507,7 +507,11 @@ _MERGE_DEDUPE: tuple[tuple[str, tuple[str, ...], str], ...] = (
     # transferring. Merging an account must not cost the person their granted
     # roles or the teams they manage.
     ("team_managers", ("team_id",), "user_id"),
-    ("global_role_grants", ("role_id", "project_id"), "user_id"),
+    # `space_id` joined the uniqueness key when a space became a scope
+    # (RADD-791). `tests/test_merge_coverage.py` caught its absence, which is the
+    # test earning its keep: without it a merge would repoint a space grant onto
+    # a duplicate key and 500 mid-merge, or silently keep both.
+    ("global_role_grants", ("role_id", "project_id", "space_id"), "user_id"),
     # dashboard_shares is gone — dashboard sharing lives in access_grants now
     # (spec 92 adopters), which `_repoint_user_access_grants` already handles
     # generically for EVERY resource type. Same reason view_shares isn't here.

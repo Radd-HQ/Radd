@@ -4,6 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.config import settings
 from radd.db import get_session
 from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
@@ -13,6 +14,7 @@ from radd.modules.projects import service as projects_service
 from . import deflect, semantic, service
 from .schemas import DeflectResponse, SearchResponse, SearchResult, SemanticResponse
 from .types import MAX_QUERY_CHARS
+from .deflect import DOCS_MODULE as PAGES_MODULE
 
 router = APIRouter(tags=["search"])
 
@@ -57,12 +59,20 @@ async def search_deflect(
     q = q.strip()
     if not q:
         return DeflectResponse(docs=[], items=[])
-    docs = (
-        await deflect.deflect_docs(session, q)
-        if Permission.PAGE_READ in permissions
-        else []
-    )
+    # RADD-791: page.read is SPACE-scoped now, so "does this project's permission
+    # set contain it" is no longer a question that means anything. Deflect into
+    # the spaces this reader may actually open.
+    docs = await deflect.deflect_docs(session, q, space_ids=await _readable_space_ids(session, user))
     return DeflectResponse(docs=docs, items=await deflect.deflect_items(session, project, q))
+
+
+async def _readable_space_ids(session, user) -> set[uuid.UUID]:
+    """The reader's wiki spaces, or an empty set when the wiki is not mounted."""
+    if PAGES_MODULE not in settings.modules:
+        return set()
+    from radd.modules.pages import access as pages_access
+
+    return set(await pages_access.readable_spaces(session, user))
 
 
 @router.get("/search/semantic", response_model=SemanticResponse)
