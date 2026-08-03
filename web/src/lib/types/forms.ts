@@ -17,12 +17,19 @@ export interface FormField {
 /** Values applied to the item a submission creates (names resolve at submit). */
 export interface FormDefaults {
   kind?: ItemKindValue | null;
+  /** RADD-801 — spec 51's issue TYPE (Bug/Feature), a different axis from
+   *  `kind` (epic/issue/subtask). The form used to offer only the latter. */
+  type_name?: string | null;
   state_name?: string | null;
   priority?: PriorityValue | null;
   labels: string[];
   assignee_email?: string | null;
   cycle_name?: string | null;
   release_version?: string | null;
+  start_date?: string | null;
+  target_date?: string | null;
+  flagged?: boolean;
+  estimate_points?: number | null;
 }
 
 /** GET /forms?project_id= (list) and GET /forms/{id} (render for submit). */

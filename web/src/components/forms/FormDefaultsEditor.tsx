@@ -5,7 +5,13 @@ import {
   PRIORITY_META,
   PRIORITY_ORDER,
 } from "../../lib/meta";
-import { cyclesQuery, releasesQuery, statesQuery, usersAdminQuery } from "../../lib/queries";
+import {
+  cyclesQuery,
+  issueTypesQuery,
+  releasesQuery,
+  statesQuery,
+  usersAdminQuery,
+} from "../../lib/queries";
 import {
   type FormDefaults,
   type ItemKindValue,
@@ -13,6 +19,7 @@ import {
 } from "../../lib/types";
 import { LabelsEditor } from "../items/LabelsEditor";
 import { SelectField } from "../SelectField";
+import { TextField } from "../TextField";
 import { PersonName } from "../PersonName";
 
 interface FormDefaultsEditorProps {
@@ -22,9 +29,15 @@ interface FormDefaultsEditorProps {
 }
 
 /**
- * Defaults applied to the item a submission creates (spec 20): kind, state,
- * priority, labels, assignee, cycle, release. Names/versions resolve at submit
- * time; every field is optional (null = leave the item's own default).
+ * Defaults applied to the item a submission creates (spec 20 → RADD-801).
+ *
+ * Names and versions resolve at submit; every field is optional (null = leave
+ * the item's own default).
+ *
+ * KIND and TYPE are two different axes and both are here, which is the fix
+ * RADD-801 exists for: `kind` is the epic/issue/subtask ladder, spec 51's TYPE
+ * is Bug/Feature/Story. The form used to offer only `kind`, labelled in a way
+ * that read as "type", so the control you reached for set the wrong thing.
  */
 export function FormDefaultsEditor({
   projectId,
@@ -32,6 +45,7 @@ export function FormDefaultsEditor({
   onChange,
 }: FormDefaultsEditorProps) {
   const states = useQuery(statesQuery(projectId));
+  const issueTypes = useQuery(issueTypesQuery(projectId));
   const cycles = useQuery(cyclesQuery());
   const releases = useQuery(releasesQuery(projectId));
   // The ADMIN directory (RADD-769): a form default stores `assignee_email`,
@@ -44,6 +58,20 @@ export function FormDefaultsEditor({
     <fieldset className="flex flex-col gap-3 rounded-md border border-subtle p-3">
       <legend className="px-1 text-xs font-medium text-fg-muted">Defaults (optional)</legend>
       <div className="grid grid-cols-2 gap-3">
+        <SelectField
+          label="Issue type"
+          value={value.type_name ?? ""}
+          onChange={(event) => set({ type_name: event.target.value || null })}
+          hint="Bug, Feature, … — separate from Kind below"
+        >
+          <option value="">The project's default</option>
+          {(issueTypes.data ?? []).map((type) => (
+            <option key={type.id} value={type.name}>
+              {type.name}
+            </option>
+          ))}
+        </SelectField>
+
         <SelectField
           label="Kind"
           value={value.kind ?? ""}
@@ -131,6 +159,43 @@ export function FormDefaultsEditor({
       </div>
 
       <LabelsEditor value={value.labels} onChange={(labels) => set({ labels })} />
+
+      {/* RADD-801 — scheduling and estimation reached ItemCreate in specs 24/70
+          and never reached the form until now. */}
+      <div className="grid grid-cols-2 gap-3">
+        <TextField
+          label="Start date"
+          type="date"
+          value={value.start_date ?? ""}
+          onChange={(event) => set({ start_date: event.target.value || null })}
+        />
+        <TextField
+          label="Target date"
+          type="date"
+          value={value.target_date ?? ""}
+          onChange={(event) => set({ target_date: event.target.value || null })}
+        />
+        <TextField
+          label="Estimate (points)"
+          type="number"
+          min={0}
+          max={999}
+          step={0.5}
+          value={value.estimate_points == null ? "" : String(value.estimate_points)}
+          onChange={(event) =>
+            set({ estimate_points: event.target.value === "" ? null : Number(event.target.value) })
+          }
+        />
+        <label className="flex cursor-pointer items-center gap-2 self-end pb-2 text-[13px] text-fg">
+          <input
+            type="checkbox"
+            checked={value.flagged}
+            onChange={(event) => set({ flagged: event.target.checked })}
+            className="size-4 accent-accent"
+          />
+          Flagged on arrival
+        </label>
+      </div>
     </fieldset>
   );
 }
@@ -138,10 +203,15 @@ export function FormDefaultsEditor({
 /** A blank defaults object (used when creating a form). */
 export const emptyDefaults: FormDefaults = {
   kind: null,
+  type_name: null,
   state_name: null,
   priority: null,
   labels: [],
   assignee_email: null,
   cycle_name: null,
   release_version: null,
+  start_date: null,
+  target_date: null,
+  flagged: false,
+  estimate_points: null,
 };

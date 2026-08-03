@@ -1,5 +1,6 @@
 import secrets
 import uuid
+from datetime import date
 from collections.abc import Sequence
 
 from sqlalchemy import delete, select
@@ -254,6 +255,29 @@ async def delete_form(session: AsyncSession, form_id: uuid.UUID, actor: User) ->
 # --- submit ---
 
 
+def _as_date(value: object) -> "date | None":
+    """Defaults ride in JSONB, so a date comes back as an ISO string."""
+    if value is None or value == "":
+        return None
+    return value if isinstance(value, date) else date.fromisoformat(str(value))
+
+
+async def _resolve_type_id(
+    session: AsyncSession, project: Project, name: str | None
+) -> uuid.UUID | None:
+    """Issue type by NAME, per project (spec 51). An unknown name resolves to
+    None — the project's default type — rather than failing the submission: a
+    renamed type should not stop people filing requests."""
+    if not name:
+        return None
+    from radd.modules.itemtypes import service as itemtypes_service
+
+    for issue_type in await itemtypes_service.list_types(session, project.id):
+        if issue_type.name.lower() == name.lower():
+            return issue_type.id
+    return None
+
+
 async def _resolve_state_id(
     session: AsyncSession, project: Project, state_name: str | None
 ) -> uuid.UUID | None:
@@ -344,6 +368,10 @@ async def submit_form(
         title=data.title,
         description=description,
         kind=ItemKind(defaults["kind"]) if defaults.get("kind") else ItemKind.ISSUE,
+        # Spec 51's issue TYPE — a different axis from `kind`, and the one a
+        # service desk actually sorts on (RADD-801). None keeps the project's
+        # default type, exactly as a hand-created item would.
+        type_id=await _resolve_type_id(session, project, defaults.get("type_name")),
         priority=Priority(defaults["priority"]) if defaults.get("priority") else Priority.NORMAL,
         state_id=await _resolve_state_id(session, project, defaults.get("state_name")),
         assignee_id=await _resolve_assignee_id(session, defaults.get("assignee_email")),
@@ -352,6 +380,10 @@ async def submit_form(
         # The submitter's team choice wins over any form default — sharing is
         # theirs to decide (RADD-798); the form only decides whether to ask.
         team_id=team_id,
+        start_date=_as_date(defaults.get("start_date")),
+        target_date=_as_date(defaults.get("target_date")),
+        flagged=bool(defaults.get("flagged")),
+        estimate_points=defaults.get("estimate_points"),
         labels=list(defaults.get("labels") or []),
         custom_fields=dict(data.values),
         **reporter_override,

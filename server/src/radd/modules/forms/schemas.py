@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -19,18 +20,78 @@ class FormField(BaseModel):
 
 
 class FormDefaults(BaseModel):
-    """Values applied to the item a submission creates. Names (state/label/cycle/release)
-    resolve at submit; an unknown assignee is rejected on write."""
+    """Values applied to the item a submission creates (RADD-801).
+
+    Addressed by NAME, not id — a form is authored once against a project's
+    vocabulary and its targets resolve at submit, so renaming a state does not
+    silently break every form pointing at it. An unknown assignee is rejected on
+    write; the rest are stored and resolved later.
+
+    ## Why the field list is checked rather than trusted
+
+    This was a hand-maintained subset of `ItemCreate` and it drifted. Spec 51
+    added issue TYPES, wired `ItemCreate.type_id`, and nobody came back here — so
+    a form could not set the one axis a service desk cares most about. Spec 70's
+    points and spec 24's flag went the same way.
+
+    The confusion was worse than a plain omission: the form DID offer `kind`, the
+    epic/issue/subtask ladder, which reads as "type" in the UI. The control you
+    reached for was present, named almost right, and set a different axis.
+
+    `DEFAULTS_COVERAGE` below states, for every `ItemCreate` field, either which
+    key here carries it or why it is deliberately absent — and
+    `tests/test_form_defaults.py` walks `ItemCreate` and fails when a new field
+    matches neither. Adding an item attribute and forgetting the form is now a
+    failing test rather than a gap somebody notices a year later.
+    """
 
     model_config = ConfigDict(from_attributes=True, extra="forbid")
 
-    kind: ItemKind | None = None
+    kind: ItemKind | None = None  # epic | issue | subtask — the hierarchy ladder
+    type_name: str | None = None  # spec 51 — Bug / Feature / …, a DIFFERENT axis
     state_name: str | None = None
     priority: Priority | None = None
     labels: list[str] = Field(default_factory=list)
     assignee_email: str | None = None
     cycle_name: str | None = None
     release_version: str | None = None
+    start_date: date | None = None
+    target_date: date | None = None
+    flagged: bool = False
+    estimate_points: float | None = Field(default=None, ge=0, le=999)
+
+
+#: `ItemCreate` field -> the `FormDefaults` key that carries it, or None plus the
+#: reason it is deliberately not form-settable. The reasons are the point: the
+#: original list had no way to tell a decision from an oversight, which is how
+#: three of them accumulated.
+DEFAULTS_COVERAGE: dict[str, tuple[str | None, str]] = {
+    "title": (None, "the submitter writes it"),
+    "description": (None, "the submitter writes it"),
+    "project_id": (None, "the form belongs to one project"),
+    "custom_fields": (None, "the form's exposed fields carry these"),
+    "kind": ("kind", ""),
+    "type_id": ("type_name", ""),
+    "state_id": ("state_name", ""),
+    "priority": ("priority", ""),
+    "labels": ("labels", ""),
+    "assignee_id": ("assignee_email", ""),
+    "cycle_id": ("cycle_name", ""),
+    "release_id": ("release_version", ""),
+    "start_date": ("start_date", ""),
+    "target_date": ("target_date", ""),
+    "flagged": ("flagged", ""),
+    "estimate_points": ("estimate_points", ""),
+    "parent_id": (None, "a specific item, not a project-level choice"),
+    "team_id": (
+        None,
+        "the SUBMITTER picks it per request (RADD-798), not the form author",
+    ),
+    "reporter_id": (None, "decided by the submit path — the person filing"),
+    "number": (None, "import-only, project.manage-gated"),
+    "created_at": (None, "import-only, project.manage-gated"),
+    "updated_at": (None, "import-only, project.manage-gated"),
+}
 
 
 class FormCreate(BaseModel):
