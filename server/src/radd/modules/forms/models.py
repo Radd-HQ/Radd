@@ -1,7 +1,15 @@
 import uuid
 from typing import Any
 
-from sqlalchemy import Boolean, CheckConstraint, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    ForeignKey,
+    String,
+    Text,
+    UniqueConstraint,
+    false,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -45,6 +53,15 @@ class Form(Base, TimestampMixin):
     )
     description_required: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="false"
+    )
+    # RADD-798: offer the submitter a team picker, limited to THEIR teams, whose
+    # choice writes `item.team_id` and lets that team open the request.
+    #
+    # Per-form and OFF by default. An internal-IT form wants it; an HR complaint
+    # form very much does not, and defaulting it on would quietly widen who can
+    # read requests that already exist.
+    team_picker_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false()
     )
     # Public submit path (spec 62): token minted on first enable, kept on disable.
     allow_public: Mapped[bool] = mapped_column(Boolean, default=False)

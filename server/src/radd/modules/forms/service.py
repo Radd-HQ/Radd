@@ -126,6 +126,7 @@ async def create_form(session: AsyncSession, data: FormCreate, actor: User) -> F
         description_enabled=data.description_enabled,
         description_prompt=data.description_prompt,
         description_required=data.description_required,
+        team_picker_enabled=data.team_picker_enabled,
     )
     session.add(form)
     await session.flush()
@@ -180,6 +181,8 @@ async def update_form(
         form.description_prompt = data.description_prompt
     if data.description_required is not None:
         form.description_required = data.description_required
+    if data.team_picker_enabled is not None:
+        form.team_picker_enabled = data.team_picker_enabled
     if data.allow_public is not None:
         # Spec 62: mint the token on FIRST enable only; disabling keeps it, so
         # re-enabling restores the same public link.
@@ -304,6 +307,7 @@ async def submit_form(
     actor: User,
     *,
     reporter_id: object = _REPORTER_UNSET,
+    team_id: uuid.UUID | None = None,
 ) -> ItemRead:
     """Validate the submission against the form's required overrides + the registry, then
     create a work item in the form's project with the defaults applied.
@@ -345,6 +349,9 @@ async def submit_form(
         assignee_id=await _resolve_assignee_id(session, defaults.get("assignee_email")),
         cycle_id=await _resolve_cycle_id(session, project, defaults.get("cycle_name")),
         release_id=await _resolve_release_id(session, project, defaults.get("release_version")),
+        # The submitter's team choice wins over any form default — sharing is
+        # theirs to decide (RADD-798); the form only decides whether to ask.
+        team_id=team_id,
         labels=list(defaults.get("labels") or []),
         custom_fields=dict(data.values),
         **reporter_override,

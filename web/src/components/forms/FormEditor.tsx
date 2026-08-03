@@ -49,6 +49,9 @@ export function FormEditor({ project, form, onDone }: FormEditorProps) {
   const [descEnabled, setDescEnabled] = useState(form?.description_enabled ?? true);
   const [descPrompt, setDescPrompt] = useState(form?.description_prompt ?? "Description");
   const [descRequired, setDescRequired] = useState(form?.description_required ?? false);
+  // RADD-798 — offer the submitter a picker of THEIR teams. Off by default:
+  // turning it on decides who else can open the requests filed here.
+  const [teamPicker, setTeamPicker] = useState(form?.team_picker_enabled ?? false);
   const [enabled, setEnabled] = useState(form?.enabled ?? true);
   const [fields, setFields] = useState<FormField[]>(form?.fields ?? []);
   const [defaults, setDefaults] = useState<FormDefaults>(form?.defaults ?? emptyDefaults);
@@ -72,6 +75,7 @@ export function FormEditor({ project, form, onDone }: FormEditorProps) {
         description_enabled: descEnabled,
         description_prompt: descPrompt.trim() || "Description",
         description_required: descRequired,
+        team_picker_enabled: teamPicker,
       };
       return persistedId
         ? api.patch<Form>(apiFormPath(persistedId), payload satisfies FormUpdate)
@@ -192,6 +196,22 @@ export function FormEditor({ project, form, onDone }: FormEditorProps) {
             </label>
           </div>
         )}
+
+        {/* RADD-798 — independent of the description area, so it sits outside
+            that conditional: a form with no description can still be shared. */}
+        <label className="flex w-fit cursor-pointer items-center gap-2 text-[13px] text-fg">
+          <input
+            type="checkbox"
+            checked={teamPicker}
+            onChange={(event) => setTeamPicker(event.target.checked)}
+            className="size-4 accent-accent"
+          />
+          Let submitters share the request with one of their teams
+        </label>
+        <p className="-mt-2 text-[11px] text-fg-faint">
+          The picker offers only teams the submitter belongs to, and everyone in the chosen
+          team can then open and follow the request.
+        </p>
       </div>
 
       <label className="flex w-fit cursor-pointer items-center gap-2 text-[13px] text-fg">

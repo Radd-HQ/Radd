@@ -14,7 +14,7 @@ import uuid
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd.exceptions import NotFoundError
+from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.auth import service as auth
 from radd.modules.auth.models import User
 from radd.modules.teams import service as teams_service
@@ -28,7 +28,7 @@ from .schemas import (
     PortalFormRead,
     PortalGroup,
     PortalProjectRef,
-    PortalRequestRead,
+    PortalTeamOption,
     PublicSubmitResult,
 )
 from .types import FormEntity
@@ -99,62 +99,50 @@ async def render_portal_form(
     return PortalFormRead(
         id=form.id,
         project=PortalProjectRef(id=project.id, key=project.key, name=project.name),
+        teams=await _my_team_options(session, form, actor),
         **base.model_dump(),
     )
 
 
-async def list_my_requests(
-    session: AsyncSession, actor: User, limit: int = 50
-) -> list[PortalRequestRead]:
-    """What this person has filed (RADD-785).
+async def _my_team_options(
+    session: AsyncSession, form: Form, actor: User
+) -> list[PortalTeamOption]:
+    """The teams THIS submitter may share with (RADD-798).
 
-    Scoped by RELATIONSHIP, not by permission: the filter is
-    `reporter_id == actor.id` and no `item.read` is asked of anyone. That is the
-    same trust the submit path already extends — your own request is yours to
-    see — and it is why a requester can be given a Baseline with no read at all
-    and still track what they raised.
-
-    Reaching into `work_items` from here is the tolerated inward read this
-    module already does for submits; the trimming lives in `PortalRequestRead`,
-    which carries no description, comments, assignee or fields. Being the
-    reporter must not become a back door into an issue's contents.
+    Their own teams, never the full list: offering every team would let anyone
+    drop a request into any team's queue, and this picker is the only thing
+    between "share with my team" and "assign work to strangers". The server
+    re-checks the choice at submit regardless — a list is a convenience, not a
+    control.
     """
-    from radd.modules.items.models import WorkItem
-    from radd.modules.workflow.models import State
-
-    rows = await session.execute(
-        select(WorkItem, State)
-        .join(State, State.id == WorkItem.state_id, isouter=True)
-        .where(WorkItem.reporter_id == actor.id)
-        .where(WorkItem.archived_at.is_(None))
-        .order_by(WorkItem.created_at.desc())
-        .limit(limit)
-    )
-    pairs = list(rows.all())
-    if not pairs:
+    if not form.team_picker_enabled:
         return []
-    project_ids = {item.project_id for item, _ in pairs}
-    projects = {
-        p.id: p for p in await projects_service.list_projects(session) if p.id in project_ids
-    }
-    keys = await projects_service.project_keys(session, list(project_ids))
-    out: list[PortalRequestRead] = []
-    for item, state in pairs:
-        project = projects.get(item.project_id)
-        if project is None:  # a project removed under them — not their problem
-            continue
-        out.append(
-            PortalRequestRead(
-                key=f"{keys[project.id]}-{item.number}",
-                title=item.title,
-                state=state.name if state else "",
-                state_category=state.category if state else "",
-                project=PortalProjectRef(id=project.id, key=project.key, name=project.name),
-                created_at=item.created_at,
-                updated_at=item.updated_at,
-            )
-        )
-    return out
+    team_ids = await teams_service.user_team_ids(session, actor.id)
+    if not team_ids:
+        return []
+    found = await teams_service.teams_by_ids(session, list(team_ids))
+    return sorted(
+        (PortalTeamOption(id=t.id, name=t.name) for t in found.values()),
+        key=lambda t: t.name,
+    )
+
+
+async def _resolve_shared_team(
+    session: AsyncSession, form: Form, actor: User, team_id: uuid.UUID | None
+) -> uuid.UUID | None:
+    """Validate a submitted team choice. UI is not enforcement (RADD-798).
+
+    Refuses a team the submitter does not belong to, and refuses ANY team when
+    the form has no picker — otherwise a hand-made request could attach itself
+    to a team's queue on a form whose author deliberately turned sharing off.
+    """
+    if team_id is None:
+        return None
+    if not form.team_picker_enabled:
+        raise ConflictError(FormEntity.FORM, reason="this form does not offer team sharing")
+    if team_id not in await teams_service.user_team_ids(session, actor.id):
+        raise ConflictError(FormEntity.FORM, reason="you are not a member of that team")
+    return team_id
 
 
 async def submit_portal_form(
@@ -167,6 +155,12 @@ async def submit_portal_form(
     from radd.modules.automations.types import SYSTEM_ACTOR_ID
 
     form = await _eligible_form(session, form_id, actor)
+    # RADD-798: validate the team choice HERE, before anything is written. The
+    # client only offers the submitter's own teams; that is presentation, and a
+    # hand-made request must meet the same rule.
+    team_id = await _resolve_shared_team(session, form, actor, data.team_id)
     system = await auth.get_user(session, SYSTEM_ACTOR_ID)
-    item = await service.submit_form(session, form.id, data, system, reporter_id=actor.id)
+    item = await service.submit_form(
+        session, form.id, data, system, reporter_id=actor.id, team_id=team_id
+    )
     return PublicSubmitResult(key=item.key, title=item.title)

@@ -18,6 +18,7 @@ import {
 } from "../components/forms/PublicFormFields";
 import { FormAssistPanel } from "../components/forms/FormAssistPanel";
 import { Button } from "../components/Button";
+import { SelectField } from "../components/SelectField";
 import { Spinner } from "../components/Spinner";
 import { TextField } from "../components/TextField";
 
@@ -67,6 +68,7 @@ function PortalSubmitForm({ form }: { form: PortalForm }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [values, setValues] = useState<CustomFields>({});
+  const [teamId, setTeamId] = useState("");
   const [created, setCreated] = useState<PublicSubmitResult | null>(null);
 
   const submit = useMutation({
@@ -75,6 +77,9 @@ function PortalSubmitForm({ form }: { form: PortalForm }) {
         title: title.trim(),
         description: form.description_enabled ? description : "",
         values: collectValues(values),
+        // RADD-798 — share it with one of MY teams. The server re-checks the
+        // membership; this picker only ever offers teams the person is in.
+        team_id: teamId || null,
       };
       return api.post<PublicSubmitResult>(apiPortalFormSubmitPath(form.id), body);
     },
@@ -97,6 +102,7 @@ function PortalSubmitForm({ form }: { form: PortalForm }) {
     setTitle("");
     setDescription("");
     setValues({});
+    setTeamId("");
     setCreated(null);
     submit.reset();
   };
@@ -163,6 +169,21 @@ function PortalSubmitForm({ form }: { form: PortalForm }) {
                 />
               </div>
 
+              {form.teams.length > 0 && (
+                <SelectField
+                  label="Share with a team"
+                  value={teamId}
+                  onChange={(e) => setTeamId(e.target.value)}
+                  hint="Everyone in that team can see this request and follow it. Leave blank to keep it to yourself."
+                >
+                  <option value="">Just me</option>
+                  {form.teams.map((team) => (
+                    <option key={team.id} value={team.id}>
+                      {team.name}
+                    </option>
+                  ))}
+                </SelectField>
+              )}
               {form.description_enabled && (
                 <FormDescriptionArea
                   prompt={form.description_prompt}
