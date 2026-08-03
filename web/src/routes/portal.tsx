@@ -7,7 +7,7 @@ import { portalFormsQuery } from "../lib/queries";
 import { type PortalGroup } from "../lib/types";
 import { EmptyState } from "../components/EmptyState";
 import { Spinner } from "../components/Spinner";
-import { MyRequests } from "../components/forms/MyRequests";
+import { MyRequests } from "../components/requests/RequestSection";
 
 /**
  * Requester portal (spec 73) — route `/portal`, visible to every signed-in

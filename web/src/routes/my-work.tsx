@@ -1,10 +1,10 @@
 import { Link } from "@tanstack/react-router";
 import { MyForms } from "../components/forms/MyForms";
-import { MyRequests } from "../components/forms/MyRequests";
+import { ListSection } from "../components/requests/ListSection";
+import { MyRequests } from "../components/requests/RequestSection";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarClock, History, Inbox, ShieldCheck, Star, UserRound } from "lucide-react";
 import { listRecentItems } from "../lib/recent";
-import type { LucideIcon } from "lucide-react";
 import { RoutePath } from "../lib/constants";
 import { shortDate } from "../lib/dates";
 import { usePeek } from "../lib/hooks";
@@ -239,36 +239,14 @@ function RecentlyViewedSection() {
   );
 }
 
-function Section({
-  icon: Icon,
-  title,
-  count,
-  empty,
-  children,
-}: {
-  icon: LucideIcon;
-  title: string;
-  count: number;
-  empty: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section>
-      <header className="mb-2 flex items-center gap-2">
-        <Icon size={14} className="text-fg-muted" aria-hidden />
-        <h2 className="text-sm font-semibold text-fg">{title}</h2>
-        <span className="text-xs text-fg-faint">{count}</span>
-      </header>
-      {count === 0 ? (
-        <p className="rounded-lg border border-dashed border-subtle px-4 py-3 text-xs text-fg-faint">
-          {empty}
-        </p>
-      ) : (
-        <ul className="overflow-hidden rounded-lg border border-subtle">{children}</ul>
-      )}
-    </section>
-  );
-}
+/**
+ * My Work's sections are the SAME object as Portal's now (RADD-799).
+ *
+ * This used to be a local component with a 14px semibold heading while Portal
+ * used an 11px uppercase muted one — same kind of list, two looks, on two pages
+ * a requester moves between. That difference was most of what "messy" meant.
+ */
+const Section = ListSection;
 
 function ItemRow({ item, showDue = false }: { item: Item; showDue?: boolean }) {
   const peek = usePeek();
