@@ -18,26 +18,8 @@
  */
 import { spawn } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
-import { existsSync, readdirSync } from "node:fs";
-import { homedir } from "node:os";
 import { resolve } from "node:path";
-
-function findChrome() {
-  if (process.env.RADD_CHROME && existsSync(process.env.RADD_CHROME)) return process.env.RADD_CHROME;
-  const base = resolve(homedir(), ".cache/ms-playwright");
-  if (existsSync(base)) {
-    for (const dir of readdirSync(base)) {
-      for (const leaf of ["chrome-linux64/chrome", "chrome-linux/chrome"]) {
-        const p = resolve(base, dir, leaf);
-        if (existsSync(p)) return p;
-      }
-    }
-  }
-  for (const p of ["/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser"]) {
-    if (existsSync(p)) return p;
-  }
-  throw new Error("no Chrome/Chromium found (set $RADD_CHROME)");
-}
+import { chromeArgs, findChrome, HOVER_CAPABLE_PROBE } from "./lib/chrome.mjs";
 
 const [baseUrl, spaceSlug, pageSlug, email, password] = process.argv.slice(2);
 const PORT = 9447;
@@ -45,8 +27,7 @@ const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-page-ext-proof");
 
 const chrome = spawn(
   findChrome(),
-  ["--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
-   `--remote-debugging-port=${PORT}`, `--user-data-dir=${PROFILE}`, "about:blank"],
+  chromeArgs({ port: PORT, profile: PROFILE }),
   { stdio: "ignore" },
 );
 
@@ -236,7 +217,13 @@ async function main() {
 
   const shot = await send("Page.captureScreenshot", { format: "png" }, sessionId);
 
+  // RADD-757: assert the launch flag took. Headless Chrome reports
+  // `(hover: none)` by default and Tailwind v4 gates every `hover:`/
+  // `group-hover:` utility on `@media (hover: hover)`, so without it this
+  // proof silently stops seeing hover-revealed UI at all.
+  const hoverCapable = await evalInPage(sessionId, HOVER_CAPABLE_PROBE);
   const checks = {
+    "the browser reports a hover-capable pointer": hoverCapable === true,
     "page body mounted": probe.mounted === true,
     // Three callout blocks on the proof page: two valid, one deliberately malformed.
     "every callout block became an element": probe.calloutCount === 3,

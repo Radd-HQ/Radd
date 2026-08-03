@@ -17,26 +17,8 @@
  */
 import { spawn } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
-import { existsSync, readdirSync } from "node:fs";
-import { homedir } from "node:os";
 import { resolve } from "node:path";
-
-function findChrome() {
-  if (process.env.RADD_CHROME && existsSync(process.env.RADD_CHROME)) return process.env.RADD_CHROME;
-  const base = resolve(homedir(), ".cache/ms-playwright");
-  if (existsSync(base)) {
-    for (const dir of readdirSync(base)) {
-      const p = resolve(base, dir, "chrome-linux64/chrome");
-      if (existsSync(p)) return p;
-      const q = resolve(base, dir, "chrome-linux/chrome");
-      if (existsSync(q)) return q;
-    }
-  }
-  for (const p of ["/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser"]) {
-    if (existsSync(p)) return p;
-  }
-  throw new Error("no Chrome/Chromium found (set $RADD_CHROME)");
-}
+import { chromeArgs, findChrome, HOVER_CAPABLE_PROBE } from "./lib/chrome.mjs";
 
 const [baseUrl, issueKey, email, password, pluginId = "participants"] = process.argv.slice(2);
 const PORT = 9444;
@@ -44,8 +26,7 @@ const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-render-proof-profile
 
 const chrome = spawn(
   findChrome(),
-  ["--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
-   `--remote-debugging-port=${PORT}`, `--user-data-dir=${PROFILE}`, "about:blank"],
+  chromeArgs({ port: PORT, profile: PROFILE }),
   { stdio: "ignore" },
 );
 

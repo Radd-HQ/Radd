@@ -18,28 +18,8 @@
  *
  * Usage: node scripts/extension-node-proof.mjs <baseUrl> <spaceSlug> <email> <password>
  */
-import { spawn } from "node:child_process";
-import { setTimeout as sleep } from "node:timers/promises";
-import { existsSync, readdirSync } from "node:fs";
-import { homedir } from "node:os";
 import { resolve } from "node:path";
-
-function findChrome() {
-  if (process.env.RADD_CHROME && existsSync(process.env.RADD_CHROME)) return process.env.RADD_CHROME;
-  const base = resolve(homedir(), ".cache/ms-playwright");
-  if (existsSync(base)) {
-    for (const dir of readdirSync(base)) {
-      for (const leaf of ["chrome-linux64/chrome", "chrome-linux/chrome"]) {
-        const p = resolve(base, dir, leaf);
-        if (existsSync(p)) return p;
-      }
-    }
-  }
-  for (const p of ["/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser"]) {
-    if (existsSync(p)) return p;
-  }
-  throw new Error("no Chrome/Chromium found (set $RADD_CHROME)");
-}
+import { openBrowser, report, sleep } from "./lib/cdp.mjs";
 
 const [baseUrl, spaceSlug, email, password] = process.argv.slice(2);
 const PORT = 9451;
@@ -65,145 +45,16 @@ const SEED = [
   "",
 ].join("\n");
 
-/**
- * Make headless Chrome admit it has a mouse.
- *
- * `--headless=new` reports `(hover: none)` and `(pointer: none)` at BASELINE —
- * before any emulation, and `Emulation.setEmulatedMedia` does not change it.
- * Tailwind v4 emits every `group-hover:` utility inside `@media (hover: hover)`,
- * so hover-revealed chrome is simply not styled in a headless proof: `:hover`
- * matches, the class is on the element, the selector matches, and the computed
- * style is still the un-hovered one. That reads exactly like a product bug.
- *
- * hover 2 = hover, pointer 4 = fine. This is a blind spot every proof in this
- * directory shares — anything gated on `group-hover:` is invisible without it.
- */
-const HOVER_CAPABLE =
-  "--blink-settings=primaryHoverType=2,availableHoverTypes=2," +
-  "primaryPointerType=4,availablePointerTypes=4";
-
-const chrome = spawn(
-  findChrome(),
-  ["--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
-   HOVER_CAPABLE,
-   `--remote-debugging-port=${PORT}`, `--user-data-dir=${PROFILE}`, "about:blank"],
-  { stdio: "ignore" },
-);
-
-const consoleErrors = [];
-let ws;
-let nextId = 1;
-const pending = new Map();
-
-function send(method, params = {}, sessionId) {
-  const id = nextId++;
-  ws.send(JSON.stringify(sessionId ? { id, method, params, sessionId } : { id, method, params }));
-  return new Promise((res, rej) => pending.set(id, { res, rej }));
-}
-async function evalInPage(sessionId, expression) {
-  const { result, exceptionDetails } = await send(
-    "Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true }, sessionId,
-  );
-  if (exceptionDetails) {
-    const detail =
-      exceptionDetails.exception?.description ||
-      exceptionDetails.exception?.value ||
-      exceptionDetails.text ||
-      "";
-    throw new Error("page eval threw: " + detail + "\n--- expression ---\n" + expression.slice(0, 600));
-  }
-  return result.value;
-}
-
-/** A real mouse click, at real coordinates, through the browser's input
- *  pipeline — so hit-testing applies. See extension-insert-proof for why. */
-async function clickAt(sessionId, selector, match) {
-  const box = await evalInPage(sessionId, `(() => {
-    const nodes = [...document.querySelectorAll(${JSON.stringify(selector)})];
-    const el = ${match ? `nodes.find((n) => (${match.toString()})(n.textContent || ""))` : "nodes[0]"};
-    if (!el) return null;
-    const target = el.closest("button") || el;
-    const r = target.getBoundingClientRect();
-    const x = r.left + r.width / 2;
-    const y = r.top + r.height / 2;
-    const top = document.elementFromPoint(x, y);
-    return {
-      x, y,
-      hitIsInsideTarget: target.contains(top),
-      hitTag: top ? top.tagName : null,
-      rect: { w: r.width, h: r.height },
-      style: (() => { const s = getComputedStyle(target);
-        return { opacity: s.opacity, pointerEvents: s.pointerEvents, display: s.display, zIndex: s.zIndex }; })(),
-      // Every element painted at that point, outermost last — this is what
-      // turns "the click missed" into "the click was intercepted by X".
-      stack: [...document.elementsFromPoint(x, y)].slice(0, 5)
-        .map((e) => e.tagName + "." + String(e.className).slice(0, 40)),
-    };
-  })()`);
-  if (!box) throw new Error(`clickAt: nothing matched ${selector}`);
-  for (const type of ["mousePressed", "mouseReleased"]) {
-    await send("Input.dispatchMouseEvent", { type, x: box.x, y: box.y, button: "left", clickCount: 1 }, sessionId);
-  }
-  return box;
-}
-
-/** Move the pointer over an element so `group-hover` chrome actually appears —
- *  CSS hover does not respond to a synthesised event on the node. */
-async function hoverOver(sessionId, selector) {
-  const at = await evalInPage(sessionId, `(() => {
-    const el = document.querySelector(${JSON.stringify(selector)});
-    if (!el) return null;
-    const r = el.getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + Math.min(12, r.height / 2) };
-  })()`);
-  if (!at) throw new Error(`hoverOver: nothing matched ${selector}`);
-  await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: at.x, y: at.y }, sessionId);
-  return at;
-}
-
 async function main() {
-  let version;
-  for (let i = 0; i < 40 && !version; i++) {
-    try { version = await (await fetch(`http://127.0.0.1:${PORT}/json/version`)).json(); }
-    catch { await sleep(250); }
-  }
-  if (!version) throw new Error("Chrome CDP did not come up");
-
-  ws = new WebSocket(version.webSocketDebuggerUrl);
-  await new Promise((res, rej) => {
-    ws.addEventListener("open", res, { once: true });
-    ws.addEventListener("error", rej, { once: true });
+  const { session, close } = await openBrowser({
+    port: PORT, profile: PROFILE, width: 1440, height: 1100,
   });
-  ws.addEventListener("message", (ev) => {
-    const m = JSON.parse(ev.data);
-    if (m.id && pending.has(m.id)) {
-      const { res, rej } = pending.get(m.id);
-      pending.delete(m.id);
-      m.error ? rej(new Error(m.error.message)) : res(m.result);
-    } else if (m.method === "Runtime.consoleAPICalled" && m.params.type === "error") {
-      consoleErrors.push(m.params.args.map((a) => a.value ?? a.description ?? "").join(" "));
-    } else if (m.method === "Runtime.exceptionThrown") {
-      consoleErrors.push("EXCEPTION: " + (m.params.exceptionDetails?.exception?.description || ""));
-    }
-  });
+  const { consoleErrors } = session;
 
-  const { targetId } = await send("Target.createTarget", { url: "about:blank" });
-  const { sessionId } = await send("Target.attachToTarget", { targetId, flatten: true });
-  await send("Page.enable", {}, sessionId);
-  await send("Runtime.enable", {}, sessionId);
-  // A persistent profile happily serves the PREVIOUS bundle, which makes this
-  // proof report on code that is not running. Always fetch fresh.
-  await send("Network.enable", {}, sessionId);
-  await send("Network.setCacheDisabled", { cacheDisabled: true }, sessionId);
-  await send("Emulation.setDeviceMetricsOverride",
-    { width: 1440, height: 1100, deviceScaleFactor: 2, mobile: false }, sessionId);
+    await session.navigate(baseUrl + "/", 1200);
+  await session.login(baseUrl, email, password);
 
-  await send("Page.navigate", { url: baseUrl + "/" }, sessionId);
-  await sleep(1200);
-  await evalInPage(sessionId,
-    `(async()=>{const r=await fetch("/api/v1/auth/login",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify(${JSON.stringify({ email, password })})});return r.status;})()`);
-
-  const created = await evalInPage(sessionId, `(async () => {
+  const created = await session.eval(`(async () => {
     const spaces = await (await fetch("/api/v1/page-spaces", {credentials:"include"})).json();
     const space = spaces.find((s) => s.slug === ${JSON.stringify(spaceSlug)});
     const pages = await (await fetch("/api/v1/page-spaces/" + space.id + "/pages", {credentials:"include"})).json();
@@ -223,19 +74,19 @@ async function main() {
     return { id: page.id, slug: page.slug };
   })()`);
 
-  const before = await evalInPage(sessionId,
+  const before = await session.eval(
     `(async () => (await (await fetch("/api/v1/pages/${created.id}", {credentials:"include"})).json()).body)()`);
 
-  await send("Page.navigate", { url: `${baseUrl}/pages/${spaceSlug}/${created.slug}` }, sessionId);
+  await session.send("Page.navigate", { url: `${baseUrl}/pages/${spaceSlug}/${created.slug}` });
   await sleep(2500);
 
-  await evalInPage(sessionId,
+  await session.eval(
     `(() => { document.querySelector('button[aria-label="Edit page"]')?.click(); })()`);
   await sleep(3000);
 
   // What the EDITOR contains. `.ProseMirror` scopes every query to editor-owned
   // DOM, so a read-mode block below cannot make this pass by accident.
-  const inEditor = await evalInPage(sessionId, `(() => {
+  const inEditor = await session.eval(`(() => {
     const pm = [...document.querySelectorAll(".ProseMirror")];
     const q = (sel) => pm.flatMap((root) => [...root.querySelectorAll(sel)]);
     const nodes = q("[data-extension-editable]");
@@ -258,12 +109,12 @@ async function main() {
 
   // Hover, then click Configure — through the input pipeline, so a chrome row
   // painted under something else fails here rather than passing quietly.
-  await hoverOver(sessionId, ".ProseMirror [data-extension-editable]");
+  await session.hover(".ProseMirror [data-extension-editable]");
   await sleep(400);
   // Read the CHROME ROW, not the button: opacity does not inherit, so
   // `getComputedStyle(button).opacity` is 1 whether or not the row is hidden —
   // an assertion on it passes against a chrome nobody can see.
-  const configureVisible = await evalInPage(sessionId, `(() => {
+  const configureVisible = await session.eval(`(() => {
     const b = document.querySelector('button[aria-label^="Configure radd:"]');
     if (!b) return null;
     const row = b.parentElement;
@@ -283,10 +134,10 @@ async function main() {
       buttonClass: String(b.className).slice(0, 60),
     };
   })()`);
-  const configureHit = await clickAt(sessionId, 'button[aria-label^="Configure radd:"]');
+  const configureHit = await session.click('button[aria-label^="Configure radd:"]');
   await sleep(700);
 
-  const dialog = await evalInPage(sessionId, `(() => {
+  const dialog = await session.eval(`(() => {
     const d = document.querySelector('[role="dialog"]');
     if (!d) return null;
     const ta = d.querySelector("textarea");
@@ -301,7 +152,7 @@ async function main() {
   // Change a parameter and save the block. Defensive rather than throwing: a
   // missing textarea is a RESULT this proof should report, not a crash that
   // hides every assertion after it.
-  const retyped = await evalInPage(sessionId, `(() => {
+  const retyped = await session.eval(`(() => {
     const ta = document.querySelector('[role="dialog"] textarea');
     if (!ta) return false;
     const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set;
@@ -310,39 +161,39 @@ async function main() {
     return true;
   })()`);
   await sleep(300);
-  if (retyped) await clickAt(sessionId, '[role="dialog"] button', (t) => t.trim() === "Save");
+  if (retyped) await session.click('[role="dialog"] button', (t) => t.trim() === "Save");
   await sleep(700);
 
-  const afterEdit = await evalInPage(sessionId, `(() => {
+  const afterEdit = await session.eval(`(() => {
     const n = document.querySelector(".ProseMirror [data-extension-editable]");
     return n ? (n.textContent || "").replace(/\\s+/g, " ").trim().slice(0, 80) : null;
   })()`);
 
-  await evalInPage(sessionId, `(() => {
+  await session.eval(`(() => {
     [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Save")?.click();
   })()`);
   await sleep(2200);
 
-  const saved = await evalInPage(sessionId,
+  const saved = await session.eval(
     `(async () => (await (await fetch("/api/v1/pages/${created.id}", {credentials:"include"})).json()).body)()`);
 
   // Round-trip with NOTHING touched: re-seed, open, save, compare.
-  await evalInPage(sessionId, `(async () => {
+  await session.eval(`(async () => {
     await fetch("/api/v1/pages/${created.id}", {
       method: "PATCH", credentials: "include", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({ body: ${JSON.stringify(SEED)} }),
     });
   })()`);
-  await send("Page.navigate", { url: `${baseUrl}/pages/${spaceSlug}/${created.slug}` }, sessionId);
+  await session.send("Page.navigate", { url: `${baseUrl}/pages/${spaceSlug}/${created.slug}` });
   await sleep(2500);
-  await evalInPage(sessionId,
+  await session.eval(
     `(() => { document.querySelector('button[aria-label="Edit page"]')?.click(); })()`);
   await sleep(3000);
-  await evalInPage(sessionId, `(() => {
+  await session.eval(`(() => {
     [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Save")?.click();
   })()`);
   await sleep(2200);
-  const untouched = await evalInPage(sessionId,
+  const untouched = await session.eval(
     `(async () => (await (await fetch("/api/v1/pages/${created.id}", {credentials:"include"})).json()).body)()`);
 
   const checks = {
@@ -373,17 +224,13 @@ async function main() {
     "no console errors": consoleErrors.length === 0,
   };
 
-  console.log(JSON.stringify({ inEditor, configureVisible, configureHit, dialog, retyped, afterEdit, saved, untouched, consoleErrors }, null, 2));
-  console.log("");
-  let failed = 0;
-  for (const [label, ok] of Object.entries(checks)) {
-    console.log(`${ok ? "ok  " : "FAIL"} ${label}`);
-    if (!ok) failed++;
-  }
-  console.log(failed ? `\n${failed} FAILED` : "\nall passed");
-  return failed;
+  return {
+    failed: report(checks, { inEditor, configureVisible, configureHit, dialog, retyped,
+                             afterEdit, saved, untouched, consoleErrors }),
+    close,
+  };
 }
 
 main()
-  .then((failed) => { chrome.kill(); process.exit(failed ? 1 : 0); })
-  .catch((err) => { console.error(err); chrome.kill(); process.exit(2); });
+  .then(({ failed, close }) => { process.exit(failed ? 1 : 0); })
+  .catch((err) => { console.error(err); process.exit(2); });
