@@ -78,6 +78,15 @@ class Permission(StrEnum):
     COMMENT_DELETE = "comment.delete"  # delete others' comments (author deletes own)
     WORKLOG_DELETE = "worklog.delete"  # delete others' worklogs (author deletes own)
     PAGE_DELETE = "page.delete"  # hard-delete pages (rides page.manage)
+    # Attaching a file is its OWN authority (RADD-790). It used to be
+    # `item.update`, which conflated "may edit this issue's fields" with "may add
+    # a file to it": a role built to let someone discuss an issue without editing
+    # it (item.read + comment.write) posted a comment fine and 403'd the moment
+    # the editor uploaded a pasted screenshot — so it read as "commenting is
+    # broken". A reviewer who must not retitle an issue should still be able to
+    # attach the crash log they are describing.
+    ATTACHMENT_CREATE = "attachment.create"  # upload a file to something
+    ATTACHMENT_DELETE = "attachment.delete"  # delete your OWN attachments
     # Project-scoped config C/U/D (state/field/release/form/view/project-access):
     STATE_CREATE = "state.create"
     STATE_UPDATE = "state.update"
@@ -244,6 +253,14 @@ IMPLIED_PERMISSIONS: dict[Permission, frozenset[Permission]] = {
     Permission.PROJECT_MANAGE: frozenset(
         {Permission.STATE_MANAGE, Permission.RELEASE_MANAGE, Permission.FIELD_MANAGE}
     ),
+    # RADD-790: anyone who may edit an issue may attach to it. This is what makes
+    # splitting attachments off `item.update` a WIDENING and never a downgrade —
+    # every existing role keeps exactly what it had, with no data migration, and
+    # a role created tomorrow inherits the same rule. A backfill would have fixed
+    # only the rows that existed on the day it ran.
+    Permission.ITEM_UPDATE: frozenset(
+        {Permission.ATTACHMENT_CREATE, Permission.ATTACHMENT_DELETE}
+    ),
     Permission.GLOBAL_MANAGE: frozenset(
         {
             Permission.LABEL_MANAGE,
@@ -351,6 +368,13 @@ for _perm, _scope, _desc, _umbrella in (
      Permission.PROJECT_MANAGE),
     (Permission.PAGE_DELETE, PermissionScope.GLOBAL, "Hard-delete pages.",
      Permission.PAGE_MANAGE),
+    # RADD-790. Project-scoped like the item they hang off; both ride
+    # project.manage, and `item.update` implies them too (see below) so no role
+    # that can edit an issue loses the ability to attach to it.
+    (Permission.ATTACHMENT_CREATE, PermissionScope.PROJECT,
+     "Attach files to items and comments.", Permission.PROJECT_MANAGE),
+    (Permission.ATTACHMENT_DELETE, PermissionScope.PROJECT,
+     "Remove your own attachments.", Permission.PROJECT_MANAGE),
 ):
     PERMISSION_SCOPES[_perm] = _scope
     PERMISSION_DESCRIPTIONS[_perm] = _desc

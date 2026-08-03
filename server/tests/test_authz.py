@@ -63,6 +63,9 @@ class StubRole:
 SESSION = object()  # never touched once the lookup is patched
 
 TRIAGER = [Permission.ITEM_READ, Permission.ITEM_UPDATE, Permission.COMMENT_WRITE]
+#: What `item.update` drags in (RADD-790) — spelled out so the expectations below
+#: read as "the role's atoms plus what they imply" rather than a magic pair.
+ATTACHING = {Permission.ATTACHMENT_CREATE, Permission.ATTACHMENT_DELETE}
 
 
 def patch_lookups(monkeypatch, *, permission_sets=(), global_permission_sets=(), baseline=None):
@@ -249,6 +252,11 @@ def test_combine_unions_across_role_sets_plus_baseline():
         Permission.PAGE_READ,  # the baseline
         Permission.ITEM_UPDATE,
         Permission.COMMENT_WRITE,
+        # RADD-790: item.update implies the attachment atoms, which is what makes
+        # splitting attaching off it a widening rather than a downgrade for every
+        # role that already had it.
+        Permission.ATTACHMENT_CREATE,
+        Permission.ATTACHMENT_DELETE,
     }
 
 
@@ -257,7 +265,8 @@ def test_combine_custom_role_grants_its_permissions_plus_the_baseline():
     combined = combine_permissions(
         instance_role=InstanceRole.MEMBER, permission_sets=[TRIAGER], baseline=BASELINE
     )
-    assert combined == set(TRIAGER) | BASELINE
+    # `| ATTACHING` because TRIAGER holds item.update, which implies it (RADD-790).
+    assert combined == set(TRIAGER) | BASELINE | ATTACHING
     assert Permission.ITEM_CREATE not in combined
 
 
@@ -340,7 +349,7 @@ async def test_effective_union_of_direct_team_and_floor(monkeypatch):
     # Any ACTIVE user holds the member floor — no membership row involved.
     patch_lookups(monkeypatch, permission_sets=[TRIAGER, [Permission.ITEM_CREATE]])
     permissions = await effective_permissions(SESSION, StubUser(), project=StubProject())
-    assert permissions == set(TRIAGER) | {Permission.ITEM_CREATE, Permission.PAGE_READ}
+    assert permissions == set(TRIAGER) | ATTACHING | {Permission.ITEM_CREATE, Permission.PAGE_READ}
 
 
 async def test_effective_inactive_user_has_no_permissions(monkeypatch):

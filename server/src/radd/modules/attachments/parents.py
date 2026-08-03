@@ -85,7 +85,15 @@ async def _item_read(session: AsyncSession, user: User, item_id: uuid.UUID) -> N
 
 
 async def _item_write(session: AsyncSession, user: User, item_id: uuid.UUID) -> None:
-    await _item_guard(session, user, item_id, Permission.ITEM_UPDATE)
+    """Upload + delete-own. `attachment.create`, NOT `item.update` (RADD-790).
+
+    Those are different authorities and conflating them broke the obvious case: a
+    role of `item.read` + `comment.write` — someone who may discuss an issue but
+    not edit it — posted a comment fine and then 403'd on the pasted screenshot,
+    which reads as "commenting is broken". `item.update` still implies this atom,
+    so nothing that could attach before has stopped being able to.
+    """
+    await _item_guard(session, user, item_id, Permission.ATTACHMENT_CREATE)
 
 
 async def _item_admin(session: AsyncSession, user: User, item_id: uuid.UUID) -> None:

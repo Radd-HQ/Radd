@@ -85,7 +85,11 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
   const toggleStar = useToggleStarOnItem();
   const perms = usePermissions();
   const can = useCan();
-  const canEditItem = perms.project(project, Permission.itemUpdate);
+  // Attaching is its own atom (RADD-790): a commenter who may not retitle the
+  // issue may still attach to it, and `item.update` implies it either way. This
+  // was the page's only remaining use of a bare `item.update` check — everything
+  // else on it goes through `useItemWritability` (spec 96).
+  const canAttach = perms.project(project, Permission.attachmentCreate);
   const canManageProject = perms.project(project, Permission.projectManage);
   // Per-field writability (spec 92): title/description/flag are grant-restrictable builtins, so gate
   // each on its own resolved verdict — disable up front rather than 403 on save.
@@ -449,7 +453,7 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
               </p>
             )}
 
-            <AttachmentsSection item={item} canEdit={canEditItem} />
+            <AttachmentsSection item={item} canEdit={canAttach} />
             </section>
 
             {/* Epic progress (spec 76) is now the HEADER of an expandable list

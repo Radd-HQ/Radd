@@ -16,6 +16,11 @@ export const Permission = {
   /** Spec 22: see other people's timesheets across the server (global). */
   timesheetView: "timesheet.view",
   commentWrite: "comment.write",
+  /** RADD-790: attaching a file is its own authority, not item.update — a role
+   *  that may discuss an issue without editing it can still add the crash log.
+   *  `item.update` implies it, so nothing that could attach before cannot now. */
+  attachmentCreate: "attachment.create",
+  attachmentDelete: "attachment.delete",
   commentReadInternal: "comment.read_internal",
   viewManage: "view.manage",
   teamManage: "team.manage",
