@@ -255,3 +255,26 @@
   border-top-left-radius: 0.375rem;
   border-top-right-radius: 0.375rem;
 }
+
+/* Extension-block chrome (RADD-746).
+   Crepe's reset.css carries `.milkdown button { border: none; background: none }`
+   and is UNLAYERED, so it beats every Tailwind utility regardless of specificity
+   — unlayered normal declarations outrank anything in @layer utilities. Our
+   node-view chrome is React we own, so its styling lives here rather than in a
+   class the reset silently strips.
+   A fixed 24px box, not padding around a 13px icon: `p-1` resolved to 0 inside
+   the editor and left a 13x13 target, which the proof now asserts against.
+   RADD-754 removes Crepe's stylesheet entirely; this block goes with it. */
+.radd-rich-editor .milkdown .radd-extension-chrome button {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border-strong, var(--crepe-color-outline));
+  background: var(--crepe-color-surface);
+  border-radius: 6px;
+}
+.radd-rich-editor .milkdown .radd-extension-chrome button:hover {
+  background: var(--crepe-color-hover);
+}

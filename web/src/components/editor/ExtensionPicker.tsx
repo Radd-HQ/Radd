@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { EditorView } from "@milkdown/prose/view";
 import { pageExtensionsQuery } from "../../lib/queries";
 import type { PageExtensionSpec } from "../../lib/types";
+import { RADD_EXTENSION_NODE } from "./extension-node";
 
 /**
  * The editor's insert menu for page extensions (RADD-709).
@@ -75,24 +76,32 @@ export function ExtensionPicker({
 }
 
 /**
- * Insert ```` ```radd:<name> ```` at the cursor, pre-filled with the schema's
- * defaults.
+ * Insert `radd:<name>` at the cursor, pre-filled with the schema's defaults.
  *
  * Pre-filling matters more than it looks: an empty block is valid but tells the
- * author nothing about what they may set, and the alternative — a parameter form
- * in the menu — asks people to fill in a dialog before they can see the thing
- * they are inserting. The defaults ARE the documentation, editable in place.
+ * author nothing about what they may set. Since RADD-746 the block also RENDERS
+ * where it is inserted, so the defaults are visible as a result rather than as
+ * JSON — which is what makes "insert, then adjust" a reasonable order of work.
+ *
+ * The `code_block` fallback is not dead code: it is what a surface WITHOUT the
+ * extension node (the picker is opt-in per surface) would produce, and it emits
+ * the identical fence — the same honest degradation the wire format has.
  */
 export function insertExtensionBlock(view: EditorView, spec: PageExtensionSpec): void {
   const { state } = view;
-  const codeBlock = state.schema.nodes.code_block;
-  if (!codeBlock) return;
   const params = defaultsFor(spec);
-  const text = Object.keys(params).length ? JSON.stringify(params, null, 2) : "";
-  const node = codeBlock.create(
-    { language: `radd:${spec.name}` },
-    text ? state.schema.text(text) : null,
-  );
+  const body = Object.keys(params).length ? JSON.stringify(params, null, 2) : "";
+  const extension = state.schema.nodes[RADD_EXTENSION_NODE];
+  const codeBlock = state.schema.nodes.code_block;
+  const node = extension
+    ? extension.create({ name: spec.name, body })
+    : codeBlock
+      ? codeBlock.create(
+          { language: `radd:${spec.name}` },
+          body ? state.schema.text(body) : null,
+        )
+      : null;
+  if (!node) return;
   view.dispatch(state.tr.replaceSelectionWith(node).scrollIntoView());
   view.focus();
 }

@@ -13,8 +13,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@radd/plugin-sdk": "*",
     "@milkdown/crepe": "^7.21.3",
+    "@prosemirror-adapter/react": "^0.5.5",
+    "@radd/plugin-sdk": "*",
     "@tanstack/react-query": "^5.101.2",
     "@tanstack/react-router": "^1.170.18",
     "lucide-react": "^1.25.0",

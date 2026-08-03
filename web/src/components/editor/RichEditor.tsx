@@ -2,10 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Crepe, CrepeFeature, type CrepeConfig } from "@milkdown/crepe";
 import { editorViewCtx } from "@milkdown/kit/core";
+import { $view } from "@milkdown/kit/utils";
 import { diffDecorationPlugin } from "@milkdown/kit/component/diff";
+import { ProsemirrorAdapterProvider, useNodeViewFactory } from "@prosemirror-adapter/react";
 import { useQuery } from "@tanstack/react-query";
 import { aiErrorText, isAiGone } from "../../lib/ai";
 import { jiraToMarkdown } from "../../lib/jira-markup";
+import { MarkdownSourceCtx } from "../../lib/markdown";
 import { searchQuery, usersQuery } from "../../lib/queries";
 import { pushToast } from "../../lib/toast";
 import {
@@ -23,6 +26,8 @@ import {
   insertExtensionBlock,
 } from "./ExtensionPicker";
 import { raddDiffDecoration } from "./diff/decoration-plugin";
+import { raddExtensionRemark, raddExtensionSchema } from "./extension-node";
+import { ExtensionNodeView } from "./ExtensionNodeView";
 import {
   insertMention,
   mentionProsePlugin,
@@ -83,14 +88,41 @@ interface Candidate {
 
 const MENTION_LIMIT = 6;
 
+/** How long to let typing settle before a live `radd:toc` re-reads the doc. */
+const SOURCE_DEBOUNCE_MS = 300;
+
 /**
  * Obsidian-style WYSIWYG editor (Milkdown/Crepe): you type markdown and it renders
  * live, but the value in and out is always **markdown** — so nothing else in the app
  * (storage, rendering, search) has to change. A fixed TopBar toolbar inserts blocks;
  * `@` autocompletes people, `#` autocompletes issues (emitting the same
  * `@[Name](uuid)` / `#[KEY](KEY)` tokens the reader renders). Reused by pages + comments.
+ *
+ * The provider is the React half of the node-view bridge (RADD-746): a
+ * ProseMirror node view rendered as a PORTAL into this tree keeps the router,
+ * the query client and the page context it would otherwise lose crossing into
+ * editor-owned DOM. It renders no element of its own — four context providers
+ * and the portal list — so it costs nothing on a surface with no node views.
+ *
+ * `MarkdownSourceCtx` sits ABOVE it on purpose, and the reason is easy to get
+ * wrong: the adapter renders its portals as a SIBLING of `children`, so a
+ * provider inside the inner component would not reach them. A live `radd:toc`
+ * reads its headings from that context, so it has to wrap the portal list, not
+ * the editor.
  */
-export function RichEditor({
+export function RichEditor(props: RichEditorProps) {
+  // The live markdown, for extensions that read the document they sit in.
+  const [source, setSource] = useState(() => jiraToMarkdown(props.value));
+  return (
+    <MarkdownSourceCtx.Provider value={source}>
+      <ProsemirrorAdapterProvider>
+        <RichEditorInner {...props} onSourceChange={setSource} />
+      </ProsemirrorAdapterProvider>
+    </MarkdownSourceCtx.Provider>
+  );
+}
+
+function RichEditorInner({
   value,
   onChange,
   placeholder,
@@ -102,7 +134,8 @@ export function RichEditor({
   extensions = false,
   className = "",
   autoFocus = false,
-}: RichEditorProps) {
+  onSourceChange,
+}: RichEditorProps & { onSourceChange: (markdown: string) => void }) {
   const rootRef = useRef<HTMLDivElement>(null);
   // Latest callbacks without recreating the editor (create-once, uncontrolled).
   const onChangeRef = useRef(onChange);
@@ -153,6 +186,14 @@ export function RichEditor({
   // identity — it is a static per-surface choice, not live state.
   const extensionsRef = useRef(extensions);
   extensionsRef.current = extensions;
+  // Builds a ProseMirror node view whose body is a React portal into this tree.
+  const nodeViewFactory = useNodeViewFactory();
+  // Publishing the live markdown is only worth it on surfaces that HAVE
+  // extensions: elsewhere it would re-render the chrome on every keystroke to
+  // feed nothing. Debounced for the same reason — a toc rebuilding per
+  // character is work nobody can see.
+  const onSourceChangeRef = useRef(onSourceChange);
+  onSourceChangeRef.current = onSourceChange;
 
   const insertExtension = (spec: PageExtensionSpec) => {
     setExtensionMenu(null);
@@ -355,10 +396,35 @@ export function RichEditor({
     if (!anonymous) crepe.editor.use(mentionProsePlugin(store));
     // Same chip rendering as the read-mode viewer (clicks consumed while editing).
     crepe.editor.use(mentionChipsPlugin({ readonly: false, openIssue: () => {} }));
+    // `radd:*` fences become a real node with a live React view (RADD-746).
+    // Registered only where extensions are offered: a comment has no page whose
+    // headings a `toc` could list, and turning its fences into rendered blocks
+    // there would change what a comment does, not just how it looks.
+    if (extensionsOn) {
+      crepe.editor
+        .use(raddExtensionRemark)
+        .use(raddExtensionSchema)
+        .use(
+          $view(raddExtensionSchema.node, () =>
+            nodeViewFactory({
+              component: ExtensionNodeView,
+              // The block is an atom whose body is interactive React — links,
+              // buttons, a config dialog. ProseMirror must not treat a click
+              // inside it as a click on the document.
+              stopEvent: () => true,
+            }),
+          ),
+        );
+    }
+    let sourceTimer: ReturnType<typeof setTimeout> | undefined;
     crepe.on((listener) => {
       listener.markdownUpdated((_ctx, markdown) => {
         contentRef.current = markdown;
         onChangeRef.current(markdown);
+        if (extensionsOn) {
+          clearTimeout(sourceTimer);
+          sourceTimer = setTimeout(() => onSourceChangeRef.current(markdown), SOURCE_DEBOUNCE_MS);
+        }
       });
     });
     crepeRef.current = crepe;
@@ -383,6 +449,7 @@ export function RichEditor({
       }
     })();
     return () => {
+      clearTimeout(sourceTimer);
       // Destroy only after create resolves, so an unmount mid-init can't race.
       void created.then(() => crepe.destroy());
       if (crepeRef.current === crepe) crepeRef.current = null;
