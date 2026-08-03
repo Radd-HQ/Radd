@@ -15,8 +15,8 @@ async def _shutdown() -> None:
 
 
 plugin = RaddPlugin(
-    on_startup=_startup,
-    on_shutdown=_shutdown,
+    on_startup=(_startup,),
+    on_shutdown=(_shutdown,),
     name="events",
     description="Transactional outbox: append-only event log, the spine every consumer reads.",
     routers=(router,),
