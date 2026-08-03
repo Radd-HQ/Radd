@@ -25,7 +25,8 @@ import {
 } from "@milkdown/kit/preset/gfm";
 import { upload, uploadConfig } from "@milkdown/kit/plugin/upload";
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
-import { diffDecorationPlugin } from "@milkdown/kit/component/diff";
+import { diffComponent, diffDecorationPlugin } from "@milkdown/kit/component/diff";
+import { diff } from "@milkdown/kit/plugin/diff";
 import { ProsemirrorAdapterProvider, useNodeViewFactory } from "@prosemirror-adapter/react";
 import { Blocks, Sparkles, type LucideIcon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -34,16 +35,13 @@ import { jiraToMarkdown } from "../../lib/jira-markup";
 import { MarkdownSourceCtx } from "../../lib/markdown";
 import { searchQuery, usersQuery } from "../../lib/queries";
 import { pushToast } from "../../lib/toast";
-import {
-  buildSuggestions,
-  createAiProvider,
-  runAiOnEditor,
-  useEditorAi,
-  type AiRun,
-} from "./ai";
+import { useEditorAi, type AiRun } from "./ai";
 import { AiActionPicker } from "./AiActionPicker";
 import { ExtensionPicker, insertExtensionBlock } from "./ExtensionPicker";
 import { raddDiffDecoration } from "./diff/decoration-plugin";
+import { AiSelectionToolbar } from "./AiSelectionToolbar";
+import { reviewPending, runAi } from "./ai-run";
+import { NO_SELECTION, selectionRectPlugin, type SelectionRect } from "./selection-state";
 import { CodeBlockView } from "./CodeBlockView";
 import { ImageNodeView } from "./ImageNodeView";
 import { TableGridPicker } from "./TableGridPicker";
@@ -261,6 +259,11 @@ function RichEditorInner({
   // What the toolbar lights up. Published by a plugin view only when it CHANGES,
   // so typing inside one paragraph does not re-render the chrome per keystroke.
   const [snapshot, setSnapshot] = useState<ToolbarSnapshot>(EMPTY_SNAPSHOT);
+  // Where the selection is, for the floating AI surface (RADD-753).
+  const [selectionRect, setSelectionRect] = useState<SelectionRect>(NO_SELECTION);
+  // Text so far while a transform streams; null when idle.
+  const [streaming, setStreaming] = useState<string | null>(null);
+  const aiHandleRef = useRef<{ cancel: () => void } | null>(null);
   // The table size picker, anchored under the toolbar's table button.
   const [tableMenu, setTableMenu] = useState<{ left: number; top: number } | null>(null);
   // Table operations bound to whichever instance is live. A stable identity, so
@@ -330,10 +333,36 @@ function RichEditorInner({
   const onHeading = (level: number) =>
     level === 0 ? run(turnIntoTextCommand.key) : run(wrapInHeadingCommand.key, level);
 
-  const dispatchAiRun = (run: AiRun) => {
+  /**
+   * Stream a transform and land it as a reviewable diff (RADD-753).
+   *
+   * A direct call, not a command dispatched by NAME. That workaround existed
+   * because importing Crepe's `runAICmd` from its subpath bound a second, dead
+   * copy of the feature module — and a `$command`'s `.key` is only assigned when
+   * its plugin instance runs. Owning the orchestration removes the reason for
+   * the trick rather than making the trick tidier.
+   */
+  const dispatchAiRun = (run: AiRun, range?: { from: number; to: number }) => {
     setAiMenu(null);
-    crepeRef.current?.editor.action((ctx) => {
-      if (!runAiOnEditor(ctx, run)) pushToast("Finish the current AI review first.");
+    const crepe = crepeRef.current;
+    if (!crepe) return;
+    crepe.editor.action((ctx) => {
+      if (reviewPending(ctx)) {
+        pushToast("Finish the current AI review first.");
+        return;
+      }
+      const handle = runAi(ctx, run, range);
+      aiHandleRef.current = handle;
+      setStreaming("");
+      handle.onChunk(setStreaming);
+      handle.done
+        .catch((error) => {
+          pushToast(isAiGone(error) ? "AI editor actions are unavailable." : aiErrorText(error));
+        })
+        .finally(() => {
+          aiHandleRef.current = null;
+          setStreaming(null);
+        });
     });
   };
 
@@ -439,14 +468,18 @@ function RichEditorInner({
       features: {
         // Ours now (RADD-749) — rendered above this root as real React.
         [CrepeFeature.TopBar]: false,
-        [CrepeFeature.Toolbar]: aiOn,
+        // Ours now (RADD-753). Its only entry we used was the AI one, and the
+        // rest duplicated the top bar.
+        [CrepeFeature.Toolbar]: false,
         [CrepeFeature.BlockEdit]: false,
         // Ours now (RADD-751): the image node view carries the resize handle, and
         // paste/drop upload moves to @milkdown/plugin-upload below. Crepe's block
         // image was a second node type for the same markdown, which is one more
         // thing that would have had to be untangled at removal time.
         [CrepeFeature.ImageBlock]: false,
-        [CrepeFeature.AI]: aiOn,
+        // Ours now (RADD-753) — same endpoint, same reviewable diff, and no
+        // dispatch through a name lookup to dodge a duplicate module instance.
+        [CrepeFeature.AI]: false,
         [CrepeFeature.Latex]: false,
         // Ours now (RADD-752) — CodeMirror wired directly, so we own when a
         // <pre> becomes a .cm-editor rather than discovering it in a proof.
@@ -457,16 +490,6 @@ function RichEditorInner({
       },
       featureConfigs: {
         [CrepeFeature.Placeholder]: { text: placeholder ?? "Write…" },
-        [CrepeFeature.AI]: {
-          provider: createAiProvider(),
-          buildAISuggestions: buildSuggestions(ai?.actions ?? []),
-          diffReviewOnEnd: true, // stream lands as a reviewable diff, never a silent replace
-          onError: (error) => {
-            // Crepe wraps whatever the provider threw; our ApiError is the cause.
-            const cause = error.cause ?? error;
-            pushToast(isAiGone(cause) ? "AI editor actions are unavailable." : aiErrorText(cause));
-          },
-        },
       },
     });
     // @/#/"/" triggers (before create) — not on anonymous pages: the popups
@@ -565,11 +588,21 @@ function RichEditorInner({
     crepeRef.current = crepe;
     const created = (async () => {
       if (aiOn) {
-        // Per-block AI diff review: swap Crepe's per-chunk decoration plugin
-        // for the fork (see diff/decoration-plugin.ts). Pre-create, so the
-        // remove is a plain unregister.
+        // The review machinery, registered by us now that Crepe's AI feature is
+        // not doing it: the diff STATE plugin plus our own decoration fork (see
+        // diff/decoration-plugin.ts). The upstream decoration component is
+        // removed first — with the feature off it is usually absent, and
+        // `remove` on something unregistered is a no-op, so this stays correct
+        // either way rather than depending on which.
+        // `diffComponent` carries the ctx slice our fork reads (labels +
+        // customBlockTypes) — Crepe's AI feature used to bring it, and reaching
+        // for that slice without it raises "Context not found" before the editor
+        // can even create. Its defaults are already Accept/Reject, so it is
+        // registered for the SLICE and then has its decoration plugin swapped
+        // for ours.
+        crepe.editor.use(diff).use(diffComponent);
         await crepe.editor.remove(diffDecorationPlugin);
-        crepe.editor.use(raddDiffDecoration);
+        crepe.editor.use(raddDiffDecoration).use(selectionRectPlugin(setSelectionRect));
       }
       await crepe.create();
       if (autoFocus) root.querySelector<HTMLElement>(".ProseMirror")?.focus();
@@ -578,9 +611,7 @@ function RichEditorInner({
       const run = initialAiRunRef.current;
       if (aiOn && run) {
         initialAiRunRef.current = null;
-        crepe.editor.action((ctx) => {
-          runAiOnEditor(ctx, run);
-        });
+        dispatchAiRun(run);
       }
     })();
     return () => {
@@ -728,6 +759,15 @@ function RichEditorInner({
           </>,
           document.body,
         )}
+      {ai && (
+        <AiSelectionToolbar
+          rect={selectionRect}
+          actions={ai.actions}
+          onRun={dispatchAiRun}
+          streaming={streaming}
+          onCancel={() => aiHandleRef.current?.cancel()}
+        />
+      )}
       {tableMenu &&
         createPortal(
           <TableGridPicker
