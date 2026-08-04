@@ -257,12 +257,45 @@
   outline: none;
   min-width: 14rem;
 }
-.radd-rich-editor .milkdown milkdown-list-item-block .list-item {
+/* RADD-849: the block renders as BOTH the custom element (edit chrome) and a
+   plain `div.milkdown-list-item-block` (the node view's actual wrapper — what
+   the read view shows), and an element selector alone missed the second form:
+   the label and content were block siblings, so every marker sat on its own
+   line above its text. Match both. */
+.radd-rich-editor .milkdown :is(milkdown-list-item-block, .milkdown-list-item-block) .list-item {
   display: flex;
-  align-items: flex-start;
-  gap: 6px;
+  align-items: baseline;
+  gap: 8px;
 }
-.radd-rich-editor .milkdown milkdown-list-item-block .label-wrapper {
+.radd-rich-editor .milkdown :is(milkdown-list-item-block, .milkdown-list-item-block) .label-wrapper {
   color: var(--color-fg-muted);
   user-select: none;
+  flex: none;
+  min-width: 14px;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.6;
+}
+/* The component's unordered marker is a literal U+29BF (⦿) — it reads as a
+   radio button. Swap the glyph in CSS: • at the top level, ◦ nested (the
+   GitHub convention), sized to the body text. */
+.radd-rich-editor .milkdown :is(milkdown-list-item-block, .milkdown-list-item-block) .label.bullet {
+  font-size: 0;
+}
+.radd-rich-editor .milkdown :is(milkdown-list-item-block, .milkdown-list-item-block) .label.bullet::before {
+  content: "\2022";
+  font-size: 14px;
+  line-height: 1.6;
+}
+.radd-rich-editor .milkdown .ProseMirror ul ul .label.bullet::before {
+  content: "\25E6";
+}
+/* Loose lists nest each item's paragraphs under .children > .content-dom —
+   the `li > p` reset above never reaches them, which is where the airy
+   one-blank-line-per-item spacing came from. */
+.radd-rich-editor .milkdown :is(milkdown-list-item-block, .milkdown-list-item-block) .content-dom > p {
+  padding: 0;
+}
+.radd-rich-editor .milkdown :is(milkdown-list-item-block, .milkdown-list-item-block) {
+  margin: 2px 0;
 }
