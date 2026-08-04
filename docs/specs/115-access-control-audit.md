@@ -137,14 +137,64 @@ system can express *today*.
 | 19 | View **and edit issues in** a board | ⚠️ | Two unrelated systems: board access is a view share, issue editing is `item.update` on the project. A board grant confers nothing on issues, which is correct but not discoverable |
 | 20 | Create own views, **not** modify issues | ✅ | `view.create` without `item.update` |
 | 21 | Create own views, modify issues, **and share** | ✅ | `view.create` + `item.update`; sharing is view `owner` |
+| 22 | A field **writable everywhere but read-only on TD** | ✅ | One project-scoped grant. Works today — see §3.1; the caveats are #23 and F5 |
+| 23 | The same, read-only for **literally everyone** on TD | ❌ | Every grant names a subject, so the minimum expressible restriction is "only X may write here". Needs deny (§5.4) |
 | — | *Suggested:* time-bounded / expiring grant | ❌ | No `expires_at` on any grant table |
 | — | *Suggested:* deny rule that overrides a grant | ❌ | Every layer is additive; no precedence model |
 | — | *Suggested:* read-only **project** (archive) | ⚠️ | Only by editing every role's atoms |
 | — | *Suggested:* per-issue-type permissions ("only QA files Bugs") | ❌ | No atom or ACL keys on `type_id` |
 | — | *Suggested:* approval-only actor (may transition, nothing else) | ⚠️ | Spec 107 guards check *data*, not *who* |
 
-**Score: 11 clean, 6 awkward, 5 impossible.** The awkward ones share one cause
+**Score: 12 clean, 6 awkward, 6 impossible.** The awkward ones share one cause
 (allowlist inversion); the impossible ones share another (no row-level model).
+
+### 3.1 Per-project field restriction — it works, and nobody can tell
+
+Scenario 22 deserves its own note because it was raised as a *suspected gap* by
+the person who designed the system, and it is not one. The belief was: "fields
+are public unless we scope them, but then they become restricted everywhere."
+
+That is **two different mechanisms being read as one**:
+
+| | Controls | Empty means |
+|---|---|---|
+| **Field scope** — `field_definition_projects` (spec 91) | which projects the field *exists* on | global (exists everywhere) |
+| **Field grants** — `access_grants.project_id` (spec 92) | who may read/write it, optionally *per project* | unrestricted (open) |
+
+Scoping a field narrows where it **exists**. Granting on a field narrows who may
+**use** it, and a grant carrying `project_id` narrows *only that project* —
+because `in_scope` drops it everywhere else:
+
+```python
+def in_scope(grant, project_id):
+    return grant.project_id is None or grant.project_id == project_id
+```
+
+Verified against the pure resolver, one grant (restrict `write` on TD to the
+Leads role), no other change:
+
+```
+ordinary user   on TD      read=True   write=False    <- read-only, as wanted
+ordinary user   on OTHER   read=True   write=True     <- untouched
+lead            on TD      read=True   write=True
+lead            on OTHER   read=True   write=True
+```
+
+So the capability is there and it costs one grant. **The defect is that this is
+undiscoverable**: the two mechanisms are adjacent in the same admin surface, both
+say "project", and nothing on screen distinguishes "where this field exists" from
+"where this restriction applies". If the system's own author reads it the other
+way, every admin will. See F12.
+
+Two caveats that are real, and both already have issues:
+
+- **You cannot restrict to nobody** (scenario 23). `access_grants.subject_id` is
+  NOT NULL, so a restricting grant always hands the access to whoever it names.
+  "Read-only for everyone on TD" has to be faked by granting write to a role
+  nobody holds. Deny (§5.4) is the honest form.
+- **`project.manage` bypasses it.** `has_manage=True` returns `True` before any
+  subject matching runs, so a project manager writes the field regardless.
+  Confirmed by probe. That is F5.2, and it is why the bypass should go.
 
 ---
 
@@ -234,6 +284,22 @@ referencing atoms the catalog no longer knows.
 granted roles. It does not read `access_grants`, so it cannot answer "why can
 this person see this space / view / field" — the questions Layer 3 decides. It
 also has no Team view, no backlinks, and its `?project_id=` parameter has no UI.
+
+### F12 — Field *scope* and field *grants* are indistinguishable on screen
+**Severity: medium — a capability that exists but reads as missing is worth as
+little as one that does not exist.** §3.1 has the detail. Spec 91 gave a custom
+field a project scope (where it exists); spec 92 gave it project-scoped grants
+(where a restriction applies). Both are edited from the custom-fields admin, both
+present a project multiselect, and neither is labelled in a way that says which
+question it answers. The observed consequence is that per-project field
+restriction — which works, in one grant — was believed to be unbuilt.
+
+The fix is wording and layout, not model: name the two sections for the questions
+they answer ("Available on" vs "Restricted on"), and state the default inline —
+"no restriction here means everyone who can see the field can write it". The
+inspector (F10) should also say *which* project a field restriction came from,
+since a grant scoped to one project is otherwise indistinguishable from a global
+one in its output.
 
 ### F11 — No expiry, no audit trail on grants
 **Severity: low-medium.** No `expires_at` on `role_grants` or `access_grants`;
