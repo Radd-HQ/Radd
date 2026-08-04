@@ -28,7 +28,10 @@ import { QueryError } from "../../components/QueryError";
  */
 export function FieldsSettingsPage() {
   const perms = usePermissions();
-  const canManage = perms.global(Permission.fieldManage);
+  // RADD-810: field.manage is project-scoped and this page has no single
+  // project — holding it ANYWHERE opens the editors; the server enforces per
+  // definition.
+  const canManage = perms.anyProject(Permission.fieldManage);
   const fields = useQuery(fieldsQuery());
   const projects = useQuery(projectsQuery());
   const [creating, setCreating] = useState(false);

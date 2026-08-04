@@ -8,6 +8,7 @@ import {
   effectiveScreenQuery,
   fieldsQuery,
   issueTypesQuery,
+  projectsQuery,
   queryKeys,
 } from "../../lib/queries";
 import {
@@ -52,6 +53,10 @@ const PROJECT_DEFAULT = ""; // the issue-type <select> sentinel for the project 
  */
 export function ScreensSettingsPage({ projectId }: { projectId: string | undefined }) {
   const perms = usePermissions();
+  // RADD-810: project.manage is project-scoped and a project IS in context —
+  // resolve against it, so a per-project manager can edit their screens.
+  const { data: allProjects } = useQuery(projectsQuery());
+  const contextProject = (allProjects ?? []).find((p) => p.id === projectId) ?? null;
   const types = useQuery({ ...issueTypesQuery(projectId ?? ""), enabled: Boolean(projectId) });
   const fields = useQuery(fieldsQuery());
   const [typeId, setTypeId] = useState<string>(PROJECT_DEFAULT);
@@ -96,7 +101,7 @@ export function ScreensSettingsPage({ projectId }: { projectId: string | undefin
         projectId={projectId}
         issueTypeId={typeId || null}
         labelFor={labelFor}
-        canManage={perms.global(Permission.projectManage)}
+        canManage={perms.project(contextProject, Permission.projectManage)}
       />
     </SettingsPage>
   );

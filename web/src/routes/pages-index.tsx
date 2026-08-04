@@ -22,6 +22,8 @@ export function PagesIndexPage() {
     );
   }
 
+  // deliberately-global: gates CREATING a space, which `create_space` checks
+  // with no space id (RADD-810) — not a per-space question.
   const canManage = perms.global(Permission.pageManage);
   const list = spaces.data ?? [];
 

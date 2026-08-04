@@ -26,6 +26,10 @@ import { QueryError } from "../../components/QueryError";
 /** Page spaces admin (spec 43, doc.manage): create/rename/delete pages spaces. */
 export function PagesSettingsPage() {
   const perms = usePermissions();
+  // deliberately-global: creating/renaming/deleting SPACES is what this page
+  // does, and `create_space` checks PAGE_MANAGE with no space id (RADD-810) —
+  // the global question matches the server here even though the atom is
+  // space-scoped.
   const canManage = perms.global(Permission.pageManage);
   const spaces = useQuery(pageSpacesQuery());
   const queryClient = useQueryClient();

@@ -86,19 +86,17 @@ export function PageSpacePage() {
     );
   }
 
-  const canWrite = perms.global(Permission.pageWrite);
-  const canManage = perms.global(Permission.pageManage);
+  // RADD-810: all three resolve against THIS space — the server checks them at
+  // space scope (RADD-791; page comments via comments_binding), so a member
+  // granted page.write in one space finally sees its editors. The old global
+  // questions were false for every space-scoped grant holder.
+  const canWrite = perms.space(space, Permission.pageWrite);
+  const canManage = perms.space(space, Permission.pageManage);
   // A SEPARATE atom (RADD-770). The server gates a page comment on `page.read`
-  // + `comment.write`, and says why: "the point of a page discussion is that
-  // people who cannot edit the page can still argue about it".
-  //
-  // The composer used to be handed `canWrite` — and `page.write` is in
-  // MEMBER_GLOBAL_SCOPE, held by every active user unconditionally. So that
-  // check was not mis-scoped, it was a CONSTANT: the composer rendered for
-  // everyone and refused everyone who lacked `comment.write`, which no builtin
-  // role grants at global scope. A gate whose input is always true is worse than
-  // no gate, because it reads as handled.
-  const canComment = perms.global(Permission.commentWrite);
+  // + `comment.write`, resolved in the space (comments_binding.py), and says
+  // why: "the point of a page discussion is that people who cannot edit the
+  // page can still argue about it".
+  const canComment = perms.space(space, Permission.commentWrite);
   const rows = pages.data ?? [];
 
   return (

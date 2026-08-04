@@ -21,6 +21,7 @@ import {
   fieldWritabilityQuery,
   instanceConfigQuery,
   itemByKeyQuery,
+  pageSpacesQuery,
   projectsQuery,
   resolvedSettingQuery,
   slqValidateQuery,
@@ -174,14 +175,18 @@ export interface PermissionChecks {
     space: Pick<PageSpace, "permissions"> | null | undefined,
     permission: PermissionValue,
   ) => boolean;
+  /** Held in AT LEAST ONE readable space — the space mirror of `anyProject`,
+   * for surfaces that span spaces (RADD-810: the item↔page link picker). */
+  anySpace: (permission: PermissionValue) => boolean;
 }
 
 export function usePermissions(): PermissionChecks {
   const authState = useAuthState();
-  // Already fetched app-wide (the sidebar renders the project tree), so this is
-  // a cache read rather than a request. `permissions` on each row is the
-  // backend's per-project union for the current user.
+  // Already fetched app-wide (the sidebar renders the project tree / Docs
+  // section), so these are cache reads rather than requests. `permissions` on
+  // each row is the backend's per-project / per-space union for the current user.
   const { data: projects } = useQuery(projectsQuery());
+  const { data: spaces } = useQuery(pageSpacesQuery());
 
   return useMemo(() => {
     const allowAll =
@@ -205,8 +210,12 @@ export function usePermissions(): PermissionChecks {
         (projects ?? []).some((p) => p.permissions?.includes(permission)),
       space: (space, permission) =>
         allowAll || Boolean(space?.permissions?.includes(permission)),
+      anySpace: (permission) =>
+        allowAll ||
+        globalPermissions.has(permission) ||
+        (spaces ?? []).some((s) => s.permissions?.includes(permission)),
     };
-  }, [authState, projects]);
+  }, [authState, projects, spaces]);
 }
 
 /**

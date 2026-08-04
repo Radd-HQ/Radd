@@ -23,7 +23,10 @@ import { Permission, type PageLinkedItem, type Item } from "../../lib/types";
  */
 export function ItemPagesSection({ item }: { item: Item }) {
   const perms = usePermissions();
-  const canWrite = perms.global(Permission.pageWrite);
+  // RADD-810: linked pages span spaces, so the affordance shows when the actor
+  // holds page.write in ANY readable space (the server still enforces per
+  // page). The old global question was false for every space-scoped grant.
+  const canWrite = perms.anySpace(Permission.pageWrite);
   const docs = useQuery(itemPagesQuery(item.id));
 
   if (docs.isError || docs.isPending) return null;

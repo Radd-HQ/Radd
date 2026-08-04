@@ -316,10 +316,11 @@ export function Sidebar() {
 
         {/* Pages (spec 43): page spaces, between Views and Cycles.
             Shown when the server returned spaces, or when the actor may create
-            one — `page.manage` with no space is the global check `create_space`
-            itself makes, so that branch is what keeps "No spaces yet." reachable
-            for an admin on a fresh instance. Someone with neither sees no
-            section at all rather than a permanently empty header (RADD-808). */}
+            one — deliberately-global: `page.manage` with no space is the global
+            check `create_space` itself makes, so that branch is what keeps
+            "No spaces yet." reachable for an admin on a fresh instance. Someone
+            with neither sees no section at all rather than a permanently empty
+            header (RADD-808). */}
         {((pageSpaces ?? []).length > 0 || perms.global(Permission.pageManage)) && (
           <div className="mt-3">
             <SectionHeader
@@ -328,6 +329,8 @@ export function Sidebar() {
               collapsed={sectionCollapsed("pages")}
               onToggle={() => toggleSection("pages")}
               actions={
+                // deliberately-global: links to space ADMIN (create/rename),
+                // which the server checks with no space id (RADD-810).
                 perms.global(Permission.pageManage) && (
                   <Link
                     to={RoutePath.settingsPages}
