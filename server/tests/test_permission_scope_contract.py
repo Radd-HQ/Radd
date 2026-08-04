@@ -74,12 +74,18 @@ def test_every_server_scope_is_declared_by_the_spa() -> None:
 
 
 @pytest.mark.skipif(not _MATRIX.exists(), reason="SPA sources not present in this checkout")
-def test_every_server_scope_is_rendered_by_the_matrix() -> None:
-    rendered = _rendered_scopes()
-    missing = {s.name.lower() for s in PermissionScope} - rendered
-    assert not missing, (
-        f"{sorted(missing)} are declared but absent from SCOPE_ORDER in {_MATRIX.name}, "
-        "so their atoms render nowhere and cannot be granted."
+def test_the_matrix_never_filters_by_scope() -> None:
+    """RADD-815 regrouped the matrix by RESOURCE: every catalog atom renders
+    unconditionally, so the RADD-808 class (a scope value with no bucket
+    silently dropping its atoms) is impossible STRUCTURALLY. This pins that —
+    a scope-based filter reappearing in the matrix is the regression."""
+    source = _MATRIX.read_text()
+    assert "byResource(catalog)" in source, (
+        f"{_MATRIX.name} no longer groups the whole catalog by resource — "
+        "if grouping filters again, dropped atoms become ungrantable invisibly."
+    )
+    assert ".scope ===" not in source and "filter((permission) => permission.scope" not in source, (
+        f"{_MATRIX.name} filters by scope again — the RADD-808 regression."
     )
 
 

@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { EyeOff, MessageSquare, Pencil, Send, Trash2 } from "lucide-react";
 import { ApiError, api, errorMessage } from "../../lib/api";
 import { useAttachmentUploader } from "../../lib/useAttachmentUploader";
@@ -12,8 +12,9 @@ import {
 import { useCurrentUser, usePermissions } from "../../lib/hooks";
 import { Avatar } from "../Avatar";
 import { PersonName } from "../PersonName";
-import { cannedResponsesQuery, commentsQuery, queryKeys, teamsQuery } from "../../lib/queries";
+import { cannedResponsesQuery, commentsQuery, queryKeys, teamMembersQuery, teamsQuery } from "../../lib/queries";
 import {
+  type Team,
   AttachmentParentType,
   CommentVisibility,
   Permission,
@@ -57,6 +58,33 @@ interface CommentsThreadProps {
   /** For the comment.read_internal check gating the visibility toggle (spec 07). */
   project: Project;
 }
+
+/** RADD-836 U2 — the audience, resolved: named teams with their headcounts
+ * (group-carried members included, via the server's team member listing), or
+ * the honest wide answer when no team narrows it. */
+function AudienceLine({ teamIds, teams }: { teamIds: string[]; teams: Team[] }) {
+  const counts = useQueries({
+    queries: teamIds.map((id) => teamMembersQuery(id)),
+  });
+  if (teamIds.length === 0) {
+    return (
+      <p className="self-start text-[11px] text-fg-faint">
+        Visible to everyone on this project who can read internal notes.
+      </p>
+    );
+  }
+  const parts = teamIds.map((id, index) => {
+    const name = teams.find((team) => team.id === id)?.name ?? "?";
+    const n = counts[index]?.data?.length;
+    return n === undefined ? name : `${name} (${n} ${n === 1 ? "person" : "people"})`;
+  });
+  return (
+    <p className="self-start text-[11px] text-fg-faint">
+      Visible to {parts.join(", ")} — plus internal-note readers with project manage.
+    </p>
+  );
+}
+
 
 /** Amber "Internal" chip on comments only comment.read_internal holders see. */
 function InternalBadge() {
@@ -306,6 +334,12 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
                 />
               </div>
             </div>
+          )}
+          {/* RADD-836 U2: WHO will read this, stated before posting — the
+              accident (an internal note to the wrong audience) is otherwise
+              unrecoverable, since a read comment cannot be unsent. */}
+          {internalDraft && (
+            <AudienceLine teamIds={visibleTeams} teams={teams ?? []} />
           )}
           {(canned ?? []).length > 0 && (
             <Select

@@ -121,6 +121,34 @@ interface RolePanelProps {
   canManage: boolean;
 }
 
+/** RADD-836 U4: the blast radius, shown BEFORE the save — a permission
+ * system that cannot say what a change will do gets changed by trial and
+ * error on production. */
+function RoleImpact({ roleId, dirty }: { roleId: string; dirty: boolean }) {
+  const impact = useQuery({
+    queryKey: ["role-impact", roleId] as const,
+    queryFn: () =>
+      api.get<{ role_id: string; total_users: number; everyone: boolean }>(
+        `${apiRolePath(roleId)}/impact`,
+      ),
+    enabled: dirty,
+    staleTime: 60_000,
+  });
+  if (!dirty || !impact.data) return null;
+  return (
+    <span
+      className={
+        "text-xs " + (impact.data.everyone ? "font-medium text-amber-400" : "text-fg-muted")
+      }
+    >
+      {impact.data.everyone
+        ? `Affects EVERY active user (${impact.data.total_users})`
+        : `Affects ${impact.data.total_users} ${impact.data.total_users === 1 ? "person" : "people"}`}
+    </span>
+  );
+}
+
+
 /** Expanded role row: matrix (editable on custom roles), save + delete. */
 function RolePanel({ role, catalog, canManage }: RolePanelProps) {
   const queryClient = useQueryClient();
@@ -200,6 +228,7 @@ function RolePanel({ role, catalog, canManage }: RolePanelProps) {
       )}
       {(editable || (isBaseline && canManage)) && (
         <div className="flex items-center gap-2">
+          <RoleImpact roleId={role.id} dirty={dirty} />
           <Button
             onClick={() =>
               // Baseline's name and description are the builtin's; only its

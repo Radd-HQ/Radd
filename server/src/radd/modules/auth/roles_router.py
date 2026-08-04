@@ -26,9 +26,12 @@ from .schemas import (
     RoleRead,
     RoleUpdate,
 )
+from pydantic import BaseModel
+
 from .types import (
     AuthEntity,
     Permission,
+    expand_permissions,
     all_permission_keys,
     permission_description_of,
     permission_parts,
@@ -104,6 +107,81 @@ _GRANTS_DOC = (
     "user_id/team_id/group_id. Gated on role.update: like editing a role's permission set, handing out "
     "instance-wide grants is escalation-equivalent to instance admin."
 )
+
+
+class RoleImpactRead(BaseModel):
+    """RADD-836 U4: the blast radius of editing this role — how many people
+    hold it through ANY channel. The Baseline answers "every active user"."""
+
+    role_id: uuid.UUID
+    total_users: int
+    everyone: bool = False  # the Baseline: held by every active account
+
+
+@role_router.get("/{role_id}/impact", response_model=RoleImpactRead)
+async def role_impact(role_id: uuid.UUID, session: Session, user: CurrentUser) -> RoleImpactRead:
+    """Who an edit to this role AFFECTS (RADD-836 U4) — resolved through every
+    channel: direct membership rows, team attachments (group-carried members
+    included), and role grants (user/team/group subjects, nesting resolved).
+    A permission system that cannot answer this gets changed by trial and
+    error on production."""
+    await authz.require(session, user, Permission.ROLE_READ)
+    role = await roles.get_role(session, role_id)
+    from radd.modules.auth.types import BuiltinRoleKey
+
+    if role.key == BuiltinRoleKey.BASELINE.value:
+        from sqlalchemy import func, select as sa_select
+
+        from .models import User as UserModel
+
+        count = await session.scalar(
+            sa_select(func.count()).select_from(UserModel).where(UserModel.active.is_(True))
+        )
+        return RoleImpactRead(role_id=role.id, total_users=count or 0, everyone=True)
+
+    from sqlalchemy import select as sa_select
+
+    from radd.modules.groups import service as groups_service
+    from radd.modules.teams import service as teams_service
+
+    from .models import GlobalRoleGrant, ProjectMember
+
+    holders: set[uuid.UUID] = set(
+        (
+            await session.execute(
+                sa_select(ProjectMember.user_id).where(ProjectMember.role_id == role_id)
+            )
+        ).scalars()
+    )
+    from radd.modules.teams.models import ProjectTeam
+
+    team_ids = set(
+        (
+            await session.execute(
+                sa_select(ProjectTeam.team_id).where(ProjectTeam.role_id == role_id)
+            )
+        ).scalars()
+    )
+    grant_rows = list(
+        (
+            await session.execute(
+                sa_select(GlobalRoleGrant).where(GlobalRoleGrant.role_id == role_id)
+            )
+        ).scalars()
+    )
+    group_ids: set[uuid.UUID] = set()
+    for grant in grant_rows:
+        if grant.user_id is not None:
+            holders.add(grant.user_id)
+        elif grant.team_id is not None:
+            team_ids.add(grant.team_id)
+        elif grant.group_id is not None:
+            group_ids.add(grant.group_id)
+    for team_id in team_ids:
+        holders |= {u.id for u, _via in await teams_service.member_users_with_via(session, team_id)}
+    if group_ids:
+        holders |= await groups_service.users_for_groups(session, group_ids)
+    return RoleImpactRead(role_id=role.id, total_users=len(holders))
 
 
 @role_router.get("/{role_id}/global-grants", response_model=list[GlobalGrantRead])
@@ -223,6 +301,71 @@ async def delete_role_grant(grant_id: uuid.UUID, session: Session, user: Current
         project = await projects_service.get_project(session, grant.project_id)
         await authz.require(session, user, Permission.MEMBER_DELETE, project=project)
     await grants.delete_grant(session, grant_id, actor_id=user.id)
+
+
+class GrantHelpRead(BaseModel):
+    """RADD-836 U3: who can actually fix a refusal — resolvable from the grant
+    tables, so a 403 can name people instead of dead-ending."""
+
+    permission: str
+    scope: str
+    granters: list[str]
+
+
+@permission_router.get("/grant-help", response_model=GrantHelpRead)
+async def grant_help(
+    permission: str,
+    session: Session,
+    user: CurrentUser,
+    project_id: uuid.UUID | None = None,
+) -> GrantHelpRead:
+    """Who can grant `permission` (RADD-836 U3): instance admins always; plus,
+    for a project scope, the people holding member.create there (RADD-826's
+    delegates). Names only — this is a door-knocker, not a directory."""
+    await authz.require_member(session, user)
+    from sqlalchemy import select as sa_select
+
+    from radd.modules.auth.types import permission_scope_of
+
+    from .models import User as UserModel
+
+    admins = list(
+        (
+            await session.execute(
+                sa_select(UserModel.name)
+                .where(UserModel.instance_role == "admin", UserModel.active.is_(True))
+                .order_by(UserModel.name)
+                .limit(10)
+            )
+        ).scalars()
+    )
+    granters = admins
+    if project_id is not None:
+        from radd.modules.projects import service as projects_service
+
+        project = await projects_service.get_project(session, project_id)
+        members = await roles.list_project_members(session, project.id)
+        role_map = await roles.roles_by_ids(session, {m.role_id for m in members})
+        delegate_ids = [
+            m.user_id
+            for m in members
+            if authz.holds_base(
+                expand_permissions(set(role_map[m.role_id].permissions)),
+                Permission.MEMBER_CREATE,
+            )
+        ]
+        if delegate_ids:
+            from . import service as users_service
+
+            users_by_id = await users_service.users_by_ids(session, delegate_ids)
+            granters = sorted(
+                {*admins, *(u.name for u in users_by_id.values() if u.active)}
+            )
+    return GrantHelpRead(
+        permission=permission,
+        scope=permission_scope_of(permission).value,
+        granters=granters[:10],
+    )
 
 
 @permission_router.get("", response_model=list[PermissionRead])
