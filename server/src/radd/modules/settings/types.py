@@ -54,6 +54,7 @@ class SettingKey(StrEnum):
     LDAP_BIND_DN = "ldap_bind_dn"
     LDAP_BIND_PASSWORD = "ldap_bind_password"
     LDAP_ADMIN_GROUPS = "ldap_admin_groups"
+    LDAP_GROUP_SYNC_SECONDS = "ldap_group_sync_seconds"  # RADD-848
     LDAP_USER_SYNC_BASE = "ldap_user_sync_base"
     LDAP_USER_SYNC_ENABLED = "ldap_user_sync_enabled"
     LDAP_USER_SYNC_DEACTIVATE_MISSING = "ldap_user_sync_deactivate_missing"
@@ -264,6 +265,18 @@ SETTINGS_REGISTRY: dict[SettingKey, SettingSpec] = {
             "Comma-separated directory group CNs whose (transitive) members "
             "sign in as instance admins. Empty = the directory carries no "
             "role opinion (the spec-110 rule)."
+        ),
+    ),
+    SettingKey.LDAP_GROUP_SYNC_SECONDS: SettingSpec(
+        key=SettingKey.LDAP_GROUP_SYNC_SECONDS,
+        type=SettingType.INT,
+        scopes=(SettingScope.INSTANCE,),
+        label="Group sync interval (seconds)",
+        description=(
+            "How often mirrored groups re-ask the directory their transitive "
+            "member question — the worst-case window between an AD removal "
+            "and the grant stopping (a login updates that user sooner). "
+            "Applies from the next cycle, no restart (RADD-848)."
         ),
     ),
     SettingKey.LDAP_USER_SYNC_BASE: SettingSpec(

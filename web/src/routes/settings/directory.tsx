@@ -68,6 +68,21 @@ export function DirectorySettingsPage() {
       await queryClient.invalidateQueries({ queryKey: queryKeys.users });
     },
   });
+  const syncGroupsNow = useMutation({
+    mutationFn: () =>
+      api.post<{ groups: number; added: number; removed: number; errors: string[] }>(
+        ApiPath.ldapSyncGroups,
+        {},
+      ),
+    onSuccess: async (result) => {
+      pushToast(
+        `Group sync: ${result.groups} groups · ${result.added} joined · ${result.removed} left`,
+        result.errors.length > 0 ? ToastKind.error : ToastKind.success,
+      );
+      await queryClient.invalidateQueries({ queryKey: queryKeys.ldapSyncStatus });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.teams });
+    },
+  });
 
   return (
     <SettingsPage
@@ -159,7 +174,18 @@ export function DirectorySettingsPage() {
           </section>
 
           <section>
-            <h2 className={sectionHeadClasses}>Groups</h2>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h2 className={`${sectionHeadClasses} mb-0`}>Groups</h2>
+              {/* RADD-848: force the reconcile after a known AD change — the
+                  revocation happens on this click, not within the interval. */}
+              <Button
+                onClick={() => syncGroupsNow.mutate()}
+                disabled={!directoryReady || syncGroupsNow.isPending}
+              >
+                <FolderSync size={14} aria-hidden />
+                {syncGroupsNow.isPending ? "Syncing…" : "Sync groups now"}
+              </Button>
+            </div>
             <div className="mb-3">
               <ScopedSettingsEditor
                 scope={SettingScope.instance}

@@ -46,6 +46,7 @@ export const SettingKey = {
   ldapBindDn: "ldap_bind_dn",
   ldapBindPassword: "ldap_bind_password",
   ldapAdminGroups: "ldap_admin_groups",
+  ldapGroupSyncSeconds: "ldap_group_sync_seconds",
   ldapUserSyncBase: "ldap_user_sync_base",
   ldapUserSyncEnabled: "ldap_user_sync_enabled",
   ldapExcludeDisabled: "ldap_exclude_disabled",
@@ -72,7 +73,11 @@ export const DIRECTORY_USER_SYNC_KEYS: readonly string[] = [
   SettingKey.ldapUserSyncEnabled,
   SettingKey.ldapUserSyncDeactivateMissing,
 ];
-export const DIRECTORY_GROUP_KEYS: readonly string[] = [SettingKey.ldapGroupSearchBase];
+export const DIRECTORY_GROUP_KEYS: readonly string[] = [
+  SettingKey.ldapGroupSearchBase,
+  // RADD-848: the revocation window, visible and editable where it matters.
+  SettingKey.ldapGroupSyncSeconds,
+];
 /** RADD-846: the connection itself — editable, env as seed/fallback. */
 export const DIRECTORY_CONNECTION_KEYS: readonly string[] = [
   SettingKey.ldapUrl,

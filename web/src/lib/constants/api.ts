@@ -32,6 +32,7 @@ export const ApiPath = {
   // Spec 85: sync status rows + the on-demand user-sync pass (instance admin).
   ldapSyncStatus: "/ldap/sync-status",
   ldapSyncUsers: "/ldap/sync/users",
+  ldapSyncGroups: "/ldap/sync/groups",
   // Jira import wizard (spec 90) — instance admin.
   // Spec 100: connections are admin-managed rows, not environment variables.
   jiraConnections: "/jira/connections",

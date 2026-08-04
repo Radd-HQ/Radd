@@ -302,6 +302,17 @@ async def run_directory_user_sync(session: Session, actor: CurrentUser) -> UserS
     return UserSyncResultRead(**result.payload())
 
 
+@admin_router.post("/sync/groups")
+async def run_directory_group_sync(session: Session, actor: CurrentUser) -> dict:
+    """Every mirrored group's reconcile, on demand (RADD-848) — the same pass
+    the ldap-groupsync loop runs hourly, for the admin who just changed AD and
+    wants the grant to stop applying NOW rather than within the interval.
+    Instance admin; 409 without a bind account; recorded in sync-status."""
+    _require_instance_admin(actor)
+    await groups.require_bind_account(session)
+    return await groupsync.run_group_sync(session)
+
+
 @team_sync_router.post("/{team_id}/directory-sync", response_model=DirectorySyncResult)
 async def directory_sync_team(
     team_id: uuid.UUID, session: Session, actor: CurrentUser

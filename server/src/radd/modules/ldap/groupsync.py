@@ -264,50 +264,68 @@ async def _team_holding_group(
 # --- the periodic reconcile loop (spec 84 §1b) --------------------------------
 
 
-async def run_once() -> int:
-    """One tick: full reconcile of every mirrored group. Per-group failures are
-    logged, never fatal (the slas-engine idiom). Spec 85: the run is recorded
-    in `directory_sync_state` (kind=group_sync) for GET /ldap/sync-status —
-    RADD-829 reshaped the payload (`groups` instead of `teams`)."""
+#: RADD-848: the interval the loop's lambda reads — seeded from env, refreshed
+#: from the settings cascade each tick, so a Directory-page edit applies from
+#: the next cycle without a restart (the lambda itself has no session).
+_interval: float = settings.ldap_group_sync_seconds
+
+
+async def run_group_sync(session: AsyncSession) -> dict:
+    """One full reconcile of every mirrored group, on the CALLER's session —
+    shared by the periodic tick and POST /ldap/sync/groups (RADD-848).
+    Per-group failures are logged, never fatal (the slas-engine idiom); the
+    run is recorded in `directory_sync_state` (kind=group_sync) for
+    GET /ldap/sync-status."""
     groups_seen = added_total = removed_total = 0
     errors: list[str] = []
+    for group in await groups_service.list_groups(session):
+        groups_seen += 1
+        try:
+            added, removed = await reconcile_group(session, group)
+            added_total += added
+            removed_total += removed
+        except StaleDirectoryGroup as exc:
+            # Expected operational state (a group renamed/deleted in AD), not a
+            # bug: the group is flagged and left intact, so this is a warning
+            # surfaced on the sync-status page rather than a traceback.
+            logger.warning("ldap groupsync: %s", exc)
+            errors.append(f"{group.name}: {exc}")
+        except Exception as exc:
+            logger.exception("ldap groupsync: reconciling group %s failed", group.id)
+            errors.append(f"{group.name}: {exc}")
+    payload = {
+        "groups": groups_seen,
+        "added": added_total,
+        "removed": removed_total,
+        "errors": errors[:MAX_RECORDED_ERRORS],
+    }
+    await state.record_run(session, SyncKind.GROUP_SYNC, payload)
+    return payload
+
+
+async def run_once() -> int:
+    """One tick of the periodic loop."""
+    global _interval
     async with SessionLocal() as session:
         # RADD-846: resolve the connection first; no bind account = dormant.
         await service.refresh_conn(session)
+        from radd.modules.settings import service as settings_service
+        from radd.modules.settings.types import SettingKey
+
+        _interval = float(
+            await settings_service.resolve(session, SettingKey.LDAP_GROUP_SYNC_SECONDS)
+            or settings.ldap_group_sync_seconds
+        )
         if not service.bind_account_enabled():
             return 0
-        for group in await groups_service.list_groups(session):
-            groups_seen += 1
-            try:
-                added, removed = await reconcile_group(session, group)
-                added_total += added
-                removed_total += removed
-            except StaleDirectoryGroup as exc:
-                # Expected operational state (a group renamed/deleted in AD), not a
-                # bug: the group is flagged and left intact, so this is a warning
-                # surfaced on the sync-status page rather than a traceback.
-                logger.warning("ldap groupsync: %s", exc)
-                errors.append(f"{group.name}: {exc}")
-            except Exception as exc:
-                logger.exception("ldap groupsync: reconciling group %s failed", group.id)
-                errors.append(f"{group.name}: {exc}")
-        await state.record_run(
-            session,
-            SyncKind.GROUP_SYNC,
-            {
-                "groups": groups_seen,
-                "added": added_total,
-                "removed": removed_total,
-                "errors": errors[:MAX_RECORDED_ERRORS],
-            },
-        )
+        payload = await run_group_sync(session)
         await session.commit()
-    return added_total + removed_total
+    return payload["added"] + payload["removed"]
 
 
 _loop = PeriodicLoop(
     run_once,
-    interval=lambda: settings.ldap_group_sync_seconds,
+    interval=lambda: _interval,  # RADD-848: cascade-refreshed each tick
     name="ldap-groupsync",
     # Web-only processes skip (spec 48 split). The bind check moved INSIDE
     # run_once (RADD-846) — see usersync for why a gate here would be wrong.
