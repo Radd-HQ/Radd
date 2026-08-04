@@ -212,3 +212,34 @@ def test_every_default_spec_offers_the_group_subject():
     `subjects` (custom fields, builtin fields) offers groups with no edit."""
     spec = ResourceSpec(resource_type="x", can_manage=None)  # type: ignore[arg-type]
     assert GrantSubject.GROUP in spec.subjects
+
+
+async def test_inspector_shows_the_nesting_chain(db):
+    """RADD-833: access through a three-level chain reads as the PATH — the
+    granted group, then each hop down to the user's direct membership."""
+    member = await _user(db, "Chained")
+    suffix = uuid.uuid4().hex[:6]
+    studio = await groups_service.upsert_group(db, dn=f"CN=st{suffix},DC=t", name="Studio")
+    vfx = await groups_service.upsert_group(db, dn=f"CN=vf{suffix},DC=t", name="VFX All")
+    wranglers = await groups_service.upsert_group(
+        db, dn=f"CN=wr{suffix},DC=t", name="Render Wranglers"
+    )
+    await groups_service.set_parents(db, vfx, [studio.id])
+    await groups_service.set_parents(db, wranglers, [vfx.id])
+    db.add(GroupMember(group_id=wranglers.id, user_id=member.id))
+    await db.flush()
+    groups_service.forget_user_groups(db)
+    role = await auth_roles.create_role(
+        db,
+        RoleCreate(
+            key=f"gg{uuid.uuid4().hex[:6]}", name="G", permissions=[Permission.LABEL_CREATE]
+        ),
+    )
+    # Granted on STUDIO — the group the member has never heard of.
+    await role_grants.create_grant(db, role.id, group_id=studio.id)
+
+    sources = await authz.permission_sources(db, member)
+    row = next(s for s in sources if s.permission == Permission.LABEL_CREATE.value)
+    assert row.via == "group"
+    assert row.via_group == "Studio"
+    assert row.group_path == ["Studio", "VFX All", "Render Wranglers"]

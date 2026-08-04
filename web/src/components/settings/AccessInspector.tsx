@@ -159,6 +159,12 @@ function SourceLabel({ source, first }: { source: string; first: PermissionSourc
       {first?.via === "team" && first.via_team ? (
         <span className="text-fg-faint"> via {first.via_team}</span>
       ) : null}
+      {first?.via === "group" && first.via_group ? (
+        <span className="text-fg-faint">
+          {" "}
+          granted to group {first.group_path?.length ? first.group_path.join(" ← ") : first.via_group}
+        </span>
+      ) : null}
       {first && first.kind === "role" && first.scope !== "global" ? (
         <span className="text-fg-faint"> · {first.scope}-scoped</span>
       ) : null}
@@ -190,7 +196,11 @@ function atomTitle(atom: PermissionSource, source: string): string {
           ? atom.scope === "global"
             ? "Granted instance-wide."
             : `Granted scoped to this ${atom.scope}.`
-          : "";
+          : atom.via === "group"
+            ? atom.group_path?.length
+              ? `Granted to the ${atom.via_group ?? "?"} group — you are a member ${atom.group_path.length - 1} level(s) down: ${atom.group_path.join(" ← ")}.`
+              : `Granted to the ${atom.via_group ?? "?"} group (you are a direct member).`
+            : "";
   return via ? `${base} ${via}` : base;
 }
 

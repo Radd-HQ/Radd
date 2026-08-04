@@ -184,6 +184,68 @@ async def users_for_groups(
     return out
 
 
+async def nesting_edges(
+    session: AsyncSession, group_ids: Iterable[uuid.UUID]
+) -> tuple[dict[uuid.UUID, set[uuid.UUID]], dict[uuid.UUID, set[uuid.UUID]]]:
+    """({child: parents}, {parent: children}) over the given groups — one query,
+    feeds the admin screen's nesting columns (RADD-833)."""
+    ids = set(group_ids)
+    parents: dict[uuid.UUID, set[uuid.UUID]] = {}
+    children: dict[uuid.UUID, set[uuid.UUID]] = {}
+    if not ids:
+        return parents, children
+    rows = await session.execute(
+        select(GroupParent.child_id, GroupParent.parent_id).where(
+            GroupParent.child_id.in_(ids) | GroupParent.parent_id.in_(ids)
+        )
+    )
+    for child_id, parent_id in rows.all():
+        parents.setdefault(child_id, set()).add(parent_id)
+        children.setdefault(parent_id, set()).add(child_id)
+    return parents, children
+
+
+async def membership_path(
+    session: AsyncSession, user_id: uuid.UUID, group_id: uuid.UUID
+) -> list[Group]:
+    """The CHAIN from a granted group DOWN to the user's direct membership
+    (RADD-833): [granted, …, direct]. Empty when the user is a DIRECT member
+    (no chain worth showing) or not a member at all. BFS down the child edges,
+    depth-limited like the closures; the first direct-membership hit wins, so
+    the shortest chain is what the inspector reads."""
+    direct = set(
+        (
+            await session.execute(
+                select(GroupMember.group_id).where(GroupMember.user_id == user_id)
+            )
+        ).scalars()
+    )
+    if group_id in direct:
+        return []
+    paths: dict[uuid.UUID, list[uuid.UUID]] = {group_id: [group_id]}
+    frontier = {group_id}
+    for _ in range(settings.group_nesting_max_depth):
+        if not frontier:
+            break
+        rows = await session.execute(
+            select(GroupParent.parent_id, GroupParent.child_id).where(
+                GroupParent.parent_id.in_(frontier)
+            )
+        )
+        next_frontier: set[uuid.UUID] = set()
+        for parent_id, child_id in rows.all():
+            if child_id in paths:
+                continue  # cycle guard / already reached shorter
+            paths[child_id] = paths[parent_id] + [child_id]
+            if child_id in direct:
+                found = paths[child_id]
+                groups = await groups_by_ids(session, found)
+                return [groups[gid] for gid in found if gid in groups]
+            next_frontier.add(child_id)
+        frontier = next_frontier
+    return []
+
+
 # --- sync writes (the ldap module drives these) --------------------------------
 
 

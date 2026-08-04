@@ -124,6 +124,9 @@ export interface PermissionSource {
   via: string | null;
   /** The team that carried it, when via === "team". */
   via_team: string | null;
+  /** RADD-833: the carrying group + the nesting chain (granted → direct). */
+  via_group?: string | null;
+  group_path?: string[] | null;
   /** Project key / space name for team-view rows that span scopes. */
   scope_label: string | null;
 }

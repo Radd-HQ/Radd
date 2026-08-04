@@ -29,20 +29,37 @@ class GroupReachRead(BaseModel):
 @router.get("", response_model=list[GroupRead])
 async def list_groups(session: Session, user: CurrentUser) -> list[GroupRead]:
     """Every mirrored directory group. Member-floor visibility, like teams —
-    the team panel names group members to anyone who can see the team."""
+    the team panel names group members to anyone who can see the team.
+    RADD-833: rows carry the TRANSITIVE member count (the number a grant
+    resolves to — direct counts under-sell nested groups) and the nesting
+    edges by name, so the admin screen reads without N+1 calls."""
     await authz.require_member(session, user)
     rows = await service.list_groups(session)
-    counts = await service.direct_member_counts(session, [g.id for g in rows])
-    return [
-        GroupRead(
-            id=group.id,
-            dn=group.dn,
-            name=group.name,
-            directory_missing_since=group.directory_missing_since,
-            direct_member_count=counts.get(group.id, 0),
+    ids = [g.id for g in rows]
+    counts = await service.direct_member_counts(session, ids)
+    parents, children = await service.nesting_edges(session, ids)
+    names = {g.id: g.name for g in rows}
+    reads = []
+    for group in rows:
+        reads.append(
+            GroupRead(
+                id=group.id,
+                dn=group.dn,
+                name=group.name,
+                directory_missing_since=group.directory_missing_since,
+                direct_member_count=counts.get(group.id, 0),
+                transitive_member_count=len(
+                    await service.group_user_ids(session, group.id)
+                ),
+                parent_names=sorted(
+                    names.get(pid, "?") for pid in parents.get(group.id, ())
+                ),
+                child_names=sorted(
+                    names.get(cid, "?") for cid in children.get(group.id, ())
+                ),
+            )
         )
-        for group in rows
-    ]
+    return reads
 
 
 @router.get("/{group_id}/reach", response_model=GroupReachRead)

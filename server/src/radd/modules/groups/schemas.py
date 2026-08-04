@@ -15,3 +15,8 @@ class GroupRead(BaseModel):
     #: are kept and sync removals held while it stands.
     directory_missing_since: UtcDatetime | None = None
     direct_member_count: int = 0
+    #: RADD-833 — the number a grant on this group RESOLVES to (nesting
+    #: included). The direct count under-sells nested groups.
+    transitive_member_count: int = 0
+    parent_names: list[str] = []
+    child_names: list[str] = []

@@ -122,6 +122,40 @@ async def space_granted_role_ids(
     return out
 
 
+async def attributed_rows_for_user(
+    session: AsyncSession, user_id: uuid.UUID
+) -> "list[tuple[GlobalRoleGrant, str, str | None, uuid.UUID | None]]":
+    """Every grant reaching the user, each with the SUBJECT that carried it:
+    (row, via, carrier_name, carrier_group_id) where via ∈ grant|team|group
+    (RADD-833 — the inspector needs the carrier, and for groups the chain).
+    A row that matches through several channels is attributed once, in
+    direct → team → group order (the most legible carrier wins)."""
+    from radd.modules.groups import service as groups  # deferred
+    from radd.modules.teams import service as teams  # deferred
+
+    team_ids = await teams.user_team_ids(session, user_id)
+    group_ids = await groups.user_group_ids(session, user_id)
+    condition = GlobalRoleGrant.user_id == user_id
+    if team_ids:
+        condition = condition | GlobalRoleGrant.team_id.in_(team_ids)
+    if group_ids:
+        condition = condition | GlobalRoleGrant.group_id.in_(group_ids)
+    rows = list((await session.execute(select(GlobalRoleGrant).where(condition))).scalars())
+    team_names = {t.id: t.name for t in (await teams.teams_by_ids(session, team_ids)).values()}
+    group_names = {
+        g.id: g.name for g in (await groups.groups_by_ids(session, group_ids)).values()
+    }
+    out: list[tuple[GlobalRoleGrant, str, str | None, uuid.UUID | None]] = []
+    for row in rows:
+        if row.user_id == user_id:
+            out.append((row, "grant", None, None))
+        elif row.team_id is not None and row.team_id in team_ids:
+            out.append((row, "team", team_names.get(row.team_id), None))
+        elif row.group_id is not None and row.group_id in group_ids:
+            out.append((row, "group", group_names.get(row.group_id), row.group_id))
+    return out
+
+
 async def held_role_ids_anywhere(session: AsyncSession, user_id: uuid.UUID) -> set[uuid.UUID]:
     """Role ids reaching the user through ANY grant channel (direct, team,
     group) at ANY scope — the RADD-809 inspector's subject set. Before RADD-832

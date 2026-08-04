@@ -118,8 +118,11 @@ class PermissionSourceRead(BaseModel):
     #: "baseline"), the channel it arrived through, and its scope.
     role_id: uuid.UUID | None = None
     scope: str = "global"  # global | project | space
-    via: str | None = None  # membership | team | grant | attached
+    via: str | None = None  # membership | team | grant | attached | group
     via_team: str | None = None
+    #: RADD-833: the carrying group + the nesting chain (granted → direct).
+    via_group: str | None = None
+    group_path: list[str] | None = None
     scope_label: str | None = None  # project key / space name (team view rows)
     #: Held via an umbrella (project.manage implies state.create), not granted
     #: directly — so the inspector never claims a role's checkbox was ticked.

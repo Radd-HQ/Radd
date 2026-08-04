@@ -24,6 +24,7 @@ import {
   Sparkles,
   Tags,
   UserRoundCog,
+  FolderTree,
   UsersRound,
   Zap,
   type LucideIcon,
@@ -142,6 +143,14 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         label: "Service accounts",
         icon: Bot,
         show: (g) => g.ws(Permission.globalManage),
+      },
+      {
+        to: RoutePath.settingsGroups,
+        label: "Groups",
+        icon: FolderTree,
+        // RADD-833: the directory mirror — read-only; whoever can see users
+        // can see the groups that carry their access.
+        show: (g) => g.ws(Permission.userManage),
       },
       {
         to: RoutePath.settingsTeams,

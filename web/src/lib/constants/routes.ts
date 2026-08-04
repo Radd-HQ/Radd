@@ -22,6 +22,8 @@ export const SettingsSection = {
   labels: "labels",
   cycles: "cycles",
   teams: "teams",
+  // Directory-mirrored groups (RADD-833) — read-only, admin-facing.
+  groups: "groups",
   // LEGACY segment — /settings/members redirects to Users (merged).
   members: "members",
   // The people page (spec 84; role ladder = instance_role since spec 86) — admins.
@@ -149,6 +151,7 @@ export const RoutePath = {
   settingsLinkTypes: `${SETTINGS_SEGMENT}/${SettingsSection.linkTypes}`,
   settingsLabels: `${SETTINGS_SEGMENT}/${SettingsSection.labels}`,
   settingsCycles: `${SETTINGS_SEGMENT}/${SettingsSection.cycles}`,
+  settingsGroups: `${SETTINGS_SEGMENT}/${SettingsSection.groups}`,
   settingsTeams: `${SETTINGS_SEGMENT}/${SettingsSection.teams}`,
   /** THE people page (spec 84): accounts + the instance_role ladder (spec 86),
    * dedupe/merge. */

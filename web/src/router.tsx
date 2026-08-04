@@ -45,6 +45,7 @@ import {
 import { GeneralSettingsPage } from "./routes/settings/general";
 import { AutomationsSettingsPage } from "./routes/settings/automations";
 import { CyclesSettingsPage } from "./routes/settings/cycles";
+import { GroupsSettingsPage } from "./routes/settings/groups";
 import { FieldsSettingsPage } from "./routes/settings/fields";
 import { LinkTypesSettingsPage } from "./routes/settings/link-types";
 import { LabelsSettingsPage } from "./routes/settings/labels";
@@ -447,6 +448,12 @@ const settingsCyclesRoute = createRoute({
   component: CyclesSettingsPage,
 });
 
+const settingsGroupsRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: SettingsSection.groups,
+  component: GroupsSettingsPage,
+});
+
 const settingsTeamsRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: SettingsSection.teams,
@@ -730,6 +737,7 @@ const routeTree = rootRoute.addChildren([
       settingsLinkTypesRoute,
       settingsLabelsRoute,
       settingsCyclesRoute,
+      settingsGroupsRoute,
       settingsTeamsRoute,
       settingsMembersRoute,
       settingsUsersRoute,

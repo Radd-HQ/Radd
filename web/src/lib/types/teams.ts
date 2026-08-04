@@ -58,6 +58,10 @@ export interface RaddGroup {
   name: string;
   directory_missing_since: string | null;
   direct_member_count: number;
+  /** RADD-833: what a grant on this group RESOLVES to (nesting included). */
+  transitive_member_count?: number;
+  parent_names?: string[];
+  child_names?: string[];
 }
 
 /** GET /groups/{id}/reach — how many people a grant on the group resolves to,
