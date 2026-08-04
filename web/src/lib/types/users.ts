@@ -20,6 +20,9 @@ export interface Me {
   /** RADD-836 U1: set while an admin previews this account read-only — the
    * rest of the payload describes the TARGET, which is the point. */
   view_as?: { real_id: string; real_name: string } | null;
+  /** RADD-843: server-answered area-visibility facts for the shell nav.
+   * Absent (older payload) = every area visible — hiding is presentation. */
+  nav?: { timesheet: boolean; portal: boolean };
 }
 
 /** PATCH /auth/me (spec 34) — omitted keys unchanged; explicit null clears avatar. */

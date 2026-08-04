@@ -17,6 +17,7 @@ import {
   GanttChartSquare,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { useNavFacts } from "../lib/nav-facts";
 import { PALETTE_SEARCH_LIMIT, RoutePath, SEARCH_DEBOUNCE_MS } from "../lib/constants";
 import { usePermissions } from "../lib/hooks";
 import {
@@ -184,6 +185,7 @@ export function CommandPalette() {
     return () => clearTimeout(timer);
   }, [query]);
 
+  const navFacts = useNavFacts();
   const gotos = useMemo<GotoEntry[]>(() => {
     const projectEntries = (projects ?? []).flatMap<GotoEntry>((project) => [
       {
@@ -199,11 +201,13 @@ export function CommandPalette() {
         params: { projectKey: project.key },
       },
     ]);
-    const all = [...STATIC_GOTOS, ...projectEntries];
+    // RADD-843: the palette IS the nav — same predicate as sidebar/rail/pins.
+    const gated = STATIC_GOTOS.filter((entry) => navFacts.forPath(entry.to));
+    const all = [...gated, ...projectEntries];
     const needle = query.trim().toLowerCase();
     if (!needle) return all;
     return all.filter((entry) => entry.label.toLowerCase().includes(needle));
-  }, [projects, query]);
+  }, [projects, query, navFacts]);
 
   const issueEntries: PaletteEntry[] = (searchData?.results ?? []).map((result) => ({
     kind: "issue",

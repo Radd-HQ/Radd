@@ -19,6 +19,7 @@ import {
   Settings,
   type LucideIcon,
 } from "lucide-react";
+import { useNavFacts } from "../../lib/nav-facts";
 import { RoutePath } from "../../lib/constants";
 import { notificationsBadgeQuery } from "../../lib/queries";
 import { openCommandPalette } from "../CommandPalette";
@@ -39,7 +40,10 @@ interface RailDestination {
   exact?: boolean;
 }
 
-/** Mirrors the primary destinations of the full sidebar, in the same order. */
+/** Mirrors the primary destinations of the full sidebar, in the same order.
+ * RADD-843: gated per-entry through the SAME useNavFacts predicate the full
+ * sidebar consumes — the rail used to gate nothing, the parallel-code-path
+ * defect class. */
 const DESTINATIONS: RailDestination[] = [
   { to: RoutePath.home, icon: House, label: "My Work", exact: true },
   { to: RoutePath.portal, icon: ConciergeBell, label: "Submission Portal" },
@@ -73,6 +77,7 @@ function RailInbox() {
 }
 
 export function SidebarRail({ pluginNav }: { pluginNav: { key: string; path: string; label: string }[] }) {
+  const navFacts = useNavFacts();
   return (
     <nav className="flex flex-1 flex-col items-center gap-1 overflow-y-auto py-2" aria-label="Primary">
       <button
@@ -87,7 +92,7 @@ export function SidebarRail({ pluginNav }: { pluginNav: { key: string; path: str
 
       <RailInbox />
 
-      {DESTINATIONS.map((d) => (
+      {DESTINATIONS.filter((d) => navFacts.forPath(d.to)).map((d) => (
         <Link
           key={d.to}
           to={d.to}

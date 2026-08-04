@@ -63,6 +63,37 @@ async def _hours_per_day(session: AsyncSession) -> int:
     return await settings_service.resolve(session, SettingKey.TIMELOG_HOURS_PER_DAY)
 
 
+async def nav_timesheet_visible(session: AsyncSession, user) -> bool:
+    """THE definition of "is the Timesheet area useful to this actor"
+    (RADD-843): timesheet.view held anywhere (they review others' time), OR
+    any READABLE project has time logging enabled (they could log), OR they
+    have worklog rows at all (general/itemless worklogs exist, spec 59 — a
+    timesheet.view-less actor with history still needs their own sheet).
+    Access ∧ usefulness — never a feature flag alone."""
+    from sqlalchemy import exists as sa_exists, select as sa_select
+
+    from .models import ProjectTimeLogging
+
+    if await authz.holds(session, user, authz.Permission.TIMESHEET_VIEW, any_project=True):
+        return True
+    readable = await authz.readable_projects(session, user)
+    if readable:
+        enabled = await session.scalar(
+            sa_select(ProjectTimeLogging.project_id)
+            .where(
+                ProjectTimeLogging.project_id.in_(readable.keys()),
+                ProjectTimeLogging.enabled.is_(True),
+            )
+            .limit(1)
+        )
+        if enabled is not None:
+            return True
+    has_rows = await session.scalar(
+        sa_select(sa_exists().where(Worklog.author_id == user.id))
+    )
+    return bool(has_rows)
+
+
 async def worklog_scope(
     session: AsyncSession, worklog: Worklog
 ) -> object | None:

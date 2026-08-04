@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { RoutePath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
+import { useNavFacts } from "../../lib/nav-facts";
 import { pinKey, useNavPins, type NavPin } from "../../lib/topbar-prefs";
 import { ContextMenu } from "../ContextMenu";
 import {
@@ -68,8 +69,11 @@ export function Sidebar() {
   const pluginNav = (pluginManifest?.nav ?? [])
     .filter((n) => n.section === "main")
     .filter((n) => !n.capability || enabledCaps.has(n.capability))
-    .filter((n) => n.requires.every((r) => perms.global(r)))
+    // RADD-843: `requires` through the scope-aware seam — a project-scoped
+    // atom held on one project satisfies its nav link (the RADD-810 class).
+    .filter((n) => n.requires.every((r) => perms.global(r) || perms.anyProject(r)))
     .filter((n) => !disabledNav.has(n.path));
+  const nav = useNavFacts();
   const { data: projects } = useQuery(projectsQuery());
   const { data: views } = useQuery(viewsQuery());
   const { data: cycles } = useQuery(cyclesQuery());
@@ -177,27 +181,37 @@ export function Sidebar() {
           My Work
         </Link>
 
-        {/* Requester portal (spec 73): every signed-in user — eligibility is
-            checked server-side, so no permission gate here. */}
-        <Link to={RoutePath.portal} className={navLinkClasses}>
-          <ConciergeBell size={14} aria-hidden />
-          Submission Portal
-        </Link>
+        {/* RADD-843: fixed destinations render only where the area can be
+            useful to the actor (useNavFacts — the same predicate the rail,
+            palette and pins consume). Hiding is presentation; every area
+            still enforces its own authz on direct navigation. */}
+        {nav.portal && (
+          <Link to={RoutePath.portal} className={navLinkClasses}>
+            <ConciergeBell size={14} aria-hidden />
+            Submission Portal
+          </Link>
+        )}
 
-        <Link to={RoutePath.projects} className={navLinkClasses} activeOptions={{ exact: true }}>
-          <Layers size={14} aria-hidden />
-          Projects
-        </Link>
+        {nav.projects && (
+          <Link to={RoutePath.projects} className={navLinkClasses} activeOptions={{ exact: true }}>
+            <Layers size={14} aria-hidden />
+            Projects
+          </Link>
+        )}
 
-        <Link to={RoutePath.reports} className={navLinkClasses}>
-          <BarChart3 size={14} aria-hidden />
-          Reports
-        </Link>
+        {nav.reports && (
+          <Link to={RoutePath.reports} className={navLinkClasses}>
+            <BarChart3 size={14} aria-hidden />
+            Reports
+          </Link>
+        )}
 
-        <Link to={RoutePath.timesheet} className={navLinkClasses}>
-          <Clock size={14} aria-hidden />
-          Timesheet
-        </Link>
+        {nav.timesheet && (
+          <Link to={RoutePath.timesheet} className={navLinkClasses}>
+            <Clock size={14} aria-hidden />
+            Timesheet
+          </Link>
+        )}
 
         {/* Plugin-contributed nav (spec 93 / A7), routed CLIENT-SIDE through the
             `$` splat that spec 94 added for `route.page` (router.tsx). These were
@@ -257,7 +271,9 @@ export function Sidebar() {
         )}
 
         {/* Dashboards (spec 75): the visible composable dashboards + a New
-            row — any member may create one (personal until shared). */}
+            row. RADD-843: the section renders only when there is something to
+            show or the actor can create one (the Views-section rule). */}
+        {nav.dashboards && (
         <div className="mt-3">
           <SectionHeader
             label="Dashboards"
@@ -285,19 +301,22 @@ export function Sidebar() {
                   </Link>
                 </li>
               ))}
-              <li>
-                <button
-                  type="button"
-                  onClick={() => setNewDashboardOpen(true)}
-                  className={`${navLinkClasses} w-full cursor-pointer text-fg-muted!`}
-                >
-                  <Plus size={14} aria-hidden />
-                  New dashboard
-                </button>
-              </li>
+              {perms.anyProject(Permission.dashboardCreate) && (
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => setNewDashboardOpen(true)}
+                    className={`${navLinkClasses} w-full cursor-pointer text-fg-muted!`}
+                  >
+                    <Plus size={14} aria-hidden />
+                    New dashboard
+                  </button>
+                </li>
+              )}
             </ul>
           )}
         </div>
+        )}
 
         {/* Queues (spec 64): queue views with live count badges — one batched
             counts call for the whole section; hidden when no queues exist. */}

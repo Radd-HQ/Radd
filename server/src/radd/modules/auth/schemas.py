@@ -229,6 +229,21 @@ class ViewAsStart(BaseModel):
     user_id: uuid.UUID
 
 
+class NavFacts(BaseModel):
+    """Server-answered area-visibility facts for the shell nav (RADD-843).
+    Hiding is presentation — every one of these areas still enforces its own
+    authz on direct navigation; these exist so the nav can stop offering
+    destinations that cannot be useful to the actor."""
+
+    #: Any readable project with time logging enabled, OR the actor has worklog
+    #: rows, OR timesheet.view held anywhere. Defined in ONE function beside
+    #: the timesheet's own authz (timelogging.nav_timesheet_visible).
+    timesheet: bool = True
+    #: The actor's portal-form eligibility is non-empty — the same computation
+    #: GET /portal/forms already runs.
+    portal: bool = True
+
+
 class MeRead(BaseModel):
     id: uuid.UUID
     email: str
@@ -248,6 +263,9 @@ class MeRead(BaseModel):
     # and without it the SPA would hide the Teams page from the very people the
     # delegation exists for.
     manages_teams: bool = False
+    #: RADD-843 — area-visibility facts the client cannot derive from lists it
+    #: already loads. Defaults keep the areas visible on older payloads.
+    nav: NavFacts = Field(default_factory=lambda: NavFacts())
     avatar_color: str | None = None
     avatar_emoji: str | None = None
     timezone: str = ""

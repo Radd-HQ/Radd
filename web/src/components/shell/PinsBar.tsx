@@ -27,6 +27,7 @@ import { ContextMenu } from "../ContextMenu";
 import { RoutePath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
 import { projectsQuery, viewsQuery } from "../../lib/queries";
+import { useNavFacts } from "../../lib/nav-facts";
 import { pinKey, useNavPins, type NavPin } from "../../lib/topbar-prefs";
 import { Permission, type Project, type View } from "../../lib/types";
 import { NewItemModal } from "../items/NewItemModal";
@@ -86,9 +87,12 @@ export function PinsBar() {
   // Resolve view pins → views; ids that no longer resolve (deleted, unshared)
   // simply don't render — the preference self-heals next time pins change.
   // Link pins (any other nav destination) need no resolution.
+  const navFacts = useNavFacts();
   const pinned = pins
     .map((pin): PinnedEntry | null => {
-      if (pin.kind === "link") return { pin };
+      // RADD-843: a link pin to an area the actor cannot use is dropped from
+      // RENDER but kept in prefs — access can return (the view-pin rule).
+      if (pin.kind === "link") return navFacts.forPath(pin.path) ? { pin } : null;
       const view = (views.data ?? []).find((entry) => entry.id === pin.id);
       return view ? { pin, view } : null;
     })

@@ -114,6 +114,29 @@ async def logout(request: Request, session: Session, response: Response) -> None
     response.delete_cookie(SESSION_COOKIE_NAME)
 
 
+async def _nav_facts(session: AsyncSession, user: User) -> "NavFacts":
+    """RADD-843: the two area-visibility facts the client cannot derive from
+    lists it already loads. Feature-detected (both modules are optional and
+    load after auth); an absent module leaves its area visible — hiding is
+    presentation, and failing open here costs a link, never a leak."""
+    from .schemas import NavFacts
+
+    facts = NavFacts()
+    try:
+        from radd.modules.timelogging import service as timelogging
+    except ImportError:
+        pass
+    else:
+        facts.timesheet = await timelogging.nav_timesheet_visible(session, user)
+    try:
+        from radd.modules.forms import portal
+    except ImportError:
+        pass
+    else:
+        facts.portal = bool(await portal.list_portal_forms(session, user))
+    return facts
+
+
 async def _me_read(session: AsyncSession, user: User) -> MeRead:
     """Spec 86 stage 3: flat shape — `global_role` + the global-scope
     `permissions` union top-level (the synthetic `workspaces` entry is gone).
@@ -127,6 +150,7 @@ async def _me_read(session: AsyncSession, user: User) -> MeRead:
     role = InstanceRole.ADMIN if admin else InstanceRole.MEMBER
     return MeRead(
         manages_teams=await teams.stewards_any_team(session, user.id),
+        nav=await _nav_facts(session, user),
         id=user.id,
         email=user.email,
         name=user.name,
