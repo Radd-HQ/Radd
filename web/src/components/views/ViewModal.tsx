@@ -56,10 +56,13 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
   const perms = usePermissions();
 
   // All-projects scope resolves "anywhere", not globally (RADD-788) — the
-  // server's `_require_scope` makes the same call.
+  // server's `_require_scope` makes the same call. Broadcasting/sharing is
+  // gated on view.create, mirroring the server (RADD-824 — view.manage was
+  // never consulted server-side, so a role granted exactly view.create had
+  // no Share section while the API would have accepted the call).
   const canShare = project
-    ? perms.project(project, Permission.viewManage)
-    : perms.anyProject(Permission.viewManage);
+    ? perms.project(project, Permission.viewCreate)
+    : perms.anyProject(Permission.viewCreate);
 
   const fields = useQuery(fieldsQuery());
 

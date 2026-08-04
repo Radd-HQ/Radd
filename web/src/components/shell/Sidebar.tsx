@@ -107,10 +107,11 @@ export function Sidebar() {
     (views ?? []).filter(
       (view) => view.project_id === project.id && view.view_type !== ViewType.queue,
     );
-  // New-view affordances are gated on view.manage in scope. The all-projects
-  // scope means "anywhere", not "globally" (RADD-788). (Personal views only need
-  // item.read server-side — API-only for pure viewers, known gap.)
-  const canCreateView = perms.anyProject(Permission.viewManage);
+  // New-view affordances mirror the server (RADD-824): creating a PERSONAL
+  // view needs only item.read in scope (views/service.PERSONAL_VIEW_PERMISSION)
+  // — sharing is gated separately inside the modal. The all-projects scope
+  // means "anywhere", not "globally" (RADD-788).
+  const canCreateView = perms.anyProject(Permission.itemRead);
   const cycleList = cycles ?? [];
   const liveCycles = selectableCycles(cycleList);
   const canManageCycles = perms.global(Permission.cycleManage);
@@ -488,7 +489,7 @@ export function Sidebar() {
                         </Link>
                       </li>
                     )}
-                    {perms.project(project, Permission.viewManage) && (
+                    {perms.project(project, Permission.itemRead) && (
                       <li>
                         <button
                           type="button"

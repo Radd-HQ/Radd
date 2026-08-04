@@ -22,6 +22,7 @@ export const Permission = {
   attachmentCreate: "attachment.create",
   attachmentDelete: "attachment.delete",
   commentReadInternal: "comment.read_internal",
+  viewCreate: "view.create",
   viewManage: "view.manage",
   teamManage: "team.manage",
   /** Spec 87: administering ANY team. Per-team leaders are granted separately —
