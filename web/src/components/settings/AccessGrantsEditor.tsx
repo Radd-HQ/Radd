@@ -220,14 +220,9 @@ function AddGrantRow({
       <SubjectPicker subjects={subjects} value={subject} onChange={setSubject} />
       {subject?.type === GrantSubject.group && <GroupReachHint groupId={subject.id} />}
 
-      <Select
-        value={access}
-        onChange={setAccess}
-        aria-label="Access level"
-        options={accesses.map((a) => ({ value: a, label: a }))}
-      />
-
-      {/* RADD-819: one deny row says "may not" — nobody else's access touched. */}
+      {/* RADD-847: the row reads as a sentence — subject, MAY/may-not, the
+          verb, then "on" the scope. RADD-819: one deny row says "may not" —
+          nobody else's access touched. */}
       <Select
         value={effect}
         onChange={(v) => setEffect(v as "allow" | "deny")}
@@ -238,6 +233,14 @@ function AddGrantRow({
         ]}
       />
 
+      <Select
+        value={access}
+        onChange={setAccess}
+        aria-label="Access level"
+        options={accesses.map((a) => ({ value: a, label: a }))}
+      />
+
+      <span className="text-xs text-fg-muted">on</span>
       <ScopePicker value={projectIds} onChange={setProjectIds} projects={projects} />
 
       {/* RADD-820: temporary elevation that actually ends. Empty = permanent. */}
