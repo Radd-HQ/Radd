@@ -29,6 +29,8 @@ export interface HistoryChange {
   removed?: (string | LinkChangeRef)[];
   key?: string;
   name?: string;
+  /** Values withheld: the actor may not read this field (RADD-834). */
+  redacted?: boolean;
 }
 
 export interface HistoryEntry {

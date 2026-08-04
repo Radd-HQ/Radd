@@ -50,9 +50,9 @@ from .schemas import (
 )
 from .service import set_archived, update_item
 
-# Package-private helper — reached through its concern module, not the service
+# Package-private helpers — reached through their concern module, not the service
 # barrel, which exports only the items module's public surface.
-from .service.visibility import _internal_visible
+from .service.visibility import _check_builtin_field_rules, _field_ctx, _internal_visible
 from radd.modules.events import service as events
 
 logger = logging.getLogger(__name__)
@@ -170,6 +170,7 @@ async def _move_one(
     target_field_keys: set[str],
     actor: User,
     permissions,
+    target_permissions,
 ) -> BulkMovedItem:
     old_key = await _item_key(session, item)
     before = (
@@ -180,6 +181,7 @@ async def _move_one(
             actor_id=actor.id,
         )
     )[0]
+    old_state_id = item.state_id
 
     # `parent_id` is untouched: the hierarchy spans projects (spec 80), so
     # the link stays valid across the project change — validity is already
@@ -193,6 +195,22 @@ async def _move_one(
             s for s in target_states.values() if s.category == old_state.category
         ]
         mapped_state = same_category[0] if same_category else target_default_state
+
+    # RADD-834: a move WRITES fields, so it runs the same checks as the
+    # single-item path — builtin-field rules in BOTH projects (the restriction
+    # may live where the item is, or where it lands), and custom-field write
+    # grants for values the move drops (removing a value is a write).
+    dropped = sorted(set(item.custom_fields) - target_field_keys)
+    touched = {"state_id"}
+    if item.release_id is not None:
+        touched.add("release_id")
+    await _check_builtin_field_rules(session, actor, source, permissions, touched)
+    await _check_builtin_field_rules(session, actor, target, target_permissions, touched)
+    if dropped:
+        source_definitions = await fields.definitions_for_project(session, source)
+        source_ctx = await _field_ctx(session, actor, source, permissions, source_definitions)
+        fields.writable_check(source_definitions, {key: None for key in dropped}, source_ctx)
+
     item.state_id = mapped_state.id
 
     # Type by name, else the target default. Release is project-scoped: cleared.
@@ -203,7 +221,6 @@ async def _move_one(
         item.type_id = target_type_default
     item.release_id = None
 
-    dropped = sorted(set(item.custom_fields) - target_field_keys)
     if dropped:
         item.custom_fields = {
             k: v for k, v in item.custom_fields.items() if k in target_field_keys
@@ -211,8 +228,25 @@ async def _move_one(
 
     item.number = await projects_service.allocate_item_number(session, target.id)
     item.project_id = target.id
+
+    # Workflow guards (RADD-834): arriving is a transition into the mapped state
+    # under the TARGET project's rules. Wildcard (from-any) rules fire — the
+    # spec-112 "require a release to enter Done" shape — and a STRICT project
+    # refuses arrivals with no wildcard edge, exactly as it refuses any
+    # undefined transition. Checked after the patch is applied, like update_item.
+    await workflow.check_transition(session, target, item, old_state_id, item.state_id)
+
     session.add(ItemKeyAlias(old_key=old_key.upper(), item_id=item.id))
     await session.flush()
+
+    # Approvals (spec 71): a move into an approved target consumes the request,
+    # mirroring the single-item path. Soft dep — module optional.
+    try:
+        from radd.modules.approvals import service as approvals_service
+    except ImportError:
+        pass
+    else:
+        await approvals_service.consume(session, item.id, item.state_id)
 
     after = (
         await hydrate(
@@ -248,7 +282,9 @@ async def bulk_move_items(
     session: AsyncSession, data: ItemBulkMove, actor: User
 ) -> BulkMoveResult:
     target = await projects_service.get_project(session, data.target_project_id)
-    await authz.require(session, actor, Permission.ITEM_CREATE, project=target)
+    target_permissions = await authz.require(
+        session, actor, Permission.ITEM_CREATE, project=target
+    )
 
     target_states = {s.name.lower(): s for s in await workflow.list_states(session, target.id)}
     target_default_state = await workflow.default_state(session, target.id)
@@ -260,14 +296,22 @@ async def bulk_move_items(
         d.key for d in await fields.definitions_for_project(session, target)
     }
 
-    items = await _selected_items(session, data.item_ids)
+    selected_ids = [item.id for item in await _selected_items(session, data.item_ids)]
     projects: dict[uuid.UUID, Project] = {}
     perms: dict[uuid.UUID, frozenset[Permission]] = {}
 
     result = BulkMoveResult()
-    for item in items:
-        if item.project_id == target.id:
-            continue  # already home — nothing to do
+    target_id = target.id
+    for item_id in selected_ids:
+        # Re-fetched per iteration: a previous item's savepoint rollback expires
+        # every instance that savepoint touched — the item, and the target
+        # project whose item-number counter it incremented — and a sync
+        # attribute access on an expired ORM object cannot lazy-load in async
+        # context. `get` refreshes only when needed.
+        item = await session.get(WorkItem, item_id)
+        target = await session.get(Project, target_id)
+        if item is None or item.project_id == target_id:
+            continue  # gone, or already home — nothing to do
         source = projects.get(item.project_id)
         if source is None:
             source = await projects_service.get_project(session, item.project_id)
@@ -275,7 +319,7 @@ async def bulk_move_items(
             perms[source.id] = await authz.effective_permissions(session, actor, project=source)
         key = f"{source.key}-{item.number}"
         if Permission.ITEM_UPDATE not in perms[source.id]:
-            result.skipped.append(_skip(item.id, key, BulkSkipReason.FORBIDDEN))
+            result.skipped.append(_skip(item_id, key, BulkSkipReason.FORBIDDEN))
             continue
         try:
             async with session.begin_nested():
@@ -291,14 +335,21 @@ async def bulk_move_items(
                     target_field_keys,
                     actor,
                     perms[source.id],
+                    target_permissions,
                 )
+        except ForbiddenError:
+            result.skipped.append(_skip(item_id, key, BulkSkipReason.FORBIDDEN))
+        except TransitionError as exc:
+            result.skipped.append(
+                _skip(item_id, key, BulkSkipReason.TRANSITION_BLOCKED, "; ".join(exc.errors))
+            )
         except ConflictError as exc:
             result.skipped.append(
-                _skip(item.id, key, BulkSkipReason.INVALID_TARGET, str(exc))
+                _skip(item_id, key, BulkSkipReason.INVALID_TARGET, str(exc))
             )
         except Exception:
-            logger.exception("bulk-move failed for item %s", item.id)
-            result.skipped.append(_skip(item.id, key, BulkSkipReason.ERROR))
+            logger.exception("bulk-move failed for item %s", item_id)
+            result.skipped.append(_skip(item_id, key, BulkSkipReason.ERROR))
         else:
             result.moved.append(moved)
     return result

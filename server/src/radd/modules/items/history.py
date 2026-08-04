@@ -17,12 +17,17 @@ from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
 from radd.modules.events import service as events
 from radd.modules.events.models import Event
+from radd.modules.fields import service as fields
 from radd.modules.teams import service as teams
 from radd.modules.projects import service as projects_service
 
 from .enums import ItemEntity, ItemEvent
 from .schemas import HistoryActor, HistoryEntry, ItemHistory
 from .service import require_item
+
+# Package-private helpers — the same per-actor field-visibility seams the item
+# read path uses (RADD-834: history is an API response, not a stream consumer).
+from .service.visibility import _builtin_read_denied, _field_ctx
 
 # Related-entity event types whose payload carries `item_id` back to this item.
 # Wire strings (not enum imports) so `items` doesn't take a dependency on
@@ -76,6 +81,31 @@ def _detail(event: Event) -> dict[str, Any] | None:
     return detail or None
 
 
+# `changes.py` diff field name -> the builtin-field rule name where they differ.
+_CHANGE_FIELD_TO_BUILTIN = {"points": "estimate_points"}
+
+
+def _redact_changes(
+    changes: list[dict], restricted_cf: set[str], builtin_denied: set[str]
+) -> list[dict]:
+    """Redact — never omit — change entries whose values the actor may not read
+    (RADD-834). "Priority changed" with no values is honest; dropping the entry
+    would rewrite the audit trail."""
+    if not restricted_cf and not builtin_denied:
+        return changes
+    out: list[dict] = []
+    for change in changes:
+        field = change.get("field")
+        if field == "custom_field":
+            if change.get("key") in restricted_cf:
+                change = {k: change[k] for k in ("field", "key", "name") if k in change}
+                change["redacted"] = True
+        elif _CHANGE_FIELD_TO_BUILTIN.get(field, field) in builtin_denied:
+            change = {"field": field, "redacted": True}
+        out.append(change)
+    return out
+
+
 async def item_history(session: AsyncSession, item_id: uuid.UUID, actor: User) -> ItemHistory:
     item = await require_item(session, item_id)
     project = await projects_service.get_project(session, item.project_id)
@@ -88,6 +118,14 @@ async def item_history(session: AsyncSession, item_id: uuid.UUID, actor: User) -
     actor_teams = (
         set() if has_manage else await teams.user_team_ids(session, actor.id)
     )
+
+    # Field-level read visibility (RADD-834): the same seams the item read path
+    # uses decide which change VALUES the actor may see. Cheap no-ops when no
+    # read-restricting grant exists (the common case).
+    definitions = await fields.definitions_for_project(session, project)
+    ctx = await _field_ctx(session, actor, project, permissions, definitions)
+    restricted_cf = {d.key for d in definitions} - fields.readable_keys(definitions, ctx)
+    builtin_denied = set(await _builtin_read_denied(session, project, ctx))
 
     raw = await events.entity_activity(
         session,
@@ -117,6 +155,7 @@ async def item_history(session: AsyncSession, item_id: uuid.UUID, actor: User) -
         # A rank-only reorder emits item.updated with no visible field change — skip.
         if is_update and not changes:
             continue
+        changes = _redact_changes(changes, restricted_cf, builtin_denied)
         if event.event_type == ItemEvent.CREATED:
             detail: dict[str, Any] | None = {"title": payload.get("title")}
         elif is_update:

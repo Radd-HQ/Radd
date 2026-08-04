@@ -234,6 +234,7 @@ export const BUILTIN_FIELD_LABELS: Record<BuiltinRuleField, string> = {
   cycle: "Cycle",
   release: "Release",
   flagged: "Flag",
+  estimate_points: "Points",
 };
 
 /** Field-grant access labels (settings/fields permission editor, spec 07). */

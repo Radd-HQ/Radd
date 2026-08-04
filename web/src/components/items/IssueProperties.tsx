@@ -225,14 +225,18 @@ export function IssueProperties({
   const placementOf = (row: EffectiveFieldRow): string =>
     row.custom && fieldErrors[row.field.slice(3)] ? ScreenPlacement.primary : row.placement;
 
-  // Per-row lock: `sla`/`time_tracking` self-render read-only surfaces (never gated); `points`
-  // isn't a grant-restrictable field, so it follows the coarse item.update; everything else (the
-  // builtin names + `cf:<key>` custom fields) resolves through the per-field grant signal.
+  // Per-row lock: `sla`/`time_tracking` self-render read-only surfaces (never gated); every other
+  // row (the builtin names — `points` is the `estimate_points` rule field since RADD-834 — plus
+  // `cf:<key>` custom fields) resolves through the per-field grant signal.
   const lockFor = (fieldRow: string): { locked: boolean; reason: string } => {
     if (fieldRow === "sla" || fieldRow === "time_tracking") return { locked: false, reason: "" };
-    const name = fieldRow.startsWith("cf:") ? fieldRow.slice(3) : fieldRow;
-    const writable = fieldRow === "points" ? writ.canEdit : writ.fieldWritable(name);
-    return { locked: !writable, reason: writ.reasonFor(name) };
+    const name =
+      fieldRow === "points"
+        ? "estimate_points"
+        : fieldRow.startsWith("cf:")
+          ? fieldRow.slice(3)
+          : fieldRow;
+    return { locked: !writ.fieldWritable(name), reason: writ.reasonFor(name) };
   };
 
   const primary = layout.filter((row) => placementOf(row) === ScreenPlacement.primary);

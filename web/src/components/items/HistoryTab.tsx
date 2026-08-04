@@ -178,7 +178,7 @@ function ChangeLine({ change }: { change: HistoryChange }): ReactNode {
       ? change.name ?? "Field"
       : HISTORY_FIELD_LABELS[change.field] ?? change.field;
 
-  if (change.field === "description") {
+  if (change.redacted || change.field === "description") {
     return (
       <>
         <FieldLabel>{label}</FieldLabel> changed

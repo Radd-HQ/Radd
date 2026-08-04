@@ -33,6 +33,7 @@ _BLANK_BUILTIN: dict[str, dict[str, Any]] = {
     "release": {"release": None},
     "labels": {"labels": []},
     "flagged": {"flagged": False},
+    "estimate_points": {"estimate_points": None},
 }
 
 
@@ -80,6 +81,7 @@ _BUILTIN_FIELD_MAP: dict[str, str] = {
     "cycle_id": "cycle",
     "release_id": "release",
     "flagged": "flagged",
+    "estimate_points": "estimate_points",
 }
 
 

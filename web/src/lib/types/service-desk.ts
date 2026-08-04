@@ -79,6 +79,7 @@ export const BUILTIN_RULE_FIELDS = [
   "cycle",
   "release",
   "flagged",
+  "estimate_points",
 ] as const;
 export type BuiltinRuleField = (typeof BUILTIN_RULE_FIELDS)[number];
 

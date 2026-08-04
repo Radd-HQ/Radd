@@ -72,6 +72,7 @@ class BuiltinItemField(StrEnum):
     CYCLE = "cycle"
     RELEASE = "release"
     FLAGGED = "flagged"
+    ESTIMATE_POINTS = "estimate_points"
 
 
 # Builtin fields that support a READ rule (spec 50). Title/state/priority are the
