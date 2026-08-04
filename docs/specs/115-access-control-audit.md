@@ -16,6 +16,46 @@ the proposed target model.
 
 ---
 
+## 0. Decisions taken
+
+Answered by Hussein while the audit was being written. Recorded here because the
+sections below assume them.
+
+| # | Decision | Consequence |
+|---|---|---|
+| D1 | **Instance admin bypasses everything; a project manager does not.** `has_manage` stops short-circuiting field and relation checks. | Every refusal becomes explainable by a grant instead of a hardcoded exemption — the precondition for the inspector telling the truth. Some project-manager flows that silently passed will start refusing; that is the point, but it is a behaviour change and needs calling out in release notes. |
+| D2 | **Baseline narrows to `item.read@own`.** | ⚠️ **Breaking for every existing deployment** — see the rollout note below. |
+| D3 | **Project admins assign existing roles on their project; role *definitions* stay global.** | Access management scales off the instance admin without role sprawl. `member.create/update/delete` already exist for this; what is missing is the screen and the delegation check. |
+| D4 | **Atom renames auto-rewrite stored roles, token scopes and access grants, emitting an event per change.** | The RADD-701 pattern plus an audit trail. Nothing breaks on upgrade, and a narrowed role is discoverable afterwards rather than invisible. |
+
+### D2 rollout — this one cannot ship in the same release as the model change
+
+Today the Baseline is `item.read` + `page.read`, so **every signed-in user reads
+every project's issues**. Narrowing it to `item.read@own` means that on upgrade,
+every account that was relying on the floor — which, on an instance that has
+never written a grant, is *all of them* — sees only issues they reported.
+
+That is the correct destination and the wrong migration, so the order matters:
+
+1. Ship relations (RADD-823) with the Baseline **unchanged**. Nothing moves.
+2. Give admins the inspector (RADD-809) and the grant screens, so the current
+   effective access of every user and team is *visible* before it changes.
+3. Provide a **pre-flight report**: "narrowing the Baseline would remove access
+   for N users across M projects; here is who and where." An admin grants the
+   roles that restore intended access.
+4. Narrow the Baseline, in its own release, as a deliberate act.
+
+Steps 1–2 are already sequenced first for other reasons. Step 3 is new work and
+belongs with D2, not with the relation mechanism — a migration that silently
+removes read access from everyone is the one failure this whole epic exists to
+prevent, and shipping it *as* the fix would be self-defeating.
+
+`page.read` is a separate question and should be decided separately: pages have
+no per-space equivalent of `@own` that most instances would want, and dropping it
+from the Baseline hides the wiki from everyone by default.
+
+---
+
 ## 1. What exists today
 
 Access is decided by **three independent layers**. They are not alternatives —
