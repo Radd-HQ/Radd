@@ -282,6 +282,7 @@ async def create_role_grant(
             project_id=project_id,
             space_id=space_id,
             actor_id=user.id,
+            expires_at=data.expires_at.replace(tzinfo=None) if data.expires_at else None,
         )
         for project_id, space_id in scopes
     ]

@@ -17,6 +17,9 @@ export interface AccessGrant {
   /** RADD-819: "allow" (default) | "deny" — deny wins on ties, specificity first. */
   effect: "allow" | "deny";
   project_id: string | null;
+  /** RADD-820: null = permanent; expired rows never load into resolution. */
+  expires_at?: string | null;
+  granted_by?: string | null;
   created_at: string;
 }
 
@@ -28,6 +31,8 @@ export interface AccessGrantCreate {
   subject_id: string;
   access: string;
   effect?: "allow" | "deny";
+  /** RADD-820: ISO datetime; omitted = permanent. */
+  expires_at?: string | null;
   project_ids?: string[];
 }
 

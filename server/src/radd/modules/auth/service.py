@@ -499,6 +499,10 @@ def _naive_utc(dt: datetime | None) -> datetime | None:
 _MERGE_REPOINT: tuple[tuple[str, str], ...] = (
     ("work_items", "assignee_id"),
     ("work_items", "reporter_id"),
+    # RADD-820: who made a grant is provenance, and a merge asserts one person
+    # — the surviving identity IS the granter, same as authorship.
+    ("access_grants", "granted_by"),
+    ("global_role_grants", "granted_by"),
     ("comments", "author_id"),
     # RADD-726: who closed an inline thread. Plain attribution — a merge should
     # show the surviving identity as having resolved it, same as authorship.

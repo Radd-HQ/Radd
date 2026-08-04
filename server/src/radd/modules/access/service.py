@@ -27,12 +27,25 @@ from .types import AccessEntity, AccessEvent, GrantEffect, GrantSubject
 # --- queries ------------------------------------------------------------------
 
 
+def _live_clause():
+    """RADD-820: expiry applies at RESOLUTION — filtered where grants LOAD, so
+    the pure resolver never learns about clocks."""
+    from datetime import UTC, datetime
+
+    now = datetime.now(UTC).replace(tzinfo=None)
+    return AccessGrant.expires_at.is_(None) | (AccessGrant.expires_at > now)
+
+
 async def list_for_resource(
     session: AsyncSession, resource_type: str, resource_id: str
 ) -> list[AccessGrant]:
     result = await session.execute(
         select(AccessGrant)
-        .where(AccessGrant.resource_type == resource_type, AccessGrant.resource_id == resource_id)
+        .where(
+            AccessGrant.resource_type == resource_type,
+            AccessGrant.resource_id == resource_id,
+            _live_clause(),
+        )
         .order_by(AccessGrant.access, AccessGrant.subject_type)
     )
     return list(result.scalars())
@@ -48,7 +61,9 @@ async def grants_for_resources(
         return out
     result = await session.execute(
         select(AccessGrant).where(
-            AccessGrant.resource_type == resource_type, AccessGrant.resource_id.in_(ids)
+            AccessGrant.resource_type == resource_type,
+            AccessGrant.resource_id.in_(ids),
+            _live_clause(),
         )
     )
     for grant in result.scalars():
@@ -121,6 +136,7 @@ async def add_grant(
     project_id: uuid.UUID | None = None,
     actor_id: uuid.UUID | None = None,
     effect: GrantEffect = GrantEffect.ALLOW,
+    expires_at=None,
 ) -> AccessGrant:
     spec = get_spec(resource_type)
     if spec is None:
@@ -157,6 +173,8 @@ async def add_grant(
         access=access,
         project_id=project_id,
         effect=effect.value,
+        expires_at=expires_at,
+        granted_by=actor_id,
     )
     session.add(grant)
     await session.flush()
@@ -205,3 +223,24 @@ async def _emit(
             "project_id": str(grant.project_id) if grant.project_id else None,
         },
     )
+
+
+async def sweep_expired_grants() -> int:
+    """RADD-820: delete expired rows from BOTH grant tables. Resolution already
+    treats them as absent (the liveness clauses) — this only stops the tables
+    accumulating corpses. Registered on the kernel task registry."""
+    from datetime import UTC, datetime
+
+    from radd.db import SessionLocal
+    from radd.modules.auth.models import GlobalRoleGrant
+
+    now = datetime.now(UTC).replace(tzinfo=None)
+    async with SessionLocal() as session:
+        removed = 0
+        for model in (AccessGrant, GlobalRoleGrant):
+            result = await session.execute(
+                delete(model).where(model.expires_at.is_not(None), model.expires_at <= now)
+            )
+            removed += result.rowcount or 0
+        await session.commit()
+    return removed

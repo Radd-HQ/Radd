@@ -42,6 +42,15 @@ async def _subject_condition(session: AsyncSession, user_id: uuid.UUID):
     return condition
 
 
+def _live():
+    """RADD-820: expiry applies AT RESOLUTION — an expired grant is absent the
+    moment it passes, never 'until the sweep next runs'."""
+    from datetime import UTC, datetime
+
+    now = datetime.now(UTC).replace(tzinfo=None)
+    return GlobalRoleGrant.expires_at.is_(None) | (GlobalRoleGrant.expires_at > now)
+
+
 def _unscoped():
     """The instance-wide grants — no scope of any kind. They apply everywhere."""
     return GlobalRoleGrant.project_id.is_(None) & GlobalRoleGrant.space_id.is_(None)
@@ -72,7 +81,7 @@ async def granted_role_ids(
     if space_id is not None:
         scope = scope | (GlobalRoleGrant.space_id == space_id)
     result = await session.execute(
-        select(GlobalRoleGrant.role_id).where(subject & scope).distinct()
+        select(GlobalRoleGrant.role_id).where(subject & scope & _live()).distinct()
     )
     return set(result.scalars())
 
@@ -88,7 +97,7 @@ async def project_granted_role_ids(
     subject = await _subject_condition(session, user_id)
     rows = await session.execute(
         select(GlobalRoleGrant.project_id, GlobalRoleGrant.role_id).where(
-            subject & GlobalRoleGrant.project_id.in_(ids)
+            subject & GlobalRoleGrant.project_id.in_(ids) & _live()
         )
     )
     out: dict[uuid.UUID, set[uuid.UUID]] = defaultdict(set)
@@ -113,7 +122,7 @@ async def space_granted_role_ids(
     subject = await _subject_condition(session, user_id)
     rows = await session.execute(
         select(GlobalRoleGrant.space_id, GlobalRoleGrant.role_id).where(
-            subject & GlobalRoleGrant.space_id.in_(ids)
+            subject & GlobalRoleGrant.space_id.in_(ids) & _live()
         )
     )
     out: dict[uuid.UUID, set[uuid.UUID]] = defaultdict(set)
@@ -162,7 +171,9 @@ async def held_role_ids_anywhere(session: AsyncSession, user_id: uuid.UUID) -> s
     this was direct grants only, so a role a TEAM held by grant never matched a
     role-subject resource grant in the inspector."""
     subject = await _subject_condition(session, user_id)
-    result = await session.execute(select(GlobalRoleGrant.role_id).where(subject).distinct())
+    result = await session.execute(
+        select(GlobalRoleGrant.role_id).where(subject & _live()).distinct()
+    )
     return set(result.scalars())
 
 
@@ -170,7 +181,7 @@ async def unscoped_role_ids(session: AsyncSession, user_id: uuid.UUID) -> set[uu
     """The instance-wide role ids — the ones that apply in every scope."""
     subject = await _subject_condition(session, user_id)
     result = await session.execute(
-        select(GlobalRoleGrant.role_id).where(subject & _unscoped()).distinct()
+        select(GlobalRoleGrant.role_id).where(subject & _unscoped() & _live()).distinct()
     )
     return set(result.scalars())
 
@@ -245,6 +256,7 @@ async def create_grant(
     project_id: uuid.UUID | None = None,
     space_id: uuid.UUID | None = None,
     actor_id: uuid.UUID | None = None,
+    expires_at=None,
 ) -> GlobalRoleGrant:
     """Grant a role to a user, team, or directory group (RADD-832) at a scope.
     No scope id = instance-wide; a project id or a space id (RADD-791) binds it
@@ -298,6 +310,7 @@ async def create_grant(
     grant = GlobalRoleGrant(
         role_id=role_id, user_id=user_id, team_id=team_id, group_id=group_id,
         project_id=project_id, space_id=space_id,
+        expires_at=expires_at, granted_by=actor_id,
     )
     session.add(grant)
     await session.flush()

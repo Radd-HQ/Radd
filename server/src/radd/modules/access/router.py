@@ -89,6 +89,7 @@ async def create_grant(
             project_id=project_id,
             actor_id=user.id,
             effect=data.effect,
+            expires_at=data.expires_at.replace(tzinfo=None) if data.expires_at else None,
         )
         for project_id in scopes
     ]

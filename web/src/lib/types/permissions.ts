@@ -138,6 +138,9 @@ export interface ResourceAccessRow {
   resource_label: string | null;
   access: string;
   effect?: "allow" | "deny"; // RADD-819: a deny row explains a refusal
+  /** RADD-820: who made the grant (null = pre-existing) + when it ends. */
+  granted_by_name?: string | null;
+  expires_at?: string | null;
   subject_type: string; // user | team | role | group
   subject_id: string;
   subject_name: string | null; // null = the user directly

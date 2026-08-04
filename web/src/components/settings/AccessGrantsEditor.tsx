@@ -23,6 +23,7 @@ import {
 import { Button } from "../Button";
 import { Select } from "../Select";
 import { ScopePicker } from "./ScopePicker";
+import { ExpiryChip } from "./AccessInspector";
 import { GroupReachHint } from "./GroupReachHint";
 import { SUBJECT_ICON, SubjectPicker, type Subject } from "./SubjectPicker";
 
@@ -134,6 +135,7 @@ export function AccessGrantsEditor({
                     deny
                   </span>
                 )}
+                {grant.expires_at && <ExpiryChip expiresAt={grant.expires_at} />}
                 {grant.project_id === null ? (
                   <span className="inline-flex items-center gap-1 text-[11px] text-emerald-300">
                     <Globe size={10} /> Global
@@ -189,6 +191,7 @@ function AddGrantRow({
   const [subject, setSubject] = useState<Subject | null>(null);
   const [access, setAccess] = useState(accesses[0]);
   const [effect, setEffect] = useState<"allow" | "deny">("allow");
+  const [expiresAt, setExpiresAt] = useState("");
   const [projectIds, setProjectIds] = useState<string[]>([]);
 
   const add = useMutation({
@@ -200,6 +203,7 @@ function AddGrantRow({
         subject_id: subject!.id,
         access,
         effect,
+        expires_at: expiresAt ? new Date(expiresAt).toISOString() : undefined,
         project_ids: projectIds,
       };
       return api.post(ApiPath.grants, body);
@@ -235,6 +239,16 @@ function AddGrantRow({
       />
 
       <ScopePicker value={projectIds} onChange={setProjectIds} projects={projects} />
+
+      {/* RADD-820: temporary elevation that actually ends. Empty = permanent. */}
+      <input
+        type="date"
+        value={expiresAt}
+        onChange={(e) => setExpiresAt(e.target.value)}
+        aria-label="Expires (optional)"
+        title="Optional expiry — the grant stops applying the moment it passes"
+        className="h-8 rounded-md border border-strong bg-surface px-2 text-xs text-fg"
+      />
 
       <Button variant="ghost" disabled={!subject || add.isPending} onClick={() => add.mutate()}>
         <Plus size={13} aria-hidden />

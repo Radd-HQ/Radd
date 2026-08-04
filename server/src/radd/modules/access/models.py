@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 from sqlalchemy import ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
@@ -37,6 +38,14 @@ class AccessGrant(Base, TimestampMixin):
     # scope wins across scopes (a project deny beats a global allow AND a
     # project allow beats a global deny — specificity first, deny on ties).
     effect: Mapped[str] = mapped_column(String(5), default="allow", server_default="allow")
+    # RADD-820: NULL = permanent (every pre-existing row). Applied at
+    # RESOLUTION time — an expired grant is absent the moment it passes, and
+    # the sweep merely deletes corpses. `granted_by` NULL = pre-existing or
+    # system-created, which is honest: nobody knows who granted those.
+    expires_at: Mapped["datetime | None"] = mapped_column(nullable=True)
+    granted_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     # NULL = every project (global); set = that project only. Widen by adding rows.
     project_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"), index=True

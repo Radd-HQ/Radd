@@ -39,6 +39,10 @@ class ResourceAccessRow:
     subject_name: str | None  # team/role display name; None when it's the user directly
     project_id: uuid.UUID | None
     project_key: str | None  # scope display + backlink
+    #: RADD-820: who made the grant (name; None = pre-existing/system) + when
+    #: it stops applying (None = permanent).
+    granted_by_name: str | None = None
+    expires_at: "object | None" = None
 
 
 @dataclass(frozen=True)
@@ -104,6 +108,15 @@ async def subject_access(
         grants = list(result.scalars())
 
     project_keys = await _project_keys(session, {g.project_id for g in grants if g.project_id})
+    granter_names: dict[uuid.UUID, str] = {}
+    granter_ids = {g.granted_by for g in grants if g.granted_by is not None}
+    if granter_ids:
+        from radd.modules.auth import service as users_service
+
+        granter_names = {
+            u.id: u.name
+            for u in (await users_service.users_by_ids(session, granter_ids)).values()
+        }
     by_type: dict[str, list[AccessGrant]] = {}
     for grant in grants:
         by_type.setdefault(grant.resource_type, []).append(grant)
@@ -128,6 +141,10 @@ async def subject_access(
                 ),
                 project_id=grant.project_id,
                 project_key=project_keys.get(grant.project_id) if grant.project_id else None,
+                granted_by_name=granter_names.get(grant.granted_by)
+                if grant.granted_by
+                else None,
+                expires_at=grant.expires_at,
             )
             for grant in type_grants
         ]

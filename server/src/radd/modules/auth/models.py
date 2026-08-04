@@ -178,6 +178,13 @@ class GlobalRoleGrant(Base, TimestampMixin):
     project_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"), index=True
     )
+    # RADD-820: NULL = permanent; expiry applies at RESOLUTION time (every
+    # GlobalRoleGrant query carries the liveness clause), the sweep only
+    # deletes corpses. granted_by NULL = pre-existing/system rows.
+    expires_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    granted_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     # RADD-791 — the second scope: a wiki space, which behaves like a project.
     #
     # A typed column with its own FK rather than a polymorphic

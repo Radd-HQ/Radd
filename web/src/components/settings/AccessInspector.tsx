@@ -151,6 +151,24 @@ export function EffectivePermissions({ userId }: { userId: string }) {
   );
 }
 
+/** RADD-820: when a grant ends — amber inside a week (the timesheet's
+ * out-of-range treatment), quiet otherwise. */
+export function ExpiryChip({ expiresAt }: { expiresAt: string }) {
+  const ends = new Date(expiresAt);
+  const soon = ends.getTime() - Date.now() < 7 * 24 * 3600 * 1000;
+  return (
+    <span
+      className={
+        "ml-1 rounded border px-1 text-[10px] " +
+        (soon ? "border-amber-500/40 text-amber-400" : "border-subtle text-fg-faint")
+      }
+      title={`Expires ${ends.toLocaleString()}`}
+    >
+      expires {ends.toLocaleDateString()}
+    </span>
+  );
+}
+
 /** The source name, linked to the role that supplies it (RADD-809 backlinks). */
 function SourceLabel({ source, first }: { source: string; first: PermissionSource | undefined }) {
   const label = (
@@ -267,7 +285,9 @@ export function ResourceSections({
                       ? ` via ${row.subject_type} ${row.subject_name}`
                       : " granted directly"}
                     {row.project_key ? ` · on ${row.project_key}` : ""}
+                    {row.granted_by_name ? ` · granted by ${row.granted_by_name}` : ""}
                   </span>
+                  {row.expires_at && <ExpiryChip expiresAt={row.expires_at} />}
                 </li>
               ))}
             </ul>

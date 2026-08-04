@@ -243,3 +243,27 @@ async def test_inspector_shows_the_nesting_chain(db):
     assert row.via == "group"
     assert row.via_group == "Studio"
     assert row.group_path == ["Studio", "VFX All", "Render Wranglers"]
+
+
+async def test_expired_grant_stops_applying_at_resolution(db):
+    """RADD-820: expiry applies THE MOMENT it passes — resolution, not the
+    sweep, is what makes a temporary elevation actually temporary."""
+    from datetime import UTC, datetime, timedelta
+
+    member = await _user(db, "Temporary")
+    role = await auth_roles.create_role(
+        db,
+        RoleCreate(
+            key=f"gg{uuid.uuid4().hex[:6]}", name="G", permissions=[Permission.LABEL_CREATE]
+        ),
+    )
+    past = datetime.now(UTC).replace(tzinfo=None) - timedelta(minutes=1)
+    future = datetime.now(UTC).replace(tzinfo=None) + timedelta(days=7)
+    grant = await role_grants.create_grant(
+        db, role.id, user_id=member.id, expires_at=future, actor_id=member.id
+    )
+    assert grant.granted_by == member.id  # who decided, on the row
+    assert Permission.LABEL_CREATE in await authz.effective_permissions(db, member)
+    grant.expires_at = past
+    await db.flush()
+    assert Permission.LABEL_CREATE not in await authz.effective_permissions(db, member)

@@ -142,6 +142,9 @@ class ResourceAccessRowRead(BaseModel):
     subject_name: str | None = None  # team/role name; None = the user directly
     project_id: uuid.UUID | None = None
     project_key: str | None = None
+    #: RADD-820: provenance an access review actually needs on the row.
+    granted_by_name: str | None = None
+    expires_at: UtcDatetime | None = None
 
 
 class ResourceTypeAccessRead(BaseModel):
@@ -449,6 +452,9 @@ class GlobalGrantRead(BaseModel):
     user_id: uuid.UUID | None = None
     team_id: uuid.UUID | None = None
     group_id: uuid.UUID | None = None
+    #: RADD-820: NULL = permanent. Who made the grant; NULL = pre-existing.
+    expires_at: UtcDatetime | None = None
+    granted_by: uuid.UUID | None = None
     # Both NULL = global; one set = scoped to that project (spec 91) or that
     # wiki space (RADD-791). Never both — see the `one_scope` CHECK.
     project_id: uuid.UUID | None = None
@@ -468,6 +474,8 @@ class RoleGrantCreate(BaseModel):
     user_id: uuid.UUID | None = None
     team_id: uuid.UUID | None = None
     group_id: uuid.UUID | None = None
+    #: RADD-820: optional expiry for every grant this request writes.
+    expires_at: UtcDatetime | None = None
     # Both empty = a single GLOBAL grant; each id = one scoped grant.
     project_ids: list[uuid.UUID] = Field(default_factory=list)
     space_ids: list[uuid.UUID] = Field(default_factory=list)
