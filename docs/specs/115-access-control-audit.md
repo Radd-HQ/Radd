@@ -24,9 +24,73 @@ sections below assume them.
 | # | Decision | Consequence |
 |---|---|---|
 | D1 | **Instance admin bypasses everything; a project manager does not.** `has_manage` stops short-circuiting field and relation checks. | Every refusal becomes explainable by a grant instead of a hardcoded exemption — the precondition for the inspector telling the truth. Some project-manager flows that silently passed will start refusing; that is the point, but it is a behaviour change and needs calling out in release notes. |
-| D2 | **Baseline narrows to `item.read@own`.** | ⚠️ **Breaking for every existing deployment** — see the rollout note below. |
-| D3 | **Project admins assign existing roles on their project; role *definitions* stay global.** | Access management scales off the instance admin without role sprawl. `member.create/update/delete` already exist for this; what is missing is the screen and the delegation check. |
+| D2 | **Baseline narrows to `item.read@own`.** | ⚠️ **Breaking for every existing deployment** — see the rollout note below. Coupled to D9: `page.read` must leave the Baseline at the same time. |
+| D3 | **Project admins assign existing roles on their project; role *definitions* stay global.** | Access management scales off the instance admin without role sprawl. `member.create/update/delete` already exist for this; what is missing is the screen and the delegation check. RADD-826. |
 | D4 | **Atom renames auto-rewrite stored roles, token scopes and access grants, emitting an event per change.** | The RADD-701 pattern plus an audit trail. Nothing breaks on upgrade, and a narrowed role is discoverable afterwards rather than invisible. |
+| D5 | **Groups become a first-class entity; teams stay flat and can contain groups; groups are grant subjects.** | Supersedes the team-nesting question — the hierarchy lives in the directory, where it already is. Own epic (RADD-827); overhauls the LDAP sync and retires `TeamSource`. |
+| D6 | **`@own` means REPORTER**, not creator. | Survives imports (Jira's reporter maps straight across) and makes a form submitted on someone's behalf belong to them. Reporter is reassignable, so ownership can be handed over deliberately. |
+| D7 | **Deny: narrower scope wins; at equal scope deny beats allow; instance admin still bypasses.** | One documented back door, kept singular — a deny that could lock out every admin makes an instance unrecoverable without DB surgery. |
+| D8 | *(superseded by D5)* | — |
+| D9 | **No anonymous reporting.** Email ingest provisions a requester account (`UserSource.EMAIL`) holding only the Baseline. `/public/forms` is removed; **`/public/pages` and `/public/csat` stay.** | One authorisation model instead of two, with the second no longer being the internet-facing one. Forces `page.read` out of the Baseline — otherwise a customer account reads the internal wiki. RADD-828. |
+| D10 | **Relations compose with field grants** — `write Priority @assigned` is expressible. | Bigger resolver and a harder grants editor, in exchange for the per-field rules approval workflows actually need. The inspector must explain two qualifiers at once. |
+| D11 | **A new resource type defaults CLOSED**; its spec may opt into open. | A plugin author who does not think about access ships something private. The existing six keep their current defaults, so nothing changes today. |
+| D12 | **Grant UI: presets AND a sentence builder.** Presets for the common shapes; the advanced mode is a sentence builder, not a control grid. | The fast path stays fast and self-documenting (the inspector can name the preset that produced a grant), while the expert path reads back as the rule it enforces rather than as a row of dropdowns. |
+
+### D5 — Groups become a first-class entity, separate from Teams
+
+Decided while answering the team-nesting question, and it supersedes it. The
+current model links an AD group **to** a team (`teams.directory_group_dn` +
+`TeamSource`), making that team's membership read-only from the directory. The
+decision is to stop doing that:
+
+| | Is | Membership | Nests |
+|---|---|---|---|
+| **Group** (new) | a directory object, mirrored from AD | from the directory | **yes** — as AD groups do |
+| **Team** (existing, changed) | a Radd concept with an owner and a purpose | users **and groups** | no — stays flat |
+
+And: **a group is a grant subject in its own right.** `GrantSubject` becomes
+`user | team | role | group`, and `role_grants` gains a `group_id` beside
+`user_id`/`team_id`. So "the Render Wranglers AD group may read this space" needs
+no team at all.
+
+**Why this is better than team nesting.** It puts the hierarchy where the
+hierarchy actually lives. AD already models nested groups and Radd was flattening
+that into a link, so a nested AD group's members either arrived as team members
+(losing the structure) or did not arrive at all. Teams stop pretending to be
+directory objects and go back to being what they are — a Radd-owned grouping with
+an owner, managers and a purpose — while groups carry the directory's truth
+including its nesting. Two concepts, each with one job, instead of one concept
+with a `source` flag deciding which it is today.
+
+**What it touches.** This is not a small change:
+
+- a `groups` table (dn, name, sync state) plus `group_parents` for nesting
+- `team_members` becomes polymorphic: a member is a user **or** a group
+- `GrantSubject.GROUP`; `role_grants.group_id`; the subject picker everywhere
+- the LDAP sync overhauled — it syncs *groups* now, resolving nesting, rather
+  than pushing users into linked teams (`groupsync.py`)
+- `teams.directory_group_dn` / `directory_group_name` / `TeamSource` /
+  `directory_missing_since` all retire
+- migration: every directory-linked team becomes an ordinary team containing the
+  one group it was linked to — which preserves current behaviour exactly
+
+**The resolution question it creates**, and the reason it belongs in this spec:
+a user's effective subjects become *user → groups (transitively) → teams (via
+group membership) → roles*. That transitive step is a recursive CTE on every
+permission resolution, so it must be resolved once per request and memoised the
+way `baseline_permissions` and `readable_projects` already are. Done carelessly
+it is a recursive query per check.
+
+**The trap to design around:** AD nesting is often far deeper and wider than
+people expect — a user can inherit membership of dozens of groups through two or
+three levels. The inspector (RADD-809) must show the *path* ("via Render
+Wranglers ← VFX All ← Studio"), because "you have this because of a group you
+have never heard of" is otherwise unanswerable.
+
+This needs its own spec; it is filed as its own epic rather than as a child of
+the access work, since it changes the identity model rather than the permission
+model. Relations (§5.4a) depend on it only for `@team`, which resolves through
+whatever the subject graph ends up being.
 
 ### D2 rollout — this one cannot ship in the same release as the model change
 
