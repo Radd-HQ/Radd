@@ -90,11 +90,21 @@ export interface TeamRef {
   name: string;
 }
 
+/** The ACTOR's per-row verdict (RADD-842) — writability is per-ROW once
+ * relations exist (`item.update@own`). Absent = fall back to project-level. */
+export interface ItemCapabilities {
+  can_update: boolean;
+  can_transition: boolean;
+  can_comment: boolean;
+}
+
 export interface Item {
   id: string;
   project_id: string;
   key: string;
   number: number;
+  /** RADD-842: per-row writability; null/absent on payloads with no actor. */
+  capabilities?: ItemCapabilities | null;
   title: string;
   description: string;
   state: StateRef;

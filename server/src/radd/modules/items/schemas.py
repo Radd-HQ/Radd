@@ -269,6 +269,21 @@ class ItemRankUpdate(BaseModel):
     before_id: uuid.UUID | None = None
 
 
+class ItemCapabilities(BaseModel):
+    """The ACTOR's per-row verdict (RADD-842). Relations made writability a
+    per-ROW fact — `item.update@own` on someone else's issue must read as a
+    disabled editor up front (spec 96), never edit-then-error. Attached at the
+    API boundary (listing + detail), absent from event payloads (a stream
+    consumer has no actor)."""
+
+    can_update: bool
+    # State changes ride the update path (state_id is an ItemUpdate field), so
+    # today's verdict is can_update's; a separate transition relation would
+    # change only this line.
+    can_transition: bool
+    can_comment: bool
+
+
 class ItemRead(BaseModel):
     id: uuid.UUID
     project_id: uuid.UUID
@@ -309,6 +324,9 @@ class ItemRead(BaseModel):
     custom_fields: dict[str, Any] = _custom_fields
     created_at: UtcDatetime
     updated_at: UtcDatetime
+    # RADD-842: the actor's per-row verdict; None on surfaces with no actor
+    # (event payloads, imports).
+    capabilities: ItemCapabilities | None = None
 
 
 class HistoryActor(BaseModel):

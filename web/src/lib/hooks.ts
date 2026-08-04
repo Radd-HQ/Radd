@@ -290,10 +290,18 @@ export interface ItemWritability {
  */
 export function useItemWritability(
   project: Pick<Project, "id" | "permissions"> | null | undefined,
+  /** RADD-842: the row itself, when the surface has one. Relations make
+   * writability per-ROW (`item.update@own`), and the server's per-item
+   * verdict OVERRIDES the project-level answer — a false here means this
+   * specific issue is not theirs to edit. Absent capabilities fall back. */
+  item?: Pick<Item, "capabilities"> | null,
 ): ItemWritability {
   const perms = usePermissions();
   const { data } = useQuery(fieldWritabilityQuery(project?.id));
-  const canEdit = project ? perms.project(project, Permission.itemUpdate) : false;
+  const projectLevel = project ? perms.project(project, Permission.itemUpdate) : false;
+  const verdict = item?.capabilities?.can_update;
+  const canEdit = verdict !== undefined && verdict !== null ? verdict : projectLevel;
+  const rowDenied = projectLevel && canEdit === false;
   const readonly = useMemo(() => new Set(data?.readonly_fields ?? []), [data]);
   return useMemo(
     () => ({
@@ -304,10 +312,12 @@ export function useItemWritability(
         readonly.has(name)
           ? "This field is restricted — you don't have permission to edit it."
           : !canEdit
-            ? "You don't have permission to edit this issue."
+            ? rowDenied
+              ? "Your edit access is limited to your own or your team's issues — this isn't one."
+              : "You don't have permission to edit this issue."
             : "",
     }),
-    [canEdit, readonly],
+    [canEdit, rowDenied, readonly],
   );
 }
 

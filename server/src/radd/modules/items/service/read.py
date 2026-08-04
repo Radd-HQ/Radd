@@ -24,6 +24,7 @@ from ..models import WorkItem
 from ..schemas import ItemRead
 from .queries import _alias_item, _parse_key, require_item
 from .visibility import (
+    attach_capabilities,
     ensure_item_relation,
     _builtin_read_denied,
     _field_ctx,
@@ -117,7 +118,13 @@ async def get_item(session: AsyncSession, item_id: uuid.UUID, actor: User) -> It
         )
     )[0]
     builtin_denied = await _builtin_read_denied(session, project, ctx)
-    return _filter_read(read, definitions, ctx, builtin_denied)
+    filtered = _filter_read(read, definitions, ctx, builtin_denied)
+    # RADD-842: the per-row verdict on the detail read.
+    return (
+        await attach_capabilities(
+            session, actor, [filtered], {item.id: item}, {project.id: permissions}
+        )
+    )[0]
 
 
 async def get_item_by_key(session: AsyncSession, key: str, actor: User) -> ItemRead:

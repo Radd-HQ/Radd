@@ -127,7 +127,7 @@ export function IssueProperties({
 }: IssuePropertiesProps) {
   // Writability (spec 92): item.update + per-field grants resolved server-side. Every editor below
   // DISABLES up front (dimmed, with a reason) when the user can't write it — never edit-then-error.
-  const writ = useItemWritability(project);
+  const writ = useItemWritability(project, item);
   // Transition guards (spec 61): disallowed target states gray out with a
   // tooltip listing the failing checks. Off mode = everything allowed.
   const transitions = useAllowedTransitions(item.id);

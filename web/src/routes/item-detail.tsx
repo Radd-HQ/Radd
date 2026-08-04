@@ -93,7 +93,7 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
   const canManageProject = perms.project(project, Permission.projectManage);
   // Per-field writability (spec 92): title/description/flag are grant-restrictable builtins, so gate
   // each on its own resolved verdict — disable up front rather than 403 on save.
-  const writ = useItemWritability(project);
+  const writ = useItemWritability(project, item);
   const canEditTitle = writ.fieldWritable("title");
   const canEditDescription = writ.fieldWritable("description");
   const archiveItem = useArchiveItem();

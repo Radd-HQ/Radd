@@ -108,6 +108,50 @@ async def relation_read_clause(
     return arms[0] if len(arms) == 1 else or_(*arms)
 
 
+async def attach_capabilities(
+    session: AsyncSession,
+    actor: User,
+    reads: "list[ItemRead]",
+    rows_by_id: "dict[uuid.UUID, WorkItem]",
+    permissions_by_project: "dict[uuid.UUID, frozenset[Permission]]",
+) -> "list[ItemRead]":
+    """Stamp the actor's per-row verdict onto API-bound reads (RADD-842).
+
+    Pure per row once the relation actor is resolved (memoised) — no queries.
+    Rows whose backing WorkItem is unavailable keep capabilities=None, which
+    the client reads as \"fall back to the project-level answer\"."""
+    from .. import schemas
+
+    relation_actor = None
+    out: list[ItemRead] = []
+    for read in reads:
+        row = rows_by_id.get(read.id)
+        permissions = permissions_by_project.get(read.project_id)
+        if row is None or permissions is None:
+            out.append(read)
+            continue
+        can_update = authz.holds_base(permissions, Permission.ITEM_UPDATE)
+        if can_update:
+            relations = authz.relations_held(permissions, Permission.ITEM_UPDATE)
+            if authz.RELATION_ANY not in relations:
+                if relation_actor is None:
+                    relation_actor = await authz.relation_actor(session, actor)
+                can_update = authz.relation_holds_row("item", relations, relation_actor, row)
+        can_comment = authz.holds_base(permissions, Permission.COMMENT_WRITE)
+        out.append(
+            read.model_copy(
+                update={
+                    "capabilities": schemas.ItemCapabilities(
+                        can_update=can_update,
+                        can_transition=can_update,
+                        can_comment=can_comment,
+                    )
+                }
+            )
+        )
+    return out
+
+
 async def ensure_item_relation(
     session: AsyncSession,
     actor: User,

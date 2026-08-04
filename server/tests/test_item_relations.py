@@ -197,3 +197,27 @@ async def test_notify_delivery_gates_the_relation_per_recipient(db, scenario):
     )
     assert await _allowed(db, planned, project, own_row)
     assert not await _allowed(db, planned, project, other_row)
+
+
+async def test_reads_carry_the_per_row_verdict(db, scenario):
+    """RADD-842: writability is per-ROW under relations, and the reads say so
+    up front — the spec-96 rule (disable, never edit-then-error) needs a
+    per-item answer the project-level seam cannot give."""
+    project, restricted, _admin, fixture = scenario
+    await _grant(db, restricted, project, ["item.read", "item.update@own", "comment.write"])
+    reads = {
+        r.id: r
+        for r in await items.list_items(
+            db,
+            actor=restricted,
+            filters=ItemListFilters(project_id=project.id),
+            limit=50,
+            offset=0,
+        )
+    }
+    own, other = reads[fixture["own"].id], reads[fixture["other"].id]
+    assert own.capabilities is not None and own.capabilities.can_update
+    assert other.capabilities is not None and not other.capabilities.can_update
+    assert other.capabilities.can_comment  # comment.write is unqualified here
+    detail = await items.get_item(db, fixture["other"].id, restricted)
+    assert detail.capabilities is not None and not detail.capabilities.can_update

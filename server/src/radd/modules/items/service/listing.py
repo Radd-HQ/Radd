@@ -21,6 +21,7 @@ from ..listing import apply_filters, cf_definitions
 from ..models import WorkItem
 from ..schemas import ItemRead
 from .visibility import (
+    attach_capabilities,
     relation_read_clause,
     _builtin_read_denied,
     _field_ctx,
@@ -142,7 +143,12 @@ async def list_items(
             session, actor, projects[pid], permissions[pid], definitions[pid]
         )
         builtin_denied[pid] = await _builtin_read_denied(session, projects[pid], ctxs[pid])
-    return [
+    filtered = [
         _filter_read(r, definitions[r.project_id], ctxs[r.project_id], builtin_denied[r.project_id])
         for r in reads
     ]
+    # RADD-842: the actor's per-row verdict rides every list read, so boards
+    # and bulk selection can disable up front instead of edit-then-error.
+    return await attach_capabilities(
+        session, actor, filtered, {i.id: i for i in visible}, permissions
+    )
