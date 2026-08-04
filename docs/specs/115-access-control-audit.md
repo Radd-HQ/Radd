@@ -35,6 +35,8 @@ sections below assume them.
 | D10 | **Relations compose with field grants** — `write Priority @assigned` is expressible. | Bigger resolver and a harder grants editor, in exchange for the per-field rules approval workflows actually need. The inspector must explain two qualifiers at once. |
 | D11 | **A new resource type defaults CLOSED**; its spec may opt into open. | A plugin author who does not think about access ships something private. The existing six keep their current defaults, so nothing changes today. |
 | D12 | **Grant UI: presets AND a sentence builder.** Presets for the common shapes; the advanced mode is a sentence builder, not a control grid. | The fast path stays fast and self-documenting (the inspector can name the preset that produced a grant), while the expert path reads back as the rule it enforces rather than as a row of dropdowns. |
+| D13 | **`@team` on an item means `item.team_id`** — the item's own team, nothing inferred. | Narrow and predictable. If "the reporter's team when the item has none" turns out to be wanted, it is a SECOND relation (`@reporter_team`), never a fuzzier definition of this one — a relation whose meaning depends on which columns happen to be set is unexplainable in an inspector. |
+| D14 | **Nobody may grant an atom they do not themselves hold.** | One intersection in the grant path, applied to delegated project admins (D3) and to everyone else. Closes the privilege-escalation hole that delegated granting otherwise opens, permanently and without a special case. |
 
 ### D5 — Groups become a first-class entity, separate from Teams
 
@@ -92,31 +94,36 @@ the access work, since it changes the identity model rather than the permission
 model. Relations (§5.4a) depend on it only for `@team`, which resolves through
 whatever the subject graph ends up being.
 
-### D2 rollout — this one cannot ship in the same release as the model change
+### D2 rollout — ship the capability, let an admin flip the row
 
-Today the Baseline is `item.read` + `page.read`, so **every signed-in user reads
-every project's issues**. Narrowing it to `item.read@own` means that on upgrade,
-every account that was relying on the floor — which, on an instance that has
-never written a grant, is *all of them* — sees only issues they reported.
+The whole wave ships as **one release** (see the execution brief,
+`115-execution-prompt.md`). D2 is the one decision that could break an instance
+on upgrade, and it does not have to, because of something RADD-773 already did:
+**the Baseline is an editable database row, not a constant.**
 
-That is the correct destination and the wrong migration, so the order matters:
+So D2 splits into a capability and an act:
 
-1. Ship relations (RADD-823) with the Baseline **unchanged**. Nothing moves.
-2. Give admins the inspector (RADD-809) and the grant screens, so the current
-   effective access of every user and team is *visible* before it changes.
-3. Provide a **pre-flight report**: "narrowing the Baseline would remove access
-   for N users across M projects; here is who and where." An admin grants the
-   roles that restore intended access.
-4. Narrow the Baseline, in its own release, as a deliberate act.
+| | Ships in the release | |
+|---|---|---|
+| `item.read@own` is expressible and enforced | ✅ | part of relations (RADD-823) |
+| `page.read` removable from the floor without hiding the wiki | ✅ | staff get it from a role granted instance-wide |
+| A **pre-flight report** — "narrowing the Baseline would remove access for N users across M projects; here is who and where" | ✅ | new work, RADD-825 |
+| The Baseline row's **value** actually changing | ❌ | an admin edits it in Settings → Roles, when their report is clean |
 
-Steps 1–2 are already sequenced first for other reasons. Step 3 is new work and
-belongs with D2, not with the relation mechanism — a migration that silently
-removes read access from everyone is the one failure this whole epic exists to
-prevent, and shipping it *as* the fix would be self-defeating.
+Nothing is held back and nothing breaks on upgrade. The seeded Baseline for a
+**fresh** instance becomes `item.read@own`, because a new instance has no one to
+break; an **existing** instance keeps whatever its row says until an admin
+changes it, having first seen exactly who it would affect.
 
-`page.read` is a separate question and should be decided separately: pages have
-no per-space equivalent of `@own` that most instances would want, and dropping it
-from the Baseline hides the wiki from everyone by default.
+That is strictly better than a migration that flips it, and it is also the
+honest shape: "who may read what" is a policy decision belonging to whoever runs
+the instance, not something a version bump should make on their behalf.
+
+`page.read` follows the same rule and for a sharper reason (D9): once email
+ingest provisions requester accounts, a permissive page floor is not generous,
+it is a leak — an auto-created customer account would read the internal wiki. The
+pre-flight report must cover both atoms, and the release notes must say plainly
+that leaving `page.read` in the Baseline exposes pages to requester accounts.
 
 ---
 
