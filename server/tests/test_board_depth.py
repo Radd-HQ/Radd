@@ -15,8 +15,10 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings as config
 from radd.exceptions import ConflictError
-from radd.modules.auth.models import User
-from radd.modules.auth.types import InstanceRole
+from radd.modules.auth import roles as auth_roles
+from radd.modules.auth.schemas import RoleCreate
+from radd.modules.auth.models import ProjectMember, User
+from radd.modules.auth.types import InstanceRole, Permission
 from radd.modules.items import rollup, service as items
 from radd.modules.items.enums import ItemKind
 from radd.modules.items.schemas import ItemRollupRequest, ROLLUP_MAX_ITEMS, ItemCreate
@@ -257,9 +259,10 @@ async def test_rollup_counts_points_and_time(db, actor):
 async def test_rollup_visibility_filter_and_caps(db, actor):
     project, states = await _project_with_states(db)
     epic, _, _ = await _epic_tree(db, actor, project, states)
-    # Spec 86 stage 1: any ACTIVE user holds the member floor, so a user with
-    # no grants still reads the rollup; an INACTIVE user gets nothing (and
-    # unknown ids are omitted, never errored).
+    # RADD-825: the floor is item.read@own — an active user with NO grants who
+    # didn't report the epic sees an EMPTY rollup (the visibility filter, not
+    # an error); a project read grant restores it; an INACTIVE user gets
+    # nothing (and unknown ids are omitted, never errored).
     other = User(
         email=f"bd-out-{uuid.uuid4().hex[:8]}@example.com",
         name="Other",
@@ -273,6 +276,20 @@ async def test_rollup_visibility_filter_and_caps(db, actor):
     )
     db.add_all([other, inactive])
     await db.flush()
+    assert await rollup.rollup_items(db, other, [epic.id, uuid.uuid4()]) == {}
+    role = await auth_roles.create_role(
+        db,
+        RoleCreate(
+            key=f"bd{uuid.uuid4().hex[:6]}", name="Reader",
+            permissions=[Permission.ITEM_READ],
+        ),
+    )
+    db.add(ProjectMember(project_id=project.id, user_id=other.id, role_id=role.id))
+    await db.flush()
+    # The per-actor permission map memoises per request/session; the first
+    # rollup call above cached the pre-grant answer.
+    db.info.pop(f"radd.project_permission_map:{other.id}", None)
+    db.info.pop(f"radd.readable_projects:{other.id}", None)
     visible = await rollup.rollup_items(db, other, [epic.id, uuid.uuid4()])
     assert set(visible) == {epic.id}
     assert await rollup.rollup_items(db, inactive, [epic.id, uuid.uuid4()]) == {}

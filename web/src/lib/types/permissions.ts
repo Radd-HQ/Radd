@@ -215,3 +215,25 @@ export interface ProjectMemberUpsert {
   user_id: string;
   role_id: string;
 }
+
+/** RADD-825: the Baseline pre-flight report — the consequence of storing a
+    proposed floor, computed server-side through the real resolvers. */
+export interface BaselinePreflightRow {
+  user_id: string;
+  name: string;
+  email: string;
+  lost: string[];
+  retained_project_keys: string[];
+  lost_project_count: number;
+}
+
+export interface BaselinePreflight {
+  proposed: string[];
+  narrowed: string[];
+  removed: string[];
+  users_affected: number;
+  projects_affected: number;
+  total_users_checked: number;
+  rows: BaselinePreflightRow[];
+  truncated: boolean;
+}

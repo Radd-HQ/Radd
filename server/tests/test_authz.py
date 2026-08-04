@@ -227,10 +227,12 @@ def test_baseline_is_seeded_read_only():
     """
     # RADD-816 widened the seed deliberately: the Q4 author-own rights and the
     # F6 catalog reads become GRANTS everyone holds — explainable and revocable
-    # — instead of hardcoded checks and vacuous member-floor gates.
+    # — instead of hardcoded checks and vacuous member-floor gates. RADD-825
+    # (Q2) then narrowed the READS: item.read@OWN (your reported issues, via
+    # the relation machinery) and no page.read at all — a floor page.read
+    # defeated every restricted space (N5). Wider is a deliberate edit now.
     assert BASELINE == {
-        Permission.ITEM_READ,
-        Permission.PAGE_READ,
+        "item.read@own",
         "comment.delete@own",
         "worklog.delete@own",
         "attachment.delete@own",
@@ -392,8 +394,12 @@ async def test_require_instance_admin_passes_everywhere():
 async def test_require_returns_the_effective_union(monkeypatch):
     patch_lookups(monkeypatch, permission_sets=[[Permission.ITEM_READ, Permission.ITEM_CREATE]])
     permissions = await require(SESSION, StubUser(), Permission.ITEM_CREATE, project=StubProject())
-    # The active-user floor (the seeded Baseline) rides along with the role.
-    assert permissions == expand_permissions(BASELINE | {Permission.ITEM_CREATE})
+    # The active-user floor (the seeded Baseline) rides along with the role —
+    # which since RADD-825 carries item.read@own; the FULL item.read comes from
+    # the role set this test patched in.
+    assert permissions == expand_permissions(
+        BASELINE | {Permission.ITEM_READ, Permission.ITEM_CREATE}
+    )
 
 
 async def test_require_custom_role_allows_update_but_not_create(monkeypatch):
@@ -408,10 +414,12 @@ async def test_require_custom_role_allows_update_but_not_create(monkeypatch):
 
 
 async def test_require_floor_only_user_denied_writes(monkeypatch):
-    # An active user with NO project grants: floor reads pass, writes 403.
+    # An active user with NO project grants: the floor's item.read@OWN passes
+    # the GATE (holds_base — RADD-825 narrowed the floor; which rows they see
+    # is the relation resolvers' question), writes 403.
     patch_lookups(monkeypatch)
     user, project = StubUser(), StubProject()
-    assert Permission.ITEM_READ in await require(
+    assert "item.read@own" in await require(
         SESSION, user, Permission.ITEM_READ, project=project
     )
     with pytest.raises(ForbiddenError):
@@ -439,7 +447,7 @@ async def test_require_global_scope_admin_and_member(monkeypatch):
     )
     with pytest.raises(ForbiddenError):
         await require(SESSION, StubUser(), Permission.ROLE_CREATE)
-    assert Permission.ITEM_READ in await require(SESSION, StubUser(), Permission.ITEM_READ)
+    assert "item.read@own" in await require(SESSION, StubUser(), Permission.ITEM_READ)
 
 
 async def test_require_unscoped_member_floor_and_admin_tier(monkeypatch):
@@ -447,7 +455,7 @@ async def test_require_unscoped_member_floor_and_admin_tier(monkeypatch):
     assert Permission.USER_MANAGE in await require(
         SESSION, StubUser(InstanceRole.ADMIN), Permission.USER_MANAGE
     )
-    assert Permission.ITEM_READ in await require(SESSION, StubUser(), Permission.ITEM_READ)
+    assert "item.read@own" in await require(SESSION, StubUser(), Permission.ITEM_READ)
     with pytest.raises(ForbiddenError):
         await require(SESSION, StubUser(), Permission.USER_MANAGE)
 

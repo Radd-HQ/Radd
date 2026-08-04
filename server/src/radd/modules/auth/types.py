@@ -680,13 +680,13 @@ BUILTIN_ROLES: tuple[BuiltinRole, ...] = (
         # no screen anywhere said so. Those three are no longer free; grant them
         # through a role, or add them back here deliberately.
         #
-        # item.read is project-scoped and page.read is global; the baseline is
-        # applied at BOTH scopes, so each lands where it means something and the
-        # other is inert. That is what preserves "any signed-in user can read the
-        # wiki and see the projects" without a second constant to keep in step.
+        # RADD-825 (Q2): the floor is item.read@OWN — a signed-in user sees the
+        # issues they reported until a role grants more. page.read left with it
+        # (N5: a floor page.read defeated every restricted space). Existing
+        # deployments keep today's effective access through the Staff role the
+        # d825flip migration seeds and grants to the accounts that predate it.
         permissions=(
-            Permission.ITEM_READ,
-            Permission.PAGE_READ,
+            "item.read@own",
             # RADD-816 (Q4): the author-own rights, as grants — explainable in
             # the inspector and REVOCABLE, which the hardcoded checks never were.
             "comment.delete@own",

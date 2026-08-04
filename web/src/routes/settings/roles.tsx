@@ -2,11 +2,12 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Plus, ShieldCheck } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
-import { apiRolePath } from "../../lib/constants";
+import { ApiPath, apiRolePath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
 import { permissionsCatalogQuery, queryKeys, rolesQuery } from "../../lib/queries";
 import {
   BASELINE_ROLE_KEY,
+  type BaselinePreflight,
   Permission,
   type PermissionInfo,
   type PermissionValue,
@@ -149,6 +150,94 @@ function RoleImpact({ roleId, dirty }: { roleId: string; dirty: boolean }) {
 }
 
 
+/** RADD-825: the Baseline pre-flight — "storing THIS set removes access for
+ * N users across M projects, here is who and where", computed server-side
+ * through the real resolvers against the EDITED (unsaved) permission set. An
+ * admin grants the roles that restore intended access and re-runs it until
+ * the diff is what they meant. */
+function BaselinePreflight({ selected }: { selected: PermissionValue[] }) {
+  const run = useMutation({
+    mutationFn: () =>
+      api.post<BaselinePreflight>(`${ApiPath.roles}/baseline/preflight`, {
+        permissions: selected,
+      }),
+  });
+  const report = run.data;
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-subtle bg-surface/40 p-3">
+      <div className="flex items-center gap-3">
+        <Button variant="secondary" size="sm" onClick={() => run.mutate()} disabled={run.isPending}>
+          {run.isPending ? "Checking every account…" : "Pre-flight this change"}
+        </Button>
+        <span className="text-xs text-fg-muted">
+          Who would lose access if this set were saved — checked against every active account
+          before anything changes.
+        </span>
+      </div>
+      {run.isError && <p className="text-xs text-red-400">{errorMessage(run.error)}</p>}
+      {report && (
+        <div className="flex flex-col gap-2 text-xs">
+          <p
+            className={
+              report.users_affected > 0 ? "font-medium text-amber-400" : "font-medium text-fg-secondary"
+            }
+          >
+            {report.users_affected === 0
+              ? `No one loses anything (${report.total_users_checked} accounts checked).`
+              : `${report.users_affected} of ${report.total_users_checked} accounts lose access` +
+                (report.projects_affected > 0
+                  ? `, across ${report.projects_affected} ${report.projects_affected === 1 ? "project" : "projects"}.`
+                  : ".")}
+          </p>
+          {(report.narrowed.length > 0 || report.removed.length > 0) && (
+            <p className="text-fg-muted">
+              {report.narrowed.length > 0 && (
+                <>Narrows: {report.narrowed.join(", ")} (kept in a tighter form). </>
+              )}
+              {report.removed.length > 0 && <>Removes: {report.removed.join(", ")}.</>}
+            </p>
+          )}
+          {report.rows.length > 0 && (
+            <div className="max-h-64 overflow-y-auto rounded-md border border-subtle">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-subtle text-fg-muted">
+                    <th className="px-2 py-1 font-medium">Person</th>
+                    <th className="px-2 py-1 font-medium">Loses</th>
+                    <th className="px-2 py-1 font-medium">Still reads</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {report.rows.map((row) => (
+                    <tr key={row.user_id} className="border-b border-subtle/60 align-top">
+                      <td className="px-2 py-1 whitespace-nowrap">{row.name}</td>
+                      <td className="px-2 py-1 text-fg-secondary">{row.lost.join(", ")}</td>
+                      <td className="px-2 py-1 text-fg-muted">
+                        {row.retained_project_keys.length > 0
+                          ? row.retained_project_keys.join(", ")
+                          : row.lost_project_count > 0
+                            ? "nothing"
+                            : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {report.truncated && (
+            <p className="text-fg-faint">
+              Showing the first {report.rows.length} of {report.users_affected} affected accounts —
+              the counts above cover everyone.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 /** Expanded role row: matrix (editable on custom roles), save + delete. */
 function RolePanel({ role, catalog, canManage }: RolePanelProps) {
   const queryClient = useQueryClient();
@@ -220,6 +309,7 @@ function RolePanel({ role, catalog, canManage }: RolePanelProps) {
         selected={selected}
         onToggle={permissionsEditable ? toggle : undefined}
       />
+      {isBaseline && canManage && <BaselinePreflight selected={selected} />}
       {/* Spec 87: builtin roles are immutable but still grantable instance-wide,
           so this is gated on role.manage, not on `editable`. */}
       <RoleGlobalGrants roleId={role.id} editable={canManage} />

@@ -26,8 +26,10 @@ from radd.modules.attachments.types import (
     DeliveryMode,
     StorageHostType,
 )
-from radd.modules.auth.models import User
-from radd.modules.auth.types import InstanceRole
+from radd.modules.auth import roles as auth_roles
+from radd.modules.auth.schemas import RoleCreate
+from radd.modules.auth.models import ProjectMember, User
+from radd.modules.auth.types import InstanceRole, Permission
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate
 from radd.modules.projects import service as projects_service
@@ -78,6 +80,17 @@ async def setup(db, tmp_path):
     item = await items_service.create_item(
         db, ItemCreate(project_id=project.id, title="secure files"), actor=admin
     )
+    # RADD-825: the floor is item.read@own now — "parent readers" needs a real
+    # membership, so the member reads the item the way any teammate would.
+    read_role = await auth_roles.create_role(
+        db,
+        RoleCreate(
+            key=f"aclr{uuid.uuid4().hex[:6]}", name="Reader",
+            permissions=[Permission.ITEM_READ],
+        ),
+    )
+    db.add(ProjectMember(project_id=project.id, user_id=member.id, role_id=read_role.id))
+    await db.flush()
     attachment = await service.save_upload(
         db,
         entity_type=AttachmentParentType.ITEM.value,
@@ -107,6 +120,17 @@ async def test_no_grants_means_open_to_parent_readers(db, setup):
 async def test_a_user_grant_restricts_everyone_else(db, setup):
     admin, member, item, attachment = setup
     chosen = await _user(db)
+    # An attachment grant narrows WITHIN parent readers; it never substitutes
+    # for item visibility — chosen must be able to read the item first.
+    role = await auth_roles.create_role(
+        db,
+        RoleCreate(
+            key=f"aclc{uuid.uuid4().hex[:6]}", name="Reader",
+            permissions=[Permission.ITEM_READ],
+        ),
+    )
+    db.add(ProjectMember(project_id=item.project_id, user_id=chosen.id, role_id=role.id))
+    await db.flush()
     await _grant(db, attachment.id, GrantSubject.USER.value, chosen.id)
     assert await acl.attachment_readable(db, chosen, attachment) is True
     assert await acl.attachment_readable(db, member, attachment) is False

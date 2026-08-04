@@ -9,12 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.db import get_session
 from radd.modules.projects import service as projects_service
 
-from . import authz, grants, roles
+from . import authz, preflight, grants, roles
 from .deps import CurrentUser
 from .models import ProjectMember
 from radd.exceptions import ConflictError, ForbiddenError
 
 from .schemas import (
+    BaselinePreflightRead,
+    BaselinePreflightRequest,
     GlobalGrantRead,
     GlobalGrantsUpdate,
     PermissionRead,
@@ -84,6 +86,18 @@ async def list_roles(session: Session, user: CurrentUser) -> list[RoleRead]:
 async def create_role(data: RoleCreate, session: Session, user: CurrentUser) -> RoleRead:
     await authz.require(session, user, Permission.ROLE_CREATE)
     return RoleRead.model_validate(await roles.create_role(session, data, actor_id=user.id))
+
+
+@role_router.post("/baseline/preflight", response_model=BaselinePreflightRead)
+async def preflight_baseline(
+    data: BaselinePreflightRequest, session: Session, user: CurrentUser
+) -> BaselinePreflightRead:
+    """RADD-825: "editing the Baseline to THIS would remove access for N users
+    across M projects — here is who, and where." An editing aid, so it rides
+    the editing gate; declared BEFORE /{role_id} (the RADD-761 shadowing rule).
+    """
+    await authz.require(session, user, Permission.ROLE_UPDATE)
+    return await preflight.baseline_preflight(session, data.permissions)
 
 
 @role_router.patch("/{role_id}", response_model=RoleRead)

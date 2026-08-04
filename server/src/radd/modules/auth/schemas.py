@@ -514,3 +514,43 @@ class ProjectMemberRead(BaseModel):
     user_id: uuid.UUID
     role_id: uuid.UUID
     role: str  # the role's key, hydrated for display
+
+
+# --- the Baseline pre-flight (RADD-825) --------------------------------------
+
+
+class BaselinePreflightRequest(BaseModel):
+    """The Baseline as the admin is ABOUT to store it."""
+
+    permissions: list[str] = Field(default_factory=list)
+
+    @field_validator("permissions")
+    @classmethod
+    def _known_atoms(cls, v: list[str]) -> list[str]:
+        return _validate_atoms(v) or []
+
+
+class BaselinePreflightRow(BaseModel):
+    """One affected person: what they lose globally, and where item read
+    survives via a project-scoped source (membership, team, scoped grant)."""
+
+    user_id: uuid.UUID
+    name: str
+    email: str
+    lost: list[str]
+    retained_project_keys: list[str]
+    lost_project_count: int
+
+
+class BaselinePreflightRead(BaseModel):
+    """The consequence of editing the Baseline to `proposed`, computed through
+    the real resolvers before anything is written."""
+
+    proposed: list[str]
+    narrowed: list[str]  # atoms whose base survives in a narrower @relation form
+    removed: list[str]  # atoms with no surviving form
+    users_affected: int
+    projects_affected: int
+    total_users_checked: int
+    rows: list[BaselinePreflightRow]  # capped sample; counts are never capped
+    truncated: bool

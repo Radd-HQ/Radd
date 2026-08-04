@@ -13,8 +13,10 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings as config
 from radd.exceptions import ConflictError, ForbiddenError
-from radd.modules.auth.models import User
-from radd.modules.auth.types import InstanceRole
+from radd.modules.auth import roles as auth_roles
+from radd.modules.auth.schemas import RoleCreate
+from radd.modules.auth.models import ProjectMember, User
+from radd.modules.auth.types import InstanceRole, Permission
 from radd.modules.items import service as items
 from radd.modules.items.schemas import ItemCreate
 from radd.modules.notify import (
@@ -103,7 +105,23 @@ async def test_reporter_without_item_update_manages_participants(db, actor):
     )
     assert added_user.user is not None and added_user.user.id == colleague.id
 
-    # A random member without item.update cannot add or remove.
+    # A member who can SEE the item but holds no item.update cannot add or
+    # remove. (Since RADD-825 the floor no longer reads everything — without
+    # this grant the bystander gets the hidden-item NotFound before the write
+    # check, which is the right answer for a stranger but not this test's.)
+    role = await auth_roles.create_role(
+        db,
+        RoleCreate(
+            key=f"pt{uuid.uuid4().hex[:6]}", name="Reader",
+            permissions=[Permission.ITEM_READ],
+        ),
+    )
+    db.add(ProjectMember(project_id=project.id, user_id=bystander.id, role_id=role.id))
+    # The colleague needs read too for the self-leave leg below — being a
+    # participant does NOT itself confer item visibility (RADD-844 tracks
+    # whether it should become a relation).
+    db.add(ProjectMember(project_id=project.id, user_id=colleague.id, role_id=role.id))
+    await db.flush()
     with pytest.raises(ForbiddenError):
         await participants.add_participant(
             db, item.id, ParticipantAdd(user_id=bystander.id), bystander

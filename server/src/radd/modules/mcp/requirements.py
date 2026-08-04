@@ -174,14 +174,17 @@ async def visible_catalog(
         if requirement.permission is None:
             visible.append(tool)
             continue
+        # holds_base, not raw membership (RADD-825): a floor of item.read@OWN
+        # still runs get_item — the relation resolvers narrow WHICH rows answer,
+        # and hiding must match what the dispatcher's `authz.require` enforces.
         if not requirement.project_scoped:
-            if requirement.permission in global_permissions:
+            if authz.holds_base(global_permissions, requirement.permission):
                 visible.append(tool)
             continue
         allowed = [
             keys_by_id[pid]
             for pid, permissions in per_project.items()
-            if requirement.permission in permissions
+            if authz.holds_base(permissions, requirement.permission)
         ]
         if not allowed:
             continue

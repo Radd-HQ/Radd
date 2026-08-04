@@ -14,8 +14,10 @@ from radd.config import settings
 from radd.exceptions import ForbiddenError, NotFoundError
 from radd.modules.access import service as access_service
 from radd.modules.access.types import GrantSubject
-from radd.modules.auth.models import User
-from radd.modules.auth.types import InstanceRole
+from radd.modules.auth import roles as auth_roles
+from radd.modules.auth.schemas import RoleCreate
+from radd.modules.auth.models import ProjectMember, User
+from radd.modules.auth.types import InstanceRole, Permission
 from radd.modules.teams import service as teams_service
 from radd.modules.teams.schemas import TeamCreate
 from radd.modules.items import service as items_service
@@ -232,12 +234,28 @@ async def test_queue_type_and_view_counts(db):
     owner = await _member(db, "Queue Owner")
     grantee = await _member(db, "Count Grantee")
     outsider = await _member(db, "Count Outsider")
-    # Plain members hold the read-only project floor — an admin seeds the items.
+    # An admin seeds the items; owner + grantee get a project read role
+    # (RADD-825: the floor is item.read@own, so counting a queue takes a real
+    # grant), the outsider stays ungranted.
     seeder = await _member(db, "Item Seeder", instance_role=InstanceRole.ADMIN)
     project = await projects_service.create_project(
         db,
         ProjectCreate(key=f"VQ{uuid.uuid4().hex[:4].upper()}", name="Desk"),
     )
+    reader = await auth_roles.create_role(
+        db,
+        RoleCreate(
+            key=f"vq{uuid.uuid4().hex[:6]}", name="Reader",
+            permissions=[Permission.ITEM_READ],
+        ),
+    )
+    db.add_all(
+        [
+            ProjectMember(project_id=project.id, user_id=owner.id, role_id=reader.id),
+            ProjectMember(project_id=project.id, user_id=grantee.id, role_id=reader.id),
+        ]
+    )
+    await db.flush()
     for index, priority in enumerate((Priority.BLOCKER, Priority.BLOCKER, Priority.LOW)):
         await items_service.create_item(
             db, ItemCreate(project_id=project.id, title=f"q-{index}", priority=priority), seeder

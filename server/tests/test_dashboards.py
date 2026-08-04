@@ -16,8 +16,10 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings
 from radd.exceptions import ConflictError, ForbiddenError, NotFoundError
-from radd.modules.auth.models import User
-from radd.modules.auth.types import InstanceRole
+from radd.modules.auth import roles as auth_roles
+from radd.modules.auth.schemas import RoleCreate
+from radd.modules.auth.models import ProjectMember, User
+from radd.modules.auth.types import InstanceRole, Permission
 from radd.modules.dashboards import service as dashboards, widgets as dashboard_widgets
 from radd.modules.dashboards.schemas import (
     DashboardCreate,
@@ -311,9 +313,18 @@ async def test_items_count_matches_ids_total_under_visibility(db):
         db, ItemCreate(project_id=away_project.id, title="invisible"), away_seeder
     )
 
-    # Spec 86: every ACTIVE user reads every project, so pin the deterministic
-    # numbers on a project filter — the invariant under test is count/ids
-    # PARITY, exercised against the same visibility path.
+    # RADD-825: the floor no longer reads everything — the counter holds read
+    # on Home only, so Away's issue stays invisible and the invariant under
+    # test remains count/ids PARITY through the same visibility path.
+    role = await auth_roles.create_role(
+        db,
+        RoleCreate(
+            key=f"dc{run[:6]}", name="Reader",
+            permissions=[Permission.ITEM_READ],
+        ),
+    )
+    db.add(ProjectMember(project_id=home_project.id, user_id=actor.id, role_id=role.id))
+    await db.flush()
     filters = ItemListFilters(project_id=home_project.id)
     ids = await bulk.list_item_ids(db, actor=actor, filters=filters)
     assert await bulk.count_items(db, actor=actor, filters=filters) == ids.total == 3
@@ -323,7 +334,13 @@ async def test_items_count_matches_ids_total_under_visibility(db):
     ids = await bulk.list_item_ids(db, actor=actor, filters=filters, q=q)
     assert await bulk.count_items(db, actor=actor, filters=filters, q=q) == ids.total == 2
 
-    # And unfiltered parity holds instance-wide (no magic totals: live DB).
+    # And unfiltered parity holds instance-wide — where visibility now BITES:
+    # the counter reads Home only, so Away's issue is absent from ids and
+    # count alike (parity through the same filter, not around it).
     unfiltered = ItemListFilters()
     ids = await bulk.list_item_ids(db, actor=actor, filters=unfiltered)
-    assert await bulk.count_items(db, actor=actor, filters=unfiltered) == ids.total >= 4
+    assert await bulk.count_items(db, actor=actor, filters=unfiltered) == ids.total >= 3
+    away_ids = await bulk.list_item_ids(
+        db, actor=actor, filters=ItemListFilters(project_id=away_project.id)
+    )
+    assert away_ids.total == 0

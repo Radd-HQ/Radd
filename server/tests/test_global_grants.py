@@ -73,8 +73,8 @@ async def test_global_grant_delivers_a_global_atom(db):
     permissions = await authz.effective_permissions(db, user)
     assert Permission.LABEL_CREATE in permissions
     await authz.require(db, user, Permission.LABEL_CREATE)  # no raise
-    # The member floor survives alongside the grant.
-    assert Permission.ITEM_READ in permissions
+    # The floor survives alongside the grant — item.read@OWN since RADD-825.
+    assert "item.read@own" in permissions
 
 
 async def test_global_grant_via_team_and_umbrella_expansion(db):
