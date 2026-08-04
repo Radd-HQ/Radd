@@ -161,6 +161,7 @@ async def list_for_scope(
                 "set_here": key.value in set_here,
                 "default": spec.default,
                 "choices": list(spec.choices) if spec.choices else None,
+                "secret": spec.secret,
             }
         )
     return result

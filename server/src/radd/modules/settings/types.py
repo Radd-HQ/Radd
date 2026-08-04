@@ -46,6 +46,14 @@ class SettingKey(StrEnum):
     CSAT_ENABLED = "csat_enabled"
     ESTIMATION_POINTS = "estimation_points"
     # Directory settings page + automatic user sync (spec 85) — instance-only.
+    # RADD-846: the CONNECTION itself (spec-110 rule: env is seed-only) —
+    # each key matches its `config.Settings` attribute, so the env value is
+    # the fallback and an existing deploy keeps working untouched.
+    LDAP_URL = "ldap_url"
+    LDAP_USER_DOMAIN = "ldap_user_domain"
+    LDAP_BIND_DN = "ldap_bind_dn"
+    LDAP_BIND_PASSWORD = "ldap_bind_password"
+    LDAP_ADMIN_GROUPS = "ldap_admin_groups"
     LDAP_USER_SYNC_BASE = "ldap_user_sync_base"
     LDAP_USER_SYNC_ENABLED = "ldap_user_sync_enabled"
     LDAP_USER_SYNC_DEACTIVATE_MISSING = "ldap_user_sync_deactivate_missing"
@@ -81,6 +89,10 @@ class SettingSpec:
     # StrEnum coercion at read time) and the generic settings editor renders a
     # select instead of a text input.
     choices: tuple[str, ...] | None = None
+    # RADD-846: the editor renders a masked input. The VALUE still reaches
+    # instance admins over the settings API — the recorded decision: same
+    # trust level as the person who set it, no write-only machinery.
+    secret: bool = False
 
     @property
     def default(self) -> Any:
@@ -200,6 +212,60 @@ SETTINGS_REGISTRY: dict[SettingKey, SettingSpec] = {
     # empty base DN means "the whole directory": consumers fall back to
     # ldap.service.base_dn() at USE time (mirroring the raw-env helpers), so the
     # registered default stays the verbatim env value.
+    SettingKey.LDAP_URL: SettingSpec(
+        key=SettingKey.LDAP_URL,
+        type=SettingType.STRING,
+        scopes=(SettingScope.INSTANCE,),
+        label="Server URL",
+        description=(
+            "The directory server, e.g. ldaps://ad.example.com:636. Empty = "
+            "LDAP sign-in disabled. Applies without a restart (RADD-846); the "
+            "RADD_LDAP_URL env value is the default."
+        ),
+    ),
+    SettingKey.LDAP_USER_DOMAIN: SettingSpec(
+        key=SettingKey.LDAP_USER_DOMAIN,
+        type=SettingType.STRING,
+        scopes=(SettingScope.INSTANCE,),
+        label="User domain",
+        description=(
+            "The UPN suffix people sign in with (user@THIS); also derives the "
+            "default base DN (ad.example.com → DC=ad,DC=example,DC=com)."
+        ),
+    ),
+    SettingKey.LDAP_BIND_DN: SettingSpec(
+        key=SettingKey.LDAP_BIND_DN,
+        type=SettingType.STRING,
+        scopes=(SettingScope.INSTANCE,),
+        label="Bind account DN",
+        description=(
+            "The service account for directory searches and sync, e.g. "
+            "CN=svc-radd,OU=Service Accounts,DC=ad,DC=example,DC=com. "
+            "Interactive sign-in stays direct-bind and never uses it."
+        ),
+    ),
+    SettingKey.LDAP_BIND_PASSWORD: SettingSpec(
+        key=SettingKey.LDAP_BIND_PASSWORD,
+        type=SettingType.STRING,
+        scopes=(SettingScope.INSTANCE,),
+        label="Bind account password",
+        description=(
+            "Stored as an instance setting readable by instance admins — the "
+            "same trust level as the person who set it."
+        ),
+        secret=True,
+    ),
+    SettingKey.LDAP_ADMIN_GROUPS: SettingSpec(
+        key=SettingKey.LDAP_ADMIN_GROUPS,
+        type=SettingType.STRING,
+        scopes=(SettingScope.INSTANCE,),
+        label="Admin groups",
+        description=(
+            "Comma-separated directory group CNs whose (transitive) members "
+            "sign in as instance admins. Empty = the directory carries no "
+            "role opinion (the spec-110 rule)."
+        ),
+    ),
     SettingKey.LDAP_USER_SYNC_BASE: SettingSpec(
         key=SettingKey.LDAP_USER_SYNC_BASE,
         type=SettingType.STRING,

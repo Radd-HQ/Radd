@@ -36,13 +36,19 @@ logger = logging.getLogger(__name__)
 _GROUP_ATTRIBUTES = ("cn", "description", "member", "memberOf")
 
 
-def require_bind_account() -> None:
+async def require_bind_account(session) -> None:
     """Spec 84 endpoints answer 409 (not 403) when the bind account is absent —
-    the caller is authorized, the DEPLOY is missing a piece."""
+    the caller is authorized, the INSTANCE is missing a piece. RADD-846: the
+    connection resolves through the cascade first, so a Directory-page edit
+    applies to the very next request."""
+    await service.refresh_conn(session)
     if not service.bind_account_enabled():
         raise ConflictError(
             LdapEntity.LDAP,
-            reason="no LDAP bind account is configured (RADD_LDAP_BIND_DN/_PASSWORD)",
+            reason=(
+                "no LDAP bind account is configured "
+                "(Settings → Directory, or RADD_LDAP_BIND_DN/_PASSWORD)"
+            ),
         )
 
 

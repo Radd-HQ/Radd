@@ -46,6 +46,7 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 
 @router.post("/login", status_code=204)
 async def ldap_login(data: LdapLoginRequest, session: Session, response: Response) -> None:
+    await service.refresh_conn(session)  # RADD-846: a Directory edit applies here
     """Directory sign-in (spec 42): direct bind as <username>@<domain>, then
     provisioning + role sync and an ordinary session cookie — the same shape
     as the local /auth/login. Spec 84: the same connection also answers the
@@ -82,7 +83,7 @@ async def search_directory_groups(
     """Paged AD group search for the link/import pickers (spec 84; spec 85: the
     base DN resolves through the settings cascade)."""
     _require_instance_admin(actor)
-    groups.require_bind_account()
+    await groups.require_bind_account(session)
     return [
         DirectoryGroupRead(
             cn=g.cn, dn=g.dn, description=g.description, member_count=g.member_count
@@ -98,7 +99,7 @@ async def import_directory_groups(
     """Spec 84 §2: per group create-or-link a team, resolve transitive members,
     optionally provision unknown users, add directory-source memberships."""
     _require_instance_admin(actor)
-    groups.require_bind_account()
+    await groups.require_bind_account(session)
     outcomes = await groupsync.import_groups(
         session, data.group_dns, data.provision_members, actor_id=actor.id
     )
@@ -124,7 +125,7 @@ async def search_ldap_directory_users(
     spec-49 enumeration narrowed by q over cn/sAMAccountName/mail; spec 85: the
     base DN resolves through the settings cascade)."""
     _require_instance_admin(actor)
-    groups.require_bind_account()
+    await groups.require_bind_account(session)
     base = await service.resolved_user_base(session)
     skip_disabled = await service.resolved_exclude_disabled(session)
     users = await asyncio.to_thread(service.search_directory_users, q, base, skip_disabled)
@@ -167,7 +168,7 @@ async def preview_ldap_directory_user_import(
     data: DirectoryUserImportRequest, session: Session, actor: CurrentUser
 ) -> list[ImportCandidateRead]:
     _require_instance_admin(actor)
-    groups.require_bind_account()
+    await groups.require_bind_account(session)
     selected, missing = await _selected_directory_users(session, data.emails)
     candidates = userimport.plan_user_import(
         selected.values(), await auth_service.list_users(session)
@@ -214,7 +215,7 @@ async def import_ldap_directory_users(
     behavior: create-or-link, existing accounts untouched.
     """
     _require_instance_admin(actor)
-    groups.require_bind_account()
+    await groups.require_bind_account(session)
     selected, missing = await _selected_directory_users(session, data.emails)
     chosen = {
         entry.email.strip().lower(): entry for entry in data.resolutions
@@ -279,6 +280,7 @@ def _state_read(row: DirectorySyncState | None) -> DirectorySyncStateRead | None
 
 @admin_router.get("/sync-status", response_model=DirectorySyncStatusRead)
 async def directory_sync_status(session: Session, actor: CurrentUser) -> DirectorySyncStatusRead:
+    await service.refresh_conn(session)  # RADD-846
     """Both `directory_sync_state` rows (spec 85) — instance admin. Readable
     without a bind account (a de-configured deploy can still see history)."""
     _require_instance_admin(actor)
@@ -295,7 +297,7 @@ async def run_directory_user_sync(session: Session, actor: CurrentUser) -> UserS
     409 without a bind account. Same code path as the ldap-usersync loop; the
     directory search runs in a thread inside."""
     _require_instance_admin(actor)
-    groups.require_bind_account()
+    await groups.require_bind_account(session)
     result = await usersync.run_user_sync(session, actor_id=actor.id)
     return UserSyncResultRead(**result.payload())
 
@@ -309,7 +311,7 @@ async def directory_sync_team(
     groups."""
     await teams_service.get_team(session, team_id)
     await authz.require(session, actor, authz.Permission.TEAM_UPDATE)
-    groups.require_bind_account()
+    await groups.require_bind_account(session)
     member_groups = await teams_service.team_groups(session, team_id)
     if not member_groups:
         raise ConflictError(LdapEntity.LDAP, reason="team holds no directory groups")

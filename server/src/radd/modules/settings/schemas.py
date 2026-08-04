@@ -19,6 +19,8 @@ class ScopedSettingRead(BaseModel):
     # Enumerated settings only (spec 107 cleanup): the accepted values — the
     # editor renders a select instead of a free-text input.
     choices: list[str] | None = None
+    # RADD-846: the editor masks the input (the value itself stays admin-readable).
+    secret: bool = False
 
 
 class ScopedSettingWrite(BaseModel):

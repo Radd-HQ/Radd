@@ -7,7 +7,7 @@ account SSO-only, and the workspace role re-syncs on every login."""
 
 import asyncio
 import logging
-from dataclasses import replace
+from dataclasses import replace, dataclass
 
 import ldap3
 from ldap3.utils.conv import escape_filter_chars
@@ -36,8 +36,66 @@ logger = logging.getLogger(__name__)
 BAD_CREDENTIALS = "invalid username or password"
 
 
+@dataclass(frozen=True)
+class LdapConn:
+    """The directory CONNECTION (RADD-846): five values an admin may edit on
+    Settings → Directory, with the RADD_LDAP_* env as seed/fallback."""
+
+    url: str
+    user_domain: str
+    bind_dn: str
+    bind_password: str
+    admin_groups: str
+
+
+def _env_conn() -> LdapConn:
+    return LdapConn(
+        url=settings.ldap_url,
+        user_domain=settings.ldap_user_domain,
+        bind_dn=settings.ldap_bind_dn,
+        bind_password=settings.ldap_bind_password,
+        admin_groups=settings.ldap_admin_groups,
+    )
+
+
+#: The module-level RESOLVED connection every sync helper below reads. Seeded
+#: from env at import; every session-bearing boundary (login, sync ticks, the
+#: directory routes, startup) refreshes it through the settings cascade first,
+#: so a Directory-page edit applies with no restart. The capability manifest's
+#: sync check reads it as-is — at worst one edit behind in a process that has
+#: not crossed a boundary since, never wrong about its own last resolution.
+_conn: LdapConn = _env_conn()
+
+
+async def refresh_conn(session: AsyncSession) -> LdapConn:
+    """Resolve the connection through the cascade (DB override → env) and
+    swap the overlay. Call at every async boundary that leads to ldap3."""
+    global _conn
+
+    async def value(key: SettingKey) -> str:
+        return str(await settings_service.resolve(session, key) or "").strip()
+
+    _conn = LdapConn(
+        url=await value(SettingKey.LDAP_URL),
+        user_domain=await value(SettingKey.LDAP_USER_DOMAIN),
+        bind_dn=await value(SettingKey.LDAP_BIND_DN),
+        bind_password=await value(SettingKey.LDAP_BIND_PASSWORD),
+        admin_groups=await value(SettingKey.LDAP_ADMIN_GROUPS),
+    )
+    return _conn
+
+
+async def warm() -> None:
+    """Startup hook: resolve once so a DB-configured instance reports the
+    right capabilities before any request crosses a boundary."""
+    from radd.db import SessionLocal
+
+    async with SessionLocal() as session:
+        await refresh_conn(session)
+
+
 def enabled() -> bool:
-    return bool(settings.ldap_url and settings.ldap_user_domain)
+    return bool(_conn.url and _conn.user_domain)
 
 
 def _timeout() -> int:
@@ -50,11 +108,11 @@ def base_dn() -> str:
     """RADD_LDAP_BASE_DN, else derived: ad.example.com → DC=ad,DC=example,DC=com."""
     if settings.ldap_base_dn:
         return settings.ldap_base_dn
-    return ",".join(f"DC={part}" for part in settings.ldap_user_domain.split("."))
+    return ",".join(f"DC={part}" for part in _conn.user_domain.split("."))
 
 
 def admin_group_names() -> list[str]:
-    return [g.strip() for g in settings.ldap_admin_groups.split(",") if g.strip()]
+    return [g.strip() for g in _conn.admin_groups.split(",") if g.strip()]
 
 
 def group_search_filter(group_cn: str) -> str:
@@ -83,14 +141,14 @@ def directory_user_from_entry(username: str, attributes: dict, is_admin: bool) -
     name = first(attributes.get(settings.ldap_name_attribute))
     return DirectoryUser(
         username=username,
-        email=(email or f"{username}@{settings.ldap_user_domain}").lower(),
+        email=(email or f"{username}@{_conn.user_domain}").lower(),
         name=name or username,
         is_admin=is_admin,
     )
 
 
 def bind_account_enabled() -> bool:
-    return bool(settings.ldap_url and settings.ldap_bind_dn and settings.ldap_bind_password)
+    return bool(_conn.url and _conn.bind_dn and _conn.bind_password)
 
 
 def user_search_base() -> str:
@@ -146,14 +204,16 @@ def service_connection() -> ldap3.Connection:
     """A SERVICE-ACCOUNT connection (specs 49/84) — enumeration/group search
     only; interactive login stays direct-bind. Caller must unbind."""
     if not bind_account_enabled():
-        raise ForbiddenError("LDAP bind account is not configured (RADD_LDAP_BIND_DN unset)")
+        raise ForbiddenError(
+            "LDAP bind account is not configured (Settings → Directory, or RADD_LDAP_BIND_DN)"
+        )
     server = ldap3.Server(
-        settings.ldap_url, get_info=ldap3.NONE, connect_timeout=_timeout()
+        _conn.url, get_info=ldap3.NONE, connect_timeout=_timeout()
     )
     return ldap3.Connection(
         server,
-        user=settings.ldap_bind_dn,
-        password=settings.ldap_bind_password,
+        user=_conn.bind_dn,
+        password=_conn.bind_password,
         auto_bind=True,
         receive_timeout=_timeout(),
     )
@@ -231,9 +291,9 @@ def _bind_and_lookup(
     """Blocking ldap3 round-trip (run via asyncio.to_thread). None = rejected.
     `team_group_dns` (spec 84): linked-team group DNs to probe transitively on
     the same connection — matches land in DirectoryUser.team_group_dns."""
-    upn = f"{username}@{settings.ldap_user_domain}"
+    upn = f"{username}@{_conn.user_domain}"
     server = ldap3.Server(
-        settings.ldap_url,
+        _conn.url,
         get_info=ldap3.NONE,
         connect_timeout=_timeout(),
     )
@@ -293,7 +353,9 @@ async def authenticate(
     username: str, password: str, team_group_dns: tuple[str, ...] = ()
 ) -> DirectoryUser:
     if not enabled():
-        raise ForbiddenError("LDAP is not configured (RADD_LDAP_URL unset)")
+        raise ForbiddenError(
+            "LDAP is not configured (set the server URL on Settings → Directory, or RADD_LDAP_URL)"
+        )
     if not username or not password or not USERNAME_RE.match(username):
         raise UnauthorizedError(BAD_CREDENTIALS)
     directory_user = await asyncio.to_thread(_bind_and_lookup, username, password, team_group_dns)

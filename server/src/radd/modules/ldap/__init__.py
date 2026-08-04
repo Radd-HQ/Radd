@@ -2,7 +2,7 @@ from radd.config import settings
 from radd.kernel import CapabilitySpec
 from radd.kernel import RaddPlugin
 
-from . import groupsync, usersync
+from . import groupsync, service, usersync
 from .router import admin_router, router, team_sync_router
 
 plugin = RaddPlugin(
@@ -20,18 +20,18 @@ plugin = RaddPlugin(
     # Per-plugin deps (§14): AD/LDAP bind needs ldap3. Maps to the `radd[ldap]` extra.
     python_deps=("ldap3",),
     routers=(router, admin_router, team_sync_router),
-    on_startup=(groupsync.start, usersync.start),
+    on_startup=(service.warm, groupsync.start, usersync.start),
     on_shutdown=(groupsync.stop, usersync.stop),
     capabilities=(
         CapabilitySpec(
             "ldap",
             "LDAP / AD directory",
             "auth",
+            # RADD-846: the resolved overlay, not raw env — a Directory-page
+            # edit shows here after the next boundary refresh (warm() covers boot).
             check=lambda: {
-                "enabled": bool(settings.ldap_url and settings.ldap_user_domain),
-                "bind_account": bool(
-                    settings.ldap_url and settings.ldap_bind_dn and settings.ldap_bind_password
-                ),
+                "enabled": service.enabled(),
+                "bind_account": service.bind_account_enabled(),
             },
         ),
     ),

@@ -272,6 +272,10 @@ async def run_once() -> int:
     groups_seen = added_total = removed_total = 0
     errors: list[str] = []
     async with SessionLocal() as session:
+        # RADD-846: resolve the connection first; no bind account = dormant.
+        await service.refresh_conn(session)
+        if not service.bind_account_enabled():
+            return 0
         for group in await groups_service.list_groups(session):
             groups_seen += 1
             try:
@@ -305,8 +309,9 @@ _loop = PeriodicLoop(
     run_once,
     interval=lambda: settings.ldap_group_sync_seconds,
     name="ldap-groupsync",
-    # Web-only processes skip (spec 48 split); no bind account = dormant.
-    enabled=lambda: settings.run_workers and service.bind_account_enabled(),
+    # Web-only processes skip (spec 48 split). The bind check moved INSIDE
+    # run_once (RADD-846) — see usersync for why a gate here would be wrong.
+    enabled=lambda: settings.run_workers,
     sleep_first=True,  # nothing to burst at startup; the login path covers freshness
 )
 

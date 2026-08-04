@@ -32,13 +32,20 @@ export interface ScopedSetting {
   default: unknown; // the env/config fallback
   /** Enumerated settings only: the accepted values — render a select. */
   choices?: string[] | null;
+  /** RADD-846: render a masked input (the value itself is admin-readable). */
+  secret?: boolean;
 }
 
 /** Registered scalar setting keys the SPA reads by name (mirror of the backend
  * `SettingKey` — only the ones with a client-side gate are listed). */
 export const SettingKey = {
   estimationPoints: "estimation_points",
-  // Directory settings (spec 85) — instance-only; edited on Settings → Directory.
+  // Directory settings (spec 85 + RADD-846) — instance-only; Settings → Directory.
+  ldapUrl: "ldap_url",
+  ldapUserDomain: "ldap_user_domain",
+  ldapBindDn: "ldap_bind_dn",
+  ldapBindPassword: "ldap_bind_password",
+  ldapAdminGroups: "ldap_admin_groups",
   ldapUserSyncBase: "ldap_user_sync_base",
   ldapUserSyncEnabled: "ldap_user_sync_enabled",
   ldapExcludeDisabled: "ldap_exclude_disabled",
@@ -66,7 +73,16 @@ export const DIRECTORY_USER_SYNC_KEYS: readonly string[] = [
   SettingKey.ldapUserSyncDeactivateMissing,
 ];
 export const DIRECTORY_GROUP_KEYS: readonly string[] = [SettingKey.ldapGroupSearchBase];
+/** RADD-846: the connection itself — editable, env as seed/fallback. */
+export const DIRECTORY_CONNECTION_KEYS: readonly string[] = [
+  SettingKey.ldapUrl,
+  SettingKey.ldapUserDomain,
+  SettingKey.ldapBindDn,
+  SettingKey.ldapBindPassword,
+  SettingKey.ldapAdminGroups,
+];
 export const DIRECTORY_SETTING_KEYS: readonly string[] = [
+  ...DIRECTORY_CONNECTION_KEYS,
   ...DIRECTORY_USER_SYNC_KEYS,
   ...DIRECTORY_GROUP_KEYS,
 ];

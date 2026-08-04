@@ -127,7 +127,7 @@ function SettingRow({
           </div>
         ) : (
           <input
-            type={row.type === "int" ? "number" : "text"}
+            type={row.type === "int" ? "number" : row.secret ? "password" : "text"}
             value={value}
             onChange={(event) => setValue(event.target.value)}
             disabled={disabled}

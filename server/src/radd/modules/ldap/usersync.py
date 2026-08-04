@@ -128,9 +128,12 @@ async def run_once() -> None:
     """One tick. The bind account and the `ldap_user_sync_enabled` cascade value
     are re-checked here, per tick — flipping the toggle on the Directory page
     arms/disarms the loop without a restart."""
-    if not service.bind_account_enabled():
-        return
     async with SessionLocal() as session:
+        # RADD-846: the bind account may live in the DB now — resolve before
+        # deciding the loop is dormant, so configuring it needs no restart.
+        await service.refresh_conn(session)
+        if not service.bind_account_enabled():
+            return
         if not bool(await settings_service.resolve(session, SettingKey.LDAP_USER_SYNC_ENABLED)):
             return
         await run_user_sync(session)
@@ -141,8 +144,10 @@ _loop = PeriodicLoop(
     run_once,
     interval=lambda: settings.ldap_user_sync_seconds,
     name="ldap-usersync",
-    # Web-only processes skip (spec 48 split); no bind account = dormant.
-    enabled=lambda: settings.run_workers and service.bind_account_enabled(),
+    # Web-only processes skip (spec 48 split). The bind check moved INSIDE
+    # run_once (RADD-846): a gate reading the overlay here would never wake a
+    # loop whose bind account arrived via the DB after boot.
+    enabled=lambda: settings.run_workers,
     sleep_first=True,  # no burst at startup; "Sync now" covers immediacy
 )
 

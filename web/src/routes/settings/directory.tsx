@@ -8,6 +8,7 @@ import { useCurrentUser } from "../../lib/hooks";
 import { instanceStatusQuery, ldapSyncStatusQuery, queryKeys } from "../../lib/queries";
 import { pushToast, ToastKind } from "../../lib/toast";
 import {
+  DIRECTORY_CONNECTION_KEYS,
   DIRECTORY_GROUP_KEYS,
   DIRECTORY_USER_SYNC_KEYS,
   InstanceRole,
@@ -101,6 +102,22 @@ export function DirectorySettingsPage() {
           </section>
 
           <section>
+            <h2 className={sectionHeadClasses}>Connection</h2>
+            {/* RADD-846: the connection is editable here — deliberately NOT
+                gated on directoryReady, since configuring it is exactly what
+                an unready instance needs. Env (RADD_LDAP_*) stays the seed:
+                each field's default is the deploy value, a saved override
+                beats it, and clearing the override falls back. Applies on the
+                next request — no restart. */}
+            <div className="mb-3">
+              <ScopedSettingsEditor
+                scope={SettingScope.instance}
+                filter={(row) => DIRECTORY_CONNECTION_KEYS.includes(row.key)}
+              />
+            </div>
+          </section>
+
+          <section>
             <div className="mb-2 flex items-center justify-between gap-2">
               <h2 className={`${sectionHeadClasses} mb-0`}>User sync</h2>
               <div className="flex items-center gap-2">
@@ -123,8 +140,9 @@ export function DirectorySettingsPage() {
             </div>
             {!directoryReady && (
               <p className="mb-3 text-xs text-amber-400/90">
-                No bind account is configured (RADD_LDAP_BIND_DN / _PASSWORD) — directory
-                searches and sync are unavailable until the deploy sets one.
+                No bind account is configured — directory searches and sync are unavailable
+                until the Connection section above (or the deploy&apos;s RADD_LDAP_* env)
+                sets one.
               </p>
             )}
             <ScopedSettingsEditor

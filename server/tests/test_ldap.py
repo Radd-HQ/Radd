@@ -16,8 +16,18 @@ from radd.modules.ldap.service import (
 from radd.modules.ldap.types import LDAP_MATCHING_RULE_IN_CHAIN, USERNAME_RE
 
 
+def _overlay(monkeypatch, **kw):
+    """RADD-846: the sync helpers read the resolved CONNECTION overlay, not
+    raw env — tests set the overlay the way a cascade refresh would."""
+    from radd.modules.ldap import service
+
+    base = dict(url="", user_domain="", bind_dn="", bind_password="", admin_groups="")
+    base.update(kw)
+    monkeypatch.setattr(service, "_conn", service.LdapConn(**base))
+
+
 def test_base_dn_derived_from_upn_domain(monkeypatch):
-    monkeypatch.setattr(settings, "ldap_user_domain", "ad.example.com")
+    _overlay(monkeypatch, user_domain="ad.example.com")
     monkeypatch.setattr(settings, "ldap_base_dn", "")
     assert base_dn() == "DC=ad,DC=example,DC=com"
 
@@ -59,7 +69,7 @@ def test_entry_mapping_prefers_directory_attributes(monkeypatch):
 
 
 def test_entry_mapping_fallbacks_upn_and_username(monkeypatch):
-    monkeypatch.setattr(settings, "ldap_user_domain", "ad.example.com")
+    _overlay(monkeypatch, user_domain="ad.example.com")
     user = directory_user_from_entry("jdoe", {}, is_admin=False)
     assert user.email == "jdoe@ad.example.com"  # UPN when the mail attribute is absent
     assert user.name == "jdoe"
@@ -69,15 +79,17 @@ def test_entry_mapping_fallbacks_upn_and_username(monkeypatch):
 def test_bind_account_enabled_gate(monkeypatch):
     from radd.modules.ldap.service import bind_account_enabled, user_search_base
 
-    monkeypatch.setattr(settings, "ldap_url", "ldaps://ad.example.com:636")
-    monkeypatch.setattr(settings, "ldap_bind_dn", "")
-    monkeypatch.setattr(settings, "ldap_bind_password", "")
+    _overlay(monkeypatch, url="ldaps://ad.example.com:636")
     assert not bind_account_enabled()
-    monkeypatch.setattr(settings, "ldap_bind_dn", "CN=svc,DC=ad,DC=example,DC=com")
-    monkeypatch.setattr(settings, "ldap_bind_password", "secret")
+    _overlay(
+        monkeypatch,
+        url="ldaps://ad.example.com:636",
+        bind_dn="CN=svc,DC=ad,DC=example,DC=com",
+        bind_password="secret",
+        user_domain="ad.example.com",
+    )
     assert bind_account_enabled()
     # search base defaults to the derived base DN when unset
-    monkeypatch.setattr(settings, "ldap_user_domain", "ad.example.com")
     monkeypatch.setattr(settings, "ldap_user_search_base", "")
     assert user_search_base() == "DC=ad,DC=example,DC=com"
     monkeypatch.setattr(settings, "ldap_user_search_base", "OU=Staff,DC=ad,DC=example,DC=com")
@@ -109,3 +121,28 @@ def test_entry_mapping_honors_configured_attributes(monkeypatch):
     )
     assert user.email == "jdoe@corp.example.com"
     assert user.name == "jdoe cn"
+
+
+async def test_connection_resolves_through_the_cascade():
+    """RADD-846: a Directory-page write beats env at the next boundary, and
+    what the DB does not override keeps coming from env — no restart either way."""
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from radd.config import settings as config
+    from radd.modules.ldap import service
+    from radd.modules.settings import service as settings_service
+    from radd.modules.settings.types import SettingKey, SettingScope
+
+    engine = create_async_engine(config.database_url)
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+    async with maker() as session:
+        await settings_service.set_value(
+            session, SettingKey.LDAP_URL, SettingScope.INSTANCE, None, "ldaps://db.example.com:636"
+        )
+        conn = await service.refresh_conn(session)
+        assert conn.url == "ldaps://db.example.com:636"
+        assert conn.user_domain == config.ldap_user_domain
+        await session.rollback()
+    await engine.dispose()
+    # the rollback discarded the write the overlay was refreshed with — reseed
+    service._conn = service._env_conn()
