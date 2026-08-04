@@ -507,6 +507,49 @@ async def team_granted_role_ids(
     return set(result.scalars())
 
 
+async def team_role_pairs_for_project(
+    session: AsyncSession, user_id: uuid.UUID, project_id: uuid.UUID
+) -> list[tuple[str, uuid.UUID]]:
+    """(team name, role id) pairs the user's teams grant on the project — the
+    inspector's provenance variant of `team_granted_role_ids` (RADD-809): same
+    rows, keeping WHICH team carried each role."""
+    result = await session.execute(
+        select(Team.name, ProjectTeam.role_id)
+        .join(TeamMember, TeamMember.team_id == ProjectTeam.team_id)
+        .join(Team, Team.id == ProjectTeam.team_id)
+        .where(TeamMember.user_id == user_id, ProjectTeam.project_id == project_id)
+        .distinct()
+    )
+    return [(name, role_id) for name, role_id in result.all()]
+
+
+async def team_granted_role_ids_anywhere(
+    session: AsyncSession, user_id: uuid.UUID
+) -> set[uuid.UUID]:
+    """Every role the user's teams grant on ANY project (the RADD-809 inspector's
+    all-scopes subject set)."""
+    result = await session.execute(
+        select(ProjectTeam.role_id)
+        .join(TeamMember, TeamMember.team_id == ProjectTeam.team_id)
+        .where(TeamMember.user_id == user_id)
+        .distinct()
+    )
+    return set(result.scalars())
+
+
+async def team_project_role_rows(
+    session: AsyncSession, team_id: uuid.UUID
+) -> list[tuple[uuid.UUID, uuid.UUID]]:
+    """(project id, role id) for every project this team is attached to — what
+    membership of the team confers (the RADD-809 team inspector)."""
+    result = await session.execute(
+        select(ProjectTeam.project_id, ProjectTeam.role_id).where(
+            ProjectTeam.team_id == team_id
+        )
+    )
+    return [(project_id, role_id) for project_id, role_id in result.all()]
+
+
 async def team_granted_role_ids_for_projects(
     session: AsyncSession, user_id: uuid.UUID, project_ids: Iterable[uuid.UUID]
 ) -> dict[uuid.UUID, set[uuid.UUID]]:

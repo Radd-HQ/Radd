@@ -538,10 +538,29 @@ class PermissionSource:
     #: (project.manage -> state.manage -> state.create). Without this the
     #: inspector would claim a role grants atoms its checkboxes never showed.
     implied: bool = False
+    #: RADD-809 — the backlink: the role row that supplied the atom (the
+    #: Baseline role's own id for kind == "baseline").
+    role_id: uuid.UUID | None = None
+    #: Where the supplying grant applies: "global" | "project" | "space".
+    scope: str = "global"
+    #: HOW the role reached this scope: "membership" (a project-member row),
+    #: "team" (a team attached to the project), "grant" (a role grant),
+    #: "attached" (team view: the team is attached to a project). None for
+    #: baseline/instance-admin. RADD-833 extends this vocabulary with the
+    #: group path.
+    via: str | None = None
+    #: The team that carried it, when via == "team".
+    via_team: str | None = None
+    #: Display name of the scoped project/space (team view rows span many).
+    scope_label: str | None = None
 
 
 async def permission_sources(
-    session: AsyncSession, user: User, *, project: Project | None = None
+    session: AsyncSession,
+    user: User,
+    *,
+    project: Project | None = None,
+    space_id: uuid.UUID | None = None,
 ) -> list[PermissionSource]:
     """Every atom the user holds in the scope, each with its provenance.
 
@@ -551,7 +570,15 @@ async def permission_sources(
     them apart means the explanation can never slow the check down — and the
     explanation is derived from the same helpers, so it cannot describe a rule
     the resolver does not follow.
+
+    RADD-809: takes a SPACE scope too (no `page.*` atom was explainable
+    before), and each row carries the channel — membership, team attachment,
+    grant — its scope, and the source role's id as a backlink. Narrower
+    channels are recorded first, so an atom held both ways reads as the
+    scoped fact.
     """
+    if project is not None and space_id is not None:
+        raise ValueError("inspect a project or a space, not both")
     if not user.active:
         return []
     if InstanceRole(user.instance_role) is InstanceRole.ADMIN:
@@ -559,10 +586,18 @@ async def permission_sources(
         # admin; listing each atom as though it were granted would bury that.
         return [PermissionSource(permission="*", kind="instance-admin")]
 
-    baseline = await baseline_permissions(session)
     sources: dict[str, PermissionSource] = {}
 
-    def record(atoms: Iterable[str], source: PermissionSource) -> None:
+    def record(
+        atoms: Iterable[str],
+        *,
+        kind: str,
+        role_name: str | None = None,
+        role_id: uuid.UUID | None = None,
+        scope: str = "global",
+        via: str | None = None,
+        via_team: str | None = None,
+    ) -> None:
         direct = {str(a) for a in atoms}
         for atom in sorted(expand_permissions(direct)):
             key = str(atom)
@@ -570,26 +605,170 @@ async def permission_sources(
                 continue
             sources[key] = PermissionSource(
                 permission=key,
-                kind=source.kind,
-                role_name=source.role_name,
+                kind=kind,
+                role_name=role_name,
                 implied=key not in direct,
+                role_id=role_id,
+                scope=scope,
+                via=via,
+                via_team=via_team,
             )
 
-    record(baseline, PermissionSource(permission="", kind="baseline"))
+    from .roles import role_by_key
+    from .types import BuiltinRoleKey
 
-    role_ids = (
-        await _granted_role_ids(session, user.id, project)
-        if project is not None
-        else await grants.granted_role_ids(session, user.id)
-    )
-    if role_ids:
-        rows = await session.execute(
-            select(Role.name, Role.permissions).where(Role.id.in_(role_ids))
+    baseline_role = await role_by_key(session, BuiltinRoleKey.BASELINE)
+    record(await baseline_permissions(session), kind="baseline", role_id=baseline_role.id)
+
+    # (role_id, scope, via, via_team) per channel — narrower scopes first.
+    channels: list[tuple[uuid.UUID, str, str, str | None]] = []
+    if project is not None:
+        member_rows = await session.execute(
+            select(ProjectMember.role_id).where(
+                ProjectMember.user_id == user.id, ProjectMember.project_id == project.id
+            )
         )
-        for name, permissions in rows.all():
-            record(permissions, PermissionSource(permission="", kind="role", role_name=name))
+        channels += [(rid, "project", "membership", None) for rid in member_rows.scalars()]
+        from radd.modules.teams import service as teams  # deferred: teams loads after auth
+
+        for team_name, rid in await teams.team_role_pairs_for_project(
+            session, user.id, project.id
+        ):
+            channels.append((rid, "project", "team", team_name))
+        scoped = await grants.project_granted_role_ids(session, user.id, [project.id])
+        channels += [(rid, "project", "grant", None) for rid in scoped.get(project.id, set())]
+    if space_id is not None:
+        scoped = await grants.space_granted_role_ids(session, user.id, [space_id])
+        channels += [(rid, "space", "grant", None) for rid in scoped.get(space_id, set())]
+    channels += [
+        (rid, "global", "grant", None)
+        for rid in await grants.granted_role_ids(session, user.id)
+    ]
+
+    role_ids = {rid for rid, _, _, _ in channels}
+    roles: dict[uuid.UUID, Role] = {}
+    if role_ids:
+        rows = await session.execute(select(Role).where(Role.id.in_(role_ids)))
+        roles = {role.id: role for role in rows.scalars()}
+    for rid, scope, via, via_team in channels:
+        role = roles.get(rid)
+        if role is None:
+            continue
+        record(
+            role.permissions,
+            kind="role",
+            role_name=role.name,
+            role_id=role.id,
+            scope=scope,
+            via=via,
+            via_team=via_team,
+        )
 
     return sorted(sources.values(), key=lambda s: s.permission)
+
+
+async def team_permission_sources(session: AsyncSession, team_id: uuid.UUID) -> list[PermissionSource]:
+    """What membership of this team confers (RADD-809) — the question a team
+    owner actually has, and nothing answered before.
+
+    Rows are NOT deduped across scopes the way the user view is: a role
+    attached on project X and a role granted on project Y are different facts,
+    so uniqueness is (atom, role, scope label).
+    """
+    from radd.modules.teams import service as teams  # deferred: teams loads after auth
+
+    channels: list[tuple[uuid.UUID, str, str, str | None]] = []
+    project_ids: set[uuid.UUID] = set()
+    for project_id, role_id in await teams.team_project_role_rows(session, team_id):
+        channels.append((role_id, "project", "attached", None))
+        project_ids.add(project_id)
+    attach_rows = await teams.team_project_role_rows(session, team_id)
+    grant_rows = await grants.grants_for_subject(session, team_id=team_id)
+    for grant in grant_rows:
+        if grant.project_id is not None:
+            project_ids.add(grant.project_id)
+
+    from radd.modules.projects import service as projects_service  # deferred
+
+    keys = await projects_service.project_keys(session, project_ids) if project_ids else {}
+    space_names = await _space_names(
+        session, {g.space_id for g in grant_rows if g.space_id is not None}
+    )
+
+    role_ids = {rid for rid, _, _, _ in channels} | {g.role_id for g in grant_rows}
+    roles: dict[uuid.UUID, Role] = {}
+    if role_ids:
+        rows = await session.execute(select(Role).where(Role.id.in_(role_ids)))
+        roles = {role.id: role for role in rows.scalars()}
+
+    sources: dict[tuple[str, uuid.UUID, str | None], PermissionSource] = {}
+
+    def record(
+        role: Role, *, scope: str, via: str, scope_label: str | None
+    ) -> None:
+        direct = {str(a) for a in role.permissions}
+        for atom in sorted(expand_permissions(direct)):
+            key = (str(atom), role.id, scope_label)
+            if key in sources:
+                continue
+            sources[key] = PermissionSource(
+                permission=str(atom),
+                kind="role",
+                role_name=role.name,
+                implied=str(atom) not in direct,
+                role_id=role.id,
+                scope=scope,
+                via=via,
+                scope_label=scope_label,
+            )
+
+    for project_id, role_id in attach_rows:
+        role = roles.get(role_id)
+        if role is not None:
+            record(role, scope="project", via="attached", scope_label=keys.get(project_id))
+    for grant in grant_rows:
+        role = roles.get(grant.role_id)
+        if role is None:
+            continue
+        if grant.space_id is not None:
+            scope, label = "space", space_names.get(grant.space_id)
+        elif grant.project_id is not None:
+            scope, label = "project", keys.get(grant.project_id)
+        else:
+            scope, label = "global", None
+        record(role, scope=scope, via="grant", scope_label=label)
+
+    return sorted(sources.values(), key=lambda s: (s.permission, s.scope_label or ""))
+
+
+async def _space_names(session: AsyncSession, space_ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
+    """Wiki-space display names, feature-detected (pages is an optional module)."""
+    if not space_ids:
+        return {}
+    try:
+        from radd.modules.pages.models import PageSpace
+    except ImportError:
+        return {}
+    rows = await session.execute(
+        select(PageSpace.id, PageSpace.name).where(PageSpace.id.in_(space_ids))
+    )
+    return dict(rows.all())
+
+
+async def all_held_role_ids(session: AsyncSession, user: User) -> set[uuid.UUID]:
+    """Every role the user holds through ANY channel at ANY scope — the subject
+    set the resource-access inspector matches role-subject grants against
+    (RADD-809). Off the request path."""
+    from radd.modules.teams import service as teams  # deferred: teams loads after auth
+
+    member_rows = await session.execute(
+        select(ProjectMember.role_id).where(ProjectMember.user_id == user.id).distinct()
+    )
+    held = set(member_rows.scalars())
+    held |= await teams.team_granted_role_ids_anywhere(session, user.id)
+    grant_rows = await grants.grants_for_subject(session, user_id=user.id)
+    held |= {g.role_id for g in grant_rows}
+    return held
 
 
 @dataclass(frozen=True)

@@ -8,10 +8,11 @@ from radd.config import settings
 from radd.db import get_session
 from radd.exceptions import ForbiddenError, UnauthorizedError
 
-from . import authz, service, service_accounts, totp
+from . import authz, roles as roles_service, service, service_accounts, totp
 from .deps import CurrentUser
 from .models import User
 from .schemas import (
+    AccessSummaryRead,
     ServiceAccountCreate,
     ServiceAccountRead,
     ServiceAccountUpdate,
@@ -19,6 +20,7 @@ from .schemas import (
     LoginRequest,
     MeRead,
     ProfileUpdate,
+    ResourceTypeAccessRead,
     TokenCreate,
     TokenCreated,
     TokenRead,
@@ -26,6 +28,7 @@ from .schemas import (
     TotpLoginRequest,
     TotpSetupRead,
     TotpStatusRead,
+    UserAccessRead,
     UserAdminUpdate,
     PermissionSourceRead,
     UserContentSummary,
@@ -176,8 +179,9 @@ async def user_permissions(
     session: Session,
     actor: CurrentUser,
     project_id: uuid.UUID | None = None,
+    space_id: uuid.UUID | None = None,
 ) -> list[PermissionSourceRead]:
-    """What this person can do here, and WHY (RADD-779).
+    """What this person can do here, and WHY (RADD-779; space scope RADD-809).
 
     The question the whole access-control epic started from — "why can this
     member delete cycles?" — previously needed a read of `authz.py`, a query
@@ -188,14 +192,80 @@ async def user_permissions(
     administrative even though every atom in it is already enforced elsewhere.
     """
     await authz.require(session, actor, authz.Permission.USER_MANAGE)
+    if project_id is not None and space_id is not None:
+        raise HTTPException(status_code=422, detail="inspect a project or a space, not both")
     target = await service.get_user(session, user_id)
     project = None
     if project_id is not None:
         from radd.modules.projects import service as projects_service
 
         project = await projects_service.get_project(session, project_id)
-    sources = await authz.permission_sources(session, target, project=project)
+    sources = await authz.permission_sources(
+        session, target, project=project, space_id=space_id
+    )
     return [PermissionSourceRead.model_validate(s, from_attributes=True) for s in sources]
+
+
+@user_router.get("/{user_id}/access", response_model=UserAccessRead)
+async def user_resource_access(
+    user_id: uuid.UUID, session: Session, actor: CurrentUser
+) -> UserAccessRead:
+    """The OTHER half of the inspector (RADD-809): spec-92 resource access —
+    which grant rows reach this person, through what, at what scope — plus
+    plain-count effective answers. `permission_sources` explains atoms; this
+    explains the layer the atoms never see, which is exactly the half that
+    produced RADD-808's hour of hunting."""
+    await authz.require(session, actor, authz.Permission.USER_MANAGE)
+    target = await service.get_user(session, user_id)
+
+    from radd.modules.access import inspect as access_inspect
+    from radd.modules.teams import service as teams_service
+    from radd.modules.projects import service as projects_service
+
+    team_ids = await teams_service.user_team_ids(session, target.id)
+    role_ids = await authz.all_held_role_ids(session, target)
+    teams_by_id = await teams_service.teams_by_ids(session, team_ids)
+    roles_by_id = await roles_service.roles_by_ids(session, set(role_ids))
+    resources = await access_inspect.subject_access(
+        session,
+        user_id=target.id,
+        team_ids=team_ids,
+        role_ids=role_ids,
+        team_names={tid: team.name for tid, team in teams_by_id.items()},
+        role_names={rid: role.name for rid, role in roles_by_id.items()},
+    )
+
+    readable = await authz.require_anywhere(session, target, authz.Permission.ITEM_READ)
+    updatable = await authz.require_anywhere(session, target, authz.Permission.ITEM_UPDATE)
+    total_projects = len(await projects_service.list_projects(session))
+    readable_spaces: int | None = None
+    total_spaces: int | None = None
+    try:
+        from radd.modules.pages import access as pages_access
+        from radd.modules.pages.models import PageSpace
+    except ImportError:
+        pass
+    else:
+        from sqlalchemy import func as _func, select as _select
+
+        readable_spaces = len(await pages_access.readable_spaces(session, target))
+        total_spaces = (
+            await session.scalar(_select(_func.count()).select_from(PageSpace))
+        ) or 0
+
+    return UserAccessRead(
+        resources=[
+            ResourceTypeAccessRead.model_validate(section, from_attributes=True)
+            for section in resources
+        ],
+        summary=AccessSummaryRead(
+            readable_projects=len(readable),
+            updatable_projects=len(updatable),
+            total_projects=total_projects,
+            readable_spaces=readable_spaces,
+            total_spaces=total_spaces,
+        ),
+    )
 
 
 @user_router.get("/directory", response_model=list[UserDirectoryEntry])

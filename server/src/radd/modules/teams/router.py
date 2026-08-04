@@ -186,6 +186,32 @@ async def list_team_members(
     ]
 
 
+@team_router.get("/{team_id}/access")
+async def team_access(team_id: uuid.UUID, session: Session, user: CurrentUser) -> dict:
+    """What membership of this team confers (RADD-809): atoms via project
+    attachments and role grants, plus the resource grants naming the team.
+    Gated like the user inspector — it describes conferred authority."""
+    from radd.modules.access import inspect as access_inspect
+    from radd.modules.auth.schemas import PermissionSourceRead, ResourceTypeAccessRead
+
+    team = await service.get_team(session, team_id)
+    await authz.require(session, user, authz.Permission.USER_MANAGE)
+    atoms = await authz.team_permission_sources(session, team.id)
+    resources = await access_inspect.subject_access(
+        session, team_ids={team.id}, team_names={team.id: team.name}
+    )
+    return {
+        "atoms": [
+            PermissionSourceRead.model_validate(a, from_attributes=True).model_dump(mode="json")
+            for a in atoms
+        ],
+        "resources": [
+            ResourceTypeAccessRead.model_validate(s, from_attributes=True).model_dump(mode="json")
+            for s in resources
+        ],
+    }
+
+
 async def _attachment_reads(
     session: AsyncSession, attachments: list[ProjectTeam]
 ) -> list[ProjectTeamRead]:

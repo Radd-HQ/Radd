@@ -24,6 +24,10 @@ export const apiUserPath = (userId: string) => `${ApiPath.users}/${userId}`;
 /** GET — every atom this person holds, and which source supplied it (RADD-779). */
 export const apiUserPermissionsPath = (userId: string) =>
   `${ApiPath.users}/${userId}/permissions`;
+/** GET — the spec-92 resource half of the inspector + summary counts (RADD-809). */
+export const apiUserAccessPath = (userId: string) => `${ApiPath.users}/${userId}/access`;
+/** GET — what membership of a team confers (RADD-809). */
+export const apiTeamAccessPath = (teamId: string) => `${ApiPath.teams}/${teamId}/access`;
 /** POST — fold the path user (the duplicate) into `into_user_id` (spec 84). */
 export const apiUserMergePath = (userId: string) => `${ApiPath.users}/${userId}/merge`;
 /** GET — what an account owns (spec 89); drives the delete dialog. */

@@ -103,7 +103,8 @@ export interface PermissionInfo {
  */
 export const BASELINE_ROLE_KEY = "baseline";
 
-/** One atom a person holds, and where it came from (RADD-779). */
+/** One atom a person holds, and where it came from (RADD-779; provenance
+ * widened by RADD-809: channel, scope, backlink to the supplying role). */
 export interface PermissionSource {
   permission: string;
   /** "baseline" | "role" | "instance-admin". */
@@ -111,6 +112,58 @@ export interface PermissionSource {
   role_name: string | null;
   /** Implied by an umbrella rather than ticked on a role. */
   implied: boolean;
+  /** Backlink: the supplying role's id (the Baseline row for kind "baseline"). */
+  role_id: string | null;
+  /** Where the supplying grant applies: "global" | "project" | "space". */
+  scope: string;
+  /** How the role reached the scope: membership | team | grant | attached. */
+  via: string | null;
+  /** The team that carried it, when via === "team". */
+  via_team: string | null;
+  /** Project key / space name for team-view rows that span scopes. */
+  scope_label: string | null;
+}
+
+/** One spec-92 grant row reaching the inspected subject (RADD-809). */
+export interface ResourceAccessRow {
+  resource_type: string;
+  resource_id: string;
+  resource_label: string | null;
+  access: string;
+  subject_type: string; // user | team | role
+  subject_id: string;
+  subject_name: string | null; // null = the user directly
+  project_id: string | null;
+  project_key: string | null;
+}
+
+/** Grants per registered resource type, with the default the reader needs to
+ * interpret an empty list — default-open types are reachable with no rows. */
+export interface ResourceTypeAccess {
+  resource_type: string;
+  label: string;
+  default_open: boolean;
+  hierarchical: boolean;
+  accesses: string[];
+  rows: ResourceAccessRow[];
+}
+
+export interface AccessSummary {
+  readable_projects: number;
+  updatable_projects: number;
+  total_projects: number;
+  readable_spaces: number | null;
+  total_spaces: number | null;
+}
+
+export interface UserAccess {
+  resources: ResourceTypeAccess[];
+  summary: AccessSummary;
+}
+
+export interface TeamAccess {
+  atoms: PermissionSource[];
+  resources: ResourceTypeAccess[];
 }
 
 export interface Role {

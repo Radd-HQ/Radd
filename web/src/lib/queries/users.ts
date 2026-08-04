@@ -4,7 +4,9 @@ import { keepPreviousData, queryOptions } from "@tanstack/react-query";
 import { api } from "../api";
 import {
   ApiPath,
+  apiTeamAccessPath,
   apiTeamMembersPath,
+  apiUserAccessPath,
   apiUserContentPath,
   apiUserPermissionsPath,
 } from "../constants";
@@ -16,9 +18,11 @@ import type {
   DirectoryUser,
   DuplicateUserGroup,
   Team,
+  TeamAccess,
   TeamMember,
   PermissionSource,
   User,
+  UserAccess,
   UserContentSummary,
   UserSummary,
 } from "../types";
@@ -64,11 +68,35 @@ export const usersAdminQuery = (filters: { q?: string; source?: string; active?:
 };
 
 /** What one person can do, and why (RADD-779). Fetched when their row opens —
- *  it is an admin explaining a specific account, not something to prefetch. */
-export const userPermissionsQuery = (userId: string) =>
+ *  it is an admin explaining a specific account, not something to prefetch.
+ *  RADD-809: resolvable at a project or a SPACE scope. */
+export const userPermissionsQuery = (
+  userId: string,
+  scope?: { projectId?: string; spaceId?: string },
+) => {
+  const query: Record<string, string> = {};
+  if (scope?.projectId) query.project_id = scope.projectId;
+  if (scope?.spaceId) query.space_id = scope.spaceId;
+  return queryOptions({
+    queryKey: [...queryKeys.users, userId, "permissions", query] as const,
+    queryFn: () => api.get<PermissionSource[]>(apiUserPermissionsPath(userId), { query }),
+    staleTime: 30_000,
+  });
+};
+
+/** The spec-92 resource half of the inspector + effective counts (RADD-809). */
+export const userAccessQuery = (userId: string) =>
   queryOptions({
-    queryKey: [...queryKeys.users, userId, "permissions"] as const,
-    queryFn: () => api.get<PermissionSource[]>(apiUserPermissionsPath(userId)),
+    queryKey: [...queryKeys.users, userId, "access"] as const,
+    queryFn: () => api.get<UserAccess>(apiUserAccessPath(userId)),
+    staleTime: 30_000,
+  });
+
+/** What membership of a team confers (RADD-809). */
+export const teamAccessQuery = (teamId: string) =>
+  queryOptions({
+    queryKey: [...queryKeys.teams, teamId, "access"] as const,
+    queryFn: () => api.get<TeamAccess>(apiTeamAccessPath(teamId)),
     staleTime: 30_000,
   });
 

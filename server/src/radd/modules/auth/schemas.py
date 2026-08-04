@@ -114,9 +114,69 @@ class PermissionSourceRead(BaseModel):
     permission: str
     kind: str
     role_name: str | None = None
+    #: RADD-809 — backlink to the supplying role (the Baseline row for kind
+    #: "baseline"), the channel it arrived through, and its scope.
+    role_id: uuid.UUID | None = None
+    scope: str = "global"  # global | project | space
+    via: str | None = None  # membership | team | grant | attached
+    via_team: str | None = None
+    scope_label: str | None = None  # project key / space name (team view rows)
     #: Held via an umbrella (project.manage implies state.create), not granted
     #: directly — so the inspector never claims a role's checkbox was ticked.
     implied: bool = False
+
+
+class ResourceAccessRowRead(BaseModel):
+    """One spec-92 grant row reaching the inspected subject (RADD-809)."""
+
+    resource_type: str
+    resource_id: str
+    resource_label: str | None = None
+    access: str
+    subject_type: str  # user | team | role
+    subject_id: uuid.UUID
+    subject_name: str | None = None  # team/role name; None = the user directly
+    project_id: uuid.UUID | None = None
+    project_key: str | None = None
+
+
+class ResourceTypeAccessRead(BaseModel):
+    """Grants per registered resource type, with the default the reader needs
+    to interpret an empty list: default-open types are reachable with no rows."""
+
+    resource_type: str
+    label: str
+    default_open: bool
+    hierarchical: bool
+    accesses: list[str]
+    rows: list[ResourceAccessRowRead]
+
+
+class AccessSummaryRead(BaseModel):
+    """Effective answers, as COUNTS (RADD-809 — guard-level conclusions are
+    workflow-data-dependent and out of scope)."""
+
+    readable_projects: int
+    updatable_projects: int
+    total_projects: int
+    readable_spaces: int | None = None  # None = pages module not installed
+    total_spaces: int | None = None
+
+
+class UserAccessRead(BaseModel):
+    """The resource half of the inspector plus the summary counts (the atom
+    half stays on /users/{id}/permissions)."""
+
+    resources: list[ResourceTypeAccessRead]
+    summary: AccessSummaryRead
+
+
+class TeamAccessRead(BaseModel):
+    """What membership of a team confers: atoms via attachments/grants, plus
+    the resource grants naming the team."""
+
+    atoms: list[PermissionSourceRead]
+    resources: list[ResourceTypeAccessRead]
 
 
 class UserAdminUpdate(BaseModel):

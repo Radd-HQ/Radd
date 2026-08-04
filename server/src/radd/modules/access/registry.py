@@ -10,7 +10,7 @@ extra code — including for plugins.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,6 +26,10 @@ from .types import Access, GrantSubject
 # resource that scopes authority per project (builtin fields, per-project managers)
 # uses it; one whose authority is intrinsic (a custom field's own scope) ignores it.
 CanManage = Callable[[AsyncSession, User, str, "uuid.UUID | None"], Awaitable[bool]]
+
+# (session, resource_ids) -> {resource_id: display label} for the inspector
+# (RADD-809). Only the owning module can turn a view id or field id into a name.
+LabelFor = Callable[[AsyncSession, Sequence[str]], Awaitable[dict[str, str]]]
 
 
 @dataclass(frozen=True)
@@ -44,6 +48,9 @@ class ResourceSpec:
     # For flag models: which OTHER accesses satisfy a given one (write implies read).
     implied_by: dict[str, tuple[str, ...]] = field(default_factory=dict)
     label: str = ""  # human name for the UI (defaults to resource_type)
+    # Optional inspector hook (RADD-809): resolve resource ids to display names.
+    # Absent = rows show the raw resource_id.
+    label_for: LabelFor | None = None
 
 
 _REGISTRY: dict[str, ResourceSpec] = {}

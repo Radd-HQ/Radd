@@ -32,6 +32,26 @@ from .validation import FieldValidationError, check_field_value
 # open until restricted, write implies read, scopeable to projects. `access.registry`
 # routes the generic /grants API + the reusable GrantsEditor to us via this spec.
 FIELD_RESOURCE = "field"
+async def _field_labels(session: AsyncSession, resource_ids) -> dict[str, str]:
+    """Inspector labels (RADD-809): field-definition id -> display name."""
+    ids = []
+    for raw in resource_ids:
+        try:
+            ids.append(uuid.UUID(raw))
+        except ValueError:
+            continue
+    if not ids:
+        return {}
+    rows = await session.execute(
+        select(FieldDefinition.id, FieldDefinition.name).where(FieldDefinition.id.in_(ids))
+    )
+    return {str(field_id): name for field_id, name in rows.all()}
+
+
+async def _builtin_labels(session: AsyncSession, resource_ids) -> dict[str, str]:
+    return {raw: raw.replace("_", " ").capitalize() for raw in resource_ids}
+
+
 _FIELD_SPEC = ResourceSpec(
     resource_type=FIELD_RESOURCE,
     can_manage=lambda session, actor, resource_id, project_id: _can_manage_field(
@@ -41,6 +61,7 @@ _FIELD_SPEC = ResourceSpec(
     default_open=True,
     implied_by={Access.READ.value: (Access.WRITE.value,)},  # a writer can see what they write
     label="Custom field",
+    label_for=_field_labels,
 )
 
 
@@ -91,6 +112,7 @@ _BUILTIN_SPEC = ResourceSpec(
     default_open=True,
     implied_by={Access.READ.value: (Access.WRITE.value,)},
     label="Builtin field",
+    label_for=_builtin_labels,
 )
 
 

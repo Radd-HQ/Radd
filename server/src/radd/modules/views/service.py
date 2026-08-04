@@ -134,6 +134,23 @@ async def _can_manage_view(
     return False
 
 
+async def _view_labels(session: AsyncSession, resource_ids) -> dict[str, str]:
+    """Inspector labels (RADD-809): view id -> name."""
+    ids = [uuid.UUID(raw) for raw in resource_ids if _uuidish(raw)]
+    if not ids:
+        return {}
+    rows = await session.execute(select(View.id, View.name).where(View.id.in_(ids)))
+    return {str(view_id): name for view_id, name in rows.all()}
+
+
+def _uuidish(raw: str) -> bool:
+    try:
+        uuid.UUID(raw)
+    except ValueError:
+        return False
+    return True
+
+
 _VIEW_SPEC = ResourceSpec(
     resource_type=VIEW_RESOURCE,
     can_manage=_can_manage_view,
@@ -143,6 +160,7 @@ _VIEW_SPEC = ResourceSpec(
     subjects=(GrantSubject.USER, GrantSubject.TEAM),
     project_scoped=False,  # a view already belongs to one project
     label="View",
+    label_for=_view_labels,
 )
 register_resource(_VIEW_SPEC)
 

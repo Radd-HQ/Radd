@@ -289,6 +289,20 @@ async def _can_manage_dashboard(
     return _grant_level(dashboard, grants, actor.id, team_ids) is ShareLevel.OWNER
 
 
+async def _dashboard_labels(session: AsyncSession, resource_ids) -> dict[str, str]:
+    """Inspector labels (RADD-809): dashboard id -> name."""
+    ids = []
+    for raw in resource_ids:
+        try:
+            ids.append(uuid.UUID(raw))
+        except ValueError:
+            continue
+    if not ids:
+        return {}
+    rows = await session.execute(select(Dashboard.id, Dashboard.name).where(Dashboard.id.in_(ids)))
+    return {str(dash_id): name for dash_id, name in rows.all()}
+
+
 _DASHBOARD_SPEC = ResourceSpec(
     resource_type=DASHBOARD_RESOURCE,
     can_manage=_can_manage_dashboard,
@@ -298,6 +312,7 @@ _DASHBOARD_SPEC = ResourceSpec(
     subjects=(GrantSubject.USER, GrantSubject.TEAM),
     project_scoped=False,  # dashboards are global, not project-scoped
     label="Dashboard",
+    label_for=_dashboard_labels,
 )
 register_resource(_DASHBOARD_SPEC)
 

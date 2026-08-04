@@ -9,6 +9,7 @@ import {
   apiTeamMembersPath,
 } from "../../lib/constants";
 import { useCurrentUser, usePermissions } from "../../lib/hooks";
+import { TeamAccessSection } from "./AccessInspector";
 import { RoleGrantsSection } from "./RoleGrantsSection";
 import {
   projectTeamsQuery,
@@ -334,6 +335,10 @@ export function TeamPanel({ team }: TeamPanelProps) {
         subject={{ teamId: team.id }}
         canManage={perms.global(Permission.roleUpdate)}
       />
+      {/* RADD-809: the answer to "what does membership of this team confer" —
+          admin-shaped (the endpoint is user.manage-gated), so only render the
+          section for someone the server will answer. */}
+      {perms.global(Permission.userManage) && <TeamAccessSection teamId={team.id} />}
       </div>
     </div>
   );

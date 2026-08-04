@@ -48,6 +48,24 @@ async def _can_manage(
     return True
 
 
+async def _attachment_labels(session: AsyncSession, resource_ids) -> dict[str, str]:
+    """Inspector labels (RADD-809): attachment id -> filename."""
+    from sqlalchemy import select
+
+    ids = []
+    for raw in resource_ids:
+        try:
+            ids.append(uuid.UUID(raw))
+        except ValueError:
+            continue
+    if not ids:
+        return {}
+    rows = await session.execute(
+        select(Attachment.id, Attachment.filename).where(Attachment.id.in_(ids))
+    )
+    return {str(attachment_id): filename for attachment_id, filename in rows.all()}
+
+
 _SPEC = access_registry.ResourceSpec(
     resource_type=ATTACHMENT_RESOURCE,
     can_manage=_can_manage,
@@ -57,6 +75,7 @@ _SPEC = access_registry.ResourceSpec(
     subjects=(GrantSubject.USER, GrantSubject.TEAM, GrantSubject.ROLE),
     project_scoped=False,
     label="Attachment",
+    label_for=_attachment_labels,
 )
 access_registry.register_resource(_SPEC)
 

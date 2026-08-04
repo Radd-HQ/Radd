@@ -60,6 +60,22 @@ async def _can_manage_page(
     return Permission.PAGE_MANAGE in held
 
 
+async def _page_labels(session: AsyncSession, resource_ids) -> dict[str, str]:
+    """Inspector labels (RADD-809): page id -> title."""
+    from sqlalchemy import select
+
+    ids = []
+    for raw in resource_ids:
+        try:
+            ids.append(uuid.UUID(raw))
+        except ValueError:
+            continue
+    if not ids:
+        return {}
+    rows = await session.execute(select(Page.id, Page.title).where(Page.id.in_(ids)))
+    return {str(page_id): title for page_id, title in rows.all()}
+
+
 _PAGE_SPEC = ResourceSpec(
     resource_type=PAGE_RESOURCE,
     can_manage=_can_manage_page,
@@ -72,6 +88,7 @@ _PAGE_SPEC = ResourceSpec(
     # A page belongs to a SPACE, not a project, so grants carry no project scope.
     project_scoped=False,
     label="Page",
+    label_for=_page_labels,
 )
 register_resource(_PAGE_SPEC)
 
