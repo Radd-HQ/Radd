@@ -2,8 +2,8 @@
 
 **Read this first, then `115-access-control-audit.md` in full, then the issues.**
 
-You are executing the access-control wave: **RADD-813** (14 children) **and
-RADD-827** (Groups, 5 children). **Both epics ship in one release.** Nineteen
+You are executing the access-control wave: **RADD-813** (17 children) **and
+RADD-827** (Groups, 5 children). **Both epics ship in one release.** Twenty-two
 issues. Every decision has been made and recorded — §0 of the audit carries
 D1–D14 with their reasoning, and §5.6a designs Groups. You are not being asked
 to re-litigate the design. You are being asked to build all of it.
@@ -47,7 +47,9 @@ Dependencies are real; this order respects them.
 
 | # | Issue | Why here |
 |---|---|---|
+| 0 | **RADD-834** — bulk skips field grants; history publishes restricted values | **Two live holes, today.** Same shape as the bug that started the epic: a second code path that forgot a clause. Fix before relations multiplies the blast radius. |
 | 1 | **RADD-809** — inspector: resource grants, Team view, backlinks | Changes no behaviour. Build it first so every later step is *observable* — you can see what a model change did instead of inferring it from a 403 that did or did not fire. |
+| 1b | **RADD-836 (U1 only)** — "View as" | Do the impersonation preview immediately after the inspector. It is the fastest way to verify every subsequent step, and building it late means verifying the whole wave the slow way. The other three parts of 836 come at step 17. |
 | 2 | **RADD-824** — `view.manage` client gates (the bug half only) | Live bug, independent, five minutes. Do not do the model half yet. |
 | 3 | **RADD-814** — scope becomes a property of the grant | The root cause. Behaviour-identical migration; collapses `require_anywhere`/`readable_projects` and the three client seams. |
 | 4 | **RADD-810** — the ten mismatched client gates | Obsoleted *by* 814 — resolve them in its terms, do not fix them first. |
@@ -64,9 +66,11 @@ Dependencies are real; this order respects them.
 | 15 | **RADD-826** — project admins assign roles | Needs D14's intersection. |
 | 16 | **RADD-833** — Groups admin screen + inspector shows the path | After 830 (needs transitive counts) and 809 (extends its provenance rows). |
 | 17 | **RADD-815** — matrix by resource, presets + sentence builder | The UI for everything above; do it once the model is final. |
-| 18 | **RADD-828** — strip anonymous reporting, email provisions accounts | Independent of the model work; keep `/public/pages` and `/public/csat`. |
-| 19 | **RADD-825** — Baseline pre-flight report | Ships the *capability*; see below. |
-| 20 | **RADD-820** — grant expiry + granted-by | Smallest, independent. |
+| 17b | **RADD-836** — audience indicator, real refusal, impact preview | The remaining three; all are UI over resolvers that exist by now. |
+| 18 | **RADD-835** — sweep every surface that names/counts/links/notifies | **The leak checklist.** Thirteen surfaces; do it as a sweep with a proof, not as bullets inside other issues. Late on purpose: it verifies everything above. |
+| 19 | **RADD-828** — strip anonymous reporting, email provisions accounts | Independent of the model work; keep `/public/pages` and `/public/csat`. |
+| 20 | **RADD-825** — Baseline pre-flight report | Ships the *capability*; see below. |
+| 21 | **RADD-820** — grant expiry + granted-by | Smallest, independent. |
 
 **Why Groups moved forward.** It was originally scoped as a separate release
 with `@team` resolving against direct membership and the group graph swapped in

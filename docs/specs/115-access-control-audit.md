@@ -817,6 +817,106 @@ which is the question a team owner actually has and which nothing answers today.
 
 ---
 
+## 5.9 Adjacent surfaces — where the model is not enforced
+
+The audit above examines how access is *decided*. This section is about where it
+is not *applied*. Two of these are live holes today, found by looking rather than
+reasoning; the rest are surfaces that relations (§5.4a) will break unless they
+are swept deliberately.
+
+### Confirmed holes, today, with no relations involved
+
+**H1 — bulk edit skips field grants.** `items/bulk.py:277` checks
+`Permission.ITEM_UPDATE` and nothing else. The single-item path calls
+`_check_builtin_field_rules` and `_field_ctx` (`items/service/core.py:148`); the
+bulk path calls neither. So a user restricted from writing `state` or `priority`
+by a builtin-field grant is refused one at a time and **succeeds in bulk**. The
+restriction is real on one screen and decorative on the other.
+
+**H2 — history renders restricted field values.** `items/history.py` filters
+internal *comments* (`internal_comment_visible`, line 105) and filters nothing
+else. Field-change events carry `changes` with old→new values, so a
+read-restricted custom field's contents are readable in the activity feed by
+anyone who can read the item. Restricting a field hides it in the rail and
+publishes it in history.
+
+Both are the same shape: a second code path that re-implements "may I write /
+read this" and forgot a clause. Both predate this wave and neither is caused by
+it — they are found *because* the wave made someone look.
+
+**H3 — an indexed restricted field is searchable.** `search.rows_for_embedding`
+reuses `search_index`, which correctly excludes internal comment bodies ("public
+text only by construction"). It has no notion of *field* grants, so a custom
+field marked `indexed` and restricted to one role still contributes its text to
+FTS and to the embedding index. The value is not shown on the issue and is
+retrievable by searching for it.
+
+### Surfaces that must inherit relations, or leak
+
+Relations hide *rows*. Every surface that names, counts, links to or notifies
+about a row must resolve through the same seam, or it becomes the leak. This is
+the checklist, and it is deliberately exhaustive because "we swept the obvious
+ones" is how the second half of a list like this survives:
+
+| Surface | What leaks if missed |
+|---|---|
+| lists, boards, swimlanes | the rows themselves |
+| counts, rollups, reports, dashboard widgets | "42 issues" beside a list of 3 |
+| FTS + semantic search, similar-issues, KB deflection | titles and bodies |
+| MCP `find_items` / `search_items` / `get_item` | everything, to an agent |
+| **item links + dependency graph** | the key and title of a blocked/blocking item |
+| **parent breadcrumbs, epic rollups, child lists** | a hidden parent's title above a visible subtask |
+| **mentions and notifications** | "X mentioned you in ABC-12" for an item you cannot open |
+| **watchers** | change notifications on rows you may not see |
+| **worklogs and the timesheet** | issue keys and titles on hidden rows |
+| **attachments** | the ACL is `project_scoped=False` and default-open, and presigned delivery is pure HMAC — a URL minted for an attachment on a now-hidden item still resolves |
+| **exports** (page, space, list) | whatever the exporter iterates |
+| **webhooks, automations, connectors** | payloads assembled as SYSTEM, delivered to subscribers |
+| **history / activity** | see H2 |
+
+The attachment row is the sharpest: it is the one place where the *network*,
+not the application, decides who gets bytes, so a relation change cannot retract
+an already-minted presigned URL. That is acceptable for short TTLs and must be a
+stated property rather than an accident.
+
+## 5.10 Usability that belongs in this wave
+
+Not polish — each of these is what makes the model above operable, and each is
+cheapest to build alongside the thing it explains.
+
+**U1 — "View as".** An admin previews the app as another user (read-only, banner
+visible, audited). This is the single highest-value tool for permission work:
+the inspector says what someone *holds*, and "View as" shows what they *see*,
+which is the question actually being asked. It would have answered the
+`hjarrar@example.com` report in ten seconds instead of an hour. Guard it
+carefully — it is impersonation, so it is read-only, never available to a
+non-admin, and every entry is an event.
+
+**U2 — the audience indicator.** On an issue and on a comment composer: *who can
+see this*. Once relations hide rows, an author genuinely cannot tell — "visible
+to the HR team (12 people)" beside an internal comment is the difference between
+a considered note and an accident. Radd already has the harder half: the resolver
+knows the answer.
+
+**U3 — the refusal experience.** Today a denial is a permission toast. It should
+be a page that says what is required, which scope it is required at, and **who
+can grant it** — resolvable from the grant tables. Add "request access", which
+notifies the people who can actually approve. This is the single most common
+usability complaint about every ACL system that has ever shipped, and Radd has
+the data to answer it properly.
+
+**U4 — impact preview on every permission change.** Before saving a grant, a
+role edit or a Baseline change: *"this affects 214 people; 3 lose access to 2
+projects"*. §5.6a already requires the headcount for group grants; the same
+resolver answers it for role edits and for the Baseline (RADD-825). A permission
+system that cannot tell you what a change will do before you make it is one that
+gets changed by trial and error on production.
+
+**U5 — an access review view.** "Show me everyone with `item.delete` anywhere",
+"show me every grant expiring this month", "show me grants nobody has used".
+The first two fall out of the resolver plus RADD-820's `expires_at`; the third
+needs usage tracking and is worth deferring.
+
 ## 6. Suggested sequence
 
 Each step is independently shippable and leaves the system working.
