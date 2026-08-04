@@ -16,6 +16,7 @@ from radd.config import settings
 from radd.db import SessionLocal
 from radd.modules.access import service as access_service
 from radd.modules.access.types import Access, AccessEvent
+from radd.modules.auth.types import AuthEvent
 from radd.modules.comments import service as comments
 from radd.modules.comments.types import CommentEvent
 from radd.modules.events import service as events
@@ -23,6 +24,7 @@ from radd.modules.events.models import Event
 from radd.modules.fields.service import BUILTIN_RESOURCE
 from radd.modules.fields.types import BuiltinItemField
 from radd.modules.items.enums import ItemEvent
+from radd.modules.teams.types import TeamEvent
 
 from .models import SearchIndexRow
 from .types import CONSUMER_NAME, SEARCH_TS_CONFIG
@@ -37,6 +39,10 @@ _COMMENT_EVENTS = {
     CommentEvent.DELETED.value,
 }
 _ACCESS_EVENTS = {AccessEvent.GRANTED.value, AccessEvent.REVOKED.value}
+# RADD-841: bulk repoints that never emit item events — user merge/delete
+# rewrites work_items.assignee_id/reporter_id in SQL, a team delete nulls
+# team_id via FK — so the relation mirror re-syncs when one of these lands.
+_SUBJECT_EVENTS = {AuthEvent.USER_DELETED.value, TeamEvent.DELETED.value}
 _DESCRIPTION = BuiltinItemField.DESCRIPTION.value
 
 # RADD-840: `description` is read-restrictable AND searchable. Conservative
@@ -67,6 +73,7 @@ async def run_once() -> int:
             # A restriction written while the consumer was down (or before this
             # release) is honored on start, not on the next grant change.
             await sync_description_restriction(session)
+            await sync_relation_columns(session)
             _restriction_synced = True
         offset = await events.get_offset(session, CONSUMER_NAME)
         batch = await events.read_after(session, offset, settings.search_batch)
@@ -95,6 +102,8 @@ async def _handle(session: AsyncSession, event: Event) -> None:
         await _reindex_comments(session, event)
     elif event.event_type in _ACCESS_EVENTS and _touches_description_read(event):
         await sync_description_restriction(session)
+    elif event.event_type in _SUBJECT_EVENTS:
+        await sync_relation_columns(session)
 
 
 def _touches_description_read(event: Event) -> bool:
@@ -132,6 +141,17 @@ async def _index_item(session: AsyncSession, event: Event) -> None:
         "title": payload.get("title", ""),
         "description": "" if restricted else payload.get("description", ""),
     }
+    # RADD-841: relation anchors, only when the payload SPEAKS about them — a
+    # partial payload must not null a good mirror (the startup sweep repairs
+    # real drift from work_items itself).
+    for column, ref_key in (
+        ("reporter_id", "reporter"),
+        ("assignee_id", "assignee"),
+        ("team_id", "team"),
+    ):
+        if ref_key in payload:
+            ref = payload.get(ref_key) or {}
+            row[column] = uuid.UUID(ref["id"]) if ref.get("id") else None
     await session.execute(
         pg_insert(SearchIndexRow)
         .values(**row)
@@ -172,6 +192,32 @@ _RESTORE_OPEN = text(
       AND si.description IS DISTINCT FROM COALESCE(wi.description, '')
     """
 )
+
+
+# RADD-841: repair the relation mirror from the owning table, bounded to rows
+# that actually drifted (the sync_description_restriction idiom).
+_RELATION_SYNC = text(
+    """
+    UPDATE search_index si SET
+        reporter_id = wi.reporter_id,
+        assignee_id = wi.assignee_id,
+        team_id = wi.team_id
+    FROM work_items wi
+    WHERE wi.id = si.item_id
+      AND (si.reporter_id IS DISTINCT FROM wi.reporter_id
+        OR si.assignee_id IS DISTINCT FROM wi.assignee_id
+        OR si.team_id IS DISTINCT FROM wi.team_id)
+    """
+)
+
+
+async def sync_relation_columns(session: AsyncSession) -> None:
+    """Re-mirror reporter/assignee/team from `work_items` wherever they drifted
+    (RADD-841). Item events keep the mirror current row by row; this covers the
+    writes that never emit them — a user merge/delete repoints assignee_id and
+    reporter_id in bulk SQL, deleting a team nulls team_id through the FK — and
+    anything missed while the consumer was down. Idempotent, bounded."""
+    await session.execute(_RELATION_SYNC)
 
 
 async def sync_description_restriction(session: AsyncSession) -> None:
