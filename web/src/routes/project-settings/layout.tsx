@@ -83,7 +83,9 @@ const PROJECT_SETTINGS_NAV: readonly {
     to: RoutePath.projectSettingsAccess,
     label: "Access",
     icon: UserRound,
-    show: (perms, project) => perms.project(project, Permission.projectManage),
+    // RADD-826 (D3): delegated access management — member.create in THIS
+    // project opens the screen; project.manage implies it.
+    show: (perms, project) => perms.project(project, "member.create"),
   },
   {
     to: RoutePath.projectSettingsReleases,

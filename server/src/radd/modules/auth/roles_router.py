@@ -12,7 +12,7 @@ from radd.modules.projects import service as projects_service
 from . import authz, grants, roles
 from .deps import CurrentUser
 from .models import ProjectMember
-from radd.exceptions import ConflictError
+from radd.exceptions import ConflictError, ForbiddenError
 
 from .schemas import (
     GlobalGrantRead,
@@ -34,6 +34,31 @@ from .types import (
     permission_parts,
     permission_scope_of,
 )
+
+async def ensure_delegated_role_coverage(
+    session: AsyncSession, actor, role, project
+) -> None:
+    """D14 (RADD-826): a DELEGATE cannot hand out atoms they do not hold — and
+    the intersection is SCOPE-AWARE: "holds the atom at the scope of the grant
+    being made". A project admin granting within their project passes on their
+    project-scoped holdings; lacking an atom globally is not a refusal (without
+    this, delegation mostly refuses). Relation-qualified atoms compare by the
+    lattice: holding item.update (@any) covers granting item.update@own."""
+    from .types import expand_permissions, relation_contains, relations_held, split_permission
+
+    actor_permissions = await authz.effective_permissions(session, actor, project=project)
+    missing: list[str] = []
+    for atom in sorted(expand_permissions(set(role.permissions))):
+        base, relation = split_permission(atom)
+        held = relations_held(actor_permissions, base)
+        if not any(relation_contains(h, relation) for h in held):
+            missing.append(atom)
+    if missing:
+        shown = ", ".join(missing[:5]) + ("…" if len(missing) > 5 else "")
+        raise ForbiddenError(
+            f"'{role.key}' carries atoms you do not hold on {project.key}: {shown}"
+        )
+
 
 role_router = APIRouter(prefix="/roles", tags=["roles"])
 role_grant_router = APIRouter(prefix="/role-grants", tags=["roles"])
@@ -149,7 +174,20 @@ async def list_role_grants(
 async def create_role_grant(
     data: RoleGrantCreate, session: Session, user: CurrentUser
 ) -> list[GlobalGrantRead]:
-    await authz.require(session, user, Permission.ROLE_UPDATE)
+    # RADD-826 (D3): a PROJECT admin grants existing roles on their own project
+    # without global role.update — gated on member.create THERE, containment
+    # enforced by the row shape (a delegate can only write project-scoped
+    # grants) and D14's scope-aware intersection below.
+    if not await authz.holds(session, user, Permission.ROLE_UPDATE):
+        if not data.project_ids or data.space_ids:
+            raise ForbiddenError(
+                "granting beyond a project's scope requires role.update"
+            )
+        role = await roles.get_role(session, data.role_id)
+        for project_id in data.project_ids:
+            project = await projects_service.get_project(session, project_id)
+            await authz.require(session, user, Permission.MEMBER_CREATE, project=project)
+            await ensure_delegated_role_coverage(session, user, role, project)
     # (project_id, space_id) pairs — at most one of each is ever set. No ids at
     # all means one instance-wide grant, which is the spec-87 behaviour.
     scopes: list[tuple[uuid.UUID | None, uuid.UUID | None]] = [
@@ -174,7 +212,16 @@ async def create_role_grant(
 
 @role_grant_router.delete("/{grant_id}", status_code=204)
 async def delete_role_grant(grant_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
-    await authz.require(session, user, Permission.ROLE_UPDATE)
+    # RADD-826: a project admin may revoke a grant SCOPED to their project
+    # (member.delete there); anything wider still needs role.update.
+    if not await authz.holds(session, user, Permission.ROLE_UPDATE):
+        from .models import GlobalRoleGrant
+
+        grant = await session.get(GlobalRoleGrant, grant_id)
+        if grant is None or grant.project_id is None:
+            raise ForbiddenError("revoking beyond a project's scope requires role.update")
+        project = await projects_service.get_project(session, grant.project_id)
+        await authz.require(session, user, Permission.MEMBER_DELETE, project=project)
     await grants.delete_grant(session, grant_id, actor_id=user.id)
 
 
@@ -244,6 +291,10 @@ async def add_project_member(
 ) -> ProjectMemberRead:
     project = await projects_service.get_project(session, project_id)
     await authz.require(session, user, Permission.MEMBER_CREATE, project=project)
+    if not await authz.holds(session, user, Permission.ROLE_UPDATE):
+        await ensure_delegated_role_coverage(
+            session, user, await roles.get_role(session, data.role_id), project
+        )
     member = await roles.add_project_member(session, project_id, data, actor_id=user.id)
     return await _member_read(session, member)
 
@@ -260,6 +311,10 @@ async def update_project_member(
 ) -> ProjectMemberRead:
     project = await projects_service.get_project(session, project_id)
     await authz.require(session, user, Permission.MEMBER_UPDATE, project=project)
+    if not await authz.holds(session, user, Permission.ROLE_UPDATE):
+        await ensure_delegated_role_coverage(
+            session, user, await roles.get_role(session, data.role_id), project
+        )
     member = await roles.update_project_member(
         session, project_id, user_id, data.role_id, actor_id=user.id
     )

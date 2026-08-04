@@ -265,6 +265,15 @@ async def attach_project_team(
 ) -> ProjectTeamRead:
     project = await projects_service.get_project(session, project_id)
     await authz.require(session, user, authz.Permission.MEMBER_CREATE, project=project)
+    # RADD-826 (D14): a delegate cannot attach a role carrying atoms they do
+    # not hold at THIS project's scope.
+    if not await authz.holds(session, user, authz.Permission.ROLE_UPDATE):
+        from radd.modules.auth import roles as auth_roles
+        from radd.modules.auth.roles_router import ensure_delegated_role_coverage
+
+        await ensure_delegated_role_coverage(
+            session, user, await auth_roles.get_role(session, data.role_id), project
+        )
     attachment = await service.attach_project_team(session, project_id, data, actor_id=user.id)
     return (await _attachment_reads(session, [attachment]))[0]
 
