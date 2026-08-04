@@ -230,14 +230,29 @@ def crud_router(spec: EntitySpec) -> APIRouter:
         rows = list((await session.execute(stmt.order_by(model.created_at.desc()))).scalars())
         # Row visibility: item.read on each row's project (project-scoped entities).
         if project_scoped:
+            from radd.kernel.registry import registries
             from radd.modules.projects import service as projects_service
 
+            # RADD-817: the query hook for plugin relations — a plugin that
+            # registered RelationSpecs for its entity key gets row-level
+            # narrowing here, with the same holds_base + relation_holds_row
+            # pair items use. No registered relations = the old behaviour.
+            entity_relations = registries.relations_for(key)
+            relation_actor = None
             visible = []
             for obj in rows:
                 project = await projects_service.get_project(session, obj.project_id)
                 perms = await authz.effective_permissions(session, user, project=project)
-                if authz.Permission.ITEM_READ in perms:
-                    visible.append(obj)
+                if not authz.holds_base(perms, authz.Permission.ITEM_READ):
+                    continue
+                if entity_relations:
+                    relations = authz.relations_held(perms, authz.Permission.ITEM_READ)
+                    if authz.RELATION_ANY not in relations:
+                        if relation_actor is None:
+                            relation_actor = await authz.relation_actor(session, user)
+                        if not authz.relation_holds_row(key, relations, relation_actor, obj):
+                            continue
+                visible.append(obj)
             rows = visible
         return [Read.model_validate(o) for o in rows]
 

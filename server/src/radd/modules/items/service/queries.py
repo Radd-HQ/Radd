@@ -54,6 +54,14 @@ async def require_readable_item(
     item = await require_item(session, item_id)
     project = await projects_service.get_project(session, item.project_id)
     permissions = await authz.require(session, actor, Permission.ITEM_READ, project=project)
+    # RADD-817: the relation gate lives IN the seam — comments, worklogs,
+    # history, watchers and every other child surface inherit item.read@own/
+    # @team by construction. A hidden item 404s (existence stays private).
+    from .visibility import ensure_item_relation
+
+    await ensure_item_relation(
+        session, actor, item, permissions, Permission.ITEM_READ, as_missing=True
+    )
     return item, project, permissions
 
 

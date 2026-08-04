@@ -157,7 +157,7 @@ async def timelog_batch(
     readable = [
         item.id
         for item in item_map.values()
-        if authz.Permission.ITEM_READ in permissions.get(item.project_id, frozenset())
+        if authz.holds_base(permissions.get(item.project_id, frozenset()), authz.Permission.ITEM_READ)
     ]
     estimates = await estimate_seconds_by_items(session, readable)
     logged = await logged_seconds_by_items(session, readable)

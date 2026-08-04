@@ -39,7 +39,7 @@ async def list_states(
         return [StateRead.model_validate(s) for s in await service.list_states(session, project_id)]
     projects = await projects_service.list_projects(session)
     permissions = await authz.permissions_for_projects(session, user, projects)
-    readable = [p.id for p in projects if authz.Permission.ITEM_READ in permissions[p.id]]
+    readable = [p.id for p in projects if authz.holds_base(permissions[p.id], authz.Permission.ITEM_READ)]
     return [
         StateRead.model_validate(s)
         for s in await service.states_for_projects(session, readable)

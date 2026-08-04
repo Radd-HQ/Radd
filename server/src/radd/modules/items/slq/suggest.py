@@ -68,16 +68,23 @@ async def suggest(
 ) -> SuggestResponse:
     """Authorize the scope (project -> item.read on it; else any active member),
     load the registry in scope, and assemble suggestions for the cursor position."""
+    from ..service.visibility import relation_read_clause
+
     if project_id is not None:
         project = await projects_service.get_project(session, project_id)
-        await authz.require(session, actor, Permission.ITEM_READ, project=project)
-        scope = SuggestScope(project=project)
+        permissions = await authz.require(session, actor, Permission.ITEM_READ, project=project)
+        # RADD-817: key/title completions show exactly the rows the list would.
+        clause = await relation_read_clause(session, actor, {project.id: permissions})
+        scope = SuggestScope(project=project, relation_clause=clause)
         definitions = await fields_service.definitions_for_project(session, project)
     else:
         readable = await authz.require_member(session, actor)  # RADD-788
         # RADD-839: unscoped completions carry issue keys+titles — bound them
         # to the projects this actor can actually read.
-        scope = SuggestScope(readable_project_ids=frozenset(readable))
+        clause = await relation_read_clause(session, actor, readable)
+        scope = SuggestScope(
+            readable_project_ids=frozenset(readable), relation_clause=clause
+        )
         definitions = await fields_service.list_fields(session)
     definitions_by_key: dict[str, FieldDefinition] = {}
     for definition in definitions:

@@ -53,6 +53,7 @@ from .service import set_archived, update_item
 # Package-private helpers — reached through their concern module, not the service
 # barrel, which exports only the items module's public surface.
 from .service.visibility import (
+    relation_read_clause,
     _check_builtin_field_rules,
     _field_ctx,
     _internal_visible,
@@ -378,7 +379,10 @@ async def _visible_ids_query(
     scoped_project: Project | None = None
     if filters.project_id:
         scoped_project = await projects_service.get_project(session, filters.project_id)
-        await authz.require(session, actor, Permission.ITEM_READ, project=scoped_project)
+        scoped_perms = await authz.require(
+            session, actor, Permission.ITEM_READ, project=scoped_project
+        )
+        readable = {scoped_project.id: scoped_perms}
     else:
         readable = await authz.require_anywhere(session, actor, Permission.ITEM_READ)
 
@@ -388,6 +392,10 @@ async def _visible_ids_query(
         # both the count and the ids honor visibility (RADD-672: item.read
         # anywhere, not the global atom a scoped key never holds).
         query = query.where(WorkItem.project_id.in_(readable.keys()))
+    # RADD-817: ids/count share the same relation row filter as the list.
+    relation_clause = await relation_read_clause(session, actor, readable)
+    if relation_clause is not None:
+        query = query.where(relation_clause)
     query = await apply_filters(session, query, filters, scoped_project)
     order: tuple = ()
     if q and q.strip():

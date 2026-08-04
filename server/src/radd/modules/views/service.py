@@ -767,7 +767,7 @@ async def transfer_ownership(
     if view.project_id is not None:
         project = await projects_service.get_project(session, view.project_id)
         target_perms = await authz.effective_permissions(session, target, project=project)
-        can_use = Permission.ITEM_READ in target_perms
+        can_use = authz.holds_base(target_perms, Permission.ITEM_READ)
     else:
         # All-projects view: the recipient needs item.read SOMEWHERE, not globally
         # (RADD-788) — otherwise handing a shared view to a colleague whose access

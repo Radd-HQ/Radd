@@ -24,6 +24,7 @@ from ..models import WorkItem
 from ..schemas import ItemRead
 from .queries import _alias_item, _parse_key, require_item
 from .visibility import (
+    ensure_item_relation,
     _builtin_read_denied,
     _field_ctx,
     _filter_read,
@@ -99,6 +100,9 @@ async def get_item(session: AsyncSession, item_id: uuid.UUID, actor: User) -> It
     item = await require_item(session, item_id)
     project = await projects_service.get_project(session, item.project_id)
     permissions = await authz.require(session, actor, Permission.ITEM_READ, project=project)
+    await ensure_item_relation(
+        session, actor, item, permissions, Permission.ITEM_READ, as_missing=True
+    )
     definitions = await fields.definitions_for_project(session, project)
     ctx = await _field_ctx(session, actor, project, permissions, definitions)
     internal_visible = _internal_visible({project.id: permissions})

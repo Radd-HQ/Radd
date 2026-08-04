@@ -44,6 +44,16 @@ ITEM_RELATIONS: tuple[RelationSpec, ...] = (
     ),
     RelationSpec(
         resource="item",
+        key="assigned",
+        label="assigned to them",
+        # Off the any⊃team⊃own chain: incomparable with team/own (an item
+        # assigned to me is neither necessarily mine nor my team's), covered
+        # only by @any.
+        where=lambda actor: WorkItem.assignee_id == actor.user_id,
+        holds=lambda actor, item: item.assignee_id == actor.user_id,
+    ),
+    RelationSpec(
+        resource="item",
         key="team",
         label="on their team",
         # An actor with no teams matches nothing — false(), never IN (empty).
@@ -59,6 +69,74 @@ ITEM_RELATIONS: tuple[RelationSpec, ...] = (
 # registrations, and the manifest is what survives it (the cascades precedent).
 for _spec in ITEM_RELATIONS:
     register_relation(_spec)
+
+
+async def relation_read_clause(
+    session: AsyncSession,
+    actor: User,
+    permissions_by_project: "dict[uuid.UUID, frozenset[Permission]]",
+):
+    """THE row filter (RADD-817): per readable project, the actor's `item.read`
+    relations compiled into one WHERE clause. None = unconstrained everywhere —
+    the common case (`@any` held on every project), costing two set lookups per
+    project and NO relation-actor resolution.
+
+    Relations are per-PROJECT facts (a role granting `item.read@team` on one
+    project says nothing about another), so the clause is an OR of per-project
+    arms: unconstrained projects pass by project_id alone; a constrained
+    project ANDs its relation filter in. Every shared builder applies this —
+    lists, boards, reports, counts, bulk, MCP — or none do (the trap)."""
+    from sqlalchemy import and_, or_
+
+    constrained: dict[uuid.UUID, Any] = {}
+    relation_actor = None
+    for project_id, permissions in permissions_by_project.items():
+        relations = authz.relations_held(permissions, Permission.ITEM_READ)
+        if authz.RELATION_ANY in relations:
+            continue
+        if relation_actor is None:
+            relation_actor = await authz.relation_actor(session, actor)
+        constrained[project_id] = authz.relation_filter("item", relations, relation_actor)
+    if not constrained:
+        return None
+    arms = []
+    unconstrained = [pid for pid in permissions_by_project if pid not in constrained]
+    if unconstrained:
+        arms.append(WorkItem.project_id.in_(unconstrained))
+    for project_id, clause in constrained.items():
+        arms.append(and_(WorkItem.project_id == project_id, clause))
+    return arms[0] if len(arms) == 1 else or_(*arms)
+
+
+async def ensure_item_relation(
+    session: AsyncSession,
+    actor: User,
+    item: "WorkItem",
+    permissions: frozenset[Permission],
+    permission: Permission,
+    *,
+    as_missing: bool = False,
+) -> None:
+    """The GATING form (RADD-817): the caller's atom is held (require passed) —
+    does it hold for THIS row? `@any` short-circuits free. A failed READ raises
+    NotFound (`as_missing=True` — a hidden item's existence stays private, the
+    spec-57 rule); a failed write raises Forbidden naming the qualifier."""
+    relations = authz.relations_held(permissions, permission)
+    if authz.RELATION_ANY in relations:
+        return
+    relation_actor = await authz.relation_actor(session, actor)
+    if authz.relation_holds_row("item", relations, relation_actor, item):
+        return
+    if as_missing:
+        from radd.exceptions import NotFoundError
+
+        from ..enums import ItemEntity
+
+        raise NotFoundError(ItemEntity.ITEM, item.id)
+    held = ", ".join(sorted(f"@{r}" for r in relations))
+    raise ForbiddenError(
+        f"'{permission}' is limited to {held} here, and this is not such an item"
+    )
 
 # --- field-level visibility (spec 07: per-role/team grants) ---
 

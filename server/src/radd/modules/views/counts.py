@@ -51,9 +51,12 @@ async def view_counts(
     # GLOBAL item.read atom and return {} when it was absent — which for a
     # project-scoped member meant every queue badge silently vanished rather than
     # erroring, the harder failure to notice.
-    readable_ids = set(await authz.readable_projects(session, actor))
+    readable_map = await authz.readable_projects(session, actor)
+    readable_ids = set(readable_map)
     if not readable_ids:
         return {}
+    # RADD-817: badges count exactly what the list shows.
+    relation_clause = await items_service.relation_read_clause(session, actor, readable_map)
     shares_map = await _shares_by_view(session, [v.id for v in views])
     team_ids = await teams_service.user_team_ids(session, actor.id)
     group_ids = await groups_service.user_group_ids(session, actor.id)
@@ -63,7 +66,9 @@ async def view_counts(
         grant = _grant_level(view, shares_map.get(view.id, []), actor.id, team_ids, group_ids)
         if view.owner_id != actor.id and grant is None:
             continue  # invisible (spec 57) — omitted, not errored
-        count = await _count_view(session, view, actor, readable_ids, extra_q=extra_q)
+        count = await _count_view(
+            session, view, actor, readable_ids, extra_q=extra_q, relation_clause=relation_clause
+        )
         if count is not None:
             counts[view.id] = count
     return counts
@@ -75,6 +80,7 @@ async def _count_view(
     actor: User,
     readable_ids: set[uuid.UUID],
     extra_q: str | None = None,
+    relation_clause=None,
 ) -> int | None:
     """One compiled-SLQ count for a VISIBLE view; None = omit (stale query)."""
     stmt = (
@@ -83,6 +89,8 @@ async def _count_view(
         # The read path hides archived items by default (spec 38) — so does the badge.
         .where(WorkItem.archived_at.is_(None))
     )
+    if relation_clause is not None:
+        stmt = stmt.where(relation_clause)
     if view.project_id is not None:
         if view.project_id not in readable_ids:
             return 0  # visible view, unreadable items — the list they'd see is empty

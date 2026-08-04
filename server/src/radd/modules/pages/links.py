@@ -118,7 +118,7 @@ async def linked_items(
         item = items.get(item_id)
         if item is None:
             continue
-        if authz.Permission.ITEM_READ not in permissions.get(item.project_id, frozenset()):
+        if not authz.holds_base(permissions.get(item.project_id, frozenset()), authz.Permission.ITEM_READ):
             continue
         project = projects[item.project_id]
         state = states.get(item.state_id)

@@ -106,6 +106,9 @@ class SuggestScope:
 
     project: Project | None = None
     readable_project_ids: frozenset[uuid.UUID] | None = None
+    # RADD-817: the actor's item.read relation filter (None = unconstrained) —
+    # key/title completions must show exactly the rows the list would.
+    relation_clause: object | None = None
 
 
 def _me() -> Candidate:
@@ -279,6 +282,9 @@ async def _item_key_candidates(
     elif scope.readable_project_ids is not None:
         # RADD-839: keys + TITLES complete only from readable projects.
         query = query.where(WorkItem.project_id.in_(scope.readable_project_ids))
+    if scope.relation_clause is not None:
+        # RADD-817: relation-scoped readers complete only their own rows.
+        query = query.where(scope.relation_clause)
     query = query.order_by(Project.key, WorkItem.number).limit(MAX_SUGGESTIONS)
     return [
         Candidate(f"{key}{ITEM_KEY_SEPARATOR}{number}", detail=title)

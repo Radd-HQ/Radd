@@ -21,6 +21,7 @@ from ..listing import apply_filters, cf_definitions
 from ..models import WorkItem
 from ..schemas import ItemRead
 from .visibility import (
+    relation_read_clause,
     _builtin_read_denied,
     _field_ctx,
     _filter_read,
@@ -85,6 +86,13 @@ async def list_items(
     query = select(WorkItem)
     if not filters.project_id:
         query = query.where(WorkItem.project_id.in_(readable.keys()))
+    # RADD-817: the relation row filter — item.read@own/@team narrows WHICH rows,
+    # per project, in the same WHERE every count/board/report shares.
+    relation_clause = await relation_read_clause(
+        session, actor, permissions if filters.project_id else readable
+    )
+    if relation_clause is not None:
+        query = query.where(relation_clause)
     query = await apply_filters(session, query, filters, projects.get(filters.project_id))
     order: tuple = ()
     if q and q.strip():
@@ -116,7 +124,7 @@ async def list_items(
         project = await projects_service.get_project(session, pid)
         projects[pid] = project
         permissions[pid] = await authz.effective_permissions(session, actor, project=project)
-    visible = [i for i in items if Permission.ITEM_READ in permissions[i.project_id]]
+    visible = [i for i in items if authz.holds_base(permissions[i.project_id], Permission.ITEM_READ)]
     reads = await hydrate(
         session,
         visible,

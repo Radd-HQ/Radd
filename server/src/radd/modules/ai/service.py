@@ -393,6 +393,16 @@ async def _semantic_pool(
         readable = await search_service.readable_project_ids(session, actor)
         if not readable:
             return []
+        # RADD-817: the ANN prefilter is project-level; relation-scoped readers
+        # get their pool narrowed at materialization (below), through the same
+        # clause every list shares.
+        from radd.modules.auth import authz as _authz
+        from radd.modules.items.models import WorkItem as _WorkItem
+        from radd.modules.items.service.visibility import relation_read_clause
+
+        relation_clause = await relation_read_clause(
+            session, actor, await _authz.readable_projects(session, actor)
+        )
         if item_id is not None:
             neighbors = await semantic.item_neighbors(
                 session,
@@ -409,6 +419,19 @@ async def _semantic_pool(
                 exclude_item_id=exclude_item_id,
                 limit=SIMILAR_CANDIDATE_POOL,
             )
+        if relation_clause is not None and neighbors:
+            from sqlalchemy import select as _select
+
+            visible = set(
+                (
+                    await session.execute(
+                        _select(_WorkItem.id).where(
+                            _WorkItem.id.in_([nid for nid, _ in neighbors]), relation_clause
+                        )
+                    )
+                ).scalars()
+            )
+            neighbors = [(nid, d) for nid, d in neighbors if nid in visible]
         if not neighbors:
             return []
         rows = await search_service.rows_for_embedding(

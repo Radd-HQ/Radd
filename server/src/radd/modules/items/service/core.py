@@ -43,7 +43,7 @@ from .relations import (
     _set_labels,
     _validate_dates,
 )
-from .visibility import _check_builtin_field_rules, _field_ctx
+from .visibility import _check_builtin_field_rules, _field_ctx, ensure_item_relation
 
 
 # --- CRUD ---
@@ -146,6 +146,7 @@ async def update_item(
     item = await require_item(session, item_id)
     project = await projects_service.get_project(session, item.project_id)
     permissions = await authz.require(session, actor, Permission.ITEM_UPDATE, project=project)
+    await ensure_item_relation(session, actor, item, permissions, Permission.ITEM_UPDATE)
     await _check_builtin_field_rules(session, actor, project, permissions, data.model_fields_set)
     definitions = await fields.definitions_for_project(session, project)
     ctx = await _field_ctx(session, actor, project, permissions, definitions)
@@ -256,6 +257,7 @@ async def set_archived(
     item = await require_item(session, item_id)
     project = await projects_service.get_project(session, item.project_id)
     permissions = await authz.require(session, actor, Permission.ITEM_UPDATE, project=project)
+    await ensure_item_relation(session, actor, item, permissions, Permission.ITEM_UPDATE)
     definitions = await fields.definitions_for_project(session, project)
     ctx = await _field_ctx(session, actor, project, permissions, definitions)
     before = await _hydrate_one(session, item, project, actor, permissions)
@@ -277,7 +279,10 @@ async def delete_item(session: AsyncSession, item_id: uuid.UUID, actor: User) ->
     removed explicitly. Missing this leaves rows nothing can reach."""
     item = await require_item(session, item_id)
     project = await projects_service.get_project(session, item.project_id)
-    await authz.require(session, actor, Permission.ITEM_DELETE, project=project)
+    delete_permissions = await authz.require(
+        session, actor, Permission.ITEM_DELETE, project=project
+    )
+    await ensure_item_relation(session, actor, item, delete_permissions, Permission.ITEM_DELETE)
     child_count = await session.scalar(
         select(func.count()).select_from(WorkItem).where(WorkItem.parent_id == item_id)
     )
@@ -343,6 +348,7 @@ async def reorder_item(
     item = await require_item(session, item_id)
     project = await projects_service.get_project(session, item.project_id)
     permissions = await authz.require(session, actor, Permission.ITEM_UPDATE, project=project)
+    await ensure_item_relation(session, actor, item, permissions, Permission.ITEM_UPDATE)
 
     async def rank_of(neighbour_id: uuid.UUID | None) -> float | None:
         if neighbour_id is None or neighbour_id == item_id:

@@ -61,7 +61,7 @@ async def _readable_project(
             DashboardEntity.DASHBOARD, reason=f"no such project {project_id}"
         ) from None
     perms = await authz.effective_permissions(session, actor, project=project)
-    if Permission.ITEM_READ not in perms:
+    if not authz.holds_base(perms, Permission.ITEM_READ):
         raise ConflictError(
             DashboardEntity.DASHBOARD, reason=f"you cannot read project {project.key}"
         )

@@ -314,6 +314,20 @@ def _narrow_to_key_scope(
     return scope.narrow(permissions, project_id)
 
 
+def holds_base(
+    permissions: "frozenset[Permission] | frozenset[str]", permission: "Permission | str"
+) -> bool:
+    """Does the set hold `permission` in ANY form — unqualified or
+    relation-qualified (RADD-823)? `item.read@own` HOLDS item.read (qualified);
+    which qualifier is a second question (`relations_held`), asked by the
+    surfaces that filter or gate rows. The fast path is the plain membership
+    test every pre-relation role hits."""
+    if permission in permissions:
+        return True
+    prefix = f"{permission}@"
+    return any(str(atom).startswith(prefix) for atom in permissions)
+
+
 async def require(
     session: AsyncSession,
     user: User,
@@ -330,7 +344,10 @@ async def require(
     permissions = await effective_permissions(
         session, user, project=project, space_id=space_id
     )
-    if permission not in permissions:
+    # RADD-823: a relation-qualified form HOLDS the base — the row-level
+    # narrowing is enforced by the surfaces that see rows (the relation
+    # resolvers), never by pretending the atom is absent.
+    if not holds_base(permissions, permission):
         if project is not None:
             raise ForbiddenError(f"permission '{permission}' denied on project {project.key}")
         if space_id is not None:
@@ -455,9 +472,11 @@ async def require_anywhere(
     held = {
         pid: permissions
         for pid, permissions in per_project.items()
-        if permission in permissions
+        if holds_base(permissions, permission)
     }
-    if refuse_when_empty and not held and permission not in await effective_permissions(session, user):
+    if refuse_when_empty and not held and not holds_base(
+        await effective_permissions(session, user), permission
+    ):
         raise ForbiddenError(f"permission '{permission}' denied")
     return held
 
@@ -507,11 +526,12 @@ async def holds(
     """
     if any_project:
         per_project = await project_permission_map(session, user)
-        if any(permission in perms for perms in per_project.values()):
+        if any(holds_base(perms, permission) for perms in per_project.values()):
             return True
-        return permission in await effective_permissions(session, user)
-    return permission in await effective_permissions(
-        session, user, project=project, space_id=space_id
+        return holds_base(await effective_permissions(session, user), permission)
+    return holds_base(
+        await effective_permissions(session, user, project=project, space_id=space_id),
+        permission,
     )
 
 

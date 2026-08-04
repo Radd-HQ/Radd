@@ -18,7 +18,7 @@ from radd.modules.auth.models import User
 
 from .models import SearchIndexRow
 from .schemas import SemanticDoc, SemanticItem, SemanticResponse
-from .service import _readable_project_ids
+from .service import _readable_project_ids, _relation_index_clause
 from .types import AI_EMBEDDINGS_MODULE
 
 logger = logging.getLogger(__name__)
@@ -52,16 +52,16 @@ async def _items(session: AsyncSession, user: User, q: str, candidates) -> list[
     )
     if not ranked:
         return []
-    rows = {
-        row.item_id: row
-        for row in (
-            await session.execute(
-                select(SearchIndexRow).where(
-                    SearchIndexRow.item_id.in_([item_id for item_id, _ in ranked])
-                )
-            )
-        ).scalars()
-    }
+    # RADD-817: the ANN prefilter is project-level; the relation filter lands
+    # here, at materialization — a semantic hit the reader may not see never
+    # becomes a row.
+    stmt = select(SearchIndexRow).where(
+        SearchIndexRow.item_id.in_([item_id for item_id, _ in ranked])
+    )
+    relation_clause = await _relation_index_clause(session, user)
+    if relation_clause is not None:
+        stmt = stmt.where(relation_clause)
+    rows = {row.item_id: row for row in (await session.execute(stmt)).scalars()}
     results: list[SemanticItem] = []
     for item_id, distance in ranked:
         row = rows.get(item_id)

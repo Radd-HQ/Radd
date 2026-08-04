@@ -15,6 +15,7 @@ from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 
 from ..enums import ItemEntity, ItemEvent, ItemKind, ItemLinkType
+from .visibility import relation_read_clause
 from ..mentions import parse_issue_keys
 from ..models import ItemLink, WorkItem
 from ..schemas import ItemLinkCreate, ItemLinkSearchResult, ItemRead
@@ -48,15 +49,13 @@ async def link_search(
     being linked from (no self-link)."""
     project = await projects_service.get_project(session, project_id)
     await authz.require(session, actor, Permission.ITEM_READ, project=project)
-    siblings = await projects_service.list_projects(session)
-    readable = [
-        pid
-        for pid, permissions in (
-            await authz.permissions_for_projects(session, actor, siblings)
-        ).items()
-        if Permission.ITEM_READ in permissions
-    ]
-    query = select(WorkItem).where(WorkItem.project_id.in_(readable))
+    # The memoised member floor (holds_base-aware, so a relation-qualified
+    # reader still completes) + the RADD-817 row filter.
+    readable_map = await authz.readable_projects(session, actor)
+    query = select(WorkItem).where(WorkItem.project_id.in_(readable_map.keys()))
+    relation_clause = await relation_read_clause(session, actor, readable_map)
+    if relation_clause is not None:
+        query = query.where(relation_clause)
     if exclude_id is not None:
         query = query.where(WorkItem.id != exclude_id)
     term = q.strip()

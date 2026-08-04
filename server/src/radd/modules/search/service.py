@@ -74,18 +74,74 @@ async def readable_project_ids(session: AsyncSession, user: User) -> set[uuid.UU
 
 
 async def _readable_project_ids(session: AsyncSession, user: User) -> set[uuid.UUID]:
-    """Projects where the caller may read items — one batched authz pass."""
+    """Projects where the caller may read items — one batched authz pass.
+    `holds_base` (RADD-823): a relation-qualified reader still counts; WHICH
+    rows they see inside the project is `_relation_index_clause`'s job."""
     projects = await projects_service.list_projects(session)
     permissions = await authz.permissions_for_projects(session, user, projects)
     return {
         project.id
         for project in projects
-        if Permission.ITEM_READ in permissions.get(project.id, frozenset())
+        if authz.holds_base(permissions.get(project.id, frozenset()), Permission.ITEM_READ)
     }
 
 
-def _scope(stmt: Select, readable: set[uuid.UUID]) -> Select:
-    return stmt.where(SearchIndexRow.project_id.in_(readable))
+def _scope(stmt: Select, readable: set[uuid.UUID], relation_clause=None) -> Select:
+    stmt = stmt.where(SearchIndexRow.project_id.in_(readable))
+    if relation_clause is not None:
+        stmt = stmt.where(relation_clause)
+    return stmt
+
+
+# The relation keys mirrored onto search_index (RADD-841) — the ONE place the
+# search module restates what a relation means, over its own columns, because
+# the registered specs are bound to work_items and a mirror exists precisely so
+# search never joins that table. The chain closure (any ⊃ team ⊃ own) is
+# applied via relation_contains, same as the canonical resolvers.
+_INDEX_RELATION_COLUMNS = ("own", "assigned", "team")
+
+
+async def _relation_index_clause(session: AsyncSession, user: User):
+    """The RADD-817 row filter compiled over the index mirror: per-project arms,
+    None when @any holds everywhere (the common case)."""
+    from sqlalchemy import and_, false, or_
+
+    from radd.modules.auth.types import relation_contains
+
+    per_project = await authz.readable_projects(session, user)
+    constrained: dict[uuid.UUID, frozenset[str]] = {}
+    for pid, perms in per_project.items():
+        relations = authz.relations_held(perms, Permission.ITEM_READ)
+        if authz.RELATION_ANY in relations:
+            continue
+        constrained[pid] = relations
+    if not constrained:
+        return None
+    from radd.modules.teams import service as teams_service
+
+    my_teams = frozenset(await teams_service.user_team_ids(session, user.id))
+    column_clauses = {
+        "own": SearchIndexRow.reporter_id == user.id,
+        "assigned": SearchIndexRow.assignee_id == user.id,
+        "team": SearchIndexRow.team_id.in_(my_teams) if my_teams else false(),
+    }
+    arms = []
+    unconstrained = [pid for pid in per_project if pid not in constrained]
+    if unconstrained:
+        arms.append(SearchIndexRow.project_id.in_(unconstrained))
+    for pid, relations in constrained.items():
+        covered = [
+            column_clauses[key]
+            for key in _INDEX_RELATION_COLUMNS
+            if any(relation_contains(held, key) for held in relations)
+        ]
+        arms.append(
+            and_(
+                SearchIndexRow.project_id == pid,
+                or_(*covered) if covered else false(),
+            )
+        )
+    return arms[0] if len(arms) == 1 else or_(*arms)
 
 
 async def search(
@@ -101,6 +157,7 @@ async def search(
     readable = await _readable_project_ids(session, user)
     if not readable:
         return []
+    relation_clause = await _relation_index_clause(session, user)
 
     hits: list[SearchHit] = []
     seen: set[uuid.UUID] = set()
@@ -110,6 +167,7 @@ async def search(
         stmt = _scope(
             select(SearchIndexRow).where(SearchIndexRow.key.ilike(pattern)),
             readable,
+            relation_clause,
         ).order_by(func.length(SearchIndexRow.key), SearchIndexRow.key).limit(limit)
         for row in (await session.execute(stmt)).scalars():
             hits.append(_hit(row, snippet=None))
@@ -129,6 +187,7 @@ async def search(
             _scope(
                 select(SearchIndexRow, snippet).where(SearchIndexRow.tsv.op("@@")(tsquery)),
                 readable,
+                relation_clause,
             )
             .order_by(
                 func.ts_rank_cd(SearchIndexRow.tsv, tsquery).desc(),
@@ -156,7 +215,11 @@ async def search(
     missing = [item_id for item_id, _ in fused if item_id not in rows_by_id]
     if missing:
         extra = await session.execute(
-            _scope(select(SearchIndexRow).where(SearchIndexRow.item_id.in_(missing)), readable)
+            _scope(
+                select(SearchIndexRow).where(SearchIndexRow.item_id.in_(missing)),
+                readable,
+                relation_clause,
+            )
         )
         for row in extra.scalars():
             # Semantic-only hits carry a description excerpt instead of a
@@ -262,6 +325,9 @@ async def similar_to_text(
         if not readable:
             return []
         stmt = stmt.where(SearchIndexRow.project_id.in_(readable))
+        clause = await _relation_index_clause(session, user)
+        if clause is not None:
+            stmt = stmt.where(clause)
     return [
         (_hit(row, snippet=row.description[:_SIMILAR_SNIPPET_CHARS] or None), float(value))
         for row, value in (await session.execute(stmt)).all()
@@ -280,11 +346,13 @@ async def titles_for_keys(
     readable = await _readable_project_ids(session, user)
     if not readable:
         return []
-    rows = await session.execute(
-        select(SearchIndexRow.key, SearchIndexRow.title).where(
-            SearchIndexRow.key.in_(keys), SearchIndexRow.project_id.in_(readable)
-        )
+    stmt = select(SearchIndexRow.key, SearchIndexRow.title).where(
+        SearchIndexRow.key.in_(keys), SearchIndexRow.project_id.in_(readable)
     )
+    clause = await _relation_index_clause(session, user)
+    if clause is not None:
+        stmt = stmt.where(clause)
+    rows = await session.execute(stmt)
     titles = dict(rows.all())
     return [(key, titles[key]) for key in keys if key in titles]
 

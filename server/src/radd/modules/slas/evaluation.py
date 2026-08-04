@@ -180,7 +180,7 @@ async def batch_sla(
     readable = [
         item
         for item in item_map.values()
-        if Permission.ITEM_READ in permissions.get(item.project_id, frozenset())
+        if authz.holds_base(permissions.get(item.project_id, frozenset()), Permission.ITEM_READ)
     ]
     matched = await service.matched_policies(session, readable)
     grouped: dict[uuid.UUID, list[uuid.UUID]] = {}

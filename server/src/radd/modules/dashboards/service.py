@@ -488,7 +488,7 @@ async def transfer_ownership(
     target_perms = await authz.effective_permissions(
         session, target
     )
-    if Permission.ITEM_READ not in target_perms:
+    if not authz.holds_base(target_perms, Permission.ITEM_READ):
         raise ConflictError(
             DashboardEntity.DASHBOARD,
             reason=f"{target.email} cannot use dashboards on this server",

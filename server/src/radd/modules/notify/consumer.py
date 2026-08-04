@@ -23,6 +23,7 @@ from radd.modules.events import service as events
 from radd.modules.events.models import Event
 from radd.modules.items import service as items
 from radd.modules.items.enums import ItemEvent
+from radd.modules.items.models import WorkItem
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 
@@ -170,6 +171,10 @@ async def _handle_item_event(session: AsyncSession, event: Event, *, watch_only:
         plan = planner.plan_item_updated(payload, event.actor_id, watchers, mention_ids)
 
     project = await projects_service.get_project(session, uuid.UUID(payload["project_id"]))
+    # RADD-817: the row itself, for per-recipient relation gating in _allowed
+    # (this handler used to never load it; a deleted item means no gate needed
+    # — the notification describes something already gone).
+    item = await session.get(WorkItem, item_id)
     await _apply(
         session,
         plan,
@@ -179,6 +184,7 @@ async def _handle_item_event(session: AsyncSession, event: Event, *, watch_only:
         item_key=payload.get("key", ""),
         item_title=payload.get("title", ""),
         watch_only=watch_only,
+        item=item,
     )
 
 
@@ -205,6 +211,7 @@ async def _handle_comment_created(
         item_key=f"{project.key}-{item.number}",
         item_title=item.title,
         watch_only=watch_only,
+        item=item,
     )
 
 
@@ -233,6 +240,7 @@ async def _handle_sla_event(
         project=project,
         item_key=payload.get("item_key", ""),
         item_title=item.title,
+        item=item,
     )
 
 
@@ -263,21 +271,34 @@ async def _handle_approval_event(session: AsyncSession, event: Event) -> None:
         project=project,
         item_key=f"{project.key}-{item.number}",
         item_title=item.title,
+        item=item,
     )
 
 
 async def _allowed(
-    session: AsyncSession, planned: PlannedNotification, project: Project
+    session: AsyncSession,
+    planned: PlannedNotification,
+    project: Project,
+    item: "WorkItem | None" = None,
 ) -> bool:
     """Recipient must exist, be active, and hold item.read (plus comment.read_internal
-    for internal-comment notifications) on the project."""
+    for internal-comment notifications) on the project — and, since RADD-817,
+    hold it FOR THIS ROW: a relation-scoped recipient (`item.read@own/@team`)
+    must not be told about an issue the list would never show them. This is the
+    single delivery choke point, so every notification type inherits it."""
     users = await auth.users_by_ids(session, {planned.user_id})
     user = users.get(planned.user_id)
     if user is None or not user.active:
         return False
     permissions = (await authz.permissions_for_projects(session, user, [project]))[project.id]
-    if Permission.ITEM_READ not in permissions:
+    if not authz.holds_base(permissions, Permission.ITEM_READ):
         return False
+    if item is not None:
+        relations = authz.relations_held(permissions, Permission.ITEM_READ)
+        if authz.RELATION_ANY not in relations:
+            relation_actor = await authz.relation_actor(session, user)
+            if not authz.relation_holds_row("item", relations, relation_actor, item):
+                return False
     if planned.detail.get("visibility") == CommentVisibility.INTERNAL.value:
         if Permission.COMMENT_READ_INTERNAL not in permissions:
             return False
@@ -309,6 +330,7 @@ async def _apply(
     item_key: str,
     item_title: str,
     watch_only: bool = False,
+    item: "WorkItem | None" = None,
 ) -> None:
     await service.add_watchers(session, item_id, plan.watch)
     if watch_only or not plan.notifications:
@@ -323,7 +345,7 @@ async def _apply(
     for planned in plan.notifications:
         if planned.type.value in muted.get(planned.user_id, ()):  # per-user preference
             continue
-        if not await _allowed(session, planned, project):
+        if not await _allowed(session, planned, project, item):
             continue
         await service.create_notification(
             session,

@@ -22,6 +22,7 @@ from radd.modules.workflow.types import StateCategory
 
 from . import service
 from .models import WorkItem
+from .service.visibility import relation_read_clause
 from .schemas import ItemRollup
 
 # Rollup "done" = finished either way (Linear model): completed or canceled.
@@ -34,9 +35,21 @@ async def rollup_items(
     # One readable map gates BOTH the requested roots and every frontier level
     # (RADD-839): the walk crosses projects (the hierarchy is global), and a
     # descendant in an unreadable project must not count.
-    readable = frozenset(await authz.readable_projects(session, actor))
+    readable_map = await authz.readable_projects(session, actor)
+    readable = frozenset(readable_map)
+    # RADD-817: the same relation row filter the list applies — a frontier
+    # descendant the actor may not see must not count either.
+    relation_clause = await relation_read_clause(session, actor, readable_map)
     item_map = await service.items_by_ids(session, list(dict.fromkeys(item_ids)))
     roots = [item.id for item in item_map.values() if item.project_id in readable]
+    if roots and relation_clause is not None:
+        roots = list(
+            (
+                await session.execute(
+                    select(WorkItem.id).where(WorkItem.id.in_(roots), relation_clause)
+                )
+            ).scalars()
+        )
     result = {root: ItemRollup() for root in roots}
     if not roots:
         return result
@@ -58,6 +71,7 @@ async def rollup_items(
                 ).where(
                     WorkItem.parent_id.in_(frontier),
                     WorkItem.project_id.in_(readable),
+                    *(() if relation_clause is None else (relation_clause,)),
                 )
             )
         ).all()

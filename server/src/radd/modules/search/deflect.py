@@ -94,7 +94,7 @@ async def _semantic_doc_ids(session: AsyncSession, q: str) -> list[uuid.UUID]:
 
 
 async def deflect_items(
-    session: AsyncSession, project: Project, q: str
+    session: AsyncSession, project: Project, q: str, *, actor=None
 ) -> list[DeflectItem]:
     """Top RESOLVED items in the project: the item FTS fused with semantic
     candidates when available (spec 106) — mirror of the docs half. Semantic
@@ -106,6 +106,24 @@ async def deflect_items(
     if not resolved_state_ids:
         return []
     rows = await _fts_resolved_rows(session, project, q, resolved_state_ids)
+    # RADD-817: a relation-scoped reader deflects only onto rows they may see.
+    if actor is not None:
+        from radd.modules.auth import authz
+        from radd.modules.items.service.visibility import relation_read_clause
+
+        permissions = await authz.effective_permissions(session, actor, project=project)
+        clause = await relation_read_clause(session, actor, {project.id: permissions})
+        if clause is not None:
+            visible = set(
+                (
+                    await session.execute(
+                        select(WorkItem.id).where(
+                            WorkItem.id.in_([row.item_id for row in rows]), clause
+                        )
+                    )
+                ).scalars()
+            )
+            rows = [row for row in rows if row.item_id in visible]
     ordered_ids = [row.item_id for row in rows]
     by_id = {row.item_id: row for row in rows}
     semantic_ids = await _semantic_item_ids(session, project, q)

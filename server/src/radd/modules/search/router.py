@@ -63,7 +63,9 @@ async def search_deflect(
     # set contain it" is no longer a question that means anything. Deflect into
     # the spaces this reader may actually open.
     docs = await deflect.deflect_docs(session, q, space_ids=await _readable_space_ids(session, user))
-    return DeflectResponse(docs=docs, items=await deflect.deflect_items(session, project, q))
+    return DeflectResponse(
+        docs=docs, items=await deflect.deflect_items(session, project, q, actor=user)
+    )
 
 
 async def _readable_space_ids(session, user) -> set[uuid.UUID]:
