@@ -17,6 +17,9 @@ export interface Me {
   avatar_color?: string | null;
   avatar_emoji?: string | null;
   timezone?: string;
+  /** RADD-836 U1: set while an admin previews this account read-only — the
+   * rest of the payload describes the TARGET, which is the point. */
+  view_as?: { real_id: string; real_name: string } | null;
 }
 
 /** PATCH /auth/me (spec 34) — omitted keys unchanged; explicit null clears avatar. */

@@ -9,6 +9,8 @@ export const ApiPath = {
   loginTotp: "/auth/login/totp",
   logout: "/auth/logout",
   me: "/auth/me",
+  /** POST starts / DELETE ends a read-only admin preview (RADD-836 U1). */
+  viewAs: "/auth/view-as",
   // TOTP two-factor (spec 48): GET status / DELETE {code}; setup + confirm below.
   totp: "/auth/totp",
   totpSetup: "/auth/totp/setup",

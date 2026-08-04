@@ -255,6 +255,77 @@ async def user_for_session_token(session: AsyncSession, token: str) -> User | No
     )
 
 
+async def session_row_for_token(session: AsyncSession, token: str) -> UserSession | None:
+    """The live session ROW for a cookie — the view-as endpoints act on it."""
+    return await session.scalar(
+        select(UserSession).where(
+            UserSession.token_hash == security.hash_token(token),
+            UserSession.expires_at > security.utcnow(),
+        )
+    )
+
+
+async def resolve_session_users(
+    session: AsyncSession, token: str
+) -> tuple[User, User | None] | None:
+    """(real user, view-as target | None) for a session cookie (RADD-836 U1).
+
+    The real account must be live; a dangling/deactivated target degrades to
+    no-impersonation rather than an error — the admin gets themselves back."""
+    row = await session_row_for_token(session, token)
+    if row is None:
+        return None
+    real = await session.get(User, row.user_id)
+    if real is None or not real.active:
+        return None
+    target: User | None = None
+    if row.view_as_user_id is not None:
+        target = await session.get(User, row.view_as_user_id)
+        if target is not None and not target.active:
+            target = None
+    return real, target
+
+
+async def start_view_as(
+    session: AsyncSession, *, admin: User, row: UserSession, target_id: uuid.UUID
+) -> User:
+    """Begin a read-only preview as `target_id` on this session (RADD-836 U1).
+    Instance-admin only — the router enforces it; this validates the target and
+    writes the audit event."""
+    if target_id == admin.id:
+        raise ConflictError(AuthEntity.SESSION, reason="you are already yourself")
+    target = await get_user(session, target_id)
+    if not target.active:
+        raise ConflictError(AuthEntity.SESSION, reason="cannot preview a deactivated account")
+    row.view_as_user_id = target.id
+    await session.flush()
+    await events.emit(
+        session,
+        event_type=AuthEvent.VIEW_AS_STARTED,
+        entity_type=AuthEntity.USER,
+        entity_id=target.id,
+        actor_id=admin.id,
+        payload={"admin": admin.email, "target": target.email},
+    )
+    return target
+
+
+async def end_view_as(session: AsyncSession, *, admin: User, row: UserSession) -> None:
+    if row.view_as_user_id is None:
+        return
+    target = await session.get(User, row.view_as_user_id)
+    row.view_as_user_id = None
+    await session.flush()
+    await events.emit(
+        session,
+        event_type=AuthEvent.VIEW_AS_ENDED,
+        entity_type=AuthEntity.USER,
+        entity_id=target.id if target else row.user_id,
+        actor_id=admin.id,
+        payload={"admin": admin.email, "target": target.email if target else None},
+    )
+
+
 # --- API tokens ---
 
 

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, ChevronDown, ChevronRight, Lock, UserRound } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { ApiError, api, errorMessage } from "../../lib/api";
-import { RoutePath, SEARCH_DEBOUNCE_MS, apiUserPath } from "../../lib/constants";
+import { ApiPath, RoutePath, SEARCH_DEBOUNCE_MS, apiUserPath } from "../../lib/constants";
 import { useCurrentUser, useDebounced, usePermissions } from "../../lib/hooks";
 import { INSTANCE_ROLE_LABELS } from "../../lib/meta";
 import { queryKeys, usersAdminQuery } from "../../lib/queries";
@@ -147,6 +147,12 @@ export function UsersSettingsPage() {
               }
               busy={patchUser.isPending}
               onDelete={setDeleting}
+              onViewAs={async (user) => {
+                // RADD-836 U1: a full reload swaps every client cache to the
+                // previewed account; the server enforces read-only.
+                await api.post(ApiPath.viewAs, { user_id: user.id });
+                window.location.assign("/");
+              }}
             />
           )}
           {patchUser.isError && (
@@ -173,6 +179,7 @@ function UsersTable({
   onToggleActive,
   onChangeRole,
   onDelete,
+  onViewAs,
   busy,
 }: {
   users: User[];
@@ -181,6 +188,7 @@ function UsersTable({
   onToggleActive: (user: User) => void;
   onChangeRole: (userId: string, role: InstanceRoleValue) => void;
   onDelete: (user: User) => void;
+  onViewAs: (user: User) => Promise<void>;
   busy: boolean;
 }) {
   // Which person's roles are open. One at a time: the grants editor fetches
@@ -286,6 +294,19 @@ function UsersTable({
                 </Td>
                 {isInstanceAdmin && (
                   <Td>
+                    {/* RADD-836 U1: read-only preview — the server refuses every
+                        write while it's on; a full reload swaps every cache. */}
+                    {!self && user.active && (
+                      <button
+                        type="button"
+                        onClick={() => void onViewAs(user)}
+                        disabled={busy}
+                        className="mr-1.5 rounded border border-strong px-2 py-0.5 text-[11px] text-fg-secondary hover:border-accent hover:text-accent-text cursor-pointer disabled:opacity-50"
+                        title="See the app exactly as this person does (read-only)"
+                      >
+                        View as
+                      </button>
+                    )}
                     {!self && (
                       <button
                         type="button"

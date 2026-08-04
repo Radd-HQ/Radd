@@ -218,11 +218,25 @@ class DuplicateUserGroup(BaseModel):
     users: list[UserRead]
 
 
+class ViewAsRead(BaseModel):
+    """The banner's facts while an admin previews another account (RADD-836 U1)."""
+
+    real_id: uuid.UUID
+    real_name: str
+
+
+class ViewAsStart(BaseModel):
+    user_id: uuid.UUID
+
+
 class MeRead(BaseModel):
     id: uuid.UUID
     email: str
     name: str
     instance_role: InstanceRole
+    #: Set while this session previews another account (RADD-836 U1) — the rest
+    #: of the payload describes the TARGET, which is the point.
+    view_as: ViewAsRead | None = None
     # Spec 86 stage 3: the global role + global-scope permission union, flat —
     # the synthetic `workspaces` wrapper is gone.
     global_role: InstanceRole

@@ -8,6 +8,7 @@ import { PluginRemotes } from "../components/shell/PluginRemotes";
 import { Sidebar } from "../components/shell/Sidebar";
 import { TopBar } from "../components/shell/TopBar";
 import { TopBarSlotProvider } from "../components/shell/TopBarSlot";
+import { ViewAsBanner } from "../components/shell/ViewAsBanner";
 import { Toaster } from "../components/Toaster";
 import { useRealtime } from "../lib/realtime";
 
@@ -31,6 +32,7 @@ export function AppLayout() {
     <StorageChoiceProvider>
       <TopBarSlotProvider>
         <div className="flex h-screen flex-col bg-base text-fg">
+          <ViewAsBanner />
           <TopBar />
           <PinsBar />
           <div className="flex min-h-0 flex-1">

@@ -31,6 +31,8 @@ from .schemas import (
     UserAccessRead,
     UserAdminUpdate,
     PermissionSourceRead,
+    ViewAsRead,
+    ViewAsStart,
     UserContentSummary,
     UserCreate,
     UserDirectoryEntry,
@@ -138,8 +140,43 @@ async def _me_read(session: AsyncSession, user: User) -> MeRead:
 
 
 @auth_router.get("/me", response_model=MeRead)
-async def me(user: CurrentUser, session: Session) -> MeRead:
-    return await _me_read(session, user)
+async def me(request: Request, user: CurrentUser, session: Session) -> MeRead:
+    payload = await _me_read(session, user)
+    # RADD-836 U1: while previewing, the payload describes the TARGET (that is
+    # the point); the banner needs to know who is really here.
+    real = getattr(request.state, "view_as_real", None)
+    if real is not None:
+        payload.view_as = ViewAsRead(real_id=real.id, real_name=real.name)
+    return payload
+
+
+@auth_router.post("/view-as", status_code=204)
+async def start_view_as(
+    request: Request, data: ViewAsStart, session: Session, actor: CurrentUser
+) -> None:
+    """Begin a read-only preview as another user (RADD-836 U1). Instance-admin
+    only, session-cookie only (a PAT has no session to carry the preview), and
+    audited on entry. While previewing, deps.py refuses every write except
+    exiting and logging out — enforcement is the resolution seam, not hidden
+    buttons."""
+    if not await authz.is_admin(session, actor):
+        raise ForbiddenError("only an instance admin may preview as another user")
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    row = await service.session_row_for_token(session, token) if token else None
+    if row is None:
+        raise HTTPException(status_code=409, detail="view-as needs a browser session")
+    await service.start_view_as(session, admin=actor, row=row, target_id=data.user_id)
+
+
+@auth_router.delete("/view-as", status_code=204)
+async def end_view_as(request: Request, session: Session, actor: CurrentUser) -> None:
+    """Exit the preview (exempt from the read-only guard) — audited."""
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    row = await service.session_row_for_token(session, token) if token else None
+    if row is None:
+        return
+    real = getattr(request.state, "view_as_real", None) or actor
+    await service.end_view_as(session, admin=real, row=row)
 
 
 @auth_router.patch("/me", response_model=MeRead)

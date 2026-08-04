@@ -30,6 +30,10 @@ _EXEMPT: dict[str, str] = {
     # The user IS the row; merging destroys the source's copy (_MERGE_PURGE) and
     # the target keeps its own identity-private credentials/preferences.
     "users.id": "the primary key of the row being merged away",
+    # RADD-836 U1: an admin previewing the merged-away account should NOT be
+    # silently repointed at the survivor — the FK's SET NULL ends the preview
+    # and the deps fallback hands the admin themselves back.
+    "sessions.view_as_user_id": "ondelete SET NULL deliberately ends the preview",
 }
 
 #: Non-FK columns that still hold user ids (no constraint to find them by).

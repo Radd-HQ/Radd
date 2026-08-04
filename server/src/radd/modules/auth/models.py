@@ -79,6 +79,12 @@ class UserSession(Base):
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)  # sha256 hex
     expires_at: Mapped[datetime]
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    # RADD-836 U1 — "View as": while set, requests on this session resolve to
+    # this user READ-ONLY (deps.py enforces the method guard). Admin-only to
+    # set; every entry/exit is an event.
+    view_as_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), default=None
+    )
 
 
 class ApiToken(Base):

@@ -618,6 +618,10 @@ class AuthEvent(StrEnum):
     ROLE_CREATED = "role.created"
     ROLE_UPDATED = "role.updated"
     ROLE_DELETED = "role.deleted"
+    # RADD-836 U1 — impersonation is audited on entry AND exit; the payload
+    # names both parties, so the trail survives either account's deletion.
+    VIEW_AS_STARTED = "auth.view_as_started"
+    VIEW_AS_ENDED = "auth.view_as_ended"
 
 
 class AuthEntity(StrEnum):
