@@ -489,7 +489,7 @@ async def _list_worklogs(session: AsyncSession, actor: User, args: Mapping[str, 
                 hours_per_day=hours_per_day,
             )
         ).where
-    sheet = await timesheet.build(session, start, end, user_ids=user_ids, where=where)
+    sheet = await timesheet.build(session, start, end, actor=actor, user_ids=user_ids, where=where)
     entries = [entry.model_dump(mode="json") for entry in sheet.entries[: _limit(args)]]
     return {
         "start": start.isoformat(),

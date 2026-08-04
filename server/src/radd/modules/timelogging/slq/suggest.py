@@ -12,6 +12,7 @@ completable here the day it exists.
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.modules.auth import authz
 from radd.modules.auth.models import User
 from radd.modules.items.slq.suggest import Suggestion, SuggestResponse, suggestions_for
 from radd.modules.items.slq.suggest_context import SuggestContext, detect
@@ -109,7 +110,7 @@ async def _delegate(
         session,
         q=trimmed,
         cursor=max(inner_cursor, 0),
-        scope=_ALL_PROJECTS,
+        scope=await _actor_scope(session, actor),
         definitions_by_key={},
     )
     shift = len(ISSUE_PREFIX) if inner.replace_from >= cut else 0
@@ -156,7 +157,13 @@ async def _values(session: AsyncSession, actor: User, field_name: str) -> list[S
             Suggestion(value=c.name, insert=_quote(c.name), label=c.name, detail="") for c in cats
         ]
     if field is WorklogField.PROJECT:
-        projects = (await session.execute(select(Project).limit(50))).scalars().all()
+        # RADD-839: only projects the actor can read complete here.
+        readable = frozenset(await authz.readable_projects(session, actor))
+        projects = (
+            (await session.execute(select(Project).where(Project.id.in_(readable)).limit(50)))
+            .scalars()
+            .all()
+        )
         return [
             Suggestion(value=p.key, insert=p.key, label=p.key, detail=p.name) for p in projects
         ]
@@ -178,10 +185,15 @@ def _rank(items: list[Suggestion], partial: str) -> list[Suggestion]:
     return starts + contains
 
 
-#: The delegated suggester runs UNSCOPED: a timesheet spans every project the
-#: actor can see, so narrowing item completions to one project would hide
-#: exactly the cross-project rows the timesheet exists to show.
-_ALL_PROJECTS = SuggestScope()
+async def _actor_scope(session: AsyncSession, actor: User) -> SuggestScope:
+    """The delegated suggester runs project-UNSCOPED — a timesheet spans every
+    project the actor can see, so narrowing to one project would hide exactly
+    the cross-project rows the timesheet exists to show — but bounded by the
+    actor's readable projects (RADD-839): keys+titles never complete from
+    projects the actor can't read. `readable_projects` is request-memoised."""
+    return SuggestScope(
+        readable_project_ids=frozenset(await authz.readable_projects(session, actor))
+    )
 
 
 __all__ = ["suggest_worklog"]

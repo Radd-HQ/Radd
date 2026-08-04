@@ -87,7 +87,7 @@ async def test_itemless_worklog_and_timesheet(db, actor):
     # Global timesheet scoped to this actor (isolates the freshly-created rows
     # from other users' committed worklogs).
     sheet = await timesheet.build(
-        db, date(2026, 7, 20), date(2026, 7, 26), user_ids={actor.id}
+        db, date(2026, 7, 20), date(2026, 7, 26), actor=actor, user_ids={actor.id}
     )
     assert len(sheet.entries) == 1
     entry = sheet.entries[0]
@@ -115,7 +115,7 @@ async def test_project_anchored_worklog_filters_and_category_lock(db, actor):
 
     # Project filter keeps its own itemless rows…
     sheet = await timesheet.build(
-        db, date(2026, 7, 20), date(2026, 7, 26), project_id=project.id
+        db, date(2026, 7, 20), date(2026, 7, 26), actor=actor, project_id=project.id
     )
     assert [e.project_key for e in sheet.entries] == [key]
     # …and the category can be swapped but never cleared on an itemless entry.

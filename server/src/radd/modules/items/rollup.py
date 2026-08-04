@@ -16,12 +16,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.modules.auth import authz
-from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
 from radd.modules.workflow.models import State
 from radd.modules.workflow.types import StateCategory
-from radd.modules.projects import service as projects_service
-from radd.modules.projects.models import Project
 
 from . import service
 from .models import WorkItem
@@ -31,29 +28,15 @@ from .schemas import ItemRollup
 DONE_CATEGORIES = frozenset({StateCategory.DONE, StateCategory.CANCELED})
 
 
-async def _readable_roots(
-    session: AsyncSession, actor: User, item_ids: Sequence[uuid.UUID]
-) -> list[uuid.UUID]:
-    """The requested ids that exist AND sit in projects the actor can read."""
-    item_map = await service.items_by_ids(session, list(dict.fromkeys(item_ids)))
-    projects: dict[uuid.UUID, Project] = {}
-    for item in item_map.values():
-        if item.project_id not in projects:
-            projects[item.project_id] = await projects_service.get_project(
-                session, item.project_id
-            )
-    permissions = await authz.permissions_for_projects(session, actor, list(projects.values()))
-    return [
-        item.id
-        for item in item_map.values()
-        if Permission.ITEM_READ in permissions.get(item.project_id, frozenset())
-    ]
-
-
 async def rollup_items(
     session: AsyncSession, actor: User, item_ids: Sequence[uuid.UUID]
 ) -> dict[uuid.UUID, ItemRollup]:
-    roots = await _readable_roots(session, actor, item_ids)
+    # One readable map gates BOTH the requested roots and every frontier level
+    # (RADD-839): the walk crosses projects (the hierarchy is global), and a
+    # descendant in an unreadable project must not count.
+    readable = frozenset(await authz.readable_projects(session, actor))
+    item_map = await service.items_by_ids(session, list(dict.fromkeys(item_ids)))
+    roots = [item.id for item in item_map.values() if item.project_id in readable]
     result = {root: ItemRollup() for root in roots}
     if not roots:
         return result
@@ -72,7 +55,10 @@ async def rollup_items(
             await session.execute(
                 select(
                     WorkItem.id, WorkItem.parent_id, WorkItem.state_id, WorkItem.estimate_points
-                ).where(WorkItem.parent_id.in_(frontier))
+                ).where(
+                    WorkItem.parent_id.in_(frontier),
+                    WorkItem.project_id.in_(readable),
+                )
             )
         ).all()
         next_frontier: dict[uuid.UUID, set[uuid.UUID]] = {}

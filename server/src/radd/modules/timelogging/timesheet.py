@@ -12,10 +12,11 @@ mirroring how reporting reads the events table directly.
 import uuid
 from datetime import date
 
-from sqlalchemy import ColumnElement, and_, func, or_, select, true
+from sqlalchemy import ColumnElement, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd.modules.auth import service as auth_service
+from radd.modules.auth import authz, service as auth_service
+from radd.modules.auth.models import User
 from radd.modules.items import service as items_service
 from radd.modules.items.models import WorkItem
 from radd.modules.projects import service as projects_service
@@ -30,12 +31,18 @@ async def build(
     start: date,
     end: date,
     *,
+    actor: User,
     project_id: uuid.UUID | None = None,
     user_ids: set[uuid.UUID] | None = None,
     where: ColumnElement[bool] | None = None,
 ) -> Timesheet:
+    # RADD-839: every row carries an issue key+title, so the sheet is bounded by
+    # the ACTOR's readable projects — even for a timesheet.view holder, whose
+    # authority is "everyone's hours", not "projects I can't read". Required
+    # parameter on purpose: a caller that forgets fails to compile, not open.
+    readable = frozenset(await authz.readable_projects(session, actor))
     projects = await projects_service.list_projects(session)
-    project_key = {p.id: p.key for p in projects}
+    project_key = {p.id: p.key for p in projects if p.id in readable}
     if project_id is not None:
         project_key = {project_id: project_key[project_id]} if project_id in project_key else {}
     if not project_key or (user_ids is not None and not user_ids):
@@ -44,10 +51,13 @@ async def build(
     # Item-bound rows scope through their item's project; itemless rows (spec 59)
     # carry an optional project anchor. A project filter keeps itemless rows only
     # when they're anchored to that project (general time belongs to no project,
-    # so it drops out of project-filtered views).
+    # so it drops out of project-filtered views). Unfiltered views keep general
+    # rows (no project to leak) and drop rows anchored to unreadable projects.
     itemless = and_(
         Worklog.item_id.is_(None),
-        Worklog.project_id == project_id if project_id is not None else true(),
+        (Worklog.project_id == project_id)
+        if project_id is not None
+        else or_(Worklog.project_id.is_(None), Worklog.project_id.in_(project_key.keys())),
     )
     stmt = (
         select(Worklog, WorkItem.number, WorkItem.title, WorkItem.project_id)
@@ -69,12 +79,22 @@ async def build(
     cats = await categories.categories_by_ids(
         session, {w.category_id for w in worklogs if w.category_id}
     )
-    all_keys = {p.id: p.key for p in projects}  # itemless project labels ignore the filter map
+    # Itemless project labels ignore the project FILTER but stay bounded by
+    # readability (RADD-839).
+    all_keys = {p.id: p.key for p in projects if p.id in readable}
     # The epic per logged item, batched through items' public seam — the
-    # timesheet can group by epic without learning the hierarchy itself.
+    # timesheet can group by epic without learning the hierarchy itself. An epic
+    # in an unreadable project is dropped (its ref is a key+title); EpicRef
+    # carries no project id, so the key prefix is the join.
+    readable_prefixes = set(all_keys.values())
     epics = await items_service.epics_for_items(
         session, {w.item_id for w in worklogs if w.item_id}
     )
+    epics = {
+        item_id: epic
+        for item_id, epic in epics.items()
+        if epic.key.rpartition("-")[0] in readable_prefixes
+    }
 
     entries: list[TimesheetEntry] = []
     total = 0

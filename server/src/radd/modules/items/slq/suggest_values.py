@@ -1,13 +1,14 @@
 """SLQ suggest (spec 12): live value sources per field.
 
-Scope = the project when given, else everything. Everything flows through the
-owning modules' public service functions (states/users/teams/labels/projects);
-item keys are the one direct query (WorkItem is ours, Project follows the
-service-layer precedent set by items/service.py). Value suggestions expose
-entity names to any member — the open-visibility default
-(docs/modules.md); revisit with guest roles.
+Scope = the project when given, else the actor's readable projects (RADD-839)
+for row-level data — item keys+titles and project keys. State/label/release/
+type NAMES stay instance-wide vocabulary (the open-visibility default,
+docs/modules.md). Everything flows through the owning modules' public service
+functions; item keys are the one direct query (WorkItem is ours, Project
+follows the service-layer precedent set by items/service.py).
 """
 
+import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
@@ -98,9 +99,13 @@ class Candidate:
 
 @dataclass(frozen=True)
 class SuggestScope:
-    """Where value suggestions come from: the project when given, else everything."""
+    """Where value suggestions come from: the project when given, else the
+    actor's readable projects (RADD-839 — item keys/titles and project keys
+    complete only from projects the actor may read; None = trusted context).
+    State/label/release/type NAMES stay instance-wide vocabulary."""
 
     project: Project | None = None
+    readable_project_ids: frozenset[uuid.UUID] | None = None
 
 
 def _me() -> Candidate:
@@ -187,6 +192,8 @@ async def value_candidates(
             return _entities([label.name for label in labels], builtin)
         case SlqField.PROJECT:
             projects = await projects_service.list_projects(session)
+            if scope.readable_project_ids is not None:
+                projects = [p for p in projects if p.id in scope.readable_project_ids]
             return _entities([project.key for project in projects], builtin)
         case SlqField.KEY:
             return await _item_key_candidates(session, scope, partial)
@@ -269,6 +276,9 @@ async def _item_key_candidates(
     )
     if scope.project is not None:
         query = query.where(WorkItem.project_id == scope.project.id)
+    elif scope.readable_project_ids is not None:
+        # RADD-839: keys + TITLES complete only from readable projects.
+        query = query.where(WorkItem.project_id.in_(scope.readable_project_ids))
     query = query.order_by(Project.key, WorkItem.number).limit(MAX_SUGGESTIONS)
     return [
         Candidate(f"{key}{ITEM_KEY_SEPARATOR}{number}", detail=title)

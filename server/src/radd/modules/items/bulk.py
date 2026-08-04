@@ -173,12 +173,14 @@ async def _move_one(
     target_permissions,
 ) -> BulkMovedItem:
     old_key = await _item_key(session, item)
+    readable = frozenset(await authz.readable_projects(session, actor))
     before = (
         await hydrate(
             session,
             [item],
             internal_visible=_internal_visible({source.id: permissions}),
             actor_id=actor.id,
+            readable_project_ids=readable,
         )
     )[0]
     old_state_id = item.state_id
@@ -254,6 +256,7 @@ async def _move_one(
             [item],
             internal_visible=_internal_visible({target.id: permissions}),
             actor_id=actor.id,
+            readable_project_ids=readable,
         )
     )[0]
     definitions = await fields.definitions_for_project(session, target)

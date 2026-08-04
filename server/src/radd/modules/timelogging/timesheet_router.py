@@ -69,7 +69,7 @@ async def get_timesheet(
         ).where
 
     sheet = await timesheet.build(
-        session, start, end, project_id=project_id, user_ids=requested, where=where
+        session, start, end, actor=user, project_id=project_id, user_ids=requested, where=where
     )
     # Outlier-flag config rides on the payload — resolved server-side so the
     # grid and the settings can never disagree.

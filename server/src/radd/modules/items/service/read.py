@@ -38,10 +38,24 @@ async def _hydrate_one(
     actor: User,
     permissions: frozenset[Permission],
 ) -> ItemRead:
-    """Full (unfiltered) hydrated read of one item — used for event payloads and for
-    the pre-mutation 'before' snapshot the change diff compares against."""
+    """Hydrated read of one item — used for event payloads and for the
+    pre-mutation 'before' snapshot the change diff compares against. Custom
+    fields stay unfiltered (stream consumers are trusted), but cross-project
+    refs inherit the ACTOR's readability (RADD-839): an event snapshot must not
+    carry references its own author could never see. Before/after are filtered
+    identically, so diffs stay consistent; automations/system writes run as an
+    instance admin and lose nothing."""
     internal_visible = _internal_visible({project.id: permissions})
-    return (await hydrate(session, [item], internal_visible=internal_visible, actor_id=actor.id))[0]
+    readable = frozenset(await authz.readable_projects(session, actor))
+    return (
+        await hydrate(
+            session,
+            [item],
+            internal_visible=internal_visible,
+            actor_id=actor.id,
+            readable_project_ids=readable,
+        )
+    )[0]
 
 
 async def _finish(
@@ -88,7 +102,16 @@ async def get_item(session: AsyncSession, item_id: uuid.UUID, actor: User) -> It
     definitions = await fields.definitions_for_project(session, project)
     ctx = await _field_ctx(session, actor, project, permissions, definitions)
     internal_visible = _internal_visible({project.id: permissions})
-    read = (await hydrate(session, [item], internal_visible=internal_visible, actor_id=actor.id))[0]
+    readable = frozenset(await authz.readable_projects(session, actor))
+    read = (
+        await hydrate(
+            session,
+            [item],
+            internal_visible=internal_visible,
+            actor_id=actor.id,
+            readable_project_ids=readable,
+        )
+    )[0]
     builtin_denied = await _builtin_read_denied(session, project, ctx)
     return _filter_read(read, definitions, ctx, builtin_denied)
 

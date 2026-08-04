@@ -74,8 +74,10 @@ async def suggest(
         scope = SuggestScope(project=project)
         definitions = await fields_service.definitions_for_project(session, project)
     else:
-        await authz.require_member(session, actor)  # RADD-788
-        scope = SuggestScope()
+        readable = await authz.require_member(session, actor)  # RADD-788
+        # RADD-839: unscoped completions carry issue keys+titles — bound them
+        # to the projects this actor can actually read.
+        scope = SuggestScope(readable_project_ids=frozenset(readable))
         definitions = await fields_service.list_fields(session)
     definitions_by_key: dict[str, FieldDefinition] = {}
     for definition in definitions:

@@ -112,7 +112,13 @@ async def list_items(
         projects[pid] = project
         permissions[pid] = await authz.effective_permissions(session, actor, project=project)
     visible = [i for i in items if Permission.ITEM_READ in permissions[i.project_id]]
-    reads = await hydrate(session, visible, internal_visible=_internal_visible(permissions), actor_id=actor.id)
+    reads = await hydrate(
+        session,
+        visible,
+        internal_visible=_internal_visible(permissions),
+        actor_id=actor.id,
+        readable_project_ids=frozenset(await authz.readable_projects(session, actor)),
+    )
 
     definitions: dict[uuid.UUID, Sequence[FieldDefinition]] = {}
     ctxs: dict[uuid.UUID, fields.FieldAccessContext] = {}

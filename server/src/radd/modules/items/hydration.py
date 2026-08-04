@@ -73,13 +73,18 @@ async def label_names(
 
 
 async def _child_counts(
-    session: AsyncSession, item_ids: Iterable[uuid.UUID]
+    session: AsyncSession,
+    item_ids: Iterable[uuid.UUID],
+    readable_project_ids: frozenset[uuid.UUID] | None,
 ) -> dict[uuid.UUID, int]:
-    rows = await session.execute(
+    query = (
         select(WorkItem.parent_id, func.count())
         .where(WorkItem.parent_id.in_(set(item_ids)))
         .group_by(WorkItem.parent_id)
     )
+    if readable_project_ids is not None:
+        query = query.where(WorkItem.project_id.in_(readable_project_ids))
+    rows = await session.execute(query)
     return dict(rows.all())
 
 
@@ -114,11 +119,16 @@ async def _parents_by_id(
 
 
 async def _links(
-    session: AsyncSession, items: list[WorkItem]
+    session: AsyncSession,
+    items: list[WorkItem],
+    readable_project_ids: frozenset[uuid.UUID] | None,
 ) -> dict[uuid.UUID, ItemLinks]:
     """Every dependency edge touching these items, split by direction — no N+1.
 
     One query for the link rows, one to resolve the far-end items' keys/titles.
+    An edge whose far end sits in a project the actor can't read is dropped
+    (RADD-839) — the key+title of a hidden item is exactly what the restriction
+    protects.
     """
     result: dict[uuid.UUID, ItemLinks] = {i.id: ItemLinks() for i in items}
     item_ids = set(result)
@@ -140,7 +150,11 @@ async def _links(
     others = (
         await session.execute(select(WorkItem).where(WorkItem.id.in_(referenced)))
     ).scalars()
-    by_id = {o.id: o for o in others}
+    by_id = {
+        o.id: o
+        for o in others
+        if readable_project_ids is None or o.project_id in readable_project_ids
+    }
     keys = await projects_service.project_keys(session, {o.project_id for o in by_id.values()})
 
     def ref(other_id: uuid.UUID) -> LinkItem:
@@ -151,7 +165,7 @@ async def _links(
     catalog = await linktypes_service.catalog(session)
     for row in rows:
         definition = catalog.get(row.link_type)
-        if row.source_item_id in result:
+        if row.source_item_id in result and row.target_item_id in by_id:
             result[row.source_item_id].outgoing.append(
                 ItemLinkRead(
                     id=row.id,
@@ -160,7 +174,7 @@ async def _links(
                     item=ref(row.target_item_id),
                 )
             )
-        if row.target_item_id in result:
+        if row.target_item_id in result and row.source_item_id in by_id:
             result[row.target_item_id].incoming.append(
                 ItemLinkRead(
                     id=row.id,
@@ -196,7 +210,12 @@ async def hydrate(
     internal_visible: set[uuid.UUID] | None = None,
     today: date | None = None,
     actor_id: uuid.UUID | None = None,
+    readable_project_ids: frozenset[uuid.UUID] | None = None,
 ) -> list[ItemRead]:
+    """`readable_project_ids` (RADD-839): the projects the ACTOR may read — parent
+    breadcrumbs, epic refs, link targets and child counts outside it are dropped
+    from the payload (the row survives; the cross-project reference does not).
+    None = trusted context (system consumers), nothing dropped."""
     pivot = today or date.today()  # derives cycle status; injectable for determinism
     item_ids = [i.id for i in items]
     starred = await _starred_ids(session, actor_id, item_ids)
@@ -208,6 +227,12 @@ async def hydrate(
     parents |= await _parents_by_id(
         session, {p.parent_id for p in parents.values() if p.parent_id} - set(parents)
     )
+    if readable_project_ids is not None:
+        parents = {
+            pid: parent
+            for pid, parent in parents.items()
+            if parent.project_id in readable_project_ids
+        }
     project_ids = {i.project_id for i in items} | {p.project_id for p in parents.values()}
     keys = await projects_service.project_keys(session, project_ids)
     states = await workflow.states_by_ids(session, {i.state_id for i in items})
@@ -222,9 +247,9 @@ async def hydrate(
     releases = await releases_service.releases_by_ids(
         session, {i.release_id for i in items if i.release_id}
     )
-    child_counts = await _child_counts(session, item_ids)
+    child_counts = await _child_counts(session, item_ids, readable_project_ids)
     comment_counts = await _comment_counts(session, items, internal_visible)
-    links = await _links(session, items)
+    links = await _links(session, items, readable_project_ids)
 
     def type_ref(type_id: uuid.UUID | None) -> TypeRef | None:
         if type_id is None or type_id not in type_map:
@@ -235,7 +260,9 @@ async def hydrate(
     def parent_ref(parent_id: uuid.UUID | None) -> ParentRef | None:
         if parent_id is None:
             return None
-        parent = parents[parent_id]
+        parent = parents.get(parent_id)  # absent = unreadable to the actor (RADD-839)
+        if parent is None:
+            return None
         return ParentRef(
             id=parent.id, key=f"{keys[parent.project_id]}-{parent.number}", title=parent.title
         )
