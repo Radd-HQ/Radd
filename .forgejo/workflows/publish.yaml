@@ -28,19 +28,13 @@ jobs:
   image:
     runs-on: docker
     container:
-      # node, because actions/checkout is a JavaScript action. The docker CLI
-      # is added below — an image with docker but no node cannot check out.
-      image: node:22-bookworm
+      # Our own runner image (RADD-807): node for actions/checkout, the docker
+      # CLI for build/push, python3 for release_notes.py — all baked in, so a
+      # release no longer depends on download.docker.com answering. Pinned to an
+      # exact version; bump deploy/ci-runner.version and rebuild to move it.
+      image: git.radd-hq.com/radd/ci-runner:1.0.0
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install the docker CLI
-        run: |
-          set -e
-          curl -sSL https://download.docker.com/linux/static/stable/x86_64/docker-27.5.1.tgz \
-            | tar xz -C /tmp docker/docker
-          install -m 0755 /tmp/docker/docker /usr/local/bin/docker
-          docker --version
 
       - name: Resolve version and image name
         id: meta
