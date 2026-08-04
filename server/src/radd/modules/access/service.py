@@ -21,7 +21,7 @@ from radd.modules.projects import service as projects_service
 
 from .models import AccessGrant
 from .registry import get_spec
-from .types import AccessEntity, AccessEvent, GrantSubject
+from .types import AccessEntity, AccessEvent, GrantEffect, GrantSubject
 
 
 # --- queries ------------------------------------------------------------------
@@ -120,6 +120,7 @@ async def add_grant(
     access: str,
     project_id: uuid.UUID | None = None,
     actor_id: uuid.UUID | None = None,
+    effect: GrantEffect = GrantEffect.ALLOW,
 ) -> AccessGrant:
     spec = get_spec(resource_type)
     if spec is None:
@@ -155,6 +156,7 @@ async def add_grant(
         subject_id=subject_id,
         access=access,
         project_id=project_id,
+        effect=effect.value,
     )
     session.add(grant)
     await session.flush()
@@ -199,6 +201,7 @@ async def _emit(
             "subject_type": grant.subject_type,
             "subject_id": str(grant.subject_id),
             "access": grant.access,
+            "effect": grant.effect,
             "project_id": str(grant.project_id) if grant.project_id else None,
         },
     )

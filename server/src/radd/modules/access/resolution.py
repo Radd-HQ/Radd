@@ -14,7 +14,43 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from .registry import ResourceSpec
-from .types import GrantSubject
+from .types import GrantEffect, GrantSubject
+
+
+def _effect(grant: _GrantLike) -> str:
+    # Rows predate the column in unit fixtures; absent = allow (the default).
+    return getattr(grant, "effect", GrantEffect.ALLOW.value) or GrantEffect.ALLOW.value
+
+
+def _deny_verdict(
+    grants: Sequence["_GrantLike"],
+    ctx: "SubjectContext",
+    accesses: tuple[str, ...],
+    project_id: uuid.UUID | None,
+) -> bool | None:
+    """RADD-819 precedence, decided once for both models. Returns True when a
+    deny kills the access, None when denies decide nothing here.
+
+    The rule, written down: SPECIFICITY FIRST, DENY ON TIES. A project-scoped
+    row beats a global row regardless of effect (the narrower statement is the
+    more deliberate one); at equal specificity a deny beats an allow. The one
+    documented back door — the instance admin — lives at the resolvers'
+    CALLERS, never here."""
+    matching = [
+        g
+        for g in grants
+        if g.access in accesses and in_scope(g, project_id) and subject_matches(g, ctx)
+    ]
+    denies = [g for g in matching if _effect(g) == GrantEffect.DENY.value]
+    if not denies:
+        return None
+    allows = [g for g in matching if _effect(g) != GrantEffect.DENY.value]
+    if any(g.project_id is not None for g in denies):
+        return True  # a narrow deny: nothing narrower exists to carve it back
+    # Only GLOBAL denies remain: a narrower (project-scoped) allow beats them.
+    if any(g.project_id is not None for g in allows):
+        return None
+    return True
 
 
 class _GrantLike(Protocol):
@@ -22,6 +58,7 @@ class _GrantLike(Protocol):
     subject_id: uuid.UUID
     access: str
     project_id: uuid.UUID | None
+    effect: str  # "allow" | "deny" (RADD-819)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -80,14 +117,34 @@ def has_access(
     matching grant, which is what lets the inspector EXPLAIN it. A resource
     that wants a manager bypass short-circuits at its own call site, where the
     decision is named and owned."""
-    restricting = [g for g in grants if g.access == access and in_scope(g, project_id)]
+    # RADD-819: denies resolve first — one deny row expresses "this team may
+    # not", with nobody else's access touched (denies never RESTRICT a
+    # default-open resource for non-matching subjects). A deny binds its EXACT
+    # access; on an implied route (write satisfies read) it blocks THAT route
+    # without closing the check sideways — deny write, and an open read stays
+    # open, but write no longer answers for read.
+    if _deny_verdict(grants, ctx, (access,), project_id):
+        return False
+    satisfying = tuple(
+        a
+        for a in (access, *spec.implied_by.get(access, ()))
+        if not _deny_verdict(grants, ctx, (a,), project_id)
+    )
+    restricting = [
+        g
+        for g in grants
+        if g.access == access
+        and in_scope(g, project_id)
+        and _effect(g) != GrantEffect.DENY.value
+    ]
     if not restricting:
         return spec.default_open
-    satisfying = (access, *spec.implied_by.get(access, ()))
     return any(
         subject_matches(g, ctx)
         for g in grants
-        if g.access in satisfying and in_scope(g, project_id)
+        if g.access in satisfying
+        and in_scope(g, project_id)
+        and _effect(g) != GrantEffect.DENY.value
     )
 
 
@@ -104,7 +161,12 @@ def effective_level(
     held = [
         g.access
         for g in grants
-        if in_scope(g, project_id) and g.access in order and subject_matches(g, ctx)
+        if in_scope(g, project_id)
+        and g.access in order
+        and subject_matches(g, ctx)
+        and _effect(g) != GrantEffect.DENY.value
+        # RADD-819: a deny of a LEVEL removes that level from consideration.
+        and not _deny_verdict(grants, ctx, (g.access,), project_id)
     ]
     if not held:
         return None
@@ -114,5 +176,9 @@ def effective_level(
 def restricted_accesses(
     grants: Sequence[_GrantLike], access: str, project_id: uuid.UUID | None
 ) -> bool:
-    """Whether ANY in-scope grant restricts `access` (drives x-restricted flags)."""
-    return any(g.access == access and in_scope(g, project_id) for g in grants)
+    """Whether ANY in-scope ALLOW grant restricts `access` (drives x-restricted
+    flags). Denies don't restrict the world — they restrict their subject."""
+    return any(
+        g.access == access and in_scope(g, project_id) and _effect(g) != GrantEffect.DENY.value
+        for g in grants
+    )

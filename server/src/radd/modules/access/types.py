@@ -31,6 +31,15 @@ class Access(StrEnum):
     WRITE = "write"
 
 
+class GrantEffect(StrEnum):
+    """RADD-819: what a grant DOES. `deny` is opt-in — no row carries it until
+    an admin writes one, so the model stays additive until the day someone
+    needs to say no."""
+
+    ALLOW = "allow"
+    DENY = "deny"
+
+
 class AccessEntity(StrEnum):
     GRANT = "access_grant"
 

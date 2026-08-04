@@ -33,6 +33,7 @@ class ResourceAccessRow:
     resource_id: str
     resource_label: str | None
     access: str
+    effect: str  # allow | deny (RADD-819) — a deny row explains a refusal
     subject_type: str  # user | team | role | group — which subject kind matched
     subject_id: uuid.UUID
     subject_name: str | None  # team/role display name; None when it's the user directly
@@ -119,6 +120,7 @@ async def subject_access(
                 resource_id=grant.resource_id,
                 resource_label=labels.get(grant.resource_id),
                 access=grant.access,
+                effect=grant.effect or "allow",
                 subject_type=grant.subject_type,
                 subject_id=grant.subject_id,
                 subject_name=_subject_name(

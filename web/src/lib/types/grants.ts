@@ -14,6 +14,8 @@ export interface AccessGrant {
   subject_type: GrantSubjectValue;
   subject_id: string;
   access: string;
+  /** RADD-819: "allow" (default) | "deny" — deny wins on ties, specificity first. */
+  effect: "allow" | "deny";
   project_id: string | null;
   created_at: string;
 }
@@ -25,6 +27,7 @@ export interface AccessGrantCreate {
   subject_type: GrantSubjectValue;
   subject_id: string;
   access: string;
+  effect?: "allow" | "deny";
   project_ids?: string[];
 }
 

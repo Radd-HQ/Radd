@@ -133,6 +133,7 @@ class ResourceAccessRowRead(BaseModel):
     resource_id: str
     resource_label: str | None = None
     access: str
+    effect: str = "allow"  # RADD-819: a deny row names what killed the access
     subject_type: str  # user | team | role
     subject_id: uuid.UUID
     subject_name: str | None = None  # team/role name; None = the user directly

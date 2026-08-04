@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from radd.apitypes import UtcDatetime
 
-from .types import GrantSubject
+from .types import GrantEffect, GrantSubject
 
 
 class AccessGrantRead(BaseModel):
@@ -16,6 +16,8 @@ class AccessGrantRead(BaseModel):
     subject_type: GrantSubject
     subject_id: uuid.UUID
     access: str
+    #: RADD-819: allow (default) | deny — deny wins on ties, specificity first.
+    effect: GrantEffect = GrantEffect.ALLOW
     project_id: uuid.UUID | None = None  # NULL = global (every scope)
     created_at: UtcDatetime
 
@@ -29,6 +31,7 @@ class AccessGrantCreate(BaseModel):
     subject_type: GrantSubject
     subject_id: uuid.UUID
     access: str = Field(min_length=1, max_length=20)
+    effect: GrantEffect = GrantEffect.ALLOW
     project_ids: list[uuid.UUID] = Field(default_factory=list)
 
 

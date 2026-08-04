@@ -115,6 +115,11 @@ export function AccessGrantsEditor({
                 <span className="rounded border border-strong px-1.5 py-px text-[11px] uppercase text-fg-secondary">
                   {grant.access}
                 </span>
+                {grant.effect === "deny" && (
+                  <span className="rounded border border-red-500/40 px-1.5 py-px text-[11px] uppercase text-red-400">
+                    deny
+                  </span>
+                )}
                 {grant.project_id === null ? (
                   <span className="inline-flex items-center gap-1 text-[11px] text-emerald-300">
                     <Globe size={10} /> Global
@@ -169,6 +174,7 @@ function AddGrantRow({
 }) {
   const [subject, setSubject] = useState<Subject | null>(null);
   const [access, setAccess] = useState(accesses[0]);
+  const [effect, setEffect] = useState<"allow" | "deny">("allow");
   const [projectIds, setProjectIds] = useState<string[]>([]);
 
   const add = useMutation({
@@ -179,6 +185,7 @@ function AddGrantRow({
         subject_type: subject!.type,
         subject_id: subject!.id,
         access,
+        effect,
         project_ids: projectIds,
       };
       return api.post(ApiPath.grants, body);
@@ -200,6 +207,17 @@ function AddGrantRow({
         onChange={setAccess}
         aria-label="Access level"
         options={accesses.map((a) => ({ value: a, label: a }))}
+      />
+
+      {/* RADD-819: one deny row says "may not" — nobody else's access touched. */}
+      <Select
+        value={effect}
+        onChange={(v) => setEffect(v as "allow" | "deny")}
+        aria-label="Effect"
+        options={[
+          { value: "allow", label: "may" },
+          { value: "deny", label: "may NOT" },
+        ]}
       />
 
       <ScopePicker value={projectIds} onChange={setProjectIds} projects={projects} />

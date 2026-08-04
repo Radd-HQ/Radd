@@ -247,6 +247,11 @@ export function ResourceSections({
                     {row.resource_label ?? row.resource_id}
                   </span>{" "}
                   — {row.access}
+                  {row.effect === "deny" && (
+                    <span className="ml-1 rounded border border-red-500/40 px-1 text-[10px] uppercase text-red-400">
+                      deny
+                    </span>
+                  )}
                   <span className="text-fg-muted">
                     {row.subject_name
                       ? ` via ${row.subject_type} ${row.subject_name}`

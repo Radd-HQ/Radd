@@ -113,3 +113,21 @@ relation:
 - **Relations are computed; spec-92 grants are explicit.** An issue is "mine"
   structurally (a column); a view is shared by a deliberate act (a grant row).
   Collapsing them means a grant row per issue, which does not survive 503k items.
+
+## Deny (RADD-819) — the rule it slots in with
+
+`access_grants.effect` ∈ {allow, deny}, opt-in (no row carries deny until an
+admin writes one). Resolution: **specificity first, deny on ties.**
+
+| pair (same subject, same access) | verdict |
+|---|---|
+| deny and allow at EQUAL scope | deny |
+| project-scoped deny vs global allow | deny (narrower wins) |
+| project-scoped allow vs global deny | allow (narrower wins) |
+| one deny row, nobody else named | that subject refused; a default-open resource stays open for everyone else |
+
+A deny binds its EXACT access. On an implied route (write satisfies read), a
+deny of write blocks that route without closing the check sideways: an open
+read stays open, but write no longer answers for read. The one documented back
+door — the instance admin — lives at the resolvers' callers, never in the
+algebra. Executed by `tests/test_deny_precedence.py`.

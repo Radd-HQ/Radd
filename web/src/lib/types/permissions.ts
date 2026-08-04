@@ -134,6 +134,7 @@ export interface ResourceAccessRow {
   resource_id: string;
   resource_label: string | null;
   access: string;
+  effect?: "allow" | "deny"; // RADD-819: a deny row explains a refusal
   subject_type: string; // user | team | role | group
   subject_id: string;
   subject_name: string | null; // null = the user directly

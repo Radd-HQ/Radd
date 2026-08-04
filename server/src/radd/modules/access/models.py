@@ -33,6 +33,10 @@ class AccessGrant(Base, TimestampMixin):
     subject_type: Mapped[str] = mapped_column(String(10))  # GrantSubject
     subject_id: Mapped[uuid.UUID] = mapped_column(index=True)
     access: Mapped[str] = mapped_column(String(20))  # Access (resource-declared)
+    # RADD-819: allow (default) | deny. Deny wins at equal scope; the NARROWER
+    # scope wins across scopes (a project deny beats a global allow AND a
+    # project allow beats a global deny — specificity first, deny on ties).
+    effect: Mapped[str] = mapped_column(String(5), default="allow", server_default="allow")
     # NULL = every project (global); set = that project only. Widen by adding rows.
     project_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"), index=True

@@ -88,6 +88,7 @@ async def create_grant(
             access=data.access,
             project_id=project_id,
             actor_id=user.id,
+            effect=data.effect,
         )
         for project_id in scopes
     ]
