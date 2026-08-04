@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Pencil, Plus, Workflow, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, Pencil, Plus, Workflow, X } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { ApiPath, apiStatePath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
@@ -60,8 +60,15 @@ export function StatesSettingsPage({ projectId }: { projectId?: string }) {
       ) : (
         <>
           <ul className="rounded-lg border border-subtle">
-            {sorted.map((state) => (
-              <StateRow key={state.id} state={state} projectId={project.id} canManage={canManage} />
+            {sorted.map((state, index) => (
+              <StateRow
+                key={state.id}
+                state={state}
+                projectId={project.id}
+                canManage={canManage}
+                neighborUp={index > 0 ? sorted[index - 1] : null}
+                neighborDown={index < sorted.length - 1 ? sorted[index + 1] : null}
+              />
             ))}
             {sorted.length === 0 && (
               <li className="px-4 py-6 text-center text-sm text-fg-muted">No states yet.</li>
@@ -75,15 +82,21 @@ export function StatesSettingsPage({ projectId }: { projectId?: string }) {
   );
 }
 
-/** One state row: category dot + name, inline rename (PATCH /states/{id}). */
+/** One state row: category dot + name, inline rename (PATCH /states/{id}),
+ * and up/down reordering (RADD-850) — a move swaps `position` with the
+ * neighbour, which is what boards, list sections and pickers all order by. */
 function StateRow({
   state,
   projectId,
   canManage,
+  neighborUp,
+  neighborDown,
 }: {
   state: State;
   projectId: string;
   canManage: boolean;
+  neighborUp: State | null;
+  neighborDown: State | null;
 }) {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
@@ -96,6 +109,13 @@ function StateRow({
       await queryClient.invalidateQueries({ queryKey: queryKeys.states(projectId) });
       setEditing(false);
     },
+  });
+  const swap = useMutation({
+    mutationFn: async (neighbor: State) => {
+      await api.patch<State>(apiStatePath(state.id), { position: neighbor.position });
+      await api.patch<State>(apiStatePath(neighbor.id), { position: state.position });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.states(projectId) }),
   });
 
   const submitRename = (event: FormEvent) => {
@@ -156,9 +176,28 @@ function StateRow({
             )}
           </span>
           <span className="text-xs text-fg-muted">{category.label}</span>
-          <span className="w-8 text-right font-mono text-[11px] text-fg-faint">
-            {state.position}
-          </span>
+          {canManage && (
+            <span className="flex items-center">
+              <button
+                type="button"
+                onClick={() => neighborUp && swap.mutate(neighborUp)}
+                disabled={!neighborUp || swap.isPending}
+                aria-label={`Move ${state.name} up`}
+                className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-fg cursor-pointer disabled:cursor-default disabled:opacity-30"
+              >
+                <ArrowUp size={13} />
+              </button>
+              <button
+                type="button"
+                onClick={() => neighborDown && swap.mutate(neighborDown)}
+                disabled={!neighborDown || swap.isPending}
+                aria-label={`Move ${state.name} down`}
+                className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-fg cursor-pointer disabled:cursor-default disabled:opacity-30"
+              >
+                <ArrowDown size={13} />
+              </button>
+            </span>
+          )}
           {canManage && (
             <button
               type="button"
