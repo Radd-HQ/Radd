@@ -2,10 +2,11 @@
 
 **Read this first, then `115-access-control-audit.md` in full, then the issues.**
 
-You are executing the access-control wave: **RADD-813** (14 children) and
-**RADD-827** (Groups as a first-class entity). Every decision has been made and
-recorded — §0 of the audit carries D1–D14 with their reasoning. You are not
-being asked to re-litigate the design. You are being asked to build all of it.
+You are executing the access-control wave: **RADD-813** (14 children) **and
+RADD-827** (Groups, 5 children). **Both epics ship in one release.** Nineteen
+issues. Every decision has been made and recorded — §0 of the audit carries
+D1–D14 with their reasoning, and §5.6a designs Groups. You are not being asked
+to re-litigate the design. You are being asked to build all of it.
 
 ---
 
@@ -50,22 +51,29 @@ Dependencies are real; this order respects them.
 | 2 | **RADD-824** — `view.manage` client gates (the bug half only) | Live bug, independent, five minutes. Do not do the model half yet. |
 | 3 | **RADD-814** — scope becomes a property of the grant | The root cause. Behaviour-identical migration; collapses `require_anywhere`/`readable_projects` and the three client seams. |
 | 4 | **RADD-810** — the ten mismatched client gates | Obsoleted *by* 814 — resolve them in its terms, do not fix them first. |
-| 5 | **RADD-823** — relations mechanism (kernel) | Depends on 814's vocabulary. |
-| 6 | **RADD-817** — items adopt relations | First adopter. |
-| 7 | **RADD-816** + rest of **RADD-824** — verb normalisation, `manage` demotion | Breaking renames; needs the inspector (1) to verify and 823 to have settled `@own` syntax. |
-| 8 | **RADD-819** — deny precedence | Additive, inert until used. |
-| 9 | **RADD-822** — field scope vs field grants wording | Independent; do it whenever. |
-| 10 | **RADD-818** — plugin access resources + uninstall sweep | Needs 814 and 816 vocabulary settled. |
-| 11 | **RADD-826** — project admins assign roles | Needs D14's intersection. |
-| 12 | **RADD-815** — matrix by resource, presets + sentence builder | The UI for everything above; do it once the model is final. |
-| 13 | **RADD-828** — strip anonymous reporting, email provisions accounts | Independent of the model work; keep `/public/pages` and `/public/csat`. |
-| 14 | **RADD-825** — Baseline pre-flight report | Ships the *capability*; see below. |
-| 15 | **RADD-820** — grant expiry + granted-by | Smallest, independent. |
+| 5 | **RADD-829** — groups entity, nesting, migration off linked teams | Groups start here because `@team` must resolve through the subject graph, and building that graph twice — once against direct membership, once against groups — means writing the hot path twice. |
+| 6 | **RADD-830** — the subject graph (one memoised resolution) | **Everything downstream resolves through this.** Blocker-priority for that reason. |
+| 7 | **RADD-831** — LDAP syncs groups, not linked teams | Directory half; independent of 830 but pointless before 829. |
+| 8 | **RADD-832** — groups are grant subjects, teams contain them | Delivers "grant to an AD group directly". |
+| 9 | **RADD-823** — relations mechanism (kernel) | Now `@team` resolves through the real graph, first time, once. |
+| 10 | **RADD-817** — items adopt relations | First adopter. |
+| 11 | **RADD-816** + rest of **RADD-824** — verb normalisation, `manage` demotion | Breaking renames; needs the inspector (1) to verify and 823 to have settled `@own` syntax. |
+| 12 | **RADD-819** — deny precedence | Additive, inert until used. |
+| 13 | **RADD-822** — field scope vs field grants wording | Independent; do it whenever. |
+| 14 | **RADD-818** — plugin access resources + uninstall sweep | Needs 814 and 816 vocabulary settled. |
+| 15 | **RADD-826** — project admins assign roles | Needs D14's intersection. |
+| 16 | **RADD-833** — Groups admin screen + inspector shows the path | After 830 (needs transitive counts) and 809 (extends its provenance rows). |
+| 17 | **RADD-815** — matrix by resource, presets + sentence builder | The UI for everything above; do it once the model is final. |
+| 18 | **RADD-828** — strip anonymous reporting, email provisions accounts | Independent of the model work; keep `/public/pages` and `/public/csat`. |
+| 19 | **RADD-825** — Baseline pre-flight report | Ships the *capability*; see below. |
+| 20 | **RADD-820** — grant expiry + granted-by | Smallest, independent. |
 
-**RADD-827 (Groups)** is a separate epic and needs its own spec written before
-building. It is not part of this release unless explicitly asked — but
-RADD-823's `@team` must resolve through a **single function** so the group graph
-can be swapped in later without touching call sites.
+**Why Groups moved forward.** It was originally scoped as a separate release
+with `@team` resolving against direct membership and the group graph swapped in
+later. Folding it in removes that swap: the subject graph is written once,
+correctly, and relations are built on top of the real thing. It also means the
+inspector's provenance work (809, 833) happens against the final subject model
+rather than being extended twice.
 
 ---
 
@@ -153,8 +161,23 @@ These are the ones that will cost a day each if rediscovered:
    role JSONB, `api_tokens.scopes` and `access_grants`, each guarded on the
    table existing, and emit an event per change. RADD-701 is the precedent.
 6. **Group nesting is a recursive CTE on the hottest path.** Memoise per request
-   beside `baseline_permissions` and `readable_projects`. (Relevant only if
-   RADD-827 is in scope.)
+   beside `baseline_permissions` and `readable_projects`, and note that
+   `permissions_for_projects` resolves per project during list hydration — so
+   the naive version is a recursive query per project per request. Measure a
+   list load before and after against the 503k-item dev DB; correct-and-200ms-
+   slower is not done.
+7. **AD is a graph, not a tree.** Cycle detection and a depth limit go in the
+   CTE on day one, with a deliberately cyclic fixture in the tests. A guard
+   nobody has fired is a guard nobody knows works.
+8. **Transitive group reach is large and invisible.** A parent group can resolve
+   to hundreds of people through nesting the picker does not show. Two things
+   are requirements, not polish: the grant UI shows the resolved headcount
+   *before* the grant is saved (RADD-832), and the inspector shows the *path*
+   ("via Render Wranglers ← VFX All ← Studio", RADD-833). Without them this
+   change makes access less explainable, not more — which would invert the point
+   of the wave.
+9. **A group that vanishes from AD keeps its grants and is flagged.** Deleting
+   them automatically turns a directory outage into a permission outage.
 
 ---
 

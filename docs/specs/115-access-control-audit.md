@@ -703,6 +703,88 @@ seam, and should be marked expensive rather than forbidden.
 - A contract test (the `test_permission_scope_contract.py` pattern from
   RADD-808) asserts every kernel-declared scope is one the SPA renders.
 
+### 5.6a Groups — the subject graph
+
+D5, designed. This ships **in the same release** as the rest of the wave, and it
+lands *before* relations, because `@team` resolves through the subject graph and
+building that graph twice — once against direct membership, once against groups —
+would mean writing the hot path twice and swapping it.
+
+#### The model
+
+| | Is | Membership | Nests | Source |
+|---|---|---|---|---|
+| **Group** (new) | a directory object, mirrored | from the directory | **yes** | AD only |
+| **Team** (changed) | a Radd grouping with an owner and a purpose | users **and groups** | no | local only |
+
+**A group is never local and a team is never directory-mirrored.** That is the
+whole point of the split: today `Team` is either, decided by `TeamSource`, which
+is one concept doing two jobs. If you want a local grouping, that is a Team; if
+you want the directory's truth, that is a Group. Neither grows a flag telling you
+which it is today.
+
+`GrantSubject` gains `GROUP` (`user | team | role | group`) and `role_grants`
+gains `group_id` beside `user_id`/`team_id`, so a group can be granted access
+directly with no team invented to hold it.
+
+#### The subject graph, and why it is the risky part
+
+An actor's subjects become a graph rather than two lists:
+
+```
+user ──┬─→ groups ──(nested, transitively)──→ groups
+       │        └──(member of)──→ teams
+       ├─→ teams (direct membership)
+       └─→ roles (via grants to any of the above)
+```
+
+Resolution is a **recursive CTE**, and it runs on the hottest path in the
+application. It must be resolved **once per request and memoised**, beside
+`baseline_permissions` and `readable_projects`, which already exist for exactly
+this reason. Done per check it is a recursive query per permission test, and a
+list hydrating per-project permissions runs those in a loop.
+
+Two guards the CTE needs on day one, not after an incident:
+
+- **Cycle detection.** AD is a graph, not a tree, and a cycle is rare but legal.
+  An unguarded recursive CTE against one does not return.
+- **Depth limit.** With a limit, a pathological directory degrades to
+  "incomplete"; without one it degrades to "down".
+
+#### What makes this materially different from teams
+
+**Transitive reach is large and invisible.** A user can inherit membership of
+dozens of groups through two or three levels, and a grant on a parent group
+reaches everyone beneath it. That is the feature — it is why the hierarchy is
+worth having — and it is also the thing that will surprise people.
+
+Two consequences that are requirements, not nice-to-haves:
+
+1. **The inspector must show the PATH**, not just the fact: *"via Render
+   Wranglers ← VFX All ← Studio"*. "You have this because of a group you have
+   never heard of" is otherwise unanswerable, and this change makes that case
+   ordinary rather than rare.
+2. **The grant UI must show reach before the grant is made**: "this group
+   currently resolves to 214 people". Granting to a parent group without seeing
+   its size is how an access review finds something nobody intended.
+
+#### Migration preserves behaviour exactly
+
+Every directory-linked team becomes an ordinary team containing the one group it
+was linked to. Same people, same access, different shape — and from then on that
+team can also hold users directly, or a second group, which it could not before.
+`teams.directory_group_dn`, `directory_group_name`, `TeamSource` and
+`directory_missing_since` retire; spec 87's AD-linked-team rules (read-only
+membership, directory-health chips) move to groups, which is where they always
+belonged.
+
+#### Open, and cheap to decide later
+
+A group that **disappears from the directory** keeps its grants and is flagged,
+exactly as a missing linked team is today (`directory_missing_since` moves
+across). Deleting the grants automatically would make an AD outage into a
+permission outage.
+
 ### 5.6 The inspector
 
 One endpoint shape, two subjects:
