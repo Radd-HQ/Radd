@@ -53,16 +53,28 @@ class ResourceSpec:
     label_for: LabelFor | None = None
 
 
-_REGISTRY: dict[str, ResourceSpec] = {}
+# RADD-818: the store is the KERNEL registry, not a private dict — the
+# sixteenth contribution kind. A plugin declares `access_resources=` on its
+# manifest (or calls the SDK's register_access_resource, which lands here),
+# and disable withdraws its resource types with everything else it
+# contributed. Core modules keep calling register_resource at import; the
+# app loader re-registers manifests after clear(), so both paths converge.
 
 
 def register_resource(spec: ResourceSpec) -> None:
-    _REGISTRY[spec.resource_type] = spec
+    from radd.kernel.registry import registries
+
+    registries.access_resources[spec.resource_type] = spec
 
 
 def get_spec(resource_type: str) -> ResourceSpec | None:
-    return _REGISTRY.get(resource_type)
+    from radd.kernel.registry import registries
+
+    spec = registries.access_resources.get(resource_type)
+    return spec  # type: ignore[return-value]
 
 
 def all_specs() -> list[ResourceSpec]:
-    return list(_REGISTRY.values())
+    from radd.kernel.registry import registries
+
+    return list(registries.access_resources.values())  # type: ignore[arg-type]

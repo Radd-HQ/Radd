@@ -106,3 +106,16 @@ def test_the_page_atoms_are_space_scoped() -> None:
         assert permission_scope_of(atom) is PermissionScope.SPACE, (
             f"{atom} is not SPACE-scoped; per-space access depends on it (RADD-791)."
         )
+
+
+def test_plugin_permission_spec_scopes_parse():
+    """RADD-818: PermissionSpec.scope documented "project|global|instance" while
+    RADD-791 added "space" — this pins the vocabulary to the enum, so the drift
+    class (RADD-808, one layer up) cannot recur silently."""
+    from radd.kernel import registries
+    from radd.modules.auth.types import PermissionScope
+
+    for spec in registries.permissions.values():
+        PermissionScope(spec.scope)  # raises on drifted vocabulary
+    # And the documented set IS the enum, so the docstring cannot lie quietly.
+    assert {s.value for s in PermissionScope} == {"project", "global", "space"}

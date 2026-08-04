@@ -4,8 +4,13 @@ from .router import router
 from .slqfield import roadmap_member_item_ids
 from . import subscribers  # noqa: F401  — registers the project-created seeding hook
 
+from .service import _VIEW_SPEC
+
 plugin = RaddPlugin(
     name="views",
+    # RADD-818: spec-92 resources ride the MANIFEST — the loader's clear()
+    # wipes import-time registration, and the manifest is what survives it.
+    access_resources=(_VIEW_SPEC,),
     description=(
         "Saved views (spec 10): named boards/lists/planning/queues over an SLQ "
         "query with group_by/swimlane_by axes; personal or workspace-shared; "

@@ -16,8 +16,13 @@ from .public_router import router as public_router
 from .router import router
 from .types import PageEvent
 
+from .page_access import _PAGE_SPEC
+
 plugin = RaddPlugin(
     name="pages",
+    # RADD-818: spec-92 resources ride the MANIFEST — the loader's clear()
+    # wipes import-time registration, and the manifest is what survives it.
+    access_resources=(_PAGE_SPEC,),
     core=False,  # optional plugin — disableable via the plugin manager
     description=(
         "Pages: page spaces + page trees (markdown bodies), optimistic-concurrency "

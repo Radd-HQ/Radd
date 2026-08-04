@@ -11,8 +11,13 @@ async def _config_handler(request: Request, exc: WidgetConfigError) -> JSONRespo
     return JSONResponse(status_code=422, content={"detail": str(exc)})
 
 
+from .service import _DASHBOARD_SPEC
+
 plugin = RaddPlugin(
     name="dashboards",
+    # RADD-818: spec-92 resources ride the MANIFEST — the loader's clear()
+    # wipes import-time registration, and the manifest is what survives it.
+    access_resources=(_DASHBOARD_SPEC,),
     core=False,  # optional plugin — disableable via the plugin manager
     description=(
         "Composable dashboards (spec 75): user-assembled widget grids over data "

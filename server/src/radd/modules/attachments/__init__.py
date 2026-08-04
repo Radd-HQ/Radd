@@ -55,9 +55,14 @@ ATTACHMENT_OWN = RelationSpec(
 )
 register_relation(ATTACHMENT_OWN)
 
+from .acl import _SPEC as _ATTACHMENT_SPEC
+
 plugin = RaddPlugin(
     cascades=lambda: gc.cascades(),
     name="attachments",
+    # RADD-818: spec-92 resources ride the MANIFEST — the loader's clear()
+    # wipes import-time registration, and the manifest is what survives it.
+    access_resources=(_ATTACHMENT_SPEC,),
     relations=(ATTACHMENT_OWN,),
     description="File attachments on work items and wiki pages (spec 102): "
     "multiple storage hosts (filesystem/S3) as DB rows, per-host proxy or "

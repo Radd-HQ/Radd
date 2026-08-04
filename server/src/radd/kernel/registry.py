@@ -63,6 +63,11 @@ class KernelRegistries:
     permissions: dict[str, PermissionSpec] = field(default_factory=dict)
     #: (resource, key) -> what @key MEANS for that resource's rows (RADD-823).
     relations: dict[tuple[str, str], RelationSpec] = field(default_factory=dict)
+    #: RADD-818: spec-92 access resources — the SIXTEENTH contribution kind,
+    #: typed loosely (the spec class lives in modules/access; kernel purity
+    #: forbids importing it). modules/access reads THROUGH this dict, so a
+    #: plugin's resource type is withdrawn with its plugin on disable.
+    access_resources: dict[str, object] = field(default_factory=dict)
     crud_resources: dict[str, CrudResourceSpec] = field(default_factory=dict)
     capabilities: dict[str, CapabilitySpec] = field(default_factory=dict)
     slq_fields: dict[str, SlqFieldSpec] = field(default_factory=dict)  # plugin SLQ query fields
@@ -90,7 +95,7 @@ class KernelRegistries:
     def clear(self) -> None:
         for f in (
             self.plugins, self.entities, self.event_types, self.permissions,
-            self.relations,
+            self.relations, self.access_resources,
             self.crud_resources, self.capabilities, self.tasks, self.consumers,
             self.integrations, self.plugin_ui_dirs, self.slq_fields,
             self.view_types, self.widget_types, self.mcp_tools, self.page_extensions,
@@ -112,6 +117,8 @@ class KernelRegistries:
             self.permissions[p.key] = p
         for r in plugin.relations:
             self.relations[(r.resource, r.key)] = r
+        for ar in plugin.access_resources:
+            self.access_resources[ar.resource_type] = ar  # type: ignore[attr-defined]
         for c in plugin.crud_resources:
             self.crud_resources[c.key] = c
         for cap in plugin.capabilities:
@@ -154,6 +161,8 @@ class KernelRegistries:
             self.permissions.pop(p.key, None)
         for r in plugin.relations:
             self.relations.pop((r.resource, r.key), None)
+        for ar in plugin.access_resources:
+            self.access_resources.pop(ar.resource_type, None)  # type: ignore[attr-defined]
         for c in plugin.crud_resources:
             self.crud_resources.pop(c.key, None)
         for cap in plugin.capabilities:

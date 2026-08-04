@@ -18,8 +18,13 @@ async def _validation_handler(request: Request, exc: FieldValidationError) -> JS
     )
 
 
+from .service import _BUILTIN_SPEC, _FIELD_SPEC
+
 plugin = RaddPlugin(
     name="fields",
+    # RADD-818: spec-92 resources ride the MANIFEST — the loader's clear()
+    # wipes import-time registration, and the manifest is what survives it.
+    access_resources=(_FIELD_SPEC, _BUILTIN_SPEC),
     description="Field-definition registry: the single source of truth for dynamic schema.",
     depends_on=("projects", "events", "auth", "teams", "access"),  # access: grant resource
     routers=(router,),

@@ -231,15 +231,101 @@ async def set_contribution_settings(
     return list(disabled)
 
 
+async def sweep_plugin_atoms(session: AsyncSession, plugin, actor_id: uuid.UUID | None) -> dict:
+    """RADD-818: strip a departing plugin's atoms from stored roles and token
+    scopes, and delete the grants of its access-resource types — the RADD-701
+    migration pattern applied at runtime, each step over its own table.
+
+    Only atoms the plugin itself DECLARED are stripped (its PermissionSpec keys
+    and its CRUD resources' key.action forms) — never a shared umbrella like
+    global.manage. Relation-qualified forms (`x.read@own`) strip by BASE. The
+    emitted payload names everything removed, because silently narrowing a
+    role is exactly what an access review needs to see."""
+    import json
+
+    from sqlalchemy import delete as sa_delete, text as sa_text
+
+    from radd.modules.access.models import AccessGrant
+    from radd.modules.auth.types import split_permission
+
+    declared = {p.key for p in plugin.permissions}
+    for crud in plugin.crud_resources:
+        declared |= {f"{crud.key}.{action}" for action in crud.actions}
+    resource_types = [
+        getattr(ar, "resource_type") for ar in getattr(plugin, "access_resources", ())
+    ]
+
+    def _strip(atoms: list) -> list:
+        return [a for a in atoms if split_permission(str(a))[0] not in declared]
+
+    swept_roles: list[str] = []
+    if declared:
+        for role_id, key, permissions in (
+            await session.execute(sa_text("SELECT id, key, permissions FROM roles"))
+        ).fetchall():
+            atoms = permissions if isinstance(permissions, list) else json.loads(permissions)
+            stripped = _strip(atoms)
+            if stripped != list(atoms):
+                await session.execute(
+                    sa_text("UPDATE roles SET permissions = :perms WHERE id = :id"),
+                    {"perms": json.dumps(stripped), "id": role_id},
+                )
+                swept_roles.append(key)
+        for token_id, scopes in (
+            await session.execute(
+                sa_text("SELECT id, scopes FROM api_tokens WHERE scopes IS NOT NULL")
+            )
+        ).fetchall():
+            data = scopes if isinstance(scopes, dict) else json.loads(scopes)
+            changed = False
+            if isinstance(data.get("global"), list):
+                stripped = _strip(data["global"])
+                changed |= stripped != data["global"]
+                data["global"] = stripped
+            for pid, atoms in (data.get("projects") or {}).items():
+                stripped = _strip(atoms)
+                changed |= stripped != atoms
+                data["projects"][pid] = stripped
+            if changed:
+                await session.execute(
+                    sa_text("UPDATE api_tokens SET scopes = :scopes WHERE id = :id"),
+                    {"scopes": json.dumps(data), "id": token_id},
+                )
+    dropped_grants = 0
+    if resource_types:
+        result = await session.execute(
+            sa_delete(AccessGrant).where(AccessGrant.resource_type.in_(resource_types))
+        )
+        dropped_grants = result.rowcount or 0
+    summary = {
+        "stripped_atoms": sorted(declared),
+        "swept_roles": swept_roles,
+        "dropped_grant_types": resource_types,
+        "dropped_grants": dropped_grants,
+    }
+    await events.emit(
+        session,
+        event_type=PluginEvent.UNINSTALLED,
+        entity_type=PluginEntity.PLUGIN,
+        entity_id=f"{plugin.id}:atom-sweep",
+        actor_id=actor_id,
+        payload={"id": plugin.id, **summary},
+    )
+    return summary
+
+
 async def uninstall(session: AsyncSession, plugin_id: str, actor_id: uuid.UUID | None = None) -> None:
     """Remove an installable plugin's record (keeps data by default — a separate purge
-    drops its tables, §10). Bootstrap builtins can't be uninstalled — only disabled."""
+    drops its tables, §10). Bootstrap builtins can't be uninstalled — only disabled.
+    RADD-818: the atom sweep runs first, so roles/token scopes/grants never keep
+    vocabulary the catalog no longer knows."""
     plugin, _path, kind = _resolve_toggleable(plugin_id)
     if kind == "bootstrap":
         raise ConflictError(
             PluginEntity.PLUGIN, reason=f"{plugin_id} is a builtin — disable it instead of uninstalling"
         )
     _ensure_no_dependents(plugin)
+    await sweep_plugin_atoms(session, plugin, actor_id)
     row = await _row(session, plugin_id)
     if row is not None:
         await session.delete(row)

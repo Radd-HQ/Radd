@@ -153,7 +153,10 @@ class PermissionSpec:
     registering one makes it appear in the roles matrix + GET /permissions."""
 
     key: str
-    scope: str  # "project" | "global" | "space" (RADD-814 retired "instance")
+    #: One of auth.types.PermissionScope: "project" | "global" | "space".
+    #: RADD-814 retired "instance" (zero atoms, no resolution branch); RADD-791
+    #: added "space" — kept in step by the scope contract test (RADD-818).
+    scope: str
     description: str = ""
     implied_by: tuple[str, ...] = ()  # umbrella atoms that expand to this one
 
