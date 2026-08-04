@@ -157,6 +157,29 @@ function GrantRoleDialog({
     },
   });
 
+  // D12 presets: named STARTING POINTS, never stored abstractions — clicking
+  // one just fills the same controls, and Save writes ordinary grant rows.
+  const presets = [
+    { label: "Viewer here", roleKey: "viewer", hint: "read-only on the projects you pick" },
+    { label: "Member here", roleKey: "member", hint: "day-to-day work on the projects you pick" },
+    { label: "Admin here", roleKey: "admin", hint: "full project control on the projects you pick" },
+  ];
+  const applyPreset = (roleKey: string) => {
+    const match = (roles.data ?? []).find((r) => r.key === roleKey);
+    if (match) setRoleId(match.id);
+  };
+
+  // D12: the SENTENCE is the feature — the grant reads back as the rule it
+  // enforces, and an unset scope reads as alarming as it is.
+  const roleName = (roles.data ?? []).find((r) => r.id === roleId)?.name;
+  const projectNames = projectIds
+    .map((id) => (projects.data ?? []).find((p) => p.id === id)?.key ?? "?")
+    .join(", ");
+  const spaceNames = spaceIds
+    .map((id) => (spaces.data ?? []).find((s) => s.id === id)?.name ?? "?")
+    .join(", ");
+  const subjectLabel = "teamId" in subject ? "this team" : "userId" in subject ? "this person" : "this group";
+
   return (
     <Modal title="Grant role" onClose={onClose}>
       <form
@@ -166,6 +189,20 @@ function GrantRoleDialog({
         }}
         className="flex flex-col gap-4"
       >
+        <div className="flex flex-wrap gap-1.5">
+          {presets.map((preset) => (
+            <button
+              key={preset.roleKey}
+              type="button"
+              onClick={() => applyPreset(preset.roleKey)}
+              title={preset.hint}
+              className="rounded-md border border-subtle px-2 py-1 text-[11px] text-fg-secondary hover:border-emphasis cursor-pointer"
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+
         <SelectField label="Role" value={roleId} onChange={(e) => setRoleId(e.target.value)}>
           <option value="">Choose a role…</option>
           {(roles.data ?? []).map((role) => (
@@ -203,6 +240,18 @@ function GrantRoleDialog({
             grant it only there.
           </p>
         </div>
+
+        {roleId && (
+          <p className="rounded-md border border-subtle bg-elevated/50 px-3 py-2 text-xs text-fg">
+            <span className="font-medium">{roleName ?? "This role"}</span> granted to {subjectLabel}
+            {projectIds.length > 0 && <> on <span className="font-mono">{projectNames}</span></>}
+            {spaceIds.length > 0 && <> in the {spaceNames} space{spaceIds.length > 1 ? "s" : ""}</>}
+            {projectIds.length === 0 && spaceIds.length === 0 && (
+              <span className="font-semibold text-amber-400"> EVERYWHERE on this server</span>
+            )}
+            .
+          </p>
+        )}
 
         {grant.isError && <p className="text-xs text-red-400">{errorMessage(grant.error)}</p>}
 
