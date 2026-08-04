@@ -299,6 +299,7 @@ class FieldAccessContext:
 
     role_ids: frozenset[uuid.UUID] = frozenset()
     team_ids: frozenset[uuid.UUID] = frozenset()
+    group_ids: frozenset[uuid.UUID] = frozenset()  # transitive directory groups (RADD-830)
     has_manage: bool = False
     user_id: uuid.UUID | None = None
     project_id: uuid.UUID | None = None
@@ -311,6 +312,7 @@ class FieldAccessContext:
             user_id=self.user_id,
             role_ids=self.role_ids,
             team_ids=self.team_ids,
+            group_ids=self.group_ids,
             has_manage=self.has_manage,
         )
 
@@ -398,7 +400,8 @@ async def build_field_ctx(
 ) -> FieldAccessContext:
     """Assemble a FieldAccessContext for a project: batch-load the fields' grants and,
     only if any grant exists, the actor's subjects. `subjects_lookup` is an async
-    callable returning (role_ids, team_ids) — passed in so items owns the authz call."""
+    callable returning (role_ids, team_ids, group_ids) — passed in so items owns
+    the authz call."""
     grants_by_field = await access_service.grants_for_resources(
         session, FIELD_RESOURCE, [str(d.id) for d in definitions]
     )
@@ -408,10 +411,11 @@ async def build_field_ctx(
     )
     if not any(grants_by_field.values()) and not any(builtin_grants.values()):
         return FieldAccessContext(has_manage=has_manage, project_id=project.id)
-    role_ids, team_ids = await subjects_lookup()
+    role_ids, team_ids, group_ids = await subjects_lookup()
     return FieldAccessContext(
         role_ids=role_ids,
         team_ids=team_ids,
+        group_ids=group_ids,
         has_manage=has_manage,
         user_id=user_id,
         project_id=project.id,
@@ -427,6 +431,7 @@ async def readonly_field_keys(
     user_id: uuid.UUID,
     role_ids: frozenset[uuid.UUID],
     team_ids: frozenset[uuid.UUID],
+    group_ids: frozenset[uuid.UUID],
     has_manage: bool,
 ) -> list[str]:
     """The builtin field NAMES + custom field KEYS the actor may NOT WRITE in this project,
@@ -436,7 +441,11 @@ async def readonly_field_keys(
     field with no restricting write grant, contributes nothing. Workflow-state transitions are
     handled separately (per-item) via /items/{id}/allowed-transitions."""
     subject = access_res.SubjectContext(
-        user_id=user_id, role_ids=role_ids, team_ids=team_ids, has_manage=has_manage
+        user_id=user_id,
+        role_ids=role_ids,
+        team_ids=team_ids,
+        group_ids=group_ids,
+        has_manage=has_manage,
     )
     # Builtin fields: every name that can carry a write grant (denied returns only truly-restricted).
     builtin_names = sorted(f.value for f in BuiltinItemField)
@@ -448,8 +457,10 @@ async def readonly_field_keys(
     # Custom fields in this project's scope: readable but not writable.
     definitions = await definitions_for_project(session, project)
 
-    async def _subjects() -> tuple[frozenset[uuid.UUID], frozenset[uuid.UUID]]:
-        return role_ids, team_ids
+    async def _subjects() -> tuple[
+        frozenset[uuid.UUID], frozenset[uuid.UUID], frozenset[uuid.UUID]
+    ]:
+        return role_ids, team_ids, group_ids
 
     ctx = await build_field_ctx(
         session,

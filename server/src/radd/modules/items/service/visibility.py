@@ -108,6 +108,7 @@ async def _check_builtin_field_rules(
         user_id=actor.id,
         role_ids=subjects.role_ids,
         team_ids=subjects.team_ids,
+        group_ids=subjects.group_ids,
         has_manage=Permission.PROJECT_MANAGE in permissions,
     )
     denied = fields.builtin_write_denied(sorted(touched), grants, subject, project.id)
@@ -127,9 +128,11 @@ async def _field_ctx(
     when no field in the project carries any grant (the common case)."""
     has_manage = Permission.PROJECT_MANAGE in permissions
 
-    async def _subjects() -> tuple[frozenset[uuid.UUID], frozenset[uuid.UUID]]:
+    async def _subjects() -> tuple[
+        frozenset[uuid.UUID], frozenset[uuid.UUID], frozenset[uuid.UUID]
+    ]:
         subjects = await authz.subjects_for(session, actor, project)
-        return subjects.role_ids, subjects.team_ids
+        return subjects.role_ids, subjects.team_ids, subjects.group_ids
 
     return await fields.build_field_ctx(
         session,

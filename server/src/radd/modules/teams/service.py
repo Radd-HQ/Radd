@@ -143,6 +143,7 @@ async def add_team_member(
         raise ConflictError(TeamEntity.MEMBER, user_id)
     session.add(TeamMember(team_id=team_id, user_id=user_id))
     await session.flush()
+    forget_user_teams(session)
     await _emit_updated(
         session, team, actor_id, {"action": TeamChange.MEMBER_ADDED, "user_id": str(user_id)}
     )
@@ -158,6 +159,7 @@ async def remove_team_member(
     )
     if result.rowcount == 0:
         raise NotFoundError(TeamEntity.MEMBER, user_id)
+    forget_user_teams(session)
     await _emit_updated(
         session, team, actor_id, {"action": TeamChange.MEMBER_REMOVED, "user_id": str(user_id)}
     )
@@ -179,6 +181,7 @@ async def add_team_group(
         raise ConflictError(TeamEntity.MEMBER, group_id)
     session.add(TeamMember(team_id=team_id, group_id=group_id))
     await session.flush()
+    forget_user_teams(session)
     await _emit_updated(
         session,
         team,
@@ -200,6 +203,7 @@ async def remove_team_group(
     )
     if result.rowcount == 0:
         raise NotFoundError(TeamEntity.MEMBER, group_id)
+    forget_user_teams(session)
     await _emit_updated(
         session,
         team,
@@ -472,13 +476,33 @@ async def teams_for_user(session: AsyncSession, user_id: uuid.UUID) -> list[Team
     return list(result.scalars())
 
 
+#: Per-request memo key prefix (RADD-830): 20 call sites resolve membership
+#: through this seam, and a batched permission resolution hits it repeatedly.
+_USER_TEAMS_CACHE_KEY = "radd.user_team_ids"
+
+
+def forget_user_teams(session: AsyncSession) -> None:
+    """Drop every memoised membership — call after a team_members write (the
+    `forget_baseline` rule: the request that changes the graph must not answer
+    with the sets it read before)."""
+    for key in [k for k in session.info if str(k).startswith(_USER_TEAMS_CACHE_KEY)]:
+        session.info.pop(key, None)
+
+
 async def user_team_ids(session: AsyncSession, user_id: uuid.UUID) -> set[uuid.UUID]:
     """THE membership seam (20 call sites): the teams this person is on, direct
-    rows and group-carried alike."""
+    rows and group-carried alike. Memoised per request (RADD-830) beside
+    `baseline_permissions` — the group closure underneath is a graph walk."""
+    key = f"{_USER_TEAMS_CACHE_KEY}:{user_id}"
+    cached: set[uuid.UUID] | None = session.info.get(key)
+    if cached is not None:
+        return cached
     result = await session.execute(
         select(TeamMember.team_id).where(await _membership_filter(session, user_id))
     )
-    return set(result.scalars())
+    resolved = set(result.scalars())
+    session.info[key] = resolved
+    return resolved
 
 
 async def team_granted_role_ids(

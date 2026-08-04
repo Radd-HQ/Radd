@@ -69,10 +69,30 @@ async def direct_member_counts(
 # --- the closures -------------------------------------------------------------
 
 
+#: Per-request memo key prefix (RADD-830): the closure runs on the hottest path
+#: — a batched permission resolution asks for it several times per request.
+_USER_GROUPS_CACHE_KEY = "radd.user_group_ids"
+
+
+def forget_user_groups(session: AsyncSession) -> None:
+    """Drop every memoised closure — call after a membership/edge write, or the
+    request that CHANGES the graph answers with the sets it read before (the
+    `forget_baseline` rule)."""
+    for key in [k for k in session.info if str(k).startswith(_USER_GROUPS_CACHE_KEY)]:
+        session.info.pop(key, None)
+
+
 async def user_group_ids(session: AsyncSession, user_id: uuid.UUID) -> set[uuid.UUID]:
     """Every group the user belongs to, TRANSITIVELY: direct memberships plus
     all ancestors (a parent group contains its child groups' members). The
-    upward closure behind `teams.user_team_ids` and the subject graph."""
+    upward closure behind `teams.user_team_ids` and the subject graph.
+
+    Memoised per request beside `baseline_permissions`/`readable_projects`
+    (RADD-830) — done per check this is a graph walk per permission test."""
+    key = f"{_USER_GROUPS_CACHE_KEY}:{user_id}"
+    cached: set[uuid.UUID] | None = session.info.get(key)
+    if cached is not None:
+        return cached
     direct = set(
         (
             await session.execute(
@@ -80,7 +100,9 @@ async def user_group_ids(session: AsyncSession, user_id: uuid.UUID) -> set[uuid.
             )
         ).scalars()
     )
-    return await _ancestors_closure(session, direct)
+    resolved = await _ancestors_closure(session, direct)
+    session.info[key] = resolved
+    return resolved
 
 
 async def _ancestors_closure(
@@ -198,6 +220,11 @@ async def replace_members(
             )
         )
     await session.flush()
+    if adds or removes:
+        forget_user_groups(session)
+        from radd.modules.teams import service as teams  # deferred: teams loads after groups
+
+        teams.forget_user_teams(session)
     return len(adds), len(removes)
 
 
@@ -224,6 +251,11 @@ async def set_parents(
             )
         )
     await session.flush()
+    if (desired - current) or stale:
+        forget_user_groups(session)
+        from radd.modules.teams import service as teams  # deferred: teams loads after groups
+
+        teams.forget_user_teams(session)
 
 
 async def mark_missing(

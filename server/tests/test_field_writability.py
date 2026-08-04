@@ -50,6 +50,7 @@ async def _readonly(db, project, *, teams=(), manage=False):
             user_id=uuid.uuid4(),
             role_ids=frozenset(),
             team_ids=frozenset(teams),
+            group_ids=frozenset(),
             has_manage=manage,
         )
     )

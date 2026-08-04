@@ -178,6 +178,19 @@ async def test_group_carried_membership_expands_into_the_team(db):
     assert await teams_service.list_team_members(db, team.id) == []
 
 
+async def test_subject_graph_is_memoised_per_request(db):
+    """RADD-830: the closure runs on the hottest path — one resolution per
+    request per actor, identity-asserted (`is`, not `==`)."""
+    user = await _user(db, "Memoised")
+    group = await groups_service.upsert_group(db, dn="CN=memo,DC=t", name="Memo")
+    db.add(GroupMember(group_id=group.id, user_id=user.id))
+    await db.flush()
+    first_groups = await groups_service.user_group_ids(db, user.id)
+    assert await groups_service.user_group_ids(db, user.id) is first_groups
+    first_teams = await teams_service.user_team_ids(db, user.id)
+    assert await teams_service.user_team_ids(db, user.id) is first_teams
+
+
 async def test_group_cycle_terminates_and_depth_fails_closed(db):
     """AD is a graph: a cycle must terminate, and nesting deeper than the cap
     resolves FEWER memberships (fails closed), never hangs."""

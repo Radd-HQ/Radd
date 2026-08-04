@@ -24,13 +24,21 @@ class _GrantLike(Protocol):
     project_id: uuid.UUID | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class SubjectContext:
     """What the acting user brings to a grant check, in one scope. `role_ids` are the
     roles the user holds ON THIS PROJECT (direct + team + project-scoped grants), so
     a role-subject grant is inherently project-aware. `has_manage` bypasses (a
-    project/resource manager always passes)."""
+    project/resource manager always passes).
 
+    `group_ids` (RADD-830) is REQUIRED on purpose — no default. The user's
+    transitive directory groups are part of the subject graph, and a
+    construction site that forgets them must fail to COMPILE, because at
+    runtime it fails as a quiet access denial the day RADD-832 makes groups
+    grant subjects. Pass `frozenset()` explicitly where groups genuinely
+    don't apply (pure unit fixtures)."""
+
+    group_ids: frozenset[uuid.UUID]
     user_id: uuid.UUID | None = None
     role_ids: frozenset[uuid.UUID] = field(default_factory=frozenset)
     team_ids: frozenset[uuid.UUID] = field(default_factory=frozenset)

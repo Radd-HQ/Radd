@@ -142,6 +142,7 @@ async def field_writability(
         user_id=user.id,
         role_ids=subjects.role_ids,
         team_ids=subjects.team_ids,
+        group_ids=subjects.group_ids,
         has_manage=authz.Permission.PROJECT_MANAGE in perms,
     )
     return FieldWritabilityRead(readonly_fields=readonly)

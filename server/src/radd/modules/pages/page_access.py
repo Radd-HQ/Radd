@@ -102,6 +102,7 @@ async def _subject_context(
     "roles held on this project" — so a grant naming a role means what a reader
     would expect: the people who hold that role here.
     """
+    from radd.modules.groups import service as groups_service
     from radd.modules.teams import service as teams_service
 
     return SubjectContext(
@@ -110,6 +111,7 @@ async def _subject_context(
             await role_grants.granted_role_ids(session, user.id, space_id=space_id)
         ),
         team_ids=frozenset(await teams_service.user_team_ids(session, user.id)),
+        group_ids=frozenset(await groups_service.user_group_ids(session, user.id)),
         has_manage=can_manage,
     )
 

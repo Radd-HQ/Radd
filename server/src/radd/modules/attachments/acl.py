@@ -82,10 +82,12 @@ access_registry.register_resource(_SPEC)
 
 async def _base_subjects(
     session: AsyncSession, user: User, attachment: Attachment
-) -> tuple[frozenset[uuid.UUID], frozenset[uuid.UUID], bool]:
-    """(role_ids, team_ids, parent_writable) for one parent — shared across a
-    listing; `has_manage` is finished per attachment (the uploader varies)."""
+) -> tuple[frozenset[uuid.UUID], frozenset[uuid.UUID], frozenset[uuid.UUID], bool]:
+    """(role_ids, team_ids, group_ids, parent_writable) for one parent — shared
+    across a listing; `has_manage` is finished per attachment (the uploader
+    varies)."""
     from radd.modules.auth import authz
+    from radd.modules.groups import service as groups_service
     from radd.modules.projects import service as projects_service
     from radd.modules.teams import service as teams_service
 
@@ -94,18 +96,19 @@ async def _base_subjects(
     if project_id is not None:
         project = await projects_service.get_project(session, project_id)
         subjects = await authz.subjects_for(session, user, project)
-        role_ids, team_ids = subjects.role_ids, subjects.team_ids
+        role_ids, team_ids, group_ids = subjects.role_ids, subjects.team_ids, subjects.group_ids
     else:
         # No project (wiki parents): role-subject grants can't resolve a scope,
-        # so user/team subjects carry the restriction.
+        # so user/team/group subjects carry the restriction.
         role_ids = frozenset()
         team_ids = frozenset(await teams_service.user_team_ids(session, user.id))
+        group_ids = frozenset(await groups_service.user_group_ids(session, user.id))
     try:
         await binding.require_write(session, user, attachment.entity_id)
         parent_writable = True
     except (ForbiddenError, NotFoundError):
         parent_writable = False
-    return role_ids, team_ids, parent_writable
+    return role_ids, team_ids, group_ids, parent_writable
 
 
 def _context(
@@ -113,12 +116,14 @@ def _context(
     attachment: Attachment,
     role_ids: frozenset[uuid.UUID],
     team_ids: frozenset[uuid.UUID],
+    group_ids: frozenset[uuid.UUID],
     parent_writable: bool,
 ) -> resolution.SubjectContext:
     return resolution.SubjectContext(
         user_id=user.id,
         role_ids=role_ids,
         team_ids=team_ids,
+        group_ids=group_ids,
         # Uploaders and parent-writers always pass their own files' gates.
         has_manage=parent_writable or attachment.created_by == user.id,
     )
@@ -138,8 +143,10 @@ async def attachment_readable(
     )
     if not grants:
         return True
-    role_ids, team_ids, parent_writable = await _base_subjects(session, user, attachment)
-    ctx = _context(user, attachment, role_ids, team_ids, parent_writable)
+    role_ids, team_ids, group_ids, parent_writable = await _base_subjects(
+        session, user, attachment
+    )
+    ctx = _context(user, attachment, role_ids, team_ids, group_ids, parent_writable)
     return resolution.has_access(grants, ctx, Access.READ.value, None, _SPEC)
 
 

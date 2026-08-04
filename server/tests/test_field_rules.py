@@ -37,8 +37,13 @@ WRITE_GRANTS = {
 }
 
 
-def ctx(*, roles=(), teams=(), manage=False):
-    return SubjectContext(role_ids=frozenset(roles), team_ids=frozenset(teams), has_manage=manage)
+def ctx(*, roles=(), teams=(), groups=(), manage=False):
+    return SubjectContext(
+        role_ids=frozenset(roles),
+        team_ids=frozenset(teams),
+        group_ids=frozenset(groups),
+        has_manage=manage,
+    )
 
 
 def test_unruled_fields_stay_open():

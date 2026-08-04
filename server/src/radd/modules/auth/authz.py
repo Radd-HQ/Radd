@@ -835,12 +835,19 @@ class Subjects:
     """The grant subjects a user brings to a project — spec 07 (field grants) consumes this."""
 
     role_ids: frozenset[uuid.UUID]  # every role held on the project (direct + team-granted)
-    team_ids: frozenset[uuid.UUID]  # the user's teams
+    team_ids: frozenset[uuid.UUID]  # the user's teams (group-carried included, RADD-829)
+    group_ids: frozenset[uuid.UUID]  # the user's transitive directory groups (RADD-830)
 
 
 async def subjects_for(session: AsyncSession, user: User, project: Project) -> Subjects:
+    from radd.modules.groups import service as groups  # deferred: loads after auth
     from radd.modules.teams import service as teams  # deferred: teams loads after auth
 
     role_ids = await _granted_role_ids(session, user.id, project)
     team_ids = await teams.user_team_ids(session, user.id)
-    return Subjects(role_ids=frozenset(role_ids), team_ids=frozenset(team_ids))
+    group_ids = await groups.user_group_ids(session, user.id)
+    return Subjects(
+        role_ids=frozenset(role_ids),
+        team_ids=frozenset(team_ids),
+        group_ids=frozenset(group_ids),
+    )
