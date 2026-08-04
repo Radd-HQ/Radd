@@ -10,12 +10,17 @@ interface PermissionMatrixProps {
 
 const SCOPE_LABELS = {
   [PermissionScope.project]: "Project permissions",
+  [PermissionScope.space]: "Space permissions",
   [PermissionScope.global]: "Global permissions",
   [PermissionScope.instance]: "Instance permissions",
 } as const;
 
+/** Every scope the catalog can serve. A missing entry is invisible, not an
+ *  error — line 44 filters by scope, so an unlisted one matches nothing and
+ *  its atoms never render (RADD-808). Keep in step with `PermissionScope`. */
 const SCOPE_ORDER = [
   PermissionScope.project,
+  PermissionScope.space,
   PermissionScope.global,
   PermissionScope.instance,
 ] as const;

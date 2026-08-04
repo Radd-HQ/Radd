@@ -49,10 +49,13 @@ export const Permission = {
   cardPresetDelete: "cardpreset.delete",
   /** Spec 20: manage a project's intake forms (project-scoped). */
   formManage: "form.manage",
-  /** Spec 43 (pages) — all global. */
+  /** Spec 43 (pages) — SPACE-scoped since RADD-791. They were global because a
+   *  page had no scope to be checked against, which made per-space access
+   *  inexpressible. Asking `perms.global(pageRead)` is therefore always wrong. */
   pageRead: "page.read",
   pageWrite: "page.write",
   pageManage: "page.manage",
+  pageDelete: "page.delete",
   /** Spec 75: the server-wide-broadcast gate on dashboard sharing (global). */
   dashboardCreate: "dashboard.create",
 } as const;
@@ -61,10 +64,20 @@ export const Permission = {
 // `(string & {})` keeps that autocomplete while accepting any catalog key.
 export type PermissionValue = (typeof Permission)[keyof typeof Permission] | (string & {});
 
+/** Mirrors `PermissionScope` in `server/src/radd/modules/auth/types.py`.
+ *
+ * RADD-808: this drifted in BOTH directions and neither side noticed — the
+ * server grew `space` (RADD-791) and never appeared here, so the four page
+ * atoms were silently dropped from the roles matrix and could not be granted
+ * at all. A scope the client does not know is not a type error; it is a row
+ * that renders nowhere. `test_permission_scope_contract.py` now pins the two
+ * lists together so the next scope fails a test instead of a screen. */
 export const PermissionScope = {
   project: "project",
   global: "global",
   instance: "instance",
+  /** RADD-791 — checked against a wiki space. */
+  space: "space",
 } as const;
 export type PermissionScopeValue = (typeof PermissionScope)[keyof typeof PermissionScope];
 

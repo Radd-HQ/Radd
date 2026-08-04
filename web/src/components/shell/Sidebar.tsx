@@ -73,10 +73,14 @@ export function Sidebar() {
   const { data: projects } = useQuery(projectsQuery());
   const { data: views } = useQuery(viewsQuery());
   const { data: cycles } = useQuery(cyclesQuery());
-  const { data: pageSpaces } = useQuery({
-    ...pageSpacesQuery(),
-    enabled: perms.global(Permission.pageRead),
-  });
+  // RADD-808: no atom gate. `page.read` is SPACE-scoped since RADD-791, so
+  // `perms.global` was false for everyone holding it from a space or team
+  // grant — the fetch never fired and the section below never rendered.
+  // `GET /page-spaces` already answers exactly this question against the
+  // spec-92 access grants (`readable_spaces`) and returns an empty list rather
+  // than a 403, so the server's answer IS the gate. Re-deriving it client-side
+  // from atoms is the second implementation RADD-779 rejected.
+  const { data: pageSpaces } = useQuery(pageSpacesQuery());
   const { data: dashboards } = useQuery(dashboardsQuery());
   /** Project the "New item" modal was opened for (from its sidebar row). */
   const [newItemProject, setNewItemProject] = useState<Project | null>(null);
@@ -309,8 +313,13 @@ export function Sidebar() {
           </div>
         )}
 
-        {/* Pages (spec 43): page spaces, between Views and Cycles. */}
-        {perms.global(Permission.pageRead) && (
+        {/* Pages (spec 43): page spaces, between Views and Cycles.
+            Shown when the server returned spaces, or when the actor may create
+            one — `page.manage` with no space is the global check `create_space`
+            itself makes, so that branch is what keeps "No spaces yet." reachable
+            for an admin on a fresh instance. Someone with neither sees no
+            section at all rather than a permanently empty header (RADD-808). */}
+        {((pageSpaces ?? []).length > 0 || perms.global(Permission.pageManage)) && (
           <div className="mt-3">
             <SectionHeader
               label="Pages"

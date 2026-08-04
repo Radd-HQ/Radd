@@ -101,6 +101,40 @@ async function main() {
     };
   })()`);
 
+  // RADD-808: a scope with no screen is spec 87's failure again — the page
+  // atoms were served by GET /permissions the whole time and rendered nowhere,
+  // because the matrix iterates its OWN scope list and filters the catalog to
+  // each entry. An unlisted scope matches nothing and drops its atoms in
+  // silence: no error, no empty state, nothing in the console.
+  await session.navigate(baseUrl + "/settings/roles", 600);
+  await sleep(2500);
+  const adminMatrix = await session.eval(`(async () => {
+    const row = [...document.querySelectorAll("button")]
+      .find((b) => (b.textContent || "").includes("Space Proof Reader"));
+    if (row) { row.click(); await new Promise((r) => setTimeout(r, 1500)); }
+    const fieldsets = [...document.querySelectorAll("fieldset")];
+    const legends = fieldsets.map((f) => (f.querySelector("legend")?.textContent || "").trim());
+    // The matrix never prints the atom KEY: the resource is a heading and the
+    // label is the bare action verb. Counting "page.read" in label text finds
+    // nothing whether the group renders or not — a check that cannot fail is
+    // not a check, so this walks the group the way the DOM is actually built.
+    const spaceSet = fieldsets.find((f) =>
+      /space/i.test(f.querySelector("legend")?.textContent || ""));
+    const pageGroup = spaceSet
+      ? [...spaceSet.querySelectorAll("div")]
+          .find((d) => (d.querySelector("p")?.textContent || "").trim() === "page")
+      : null;
+    return {
+      legends,
+      hasSpaceGroup: legends.some((l) => /space/i.test(l)),
+      pageAtoms: pageGroup ? pageGroup.querySelectorAll('input[type="checkbox"]').length : 0,
+      pageActions: pageGroup
+        ? [...pageGroup.querySelectorAll("li")].map((li) =>
+            (li.querySelector("span span")?.textContent || "").trim())
+        : [],
+    };
+  })()`);
+
   // --- the MEMBER half: does the scope actually shape the wiki? --------------
   await session.eval(`fetch("/api/v1/auth/logout", {method:"POST", credentials:"include"})`);
   const loginStatus = await session.login(baseUrl, ACCOUNT.email, ACCOUNT.password);
@@ -123,6 +157,32 @@ async function main() {
     return {
       showsGranted: text.includes("Granted ${STAMP}"),
       showsWithheld: text.includes("Withheld ${STAMP}"),
+    };
+  })()`);
+
+  // RADD-808: the SIDEBAR, which the checks above never touched — they read the
+  // /pages route's own body, so the nav section could vanish entirely and every
+  // assertion still passed. That is precisely what happened: the section gated
+  // on \`perms.global(page.read)\`, an atom that has been SPACE-scoped since
+  // RADD-791 and so is never held globally by the very account this proof
+  // creates. The feature was unreachable for exactly the person it was built
+  // for, and the proof for the feature was looking the other way.
+  const sidebar = await session.eval(`(() => {
+    const aside = document.querySelector("aside");
+    const text = aside ? aside.textContent || "" : "";
+    const header = [...(aside ? aside.querySelectorAll("*") : [])].find(
+      (n) => n.children.length === 0 && n.textContent.trim() === "Pages",
+    );
+    return {
+      asidePresent: aside !== null,
+      // Plain includes, not a regex: a word-boundary escape inside this
+      // template literal is a BACKSPACE by the time the page evaluates it, so
+      // the pattern matched nothing and reported a missing section that was
+      // on screen the whole time.
+      hasPagesSection: text.includes("Pages"),
+      headerVisible: header ? header.getBoundingClientRect().width > 0 : false,
+      listsGranted: text.includes("Granted ${STAMP}"),
+      listsWithheld: text.includes("Withheld ${STAMP}"),
     };
   })()`);
 
@@ -162,6 +222,14 @@ async function main() {
     "search does not surface the withheld space's page": api.searchHitsSecret === false,
     "the wiki shows the granted space": wiki.showsGranted === true,
     "and does not show the withheld one": wiki.showsWithheld === false,
+    // RADD-808: the nav, not just the page it links to.
+    "the sidebar renders a Pages section": sidebar.hasPagesSection === true,
+    "the Pages section header has real width": sidebar.headerVisible === true,
+    "the sidebar lists the granted space": sidebar.listsGranted === true,
+    "and not the withheld one": sidebar.listsWithheld === false,
+    "the roles matrix renders a Space permissions group":
+      adminMatrix.hasSpaceGroup === true,
+    "and offers the four page atoms": adminMatrix.pageAtoms === 4,
     "no console errors": consoleErrors.length === 0,
     "the Baseline was restored":
       restored.patch === 200 &&
@@ -169,7 +237,7 @@ async function main() {
     "the seeded account was removed": restored.userDel === 204,
   };
 
-  return report(checks, { seeded: { grantStatus: seeded.grantStatus }, adminView, api, wiki, restored,
+  return report(checks, { seeded: { grantStatus: seeded.grantStatus }, adminView, adminMatrix, sidebar, api, wiki, restored,
     consoleErrors: consoleErrors.slice(0, 5) });
 }
 
