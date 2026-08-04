@@ -19,6 +19,7 @@ from radd.modules.events import service as events
 from radd.modules.fields import service as fields
 from radd.modules.fields.models import FieldDefinition
 from radd.modules.fields.types import FieldType
+from radd.modules.groups import service as groups_service
 from radd.modules.items import service as items_service, slq
 from radd.modules.items.filters import ItemFilterParam
 from radd.modules.teams import service as teams_service
@@ -32,6 +33,7 @@ from .schemas import (
     CardPresetCreate,
     CardPresetUpdate,
     QuickFilter,
+    ShareGroupRef,
     ShareTeamRef,
     ShareUserRef,
     ViewCreate,
@@ -90,15 +92,22 @@ async def _shares_by_view(
 
 
 def _grant_level(
-    view: View, grants: list[AccessGrant], actor_id: uuid.UUID, team_ids: set[uuid.UUID]
+    view: View,
+    grants: list[AccessGrant],
+    actor_id: uuid.UUID,
+    team_ids: set[uuid.UUID],
+    group_ids: set[uuid.UUID],
 ) -> ShareLevel | None:
-    """The highest ShareLevel the actor holds on the view via direct/team grants
-    or global_access — None = the view is invisible to them."""
+    """The highest ShareLevel the actor holds on the view via direct/team/group
+    grants or global_access — None = the view is invisible to them. `group_ids`
+    is the TRANSITIVE closure (RADD-832), so a share with a parent group reaches
+    nested members."""
     levels: set[ShareLevel] = {
         ShareLevel(grant.access)
         for grant in grants
         if (grant.subject_type == GrantSubject.USER.value and grant.subject_id == actor_id)
         or (grant.subject_type == GrantSubject.TEAM.value and grant.subject_id in team_ids)
+        or (grant.subject_type == GrantSubject.GROUP.value and grant.subject_id in group_ids)
     }
     if view.global_access is not None:
         levels.add(ShareLevel(view.global_access))
@@ -122,7 +131,8 @@ async def _can_manage_view(
         return True
     grants = (await _shares_by_view(session, [view.id])).get(view.id, [])
     team_ids = await teams_service.user_team_ids(session, actor.id)
-    if _grant_level(view, grants, actor.id, team_ids) is ShareLevel.OWNER:
+    group_ids = await groups_service.user_group_ids(session, actor.id)
+    if _grant_level(view, grants, actor.id, team_ids, group_ids) is ShareLevel.OWNER:
         return True
     if view.owner_id is None:
         if view.project_id is not None:
@@ -157,7 +167,7 @@ _VIEW_SPEC = ResourceSpec(
     accesses=(ShareLevel.VIEWER.value, ShareLevel.EDITOR.value, ShareLevel.OWNER.value),
     default_open=False,  # a view is private (owner-only) until shared
     hierarchical=True,  # viewer < editor < owner — the effective level is the highest held
-    subjects=(GrantSubject.USER, GrantSubject.TEAM),
+    subjects=(GrantSubject.USER, GrantSubject.TEAM, GrantSubject.GROUP),
     project_scoped=False,  # a view already belongs to one project
     label="View",
     label_for=_view_labels,
@@ -193,18 +203,22 @@ async def _hydrate(session: AsyncSession, actor: User, views: list[View]) -> lis
     shares_map = await _shares_by_view(session, [v.id for v in views])
     user_ids = {v.owner_id for v in views if v.owner_id is not None}
     team_ids: set[uuid.UUID] = set()
+    group_ids: set[uuid.UUID] = set()
     for grants in shares_map.values():
         user_ids |= {g.subject_id for g in grants if g.subject_type == GrantSubject.USER.value}
         team_ids |= {g.subject_id for g in grants if g.subject_type == GrantSubject.TEAM.value}
+        group_ids |= {g.subject_id for g in grants if g.subject_type == GrantSubject.GROUP.value}
     users = await users_service.users_by_ids(session, user_ids)
     teams = await teams_service.teams_by_ids(session, team_ids)
+    groups = await groups_service.groups_by_ids(session, group_ids)
     actor_teams = await teams_service.user_team_ids(session, actor.id)
+    actor_groups = await groups_service.user_group_ids(session, actor.id)
     perms_cache: dict[uuid.UUID | None, frozenset[Permission]] = {}
 
     reads: list[ViewRead] = []
     for view in views:
         shares = shares_map.get(view.id, [])
-        grant = _grant_level(view, shares, actor.id, actor_teams)
+        grant = _grant_level(view, shares, actor.id, actor_teams, actor_groups)
         if view.owner_id == actor.id or grant is ShareLevel.OWNER:
             can_manage = True
         elif view.owner_id is None:
@@ -262,6 +276,12 @@ async def _hydrate(session: AsyncSession, actor: User, views: list[View]) -> lis
                             ShareTeamRef(id=t.id, name=t.name)
                             if g.subject_type == GrantSubject.TEAM.value
                             and (t := teams.get(g.subject_id))
+                            else None
+                        ),
+                        group=(
+                            ShareGroupRef(id=grp.id, name=grp.name)
+                            if g.subject_type == GrantSubject.GROUP.value
+                            and (grp := groups.get(g.subject_id))
                             else None
                         ),
                     )
@@ -501,7 +521,8 @@ async def _load_visible(
     view = await get_view(session, view_id)
     shares = (await _shares_by_view(session, [view.id])).get(view.id, [])
     team_ids = await teams_service.user_team_ids(session, actor.id)
-    grant = _grant_level(view, shares, actor.id, team_ids)
+    group_ids = await groups_service.user_group_ids(session, actor.id)
+    grant = _grant_level(view, shares, actor.id, team_ids, group_ids)
     if view.owner_id != actor.id and grant is None:
         raise NotFoundError(ViewEntity.VIEW, view_id)
     return view, grant
@@ -615,13 +636,18 @@ async def _add_share(
 ) -> None:
     """One view share = an access grant (spec 92). add_grant validates the subject
     exists + the level + dedupes."""
-    subject_type = GrantSubject.USER if entry.user_id is not None else GrantSubject.TEAM
+    if entry.user_id is not None:
+        subject_type, subject_id = GrantSubject.USER, entry.user_id
+    elif entry.team_id is not None:
+        subject_type, subject_id = GrantSubject.TEAM, entry.team_id
+    else:
+        subject_type, subject_id = GrantSubject.GROUP, entry.group_id
     await access_service.add_grant(
         session,
         VIEW_RESOURCE,
         str(view_id),
         subject_type=subject_type,
-        subject_id=entry.user_id if entry.user_id is not None else entry.team_id,
+        subject_id=subject_id,
         access=entry.level.value,
         actor_id=actor.id,
     )
@@ -649,11 +675,13 @@ async def list_views(
     # team X simply doesn't exist for people outside it.
     shares_map = await _shares_by_view(session, [v.id for v in candidates])
     team_ids = await teams_service.user_team_ids(session, actor.id)
+    group_ids = await groups_service.user_group_ids(session, actor.id)
     visible = [
         view
         for view in candidates
         if view.owner_id == actor.id
-        or _grant_level(view, shares_map.get(view.id, []), actor.id, team_ids) is not None
+        or _grant_level(view, shares_map.get(view.id, []), actor.id, team_ids, group_ids)
+        is not None
     ]
     return await _hydrate(session, actor, visible)
 

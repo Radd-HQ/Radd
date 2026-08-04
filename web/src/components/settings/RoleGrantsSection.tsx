@@ -17,7 +17,7 @@ import { SelectField } from "../SelectField";
 import { TokenMultiSelect } from "../TokenMultiSelect";
 import { ScopePicker } from "./ScopePicker";
 
-type Subject = { teamId: string } | { userId: string };
+type Subject = { teamId: string } | { userId: string } | { groupId: string };
 
 /**
  * Role grants held by a team or user (spec 91) — the unified, scopeable grant
@@ -34,8 +34,9 @@ export function RoleGrantsSection({
 }) {
   const teamId = "teamId" in subject ? subject.teamId : undefined;
   const userId = "userId" in subject ? subject.userId : undefined;
+  const groupId = "groupId" in subject ? subject.groupId : undefined;
   const queryClient = useQueryClient();
-  const grants = useQuery(roleGrantsQuery({ teamId, userId }));
+  const grants = useQuery(roleGrantsQuery({ teamId, userId, groupId }));
   const roles = useQuery(rolesQuery());
   const projects = useQuery(projectsQuery());
   const spaces = useQuery(pageSpacesQuery());
@@ -142,7 +143,11 @@ function GrantRoleDialog({
         role_id: roleId,
         project_ids: projectIds,
         space_ids: spaceIds,
-        ...("teamId" in subject ? { team_id: subject.teamId } : { user_id: subject.userId }),
+        ...("teamId" in subject
+          ? { team_id: subject.teamId }
+          : "userId" in subject
+            ? { user_id: subject.userId }
+            : { group_id: subject.groupId }),
       };
       return api.post(ApiPath.roleGrants, body);
     },

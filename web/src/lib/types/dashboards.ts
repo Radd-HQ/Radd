@@ -77,7 +77,7 @@ export interface DashboardCreate {
   description?: string;
   /** Wire name for "everyone on this server" (spec 86). */
   global_access?: ShareLevelValue | null;
-  shares?: { user_id?: string; team_id?: string; level: ShareLevelValue }[];
+  shares?: { user_id?: string; team_id?: string; group_id?: string; level: ShareLevelValue }[];
 }
 
 export interface DashboardUpdate {

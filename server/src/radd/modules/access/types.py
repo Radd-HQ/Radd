@@ -12,11 +12,14 @@ from enum import StrEnum
 
 
 class GrantSubject(StrEnum):
-    """Who a grant is given to. Uniform across every grant surface."""
+    """Who a grant is given to. Uniform across every grant surface.
+    GROUP (RADD-832) is a mirrored directory group, matched through nesting —
+    a grant to a parent group reaches every descendant's people."""
 
     USER = "user"
     TEAM = "team"
     ROLE = "role"
+    GROUP = "group"
 
 
 class Access(StrEnum):

@@ -36,8 +36,8 @@ export function DashboardSharingModal({
   );
   const [shareRows, setShareRows] = useState<LocalShare[]>(
     dashboard.shares.map((share) => ({
-      kind: share.user ? "user" : "team",
-      subjectId: (share.user ?? share.team)?.id ?? "",
+      kind: share.user ? "user" : share.team ? "team" : "group",
+      subjectId: (share.user ?? share.team ?? share.group)?.id ?? "",
       level: share.level,
     })),
   );
@@ -49,7 +49,11 @@ export function DashboardSharingModal({
   const reconcileShares = async () => {
     const current = (dashboard.shares ?? []).map((s) => ({
       id: s.id,
-      key: s.user ? `user:${s.user.id}` : `team:${s.team!.id}`,
+      key: s.user
+        ? `user:${s.user.id}`
+        : s.team
+          ? `team:${s.team.id}`
+          : `group:${s.group!.id}`,
       level: s.level as string,
     }));
     const desired = shareRows

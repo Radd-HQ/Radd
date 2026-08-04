@@ -125,9 +125,10 @@ class Role(Base, TimestampMixin):
 
 
 class GlobalRoleGrant(Base, TimestampMixin):
-    """A SCOPEABLE role grant (spec 87 → spec 91): a role held by a user or a team,
-    either instance-wide (`project_id` NULL = global, the spec-87 behavior) or on
-    one project (`project_id` set). Exactly one of user_id/team_id.
+    """A SCOPEABLE role grant (spec 87 → spec 91 → RADD-832): a role held by a
+    user, a team, or a directory GROUP, either instance-wide (`project_id` NULL =
+    global, the spec-87 behavior) or on one project (`project_id` set). Exactly
+    one of user_id/team_id/group_id.
 
     This is the DELIVERY MECHANISM for permission atoms outside project membership.
     Global grants apply at BOTH scopes (global checks union them in; every project
@@ -146,7 +147,12 @@ class GlobalRoleGrant(Base, TimestampMixin):
         # NULLs are distinct in Postgres, so duplicate GLOBAL grants are guarded in code.
         UniqueConstraint("role_id", "user_id", "project_id", "space_id"),
         UniqueConstraint("role_id", "team_id", "project_id", "space_id"),
-        CheckConstraint("(user_id IS NULL) <> (team_id IS NULL)", name="one_subject"),
+        UniqueConstraint("role_id", "group_id", "project_id", "space_id"),
+        # RADD-832: exactly one of user/team/GROUP — a role granted to an AD
+        # group directly, with no team invented to hold it.
+        CheckConstraint(
+            "num_nonnulls(user_id, team_id, group_id) = 1", name="one_subject"
+        ),
         # A grant has AT MOST one scope: no scope = instance-wide. Two would be an
         # unanswerable question ("this role, on that project, but only in that
         # space") rather than a useful one.
@@ -162,6 +168,11 @@ class GlobalRoleGrant(Base, TimestampMixin):
     )
     team_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("teams.id", ondelete="CASCADE"), index=True
+    )
+    # RADD-832 — the third subject kind: a directory group, resolved through
+    # nesting (a grant to a parent group reaches every descendant's people).
+    group_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("groups.id", ondelete="CASCADE"), index=True
     )
     # NULL = global (every project); set = scoped to that project only.
     project_id: Mapped[uuid.UUID | None] = mapped_column(

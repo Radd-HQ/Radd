@@ -3,7 +3,7 @@
 // Generic access grants (spec 92 — one scopeable ACL primitive for any resource)
 // ---------------------------------------------------------------------------
 
-export const GrantSubject = { user: "user", team: "team", role: "role" } as const;
+export const GrantSubject = { user: "user", team: "team", role: "role", group: "group" } as const;
 export type GrantSubjectValue = (typeof GrantSubject)[keyof typeof GrantSubject];
 
 /** One access grant: subject → access on a resource, scoped to a project (null = global). */
@@ -50,6 +50,8 @@ export interface RoleGrant {
   role_id: string;
   user_id: string | null;
   team_id: string | null;
+  /** A directory group holding the role (RADD-832), resolved through nesting. */
+  group_id: string | null;
   project_id: string | null;
   space_id: string | null;
 }
@@ -60,6 +62,7 @@ export interface RoleGrantCreate {
   role_id: string;
   user_id?: string | null;
   team_id?: string | null;
+  group_id?: string | null;
   /** Each id = one project-scoped grant. */
   project_ids?: string[];
   /** Each id = one SPACE-scoped grant (RADD-791). Both empty = one global grant. */

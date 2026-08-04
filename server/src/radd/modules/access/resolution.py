@@ -57,6 +57,10 @@ def subject_matches(grant: _GrantLike, ctx: SubjectContext) -> bool:
         return grant.subject_id in ctx.team_ids
     if grant.subject_type == GrantSubject.ROLE.value:
         return grant.subject_id in ctx.role_ids
+    if grant.subject_type == GrantSubject.GROUP.value:
+        # ctx.group_ids is the TRANSITIVE closure (RADD-830), so a grant on a
+        # parent group matches members of any nested descendant.
+        return grant.subject_id in ctx.group_ids
     return False
 
 

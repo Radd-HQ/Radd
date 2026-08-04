@@ -33,7 +33,7 @@ class ResourceAccessRow:
     resource_id: str
     resource_label: str | None
     access: str
-    subject_type: str  # user | team | role — which subject kind matched
+    subject_type: str  # user | team | role | group — which subject kind matched
     subject_id: uuid.UUID
     subject_name: str | None  # team/role display name; None when it's the user directly
     project_id: uuid.UUID | None
@@ -60,14 +60,18 @@ async def subject_access(
     user_id: uuid.UUID | None = None,
     team_ids: Iterable[uuid.UUID] = (),
     role_ids: Iterable[uuid.UUID] = (),
+    group_ids: Iterable[uuid.UUID] = (),
     team_names: Mapping[uuid.UUID, str] | None = None,
     role_names: Mapping[uuid.UUID, str] | None = None,
+    group_names: Mapping[uuid.UUID, str] | None = None,
 ) -> list[ResourceTypeAccess]:
     """Every access grant reaching the given subjects, grouped per registered
     resource type. Registry-driven: a plugin's resource type appears with no
-    edit here, exactly as its atoms already do."""
+    edit here, exactly as its atoms already do. `group_ids` (RADD-832) is the
+    caller's TRANSITIVE closure, so a grant on a parent group is reported."""
     team_ids = set(team_ids)
     role_ids = set(role_ids)
+    group_ids = set(group_ids)
     conditions = []
     if user_id is not None:
         conditions.append(
@@ -83,6 +87,11 @@ async def subject_access(
         conditions.append(
             (AccessGrant.subject_type == GrantSubject.ROLE.value)
             & (AccessGrant.subject_id.in_(role_ids))
+        )
+    if group_ids:
+        conditions.append(
+            (AccessGrant.subject_type == GrantSubject.GROUP.value)
+            & (AccessGrant.subject_id.in_(group_ids))
         )
     grants: list[AccessGrant] = []
     if conditions:
@@ -112,7 +121,9 @@ async def subject_access(
                 access=grant.access,
                 subject_type=grant.subject_type,
                 subject_id=grant.subject_id,
-                subject_name=_subject_name(grant, team_names or {}, role_names or {}),
+                subject_name=_subject_name(
+                    grant, team_names or {}, role_names or {}, group_names or {}
+                ),
                 project_id=grant.project_id,
                 project_key=project_keys.get(grant.project_id) if grant.project_id else None,
             )
@@ -135,11 +146,14 @@ def _subject_name(
     grant: AccessGrant,
     team_names: Mapping[uuid.UUID, str],
     role_names: Mapping[uuid.UUID, str],
+    group_names: Mapping[uuid.UUID, str],
 ) -> str | None:
     if grant.subject_type == GrantSubject.TEAM.value:
         return team_names.get(grant.subject_id)
     if grant.subject_type == GrantSubject.ROLE.value:
         return role_names.get(grant.subject_id)
+    if grant.subject_type == GrantSubject.GROUP.value:
+        return group_names.get(grant.subject_id)
     return None
 
 

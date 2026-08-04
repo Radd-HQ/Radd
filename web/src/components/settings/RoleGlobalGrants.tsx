@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { useOnLeaveIds } from "../PersonName";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Globe, Users } from "lucide-react";
+import { Globe, Users, UsersRound } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { apiRoleGlobalGrantsPath } from "../../lib/constants";
-import { queryKeys, roleGlobalGrantsQuery, teamsQuery, usersQuery } from "../../lib/queries";
+import { groupsQuery, queryKeys, roleGlobalGrantsQuery, teamsQuery, usersQuery } from "../../lib/queries";
 import type { GlobalGrant } from "../../lib/types";
 import { TokenMultiSelect, type TokenOption } from "../TokenMultiSelect";
 
@@ -22,6 +22,7 @@ export function RoleGlobalGrants({ roleId, editable }: { roleId: string; editabl
   const grants = useQuery(roleGlobalGrantsQuery(roleId));
   const users = useQuery({ ...usersQuery, enabled: editable, retry: false });
   const teams = useQuery(teamsQuery());
+  const groups = useQuery(groupsQuery());
   const [draft, setDraft] = useState<GlobalGrant[]>([]);
 
   // The server owns the state; the draft is only what's on screen between edits.
@@ -42,7 +43,9 @@ export function RoleGlobalGrants({ roleId, editable }: { roleId: string; editabl
   });
 
   // The token select works in "kind:id" strings; map to/from GlobalGrant rows.
-  const value = draft.map((row) => (row.user_id ? `user:${row.user_id}` : `team:${row.team_id}`));
+  const value = draft.map((row) =>
+    row.user_id ? `user:${row.user_id}` : row.team_id ? `team:${row.team_id}` : `group:${row.group_id}`,
+  );
   const onLeaveIds = useOnLeaveIds();
   const options: TokenOption[] = [
     ...(teams.data ?? []).map((team) => ({
@@ -50,6 +53,12 @@ export function RoleGlobalGrants({ roleId, editable }: { roleId: string; editabl
       label: team.name,
       group: "Teams",
       icon: <Users size={12} aria-hidden className="shrink-0 text-accent-text" />,
+    })),
+    ...(groups.data ?? []).map((g) => ({
+      value: `group:${g.id}`,
+      label: g.name,
+      group: "Directory groups",
+      icon: <UsersRound size={12} aria-hidden className="shrink-0 text-accent-text" />,
     })),
     ...(users.data ?? [])
       .filter((u) => u.active)
@@ -64,6 +73,7 @@ export function RoleGlobalGrants({ roleId, editable }: { roleId: string; editabl
           role_id: roleId,
           user_id: kind === "user" ? id : null,
           team_id: kind === "team" ? id : null,
+          group_id: kind === "group" ? id : null,
         };
       }),
     );
@@ -75,8 +85,8 @@ export function RoleGlobalGrants({ roleId, editable }: { roleId: string; editabl
         Granted instance-wide
       </h4>
       <p className="mb-2 text-xs text-fg-muted">
-        People and teams that hold this role everywhere — the only way a non-admin gets a
-        global permission. It also applies inside every project.
+        People, teams, and directory groups that hold this role everywhere — the only way a
+        non-admin gets a global permission. It also applies inside every project.
       </p>
 
       {grants.isPending ? (

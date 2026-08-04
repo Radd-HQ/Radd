@@ -130,7 +130,7 @@ export interface ResourceAccessRow {
   resource_id: string;
   resource_label: string | null;
   access: string;
-  subject_type: string; // user | team | role
+  subject_type: string; // user | team | role | group
   subject_id: string;
   subject_name: string | null; // null = the user directly
   project_id: string | null;

@@ -8,6 +8,8 @@ export interface GlobalGrant {
   role_id: string;
   user_id: string | null;
   team_id: string | null;
+  /** A directory group holding the role instance-wide (RADD-832). */
+  group_id: string | null;
 }
 
 /** GET /teams (spec 01; ownership — spec 87). RADD-829 retired the directory
@@ -56,6 +58,13 @@ export interface RaddGroup {
   name: string;
   directory_missing_since: string | null;
   direct_member_count: number;
+}
+
+/** GET /groups/{id}/reach — how many people a grant on the group resolves to,
+ * nesting included (RADD-832). The guardrail number shown before a grant saves. */
+export interface GroupReach {
+  group_id: string;
+  user_count: number;
 }
 
 /** A GROUP member of a team — GET /teams/{id}/groups (RADD-829). */

@@ -84,7 +84,7 @@ _PAGE_SPEC = ResourceSpec(
     # asked for and what makes an unrestricted wiki behave exactly as before.
     default_open=True,
     implied_by={Access.READ.value: (Access.WRITE.value,)},  # a writer can read
-    subjects=(GrantSubject.USER, GrantSubject.TEAM, GrantSubject.ROLE),
+    subjects=(GrantSubject.USER, GrantSubject.TEAM, GrantSubject.ROLE, GrantSubject.GROUP),
     # A page belongs to a SPACE, not a project, so grants carry no project scope.
     project_scoped=False,
     label="Page",

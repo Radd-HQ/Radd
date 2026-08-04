@@ -93,6 +93,7 @@ async def _validate_subject(
     session: AsyncSession, subject_type: GrantSubject, subject_id: uuid.UUID
 ) -> None:
     from radd.modules.auth import roles as roles_service, service as users_service
+    from radd.modules.groups import service as groups_service
     from radd.modules.teams import service as teams_service
 
     if subject_type is GrantSubject.USER:
@@ -101,6 +102,9 @@ async def _validate_subject(
     elif subject_type is GrantSubject.TEAM:
         if (await teams_service.teams_by_ids(session, [subject_id])).get(subject_id) is None:
             raise ConflictError(AccessEntity.GRANT, reason=f"no such team {subject_id}")
+    elif subject_type is GrantSubject.GROUP:
+        if (await groups_service.groups_by_ids(session, [subject_id])).get(subject_id) is None:
+            raise ConflictError(AccessEntity.GRANT, reason=f"no such group {subject_id}")
     else:  # ROLE
         if (await roles_service.roles_by_ids(session, {subject_id})).get(subject_id) is None:
             raise ConflictError(AccessEntity.GRANT, reason=f"no such role {subject_id}")

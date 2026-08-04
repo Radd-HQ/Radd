@@ -2,8 +2,9 @@ import { useMemo } from "react";
 import { PersonName } from "../PersonName";
 import { useQuery } from "@tanstack/react-query";
 import { Globe, Trash2 } from "lucide-react";
-import { teamsQuery, usersQuery } from "../../lib/queries";
+import { groupsQuery, teamsQuery, usersQuery } from "../../lib/queries";
 import { GrantSubject, ShareLevel, type ShareLevelValue } from "../../lib/types";
+import { GroupReachHint } from "../settings/GroupReachHint";
 import { SubjectPicker, type Subject } from "../settings/SubjectPicker";
 import { Select } from "../Select";
 
@@ -17,7 +18,7 @@ import { Select } from "../Select";
  */
 
 export interface LocalShare {
-  kind: "user" | "team";
+  kind: "user" | "team" | "group";
   subjectId: string;
   level: ShareLevelValue;
 }
@@ -49,14 +50,16 @@ export function ViewSharingEditor({
 }) {
   const users = useQuery(usersQuery);
   const teams = useQuery(teamsQuery());
+  const groups = useQuery(groupsQuery());
 
-  // Users + teams as the reusable SubjectPicker's options (views share with people/teams).
+  // Users + teams + directory groups (RADD-832) as the SubjectPicker's options.
   const subjects = useMemo<Subject[]>(
     () => [
       ...(users.data ?? []).map((u) => ({ type: GrantSubject.user, id: u.id, name: u.name })),
       ...(teams.data ?? []).map((t) => ({ type: GrantSubject.team, id: t.id, name: t.name })),
+      ...(groups.data ?? []).map((g) => ({ type: GrantSubject.group, id: g.id, name: g.name })),
     ],
-    [users.data, teams.data],
+    [users.data, teams.data, groups.data],
   );
   const subjectFor = (share: LocalShare): Subject | null =>
     share.subjectId ? subjects.find((s) => s.type === share.kind && s.id === share.subjectId) ?? null : null;
@@ -102,10 +105,16 @@ export function ViewSharingEditor({
             subjects={subjects}
             value={subjectFor(share)}
             onChange={(s) =>
-              setShare(index, s ? { kind: s.type as "user" | "team", subjectId: s.id } : { subjectId: "" })
+              setShare(
+                index,
+                s ? { kind: s.type as LocalShare["kind"], subjectId: s.id } : { subjectId: "" },
+              )
             }
-            placeholder="Person or team…"
+            placeholder="Person, team, or group…"
           />
+          {share.kind === "group" && share.subjectId && (
+            <GroupReachHint groupId={share.subjectId} />
+          )}
           <Select
             aria-label="Access level"
             value={share.level}
@@ -135,7 +144,7 @@ export function ViewSharingEditor({
         }
         className="w-fit text-xs text-fg-muted hover:text-fg cursor-pointer"
       >
-        + Share with a person or team
+        + Share with a person, team, or group
       </button>
 
       {onTransferTo && (

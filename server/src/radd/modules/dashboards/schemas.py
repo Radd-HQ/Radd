@@ -7,7 +7,7 @@ from radd.apitypes import UtcDatetime
 from radd.modules.items.enums import ItemKind
 from radd.modules.reporting.service import SLA_REPORT_MAX_WEEKS
 from radd.modules.reporting.types import ReportInterval, ReportMeasure
-from radd.modules.views.schemas import ShareTeamRef, ShareUserRef
+from radd.modules.views.schemas import ShareGroupRef, ShareTeamRef, ShareUserRef
 
 from .types import ShareLevel, WidgetType
 
@@ -210,16 +210,19 @@ class WidgetRead(BaseModel):
 
 
 class DashboardShareEntry(BaseModel):
-    """One sharing grant to write: exactly one of user_id/team_id."""
+    """One sharing grant to write: exactly one of user_id/team_id/group_id
+    (groups are grant subjects since RADD-832)."""
 
     user_id: uuid.UUID | None = None
     team_id: uuid.UUID | None = None
+    group_id: uuid.UUID | None = None
     level: ShareLevel = ShareLevel.VIEWER
 
     @model_validator(mode="after")
     def _one_subject(self) -> "DashboardShareEntry":
-        if (self.user_id is None) == (self.team_id is None):
-            raise ValueError("exactly one of user_id/team_id is required")
+        named = [x for x in (self.user_id, self.team_id, self.group_id) if x is not None]
+        if len(named) != 1:
+            raise ValueError("exactly one of user_id/team_id/group_id is required")
         return self
 
 
@@ -258,6 +261,7 @@ class DashboardShareRead(BaseModel):
     level: ShareLevel
     user: ShareUserRef | None = None
     team: ShareTeamRef | None = None
+    group: ShareGroupRef | None = None
 
 
 class DashboardRead(BaseModel):

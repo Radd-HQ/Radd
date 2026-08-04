@@ -66,6 +66,8 @@ export interface ViewShare {
   level: ShareLevelValue;
   user: ShareSubjectRef | null;
   team: ShareSubjectRef | null;
+  /** A directory group the view is shared with (RADD-832). */
+  group: ShareSubjectRef | null;
 }
 
 /** PUT /views/{id}/sharing — the FULL sharing state, replaced atomically.

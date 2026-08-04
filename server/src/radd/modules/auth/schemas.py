@@ -384,11 +384,13 @@ class GlobalGrantEntry(BaseModel):
 
     user_id: uuid.UUID | None = None
     team_id: uuid.UUID | None = None
+    group_id: uuid.UUID | None = None
 
     @model_validator(mode="after")
     def _one_subject(self) -> "GlobalGrantEntry":
-        if (self.user_id is None) == (self.team_id is None):
-            raise ValueError("exactly one of user_id/team_id is required")
+        named = [x for x in (self.user_id, self.team_id, self.group_id) if x is not None]
+        if len(named) != 1:
+            raise ValueError("exactly one of user_id/team_id/group_id is required")
         return self
 
 
@@ -406,6 +408,7 @@ class GlobalGrantRead(BaseModel):
     role_id: uuid.UUID
     user_id: uuid.UUID | None = None
     team_id: uuid.UUID | None = None
+    group_id: uuid.UUID | None = None
     # Both NULL = global; one set = scoped to that project (spec 91) or that
     # wiki space (RADD-791). Never both — see the `one_scope` CHECK.
     project_id: uuid.UUID | None = None
@@ -424,14 +427,16 @@ class RoleGrantCreate(BaseModel):
     role_id: uuid.UUID
     user_id: uuid.UUID | None = None
     team_id: uuid.UUID | None = None
+    group_id: uuid.UUID | None = None
     # Both empty = a single GLOBAL grant; each id = one scoped grant.
     project_ids: list[uuid.UUID] = Field(default_factory=list)
     space_ids: list[uuid.UUID] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _one_subject(self) -> "RoleGrantCreate":
-        if (self.user_id is None) == (self.team_id is None):
-            raise ValueError("exactly one of user_id/team_id is required")
+        named = [x for x in (self.user_id, self.team_id, self.group_id) if x is not None]
+        if len(named) != 1:
+            raise ValueError("exactly one of user_id/team_id/group_id is required")
         self.project_ids = list(dict.fromkeys(self.project_ids))
         self.space_ids = list(dict.fromkeys(self.space_ids))
         return self

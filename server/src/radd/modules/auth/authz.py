@@ -825,8 +825,8 @@ async def all_held_role_ids(session: AsyncSession, user: User) -> set[uuid.UUID]
     )
     held = set(member_rows.scalars())
     held |= await teams.team_granted_role_ids_anywhere(session, user.id)
-    grant_rows = await grants.grants_for_subject(session, user_id=user.id)
-    held |= {g.role_id for g in grant_rows}
+    # RADD-832: every grant CHANNEL (direct, team, group), not just direct rows.
+    held |= await grants.held_role_ids_anywhere(session, user.id)
     return held
 
 

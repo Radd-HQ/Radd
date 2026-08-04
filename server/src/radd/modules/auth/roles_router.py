@@ -75,7 +75,7 @@ _GRANTS_DOC = (
     "Who holds this role INSTANCE-WIDE (spec 87) — the delivery mechanism for global-scope "
     "atoms, which no project attachment can carry. Granted permissions apply at global scope "
     "and on every project. PUT replaces the full set atomically; each entry is exactly one of "
-    "user_id/team_id. Gated on role.update: like editing a role's permission set, handing out "
+    "user_id/team_id/group_id. Gated on role.update: like editing a role's permission set, handing out "
     "instance-wide grants is escalation-equivalent to instance admin."
 )
 
@@ -101,7 +101,8 @@ async def replace_global_grants(
 
 
 _GRANT_DIALOG_DOC = (
-    "The unified Grant Role dialog (spec 91 → RADD-791): grant a role to a user OR team "
+    "The unified Grant Role dialog (spec 91 → RADD-791 → RADD-832): grant a role to a "
+    "user, team, or directory group "
     "at global scope (no ids), on specific projects, or in specific wiki spaces. One "
     "dialog for every scope — a second one for spaces is how two scopes become two sets "
     "of rules. Like editing a role, handing out grants is escalation-equivalent — gated "
@@ -115,24 +116,29 @@ async def list_role_grants(
     user: CurrentUser,
     team_id: uuid.UUID | None = None,
     user_id: uuid.UUID | None = None,
+    group_id: uuid.UUID | None = None,
     space_id: uuid.UUID | None = None,
 ) -> list[GlobalGrantRead]:
-    """Role grants, by SUBJECT (the team/user Roles tab) or by SPACE (RADD-793).
+    """Role grants, by SUBJECT (the team/user/group Roles tab) or by SPACE
+    (RADD-793).
 
-    Exactly one of team_id/user_id/space_id. The space direction is the one an
-    admin actually asks — "who has access to this space?" — and asking it by
-    walking every user was not an answer.
+    Exactly one of team_id/user_id/group_id/space_id. The space direction is
+    the one an admin actually asks — "who has access to this space?" — and
+    asking it by walking every user was not an answer.
     """
     await authz.require_member(session, user)
-    named = [x for x in (team_id, user_id, space_id) if x is not None]
+    named = [x for x in (team_id, user_id, group_id, space_id) if x is not None]
     if len(named) != 1:
         raise ConflictError(
-            AuthEntity.GLOBAL_GRANT, reason="exactly one of team_id/user_id/space_id"
+            AuthEntity.GLOBAL_GRANT,
+            reason="exactly one of team_id/user_id/group_id/space_id",
         )
     if space_id is not None:
         rows = await grants.grants_for_space(session, space_id)
     else:
-        rows = await grants.grants_for_subject(session, user_id=user_id, team_id=team_id)
+        rows = await grants.grants_for_subject(
+            session, user_id=user_id, team_id=team_id, group_id=group_id
+        )
     return [GlobalGrantRead.model_validate(g) for g in rows]
 
 
@@ -155,6 +161,7 @@ async def create_role_grant(
             data.role_id,
             user_id=data.user_id,
             team_id=data.team_id,
+            group_id=data.group_id,
             project_id=project_id,
             space_id=space_id,
             actor_id=user.id,

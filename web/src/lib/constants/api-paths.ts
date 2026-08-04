@@ -43,6 +43,9 @@ export const apiTeamTransferPath = (teamId: string) => `${ApiPath.teams}/${teamI
 export const apiTeamMembersPath = (teamId: string) => `${ApiPath.teams}/${teamId}/members`;
 export const apiTeamMemberPath = (teamId: string, userId: string) =>
   `${ApiPath.teams}/${teamId}/members/${userId}`;
+/** RADD-832: how many people a grant on this group resolves to, nesting included. */
+export const apiGroupReachPath = (groupId: string) => `${ApiPath.groups}/${groupId}/reach`;
+
 /** RADD-829: a team's GROUP members (the directory arrives as held groups). */
 export const apiTeamGroupsPath = (teamId: string) => `${ApiPath.teams}/${teamId}/groups`;
 export const apiTeamGroupPath = (teamId: string, groupId: string) =>

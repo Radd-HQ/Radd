@@ -42,7 +42,7 @@ class ResourceSpec:
     # Are `accesses` ordered levels (viewer<editor<owner) or independent flags (read/write)?
     hierarchical: bool = False
     subjects: tuple[GrantSubject, ...] = (
-        GrantSubject.USER, GrantSubject.TEAM, GrantSubject.ROLE,
+        GrantSubject.USER, GrantSubject.TEAM, GrantSubject.ROLE, GrantSubject.GROUP,
     )
     project_scoped: bool = True
     # For flag models: which OTHER accesses satisfy a given one (write implies read).

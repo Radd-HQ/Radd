@@ -82,8 +82,8 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
   );
   const [shareRows, setShareRows] = useState<LocalShare[]>(
     (view?.shares ?? []).map((share) => ({
-      kind: share.user ? "user" : "team",
-      subjectId: (share.user ?? share.team)?.id ?? "",
+      kind: share.user ? "user" : share.team ? "team" : "group",
+      subjectId: (share.user ?? share.team ?? share.group)?.id ?? "",
       level: share.level,
     })),
   );
@@ -137,7 +137,9 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
       .map((row) =>
         row.kind === "user"
           ? { user_id: row.subjectId, level: row.level }
-          : { team_id: row.subjectId, level: row.level },
+          : row.kind === "team"
+            ? { team_id: row.subjectId, level: row.level }
+            : { group_id: row.subjectId, level: row.level },
       );
 
   /** On EDIT, per-subject shares are access grants (spec 92): reconcile the local
@@ -146,7 +148,11 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
     if (!view) return;
     const current = (view.shares ?? []).map((s) => ({
       id: s.id,
-      key: s.user ? `user:${s.user.id}` : `team:${s.team!.id}`,
+      key: s.user
+        ? `user:${s.user.id}`
+        : s.team
+          ? `team:${s.team.id}`
+          : `group:${s.group!.id}`,
       level: s.level as string,
     }));
     const desired = shareRows

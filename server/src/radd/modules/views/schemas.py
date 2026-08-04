@@ -105,16 +105,19 @@ class ViewCountsRequest(BaseModel):
 
 
 class ViewShareEntry(BaseModel):
-    """One sharing grant to write (spec 57): exactly one of user_id/team_id."""
+    """One sharing grant to write (spec 57): exactly one of
+    user_id/team_id/group_id (groups are grant subjects since RADD-832)."""
 
     user_id: uuid.UUID | None = None
     team_id: uuid.UUID | None = None
+    group_id: uuid.UUID | None = None
     level: ShareLevel = ShareLevel.VIEWER
 
     @model_validator(mode="after")
     def _one_subject(self) -> "ViewShareEntry":
-        if (self.user_id is None) == (self.team_id is None):
-            raise ValueError("exactly one of user_id/team_id is required")
+        named = [x for x in (self.user_id, self.team_id, self.group_id) if x is not None]
+        if len(named) != 1:
+            raise ValueError("exactly one of user_id/team_id/group_id is required")
         return self
 
 
@@ -201,11 +204,19 @@ class ShareTeamRef(BaseModel):
     name: str
 
 
+class ShareGroupRef(BaseModel):
+    """One directory group named by a share (RADD-832)."""
+
+    id: uuid.UUID
+    name: str
+
+
 class ViewShareRead(BaseModel):
     id: uuid.UUID
     level: ShareLevel
     user: ShareUserRef | None = None
     team: ShareTeamRef | None = None
+    group: ShareGroupRef | None = None
 
 
 class ViewRead(BaseModel):

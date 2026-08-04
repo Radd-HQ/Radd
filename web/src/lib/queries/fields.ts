@@ -38,13 +38,16 @@ export const grantsQuery = (resourceType: string, resourceId: string) =>
 export const roleGrantsQuery = (subject: {
   teamId?: string;
   userId?: string;
+  groupId?: string;
   spaceId?: string;
 }) => {
   const key = subject.teamId
     ? `team_id=${subject.teamId}`
     : subject.userId
       ? `user_id=${subject.userId}`
-      : `space_id=${subject.spaceId}`;
+      : subject.groupId
+        ? `group_id=${subject.groupId}`
+        : `space_id=${subject.spaceId}`;
   return queryOptions({
     queryKey: [
       ...queryKeys.roleGrants,

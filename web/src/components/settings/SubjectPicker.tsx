@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Shield, User, Users, X } from "lucide-react";
+import { Shield, User, Users, UsersRound, X } from "lucide-react";
 import { GrantSubject, type GrantSubjectValue } from "../../lib/types";
 
 export interface Subject {
@@ -12,6 +12,7 @@ export const SUBJECT_ICON = {
   [GrantSubject.role]: Shield,
   [GrantSubject.team]: Users,
   [GrantSubject.user]: User,
+  [GrantSubject.group]: UsersRound,
 } as const;
 
 /**

@@ -4,6 +4,7 @@ import { keepPreviousData, queryOptions } from "@tanstack/react-query";
 import { api } from "../api";
 import {
   ApiPath,
+  apiGroupReachPath,
   apiTeamAccessPath,
   apiTeamGroupsPath,
   apiTeamMembersPath,
@@ -18,6 +19,7 @@ import type {
   DirectorySyncStatus,
   DirectoryUser,
   DuplicateUserGroup,
+  GroupReach,
   RaddGroup,
   Team,
   TeamAccess,
@@ -156,6 +158,15 @@ export const groupsQuery = () =>
   queryOptions({
     queryKey: ["groups"] as const,
     queryFn: () => api.get<RaddGroup[]>(ApiPath.groups),
+    staleTime: 60_000,
+  });
+
+/** How many people a grant on a group resolves to, NESTING INCLUDED (RADD-832)
+ * — the number the grant UI shows before a grant is saved. */
+export const groupReachQuery = (groupId: string) =>
+  queryOptions({
+    queryKey: ["groups", groupId, "reach"] as const,
+    queryFn: () => api.get<GroupReach>(apiGroupReachPath(groupId)),
     staleTime: 60_000,
   });
 

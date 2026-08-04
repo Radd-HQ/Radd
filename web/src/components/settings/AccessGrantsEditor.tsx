@@ -6,6 +6,7 @@ import { Entity, invalidateEntities } from "../../lib/cache";
 import { ApiPath } from "../../lib/constants";
 import {
   grantsQuery,
+  groupsQuery,
   projectsQuery,
   queryKeys,
   rolesQuery,
@@ -22,6 +23,7 @@ import {
 import { Button } from "../Button";
 import { Select } from "../Select";
 import { ScopePicker } from "./ScopePicker";
+import { GroupReachHint } from "./GroupReachHint";
 import { SUBJECT_ICON, SubjectPicker, type Subject } from "./SubjectPicker";
 
 /**
@@ -35,7 +37,7 @@ export function AccessGrantsEditor({
   resourceType,
   resourceId,
   accesses = ["read", "write"],
-  subjectKinds = [GrantSubject.role, GrantSubject.team, GrantSubject.user],
+  subjectKinds = [GrantSubject.role, GrantSubject.team, GrantSubject.user, GrantSubject.group],
   description,
 }: {
   resourceType: string;
@@ -51,6 +53,7 @@ export function AccessGrantsEditor({
   const roles = useQuery(rolesQuery());
   const teams = useQuery(teamsQuery());
   const users = useQuery({ ...usersQuery, retry: false });
+  const groups = useQuery(groupsQuery());
   const projects = useQuery(projectsQuery());
 
   const subjects = useMemo<Subject[]>(() => {
@@ -61,8 +64,10 @@ export function AccessGrantsEditor({
       out.push(...(teams.data ?? []).map((t) => ({ type: GrantSubject.team, id: t.id, name: t.name })));
     if (subjectKinds.includes(GrantSubject.user))
       out.push(...(users.data ?? []).map((u) => ({ type: GrantSubject.user, id: u.id, name: u.name })));
+    if (subjectKinds.includes(GrantSubject.group))
+      out.push(...(groups.data ?? []).map((g) => ({ type: GrantSubject.group, id: g.id, name: g.name })));
     return out;
-  }, [roles.data, teams.data, users.data, subjectKinds]);
+  }, [roles.data, teams.data, users.data, groups.data, subjectKinds]);
 
   const nameOf = (g: AccessGrant) =>
     subjects.find((s) => s.type === g.subject_type && s.id === g.subject_id)?.name ?? "—";
@@ -188,6 +193,7 @@ function AddGrantRow({
   return (
     <div className="flex flex-wrap items-center gap-2 border-t border-subtle/60 pt-3">
       <SubjectPicker subjects={subjects} value={subject} onChange={setSubject} />
+      {subject?.type === GrantSubject.group && <GroupReachHint groupId={subject.id} />}
 
       <Select
         value={access}

@@ -19,6 +19,7 @@ from radd.modules.auth import authz
 from radd.modules.auth.models import User
 from radd.modules.items import service as items_service, slq
 from radd.modules.items.models import WorkItem
+from radd.modules.groups import service as groups_service
 from radd.modules.teams import service as teams_service
 from radd.modules.projects import service as projects_service
 
@@ -55,10 +56,11 @@ async def view_counts(
         return {}
     shares_map = await _shares_by_view(session, [v.id for v in views])
     team_ids = await teams_service.user_team_ids(session, actor.id)
+    group_ids = await groups_service.user_group_ids(session, actor.id)
 
     counts: dict[uuid.UUID, int] = {}
     for view in views:
-        grant = _grant_level(view, shares_map.get(view.id, []), actor.id, team_ids)
+        grant = _grant_level(view, shares_map.get(view.id, []), actor.id, team_ids, group_ids)
         if view.owner_id != actor.id and grant is None:
             continue  # invisible (spec 57) — omitted, not errored
         count = await _count_view(session, view, actor, readable_ids, extra_q=extra_q)

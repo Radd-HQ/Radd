@@ -1,5 +1,6 @@
-"""Scopeable role grants (spec 87 → spec 91) — how a role reaches a user/team
-outside project membership, at global OR project scope.
+"""Scopeable role grants (spec 87 → spec 91 → RADD-832) — how a role reaches a
+user, team, or directory GROUP outside project membership, at global OR
+project scope.
 
 Spec 87 introduced instance-wide grants (`global_role_grants`). Spec 91 adds a
 nullable `project_id`: NULL = global (unchanged), set = the role held only on that
@@ -24,13 +25,20 @@ from .types import AuthEntity, AuthEvent
 
 
 async def _subject_condition(session: AsyncSession, user_id: uuid.UUID):
-    """A grant belongs to the user directly, or to one of their teams."""
+    """A grant belongs to the user directly, to one of their teams, or — since
+    RADD-832 — to one of their TRANSITIVE directory groups (a role granted to a
+    parent group reaches every nested member). Both closures are memoised per
+    request (RADD-830)."""
+    from radd.modules.groups import service as groups  # deferred: loads after auth
     from radd.modules.teams import service as teams  # deferred: teams loads after auth
 
     team_ids = await teams.user_team_ids(session, user_id)
+    group_ids = await groups.user_group_ids(session, user_id)
     condition = GlobalRoleGrant.user_id == user_id
     if team_ids:
         condition = condition | GlobalRoleGrant.team_id.in_(team_ids)
+    if group_ids:
+        condition = condition | GlobalRoleGrant.group_id.in_(group_ids)
     return condition
 
 
@@ -114,6 +122,16 @@ async def space_granted_role_ids(
     return out
 
 
+async def held_role_ids_anywhere(session: AsyncSession, user_id: uuid.UUID) -> set[uuid.UUID]:
+    """Role ids reaching the user through ANY grant channel (direct, team,
+    group) at ANY scope — the RADD-809 inspector's subject set. Before RADD-832
+    this was direct grants only, so a role a TEAM held by grant never matched a
+    role-subject resource grant in the inspector."""
+    subject = await _subject_condition(session, user_id)
+    result = await session.execute(select(GlobalRoleGrant.role_id).where(subject).distinct())
+    return set(result.scalars())
+
+
 async def unscoped_role_ids(session: AsyncSession, user_id: uuid.UUID) -> set[uuid.UUID]:
     """The instance-wide role ids — the ones that apply in every scope."""
     subject = await _subject_condition(session, user_id)
@@ -136,14 +154,19 @@ async def grants_for_subject(
     *,
     user_id: uuid.UUID | None = None,
     team_id: uuid.UUID | None = None,
+    group_id: uuid.UUID | None = None,
 ) -> list[GlobalRoleGrant]:
-    """Every grant (any role, any scope) held by one subject — the team/user Roles
-    tab. Exactly one of user_id/team_id."""
-    if (user_id is None) == (team_id is None):
+    """Every grant (any role, any scope) held DIRECTLY by one subject — the
+    team/user/group Roles tab. Exactly one of user_id/team_id/group_id."""
+    named = [x for x in (user_id, team_id, group_id) if x is not None]
+    if len(named) != 1:
         raise ConflictError(AuthEntity.GLOBAL_GRANT, reason="exactly one subject required")
-    condition = (
-        GlobalRoleGrant.user_id == user_id if user_id else GlobalRoleGrant.team_id == team_id
-    )
+    if user_id is not None:
+        condition = GlobalRoleGrant.user_id == user_id
+    elif team_id is not None:
+        condition = GlobalRoleGrant.team_id == team_id
+    else:
+        condition = GlobalRoleGrant.group_id == group_id
     result = await session.execute(
         select(GlobalRoleGrant).where(condition).order_by(GlobalRoleGrant.created_at)
     )
@@ -184,18 +207,21 @@ async def create_grant(
     *,
     user_id: uuid.UUID | None = None,
     team_id: uuid.UUID | None = None,
+    group_id: uuid.UUID | None = None,
     project_id: uuid.UUID | None = None,
     space_id: uuid.UUID | None = None,
     actor_id: uuid.UUID | None = None,
 ) -> GlobalRoleGrant:
-    """Grant a role to a user or team at a scope. No scope id = instance-wide;
-    a project id or a space id (RADD-791) binds it to that one thing."""
+    """Grant a role to a user, team, or directory group (RADD-832) at a scope.
+    No scope id = instance-wide; a project id or a space id (RADD-791) binds it
+    to that one thing."""
+    from radd.modules.groups import service as groups_service
     from radd.modules.projects import service as projects_service
     from radd.modules.teams import service as teams
 
     from . import roles as roles_service, service as users_service
 
-    if (user_id is None) == (team_id is None):
+    if len([x for x in (user_id, team_id, group_id) if x is not None]) != 1:
         raise ConflictError(AuthEntity.GLOBAL_GRANT, reason="exactly one subject required")
     if project_id is not None and space_id is not None:
         raise ConflictError(
@@ -206,6 +232,10 @@ async def create_grant(
         raise ConflictError(AuthEntity.GLOBAL_GRANT, reason=f"no such user {user_id}")
     if team_id is not None and (await teams.teams_by_ids(session, [team_id])).get(team_id) is None:
         raise ConflictError(AuthEntity.GLOBAL_GRANT, reason=f"no such team {team_id}")
+    if group_id is not None and (
+        await groups_service.groups_by_ids(session, [group_id])
+    ).get(group_id) is None:
+        raise ConflictError(AuthEntity.GLOBAL_GRANT, reason=f"no such group {group_id}")
     if project_id is not None:
         await projects_service.get_project(session, project_id)
     if space_id is not None:
@@ -220,6 +250,7 @@ async def create_grant(
             GlobalRoleGrant.role_id == role_id,
             GlobalRoleGrant.user_id == user_id,
             GlobalRoleGrant.team_id == team_id,
+            GlobalRoleGrant.group_id == group_id,
             GlobalRoleGrant.project_id.is_(None)
             if project_id is None
             else GlobalRoleGrant.project_id == project_id,
@@ -231,7 +262,7 @@ async def create_grant(
     if existing is not None:
         raise ConflictError(AuthEntity.GLOBAL_GRANT, reason="that grant already exists")
     grant = GlobalRoleGrant(
-        role_id=role_id, user_id=user_id, team_id=team_id,
+        role_id=role_id, user_id=user_id, team_id=team_id, group_id=group_id,
         project_id=project_id, space_id=space_id,
     )
     session.add(grant)
@@ -268,6 +299,7 @@ async def _emit(
             "key": role_key,
             "user_id": str(grant.user_id) if grant.user_id else None,
             "team_id": str(grant.team_id) if grant.team_id else None,
+            "group_id": str(grant.group_id) if grant.group_id else None,
             "project_id": str(grant.project_id) if grant.project_id else None,
             "space_id": str(grant.space_id) if grant.space_id else None,
         },
@@ -283,6 +315,7 @@ async def replace_grants(
     """Full-state replace of who holds this role GLOBALLY (the Roles page editor).
     Only global grants (project_id NULL) are touched — project-scoped grants are
     managed grant-by-grant through the Grant Role dialog."""
+    from radd.modules.groups import service as groups_service  # deferred
     from radd.modules.teams import service as teams  # deferred: teams loads after auth
 
     from . import roles as roles_service, service as users_service
@@ -290,7 +323,12 @@ async def replace_grants(
     role = await roles_service.get_role(session, role_id)
     seen: set[tuple[str, uuid.UUID]] = set()
     for entry in entries:
-        key = ("user", entry.user_id) if entry.user_id else ("team", entry.team_id)
+        if entry.user_id is not None:
+            key = ("user", entry.user_id)
+        elif entry.team_id is not None:
+            key = ("team", entry.team_id)
+        else:
+            key = ("group", entry.group_id)
         if key in seen:
             raise ConflictError(AuthEntity.GLOBAL_GRANT, reason=f"duplicate subject {key[1]}")
         seen.add(key)  # type: ignore[arg-type]
@@ -304,13 +342,23 @@ async def replace_grants(
     for team_id in team_ids:
         if found_teams.get(team_id) is None:
             raise ConflictError(AuthEntity.GLOBAL_GRANT, reason=f"no such team {team_id}")
+    group_ids = [e.group_id for e in entries if e.group_id is not None]
+    found_groups = await groups_service.groups_by_ids(session, group_ids)
+    for gid in group_ids:
+        if found_groups.get(gid) is None:
+            raise ConflictError(AuthEntity.GLOBAL_GRANT, reason=f"no such group {gid}")
 
     await session.execute(
         delete(GlobalRoleGrant).where(GlobalRoleGrant.role_id == role_id, _unscoped())
     )
     for entry in entries:
         session.add(
-            GlobalRoleGrant(role_id=role_id, user_id=entry.user_id, team_id=entry.team_id)
+            GlobalRoleGrant(
+                role_id=role_id,
+                user_id=entry.user_id,
+                team_id=entry.team_id,
+                group_id=entry.group_id,
+            )
         )
     await session.flush()
     await events.emit(

@@ -25,7 +25,8 @@ from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
 from radd.modules.events import service as events
 from radd.modules.teams import service as teams_service
-from radd.modules.views.schemas import ShareTeamRef, ShareUserRef
+from radd.modules.groups import service as groups_service
+from radd.modules.views.schemas import ShareGroupRef, ShareTeamRef, ShareUserRef
 
 from .models import Dashboard, DashboardWidget
 from .schemas import (
@@ -103,14 +104,18 @@ def _grant_level(
     shares: list[AccessGrant],
     actor_id: uuid.UUID,
     team_ids: set[uuid.UUID],
+    group_ids: set[uuid.UUID],
 ) -> ShareLevel | None:
-    """The highest ShareLevel the actor holds via direct grants, team grants,
-    or global_access — None = the dashboard is invisible to them."""
+    """The highest ShareLevel the actor holds via direct/team/group grants or
+    global_access — None = the dashboard is invisible to them. `group_ids` is
+    the TRANSITIVE closure (RADD-832), so a share with a parent group reaches
+    nested members."""
     levels: set[ShareLevel] = {
         ShareLevel(grant.access)
         for grant in shares
         if (grant.subject_type == GrantSubject.USER and grant.subject_id == actor_id)
         or (grant.subject_type == GrantSubject.TEAM and grant.subject_id in team_ids)
+        or (grant.subject_type == GrantSubject.GROUP and grant.subject_id in group_ids)
     }
     if dashboard.global_access is not None:
         levels.add(ShareLevel(dashboard.global_access))
@@ -152,17 +157,21 @@ async def _hydrate(
     widgets_map = await _widgets_by_dashboard(session, [d.id for d in dashboards])
     user_ids = {d.owner_id for d in dashboards if d.owner_id is not None}
     team_ids: set[uuid.UUID] = set()
+    group_ids: set[uuid.UUID] = set()
     for shares in shares_map.values():
         user_ids |= {g.subject_id for g in shares if g.subject_type == GrantSubject.USER}
         team_ids |= {g.subject_id for g in shares if g.subject_type == GrantSubject.TEAM}
+        group_ids |= {g.subject_id for g in shares if g.subject_type == GrantSubject.GROUP}
     users = await users_service.users_by_ids(session, user_ids)
     teams = await teams_service.teams_by_ids(session, team_ids)
+    groups = await groups_service.groups_by_ids(session, group_ids)
     actor_teams = await teams_service.user_team_ids(session, actor.id)
+    actor_groups = await groups_service.user_group_ids(session, actor.id)
 
     reads: list[DashboardRead] = []
     for dashboard in dashboards:
         shares = shares_map.get(dashboard.id, [])
-        grant = _grant_level(dashboard, shares, actor.id, actor_teams)
+        grant = _grant_level(dashboard, shares, actor.id, actor_teams, actor_groups)
         can_manage = dashboard.owner_id == actor.id or grant is ShareLevel.OWNER
         owner = users.get(dashboard.owner_id) if dashboard.owner_id else None
         reads.append(
@@ -189,6 +198,12 @@ async def _hydrate(
                             ShareTeamRef(id=t.id, name=t.name)
                             if g.subject_type == GrantSubject.TEAM
                             and (t := teams.get(g.subject_id))
+                            else None
+                        ),
+                        group=(
+                            ShareGroupRef(id=grp.id, name=grp.name)
+                            if g.subject_type == GrantSubject.GROUP
+                            and (grp := groups.get(g.subject_id))
                             else None
                         ),
                     )
@@ -240,7 +255,8 @@ async def _load_visible(
     dashboard = await get_dashboard(session, dashboard_id)
     shares = (await _shares_by_dashboard(session, [dashboard.id])).get(dashboard.id, [])
     team_ids = await teams_service.user_team_ids(session, actor.id)
-    grant = _grant_level(dashboard, shares, actor.id, team_ids)
+    group_ids = await groups_service.user_group_ids(session, actor.id)
+    grant = _grant_level(dashboard, shares, actor.id, team_ids, group_ids)
     if dashboard.owner_id != actor.id and grant is None:
         raise NotFoundError(DashboardEntity.DASHBOARD, dashboard_id)
     return dashboard, grant
@@ -286,7 +302,8 @@ async def _can_manage_dashboard(
         return True
     grants = (await _shares_by_dashboard(session, [dashboard.id])).get(dashboard.id, [])
     team_ids = await teams_service.user_team_ids(session, actor.id)
-    return _grant_level(dashboard, grants, actor.id, team_ids) is ShareLevel.OWNER
+    group_ids = await groups_service.user_group_ids(session, actor.id)
+    return _grant_level(dashboard, grants, actor.id, team_ids, group_ids) is ShareLevel.OWNER
 
 
 async def _dashboard_labels(session: AsyncSession, resource_ids) -> dict[str, str]:
@@ -309,7 +326,7 @@ _DASHBOARD_SPEC = ResourceSpec(
     accesses=(ShareLevel.VIEWER.value, ShareLevel.EDITOR.value, ShareLevel.OWNER.value),
     default_open=False,  # private to its owner until shared
     hierarchical=True,  # viewer < editor < owner — effective level is the highest held
-    subjects=(GrantSubject.USER, GrantSubject.TEAM),
+    subjects=(GrantSubject.USER, GrantSubject.TEAM, GrantSubject.GROUP),
     project_scoped=False,  # dashboards are global, not project-scoped
     label="Dashboard",
     label_for=_dashboard_labels,
@@ -337,13 +354,18 @@ async def _add_share(
     """One dashboard share = an access grant (spec 92). `add_grant` validates the
     subject exists + the level + dedupes, which is exactly what the old
     `_validate_shares` hand-rolled here."""
-    subject_type = GrantSubject.USER if entry.user_id is not None else GrantSubject.TEAM
+    if entry.user_id is not None:
+        subject_type, subject_id = GrantSubject.USER, entry.user_id
+    elif entry.team_id is not None:
+        subject_type, subject_id = GrantSubject.TEAM, entry.team_id
+    else:
+        subject_type, subject_id = GrantSubject.GROUP, entry.group_id
     await access_service.add_grant(
         session,
         DASHBOARD_RESOURCE,
         str(dashboard_id),
         subject_type=subject_type,
-        subject_id=entry.user_id if entry.user_id is not None else entry.team_id,
+        subject_id=subject_id,
         access=entry.level.value,
         actor_id=actor.id,
     )
@@ -393,11 +415,14 @@ async def list_dashboards(
     )
     shares_map = await _shares_by_dashboard(session, [d.id for d in candidates])
     team_ids = await teams_service.user_team_ids(session, actor.id)
+    group_ids = await groups_service.user_group_ids(session, actor.id)
     visible = [
         dashboard
         for dashboard in candidates
         if dashboard.owner_id == actor.id
-        or _grant_level(dashboard, shares_map.get(dashboard.id, []), actor.id, team_ids)
+        or _grant_level(
+            dashboard, shares_map.get(dashboard.id, []), actor.id, team_ids, group_ids
+        )
         is not None
     ]
     return await _hydrate(session, actor, visible)

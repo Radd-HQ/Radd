@@ -256,20 +256,25 @@ async def user_resource_access(
     target = await service.get_user(session, user_id)
 
     from radd.modules.access import inspect as access_inspect
+    from radd.modules.groups import service as groups_service
     from radd.modules.teams import service as teams_service
     from radd.modules.projects import service as projects_service
 
     team_ids = await teams_service.user_team_ids(session, target.id)
+    group_ids = await groups_service.user_group_ids(session, target.id)
     role_ids = await authz.all_held_role_ids(session, target)
     teams_by_id = await teams_service.teams_by_ids(session, team_ids)
+    groups_by_id = await groups_service.groups_by_ids(session, group_ids)
     roles_by_id = await roles_service.roles_by_ids(session, set(role_ids))
     resources = await access_inspect.subject_access(
         session,
         user_id=target.id,
         team_ids=team_ids,
         role_ids=role_ids,
+        group_ids=group_ids,
         team_names={tid: team.name for tid, team in teams_by_id.items()},
         role_names={rid: role.name for rid, role in roles_by_id.items()},
+        group_names={gid: group.name for gid, group in groups_by_id.items()},
     )
 
     readable = await authz.require_anywhere(session, target, authz.Permission.ITEM_READ)
