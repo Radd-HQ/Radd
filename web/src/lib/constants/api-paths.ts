@@ -43,6 +43,10 @@ export const apiTeamTransferPath = (teamId: string) => `${ApiPath.teams}/${teamI
 export const apiTeamMembersPath = (teamId: string) => `${ApiPath.teams}/${teamId}/members`;
 export const apiTeamMemberPath = (teamId: string, userId: string) =>
   `${ApiPath.teams}/${teamId}/members/${userId}`;
+/** RADD-829: a team's GROUP members (the directory arrives as held groups). */
+export const apiTeamGroupsPath = (teamId: string) => `${ApiPath.teams}/${teamId}/groups`;
+export const apiTeamGroupPath = (teamId: string, groupId: string) =>
+  `${ApiPath.teams}/${teamId}/groups/${groupId}`;
 export const apiProjectTeamsPath = (projectId: string) => `${ApiPath.projects}/${projectId}/teams`;
 export const apiProjectTeamPath = (projectId: string, teamId: string) =>
   `${ApiPath.projects}/${projectId}/teams/${teamId}`;

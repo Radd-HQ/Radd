@@ -463,26 +463,24 @@ async def test_a_stale_template_never_breaks_a_sign_in(db):
     later. The database makes the case impossible rather than the code handling
     it.
 
-    Teams are different, and this is the case that survives: a team can be
-    LINKED to an AD group after the template was written, and its membership
-    then belongs to the directory (spec 87 — `add_team_member` answers 409).
-    Someone signing in must not meet that failure; they land on the Baseline and
-    an admin grants the rest.
+    Teams are different, and this is the case that survives (RADD-829 removed
+    directory-owned teams, so a rule can no longer hit a read-only roster —
+    but it can still name a team that was DELETED after the template was
+    written). Someone signing in must not meet that failure; they land on the
+    Baseline and an admin grants the rest.
     """
     from radd.modules.teams import service as teams_service
     from radd.modules.teams.schemas import TeamCreate
-    from radd.modules.teams.types import TeamSource
 
-    team = await teams_service.create_team(db, TeamCreate(name=f"Linked {uuid.uuid4().hex[:5]}"))
+    team = await teams_service.create_team(db, TeamCreate(name=f"Gone {uuid.uuid4().hex[:5]}"))
     provider = await _provider(db, provisioning_rules=[{"team_ids": [team.id]}])
-    # The directory takes ownership after the template was configured.
-    team.source = TeamSource.DIRECTORY.value
-    await db.flush()
+    # The team is deleted after the template was configured.
+    await teams_service.delete_team(db, team.id)
 
     user = await service.provision(db, provider, _claims(f"new-{uuid.uuid4().hex[:6]}@radd-hq.com"))
 
     assert user.id is not None  # the sign-in completed
-    assert user.id not in {m.id for m in await teams_service.list_team_members(db, team.id)}
+    assert await teams_service.user_team_ids(db, user.id) == set()
 
 
 async def test_rules_route_by_email_domain(db):

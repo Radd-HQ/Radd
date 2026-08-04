@@ -571,6 +571,9 @@ _MERGE_DEDUPE: tuple[tuple[str, tuple[str, ...], str], ...] = (
     ("item_stars", ("item_id",), "user_id"),
     ("project_members", ("project_id",), "user_id"),
     ("team_members", ("team_id",), "user_id"),
+    # RADD-829: directory-group memberships — the next sync would converge them
+    # anyway, but a merge must not strand rows on the deleted account meanwhile.
+    ("group_members", ("group_id",), "user_id"),
     ("item_participants", ("item_id",), "user_id"),
     ("form_shares", ("form_id",), "user_id"),
     # Spec 87, found by the audit: both are CASCADE, so a merge that

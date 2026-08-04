@@ -4,9 +4,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from radd.apitypes import UtcDatetime
 
 
-from .types import MemberSource, TeamSource
-
-
 class TeamCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     # Spec 87: defaults to the creator. An admin creating a team for someone else
@@ -15,12 +12,10 @@ class TeamCreate(BaseModel):
 
 
 class TeamUpdate(BaseModel):
-    """PATCH /teams/{id} (spec 84): rename and/or set/clear the AD group link.
-    Omitted = unchanged; explicit null clears the link."""
+    """PATCH /teams/{id}: rename. (RADD-829 retired the AD-link fields — the
+    directory's truth is a Group, held as a MEMBER via /teams/{id}/groups.)"""
 
     name: str | None = Field(default=None, min_length=1, max_length=200)
-    directory_group_dn: str | None = Field(default=None, max_length=1000)
-    directory_group_name: str | None = Field(default=None, max_length=200)
 
 
 class TeamRead(BaseModel):
@@ -29,18 +24,9 @@ class TeamRead(BaseModel):
     id: uuid.UUID
     name: str
     created_at: UtcDatetime
-    # Spec 84: linked AD group (null = not linked); CN kept for display.
-    directory_group_dn: str | None = None
-    directory_group_name: str | None = None
-    # Spec 87: membership ownership + delegated management. `can_manage` /
-    # `can_delete` are computed per-actor server-side so the client never
-    # re-derives the owner/manager/atom union (the ViewRead precedent).
-    source: TeamSource = TeamSource.LOCAL
-    # Spec 87: set when the linked AD group stopped resolving (null = healthy).
-    # The team stays LOCKED — its people are kept and every sync removal is held,
-    # but membership only re-opens when an admin unlinks. The server never infers
-    # "unlink me" from a directory it may simply be failing to read correctly.
-    directory_missing_since: UtcDatetime | None = None
+    # Spec 87: ownership + delegated management. `can_manage` / `can_delete` are
+    # computed per-actor server-side so the client never re-derives the
+    # owner/manager/atom union (the ViewRead precedent).
     owner_id: uuid.UUID | None = None
     managers: list[uuid.UUID] = Field(default_factory=list)
     can_manage: bool = False
@@ -65,11 +51,29 @@ class TeamMemberAdd(BaseModel):
     user_id: uuid.UUID
 
 
+class TeamGroupAdd(BaseModel):
+    """POST /teams/{id}/groups (RADD-829): the team gains a directory group as
+    a member — its people (nesting included) count as team members."""
+
+    group_id: uuid.UUID
+
+
 class TeamMemberRead(BaseModel):
     user_id: uuid.UUID
     email: str
     name: str
-    source: MemberSource = MemberSource.MANUAL  # spec 84: directory rows are sync-owned
+    #: RADD-829: the group that carries this person, when their membership is
+    #: reached through one (None = a direct user row).
+    via_group: str | None = None
+
+
+class TeamGroupRead(BaseModel):
+    """A GROUP member of the team (RADD-829)."""
+
+    group_id: uuid.UUID
+    name: str
+    dn: str
+    directory_missing_since: UtcDatetime | None = None
 
 
 class ProjectTeamAttach(BaseModel):

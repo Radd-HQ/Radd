@@ -1,55 +1,43 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FolderSync, Link2, TriangleAlert, Unlink, X } from "lucide-react";
+import { FolderSync, Plus, TriangleAlert, X } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
-import {
-  SEARCH_DEBOUNCE_MS,
-  apiTeamDirectorySyncPath,
-  apiTeamPath,
-} from "../../lib/constants";
-import { useCurrentUser, useDebounced } from "../../lib/hooks";
-import { instanceStatusQuery, ldapGroupsQuery, queryKeys } from "../../lib/queries";
+import { apiTeamDirectorySyncPath, apiTeamGroupPath, apiTeamGroupsPath } from "../../lib/constants";
+import { groupsQuery, queryKeys, teamGroupsQuery } from "../../lib/queries";
 import { pushToast, ToastKind } from "../../lib/toast";
-import {
-  InstanceRole,
-  type DirectorySyncResult,
-  type Team,
-  type TeamUpdate,
-} from "../../lib/types";
+import type { DirectorySyncResult, RaddGroup, Team, TeamGroup } from "../../lib/types";
 import { Button } from "../Button";
-import { TextField } from "../TextField";
 
 /**
- * Team ↔ AD group link (spec 84): shows the linked CN with unlink + "Sync now"
- * (returns +added / −removed), or — for instance admins with a bind account —
- * a group search picker. Nested AD membership counts (transitive rule).
+ * The team's GROUP members (RADD-829). A team is always local now; it reaches
+ * the directory by HOLDING mirrored AD groups, whose people (nesting included)
+ * count as members. Mirroring a new group from AD happens on Settings →
+ * Directory (the import); this section picks from the already-mirrored list.
  */
-export function TeamDirectoryGroup({ team }: { team: Team }) {
+export function TeamGroupsSection({ team, canManage }: { team: Team; canManage: boolean }) {
   const queryClient = useQueryClient();
-  const [q, setQ] = useState("");
-  const debounced = useDebounced(q, SEARCH_DEBOUNCE_MS);
   const [picking, setPicking] = useState(false);
-  // The AD affordances key on the bind-account status flag; the status (and
-  // group-search) endpoints are instance-admin only, so a plain team manager
-  // just sees the linked CN — never a 403 toast.
-  const me = useCurrentUser();
-  const isInstanceAdmin = me?.instance_role === InstanceRole.admin;
-  const status = useQuery({ ...instanceStatusQuery, enabled: isInstanceAdmin, retry: false });
-  const directoryReady = Boolean(status.data?.ldap_bind_account);
-  const groups = useQuery({ ...ldapGroupsQuery(debounced), enabled: picking && directoryReady });
+  const memberGroups = useQuery(teamGroupsQuery(team.id));
+  const allGroups = useQuery({ ...groupsQuery(), enabled: picking });
 
   const invalidate = async () => {
     await queryClient.invalidateQueries({ queryKey: queryKeys.teams });
     await queryClient.invalidateQueries({ queryKey: queryKeys.teamMembers(team.id) });
+    await queryClient.invalidateQueries({ queryKey: [...queryKeys.teams, team.id, "groups"] });
   };
 
-  const patchTeam = useMutation({
-    mutationFn: (body: TeamUpdate) => api.patch<Team>(apiTeamPath(team.id), body),
+  const addGroup = useMutation({
+    mutationFn: (groupId: string) =>
+      api.post<TeamGroup>(apiTeamGroupsPath(team.id), { group_id: groupId }),
     onSuccess: async () => {
       setPicking(false);
-      setQ("");
       await invalidate();
     },
+  });
+
+  const removeGroup = useMutation({
+    mutationFn: (groupId: string) => api.delete(apiTeamGroupPath(team.id, groupId)),
+    onSuccess: invalidate,
   });
 
   const syncNow = useMutation({
@@ -60,121 +48,109 @@ export function TeamDirectoryGroup({ team }: { team: Team }) {
     },
   });
 
-  if (!team.directory_group_dn && !directoryReady) return null;
+  const held = memberGroups.data ?? [];
+  const heldIds = new Set(held.map((g) => g.group_id));
+  const addable = (allGroups.data ?? []).filter((g: RaddGroup) => !heldIds.has(g.id));
+  if (held.length === 0 && !canManage) return null;
 
   return (
-    <section aria-label={`${team.name} directory group`} className="mb-4">
+    <section aria-label={`${team.name} directory groups`} className="mb-4">
       <h4 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
-        Directory group
+        Directory groups
       </h4>
-      {team.directory_missing_since && (
-        <div className="mb-2 rounded-md border border-amber-500/50 bg-amber-500/5 p-2.5">
-          <p className="flex items-start gap-1.5 text-xs text-amber-200">
-            <TriangleAlert size={13} className="mt-0.5 shrink-0" aria-hidden />
-            <span>
-              <strong className="font-medium">This AD group no longer exists.</strong> It was
-              last seen {new Date(team.directory_missing_since).toLocaleString()} — renamed,
-              moved, or deleted in the directory. The team's members are kept and the sync
-              won't remove anyone, but membership stays read-only while the link is in place.
-              Unlink to manage these people here, or restore the group in AD.
-            </span>
-          </p>
-          <Button
-            variant="ghost"
-            className="mt-1.5 text-amber-200"
-            onClick={() =>
-              patchTeam.mutate({ directory_group_dn: null, directory_group_name: null })
-            }
-            disabled={patchTeam.isPending}
-          >
-            <Unlink size={13} aria-hidden />
-            {patchTeam.isPending ? "Unlinking…" : "Unlink and edit here"}
-          </Button>
-        </div>
+      {held.length > 0 && (
+        <ul className="mb-2 flex flex-col gap-1.5">
+          {held.map((group) => (
+            <li key={group.group_id} className="flex flex-wrap items-center gap-2 text-[13px]">
+              <span
+                className="rounded border border-sky-500/50 px-1.5 py-px text-[11px] text-sky-300"
+                title={group.dn}
+              >
+                {group.name}
+              </span>
+              {group.directory_missing_since && (
+                <span
+                  className="flex items-center gap-1 text-[11px] text-amber-300"
+                  title={`Last seen ${new Date(group.directory_missing_since).toLocaleString()} — renamed, moved, or deleted in AD. Its people are kept and the sync won't remove anyone while it's missing.`}
+                >
+                  <TriangleAlert size={12} aria-hidden />
+                  missing from AD
+                </span>
+              )}
+              {canManage && (
+                <button
+                  type="button"
+                  onClick={() => removeGroup.mutate(group.group_id)}
+                  disabled={removeGroup.isPending}
+                  aria-label={`Remove ${group.name} from ${team.name}`}
+                  className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer disabled:opacity-50"
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
       )}
-      {team.directory_group_dn ? (
-        <div className="flex flex-wrap items-center gap-2 text-[13px]">
-          <span
-            className="rounded border border-sky-500/50 px-1.5 py-px text-[11px] text-sky-300"
-            title={team.directory_group_dn}
-          >
-            {team.directory_group_name ?? team.directory_group_dn}
-          </span>
-          <span className="text-xs text-fg-muted">
-            AD owns this team's members (nested groups count) — they can't be edited here.
-            Unlinking keeps everyone and re-opens editing.
-          </span>
-          {directoryReady && (
+      {held.length > 0 && (
+        <p className="mb-2 text-xs text-fg-muted">
+          These groups' people (nested groups included) count as members of this team.
+        </p>
+      )}
+      {canManage && (
+        <div className="flex flex-wrap items-center gap-2">
+          {held.length > 0 && (
             <Button variant="ghost" onClick={() => syncNow.mutate()} disabled={syncNow.isPending}>
               <FolderSync size={13} aria-hidden />
               {syncNow.isPending ? "Syncing…" : "Sync now"}
             </Button>
           )}
-          <button
-            type="button"
-            onClick={() =>
-              patchTeam.mutate({ directory_group_dn: null, directory_group_name: null })
-            }
-            disabled={patchTeam.isPending}
-            aria-label={`Unlink ${team.name} from its directory group`}
-            className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer disabled:opacity-50"
-          >
-            <X size={13} />
-          </button>
-        </div>
-      ) : picking ? (
-        <div className="flex max-w-md flex-col gap-2">
-          <TextField
-            label="Search AD groups"
-            value={q}
-            onChange={(event) => setQ(event.target.value)}
-            placeholder="Group name (cn)…"
-          />
-          {groups.isError ? (
-            <p className="text-xs text-red-400">{errorMessage(groups.error)}</p>
-          ) : groups.isPending ? (
-            <p className="text-xs text-fg-muted">Searching…</p>
-          ) : (groups.data ?? []).length === 0 ? (
-            <p className="text-xs text-fg-muted">No directory groups match.</p>
+          {picking ? (
+            <div className="flex w-full max-w-md flex-col gap-2">
+              {allGroups.isError ? (
+                <p className="text-xs text-red-400">{errorMessage(allGroups.error)}</p>
+              ) : allGroups.isPending ? (
+                <p className="text-xs text-fg-muted">Loading groups…</p>
+              ) : addable.length === 0 ? (
+                <p className="text-xs text-fg-muted">
+                  No mirrored groups to add — import one on Settings → Directory first.
+                </p>
+              ) : (
+                <ul className="flex max-h-40 flex-col gap-1 overflow-y-auto">
+                  {addable.map((group: RaddGroup) => (
+                    <li key={group.id}>
+                      <button
+                        type="button"
+                        onClick={() => addGroup.mutate(group.id)}
+                        disabled={addGroup.isPending}
+                        className="flex w-full items-center gap-2 rounded-md border border-subtle px-2.5 py-1.5 text-left text-[13px] hover:bg-surface/60 cursor-pointer disabled:opacity-50"
+                      >
+                        <span className="truncate text-fg">{group.name}</span>
+                        <span className="ml-auto shrink-0 text-xs text-fg-muted">
+                          {group.direct_member_count} direct
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div>
+                <Button variant="ghost" onClick={() => setPicking(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
           ) : (
-            <ul className="flex max-h-40 flex-col gap-1 overflow-y-auto">
-              {(groups.data ?? []).map((group) => (
-                <li key={group.dn}>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      patchTeam.mutate({
-                        directory_group_dn: group.dn,
-                        directory_group_name: group.cn,
-                      })
-                    }
-                    disabled={patchTeam.isPending}
-                    className="flex w-full items-center gap-2 rounded-md border border-subtle px-2.5 py-1.5 text-left text-[13px] hover:bg-surface/60 cursor-pointer disabled:opacity-50"
-                  >
-                    <span className="truncate text-fg">{group.cn}</span>
-                    <span className="ml-auto shrink-0 text-xs text-fg-muted">
-                      {group.member_count} direct
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div>
-            <Button variant="ghost" onClick={() => setPicking(false)}>
-              Cancel
+            <Button variant="ghost" onClick={() => setPicking(true)}>
+              <Plus size={13} aria-hidden />
+              Add a group
             </Button>
-          </div>
+          )}
         </div>
-      ) : (
-        <Button variant="ghost" onClick={() => setPicking(true)}>
-          <Link2 size={13} aria-hidden />
-          Link to an AD group
-        </Button>
       )}
-      {(patchTeam.isError || syncNow.isError) && (
+      {(addGroup.isError || removeGroup.isError || syncNow.isError) && (
         <p className="mt-1 text-xs text-red-400">
-          {errorMessage(patchTeam.error ?? syncNow.error)}
+          {errorMessage(addGroup.error ?? removeGroup.error ?? syncNow.error)}
         </p>
       )}
     </section>

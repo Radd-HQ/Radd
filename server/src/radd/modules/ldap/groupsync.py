@@ -1,19 +1,25 @@
-"""Team↔AD-group reconcile + group import (spec 84).
+"""Directory-group reconcile + group import (spec 84 → RADD-829).
 
-The planner is PURE: directory membership (emails/UPNs) × current team_members
-rows × the existing-user lookup → add/remove sets. It only ever removes
-DIRECTORY-source rows and never adds a user who already has ANY row (a manual
-row blocks a duplicate directory add), so applying it is idempotent.
+GROUPS are the sync surface now, not linked teams: the directory's truth lives
+in `groups` rows, whose membership is wholly sync-owned (no manual path, so no
+MemberSource bookkeeping — the planner's job collapsed into a set replace).
+Teams reach the directory by holding a group as a member; the sync never
+touches team_members again.
 
-Three consumers share it: the login-time per-user sync (direct bind, no service
-account needed), the on-demand `POST /teams/{id}/directory-sync`, and the
+Three consumers share the reconcile: the login-time per-user sync (direct
+bind, no service account needed), the on-demand import, and the
 `ldap.groupsync` PeriodicLoop (bind account + run_workers gated). Unknown
 directory members are NEVER auto-provisioned by a reconcile — provisioning is
-the explicit import path only."""
+the explicit import path only.
+
+The spec-87 two-path invariant moved here with the health flag: the periodic
+loop refuses removals while a group's DN stops resolving (a renamed/deleted
+group must not read as "everyone left"), and the login path holds removals for
+flagged groups while still applying joins.
+"""
 
 import logging
 import uuid
-from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,14 +28,14 @@ from radd.config import settings
 from radd.db import SessionLocal
 from radd.modules.auth import service as auth_service
 from radd.modules.auth.models import User
+from radd.modules.groups import service as groups_service
+from radd.modules.groups.models import Group
 from radd.modules.teams import service as teams_service
-from radd.modules.teams.models import Team
-from radd.modules.teams.schemas import TeamCreate, TeamUpdate
-from radd.modules.teams.types import MemberSource
+from radd.modules.teams.schemas import TeamCreate
 from radd.worker import PeriodicLoop
 
-from . import groups, service, state
-from .types import DirectoryGroup, DirectoryUnreachable, DirectoryUser, SyncKind
+from . import groups as directory, service, state
+from .types import DirectoryUnreachable, SyncKind
 
 logger = logging.getLogger(__name__)
 
@@ -39,129 +45,85 @@ MAX_RECORDED_ERRORS = 20
 
 
 class StaleDirectoryGroup(Exception):
-    """The linked group no longer resolves in AD (spec 87) — renamed, moved, or
-    deleted. Raised instead of reconciling, so a vanished group cannot be read as
-    "the group is now empty" and empty the team."""
+    """The group no longer resolves in AD (spec 87) — renamed, moved, or
+    deleted. Raised instead of reconciling, so a vanished group cannot be read
+    as "the group is now empty" and drain its memberships."""
 
     def __init__(self, group_dn: str):
         self.group_dn = group_dn
-        super().__init__(f"directory group {group_dn} no longer exists — team left untouched")
+        super().__init__(f"directory group {group_dn} no longer exists — memberships kept")
 
 
-# --- the pure planner ---------------------------------------------------------
+# --- reconciling one group ----------------------------------------------------
 
 
-@dataclass(frozen=True)
-class MemberRow:
-    """The reconcile-relevant slice of one team_members row."""
-
-    user_id: uuid.UUID
-    source: str  # MemberSource value
-
-
-@dataclass(frozen=True)
-class ReconcilePlan:
-    add_user_ids: frozenset[uuid.UUID]  # inserted as DIRECTORY-source rows
-    remove_user_ids: frozenset[uuid.UUID]  # deleted ONLY where source=directory
-
-
-def plan_reconcile(
-    directory_emails: Iterable[str],
-    current_rows: Iterable[MemberRow],
-    users_by_email: Mapping[str, uuid.UUID],
-) -> ReconcilePlan:
-    """Directory truth → row deltas (pure).
-
-    - joiner: resolved directory member with NO row of any source → add.
-    - leaver: directory-source row whose user is no longer a directory member → remove.
-    - manual rows are invisible to removal and block a duplicate directory add.
-    - unknown directory members (no matching Radd user) are ignored here."""
-    desired = {
-        users_by_email[email.lower()]
-        for email in directory_emails
-        if email and email.lower() in users_by_email
-    }
-    rows = list(current_rows)
-    present = {row.user_id for row in rows}
-    directory_rows = {row.user_id for row in rows if row.source == MemberSource.DIRECTORY}
-    return ReconcilePlan(
-        add_user_ids=frozenset(desired - present),
-        remove_user_ids=frozenset(directory_rows - desired),
-    )
-
-
-# --- applying a plan ----------------------------------------------------------
-
-
-async def reconcile_team(
-    session: AsyncSession,
-    team: Team,
-    directory_members: list[DirectoryUser] | None = None,
-    actor_id: uuid.UUID | None = None,
+async def reconcile_group(
+    session: AsyncSession, group: Group
 ) -> tuple[int, int]:
-    """Full reconcile of ONE linked team against the directory (service
-    account). `directory_members` may be pre-fetched (import path/tests);
-    None = resolve transitively now. Returns (added, removed)."""
-    if not team.directory_group_dn:
-        return 0, 0
-    if directory_members is None:
-        # Spec 87 stale-group guard. An empty transitive search is ambiguous: the
-        # group may genuinely have no members, or it may have been renamed/deleted
-        # in AD — and those DNs are exactly the ones that change during a domain
-        # reorg. Reconciling the second case would remove every directory member
-        # and silently revoke whatever the team granted. Confirm the group still
-        # resolves before believing an empty answer.
-        #
-        # `get_group` raises DirectoryUnreachable rather than answering None when
-        # the directory can't be asked, so an outage propagates (the run records
-        # an error and touches nothing) instead of flagging a healthy team as
-        # stale. Only a definitive "not there" marks it.
-        directory_members = await groups.search_group_members(session, team.directory_group_dn)
-        if not directory_members and await groups.get_group(team.directory_group_dn) is None:
-            await teams_service.mark_directory_health(session, team, missing=True)
-            raise StaleDirectoryGroup(team.directory_group_dn)
-        await teams_service.mark_directory_health(session, team, missing=False)
-    emails = [member.email for member in directory_members]
-    users_by_email = {
-        email: user.id for email, user in (await auth_service.users_by_emails(session, emails)).items()
-    }
-    rows = [
-        MemberRow(user_id=row.user_id, source=row.source)
-        for row in await teams_service.team_member_rows(session, team.id)
-    ]
-    plan = plan_reconcile(emails, rows, users_by_email)
-    return await teams_service.apply_directory_membership(
-        session, team, plan.add_user_ids, plan.remove_user_ids, actor_id=actor_id
+    """Full reconcile of ONE group's membership against the directory (service
+    account): resolve the group's TRANSITIVE people in AD, replace the
+    `group_members` rows. Returns (added, removed).
+
+    Spec 87 stale-group guard: an empty transitive search is ambiguous — the
+    group may genuinely be empty, or renamed/deleted (exactly the DNs that
+    change in a domain reorg). Confirm the group still resolves before
+    believing an empty answer; `get_group` raises DirectoryUnreachable on an
+    outage so it propagates rather than flagging a healthy group."""
+    members = await directory.search_group_members(session, group.dn)
+    if not members:
+        if await directory.get_group(group.dn) is None:
+            await groups_service.mark_missing(session, group, missing=True)
+            raise StaleDirectoryGroup(group.dn)
+    await groups_service.mark_missing(session, group, missing=False)
+    users_by_email = await auth_service.users_by_emails(
+        session, [member.email for member in members]
     )
+    return await groups_service.replace_members(
+        session, group, [user.id for user in users_by_email.values()]
+    )
+
+
+# --- login-time per-user sync (spec 84 §1a) -----------------------------------
 
 
 async def sync_login_membership(
-    session: AsyncSession, user: User, linked: list[Team], member_dns: frozenset[str]
+    session: AsyncSession, user: User, groups: list[Group], member_dns: frozenset[str]
 ) -> None:
-    """Login-time per-user sync (spec 84 §1a): the direct-bind connection
-    already answered which linked-team groups the user is transitively in
-    (`member_dns`); join/leave only THIS user's directory-source rows."""
-    for team in linked:
-        if not team.directory_group_dn:
-            continue
-        rows = {
-            row.user_id: row for row in await teams_service.team_member_rows(session, team.id)
-        }
-        row = rows.get(user.id)
-        if team.directory_group_dn in member_dns:
-            if row is None:
-                await teams_service.apply_directory_membership(
-                    session, team, [user.id], [], actor_id=user.id
-                )
-        elif row is not None and row.source == MemberSource.DIRECTORY:
-            # Spec 87: while the group is known-missing, "not a member" is what a
-            # non-existent DN always answers — believing it would drain the team
-            # one login at a time. Joins still apply; only removals are held.
-            if team.directory_missing_since is not None:
-                continue
-            await teams_service.apply_directory_membership(
-                session, team, [], [user.id], actor_id=user.id
+    """The direct-bind connection already answered which mirrored groups the
+    user is transitively in (`member_dns`); join/leave only THIS user's rows.
+    Removals are held for flagged groups — "not a member" is what a
+    non-existent DN always answers, and believing it would drain the group one
+    login at a time."""
+    for group in groups:
+        if group.dn in member_dns:
+            await groups_service.replace_members(
+                session,
+                group,
+                await _with_user(session, group, user.id, add=True),
             )
+        elif group.directory_missing_since is None:
+            await groups_service.replace_members(
+                session,
+                group,
+                await _with_user(session, group, user.id, add=False),
+            )
+
+
+async def _with_user(
+    session: AsyncSession, group: Group, user_id: uuid.UUID, *, add: bool
+) -> set[uuid.UUID]:
+    from sqlalchemy import select
+
+    from radd.modules.groups.models import GroupMember
+
+    current = set(
+        (
+            await session.execute(
+                select(GroupMember.user_id).where(GroupMember.group_id == group.id)
+            )
+        ).scalars()
+    )
+    return current | {user_id} if add else current - {user_id}
 
 
 # --- group import (spec 84 §2) ------------------------------------------------
@@ -184,14 +146,15 @@ async def import_groups(
     provision_members: bool,
     actor_id: uuid.UUID | None = None,
 ) -> list[GroupImportOutcome]:
-    """Per group: create-or-link a team (name = CN), resolve TRANSITIVE members,
-    optionally provision unknown users (spec-42 path: SSO-only account,
-    source=ldap — a new active user holds the global member floor), then add
-    directory-source memberships via the reconcile planner."""
+    """Per DN: mirror the GROUP (find-or-create by dn), resolve its transitive
+    people, optionally provision unknown users (spec-42 path: SSO-only account,
+    source=ldap), replace its memberships — and keep the spec-84 UX by ensuring
+    a TEAM of the same name holds the group, so an import still yields
+    something attachable to projects."""
     outcomes: list[GroupImportOutcome] = []
     for group_dn in dict.fromkeys(group_dns):
         try:
-            group = await groups.get_group(group_dn)
+            found = await directory.get_group(group_dn)
         except DirectoryUnreachable as exc:
             # Spec 87: distinct from "no such group" — reporting an outage as a
             # missing group would tell the admin their AD is wrong when it isn't.
@@ -207,7 +170,7 @@ async def import_groups(
                 )
             )
             continue
-        if group is None:
+        if found is None:
             outcomes.append(
                 GroupImportOutcome(
                     group_dn=group_dn,
@@ -220,8 +183,8 @@ async def import_groups(
                 )
             )
             continue
-        team, created = await _team_for_group(session, group, actor_id)
-        members = await groups.search_group_members(session, group.dn)
+        group = await groups_service.upsert_group(session, dn=found.dn, name=found.cn)
+        members = await directory.search_group_members(session, group.dn)
         provisioned = 0
         if provision_members:
             known = await auth_service.users_by_emails(session, [m.email for m in members])
@@ -231,13 +194,17 @@ async def import_groups(
                 _user, was_created = await service.find_or_create_user(session, member)
                 if was_created:
                     provisioned += 1
-        added, _removed = await reconcile_team(
-            session, team, directory_members=members, actor_id=actor_id
+        users_by_email = await auth_service.users_by_emails(
+            session, [m.email for m in members]
         )
+        added, _removed = await groups_service.replace_members(
+            session, group, [u.id for u in users_by_email.values()]
+        )
+        team, created = await _team_holding_group(session, group, actor_id)
         outcomes.append(
             GroupImportOutcome(
                 group_dn=group.dn,
-                cn=group.cn,
+                cn=found.cn,
                 team_id=team.id,
                 created=created,
                 members_added=added,
@@ -247,69 +214,55 @@ async def import_groups(
     return outcomes
 
 
-async def _team_for_group(
-    session: AsyncSession, group: DirectoryGroup, actor_id: uuid.UUID | None
-) -> tuple[Team, bool]:
-    """Find the team already linked to this DN, else link the same-named team,
-    else create one (linked)."""
-    for team in await teams_service.linked_teams(session):
-        if team.directory_group_dn == group.dn:
-            return team, False
-    existing = {
-        team.name: team for team in await teams_service.list_teams(session)
-    }
-    if group.cn in existing:
-        team = await teams_service.update_team(
-            session,
-            existing[group.cn].id,
-            TeamUpdate(directory_group_dn=group.dn, directory_group_name=group.cn),
-            actor_id=actor_id,
+async def _team_holding_group(
+    session: AsyncSession, group: Group, actor_id: uuid.UUID | None
+):
+    """Ensure a team of the group's name holds the group as a member — the
+    RADD-829 shape of "import AD group as team". Idempotent."""
+    existing = {team.name: team for team in await teams_service.list_teams(session)}
+    team = existing.get(group.name)
+    created = False
+    if team is None:
+        team = await teams_service.create_team(
+            session, TeamCreate(name=group.name), actor_id=actor_id
         )
-        return team, False
-    team = await teams_service.create_team(
-        session, TeamCreate(name=group.cn), actor_id=actor_id
-    )
-    return (
-        await teams_service.update_team(
-            session,
-            team.id,
-            TeamUpdate(directory_group_dn=group.dn, directory_group_name=group.cn),
-            actor_id=actor_id,
-        ),
-        True,
-    )
+        created = True
+    if group.id not in {g.id for g in await teams_service.team_groups(session, team.id)}:
+        await teams_service.add_team_group(session, team.id, group.id, actor_id=actor_id)
+    return team, created
 
 
 # --- the periodic reconcile loop (spec 84 §1b) --------------------------------
 
 
 async def run_once() -> int:
-    """One tick: full reconcile of every linked team. Per-team failures are
+    """One tick: full reconcile of every mirrored group. Per-group failures are
     logged, never fatal (the slas-engine idiom). Spec 85: the run is recorded
-    in `directory_sync_state` (kind=group_sync) for GET /ldap/sync-status."""
-    teams_seen = added_total = removed_total = 0
+    in `directory_sync_state` (kind=group_sync) for GET /ldap/sync-status —
+    RADD-829 reshaped the payload (`groups` instead of `teams`)."""
+    groups_seen = added_total = removed_total = 0
     errors: list[str] = []
     async with SessionLocal() as session:
-        for team in await teams_service.linked_teams(session):
-            teams_seen += 1
+        for group in await groups_service.list_groups(session):
+            groups_seen += 1
             try:
-                added, removed = await reconcile_team(session, team)
+                added, removed = await reconcile_group(session, group)
                 added_total += added
                 removed_total += removed
             except StaleDirectoryGroup as exc:
                 # Expected operational state (a group renamed/deleted in AD), not a
-                # bug: the team is flagged and left intact, so this is a warning
+                # bug: the group is flagged and left intact, so this is a warning
                 # surfaced on the sync-status page rather than a traceback.
                 logger.warning("ldap groupsync: %s", exc)
-                errors.append(f"{team.name}: {exc}")
+                errors.append(f"{group.name}: {exc}")
             except Exception as exc:
-                logger.exception("ldap groupsync: reconciling team %s failed", team.id)
-                errors.append(f"{team.name}: {exc}")
+                logger.exception("ldap groupsync: reconciling group %s failed", group.id)
+                errors.append(f"{group.name}: {exc}")
         await state.record_run(
             session,
             SyncKind.GROUP_SYNC,
             {
-                "teams": teams_seen,
+                "groups": groups_seen,
                 "added": added_total,
                 "removed": removed_total,
                 "errors": errors[:MAX_RECORDED_ERRORS],

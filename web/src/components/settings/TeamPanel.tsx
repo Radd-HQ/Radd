@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link2, Lock, Plus, X } from "lucide-react";
+import { Link2, Plus, X } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import {
   apiProjectTeamPath,
@@ -20,9 +20,7 @@ import {
   usersQuery,
 } from "../../lib/queries";
 import {
-  MemberSource,
   Permission,
-  TeamSource,
   type ProjectTeam,
   type ProjectTeamAttach,
   type Role,
@@ -32,7 +30,7 @@ import {
 import { Button } from "../Button";
 import { Select } from "../Select";
 import { SelectField } from "../SelectField";
-import { TeamDirectoryGroup } from "./TeamDirectoryGroup";
+import { TeamGroupsSection } from "./TeamDirectoryGroup";
 import { TeamStewardship } from "./TeamStewardship";
 
 interface TeamPanelProps {
@@ -55,12 +53,12 @@ export function TeamPanel({ team }: TeamPanelProps) {
   const perms = usePermissions();
   const me = useCurrentUser();
   const canManageTeam = team.can_manage;
-  const isDirectory = team.source === TeamSource.directory;
-  const canEditMembers = canManageTeam && !isDirectory;
+  // RADD-829: no team is directory-owned any more — membership is always
+  // hand-editable; the directory arrives as GROUP members instead.
+  const canEditMembers = canManageTeam;
   // Appointing managers / transferring is the owner's call (or an atom holder's);
   // a delegate must not be able to appoint further delegates.
   const isOwner = Boolean(me && team.owner_id === me.id);
-  const canLinkDirectory = perms.global(Permission.teamUpdate);
   const members = useQuery(teamMembersQuery(team.id));
   // GET /users needs user.manage — only fetched when an affordance needs names.
   const users = useQuery({ ...usersQuery, enabled: canManageTeam, retry: false });
@@ -151,10 +149,11 @@ export function TeamPanel({ team }: TeamPanelProps) {
 
   return (
     <div className="border-t border-subtle/60 bg-surface/30 px-4 py-4">
-      {/* Linking to AD hands the roster over, so it stays with the global atom —
-          a team's own owner/managers cannot do it (spec 87). */}
-      {canLinkDirectory && <TeamDirectoryGroup team={team} />}
-      <TeamStewardship team={team} canAdminister={isOwner || canLinkDirectory} />
+      <TeamGroupsSection team={team} canManage={canManageTeam} />
+      <TeamStewardship
+        team={team}
+        canAdminister={isOwner || perms.global(Permission.teamUpdate)}
+      />
       <div className="grid gap-5 sm:grid-cols-2">
       <section aria-label={`${team.name} members`}>
         <h4 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
@@ -172,15 +171,15 @@ export function TeamPanel({ team }: TeamPanelProps) {
               <li key={member.user_id} className="flex items-center gap-2 text-[13px]">
                 <span className="text-fg">{member.name}</span>
                 <span className="truncate text-xs text-fg-muted">{member.email}</span>
-                {member.source === MemberSource.directory && (
+                {member.via_group && (
                   <span
                     className="rounded border border-sky-500/50 px-1 py-px text-[10px] text-sky-300"
-                    title="Managed by the directory sync — removed here, it returns on the next sync."
+                    title={`Member via the ${member.via_group} group — managed by the directory sync.`}
                   >
-                    AD
+                    {member.via_group}
                   </span>
                 )}
-                {canEditMembers && (
+                {canEditMembers && !member.via_group && (
                   <button
                     type="button"
                     onClick={() => removeMember.mutate(member.user_id)}
@@ -194,28 +193,6 @@ export function TeamPanel({ team }: TeamPanelProps) {
               </li>
             ))}
           </ul>
-        )}
-        {isDirectory && (
-          <p className="mt-3 flex items-start gap-1.5 text-xs text-fg-muted">
-            <Lock size={12} className="mt-0.5 shrink-0 text-fg-faint" aria-hidden />
-            <span>
-              Members come from{" "}
-              <span className="text-fg-secondary">
-                {team.directory_group_name ?? team.directory_group_dn}
-              </span>{" "}
-              and are managed in Active Directory. Unlink the group to edit them here.
-              {/* The banner above carries the detail + the unlink button, but it
-                  only renders for atom holders — an owner/manager still needs to
-                  know why their roster is frozen. */}
-              {team.directory_missing_since && (
-                <span className="text-amber-300/90">
-                  {" "}
-                  That group no longer exists in the directory — nobody will be removed, but
-                  an administrator has to unlink it before these members can be edited.
-                </span>
-              )}
-            </span>
-          </p>
         )}
         {canEditMembers && (
           <form onSubmit={onAddMember} className="mt-3 flex items-end gap-2">

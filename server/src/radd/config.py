@@ -121,9 +121,13 @@ class Settings(BaseSettings):
     ldap_user_search_base: str = ""  # "" = base_dn(); narrow to an OU to scope the import
     ldap_user_filter: str = "(&(objectCategory=person)(objectClass=user)(mail=*))"
     ldap_page_size: int = 500  # AD caps a single search at ~1000; page through
-    # Team↔group reconcile loop (spec 84): full reconcile of every linked team
-    # per tick. Needs the bind account + run_workers; long interval by design.
+    # Group reconcile loop (spec 84 → RADD-829: GROUPS are the sync surface, not
+    # linked teams). Needs the bind account + run_workers; long interval by design.
     ldap_group_sync_seconds: float = 3600.0
+    # RADD-829: the nesting walk's depth cap. AD nesting is rarely deeper than 3;
+    # a pathological directory degrades to "incomplete" (fails CLOSED — fewer
+    # memberships resolved) instead of "down".
+    group_nesting_max_depth: int = 10
     # Directory settings page + automatic user sync (spec 85). These four are
     # the CASCADE DEFAULTS for the registered instance-scope SettingKeys — an
     # instance override written on the Directory settings page wins over env.
@@ -322,6 +326,7 @@ class Settings(BaseSettings):
         "radd.modules.capabilities",
         "radd.modules.pluginmgr",
         "radd.modules.settings",
+        "radd.modules.groups",
         "radd.modules.teams",
         "radd.modules.access",
         "radd.modules.workflow",

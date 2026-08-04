@@ -1,11 +1,13 @@
-"""Team ownership, delegated management, and the stale-group guard (spec 87).
+"""Team ownership, delegated management, and the stale-group guard (spec 87,
+reshaped by RADD-829: the guard lives on GROUPS now, and a team reaches the
+directory by holding a group as a member).
 
 The invariants worth pinning:
   - a team leader administers THEIR team and no other (that is the whole point
     of per-team delegation over the all-or-nothing team.update atom),
   - a delegate cannot promote themselves — appointing managers and transferring
     ownership stay with the owner,
-  - a directory group that vanishes from AD never empties the team it is linked to.
+  - a directory group that vanishes from AD never loses its memberships.
 
 Rolled-back transactions on the compose DB.
 """
@@ -19,6 +21,8 @@ from radd.config import settings
 from radd.exceptions import ConflictError
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
+from radd.modules.groups import service as groups_service
+from radd.modules.groups.models import GroupMember
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate, ItemUpdate
 from radd.modules.ldap import groups, groupsync
@@ -29,9 +33,7 @@ from radd.modules.ldap.types import DirectoryGroup, DirectoryUnreachable
 # fixtures below need one to land in.
 from radd.modules import workflow as _workflow  # noqa: F401
 from radd.modules.teams import service as teams_service
-from radd.modules.teams.models import TeamMember
-from radd.modules.teams.schemas import TeamCreate, TeamUpdate
-from radd.modules.teams.types import MemberSource, TeamSource
+from radd.modules.teams.schemas import TeamCreate
 
 
 @pytest.fixture
@@ -141,38 +143,64 @@ async def test_delete_refuses_while_the_team_grants_project_access(db):
     await teams_service.delete_team(db, team.id, actor_id=owner.id)
 
 
-async def test_directory_team_membership_is_read_only(db):
+async def test_group_carried_membership_expands_into_the_team(db):
+    """RADD-829: a team holding a GROUP counts the group's people (nesting
+    included) as members everywhere membership is asked — and stays hand-
+    editable for direct user rows, because no team is directory-owned now."""
     owner = await _user(db, "Owner")
-    member = await _user(db, "Member")
+    direct = await _user(db, "Direct")
+    via_group = await _user(db, "Via Group")
+    via_nested = await _user(db, "Via Nested")
     team = await _team(db, owner)
-    await teams_service.update_team(
-        db,
-        team.id,
-        TeamUpdate(
-            directory_group_dn="CN=g,OU=Groups,DC=ad,DC=example,DC=com", directory_group_name="g"
-        ),
-        actor_id=owner.id,
-    )
-    assert TeamSource(team.source) is TeamSource.DIRECTORY
 
-    with pytest.raises(ConflictError):
-        await teams_service.add_team_member(db, team.id, member.id, actor_id=owner.id)
-    # Even the owner cannot hand-edit it — the directory is the single source.
-    db.add(TeamMember(team_id=team.id, user_id=member.id, source=MemberSource.DIRECTORY))
+    parent = await groups_service.upsert_group(db, dn="CN=parent,DC=t", name="Parent")
+    child = await groups_service.upsert_group(db, dn="CN=child,DC=t", name="Child")
+    await groups_service.set_parents(db, child, [parent.id])
+    db.add(GroupMember(group_id=parent.id, user_id=via_group.id))
+    db.add(GroupMember(group_id=child.id, user_id=via_nested.id))
     await db.flush()
-    with pytest.raises(ConflictError):
-        await teams_service.remove_team_member(db, team.id, member.id, actor_id=owner.id)
+
+    await teams_service.add_team_member(db, team.id, direct.id, actor_id=owner.id)
+    await teams_service.add_team_group(db, team.id, parent.id, actor_id=owner.id)
+
+    members = {u.id for u in await teams_service.list_team_members(db, team.id)}
+    assert members == {direct.id, via_group.id, via_nested.id}
+    # The membership seam agrees for every carried person.
+    for user in (direct, via_group, via_nested):
+        assert team.id in await teams_service.user_team_ids(db, user.id)
+    # The via labels name the carrier.
+    via = {u.id: v for u, v in await teams_service.member_users_with_via(db, team.id)}
+    assert via[direct.id] is None and via[via_group.id] == "Parent"
+
+    # Still hand-editable — no read-only teams exist any more.
+    await teams_service.remove_team_member(db, team.id, direct.id, actor_id=owner.id)
+    await teams_service.remove_team_group(db, team.id, parent.id, actor_id=owner.id)
+    assert await teams_service.list_team_members(db, team.id) == []
 
 
-async def test_vanished_ad_group_never_empties_the_team(db, monkeypatch):
-    owner = await _user(db, "Owner", instance_role=InstanceRole.ADMIN)
+async def test_group_cycle_terminates_and_depth_fails_closed(db):
+    """AD is a graph: a cycle must terminate, and nesting deeper than the cap
+    resolves FEWER memberships (fails closed), never hangs."""
+    a = await groups_service.upsert_group(db, dn="CN=a,DC=t", name="A")
+    b = await groups_service.upsert_group(db, dn="CN=b,DC=t", name="B")
+    c = await groups_service.upsert_group(db, dn="CN=c,DC=t", name="C")
+    # a -> b -> c -> a (a cycle, as AD legally allows).
+    await groups_service.set_parents(db, a, [b.id])
+    await groups_service.set_parents(db, b, [c.id])
+    await groups_service.set_parents(db, c, [a.id])
+    user = await _user(db, "Cycled")
+    db.add(GroupMember(group_id=a.id, user_id=user.id))
+    await db.flush()
+    resolved = await groups_service.user_group_ids(db, user.id)
+    assert resolved == {a.id, b.id, c.id}  # terminated, everything reached once
+    reach = await groups_service.group_user_ids(db, c.id)
+    assert user.id in reach  # the downward closure crosses the cycle too
+
+
+async def test_vanished_ad_group_never_loses_its_memberships(db, monkeypatch):
     member = await _user(db, "Synced")
-    group_dn = "CN=gone,OU=Groups,DC=ad,DC=example,DC=com"
-    team = await _team(db, owner)
-    await teams_service.update_team(
-        db, team.id, TeamUpdate(directory_group_dn=group_dn, directory_group_name="gone")
-    )
-    db.add(TeamMember(team_id=team.id, user_id=member.id, source=MemberSource.DIRECTORY))
+    group = await groups_service.upsert_group(db, dn="CN=gone,DC=t", name="Gone")
+    db.add(GroupMember(group_id=group.id, user_id=member.id))
     await db.flush()
 
     async def no_members(session, dn):
@@ -186,41 +214,31 @@ async def test_vanished_ad_group_never_empties_the_team(db, monkeypatch):
 
     # An empty search + a group that no longer resolves must NOT read as "everyone left".
     with pytest.raises(groupsync.StaleDirectoryGroup):
-        await groupsync.reconcile_team(db, team, actor_id=owner.id)
-    rows = await teams_service.team_member_rows(db, team.id)
-    assert [r.user_id for r in rows] == [member.id]
-    assert team.directory_missing_since is not None
+        await groupsync.reconcile_group(db, group)
+    assert member.id in await groups_service.group_user_ids(db, group.id)
+    assert group.directory_missing_since is not None
 
     # While flagged, the login path holds removals too (it would otherwise drain
-    # the team one sign-in at a time).
-    await groupsync.sync_login_membership(db, member, [team], frozenset())
-    assert len(await teams_service.team_member_rows(db, team.id)) == 1
+    # the group one sign-in at a time).
+    await groupsync.sync_login_membership(db, member, [group], frozenset())
+    assert member.id in await groups_service.group_user_ids(db, group.id)
 
     # A genuinely empty group that still EXISTS does reconcile, and clears the flag.
     async def group_exists(dn):
         return DirectoryGroup(cn="gone", dn=dn, description="", member_count=0)
 
     monkeypatch.setattr(groups, "get_group", group_exists)
-    added, removed = await groupsync.reconcile_team(db, team, actor_id=owner.id)
+    added, removed = await groupsync.reconcile_group(db, group)
     assert (added, removed) == (0, 1)
-    assert team.directory_missing_since is None
-    assert await teams_service.team_member_rows(db, team.id) == []
+    assert group.directory_missing_since is None
+    assert await groups_service.group_user_ids(db, group.id) == set()
 
 
 async def test_unreachable_directory_is_not_a_missing_group(db, monkeypatch):
     """The distinction the whole guard rests on: a DC that can't be reached must
-    never be read as "the group is gone", which would flag a healthy team and
+    never be read as "the group is gone", which would flag a healthy group and
     tell the admin their AD is wrong when it isn't."""
-    owner = await _user(db, "Owner", instance_role=InstanceRole.ADMIN)
-    team = await _team(db, owner)
-    await teams_service.update_team(
-        db,
-        team.id,
-        TeamUpdate(
-            directory_group_dn="CN=fine,OU=Groups,DC=ad,DC=example,DC=com",
-            directory_group_name="fine",
-        ),
-    )
+    group = await groups_service.upsert_group(db, dn="CN=fine,DC=t", name="Fine")
 
     async def no_members(session, dn):
         return []
@@ -232,8 +250,8 @@ async def test_unreachable_directory_is_not_a_missing_group(db, monkeypatch):
     monkeypatch.setattr(groups, "get_group", dc_down)
 
     with pytest.raises(DirectoryUnreachable):
-        await groupsync.reconcile_team(db, team, actor_id=owner.id)
-    assert team.directory_missing_since is None  # NOT flagged as stale
+        await groupsync.reconcile_group(db, group)
+    assert group.directory_missing_since is None  # NOT flagged as stale
 
 
 async def test_unknown_manager_is_refused(db):

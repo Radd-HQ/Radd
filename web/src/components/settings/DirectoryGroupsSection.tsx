@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, Link2, UsersRound } from "lucide-react";
+import { Download, UsersRound } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
-import { SEARCH_DEBOUNCE_MS, apiTeamPath } from "../../lib/constants";
+import { SEARCH_DEBOUNCE_MS, apiTeamGroupsPath } from "../../lib/constants";
 import { useDebounced } from "../../lib/hooks";
-import { ldapGroupsQuery, teamsQuery } from "../../lib/queries";
+import { groupsQuery, ldapGroupsQuery, teamsQuery } from "../../lib/queries";
 import { pushToast, ToastKind } from "../../lib/toast";
-import type { DirectoryGroup, Team, TeamUpdate } from "../../lib/types";
+import type { DirectoryGroup, TeamGroup } from "../../lib/types";
 import { Button } from "../Button";
 import { EmptyState } from "../EmptyState";
 import { Modal } from "../Modal";
@@ -22,39 +22,24 @@ const rowActionClasses =
   "disabled:opacity-50 hover:border-accent/50 hover:text-accent-text";
 
 /**
- * The Directory page's Groups card (spec 85 §3): every group under the
- * configured base with its LINK STATE (the team already holding that DN), a
- * per-row Import-as-team / Link-to-existing-team / Unlink, and bulk import.
- * Import reuses the spec-84 dialog (preselected mode); link/unlink ride the
- * ordinary team PATCH.
+ * The Directory page's Groups card (spec 85 §3 → RADD-829): every AD group
+ * under the configured base with its MIRROR state (a `groups` row exists for
+ * the DN), per-row Import / Add-to-team, and bulk import. Importing mirrors
+ * the group and ensures a same-named team holds it; "Add to team" puts an
+ * already-mirrored group on any team. Un-mirroring doesn't exist — a group
+ * row is the directory's truth, and removing it from a team is the team
+ * panel's job.
  */
 export function DirectoryGroupsSection({ directoryReady }: { directoryReady: boolean }) {
-  const queryClient = useQueryClient();
   const [q, setQ] = useState("");
   const debounced = useDebounced(q, SEARCH_DEBOUNCE_MS);
   const groups = useQuery({ ...ldapGroupsQuery(debounced), enabled: directoryReady });
-  const teams = useQuery({ ...teamsQuery(), enabled: directoryReady });
+  const mirrored = useQuery({ ...groupsQuery(), enabled: directoryReady });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [importing, setImporting] = useState<DirectoryGroup[] | null>(null);
-  const [linking, setLinking] = useState<DirectoryGroup | null>(null);
+  const [adding, setAdding] = useState<{ dn: string; cn: string; groupId: string } | null>(null);
 
-  const linkedByDn = new Map(
-    (teams.data ?? [])
-      .filter((team) => team.directory_group_dn)
-      .map((team) => [team.directory_group_dn as string, team]),
-  );
-
-  const unlink = useMutation({
-    mutationFn: (team: Team) =>
-      api.patch<Team>(apiTeamPath(team.id), {
-        directory_group_dn: null,
-        directory_group_name: null,
-      } satisfies TeamUpdate),
-    onSuccess: async (team) => {
-      pushToast(`Unlinked ${team.name} from its directory group`, ToastKind.success);
-      await queryClient.invalidateQueries({ queryKey: ["teams"] });
-    },
-  });
+  const mirroredByDn = new Map((mirrored.data ?? []).map((group) => [group.dn, group]));
 
   const toggle = (dn: string) => {
     setSelected((prev) => {
@@ -111,13 +96,13 @@ export function DirectoryGroupsSection({ directoryReady }: { directoryReady: boo
                 <th className={settingsTableClasses.head} />
                 <th className={settingsTableClasses.head}>Group</th>
                 <th className={settingsTableClasses.head}>Direct members</th>
-                <th className={settingsTableClasses.head}>Linked team</th>
+                <th className={settingsTableClasses.head}>Mirrored</th>
                 <th className={settingsTableClasses.head} />
               </tr>
             </thead>
             <tbody>
               {list.map((group) => {
-                const linked = linkedByDn.get(group.dn);
+                const mirror = mirroredByDn.get(group.dn);
                 return (
                   <tr key={group.dn} className="last:[&>td]:border-b-0">
                     <td className={settingsTableClasses.cell}>
@@ -137,45 +122,38 @@ export function DirectoryGroupsSection({ directoryReady }: { directoryReady: boo
                     </td>
                     <td className={settingsTableClasses.cell}>{group.member_count}</td>
                     <td className={settingsTableClasses.cell}>
-                      {linked ? (
+                      {mirror ? (
                         <span
                           className="rounded border border-sky-500/50 px-1.5 py-px text-[11px] text-sky-300"
-                          title={group.dn}
+                          title={`Synced as ${mirror.name}`}
                         >
-                          {linked.name}
+                          yes
                         </span>
                       ) : (
                         <span className="text-fg-faint">—</span>
                       )}
                     </td>
                     <td className={`${settingsTableClasses.cell} whitespace-nowrap`}>
-                      {linked ? (
+                      <span className="flex gap-1.5">
                         <button
                           type="button"
-                          onClick={() => unlink.mutate(linked)}
-                          disabled={unlink.isPending}
+                          onClick={() => setImporting([group])}
                           className={rowActionClasses}
                         >
-                          Unlink
+                          {mirror ? "Re-import" : "Import as team"}
                         </button>
-                      ) : (
-                        <span className="flex gap-1.5">
+                        {mirror && (
                           <button
                             type="button"
-                            onClick={() => setImporting([group])}
+                            onClick={() =>
+                              setAdding({ dn: group.dn, cn: group.cn, groupId: mirror.id })
+                            }
                             className={rowActionClasses}
                           >
-                            Import as team
+                            Add to team
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => setLinking(group)}
-                            className={rowActionClasses}
-                          >
-                            Link to existing team
-                          </button>
-                        </span>
-                      )}
+                        )}
+                      </span>
                     </td>
                   </tr>
                 );
@@ -184,7 +162,6 @@ export function DirectoryGroupsSection({ directoryReady }: { directoryReady: boo
           </table>
         </div>
       )}
-      {unlink.isError && <p className="text-xs text-red-400">{errorMessage(unlink.error)}</p>}
       {importing && (
         <ImportGroupsDialog
           preselected={importing}
@@ -194,66 +171,66 @@ export function DirectoryGroupsSection({ directoryReady }: { directoryReady: boo
           }}
         />
       )}
-      {linking && <LinkTeamDialog group={linking} onClose={() => setLinking(null)} />}
+      {adding && (
+        <AddGroupToTeamDialog
+          cn={adding.cn}
+          groupId={adding.groupId}
+          onClose={() => setAdding(null)}
+        />
+      )}
     </div>
   );
 }
 
-/** Spec 85 §3: link one discovered group to an EXISTING team — team pick
- * (already-linked teams excluded) → the ordinary team PATCH. */
-function LinkTeamDialog({ group, onClose }: { group: DirectoryGroup; onClose: () => void }) {
+/** RADD-829: put an already-mirrored group on an EXISTING team as a member. */
+function AddGroupToTeamDialog({
+  cn,
+  groupId,
+  onClose,
+}: {
+  cn: string;
+  groupId: string;
+  onClose: () => void;
+}) {
   const queryClient = useQueryClient();
   const teams = useQuery(teamsQuery());
   const [teamId, setTeamId] = useState("");
-  const candidates = (teams.data ?? []).filter((team) => !team.directory_group_dn);
 
-  const link = useMutation({
-    mutationFn: () =>
-      api.patch<Team>(apiTeamPath(teamId), {
-        directory_group_dn: group.dn,
-        directory_group_name: group.cn,
-      } satisfies TeamUpdate),
-    onSuccess: async (team) => {
-      pushToast(`Linked ${group.cn} to ${team.name}`, ToastKind.success);
+  const add = useMutation({
+    mutationFn: () => api.post<TeamGroup>(apiTeamGroupsPath(teamId), { group_id: groupId }),
+    onSuccess: async () => {
+      pushToast(`Added ${cn} to the team`, ToastKind.success);
       await queryClient.invalidateQueries({ queryKey: ["teams"] });
-      await queryClient.invalidateQueries({ queryKey: ["teamMembers"] });
       onClose();
     },
   });
 
   return (
-    <Modal title={`Link ${group.cn} to a team`} onClose={onClose}>
+    <Modal title={`Add ${cn} to a team`} onClose={onClose}>
       <div className="flex flex-col gap-3">
         <p className="text-xs text-fg-muted">
-          The team's membership will sync from the directory group (nested groups count);
-          hand-added members are kept.
+          The group's people (nested groups included) will count as members of the team;
+          the directory sync keeps them current.
         </p>
         <SelectField
           label="Team"
           value={teamId}
           onChange={(event) => setTeamId(event.target.value)}
         >
-          <option value="">Choose a team…</option>
-          {candidates.map((team) => (
+          <option value="">Pick a team…</option>
+          {(teams.data ?? []).map((team) => (
             <option key={team.id} value={team.id}>
               {team.name}
             </option>
           ))}
         </SelectField>
-        {teams.data && candidates.length === 0 && (
-          <p className="text-xs text-fg-muted">
-            Every team is already linked — unlink one first, or import the group as a
-            new team.
-          </p>
-        )}
-        {link.isError && <p className="text-xs text-red-400">{errorMessage(link.error)}</p>}
+        {add.isError && <p className="text-xs text-red-400">{errorMessage(add.error)}</p>}
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={() => link.mutate()} disabled={!teamId || link.isPending}>
-            <Link2 size={14} aria-hidden />
-            {link.isPending ? "Linking…" : "Link"}
+          <Button onClick={() => add.mutate()} disabled={!teamId || add.isPending}>
+            {add.isPending ? "Adding…" : "Add group"}
           </Button>
         </div>
       </div>

@@ -16,7 +16,7 @@ plugin = RaddPlugin(
     "Spec 85: cascade-resolved search bases (Directory settings page), the "
     "ldap-usersync PeriodicLoop (automatic provision/update/deactivate), and "
     "the directory_sync_state status rows.",
-    depends_on=("events", "projects", "auth", "settings", "teams"),
+    depends_on=("events", "projects", "auth", "settings", "groups", "teams"),
     # Per-plugin deps (§14): AD/LDAP bind needs ldap3. Maps to the `radd[ldap]` extra.
     python_deps=("ldap3",),
     routers=(router, admin_router, team_sync_router),

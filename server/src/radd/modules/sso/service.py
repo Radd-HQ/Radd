@@ -281,8 +281,8 @@ async def _apply_provisioning_template(
                 )
         for team_id in team_ids:
             try:
-                # Directory-linked teams answer 409 (spec 87 — their membership
-                # belongs to the AD group): the same stale-rule case, skipped.
+                # A team deleted after the template was written is the stale-rule
+                # case that survives RADD-829 — skipped, sign-in completes.
                 await teams_service.add_team_member(session, team_id, user.id)
             except Exception:  # noqa: BLE001
                 logger.warning(

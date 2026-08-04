@@ -62,6 +62,8 @@ export const ApiPath = {
   roleGrants: "/role-grants",
   grants: "/grants",
   teams: "/teams",
+  /** RADD-829: mirrored directory groups (read-only — sync writes them). */
+  groups: "/groups",
   comments: "/comments",
   // Spec 06/08 consumers:
   views: "/views",

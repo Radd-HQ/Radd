@@ -6,8 +6,8 @@ from .types import TeamEvent
 
 plugin = RaddPlugin(
     name="teams",
-    description="Global teams, team membership, and project↔team role attachments.",
-    depends_on=("events", "projects", "auth"),
+    description="Global teams, team membership (users AND groups), and project↔team role attachments.",
+    depends_on=("events", "projects", "auth", "groups"),
     routers=(team_router, project_team_router),
     event_types=(
         EventTypeSpec(TeamEvent.CREATED, "Team created", "Admin"),

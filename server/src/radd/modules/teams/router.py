@@ -16,6 +16,8 @@ from .schemas import (
     ProjectTeamRead,
     ProjectTeamUpdate,
     TeamCreate,
+    TeamGroupAdd,
+    TeamGroupRead,
     TeamManagersUpdate,
     TeamMemberAdd,
     TeamMemberRead,
@@ -23,7 +25,6 @@ from .schemas import (
     TeamTransfer,
     TeamUpdate,
 )
-from .types import MemberSource
 
 team_router = APIRouter(prefix="/teams", tags=["teams"])
 project_team_router = APIRouter(prefix="/projects", tags=["teams"])
@@ -99,14 +100,10 @@ async def list_teams(session: Session, user: CurrentUser) -> list[TeamRead]:
 async def update_team(
     team_id: uuid.UUID, data: TeamUpdate, session: Session, user: CurrentUser
 ) -> TeamRead:
-    """Rename + set/clear the AD group link (spec 84). Renaming is open to the
-    team's owner/managers (spec 87); linking to a directory group is not — it
-    hands the roster to AD, so it stays with the team.update atom."""
+    """Rename — open to the team's owner/managers (spec 87). (RADD-829 retired
+    the AD-link branch; group membership rides /teams/{id}/groups.)"""
     team = await service.get_team(session, team_id)
-    if "directory_group_dn" in data.model_fields_set:
-        await authz.require(session, user, authz.Permission.TEAM_UPDATE)
-    else:
-        await _require_manage(session, user, team)
+    await _require_manage(session, user, team)
     updated = await service.update_team(session, team_id, data, actor_id=user.id)
     return await _team_read(session, updated, user)
 
@@ -168,22 +165,53 @@ async def remove_team_member(
 async def list_team_members(
     team_id: uuid.UUID, session: Session, user: CurrentUser
 ) -> list[TeamMemberRead]:
-    await service.get_team(session, team_id)
+    """Every PERSON on the team (RADD-829): direct rows plus the people its
+    member groups resolve to, nesting included — `via_group` names the carrier."""
     await authz.require_member(session, user)
-    users = await service.list_team_members(session, team_id)
-    sources = {
-        row.user_id: MemberSource(row.source)
-        for row in await service.team_member_rows(session, team_id)
-    }
     return [
-        TeamMemberRead(
-            user_id=u.id,
-            email=u.email,
-            name=u.name,
-            source=sources.get(u.id, MemberSource.MANUAL),
-        )
-        for u in users
+        TeamMemberRead(user_id=u.id, email=u.email, name=u.name, via_group=via)
+        for u, via in await service.member_users_with_via(session, team_id)
     ]
+
+
+@team_router.get("/{team_id}/groups", response_model=list[TeamGroupRead])
+async def list_team_groups(
+    team_id: uuid.UUID, session: Session, user: CurrentUser
+) -> list[TeamGroupRead]:
+    await authz.require_member(session, user)
+    return [
+        TeamGroupRead(
+            group_id=g.id,
+            name=g.name,
+            dn=g.dn,
+            directory_missing_since=g.directory_missing_since,
+        )
+        for g in await service.team_groups(session, team_id)
+    ]
+
+
+@team_router.post("/{team_id}/groups", response_model=TeamGroupRead, status_code=201)
+async def add_team_group(
+    team_id: uuid.UUID, data: TeamGroupAdd, session: Session, user: CurrentUser
+) -> TeamGroupRead:
+    team = await service.get_team(session, team_id)
+    await _require_manage(session, user, team)
+    group = await service.add_team_group(session, team_id, data.group_id, actor_id=user.id)
+    return TeamGroupRead(
+        group_id=group.id,
+        name=group.name,
+        dn=group.dn,
+        directory_missing_since=group.directory_missing_since,
+    )
+
+
+@team_router.delete("/{team_id}/groups/{group_id}", status_code=204)
+async def remove_team_group(
+    team_id: uuid.UUID, group_id: uuid.UUID, session: Session, user: CurrentUser
+) -> None:
+    team = await service.get_team(session, team_id)
+    await _require_manage(session, user, team)
+    await service.remove_team_group(session, team_id, group_id, actor_id=user.id)
 
 
 @team_router.get("/{team_id}/access")

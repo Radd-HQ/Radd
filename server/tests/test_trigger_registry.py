@@ -36,5 +36,6 @@ def test_trigger_registry_reproduces_the_catalog_exactly():
         assert current[et] == expected, f"{et}: {current[et]} != {expected}"
 
 
-def test_trigger_count_is_67():
-    assert len(_current_triggers()) == 67
+def test_trigger_count_is_70():
+    # RADD-829 added the three group.* events (synced/missing/restored).
+    assert len(_current_triggers()) == 70

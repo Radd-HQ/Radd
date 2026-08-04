@@ -1,11 +1,11 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, Link2, Plus, TriangleAlert, UsersRound } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, UsersRound } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
 import { queryKeys, teamsQuery } from "../../lib/queries";
-import { Permission, TeamSource, type Team, type TeamCreate } from "../../lib/types";
+import { Permission, type Team, type TeamCreate } from "../../lib/types";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { TableSkeleton } from "../../components/TableSkeleton";
@@ -54,24 +54,6 @@ export function TeamsSettingsPage() {
                         <ChevronRight size={14} className="text-fg-muted" aria-hidden />
                       )}
                       <span className="text-[13px] font-medium text-heading">{team.name}</span>
-                      {team.source === TeamSource.directory &&
-                        (team.directory_missing_since ? (
-                          <span
-                            className="flex items-center gap-1 rounded border border-amber-500/60 px-1.5 py-px text-[10px] text-amber-300"
-                            title={`The AD group ${team.directory_group_name ?? team.directory_group_dn} no longer exists — members are kept, but the roster stays locked until it's unlinked`}
-                          >
-                            <TriangleAlert size={10} aria-hidden />
-                            AD group missing
-                          </span>
-                        ) : (
-                          <span
-                            className="flex items-center gap-1 rounded border border-sky-500/50 px-1.5 py-px text-[10px] text-sky-300"
-                            title={`Members come from the AD group ${team.directory_group_name ?? team.directory_group_dn}`}
-                          >
-                            <Link2 size={10} aria-hidden />
-                            AD
-                          </span>
-                        ))}
                       <span className="ml-auto text-xs text-fg-faint">
                         {new Date(team.created_at).toLocaleDateString()}
                       </span>

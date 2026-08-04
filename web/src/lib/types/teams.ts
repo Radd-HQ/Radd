@@ -10,26 +10,13 @@ export interface GlobalGrant {
   team_id: string | null;
 }
 
-/** Who owns a team's MEMBERSHIP (spec 87). A `directory` team's roster belongs
- * to its AD group and is read-only here; its NAME and its project grants stay
- * local — deciding what an AD group may do here is the point of linking it. */
-export const TeamSource = {
-  local: "local",
-  directory: "directory",
-} as const;
-export type TeamSourceValue = (typeof TeamSource)[keyof typeof TeamSource];
-
-/** GET /teams (spec 01; directory link — spec 84; ownership — spec 87). */
+/** GET /teams (spec 01; ownership — spec 87). RADD-829 retired the directory
+ * link: a team is always local, and reaches the directory by holding a GROUP
+ * as a member (see RaddGroup / TeamGroup). */
 export interface Team {
   id: string;
   name: string;
   created_at: string;
-  directory_group_dn: string | null;
-  directory_group_name: string | null;
-  source: TeamSourceValue;
-  /** Spec 87: set when the linked AD group stopped resolving. The team stays
-   * locked and keeps its people — unlinking is the (deliberate, human) way out. */
-  directory_missing_since: string | null;
   owner_id: string | null;
   managers: string[];
   /** Resolved server-side: owner ∪ manager ∪ global-atom holder. The client
@@ -48,26 +35,35 @@ export interface TeamManagersUpdate {
   user_ids: string[];
 }
 
-/** PATCH /teams/{id} (spec 84): rename + set/clear the AD group link. */
+/** PATCH /teams/{id}: rename (RADD-829 retired the AD-link fields). */
 export interface TeamUpdate {
   name?: string;
-  directory_group_dn?: string | null;
-  directory_group_name?: string | null;
 }
 
-/** How a team_members row got there (spec 84) — sync owns only directory rows. */
-export const MemberSource = {
-  manual: "manual",
-  directory: "directory",
-} as const;
-export type MemberSourceValue = (typeof MemberSource)[keyof typeof MemberSource];
-
-/** GET /teams/{id}/members (spec 01; source — spec 84). */
+/** GET /teams/{id}/members (RADD-829): direct rows plus group-carried people —
+ * `via_group` names the carrier (null = a direct user row). */
 export interface TeamMember {
   user_id: string;
   email: string;
   name: string;
-  source: MemberSourceValue;
+  via_group: string | null;
+}
+
+/** One mirrored directory group — GET /groups (RADD-829). */
+export interface RaddGroup {
+  id: string;
+  dn: string;
+  name: string;
+  directory_missing_since: string | null;
+  direct_member_count: number;
+}
+
+/** A GROUP member of a team — GET /teams/{id}/groups (RADD-829). */
+export interface TeamGroup {
+  group_id: string;
+  name: string;
+  dn: string;
+  directory_missing_since: string | null;
 }
 
 /** One AD group from GET /ldap/groups (spec 84). member_count is the DIRECT
@@ -188,7 +184,7 @@ export interface UserSyncResult {
 
 /** One directory_sync_state row (spec 85). `last_result` is the run summary —
  * user_sync: {provisioned, updated, deactivated, errors}, group_sync:
- * {teams, added, removed, errors}. */
+ * {groups, added, removed, errors} (RADD-829 reshaped it). */
 export interface DirectorySyncState {
   kind: string;
   last_run_at: string;

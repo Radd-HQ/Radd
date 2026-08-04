@@ -1,8 +1,7 @@
 import uuid
 from collections.abc import Iterable
-from datetime import UTC, datetime
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError, NotFoundError
@@ -10,11 +9,13 @@ from radd.modules.auth import roles as auth_roles, service as auth
 from radd.modules.auth.models import User
 from radd.modules.auth.types import BuiltinRoleKey
 from radd.modules.events import service as events
+from radd.modules.groups import service as groups_service
+from radd.modules.groups.models import Group
 from radd.modules.projects import service as projects_service
 
 from .models import ProjectTeam, Team, TeamManager, TeamMember
 from .schemas import ProjectTeamAttach, ProjectTeamUpdate, TeamCreate, TeamUpdate
-from .types import MemberSource, TeamChange, TeamEntity, TeamEvent, TeamSource
+from .types import TeamChange, TeamEntity, TeamEvent
 
 
 async def create_team(
@@ -43,21 +44,6 @@ async def create_team(
     return team
 
 
-def ensure_membership_editable(team: Team) -> None:
-    """Spec 87: a directory team's membership belongs to AD. Refusing here (not
-    just in the router) means every path — API, importer, future callers — gets
-    the same answer, and the 409 says where to make the change instead."""
-    if TeamSource(team.source) is TeamSource.DIRECTORY:
-        raise ConflictError(
-            TeamEntity.TEAM,
-            reason=(
-                f"'{team.name}' is linked to the AD group "
-                f"'{team.directory_group_name or team.directory_group_dn}' — its membership is "
-                "managed in the directory. Change the group there, or unlink the team first."
-            ),
-        )
-
-
 async def list_teams(session: AsyncSession) -> list[Team]:
     return list((await session.execute(select(Team).order_by(Team.name))).scalars())
 
@@ -77,10 +63,9 @@ async def teams_by_ids(session: AsyncSession, ids: Iterable[uuid.UUID]) -> dict[
 async def update_team(
     session: AsyncSession, team_id: uuid.UUID, data: TeamUpdate, actor_id: uuid.UUID | None = None
 ) -> Team:
-    """PATCH /teams/{id} (spec 84): rename + set/clear the AD group link.
-    Explicit null in the payload clears the link (model_fields_set semantics)."""
+    """PATCH /teams/{id}: rename. (RADD-829 retired the AD-link branch — the
+    directory's truth is a Group, held as a member.)"""
     team = await get_team(session, team_id)
-    fields_set = data.model_fields_set
     if data.name is not None and data.name != team.name:
         existing = await session.scalar(
             select(Team.id).where(Team.name == data.name, Team.id != team.id)
@@ -92,32 +77,6 @@ async def update_team(
         await _emit_updated(
             session, team, actor_id, {"action": TeamChange.RENAMED, "name": team.name}
         )
-    if "directory_group_dn" in fields_set and data.directory_group_dn != team.directory_group_dn:
-        team.directory_group_dn = data.directory_group_dn
-        team.directory_group_name = data.directory_group_name if data.directory_group_dn else None
-        # Spec 87: linking and unlinking are ownership handovers, so the existing
-        # rows are re-sourced to match. Linking gives the roster to AD — manual
-        # rows become directory rows the next reconcile can prune, otherwise they
-        # would be permanently frozen (unremovable by hand, invisible to sync).
-        # Unlinking gives it back — directory rows become manual so nobody loses
-        # access the moment the link goes, which makes unlink the safe escape hatch.
-        if data.directory_group_dn:
-            team.source = TeamSource.DIRECTORY
-            new_source, payload = MemberSource.DIRECTORY, {
-                "action": TeamChange.DIRECTORY_LINKED,
-                "directory_group_dn": team.directory_group_dn,
-                "directory_group_name": team.directory_group_name,
-            }
-        else:
-            team.source = TeamSource.LOCAL
-            new_source, payload = MemberSource.MANUAL, {"action": TeamChange.DIRECTORY_UNLINKED}
-        await session.execute(
-            update(TeamMember)
-            .where(TeamMember.team_id == team.id)
-            .values(source=new_source.value)
-        )
-        await session.flush()
-        await _emit_updated(session, team, actor_id, payload)
     return team
 
 
@@ -161,53 +120,26 @@ async def delete_team(
         entity_type=TeamEntity.TEAM,
         entity_id=team.id,
         actor_id=actor_id,
-        payload={"name": team.name, "source": team.source},
+        payload={"name": team.name},
     )
     await session.delete(team)
     await session.flush()
 
 
-async def mark_directory_health(
-    session: AsyncSession, team: Team, *, missing: bool, actor_id: uuid.UUID | None = None
-) -> None:
-    """Flag/unflag a linked team whose AD group stopped resolving (spec 87).
-    Idempotent — only a CHANGE in health writes and emits, so the hourly loop
-    doesn't spam the event log."""
-    already = team.directory_missing_since is not None
-    if already == missing:
-        return
-    team.directory_missing_since = datetime.now(UTC).replace(tzinfo=None) if missing else None
-    await session.flush()
-    await _emit_updated(
-        session,
-        team,
-        actor_id,
-        {
-            "action": TeamChange.DIRECTORY_MISSING if missing else TeamChange.DIRECTORY_RESTORED,
-            "directory_group_dn": team.directory_group_dn,
-        },
-    )
-
-
-async def linked_teams(session: AsyncSession) -> list[Team]:
-    """Every team with an AD group link — the directory reconcile surface
-    (spec 84; consumed by the ldap module)."""
-    result = await session.execute(
-        select(Team).where(Team.directory_group_dn.is_not(None)).order_by(Team.name)
-    )
-    return list(result.scalars())
-
-
-# --- team members ---
+# --- team members (RADD-829: a member is a USER or a GROUP) --------------------
 
 
 async def add_team_member(
     session: AsyncSession, team_id: uuid.UUID, user_id: uuid.UUID, actor_id: uuid.UUID | None = None
 ) -> User:
     team = await get_team(session, team_id)
-    ensure_membership_editable(team)  # spec 87: directory teams are read-only here
     user = await auth.get_user(session, user_id)
-    if await session.get(TeamMember, (team_id, user_id)):
+    existing = await session.scalar(
+        select(TeamMember.id).where(
+            TeamMember.team_id == team_id, TeamMember.user_id == user_id
+        )
+    )
+    if existing:
         raise ConflictError(TeamEntity.MEMBER, user_id)
     session.add(TeamMember(team_id=team_id, user_id=user_id))
     await session.flush()
@@ -221,7 +153,6 @@ async def remove_team_member(
     session: AsyncSession, team_id: uuid.UUID, user_id: uuid.UUID, actor_id: uuid.UUID | None = None
 ) -> None:
     team = await get_team(session, team_id)
-    ensure_membership_editable(team)  # spec 87: directory teams are read-only here
     result = await session.execute(
         delete(TeamMember).where(TeamMember.team_id == team_id, TeamMember.user_id == user_id)
     )
@@ -232,58 +163,99 @@ async def remove_team_member(
     )
 
 
-async def list_team_members(session: AsyncSession, team_id: uuid.UUID) -> list[User]:
-    await get_team(session, team_id)
-    member_ids = list(
-        (await session.execute(select(TeamMember.user_id).where(TeamMember.team_id == team_id)))
-        .scalars()
+async def add_team_group(
+    session: AsyncSession, team_id: uuid.UUID, group_id: uuid.UUID, actor_id: uuid.UUID | None = None
+) -> Group:
+    """The team gains a directory GROUP as a member (RADD-829): its people —
+    nesting included — count as team members everywhere membership is asked."""
+    team = await get_team(session, team_id)
+    group = await groups_service.get_group(session, group_id)
+    existing = await session.scalar(
+        select(TeamMember.id).where(
+            TeamMember.team_id == team_id, TeamMember.group_id == group_id
+        )
     )
-    users = await auth.users_by_ids(session, member_ids)
-    return sorted(users.values(), key=lambda u: u.name)
+    if existing:
+        raise ConflictError(TeamEntity.MEMBER, group_id)
+    session.add(TeamMember(team_id=team_id, group_id=group_id))
+    await session.flush()
+    await _emit_updated(
+        session,
+        team,
+        actor_id,
+        {"action": TeamChange.GROUP_ADDED, "group_id": str(group_id), "group": group.name},
+    )
+    return group
 
 
-async def team_member_rows(session: AsyncSession, team_id: uuid.UUID) -> list[TeamMember]:
-    """The raw membership rows incl. `source` (spec 84) — feeds the reconcile
-    planner and the member-list source badges."""
+async def remove_team_group(
+    session: AsyncSession, team_id: uuid.UUID, group_id: uuid.UUID, actor_id: uuid.UUID | None = None
+) -> None:
+    team = await get_team(session, team_id)
+    group = await groups_service.get_group(session, group_id)
+    result = await session.execute(
+        delete(TeamMember).where(
+            TeamMember.team_id == team_id, TeamMember.group_id == group_id
+        )
+    )
+    if result.rowcount == 0:
+        raise NotFoundError(TeamEntity.MEMBER, group_id)
+    await _emit_updated(
+        session,
+        team,
+        actor_id,
+        {"action": TeamChange.GROUP_REMOVED, "group_id": str(group_id), "group": group.name},
+    )
+
+
+async def team_groups(session: AsyncSession, team_id: uuid.UUID) -> list[Group]:
+    """The team's GROUP members (RADD-829)."""
     await get_team(session, team_id)
-    result = await session.execute(select(TeamMember).where(TeamMember.team_id == team_id))
+    result = await session.execute(
+        select(Group)
+        .join(TeamMember, TeamMember.group_id == Group.id)
+        .where(TeamMember.team_id == team_id)
+        .order_by(Group.name)
+    )
     return list(result.scalars())
 
 
-async def apply_directory_membership(
-    session: AsyncSession,
-    team: Team,
-    add_user_ids: Iterable[uuid.UUID],
-    remove_user_ids: Iterable[uuid.UUID],
-    actor_id: uuid.UUID | None = None,
-) -> tuple[int, int]:
-    """Apply a directory reconcile plan (spec 84): insert DIRECTORY-source rows
-    for the joiners, delete DIRECTORY-source rows for the leavers — manual rows
-    are never touched. Emits one team.updated (directory_synced) with counts
-    when anything changed. Returns (added, removed)."""
-    adds = list(dict.fromkeys(add_user_ids))
-    removes = list(dict.fromkeys(remove_user_ids))
-    for user_id in adds:
-        session.add(TeamMember(team_id=team.id, user_id=user_id, source=MemberSource.DIRECTORY))
-    removed = 0
-    if removes:
-        result = await session.execute(
-            delete(TeamMember).where(
-                TeamMember.team_id == team.id,
-                TeamMember.user_id.in_(removes),
-                TeamMember.source == MemberSource.DIRECTORY.value,
+async def list_team_members(session: AsyncSession, team_id: uuid.UUID) -> list[User]:
+    """Every PERSON on the team: direct user rows plus the people its member
+    groups resolve to, nesting included. Group-expanded members count as
+    members — post-migration a directory team's people are reachable ONLY via
+    its group, so stewardship, leave and approval electorates all depend on
+    this expansion."""
+    users = await member_users_with_via(session, team_id)
+    return sorted({u.id: u for u, _via in users}.values(), key=lambda u: u.name)
+
+
+async def member_users_with_via(
+    session: AsyncSession, team_id: uuid.UUID
+) -> list[tuple[User, str | None]]:
+    """(user, via-group-name|None) pairs — the router's member list with
+    provenance. A person reached both directly and via a group appears once,
+    as direct."""
+    await get_team(session, team_id)
+    direct_ids = list(
+        (
+            await session.execute(
+                select(TeamMember.user_id).where(
+                    TeamMember.team_id == team_id, TeamMember.user_id.is_not(None)
+                )
             )
-        )
-        removed = result.rowcount or 0
-    await session.flush()
-    if adds or removed:
-        await _emit_updated(
-            session,
-            team,
-            actor_id,
-            {"action": TeamChange.DIRECTORY_SYNCED, "added": len(adds), "removed": removed},
-        )
-    return len(adds), removed
+        ).scalars()
+    )
+    out: dict[uuid.UUID, tuple[User, str | None]] = {}
+    users = await auth.users_by_ids(session, direct_ids)
+    for user in users.values():
+        out[user.id] = (user, None)
+    for group in await team_groups(session, team_id):
+        group_user_ids = await groups_service.group_user_ids(session, group.id)
+        group_users = await auth.users_by_ids(session, group_user_ids - set(out))
+        for user in group_users.values():
+            out.setdefault(user.id, (user, group.name))
+    return sorted(out.values(), key=lambda pair: pair[0].name)
 
 
 # --- ownership + delegated management (spec 87) ---
@@ -477,19 +449,34 @@ async def list_project_teams(session: AsyncSession, project_id: uuid.UUID) -> li
 # --- helpers other modules import (the authz engine + spec 07 build on these) ---
 
 
+async def _membership_filter(session: AsyncSession, user_id: uuid.UUID):
+    """The team_members condition for one person (RADD-829): a direct user row,
+    OR a group row for any group they belong to transitively. THE subject-graph
+    join — every resolution below goes through it, so the group swap happened
+    in exactly one place."""
+    group_ids = await groups_service.user_group_ids(session, user_id)
+    condition = TeamMember.user_id == user_id
+    if group_ids:
+        condition = or_(condition, TeamMember.group_id.in_(group_ids))
+    return condition
+
+
 async def teams_for_user(session: AsyncSession, user_id: uuid.UUID) -> list[Team]:
     result = await session.execute(
         select(Team)
         .join(TeamMember, TeamMember.team_id == Team.id)
-        .where(TeamMember.user_id == user_id)
+        .where(await _membership_filter(session, user_id))
         .order_by(Team.name)
+        .distinct()
     )
     return list(result.scalars())
 
 
 async def user_team_ids(session: AsyncSession, user_id: uuid.UUID) -> set[uuid.UUID]:
+    """THE membership seam (20 call sites): the teams this person is on, direct
+    rows and group-carried alike."""
     result = await session.execute(
-        select(TeamMember.team_id).where(TeamMember.user_id == user_id)
+        select(TeamMember.team_id).where(await _membership_filter(session, user_id))
     )
     return set(result.scalars())
 
@@ -501,7 +488,10 @@ async def team_granted_role_ids(
     result = await session.execute(
         select(ProjectTeam.role_id)
         .join(TeamMember, TeamMember.team_id == ProjectTeam.team_id)
-        .where(TeamMember.user_id == user_id, ProjectTeam.project_id == project_id)
+        .where(
+            await _membership_filter(session, user_id),
+            ProjectTeam.project_id == project_id,
+        )
         .distinct()
     )
     return set(result.scalars())
@@ -517,7 +507,10 @@ async def team_role_pairs_for_project(
         select(Team.name, ProjectTeam.role_id)
         .join(TeamMember, TeamMember.team_id == ProjectTeam.team_id)
         .join(Team, Team.id == ProjectTeam.team_id)
-        .where(TeamMember.user_id == user_id, ProjectTeam.project_id == project_id)
+        .where(
+            await _membership_filter(session, user_id),
+            ProjectTeam.project_id == project_id,
+        )
         .distinct()
     )
     return [(name, role_id) for name, role_id in result.all()]
@@ -531,7 +524,7 @@ async def team_granted_role_ids_anywhere(
     result = await session.execute(
         select(ProjectTeam.role_id)
         .join(TeamMember, TeamMember.team_id == ProjectTeam.team_id)
-        .where(TeamMember.user_id == user_id)
+        .where(await _membership_filter(session, user_id))
         .distinct()
     )
     return set(result.scalars())
@@ -557,7 +550,10 @@ async def team_granted_role_ids_for_projects(
     result = await session.execute(
         select(ProjectTeam.project_id, ProjectTeam.role_id)
         .join(TeamMember, TeamMember.team_id == ProjectTeam.team_id)
-        .where(TeamMember.user_id == user_id, ProjectTeam.project_id.in_(set(project_ids)))
+        .where(
+            await _membership_filter(session, user_id),
+            ProjectTeam.project_id.in_(set(project_ids)),
+        )
         .distinct()
     )
     granted: dict[uuid.UUID, set[uuid.UUID]] = {}

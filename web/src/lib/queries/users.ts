@@ -5,6 +5,7 @@ import { api } from "../api";
 import {
   ApiPath,
   apiTeamAccessPath,
+  apiTeamGroupsPath,
   apiTeamMembersPath,
   apiUserAccessPath,
   apiUserContentPath,
@@ -17,8 +18,10 @@ import type {
   DirectorySyncStatus,
   DirectoryUser,
   DuplicateUserGroup,
+  RaddGroup,
   Team,
   TeamAccess,
+  TeamGroup,
   TeamMember,
   PermissionSource,
   User,
@@ -146,6 +149,21 @@ export const teamMembersQuery = (teamId: string) =>
   queryOptions({
     queryKey: queryKeys.teamMembers(teamId),
     queryFn: () => api.get<TeamMember[]>(apiTeamMembersPath(teamId)),
+  });
+
+/** The mirrored directory groups (RADD-829) — the team panel's add-group picker. */
+export const groupsQuery = () =>
+  queryOptions({
+    queryKey: ["groups"] as const,
+    queryFn: () => api.get<RaddGroup[]>(ApiPath.groups),
+    staleTime: 60_000,
+  });
+
+/** A team's GROUP members (RADD-829). */
+export const teamGroupsQuery = (teamId: string) =>
+  queryOptions({
+    queryKey: [...queryKeys.teams, teamId, "groups"] as const,
+    queryFn: () => api.get<TeamGroup[]>(apiTeamGroupsPath(teamId)),
   });
 
 /** The caller's personal access tokens. */

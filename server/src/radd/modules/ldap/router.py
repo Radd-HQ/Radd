@@ -12,6 +12,7 @@ from radd.modules.auth import authz, service as auth_service
 from radd.modules.auth.deps import CurrentUser
 from radd.modules.auth.models import User
 from radd.modules.auth.types import SESSION_COOKIE_NAME, InstanceRole
+from radd.modules.groups import service as groups_service
 from radd.modules.teams import service as teams_service
 
 from . import groups, groupsync, service, state, userimport, usersync
@@ -50,14 +51,14 @@ async def ldap_login(data: LdapLoginRequest, session: Session, response: Respons
     as the local /auth/login. Spec 84: the same connection also answers the
     user's transitive membership in every linked team's group, so directory
     team seats join/leave on login without a service account."""
-    linked = await teams_service.linked_teams(session)
+    mirrored = await groups_service.list_groups(session)
     directory_user = await service.authenticate(
         data.username.strip(),
         data.password,
-        tuple(team.directory_group_dn for team in linked if team.directory_group_dn),
+        tuple(group.dn for group in mirrored),
     )
     user = await service.provision(session, directory_user)
-    await groupsync.sync_login_membership(session, user, linked, directory_user.team_group_dns)
+    await groupsync.sync_login_membership(session, user, mirrored, directory_user.team_group_dns)
     token = await auth_service.create_session(session, user)
     response.set_cookie(
         SESSION_COOKIE_NAME,
@@ -303,19 +304,23 @@ async def run_directory_user_sync(session: Session, actor: CurrentUser) -> UserS
 async def directory_sync_team(
     team_id: uuid.UUID, session: Session, actor: CurrentUser
 ) -> DirectorySyncResult:
-    """On-demand reconcile of one linked team (spec 84 §1c) — team.manage;
-    409 when no bind account or the team isn't linked."""
-    team = await teams_service.get_team(session, team_id)
-    await authz.require(
-        session, actor, authz.Permission.TEAM_UPDATE
-    )
+    """On-demand reconcile of one team's GROUP members (spec 84 §1c →
+    RADD-829) — team.update; 409 when no bind account or the team holds no
+    groups."""
+    await teams_service.get_team(session, team_id)
+    await authz.require(session, actor, authz.Permission.TEAM_UPDATE)
     groups.require_bind_account()
-    if not team.directory_group_dn:
-        raise ConflictError(LdapEntity.LDAP, reason="team is not linked to a directory group")
-    try:
-        added, removed = await groupsync.reconcile_team(session, team, actor_id=actor.id)
-    except groupsync.StaleDirectoryGroup as exc:
-        # Spec 87: the group is gone from AD. The team was left untouched — say so
-        # (409) instead of reporting a successful sync that removed everybody.
-        raise ConflictError(LdapEntity.LDAP, reason=str(exc)) from exc
-    return DirectorySyncResult(added=added, removed=removed)
+    member_groups = await teams_service.team_groups(session, team_id)
+    if not member_groups:
+        raise ConflictError(LdapEntity.LDAP, reason="team holds no directory groups")
+    added_total = removed_total = 0
+    for group in member_groups:
+        try:
+            added, removed = await groupsync.reconcile_group(session, group)
+        except groupsync.StaleDirectoryGroup as exc:
+            # Spec 87: the group is gone from AD. Memberships were kept — say so
+            # (409) instead of reporting a successful sync that removed everybody.
+            raise ConflictError(LdapEntity.LDAP, reason=str(exc)) from exc
+        added_total += added
+        removed_total += removed
+    return DirectorySyncResult(added=added_total, removed=removed_total)
