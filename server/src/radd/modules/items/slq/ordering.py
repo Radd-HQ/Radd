@@ -33,6 +33,11 @@ _SORT_COLUMNS = {
 
 
 def order_clause(ctx: Context, term: OrderTerm) -> ColumnElement[Any]:
+    if term.field in ctx.denied_fields:
+        # RADD-840: sorting by a hidden field leaks its ordering — same oracle.
+        raise SlqError(
+            f"field '{term.field}' is read-restricted for you", term.field_position
+        )
     try:
         builtin = SlqField(term.field)
     except ValueError:

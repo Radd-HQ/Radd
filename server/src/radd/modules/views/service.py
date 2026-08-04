@@ -294,12 +294,18 @@ async def _validate_query(
     text = query.strip()
     if text:
         definitions = await _scope_definitions(session, view.project_id)
+        project = (
+            await projects_service.get_project(session, view.project_id)
+            if view.project_id
+            else None
+        )
         await slq.compile_query(
             session,
             slq.parse(text),
             definitions_by_key=definitions,
             current_user_id=actor.id,
             project_id=view.project_id,
+            denied_fields=await items_service.denied_slq_fields(session, actor, project),
         )
     return text
 

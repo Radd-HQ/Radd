@@ -52,7 +52,12 @@ from .service import set_archived, update_item
 
 # Package-private helpers — reached through their concern module, not the service
 # barrel, which exports only the items module's public surface.
-from .service.visibility import _check_builtin_field_rules, _field_ctx, _internal_visible
+from .service.visibility import (
+    _check_builtin_field_rules,
+    _field_ctx,
+    _internal_visible,
+    denied_slq_fields,
+)
 from radd.modules.events import service as events
 
 logger = logging.getLogger(__name__)
@@ -392,6 +397,7 @@ async def _visible_ids_query(
             definitions_by_key=await cf_definitions(session, scoped_project),
             current_user_id=actor.id,
             project_id=filters.project_id,
+            denied_fields=await denied_slq_fields(session, actor, scoped_project),
         )
         if compiled.where is not None:
             query = query.where(compiled.where)

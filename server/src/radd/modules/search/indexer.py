@@ -14,10 +14,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
 from radd.db import SessionLocal
+from radd.modules.access import service as access_service
+from radd.modules.access.types import Access, AccessEvent
 from radd.modules.comments import service as comments
 from radd.modules.comments.types import CommentEvent
 from radd.modules.events import service as events
 from radd.modules.events.models import Event
+from radd.modules.fields.service import BUILTIN_RESOURCE
+from radd.modules.fields.types import BuiltinItemField
 from radd.modules.items.enums import ItemEvent
 
 from .models import SearchIndexRow
@@ -32,6 +36,16 @@ _COMMENT_EVENTS = {
     CommentEvent.UPDATED.value,
     CommentEvent.DELETED.value,
 }
+_ACCESS_EVENTS = {AccessEvent.GRANTED.value, AccessEvent.REVOKED.value}
+_DESCRIPTION = BuiltinItemField.DESCRIPTION.value
+
+# RADD-840: `description` is read-restrictable AND searchable. Conservative
+# indexing — the internal-comments precedent ("public text only by
+# construction"): where a read-restricting grant covers a project, its items'
+# descriptions index for NOBODY, so snippets, similar-issues and the embedding
+# provider can never carry text some readers may not see. Synced once at
+# consumer start and again on every description read-grant change.
+_restriction_synced = False
 
 # The key is indexed in both "TD-123" and "TD 123" token forms so either matches.
 _TSV_UPDATE = text(
@@ -47,10 +61,17 @@ _TSV_UPDATE = text(
 
 
 async def run_once() -> int:
+    global _restriction_synced
     async with SessionLocal() as session:
+        if not _restriction_synced:
+            # A restriction written while the consumer was down (or before this
+            # release) is honored on start, not on the next grant change.
+            await sync_description_restriction(session)
+            _restriction_synced = True
         offset = await events.get_offset(session, CONSUMER_NAME)
         batch = await events.read_after(session, offset, settings.search_batch)
         if not batch:
+            await session.commit()
             return 0
         for event in batch:
             try:
@@ -72,18 +93,44 @@ async def _handle(session: AsyncSession, event: Event) -> None:
             await session.delete(row)
     elif event.event_type in _COMMENT_EVENTS:
         await _reindex_comments(session, event)
+    elif event.event_type in _ACCESS_EVENTS and _touches_description_read(event):
+        await sync_description_restriction(session)
+
+
+def _touches_description_read(event: Event) -> bool:
+    payload = event.payload or {}
+    return (
+        payload.get("resource_type") == BUILTIN_RESOURCE
+        and payload.get("resource_id") == _DESCRIPTION
+        and payload.get("access") == Access.READ.value
+    )
+
+
+async def _restricted_scope(session: AsyncSession) -> tuple[bool, set[uuid.UUID]]:
+    """(restricted everywhere, project ids restricted) from the read grants on
+    the `description` builtin. Any read grant restricts — for everybody, holders
+    included: index text must be one-per-row, and a per-reader index is not."""
+    grants = await access_service.grants_for_resources(session, BUILTIN_RESOURCE, [_DESCRIPTION])
+    read_rows = [g for g in grants.get(_DESCRIPTION, ()) if g.access == Access.READ.value]
+    return (
+        any(g.project_id is None for g in read_rows),
+        {g.project_id for g in read_rows if g.project_id is not None},
+    )
 
 
 async def _index_item(session: AsyncSession, event: Event) -> None:
     payload = event.payload or {}
     if "project_id" not in payload:
         return
+    project_id = uuid.UUID(payload["project_id"])
+    everywhere, scoped = await _restricted_scope(session)
+    restricted = everywhere or project_id in scoped
     row = {
         "item_id": uuid.UUID(event.entity_id),
-        "project_id": uuid.UUID(payload["project_id"]),
+        "project_id": project_id,
         "key": payload.get("key", ""),
         "title": payload.get("title", ""),
-        "description": payload.get("description", ""),
+        "description": "" if restricted else payload.get("description", ""),
     }
     await session.execute(
         pg_insert(SearchIndexRow)
@@ -94,6 +141,47 @@ async def _index_item(session: AsyncSession, event: Event) -> None:
         )
     )
     await session.execute(_TSV_UPDATE, {"item_id": row["item_id"]})
+
+
+# Bulk forms of _TSV_UPDATE for the restriction sweep: recompute tsv inline
+# with the row's NEW description in the same statement, bounded to rows whose
+# text actually changes.
+_BLANK_RESTRICTED = text(
+    f"""
+    UPDATE search_index SET description = '', tsv =
+        setweight(to_tsvector('{SEARCH_TS_CONFIG}',
+            key || ' ' || replace(key, '-', ' ') || ' ' || title), 'A') ||
+        setweight(to_tsvector('{SEARCH_TS_CONFIG}', comments_text), 'C')
+    WHERE description <> ''
+      AND (:everywhere OR project_id = ANY(:project_ids))
+    """
+)
+# Restore reads work_items directly — the timesheet's "tolerated inward read of
+# dependency tables" precedent: the description came FROM that table via event
+# payloads, and only the owning row can put it back.
+_RESTORE_OPEN = text(
+    f"""
+    UPDATE search_index si SET description = COALESCE(wi.description, ''), tsv =
+        setweight(to_tsvector('{SEARCH_TS_CONFIG}',
+            si.key || ' ' || replace(si.key, '-', ' ') || ' ' || si.title), 'A') ||
+        setweight(to_tsvector('{SEARCH_TS_CONFIG}', COALESCE(wi.description, '')), 'B') ||
+        setweight(to_tsvector('{SEARCH_TS_CONFIG}', si.comments_text), 'C')
+    FROM work_items wi
+    WHERE wi.id = si.item_id
+      AND NOT (:everywhere OR si.project_id = ANY(:project_ids))
+      AND si.description IS DISTINCT FROM COALESCE(wi.description, '')
+    """
+)
+
+
+async def sync_description_restriction(session: AsyncSession) -> None:
+    """Blank indexed descriptions where a read-restriction covers the project;
+    restore them where none does. Idempotent, bounded to rows whose text
+    changes; run at consumer start and on description read-grant changes."""
+    everywhere, scoped = await _restricted_scope(session)
+    params = {"everywhere": everywhere, "project_ids": list(scoped)}
+    await session.execute(_BLANK_RESTRICTED, params)
+    await session.execute(_RESTORE_OPEN, params)
 
 
 async def _reindex_comments(session: AsyncSession, event: Event) -> None:

@@ -487,6 +487,7 @@ async def _list_worklogs(session: AsyncSession, actor: User, args: Mapping[str, 
                 worklog_parse(str(args["slq"])),
                 current_user_id=actor.id,
                 hours_per_day=hours_per_day,
+                denied_item_fields=await items_service.denied_slq_fields(session, actor, None),
             )
         ).where
     sheet = await timesheet.build(session, start, end, actor=actor, user_ids=user_ids, where=where)

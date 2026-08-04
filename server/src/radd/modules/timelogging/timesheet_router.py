@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.db import get_session
 from radd.modules.auth import authz
 from radd.modules.auth.deps import CurrentUser
+from radd.modules.items import service as items_service
 from radd.modules.settings import service as settings_service
 from radd.modules.settings.types import SettingKey
 from radd.modules.teams import service as teams_service
@@ -64,7 +65,11 @@ async def get_timesheet(
         hours_per_day = await service._hours_per_day(session)
         where = (
             await compile_worklog_query(
-                session, parse(q), current_user_id=user.id, hours_per_day=hours_per_day
+                session,
+                parse(q),
+                current_user_id=user.id,
+                hours_per_day=hours_per_day,
+                denied_item_fields=await items_service.denied_slq_fields(session, user, None),
             )
         ).where
 
@@ -98,7 +103,11 @@ async def validate_worklog_slq(session: Session, user: CurrentUser, q: str = "")
     if q.strip():
         hours_per_day = await service._hours_per_day(session)
         await compile_worklog_query(
-            session, parse(q), current_user_id=user.id, hours_per_day=hours_per_day
+            session,
+            parse(q),
+            current_user_id=user.id,
+            hours_per_day=hours_per_day,
+            denied_item_fields=await items_service.denied_slq_fields(session, user, None),
         )
     return {"ok": True}
 

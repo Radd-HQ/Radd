@@ -41,6 +41,11 @@ class Context:
     # spec 83: uppercased key text -> item id via the spec-68 alias-aware
     # resolver; a missing entry means "no such item" -> positioned SlqError.
     ancestor_ids_by_key: Mapping[str, uuid.UUID] = dc_field(default_factory=dict)
+    # RADD-840: SLQ field names + custom keys the actor may not READ. Filtering
+    # or sorting by one is refused at compile time — result-set membership
+    # discloses the value by bisection, and /items/count makes it cheap. Empty =
+    # trusted context (system/automations).
+    denied_fields: frozenset[str] = frozenset()
 
     @property
     def field_names(self) -> list[str]:

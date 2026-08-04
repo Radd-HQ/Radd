@@ -25,6 +25,7 @@ from .visibility import (
     _field_ctx,
     _filter_read,
     _internal_visible,
+    denied_slq_fields,
 )
 
 
@@ -51,6 +52,7 @@ async def validate_slq(
         definitions_by_key=await cf_definitions(session, project),
         current_user_id=actor.id,
         project_id=project_id,
+        denied_fields=await denied_slq_fields(session, actor, project),
     )
 
 
@@ -94,6 +96,9 @@ async def list_items(
             definitions_by_key=await cf_definitions(session, projects.get(filters.project_id)),
             current_user_id=actor.id,
             project_id=filters.project_id,
+            denied_fields=await denied_slq_fields(
+                session, actor, projects.get(filters.project_id)
+            ),
         )
         if compiled.where is not None:
             query = query.where(compiled.where)

@@ -47,13 +47,16 @@ async def compile_query(
     definitions_by_key: Mapping[str, FieldDefinition],
     current_user_id: uuid.UUID,
     project_id: uuid.UUID | None = None,
+    denied_fields: frozenset[str] = frozenset(),
 ) -> CompiledQuery:
     """Compile a parsed query. `session`/`project_id` are only used to resolve
     label names (scoped to the project's labels-in-use when given) and bare
-    `epic`/`parent` item keys (spec 83, alias-aware)."""
+    `epic`/`parent` item keys (spec 83, alias-aware). `denied_fields` (RADD-840)
+    carries the actor's read-restricted field names — conditions and sorts on
+    them refuse at compile time, closing the bisection oracle."""
     labels = await _resolve_label_ids(session, project_id, _label_names(query.where))
     ancestors = await resolve_ancestor_keys(session, ancestor_key_texts(query.where))
-    ctx = Context(definitions_by_key, current_user_id, labels, ancestors)
+    ctx = Context(definitions_by_key, current_user_id, labels, ancestors, denied_fields)
     where = _expr(ctx, query.where) if query.where is not None else None
     order = tuple(order_clause(ctx, term) for term in query.order)
     return CompiledQuery(where=where, order=order)
@@ -74,6 +77,11 @@ _CONDITION_COMPILERS = {**BUILTIN_COMPILERS, **ANCESTOR_COMPILERS}
 
 
 def _condition(ctx: Context, node: Condition) -> ColumnElement[bool]:
+    if node.field in ctx.denied_fields:
+        # RADD-840: a filter on a field the actor can't read is a value oracle.
+        raise SlqError(
+            f"field '{node.field}' is read-restricted for you", node.field_position
+        )
     try:
         builtin = SlqField(node.field)
     except ValueError:

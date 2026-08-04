@@ -150,3 +150,82 @@ def _internal_visible(
         for pid, permissions in permissions_by_project.items()
         if Permission.COMMENT_READ_INTERNAL in permissions
     }
+
+
+# Read-restrictable builtin -> the SLQ field names that disclose its value
+# (RADD-840). `parent` restriction hides WHO the ancestors are, so every
+# ancestor field goes with it; assignee restriction covers its ancestor
+# mirrors. description has no SLQ field; title/state/priority are never
+# read-restrictable.
+_BUILTIN_TO_SLQ_FIELDS: dict[str, tuple[str, ...]] = {
+    "assignee": ("assignee", "epic.assignee", "parent.assignee"),
+    "reporter": ("reporter",),
+    "team": ("team",),
+    "labels": ("label",),
+    "parent": (
+        "parent",
+        "epic",
+        "epic.state",
+        "epic.category",
+        "epic.assignee",
+        "epic.priority",
+        "parent.state",
+        "parent.category",
+        "parent.assignee",
+        "parent.priority",
+    ),
+    "start_date": ("start",),
+    "target_date": ("target",),
+    "cycle": ("cycle", "past_cycle"),
+    "release": ("release",),
+    "flagged": ("flagged",),
+    "estimate_points": ("points",),
+}
+
+
+async def denied_slq_fields(
+    session: AsyncSession, actor: User, project: Project | None
+) -> frozenset[str]:
+    """SLQ field names + custom keys this actor may not filter or sort by
+    (RADD-840): anything the compiler will match against is disclosable by
+    bisection, and /items/count makes the oracle cheap — so the grant check
+    lives at compile time, exactly like an unknown field.
+
+    With a project: the exact per-actor resolution the read path uses. Without
+    one (cross-project surfaces): conservative — any field carrying a
+    read-restricting grant anywhere is denied for everyone except an instance
+    admin, since per-project subjects can't be resolved for a query that spans
+    them all. Restriction is rare; a leak is not.
+    """
+    from radd.modules.auth.types import InstanceRole
+
+    if actor.instance_role == InstanceRole.ADMIN.value:
+        return frozenset()
+
+    denied: set[str] = set()
+    if project is not None:
+        permissions = await authz.effective_permissions(session, actor, project=project)
+        definitions = await fields.definitions_for_project(session, project)
+        ctx = await _field_ctx(session, actor, project, permissions, definitions)
+        denied |= {d.key for d in definitions} - fields.readable_keys(definitions, ctx)
+        for name in await _builtin_read_denied(session, project, ctx):
+            denied |= set(_BUILTIN_TO_SLQ_FIELDS.get(name, ()))
+        return frozenset(denied)
+
+    definitions = await fields.list_fields(session)
+    field_grants = await access_service.grants_for_resources(
+        session, fields.FIELD_RESOURCE, [str(d.id) for d in definitions]
+    )
+    for definition in definitions:
+        if any(
+            g.access == fields.Access.READ.value
+            for g in field_grants.get(str(definition.id), ())
+        ):
+            denied.add(definition.key)
+    builtin_grants = await access_service.grants_for_resources(
+        session, fields.BUILTIN_RESOURCE, sorted(_BUILTIN_TO_SLQ_FIELDS)
+    )
+    for name, grants in builtin_grants.items():
+        if any(g.access == fields.Access.READ.value for g in grants):
+            denied |= set(_BUILTIN_TO_SLQ_FIELDS.get(name, ()))
+    return frozenset(denied)

@@ -17,9 +17,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.modules.auth import authz
 from radd.modules.auth.models import User
-from radd.modules.items import slq
+from radd.modules.items import service as items_service, slq
 from radd.modules.items.models import WorkItem
 from radd.modules.teams import service as teams_service
+from radd.modules.projects import service as projects_service
 
 from .models import View
 from .service import _grant_level, _scope_definitions, _shares_by_view
@@ -93,6 +94,12 @@ async def _count_view(
     # The view's own query AND the caller's extra filter compile separately
     # against the same scope, and each contributes a WHERE — predicate-level
     # composition, no string splicing.
+    project = (
+        await projects_service.get_project(session, view.project_id)
+        if view.project_id is not None
+        else None
+    )
+    denied = await items_service.denied_slq_fields(session, actor, project)
     for query_text in (text, extra):
         if not query_text:
             continue
@@ -104,8 +111,11 @@ async def _count_view(
                 definitions_by_key=definitions,
                 current_user_id=actor.id,
                 project_id=view.project_id,
+                denied_fields=denied,
             )
         except slq.SlqError:
+            # Stale query — or one naming a field this actor can't read
+            # (RADD-840): the badge is a COUNT, the exact oracle to close.
             return None
         if compiled.where is not None:
             stmt = stmt.where(compiled.where)

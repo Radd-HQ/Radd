@@ -43,9 +43,11 @@ from .queries import (
     require_item,
 )
 from .read import get_item, get_item_by_key
+from .visibility import denied_slq_fields
 
 __all__ = [
     "add_item_link",
+    "denied_slq_fields",
     "count_items_assigned_to_team",
     "count_items_in_state",
     "create_item",

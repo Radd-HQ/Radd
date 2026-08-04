@@ -64,6 +64,8 @@ class _Ctx:
     current_user_id: uuid.UUID
     hours_per_day: int
     days_per_week: int
+    # RADD-840: read-restricted item fields the delegated `issue.` compile refuses.
+    denied_item_fields: frozenset[str] = frozenset()
 
 
 async def compile_worklog_query(
@@ -73,11 +75,13 @@ async def compile_worklog_query(
     current_user_id: uuid.UUID,
     hours_per_day: int = 8,
     days_per_week: int = 5,
+    denied_item_fields: frozenset[str] = frozenset(),
 ) -> CompiledWorklogQuery:
     """Compile a parsed worklog query. Async because `issue.` terms are compiled
     by the item dialect, which resolves label names and item keys against the
-    database."""
-    ctx = _Ctx(current_user_id, hours_per_day, days_per_week)
+    database. `denied_item_fields` (RADD-840) rides into that delegation so a
+    read-restricted item field is just as unfilterable from the timesheet."""
+    ctx = _Ctx(current_user_id, hours_per_day, days_per_week, denied_item_fields)
     where = await _expr(session, ctx, query.where) if query.where is not None else None
     return CompiledWorklogQuery(where=where)
 
@@ -123,6 +127,7 @@ async def _delegated_issue_condition(
             Query(where=inner, order=()),
             definitions_by_key={},
             current_user_id=ctx.current_user_id,
+            denied_fields=ctx.denied_item_fields,
         )
     except SlqError as error:
         # Re-raise with the caret on the OUTER field: the delegated AST carries
