@@ -271,6 +271,7 @@ export const VIEW_TYPE_LABELS: Record<ViewTypeValue, string> = {
 /** Builtin view-axis labels (custom-field axes are labeled from the registry). */
 export const VIEW_AXIS_LABELS: Record<ViewAxisValue, string> = {
   [ViewAxis.state]: "State",
+  [ViewAxis.stateCategory]: "State category",
   [ViewAxis.assignee]: "Assignee",
   [ViewAxis.priority]: "Priority",
   [ViewAxis.kind]: "Kind",
@@ -281,6 +282,7 @@ export const VIEW_AXIS_LABELS: Record<ViewAxisValue, string> = {
 
 export const VIEW_AXIS_ORDER: readonly ViewAxisValue[] = [
   ViewAxis.state,
+  ViewAxis.stateCategory,
   ViewAxis.assignee,
   ViewAxis.priority,
   ViewAxis.kind,

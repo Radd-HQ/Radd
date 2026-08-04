@@ -51,6 +51,7 @@ export function dragEnabledForAxis(axis: string | null | undefined): boolean {
   if (axis.startsWith(CF_AXIS_PREFIX)) return true;
   switch (axis) {
     case ViewAxis.state:
+    case ViewAxis.stateCategory:
     case ViewAxis.priority:
     case ViewAxis.assignee:
     case ViewAxis.team:
@@ -101,6 +102,21 @@ export function bucketMovePlan(
       return {
         patch: { state_id: state.id },
         optimistic: { state: { id: state.id, name: state.name, category: state.category } },
+      };
+    }
+    case ViewAxis.stateCategory: {
+      // RADD-851: a category drop transitions to the item's OWN project's
+      // first state (by position) in that category — the same own-project
+      // resolution the all-projects state axis does. A project with no state
+      // in the category keeps the item put.
+      if (item.state.category === bucket.key) return null;
+      const target = (ctx.states ?? [])
+        .filter((s) => s.project_id === item.project_id && s.category === bucket.key)
+        .sort((a, b) => a.position - b.position)[0];
+      if (!target || item.state.id === target.id) return null;
+      return {
+        patch: { state_id: target.id },
+        optimistic: { state: { id: target.id, name: target.name, category: target.category } },
       };
     }
     case ViewAxis.priority: {

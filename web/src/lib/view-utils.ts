@@ -2,6 +2,7 @@ import { shortDate } from "./dates";
 import { fieldInScope } from "./field-scope";
 import {
   CATEGORY_META,
+  CATEGORY_ORDER,
   CYCLE_STATUS_META,
   CYCLE_STATUS_ORDER,
   KIND_META,
@@ -173,6 +174,14 @@ export function groupItemsForView(
   switch (axis) {
     case ViewAxis.state:
       return groupByState(items, context.states);
+    case ViewAxis.stateCategory:
+      // RADD-851: the fixed tier — every category always present (an empty
+      // Done column is information), membership from the state each item is in.
+      return CATEGORY_ORDER.map((cat) => ({
+        key: cat,
+        label: CATEGORY_META[cat].label,
+        items: items.filter((item) => item.state.category === cat),
+      }));
     case ViewAxis.assignee:
       return groupByAssignee(items);
     case ViewAxis.team:

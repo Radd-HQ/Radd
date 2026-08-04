@@ -24,6 +24,10 @@ class ViewAxis(StrEnum):
     (validated against the registry in views/service.py)."""
 
     STATE = "state"
+    # RADD-851: the fixed category tier above states — a five-column "what's
+    # actually in flight" board. Bucketing is client-side like every axis;
+    # membership comes from item.state.category, so no query changes.
+    STATE_CATEGORY = "state_category"
     ASSIGNEE = "assignee"
     PRIORITY = "priority"
     KIND = "kind"
