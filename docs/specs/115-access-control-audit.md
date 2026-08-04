@@ -293,6 +293,57 @@ granted roles. It does not read `access_grants`, so it cannot answer "why can
 this person see this space / view / field" — the questions Layer 3 decides. It
 also has no Team view, no backlinks, and its `?project_id=` parameter has no UI.
 
+### F13 — Half the `manage` atoms do nothing, and one of them misfires
+**Severity: medium.** Asked directly — *does `manage` serve any real purpose?* —
+the measured answer is mostly no.
+
+Eighteen `*.manage` atoms exist. Counting **direct** enforcement sites (a
+`require(...)` naming the atom, excluding the declaration tables):
+
+| Direct uses | Atoms |
+|---|---|
+| **0** | `canned` `cardpreset` `cycle` `label` `release` `role` `sla` `team` `view` |
+| 1–6 | `automation` `form` `webhook` `state` `user` `field` |
+| 12–24 | `global` `page` `project` |
+
+**Nine of eighteen are never checked anywhere.** Granting `label.manage` is
+exactly equivalent to ticking `label.create` + `label.update` + `label.delete`;
+it is a third checkbox whose only meaning is the other three.
+
+**`view.manage` is worse than inert — it is wrong.** The server gates view
+writes on `VIEW_CREATE` / `VIEW_UPDATE` / `VIEW_DELETE` (`views/service.py:558`,
+`686`, `766`) and never consults `view.manage`. The **client** gates the New-view
+affordance on `view.manage` at three sites (`Sidebar.tsx:113,491`,
+`ViewModal.tsx:61-62`). Since `manage` implies `create` but not the reverse, a
+role granted exactly what the server enforces — `view.create` — gets **no New
+View button**, while the API would have accepted the call. Same shape as
+RADD-810, different axis: umbrella-vs-granular rather than scope.
+
+**What it was for.** Back-compat, correctly. Spec 36 split per-entity manage out
+of `project.manage`/`global.manage`; spec 50 added the CRUD triples and kept
+`manage` as an umbrella so pre-existing roles survived with zero backfill. That
+was the right call then and is why the atoms exist.
+
+**What it costs now.**
+
+1. **Silent widening.** Adding a CRUD atom to a resource automatically grants it
+   to every existing `manage` holder. A permission appears in someone's role that
+   nobody granted — the same class of invisibility RADD-773 removed from the
+   member floor, still present here.
+2. **An explanation burden.** The inspector needs a whole `implied` concept
+   (RADD-779) solely to describe grants that were never made.
+3. **A vague word attracts jobs.** `project.manage` accreted four unrelated
+   responsibilities (F5) precisely because "manage" is loose enough to host them.
+4. **92 atoms where ~74 would do**, on a screen already criticised as confusing.
+
+**Recommendation: `manage` becomes a UI affordance, not a stored atom.** Ticking
+it ticks the resource's boxes; the role stores granular atoms only. That keeps
+the one-click convenience, kills the silent widening, and removes `implied` from
+the inspector entirely. The genuinely load-bearing cases are not folded away —
+they get real atoms for what they actually authorise (`page.manage` means
+*administer a space*, which is not any CRUD triple), rather than hiding behind a
+word that means something different on every row.
+
 ### F12 — Field *scope* and field *grants* are indistinguishable on screen
 **Severity: medium — a capability that exists but reads as missing is worth as
 little as one that does not exist.** §3.1 has the detail. Spec 91 gave a custom
