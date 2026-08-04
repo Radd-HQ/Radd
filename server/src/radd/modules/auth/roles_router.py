@@ -45,8 +45,9 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 
 @role_router.get("", response_model=list[RoleRead])
 async def list_roles(session: Session, user: CurrentUser) -> list[RoleRead]:
-    # Member floor (RADD-788): item.read in SOME project, not the global atom.
-    if not await authz.readable_projects(session, user):
+    # RADD-816 (F6): the catalog read is a deliverable atom now — Baseline-
+    # seeded, so day-one behaviour is the old member floor, but REVOCABLE.
+    if not await authz.holds(session, user, Permission.ROLE_READ):
         return []
     return [RoleRead.model_validate(r) for r in await roles.list_roles(session)]
 
@@ -85,7 +86,7 @@ async def list_global_grants(
     role_id: uuid.UUID, session: Session, user: CurrentUser
 ) -> list[GlobalGrantRead]:
     await roles.get_role(session, role_id)
-    await authz.require_member(session, user)
+    await authz.require(session, user, Permission.ROLE_READ)
     return [GlobalGrantRead.model_validate(g) for g in await grants.list_grants(session, role_id)]
 
 
@@ -179,7 +180,9 @@ async def delete_role_grant(grant_id: uuid.UUID, session: Session, user: Current
 
 @permission_router.get("", response_model=list[PermissionRead])
 async def permission_catalog(session: Session, user: CurrentUser) -> list[PermissionRead]:
-    """Every permission the system knows, with scope — for the admin role-matrix UI."""
+    """Every permission the system knows, with scope — for the admin role-matrix UI.
+    VOCABULARY, not data (atom names and descriptions carry no instance state),
+    so it stays on the member floor rather than role.read (RADD-816)."""
     await authz.require_member(session, user)
     # Builtins first, in enum order (parity), then any plugin-registered atoms
     # (spec 93/A2 — a plugin's atoms appear in the matrix with no edit to auth).

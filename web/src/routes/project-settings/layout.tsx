@@ -89,7 +89,7 @@ const PROJECT_SETTINGS_NAV: readonly {
     to: RoutePath.projectSettingsReleases,
     label: "Releases",
     icon: Rocket,
-    show: (perms, project) => perms.project(project, Permission.releaseManage),
+    show: (perms, project) => perms.project(project, Permission.releaseUpdate),
   },
   {
     to: RoutePath.projectSettingsForms,
@@ -107,7 +107,7 @@ const PROJECT_SETTINGS_NAV: readonly {
     to: RoutePath.projectSettingsSla,
     label: "SLAs",
     icon: Timer,
-    show: (perms) => perms.global(Permission.slaManage),
+    show: (perms) => perms.global(Permission.slaUpdate),
   },
 ];
 

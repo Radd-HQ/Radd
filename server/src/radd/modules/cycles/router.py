@@ -43,8 +43,9 @@ async def list_cycles(
     user: CurrentUser,
     status: Annotated[CycleStatus | None, Query()] = None,
 ) -> list[CycleRead]:
-    # Member floor (RADD-788): item.read in SOME project, not the global atom.
-    if not await authz.readable_projects(session, user):
+    # RADD-816 (F6): the catalog read is a deliverable atom now — Baseline-
+    # seeded, so day-one behaviour is the old member floor, but REVOCABLE.
+    if not await authz.holds(session, user, authz.Permission.CYCLE_READ):
         return []
     today = date.today()
     # Spec 60: team-restricted cycles only reach their members (+ cycle managers).
@@ -65,7 +66,7 @@ async def _require_visible(session: AsyncSession, cycle, user) -> None:
 @router.get("/{cycle_id}", response_model=CycleRead)
 async def get_cycle(cycle_id: uuid.UUID, session: Session, user: CurrentUser) -> CycleRead:
     cycle = await service.get_cycle(session, cycle_id)
-    await authz.require_member(session, user)
+    await authz.require(session, user, authz.Permission.CYCLE_READ)
     await _require_visible(session, cycle, user)
     team_ids = (await service.team_ids_by_cycle(session, [cycle.id])).get(cycle.id, [])
     return service.to_read(cycle, date.today(), team_ids)
@@ -104,7 +105,7 @@ async def cycle_stats(
     from radd.modules.timelogging.timesheet import cycle_time_totals
 
     cycle = await service.get_cycle(session, cycle_id)
-    await authz.require_member(session, user)
+    await authz.require(session, user, authz.Permission.CYCLE_READ)
     await _require_visible(session, cycle, user)
     counts = await items_service.cycle_state_category_counts(
         session, cycle_id, assignee_id=assignee_id, team_id=team_id, project_id=project_id
@@ -168,7 +169,7 @@ async def delete_cycle(cycle_id: uuid.UUID, session: Session, user: CurrentUser)
 
 @series_router.get("", response_model=list[CycleSeriesRead])
 async def list_series(session: Session, user: CurrentUser) -> list[CycleSeriesRead]:
-    if not await authz.readable_projects(session, user):
+    if not await authz.holds(session, user, authz.Permission.CYCLE_READ):
         return []
     rows = await service.list_series(session)
     return [CycleSeriesRead.model_validate(row) for row in rows]

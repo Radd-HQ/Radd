@@ -192,10 +192,11 @@ async def test_card_presets_crud(db, actor):
 
 
 async def test_card_preset_rbac_atoms(db):
-    # global.manage expands (transitively) to the cardpreset triple…
+    # global.manage expands (transitively) to the cardpreset atoms — RADD-816
+    # deleted the dead cardpreset.manage umbrella; the CRUD atoms are the truth.
     expanded = expand_permissions({Permission.GLOBAL_MANAGE})
     assert {
-        Permission.CARD_PRESET_MANAGE.value,
+        Permission.CARD_PRESET_READ.value,
         Permission.CARD_PRESET_CREATE.value,
         Permission.CARD_PRESET_UPDATE.value,
         Permission.CARD_PRESET_DELETE.value,

@@ -6,8 +6,25 @@ from .slq import commented_by_item_ids
 from .router import router
 from .types import CommentEvent
 
+from radd.kernel.registry import register_relation
+from radd.kernel.specs import RelationSpec
+from .models import Comment
+
+# RADD-816 (Q4): what @own MEANS for a comment — the author column. Both forms
+# mandatory (the RADD-823 contract); registered on the manifest so the loader's
+# clear() cannot drop it.
+COMMENT_OWN = RelationSpec(
+    resource="comment",
+    key="own",
+    label="they authored",
+    where=lambda actor: Comment.author_id == actor.user_id,
+    holds=lambda actor, row: row.author_id == actor.user_id,
+)
+register_relation(COMMENT_OWN)
+
 plugin = RaddPlugin(
     name="comments",
+    relations=(COMMENT_OWN,),
     description="Comments on work items: CRUD + comment.* events; counts feed item hydration.",
     depends_on=("items", "auth", "projects", "events", "teams"),
     # `commented_by = me` on the ITEM dialect — see slq.py.

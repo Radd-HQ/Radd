@@ -132,7 +132,7 @@ export function CyclePage() {
               : "Not scheduled"}
           </span>
           {cycle.data.status === CycleStatus.active &&
-            perms.global(Permission.cycleManage) && (
+            perms.global(Permission.cycleUpdate) && (
               <button
                 type="button"
                 onClick={() => setCompleting(true)}

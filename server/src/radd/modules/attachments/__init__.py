@@ -39,9 +39,26 @@ async def _shutdown() -> None:
     drained by the kernel's single consumer rather than a loop per module."""
 
 
+from radd.kernel.registry import register_relation
+from radd.kernel.specs import RelationSpec
+from .models import Attachment
+
+# RADD-816 (Q4): what @own MEANS for a attachment — the author column. Both forms
+# mandatory (the RADD-823 contract); registered on the manifest so the loader's
+# clear() cannot drop it.
+ATTACHMENT_OWN = RelationSpec(
+    resource="attachment",
+    key="own",
+    label="they authored",
+    where=lambda actor: Attachment.created_by == actor.user_id,
+    holds=lambda actor, row: row.created_by == actor.user_id,
+)
+register_relation(ATTACHMENT_OWN)
+
 plugin = RaddPlugin(
     cascades=lambda: gc.cascades(),
     name="attachments",
+    relations=(ATTACHMENT_OWN,),
     description="File attachments on work items and wiki pages (spec 102): "
     "multiple storage hosts (filesystem/S3) as DB rows, per-host proxy or "
     "presigned delivery, routed uploads, blob API for other modules.",

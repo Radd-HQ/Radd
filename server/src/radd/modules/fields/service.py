@@ -321,13 +321,25 @@ def _grants_for(definition: Any, ctx: FieldAccessContext) -> Sequence[AccessGran
     return ctx.grants_by_field.get(str(definition.id), ())
 
 
+# RADD-816 (F5.2): `has_manage` on the field contexts now means INSTANCE ADMIN
+# — the operator who administers the grant system sees through it, a named
+# resource-layer rule the inspector already explains with the `*` row. The old
+# meaning (project.manage held) is GONE: a project manager is denied like
+# anyone else unless a grant names them. The framework (`has_access`) never
+# consults the flag; these short-circuits are the fields module's own.
+
+
 def field_readable(definition: Any, ctx: FieldAccessContext) -> bool:
+    if ctx.has_manage:
+        return True
     return access_res.has_access(
         _grants_for(definition, ctx), ctx.as_subject(), Access.READ.value, ctx.project_id, _FIELD_SPEC
     )
 
 
 def field_writable(definition: Any, ctx: FieldAccessContext) -> bool:
+    if ctx.has_manage:
+        return True
     return access_res.has_access(
         _grants_for(definition, ctx), ctx.as_subject(), Access.WRITE.value, ctx.project_id, _FIELD_SPEC
     )
@@ -367,6 +379,8 @@ def builtin_write_denied(
     project_id: uuid.UUID | None,
 ) -> list[str]:
     """Which of the touched builtin fields the actor may NOT write (grants scoped)."""
+    if subject.has_manage:  # instance admin (RADD-816) — administers the grants
+        return []
     return sorted(
         name
         for name in touched
@@ -382,6 +396,8 @@ def builtin_read_denied(
     project_id: uuid.UUID | None,
 ) -> list[str]:
     """Which read-restrictable builtin fields to blank for the actor (grants scoped)."""
+    if subject.has_manage:  # instance admin (RADD-816)
+        return []
     return sorted(
         name
         for name, grants in grants_by_field.items()
@@ -437,8 +453,8 @@ async def readonly_field_keys(
     """The builtin field NAMES + custom field KEYS the actor may NOT WRITE in this project,
     resolved through the generic access framework (spec 92). This is per-(actor, project) and
     item-INDEPENDENT (field grants are project/global-scoped, never per-item), so the SPA can
-    disable exactly those editors up front instead of erroring on save. A project manager, or a
-    field with no restricting write grant, contributes nothing. Workflow-state transitions are
+    disable exactly those editors up front instead of erroring on save. RADD-816 removed the
+    manager bypass: a project manager is denied like anyone else unless a grant names them. Workflow-state transitions are
     handled separately (per-item) via /items/{id}/allowed-transitions."""
     subject = access_res.SubjectContext(
         user_id=user_id,

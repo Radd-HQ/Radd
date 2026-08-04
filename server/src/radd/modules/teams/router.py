@@ -82,10 +82,11 @@ async def create_team(data: TeamCreate, session: Session, user: CurrentUser) -> 
 
 @team_router.get("", response_model=list[TeamRead])
 async def list_teams(session: Session, user: CurrentUser) -> list[TeamRead]:
-    # Member floor (RADD-788): item.read in SOME project, not the global atom.
-    readable = await authz.readable_projects(session, user)
-    if not readable:
+    # RADD-816 (F6): the catalog read is a deliverable atom now — Baseline-
+    # seeded, so day-one behaviour is the old member floor, but REVOCABLE.
+    if not await authz.holds(session, user, authz.Permission.TEAM_READ):
         return []
+    readable = await authz.readable_projects(session, user)
     # Team rows carry per-team manage flags; resolve those against the actor's
     # widest project permissions rather than a global union that is now empty for
     # anyone whose access is project-scoped.
@@ -167,7 +168,7 @@ async def list_team_members(
 ) -> list[TeamMemberRead]:
     """Every PERSON on the team (RADD-829): direct rows plus the people its
     member groups resolve to, nesting included — `via_group` names the carrier."""
-    await authz.require_member(session, user)
+    await authz.require(session, user, authz.Permission.TEAM_READ)
     return [
         TeamMemberRead(user_id=u.id, email=u.email, name=u.name, via_group=via)
         for u, via in await service.member_users_with_via(session, team_id)
@@ -178,7 +179,7 @@ async def list_team_members(
 async def list_team_groups(
     team_id: uuid.UUID, session: Session, user: CurrentUser
 ) -> list[TeamGroupRead]:
-    await authz.require_member(session, user)
+    await authz.require(session, user, authz.Permission.TEAM_READ)
     return [
         TeamGroupRead(
             group_id=g.id,

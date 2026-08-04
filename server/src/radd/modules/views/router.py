@@ -67,9 +67,9 @@ async def view_counts(
 
 @router.get("/card-presets", response_model=list[CardPresetRead])
 async def list_card_presets(session: Session, user: CurrentUser) -> list[CardPresetRead]:
-    # Any member may browse (they apply these from the card designer) — the floor
-    # is item.read in SOME project, not the global atom (RADD-788).
-    if not await authz.readable_projects(session, user):
+    # RADD-816 (F6): the catalog read is a deliverable atom now — Baseline-
+    # seeded, so day-one behaviour is the old member floor, but REVOCABLE.
+    if not await authz.holds(session, user, authz.Permission.CARD_PRESET_READ):
         return []
     return [
         CardPresetRead.model_validate(preset)

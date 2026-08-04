@@ -89,13 +89,13 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         to: RoutePath.settingsLabels,
         label: "Labels",
         icon: Tags,
-        show: (g) => g.ws(Permission.labelManage),
+        show: (g) => g.ws(Permission.labelUpdate),
       },
       {
         to: RoutePath.settingsCycles,
         label: "Cycles",
         icon: CalendarRange,
-        show: (g) => g.ws(Permission.cycleManage),
+        show: (g) => g.ws(Permission.cycleUpdate),
       },
       {
         to: RoutePath.settingsTimelogging,
@@ -113,7 +113,7 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         to: RoutePath.settingsCanned,
         label: "Canned responses",
         icon: MessageSquareQuote,
-        show: (g) => g.ws(Permission.cannedManage),
+        show: (g) => g.ws(Permission.cannedUpdate),
       },
       {
         // Spec 111 — version-control hosts and their repositories.
@@ -149,13 +149,13 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         icon: UsersRound,
         // Spec 87: a team leader holds no global team atom — `manages_teams`
         // says they own or manage one, so their page stays reachable.
-        show: (g) => g.ws(Permission.teamManage) || g.managesTeams,
+        show: (g) => g.ws(Permission.teamUpdate) || g.managesTeams,
       },
       {
         to: RoutePath.settingsRoles,
         label: "Roles",
         icon: ShieldCheck,
-        show: (g) => g.ws(Permission.roleManage),
+        show: (g) => g.ws(Permission.roleUpdate),
       },
       {
         // Per-team public holidays — the admin half of the old Leave page

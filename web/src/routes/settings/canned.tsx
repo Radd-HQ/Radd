@@ -17,7 +17,7 @@ import { QueryError } from "../../components/QueryError";
 /** Canned responses admin (spec 30): admin-managed comment snippets. */
 export function CannedSettingsPage() {
   const perms = usePermissions();
-  const canManage = perms.global(Permission.cannedManage);
+  const canManage = perms.global(Permission.cannedUpdate);
   const responses = useQuery(cannedResponsesQuery());
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<CannedResponse | null>(null);

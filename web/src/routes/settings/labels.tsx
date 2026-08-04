@@ -21,7 +21,7 @@ const NO_COLOR_SWATCH_CLASS = "bg-strong";
 export function LabelsSettingsPage() {
   const perms = usePermissions();
   // Label creation requires project.manage at global scope (backend rule).
-  const canManage = perms.global(Permission.labelManage);
+  const canManage = perms.global(Permission.labelUpdate);
   const labels = useQuery(labelsQuery());
   const list = labels.data ?? [];
 

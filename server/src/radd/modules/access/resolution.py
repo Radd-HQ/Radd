@@ -28,8 +28,10 @@ class _GrantLike(Protocol):
 class SubjectContext:
     """What the acting user brings to a grant check, in one scope. `role_ids` are the
     roles the user holds ON THIS PROJECT (direct + team + project-scoped grants), so
-    a role-subject grant is inherently project-aware. `has_manage` bypasses (a
-    project/resource manager always passes).
+    a role-subject grant is inherently project-aware. `has_manage` is a FACT
+    the resolvers no longer consult (RADD-816/F5.2 removed the bypass) — kept
+    on the context so call sites that own a deliberate resource-manage
+    short-circuit can carry it, but it grants nothing here.
 
     `group_ids` (RADD-830) is REQUIRED on purpose — no default. The user's
     transitive directory groups are part of the subject graph, and a
@@ -73,12 +75,14 @@ def has_access(
 ) -> bool:
     """Flag model (fields): an access is OPEN until some in-scope grant restricts it;
     once restricted, the actor needs a matching grant of that access (or one that
-    implies it — write implies read), or `has_manage`."""
+    implies it — write implies read). RADD-816 (F5.2): `has_manage` no longer
+    bypasses — a manager holds access the same way anyone does, through a
+    matching grant, which is what lets the inspector EXPLAIN it. A resource
+    that wants a manager bypass short-circuits at its own call site, where the
+    decision is named and owned."""
     restricting = [g for g in grants if g.access == access and in_scope(g, project_id)]
     if not restricting:
         return spec.default_open
-    if ctx.has_manage:
-        return True
     satisfying = (access, *spec.implied_by.get(access, ()))
     return any(
         subject_matches(g, ctx)

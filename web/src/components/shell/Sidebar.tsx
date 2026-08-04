@@ -118,7 +118,7 @@ export function Sidebar() {
   const canCreateView = perms.anyProject(Permission.itemRead);
   const cycleList = cycles ?? [];
   const liveCycles = selectableCycles(cycleList);
-  const canManageCycles = perms.global(Permission.cycleManage);
+  const canManageCycles = perms.global(Permission.cycleUpdate);
 
   const railed = prefs.railCollapsed;
 
@@ -499,7 +499,7 @@ export function Sidebar() {
                     {(perms.project(project, Permission.stateManage) ||
                       perms.project(project, Permission.projectManage) ||
                       perms.project(project, Permission.formManage) ||
-                      perms.project(project, Permission.releaseManage)) && (
+                      perms.project(project, Permission.releaseUpdate)) && (
                       <li>
                         <Link
                           to={RoutePath.projectSettings}

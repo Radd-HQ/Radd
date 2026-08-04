@@ -28,8 +28,25 @@ async def _duration_error_handler(request: Request, exc: DurationError) -> JSONR
     return JSONResponse(status_code=422, content={"detail": str(exc)})
 
 
+from radd.kernel.registry import register_relation
+from radd.kernel.specs import RelationSpec
+from .models import Worklog
+
+# RADD-816 (Q4): what @own MEANS for a worklog — the author column. Both forms
+# mandatory (the RADD-823 contract); registered on the manifest so the loader's
+# clear() cannot drop it.
+WORKLOG_OWN = RelationSpec(
+    resource="worklog",
+    key="own",
+    label="they authored",
+    where=lambda actor: Worklog.author_id == actor.user_id,
+    holds=lambda actor, row: row.author_id == actor.user_id,
+)
+register_relation(WORKLOG_OWN)
+
 plugin = RaddPlugin(
     name="timelogging",
+    relations=(WORKLOG_OWN,),
     description=(
         "Per-project time logging: worklogs (duration/day/work-category/note) + item "
         "estimates, and a global timesheet for day/week/month reports filterable by "

@@ -65,8 +65,12 @@ def test_matching_role_or_team_passes():
     ) == ["priority"]
 
 
-def test_manage_bypasses():
+def test_manage_flag_is_the_instance_admin_short_circuit():
+    # RADD-816 (F5.2): the flag means INSTANCE ADMIN now — construction sites
+    # stopped passing project.manage, so a pm-holder arrives as ctx() and is
+    # denied unless the grant names them.
     assert builtin_write_denied(["priority"], WRITE_GRANTS, ctx(manage=True), None) == []
+    assert builtin_write_denied(["priority"], WRITE_GRANTS, ctx(), None) == ["priority"]
 
 
 def test_scoped_builtin_grant_only_restricts_its_project():

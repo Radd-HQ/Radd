@@ -26,7 +26,7 @@ import { QueryError } from "../../components/QueryError";
 /** Roles admin (spec 09): list + expandable permission matrix per role. */
 export function RolesSettingsPage() {
   const perms = usePermissions();
-  const canManage = perms.global(Permission.roleManage);
+  const canManage = perms.global(Permission.roleUpdate);
   const roles = useQuery(rolesQuery());
   const catalog = useQuery(permissionsCatalogQuery);
   const [expandedId, setExpandedId] = useState<string | null>(null);

@@ -19,7 +19,7 @@ import { QueryError } from "../../components/QueryError";
  * `sla.manage` permission, same as the old global-settings page. */
 export function ProjectSlaSettingsPage({ projectId }: { projectId?: string }) {
   const perms = usePermissions();
-  const canManage = perms.global(Permission.slaManage);
+  const canManage = perms.global(Permission.slaUpdate);
   const policies = useQuery({
     ...slaPoliciesQuery(projectId ?? ""),
     enabled: Boolean(projectId),

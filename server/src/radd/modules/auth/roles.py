@@ -66,7 +66,7 @@ async def ensure_builtin_roles(session: AsyncSession) -> None:
             key=spec.key,
             name=spec.name,
             description=spec.description,
-            permissions=[permission.value for permission in spec.permissions],
+            permissions=[str(permission) for permission in spec.permissions],
             is_builtin=True,
             position=spec.position,
         )

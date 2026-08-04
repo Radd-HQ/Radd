@@ -143,7 +143,8 @@ async def field_writability(
         role_ids=subjects.role_ids,
         team_ids=subjects.team_ids,
         group_ids=subjects.group_ids,
-        has_manage=authz.Permission.PROJECT_MANAGE in perms,
+        # RADD-816: instance admin, NOT project.manage — the bypass demotion.
+        has_manage=await authz.is_admin(session, user),
     )
     return FieldWritabilityRead(readonly_fields=readonly)
 

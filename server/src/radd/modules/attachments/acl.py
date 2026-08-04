@@ -124,8 +124,6 @@ def _context(
         role_ids=role_ids,
         team_ids=team_ids,
         group_ids=group_ids,
-        # Uploaders and parent-writers always pass their own files' gates.
-        has_manage=parent_writable or attachment.created_by == user.id,
     )
 
 
@@ -146,6 +144,10 @@ async def attachment_readable(
     role_ids, team_ids, group_ids, parent_writable = await _base_subjects(
         session, user, attachment
     )
+    if parent_writable or attachment.created_by == user.id:
+        # The resource-owned rule, explicit since RADD-816 moved bypasses out
+        # of the framework: uploaders and parent-writers always read their own.
+        return True
     ctx = _context(user, attachment, role_ids, team_ids, group_ids, parent_writable)
     return resolution.has_access(grants, ctx, Access.READ.value, None, _SPEC)
 
@@ -168,6 +170,10 @@ async def readable_map(
             continue
         if base is None:  # one parent per listing -> resolve subjects once
             base = await _base_subjects(session, user, attachment)
+        parent_writable = base[3]
+        if parent_writable or attachment.created_by == user.id:
+            out[attachment.id] = (True, True)  # the explicit uploader/writer rule
+            continue
         ctx = _context(user, attachment, *base)
         out[attachment.id] = (
             resolution.has_access(grants, ctx, Access.READ.value, None, _SPEC),

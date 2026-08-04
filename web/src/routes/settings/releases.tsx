@@ -32,7 +32,7 @@ export function ReleasesSettingsPage({ projectId }: { projectId?: string }) {
 
   const project = (projects.data ?? []).find((entry) => entry.id === projectId);
   // Releases are per-project: gate on THAT project's manage permission.
-  const canManage = perms.project(project, Permission.releaseManage);
+  const canManage = perms.project(project, Permission.releaseUpdate);
   const releases = useQuery({ ...releasesQuery(projectId ?? ""), enabled: Boolean(projectId) });
   const list = releases.data ?? [];
 

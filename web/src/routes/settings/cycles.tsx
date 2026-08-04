@@ -46,7 +46,7 @@ function dateRange(cycle: Cycle): string {
 
 export function CyclesSettingsPage() {
   const perms = usePermissions();
-  const canManage = perms.global(Permission.cycleManage);
+  const canManage = perms.global(Permission.cycleUpdate);
   const cycles = useQuery(cyclesQuery());
   const [modal, setModal] = useState<{ cycle: Cycle | null } | null>(null);
   const [completing, setCompleting] = useState<Cycle | null>(null);

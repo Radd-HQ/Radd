@@ -95,9 +95,10 @@ async def test_readonly_reflects_custom_and_builtin_write_grants(db):
     member = await _readonly(db, project, teams=[team.id])
     assert f"budget_{tag}" not in member and "priority" not in member
 
-    # A project manager bypasses grants entirely.
-    manager = await _readonly(db, project, manage=True)
-    assert f"budget_{tag}" not in manager and "priority" not in manager
+    # RADD-816 (F5.2): `manage` means INSTANCE ADMIN at the callers now — a
+    # project manager constructs manage=False and is denied like anyone else.
+    admin_view = await _readonly(db, project, manage=True)
+    assert f"budget_{tag}" not in admin_view and "priority" not in admin_view
 
 
 async def test_no_grants_means_nothing_readonly(db):

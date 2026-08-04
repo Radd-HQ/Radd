@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
+from radd.modules.auth import authz
 from radd.modules.auth.deps import CurrentUser
 
 from radd.exceptions import ForbiddenError
@@ -120,11 +121,37 @@ async def delete_attachment(
 ) -> None:
     attachment = await service.get_attachment(session, attachment_id)
     binding = parents.binding_for(attachment.entity_type)
-    # Uploader may remove their own; otherwise the parent's admin (mirrors comments).
-    if attachment.created_by == user.id:
-        await binding.require_write(session, user, attachment.entity_id)
+    project_id = await binding.project_id_of(session, attachment.entity_id)
+    if project_id is None:
+        # Page attachments: the space's write/admin rule — no project scope for
+        # the attachment atoms to resolve against (recorded in RADD-816's
+        # disposition; page-side relations are a later adoption).
+        if attachment.created_by == user.id:
+            await binding.require_write(session, user, attachment.entity_id)
+        else:
+            await binding.require_admin(session, user, attachment.entity_id)
     else:
-        await binding.require_admin(session, user, attachment.entity_id)
+        # RADD-816: `attachment.delete` means ANYONE's, uniformly; the old
+        # uploader-own right is the Baseline's `attachment.delete@own` grant,
+        # relation-resolved against this row. Parent readability first — the
+        # child inherits the item's relation through the seam-backed binding.
+        await binding.require_read(session, user, attachment.entity_id)
+        from radd.modules.projects import service as projects_service
+
+        project = await projects_service.get_project(session, project_id)
+        permissions = await authz.effective_permissions(session, user, project=project)
+        relations = authz.relations_held(permissions, authz.Permission.ATTACHMENT_DELETE)
+        allowed = bool(relations) and (
+            authz.RELATION_ANY in relations
+            or authz.relation_holds_row(
+                "attachment",
+                relations,
+                await authz.relation_actor(session, user),
+                attachment,
+            )
+        )
+        if not allowed:
+            raise ForbiddenError("you may only delete your own attachments here")
     await service.delete_attachment(session, attachment, actor_id=user.id)
 
 

@@ -25,8 +25,9 @@ async def create_label(data: LabelCreate, session: Session, user: CurrentUser) -
 
 @router.get("", response_model=list[LabelRead])
 async def list_labels(session: Session, user: CurrentUser) -> list[LabelRead]:
-    # Member floor (RADD-788): item.read in SOME project, not the global atom.
-    if not await authz.readable_projects(session, user):
+    # RADD-816 (F6): the catalog read is a deliverable atom now — Baseline-
+    # seeded, so day-one behaviour is the old member floor, but REVOCABLE.
+    if not await authz.holds(session, user, authz.Permission.LABEL_READ):
         return []
     labels = await service.list_labels(session)
     return [LabelRead.model_validate(label) for label in labels]

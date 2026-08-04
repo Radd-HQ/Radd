@@ -227,6 +227,8 @@ async def _builtin_read_denied(
     """Builtin fields this actor may not read on the project (spec 50/92). The read
     grants + subjects were resolved into `ctx` by `_field_ctx` — cheap no-op for the
     common case (manage holder, or no read grants in scope)."""
+    # `ctx.has_manage` = INSTANCE ADMIN since RADD-816 — a restricted builtin
+    # blanks for a project MANAGER now unless a grant names them.
     if ctx.has_manage or not any(ctx.builtin_grants.values()):
         return []
     return fields.builtin_read_denied(ctx.builtin_grants, ctx.as_subject(), ctx.project_id)
@@ -276,7 +278,8 @@ async def _check_builtin_field_rules(
         role_ids=subjects.role_ids,
         team_ids=subjects.team_ids,
         group_ids=subjects.group_ids,
-        has_manage=Permission.PROJECT_MANAGE in permissions,
+        # RADD-816: instance admin, NOT project.manage — the bypass demotion.
+        has_manage=await authz.is_admin(session, actor),
     )
     denied = fields.builtin_write_denied(sorted(touched), grants, subject, project.id)
     if denied:
@@ -293,7 +296,7 @@ async def _field_ctx(
     """The actor's field-grant context (spec 92): the fields' access grants + the
     actor's per-project subjects. Batch-loads grants and skips the subject lookup
     when no field in the project carries any grant (the common case)."""
-    has_manage = Permission.PROJECT_MANAGE in permissions
+    has_manage = await authz.is_admin(session, actor)  # RADD-816: admin, not pm
 
     async def _subjects() -> tuple[
         frozenset[uuid.UUID], frozenset[uuid.UUID], frozenset[uuid.UUID]

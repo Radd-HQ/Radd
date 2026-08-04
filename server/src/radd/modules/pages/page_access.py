@@ -130,9 +130,13 @@ async def page_access(
     grants = await access_service.list_for_resource(session, PAGE_RESOURCE, str(page.id))
     if not grants:
         return True  # unrestricted: the space's answer stands
-    ctx = await _subject_context(
-        session, user, page.space_id, can_manage=Permission.PAGE_MANAGE in space_held
-    )
+    if Permission.PAGE_MANAGE in space_held:
+        # The resource-owned manager rule (RADD-816 moved it here from the
+        # framework): a space's page.manage holder administers restrictions,
+        # so they can always see what they administer. Named at the call site,
+        # never a framework bypass.
+        return True
+    ctx = await _subject_context(session, user, page.space_id, can_manage=False)
     return has_access(grants, ctx, access, None, _PAGE_SPEC)
 
 
@@ -162,9 +166,12 @@ async def readable_page_ids(
         if not grants:
             readable.add(page.id)
             continue
+        if Permission.PAGE_MANAGE in held:
+            readable.add(page.id)  # the resource-owned manager rule (see page_access)
+            continue
         if page.space_id not in contexts:
             contexts[page.space_id] = await _subject_context(
-                session, user, page.space_id, can_manage=Permission.PAGE_MANAGE in held
+                session, user, page.space_id, can_manage=False
             )
         if has_access(grants, contexts[page.space_id], Access.READ.value, None, _PAGE_SPEC):
             readable.add(page.id)

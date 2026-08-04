@@ -79,11 +79,12 @@ async def test_global_grant_delivers_a_global_atom(db):
 
 async def test_global_grant_via_team_and_umbrella_expansion(db):
     """Grants resolve through team membership, and umbrellas still expand:
-    team.manage must yield team.create/update/delete at global scope."""
+    global.manage must yield team.create/update/delete at global scope
+    (RADD-816 deleted the dead team.manage umbrella)."""
     user = await _member(db, "Team-granted")
     team = await teams_service.create_team(db, TeamCreate(name=f"GG-{uuid.uuid4().hex[:6]}"))
     await teams_service.add_team_member(db, team.id, user.id)
-    role = await _role(db, Permission.TEAM_MANAGE)
+    role = await _role(db, Permission.GLOBAL_MANAGE)
 
     await grants.replace_grants(db, role.id, [GlobalGrantEntry(team_id=team.id)])
 

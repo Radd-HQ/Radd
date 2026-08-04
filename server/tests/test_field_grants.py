@@ -130,9 +130,14 @@ def test_write_grant_confers_read():
     assert not field_readable(d, ctx([d], roles=[OTHER_ROLE]))
 
 
-def test_project_manage_bypasses_read_grants():
+def test_manage_flag_means_instance_admin_and_short_circuits():
+    """RADD-816 (F5.2): the flag no longer means project.manage — construction
+    sites pass the INSTANCE-ADMIN fact, and the fields layer (not the
+    framework) short-circuits for the operator who administers the grants. A
+    project manager without a naming grant is denied (the plain ctx below)."""
     d = StubDef("budget", team_grant(LEADS_TEAM, Access.READ))
-    assert field_readable(d, ctx([d], manage=True))
+    assert field_readable(d, ctx([d], manage=True))  # instance admin
+    assert not field_readable(d, ctx([d]))  # a pm-holder constructs THIS now
 
 
 # --- per-project SCOPE (spec 92) ---
@@ -169,9 +174,9 @@ def test_write_requires_a_write_grant_not_a_read_grant():
     assert not field_writable(d, ctx([d], roles=[TRIAGER_ROLE]))
 
 
-def test_project_manage_bypasses_write_grants():
+def test_admin_write_short_circuit():
     d = StubDef("budget", role_grant(TRIAGER_ROLE, Access.WRITE))
-    assert field_writable(d, ctx([d], manage=True))
+    assert field_writable(d, ctx([d], manage=True))  # instance admin
 
 
 # --- list helpers the items module consumes ---
@@ -184,7 +189,7 @@ def test_readable_and_keys_filter_definitions():
     assert readable(defs, ctx(defs)) == [open_def]
     assert readable_keys(defs, ctx(defs)) == {"severity"}
     assert readable_keys(defs, ctx(defs, teams=[LEADS_TEAM])) == {"severity", "budget"}
-    assert readable_keys(defs, ctx(defs, manage=True)) == {"severity", "budget"}
+    assert readable_keys(defs, ctx(defs, manage=True)) == {"severity", "budget"}  # admin
 
 
 def test_writable_check_raises_forbidden_listing_denied_keys():
@@ -195,7 +200,7 @@ def test_writable_check_raises_forbidden_listing_denied_keys():
     ]
     writable_check(defs, {"severity": "high"}, ctx(defs))
     writable_check(defs, {"budget": 5, "quota": 1}, ctx(defs, roles=[TRIAGER_ROLE]))
-    writable_check(defs, {"budget": 5, "unknown": 1}, ctx(defs, manage=True))
+    writable_check(defs, {"budget": 5, "unknown": 1}, ctx(defs, manage=True))  # admin
     with pytest.raises(ForbiddenError) as excinfo:
         writable_check(defs, {"budget": 5, "quota": 1, "severity": "low"}, ctx(defs))
     assert "budget, quota" in str(excinfo.value)

@@ -335,12 +335,26 @@ async def authorize_mutation(session: AsyncSession, user, worklog, *, others) ->
     is_author = worklog.author_id == user.id
     if project is not None:
         perms = await authz.effective_permissions(session, user, project=project)
+    else:
+        perms = await authz.effective_permissions(session, user)
+    if others is authz.Permission.WORKLOG_DELETE:
+        # RADD-816 (Q4): the author-own right is the Baseline's
+        # `worklog.delete@own` grant — relation-resolved, inspector-explainable,
+        # revocable. The hardcoded author arm is gone.
+        relations = authz.relations_held(perms, authz.Permission.WORKLOG_DELETE)
+        if relations:
+            if authz.RELATION_ANY in relations:
+                return
+            relation_actor = await authz.relation_actor(session, user)
+            if authz.relation_holds_row("worklog", relations, relation_actor, worklog):
+                return
+        raise ForbiddenError("you may only delete your own worklogs here")
+    if project is not None:
         if (is_author and authz.Permission.WORKLOG_WRITE in perms) or (others in perms):
             return
     else:
         if is_author and await can_log_general(session, user):
             return
-        perms = await authz.effective_permissions(session, user)
         if others in perms:
             return
     raise ForbiddenError("only the worklog's author or a project manager may change it")

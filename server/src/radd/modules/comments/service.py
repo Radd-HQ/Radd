@@ -176,8 +176,19 @@ async def _require_author_or(
     *,
     others: Permission,
 ) -> frozenset[Permission]:
-    """Authors act on their own comments (comment.write); others need `others`
-    (spec 50: comment.delete for deletion, project.manage for editing another's)."""
+    """EDITS: authors act on their own comments (comment.write); others need
+    `others` (spec 50: project.manage). DELETES (RADD-816/Q4) are relation-
+    aware instead: the author-own right is the Baseline's `comment.delete@own`
+    grant — explainable in the inspector and revocable, which the hardcoded
+    author check never was."""
+    if others is Permission.COMMENT_DELETE:
+        permissions = await authz.require(session, actor, Permission.COMMENT_DELETE, project=project)
+        relations = authz.relations_held(permissions, Permission.COMMENT_DELETE)
+        if authz.RELATION_ANY not in relations:
+            relation_actor = await authz.relation_actor(session, actor)
+            if not authz.relation_holds_row("comment", relations, relation_actor, comment):
+                raise ForbiddenError("you may only delete your own comments here")
+        return permissions
     permission = Permission.COMMENT_WRITE if comment.author_id == actor.id else others
     return await authz.require(session, actor, permission, project=project)
 

@@ -37,7 +37,6 @@ class Permission(StrEnum):
     GLOBAL_MANAGE = "global.manage"  # global settings + administration (was workspace.manage)
     PROJECT_CREATE = "project.create"
     PROJECT_MANAGE = "project.manage"  # states/fields/labels/webhooks/teams/members
-    CYCLE_MANAGE = "cycle.manage"  # create/edit/delete cycles — global scope
     ITEM_READ = "item.read"
     ITEM_CREATE = "item.create"
     ITEM_UPDATE = "item.update"
@@ -45,22 +44,20 @@ class Permission(StrEnum):
     TIMESHEET_VIEW = "timesheet.view"  # global-scoped; see others' timesheets (spec 22)
     COMMENT_WRITE = "comment.write"
     COMMENT_READ_INTERNAL = "comment.read_internal"
-    VIEW_MANAGE = "view.manage"
     FORM_MANAGE = "form.manage"  # project-scoped; create/edit/delete intake forms (spec 17)
-    TEAM_MANAGE = "team.manage"
-    ROLE_MANAGE = "role.manage"  # global-scoped; admins hold it implicitly
     USER_MANAGE = "user.manage"
     AUTOMATION_MANAGE = "automation.manage"  # manage automation rules — global scope (spec 15)
-    SLA_MANAGE = "sla.manage"  # manage SLA policies — global scope (specs 30/67)
     # Per-entity manage actions (spec 36) — previously folded into project.manage /
     # global.manage; the umbrellas still imply them (IMPLIED_PERMISSIONS).
     STATE_MANAGE = "state.manage"  # project workflow states
-    RELEASE_MANAGE = "release.manage"  # project releases/versions
+    # RADD-816: nine manage umbrellas with ZERO direct enforcement sites
+    # (view/cycle/label/release/canned/cardpreset/sla/team/role) are DELETED
+    # — granting one was exactly ticking its triple, a third checkbox whose
+    # only meaning was the other three. The migration rewrites stored roles
+    # to the triples; no alias survives (the no-backcompat rule).
+    # `service_account.delete` had no route and is gone the same way.
     FIELD_MANAGE = "field.manage"  # custom-field definitions + field access rules
-    LABEL_MANAGE = "label.manage"  # labels (global)
     WEBHOOK_MANAGE = "webhook.manage"  # webhook endpoints (global)
-    CANNED_MANAGE = "canned.manage"  # canned responses (global)
-    CARD_PRESET_MANAGE = "cardpreset.manage"  # card-layout preset library (global, spec 109)
     # Wiki (spec 43) — SPACE-scoped since RADD-791 (they were global; a page had
     # no scope, which is why per-space access was inexpressible).
     PAGE_READ = "page.read"  # read page spaces/pages + doc search
@@ -107,6 +104,15 @@ class Permission(StrEnum):
     MEMBER_CREATE = "member.create"  # grant project access (member/team attach)
     MEMBER_UPDATE = "member.update"  # change a grant's role
     MEMBER_DELETE = "member.delete"  # revoke project access
+    # RADD-816 (F6): READ becomes deliverable for the config catalogs that
+    # used to ride the member floor — seeded into the Baseline so day-one
+    # behaviour is identical, and REVOCABLE for the first time.
+    LABEL_READ = "label.read"
+    CYCLE_READ = "cycle.read"
+    CANNED_READ = "canned.read"
+    TEAM_READ = "team.read"
+    ROLE_READ = "role.read"
+    CARD_PRESET_READ = "cardpreset.read"
     ISSUE_TYPE_CREATE = "issue_type.create"  # spec 51 — per-project issue types
     ISSUE_TYPE_UPDATE = "issue_type.update"
     ISSUE_TYPE_DELETE = "issue_type.delete"
@@ -126,7 +132,6 @@ class Permission(StrEnum):
     # Spec 113 — service accounts (principals that authenticate by API key only).
     SERVICE_ACCOUNT_CREATE = "service_account.create"
     SERVICE_ACCOUNT_UPDATE = "service_account.update"
-    SERVICE_ACCOUNT_DELETE = "service_account.delete"
     # Spec 111 — version-control connections (Forgejo/Gitea hosts + repos).
     VCSCONN_CREATE = "vcsconn.create"
     VCSCONN_UPDATE = "vcsconn.update"
@@ -213,7 +218,6 @@ PERMISSION_SCOPES: dict[Permission, PermissionScope] = {
     Permission.GLOBAL_MANAGE: PermissionScope.GLOBAL,
     Permission.PROJECT_CREATE: PermissionScope.GLOBAL,
     Permission.PROJECT_MANAGE: PermissionScope.PROJECT,
-    Permission.CYCLE_MANAGE: PermissionScope.GLOBAL,
     Permission.ITEM_READ: PermissionScope.PROJECT,
     Permission.ITEM_CREATE: PermissionScope.PROJECT,
     Permission.ITEM_UPDATE: PermissionScope.PROJECT,
@@ -221,20 +225,12 @@ PERMISSION_SCOPES: dict[Permission, PermissionScope] = {
     Permission.TIMESHEET_VIEW: PermissionScope.GLOBAL,
     Permission.COMMENT_WRITE: PermissionScope.PROJECT,
     Permission.COMMENT_READ_INTERNAL: PermissionScope.PROJECT,
-    Permission.VIEW_MANAGE: PermissionScope.PROJECT,
     Permission.FORM_MANAGE: PermissionScope.PROJECT,
-    Permission.TEAM_MANAGE: PermissionScope.GLOBAL,
-    Permission.ROLE_MANAGE: PermissionScope.GLOBAL,
     Permission.USER_MANAGE: PermissionScope.GLOBAL,
     Permission.AUTOMATION_MANAGE: PermissionScope.GLOBAL,
-    Permission.SLA_MANAGE: PermissionScope.GLOBAL,
     Permission.STATE_MANAGE: PermissionScope.PROJECT,
-    Permission.RELEASE_MANAGE: PermissionScope.PROJECT,
     Permission.FIELD_MANAGE: PermissionScope.PROJECT,
-    Permission.LABEL_MANAGE: PermissionScope.GLOBAL,
     Permission.WEBHOOK_MANAGE: PermissionScope.GLOBAL,
-    Permission.CANNED_MANAGE: PermissionScope.GLOBAL,
-    Permission.CARD_PRESET_MANAGE: PermissionScope.GLOBAL,
     # RADD-791: the page atoms are SPACE-scoped now. They were global because a
     # page had no scope to be checked against, which made per-space access
     # inexpressible and dropped page commenting on the floor — the comments
@@ -249,7 +245,6 @@ PERMISSION_DESCRIPTIONS: dict[Permission, str] = {
     Permission.GLOBAL_MANAGE: "Administer global settings and shared configuration.",
     Permission.PROJECT_CREATE: "Create projects (global).",
     Permission.PROJECT_MANAGE: "Manage a project: states, fields, labels, teams, members.",
-    Permission.CYCLE_MANAGE: "Create and manage cycles (global).",
     Permission.ITEM_READ: "See the project's work items.",
     Permission.ITEM_CREATE: "Create work items in the project.",
     Permission.ITEM_UPDATE: "Edit the project's work items.",
@@ -257,20 +252,12 @@ PERMISSION_DESCRIPTIONS: dict[Permission, str] = {
     Permission.TIMESHEET_VIEW: "See other people's timesheets (global).",
     Permission.COMMENT_WRITE: "Comment on the project's work items.",
     Permission.COMMENT_READ_INTERNAL: "See internal (team-only) comments.",
-    Permission.VIEW_MANAGE: "Create and edit the project's saved views.",
     Permission.FORM_MANAGE: "Create and manage the project's intake forms.",
-    Permission.TEAM_MANAGE: "Create teams and manage their memberships.",
-    Permission.ROLE_MANAGE: "Create, edit, and delete roles (global).",
     Permission.USER_MANAGE: "Create users and see the user directory.",
     Permission.AUTOMATION_MANAGE: "Create and manage automation rules (global).",
-    Permission.SLA_MANAGE: "Create and manage SLA policies (global).",
     Permission.STATE_MANAGE: "Manage the project's workflow states.",
-    Permission.RELEASE_MANAGE: "Manage the project's releases/versions.",
     Permission.FIELD_MANAGE: "Manage custom-field definitions and field access rules.",
-    Permission.LABEL_MANAGE: "Create and manage labels (global).",
     Permission.WEBHOOK_MANAGE: "Manage webhook endpoints (global).",
-    Permission.CANNED_MANAGE: "Manage canned responses (global).",
-    Permission.CARD_PRESET_MANAGE: "Manage the shared card-layout preset library (global).",
     Permission.PAGE_READ: "Read a wiki space and its pages.",
     Permission.PAGE_WRITE: "Create and edit pages in a space; link them to issues.",
     Permission.PAGE_MANAGE: "Manage a space; hard-delete and restore its pages.",
@@ -284,22 +271,22 @@ PERMISSION_DESCRIPTIONS: dict[Permission, str] = {
 # state.manage -> state.create/update/delete all resolve in one pass.
 IMPLIED_PERMISSIONS: dict[Permission, frozenset[Permission]] = {
     Permission.PROJECT_MANAGE: frozenset(
-        {Permission.STATE_MANAGE, Permission.RELEASE_MANAGE, Permission.FIELD_MANAGE}
+        {Permission.STATE_MANAGE, Permission.FIELD_MANAGE}
     ),
     # RADD-790: anyone who may edit an issue may attach to it. This is what makes
     # splitting attachments off `item.update` a WIDENING and never a downgrade —
     # every existing role keeps exactly what it had, with no data migration, and
     # a role created tomorrow inherits the same rule. A backfill would have fixed
     # only the rows that existed on the day it ran.
+    # RADD-816: `attachment.delete` now means ANYONE's (the uniform verb);
+    # what item.update carries is the @own form — the qualified atom is a
+    # plain string, which the whole implication machinery already speaks.
     Permission.ITEM_UPDATE: frozenset(
-        {Permission.ATTACHMENT_CREATE, Permission.ATTACHMENT_DELETE}
+        {Permission.ATTACHMENT_CREATE, "attachment.delete@own"}
     ),
     Permission.GLOBAL_MANAGE: frozenset(
         {
-            Permission.LABEL_MANAGE,
             Permission.WEBHOOK_MANAGE,
-            Permission.CANNED_MANAGE,
-            Permission.CARD_PRESET_MANAGE,
         }
     ),
 }
@@ -325,25 +312,46 @@ class ResourceSpec:
 CRUD_RESOURCES: tuple[ResourceSpec, ...] = (
     ResourceSpec("state", PermissionScope.PROJECT, "workflow states", Permission.STATE_MANAGE),
     ResourceSpec("field", PermissionScope.PROJECT, "custom fields", Permission.FIELD_MANAGE),
-    ResourceSpec("release", PermissionScope.PROJECT, "releases", Permission.RELEASE_MANAGE),
+    ResourceSpec("release", PermissionScope.PROJECT, "releases", Permission.PROJECT_MANAGE),
     ResourceSpec("form", PermissionScope.PROJECT, "intake forms", Permission.FORM_MANAGE),
-    ResourceSpec("view", PermissionScope.PROJECT, "saved views", Permission.VIEW_MANAGE),
+    ResourceSpec("view", PermissionScope.PROJECT, "saved views", Permission.PROJECT_MANAGE),
     ResourceSpec("member", PermissionScope.PROJECT, "project access", Permission.PROJECT_MANAGE),
     ResourceSpec("issue_type", PermissionScope.PROJECT, "issue types", Permission.PROJECT_MANAGE),
-    ResourceSpec("label", PermissionScope.GLOBAL, "labels", Permission.LABEL_MANAGE),
+    ResourceSpec(
+        "label", PermissionScope.GLOBAL, "labels", Permission.GLOBAL_MANAGE,
+        actions=(CrudAction.CREATE, CrudAction.READ, CrudAction.UPDATE, CrudAction.DELETE),
+    ),
     ResourceSpec("webhook", PermissionScope.GLOBAL, "webhooks", Permission.WEBHOOK_MANAGE),
-    ResourceSpec("canned", PermissionScope.GLOBAL, "canned responses", Permission.CANNED_MANAGE),
+    ResourceSpec(
+        "canned", PermissionScope.GLOBAL, "canned responses", Permission.GLOBAL_MANAGE,
+        actions=(CrudAction.CREATE, CrudAction.READ, CrudAction.UPDATE, CrudAction.DELETE),
+    ),
     # Spec 109: the shared board-card layout preset library.
     ResourceSpec(
-        "cardpreset", PermissionScope.GLOBAL, "card layout presets", Permission.CARD_PRESET_MANAGE
+        "cardpreset", PermissionScope.GLOBAL, "card layout presets", Permission.GLOBAL_MANAGE,
+        actions=(CrudAction.CREATE, CrudAction.READ, CrudAction.UPDATE, CrudAction.DELETE),
     ),
     ResourceSpec(
         "automation", PermissionScope.GLOBAL, "automation rules", Permission.AUTOMATION_MANAGE
     ),
-    ResourceSpec("cycle", PermissionScope.GLOBAL, "cycles", Permission.CYCLE_MANAGE),
-    ResourceSpec("sla", PermissionScope.GLOBAL, "SLA policies", Permission.SLA_MANAGE),
-    ResourceSpec("team", PermissionScope.GLOBAL, "teams", Permission.TEAM_MANAGE),
-    ResourceSpec("role", PermissionScope.GLOBAL, "roles", Permission.ROLE_MANAGE),
+    ResourceSpec(
+        "cycle", PermissionScope.GLOBAL, "cycles", Permission.GLOBAL_MANAGE,
+        actions=(CrudAction.CREATE, CrudAction.READ, CrudAction.UPDATE, CrudAction.DELETE),
+    ),
+    # RADD-816: no sla.read — policy reads ride the project's item.read (the
+    # list is project-scoped), and a minted-but-unenforced atom is the dead
+    # class this change deletes.
+    ResourceSpec(
+        "sla", PermissionScope.GLOBAL, "SLA policies", Permission.GLOBAL_MANAGE,
+    ),
+    ResourceSpec(
+        "team", PermissionScope.GLOBAL, "teams", Permission.GLOBAL_MANAGE,
+        actions=(CrudAction.CREATE, CrudAction.READ, CrudAction.UPDATE, CrudAction.DELETE),
+    ),
+    ResourceSpec(
+        "role", PermissionScope.GLOBAL, "roles", Permission.GLOBAL_MANAGE,
+        actions=(CrudAction.CREATE, CrudAction.READ, CrudAction.UPDATE, CrudAction.DELETE),
+    ),
     # Spec 89 restored the full triple: deleting a user is real, and gated by
     # reassigning their work rather than by the atom not existing.
     ResourceSpec("user", PermissionScope.GLOBAL, "users", Permission.USER_MANAGE),
@@ -366,13 +374,16 @@ CRUD_RESOURCES: tuple[ResourceSpec, ...] = (
     # Spec 113: service accounts sit beside users but are managed separately —
     # granting someone the ability to mint agent keys is not the same as granting
     # them the ability to edit people.
+    # RADD-816: no delete route exists, so no delete atom is minted.
     ResourceSpec(
-        "service_account", PermissionScope.GLOBAL, "service accounts", Permission.GLOBAL_MANAGE
+        "service_account", PermissionScope.GLOBAL, "service accounts", Permission.GLOBAL_MANAGE,
+        actions=(CrudAction.CREATE, CrudAction.UPDATE),
     ),
 )
 
 _ACTION_VERB: dict[CrudAction, str] = {
     CrudAction.CREATE: "Create",
+    CrudAction.READ: "See",
     CrudAction.UPDATE: "Edit",
     CrudAction.DELETE: "Delete",
 }
@@ -406,8 +417,10 @@ for _perm, _scope, _desc, _umbrella in (
     # that can edit an issue loses the ability to attach to it.
     (Permission.ATTACHMENT_CREATE, PermissionScope.PROJECT,
      "Attach files to items and comments.", Permission.PROJECT_MANAGE),
+    # RADD-816: `delete` means ANYONE's, uniformly — the old "your own"
+    # meaning is the Baseline-seeded `attachment.delete@own` grant (Q4).
     (Permission.ATTACHMENT_DELETE, PermissionScope.PROJECT,
-     "Remove your own attachments.", Permission.PROJECT_MANAGE),
+     "Delete anyone's attachments.", Permission.PROJECT_MANAGE),
 ):
     PERMISSION_SCOPES[_perm] = _scope
     PERMISSION_DESCRIPTIONS[_perm] = _desc
@@ -644,7 +657,7 @@ class BuiltinRole:
     key: BuiltinRoleKey
     name: str
     description: str
-    permissions: tuple[Permission, ...]
+    permissions: "tuple[Permission | str, ...]"
     position: int
 
 
@@ -666,7 +679,23 @@ BUILTIN_ROLES: tuple[BuiltinRole, ...] = (
         # applied at BOTH scopes, so each lands where it means something and the
         # other is inert. That is what preserves "any signed-in user can read the
         # wiki and see the projects" without a second constant to keep in step.
-        permissions=(Permission.ITEM_READ, Permission.PAGE_READ),
+        permissions=(
+            Permission.ITEM_READ,
+            Permission.PAGE_READ,
+            # RADD-816 (Q4): the author-own rights, as grants — explainable in
+            # the inspector and REVOCABLE, which the hardcoded checks never were.
+            "comment.delete@own",
+            "worklog.delete@own",
+            "attachment.delete@own",
+            # RADD-816 (F6): the catalog reads everyone had via the member
+            # floor, now deliverable atoms — same day-one behaviour, revocable.
+            Permission.LABEL_READ,
+            Permission.CYCLE_READ,
+            Permission.CANNED_READ,
+            Permission.TEAM_READ,
+            Permission.ROLE_READ,
+            Permission.CARD_PRESET_READ,
+        ),
         position=-1,
     ),
     BuiltinRole(
@@ -693,7 +722,9 @@ BUILTIN_ROLES: tuple[BuiltinRole, ...] = (
             Permission.WORKLOG_WRITE,
             Permission.COMMENT_WRITE,
             Permission.COMMENT_READ_INTERNAL,
-            Permission.VIEW_MANAGE,
+            Permission.VIEW_CREATE,
+            Permission.VIEW_UPDATE,
+            Permission.VIEW_DELETE,
             Permission.FORM_MANAGE,
             Permission.PAGE_WRITE,  # members write docs (spec 43; global-scoped rider)
         ),

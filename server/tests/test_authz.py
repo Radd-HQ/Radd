@@ -65,7 +65,9 @@ SESSION = object()  # never touched once the lookup is patched
 TRIAGER = [Permission.ITEM_READ, Permission.ITEM_UPDATE, Permission.COMMENT_WRITE]
 #: What `item.update` drags in (RADD-790) — spelled out so the expectations below
 #: read as "the role's atoms plus what they imply" rather than a magic pair.
-ATTACHING = {Permission.ATTACHMENT_CREATE, Permission.ATTACHMENT_DELETE}
+# RADD-816: item.update implies attaching + deleting YOUR OWN attachments —
+# the unqualified delete verb means anyone's now and rides project.manage.
+ATTACHING = {Permission.ATTACHMENT_CREATE, "attachment.delete@own"}
 
 
 def patch_lookups(monkeypatch, *, permission_sets=(), global_permission_sets=(), baseline=None):
@@ -106,11 +108,11 @@ def test_builtin_admin_holds_every_project_scoped_permission():
     assert admin == set(PROJECT_PERMISSIONS) | {Permission.DASHBOARD_CREATE}
     assert {
         Permission.PROJECT_MANAGE,
-        Permission.VIEW_MANAGE,
+        Permission.VIEW_CREATE,
         Permission.COMMENT_READ_INTERNAL,
     } <= admin
     # No admin-tier global permissions leak into a project role.
-    assert not admin & {Permission.GLOBAL_MANAGE, Permission.ROLE_MANAGE, Permission.TEAM_MANAGE}
+    assert not admin & {Permission.GLOBAL_MANAGE, Permission.ROLE_CREATE, Permission.TEAM_CREATE}
 
 
 def test_builtin_member_and_viewer_sets():
@@ -121,7 +123,9 @@ def test_builtin_member_and_viewer_sets():
         Permission.WORKLOG_WRITE,  # members log their own time (spec 22)
         Permission.COMMENT_WRITE,
         Permission.COMMENT_READ_INTERNAL,
-        Permission.VIEW_MANAGE,
+        Permission.VIEW_CREATE,
+        Permission.VIEW_UPDATE,  # RADD-816: view.manage's job, as its triple
+        Permission.VIEW_DELETE,
         Permission.FORM_MANAGE,  # members author intake forms (spec 36)
         Permission.PAGE_WRITE,  # members write docs (spec 43)
     }
@@ -140,7 +144,7 @@ def test_umbrellas_imply_per_entity_actions():
     )
     assert {
         Permission.STATE_MANAGE,
-        Permission.RELEASE_MANAGE,
+        Permission.RELEASE_CREATE,
         Permission.FIELD_MANAGE,
     } <= combined
     # And a granular grant alone does NOT imply the umbrella.
@@ -221,9 +225,24 @@ def test_baseline_is_seeded_read_only():
     set, which is how a member with no grants anywhere could edit any wiki page
     and delete any cycle. Anything beyond reading now has to be granted.
     """
-    assert BASELINE == {Permission.ITEM_READ, Permission.PAGE_READ}
+    # RADD-816 widened the seed deliberately: the Q4 author-own rights and the
+    # F6 catalog reads become GRANTS everyone holds — explainable and revocable
+    # — instead of hardcoded checks and vacuous member-floor gates.
+    assert BASELINE == {
+        Permission.ITEM_READ,
+        Permission.PAGE_READ,
+        "comment.delete@own",
+        "worklog.delete@own",
+        "attachment.delete@own",
+        Permission.LABEL_READ,
+        Permission.CYCLE_READ,
+        Permission.CANNED_READ,
+        Permission.TEAM_READ,
+        Permission.ROLE_READ,
+        Permission.CARD_PRESET_READ,
+    }
     assert Permission.PAGE_WRITE not in BASELINE
-    assert Permission.CYCLE_MANAGE not in BASELINE
+    assert Permission.CYCLE_CREATE not in BASELINE
     assert Permission.TIMESHEET_VIEW not in BASELINE
 
 
@@ -247,17 +266,11 @@ def test_combine_unions_across_role_sets_plus_baseline():
         permission_sets=[[Permission.ITEM_UPDATE], [Permission.COMMENT_WRITE]],
         baseline=BASELINE,
     )
-    assert combined == {
-        Permission.ITEM_READ,  # the baseline
-        Permission.PAGE_READ,  # the baseline
-        Permission.ITEM_UPDATE,
-        Permission.COMMENT_WRITE,
-        # RADD-790: item.update implies the attachment atoms, which is what makes
-        # splitting attaching off it a widening rather than a downgrade for every
-        # role that already had it.
-        Permission.ATTACHMENT_CREATE,
-        Permission.ATTACHMENT_DELETE,
-    }
+    # RADD-790/816: item.update implies attachment.create + delete@own; the
+    # baseline rides along whole (incl. its @own grants + catalog reads).
+    assert combined == expand_permissions(
+        BASELINE | {Permission.ITEM_UPDATE, Permission.COMMENT_WRITE}
+    )
 
 
 def test_combine_custom_role_grants_its_permissions_plus_the_baseline():
@@ -288,7 +301,7 @@ def test_editing_the_baseline_changes_what_everyone_holds():
     widened = combine_permissions(
         instance_role=InstanceRole.MEMBER,
         permission_sets=[],
-        baseline=BASELINE | {Permission.VIEW_MANAGE},
+        baseline=BASELINE | {Permission.VIEW_CREATE},
     )
     assert Permission.VIEW_CREATE in widened  # umbrella expansion still applies
     narrowed = combine_permissions(
@@ -321,8 +334,10 @@ def test_global_scope_permissions():
         Permission.TIMESHEET_VIEW,
     } & member
     # Granted instance-wide, the umbrella still expands (spec 50).
+    # RADD-816 deleted cycle.manage — global.manage is the umbrella that
+    # expands to the cycle triple now.
     with_cycles = global_scope_permissions(
-        InstanceRole.MEMBER.value, [[Permission.CYCLE_MANAGE]], baseline=BASELINE
+        InstanceRole.MEMBER.value, [[Permission.GLOBAL_MANAGE]], baseline=BASELINE
     )
     assert {
         Permission.CYCLE_CREATE,
@@ -330,8 +345,8 @@ def test_global_scope_permissions():
         Permission.CYCLE_DELETE,
     } <= with_cycles
     assert global_scope_permissions(None) == frozenset()  # inactive
-    assert Permission.ROLE_MANAGE in global_scope_permissions(InstanceRole.ADMIN.value)
-    assert Permission.ROLE_MANAGE not in member
+    assert Permission.ROLE_CREATE in global_scope_permissions(InstanceRole.ADMIN.value)
+    assert Permission.ROLE_CREATE not in member
 
 
 # --- effective_permissions (lookups stubbed) — spec 86 semantics ---
@@ -349,7 +364,9 @@ async def test_effective_union_of_direct_team_and_floor(monkeypatch):
     # Any ACTIVE user holds the member floor — no membership row involved.
     patch_lookups(monkeypatch, permission_sets=[TRIAGER, [Permission.ITEM_CREATE]])
     permissions = await effective_permissions(SESSION, StubUser(), project=StubProject())
-    assert permissions == set(TRIAGER) | ATTACHING | {Permission.ITEM_CREATE, Permission.PAGE_READ}
+    assert permissions == expand_permissions(
+        set(TRIAGER) | BASELINE | {Permission.ITEM_CREATE}
+    )
 
 
 async def test_effective_inactive_user_has_no_permissions(monkeypatch):
@@ -365,7 +382,7 @@ async def test_effective_inactive_user_has_no_permissions(monkeypatch):
 async def test_require_instance_admin_passes_everywhere():
     admin = StubUser(InstanceRole.ADMIN)
     assert await require(SESSION, admin, Permission.USER_MANAGE) == all_permission_keys()
-    assert await require(SESSION, admin, Permission.TEAM_MANAGE) == all_permission_keys()
+    assert await require(SESSION, admin, Permission.TEAM_CREATE) == all_permission_keys()
     assert (
         await require(SESSION, admin, Permission.PROJECT_MANAGE, project=StubProject())
         == all_permission_keys()
@@ -375,8 +392,8 @@ async def test_require_instance_admin_passes_everywhere():
 async def test_require_returns_the_effective_union(monkeypatch):
     patch_lookups(monkeypatch, permission_sets=[[Permission.ITEM_READ, Permission.ITEM_CREATE]])
     permissions = await require(SESSION, StubUser(), Permission.ITEM_CREATE, project=StubProject())
-    # The active-user floor (viewer set) rides along with the granted role.
-    assert permissions == {Permission.ITEM_READ, Permission.ITEM_CREATE, Permission.PAGE_READ}
+    # The active-user floor (the seeded Baseline) rides along with the role.
+    assert permissions == expand_permissions(BASELINE | {Permission.ITEM_CREATE})
 
 
 async def test_require_custom_role_allows_update_but_not_create(monkeypatch):
@@ -417,11 +434,11 @@ async def test_require_global_scope_admin_and_member(monkeypatch):
     # plain active member holds the member global set (ITEM_READ yes, ROLE_MANAGE no).
     patch_lookups(monkeypatch)
     assert (
-        await require(SESSION, StubUser(InstanceRole.ADMIN), Permission.ROLE_MANAGE)
+        await require(SESSION, StubUser(InstanceRole.ADMIN), Permission.ROLE_CREATE)
         == all_permission_keys()
     )
     with pytest.raises(ForbiddenError):
-        await require(SESSION, StubUser(), Permission.ROLE_MANAGE)
+        await require(SESSION, StubUser(), Permission.ROLE_CREATE)
     assert Permission.ITEM_READ in await require(SESSION, StubUser(), Permission.ITEM_READ)
 
 
