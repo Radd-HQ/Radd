@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { usePermissions } from "./hooks";
-import type { Project } from "./types";
+import type { PageSpace, Project } from "./types";
 
 /**
  * "May this actor do X?" — one question, one answer, one treatment (RADD-771).
@@ -55,6 +55,12 @@ export interface CanOptions {
   /** Resolve against this project. Omit for a global-scope atom. */
   project?: Pick<Project, "id" | "permissions"> | null;
   /**
+   * Resolve against this wiki SPACE (RADD-814) — the space leg of the scope
+   * ladder. The RADD-810 class was space-scoped atoms asked as global
+   * questions because this option did not exist.
+   */
+  space?: Pick<PageSpace, "id" | "permissions"> | null;
+  /**
    * Resolve against ANY project the caller can see (RADD-788) — for surfaces
    * that span projects and so have no single one to check. Ignored when
    * `project` is given, which is the more specific question.
@@ -75,12 +81,14 @@ export function useCan(): CanFn {
 
   return useMemo<CanFn>(
     () => (permission, options = {}) => {
-      const { project, anyProject, verb, unless } = options;
+      const { project, space, anyProject, verb, unless } = options;
       const held = project
         ? perms.project(project, permission as never)
-        : anyProject
-          ? perms.anyProject(permission as never)
-          : perms.global(permission as never);
+        : space
+          ? perms.space(space, permission as never)
+          : anyProject
+            ? perms.anyProject(permission as never)
+            : perms.global(permission as never);
       const blocked = unless?.when === true;
       const allowed = held && !blocked;
       const reason = allowed

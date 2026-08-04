@@ -39,6 +39,7 @@ import {
   SettingKey,
   type Item,
   type Me,
+  type PageSpace,
   type PermissionValue,
   type Project,
 } from "./types";
@@ -163,6 +164,16 @@ export interface PermissionChecks {
    * is offered at all.
    */
   anyProject: (permission: PermissionValue) => boolean;
+  /**
+   * The caller holds `permission` IN THIS SPACE (RADD-814): the space leg of
+   * the scope ladder, resolved from the per-space union `GET /page-spaces`
+   * carries — the RADD-810 class was space-scoped atoms asked as global
+   * questions because no space-shaped question existed to ask.
+   */
+  space: (
+    space: Pick<PageSpace, "permissions"> | null | undefined,
+    permission: PermissionValue,
+  ) => boolean;
 }
 
 export function usePermissions(): PermissionChecks {
@@ -192,6 +203,8 @@ export function usePermissions(): PermissionChecks {
         allowAll ||
         globalPermissions.has(permission) ||
         (projects ?? []).some((p) => p.permissions?.includes(permission)),
+      space: (space, permission) =>
+        allowAll || Boolean(space?.permissions?.includes(permission)),
     };
   }, [authState, projects]);
 }

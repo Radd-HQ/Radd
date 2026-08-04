@@ -76,7 +76,6 @@ export type PermissionValue = (typeof Permission)[keyof typeof Permission] | (st
 export const PermissionScope = {
   project: "project",
   global: "global",
-  instance: "instance",
   /** RADD-791 — checked against a wiki space. */
   space: "space",
 } as const;

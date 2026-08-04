@@ -12,17 +12,16 @@ const SCOPE_LABELS = {
   [PermissionScope.project]: "Project permissions",
   [PermissionScope.space]: "Space permissions",
   [PermissionScope.global]: "Global permissions",
-  [PermissionScope.instance]: "Instance permissions",
 } as const;
 
 /** Every scope the catalog can serve. A missing entry is invisible, not an
  *  error — line 44 filters by scope, so an unlisted one matches nothing and
- *  its atoms never render (RADD-808). Keep in step with `PermissionScope`. */
+ *  its atoms never render (RADD-808). Keep in step with `PermissionScope`.
+ *  (RADD-814 retired `instance` on both sides — zero atoms, dead group.) */
 const SCOPE_ORDER = [
   PermissionScope.project,
   PermissionScope.space,
   PermissionScope.global,
-  PermissionScope.instance,
 ] as const;
 
 /** Group a scope's rows by resource, preserving catalog (enum) order within each. */

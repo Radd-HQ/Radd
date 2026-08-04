@@ -14,8 +14,8 @@ import pytest
 
 from radd.exceptions import ConflictError, ForbiddenError
 from radd.modules.auth import authz, roles
+from radd.modules.auth.types import all_permission_keys
 from radd.modules.auth.authz import (
-    ALL_PERMISSIONS,
     Permission,
     combine_permissions,
     effective_permissions,
@@ -300,12 +300,12 @@ def test_editing_the_baseline_changes_what_everyone_holds():
 def test_combine_instance_admin_gets_everything():
     assert (
         combine_permissions(instance_role=InstanceRole.ADMIN, permission_sets=[])
-        == ALL_PERMISSIONS
+        == all_permission_keys()
     )
 
 
 def test_global_scope_permissions():
-    assert global_scope_permissions(InstanceRole.ADMIN.value) == ALL_PERMISSIONS
+    assert global_scope_permissions(InstanceRole.ADMIN.value) == all_permission_keys()
     # Spec 36: members additionally run cycles + see timesheets at global
     # scope; spec 43 adds writing docs. Spec 50: cycle.manage expands to its
     # create/update/delete atoms so the granular cycle endpoints resolve.
@@ -342,7 +342,7 @@ async def test_effective_instance_admin_skips_lookups():
     permissions = await effective_permissions(
         SESSION, StubUser(InstanceRole.ADMIN), project=StubProject()
     )
-    assert permissions == ALL_PERMISSIONS
+    assert permissions == all_permission_keys()
 
 
 async def test_effective_union_of_direct_team_and_floor(monkeypatch):
@@ -364,11 +364,11 @@ async def test_effective_inactive_user_has_no_permissions(monkeypatch):
 
 async def test_require_instance_admin_passes_everywhere():
     admin = StubUser(InstanceRole.ADMIN)
-    assert await require(SESSION, admin, Permission.USER_MANAGE) == ALL_PERMISSIONS
-    assert await require(SESSION, admin, Permission.TEAM_MANAGE) == ALL_PERMISSIONS
+    assert await require(SESSION, admin, Permission.USER_MANAGE) == all_permission_keys()
+    assert await require(SESSION, admin, Permission.TEAM_MANAGE) == all_permission_keys()
     assert (
         await require(SESSION, admin, Permission.PROJECT_MANAGE, project=StubProject())
-        == ALL_PERMISSIONS
+        == all_permission_keys()
     )
 
 
@@ -418,7 +418,7 @@ async def test_require_global_scope_admin_and_member(monkeypatch):
     patch_lookups(monkeypatch)
     assert (
         await require(SESSION, StubUser(InstanceRole.ADMIN), Permission.ROLE_MANAGE)
-        == ALL_PERMISSIONS
+        == all_permission_keys()
     )
     with pytest.raises(ForbiddenError):
         await require(SESSION, StubUser(), Permission.ROLE_MANAGE)

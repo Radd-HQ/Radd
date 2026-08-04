@@ -36,10 +36,10 @@ _WEB = Path(__file__).resolve().parents[2] / "web" / "src"
 _TYPES = _WEB / "lib" / "types" / "permissions.ts"
 _MATRIX = _WEB / "components" / "settings" / "PermissionMatrix.tsx"
 
-#: `instance` is declared on both sides but no atom carries it today. It is a
-#: real scope kept for the admin-only tier, not drift, so it is exempt from the
-#: "the server must emit it" half rather than silently tolerated by a loose test.
-_UNPOPULATED = {PermissionScope.INSTANCE}
+#: RADD-814 retired the `instance` tier (zero atoms, no resolution branch) on
+#: both sides at once, so nothing is exempt any more: every declared scope must
+#: be populated, and every populated scope must be declared.
+_UNPOPULATED: set[PermissionScope] = set()
 
 
 def _declared_scopes() -> set[str]:

@@ -13,6 +13,9 @@ export interface PageSpace {
   public: boolean;
   /** Live (non-archived) page count, hydrated by the list endpoint. */
   page_count: number;
+  /** RADD-814: the caller's per-SPACE permission union (the ProjectRead
+   * .permissions analogue) — what `can({ space })` resolves against. */
+  permissions?: string[];
   created_at: string;
   updated_at: string;
 }

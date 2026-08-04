@@ -36,6 +36,11 @@ class PageSpaceRead(BaseModel):
     position: float
     public: bool
     page_count: int = 0  # live (non-archived) pages; hydrated by the service
+    #: RADD-814: the caller's per-SPACE permission union — the space analogue of
+    #: ProjectRead.permissions, and what lets the SPA's one `can()` seam resolve
+    #: a space-scoped atom instead of asking a global question (the RADD-810
+    #: class). Filled by the list endpoint; empty from other constructors.
+    permissions: list[str] = []
     created_at: UtcDatetime
     updated_at: UtcDatetime
 

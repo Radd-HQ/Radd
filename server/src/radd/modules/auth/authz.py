@@ -48,10 +48,9 @@ from .types import (
     expand_permissions,
 )
 
-# Builtin atom set — kept for back-compat imports. The admin's *effective* set is
-# `all_permission_keys()` (builtin ∪ plugin-registered, spec 93/A2), which equals
-# this in the default config and grows as plugins register atoms.
-ALL_PERMISSIONS: frozenset[Permission] = frozenset(Permission)
+# (RADD-814 removed the dead `ALL_PERMISSIONS` back-compat constant — the
+# admin's effective set is `all_permission_keys()`, builtin ∪ plugin-registered,
+# and the frozen enum copy silently excluded plugin atoms.)
 
 # The floor is a ROLE now, not a constant (RADD-773).
 #
@@ -198,6 +197,10 @@ _BASELINE_CACHE_KEY = "radd.baseline_permissions"
 
 #: Key prefix for the per-request memo of `readable_projects` (per actor).
 _READABLE_CACHE_KEY = "radd.readable_projects"
+
+#: Key prefix for the per-request memo of the full per-project permission map
+#: (RADD-814) — the ladder's project tier, resolved once per actor per request.
+_PROJECT_MAP_CACHE_KEY = "radd.project_permission_map"
 
 
 async def baseline_permissions(session: AsyncSession) -> frozenset[Permission]:
@@ -436,11 +439,12 @@ async def require_anywhere(
     Nothing becomes readable: the atom still gates each project's contents. The
     only change is whether "you may see none of them" arrives as a result or as
     a failure.
-    """
-    from radd.modules.projects import service as projects_service  # deferred: projects loads after auth
 
-    projects = await projects_service.list_projects(session)
-    per_project = await permissions_for_projects(session, user, projects)
+    RADD-814: filters the request-memoised `project_permission_map`, so the
+    seven cross-project surfaces that each used to run a projects listing plus
+    a full batched resolution now share one.
+    """
+    per_project = await project_permission_map(session, user)
     held = {
         pid: permissions
         for pid, permissions in per_project.items()
@@ -449,6 +453,59 @@ async def require_anywhere(
     if refuse_when_empty and not held and permission not in await effective_permissions(session, user):
         raise ForbiddenError(f"permission '{permission}' denied")
     return held
+
+
+async def project_permission_map(
+    session: AsyncSession, user: User
+) -> dict[uuid.UUID, frozenset[Permission]]:
+    """The effective union for EVERY project, memoised per request (RADD-814).
+
+    The ladder's project tier, resolved once: `require_anywhere` and
+    `readable_projects` are filters over this. Memoised beside
+    `baseline_permissions` for the same reason — a page load crosses several
+    cross-project surfaces, and each used to pay a projects listing plus a
+    batched permission resolution of its own.
+    """
+    key = f"{_PROJECT_MAP_CACHE_KEY}:{user.id}"
+    cached: dict[uuid.UUID, frozenset[Permission]] | None = session.info.get(key)
+    if cached is not None:
+        return cached
+    from radd.modules.projects import service as projects_service  # deferred: projects loads after auth
+
+    projects = await projects_service.list_projects(session)
+    resolved = await permissions_for_projects(session, user, projects)
+    session.info[key] = resolved
+    return resolved
+
+
+async def holds(
+    session: AsyncSession,
+    user: User,
+    permission: Permission,
+    *,
+    project: Project | None = None,
+    space_id: uuid.UUID | None = None,
+    any_project: bool = False,
+) -> bool:
+    """THE one boolean question, under the scope ladder (RADD-814):
+
+        global  ⊃  {project | space}
+
+    A grant at an outer scope satisfies a check at any scope it contains —
+    which `effective_permissions` has always done by unioning global grants
+    into every scoped resolution; this seam names it. `any_project` is the
+    cross-project tier (RADD-672): held on at least one project, or globally.
+    `require`/`require_anywhere` are the raising/map-returning forms of the
+    same resolution — never a second opinion.
+    """
+    if any_project:
+        per_project = await project_permission_map(session, user)
+        if any(permission in perms for perms in per_project.values()):
+            return True
+        return permission in await effective_permissions(session, user)
+    return permission in await effective_permissions(
+        session, user, project=project, space_id=space_id
+    )
 
 
 async def readable_projects(
@@ -490,7 +547,9 @@ async def readable_projects(
 
     Memoised per request like `baseline_permissions`, and for the same reason: a
     page load hits several of these surfaces, each of which would otherwise repeat
-    a projects listing plus a batched permission resolution.
+    a projects listing plus a batched permission resolution. (RADD-814 moved the
+    expensive half into `project_permission_map`, shared with every
+    `require_anywhere` caller; this memo now caches only the filter.)
     """
     key = f"{_READABLE_CACHE_KEY}:{user.id}"
     cached: dict[uuid.UUID, frozenset[Permission]] | None = session.info.get(key)

@@ -89,7 +89,15 @@ async def list_spaces(session: Session, user: CurrentUser) -> list[PageSpaceRead
     account with a permission toast.
     """
     readable = await access.readable_spaces(session, user)
-    return [s for s in await spaces.list_spaces(session) if s.id in readable]
+    out = []
+    for space in await spaces.list_spaces(session):
+        if space.id not in readable:
+            continue
+        # RADD-814: each row carries the caller's per-space union, so the SPA's
+        # `can()` resolves space-scoped atoms against THE space (RADD-810 class).
+        space.permissions = sorted(str(p) for p in readable[space.id])
+        out.append(space)
+    return out
 
 
 @router.post("/page-spaces", response_model=PageSpaceRead, status_code=201)

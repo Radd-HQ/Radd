@@ -175,11 +175,15 @@ class PermissionScope(StrEnum):
 
     2026-07-22 named the middle scope GLOBAL; spec 86 stage 3 finished the
     job — the workspace entity is gone and the umbrella atom is
-    `global.manage` (stored role JSONB migrated)."""
+    `global.manage` (stored role JSONB migrated).
+
+    RADD-814 retired the `instance` tier: it carried zero atoms and had no
+    resolution branch — dead vocabulary that made the ladder look four rungs
+    tall when it has three. The containment ladder is
+    `global ⊃ {project | space}` (see `checkable_at`)."""
 
     PROJECT = "project"
     GLOBAL = "global"
-    INSTANCE = "instance"
     #: RADD-791 — checked against a WIKI SPACE. The page atoms moved here from
     #: GLOBAL: a space is a scope the way a project is, so "read-only space" and
     #: "who may comment here" are ordinary role grants rather than new vocabulary.
@@ -506,6 +510,29 @@ def permission_scope_of(key: "Permission | str") -> "PermissionScope":
         return scope
     reg = _all_registered().get(str(key))
     return reg[0] if reg else PermissionScope.GLOBAL
+
+
+# --- RADD-814: scope is a property of the GRANT, not the atom -----------------
+#
+# The containment ladder:   global  ⊃  {project | space}
+#
+# A grant at an outer scope satisfies a check at any scope it contains — which
+# has always been the resolver's de-facto behaviour (`_granted_role_ids` unions
+# global grants into every project), declared nowhere. `CHECKABLE_AT` names the
+# scopes an atom can be CHECKED at. Day one it is behaviour-identical: every
+# atom carries its old single scope, and `PERMISSION_SCOPES` survives as the
+# catalog's PRIMARY grouping. Widening an atom to a second scope is one
+# reviewable line in `_CHECKABLE_WIDENINGS`, never a rewrite.
+
+_CHECKABLE_WIDENINGS: dict[str, frozenset[PermissionScope]] = {}
+
+
+def checkable_at(key: "Permission | str") -> frozenset[PermissionScope]:
+    """The scope kinds this atom can be checked at (RADD-814). Single-member for
+    every atom today; the matrix (RADD-815) and the RADD-810 contract read it."""
+    return frozenset({permission_scope_of(key)}) | _CHECKABLE_WIDENINGS.get(
+        str(key), frozenset()
+    )
 
 
 def permission_description_of(key: "Permission | str") -> str:
