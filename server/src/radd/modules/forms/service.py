@@ -188,7 +188,9 @@ async def update_form(
         # Spec 62: mint the token on FIRST enable only; disabling keeps it, so
         # re-enabling restores the same public link.
         form.allow_public = data.allow_public
-        if data.allow_public and form.public_token is None:
+        # RADD-828: no anonymous reporting — the tokened public path is gone,
+        # so nothing mints public tokens any more (the column is inert data).
+        if False and data.allow_public and form.public_token is None:
             form.public_token = secrets.token_urlsafe(32)
     await session.flush()
     await _emit(session, FormEvent.UPDATED, form, project, actor)

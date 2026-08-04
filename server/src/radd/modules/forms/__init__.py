@@ -6,7 +6,6 @@ from radd.kernel import RaddPlugin
 
 from . import staging  # noqa: F401 — registers the staging attachment parent (RADD-800)
 from .portal_router import requests_router as portal_requests_router, router as portal_router
-from .public_router import router as public_router
 from .router import router
 from .types import FormEvent
 from .validation import FormValidationError
@@ -24,7 +23,7 @@ plugin = RaddPlugin(
     description=(
         "Template-scoped intake forms (spec 17): capture structured intake against the "
         "field registry and create a work item with defaults applied. Spec 62 adds the "
-        "tokened public (no-login) render/submit path under /public/forms/{token}. "
+        "RADD-828 removed the tokened public path — email ingest provisions a requester account instead. "
         "Spec 73 adds portal sharing (form_shares grant rows, PUT /forms/{id}/sharing) "
         "and the authenticated requester-portal directory under /portal/forms."
     ),
@@ -32,7 +31,7 @@ plugin = RaddPlugin(
         "projects", "auth", "teams", "fields", "workflow", "labels", "cycles", "releases",
         "items", "events",
     ),
-    routers=(router, public_router, portal_router, portal_requests_router),
+    routers=(router, portal_router, portal_requests_router),
     exception_handlers=((FormValidationError, _form_validation_handler),),
     event_types=(
         EventTypeSpec(FormEvent.CREATED, "Intake form created", "Admin"),

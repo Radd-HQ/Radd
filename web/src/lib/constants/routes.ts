@@ -117,7 +117,6 @@ export const RoutePath = {
   /** Public-shaped intake form submit page (spec 20) — members, behind the auth gate. */
   formSubmit: `${PROJECT_SEGMENT}/forms/$formId`,
   /** Truly PUBLIC tokened form submit page (spec 62) — root-level, outside the auth gate. */
-  publicForm: "/public/forms/$token",
   /** PUBLIC tokened CSAT rating page (spec 65) — root-level, outside the auth gate. */
   publicCsat: "/public/csat/$token",
   settings: SETTINGS_SEGMENT,

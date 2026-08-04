@@ -354,8 +354,11 @@ async def provision(session: AsyncSession, provider: SsoProvider, claims: dict) 
 
     identity.email = email or identity.email
     identity.claims = {k: claims[k] for k in ("hd", "picture", "name") if k in claims}
-    if user.source == UserSource.UNKNOWN:
-        user.source = UserSource.OIDC  # spec 84: claim pre-84 SSO-only rows on login
+    if user.source in (UserSource.UNKNOWN, UserSource.EMAIL):
+        # spec 84: claim pre-84 SSO-only rows; RADD-828: an email-provisioned
+        # requester who signs in with the same verified address JOINS their
+        # account (keeping their tickets) and becomes able to log in.
+        user.source = UserSource.OIDC
 
     if _syncs_roles(provider):
         user.instance_role = (

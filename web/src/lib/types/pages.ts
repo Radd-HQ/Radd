@@ -211,11 +211,6 @@ export interface PublicPagesPage {
   updated_at: string;
 }
 
-/** GET /public/forms/{token}/deflect (spec 74) — public-KB docs ONLY (the
- * authed DeflectResponse's docs shape; resolved issues stay internal). */
-export interface PublicDeflectResponse {
-  docs: DeflectPage[];
-}
 
 /** GET /search/deflect (spec 66) — KB deflection under the new-issue title:
  * pages pages that may already answer it + previously RESOLVED items. */

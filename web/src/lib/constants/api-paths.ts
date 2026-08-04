@@ -120,13 +120,8 @@ export const apiPortalFormPath = (formId: string) => `${ApiPath.portalForms}/${f
 export const apiPortalFormSubmitPath = (formId: string) =>
   `${ApiPath.portalForms}/${formId}/submit`;
 /** Public (unauthenticated) form path (spec 62): GET renders, POST submits. */
-export const apiPublicFormPath = (token: string) => `/public/forms/${encodeURIComponent(token)}`;
 /** Tokened KB deflection for the public form page (spec 74) — docs only. */
-export const apiPublicFormDeflectPath = (token: string) =>
-  `${apiPublicFormPath(token)}/deflect`;
 /** The shareable public submit URL shown in the form builder (spec 62). */
-export const publicFormUrl = (token: string) =>
-  `${window.location.origin}/public/forms/${encodeURIComponent(token)}`;
 /** Public KB paths (spec 74): a public space's tree + one page's body. */
 export const apiPublicPagesTreePath = (spaceId: string) =>
   `${ApiPath.publicKbSpaces}/${spaceId}/tree`;

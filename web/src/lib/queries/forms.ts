@@ -10,7 +10,6 @@ import {
   apiItemMailContactPath,
   apiPortalFormPath,
   apiPublicCsatPath,
-  apiPublicFormPath,
 } from "../constants";
 import { queryKeys } from "./shared";
 import type {
@@ -22,7 +21,6 @@ import type {
   PortalForm,
   PortalGroup,
   PublicCsat,
-  PublicForm,
 } from "../types";
 
 /** A project's intake forms (spec 20) — listing requires form.manage. */
@@ -72,12 +70,6 @@ export const portalFormQuery = (formId: string) =>
  * The PUBLIC render payload (spec 62) — no login, the token is the credential.
  * 404 (unknown token) / 409 (disabled) surface to the page as-is; no retry.
  */
-export const publicFormQuery = (token: string) =>
-  queryOptions({
-    queryKey: queryKeys.publicForm(token),
-    queryFn: () => api.get<PublicForm>(apiPublicFormPath(token)),
-    retry: false,
-  });
 
 /**
  * The item's external requester (spec 62) — 404-quiet: most items have none,

@@ -210,6 +210,32 @@ _READABLE_CACHE_KEY = "radd.readable_projects"
 _PROJECT_MAP_CACHE_KEY = "radd.project_permission_map"
 
 
+_REQUESTER_CACHE_KEY = "radd.requester_floor"
+
+
+async def floor_permissions(session: AsyncSession, user: User) -> frozenset[Permission]:
+    """The user's FLOOR (RADD-828): the Baseline for staff-shaped accounts, the
+    seeded Requester role for email-provisioned ones (`UserSource.EMAIL`). The
+    Baseline is the operator's STAFF policy row — handing it to every stranger
+    whose mail was ingested would be a default-open hole, so the internet-facing
+    floor is decoupled permanently. Same memoisation, same fail-closed default."""
+    from .types import UserSource
+
+    if getattr(user, "source", None) != UserSource.EMAIL.value:
+        return await baseline_permissions(session)
+    cached: frozenset[Permission] | None = session.info.get(_REQUESTER_CACHE_KEY)
+    if cached is not None:
+        return cached
+    row = (
+        await session.execute(
+            select(Role.permissions).where(Role.key == BuiltinRoleKey.REQUESTER.value)
+        )
+    ).scalar()
+    resolved = frozenset(row or ())
+    session.info[_REQUESTER_CACHE_KEY] = resolved
+    return resolved
+
+
 async def baseline_permissions(session: AsyncSession) -> frozenset[Permission]:
     """What every active user holds without being granted anything (RADD-773).
 
@@ -283,20 +309,20 @@ async def effective_permissions(
         resolved = combine_permissions(
             instance_role=user.instance_role,
             permission_sets=permission_sets,
-            baseline=await baseline_permissions(session),
+            baseline=await floor_permissions(session, user),
         )
     elif project is not None:
         permission_sets = await _project_permission_sets(session, user.id, project)
         resolved = combine_permissions(
             instance_role=user.instance_role,
             permission_sets=permission_sets,
-            baseline=await baseline_permissions(session),
+            baseline=await floor_permissions(session, user),
         )
     else:
         resolved = global_scope_permissions(
             role,
             await _global_permission_sets(session, user.id),
-            baseline=await baseline_permissions(session),
+            baseline=await floor_permissions(session, user),
         )
     return _narrow_to_key_scope(user, resolved, project.id if project is not None else None)
 
@@ -412,7 +438,7 @@ async def permissions_for_projects(
 
     # Spec 113: the batched path must narrow too, or a scoped key would see the
     # full set anywhere a list hydrates permissions instead of resolving one project.
-    baseline = await baseline_permissions(session)
+    baseline = await floor_permissions(session, user)
     return {
         project.id: _narrow_to_key_scope(
             user,

@@ -21,6 +21,7 @@ class UserSource(StrEnum):
     OIDC = "oidc"  # provisioned by the OIDC callback
     JIRA = "jira"  # placeholder provisioned by the Jira importer (spec 90 follow-up)
     SERVICE = "service"  # spec 113 — a service account; authenticates by API key ONLY
+    EMAIL = "email"  # RADD-828 — provisioned by mail ingest; cannot log in until SSO claims it
     UNKNOWN = "unknown"  # pre-spec-84 SSO-only rows (upgraded on next login)
 
 
@@ -648,6 +649,10 @@ class BuiltinRoleKey(StrEnum):
     ADMIN = "admin"
     MEMBER = "member"
     VIEWER = "viewer"
+    #: RADD-828 (Q1): the INTERNET-facing floor — what an email-provisioned
+    #: requester holds INSTEAD of the Baseline, so enabling mail ingest can
+    #: never hand strangers the operator's staff policy row.
+    REQUESTER = "requester"
 
 
 @dataclass(frozen=True)
@@ -738,6 +743,20 @@ BUILTIN_ROLES: tuple[BuiltinRole, ...] = (
         # (spec 43) — any active user can read the wiki.
         permissions=(Permission.ITEM_READ, Permission.PAGE_READ),
         position=2,
+    ),
+    BuiltinRole(
+        key=BuiltinRoleKey.REQUESTER,
+        name="Requester",
+        description=(
+            "The floor for email-provisioned requester accounts (never the "
+            "Baseline): their own tickets, commenting and attaching on them, "
+            "and nothing else — not other items, not the wiki."
+        ),
+        # item.read@own is the whole visibility story: every child surface
+        # (comments, attachments, history) inherits it through the item seam,
+        # and comment.write/attachment.create only reach items they can read.
+        permissions=("item.read@own", Permission.COMMENT_WRITE, Permission.ATTACHMENT_CREATE),
+        position=3,
     ),
 )
 

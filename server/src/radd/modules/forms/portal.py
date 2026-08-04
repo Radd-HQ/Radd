@@ -17,14 +17,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.auth import service as auth
 from radd.modules.auth.models import User
+from radd.modules.fields import service as fields_service
 from radd.modules.teams import service as teams_service
 from radd.modules.projects import service as projects_service
 
-from . import public, service
+from . import service
 from .models import Form, FormShare
 from .schemas import (
     FormSubmit,
     PortalFormCard,
+    PublicFormField,
+    PublicFormRead,
     PortalFormRead,
     PortalGroup,
     PortalProjectRef,
@@ -32,6 +35,44 @@ from .schemas import (
     PublicSubmitResult,
 )
 from .types import FormEntity
+
+
+async def trimmed_read(session: AsyncSession, form: Form) -> PublicFormRead:
+    """The trimmed render payload: form chrome + each exposed field WITH the
+    definition bits the widgets need — a portal sharee (spec 73) may not read
+    the field registry. Lived in public.py until RADD-828 removed the
+    anonymous path; the portal is its only caller now."""
+    project = await projects_service.get_project(session, form.project_id)
+    definitions = {
+        definition.key: definition
+        for definition in await fields_service.definitions_for_project(session, project)
+    }
+    fields: list[PublicFormField] = []
+    for form_field in form.fields:
+        definition = definitions.get(form_field["field_key"])
+        if definition is None:
+            continue  # dropped from the registry since the form was built
+        fields.append(
+            PublicFormField(
+                field_key=definition.key,
+                label=form_field.get("label_override") or definition.name,
+                help=form_field.get("help"),
+                required=bool(form_field.get("required")),
+                type=definition.type,
+                options=definition.options,
+                display=definition.display,
+                default_value=definition.default_value,
+            )
+        )
+    return PublicFormRead(
+        name=form.name,
+        description=form.description,
+        title_prompt=form.title_prompt,
+        description_enabled=form.description_enabled,
+        description_prompt=form.description_prompt,
+        description_required=form.description_required,
+        fields=fields,
+    )
 
 
 def _shared_form_ids(actor: User, team_ids: set[uuid.UUID]):
@@ -95,7 +136,7 @@ async def render_portal_form(
     visitor may not read the registry) plus the form id + project ref."""
     form = await _eligible_form(session, form_id, actor)
     project = await projects_service.get_project(session, form.project_id)
-    base = await public.trimmed_read(session, form)
+    base = await trimmed_read(session, form)
     return PortalFormRead(
         id=form.id,
         project=PortalProjectRef(id=project.id, key=project.key, name=project.name),

@@ -79,7 +79,6 @@ export const queryKeys = {
   automationCatalog: ["automationCatalog"] as const,
   forms: (projectId: string) => ["forms", { projectId }] as const,
   form: (formId: string) => ["form", { formId }] as const,
-  publicForm: (token: string) => ["publicForm", { token }] as const,
   portalForms: ["portalForms"] as const,
   //: RADD-796 — the requester's own requests, and one opened. Separate from
   //: `portalForms` because replying invalidates the LIST (a reply clears the

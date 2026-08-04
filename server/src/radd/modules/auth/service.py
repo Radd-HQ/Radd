@@ -221,9 +221,16 @@ async def create_session(session: AsyncSession, user: User) -> str:
     every successful sign-in path."""
     # Spec 113: a service account authenticates by API key and nothing else.
     # Refusing here covers local, TOTP, LDAP and OIDC at once, because every one
-    # of those paths mints its session through this function.
+    # of those paths mints its session through this function. RADD-828: an
+    # email-provisioned requester account has no credential either — mail is
+    # its interface until an SSO login by the same verified email CLAIMS it.
     if user.source == UserSource.SERVICE:
         raise UnauthorizedError("service accounts authenticate with an API key")
+    if user.source == UserSource.EMAIL:
+        raise UnauthorizedError(
+            "this account was created from an email and has no login — sign in "
+            "with SSO using the same address to claim it"
+        )
     token = security.new_session_token()
     session.add(
         UserSession(

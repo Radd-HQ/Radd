@@ -130,11 +130,25 @@ def _sender(plan: EmailPlan) -> str:
 
 
 async def _sender_user(session: AsyncSession, plan: EmailPlan) -> User | None:
-    """The sender resolved to an ACTIVE user, else None (→ external contact)."""
+    """The sender resolved to an ACTIVE user — PROVISIONED when unknown
+    (RADD-828): a `UserSource.EMAIL` account that cannot log in and whose floor
+    is the seeded Requester role (item.read@own + commenting), never the
+    Baseline. A later SSO login by the same verified email CLAIMS the account
+    instead of forking a duplicate. None only for unparseable senders."""
     if not plan.sender_email:
         return None
     user = await auth.get_user_by_email(session, plan.sender_email)
-    return user if user is not None and user.active else None
+    if user is not None:
+        return user if user.active else None
+    from radd.modules.auth.types import UserSource
+
+    user, _created = await auth.ensure_imported_user(
+        session,
+        email=plan.sender_email,
+        name=plan.sender_name or plan.sender_email,
+        source=UserSource.EMAIL,
+    )
+    return user
 
 
 async def _intake(session: AsyncSession, plan: EmailPlan) -> AckPlan | None:
@@ -168,8 +182,13 @@ async def _intake(session: AsyncSession, plan: EmailPlan) -> AckPlan | None:
         ),
         actor,
     )
-    if sender is not None or not plan.sender_email:
-        return None  # registered senders are reporters + auto-watchers, no contact
+    from radd.modules.auth.types import UserSource
+
+    email_sourced = sender is not None and sender.source == UserSource.EMAIL.value
+    if (sender is not None and not email_sourced) or not plan.sender_email:
+        return None  # staff senders are reporters + auto-watchers, no contact
+    # RADD-828: an email-provisioned requester cannot log in — the mail loop
+    # (contact row: acks, replies, threading) stays their interface.
     await service.upsert_contact(
         session,
         created.id,

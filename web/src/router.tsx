@@ -20,7 +20,6 @@ import { MyWorkPage } from "./routes/my-work";
 import { ProjectHomePage } from "./routes/project-home";
 import { ProjectsIndexPage } from "./routes/projects-index";
 import { PublicCsatPage } from "./routes/public-csat";
-import { PublicFormPage } from "./routes/public-form";
 import { PublicPagesIndexPage, PublicPageSpacePage } from "./routes/public-pages";
 import { RoadmapPage } from "./routes/roadmap";
 import { ReportsPage } from "./routes/reports";
@@ -100,11 +99,6 @@ const loginRoute = createRoute({
 });
 
 /** PUBLIC tokened form submit (spec 62) — root-level like /login, no auth gate. */
-const publicFormRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: RoutePath.publicForm,
-  component: PublicFormPage,
-});
 
 /** PUBLIC tokened CSAT rating page (spec 65) — same idiom; the survey email's
  * links carry `?rating=N` to preselect a star (the page still POSTs). */
@@ -684,7 +678,6 @@ const projectSettingsSlaRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   loginRoute,
-  publicFormRoute,
   publicCsatRoute,
   publicKbIndexRoute,
   publicKbSpaceRoute,

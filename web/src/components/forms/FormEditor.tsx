@@ -1,10 +1,10 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, Copy, ExternalLink } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { fieldInScope } from "../../lib/field-scope";
-import { ApiPath, RoutePath, apiFormPath, publicFormUrl } from "../../lib/constants";
+import { ApiPath, RoutePath, apiFormPath } from "../../lib/constants";
 import { fieldsQuery, queryKeys } from "../../lib/queries";
 import {
   type FieldDef,
@@ -55,10 +55,6 @@ export function FormEditor({ project, form, onDone }: FormEditorProps) {
   const [enabled, setEnabled] = useState(form?.enabled ?? true);
   const [fields, setFields] = useState<FormField[]>(form?.fields ?? []);
   const [defaults, setDefaults] = useState<FormDefaults>(form?.defaults ?? emptyDefaults);
-  // Public link (spec 62): toggled by its own immediate PATCH — the token is
-  // minted server-side on first enable and kept on disable (same link forever).
-  const [allowPublic, setAllowPublic] = useState(form?.allow_public ?? false);
-  const [publicToken, setPublicToken] = useState<string | null>(form?.public_token ?? null);
 
   const canSave =
     name.trim() !== "" && titlePrompt.trim() !== "" && (!descEnabled || descPrompt.trim() !== "");
@@ -90,15 +86,6 @@ export function FormEditor({ project, form, onDone }: FormEditorProps) {
     },
   });
 
-  const togglePublic = useMutation({
-    mutationFn: (next: boolean) =>
-      api.patch<Form>(apiFormPath(persistedId ?? ""), { allow_public: next } satisfies FormUpdate),
-    onSuccess: async (saved) => {
-      setAllowPublic(saved.allow_public);
-      setPublicToken(saved.public_token);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.forms(project.id) });
-    },
-  });
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -224,32 +211,9 @@ export function FormEditor({ project, form, onDone }: FormEditorProps) {
         Enabled (disabled forms reject submissions)
       </label>
 
-      {persistedId && (
-        <div className="flex flex-col gap-2 rounded-lg border border-subtle bg-surface/40 p-3">
-          <label className="flex w-fit cursor-pointer items-center gap-2 text-[13px] text-fg">
-            <input
-              type="checkbox"
-              checked={allowPublic}
-              disabled={togglePublic.isPending}
-              onChange={(event) => togglePublic.mutate(event.target.checked)}
-              className="size-4 accent-accent"
-            />
-            Public link — anyone with the URL can submit, no sign-in
-          </label>
-          {allowPublic && publicToken && <PublicLinkRow token={publicToken} />}
-          {!allowPublic && publicToken && (
-            <p className="text-xs text-fg-muted">
-              Link disabled — re-enabling restores the same URL.
-            </p>
-          )}
-          {togglePublic.isError && (
-            <p className="text-xs text-red-400">{errorMessage(togglePublic.error)}</p>
-          )}
-        </div>
-      )}
-
-      {/* Portal sharing (spec 73): the public-link toggle's counterpart for
-          signed-in requesters — presence = sees the form on /portal + may submit. */}
+      {/* RADD-828: the anonymous public link is GONE — email ingest provisions
+          a requester account instead, so every submission passes through the
+          permission model. Portal sharing below is the signed-in counterpart. */}
       {persistedId && (
         <FormSharing
           formId={persistedId}
@@ -283,27 +247,3 @@ export function FormEditor({ project, form, onDone }: FormEditorProps) {
   );
 }
 
-/** The shareable public URL + a copy button (spec 62). */
-function PublicLinkRow({ token }: { token: string }) {
-  const [copied, setCopied] = useState(false);
-  const url = publicFormUrl(token);
-  const copy = async () => {
-    await navigator.clipboard.writeText(url);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 2000);
-  };
-  return (
-    <div className="flex items-center gap-2">
-      <input
-        readOnly
-        value={url}
-        onFocus={(event) => event.target.select()}
-        className="h-7 min-w-0 flex-1 rounded-md border border-strong bg-surface px-2 font-mono text-[12px] text-fg"
-      />
-      <Button size="sm" variant="secondary" className="shrink-0" onClick={copy}>
-        {copied ? <Check size={12} aria-hidden /> : <Copy size={12} aria-hidden />}
-        {copied ? "Copied" : "Copy"}
-      </Button>
-    </div>
-  );
-}

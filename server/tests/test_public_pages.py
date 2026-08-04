@@ -20,8 +20,6 @@ from radd.modules.auth.types import InstanceRole
 from radd.modules.pages import public as kb, service as docs_service, spaces as docs_spaces
 from radd.modules.pages.models import PageSpace
 from radd.modules.pages.schemas import PageCreate, PageSpaceCreate, PageSpaceUpdate
-from radd.modules.forms import public as forms_public, service as forms_service
-from radd.modules.forms.schemas import FormCreate, FormUpdate
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 
@@ -134,80 +132,3 @@ async def test_toggling_public_off_immediately_404s(db, admin):
 
 
 # --- the tokened form deflect (public router seam) ---
-
-
-async def _public_form(db, admin) -> tuple[uuid.UUID, str]:
-    """A publicly-enabled form; returns (form_id, token)."""
-    project = await projects_service.create_project(
-        db,
-        ProjectCreate(key=f"K{uuid.uuid4().hex[:4].upper()}", name="Desk"),
-    )
-    form = await forms_service.create_form(
-        db, FormCreate(project_id=project.id, name="Support"), admin
-    )
-    enabled = await forms_service.update_form(db, form.id, FormUpdate(allow_public=True), admin)
-    assert enabled.public_token is not None
-    return form.id, enabled.public_token
-
-
-async def test_form_deflect_returns_public_kb_hits_only(db, admin):
-    term = f"numbat{uuid.uuid4().hex[:6]}"
-    space = await _space(db, admin, public=True, name="Handbook")
-    page = await _page(db, admin, space, f"Fixing {term}", "the answer")
-    private_space = await _space(db, admin, public=False, name="Internal")
-    await _page(db, admin, private_space, f"Private {term}", "internal")
-    _, token = await _public_form(db, admin)
-
-    result = await forms_public.deflect_public_form(db, token, term)
-    assert [(doc.id, doc.space_id) for doc in result.docs] == [(page.id, space.id)]
-    assert result.docs[0].space_name == space.name
-
-    # Blank query short-circuits; bad token 404s; disabled form 409s.
-    assert (await forms_public.deflect_public_form(db, token, "   ")).docs == []
-    with pytest.raises(NotFoundError):
-        await forms_public.deflect_public_form(db, "not-a-real-token", term)
-
-
-async def test_form_deflect_respects_the_form_gate(db, admin):
-    form_id, token = await _public_form(db, admin)
-    await forms_service.update_form(db, form_id, FormUpdate(enabled=False), admin)
-    with pytest.raises(ConflictError):
-        await forms_public.deflect_public_form(db, token, "anything")
-
-
-async def test_form_deflect_fuses_public_semantic_candidates(db, admin, monkeypatch):
-    """Spec 106: public deflection fuses public-only semantic candidates — and
-    re-checks the LIVE space flag, so a private page the (stale) vector store
-    offers never reaches the anonymous visitor."""
-    from radd.modules.ai.embeddings import candidates
-
-    term = f"wombat{uuid.uuid4().hex[:6]}"
-    space = await _space(db, admin, public=True, name="Handbook")
-    fts_page = await _page(db, admin, space, f"Fixing {term}", "the answer")
-    lookalike = await _page(db, admin, space, "Adjacent lore", "related content")
-    private_space = await _space(db, admin, public=False, name="Internal")
-    private_page = await _page(db, admin, private_space, "Secret fix", "internal")
-    _, token = await _public_form(db, admin)
-
-    seen: dict[str, bool] = {}
-
-    async def fake_enabled(session):
-        return True
-
-    async def fake_doc_candidates(session, q, *, public_only, limit):
-        seen["public_only"] = public_only
-        return [(lookalike.id, 0.1), (private_page.id, 0.2)]
-
-    monkeypatch.setattr(candidates, "semantic_enabled", fake_enabled)
-    monkeypatch.setattr(candidates, "doc_candidates", fake_doc_candidates)
-
-    result = await forms_public.deflect_public_form(db, token, term)
-    assert [doc.id for doc in result.docs] == [fts_page.id, lookalike.id]
-    assert seen["public_only"] is True
-
-    async def broken(session, q, *, public_only, limit):
-        raise RuntimeError("provider down")
-
-    monkeypatch.setattr(candidates, "doc_candidates", broken)
-    result = await forms_public.deflect_public_form(db, token, term)
-    assert [doc.id for doc in result.docs] == [fts_page.id]

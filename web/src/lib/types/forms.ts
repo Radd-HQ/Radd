@@ -135,7 +135,8 @@ export interface PublicFormField {
   default_value: CustomFieldValue;
 }
 
-/** GET /public/forms/{token} — the unauthenticated render payload. */
+/** The trimmed render payload (portal base shape — the anonymous tokened
+    path went with RADD-828). */
 export interface PublicForm {
   name: string;
   description: string;
@@ -144,15 +145,6 @@ export interface PublicForm {
   description_prompt: string;
   description_required: boolean;
   fields: PublicFormField[];
-}
-
-/** POST /public/forms/{token} — submission plus who is asking. */
-export interface PublicFormSubmit {
-  title: string;
-  description?: string;
-  values: CustomFields;
-  email: string;
-  name?: string;
 }
 
 /** What an anonymous submitter learns back: the created issue key only. */
