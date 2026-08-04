@@ -26,6 +26,7 @@ from .queries import _alias_item, _parse_key, require_item
 from .visibility import (
     attach_capabilities,
     ensure_item_relation,
+    relation_read_clause,
     _builtin_read_denied,
     _field_ctx,
     _filter_read,
@@ -48,14 +49,15 @@ async def _hydrate_one(
     identically, so diffs stay consistent; automations/system writes run as an
     instance admin and lose nothing."""
     internal_visible = _internal_visible({project.id: permissions})
-    readable = frozenset(await authz.readable_projects(session, actor))
+    readable_map = await authz.readable_projects(session, actor)
     return (
         await hydrate(
             session,
             [item],
             internal_visible=internal_visible,
             actor_id=actor.id,
-            readable_project_ids=readable,
+            readable_project_ids=frozenset(readable_map),
+            relation_clause=await relation_read_clause(session, actor, readable_map),
         )
     )[0]
 
@@ -107,14 +109,15 @@ async def get_item(session: AsyncSession, item_id: uuid.UUID, actor: User) -> It
     definitions = await fields.definitions_for_project(session, project)
     ctx = await _field_ctx(session, actor, project, permissions, definitions)
     internal_visible = _internal_visible({project.id: permissions})
-    readable = frozenset(await authz.readable_projects(session, actor))
+    readable_map = await authz.readable_projects(session, actor)
     read = (
         await hydrate(
             session,
             [item],
             internal_visible=internal_visible,
             actor_id=actor.id,
-            readable_project_ids=readable,
+            readable_project_ids=frozenset(readable_map),
+            relation_clause=await relation_read_clause(session, actor, readable_map),
         )
     )[0]
     builtin_denied = await _builtin_read_denied(session, project, ctx)

@@ -76,12 +76,16 @@ async def nav_timesheet_visible(session: AsyncSession, user) -> bool:
 
     if await authz.holds(session, user, authz.Permission.TIMESHEET_VIEW, any_project=True):
         return True
-    readable = await authz.readable_projects(session, user)
-    if readable:
+    # "They could log" means worklog.write SOMEWHERE with logging enabled
+    # there — not "some readable project logs time": since RADD-825 the floor
+    # makes every project readable-in-part (item.read@own), which would light
+    # this arm for accounts that cannot log a minute anywhere (RADD-835).
+    writable = await authz.require_anywhere(session, user, authz.Permission.WORKLOG_WRITE)
+    if writable:
         enabled = await session.scalar(
             sa_select(ProjectTimeLogging.project_id)
             .where(
-                ProjectTimeLogging.project_id.in_(readable.keys()),
+                ProjectTimeLogging.project_id.in_(writable.keys()),
                 ProjectTimeLogging.enabled.is_(True),
             )
             .limit(1)

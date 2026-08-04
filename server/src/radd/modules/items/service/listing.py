@@ -126,12 +126,14 @@ async def list_items(
         projects[pid] = project
         permissions[pid] = await authz.effective_permissions(session, actor, project=project)
     visible = [i for i in items if authz.holds_base(permissions[i.project_id], Permission.ITEM_READ)]
+    readable_map = await authz.readable_projects(session, actor)
     reads = await hydrate(
         session,
         visible,
         internal_visible=_internal_visible(permissions),
         actor_id=actor.id,
-        readable_project_ids=frozenset(await authz.readable_projects(session, actor)),
+        readable_project_ids=frozenset(readable_map),
+        relation_clause=await relation_read_clause(session, actor, readable_map),
     )
 
     definitions: dict[uuid.UUID, Sequence[FieldDefinition]] = {}

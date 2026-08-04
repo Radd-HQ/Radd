@@ -27,7 +27,8 @@ from radd.modules.auth.types import BuiltinRoleKey
 from radd.modules import workflow as _workflow  # noqa: F401
 from radd.modules.items import bulk, service as items
 from radd.modules.items.filters import ItemListFilters
-from radd.modules.items.schemas import ItemCreate, ItemUpdate
+from radd.modules.items.enums import ItemKind
+from radd.modules.items.schemas import ItemCreate, ItemLinkCreate, ItemUpdate
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.search import indexer, service as search_service
@@ -221,3 +222,54 @@ async def test_reads_carry_the_per_row_verdict(db, scenario):
     assert other.capabilities.can_comment  # comment.write is unqualified here
     detail = await items.get_item(db, fixture["other"].id, restricted)
     assert detail.capabilities is not None and not detail.capabilities.can_update
+
+
+async def test_hydration_refs_pass_the_relation_filter(db, scenario):
+    """RADD-835: a hidden ROW in a readable project must not surface through
+    the payload's cross-item references — the link far-end, the parent
+    breadcrumb, the child count. The project filter alone let all three
+    through (found by relation-sweep-proof.mjs, pinned here)."""
+    project, restricted, admin, fixture = scenario
+    await _grant(db, restricted, project, ["item.read@own"])
+
+    # A dependency from the OWN row to a hidden one.
+    await items.add_item_link(
+        db, fixture["own"].id, ItemLinkCreate(target_id=fixture["other"].id, link_type="blocks"), admin
+    )
+    # A hidden epic whose child the restricted user reported.
+    epic = await items.create_item(
+        db, ItemCreate(project_id=project.id, kind=ItemKind.EPIC, title="secret initiative"), admin
+    )
+    child = await items.create_item(
+        db,
+        ItemCreate(
+            project_id=project.id,
+            parent_id=epic.id,
+            title="my visible child",
+            reporter_id=restricted.id,
+        ),
+        admin,
+    )
+    hidden_child = await items.create_item(
+        db,
+        ItemCreate(project_id=project.id, kind=ItemKind.SUBTASK, parent_id=fixture["own"].id, title="hidden sibling"),
+        admin,
+    )
+
+    own_read = await items.get_item(db, fixture["own"].id, restricted)
+    linked = [link.item.id for link in own_read.links.outgoing + own_read.links.incoming]
+    assert fixture["other"].id not in linked
+    # The hidden child never reaches the count either — counts must match rows.
+    assert own_read.child_count == 0
+
+    child_read = await items.get_item(db, child.id, restricted)
+    assert child_read.parent is None  # the hidden epic's title stays hidden
+
+    # The ADMIN still sees all three — the filter is the actor's, not global.
+    admin_read = await items.get_item(db, fixture["own"].id, admin)
+    assert fixture["other"].id in [
+        link.item.id for link in admin_read.links.outgoing + admin_read.links.incoming
+    ]
+    assert admin_read.child_count == 1
+    assert (await items.get_item(db, child.id, admin)).parent is not None
+    assert hidden_child.id is not None  # anchors the fixture; the count above is its proof

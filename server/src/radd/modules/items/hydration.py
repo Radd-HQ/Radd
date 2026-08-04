@@ -76,6 +76,7 @@ async def _child_counts(
     session: AsyncSession,
     item_ids: Iterable[uuid.UUID],
     readable_project_ids: frozenset[uuid.UUID] | None,
+    relation_clause=None,
 ) -> dict[uuid.UUID, int]:
     query = (
         select(WorkItem.parent_id, func.count())
@@ -84,6 +85,8 @@ async def _child_counts(
     )
     if readable_project_ids is not None:
         query = query.where(WorkItem.project_id.in_(readable_project_ids))
+    if relation_clause is not None:
+        query = query.where(relation_clause)  # RADD-835: counts must match rows
     rows = await session.execute(query)
     return dict(rows.all())
 
@@ -110,11 +113,17 @@ async def _comment_counts(
 
 
 async def _parents_by_id(
-    session: AsyncSession, parent_ids: set[uuid.UUID]
+    session: AsyncSession, parent_ids: set[uuid.UUID], relation_clause=None
 ) -> dict[uuid.UUID, WorkItem]:
     if not parent_ids:
         return {}
-    result = await session.execute(select(WorkItem).where(WorkItem.id.in_(parent_ids)))
+    query = select(WorkItem).where(WorkItem.id.in_(parent_ids))
+    # RADD-835: a hidden ROW in a readable project is hidden too — the project
+    # filter alone predates relations, and a subtask's payload carried its
+    # restricted parent's title through exactly this query.
+    if relation_clause is not None:
+        query = query.where(relation_clause)
+    result = await session.execute(query)
     return {parent.id: parent for parent in result.scalars()}
 
 
@@ -122,6 +131,7 @@ async def _links(
     session: AsyncSession,
     items: list[WorkItem],
     readable_project_ids: frozenset[uuid.UUID] | None,
+    relation_clause=None,
 ) -> dict[uuid.UUID, ItemLinks]:
     """Every dependency edge touching these items, split by direction — no N+1.
 
@@ -147,9 +157,12 @@ async def _links(
         ).scalars()
     )
     referenced = {r.source_item_id for r in rows} | {r.target_item_id for r in rows}
-    others = (
-        await session.execute(select(WorkItem).where(WorkItem.id.in_(referenced)))
-    ).scalars()
+    far_query = select(WorkItem).where(WorkItem.id.in_(referenced))
+    if relation_clause is not None:
+        # RADD-835: the RELATION row filter, on top of the project one below —
+        # a link's far end must pass the same seam every list read passes.
+        far_query = far_query.where(relation_clause)
+    others = (await session.execute(far_query)).scalars()
     by_id = {
         o.id: o
         for o in others
@@ -211,21 +224,33 @@ async def hydrate(
     today: date | None = None,
     actor_id: uuid.UUID | None = None,
     readable_project_ids: frozenset[uuid.UUID] | None = None,
+    relation_clause=None,
 ) -> list[ItemRead]:
     """`readable_project_ids` (RADD-839): the projects the ACTOR may read — parent
     breadcrumbs, epic refs, link targets and child counts outside it are dropped
     from the payload (the row survives; the cross-project reference does not).
-    None = trusted context (system consumers), nothing dropped."""
+    None = trusted context (system consumers), nothing dropped.
+
+    `relation_clause` (RADD-835): the RADD-823 row filter for the same actor —
+    `items.service.visibility.relation_read_clause` — applied to every
+    cross-item reference this assembles (parents, link far-ends, child
+    counts). The project filter answers "which projects may they read"; this
+    one answers "which ROWS", and since the floor narrowed to item.read@own
+    the second question is the one that bites."""
     pivot = today or date.today()  # derives cycle status; injectable for determinism
     item_ids = [i.id for i in items]
     starred = await _starred_ids(session, actor_id, item_ids)
-    parents = await _parents_by_id(session, {i.parent_id for i in items if i.parent_id})
+    parents = await _parents_by_id(
+        session, {i.parent_id for i in items if i.parent_id}, relation_clause
+    )
     # RADD-697: the epic axis needs the epic an item BELONGS TO, which is at most
     # two hops up (hierarchy: epic <- issue <- subtask). One extra batched
     # lookup for the grandparents, merged into the same map — a subtask's epic
     # is its parent-issue's parent, and no client can derive that from `parent`.
     parents |= await _parents_by_id(
-        session, {p.parent_id for p in parents.values() if p.parent_id} - set(parents)
+        session,
+        {p.parent_id for p in parents.values() if p.parent_id} - set(parents),
+        relation_clause,
     )
     if readable_project_ids is not None:
         parents = {
@@ -247,9 +272,9 @@ async def hydrate(
     releases = await releases_service.releases_by_ids(
         session, {i.release_id for i in items if i.release_id}
     )
-    child_counts = await _child_counts(session, item_ids, readable_project_ids)
+    child_counts = await _child_counts(session, item_ids, readable_project_ids, relation_clause)
     comment_counts = await _comment_counts(session, items, internal_visible)
-    links = await _links(session, items, readable_project_ids)
+    links = await _links(session, items, readable_project_ids, relation_clause)
 
     def type_ref(type_id: uuid.UUID | None) -> TypeRef | None:
         if type_id is None or type_id not in type_map:
