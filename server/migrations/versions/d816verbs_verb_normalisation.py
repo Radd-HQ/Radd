@@ -80,6 +80,8 @@ def upgrade() -> None:
     for role_id, permissions in conn.execute(
         sa.text("SELECT id, permissions FROM roles")
     ).fetchall():
+        if permissions is None:
+            continue  # JSON null in the JSONB column — nothing to rewrite
         atoms = permissions if isinstance(permissions, list) else json.loads(permissions)
         rewritten = _rewrite(atoms)
         if rewritten != list(atoms):
@@ -91,7 +93,7 @@ def upgrade() -> None:
     row = conn.execute(
         sa.text("SELECT id, permissions FROM roles WHERE key = 'baseline'")
     ).fetchone()
-    if row is not None:
+    if row is not None and row[1] is not None:
         atoms = row[1] if isinstance(row[1], list) else json.loads(row[1])
         merged = list(atoms) + [a for a in _BASELINE_ADDITIONS if a not in atoms]
         conn.execute(
@@ -102,6 +104,11 @@ def upgrade() -> None:
     for token_id, scopes in conn.execute(
         sa.text("SELECT id, scopes FROM api_tokens WHERE scopes IS NOT NULL")
     ).fetchall():
+        if scopes is None:
+            # JSONB can hold JSON null: SQL `IS NOT NULL` passes, the driver
+            # decodes None. An unscoped token carries no atoms to rewrite —
+            # this row crashed the v0.18.0 deploy on the live owner PAT.
+            continue
         data = scopes if isinstance(scopes, dict) else json.loads(scopes)
         changed = False
         if isinstance(data.get("global"), list):
