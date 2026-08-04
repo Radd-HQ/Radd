@@ -144,9 +144,17 @@ system can express *today*.
 | — | *Suggested:* read-only **project** (archive) | ⚠️ | Only by editing every role's atoms |
 | — | *Suggested:* per-issue-type permissions ("only QA files Bugs") | ❌ | No atom or ACL keys on `type_id` |
 | — | *Suggested:* approval-only actor (may transition, nothing else) | ⚠️ | Spec 107 guards check *data*, not *who* |
+| 24 | Edit **own** issues, not other people's | ❌ | Needs relations (§5.4a) |
+| 25 | Edit **your team's** issues, not those assigned elsewhere | ❌ | Needs relations |
+| 26 | A team sees only its own issues — on one project **or** globally | ❌ | Needs relations × scope; the two axes compose (§5.4a) |
+| 27 | Edit **own** pages, not others' | ❌ | Needs relations on `pages` |
+| 28 | Own vs others on views / dashboards | ⚠️ | `owner_id` exists but is not expressible as an atom qualifier |
 
-**Score: 12 clean, 6 awkward, 6 impossible.** The awkward ones share one cause
-(allowlist inversion); the impossible ones share another (no row-level model).
+**Score: 12 clean, 7 awkward, 10 impossible.** The awkward ones share one cause
+(allowlist inversion); the impossible ones share another — **there is no way to
+say "the ones that are mine"**. That single missing concept accounts for six of
+the ten, across four different resources, which is why §5.4a treats it as a
+kernel mechanism rather than an items feature.
 
 ### 3.1 Per-project field restriction — it works, and nobody can tell
 
@@ -412,6 +420,112 @@ Add an explicit `effect` (`allow` | `deny`) to `access_grants`, with **deny
 winning** at equal or narrower scope. That makes F3's natural phrasing
 expressible without inverting the whole model, and it is opt-in: no existing row
 carries `deny`, so behaviour is unchanged until one is written.
+
+### 5.4a Relations — access qualified by who you are to the record
+
+This is the general form of §5.3, and it should be built as the general form
+rather than as an items feature. The brief asks for it across issues, pages,
+views, dashboards *and whatever comes next*, which is the definition of a kernel
+mechanism.
+
+**The idea in one line:** an atom is qualified by the actor's **relationship to
+the record**, not only by the scope it is granted at.
+
+```
+item.update            edit any issue                     (today's meaning)
+item.update@own        edit issues you reported
+item.update@assigned   edit issues assigned to you
+item.update@team       edit issues whose team is one of yours
+page.write@own         edit pages you authored
+view.update@own        edit your own views
+```
+
+**Two orthogonal axes**, and keeping them orthogonal is the whole design:
+
+| Axis | Answers | Carried by |
+|---|---|---|
+| **Scope** (§5.1) | *where* does this apply — instance, project, space | the **grant** |
+| **Relation** | *which rows* — any, own, assigned, team | the **atom** |
+
+They compose without interacting. The brief's HR example is
+`role[item.read@team, comment.write@team]` granted **on the HR project** for the
+project-local version, or granted **instance-wide** for the global version. One
+role, two grants, no new vocabulary — which is the test of whether the two axes
+were factored correctly.
+
+#### The registry
+
+Each resource contributes its own relations, because only the owning module
+knows what "own" means for its rows:
+
+```python
+RelationSpec(
+    key="team",
+    label="on their team",
+    #: FILTERING — a SQL expression, for lists/counts/search/aggregates.
+    where=lambda actor: Item.team_id.in_(actor.team_ids),
+    #: GATING — a predicate over one loaded row, for writes.
+    holds=lambda actor, row: row.team_id in actor.team_ids,
+)
+```
+
+**Both forms are required, and that is the point.** A read restriction must
+become a `WHERE` clause or every list, count and aggregate leaks; a write
+restriction is asked about one row that is already loaded. Deriving one from the
+other is not possible in general, so a relation declares both and a contract test
+asserts they agree on a fixture — a relation whose filter and predicate disagree
+is a silent leak, and it is exactly the bug this mechanism could introduce.
+
+`items` contributes `own` / `assigned` / `team`; `pages` contributes `own` and
+(via the space) `team`; `views` and `dashboards` already have `owner_id`, so
+their `own` is a rename of something that exists. A plugin registers relations
+for its entity and inherits the whole mechanism.
+
+#### Relations form a lattice
+
+`any ⊃ team ⊃ own`. Holding `item.update@any` implies `@team` and `@own`; the
+existing transitive `expand_permissions` closure does this already and needs no
+new machinery.
+
+**An unqualified atom means `@any`.** `item.update` today permits editing
+anything, so `item.update ≡ item.update@any` and **every existing role keeps
+exactly what it had, with no backfill**. That is the RADD-790 precedent: splitting
+attachments off `item.update` was a widening rather than a downgrade precisely
+because the implication was declared instead of migrated. Same trick, same
+reason.
+
+#### "Others" is not a relation
+
+The brief phrases it as *"can edit own, cannot edit others"*. That is the
+**absence** of `@any`, not the presence of an `@others` grant — and keeping it
+that way is what preserves the additive model. `@others` only becomes meaningful
+alongside deny (§5.4), where `deny item.update@others` is a legitimate way to
+carve a hole in a broad grant. Define it there, not here.
+
+#### Three traps this must be designed around
+
+1. **Child content must inherit the parent's relation.** If `item.read@team`
+   hides an issue, its comments, attachments, worklogs and history must vanish
+   with it. Those are separate tables with separate endpoints, and each one that
+   forgets is a leak of the exact data the restriction exists to protect. The
+   relation belongs on the *item resolution seam* every child already goes
+   through — not re-implemented per child.
+2. **Every counting surface must inherit the filter.** A restricted user seeing
+   "42 issues" on a dashboard and 3 in the list is the classic failure. Reports,
+   board column counts, swimlane rollups, search, SLQ and MCP `find_items` all
+   inherit it or none do. This is the same "one seam or none" rule that made
+   `nearest_epic_case` work in RADD-697.
+3. **Relations are computed, spec-92 grants are explicit — keep both.** A view is
+   shared by a deliberate act (a grant row); an issue is "mine" structurally (a
+   column). Collapsing the two would mean writing a grant row per issue, which
+   does not survive 503k items. They answer different questions and both stay.
+
+#### Cost
+
+`@own` is `reporter_id = :me`; `@team` is `team_id IN (:teams)`. Both are indexed
+single-column predicates and cost nothing at scale. A relation needing a join
+("issues I commented on") is expressible via the spec-97 `item_ids` subquery
+seam, and should be marked expensive rather than forbidden.
 
 ### 5.5 Plugin parity (F7, F8, F9)
 
