@@ -83,9 +83,7 @@ async def item_sla(item_id: uuid.UUID, session: Session, user: CurrentUser) -> I
     """Live timer status under the item's MATCHED policy (spec 63 first-match;
     display always recomputes — the engine's stored rows only gate breach-event
     dedup). At most one entry; an empty list = no policy applies."""
-    item = await items_service.require_item(session, item_id)
-    project = await projects_service.get_project(session, item.project_id)
-    await authz.require(session, user, Permission.ITEM_READ, project=project)
+    item, _project, _perms = await items_service.require_readable_item(session, item_id, user)
     entries: list[ItemSlaEntry] = []
     policy = await service.matched_policy(session, item)
     if policy is not None:

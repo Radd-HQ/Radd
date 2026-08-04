@@ -41,6 +41,7 @@ from .queries import (
     item_ids_for_projects,
     items_by_ids,
     require_item,
+    require_readable_item,
 )
 from .read import get_item, get_item_by_key
 from .visibility import denied_slq_fields
@@ -68,6 +69,7 @@ __all__ = [
     "remove_item_link",
     "reorder_item",
     "require_item",
+    "require_readable_item",
     "set_archived",
     "star_item",
     "sync_mention_links",

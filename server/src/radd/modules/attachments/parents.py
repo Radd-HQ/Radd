@@ -75,9 +75,10 @@ def binding_for(entity_type: str) -> ParentBinding:
 async def _item_guard(
     session: AsyncSession, user: User, item_id: uuid.UUID, permission: Permission
 ) -> None:
-    item = await items_service.require_item(session, item_id)
-    project = await projects_service.get_project(session, item.project_id)
-    await authz.require(session, user, permission, project=project)
+    # RADD-823: read-resolution through THE item seam; other atoms layer on top.
+    _item, project, _perms = await items_service.require_readable_item(session, item_id, user)
+    if permission is not Permission.ITEM_READ:
+        await authz.require(session, user, permission, project=project)
 
 
 async def _item_read(session: AsyncSession, user: User, item_id: uuid.UUID) -> None:

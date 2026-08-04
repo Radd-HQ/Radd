@@ -104,9 +104,7 @@ async def mark_all_read(session: Session, user: CurrentUser) -> None:
 async def _readable_item_project(
     session: AsyncSession, user: CurrentUser, item_id: uuid.UUID
 ) -> Project:
-    item = await items_service.require_item(session, item_id)
-    project = await projects_service.get_project(session, item.project_id)
-    await authz.require(session, user, authz.Permission.ITEM_READ, project=project)
+    _item, project, _perms = await items_service.require_readable_item(session, item_id, user)
     return project
 
 

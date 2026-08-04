@@ -23,7 +23,7 @@ from radd.modules.projects import service as projects_service
 
 from .enums import ItemEntity, ItemEvent
 from .schemas import HistoryActor, HistoryEntry, ItemHistory
-from .service import require_item
+from .service import require_readable_item
 
 # Package-private helpers — the same per-actor field-visibility seams the item
 # read path uses (RADD-834: history is an API response, not a stream consumer).
@@ -107,9 +107,7 @@ def _redact_changes(
 
 
 async def item_history(session: AsyncSession, item_id: uuid.UUID, actor: User) -> ItemHistory:
-    item = await require_item(session, item_id)
-    project = await projects_service.get_project(session, item.project_id)
-    permissions = await authz.require(session, actor, Permission.ITEM_READ, project=project)
+    item, project, permissions = await require_readable_item(session, item_id, actor)
     can_internal = Permission.COMMENT_READ_INTERNAL in permissions
     # Spec 50: teams narrow which internal-comment activity the actor may see.
     from radd.modules.comments.visibility import internal_comment_visible  # deferred: cycle

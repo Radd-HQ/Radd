@@ -368,8 +368,7 @@ async def _live_request(
 async def create_request(
     session: AsyncSession, item_id: uuid.UUID, data: ApprovalRequestCreate, actor: User
 ) -> ApprovalRequestRead:
-    item = await items_service.require_item(session, item_id)
-    project = await projects_service.get_project(session, item.project_id)
+    item, project, _perms = await items_service.require_readable_item(session, item_id, actor)
     await authz.require(session, actor, Permission.ITEM_UPDATE, project=project)
     state = await workflow.get_state(session, data.to_state_id)
     if state.project_id != project.id:
@@ -424,9 +423,7 @@ async def create_request(
 async def item_approvals(
     session: AsyncSession, item_id: uuid.UUID, actor: User
 ) -> ItemApprovalsRead:
-    item = await items_service.require_item(session, item_id)
-    project = await projects_service.get_project(session, item.project_id)
-    await authz.require(session, actor, Permission.ITEM_READ, project=project)
+    item, project, _perms = await items_service.require_readable_item(session, item_id, actor)
     requests = list(
         (
             await session.execute(

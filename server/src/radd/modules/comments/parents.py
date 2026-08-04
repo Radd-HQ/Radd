@@ -101,7 +101,11 @@ async def _item_project(session: AsyncSession, item_id: uuid.UUID) -> Project:
 
 
 async def _item_read(session, user: User, entity_id: uuid.UUID, project):
-    return await authz.require(session, user, Permission.ITEM_READ, project=project)
+    # RADD-823: through THE item seam, so comments inherit per-item read rules.
+    _item, _project, permissions = await items_service.require_readable_item(
+        session, entity_id, user
+    )
+    return permissions
 
 
 async def _item_write(session, user: User, entity_id: uuid.UUID, project):

@@ -454,9 +454,88 @@ PROJECT_PERMISSIONS: tuple[Permission, ...] = tuple(
 def permission_parts(permission: "Permission | str") -> tuple[str, str]:
     """Decompose `item.delete` -> ("item", "delete") for the resource × action
     roles matrix (spec 50). The action is the whole suffix (e.g. read_internal).
-    Accepts a plugin atom string as well as a builtin `Permission`."""
-    resource, _, action = str(permission).partition(".")
+    Accepts a plugin atom string as well as a builtin `Permission`; a relation
+    qualifier (RADD-823) is stripped — the matrix cell is the base atom."""
+    resource, _, action = base_permission(permission).partition(".")
     return resource, action
+
+
+# --- RADD-823: relations — an atom qualified by who you are to the record -----
+#
+# `resource.action@relation` is the normative syntax (D-review note: never the
+# dotted form). An UNQUALIFIED atom means `@any` — `item.update` and
+# `item.update@any` are the same fact, which is what makes migration free:
+# every existing role keeps exactly what it had, with zero backfill.
+#
+# The relation lattice is a CHAIN, widest first: any ⊃ team ⊃ own. Holding a
+# wider relation satisfies a narrower need; the MEET of two relations is the
+# narrower one. What a relation MEANS for a resource's rows is the owning
+# module's `RelationSpec` in the kernel registry — this vocabulary is pure
+# string algebra and never touches a table.
+
+RELATION_SEP = "@"
+
+RELATION_ANY = "any"
+
+#: The containment chain, outermost first. A relation not in this tuple is a
+#: resource-specific extension and is treated as incomparable with the others
+#: (contains only itself, plus `any` contains everything).
+RELATION_ORDER: tuple[str, ...] = ("any", "team", "own")
+
+
+def split_permission(key: "Permission | str") -> tuple[str, str]:
+    """`item.update@team` -> ("item.update", "team"); unqualified -> `any`."""
+    base, sep, relation = str(key).partition(RELATION_SEP)
+    return base, (relation if sep else RELATION_ANY)
+
+
+def base_permission(key: "Permission | str") -> str:
+    return split_permission(key)[0]
+
+
+def permission_relation(key: "Permission | str") -> str:
+    return split_permission(key)[1]
+
+
+def qualify_permission(base: str, relation: str) -> str:
+    """The canonical spelling: `@any` is never written out."""
+    return base if relation == RELATION_ANY else f"{base}{RELATION_SEP}{relation}"
+
+
+def relation_contains(outer: str, inner: str) -> bool:
+    """Does holding `outer` satisfy a need for `inner`? Chain containment:
+    any ⊃ team ⊃ own; equal always; unknown relations only contain themselves."""
+    if outer == inner or outer == RELATION_ANY:
+        return True
+    if outer in RELATION_ORDER and inner in RELATION_ORDER:
+        return RELATION_ORDER.index(outer) <= RELATION_ORDER.index(inner)
+    return False
+
+
+def relation_meet(a: str, b: str) -> str | None:
+    """The NARROWER of two relations (the lattice meet) — what a key scoped to
+    one relation may do against an account holding another (spec 113 becomes
+    lattice-aware here). None = incomparable: the pair grants nothing."""
+    if relation_contains(a, b):
+        return b
+    if relation_contains(b, a):
+        return a
+    return None
+
+
+def relations_held(
+    permissions: "frozenset[Permission] | frozenset[str] | set[str]", base: "Permission | str"
+) -> frozenset[str]:
+    """The relation qualifiers a permission set holds for one base atom.
+    `{"any"}`-containing = unrestricted; empty = the atom is not held at all.
+    The set is not closed downward — callers test with `relation_contains`."""
+    wanted = str(base)
+    return frozenset(
+        relation
+        for atom in permissions
+        for b, relation in (split_permission(atom),)
+        if b == wanted
+    )
 
 
 # --- plugin-contributable RBAC (spec 93 / A2) --------------------------------
@@ -504,11 +583,13 @@ def all_permission_keys() -> frozenset[str]:
 
 def permission_scope_of(key: "Permission | str") -> "PermissionScope":
     # PERMISSION_SCOPES is keyed by Permission (a StrEnum), so a plain-string
-    # lookup resolves a builtin atom; else fall to the plugin registry.
-    scope = PERMISSION_SCOPES.get(str(key))  # type: ignore[arg-type]
+    # lookup resolves a builtin atom; else fall to the plugin registry. A
+    # relation qualifier never changes WHERE an atom is checked (RADD-823):
+    # scope is the grant's axis, relation is the atom's — resolve the base.
+    scope = PERMISSION_SCOPES.get(base_permission(key))  # type: ignore[arg-type]
     if scope is not None:
         return scope
-    reg = _all_registered().get(str(key))
+    reg = _all_registered().get(base_permission(key))
     return reg[0] if reg else PermissionScope.GLOBAL
 
 
@@ -531,15 +612,15 @@ def checkable_at(key: "Permission | str") -> frozenset[PermissionScope]:
     """The scope kinds this atom can be checked at (RADD-814). Single-member for
     every atom today; the matrix (RADD-815) and the RADD-810 contract read it."""
     return frozenset({permission_scope_of(key)}) | _CHECKABLE_WIDENINGS.get(
-        str(key), frozenset()
+        base_permission(key), frozenset()
     )
 
 
 def permission_description_of(key: "Permission | str") -> str:
-    desc = PERMISSION_DESCRIPTIONS.get(str(key))  # type: ignore[arg-type]
+    desc = PERMISSION_DESCRIPTIONS.get(base_permission(key))  # type: ignore[arg-type]
     if desc is not None:
         return desc
-    reg = _all_registered().get(str(key))
+    reg = _all_registered().get(base_permission(key))
     return reg[1] if reg else ""
 
 

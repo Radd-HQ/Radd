@@ -18,7 +18,7 @@ import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from .types import Permission
+from .types import Permission, qualify_permission, relation_meet, split_permission
 
 GLOBAL_KEY = "global"
 PROJECTS_KEY = "projects"
@@ -42,22 +42,40 @@ class TokenScope:
     def narrow(
         self, permissions: frozenset[Permission], project_id: uuid.UUID | None
     ) -> frozenset[Permission]:
-        """The intersection. Global atoms also apply inside a project, because a
-        global-scoped atom (page.read, timesheet.view) is checked with project=None
-        in some paths and inside a project in others; a scope that granted it
-        globally but not per project would behave differently depending on which
-        code path asked, which is exactly the sort of subtlety a permission system
-        must not have."""
+        """The intersection — LATTICE-AWARE since RADD-823. Two atoms with the
+        same base meet at the NARROWER relation: an `item.read` key against an
+        `item.read@team` account yields `@team` (the key cannot exceed the
+        account), and an `item.read@team` key against an `item.read` account
+        yields `@team` too (the account cannot exceed the key). With no
+        relation qualifiers anywhere this is exactly the old set intersection.
+
+        Global atoms also apply inside a project, because a global-scoped atom
+        (page.read, timesheet.view) is checked with project=None in some paths
+        and inside a project in others; a scope that granted it globally but
+        not per project would behave differently depending on which code path
+        asked, which is exactly the sort of subtlety a permission system must
+        not have."""
         if project_id is None:
-            return permissions & self.global_atoms
-        return permissions & (self.global_atoms | frozenset(self.project_atoms.get(project_id, frozenset())))
+            allowed = self.global_atoms
+        else:
+            allowed = self.global_atoms | frozenset(
+                self.project_atoms.get(project_id, frozenset())
+            )
+        return _lattice_intersect(permissions, allowed)
 
     def projects_allowing(self, permission: Permission) -> set[uuid.UUID]:
         """Which projects this scope permits `permission` in — the input to the
-        MCP catalog's project enums (spec 114)."""
-        if permission in self.global_atoms:
+        MCP catalog's project enums (spec 114). Base-aware (RADD-823): a scope
+        carrying `item.read@team` still ALLOWS item.read somewhere (narrowed),
+        so the project stays in the catalog rather than vanishing."""
+        wanted = str(permission)
+        if any(split_permission(a)[0] == wanted for a in self.global_atoms):
             return set(self.project_atoms)  # a globally scoped atom applies everywhere named
-        return {pid for pid, atoms in self.project_atoms.items() if permission in atoms}
+        return {
+            pid
+            for pid, atoms in self.project_atoms.items()
+            if any(split_permission(a)[0] == wanted for a in atoms)
+        }
 
     def to_json(self) -> dict:
         return {
@@ -69,17 +87,48 @@ class TokenScope:
         }
 
 
+def _lattice_intersect(
+    permissions: "frozenset[Permission] | frozenset[str]",
+    allowed: "frozenset[Permission] | frozenset[str]",
+) -> frozenset:
+    """Per-base meet (RADD-823): for each held atom, the widest allowance of the
+    same BASE narrows it to the lattice meet of the two relations. Incomparable
+    relations grant nothing for that pair (fails closed). Pure and total; equal
+    to plain set intersection when no atom carries a qualifier."""
+    allowed_relations: dict[str, set[str]] = {}
+    for atom in allowed:
+        base, relation = split_permission(atom)
+        allowed_relations.setdefault(base, set()).add(relation)
+    out: set = set()
+    for atom in permissions:
+        base, held_rel = split_permission(atom)
+        meets = {
+            met
+            for rel in allowed_relations.get(base, ())
+            if (met := relation_meet(held_rel, rel)) is not None
+        }
+        for met in meets:
+            out.add(atom if met == held_rel else qualify_permission(base, met))
+    return frozenset(out)
+
+
 def _atoms(values: object, where: str) -> frozenset[Permission]:
     if not isinstance(values, list):
         raise ValueError(f"scope {where} must be a list of permission atoms")
-    out: set[Permission] = set()
+    out: set = set()
     for value in values:
+        base, _relation = split_permission(str(value))
         try:
-            out.add(Permission(value))
+            Permission(base)
         except ValueError:
             # Refuse at WRITE time. An unknown atom that silently never matches is
             # a scope that looks granted and is not — the worst failure mode here.
+            # (The relation qualifier is validated shallowly here — base only —
+            # because a scope is written before the owning plugin's relations
+            # may be loaded; an unregistered qualifier resolves to nothing,
+            # which for a KEY is the fail-closed direction.)
             raise ValueError(f"unknown permission atom '{value}' in scope {where}") from None
+        out.add(Permission(str(value)) if str(value) == base else str(value))
     return frozenset(out)
 
 

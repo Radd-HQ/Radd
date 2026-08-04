@@ -15,6 +15,7 @@ from pathlib import Path
 
 from .plugin import RaddPlugin
 from .specs import (
+    RelationSpec,
     CapabilitySpec,
     CascadeSpec,
     ConsumerSpec,
@@ -60,6 +61,8 @@ class KernelRegistries:
     entities: dict[str, EntitySpec] = field(default_factory=dict)
     event_types: dict[str, EventTypeSpec] = field(default_factory=dict)
     permissions: dict[str, PermissionSpec] = field(default_factory=dict)
+    #: (resource, key) -> what @key MEANS for that resource's rows (RADD-823).
+    relations: dict[tuple[str, str], RelationSpec] = field(default_factory=dict)
     crud_resources: dict[str, CrudResourceSpec] = field(default_factory=dict)
     capabilities: dict[str, CapabilitySpec] = field(default_factory=dict)
     slq_fields: dict[str, SlqFieldSpec] = field(default_factory=dict)  # plugin SLQ query fields
@@ -87,6 +90,7 @@ class KernelRegistries:
     def clear(self) -> None:
         for f in (
             self.plugins, self.entities, self.event_types, self.permissions,
+            self.relations,
             self.crud_resources, self.capabilities, self.tasks, self.consumers,
             self.integrations, self.plugin_ui_dirs, self.slq_fields,
             self.view_types, self.widget_types, self.mcp_tools, self.page_extensions,
@@ -106,6 +110,8 @@ class KernelRegistries:
             self.event_types[et.event_type] = et
         for p in plugin.permissions:
             self.permissions[p.key] = p
+        for r in plugin.relations:
+            self.relations[(r.resource, r.key)] = r
         for c in plugin.crud_resources:
             self.crud_resources[c.key] = c
         for cap in plugin.capabilities:
@@ -146,6 +152,8 @@ class KernelRegistries:
             self.event_types.pop(et.event_type, None)
         for p in plugin.permissions:
             self.permissions.pop(p.key, None)
+        for r in plugin.relations:
+            self.relations.pop((r.resource, r.key), None)
         for c in plugin.crud_resources:
             self.crud_resources.pop(c.key, None)
         for cap in plugin.capabilities:
@@ -185,6 +193,10 @@ class KernelRegistries:
         if module_file:
             self.plugin_ui_dirs[plugin.name] = str(Path(module_file).resolve().parent / "ui" / "dist")
 
+    def relations_for(self, resource: str) -> dict[str, RelationSpec]:
+        """Every relation registered for one resource, keyed by qualifier (RADD-823)."""
+        return {key: spec for (res, key), spec in self.relations.items() if res == resource}
+
     def cascades_for(self, event_type: str) -> list[CascadeSpec]:
         """Every registered cleanup for a parent event (RADD-745)."""
         return [c for c in self.cascades if c.parent_event == event_type]
@@ -213,6 +225,14 @@ def register_event_type(spec: EventTypeSpec) -> EventTypeSpec:
 
 def register_permission(spec: PermissionSpec) -> PermissionSpec:
     registries.permissions[spec.key] = spec
+    return spec
+
+
+def register_relation(spec: RelationSpec) -> RelationSpec:
+    """Register what a relation qualifier MEANS for one resource's rows
+    (RADD-823). Module-level like register_cascade: the natural caller is the
+    owning module's import, beside the model whose columns the predicates read."""
+    registries.relations[(spec.resource, spec.key)] = spec
     return spec
 
 

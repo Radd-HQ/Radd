@@ -31,6 +31,32 @@ async def require_item(session: AsyncSession, item_id: uuid.UUID) -> WorkItem:
     return item
 
 
+async def require_readable_item(
+    session: AsyncSession, item_id: uuid.UUID, actor
+) -> "tuple[WorkItem, object, frozenset]":
+    """THE item-resolution seam (RADD-823): item + its project + the actor's
+    effective permissions there, with `item.read` REQUIRED.
+
+    Every child surface (history, worklogs, watchers, participants, weblinks,
+    vcs, sla, csat, approvals, transitions, canned, mail, page-links, stars)
+    used to carry its own require_item + get_project + require copy — ~15
+    sites, each one a place a per-item rule could be forgotten. This is the
+    single door: when relation gating lands on items (RADD-817), a child
+    surface inherits `item.read@own/@team` by construction, because the
+    relation check happens HERE and nowhere else has to remember it.
+
+    Returns (item, project, permissions) so callers can layer their own atom
+    checks (worklog.write, comment.write) on the same resolution."""
+    from radd.modules.auth import authz
+    from radd.modules.auth.authz import Permission
+    from radd.modules.projects import service as projects_service
+
+    item = await require_item(session, item_id)
+    project = await projects_service.get_project(session, item.project_id)
+    permissions = await authz.require(session, actor, Permission.ITEM_READ, project=project)
+    return item, project, permissions
+
+
 async def items_by_ids(
     session: AsyncSession, ids: Iterable[uuid.UUID]
 ) -> dict[uuid.UUID, WorkItem]:

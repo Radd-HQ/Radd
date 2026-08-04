@@ -31,9 +31,10 @@ router = APIRouter(tags=["timelogging"])
 Session = Annotated[AsyncSession, Depends(get_session)]
 
 
-async def _item_project(session: AsyncSession, item_id: uuid.UUID):
-    item = await items_service.require_item(session, item_id)
-    project = await projects_service.get_project(session, item.project_id)
+async def _item_project(session: AsyncSession, item_id: uuid.UUID, user):
+    # RADD-823: THE item seam — worklog surfaces inherit per-item read rules;
+    # write atoms (worklog.write, item.update) layer on the same resolution.
+    item, project, _perms = await items_service.require_readable_item(session, item_id, user)
     return item, project
 
 
@@ -41,7 +42,7 @@ async def _item_project(session: AsyncSession, item_id: uuid.UUID):
 async def log_work(
     item_id: uuid.UUID, data: WorklogCreate, session: Session, user: CurrentUser
 ) -> WorklogRead:
-    _, project = await _item_project(session, item_id)
+    _, project = await _item_project(session, item_id, user)
     await authz.require(session, user, authz.Permission.WORKLOG_WRITE, project=project)
     author_id = user.id
     created_at = None
@@ -72,8 +73,7 @@ async def item_timelog_batch(
 async def item_timelog(
     item_id: uuid.UUID, session: Session, user: CurrentUser
 ) -> ItemTimeSummary:
-    _, project = await _item_project(session, item_id)
-    await authz.require(session, user, authz.Permission.ITEM_READ, project=project)
+    await _item_project(session, item_id, user)
     return await service.item_summary(session, item_id, project)
 
 
@@ -81,7 +81,7 @@ async def item_timelog(
 async def set_estimate(
     item_id: uuid.UUID, data: EstimateSet, session: Session, user: CurrentUser
 ) -> ItemTimeSummary:
-    _, project = await _item_project(session, item_id)
+    _, project = await _item_project(session, item_id, user)
     await authz.require(session, user, authz.Permission.ITEM_UPDATE, project=project)
     await enablement.require_enabled(session, project.id)
     await service.set_estimate(session, item_id, data)
@@ -92,7 +92,7 @@ async def set_estimate(
 async def clear_estimate(
     item_id: uuid.UUID, session: Session, user: CurrentUser
 ) -> ItemTimeSummary:
-    _, project = await _item_project(session, item_id)
+    _, project = await _item_project(session, item_id, user)
     await authz.require(session, user, authz.Permission.ITEM_UPDATE, project=project)
     await service.clear_estimate(session, item_id)
     return await service.item_summary(session, item_id, project)

@@ -65,16 +65,19 @@ DEFAULT_LIMIT = 50
 async def visible_condition(session: AsyncSession, actor: User) -> ColumnElement[bool]:
     """THE admission rule: reported by you, or filed for a team you are in.
 
-    One expression, used by every read and write below. `team_id` is the column
-    the form's team picker writes (RADD-798) — sharing a request with your team
-    means your team can open it, which is what makes a per-team section on the
-    portal worth having.
+    One expression, used by every read and write below — and since RADD-823 it
+    is COMPOSED from the registered item relations (`own` ∪ `team`) rather than
+    restating their columns: this function was the relation pattern shipping in
+    miniature (trap-aware — the trimming is in the QUERY, not the serializer),
+    and it becomes the registry's first consumer instead of a copy that would
+    drift. `team` is the column the form's team picker writes (RADD-798).
     """
-    team_ids = await teams_service.user_team_ids(session, actor.id)
-    condition = WorkItem.reporter_id == actor.id
-    if team_ids:
-        condition = or_(condition, WorkItem.team_id.in_(team_ids))
-    return condition
+    from radd.kernel import registries
+    from radd.modules.auth import authz
+
+    relation_actor = await authz.relation_actor(session, actor)
+    specs = registries.relations_for("item")
+    return or_(specs["own"].where(relation_actor), specs["team"].where(relation_actor))
 
 
 def _public_comments(item_ids: list[uuid.UUID]) -> Select:

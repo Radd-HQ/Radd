@@ -75,7 +75,5 @@ async def allowed_transitions_for_item(
 ) -> AllowedTransitions:
     from radd.modules.items import service as items_service  # deferred: items loads later
 
-    item = await items_service.require_item(session, item_id)
-    project = await projects_service.get_project(session, item.project_id)
-    await authz.require(session, user, authz.Permission.ITEM_READ, project=project)
+    item, project, _perms = await items_service.require_readable_item(session, item_id, user)
     return await transitions.allowed_transitions(session, project, item)

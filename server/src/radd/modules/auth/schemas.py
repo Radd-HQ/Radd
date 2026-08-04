@@ -328,13 +328,31 @@ RoleKey = Annotated[str, StringConstraints(pattern=r"^[a-z0-9][a-z0-9-]{0,99}$")
 def _validate_atoms(values: list[str] | None) -> list[str] | None:
     """Atoms are strings now (spec 93/A2) — builtin OR plugin-registered. Validate
     membership in the live catalog so a garbage atom is still rejected (the
-    guarantee the `list[Permission]` enum used to give), while plugin atoms pass."""
+    guarantee the `list[Permission]` enum used to give), while plugin atoms pass.
+
+    RADD-823: an atom may carry a relation qualifier (`item.update@team`). The
+    BASE must be in the catalog and the relation must be REGISTERED for the
+    base's resource — an unregistered qualifier would be stored, resolve to
+    nothing, and read as a mysterious denial."""
     if values is None:
         return None
-    from .types import all_permission_keys
+    from radd.kernel import registries
+
+    from .types import RELATION_ANY, all_permission_keys, permission_parts, split_permission
 
     known = all_permission_keys()
-    unknown = [v for v in values if v not in known]
+    unknown: list[str] = []
+    for value in values:
+        base, relation = split_permission(value)
+        if base not in known:
+            unknown.append(value)
+            continue
+        if relation != RELATION_ANY:
+            resource, _action = permission_parts(base)
+            if relation not in registries.relations_for(resource):
+                raise ValueError(
+                    f"'{value}': no relation '@{relation}' is registered for '{resource}'"
+                )
     if unknown:
         raise ValueError(f"unknown permission atoms: {sorted(unknown)}")
     return values

@@ -31,6 +31,7 @@ DB lookups are thin and monkeypatched in `tests/test_authz.py`.
 import uuid
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,12 +42,18 @@ from radd.modules.projects.models import Project
 from . import grants
 from .models import ProjectMember, Role, User
 from .types import (
+    RELATION_ANY,
+    relation_contains,
     BuiltinRoleKey,
     InstanceRole,
     Permission,  # noqa: F401  — re-exported: every module imports Permission from here
     all_permission_keys,
     expand_permissions,
+    relations_held,  # noqa: F401  — re-exported beside the resolvers below (RADD-823)
 )
+
+if TYPE_CHECKING:
+    from radd.kernel.specs import RelationActor
 
 # (RADD-814 removed the dead `ALL_PERMISSIONS` back-compat constant — the
 # admin's effective set is `all_permission_keys()`, builtin ∪ plugin-registered,
@@ -828,6 +835,68 @@ async def all_held_role_ids(session: AsyncSession, user: User) -> set[uuid.UUID]
     # RADD-832: every grant CHANNEL (direct, team, group), not just direct rows.
     held |= await grants.held_role_ids_anywhere(session, user.id)
     return held
+
+
+# --- relations (RADD-823) -----------------------------------------------------
+#
+# The two resolver forms every adopter composes. `relations_held` (auth.types)
+# answers WHICH qualifiers a permission set carries for a base atom; these turn
+# that answer into a WHERE clause (lists/counts/search) or a row verdict
+# (gates). The registry supplies what each qualifier MEANS — only the owning
+# module knows its columns.
+
+
+async def relation_actor(session: AsyncSession, user: User) -> "RelationActor":
+    """The acting user as relation predicates see them. `team_ids` is the
+    RADD-830 subject graph (direct + group-carried), memoised per request —
+    a relation predicate must never re-derive it."""
+    from radd.kernel.specs import RelationActor
+    from radd.modules.teams import service as teams  # deferred: teams loads after auth
+
+    return RelationActor(
+        user_id=user.id, team_ids=frozenset(await teams.user_team_ids(session, user.id))
+    )
+
+
+def relation_filter(resource: str, relations: frozenset[str], actor: "RelationActor"):
+    """The FILTERING form: None = unconstrained (`@any` held); otherwise the OR
+    of the held relations' WHERE clauses — `false()` when nothing held, so an
+    empty answer excludes rows instead of quietly passing them (fails closed).
+    A qualifier with no registered spec contributes nothing (fails closed too:
+    an unregistered relation must never widen)."""
+    from sqlalchemy import false, or_
+
+    from radd.kernel import registries
+
+    if RELATION_ANY in relations:
+        return None
+    specs = registries.relations_for(resource)
+    # Downward closure (the lattice is normative: any ⊃ team ⊃ own) — holding
+    # @team covers the @own rows too, so the filter ORs every CONTAINED spec.
+    clauses = [
+        spec.where(actor)
+        for key, spec in specs.items()
+        if any(relation_contains(held, key) for held in relations)
+    ]
+    if not clauses:
+        return false()
+    return clauses[0] if len(clauses) == 1 else or_(*clauses)
+
+
+def relation_holds_row(
+    resource: str, relations: frozenset[str], actor: "RelationActor", row: object
+) -> bool:
+    """The GATING form: does ANY held relation hold for this loaded row?"""
+    from radd.kernel import registries
+
+    if RELATION_ANY in relations:
+        return True
+    specs = registries.relations_for(resource)
+    return any(
+        spec.holds(actor, row)
+        for key, spec in specs.items()
+        if any(relation_contains(held, key) for held in relations)
+    )
 
 
 @dataclass(frozen=True)

@@ -7,6 +7,7 @@ from radd.kernel import RaddPlugin
 from .enums import ItemEvent
 from .filters import FilterParseError
 from .router import router
+from .service.visibility import ITEM_RELATIONS
 from .slq import SlqError
 
 
@@ -40,4 +41,6 @@ plugin = RaddPlugin(
         EventTypeSpec(ItemEvent.UPDATED, "Item updated", "Items", item_scoped=True, has_changes=True),
         EventTypeSpec(ItemEvent.DELETED, "Item deleted", "Items"),
     ),
+    # RADD-823: what @own / @team MEAN for an item (D6 reporter; D13 item.team_id).
+    relations=ITEM_RELATIONS,
 )

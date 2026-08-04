@@ -44,9 +44,7 @@ async def render_response(
     """The body with its `{{token}}` variables resolved against `item_id`
     (spec 66) — `me` is the caller; unresolved tokens stay verbatim."""
     response = await service.get_response(session, response_id)
-    item = await items_service.require_item(session, item_id)
-    project = await projects_service.get_project(session, item.project_id)
-    await authz.require(session, user, Permission.ITEM_READ, project=project)
+    item, project, _perms = await items_service.require_readable_item(session, item_id, user)
     ctx = await service.render_context(session, item, project, me=user)
     return CannedRenderResult(body=render_canned(response.body, ctx))
 

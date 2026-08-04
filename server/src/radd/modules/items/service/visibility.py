@@ -4,7 +4,11 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy import false
+
 from radd.exceptions import ForbiddenError
+from radd.kernel.registry import register_relation
+from radd.kernel.specs import RelationSpec
 from radd.modules.access import resolution as access_res, service as access_service
 from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
@@ -13,7 +17,48 @@ from radd.modules.fields import service as fields
 from radd.modules.fields.models import FieldDefinition
 from radd.modules.projects.models import Project
 
+from ..models import WorkItem
 from ..schemas import ItemRead
+
+# --- relations (RADD-823): what @own / @team MEAN for an item -----------------
+#
+# D6: `@own` is the REPORTER — it survives imports (Jira's reporter maps
+# straight across), a form filed on someone's behalf belongs to THEM, and
+# reporter is reassignable so ownership can be handed over deliberately. A
+# separate `@created` is not built until something needs it.
+# D13: `@team` is `item.team_id` — the item's own team, nothing inferred. "The
+# reporter's team when the item has none" would be a SECOND relation
+# (`@reporter_team`), never a fuzzier definition of this one.
+#
+# Both forms per relation, mandatory (RelationSpec has no defaults): `where`
+# is what keeps lists/counts/search honest, `holds` gates a loaded row. The
+# contract test in tests/test_relation_semantics.py asserts the pair agrees.
+
+ITEM_RELATIONS: tuple[RelationSpec, ...] = (
+    RelationSpec(
+        resource="item",
+        key="own",
+        label="they reported",
+        where=lambda actor: WorkItem.reporter_id == actor.user_id,
+        holds=lambda actor, item: item.reporter_id == actor.user_id,
+    ),
+    RelationSpec(
+        resource="item",
+        key="team",
+        label="on their team",
+        # An actor with no teams matches nothing — false(), never IN (empty).
+        where=lambda actor: (
+            WorkItem.team_id.in_(actor.team_ids) if actor.team_ids else false()
+        ),
+        holds=lambda actor, item: item.team_id is not None and item.team_id in actor.team_ids,
+    ),
+)
+
+# Registered at import for direct-import contexts (unit tests, scripts) AND
+# listed on the plugin manifest — the loader's clear() wipes import-time
+# registrations, and the manifest is what survives it (the cascades precedent).
+for _spec in ITEM_RELATIONS:
+    register_relation(_spec)
 
 # --- field-level visibility (spec 07: per-role/team grants) ---
 

@@ -60,11 +60,10 @@ async def team_recipient_ids(session: AsyncSession, item_id: uuid.UUID) -> set[u
 
 
 async def _item_project(
-    session: AsyncSession, item_id: uuid.UUID
-) -> tuple[WorkItem, Project]:
-    item = await items_service.require_item(session, item_id)
-    project = await projects_service.get_project(session, item.project_id)
-    return item, project
+    session: AsyncSession, item_id: uuid.UUID, actor: User
+) -> tuple[WorkItem, Project, frozenset[Permission]]:
+    # RADD-823: THE item seam — participants inherit per-item read rules.
+    return await items_service.require_readable_item(session, item_id, actor)
 
 
 def _can_manage(
@@ -151,8 +150,7 @@ async def _emit(
 async def list_participants(
     session: AsyncSession, item_id: uuid.UUID, actor: User
 ) -> ItemParticipantsRead:
-    item, project = await _item_project(session, item_id)
-    permissions = await authz.require(session, actor, Permission.ITEM_READ, project=project)
+    item, project, permissions = await _item_project(session, item_id, actor)
     reads = await _reads(session, await _rows(session, item_id))
     return ItemParticipantsRead(
         users=[read.user for read in reads if read.user],
@@ -165,8 +163,7 @@ async def list_participants(
 async def add_participant(
     session: AsyncSession, item_id: uuid.UUID, data: ParticipantAdd, actor: User
 ) -> ParticipantRow:
-    item, project = await _item_project(session, item_id)
-    permissions = await authz.require(session, actor, Permission.ITEM_READ, project=project)
+    item, project, permissions = await _item_project(session, item_id, actor)
     if not _can_manage(permissions, actor, item):
         raise ForbiddenError(
             "adding participants requires item.update or being the item's reporter"
@@ -201,8 +198,7 @@ async def add_participant(
 async def remove_participant(
     session: AsyncSession, item_id: uuid.UUID, participant_id: uuid.UUID, actor: User
 ) -> None:
-    item, project = await _item_project(session, item_id)
-    permissions = await authz.require(session, actor, Permission.ITEM_READ, project=project)
+    item, project, permissions = await _item_project(session, item_id, actor)
     row = await session.get(ItemParticipant, participant_id)
     if row is None or row.item_id != item.id:
         raise NotFoundError(ParticipantEntity.PARTICIPANT, participant_id)

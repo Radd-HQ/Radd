@@ -101,6 +101,51 @@ class CapabilitySpec:
     check: Callable[[], dict[str, Any]] | None = None
 
 
+# --- relations (RADD-823: access qualified by who you are to the record) ---
+@dataclass(frozen=True)
+class RelationActor:
+    """What a relation predicate may know about the acting user (RADD-823).
+
+    Deliberately tiny: relations are structural facts about columns
+    (`reporter_id = :me`, `team_id IN :my_teams`), so the actor is ids only —
+    never the User row, never a session. `team_ids` is the RESOLVED set (the
+    RADD-830 subject graph: direct + group-carried, memoised per request);
+    a relation predicate must not re-derive it."""
+
+    user_id: uuid.UUID
+    team_ids: frozenset[uuid.UUID] = frozenset()
+
+
+@dataclass(frozen=True)
+class RelationSpec:
+    """One relation a resource contributes: what `@own` / `@team` MEAN for its
+    rows (RADD-823). Only the owning module knows — the kernel carries the
+    declaration and the resolvers compose it.
+
+    BOTH forms are mandatory, by construction (no defaults): a read
+    restriction must become a WHERE clause or every list, count and aggregate
+    leaks (`where`), while a write restriction is asked about a row already
+    loaded (`holds`). Neither is derivable from the other, and a pair that
+    DISAGREES is a silent leak — the contract test in
+    tests/test_relation_semantics.py asserts they agree on a fixture.
+    """
+
+    #: The resource whose rows this qualifies — the atom prefix ("item", "page").
+    resource: str
+    #: The qualifier: `item.update@own` names the ("item", "own") spec.
+    key: str
+    #: Inspector/matrix copy: "they reported", "on their team".
+    label: str
+    #: FILTERING form: (RelationActor) -> a SQLAlchemy boolean expression over
+    #: the resource's own table.
+    where: Callable[[RelationActor], Any]
+    #: GATING form: (RelationActor, row) -> does the relation hold for THIS row?
+    holds: Callable[[RelationActor, Any], bool]
+    #: A relation needing a join ("issues I commented on") is expressible but
+    #: marked, so hot paths can decline it — never silently slow.
+    expensive: bool = False
+
+
 # --- permissions (§7: RBAC atoms become a registry) ---
 @dataclass(frozen=True)
 class PermissionSpec:

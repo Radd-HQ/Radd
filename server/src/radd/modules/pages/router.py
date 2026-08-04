@@ -463,9 +463,7 @@ async def unlink_item(
 @router.get("/items/{item_id}/pages", response_model=list[ItemPageRef])
 async def item_docs(item_id: uuid.UUID, session: Session, user: CurrentUser) -> list[ItemPageRef]:
     """Pages linked to an item — path-extends the items surface (like timelogging)."""
-    item = await items_service.require_item(session, item_id)
-    project = await projects_service.get_project(session, item.project_id)
-    await authz.require(session, user, authz.Permission.ITEM_READ, project=project)
+    await items_service.require_readable_item(session, item_id, user)
     return await links.pages_for_item(session, item_id)
 
 

@@ -27,9 +27,7 @@ async def item_mail_contact(
 ) -> MailContactRead:
     """The item's external requester (spec 62) — 404 when the item has none
     (most items: anything raised by a registered user)."""
-    item = await items_service.require_item(session, item_id)
-    project = await projects_service.get_project(session, item.project_id)
-    await authz.require(session, user, Permission.ITEM_READ, project=project)
+    await items_service.require_readable_item(session, item_id, user)
     contact = await service.contact_for_item(session, item_id)
     if contact is None:
         raise NotFoundError(MailEntity.CONTACT, item_id)

@@ -27,6 +27,7 @@ from .specs import (
     PermissionSpec,
     PluginUiManifest,
     SettingSectionSpec,
+    RelationSpec,
     SlqFieldSpec,
     TaskSpec,
     ViewTypeSpec,
@@ -77,6 +78,7 @@ class RaddPlugin:
     settings_sections: tuple[SettingSectionSpec, ...] = ()
     permissions: tuple[PermissionSpec, ...] = ()
     crud_resources: tuple[CrudResourceSpec, ...] = ()
+    relations: tuple[RelationSpec, ...] = ()  # @own/@team qualifiers for this plugin's rows (RADD-823)
     access_resources: tuple[Any, ...] = ()
     capabilities: tuple[CapabilitySpec, ...] = ()
     slq_fields: tuple[SlqFieldSpec, ...] = ()  # custom SLQ query fields (e.g. `note ~ "x"`)
