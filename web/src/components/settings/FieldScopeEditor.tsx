@@ -37,8 +37,8 @@ export function FieldScopeEditor({
       />
       <p className="mt-1.5 text-[11px] text-fg-faint">
         {field.project_ids.length === 0
-          ? "Applies to items in every project."
-          : "Applies only to the selected projects — add more, or go Global."}
+          ? "No projects selected — the field is available everywhere. This controls WHERE the field exists; who may read or write it is \u201cRestricted on\u201d below."
+          : "The field exists only on the selected projects and vanishes elsewhere. Who may read or write it where it exists is \u201cRestricted on\u201d below."}
       </p>
       {save.isError && <p className="text-[11px] text-red-400">{errorMessage(save.error)}</p>}
     </div>

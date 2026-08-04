@@ -219,7 +219,10 @@ function FieldDetail({
       </div>
 
       <dl className="flex flex-col divide-y divide-subtle/60">
-        <Row label="Scope">
+        {/* RADD-822: two mechanisms both said "project". Named for their
+            questions now — "Available on" (does the field EXIST here) vs
+            "Restricted on" (who may read/write it, per project). */}
+        <Row label="Available on">
           <FieldScopeEditor field={field} projects={projects} canManage={canManage} />
         </Row>
 
@@ -234,7 +237,7 @@ function FieldDetail({
         </Row>
 
 
-        <Row label="Access" full>
+        <Row label="Restricted on" full>
           <AccessGrantsEditor resourceType="field" resourceId={field.id} />
         </Row>
       </dl>

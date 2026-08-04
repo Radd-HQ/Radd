@@ -103,7 +103,10 @@ export function AccessGrantsEditor({
       </p>
 
       {list.length === 0 ? (
-        <p className="text-xs text-fg-muted">No grants — open.</p>
+        <p className="text-xs text-fg-muted">
+          No restriction anywhere — anyone who can see this can read it, and anyone who can
+          edit its parent can write it.
+        </p>
       ) : (
         <ul className="flex flex-col gap-1">
           {list.map((grant) => {
@@ -112,7 +115,18 @@ export function AccessGrantsEditor({
               <li key={grant.id} className="flex items-center gap-2 text-[13px]">
                 <Icon size={12} className="text-fg-faint" aria-hidden />
                 <span className="text-fg">{nameOf(grant)}</span>
-                <span className="rounded border border-strong px-1.5 py-px text-[11px] uppercase text-fg-secondary">
+                <span
+                  className="rounded border border-strong px-1.5 py-px text-[11px] uppercase text-fg-secondary"
+                  title={
+                    grant.effect === "deny"
+                      ? `${grant.access} denied to ${nameOf(grant)}` +
+                        (grant.project_id ? ` on ${projectKey.get(grant.project_id) ?? "?"}` : " everywhere")
+                      : `${grant.access} restricted to ${nameOf(grant)}` +
+                        (grant.project_id
+                          ? ` on ${projectKey.get(grant.project_id) ?? "?"} only`
+                          : " everywhere")
+                  }
+                >
                   {grant.access}
                 </span>
                 {grant.effect === "deny" && (
