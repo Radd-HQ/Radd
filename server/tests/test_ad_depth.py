@@ -86,6 +86,17 @@ def test_duplicate_groups_identical_membership_reported_once():
     assert kind is DuplicateKind.EMAIL_LOCAL_PART and key == "dupe"
 
 
+def test_transitive_member_filter_excludes_disabled_accounts_per_setting():
+    """RADD-831 Done-when: `ldap_exclude_disabled` applies to group-member
+    resolution too — a disabled account must not arrive as a group member."""
+    dn = "CN=Artists,OU=Groups,DC=x"
+    on = groups.transitive_group_members_filter(dn, exclude_disabled=True)
+    off = groups.transitive_group_members_filter(dn, exclude_disabled=False)
+    assert ldap_service.DISABLED_ACCOUNT_CLAUSE in on
+    assert ldap_service.DISABLED_ACCOUNT_CLAUSE not in off
+    assert dn.replace("=", "\\3d") in on or dn in on  # the group DN still anchors the probe
+
+
 # --- user administration (DB) -------------------------------------------------
 
 
@@ -235,7 +246,11 @@ async def test_reconcile_group_joiner_leaver_and_idempotent(db, admin, monkeypat
         assert dn == group_dn
         return directory
 
+    async def fake_get_group(dn):
+        return DirectoryGroup(cn="render", dn=dn, description="", member_count=2)
+
     monkeypatch.setattr(groups, "search_group_members", fake_members)
+    monkeypatch.setattr(groups, "get_group", fake_get_group)
 
     # Joiner in, leaver out; the stranger (no Radd account) is never provisioned
     # by a reconcile.
@@ -245,6 +260,34 @@ async def test_reconcile_group_joiner_leaver_and_idempotent(db, admin, monkeypat
     assert await auth_service.get_user_by_email(db, "stranger@ad.example.com") is None
     # Idempotent: a second run changes nothing.
     assert await groupsync.reconcile_group(db, group) == (0, 0)
+
+
+async def test_reconcile_mirrors_nesting_edges_between_mirrored_groups(db, monkeypatch):
+    """RADD-831: the sync fetches group→group edges — the structure the old
+    transitive-only resolution threw away. Only edges between MIRRORED groups
+    are representable; an unmirrored parent DN is silently absent."""
+    parent = await groups_service.upsert_group(db, dn="CN=parent,DC=e", name="parent")
+    child = await groups_service.upsert_group(db, dn="CN=child,DC=e", name="child")
+
+    async def fake_get_group(dn):
+        member_of = ("CN=parent,DC=e", "CN=unmirrored,DC=e") if dn == child.dn else ()
+        return DirectoryGroup(cn=dn.split(",")[0][3:], dn=dn, description="", member_count=0, member_of=member_of)
+
+    async def no_members(session, dn):
+        return []
+
+    monkeypatch.setattr(groups, "get_group", fake_get_group)
+    monkeypatch.setattr(groups, "search_group_members", no_members)
+
+    await groupsync.reconcile_group(db, child)
+    user = await auth_service.create_user(
+        db, UserCreate(email="edge@ad.example.com", name="Edge", password="password-123")
+    )
+    db.add(GroupMember(group_id=child.id, user_id=user.id))
+    await db.flush()
+    # Membership of the child now reaches the parent through the mirrored edge.
+    resolved = await groups_service.user_group_ids(db, user.id)
+    assert {child.id, parent.id} <= resolved
 
 
 async def test_login_membership_sync_joins_and_leaves_group_rows(db, admin):

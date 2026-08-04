@@ -32,7 +32,8 @@ logger = logging.getLogger(__name__)
 
 # Displayed member counts read the DIRECT `member` attribute (cheap); the sync
 # itself always resolves membership transitively so nested groups count.
-_GROUP_ATTRIBUTES = ("cn", "description", "member")
+# `memberOf` (RADD-831) carries the group's DIRECT parents — the nesting edges.
+_GROUP_ATTRIBUTES = ("cn", "description", "member", "memberOf")
 
 
 def require_bind_account() -> None:
@@ -51,11 +52,16 @@ def group_query_filter(q: str) -> str:
     return f"(&(objectClass=group)(cn=*{escape_filter_chars(q.strip())}*))"
 
 
-def transitive_group_members_filter(group_dn: str) -> str:
+def transitive_group_members_filter(group_dn: str, exclude_disabled: bool = True) -> str:
     """Every person that is a (possibly NESTED) member of the group — the
-    spec-42 matching-rule idiom generalized to whole-group resolution."""
+    spec-42 matching-rule idiom generalized to whole-group resolution.
+    `ldap_exclude_disabled` applies here too (spec 100 → RADD-831): a disabled
+    account must not arrive as a group member and quietly hold grants."""
+    person = "(objectCategory=person)(objectClass=user)"
+    if exclude_disabled:
+        person += f"(!{service.DISABLED_ACCOUNT_CLAUSE})"
     return (
-        "(&(objectCategory=person)(objectClass=user)"
+        f"(&{person}"
         f"(memberOf:{LDAP_MATCHING_RULE_IN_CHAIN}:={escape_filter_chars(group_dn)}))"
     )
 
@@ -73,11 +79,15 @@ def _entry_to_group(dn: str, attributes: dict) -> DirectoryGroup | None:
     member = attributes.get("member") or []
     if not isinstance(member, (list, tuple)):
         member = [member]
+    member_of = attributes.get("memberOf") or []
+    if not isinstance(member_of, (list, tuple)):
+        member_of = [member_of]
     return DirectoryGroup(
         cn=cn,
         dn=dn,
         description=_first(attributes.get("description")),
         member_count=len(member),
+        member_of=tuple(str(parent).strip() for parent in member_of if str(parent).strip()),
     )
 
 
@@ -156,7 +166,9 @@ async def get_group(group_dn: str) -> DirectoryGroup | None:
     return await asyncio.to_thread(_get_group_sync, group_dn)
 
 
-def _search_group_members_sync(group_dn: str, base: str) -> list[DirectoryUser]:
+def _search_group_members_sync(
+    group_dn: str, base: str, exclude_disabled: bool
+) -> list[DirectoryUser]:
     """TRANSITIVE members of one group, as DirectoryUsers (username required;
     email falls back to the synthesized UPN — matching is by email/UPN)."""
     conn = service.service_connection()
@@ -164,7 +176,7 @@ def _search_group_members_sync(group_dn: str, base: str) -> list[DirectoryUser]:
     try:
         entries = conn.extend.standard.paged_search(
             search_base=base,
-            search_filter=transitive_group_members_filter(group_dn),
+            search_filter=transitive_group_members_filter(group_dn, exclude_disabled),
             attributes=[
                 "sAMAccountName",
                 settings.ldap_email_attribute,
@@ -195,5 +207,8 @@ async def search_group_members(session: AsyncSession, group_dn: str) -> list[Dir
     """Transitive member resolution under the cascade-resolved USERS base
     (spec 85 — member entries are user objects, so the users base scopes them)."""
     return await asyncio.to_thread(
-        _search_group_members_sync, group_dn, await service.resolved_user_base(session)
+        _search_group_members_sync,
+        group_dn,
+        await service.resolved_user_base(session),
+        await service.resolved_exclude_disabled(session),
     )

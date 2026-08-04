@@ -60,27 +60,41 @@ class StaleDirectoryGroup(Exception):
 async def reconcile_group(
     session: AsyncSession, group: Group
 ) -> tuple[int, int]:
-    """Full reconcile of ONE group's membership against the directory (service
-    account): resolve the group's TRANSITIVE people in AD, replace the
-    `group_members` rows. Returns (added, removed).
+    """Full reconcile of ONE group against the directory (service account):
+    resolve the group's TRANSITIVE people in AD, replace the `group_members`
+    rows, and mirror its DIRECT parent edges (RADD-831 — the structure the old
+    sync resolved transitively and threw away). Returns (added, removed).
 
     Spec 87 stale-group guard: an empty transitive search is ambiguous — the
     group may genuinely be empty, or renamed/deleted (exactly the DNs that
     change in a domain reorg). Confirm the group still resolves before
     believing an empty answer; `get_group` raises DirectoryUnreachable on an
-    outage so it propagates rather than flagging a healthy group."""
-    members = await directory.search_group_members(session, group.dn)
-    if not members:
-        if await directory.get_group(group.dn) is None:
-            await groups_service.mark_missing(session, group, missing=True)
-            raise StaleDirectoryGroup(group.dn)
+    outage so it propagates rather than flagging a healthy group.
+
+    Edge semantics (the RADD-831 invariant): edges are written only from a
+    SUCCESSFUL read of the child's own `memberOf` — an unreadable directory
+    raises before any edge write, so a missing PARENT in a nested chain can
+    never read as "the children have no parent". A parent that is not
+    mirrored simply has no representable edge (mirroring is opt-in via the
+    import); a parent deleted in AD drops out of the child's memberOf, which
+    is the honest answer."""
+    found = await directory.get_group(group.dn)
+    if found is None:
+        await groups_service.mark_missing(session, group, missing=True)
+        raise StaleDirectoryGroup(group.dn)
     await groups_service.mark_missing(session, group, missing=False)
+    members = await directory.search_group_members(session, group.dn)
     users_by_email = await auth_service.users_by_emails(
         session, [member.email for member in members]
     )
-    return await groups_service.replace_members(
+    added, removed = await groups_service.replace_members(
         session, group, [user.id for user in users_by_email.values()]
     )
+    mirrored_parents = await groups_service.groups_by_dns(session, found.member_of)
+    await groups_service.set_parents(
+        session, group, [parent.id for parent in mirrored_parents.values()]
+    )
+    return added, removed
 
 
 # --- login-time per-user sync (spec 84 §1a) -----------------------------------
@@ -93,7 +107,15 @@ async def sync_login_membership(
     user is transitively in (`member_dns`); join/leave only THIS user's rows.
     Removals are held for flagged groups — "not a member" is what a
     non-existent DN always answers, and believing it would drain the group one
-    login at a time."""
+    login at a time.
+
+    DECISION (RADD-831): the login path keeps the per-user PROBE
+    (memberOf:IN_CHAIN against each mirrored DN on the user's own connection)
+    rather than walking the mirrored edge graph. The probe asks AD the
+    transitive question directly — always current, needs no service account —
+    while an edge walk is only as fresh as the last periodic sync, and a login
+    must not depend on it. The edges exist for provenance (the inspector's
+    path) and the ancestors closure, not for authentication."""
     for group in groups:
         if group.dn in member_dns:
             await groups_service.replace_members(
@@ -184,6 +206,13 @@ async def import_groups(
             )
             continue
         group = await groups_service.upsert_group(session, dn=found.dn, name=found.cn)
+        # Mirror the nesting edges representable at this point (RADD-831):
+        # parents already mirrored link up now; importing a parent LATER links
+        # the other direction on its own reconcile.
+        mirrored_parents = await groups_service.groups_by_dns(session, found.member_of)
+        await groups_service.set_parents(
+            session, group, [parent.id for parent in mirrored_parents.values()]
+        )
         members = await directory.search_group_members(session, group.dn)
         provisioned = 0
         if provision_members:

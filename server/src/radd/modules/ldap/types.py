@@ -87,9 +87,12 @@ class DirectoryUser:
 class DirectoryGroup:
     """One AD group from the service-account group search (spec 84).
     member_count is the DIRECT `member` attribute length — cheap for display;
-    the sync itself resolves membership transitively."""
+    the sync itself resolves membership transitively. `member_of` (RADD-831)
+    is the group's DIRECT parents — the nesting edges the old sync resolved
+    transitively and threw away."""
 
     cn: str
     dn: str
     description: str
     member_count: int
+    member_of: tuple[str, ...] = ()

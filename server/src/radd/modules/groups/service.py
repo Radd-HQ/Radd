@@ -53,6 +53,16 @@ async def group_by_dn(session: AsyncSession, dn: str) -> Group | None:
     return await session.scalar(select(Group).where(Group.dn == dn))
 
 
+async def groups_by_dns(session: AsyncSession, dns: Iterable[str]) -> dict[str, Group]:
+    """{dn: group} for the DNs that are mirrored — the edge sync's join
+    (RADD-831): an edge is only representable between two mirrored groups."""
+    wanted = {dn for dn in dns if dn}
+    if not wanted:
+        return {}
+    result = await session.execute(select(Group).where(Group.dn.in_(wanted)))
+    return {group.dn: group for group in result.scalars()}
+
+
 async def direct_member_counts(
     session: AsyncSession, group_ids: Iterable[uuid.UUID]
 ) -> dict[uuid.UUID, int]:
