@@ -987,20 +987,93 @@ def relation_filter(resource: str, relations: frozenset[str], actor: "RelationAc
     return clauses[0] if len(clauses) == 1 else or_(*clauses)
 
 
+def _held_specs(resource: str, relations: frozenset[str]) -> list:
+    from radd.kernel import registries
+
+    return [
+        spec
+        for key, spec in registries.relations_for(resource).items()
+        if any(relation_contains(held, key) for held in relations)
+    ]
+
+
 def relation_holds_row(
     resource: str, relations: frozenset[str], actor: "RelationActor", row: object
 ) -> bool:
-    """The GATING form: does ANY held relation hold for this loaded row?"""
-    from radd.kernel import registries
+    """The GATING form: does ANY held relation hold for this loaded row?
 
+    SYNC — only pure predicates answer here. A query-gated relation
+    (`holds=None`, RADD-844) is treated as NOT held: failing closed, never
+    wide. A gate that must honour those uses `relation_holds_row_async`."""
     if RELATION_ANY in relations:
         return True
-    specs = registries.relations_for(resource)
     return any(
-        spec.holds(actor, row)
-        for key, spec in specs.items()
-        if any(relation_contains(held, key) for held in relations)
+        spec.holds(actor, row) for spec in _held_specs(resource, relations)
+        if spec.holds is not None
     )
+
+
+async def relation_holds_row_async(
+    session: AsyncSession,
+    resource: str,
+    relations: frozenset[str],
+    actor: "RelationActor",
+    row: object,
+) -> bool:
+    """The GATING form for gates that can ask the database (RADD-844): pure
+    predicates answer free; a query-gated relation (`holds=None` — membership
+    in another table, like `@participant`) is answered by running its
+    where-form against THIS row's id. One EXISTS covers them all."""
+    if RELATION_ANY in relations:
+        return True
+    held = _held_specs(resource, relations)
+    if any(spec.holds(actor, row) for spec in held if spec.holds is not None):
+        return True
+    pending = [spec for spec in held if spec.holds is None]
+    if not pending:
+        return False
+    from sqlalchemy import exists, or_, select
+
+    model = type(row)
+    clause = or_(*[spec.where(actor) for spec in pending])
+    return bool(
+        await session.scalar(select(exists().where(model.id == row.id, clause)))
+    )
+
+
+async def relation_row_ids_holding(
+    session: AsyncSession,
+    resource: str,
+    relations: frozenset[str],
+    actor: "RelationActor",
+    rows: "Sequence[object]",
+) -> set[uuid.UUID]:
+    """Batched gating (RADD-844): the ids among `rows` the relation set holds
+    for. Pure predicates run in Python; every query-gated relation is folded
+    into ONE membership query over the page of ids — list surfaces stamping
+    per-row capabilities stay one query, not one per row."""
+    if not rows:
+        return set()
+    if RELATION_ANY in relations:
+        return {row.id for row in rows}
+    held = _held_specs(resource, relations)
+    matched = {
+        row.id
+        for row in rows
+        if any(spec.holds(actor, row) for spec in held if spec.holds is not None)
+    }
+    pending = [spec for spec in held if spec.holds is None]
+    remaining = [row for row in rows if row.id not in matched]
+    if pending and remaining:
+        from sqlalchemy import or_, select
+
+        model = type(remaining[0])
+        clause = or_(*[spec.where(actor) for spec in pending])
+        result = await session.execute(
+            select(model.id).where(model.id.in_([row.id for row in remaining]), clause)
+        )
+        matched.update(result.scalars())
+    return matched
 
 
 @dataclass(frozen=True)

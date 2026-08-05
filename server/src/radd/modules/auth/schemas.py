@@ -357,13 +357,15 @@ def _validate_atoms(values: list[str] | None) -> list[str] | None:
 
     RADD-823: an atom may carry a relation qualifier (`item.update@team`). The
     BASE must be in the catalog and the relation must be REGISTERED for the
-    base's resource — an unregistered qualifier would be stored, resolve to
-    nothing, and read as a mysterious denial."""
+    atom's relation DOMAIN — its own resource, unless the owning module
+    declared a parent domain (RADD-844: `comment.write` qualifies against the
+    ITEM the comment lands on). An unregistered qualifier would be stored,
+    resolve to nothing, and read as a mysterious denial."""
     if values is None:
         return None
     from radd.kernel import registries
 
-    from .types import RELATION_ANY, all_permission_keys, permission_parts, split_permission
+    from .types import RELATION_ANY, all_permission_keys, split_permission
 
     known = all_permission_keys()
     unknown: list[str] = []
@@ -373,7 +375,7 @@ def _validate_atoms(values: list[str] | None) -> list[str] | None:
             unknown.append(value)
             continue
         if relation != RELATION_ANY:
-            resource, _action = permission_parts(base)
+            resource = registries.relation_domain(base)
             if relation not in registries.relations_for(resource):
                 raise ValueError(
                     f"'{value}': no relation '@{relation}' is registered for '{resource}'"

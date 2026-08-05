@@ -687,6 +687,15 @@ BUILTIN_ROLES: tuple[BuiltinRole, ...] = (
         # d825flip migration seeds and grants to the accounts that predate it.
         permissions=(
             "item.read@own",
+            # RADD-844: the second-reporter floor. A share means something —
+            # a participant opens THAT item and comments on it, exactly the
+            # reach a reporter has, and nothing wider. comment.write's
+            # qualifier names a relation to the parent ITEM (see the comments
+            # item binding), so @own here is "on issues they reported" — the
+            # first reporter gets the same discussion right the second one does.
+            "item.read@participant",
+            "comment.write@own",
+            "comment.write@participant",
             # RADD-816 (Q4): the author-own rights, as grants — explainable in
             # the inspector and REVOCABLE, which the hardcoded checks never were.
             "comment.delete@own",
@@ -755,7 +764,14 @@ BUILTIN_ROLES: tuple[BuiltinRole, ...] = (
         # item.read@own is the whole visibility story: every child surface
         # (comments, attachments, history) inherits it through the item seam,
         # and comment.write/attachment.create only reach items they can read.
-        permissions=("item.read@own", Permission.COMMENT_WRITE, Permission.ATTACHMENT_CREATE),
+        # @participant (RADD-844): a requester shared into a colleague's ticket
+        # follows it like a second reporter — same floor shape as the Baseline.
+        permissions=(
+            "item.read@own",
+            "item.read@participant",
+            Permission.COMMENT_WRITE,
+            Permission.ATTACHMENT_CREATE,
+        ),
         position=3,
     ),
 )

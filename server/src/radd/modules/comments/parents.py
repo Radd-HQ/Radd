@@ -109,7 +109,18 @@ async def _item_read(session, user: User, entity_id: uuid.UUID, project):
 
 
 async def _item_write(session, user: User, entity_id: uuid.UUID, project):
-    return await authz.require(session, user, Permission.COMMENT_WRITE, project=project)
+    permissions = await authz.require(session, user, Permission.COMMENT_WRITE, project=project)
+    # RADD-844: comment.write on an ITEM may be relation-qualified, and the
+    # qualifier names a relation to the PARENT — `comment.write@participant` /
+    # `@own` read "may write comments on items shared with them / they
+    # reported" (the Baseline's second-reporter floor). Every pre-relation
+    # grant is unqualified (@any) and short-circuits here for free.
+    if authz.RELATION_ANY not in authz.relations_held(permissions, Permission.COMMENT_WRITE):
+        item = await items_service.require_item(session, entity_id)
+        await items_service.ensure_item_relation(
+            session, user, item, permissions, Permission.COMMENT_WRITE
+        )
+    return permissions
 
 
 register_parent(

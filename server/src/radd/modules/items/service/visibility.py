@@ -117,12 +117,52 @@ async def attach_capabilities(
 ) -> "list[ItemRead]":
     """Stamp the actor's per-row verdict onto API-bound reads (RADD-842).
 
-    Pure per row once the relation actor is resolved (memoised) — no queries.
-    Rows whose backing WorkItem is unavailable keep capabilities=None, which
-    the client reads as \"fall back to the project-level answer\"."""
+    Cheap per row once the relation actor is resolved (memoised); a
+    relation-qualified atom whose relation is query-gated (@participant,
+    RADD-844) costs ONE batched membership query per (permission, page), never
+    one per row. Rows whose backing WorkItem is unavailable keep
+    capabilities=None, which the client reads as \"fall back to the
+    project-level answer\"."""
     from .. import schemas
 
     relation_actor = None
+
+    async def _holding_ids(permission: Permission) -> "dict[uuid.UUID, bool] | None":
+        """None = unconstrained (@any everywhere the base atom is held);
+        otherwise row.id -> verdict for every row whose project holds the base."""
+        nonlocal relation_actor
+        constrained_rows: list[WorkItem] = []
+        for read in reads:
+            permissions = permissions_by_project.get(read.project_id)
+            row = rows_by_id.get(read.id)
+            if row is None or permissions is None or not authz.holds_base(permissions, permission):
+                continue
+            if authz.RELATION_ANY not in authz.relations_held(permissions, permission):
+                constrained_rows.append(row)
+        if not constrained_rows:
+            return None
+        if relation_actor is None:
+            relation_actor = await authz.relation_actor(session, actor)
+        # The union of per-project relation sets is safe here only as an upper
+        # bound would NOT be — so resolve per row against ITS project's set.
+        verdicts: dict[uuid.UUID, bool] = {}
+        by_relations: dict[frozenset, list[WorkItem]] = {}
+        for row in constrained_rows:
+            permissions = permissions_by_project[row.project_id]
+            by_relations.setdefault(
+                authz.relations_held(permissions, permission), []
+            ).append(row)
+        for relations, rows in by_relations.items():
+            held = await authz.relation_row_ids_holding(
+                session, "item", relations, relation_actor, rows
+            )
+            for row in rows:
+                verdicts[row.id] = row.id in held
+        return verdicts
+
+    update_verdicts = await _holding_ids(Permission.ITEM_UPDATE)
+    comment_verdicts = await _holding_ids(Permission.COMMENT_WRITE)
+
     out: list[ItemRead] = []
     for read in reads:
         row = rows_by_id.get(read.id)
@@ -131,13 +171,11 @@ async def attach_capabilities(
             out.append(read)
             continue
         can_update = authz.holds_base(permissions, Permission.ITEM_UPDATE)
-        if can_update:
-            relations = authz.relations_held(permissions, Permission.ITEM_UPDATE)
-            if authz.RELATION_ANY not in relations:
-                if relation_actor is None:
-                    relation_actor = await authz.relation_actor(session, actor)
-                can_update = authz.relation_holds_row("item", relations, relation_actor, row)
+        if can_update and update_verdicts is not None:
+            can_update = update_verdicts.get(read.id, True)
         can_comment = authz.holds_base(permissions, Permission.COMMENT_WRITE)
+        if can_comment and comment_verdicts is not None:
+            can_comment = comment_verdicts.get(read.id, True)
         out.append(
             read.model_copy(
                 update={
@@ -169,7 +207,9 @@ async def ensure_item_relation(
     if authz.RELATION_ANY in relations:
         return
     relation_actor = await authz.relation_actor(session, actor)
-    if authz.relation_holds_row("item", relations, relation_actor, item):
+    # async form (RADD-844): honours query-gated relations (@participant) with
+    # one EXISTS; pure predicates still answer free.
+    if await authz.relation_holds_row_async(session, "item", relations, relation_actor, item):
         return
     if as_missing:
         from radd.exceptions import NotFoundError

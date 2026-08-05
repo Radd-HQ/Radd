@@ -225,5 +225,23 @@ async def test_registered_item_relations_where_and_holds_agree(db):
                 )
             ).scalars()
         )
+        if spec.holds is None:
+            # Query-gated relation (RADD-844): the async gate IS the where-form,
+            # so the contract is that the gate agrees with the filter per row.
+            assert spec.expensive, f"relation '{key}': holds=None must be expensive"
+            via_gate = {
+                item_id
+                for item_id, row in rows.items()
+                if await authz.relation_holds_row_async(
+                    db, "item", frozenset({key}), actor, row
+                )
+            }
+            assert via_where == via_gate, f"relation '{key}': where/async-gate disagree"
+            # The SYNC resolver must fail CLOSED on it — never wide.
+            assert not any(
+                authz.relation_holds_row("item", frozenset({key}), actor, row)
+                for row in rows.values()
+            )
+            continue
         via_holds = {item_id for item_id, row in rows.items() if spec.holds(actor, row)}
         assert via_where == via_holds, f"relation '{key}': where/holds disagree"

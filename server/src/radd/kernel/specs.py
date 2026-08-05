@@ -122,12 +122,16 @@ class RelationSpec:
     rows (RADD-823). Only the owning module knows — the kernel carries the
     declaration and the resolvers compose it.
 
-    BOTH forms are mandatory, by construction (no defaults): a read
-    restriction must become a WHERE clause or every list, count and aggregate
-    leaks (`where`), while a write restriction is asked about a row already
-    loaded (`holds`). Neither is derivable from the other, and a pair that
-    DISAGREES is a silent leak — the contract test in
-    tests/test_relation_semantics.py asserts they agree on a fixture.
+    The FILTERING form is mandatory: a read restriction must become a WHERE
+    clause or every list, count and aggregate leaks. The GATING form (`holds`)
+    is asked about a row already loaded; a column relation supplies it as a
+    pure predicate, and the pair must agree — the contract test in
+    tests/test_relation_semantics.py asserts it on a fixture, because a pair
+    that DISAGREES is a silent leak. A relation whose membership lives in
+    ANOTHER table (`@participant`, RADD-844) has no pure row form: it sets
+    `holds=None` + `expensive=True`, and gates answer it by running `where`
+    against that one row (`authz.relation_holds_row_async`). Sync resolvers
+    treat a None-holds relation as NOT held — failing closed, never wide.
     """
 
     #: The resource whose rows this qualifies — the atom prefix ("item", "page").
@@ -140,10 +144,18 @@ class RelationSpec:
     #: the resource's own table.
     where: Callable[[RelationActor], Any]
     #: GATING form: (RelationActor, row) -> does the relation hold for THIS row?
-    holds: Callable[[RelationActor, Any], bool]
-    #: A relation needing a join ("issues I commented on") is expressible but
+    #: None = no pure form exists; gate via the where-form (requires expensive).
+    holds: Callable[[RelationActor, Any], bool] | None
+    #: A relation needing a join ("issues shared with me") is expressible but
     #: marked, so hot paths can decline it — never silently slow.
     expensive: bool = False
+
+    def __post_init__(self) -> None:
+        if self.holds is None and not self.expensive:
+            raise ValueError(
+                f"relation {self.resource}@{self.key}: holds=None requires expensive=True "
+                "— a query-gated relation must be declared as one"
+            )
 
 
 # --- permissions (§7: RBAC atoms become a registry) ---

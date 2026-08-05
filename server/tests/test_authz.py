@@ -231,8 +231,14 @@ def test_baseline_is_seeded_read_only():
     # (Q2) then narrowed the READS: item.read@OWN (your reported issues, via
     # the relation machinery) and no page.read at all — a floor page.read
     # defeated every restricted space (N5). Wider is a deliberate edit now.
+    # RADD-844 added the second-reporter floor: a participant opens the shared
+    # item and comments on it; @own on comment.write gives the FIRST reporter
+    # the same discussion right.
     assert BASELINE == {
         "item.read@own",
+        "item.read@participant",
+        "comment.write@own",
+        "comment.write@participant",
         "comment.delete@own",
         "worklog.delete@own",
         "attachment.delete@own",

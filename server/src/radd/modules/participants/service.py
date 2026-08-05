@@ -1,12 +1,16 @@
 """Request participants (spec 72): users + whole teams following an item.
 
-Participation is a NOTIFICATION concept riding the existing watcher + notify
-machinery — it never changes RBAC (recipients still pass notify's item.read and
-internal-comment filters). Direct USER participants are auto-watched on add
-(`notify.add_watchers` — one fan-out mechanism, no parallel path); TEAM
-participants stay LIVE: the notify consumer unions `team_recipient_ids`
-(CURRENT members at fan-out time) into the watcher set through a deferred
-feature-detected seam on its side (this module loads after notify).
+Participation rides the existing watcher + notify machinery, and since
+RADD-844 it is also a RELATION on the item (`@participant`, registered in
+__init__): the Baseline's `item.read@participant` + `comment.write@participant`
+give a share the second-reporter meaning — the person opens that one item,
+comments on it, and passes notify's per-row read gate — while recipients still
+pass every notify filter (internal comments stay internal). Direct USER
+participants are auto-watched on add (`notify.add_watchers` — one fan-out
+mechanism, no parallel path); TEAM participants stay LIVE: the notify consumer
+unions `team_recipient_ids` (CURRENT members at fan-out time) into the watcher
+set through a deferred feature-detected seam on its side (this module loads
+after notify).
 
 The management gate is the feature's point: `item.update` OR being the item's
 REPORTER — an identity check, not a permission — so a requester can share
@@ -198,16 +202,24 @@ async def add_participant(
 async def remove_participant(
     session: AsyncSession, item_id: uuid.UUID, participant_id: uuid.UUID, actor: User
 ) -> None:
-    item, project, permissions = await _item_project(session, item_id, actor)
+    # Self-leave is an IDENTITY operation (RADD-844): removing yourself from a
+    # thing — to stop being listed and notified — must not require being able
+    # to SEE it, or a participant who lost project access is trapped on the
+    # roster forever. The row is loaded first; only a non-self removal walks
+    # through the readability gate.
     row = await session.get(ItemParticipant, participant_id)
-    if row is None or row.item_id != item.id:
+    if row is None or row.item_id != item_id:
         raise NotFoundError(ParticipantEntity.PARTICIPANT, participant_id)
-    # Manage gate, PLUS: a direct user participant may always remove THEMSELF.
     is_self_leave = row.user_id is not None and row.user_id == actor.id
-    if not is_self_leave and not _can_manage(permissions, actor, item):
-        raise ForbiddenError(
-            "removing participants requires item.update or being the item's reporter"
-        )
+    if is_self_leave:
+        item = await items_service.require_item(session, item_id)
+        project = await projects_service.get_project(session, item.project_id)
+    else:
+        item, project, permissions = await _item_project(session, item_id, actor)
+        if not _can_manage(permissions, actor, item):
+            raise ForbiddenError(
+                "removing participants requires item.update or being the item's reporter"
+            )
     read = (await _reads(session, [row]))[0]
     await session.delete(row)
     await session.flush()

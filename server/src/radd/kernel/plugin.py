@@ -79,6 +79,9 @@ class RaddPlugin:
     permissions: tuple[PermissionSpec, ...] = ()
     crud_resources: tuple[CrudResourceSpec, ...] = ()
     relations: tuple[RelationSpec, ...] = ()  # @own/@team qualifiers for this plugin's rows (RADD-823)
+    #: base atom -> resource whose relations qualify it (RADD-844) — for a
+    #: CREATE-shaped atom gated against its PARENT (comment.write -> item).
+    relation_domains: tuple[tuple[str, str], ...] = ()
     access_resources: tuple[Any, ...] = ()
     capabilities: tuple[CapabilitySpec, ...] = ()
     slq_fields: tuple[SlqFieldSpec, ...] = ()  # custom SLQ query fields (e.g. `note ~ "x"`)

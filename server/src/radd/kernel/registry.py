@@ -63,6 +63,12 @@ class KernelRegistries:
     permissions: dict[str, PermissionSpec] = field(default_factory=dict)
     #: (resource, key) -> what @key MEANS for that resource's rows (RADD-823).
     relations: dict[tuple[str, str], RelationSpec] = field(default_factory=dict)
+    #: base atom -> the resource whose relations qualify it (RADD-844). Default
+    #: is the atom's own prefix; a CREATE-shaped atom whose row does not exist
+    #: yet may declare its PARENT — `comment.write@participant` reads "write
+    #: comments on ITEMS shared with them", so its qualifier resolves against
+    #: the item relations, in validation and at the gate alike.
+    relation_domains: dict[str, str] = field(default_factory=dict)
     #: RADD-818: spec-92 access resources — the SIXTEENTH contribution kind,
     #: typed loosely (the spec class lives in modules/access; kernel purity
     #: forbids importing it). modules/access reads THROUGH this dict, so a
@@ -95,7 +101,7 @@ class KernelRegistries:
     def clear(self) -> None:
         for f in (
             self.plugins, self.entities, self.event_types, self.permissions,
-            self.relations, self.access_resources,
+            self.relations, self.relation_domains, self.access_resources,
             self.crud_resources, self.capabilities, self.tasks, self.consumers,
             self.integrations, self.plugin_ui_dirs, self.slq_fields,
             self.view_types, self.widget_types, self.mcp_tools, self.page_extensions,
@@ -117,6 +123,8 @@ class KernelRegistries:
             self.permissions[p.key] = p
         for r in plugin.relations:
             self.relations[(r.resource, r.key)] = r
+        for atom, resource in plugin.relation_domains:
+            self.relation_domains[atom] = resource
         for ar in plugin.access_resources:
             self.access_resources[ar.resource_type] = ar  # type: ignore[attr-defined]
         for c in plugin.crud_resources:
@@ -161,6 +169,8 @@ class KernelRegistries:
             self.permissions.pop(p.key, None)
         for r in plugin.relations:
             self.relations.pop((r.resource, r.key), None)
+        for atom, _resource in plugin.relation_domains:
+            self.relation_domains.pop(atom, None)
         for ar in plugin.access_resources:
             self.access_resources.pop(ar.resource_type, None)  # type: ignore[attr-defined]
         for c in plugin.crud_resources:
@@ -206,6 +216,11 @@ class KernelRegistries:
         """Every relation registered for one resource, keyed by qualifier (RADD-823)."""
         return {key: spec for (res, key), spec in self.relations.items() if res == resource}
 
+    def relation_domain(self, base_atom: str) -> str:
+        """The resource whose relations qualify `base_atom` (RADD-844): the
+        declared override, else the atom's own prefix."""
+        return self.relation_domains.get(base_atom, base_atom.partition(".")[0])
+
     def cascades_for(self, event_type: str) -> list[CascadeSpec]:
         """Every registered cleanup for a parent event (RADD-745)."""
         return [c for c in self.cascades if c.parent_event == event_type]
@@ -235,6 +250,13 @@ def register_event_type(spec: EventTypeSpec) -> EventTypeSpec:
 def register_permission(spec: PermissionSpec) -> PermissionSpec:
     registries.permissions[spec.key] = spec
     return spec
+
+
+def register_relation_domain(base_atom: str, resource: str) -> None:
+    """Declare whose relations qualify `base_atom` (RADD-844) — import-time
+    like register_relation; list it on the plugin manifest too so hot
+    enable/disable survives the loader's clear()."""
+    registries.relation_domains[base_atom] = resource
 
 
 def register_relation(spec: RelationSpec) -> RelationSpec:
