@@ -24,13 +24,10 @@ class ViewAxis(StrEnum):
     (validated against the registry in views/service.py)."""
 
     STATE = "state"
-    # RADD-851: the fixed category tier above states — a five-column "what's
-    # actually in flight" board. Bucketing is client-side like every axis;
-    # membership comes from item.state.category, so no query changes.
+    # RADD-851 → 854: the CATEGORY tier above states — user-owned vocabulary
+    # rows since the consolidation (bucketed client-side via states'
+    # category_key; the semantic behaves_as stays server truth).
     STATE_CATEGORY = "state_category"
-    # RADD-852: the user-defined presentation tier (state_groups rows) — the
-    # state keeps its category, the group is pure vocabulary.
-    STATE_GROUP = "state_group"
     ASSIGNEE = "assignee"
     PRIORITY = "priority"
     KIND = "kind"

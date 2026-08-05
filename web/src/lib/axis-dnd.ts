@@ -52,7 +52,6 @@ export function dragEnabledForAxis(axis: string | null | undefined): boolean {
   switch (axis) {
     case ViewAxis.state:
     case ViewAxis.stateCategory:
-    case ViewAxis.stateGroup:
     case ViewAxis.priority:
     case ViewAxis.assignee:
     case ViewAxis.team:
@@ -106,27 +105,16 @@ export function bucketMovePlan(
       };
     }
     case ViewAxis.stateCategory: {
-      // RADD-851: a category drop transitions to the item's OWN project's
-      // first state (by position) in that category — the same own-project
-      // resolution the all-projects state axis does. A project with no state
-      // in the category keeps the item put.
-      if (item.state.category === bucket.key) return null;
+      // RADD-851 → 854: a category drop transitions to the item's OWN
+      // project's first state (by position) classified under that vocabulary
+      // ROW — the same own-project resolution the all-projects state axis
+      // does. A project with no state in the row keeps the item put. Bucket
+      // keys are row keys; the six builtin keys coincide with the semantic
+      // values, so the fallback buckets resolve identically.
+      const current = (ctx.states ?? []).find((s) => s.id === item.state.id);
+      if (current?.category_key === bucket.key) return null;
       const target = (ctx.states ?? [])
-        .filter((s) => s.project_id === item.project_id && s.category === bucket.key)
-        .sort((a, b) => a.position - b.position)[0];
-      if (!target || item.state.id === target.id) return null;
-      return {
-        patch: { state_id: target.id },
-        optimistic: { state: { id: target.id, name: target.name, category: target.category } },
-      };
-    }
-    case ViewAxis.stateGroup: {
-      // RADD-852: a group drop transitions to the item's OWN project's first
-      // state (by position) IN that group. The Ungrouped bucket is not a
-      // target — "no group" names no state to move to.
-      if (bucket.key === NO_VALUE_KEY) return null;
-      const target = (ctx.states ?? [])
-        .filter((s) => s.project_id === item.project_id && s.group_id === bucket.key)
+        .filter((s) => s.project_id === item.project_id && s.category_key === bucket.key)
         .sort((a, b) => a.position - b.position)[0];
       if (!target || item.state.id === target.id) return null;
       return {

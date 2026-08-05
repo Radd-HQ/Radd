@@ -43,7 +43,7 @@ class StateEvent(StrEnum):
 
 class StateEntity(StrEnum):
     STATE = "state"
-    STATE_GROUP = "state_group"
+    STATE_CATEGORY = "state_category"
 
 
 class TransitionMode(StrEnum):

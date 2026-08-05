@@ -20,7 +20,7 @@ import type {
   ProjectTeam,
   ScreenConfig,
   State,
-  StateGroup,
+  StateCategoryRow,
   Transition,
 } from "../types";
 
@@ -37,12 +37,12 @@ export const statesQuery = (projectId: string) =>
     staleTime: 60_000,
   });
 
-/** State groups (RADD-852) — the user-defined presentation tier; any member
- * may read (vocabulary), instance admins manage. */
-export const stateGroupsQuery = () =>
+/** State categories (RADD-854) — the user-owned vocabulary tier; any member
+ * may read, instance admins manage. */
+export const stateCategoriesQuery = () =>
   queryOptions({
-    queryKey: queryKeys.stateGroups,
-    queryFn: () => api.get<StateGroup[]>(ApiPath.stateGroups),
+    queryKey: queryKeys.stateCategories,
+    queryFn: () => api.get<StateCategoryRow[]>(ApiPath.stateCategories),
     staleTime: 60_000,
   });
 

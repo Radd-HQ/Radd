@@ -14,10 +14,10 @@ from radd.exceptions import ForbiddenError
 from radd.modules.auth.types import InstanceRole
 
 from .schemas import (
+    StateCategoryCreate,
+    StateCategoryRead,
+    StateCategoryUpdate,
     StateCreate,
-    StateGroupCreate,
-    StateGroupRead,
-    StateGroupUpdate,
     StateRead,
     StateUpdate,
 )
@@ -83,41 +83,48 @@ async def delete_state(
     await service.delete_state(session, state_id, actor_id=user.id, reassign_to=reassign_to, actor=user)
 
 
-# --- state groups (RADD-852) — instance-wide presentation tier ----------------
-# Reads ride membership like states; writes are instance-admin (the linktypes
-# precedent: instance-wide vocabulary, no per-project scope to gate on).
+# --- state categories (RADD-854) — the user-owned vocabulary tier -------------
+# Reads ride membership (vocabulary); writes are instance-admin (the linktypes
+# precedent: instance-wide, no per-project scope to gate on).
 
-group_router = APIRouter(prefix="/state-groups", tags=["workflow"])
+category_router = APIRouter(prefix="/state-categories", tags=["workflow"])
 
 
 def _require_instance_admin(user) -> None:
     if user.instance_role != InstanceRole.ADMIN.value:
-        raise ForbiddenError("managing state groups requires an instance admin")
+        raise ForbiddenError("managing state categories requires an instance admin")
 
 
-@group_router.get("", response_model=list[StateGroupRead])
-async def list_state_groups(session: Session, user: CurrentUser) -> list[StateGroupRead]:
+@category_router.get("", response_model=list[StateCategoryRead])
+async def list_state_categories(session: Session, user: CurrentUser) -> list[StateCategoryRead]:
     await authz.require_member(session, user)
-    return [StateGroupRead.model_validate(g) for g in await service.list_state_groups(session)]
+    return [
+        StateCategoryRead.model_validate(row)
+        for row in await service.list_state_categories(session)
+    ]
 
 
-@group_router.post("", response_model=StateGroupRead, status_code=201)
-async def create_state_group(
-    data: StateGroupCreate, session: Session, user: CurrentUser
-) -> StateGroupRead:
+@category_router.post("", response_model=StateCategoryRead, status_code=201)
+async def create_state_category(
+    data: StateCategoryCreate, session: Session, user: CurrentUser
+) -> StateCategoryRead:
     _require_instance_admin(user)
-    return StateGroupRead.model_validate(await service.create_state_group(session, data))
+    return StateCategoryRead.model_validate(await service.create_state_category(session, data))
 
 
-@group_router.patch("/{group_id}", response_model=StateGroupRead)
-async def update_state_group(
-    group_id: uuid.UUID, data: StateGroupUpdate, session: Session, user: CurrentUser
-) -> StateGroupRead:
+@category_router.patch("/{category_id}", response_model=StateCategoryRead)
+async def update_state_category(
+    category_id: uuid.UUID, data: StateCategoryUpdate, session: Session, user: CurrentUser
+) -> StateCategoryRead:
     _require_instance_admin(user)
-    return StateGroupRead.model_validate(await service.update_state_group(session, group_id, data))
+    return StateCategoryRead.model_validate(
+        await service.update_state_category(session, category_id, data)
+    )
 
 
-@group_router.delete("/{group_id}", status_code=204)
-async def delete_state_group(group_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
+@category_router.delete("/{category_id}", status_code=204)
+async def delete_state_category(
+    category_id: uuid.UUID, session: Session, user: CurrentUser
+) -> None:
     _require_instance_admin(user)
-    await service.delete_state_group(session, group_id)
+    await service.delete_state_category(session, category_id)

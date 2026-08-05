@@ -9,8 +9,8 @@ from radd.modules.events import service as events
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 
-from .models import StateGroup, State, WorkflowTransition
-from .schemas import StateCreate, StateGroupCreate, StateGroupUpdate, StateUpdate
+from .models import State, StateCategoryDef, WorkflowTransition
+from .schemas import StateCategoryCreate, StateCategoryUpdate, StateCreate, StateUpdate
 from .types import DEFAULT_STATES, StateCategory, StateEntity, StateEvent
 
 
@@ -20,6 +20,7 @@ async def create_default_states(session: AsyncSession, project: Project) -> None
             project_id=project.id,
             name=default.name,
             category=default.category.value,
+            category_key=default.category.value,  # builtin rows share the enum keys
             position=position,
             is_default=default.is_default,
         )
@@ -44,8 +45,14 @@ async def create_state(
         position = (max_position or 0) + 1
     else:
         position = data.position
+    row = await get_state_category(session, data.category)
     state = State(
-        project_id=project.id, name=data.name, category=data.category.value, position=position
+        project_id=project.id,
+        name=data.name,
+        # RADD-854: the semantic column DERIVES from the vocabulary row.
+        category=row.behaves_as,
+        category_key=row.key,
+        position=position,
     )
     session.add(state)
     await session.flush()
@@ -63,15 +70,12 @@ async def update_state(
     if data.position is not None:
         state.position = data.position
     if data.category is not None:
-        # RADD-853: re-categorising re-classifies the state's items for every
-        # category consumer from now on — the admin's call, like renaming.
-        state.category = data.category.value
-    if "group_id" in data.model_fields_set:
-        # RADD-852: null LEAVES the group (absent = untouched). Validate the
-        # target exists so a stale picker 404s instead of writing a dangle.
-        if data.group_id is not None:
-            await get_state_group(session, data.group_id)
-        state.group_id = data.group_id
+        # RADD-853/854: re-classifying sets the vocabulary row AND derives the
+        # semantic column from its behaves_as — every category consumer reads
+        # the new behaviour from this moment on (the admin's call).
+        row = await get_state_category(session, data.category)
+        state.category = row.behaves_as
+        state.category_key = row.key
     await session.flush()
     await _emit(session, StateEvent.UPDATED, state, actor_id)
     return state
@@ -205,57 +209,124 @@ async def _emit(
 from .transitions import check_transition  # noqa: E402, F401
 
 
-# --- state groups (RADD-852): the presentation tier ---------------------------
 
 
-async def list_state_groups(session: AsyncSession) -> list[StateGroup]:
-    result = await session.execute(select(StateGroup).order_by(StateGroup.position, StateGroup.name))
+# --- state categories (RADD-854): the user-owned vocabulary tier -------------
+
+
+def _slug(name: str) -> str:
+    """A stable key minted from the name at CREATE time — immutable after (it
+    is the reference states carry), so a later rename never rewrites states."""
+    import re as _re
+
+    key = _re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+    return key[:60] or "category"
+
+
+async def list_state_categories(session: AsyncSession) -> list[StateCategoryDef]:
+    result = await session.execute(
+        select(StateCategoryDef).order_by(StateCategoryDef.position, StateCategoryDef.name)
+    )
     return list(result.scalars())
 
 
-async def get_state_group(session: AsyncSession, group_id: uuid.UUID) -> StateGroup:
-    group = await session.get(StateGroup, group_id)
-    if group is None:
-        raise NotFoundError(StateEntity.STATE_GROUP, group_id)
-    return group
+async def get_state_category(session: AsyncSession, key_or_id) -> StateCategoryDef:
+    """By KEY (the reference states carry) or by row id (the admin routes)."""
+    row = await session.scalar(
+        select(StateCategoryDef).where(StateCategoryDef.key == str(key_or_id))
+    )
+    if row is None:
+        try:
+            row = await session.get(StateCategoryDef, uuid.UUID(str(key_or_id)))
+        except (ValueError, TypeError):
+            row = None
+    if row is None:
+        raise NotFoundError(StateEntity.STATE_CATEGORY, key_or_id)
+    return row
 
 
-async def create_state_group(session: AsyncSession, data: StateGroupCreate) -> StateGroup:
-    existing = await session.scalar(select(StateGroup).where(StateGroup.name == data.name))
-    if existing is not None:
-        raise ConflictError(StateEntity.STATE_GROUP, reason=f"group '{data.name}' already exists")
+async def create_state_category(
+    session: AsyncSession, data: StateCategoryCreate
+) -> StateCategoryDef:
+    key = _slug(data.name)
+    clash = await session.scalar(
+        select(StateCategoryDef).where(
+            (StateCategoryDef.key == key) | (StateCategoryDef.name == data.name)
+        )
+    )
+    if clash is not None:
+        raise ConflictError(
+            StateEntity.STATE_CATEGORY, reason=f"category '{data.name}' already exists"
+        )
     if data.position is None:
-        max_position = await session.scalar(select(func.max(StateGroup.position)))
+        max_position = await session.scalar(select(func.max(StateCategoryDef.position)))
         position = (max_position or 0) + 1
     else:
         position = data.position
-    group = StateGroup(name=data.name, color=data.color, position=position)
-    session.add(group)
+    row = StateCategoryDef(
+        key=key,
+        name=data.name,
+        color=data.color,
+        position=position,
+        behaves_as=data.behaves_as.value,
+        is_builtin=False,
+    )
+    session.add(row)
     await session.flush()
-    return group
+    return row
 
 
-async def update_state_group(
-    session: AsyncSession, group_id: uuid.UUID, data: StateGroupUpdate
-) -> StateGroup:
-    group = await get_state_group(session, group_id)
-    if data.name is not None and data.name != group.name:
-        clash = await session.scalar(select(StateGroup).where(StateGroup.name == data.name))
+async def update_state_category(
+    session: AsyncSession, category_id: uuid.UUID, data: StateCategoryUpdate
+) -> StateCategoryDef:
+    row = await get_state_category(session, category_id)
+    if data.name is not None and data.name != row.name:
+        clash = await session.scalar(
+            select(StateCategoryDef).where(StateCategoryDef.name == data.name)
+        )
         if clash is not None:
-            raise ConflictError(StateEntity.STATE_GROUP, reason=f"group '{data.name}' already exists")
-        group.name = data.name
+            raise ConflictError(
+                StateEntity.STATE_CATEGORY, reason=f"category '{data.name}' already exists"
+            )
+        row.name = data.name
+    if data.behaves_as is not None and data.behaves_as.value != row.behaves_as:
+        if row.is_builtin:
+            raise ConflictError(
+                StateEntity.STATE_CATEGORY,
+                reason=f"'{row.name}' is a builtin — its behaviour is its identity",
+            )
+        # The RIPPLE: every state classified under this row re-derives its
+        # semantic column in one UPDATE — reports change meaning from here on.
+        row.behaves_as = data.behaves_as.value
+        await session.execute(
+            State.__table__.update()
+            .where(State.__table__.c.category_key == row.key)
+            .values(category=row.behaves_as)
+        )
     if "color" in data.model_fields_set:
-        group.color = data.color
+        row.color = data.color
     if data.position is not None:
-        group.position = data.position
+        row.position = data.position
     await session.flush()
-    return group
+    return row
 
 
-async def delete_state_group(session: AsyncSession, group_id: uuid.UUID) -> None:
-    """Hard delete. `states.group_id` is SET NULL by the FK — members degrade
-    to ungrouped; nothing semantic can break because the group never carried
-    semantics (that was the whole design)."""
-    group = await get_state_group(session, group_id)
-    await session.delete(group)
+async def delete_state_category(session: AsyncSession, category_id: uuid.UUID) -> None:
+    """Custom rows only, and only while no state references them — a category
+    with states has meaning in flight, and silently re-homing states is not a
+    delete (the spec-87 states rule, one tier up)."""
+    row = await get_state_category(session, category_id)
+    if row.is_builtin:
+        raise ConflictError(
+            StateEntity.STATE_CATEGORY, reason=f"'{row.name}' is a builtin category"
+        )
+    in_use = await session.scalar(
+        select(func.count()).select_from(State).where(State.category_key == row.key)
+    )
+    if in_use:
+        raise ConflictError(
+            StateEntity.STATE_CATEGORY,
+            reason=f"{in_use} state(s) are classified as '{row.name}' — re-categorise them first",
+        )
+    await session.delete(row)
     await session.flush()

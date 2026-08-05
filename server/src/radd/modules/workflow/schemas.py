@@ -10,19 +10,18 @@ from radd.apitypes import UtcDatetime
 class StateCreate(BaseModel):
     project_id: uuid.UUID
     name: str = Field(min_length=1, max_length=100)
-    category: StateCategory
+    # RADD-854: a category KEY (vocabulary row). The six builtin keys coincide
+    # with the old enum values, so pre-854 payloads stay valid unchanged.
+    category: str = Field(min_length=1, max_length=60)
     position: int | None = None  # None = append at the end of the workflow
 
 
 class StateUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=100)
-    # RADD-853: editable — re-classifies the state's items for every category
-    # consumer from that moment on (the admin's call, like renaming).
-    category: StateCategory | None = None
+    # RADD-853/854: a category KEY — re-classifies the state (and derives the
+    # semantic column from the row's behaves_as) from that moment on.
+    category: str | None = Field(default=None, min_length=1, max_length=60)
     position: int | None = None
-    # RADD-852: tri-state — absent = untouched, null = leave the group.
-    # Distinguished via model_fields_set in the service.
-    group_id: uuid.UUID | None = None
 
 
 class StateRead(BaseModel):
@@ -31,10 +30,13 @@ class StateRead(BaseModel):
     id: uuid.UUID
     project_id: uuid.UUID
     name: str
+    #: The SEMANTIC behaviour (derived from the vocabulary row) — what
+    #: reports, sweeps and colours key off.
     category: StateCategory
+    #: The VOCABULARY row the state is classified under (RADD-854).
+    category_key: str
     position: int
     is_default: bool
-    group_id: uuid.UUID | None = None
     created_at: UtcDatetime
 
 
@@ -111,25 +113,32 @@ class AllowedTransitions(BaseModel):
     targets: list[AllowedTarget]
 
 
-# --- state groups (RADD-852) --------------------------------------------------
+# --- state categories (RADD-854): the user-owned vocabulary tier -------------
 
 
-class StateGroupCreate(BaseModel):
+class StateCategoryCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
+    behaves_as: StateCategory
     color: str | None = Field(default=None, max_length=20)
     position: int | None = None  # None = append
 
 
-class StateGroupUpdate(BaseModel):
+class StateCategoryUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=100)
+    #: Custom rows only — a builtin's behaviour IS its identity. Ripples over
+    #: the row's states (their derived semantic column updates in one pass).
+    behaves_as: StateCategory | None = None
     color: str | None = Field(default=None, max_length=20)
     position: int | None = None
 
 
-class StateGroupRead(BaseModel):
+class StateCategoryRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
+    key: str
     name: str
     color: str | None
     position: int
+    behaves_as: StateCategory
+    is_builtin: bool

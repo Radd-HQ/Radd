@@ -5,14 +5,14 @@ import { api, errorMessage } from "../../lib/api";
 import { ApiPath, apiStatePath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
 import { CATEGORY_META, CATEGORY_ORDER } from "../../lib/meta";
-import { projectsQuery, queryKeys, stateGroupsQuery, statesQuery } from "../../lib/queries";
+import { projectsQuery, queryKeys, stateCategoriesQuery, statesQuery } from "../../lib/queries";
 import {
   Permission,
   StateCategory,
   type State,
   type StateCategoryValue,
+  type StateCategoryRow,
   type StateCreate,
-  type StateGroup,
   type StateUpdate,
 } from "../../lib/types";
 import { ApiPath as Api, apiStatePath as statePath } from "../../lib/constants";
@@ -40,7 +40,7 @@ export function StatesSettingsPage({ projectId }: { projectId?: string }) {
   // States are per-project: gate on THAT project's manage permission.
   const canManage = perms.project(project, Permission.stateManage);
   const states = useQuery({ ...statesQuery(projectId ?? ""), enabled: Boolean(projectId) });
-  const groups = useQuery(stateGroupsQuery());
+  const categories = useQuery(stateCategoriesQuery());
   const me = useCurrentUser();
   const isInstanceAdmin = me?.instance_role === InstanceRole.admin;
   const sorted = useMemo(
@@ -75,7 +75,7 @@ export function StatesSettingsPage({ projectId }: { projectId?: string }) {
                 state={state}
                 projectId={project.id}
                 canManage={canManage}
-                groups={groups.data ?? []}
+                categories={categories.data ?? []}
                 siblings={sorted}
                 neighborUp={index > 0 ? sorted[index - 1] : null}
                 neighborDown={index < sorted.length - 1 ? sorted[index + 1] : null}
@@ -86,7 +86,10 @@ export function StatesSettingsPage({ projectId }: { projectId?: string }) {
             )}
           </ul>
           {canManage && <AddStateForm projectId={project.id} />}
-          <StateGroupsCard groups={groups.data ?? []} canManage={isInstanceAdmin} />
+          <StateCategoriesCard
+            categories={categories.data ?? []}
+            canManage={isInstanceAdmin}
+          />
           <TransitionsSection project={project} states={sorted} canManage={canManage} />
         </>
       )}
@@ -101,7 +104,7 @@ function StateRow({
   state,
   projectId,
   canManage,
-  groups,
+  categories,
   siblings,
   neighborUp,
   neighborDown,
@@ -109,7 +112,7 @@ function StateRow({
   state: State;
   projectId: string;
   canManage: boolean;
-  groups: StateGroup[];
+  categories: StateCategoryRow[];
   siblings: State[];
   neighborUp: State | null;
   neighborDown: State | null;
@@ -192,37 +195,21 @@ function StateRow({
               </span>
             )}
           </span>
-          {/* RADD-853: the category is editable in place — re-classifies the
-              state's items for every category consumer from now on. */}
-          {canManage ? (
+          {/* RADD-853/854: the category is editable in place from the
+              VOCABULARY rows — the semantic behaviour derives from the row's
+              behaves_as server-side. */}
+          {canManage && categories.length > 0 ? (
             <Select
-              value={state.category}
-              onChange={(value) =>
-                rename.mutate({ category: value as StateCategoryValue })
-              }
-              options={CATEGORY_ORDER.map((cat) => ({
-                value: cat,
-                label: CATEGORY_META[cat].label,
-              }))}
+              value={state.category_key}
+              onChange={(value) => rename.mutate({ category: value })}
+              options={categories
+                .slice()
+                .sort((a, b) => a.position - b.position)
+                .map((row) => ({ value: row.key, label: row.name }))}
             />
           ) : (
-            <span className="text-xs text-fg-muted">{category.label}</span>
-          )}
-          {/* RADD-852: presentation-group membership — pure vocabulary, so the
-              picker changes boards, never reports. */}
-          {canManage && groups.length > 0 && (
-            <Select
-              value={state.group_id ?? ""}
-              onChange={(value) => rename.mutate({ group_id: value === "" ? null : value })}
-              options={[
-                { value: "", label: "No group" },
-                ...groups.map((group) => ({ value: group.id, label: group.name })),
-              ]}
-            />
-          )}
-          {!canManage && state.group_id && (
-            <span className="text-xs text-fg-faint">
-              {groups.find((g) => g.id === state.group_id)?.name}
+            <span className="text-xs text-fg-muted">
+              {categories.find((row) => row.key === state.category_key)?.name ?? category.label}
             </span>
           )}
           {canManage && (
@@ -341,87 +328,112 @@ function AddStateForm({ projectId }: { projectId: string }) {
 }
 
 
-/** RADD-852: manage the instance-wide presentation groups. Pure vocabulary —
- * a group changes how boards bucket, never what reports count — so the card
- * lives beside the states it groups. Writes are instance-admin. */
-function StateGroupsCard({ groups, canManage }: { groups: StateGroup[]; canManage: boolean }) {
+/** RADD-854: manage the category VOCABULARY — the one tier above states.
+ * Name, colour and order are the operator's; `behaves_as` anchors each row to
+ * one of the six fixed behaviours so every report/sweep/guard keeps working.
+ * Builtins rename and recolour but keep their behaviour and cannot be
+ * deleted; custom rows delete only when no state references them. */
+function StateCategoriesCard({
+  categories,
+  canManage,
+}: {
+  categories: StateCategoryRow[];
+  canManage: boolean;
+}) {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.stateGroups });
+  const [behavesAs, setBehavesAs] = useState<StateCategoryValue>(StateCategory.in_progress);
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.stateCategories });
   const add = useMutation({
-    mutationFn: () => api.post<StateGroup>(Api.stateGroups, { name: name.trim() }),
+    mutationFn: () =>
+      api.post<StateCategoryRow>(Api.stateCategories, {
+        name: name.trim(),
+        behaves_as: behavesAs,
+      }),
     onSuccess: () => {
       setName("");
       return invalidate();
     },
   });
   const patch = useMutation({
-    mutationFn: ({ id, body }: { id: string; body: Partial<StateGroup> }) =>
-      api.patch<StateGroup>(`${Api.stateGroups}/${id}`, body),
+    mutationFn: ({ id, body }: { id: string; body: Partial<StateCategoryRow> }) =>
+      api.patch<StateCategoryRow>(`${Api.stateCategories}/${id}`, body),
     onSuccess: invalidate,
   });
   const remove = useMutation({
-    mutationFn: (id: string) => api.delete(`${Api.stateGroups}/${id}`),
+    mutationFn: (id: string) => api.delete(`${Api.stateCategories}/${id}`),
     onSuccess: invalidate,
   });
   const swap = useMutation({
-    mutationFn: async ({ a, b }: { a: StateGroup; b: StateGroup }) => {
-      await api.patch<StateGroup>(`${Api.stateGroups}/${a.id}`, { position: b.position });
-      await api.patch<StateGroup>(`${Api.stateGroups}/${b.id}`, { position: a.position });
+    mutationFn: async ({ a, b }: { a: StateCategoryRow; b: StateCategoryRow }) => {
+      await api.patch<StateCategoryRow>(`${Api.stateCategories}/${a.id}`, { position: b.position });
+      await api.patch<StateCategoryRow>(`${Api.stateCategories}/${b.id}`, { position: a.position });
     },
     onSuccess: invalidate,
   });
-  const sorted = [...groups].sort((a, b) => a.position - b.position);
+  const sorted = [...categories].sort((a, b) => a.position - b.position);
 
   return (
-    <section className="mt-6" aria-label="State groups">
-      <h2 className="mb-1 text-sm font-medium text-heading">State groups</h2>
+    <section className="mt-6" aria-label="State categories">
+      <h2 className="mb-1 text-sm font-medium text-heading">Categories</h2>
       <p className="mb-2 text-xs text-fg-muted">
-        Optional, instance-wide grouping for boards and swimlanes ("group by State group").
-        Purely presentational: each state keeps its category, so reports and automations are
-        untouched. Assign states to a group with the picker on each row above.
+        The tier boards group by and states are classified under — instance-wide, and the
+        vocabulary is yours. Each category <em>behaves as</em> one of six fixed behaviours
+        (triage, backlog, todo, in&nbsp;progress, done, canceled), which is what keeps reports,
+        sweeps and guards correct whatever you name things.
       </p>
       <ul className="rounded-lg border border-subtle">
-        {sorted.map((group, index) => (
+        {sorted.map((row, index) => (
           <li
-            key={group.id}
+            key={row.id}
             className="flex items-center gap-3 border-b border-subtle/60 px-4 py-2 last:border-b-0"
           >
             <input
               type="color"
-              value={group.color ?? "#8b93a7"}
-              onChange={(event) => patch.mutate({ id: group.id, body: { color: event.target.value } })}
+              value={row.color ?? "#8b93a7"}
+              onChange={(event) => patch.mutate({ id: row.id, body: { color: event.target.value } })}
               disabled={!canManage}
-              aria-label={`Colour for ${group.name}`}
+              aria-label={`Colour for ${row.name}`}
               className="size-5 shrink-0 cursor-pointer rounded border border-strong bg-transparent disabled:cursor-default"
             />
-            <span className="flex-1 text-[13px] text-heading">{group.name}</span>
+            <span className="flex-1 text-[13px] text-heading">
+              {row.name}
+              {row.is_builtin && (
+                <span className="ml-2 rounded border border-strong px-1 py-px text-[10px] uppercase tracking-wide text-fg-muted">
+                  Builtin
+                </span>
+              )}
+            </span>
+            <span className="text-xs text-fg-faint">
+              behaves as {CATEGORY_META[row.behaves_as].label}
+            </span>
             {canManage && (
               <>
                 <button
                   type="button"
-                  onClick={() => index > 0 && swap.mutate({ a: group, b: sorted[index - 1] })}
+                  onClick={() => index > 0 && swap.mutate({ a: row, b: sorted[index - 1] })}
                   disabled={index === 0 || swap.isPending}
-                  aria-label={`Move ${group.name} up`}
+                  aria-label={`Move ${row.name} up`}
                   className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-fg cursor-pointer disabled:cursor-default disabled:opacity-30"
                 >
                   <ArrowUp size={13} />
                 </button>
                 <button
                   type="button"
-                  onClick={() => index < sorted.length - 1 && swap.mutate({ a: group, b: sorted[index + 1] })}
+                  onClick={() => index < sorted.length - 1 && swap.mutate({ a: row, b: sorted[index + 1] })}
                   disabled={index === sorted.length - 1 || swap.isPending}
-                  aria-label={`Move ${group.name} down`}
+                  aria-label={`Move ${row.name} down`}
                   className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-fg cursor-pointer disabled:cursor-default disabled:opacity-30"
                 >
                   <ArrowDown size={13} />
                 </button>
                 <button
                   type="button"
-                  onClick={() => remove.mutate(group.id)}
-                  disabled={remove.isPending}
-                  aria-label={`Delete ${group.name}`}
-                  className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer"
+                  onClick={() => remove.mutate(row.id)}
+                  disabled={row.is_builtin || remove.isPending}
+                  title={row.is_builtin ? "Builtin categories cannot be deleted" : `Delete ${row.name}`}
+                  aria-label={`Delete ${row.name}`}
+                  className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer disabled:cursor-default disabled:opacity-30"
                 >
                   <X size={14} />
                 </button>
@@ -429,11 +441,6 @@ function StateGroupsCard({ groups, canManage }: { groups: StateGroup[]; canManag
             )}
           </li>
         ))}
-        {sorted.length === 0 && (
-          <li className="px-4 py-4 text-center text-xs text-fg-muted">
-            No groups yet — states bucket by their own order until you add some.
-          </li>
-        )}
       </ul>
       {canManage && (
         <form
@@ -441,31 +448,38 @@ function StateGroupsCard({ groups, canManage }: { groups: StateGroup[]; canManag
             event.preventDefault();
             if (name.trim()) add.mutate();
           }}
-          className="mt-2 flex items-center gap-2"
+          className="mt-2 flex items-end gap-2"
         >
           <TextField
             label=""
-            aria-label="New group name"
+            aria-label="New category name"
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder="New group name"
+            placeholder="New category name"
             maxLength={100}
+          />
+          <Select
+            value={behavesAs}
+            onChange={(value) => setBehavesAs(value as StateCategoryValue)}
+            options={CATEGORY_ORDER.map((cat) => ({
+              value: cat,
+              label: `behaves as ${CATEGORY_META[cat].label}`,
+            }))}
           />
           <Button type="submit" disabled={!name.trim() || add.isPending}>
             <Plus size={13} aria-hidden />
-            Add group
+            Add category
           </Button>
         </form>
       )}
-      {(add.isError || patch.isError || remove.isError) && (
+      {(add.isError || patch.isError || remove.isError || swap.isError) && (
         <p className="mt-1 text-xs text-red-400">
-          {errorMessage(add.error ?? patch.error ?? remove.error)}
+          {errorMessage(add.error ?? patch.error ?? remove.error ?? swap.error)}
         </p>
       )}
     </section>
   );
 }
-
 
 /** RADD-853: delete a state with a SUCCESSOR for its items — the spec-89
  * delete-with-a-successor precedent. The dialog names the item count and asks

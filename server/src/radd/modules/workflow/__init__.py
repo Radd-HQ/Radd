@@ -6,7 +6,7 @@ from radd.kernel import RaddPlugin
 
 from . import subscribers  # noqa: F401  — registers the project-created hook
 from .guards import TransitionError
-from .router import router, group_router
+from .router import router, category_router
 from .transitions_router import router as transitions_router
 from .types import StateEvent, TransitionEvent
 
@@ -31,7 +31,7 @@ plugin = RaddPlugin(
         "creation. Optional transition graph with validation guards (spec 61)."
     ),
     depends_on=("projects", "events", "auth", "settings"),
-    routers=(router, group_router, transitions_router),
+    routers=(router, category_router, transitions_router),
     exception_handlers=((TransitionError, _transition_handler),),
     event_types=(
         EventTypeSpec(StateEvent.CREATED, "Workflow state created", "Admin"),

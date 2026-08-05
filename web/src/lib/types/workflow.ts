@@ -22,8 +22,8 @@ export interface State {
   position: number;
   is_default: boolean;
   created_at: string;
-  /** RADD-852: optional presentation-group membership. */
-  group_id?: string | null;
+  /** RADD-854: the vocabulary row classifying this state. */
+  category_key: string;
 }
 
 export interface StateCreate {
@@ -36,8 +36,9 @@ export interface StateCreate {
 /** PATCH /states/{id} — rename / reposition. */
 export interface StateUpdate {
   name?: string;
-  /** RADD-853: re-classifies the state's items from that moment on. */
-  category?: StateCategoryValue;
+  /** RADD-853/854: a category KEY (vocabulary row); the semantic behaviour
+   *  derives from the row's behaves_as server-side. */
+  category?: string;
   position?: number;
   /** RADD-852: null leaves the group; absent = untouched. */
   group_id?: string | null;
@@ -154,10 +155,14 @@ export interface AllowedTransitions {
   targets: AllowedTarget[];
 }
 
-/** A user-defined presentation tier over states (RADD-852) — no semantics. */
-export interface StateGroup {
+/** The user-owned category tier (RADD-854): vocabulary over fixed semantics. */
+export interface StateCategoryRow {
   id: string;
+  key: string;
   name: string;
   color: string | null;
   position: number;
+  /** The semantic anchor — one of the six fixed StateCategory behaviours. */
+  behaves_as: StateCategoryValue;
+  is_builtin: boolean;
 }

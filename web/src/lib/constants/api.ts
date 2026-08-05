@@ -33,7 +33,7 @@ export const ApiPath = {
   ldapSyncStatus: "/ldap/sync-status",
   ldapSyncUsers: "/ldap/sync/users",
   ldapSyncGroups: "/ldap/sync/groups",
-  stateGroups: "/state-groups",
+  stateCategories: "/state-categories",
   // Jira import wizard (spec 90) — instance admin.
   // Spec 100: connections are admin-managed rows, not environment variables.
   jiraConnections: "/jira/connections",

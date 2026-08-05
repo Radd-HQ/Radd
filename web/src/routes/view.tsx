@@ -50,7 +50,7 @@ import {
   usersQuery,
   viewsQuery,
   allStatesQuery,
-stateGroupsQuery } from "../lib/queries";
+stateCategoriesQuery } from "../lib/queries";
 import { pushToast } from "../lib/toast";
 import { useReorderItem, useToggleStar, useUpdateItemInView } from "../lib/item-mutations";
 import {
@@ -597,20 +597,21 @@ export function ViewPage() {
         : (view?.group_by ?? (view?.view_type === ViewType.board ? ViewAxis.state : null));
   const laneAxis = view?.view_type === ViewType.board ? view.swimlane_by : null;
 
-  const stateGroups = useQuery({
-    ...stateGroupsQuery(),
-    // RADD-852: only fetched when an axis actually groups by state group.
-    enabled: view?.group_by === ViewAxis.stateGroup || view?.swimlane_by === ViewAxis.stateGroup,
+  const stateCategories = useQuery({
+    ...stateCategoriesQuery(),
+    // RADD-854: only fetched when an axis groups by the category tier.
+    enabled:
+      view?.group_by === ViewAxis.stateCategory || view?.swimlane_by === ViewAxis.stateCategory,
   });
   const axisContext = useMemo(
     () => ({
       states: states.data,
-      stateGroups: stateGroups.data,
+      stateCategories: stateCategories.data,
       fields: fields.data,
       cycles: cycles.data,
       cycleFilter: view?.cycle_filter,
     }),
-    [states.data, stateGroups.data, fields.data, cycles.data, view?.cycle_filter],
+    [states.data, stateCategories.data, fields.data, cycles.data, view?.cycle_filter],
   );
   // A cycle-grouped view shows every (matching) cycle as a header — including
   // empty staging cycles — so it renders even when the SLQ matched no items.

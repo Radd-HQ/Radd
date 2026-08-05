@@ -20,10 +20,9 @@ export type ViewTypeValue = (typeof ViewType)[keyof typeof ViewType];
 /** Builtin grouping axes for a view (board columns / list sections / swimlanes). */
 export const ViewAxis = {
   state: "state",
-  /** RADD-851: the fixed category tier above states — five stable columns. */
+  /** RADD-851 → 854: the category tier above states — user-owned vocabulary
+   *  rows since the consolidation. */
   stateCategory: "state_category",
-  /** RADD-852: the user-defined presentation tier (state groups). */
-  stateGroup: "state_group",
   assignee: "assignee",
   priority: "priority",
   kind: "kind",

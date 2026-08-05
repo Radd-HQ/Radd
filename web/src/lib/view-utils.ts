@@ -26,7 +26,7 @@ import {
   type Item,
   type ItemParentRef,
   type State,
-  type StateGroup,
+  type StateCategoryRow,
 } from "./types";
 
 /**
@@ -86,8 +86,9 @@ export const NO_EPIC_LABEL = "No epic";
 export interface AxisContext {
   /** The view's project's states (undefined for all-projects views). */
   states?: State[];
-  /** State groups (RADD-852) — headers for the `state_group` axis. */
-  stateGroups?: StateGroup[];
+  /** State categories (RADD-854) — the vocabulary rows the category axis
+   *  buckets by (semantic fallback when absent). */
+  stateCategories?: StateCategoryRow[];
   /** Registry definitions in scope — resolves `cf.<key>` option buckets. */
   fields?: FieldDef[];
   /** All cycles — the `cycle` axis header set (incl. empty staging cycles). */
@@ -177,33 +178,28 @@ export function groupItemsForView(
   switch (axis) {
     case ViewAxis.state:
       return groupByState(items, context.states);
-    case ViewAxis.stateGroup: {
-      // RADD-852: user-defined groups in their order, plus a trailing
-      // Ungrouped bucket. Membership goes item -> state -> group_id via the
-      // states list (the compact item.state ref does not carry the group).
-      const groupOf = new Map((context.states ?? []).map((s) => [s.id, s.group_id ?? null]));
-      const groups = [...(context.stateGroups ?? [])].sort((a, b) => a.position - b.position);
-      const buckets: ViewGroup[] = groups.map((g) => ({
-        key: g.id,
-        label: g.name,
-        items: items.filter((item) => groupOf.get(item.state.id) === g.id),
-      }));
-      const grouped = new Set(groups.map((g) => g.id));
-      buckets.push({
-        key: NO_VALUE_KEY,
-        label: "Ungrouped",
-        items: items.filter((item) => !grouped.has(groupOf.get(item.state.id) as string)),
-      });
-      return buckets;
-    }
-    case ViewAxis.stateCategory:
-      // RADD-851: the fixed tier — every category always present (an empty
-      // Done column is information), membership from the state each item is in.
+    case ViewAxis.stateCategory: {
+      // RADD-854: the user-owned vocabulary rows, in their order — every row
+      // always present (an empty Done column is information). Membership goes
+      // item -> state -> category_key via the states list; when the rows (or
+      // the states list) are unavailable, fall back to the six semantic
+      // categories so a stale surface degrades instead of flattening.
+      const rows = [...(context.stateCategories ?? [])].sort((a, b) => a.position - b.position);
+      const keyOf = new Map((context.states ?? []).map((s) => [s.id, s.category_key]));
+      if (rows.length > 0 && (context.states ?? []).length > 0) {
+        return rows.map((row) => ({
+          key: row.key,
+          label: row.name,
+          dotClassName: CATEGORY_META[row.behaves_as]?.dotClassName,
+          items: items.filter((item) => keyOf.get(item.state.id) === row.key),
+        }));
+      }
       return CATEGORY_ORDER.map((cat) => ({
         key: cat,
         label: CATEGORY_META[cat].label,
         items: items.filter((item) => item.state.category === cat),
       }));
+    }
     case ViewAxis.assignee:
       return groupByAssignee(items);
     case ViewAxis.team:
