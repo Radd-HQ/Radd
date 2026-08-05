@@ -13,7 +13,7 @@ from .history import (  # noqa: F401 — the items module's public seam (spec 56
     past_cycles_by_item_ids,
     record_cycle_change,
 )
-from .models import Cycle, CycleSeries, CycleTeam
+from .models import Cycle, CycleSeries, CycleTeam, ItemCycleRecord
 from .schemas import (
     CycleComplete,
     CycleCompleteResult,
@@ -82,6 +82,27 @@ def to_read(
 
 
 # --- team visibility (spec 60): no rows = public; rows = those teams only ---
+
+
+def ids_by_names(names: list[str]):
+    """Select of cycle ids matching these NAMES — the query-fragment seam the
+    items SLQ `cycle` builtin composes into `WorkItem.cycle_id IN (…)`
+    (RADD-888: the fragment crosses the boundary, the table does not)."""
+    from sqlalchemy import select as _select
+
+    return _select(Cycle.id).where(Cycle.name.in_(names))
+
+
+def closed_stint_item_ids(names: list[str] | None = None):
+    """Select of WORK-ITEM ids with a closed cycle stint (spec 56 carryover),
+    optionally narrowed to stints in the named cycles — the whole `past_cycle`
+    subquery, owned here because ItemCycleRecord is this module's table."""
+    from sqlalchemy import select as _select
+
+    stmt = _select(ItemCycleRecord.item_id).where(ItemCycleRecord.removed_at.is_not(None))
+    if names is not None:
+        stmt = stmt.join(Cycle, Cycle.id == ItemCycleRecord.cycle_id).where(Cycle.name.in_(names))
+    return stmt
 
 
 async def team_ids_by_cycle(

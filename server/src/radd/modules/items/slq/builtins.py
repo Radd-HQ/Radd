@@ -9,9 +9,9 @@ from sqlalchemy import ColumnElement, and_, false, not_, or_, select
 from sqlalchemy.orm import aliased
 
 from radd.modules.auth.models import User
-from radd.modules.cycles.models import Cycle, ItemCycleRecord
-from radd.modules.releases.models import Release
-from radd.modules.itemtypes.models import IssueType
+from radd.modules.cycles import service as cycles_service
+from radd.modules.itemtypes import service as itemtypes_service
+from radd.modules.releases import service as releases_service
 from radd.modules.teams.models import Team
 from radd.modules.workflow.models import State
 from radd.modules.workflow.types import StateCategory
@@ -122,9 +122,7 @@ def _type(ctx: Context, node: Condition) -> ColumnElement[bool]:
         else:
             names.append(plain(value, node.field))
     if names:
-        conditions.append(
-            WorkItem.type_id.in_(select(IssueType.id).where(IssueType.name.in_(names)))
-        )
+        conditions.append(WorkItem.type_id.in_(itemtypes_service.ids_by_names(names)))
     return polarity(node, or_(*conditions))
 
 
@@ -213,7 +211,7 @@ def _cycle(ctx: Context, node: Condition) -> ColumnElement[bool]:
         else:
             names.append(plain(value, node.field))
     if names:
-        conditions.append(WorkItem.cycle_id.in_(select(Cycle.id).where(Cycle.name.in_(names))))
+        conditions.append(WorkItem.cycle_id.in_(cycles_service.ids_by_names(names)))
     return polarity(node, or_(*conditions))
 
 
@@ -221,7 +219,7 @@ def _past_cycle(ctx: Context, node: Condition) -> ColumnElement[bool]:
     """Closed cycle stints (spec 56): cycles the item was in and LEFT — the
     carryover trail. The current cycle is `cycle`; `past_cycle IS NOT EMPTY`
     = "has rolled over at least once"."""
-    closed = select(ItemCycleRecord.item_id).where(ItemCycleRecord.removed_at.is_not(None))
+    closed = cycles_service.closed_stint_item_ids()
     if isinstance(node, EmptyCheck):
         return polarity(node, WorkItem.id.notin_(closed))
     conditions: list[ColumnElement[bool]] = []
@@ -232,12 +230,7 @@ def _past_cycle(ctx: Context, node: Condition) -> ColumnElement[bool]:
         else:
             names.append(plain(value, node.field))
     if names:
-        stints = (
-            select(ItemCycleRecord.item_id)
-            .join(Cycle, Cycle.id == ItemCycleRecord.cycle_id)
-            .where(ItemCycleRecord.removed_at.is_not(None), Cycle.name.in_(names))
-        )
-        conditions.append(WorkItem.id.in_(stints))
+        conditions.append(WorkItem.id.in_(cycles_service.closed_stint_item_ids(names)))
     return polarity(node, or_(*conditions))
 
 
@@ -252,9 +245,7 @@ def _release(ctx: Context, node: Condition) -> ColumnElement[bool]:
         else:
             versions.append(plain(value, node.field))
     if versions:
-        conditions.append(
-            WorkItem.release_id.in_(select(Release.id).where(Release.version.in_(versions)))
-        )
+        conditions.append(WorkItem.release_id.in_(releases_service.ids_by_versions(versions)))
     return polarity(node, or_(*conditions))
 
 

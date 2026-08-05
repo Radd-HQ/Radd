@@ -111,6 +111,19 @@ async def delete_type(
     await session.flush()
 
 
+def ids_by_names(names: list[str]):
+    """Select of issue-type ids matching these NAMES — the fragment seam for the
+    items SLQ `type` builtin (RADD-888)."""
+    return select(IssueType.id).where(IssueType.name.in_(names))
+
+
+async def distinct_names(session: AsyncSession) -> list[str]:
+    """Distinct type names instance-wide — SLQ value autocomplete + the NL
+    repair vocabulary (was the one entity field with no value source)."""
+    result = await session.execute(select(IssueType.name).distinct().order_by(IssueType.name))
+    return list(result.scalars())
+
+
 async def list_types(session: AsyncSession, project_id: uuid.UUID) -> list[IssueType]:
     result = await session.execute(
         select(IssueType).where(IssueType.project_id == project_id).order_by(IssueType.position)

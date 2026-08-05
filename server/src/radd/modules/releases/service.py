@@ -99,6 +99,12 @@ async def resolve_release(
     )
 
 
+def ids_by_versions(versions: list[str]):
+    """Select of release ids matching these VERSIONS — the fragment seam the
+    items SLQ `release` builtin composes into `WorkItem.release_id IN (…)`."""
+    return select(Release.id).where(Release.version.in_(versions))
+
+
 async def list_releases(session: AsyncSession, project_id: uuid.UUID) -> list[Release]:
     result = await session.execute(
         select(Release).where(Release.project_id == project_id).order_by(Release.version)

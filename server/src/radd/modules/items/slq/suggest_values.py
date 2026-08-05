@@ -180,16 +180,9 @@ async def value_candidates(
             teams = await teams_service.list_teams(session)
             return [_none()] + _entities([team.name for team in teams], builtin)
         case SlqField.TYPE:
-            # Was the one entity field with no value source (found by the
-            # spec-103 NL repair work) — distinct issue-type names, instance-wide.
-            from radd.modules.itemtypes.models import IssueType
+            from radd.modules.itemtypes import service as itemtypes_service
 
-            names = (
-                (await session.execute(select(IssueType.name).distinct().order_by(IssueType.name)))
-                .scalars()
-                .all()
-            )
-            return _entities(list(names), builtin)
+            return _entities(await itemtypes_service.distinct_names(session), builtin)
         case SlqField.LABEL:
             labels = await labels_service.list_labels(session)
             return _entities([label.name for label in labels], builtin)

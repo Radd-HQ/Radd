@@ -48,9 +48,6 @@ MODEL_IMPORT_ALLOWLIST: set[tuple[str, str]] = {
     ("forms", "comments"),  # requester portal composition → owner services (RADD-887)
     ("forms", "releases"),  # same
     ("forms", "attachments"),  # same
-    ("items", "cycles"),  # SLQ builtin catalog → owner SlqFieldSpecs (RADD-888)
-    ("items", "releases"),  # same
-    ("items", "itemtypes"),  # same
     ("ldap", "groups"),  # read helper → groups.service member_ids (RADD-887)
     ("pages", "labels"),  # labels.service.by_ids (RADD-887)
     ("search", "pages"),  # pages.search seam like ai uses (RADD-887)
