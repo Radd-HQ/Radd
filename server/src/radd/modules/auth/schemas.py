@@ -91,6 +91,11 @@ class UserDirectoryEntry(BaseModel):
     they can author a page version or a comment, and a directory that omits them
     would leave those bylines unresolvable — a hole in the read path in exchange
     for tidier pickers, which already filter on `active`.
+
+    `source` IS here (RADD-869): without it a picker rendered a service account
+    exactly like a colleague, which contradicted the "never mistaken for a
+    person" intent. Which auth backend a person uses is not an administrative
+    secret the way their address is; the SPA badges `service` rows.
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -98,6 +103,7 @@ class UserDirectoryEntry(BaseModel):
     id: uuid.UUID
     name: str
     active: bool
+    source: str
     avatar_color: str | None = None
     avatar_emoji: str | None = None
 

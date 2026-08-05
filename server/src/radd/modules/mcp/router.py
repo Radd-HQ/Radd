@@ -1,9 +1,11 @@
-"""POST {api_prefix}/mcp — the embedded MCP server endpoint (spec 45).
+"""{api_prefix}/mcp — the embedded MCP server endpoint (spec 45).
 
-Streamable-HTTP transport, JSON-only: one JSON-RPC 2.0 message per POST body
-(no SSE streaming, no sessions beyond auth). Module routers are mounted under
-`settings.api_prefix`, so the endpoint lives at **POST /api/v1/mcp** — point an
-MCP client there with `Authorization: Bearer radd_pat_…`.
+Streamable-HTTP transport: one JSON-RPC 2.0 message per POST body (JSON-only —
+a POST never streams), plus the RADD-740 GET leg answering `text/event-stream`
+as the notification channel the transport spec requires. Module routers are
+mounted under `settings.api_prefix`, so the endpoint lives at
+**POST /api/v1/mcp** — point an MCP client there with
+`Authorization: Bearer radd_pat_…`.
 
 Layering:
 - HTTP level: disabled instance -> 403; missing/invalid credentials -> 401

@@ -715,8 +715,10 @@ async def merge_users(
     actor_id: uuid.UUID | None = None,
 ) -> User:
     """Fold `source` into `target`: every reference (items, comments, worklogs,
-    watchers, memberships, history…) repoints to the target; the source's
-    credentials are revoked and the account deactivated (kept for audit)."""
+    watchers, memberships, history…) repoints to the target, then the source
+    row is DELETED — no shell survives (RADD-869: this docstring promised a
+    deactivated audit shell the code never kept). The surviving audit record is
+    the `user.deleted` event, whose payload names both accounts."""
     from sqlalchemy import text as sql
 
     if source_id == target_id:
@@ -976,8 +978,10 @@ async def delete_user(
     """HARD-delete an account, handing everything it authored to `successor_id`
     (spec 89). Returns the summary of what moved.
 
-    The row really goes — unlike `merge_users`, which keeps a deactivated shell
-    for audit. Everything that would block that (13 FK columns with NO ACTION) is
+    The row really goes — as it does in `merge_users` (both end in deletion;
+    the difference is a successor's CONSENT gaps are checked here, while a
+    merge repoints onto an account that already owns the identity). Everything
+    that would block that (13 FK columns with NO ACTION) is
     repointed first, personal state (sessions, tokens, MFA, prefs, stars,
     memberships, shares) dies with the account via purge or FK CASCADE, and
     worklogs are DELETED rather than reassigned so nobody is credited with hours

@@ -27,8 +27,12 @@ from .models import ApiToken, User
 from .schemas import ServiceAccountCreate, ServiceAccountUpdate, TokenCreate
 from .types import PAT_PREFIX_DISPLAY_CHARS, AuthEntity, AuthEvent, InstanceRole, UserSource
 
-#: Synthetic addresses live on a domain that cannot receive mail, so a service
-#: account is never mistaken for a person and never gets notified.
+#: Synthetic addresses live on a domain that cannot receive mail — the DEFAULT
+#: address is undeliverable, so email notifications to an unconfigured service
+#: account go nowhere. That is the whole guarantee (RADD-869): a caller may
+#: still set a real address, the account can be assigned work and accrues
+#: notification rows like anyone, and pickers rely on `UserDirectoryEntry.
+#: source` (badged as a service account in the SPA) to tell it from a person.
 SERVICE_EMAIL_DOMAIN = "service.radd.local"
 
 

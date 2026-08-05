@@ -499,15 +499,19 @@ def test_user_directory_entry_exposes_no_administrative_fields():
     disguise is that this model carries none of what `UserRead` does.
 
     So this asserts the EXCLUSION, not the inclusion: adding `email` (or the
-    instance role, or the account source, or sign-in history) back onto the
-    entry would publish it to every account in the instance, and would do it
-    silently.
+    instance role, or sign-in history) back onto the entry would publish it to
+    every account in the instance, and would do it silently.
+
+    REVISED (RADD-869): `source` moved to the exposed side. Which auth backend
+    an account uses is not a secret the way an address is, and without it a
+    picker rendered a service account exactly like a colleague — defeating the
+    "never mistaken for a person" intent the service-accounts module states.
     """
     from radd.modules.auth.schemas import UserDirectoryEntry, UserRead
 
     exposed = set(UserDirectoryEntry.model_fields)
-    assert exposed == {"id", "name", "active", "avatar_color", "avatar_emoji"}
-    administrative = {"email", "instance_role", "source", "last_login_at", "timezone"}
+    assert exposed == {"id", "name", "active", "source", "avatar_color", "avatar_emoji"}
+    administrative = {"email", "instance_role", "last_login_at", "timezone"}
     assert exposed & administrative == set()
     # The administrative shape still carries them: this is a split by audience,
     # not a trim — `GET /users` keeps both the fields and `user.manage`.

@@ -109,9 +109,10 @@ async def update_view(
 
 
 _SHARING_DOC = (
-    "Replace the view's FULL sharing state (spec 57): global_access (what every active user "
-    "gets; null = not globally visible) + per-user/team grants at viewer|editor. Owner-only "
-    "(legacy owner-less views: view.update); enabling global_access needs view.create."
+    "Set the view's PUBLIC access level (spec 57): global_access is what every active user "
+    "gets; null = not globally visible. Per-subject viewer/editor grants moved to the "
+    "generic /grants API in spec 92 — this endpoint no longer carries them (RADD-869). "
+    "Owner-only (seeded owner-less views: view.update); enabling global_access needs view.create."
 )
 
 

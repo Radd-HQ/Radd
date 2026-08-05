@@ -109,6 +109,9 @@ export interface UserSummary {
   id: string;
   name: string;
   active: boolean;
+  /** Auth backend (`local`/`ldap`/`oidc`/`service`) — pickers badge `service`
+   * rows so an automation identity is never mistaken for a colleague (RADD-869). */
+  source: string;
   avatar_color?: string | null;
   avatar_emoji?: string | null;
 }

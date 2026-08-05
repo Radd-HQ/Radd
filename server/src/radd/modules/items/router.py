@@ -323,6 +323,7 @@ async def unarchive_item(item_id: uuid.UUID, session: Session, user: CurrentUser
 
 @router.delete("/{item_id}", status_code=204)
 async def delete_item(item_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
-    """Hard delete (spec 38): project.manage; children must be removed first.
-    The event log keeps the item's history."""
+    """Hard delete (spec 38): gated on item.delete (spec 50 — project.manage
+    implies it); children must be removed first. The event log keeps the
+    item's history."""
     await service.delete_item(session, item_id, user)

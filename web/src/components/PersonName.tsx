@@ -43,22 +43,37 @@ export function AwayChip() {
  * comment author lines, menu rows — anywhere a person is named without an
  * avatar. Away today → chip + tooltip; otherwise renders just the name.
  */
+/** The quiet "service" chip an automation identity carries in every picker and
+ * byline (RADD-869) — the rendering half of `UserDirectoryEntry.source`. */
+function ServiceChip() {
+  return (
+    <span
+      aria-label="Service account"
+      className="shrink-0 rounded bg-elevated px-1 py-px text-[10px] font-medium leading-3 text-fg-muted"
+    >
+      service
+    </span>
+  );
+}
+
 export function PersonName({
   user,
   className = "",
 }: {
-  user: { id: string; name: string };
+  user: { id: string; name: string; source?: string };
   className?: string;
 }) {
   const onLeave = useOnLeave(user.id);
-  if (!onLeave) return <span className={className}>{user.name}</span>;
+  const isService = user.source === "service";
+  if (!onLeave && !isService) return <span className={className}>{user.name}</span>;
   return (
     <span
       className={`inline-flex items-center gap-1.5 ${className}`}
-      title={leaveTitle(user.name, onLeave)}
+      title={onLeave ? leaveTitle(user.name, onLeave) : undefined}
     >
       {user.name}
-      <AwayChip />
+      {isService && <ServiceChip />}
+      {onLeave && <AwayChip />}
     </span>
   );
 }
