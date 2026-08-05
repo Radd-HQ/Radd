@@ -24,8 +24,6 @@ export const SettingsSection = {
   teams: "teams",
   // Directory-mirrored groups (RADD-833) — read-only, admin-facing.
   groups: "groups",
-  // LEGACY segment — /settings/members redirects to Users (merged).
-  members: "members",
   // The people page (spec 84; role ladder = instance_role since spec 86) — admins.
   users: "users",
   // Consolidated Directory/LDAP settings (spec 85) — admin only.
@@ -55,9 +53,6 @@ export const SettingsSection = {
   signIn: "sign-in",
   // Operator monitoring: DB health, counts, worker lag — admin only.
   monitoring: "monitoring",
-  // LEGACY segment — /settings/leave redirects to Profile (reorg:
-  // personal absences live on Profile, team holidays on People → Holidays).
-  leave: "leave",
   // Per-team public holidays (People group) — admin-managed.
   holidays: "holidays",
 } as const;
@@ -174,7 +169,6 @@ export const RoutePath = {
   /** SSO providers + per-provider signup domain allowlists (spec 110, admin). */
   settingsSignIn: `${SETTINGS_SEGMENT}/${SettingsSection.signIn}`,
   settingsMonitoring: `${SETTINGS_SEGMENT}/${SettingsSection.monitoring}`,
-  settingsLeave: `${SETTINGS_SEGMENT}/${SettingsSection.leave}`,
   settingsHolidays: `${SETTINGS_SEGMENT}/${SettingsSection.holidays}`,
   /** Plugin manager (spec 93 / A4, admin): install/enable/disable plugins. */
   settingsPlugins: `${SETTINGS_SEGMENT}/${SettingsSection.plugins}`,
@@ -192,16 +186,13 @@ export const RoutePath = {
   /** RADD-733: the print view — a TOP-LEVEL route, outside the app layout,
    *  because the layout is exactly what must not be in the output. */
   pagePrint: "/pages/$spaceSlug/$pageSlug/print",
-  /** Pre-702 UUID URLs — kept as routes so they REDIRECT rather than 404. */
-  legacyDocs: "/docs",
-  legacyDocSpace: "/docs/$spaceSlug",
-  legacyDocPage: "/docs/$spaceSlug/$pageSlug",
   /** Page spaces admin (spec 43, doc.manage). */
   settingsPages: `${SETTINGS_SEGMENT}/${SettingsSection.pages}`,
   /** PUBLIC pages (spec 74) — root-level, outside the auth gate. */
   publicPages: "/public-pages",
   publicPageSpace: "/public-pages/$spaceSlug",
   publicPage: "/public-pages/$spaceSlug/$pageSlug",
+  // Kept until V1: the instance is public and old /kb links live in the wild (RADD-896).
   legacyKb: "/kb",
   legacyKbSpace: "/kb/$spaceSlug",
   legacyKbPage: "/kb/$spaceSlug/$pageSlug",

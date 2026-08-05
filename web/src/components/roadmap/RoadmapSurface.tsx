@@ -383,7 +383,7 @@ export function RoadmapSurface({
           // plan's schedule order so the fresh schedule reads top-to-bottom
           // by date. Chain failure toasts on its own — the committed dates
           // stand (deliberately not part of the optimistic unit).
-          void editing.applyRankChain(plan.orderedIds);
+          editing.applyRankChain(plan.orderedIds);
         },
         `Auto-schedule ${row.item.key}'s children`,
       );

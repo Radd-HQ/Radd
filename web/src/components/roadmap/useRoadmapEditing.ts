@@ -414,9 +414,8 @@ export function useRoadmapEditing(
    */
   const applyRankChain = useCallback(
     // Draft wave: the chain is recorded as one op (the sequential rank PATCHes
-    // replay at Save); `async` stays for call-site compatibility.
-    // eslint-disable-next-line @typescript-eslint/require-await
-    async (orderedIds: string[], onSuccess?: () => void) => {
+    // replay at Save).
+    (orderedIds: string[], onSuccess?: () => void) => {
       if (orderedIds.length < RANK_CHAIN_MIN_ITEMS) return;
       draft.pushOp({
         kind: "chain",
@@ -434,7 +433,7 @@ export function useRoadmapEditing(
     (row: RoadmapRow) => {
       const ordered = childrenDateOrder(row.children);
       if (ordered.length < RANK_CHAIN_MIN_ITEMS) return;
-      void applyRankChain(
+      applyRankChain(
         ordered.map((child) => child.id),
         // Always >= RANK_CHAIN_MIN_ITEMS here, so plural is safe.
         () => pushToast(`Ordered ${ordered.length} children by date`),

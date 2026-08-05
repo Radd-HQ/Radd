@@ -112,16 +112,9 @@ export const DEFAULT_BOARD_SLOTS: readonly CardSlotValue[] = [
   CardSlot.loggedTime,
 ];
 
-/** Planning rows are the densest surface — a minimal default set. */
-export const DEFAULT_PLANNING_SLOTS: readonly CardSlotValue[] = [
-  CardSlot.priority,
-  CardSlot.assignee,
-  CardSlot.state,
-];
-
-/** Queues (spec 64) have a FIXED column set — no DisplayMenu. Reporter, age
- *  and the always-on SLA chip are queue columns rendered by the queue row
- *  itself (QueueRowMeta), so `sla` is deliberately not in this list. */
+/** Queues (spec 64) have a FIXED column set — no DisplayMenu. Reporter and
+ *  the always-on SLA chip are queue table columns (spec 108), so `sla` is
+ *  deliberately not in this list. */
 export const DEFAULT_QUEUE_SLOTS: readonly CardSlotValue[] = [
   CardSlot.type,
   CardSlot.labels,

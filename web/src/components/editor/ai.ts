@@ -56,9 +56,7 @@ export function useEditorAi(enabled = true): EditorAi | null {
   const prefs = useQuery({ ...mePreferencesQuery(), enabled });
   const gateOpen =
     enabled &&
-    // `features` is optional-chained deliberately: a pre-spec-101 backend
-    // returns {enabled, provider, model} with no features map at all.
-    status.data?.features?.[AiFeature.editorActions] === true &&
+    status.data?.features[AiFeature.editorActions] === true &&
     prefs.data !== undefined &&
     prefs.data[EDITOR_AI_PREF_KEY] !== false;
   const actions = useQuery({ ...aiEditorActionsQuery, enabled: gateOpen });

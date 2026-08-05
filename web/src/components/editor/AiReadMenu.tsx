@@ -73,7 +73,7 @@ export function AiReadMenu({
 
   const aiEnabled = status.data?.enabled === true;
   const itemSummarizeOn =
-    summarizeItemId !== undefined && status.data?.features?.[AiFeature.summarize] === true;
+    summarizeItemId !== undefined && status.data?.features[AiFeature.summarize] === true;
   const summarizeAction =
     summarizeItemId !== undefined
       ? undefined // whole-issue menus never fall back to text-only summarize

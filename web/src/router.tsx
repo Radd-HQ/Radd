@@ -126,6 +126,7 @@ const publicKbSpaceRoute = createRoute({
   component: PublicPageSpacePage,
 });
 
+// Kept until V1: the instance is public and old /kb links live in the wild (RADD-896).
 const legacyKbIndexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: RoutePath.legacyKb,
@@ -337,40 +338,6 @@ const pagePrintRoute = createRoute({
   }),
 });
 
-/**
- * Pre-RADD-702 URLs. `/docs/<uuid>/<uuid>` was the canonical page address for
- * every version up to 0.5.0, so those links are in issues, chat logs and
- * bookmarks. They REDIRECT rather than 404 — and because the new route resolves
- * a segment that is an id, the redirect is a straight hand-off; PageSpacePage
- * then rewrites the address bar to the slug form.
- */
-const legacyDocsRoute = createRoute({
-  getParentRoute: () => appLayoutRoute,
-  path: RoutePath.legacyDocs,
-  beforeLoad: () => {
-    throw redirect({ to: RoutePath.pages, replace: true });
-  },
-  component: () => null,
-});
-
-const legacyDocSpaceRoute = createRoute({
-  getParentRoute: () => appLayoutRoute,
-  path: RoutePath.legacyDocSpace,
-  beforeLoad: ({ params }) => {
-    throw redirect({ to: RoutePath.pageSpace, params, replace: true });
-  },
-  component: () => null,
-});
-
-const legacyDocPageRoute = createRoute({
-  getParentRoute: () => appLayoutRoute,
-  path: RoutePath.legacyDocPage,
-  beforeLoad: ({ params }) => {
-    throw redirect({ to: RoutePath.page, params, replace: true });
-  },
-  component: () => null,
-});
-
 const settingsRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.settings,
@@ -452,16 +419,6 @@ const settingsTeamsRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: SettingsSection.teams,
   component: TeamsSettingsPage,
-});
-
-/** LEGACY members path: the old Members page merged into
- * Users — this route stays registered so old links keep working. */
-const settingsMembersRoute = createRoute({
-  getParentRoute: () => settingsRoute,
-  path: SettingsSection.members,
-  beforeLoad: () => {
-    throw redirect({ to: RoutePath.settingsUsers });
-  },
 });
 
 /** Instance user administration (spec 84) — instance-admin only (nav-gated + API 403). */
@@ -583,15 +540,6 @@ const settingsMonitoringRoute = createRoute({
   component: MonitoringSettingsPage,
 });
 
-/** LEGACY — personal absences moved onto Profile (settings reorg). */
-const settingsLeaveRoute = createRoute({
-  getParentRoute: () => settingsRoute,
-  path: SettingsSection.leave,
-  beforeLoad: () => {
-    throw redirect({ to: RoutePath.settingsProfile });
-  },
-});
-
 /** Per-team public holidays (People group) — the admin half of the old Leave page. */
 const settingsHolidaysRoute = createRoute({
   getParentRoute: () => settingsRoute,
@@ -706,9 +654,6 @@ const routeTree = rootRoute.addChildren([
     docsIndexRoute,
     docSpaceRoute,
     pageRoute,
-    legacyDocsRoute,
-    legacyDocSpaceRoute,
-    legacyDocPageRoute,
     projectSettingsRoute.addChildren([
       projectSettingsIndexRoute,
       projectSettingsGeneralRoute,
@@ -732,7 +677,6 @@ const routeTree = rootRoute.addChildren([
       settingsCyclesRoute,
       settingsGroupsRoute,
       settingsTeamsRoute,
-      settingsMembersRoute,
       settingsUsersRoute,
       settingsDirectoryRoute,
       settingsJiraImportRoute,
@@ -751,7 +695,6 @@ const routeTree = rootRoute.addChildren([
       settingsStorageRoute,
       settingsSignInRoute,
       settingsMonitoringRoute,
-      settingsLeaveRoute,
       settingsHolidaysRoute,
       // Splat LAST under settings so explicit settings pages win; plugin settings.page slots
       // render here (inside the Settings chrome). Spec 94.

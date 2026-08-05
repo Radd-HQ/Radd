@@ -4,7 +4,6 @@ import type { BucketRef } from "../../lib/axis-dnd";
 import { useBucketDrop } from "../../lib/bucket-drop";
 import { usePeek } from "../../lib/hooks";
 import {
-  CardSlot,
   DEFAULT_LIST_SLOTS,
   defaultCardDisplay,
   type CardDisplayConfig,
@@ -28,15 +27,11 @@ import {
   CycleStatusPill,
   DoneCountPill,
 } from "../cycles/CycleBadges";
-import { RowMetaSlots } from "../items/CardSlots";
-import { QueueRowMeta } from "../items/QueueMeta";
 import {
   FlagBadge,
   ItemKeyLink,
   KindBadge,
-  LabelChips,
   StarButton,
-  TypeChip,
 } from "../items/ItemBadges";
 
 interface ViewListProps {
@@ -49,15 +44,11 @@ interface ViewListProps {
   /** Epic-progress rollups by item id (spec 76) — set while the progress slot
    *  is on and epic-kind items are on the page. */
   rollupByItem?: RollupResponse;
-  /** Queue rendering (spec 64): rows gain the fixed reporter/age/SLA columns.
-   * Legacy path only — a queue with `listColumns` renders those as columns. */
-  queue?: boolean;
-  /** Table columns (spec 108): when set, rows render one typed cell per
-   * column (aligned under the sticky header) instead of the slot cluster.
-   * FIT-TO-WIDTH: boundary drags transfer width between neighbours, so the
-   * row always spans exactly the screen. The column SET comes from the saved
-   * view; widths are personal. */
-  listColumns?: ColumnDef[];
+  /** Table columns (spec 108): rows render one typed cell per column (aligned
+   * under the sticky header). FIT-TO-WIDTH: boundary drags transfer width
+   * between neighbours, so the row always spans exactly the screen. The
+   * column SET comes from the saved view; widths are personal. */
+  listColumns: ColumnDef[];
   columnWidths?: Record<string, number>;
   onColumnsApply?: (patch: Record<string, number>) => void;
   onColumnsCommit?: (patch: Record<string, number>) => void;
@@ -116,7 +107,6 @@ export function ViewList({
   display = defaultCardDisplay(DEFAULT_LIST_SLOTS),
   slaByItem,
   rollupByItem,
-  queue,
   listColumns,
   columnWidths,
   onColumnsApply,
@@ -187,7 +177,7 @@ export function ViewList({
           horizontal scroll; the Item zone flexes and cells compress toward
           their minimums when space runs short. */}
       <div className="space-y-3 p-4">
-      {listColumns && listColumns.length > 0 && (
+      {listColumns.length > 0 && (
         <ListColumnHeader
           columns={listColumns}
           widths={columnWidths ?? {}}
@@ -291,7 +281,6 @@ export function ViewList({
                       display={display}
                       sla={slaByItem?.[item.id]}
                       rollup={rollupByItem?.[item.id]}
-                      queue={queue}
                       listColumns={listColumns}
                       columnWidths={columnWidths}
                       timelog={timelogByItem?.[item.id]}
@@ -316,10 +305,8 @@ interface ListRowProps {
   sla?: SlaBatchTimer[];
   /** Epic-progress aggregates for the progress slot (spec 76). */
   rollup?: ItemRollup;
-  /** Queue row (spec 64): fixed reporter/age/always-on-SLA columns. */
-  queue?: boolean;
-  /** Table columns (spec 108) — replaces the slot cluster when present. */
-  listColumns?: ColumnDef[];
+  /** Table columns (spec 108). */
+  listColumns: ColumnDef[];
   columnWidths?: Record<string, number>;
   timelog?: ItemTimelogBatchEntry;
   usersById?: Map<string, string>;
@@ -342,7 +329,6 @@ function ListRow({
   display,
   sla,
   rollup,
-  queue,
   listColumns,
   columnWidths,
   timelog,
@@ -419,60 +405,33 @@ function ListRow({
         indicatorClass
       }
     >
-      {listColumns ? (
-        /* Table mode (spec 108), FIT-TO-WIDTH: the Item zone flexes to absorb
-           the slack, cells share the row's single flex context (identical
-           geometry to the header), and boundary drags transfer width between
-           neighbours — the row can never outgrow the screen. */
-        <>
-          <span className={ITEM_ZONE_CLASS}>
-            <RowLeading
-              item={item}
-              selectable={selectable}
-              selected={selected}
-              onSelectToggle={onSelectToggle}
-              onStar={onStar}
-            />
-            <span className="min-w-0 flex-1 truncate text-[13px] text-heading">{item.title}</span>
-          </span>
-          {listColumns.map((column) => (
-            <ColumnCell
-              key={column.id}
-              column={column}
-              item={item}
-              width={columnWidths?.[column.id] ?? column.width}
-              maxLabels={display.maxLabels}
-              sla={sla}
-              rollup={rollup}
-              loggedSeconds={timelog?.logged_seconds}
-              usersById={usersById}
-            />
-          ))}
-        </>
-      ) : (
-        <>
-          <RowLeading
-            item={item}
-            selectable={selectable}
-            selected={selected}
-            onSelectToggle={onSelectToggle}
-            onStar={onStar}
-          />
-          {display.slots.includes(CardSlot.type) && item.type && <TypeChip type={item.type} />}
-          {/* Column discipline: the title is the ONE flexible cell (fills the
-              slack, truncates when long); everything after it is fixed-width. */}
-          <span className="min-w-0 flex-1 truncate text-[13px] text-heading">{item.title}</span>
-          {display.slots.includes(CardSlot.labels) && (
-            <span className="flex w-56 shrink-0 items-center">
-              <LabelChips labels={item.labels} max={display.maxLabels} nowrap />
-            </span>
-          )}
-          <span className="flex shrink-0 items-center gap-1.5 pl-2">
-            {queue && <QueueRowMeta item={item} sla={sla} />}
-            <RowMetaSlots item={item} display={display} sla={sla} rollup={rollup} />
-          </span>
-        </>
-      )}
+      {/* Table mode (spec 108), FIT-TO-WIDTH: the Item zone flexes to absorb
+          the slack, cells share the row's single flex context (identical
+          geometry to the header), and boundary drags transfer width between
+          neighbours — the row can never outgrow the screen. */}
+      <span className={ITEM_ZONE_CLASS}>
+        <RowLeading
+          item={item}
+          selectable={selectable}
+          selected={selected}
+          onSelectToggle={onSelectToggle}
+          onStar={onStar}
+        />
+        <span className="min-w-0 flex-1 truncate text-[13px] text-heading">{item.title}</span>
+      </span>
+      {listColumns.map((column) => (
+        <ColumnCell
+          key={column.id}
+          column={column}
+          item={item}
+          width={columnWidths?.[column.id] ?? column.width}
+          maxLabels={display.maxLabels}
+          sla={sla}
+          rollup={rollup}
+          loggedSeconds={timelog?.logged_seconds}
+          usersById={usersById}
+        />
+      ))}
     </li>
   );
 }

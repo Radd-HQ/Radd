@@ -1189,7 +1189,6 @@ export function ViewPage() {
               display={display}
               slaByItem={slaByItem}
               rollupByItem={rollupByItem}
-              queue={isQueue}
               listColumns={listColumns}
               columnWidths={colWidths.widths}
               onColumnsApply={colWidths.applyWidths}
