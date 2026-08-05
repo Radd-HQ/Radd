@@ -134,7 +134,6 @@ async def field_writability(
     resolution) — the SPA disables exactly those editors up front instead of erroring on save.
     Per-(actor, project), so it's cached per project and covers every item/board/list surface."""
     project = await projects_service.get_project(session, project_id)
-    perms = await authz.effective_permissions(session, user, project=project)
     subjects = await authz.subjects_for(session, user, project)
     readonly = await service.readonly_field_keys(
         session,
