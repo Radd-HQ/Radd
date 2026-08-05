@@ -9,8 +9,9 @@ This is the payoff of mediation: "add a milestone entity → get a first-class
 feature." Model access goes only through the kernel session, so the permission and
 outbox invariants hold.
 
-The kernel imports nothing from `radd.modules.*` at module load; the CRUD handlers
-reach auth/projects/events through deferred imports (the codebase's cross-module idiom).
+The kernel imports nothing from `radd.modules.*` — at load OR inside a handler
+(RADD-892). Identity, the permission gate, row visibility and event emission are
+policies, resolved per request through the installed `kernel.hosts.EntityHost`.
 """
 
 # NOTE: deliberately NOT `from __future__ import annotations` — the generated CRUD
@@ -21,7 +22,7 @@ import uuid
 from datetime import date, datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import ConfigDict, create_model
 from sqlalchemy import (
     JSON,
@@ -43,8 +44,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import Base, get_session
 
+from .hosts import entity_host
 from .registry import registries
-from .specs import CrudResourceSpec, EntityFieldSpec, EntitySpec, EventTypeSpec
+from .specs import (
+    CrudResourceSpec,
+    EntityFieldSpec,
+    EntitySpec,
+    EventTypeSpec,
+    ProjectPurgeSpec,
+)
 
 # EntityFieldSpec.type → (SQLAlchemy column type, python type for pydantic)
 _TYPES: dict[str, tuple[Any, Any]] = {
@@ -122,6 +130,17 @@ def _event_types(spec: EntitySpec) -> tuple[EventTypeSpec, ...]:
     )
 
 
+def _project_purge(spec: EntitySpec) -> ProjectPurgeSpec:
+    """A declared entity's table has no `ON DELETE CASCADE` — `_column` never
+    emits one — so a project cannot be deleted while its rows exist. Registering
+    the purge HERE is what makes the north-star promise hold in both directions:
+    a plugin that writes no model code also writes no teardown code, and the
+    hardcoded child list that predated this (jiraimport's `_PROJECT_CHILDREN`)
+    could never have known the table existed. Order 10: entity rows are leaves.
+    """
+    return ProjectPurgeSpec(name=f"entity:{spec.key}", tables=(spec.table,), order=10)
+
+
 def register_entity(spec: EntitySpec) -> type:
     """Auto-wire an entity: build the model + register its CRUD-resource RBAC atoms
     and created/updated/deleted event types into the kernel registries. Idempotent."""
@@ -129,6 +148,9 @@ def register_entity(spec: EntitySpec) -> type:
     registries.crud_resources.setdefault(spec.key, _crud_resource(spec))
     for et in _event_types(spec):
         registries.event_types.setdefault(et.event_type, et)
+    if spec.project_scoped:
+        purge = _project_purge(spec)
+        registries.project_purges.setdefault(purge.name, purge)
     return model
 
 
@@ -156,6 +178,19 @@ def _pydantic_models(spec: EntitySpec):
     return Create, Update, Read
 
 
+async def _acting_user(
+    request: Request, session: Annotated[AsyncSession, Depends(get_session)]
+):
+    """The caller, resolved through the host at REQUEST time.
+
+    A kernel-owned dependency with a fixed signature is what lets the generated
+    routers be built while plugins are still loading: FastAPI needs a callable at
+    decoration time, and `auth.deps.CurrentUser` would have to be imported then —
+    the very dependency this file is here to shed.
+    """
+    return await entity_host().current_user(request, session)
+
+
 def crud_router(spec: EntitySpec) -> APIRouter:
     """A full CRUD router for the entity — permission-guarded by its own atoms,
     emitting its own events. The plugin writes none of this."""
@@ -164,35 +199,21 @@ def crud_router(spec: EntitySpec) -> APIRouter:
     plural = spec.plural or f"{spec.key}s"
     router = APIRouter(prefix=f"/{plural}", tags=[plural])
     Session = Annotated[AsyncSession, Depends(get_session)]
+    User = Annotated[Any, Depends(_acting_user)]
     key = spec.key
     project_scoped = spec.project_scoped
 
-    def _current_user():
-        from radd.modules.auth.deps import CurrentUser
-
-        return CurrentUser
-
-    User = _current_user()
-
     async def _require(session: AsyncSession, user, obj_or_pid, atom: str) -> None:
-        from radd.modules.auth import authz
-
+        pid = None
         if project_scoped:
-            from radd.modules.projects import service as projects_service
-
             pid = obj_or_pid if isinstance(obj_or_pid, uuid.UUID) else obj_or_pid.project_id
-            project = await projects_service.get_project(session, pid)
-            await authz.require(session, user, atom, project=project)
-        else:
-            await authz.require(session, user, atom)
+        await entity_host().require(session, user, atom, project_id=pid)
 
     async def _emit(session: AsyncSession, verb: str, obj, actor_id) -> None:
-        from radd.modules.events import service as events
-
         payload = {"id": str(obj.id)}
         if project_scoped:
             payload["project_id"] = str(obj.project_id)
-        await events.emit(
+        await entity_host().emit(
             session,
             event_type=f"{key}.{verb}",
             entity_type=key,
@@ -222,38 +243,15 @@ def crud_router(spec: EntitySpec) -> APIRouter:
 
     @router.get("", response_model=list[Read])
     async def list_(session: Session, user: User, project_id: uuid.UUID | None = None):  # type: ignore[valid-type]
-        from radd.modules.auth import authz
-
         stmt = select(model)
         if project_scoped and project_id is not None:
             stmt = stmt.where(model.project_id == project_id)
         rows = list((await session.execute(stmt.order_by(model.created_at.desc()))).scalars())
-        # Row visibility: item.read on each row's project (project-scoped entities).
+        # Row visibility is the host's call, not the kernel's: it means item.read
+        # per row's project plus (RADD-817) whatever RelationSpecs the plugin
+        # registered for this entity key.
         if project_scoped:
-            from radd.kernel.registry import registries
-            from radd.modules.projects import service as projects_service
-
-            # RADD-817: the query hook for plugin relations — a plugin that
-            # registered RelationSpecs for its entity key gets row-level
-            # narrowing here, with the same holds_base + relation_holds_row
-            # pair items use. No registered relations = the old behaviour.
-            entity_relations = registries.relations_for(key)
-            relation_actor = None
-            visible = []
-            for obj in rows:
-                project = await projects_service.get_project(session, obj.project_id)
-                perms = await authz.effective_permissions(session, user, project=project)
-                if not authz.holds_base(perms, authz.Permission.ITEM_READ):
-                    continue
-                if entity_relations:
-                    relations = authz.relations_held(perms, authz.Permission.ITEM_READ)
-                    if authz.RELATION_ANY not in relations:
-                        if relation_actor is None:
-                            relation_actor = await authz.relation_actor(session, user)
-                        if not authz.relation_holds_row(key, relations, relation_actor, obj):
-                            continue
-                visible.append(obj)
-            rows = visible
+            rows = await entity_host().visible_rows(session, user, key, rows)
         return [Read.model_validate(o) for o in rows]
 
     @router.get("/{obj_id}", response_model=Read)

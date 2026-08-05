@@ -20,12 +20,15 @@ from .specs import (
     CrudResourceSpec,
     EntitySpec,
     EventTypeSpec,
+    GrantScopeSpec,
     IntegrationSpec,
     CascadeSpec,
     McpToolSpec,
+    NavFactSpec,
     PageExtensionSpec,
     PermissionSpec,
     PluginUiManifest,
+    ProjectPurgeSpec,
     SettingSectionSpec,
     SettingSpec,
     RelationSpec,
@@ -90,6 +93,12 @@ class RaddPlugin:
     #: CREATE-shaped atom gated against its PARENT (comment.write -> item).
     relation_domains: tuple[tuple[str, str], ...] = ()
     access_resources: tuple[Any, ...] = ()
+    #: RADD-892 — facts this plugin owns and a generic consumer aggregates:
+    #: whether its nav area is worth offering, the grant scope it defines, and
+    #: which of its tables die with a project.
+    nav_facts: tuple[NavFactSpec, ...] = ()
+    grant_scopes: tuple[GrantScopeSpec, ...] = ()
+    project_purges: tuple[ProjectPurgeSpec, ...] = ()
     capabilities: tuple[CapabilitySpec, ...] = ()
     slq_fields: tuple[SlqFieldSpec, ...] = ()  # custom SLQ query fields (e.g. `note ~ "x"`)
     view_types: tuple[ViewTypeSpec, ...] = ()  # custom saved-view types

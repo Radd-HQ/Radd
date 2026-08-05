@@ -82,7 +82,7 @@ from .authz_core import (
 )
 from .authz_explain import (
     PermissionSource as PermissionSource,
-    _space_names as _space_names,
+    scope_labels as scope_labels,
     all_held_role_ids as all_held_role_ids,
     permission_sources as permission_sources,
     team_permission_sources as team_permission_sources,

@@ -8,6 +8,7 @@ from radd.config import settings
 from radd.apitypes import TOTAL_COUNT_HEADER
 from radd.db import get_session
 from radd.exceptions import ForbiddenError, UnauthorizedError
+from radd.kernel import registries
 
 from . import authz, roles as roles_service, service, service_accounts, totp
 from .deps import CurrentUser
@@ -42,7 +43,7 @@ from .schemas import (
     UserMergeRequest,
     UserRead,
 )
-from .types import SESSION_COOKIE_NAME, InstanceRole, UserSource
+from .types import SESSION_COOKIE_NAME, GrantScopeKind, InstanceRole, UserSource
 
 # The 401 detail the login form keys on to show the code field (spec 48).
 TOTP_REQUIRED = "totp_required"
@@ -117,27 +118,20 @@ async def logout(request: Request, session: Session, response: Response) -> None
     response.delete_cookie(SESSION_COOKIE_NAME)
 
 
-async def _nav_facts(session: AsyncSession, user: User) -> "NavFacts":
-    """RADD-843: the two area-visibility facts the client cannot derive from
-    lists it already loads. Feature-detected (both modules are optional and
-    load after auth); an absent module leaves its area visible — hiding is
-    presentation, and failing open here costs a link, never a leak."""
-    from .schemas import NavFacts
+async def _nav_facts(session: AsyncSession, user: User) -> dict[str, bool]:
+    """RADD-843: the area-visibility facts the client cannot derive from lists it
+    already loads — RADD-892: whichever ones are REGISTERED.
 
-    facts = NavFacts()
-    try:
-        from radd.modules.timelogging import service as timelogging
-    except ImportError:
-        pass
-    else:
-        facts.timesheet = await timelogging.nav_timesheet_visible(session, user)
-    try:
-        from radd.modules.forms import portal
-    except ImportError:
-        pass
-    else:
-        facts.portal = bool(await portal.list_portal_forms(session, user))
-    return facts
+    auth used to import timelogging and forms to ask them, which inverted the
+    load order: two optional features that load after auth, named by the module
+    they load under. Now each contributes a `NavFactSpec` and this reads the
+    registry — at request time, since a plugin may be enabled after boot. A
+    module that is not loaded leaves its key absent, which the SPA reads as
+    visible, exactly as the old feature-detection did."""
+    return {
+        spec.key: await spec.resolve(session, user)
+        for spec in registries.nav_facts.values()
+    }
 
 
 async def _me_read(session: AsyncSession, user: User) -> MeRead:
@@ -307,20 +301,15 @@ async def user_resource_access(
     readable = await authz.require_anywhere(session, target, authz.Permission.ITEM_READ)
     updatable = await authz.require_anywhere(session, target, authz.Permission.ITEM_UPDATE)
     total_projects = len(await projects_service.list_projects(session))
+    # RADD-892: how much of a SCOPE KIND the actor reaches is the scope owner's
+    # answer — spaces carry per-space ACLs auth cannot compute. Absent kind (or a
+    # kind that cannot answer, like project, whose readability is an atom
+    # question auth answers above) leaves the counts null.
     readable_spaces: int | None = None
     total_spaces: int | None = None
-    try:
-        from radd.modules.pages import access as pages_access
-        from radd.modules.pages.models import PageSpace
-    except ImportError:
-        pass
-    else:
-        from sqlalchemy import func as _func, select as _select
-
-        readable_spaces = len(await pages_access.readable_spaces(session, target))
-        total_spaces = (
-            await session.scalar(_select(_func.count()).select_from(PageSpace))
-        ) or 0
+    space_scope = registries.grant_scopes.get(GrantScopeKind.SPACE)
+    if space_scope is not None and space_scope.reach is not None:
+        readable_spaces, total_spaces = await space_scope.reach(session, target)
 
     return UserAccessRead(
         resources=[

@@ -17,11 +17,12 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError, NotFoundError
+from radd.kernel import registries
 from radd.modules.events import service as events
 
 from .models import GlobalRoleGrant
 from .schemas import GlobalGrantEntry
-from .types import AuthEntity, AuthEvent
+from .types import AuthEntity, AuthEvent, GrantScopeKind
 from radd.clock import utcnow
 
 
@@ -246,6 +247,30 @@ async def role_referenced(session: AsyncSession, role_id: uuid.UUID) -> bool:
 # --- grant-centric CRUD (the unified Grant Role dialog) -----------------------
 
 
+async def _check_scope(
+    session: AsyncSession, *, project_id: uuid.UUID | None, space_id: uuid.UUID | None
+) -> None:
+    """Refuse a grant bound to a scope that does not exist (RADD-892).
+
+    The columns are auth's, so the pairs are listed here; whether an id is REAL
+    is the scope owner's answer, read from the registry. A kind whose module is
+    not loaded cannot be checked — the foreign key is then the only guard, which
+    turns a bad id into a 500 rather than a 404, and that is the honest cost of
+    the module being absent.
+    """
+    for kind, scope_id in (
+        (GrantScopeKind.PROJECT, project_id),
+        (GrantScopeKind.SPACE, space_id),
+    ):
+        if scope_id is None:
+            continue
+        spec = registries.grant_scopes.get(kind)
+        if spec is None:
+            continue
+        if not await spec.exists(session, scope_id):
+            raise NotFoundError(kind, scope_id)
+
+
 async def create_grant(
     session: AsyncSession,
     role_id: uuid.UUID,
@@ -262,7 +287,6 @@ async def create_grant(
     No scope id = instance-wide; a project id or a space id (RADD-791) binds it
     to that one thing."""
     from radd.modules.groups import service as groups_service
-    from radd.modules.projects import service as projects_service
     from radd.modules.teams import service as teams
 
     from . import roles as roles_service, service as users_service
@@ -282,14 +306,7 @@ async def create_grant(
         await groups_service.groups_by_ids(session, [group_id])
     ).get(group_id) is None:
         raise ConflictError(AuthEntity.GLOBAL_GRANT, reason=f"no such group {group_id}")
-    if project_id is not None:
-        await projects_service.get_project(session, project_id)
-    if space_id is not None:
-        # Deferred: pages loads after auth, and auth must not import it at module
-        # scope. The FK guarantees the row exists; this turns a 500 into a 409.
-        from radd.modules.pages import spaces as pages_spaces
-
-        await pages_spaces.get_space(session, space_id)
+    await _check_scope(session, project_id=project_id, space_id=space_id)
     # Guard duplicates (NULL scope columns aren't caught by the unique constraint).
     existing = await session.scalar(
         select(GlobalRoleGrant.id).where(

@@ -15,12 +15,13 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.kernel import registries
 from radd.modules.projects.models import Project
 
 from . import grants
 from .authz_core import baseline_permissions
 from .models import ProjectMember, Role, User
-from .types import InstanceRole, expand_permissions
+from .types import GrantScopeKind, InstanceRole, expand_permissions
 
 
 @dataclass(frozen=True)
@@ -255,8 +256,10 @@ async def team_permission_sources(session: AsyncSession, team_id: uuid.UUID) -> 
     from radd.modules.projects import service as projects_service  # deferred
 
     keys = await projects_service.project_keys(session, project_ids) if project_ids else {}
-    space_names = await _space_names(
-        session, {g.space_id for g in grant_rows if g.space_id is not None}
+    space_names = await scope_labels(
+        session,
+        GrantScopeKind.SPACE,
+        {g.space_id for g in grant_rows if g.space_id is not None},
     )
 
     role_ids = {rid for rid, _, _, _ in channels} | {g.role_id for g in grant_rows}
@@ -305,18 +308,23 @@ async def team_permission_sources(session: AsyncSession, team_id: uuid.UUID) -> 
     return sorted(sources.values(), key=lambda s: (s.permission, s.scope_label or ""))
 
 
-async def _space_names(session: AsyncSession, space_ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
-    """Wiki-space display names, feature-detected (pages is an optional module)."""
-    if not space_ids:
+async def scope_labels(
+    session: AsyncSession, kind: GrantScopeKind, scope_ids: set[uuid.UUID]
+) -> dict[uuid.UUID, str]:
+    """Display names for the things grants of `kind` are bound to (RADD-892).
+
+    Read from the registered `GrantScopeSpec` rather than queried here: auth owns
+    the `space_id` column but not what a space is CALLED, and reaching into
+    `pages.models` for the name was the last non-spine model import in the
+    codebase. An unregistered kind (its module disabled) yields no labels, which
+    renders the scope unlabelled — the same degradation the old feature-detected
+    import produced."""
+    if not scope_ids:
         return {}
-    try:
-        from radd.modules.pages.models import PageSpace
-    except ImportError:
+    spec = registries.grant_scopes.get(kind)
+    if spec is None:
         return {}
-    rows = await session.execute(
-        select(PageSpace.id, PageSpace.name).where(PageSpace.id.in_(space_ids))
-    )
-    return dict(rows.all())
+    return await spec.labels(session, scope_ids)
 
 
 async def all_held_role_ids(session: AsyncSession, user: User) -> set[uuid.UUID]:

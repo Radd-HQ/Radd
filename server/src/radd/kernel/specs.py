@@ -328,6 +328,75 @@ class CascadeSpec:
     after_commit: Callable[[Any], Awaitable[None]] | None = None
 
 
+# --- fact providers (RADD-892: the aggregation inversion) ---
+#
+# Three registries, one shape: the feature that OWNS a fact declares it, and a
+# generic consumer iterates. Each replaces a consumer that had grown a hardcoded
+# list of the features it aggregated — auth reaching into timelogging/forms for
+# nav visibility and into pages for space names, jiraimport naming seven other
+# modules' tables by string — which inverts the load order those consumers are
+# supposed to sit above.
+@dataclass(frozen=True)
+class NavFactSpec:
+    """One area-visibility answer the client cannot derive from lists it already
+    loads (RADD-843).
+
+    The consumer (`GET /auth/me`) does not know which facts exist; it serves
+    whatever is registered, keyed by `key`. A module that is not loaded
+    contributes no fact and the key is simply absent, which the SPA reads as
+    VISIBLE — hiding is presentation, every area still enforces its own authz on
+    direct navigation, and failing open here costs a link, never a leak.
+    """
+
+    key: str  # the key on /auth/me's `nav` object, e.g. "timesheet"
+    resolve: Callable[[Any, Any], Awaitable[bool]]  # (session, user) -> is the area worth offering
+
+
+@dataclass(frozen=True)
+class GrantScopeSpec:
+    """A kind of thing a role grant can be BOUND to — spec 91's project scope,
+    RADD-791's wiki space.
+
+    `key` names the `<key>_id` column on the grant row, so this registry does NOT
+    make the set of scopes open: a new kind needs a column, i.e. a migration in
+    auth. What it inverts is the KNOWLEDGE — what a scope id is called, whether
+    it is real, how much of the kind an actor reaches — none of which auth can
+    answer without importing the module that owns the scope.
+
+    `reach` is optional because only a scope kind whose readability is its own
+    can answer it: wiki spaces carry per-space ACLs, while project readability is
+    an atom question auth answers with its own machinery.
+    """
+
+    key: str
+    labels: Callable[[Any, Any], Awaitable[dict]]  # (session, ids) -> {id: display name}
+    exists: Callable[[Any, Any], Awaitable[bool]]  # (session, id) -> is this a real scope
+    reach: Callable[[Any, Any], Awaitable[tuple[int, int]]] | None = None  # -> (readable, total)
+
+
+@dataclass(frozen=True)
+class ProjectPurgeSpec:
+    """Rows that must be destroyed with a project because the DATABASE will not
+    do it — their `project_id` foreign key carries no `ON DELETE CASCADE`.
+
+    Table names rather than a callback, deliberately: the value of the registry
+    is that coverage can be CHECKED (tests/test_project_purge.py asserts every
+    non-cascading project-scoped table is named by some spec), and a callback is
+    opaque to that check. A plain DELETE is also the right verb — a purge is an
+    administrative teardown of rows nobody authored, so routing it through each
+    module's service would re-run permission checks and emit deletion events for
+    work that never really happened.
+
+    `tables` are deleted in the order given; `order` sequences the modules
+    against each other (low first), because a table must go before the one its
+    rows point at.
+    """
+
+    name: str
+    tables: tuple[str, ...]
+    order: int = 50
+
+
 # --- page extensions (RADD-709: live blocks embedded in a page's markdown) ---
 @dataclass(frozen=True)
 class PageExtensionSpec:

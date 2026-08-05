@@ -12,12 +12,13 @@ from fastapi.responses import JSONResponse
 
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin, SlqFieldSpec
-from radd.kernel import PermissionSpec
+from radd.kernel import NavFactSpec, PermissionSpec, ProjectPurgeSpec
 from radd.kernel import SettingSpec
 
 from .slq import logged_by_item_ids
 
 from . import categories
+from . import service
 from .category_router import router as category_router
 from .duration import DurationError
 from .enablement_router import router as enablement_router
@@ -64,6 +65,13 @@ plugin = RaddPlugin(
         PermissionSpec("timesheet.view", "global", "See other people's timesheets (global)."),
     ),
     relations=(WORKLOG_OWN,),
+    # RADD-892: auth used to import this module to answer "offer the Timesheet?".
+    nav_facts=(NavFactSpec(key="timesheet", resolve=service.nav_timesheet_visible),),
+    # `project_timelogging` already cascades in the database; declared anyway so
+    # the purge does not silently depend on a migration nobody re-reads.
+    project_purges=(
+        ProjectPurgeSpec(name="timelogging", tables=("project_timelogging",), order=20),
+    ),
     # RADD-891: the scalar cascade keys timelogging/the timesheet read
     # (`settings.service.resolve`) — moved out of `settings.types`'s old
     # hardcoded `SETTINGS_REGISTRY` dict onto the module that owns them.

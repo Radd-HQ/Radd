@@ -1,6 +1,7 @@
-from radd.kernel import EventTypeSpec
+from radd.kernel import EventTypeSpec, GrantScopeSpec
 from radd.kernel import RaddPlugin
 
+from . import service
 from .router import instance_router, project_router
 from .types import ProjectEvent
 
@@ -17,5 +18,15 @@ plugin = RaddPlugin(
     mcp_tools=mcptools.MCP_TOOLS,
     event_types=(
         EventTypeSpec(ProjectEvent.PROJECT_CREATED, "Project created", "Admin"),
+    ),
+    # RADD-892: what a project-scoped role grant is bound to. No `reach` — how
+    # many projects someone can READ is an atom question, and auth answers it
+    # with its own machinery rather than asking the scope owner.
+    grant_scopes=(
+        GrantScopeSpec(
+            key="project",
+            labels=service.project_keys,
+            exists=service.project_exists,
+        ),
     ),
 )

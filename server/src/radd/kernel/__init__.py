@@ -21,6 +21,7 @@ from .registry import (
     register_permission,
     registries,
 )
+from .hosts import EntityHost, entity_host, set_entity_host
 from .specs import (
     CapabilitySpec,
     CascadeSpec,
@@ -29,12 +30,15 @@ from .specs import (
     EntityFieldSpec,
     EntitySpec,
     EventTypeSpec,
+    GrantScopeSpec,
     IntegrationSpec,
     McpToolSpec,
+    NavFactSpec,
     NavItemSpec,
     PageExtensionSpec,
     PermissionSpec,
     PluginUiManifest,
+    ProjectPurgeSpec,
     SettingSectionSpec,
     SettingSpec,
     SlqFieldContext,
@@ -74,7 +78,13 @@ __all__ = [
     "McpToolSpec",
     "PageExtensionSpec",
     "NavItemSpec",
+    "NavFactSpec",
+    "GrantScopeSpec",
+    "ProjectPurgeSpec",
     "PluginUiManifest",
     "SettingSectionSpec",
     "SettingSpec",
+    "EntityHost",
+    "entity_host",
+    "set_entity_host",
 ]

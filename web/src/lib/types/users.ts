@@ -21,8 +21,10 @@ export interface Me {
    * rest of the payload describes the TARGET, which is the point. */
   view_as?: { real_id: string; real_name: string } | null;
   /** RADD-843: server-answered area-visibility facts for the shell nav.
-   * Absent (older payload) = every area visible — hiding is presentation. */
-  nav?: { timesheet: boolean; portal: boolean };
+   * RADD-892 made it an open map keyed by the contributing plugin, so a key is
+   * absent whenever that plugin is not loaded — and absent (like an older
+   * payload) means visible: hiding is presentation. */
+  nav?: { timesheet?: boolean; portal?: boolean };
 }
 
 /** PATCH /auth/me (spec 34) — omitted keys unchanged; explicit null clears avatar. */

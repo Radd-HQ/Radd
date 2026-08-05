@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import delete as sa_delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.kernel import registries
 from radd.modules.items.models import WorkItem
 
 from . import ledger
@@ -171,20 +172,6 @@ async def execute(
     return result
 
 
-# Creating a project fires hooks that seed default states, issue types and views.
-# Those are not in the ledger (the import did not ask for them), but they DO hold
-# the project down, so undoing a created project has to take them with it.
-_PROJECT_CHILDREN: tuple[str, ...] = (
-    "views",
-    "forms",
-    "releases",
-    "work_items",
-    "issue_types",
-    "states",
-    "project_timelogging",
-)
-
-
 async def _delete(session: AsyncSession, entity: LedgerEntity, entity_id: str) -> None:
     typed = _typed(entity_id)
     if entity is LedgerEntity.PROJECT:
@@ -201,7 +188,16 @@ async def _delete(session: AsyncSession, entity: LedgerEntity, entity_id: str) -
                 f"{remaining} issue(s) were kept (edited since the import), so the "
                 "project was kept too"
             )
-        for table in _PROJECT_CHILDREN:
+        # Creating a project fires hooks that seed default states, issue types
+        # and views. Those are not in the ledger (the import did not ask for
+        # them) but they DO hold the project down, so undoing a created project
+        # takes them with it. RADD-892: which tables those are is no longer a
+        # list HERE — jiraimport was naming seven other modules' tables by
+        # string, so a module that added a project-scoped table (or a plugin
+        # that declared a project-scoped entity, which nothing could have
+        # anticipated) silently fell out of coverage. Each owner registers a
+        # ProjectPurgeSpec; this reads them in the order the registry resolves.
+        for table in registries.project_purge_tables():
             await session.execute(
                 text(f"DELETE FROM {table} WHERE project_id = :id"), {"id": typed}
             )

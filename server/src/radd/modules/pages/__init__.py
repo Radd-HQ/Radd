@@ -13,6 +13,7 @@ from radd.kernel import PermissionSpec
 from . import attachments_binding  # registers the page parent (spec 102)
 from . import comments_binding  # registers the page comment parent (RADD-717)
 from .extensions import PAGE_EXTENSIONS
+from .grantscope import SPACE_SCOPE
 from .public_router import router as public_router
 from .router import router
 from .types import PageEvent
@@ -63,6 +64,8 @@ plugin = RaddPlugin(
         EventTypeSpec(PageEvent.LINK_DELETED, "Page↔issue link removed", "Pages", item_scoped=True),
     ),
     page_extensions=PAGE_EXTENSIONS,
+    # RADD-892: a space is a grant scope, and only pages can name/count one.
+    grant_scopes=(SPACE_SCOPE,),
     # RADD-889: the doc tools of the spec-45 MCP catalog live with their owner —
     # registration replaces the mcp pages_bridge feature probe, so disabling this
     # plugin removes them from catalog + dispatch together.

@@ -26,6 +26,7 @@ from radd.config import settings
 from radd.kernel import registries
 
 MODULES_DIR = Path(__file__).resolve().parents[1] / "src" / "radd" / "modules"
+KERNEL_DIR = MODULES_DIR.parent / "kernel"
 
 #: Rule-1 spine: models importable by everyone. items/workflow/teams/fields are
 #: READ-ONLY blessings (the audit's §3b/§3d reality — WorkItem has 14 FK
@@ -37,10 +38,10 @@ SPINE = {"auth", "projects", "items", "workflow", "teams", "fields"}
 
 #: (importing module, imported module) pairs the audit found reaching a
 #: non-spine models.py — frozen so the class cannot GROW. Shrunk by the
-#: RADD-887/888 seam work; never extended without a review.
-MODEL_IMPORT_ALLOWLIST: set[tuple[str, str]] = {
-    ("auth", "pages"),  # RADD-791 space-scope reach → the RADD-892 inversion
-}
+#: RADD-887/888 seam work and EMPTIED by RADD-892, which inverted auth's reach
+#: into `pages.models` into a registered GrantScopeSpec. An addition needs a
+#: reason reviewed here; the burn-down is finished.
+MODEL_IMPORT_ALLOWLIST: set[tuple[str, str]] = set()
 
 
 def _module_edges(module: str) -> list[tuple[str, str | None, str]]:
@@ -67,6 +68,23 @@ def _module_edges(module: str) -> list[tuple[str, str | None, str]]:
                             (parts[2], parts[3] if len(parts) > 3 else None, f"{where}:{node.lineno}")
                         )
     return edges
+
+
+def _kernel_module_imports() -> list[str]:
+    """Every `radd.modules.*` import anywhere under `kernel/`, deferred included."""
+    found = []
+    for path in KERNEL_DIR.rglob("*.py"):
+        tree = ast.parse(path.read_text(), filename=str(path))
+        for node in ast.walk(tree):
+            names = []
+            if isinstance(node, ast.ImportFrom) and node.module:
+                names = [node.module]
+            elif isinstance(node, ast.Import):
+                names = [a.name for a in node.names]
+            for name in names:
+                if name.split(".")[:2] == ["radd", "modules"]:
+                    found.append(f"{path.relative_to(KERNEL_DIR.parent)}:{node.lineno}: {name}")
+    return found
 
 
 def _all_modules() -> list[str]:
@@ -100,6 +118,16 @@ def test_allowlist_only_shrinks():
                 live.add((module, target))
     stale = MODEL_IMPORT_ALLOWLIST - live
     assert not stale, f"allowlist entries with no surviving import: {sorted(stale)}"
+
+
+def test_the_kernel_imports_no_plugin():
+    """The kernel is mechanism; a plugin is policy. Nothing under `kernel/` may
+    import `radd.modules.*` — including from inside a handler, which is how
+    `kernel/entities.py` reached auth/projects/events for years while its own
+    docstring claimed purity (RADD-892). Policies arrive through
+    `kernel.hosts.EntityHost` and the contribution registries."""
+    found = _kernel_module_imports()
+    assert not found, "the kernel imports plugins:\n  " + "\n  ".join(found)
 
 
 def test_every_import_is_declared():

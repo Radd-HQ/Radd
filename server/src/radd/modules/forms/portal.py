@@ -129,6 +129,14 @@ async def list_portal_forms(session: AsyncSession, actor: User) -> list[PortalGr
     return groups
 
 
+async def nav_portal_visible(session: AsyncSession, actor: User) -> bool:
+    """Is the requester portal worth offering (RADD-843, contributed as a
+    NavFactSpec in RADD-892)? Eligibility for at least one form — the same
+    computation `GET /portal/forms` runs, kept here so the nav answer and the
+    page can never disagree."""
+    return bool(await list_portal_forms(session, actor))
+
+
 async def render_portal_form(
     session: AsyncSession, form_id: uuid.UUID, actor: User
 ) -> PortalFormRead:

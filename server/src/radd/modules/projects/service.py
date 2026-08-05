@@ -64,6 +64,12 @@ async def project_keys(session: AsyncSession, ids: Iterable[uuid.UUID]) -> dict[
     return dict(rows.all())
 
 
+async def project_exists(session: AsyncSession, project_id: uuid.UUID) -> bool:
+    """Is this a real project — asked by callers validating a REFERENCE (a role
+    grant's scope), which want a boolean, not the row and not an exception."""
+    return await session.scalar(select(Project.id).where(Project.id == project_id)) is not None
+
+
 async def allocate_item_number(session: AsyncSession, project_id: uuid.UUID) -> int:
     """Atomically claim the next item number for a project (safe under concurrency)."""
     result = await session.execute(

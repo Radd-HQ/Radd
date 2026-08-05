@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
-from radd.kernel import CrudResourceSpec, PermissionSpec
+from radd.kernel import CrudResourceSpec, PermissionSpec, ProjectPurgeSpec
 from radd.kernel import SettingSpec
 
 from . import subscribers  # noqa: F401  — registers the project-created hook
@@ -37,6 +37,15 @@ plugin = RaddPlugin(
         ),
     ),
     crud_resources=(CrudResourceSpec("state", "project", "workflow states", "state.manage"),),
+    # RADD-892: order 70 — every item points at a state, so items go first. The
+    # transitions must go before the states they join, which the hardcoded list
+    # this replaces never did: it named `states` alone, and a project with any
+    # transition row could not be purged at all.
+    project_purges=(
+        ProjectPurgeSpec(
+            name="workflow", tables=("workflow_transitions", "states"), order=70
+        ),
+    ),
     # RADD-891: the enforcement mode workflow.check_transition resolves per
     # item project — moved off `settings.types`'s old hardcoded dict.
     settings_keys=(

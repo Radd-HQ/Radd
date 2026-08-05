@@ -264,21 +264,6 @@ class ViewAsStart(BaseModel):
     user_id: uuid.UUID
 
 
-class NavFacts(BaseModel):
-    """Server-answered area-visibility facts for the shell nav (RADD-843).
-    Hiding is presentation — every one of these areas still enforces its own
-    authz on direct navigation; these exist so the nav can stop offering
-    destinations that cannot be useful to the actor."""
-
-    #: Any readable project with time logging enabled, OR the actor has worklog
-    #: rows, OR timesheet.view held anywhere. Defined in ONE function beside
-    #: the timesheet's own authz (timelogging.nav_timesheet_visible).
-    timesheet: bool = True
-    #: The actor's portal-form eligibility is non-empty — the same computation
-    #: GET /portal/forms already runs.
-    portal: bool = True
-
-
 class MeRead(BaseModel):
     id: uuid.UUID
     email: str
@@ -299,8 +284,11 @@ class MeRead(BaseModel):
     # delegation exists for.
     manages_teams: bool = False
     #: RADD-843 — area-visibility facts the client cannot derive from lists it
-    #: already loads. Defaults keep the areas visible on older payloads.
-    nav: NavFacts = Field(default_factory=lambda: NavFacts())
+    #: already loads, keyed by the contributing plugin's `NavFactSpec.key`
+    #: (RADD-892). An open map rather than named booleans because auth does not
+    #: know which features exist; a MISSING key means visible, which is how the
+    #: SPA already reads an unknown fact.
+    nav: dict[str, bool] = Field(default_factory=dict)
     avatar_color: str | None = None
     avatar_emoji: str | None = None
     timezone: str = ""

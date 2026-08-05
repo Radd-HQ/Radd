@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
-from radd.kernel import PermissionSpec
+from radd.kernel import PermissionSpec, ProjectPurgeSpec
 from radd.kernel import SettingSpec
 
 from .enums import ItemEvent
@@ -88,6 +88,10 @@ plugin = RaddPlugin(
     ),
     # RADD-823: what @own / @team MEAN for an item (D6 reporter; D13 item.team_id).
     relations=ITEM_RELATIONS,
+    # RADD-892: `work_items.project_id` carries no ON DELETE CASCADE, so a dying
+    # project takes its items with it explicitly. Ordered after the tables that
+    # point AT an item (order 20) and before the states/types it points at.
+    project_purges=(ProjectPurgeSpec(name="items", tables=("work_items",), order=50),),
     # RADD-889: the item tools of the spec-45/114 MCP catalog live with their owner.
     mcp_tools=MCP_TOOLS,
 )

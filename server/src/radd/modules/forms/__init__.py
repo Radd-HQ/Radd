@@ -3,8 +3,9 @@ from fastapi.responses import JSONResponse
 
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
-from radd.kernel import CrudResourceSpec, PermissionSpec
+from radd.kernel import CrudResourceSpec, NavFactSpec, PermissionSpec, ProjectPurgeSpec
 
+from . import portal
 from . import staging  # noqa: F401 — registers the staging attachment parent (RADD-800)
 from .portal_router import requests_router as portal_requests_router, router as portal_router
 from .router import router
@@ -27,6 +28,11 @@ plugin = RaddPlugin(
         ),
     ),
     crud_resources=(CrudResourceSpec("form", "project", "intake forms", "form.manage"),),
+    # RADD-892: the two facts about forms other machinery used to reach in for —
+    # whether the portal is worth a nav link, and that a form dies with its
+    # project (`forms.project_id` carries no ON DELETE CASCADE).
+    nav_facts=(NavFactSpec(key="portal", resolve=portal.nav_portal_visible),),
+    project_purges=(ProjectPurgeSpec(name="forms", tables=("forms",), order=20),),
     description=(
         "Template-scoped intake forms (spec 17): capture structured intake against the "
         "field registry and create a work item with defaults applied. Spec 62 adds the "

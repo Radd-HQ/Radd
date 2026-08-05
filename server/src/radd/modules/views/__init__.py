@@ -1,5 +1,5 @@
 from radd.kernel import RaddPlugin, SlqFieldSpec
-from radd.kernel import CrudResourceSpec
+from radd.kernel import CrudResourceSpec, ProjectPurgeSpec
 
 from .router import router
 from .slqfield import roadmap_member_item_ids
@@ -9,6 +9,9 @@ from .service import _VIEW_SPEC
 
 plugin = RaddPlugin(
     name="views",
+    # RADD-892: `views.project_id` carries no ON DELETE CASCADE. Its members
+    # cascade off the view row, so the view alone is enough.
+    project_purges=(ProjectPurgeSpec(name="views", tables=("views",), order=20),),
     crud_resources=(
         CrudResourceSpec("view", "project", "saved views", "project.manage"),
         # Spec 109: the shared board-card layout preset library.

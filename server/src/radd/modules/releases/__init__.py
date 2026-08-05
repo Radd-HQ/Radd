@@ -1,6 +1,6 @@
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
-from radd.kernel import CrudResourceSpec
+from radd.kernel import CrudResourceSpec, ProjectPurgeSpec
 from radd.kernel import SettingSpec
 
 from .router import router
@@ -13,6 +13,9 @@ plugin = RaddPlugin(
     name="releases",
     # No coarse verb of its own: the umbrella is project.manage directly.
     crud_resources=(CrudResourceSpec("release", "project", "releases", "project.manage"),),
+    # RADD-892: `releases.project_id` carries no ON DELETE CASCADE. Order 30 —
+    # an item's `release_id` is SET NULL, so items may still be standing.
+    project_purges=(ProjectPurgeSpec(name="releases", tables=("releases",), order=30),),
     description=(
         "Project-scoped releases/versions. Ordinary API resources a CI service-account "
         "or the automations engine can POST to and assign — replaces the CI-writes-labels hack."
