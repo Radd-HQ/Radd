@@ -177,16 +177,19 @@
 /* --- AI diff review (Crepe's diff.css) ------------------------------------ */
 
 /* Our fork emits upstream's `milkdown-diff-*` classes (see
-   diff/decoration-plugin.ts). Green for what a run proposes, slate struck
+   diff/decoration-plugin.ts + diff/doc-utils.ts: -added/-added-block/
+   -removed/-removed-block). Green for what a run proposes, slate struck
    through for what it removes — the traffic-light reading the rest of the app
-   uses, over the chart tokens so both themes stay legible. */
-.radd-rich-editor .milkdown .milkdown-diff-insert,
-.radd-rich-editor .milkdown .milkdown-diff-block-insert {
+   uses, over the chart tokens so both themes stay legible. These rules styled
+   upstream's OLD -insert/-delete names for two releases (RADD-879), so pure
+   deletions rendered with no treatment at all. */
+.radd-rich-editor .milkdown .milkdown-diff-added,
+.radd-rich-editor .milkdown .milkdown-diff-added-block {
   background: color-mix(in srgb, var(--chart-progress) 22%, transparent);
   border-radius: 3px;
 }
-.radd-rich-editor .milkdown .milkdown-diff-delete,
-.radd-rich-editor .milkdown .milkdown-diff-block-delete {
+.radd-rich-editor .milkdown .milkdown-diff-removed,
+.radd-rich-editor .milkdown .milkdown-diff-removed-block {
   background: color-mix(in srgb, var(--chart-canceled) 22%, transparent);
   text-decoration: line-through;
   color: var(--color-fg-muted);
