@@ -88,16 +88,22 @@ def _find_or_create_space(base: str, token: str) -> dict:
 
 
 def _find_or_create_page(
-    base: str, token: str, space: dict, title: str, parent_id: str | None, body: str
+    base: str, token: str, space: dict, title: str, parent_id: str | None, body: str,
+    overwrite: bool = True,
 ) -> dict:
     """Find by (parent, title) and update, else create. Title is the identity
     here rather than the slug: a page whose URL someone deliberately changed is
-    still the same page, and re-running a release must not fork it."""
+    still the same page, and re-running a release must not fork it.
+
+    `overwrite=False` (RADD-862): the body applies at CREATION only — for the
+    structural root/section pages, whose content belongs to the operator once
+    they exist. The 0.20.0 publish silently reset the section to its default,
+    deleting the radd:children embed fence placed there minutes earlier."""
     rows = _request(f"{base}/api/v1/page-spaces/{space['id']}/pages", token)
     for row in rows:  # type: ignore[union-attr]
         if row["title"] == title and (row["parent_id"] or None) == parent_id:
             current = _request(f"{base}/api/v1/pages/{row['id']}", token)
-            if body and current.get("body") != body:  # type: ignore[union-attr]
+            if overwrite and body and current.get("body") != body:  # type: ignore[union-attr]
                 return _request(  # type: ignore[return-value]
                     f"{base}/api/v1/pages/{row['id']}", token, "PATCH", {"body": body}
                 )
@@ -118,6 +124,7 @@ def publish_page(base: str, token: str, version: str, markdown: str) -> str:
         None,
         "Radd's own documentation. Release notes are generated per version by "
         "`scripts/release_notes.py` when a tag is pushed.",
+        overwrite=False,
     )
     section = _find_or_create_page(
         base,
@@ -125,7 +132,11 @@ def publish_page(base: str, token: str, version: str, markdown: str) -> str:
         space,
         SECTION_PAGE,
         root["id"],
-        "One page per released version, newest first in the tree.",
+        # The creation default IS the unified page (RADD-858): every child
+        # transcluded, live. Never overwritten after creation.
+        "One page per released version.\n\n"
+        "```radd:children\n{\"mode\": \"embed\"}\n```\n",
+        overwrite=False,
     )
     page = _find_or_create_page(base, token, space, version, section["id"], markdown)
     return f"{base}/pages/{space['slug']}/{page['slug']}"
