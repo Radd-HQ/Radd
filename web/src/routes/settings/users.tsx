@@ -2,7 +2,7 @@ import { Fragment, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, ChevronDown, ChevronRight, Lock, UserRound } from "lucide-react";
 import { Link } from "@tanstack/react-router";
-import { ApiError, api, errorMessage } from "../../lib/api";
+import { ApiError, api } from "../../lib/api";
 import { ApiPath, RoutePath, SEARCH_DEBOUNCE_MS, apiUserPath } from "../../lib/constants";
 import { useCurrentUser, useDebounced, usePermissions } from "../../lib/hooks";
 import { INSTANCE_ROLE_LABELS } from "../../lib/meta";
@@ -31,6 +31,8 @@ import { DuplicatesSection } from "../../components/settings/UserDuplicates";
 import { SOURCE_LABELS, SourceBadge } from "../../components/settings/UserSourceBadge";
 import { Table, TBody, Td, THead, Th } from "../../components/Table";
 import { RoleGrantsSection } from "../../components/settings/RoleGrantsSection";
+import { ErrorText } from "../../components/ErrorText";
+import { formatDateTime } from "../../lib/dates";
 
 /**
  * THE people page (spec 84; spec 86 collapsed the membership layer): every
@@ -177,7 +179,7 @@ export function UsersSettingsPage() {
             </div>
           )}
           {patchUser.isError && (
-            <p className="mt-2 text-xs text-red-400">{errorMessage(patchUser.error)}</p>
+            <ErrorText className="mt-2" error={patchUser.error} />
           )}
           {isInstanceAdmin && <DuplicatesSection />}
           {deleting && (
@@ -308,7 +310,7 @@ function UsersTable({
                 </Td>
                 <Td>
                   {user.last_login_at ? (
-                    new Date(user.last_login_at).toLocaleString()
+                    formatDateTime(user.last_login_at)
                   ) : (
                     <span className="text-fg-faint">Never</span>
                   )}

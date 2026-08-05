@@ -18,6 +18,8 @@ import {
 } from "../../lib/types";
 import { Button } from "../Button";
 import { Select } from "../Select";
+import { IconButton } from "../IconButton";
+import { ErrorText } from "../ErrorText";
 
 /**
  * Related / external links on an item (`weblinks` module): docs, design files,
@@ -73,15 +75,14 @@ function WebLinkRow({ link, canWrite }: { link: WebLink; canWrite: boolean }) {
       </a>
       <span className="shrink-0 text-[11px] text-fg-faint">{meta?.label ?? link.category}</span>
       {canWrite && (
-        <button
-          type="button"
+        <IconButton
+          danger
           onClick={() => remove.mutate()}
           disabled={remove.isPending}
           aria-label={`Remove link ${link.title || link.url}`}
-          className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer disabled:opacity-50"
         >
           <X size={13} />
-        </button>
+        </IconButton>
       )}
     </li>
   );
@@ -117,14 +118,10 @@ function AddWebLinkForm({ itemId }: { itemId: string }) {
 
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="flex w-fit items-center gap-1.5 rounded border border-strong px-2 py-1 text-xs text-fg hover:bg-elevated cursor-pointer"
-      >
+      <Button variant="secondary" size="sm" className="w-fit" onClick={() => setOpen(true)}>
         <Plus size={12} aria-hidden />
         Add link
-      </button>
+      </Button>
     );
   }
 
@@ -158,7 +155,7 @@ function AddWebLinkForm({ itemId }: { itemId: string }) {
           }))}
         />
       </div>
-      {create.isError && <p className="text-xs text-red-400">{errorMessage(create.error)}</p>}
+      {create.isError && <ErrorText error={create.error} />}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" onClick={() => setOpen(false)}>
           Cancel

@@ -20,6 +20,7 @@ import { Avatar } from "../Avatar";
 import { formatPoints } from "./ItemBadges";
 import { Spinner } from "../Spinner";
 import { compareChildrenOpenFirst } from "../../lib/view-utils";
+import { ErrorText } from "../ErrorText";
 
 /**
  * An item's children, on the item (RADD-655, RADD-660).
@@ -114,7 +115,7 @@ export function ChildrenSection({
           {children.isPending ? (
             <Spinner label="Loading children…" />
           ) : children.isError ? (
-            <p className="text-xs text-red-400">{errorMessage(children.error)}</p>
+            <ErrorText error={children.error} />
           ) : children.data.length === 0 ? (
             <p className="text-[13px] text-fg-faint">
               {isChecklist ? "No subtasks yet." : "No child items yet."}

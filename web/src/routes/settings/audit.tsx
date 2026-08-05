@@ -14,6 +14,7 @@ import { Table, TBody, Td, THead, Th } from "../../components/Table";
 import { TableSkeleton } from "../../components/TableSkeleton";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { QueryError } from "../../components/QueryError";
+import { formatDateTime } from "../../lib/dates";
 
 /** Entity filter options (wire entity_type -> label). "" = all. */
 const ENTITY_OPTIONS: readonly (readonly [string, string])[] = [
@@ -142,8 +143,8 @@ function AuditRow({ entry }: { entry: AuditEntry }) {
   return (
     <tr>
       <Td className="whitespace-nowrap text-fg-muted">
-        <time dateTime={entry.at} title={new Date(entry.at).toLocaleString()}>
-          {new Date(entry.at).toLocaleString()}
+        <time dateTime={entry.at} title={formatDateTime(entry.at)}>
+          {formatDateTime(entry.at)}
         </time>
       </Td>
       <Td className="whitespace-nowrap">

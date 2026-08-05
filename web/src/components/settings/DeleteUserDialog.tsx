@@ -1,16 +1,18 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { TriangleAlert, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { apiUserPath } from "../../lib/constants";
 import { queryKeys, successorCheckQuery, userContentQuery } from "../../lib/queries";
 import { pushToast, ToastKind } from "../../lib/toast";
 import type { User, UserContentSummary } from "../../lib/types";
 import { Button } from "../Button";
+import { Callout } from "../Callout";
 import { Modal } from "../Modal";
 import { SelectField } from "../SelectField";
 import { PersonName } from "../PersonName";
 import { Spinner } from "../Spinner";
+import { ErrorText } from "../ErrorText";
 
 /** The things that MOVE to the successor, in the order the dialog reads best.
  * Owned teams are NOT here (RADD-784): running a team is delegation, not
@@ -84,7 +86,7 @@ export function DeleteUserDialog({
         {content.isPending ? (
           <Spinner label="Checking what they own…" />
         ) : content.isError ? (
-          <p className="text-xs text-red-400">{errorMessage(content.error)}</p>
+          <ErrorText error={content.error} />
         ) : !ownsSomething ? (
           <p className="text-xs text-fg-muted">
             They haven't created anything, so there is nothing to hand over.
@@ -106,17 +108,14 @@ export function DeleteUserDialog({
               </div>
             )}
             {Number(summary?.worklogs ?? 0) > 0 && (
-              <p className="flex items-start gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/5 p-2.5 text-xs text-amber-200">
-                <TriangleAlert size={13} className="mt-0.5 shrink-0" aria-hidden />
-                <span>
-                  <strong className="font-medium">
-                    {summary?.worklogs} time entries ({hours(Number(summary?.worklog_seconds ?? 0))})
-                    will be deleted
-                  </strong>{" "}
-                  — not reassigned. Crediting someone else with hours they didn't work would
-                  skew every timesheet and time report. Export them first if you need them.
-                </span>
-              </p>
+              <Callout kind="warning">
+                <strong className="font-medium">
+                  {summary?.worklogs} time entries ({hours(Number(summary?.worklog_seconds ?? 0))})
+                  will be deleted
+                </strong>{" "}
+                — not reassigned. Crediting someone else with hours they didn't work would
+                skew every timesheet and time report. Export them first if you need them.
+              </Callout>
             )}
           </>
         )}
@@ -151,27 +150,22 @@ export function DeleteUserDialog({
 
         {!!successor && check.isPending && <Spinner label="Checking their access…" />}
         {notViable && (
-          <div className="flex items-start gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/5 p-2.5 text-xs text-amber-200">
-            <TriangleAlert size={13} className="mt-0.5 shrink-0" aria-hidden />
-            <div>
-              <p className="font-medium">
-                This person holds less access than {user.name}, so they can't inherit the work.
-              </p>
-              <p className="mt-1 text-amber-200/80">
-                Grant these first, or choose someone else:
-              </p>
-              <ul className="mt-1 flex flex-col gap-0.5">
-                {check.data?.gaps.map((gap) => (
-                  <li key={`${gap.scope_type}-${gap.scope_id ?? gap.label}`}>
-                    <span className="font-medium">{gap.label}</span>
-                    {": "}
-                    {gap.missing.slice(0, 8).join(", ")}
-                    {gap.missing.length > 8 ? ` (+${gap.missing.length - 8} more)` : ""}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
+          <Callout kind="warning">
+            <p className="font-medium">
+              This person holds less access than {user.name}, so they can't inherit the work.
+            </p>
+            <p className="mt-1">Grant these first, or choose someone else:</p>
+            <ul className="mt-1 flex flex-col gap-0.5">
+              {check.data?.gaps.map((gap) => (
+                <li key={`${gap.scope_type}-${gap.scope_id ?? gap.label}`}>
+                  <span className="font-medium">{gap.label}</span>
+                  {": "}
+                  {gap.missing.slice(0, 8).join(", ")}
+                  {gap.missing.length > 8 ? ` (+${gap.missing.length - 8} more)` : ""}
+                </li>
+              ))}
+            </ul>
+          </Callout>
         )}
 
         <div className="flex justify-end gap-2">

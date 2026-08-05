@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MessageSquare, Package, UserRound } from "lucide-react";
-import { api, errorMessage } from "../../lib/api";
+import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { relativeTime } from "../../lib/dates";
 import { portalRequestDetailQuery, queryKeys } from "../../lib/queries";
@@ -9,6 +9,7 @@ import type { PortalRequestComment } from "../../lib/types";
 import { Button } from "../Button";
 import { PageBody } from "../pages/PageBody";
 import { Spinner } from "../Spinner";
+import { ErrorText } from "../ErrorText";
 
 /**
  * A requester's view of one request, rendered INSIDE the ordinary peek drawer
@@ -107,7 +108,7 @@ export function RequestPanelBody({ requestKey }: { requestKey: string }) {
           aria-label="Reply to this request"
           className="w-full rounded-md border border-subtle bg-base px-3 py-2 text-[13px] text-fg placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-focus"
         />
-        {send.isError && <p className="text-xs text-red-400">{errorMessage(send.error)}</p>}
+        {send.isError && <ErrorText error={send.error} />}
         <div className="flex justify-end">
           <Button onClick={() => send.mutate()} disabled={!reply.trim() || send.isPending}>
             {send.isPending ? "Sending…" : "Reply"}

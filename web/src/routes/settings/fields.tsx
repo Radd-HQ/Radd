@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, SlidersHorizontal, Trash2 } from "lucide-react";
-import { api, errorMessage } from "../../lib/api";
+import { api } from "../../lib/api";
 import { ApiPath, apiFieldOptionsPath } from "../../lib/constants";
 import { TokenMultiSelect } from "../../components/TokenMultiSelect";
 import { usePermissions } from "../../lib/hooks";
@@ -22,6 +22,7 @@ import { NewFieldModal } from "../../components/settings/NewFieldModal";
 import { RestrictedBadge } from "../../components/settings/RestrictedBadge";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { QueryError } from "../../components/QueryError";
+import { ErrorText } from "../../components/ErrorText";
 
 /**
  * Custom-field admin as a two-pane master-detail: the left rail lists the fields,
@@ -267,7 +268,7 @@ function FieldDetail({
         </Row>
       </dl>
       {del.isError && (
-        <p className="px-4 py-2 text-[11px] text-red-400">{errorMessage(del.error)}</p>
+        <ErrorText className="px-4 py-2" error={del.error} />
       )}
       {confirmDialog}
     </div>
@@ -377,7 +378,7 @@ function FieldOptionsSection({ field, canManage }: { field: FieldDef; canManage:
               {add.isPending ? "Adding…" : staged.length > 1 ? `Add ${staged.length}` : "Add"}
             </Button>
           </div>
-          {add.isError && <p className="text-xs text-red-400">{errorMessage(add.error)}</p>}
+          {add.isError && <ErrorText error={add.error} />}
           <p className="text-[11px] text-fg-faint">
             Adding options is always safe. Existing options can&apos;t be removed or renamed —
             items already store their values.

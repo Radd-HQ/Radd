@@ -12,9 +12,16 @@ interface ModalProps {
   extraWide?: boolean;
 }
 
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), ' +
+  'textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 /**
- * Minimal centered modal: overlay, Escape / overlay-click / X to close,
- * focuses its first form control on mount.
+ * Minimal centered modal: overlay, Escape / overlay-click / X to close. Focus
+ * moves to the first form control on mount (the panel itself when there is
+ * none), Tab and Shift-Tab wrap INSIDE the dialog — `aria-modal` used to be a
+ * claim with no trap behind it, so Tab walked into the inert page (RADD-901)
+ * — and focus returns to whatever opened the modal on close.
  */
 export function Modal({ title, onClose, children, wide = false, extraWide = false }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -22,15 +29,53 @@ export function Modal({ title, onClose, children, wide = false, extraWide = fals
   useEffect(() => {
     // Dismiss-stack, not a bare document listener: when the issue peek opens
     // over this modal, one Esc must close the topmost overlay only.
-    const unregister = registerDismiss(() => {
+    return registerDismiss(() => {
       onClose();
       return true;
     });
-    panelRef.current
-      ?.querySelector<HTMLElement>("input, select, textarea, button")
-      ?.focus();
-    return unregister;
   }, [onClose]);
+
+  // Focus lifecycle runs ONCE per modal, not per render: `onClose` is usually
+  // an inline arrow, and keying this effect on it would restore-then-steal
+  // focus on every parent render.
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const panel = panelRef.current;
+    (panel?.querySelector<HTMLElement>("input, select, textarea, button") ?? panel)?.focus();
+
+    // The trap: Tab from the last focusable wraps to the first and vice
+    // versa; a focus that escaped entirely (backdrop mousedown) re-enters at
+    // the edge. The list is queried per keystroke, so controls that mount or
+    // disable while the dialog is open stay covered.
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Tab" || !panel) return;
+      const focusables = [...panel.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+        (el) => el.offsetParent !== null || el === document.activeElement,
+      );
+      if (focusables.length === 0) {
+        event.preventDefault();
+        panel.focus();
+        return;
+      }
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey) {
+        if (active === first || !panel.contains(active)) {
+          event.preventDefault();
+          last.focus();
+        }
+      } else if (active === last || !panel.contains(active)) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown, true);
+      opener?.focus();
+    };
+  }, []);
 
   return (
     <div
@@ -47,8 +92,9 @@ export function Modal({ title, onClose, children, wide = false, extraWide = fals
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        tabIndex={-1}
         className={
-          "w-full animate-overlay-in rounded-xl border border-subtle bg-surface shadow-modal " +
+          "w-full animate-overlay-in rounded-xl border border-subtle bg-surface shadow-modal outline-none " +
           (extraWide
             ? "max-w-3xl max-h-full overflow-y-auto"
             : wide

@@ -33,6 +33,7 @@ import { MyLeaveSection } from "../../components/settings/LeaveSections";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { TokensPanel } from "../../components/settings/TokensPanel";
 import { TotpPanel } from "../../components/settings/TotpPanel";
+import { ErrorText } from "../../components/ErrorText";
 
 /** Curated avatar palette (any hex works via the color input). */
 const AVATAR_COLORS = [
@@ -325,7 +326,7 @@ function NotificationPrefsPanel() {
         />
         Email digest of unread notifications
       </label>
-      {save.isError && <p className="text-xs text-red-400">{errorMessage(save.error)}</p>}
+      {save.isError && <ErrorText error={save.error} />}
     </div>
   );
 }
@@ -360,7 +361,7 @@ function EditorAiPanel() {
         />
         AI writing actions in the editor
       </label>
-      {save.isError && <p className="text-xs text-red-400">{errorMessage(save.error)}</p>}
+      {save.isError && <ErrorText error={save.error} />}
     </div>
   );
 }

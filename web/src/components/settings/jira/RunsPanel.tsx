@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, CircleAlert, Link2, Loader2, Undo2, X } from "lucide-react";
-import { api, errorMessage } from "../../../lib/api";
+import { api } from "../../../lib/api";
 import { ApiPath } from "../../../lib/constants";
 import { relativeTime } from "../../../lib/dates";
 import { jiraPendingQuery, jiraRunsQuery, queryKeys } from "../../../lib/queries";
@@ -21,6 +21,7 @@ import { QueryError } from "../../QueryError";
 import { Table, TBody, Td, THead, Th } from "../../Table";
 import { TableSkeleton } from "../../TableSkeleton";
 import { ProblemList } from "./ProblemList";
+import { ErrorText } from "../../ErrorText";
 
 const isRunning = (run: JiraRun) => !TERMINAL_JIRA_RUN_STAGES.includes(run.stage);
 
@@ -195,9 +196,7 @@ export function RunsPanel({
         </div>
       )}
       {(rollback.isError || relink.isError) && (
-        <p className="mt-2 text-xs text-red-400">
-          {errorMessage(rollback.error ?? relink.error)}
-        </p>
+        <ErrorText className="mt-2" error={rollback.error ?? relink.error} />
       )}
     </section>
   );

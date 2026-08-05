@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, errorMessage } from "../../lib/api";
+import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { queryKeys } from "../../lib/queries";
 import type { CustomFieldValue, FieldDef } from "../../lib/types";
 import { CustomFieldControl } from "../items/CustomFieldsForm";
 import { Button } from "../Button";
+import { ErrorText } from "../ErrorText";
 
 /**
  * Inline editor for a field's default_value (spec 50 follow-up). Reuses the same
@@ -61,7 +62,7 @@ export function FieldDefaultEditor({ field, canManage }: { field: FieldDef; canM
           )}
         </div>
       )}
-      {save.isError && <p className="mt-1 text-[11px] text-red-400">{errorMessage(save.error)}</p>}
+      {save.isError && <ErrorText className="mt-1" error={save.error} />}
     </div>
   );
 }

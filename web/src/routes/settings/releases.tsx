@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Pencil, Plus, Rocket, Trash2, X } from "lucide-react";
+import { CheckCircle2, Pencil, Plus, Rocket, Trash2 } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { ApiPath, apiReleasePath } from "../../lib/constants";
+import { formatDate } from "../../lib/dates";
 import { usePermissions } from "../../lib/hooks";
 import { useListFilter } from "../../lib/list-filter";
 import { RELEASE_STATUS_META } from "../../lib/meta";
@@ -15,6 +16,7 @@ import {
   type ReleaseUpdate,
 } from "../../lib/types";
 import { Button } from "../../components/Button";
+import { useConfirm } from "../../components/ConfirmDialog";
 import { EmptyState } from "../../components/EmptyState";
 import { ListSearchInput } from "../../components/ListSearchInput";
 import { Modal } from "../../components/Modal";
@@ -22,6 +24,8 @@ import { TableSkeleton } from "../../components/TableSkeleton";
 import { TextField } from "../../components/TextField";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { QueryError } from "../../components/QueryError";
+import { IconButton } from "../../components/IconButton";
+import { ErrorText } from "../../components/ErrorText";
 
 /**
  * Per-project releases (spec 50). The project is supplied by the URL context
@@ -118,7 +122,9 @@ function ReleaseRow({
   onEdit: () => void;
 }) {
   const queryClient = useQueryClient();
-  const [confirming, setConfirming] = useState(false);
+  // useConfirm like every sibling page — this row carried the app's one
+  // hand-rolled inline Delete/Cancel confirm (RADD-901).
+  const [confirmDialog, confirm] = useConfirm();
   const status = RELEASE_STATUS_META[release.status];
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: queryKeys.releases(projectId) });
@@ -145,60 +151,48 @@ function ReleaseRow({
       </span>
       <span className="ml-auto shrink-0 text-xs text-fg-muted">
         {release.released_at
-          ? `Released ${new Date(release.released_at).toLocaleDateString()}`
+          ? `Released ${formatDate(release.released_at)}`
           : "—"}
       </span>
-      {canManage &&
-        (confirming ? (
-          <span className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => remove.mutate()}
-              disabled={remove.isPending}
-              className="rounded px-1.5 py-0.5 text-xs text-red-400 hover:bg-elevated cursor-pointer disabled:opacity-50"
+      {canManage && (
+        <>
+          {release.status === ReleaseStatus.planned && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => markReleased.mutate()}
+              disabled={markReleased.isPending}
             >
-              {remove.isPending ? "Deleting…" : "Delete"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirming(false)}
-              aria-label="Cancel delete"
-              className="rounded p-1 text-fg-muted hover:bg-elevated hover:text-fg cursor-pointer"
-            >
-              <X size={13} />
-            </button>
-          </span>
-        ) : (
-          <>
-            {release.status === ReleaseStatus.planned && (
-              <button
-                type="button"
-                onClick={() => markReleased.mutate()}
-                disabled={markReleased.isPending}
-                className="inline-flex items-center gap-1 rounded border border-strong px-1.5 py-0.5 text-[11px] text-fg hover:bg-elevated hover:text-emerald-300 cursor-pointer disabled:opacity-50"
-              >
-                <CheckCircle2 size={12} aria-hidden />
-                {markReleased.isPending ? "Releasing…" : "Mark released"}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={onEdit}
-              aria-label={`Edit ${release.version}`}
-              className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-fg cursor-pointer"
-            >
-              <Pencil size={13} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirming(true)}
-              aria-label={`Delete ${release.version}`}
-              className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer"
-            >
-              <Trash2 size={13} />
-            </button>
-          </>
-        ))}
+              <CheckCircle2 size={12} aria-hidden />
+              {markReleased.isPending ? "Releasing…" : "Mark released"}
+            </Button>
+          )}
+          <IconButton
+            onClick={onEdit}
+            aria-label={`Edit ${release.version}`}
+          >
+            <Pencil size={13} />
+          </IconButton>
+          <IconButton
+            danger
+            onClick={() =>
+              void confirm({
+                title: `Delete ${release.version}?`,
+                message: "Items pointing at this release keep their history; the version itself goes.",
+                confirmLabel: "Delete",
+                danger: true,
+              }).then((ok) => {
+                if (ok) remove.mutate();
+              })
+            }
+            disabled={remove.isPending}
+            aria-label={`Delete ${release.version}`}
+          >
+            <Trash2 size={13} />
+          </IconButton>
+        </>
+      )}
+      {confirmDialog}
       {(markReleased.isError || remove.isError) && (
         <span className="text-xs text-red-400">
           {errorMessage(markReleased.error ?? remove.error)}
@@ -283,7 +277,7 @@ function ReleaseModal({
             className="rounded-md border border-strong bg-surface px-2.5 py-1.5 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
           />
         </div>
-        {save.isError && <p className="text-xs text-red-400">{errorMessage(save.error)}</p>}
+        {save.isError && <ErrorText error={save.error} />}
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
             Cancel

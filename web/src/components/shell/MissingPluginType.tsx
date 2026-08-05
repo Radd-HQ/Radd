@@ -1,3 +1,5 @@
+import { Callout } from "../Callout";
+
 /**
  * Shown where a plugin-contributed surface can't render:
  *  - a saved view / dashboard widget references a plugin TYPE that's no longer available because the
@@ -16,15 +18,17 @@ export function MissingPluginType({
   disabled?: boolean;
 }) {
   return (
-    <div
+    <Callout
+      kind="warning"
+      icon={null}
       data-plugin-missing={disabled ? undefined : kind}
       data-plugin-disabled={disabled ? kind : undefined}
-      className="m-4 rounded-lg border border-dashed border-amber-500/40 bg-amber-500/5 p-6 text-center text-sm text-amber-300"
+      className="m-4 rounded-lg border-dashed p-6 text-center text-sm"
     >
       {disabled ? (
         <>
           This {kind} has been turned off.
-          <span className="mt-1 block text-xs text-amber-300/70">
+          <span className="mt-1 block text-xs">
             Re-enable it on your Profile, or ask an instance admin if it was disabled for everyone.
           </span>
         </>
@@ -32,9 +36,9 @@ export function MissingPluginType({
         <>
           The “{typeKey}” {kind} type is no longer available — the plugin that provided it was
           disabled or uninstalled.
-          <span className="mt-1 block text-xs text-amber-300/70">Check with your instance admin.</span>
+          <span className="mt-1 block text-xs">Check with your instance admin.</span>
         </>
       )}
-    </div>
+    </Callout>
   );
 }

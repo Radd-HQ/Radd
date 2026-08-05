@@ -8,7 +8,9 @@ import {
   type EventCondition,
   type TriggerInfo,
 } from "../../lib/types";
+import { useKeyedRows } from "../../lib/keyed-rows";
 import { Select } from "../Select";
+import { IconButton } from "../IconButton";
 
 /** Node type guard: groups have `op` + `conditions`, leaves have `subject`. */
 export function isGroup(node: ConditionGroup | EventCondition): node is ConditionGroup {
@@ -107,16 +109,17 @@ function GroupEditor({
   onChange: (group: ConditionGroup) => void;
   onRemove: () => void;
 }) {
+  // Stable per-row keys (RADD-901): rows hold Selects and inputs, and keying by
+  // index re-keyed every row below a removal — focus lost, editor state flashed.
+  const rows = useKeyedRows(group.conditions, (next) => {
+    if (next.length === 0) onRemove();
+    else onChange({ ...group, conditions: next });
+  });
   const replaceChild = (index: number, child: ConditionGroup | EventCondition) =>
     onChange({
       ...group,
       conditions: group.conditions.map((c, i) => (i === index ? child : c)),
     });
-  const removeChild = (index: number) => {
-    const rest = group.conditions.filter((_, i) => i !== index);
-    if (rest.length === 0) onRemove();
-    else onChange({ ...group, conditions: rest });
-  };
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-subtle bg-surface/30 p-3">
@@ -129,35 +132,35 @@ function GroupEditor({
           options={Object.entries(GROUP_OP_LABELS).map(([op, label]) => ({ value: op, label }))}
         />
         <span className="text-[11px] text-fg-faint">must hold</span>
-        <button
-          type="button"
+        <IconButton
+          danger
           onClick={onRemove}
           aria-label="Remove group"
-          className="ml-auto rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer"
+          className="ml-auto"
         >
           <Trash2 size={13} aria-hidden />
-        </button>
+        </IconButton>
       </div>
 
       {group.conditions.map((child, index) =>
         isGroup(child) ? (
           <GroupEditor
-            key={index}
+            key={rows.keys[index]}
             catalog={catalog}
             trigger={trigger}
             group={child}
             depth={depth + 1}
             onChange={(next) => replaceChild(index, next)}
-            onRemove={() => removeChild(index)}
+            onRemove={() => rows.removeAt(index)}
           />
         ) : (
           <ConditionRow
-            key={index}
+            key={rows.keys[index]}
             catalog={catalog}
             trigger={trigger}
             condition={child}
             onChange={(next) => replaceChild(index, next)}
-            onRemove={() => removeChild(index)}
+            onRemove={() => rows.removeAt(index)}
           />
         ),
       )}
@@ -165,7 +168,7 @@ function GroupEditor({
       <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={() => onChange({ ...group, conditions: [...group.conditions, emptyCondition()] })}
+          onClick={() => rows.add(emptyCondition())}
           className="rounded-md border border-subtle px-2 py-1 text-[11px] text-fg-secondary hover:border-strong hover:text-fg cursor-pointer"
         >
           <Plus size={11} className="mr-1 inline" aria-hidden />
@@ -174,15 +177,7 @@ function GroupEditor({
         {depth < MAX_DEPTH && (
           <button
             type="button"
-            onClick={() =>
-              onChange({
-                ...group,
-                conditions: [
-                  ...group.conditions,
-                  { op: ConditionGroupOp.any, conditions: [emptyCondition()] },
-                ],
-              })
-            }
+            onClick={() => rows.add({ op: ConditionGroupOp.any, conditions: [emptyCondition()] })}
             className="rounded-md border border-subtle px-2 py-1 text-[11px] text-fg-secondary hover:border-strong hover:text-fg cursor-pointer"
           >
             <Plus size={11} className="mr-1 inline" aria-hidden />
@@ -270,14 +265,13 @@ function ConditionRow({
         />
       )}
 
-      <button
-        type="button"
+      <IconButton
+        danger
         onClick={onRemove}
         aria-label="Remove condition"
-        className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer"
       >
         <Trash2 size={13} aria-hidden />
-      </button>
+      </IconButton>
     </div>
   );
 }

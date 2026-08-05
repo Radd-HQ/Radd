@@ -6,6 +6,7 @@ import {
 } from "../../lib/types";
 import { CustomFieldControl } from "../items/CustomFieldsForm";
 import { LazyRichEditor } from "../editor/LazyRichEditor";
+import { ErrorText } from "../ErrorText";
 
 /**
  * Shared rendering for the TRIMMED form payloads (spec 62 public tokened page,
@@ -123,7 +124,7 @@ export function FormDescriptionArea({
         onUploadImage={onUploadImage}
         className="[&_.ProseMirror]:min-h-[8rem]"
       />
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <ErrorText error={error} />}
     </div>
   );
 }

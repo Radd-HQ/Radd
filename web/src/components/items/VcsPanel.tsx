@@ -25,6 +25,8 @@ import {
 import { Button } from "../Button";
 import { Select } from "../Select";
 import { Spinner } from "../Spinner";
+import { IconButton } from "../IconButton";
+import { ErrorText } from "../ErrorText";
 
 /**
  * The Version-control tab: branches, commits, and merge/pull requests linked to
@@ -122,15 +124,14 @@ function VcsRow({ link, canWrite }: { link: VcsLink; canWrite: boolean }) {
         {VCS_PROVIDER_LABELS[link.provider] ?? link.provider}
       </span>
       {canWrite && (
-        <button
-          type="button"
+        <IconButton
+          danger
           onClick={() => remove.mutate()}
           disabled={remove.isPending}
           aria-label={`Remove ${link.title}`}
-          className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer disabled:opacity-50"
         >
           <X size={13} />
-        </button>
+        </IconButton>
       )}
     </li>
   );
@@ -165,14 +166,10 @@ function AddVcsForm({ itemId }: { itemId: string }) {
 
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="flex w-fit items-center gap-1.5 rounded border border-strong px-2 py-1 text-xs text-fg hover:bg-elevated cursor-pointer"
-      >
+      <Button variant="secondary" size="sm" className="w-fit" onClick={() => setOpen(true)}>
         <Plus size={12} aria-hidden />
         Link a branch or pull request
-      </button>
+      </Button>
     );
   }
 
@@ -205,7 +202,7 @@ function AddVcsForm({ itemId }: { itemId: string }) {
         type="url"
         className="h-8 w-full rounded-md border border-strong bg-surface px-2.5 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
       />
-      {create.isError && <p className="text-xs text-red-400">{errorMessage(create.error)}</p>}
+      {create.isError && <ErrorText error={create.error} />}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" onClick={() => setOpen(false)}>
           Cancel

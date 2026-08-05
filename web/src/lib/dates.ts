@@ -29,6 +29,13 @@ export function formatDateOrNever(iso: string | null): string {
   return iso ? formatDate(iso) : "Never";
 }
 
+/** Full locale timestamp, e.g. "7/6/2026, 9:41:12 AM" — audit rows, last-login,
+ * hover titles. The bare `new Date(x).toLocaleString()` this replaces was
+ * scattered across the settings pages (RADD-901). */
+export function formatDateTime(iso: string): string {
+  return new Date(iso).toLocaleString();
+}
+
 /** "Jul 27, 09:00" — compact absolute timestamp (scheduler next/last-run chips). */
 export function shortDateTime(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {

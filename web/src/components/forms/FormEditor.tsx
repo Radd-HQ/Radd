@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Check, ExternalLink } from "lucide-react";
-import { api, errorMessage } from "../../lib/api";
+import { api } from "../../lib/api";
 import { fieldInScope } from "../../lib/field-scope";
 import { ApiPath, RoutePath, apiFormPath } from "../../lib/constants";
 import { fieldsQuery, queryKeys } from "../../lib/queries";
@@ -20,6 +20,7 @@ import { TextField } from "../TextField";
 import { FormDefaultsEditor, emptyDefaults } from "./FormDefaultsEditor";
 import { FormFieldsPicker } from "./FormFieldsPicker";
 import { FormSharing } from "./FormSharing";
+import { ErrorText } from "../ErrorText";
 
 interface FormEditorProps {
   project: Project;
@@ -230,7 +231,7 @@ export function FormEditor({ project, form, onDone }: FormEditorProps) {
         onChange={setDefaults}
       />
 
-      {save.isError && <p className="text-xs text-red-400">{errorMessage(save.error)}</p>}
+      {save.isError && <ErrorText error={save.error} />}
 
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={!canSave || save.isPending}>

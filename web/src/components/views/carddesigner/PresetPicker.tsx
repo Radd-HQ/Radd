@@ -1,13 +1,16 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookmarkPlus, Trash2 } from "lucide-react";
-import { api, errorMessage } from "../../../lib/api";
+import { api } from "../../../lib/api";
 import { Entity, invalidateEntities } from "../../../lib/cache";
 import { ApiPath, apiCardLayoutPresetPath } from "../../../lib/constants";
 import { usePermissions } from "../../../lib/hooks";
 import { cardLayoutPresetsQuery } from "../../../lib/queries";
 import { Permission, type CardLayout, type CardLayoutPreset } from "../../../lib/types";
 import { useConfirm } from "../../ConfirmDialog";
+import { IconButton } from "../../IconButton";
+import { ErrorText } from "../../ErrorText";
+import { Button } from "../../Button";
 
 /**
  * The shared preset library inside the card designer (spec 109). Applying a
@@ -74,8 +77,8 @@ export function PresetPicker({
                 {preset.name}
               </button>
               {canDelete && (
-                <button
-                  type="button"
+                <IconButton
+                  danger
                   aria-label={`Delete the ${preset.name} preset`}
                   onClick={() => {
                     void confirm({
@@ -87,10 +90,9 @@ export function PresetPicker({
                       if (ok) deletePreset.mutate(preset.id);
                     });
                   }}
-                  className="cursor-pointer rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400"
                 >
                   <Trash2 size={12} aria-hidden />
-                </button>
+                </IconButton>
               )}
             </li>
           ))}
@@ -113,13 +115,14 @@ export function PresetPicker({
               maxLength={100}
               className="w-full rounded-md border border-subtle bg-transparent px-2 py-1 text-xs text-fg outline-none placeholder:text-fg-faint focus:border-strong"
             />
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               type="submit"
               disabled={!name.trim() || createPreset.isPending}
-              className="cursor-pointer rounded-md border border-strong px-2 py-1 text-xs text-fg-secondary hover:border-emphasis hover:text-fg disabled:opacity-50"
             >
               Save
-            </button>
+            </Button>
             <button
               type="button"
               onClick={() => setNaming(false)}
@@ -139,9 +142,7 @@ export function PresetPicker({
           </button>
         ))}
       {(createPreset.isError || deletePreset.isError) && (
-        <p className="mt-1.5 text-[11px] text-red-400">
-          {errorMessage(createPreset.error ?? deletePreset.error)}
-        </p>
+        <ErrorText className="mt-1.5" error={createPreset.error ?? deletePreset.error} />
       )}
       {confirmNode}
     </div>

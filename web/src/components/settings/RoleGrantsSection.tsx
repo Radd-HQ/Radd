@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen, Globe, Plus, ShieldCheck, X } from "lucide-react";
-import { api, errorMessage } from "../../lib/api";
+import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import {
   pageSpacesQuery,
@@ -16,6 +16,8 @@ import { Modal } from "../Modal";
 import { SelectField } from "../SelectField";
 import { TokenMultiSelect } from "../TokenMultiSelect";
 import { ScopePicker } from "./ScopePicker";
+import { IconButton } from "../IconButton";
+import { ErrorText } from "../ErrorText";
 
 type Subject = { teamId: string } | { userId: string } | { groupId: string };
 
@@ -94,21 +96,21 @@ export function RoleGrantsSection({
                 </span>
               )}
               {canManage && (
-                <button
-                  type="button"
+                <IconButton
+                  danger
                   onClick={() => revoke.mutate(grant.id)}
                   disabled={revoke.isPending}
                   aria-label="Revoke grant"
-                  className="ml-auto rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer disabled:opacity-50"
+                  className="ml-auto"
                 >
                   <X size={13} />
-                </button>
+                </IconButton>
               )}
             </li>
           ))}
         </ul>
       )}
-      {revoke.isError && <p className="mt-1 text-xs text-red-400">{errorMessage(revoke.error)}</p>}
+      {revoke.isError && <ErrorText className="mt-1" error={revoke.error} />}
 
       {granting && (
         <GrantRoleDialog
@@ -253,7 +255,7 @@ function GrantRoleDialog({
           </p>
         )}
 
-        {grant.isError && <p className="text-xs text-red-400">{errorMessage(grant.error)}</p>}
+        {grant.isError && <ErrorText error={grant.error} />}
 
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>

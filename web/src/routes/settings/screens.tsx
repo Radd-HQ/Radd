@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { api, errorMessage } from "../../lib/api";
+import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
 import {
@@ -22,6 +22,7 @@ import { SelectField } from "../../components/SelectField";
 import { Spinner } from "../../components/Spinner";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { QueryError } from "../../components/QueryError";
+import { ErrorText } from "../../components/ErrorText";
 
 const BUILTIN_LABELS: Record<string, string> = {
   assignee: "Assignee",
@@ -256,7 +257,7 @@ function ScreenEditor({
         </div>
       )}
       {(save.isError || reset.isError) && (
-        <p className="mt-2 text-xs text-red-400">{errorMessage(save.error ?? reset.error)}</p>
+        <ErrorText className="mt-2" error={save.error ?? reset.error} />
       )}
     </div>
   );

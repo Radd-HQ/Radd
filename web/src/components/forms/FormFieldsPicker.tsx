@@ -3,6 +3,7 @@ import { FIELD_TYPE_LABELS } from "../../lib/meta";
 import type { FieldDef, FormField } from "../../lib/types";
 import { SelectField } from "../SelectField";
 import { TextField } from "../TextField";
+import { IconButton } from "../IconButton";
 
 interface FormFieldsPickerProps {
   /** Registry fields in the form's project scope (global + project-scoped). */
@@ -113,14 +114,13 @@ export function FormFieldsPicker({ available, value, onChange }: FormFieldsPicke
                   Required on this form
                 </label>
               </div>
-              <button
-                type="button"
+              <IconButton
+                danger
                 onClick={() => remove(index)}
                 aria-label={`Remove field ${field.field_key}`}
-                className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer"
               >
                 <Trash2 size={14} />
-              </button>
+              </IconButton>
             </li>
           );
         })}

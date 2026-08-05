@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, CircleAlert, Database, Loader2, Trash2, X } from "lucide-react";
-import { api, errorMessage } from "../../../lib/api";
+import { api } from "../../../lib/api";
 import { ApiPath } from "../../../lib/constants";
 import { relativeTime } from "../../../lib/dates";
 import {
@@ -27,6 +27,7 @@ import { Table, TBody, Td, THead, Th } from "../../Table";
 import { TableSkeleton } from "../../TableSkeleton";
 import { TextField } from "../../TextField";
 import { ProblemList } from "./ProblemList";
+import { ErrorText } from "../../ErrorText";
 
 const POLL_MS = 1500;
 
@@ -418,7 +419,7 @@ function NewDownloadModal({
           </label>
         </fieldset>
 
-        {start.isError && <p className="text-xs text-red-400">{errorMessage(start.error)}</p>}
+        {start.isError && <ErrorText error={start.error} />}
 
         <div className="mt-1 flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>

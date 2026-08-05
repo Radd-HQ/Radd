@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, errorMessage } from "../../lib/api";
+import { api } from "../../lib/api";
 import { ApiPath, apiAiRolePath } from "../../lib/constants";
 import type { EmbeddingCoverage } from "../../lib/types";
 import { aiProvidersQuery, aiRolesQuery, queryKeys } from "../../lib/queries";
@@ -15,6 +15,7 @@ import { Select, type SelectOption } from "../Select";
 import { Spinner } from "../Spinner";
 import { QueryError } from "../QueryError";
 import { Table, TBody, Td, Th, THead } from "../Table";
+import { ErrorText } from "../ErrorText";
 
 const sectionHeadClasses = "mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted";
 
@@ -164,7 +165,7 @@ function RoleRow({
       <Td>
         <p className="font-medium text-heading">{label}</p>
         <p className="text-xs text-fg-muted">{blurb}</p>
-        {error && <p className="mt-1 text-xs text-red-400">{errorMessage(error)}</p>}
+        {error && <ErrorText className="mt-1" error={error} />}
       </Td>
       <Td>
         <Select

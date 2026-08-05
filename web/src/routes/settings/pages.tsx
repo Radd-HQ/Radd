@@ -22,6 +22,7 @@ import { TextField } from "../../components/TextField";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { SpaceAccessPanel } from "../../components/settings/SpaceAccessPanel";
 import { QueryError } from "../../components/QueryError";
+import { ErrorText } from "../../components/ErrorText";
 
 /** Page spaces admin (spec 43, doc.manage): create/rename/delete pages spaces. */
 export function PagesSettingsPage() {
@@ -75,7 +76,7 @@ export function PagesSettingsPage() {
         <QueryError label="page spaces" error={spaces.error} />
       ) : (
         <>
-          {deleteError && <p className="mb-3 text-xs text-red-400">{deleteError}</p>}
+          {deleteError && <ErrorText className="mb-3" error={deleteError} />}
           {list.length === 0 ? (
             <EmptyState icon={BookOpen} message="No page spaces yet — create the first one below." />
           ) : (

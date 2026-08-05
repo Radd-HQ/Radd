@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Download } from "lucide-react";
-import { api, errorMessage } from "../../lib/api";
+import { api } from "../../lib/api";
 import { ApiPath, SEARCH_DEBOUNCE_MS } from "../../lib/constants";
 import { useDebounced } from "../../lib/hooks";
 import { ldapDirectoryUsersQuery, ldapGroupsQuery, queryKeys } from "../../lib/queries";
@@ -20,6 +20,7 @@ import { Button } from "../Button";
 import { Modal } from "../Modal";
 import { TextField } from "../TextField";
 import { DirectoryImportReview } from "./DirectoryImportReview";
+import { ErrorText } from "../ErrorText";
 
 const rowClasses =
   "flex items-start gap-2 rounded-md border border-subtle px-2.5 py-2 text-[13px] " +
@@ -111,7 +112,7 @@ export function ImportUsersDialog({ onClose }: { onClose: () => void }) {
             onChoose={(email, entry) => setChoices((prev) => ({ ...prev, [email]: entry }))}
           />
           {importUsers.isError && (
-            <p className="text-xs text-red-400">{errorMessage(importUsers.error)}</p>
+            <ErrorText error={importUsers.error} />
           )}
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setCandidates(null)}>
@@ -146,7 +147,7 @@ export function ImportUsersDialog({ onClose }: { onClose: () => void }) {
           hint="Searches cn / sAMAccountName / mail via the service account."
         />
         {search.isError ? (
-          <p className="text-xs text-red-400">{errorMessage(search.error)}</p>
+          <ErrorText error={search.error} />
         ) : search.isPending ? (
           <p className="text-xs text-fg-muted">Searching…</p>
         ) : (search.data ?? []).length === 0 ? (
@@ -190,7 +191,7 @@ export function ImportUsersDialog({ onClose }: { onClose: () => void }) {
             ))}
           </ul>
         )}
-        {preview.isError && <p className="text-xs text-red-400">{errorMessage(preview.error)}</p>}
+        {preview.isError && <ErrorText error={preview.error} />}
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
             Close
@@ -265,7 +266,7 @@ export function ImportGroupsDialog({
           />
         )}
         {!preselected && search.isError ? (
-          <p className="text-xs text-red-400">{errorMessage(search.error)}</p>
+          <ErrorText error={search.error} />
         ) : !preselected && search.isPending ? (
           <p className="text-xs text-fg-muted">Searching…</p>
         ) : groupList.length === 0 ? (
@@ -325,7 +326,7 @@ export function ImportGroupsDialog({
           </ul>
         )}
         {importGroups.isError && (
-          <p className="text-xs text-red-400">{errorMessage(importGroups.error)}</p>
+          <ErrorText error={importGroups.error} />
         )}
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>

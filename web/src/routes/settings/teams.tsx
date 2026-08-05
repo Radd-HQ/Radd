@@ -15,6 +15,7 @@ import { TextField } from "../../components/TextField";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { TeamPanel } from "../../components/settings/TeamPanel";
 import { QueryError } from "../../components/QueryError";
+import { formatDate } from "../../lib/dates";
 
 export function TeamsSettingsPage() {
   const perms = usePermissions();
@@ -77,7 +78,7 @@ export function TeamsSettingsPage() {
                           )}
                           <span className="text-[13px] font-medium text-heading">{team.name}</span>
                           <span className="ml-auto text-xs text-fg-faint">
-                            {new Date(team.created_at).toLocaleDateString()}
+                            {formatDate(team.created_at)}
                           </span>
                         </button>
                         {expanded && <TeamPanel team={team} />}

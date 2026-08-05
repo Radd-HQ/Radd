@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, CircleAlert, Loader2, Plug, Star, Trash2 } from "lucide-react";
-import { api, errorMessage } from "../../../lib/api";
+import { api } from "../../../lib/api";
 import { ApiPath } from "../../../lib/constants";
 import { jiraConnectionsQuery, queryKeys } from "../../../lib/queries";
 import {
@@ -23,6 +23,7 @@ import { SelectField } from "../../SelectField";
 import { Table, TBody, Td, THead, Th } from "../../Table";
 import { TableSkeleton } from "../../TableSkeleton";
 import { TextField } from "../../TextField";
+import { ErrorText } from "../../ErrorText";
 
 const EMPTY: JiraConnectionInput = {
   name: "",
@@ -389,7 +390,7 @@ function ConnectionModal({
           Use as the default connection
         </label>
 
-        {save.isError && <p className="text-xs text-red-400">{errorMessage(save.error)}</p>}
+        {save.isError && <ErrorText error={save.error} />}
 
         <div className="mt-1 flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>

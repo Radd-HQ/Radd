@@ -18,6 +18,7 @@ import {
   unknownKeys,
   type SchemaField,
 } from "./extension-schema";
+import { ErrorText } from "../ErrorText";
 
 /**
  * Configure one `radd:<name>` block, with a form GENERATED from its schema
@@ -101,7 +102,7 @@ export function ExtensionConfig({
                 aria-label="Parameters as JSON"
                 className="w-full rounded-md border border-subtle bg-surface px-2.5 py-2 font-mono text-[12px] text-heading focus:border-accent focus:ring-2 focus:ring-accent/30 focus:outline-none"
               />
-              {!parsed.ok && <p className="text-xs text-red-400">{parsed.error}</p>}
+              {!parsed.ok && <ErrorText error={parsed.error} />}
               {!canForm && (
                 <p className="text-xs text-fg-muted">
                   {!parsedOriginal.ok

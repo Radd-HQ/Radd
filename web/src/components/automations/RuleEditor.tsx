@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Check } from "lucide-react";
-import { api, errorMessage } from "../../lib/api";
+import { api } from "../../lib/api";
 import { ApiPath, apiAutomationPath } from "../../lib/constants";
 import { SlqProbeStatus, useSlqValidation } from "../../lib/hooks";
 import { automationCatalogQuery, queryKeys } from "../../lib/queries";
@@ -24,6 +24,7 @@ import { ActionsBuilder, isActionValid } from "./ActionsBuilder";
 import { ConditionsBuilder, isConditionValid } from "./ConditionsBuilder";
 import { RuleTestPanel } from "./RuleTestPanel";
 import { ScheduleEditor, defaultSchedule, isScheduleValid } from "./ScheduleEditor";
+import { ErrorText } from "../ErrorText";
 
 interface RuleEditorProps {
   /** The rule to edit, or null to create a new one. */
@@ -210,7 +211,7 @@ export function RuleEditor({ rule, onDone }: RuleEditorProps) {
       <ActionsBuilder value={actions} onChange={setActions} />
 
       {save.isError && !saveSlqError && (
-        <p className="text-xs text-red-400">{errorMessage(save.error)}</p>
+        <ErrorText error={save.error} />
       )}
       {saveSlqError && (
         <p className="text-xs text-red-400">Condition rejected on save: {saveSlqError.message}</p>

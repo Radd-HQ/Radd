@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, ClipboardList, Trash2 } from "lucide-react";
-import { api, errorMessage } from "../../../lib/api";
+import { api } from "../../../lib/api";
 import { ApiPath } from "../../../lib/constants";
 import {
   jiraPlansQuery,
@@ -18,6 +18,7 @@ import { SelectField } from "../../SelectField";
 import { Table, TBody, Td, THead, Th } from "../../Table";
 import { TableSkeleton } from "../../TableSkeleton";
 import { TextField } from "../../TextField";
+import { ErrorText } from "../../ErrorText";
 
 /**
  * Import plans (spec 100) — one per cached download, holding every mapping
@@ -225,7 +226,7 @@ function NewPlanModal({
           value={projectName}
           onChange={(e) => setProjectName(e.target.value)}
         />
-        {create.isError && <p className="text-xs text-red-400">{errorMessage(create.error)}</p>}
+        {create.isError && <ErrorText error={create.error} />}
         <div className="mt-1 flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
             Cancel

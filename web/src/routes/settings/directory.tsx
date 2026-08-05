@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, FolderSync, Lock, UserRoundPlus } from "lucide-react";
-import { api, errorMessage } from "../../lib/api";
+import { api } from "../../lib/api";
 import { ApiPath, RoutePath } from "../../lib/constants";
 import { useCurrentUser } from "../../lib/hooks";
 import { instanceStatusQuery, ldapSyncStatusQuery, queryKeys } from "../../lib/queries";
@@ -25,6 +25,7 @@ import { ImportUsersDialog } from "../../components/settings/DirectoryImportDial
 import { ScopedSettingsEditor } from "../../components/settings/ScopedSettingsEditor";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { StatusPill } from "./instance";
+import { ErrorText } from "../../components/ErrorText";
 
 const sectionHeadClasses = "mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted";
 
@@ -166,7 +167,7 @@ export function DirectorySettingsPage() {
               disabled={!directoryReady}
             />
             {syncNow.isError && (
-              <p className="mt-2 text-xs text-red-400">{errorMessage(syncNow.error)}</p>
+              <ErrorText className="mt-2" error={syncNow.error} />
             )}
             <p className="mt-2 text-xs text-fg-muted">
               {syncStatus.isPending ? "Loading last run…" : lastRunLine(syncStatus.data?.user_sync)}

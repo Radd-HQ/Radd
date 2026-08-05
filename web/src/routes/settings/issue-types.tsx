@@ -13,6 +13,7 @@ import { TextField } from "../../components/TextField";
 import { ValueChip } from "../../components/items/ValueChip";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { QueryError } from "../../components/QueryError";
+import { IconButton } from "../../components/IconButton";
 
 const PALETTE = ["#64748b", "#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7", "#ec4899"];
 
@@ -187,15 +188,14 @@ function TypeRow({
         />
       )}
       {canManage && !issueType.is_default && (
-        <button
-          type="button"
+        <IconButton
+          danger
           onClick={() => (confirming ? remove.mutate() : setConfirming(true))}
           onBlur={() => setConfirming(false)}
           aria-label={`Delete ${issueType.name}`}
-          className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-300 cursor-pointer"
         >
           {confirming ? <Check size={13} className="text-red-400" /> : <Trash2 size={13} />}
-        </button>
+        </IconButton>
       )}
       {(save.isError || remove.isError) && (
         <span className="text-[11px] text-red-400">

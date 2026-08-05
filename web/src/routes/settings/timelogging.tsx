@@ -16,6 +16,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { TableSkeleton } from "../../components/TableSkeleton";
 import { TextField } from "../../components/TextField";
 import { SettingsPage } from "../../components/settings/SettingsPage";
+import { IconButton } from "../../components/IconButton";
 
 /**
  * Global time-logging admin (spec 50): the shared work categories people pick
@@ -102,15 +103,13 @@ function CategoryRow({
         </span>
       )}
       {canManage && (
-        <button
-          type="button"
+        <IconButton
           onClick={() => patch.mutate({ archived: !category.archived })}
           disabled={patch.isPending}
           aria-label={category.archived ? "Restore category" : "Archive category"}
-          className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-fg cursor-pointer disabled:opacity-50"
         >
           {category.archived ? <ArchiveRestore size={13} /> : <Archive size={13} />}
-        </button>
+        </IconButton>
       )}
     </li>
   );

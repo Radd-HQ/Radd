@@ -21,6 +21,7 @@ import { SelectField } from "../SelectField";
 import { Table, TBody, Td, Th, THead } from "../Table";
 import { TableSkeleton } from "../TableSkeleton";
 import { TextField } from "../TextField";
+import { ErrorText } from "../ErrorText";
 
 const WIRE_SHAPE_LABELS: Record<AiWireShapeValue, string> = {
   [AiWireShape.openai]: "OpenAI-compatible",
@@ -140,7 +141,7 @@ export function AiProvidersSection() {
         </div>
       )}
       {remove.isError && (
-        <p className="mt-2 text-xs text-red-400">{errorMessage(remove.error)}</p>
+        <ErrorText className="mt-2" error={remove.error} />
       )}
       {(adding || editing) && (
         <ProviderModal

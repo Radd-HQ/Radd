@@ -13,6 +13,7 @@ import {
 import { Button } from "../Button";
 import { Modal } from "../Modal";
 import { SourceBadge } from "./UserSourceBadge";
+import { ErrorText } from "../ErrorText";
 
 const KIND_LABELS = {
   [DuplicateKind.emailLocalPart]: "Same email local part",
@@ -153,7 +154,7 @@ function MergeDialog({
             </label>
           ))}
         </div>
-        {merge.isError && <p className="text-xs text-red-400">{errorMessage(merge.error)}</p>}
+        {merge.isError && <ErrorText error={merge.error} />}
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
             Cancel

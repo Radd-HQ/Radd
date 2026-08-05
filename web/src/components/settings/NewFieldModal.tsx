@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, errorMessage } from "../../lib/api";
+import { api } from "../../lib/api";
 import { ApiPath, FIELD_KEY_HINT, FIELD_KEY_PATTERN } from "../../lib/constants";
 import { FIELD_TYPE_LABELS, FIELD_TYPE_ORDER, fieldTypeHasOptions } from "../../lib/meta";
 import { projectsQuery, queryKeys } from "../../lib/queries";
@@ -18,6 +18,7 @@ import { TextField } from "../TextField";
 import { CustomFieldControl } from "../items/CustomFieldsForm";
 import { OptionsEditor } from "./OptionsEditor";
 import { ScopePicker } from "./ScopePicker";
+import { ErrorText } from "../ErrorText";
 
 interface NewFieldModalProps {
   onClose: () => void;
@@ -180,7 +181,7 @@ export function NewFieldModal({ onClose }: NewFieldModalProps) {
         )}
 
         {createField.isError && (
-          <p className="text-xs text-red-400">{errorMessage(createField.error)}</p>
+          <ErrorText error={createField.error} />
         )}
 
         <div className="flex justify-end gap-2">

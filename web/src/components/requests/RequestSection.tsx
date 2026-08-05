@@ -1,12 +1,12 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Inbox, Users } from "lucide-react";
-import { errorMessage } from "../../lib/api";
 import { portalRequestsQuery } from "../../lib/queries";
 import type { PortalRequest } from "../../lib/types";
 import { usePeek } from "../../lib/hooks";
 import { ListSection } from "./ListSection";
 import { RequestRow } from "./RequestRow";
+import { ErrorText } from "../ErrorText";
 
 /**
  * The grouped request list, shared by `/portal` and My Work (RADD-799).
@@ -31,7 +31,7 @@ export function MyRequests({ compact = false }: { compact?: boolean }) {
 
   if (requests.isPending) return null;
   if (requests.isError) {
-    return <p className="text-sm text-red-400">{errorMessage(requests.error)}</p>;
+    return <ErrorText size="sm" error={requests.error} />;
   }
   if (!groups.length) return null;
 

@@ -8,6 +8,7 @@ import {
 import { SelectField } from "../SelectField";
 import { TextField } from "../TextField";
 import { TokenMultiSelect } from "../TokenMultiSelect";
+import { ErrorText } from "../ErrorText";
 
 interface CustomFieldsFormProps {
   fields: FieldDef[];
@@ -172,7 +173,7 @@ function MultiSelectField({ field, value, error, onChange }: ControlProps) {
         placeholder="Select…"
         ariaLabel={field.name}
       />
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <ErrorText error={error} />}
     </div>
   );
 }
@@ -206,7 +207,7 @@ function BooleanToggle({ field, value, error, onChange }: ControlProps) {
           />
         </button>
       </div>
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <ErrorText error={error} />}
     </div>
   );
 }

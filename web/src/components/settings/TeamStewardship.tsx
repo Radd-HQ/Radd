@@ -14,6 +14,7 @@ import type { Team, TeamManagersUpdate } from "../../lib/types";
 import { Button } from "../Button";
 import { SelectField } from "../SelectField";
 import { TokenMultiSelect } from "../TokenMultiSelect";
+import { ErrorText } from "../ErrorText";
 
 /**
  * Team ownership + managers (spec 87) — the per-team delegation surface.
@@ -128,7 +129,7 @@ export function TeamStewardship({
         Managers needn't be members — a lead can run a team they're not on.
       </p>
       {setManagers.isError && (
-        <p className="mt-1 text-xs text-red-400">{errorMessage(setManagers.error)}</p>
+        <ErrorText className="mt-1" error={setManagers.error} />
       )}
 
       {team.can_delete && (

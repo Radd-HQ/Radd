@@ -32,6 +32,7 @@ import { Table, TBody, Td, Th, THead } from "../../Table";
 import { TableSkeleton } from "../../TableSkeleton";
 import { HostDialog } from "./HostDialog";
 import { MoveHostDialog, MoveJobProgress } from "./MoveJobProgress";
+import { ErrorText } from "../../ErrorText";
 
 const TYPE_LABELS: Record<StorageHostTypeValue, string> = {
   [StorageHostType.filesystem]: "Filesystem",
@@ -159,9 +160,7 @@ export function HostsPanel() {
       )}
       {activeJobId && <MoveJobProgress jobId={activeJobId} hosts={list} />}
       {(remove.isError || makeDefault.isError) && (
-        <p className="mt-2 text-xs text-red-400">
-          {errorMessage(remove.error ?? makeDefault.error)}
-        </p>
+        <ErrorText className="mt-2" error={remove.error ?? makeDefault.error} />
       )}
       {moving && (
         <MoveHostDialog

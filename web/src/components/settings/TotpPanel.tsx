@@ -7,6 +7,7 @@ import { queryKeys, totpStatusQuery } from "../../lib/queries";
 import type { TotpSetup } from "../../lib/types";
 import { Button } from "../Button";
 import { TextField } from "../TextField";
+import { ErrorText } from "../ErrorText";
 
 const INVALID_CODE_MESSAGE = "Invalid code.";
 
@@ -76,7 +77,7 @@ function SetupPanel({ pending }: { pending: boolean }) {
         <Button onClick={() => start.mutate()} disabled={start.isPending}>
           {start.isPending ? "Preparing…" : pending ? "Restart setup" : "Enable"}
         </Button>
-        {start.isError && <p className="text-xs text-red-400">{errorMessage(start.error)}</p>}
+        {start.isError && <ErrorText error={start.error} />}
       </div>
     );
   }

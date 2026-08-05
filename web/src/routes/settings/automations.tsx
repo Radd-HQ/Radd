@@ -16,6 +16,7 @@ import { TableSkeleton } from "../../components/TableSkeleton";
 import { RuleEditor } from "../../components/automations/RuleEditor";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { QueryError } from "../../components/QueryError";
+import { IconButton } from "../../components/IconButton";
 
 /** Automation rules admin (spec 20) — global, gated on automation.manage. */
 export function AutomationsSettingsPage() {
@@ -165,22 +166,19 @@ function RuleRow({ rule, onEdit }: { rule: Rule; onEdit: () => void }) {
         </span>
       ) : (
         <>
-          <button
-            type="button"
+          <IconButton
             onClick={onEdit}
             aria-label={`Edit ${rule.name}`}
-            className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-fg cursor-pointer"
           >
             <Pencil size={13} />
-          </button>
-          <button
-            type="button"
+          </IconButton>
+          <IconButton
+            danger
             onClick={() => setConfirming(true)}
             aria-label={`Delete ${rule.name}`}
-            className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer"
           >
             <Trash2 size={13} />
-          </button>
+          </IconButton>
         </>
       )}
       {(toggle.isError || remove.isError) && (

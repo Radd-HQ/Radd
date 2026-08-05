@@ -17,7 +17,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { errorMessage } from "../../lib/api";
 import { RoutePath } from "../../lib/constants";
 import {
   pageSpacesQuery,
@@ -28,6 +27,7 @@ import {
 } from "../../lib/queries";
 import type { PermissionSource, ResourceTypeAccess } from "../../lib/types";
 import { SelectField } from "../SelectField";
+import { ErrorText } from "../ErrorText";
 
 const GLOBAL_SCOPE = "";
 const PROJECT_PREFIX = "project:";
@@ -90,7 +90,7 @@ export function EffectivePermissions({ userId }: { userId: string }) {
     return (
       <div className="flex flex-col gap-2">
         {picker}
-        <p className="text-xs text-red-400">{errorMessage(error)}</p>
+        <ErrorText error={error} />
       </div>
     );
 
@@ -226,7 +226,7 @@ function atomTitle(atom: PermissionSource, source: string): string {
 export function ResourceAccessSection({ userId }: { userId: string }) {
   const { data, isPending, isError, error } = useQuery(userAccessQuery(userId));
   if (isPending) return <p className="text-xs text-fg-muted">Resolving resource access…</p>;
-  if (isError) return <p className="text-xs text-red-400">{errorMessage(error)}</p>;
+  if (isError) return <ErrorText error={error} />;
   const summary = data.summary;
   return (
     <div className="flex flex-col gap-2">
@@ -309,7 +309,7 @@ export function ResourceSections({
 export function TeamAccessSection({ teamId }: { teamId: string }) {
   const { data, isPending, isError, error } = useQuery(teamAccessQuery(teamId));
   if (isPending) return <p className="text-xs text-fg-muted">Resolving team access…</p>;
-  if (isError) return <p className="text-xs text-red-400">{errorMessage(error)}</p>;
+  if (isError) return <ErrorText error={error} />;
 
   // Group atoms by (role, scope label) — a role attached on X and granted on Y
   // are different facts and must not merge.

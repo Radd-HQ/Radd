@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { SlotId, useDisabledMatches } from "@radd/plugin-sdk";
-import { api, errorMessage } from "../../lib/api";
+import { api } from "../../lib/api";
 import { ApiPath, RoutePath, apiViewPath, apiViewSharingPath, apiViewTransferPath } from "../../lib/constants";
 import { SlqProbeStatus, usePermissions, useSlqValidation } from "../../lib/hooks";
 import { capabilitiesQuery, fieldsQuery, queryKeys } from "../../lib/queries";
@@ -29,6 +29,9 @@ import { TextField } from "../TextField";
 import { SlqCheatSheet } from "./SlqCheatSheet";
 import { SlqEditor } from "./SlqEditor";
 import { ViewSharingEditor, SERVER_PRIVATE, type LocalShare } from "./ViewSharingEditor";
+import { useKeyedRows } from "../../lib/keyed-rows";
+import { IconButton } from "../IconButton";
+import { ErrorText } from "../ErrorText";
 
 interface ViewModalProps {
   /** View scope, fixed at open time: a project, or null = all-projects. */
@@ -97,6 +100,9 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
   const [swimlaneBy, setSwimlaneBy] = useState<string>(view?.swimlane_by ?? AXIS_NONE);
   const [cycleFilter, setCycleFilter] = useState(view?.cycle_filter ?? "");
   const [quickFilters, setQuickFilters] = useState<QuickFilter[]>(view?.quick_filters ?? []);
+  // Stable per-row keys (RADD-901): each quick-filter row owns an SlqEditor,
+  // and keying by index re-keyed every row below a removal.
+  const quickFilterRows = useKeyedRows(quickFilters, setQuickFilters);
 
   const probe = useSlqValidation(project?.id ?? null, query);
 
@@ -348,7 +354,7 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
           </span>
           {quickFilters.map((filter, index) => (
             <QuickFilterRow
-              key={index}
+              key={quickFilterRows.keys[index]}
               filter={filter}
               projectId={project?.id ?? null}
               onChange={(next) =>
@@ -356,17 +362,13 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
                   current.map((entry, i) => (i === index ? next : entry)),
                 )
               }
-              onRemove={() =>
-                setQuickFilters((current) => current.filter((_, i) => i !== index))
-              }
+              onRemove={() => quickFilterRows.removeAt(index)}
             />
           ))}
           {quickFilters.length < 10 && (
             <button
               type="button"
-              onClick={() =>
-                setQuickFilters((current) => [...current, { name: "", query: "" }])
-              }
+              onClick={() => quickFilterRows.add({ name: "", query: "" })}
               className="w-fit text-xs text-fg-muted hover:text-fg cursor-pointer"
             >
               + Add quick filter
@@ -387,7 +389,7 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
         )}
 
         {save.isError && !saveSlqError && (
-          <p className="text-xs text-red-400">{errorMessage(save.error)}</p>
+          <ErrorText error={save.error} />
         )}
         {saveSlqError && (
           <p className="text-xs text-red-400">Query rejected on save: {saveSlqError.message}</p>
@@ -447,14 +449,14 @@ function QuickFilterRow({
           placeholder="SLQ condition, e.g. assignee = me"
         />
       </div>
-      <button
-        type="button"
+      <IconButton
+        danger
         aria-label="Remove quick filter"
         onClick={onRemove}
-        className="mt-1.5 rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer"
+        className="mt-1.5"
       >
         ×
-      </button>
+      </IconButton>
     </div>
   );
 }

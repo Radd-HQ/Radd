@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Plus, ShieldCheck } from "lucide-react";
-import { api, errorMessage } from "../../lib/api";
+import { api } from "../../lib/api";
 import { ApiPath, apiRolePath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
 import { permissionsCatalogQuery, queryKeys, rolesQuery } from "../../lib/queries";
@@ -23,6 +23,7 @@ import { RoleGlobalGrants } from "../../components/settings/RoleGlobalGrants";
 import { RoleModal } from "../../components/settings/RoleModal";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { QueryError } from "../../components/QueryError";
+import { ErrorText } from "../../components/ErrorText";
 
 /** Roles admin (spec 09): list + expandable permission matrix per role. */
 export function RolesSettingsPage() {
@@ -174,7 +175,7 @@ function BaselinePreflight({ selected }: { selected: PermissionValue[] }) {
           before anything changes.
         </span>
       </div>
-      {run.isError && <p className="text-xs text-red-400">{errorMessage(run.error)}</p>}
+      {run.isError && <ErrorText error={run.error} />}
       {report && (
         <div className="flex flex-col gap-2 text-xs">
           <p
@@ -314,7 +315,7 @@ function RolePanel({ role, catalog, canManage }: RolePanelProps) {
           so this is gated on role.manage, not on `editable`. */}
       <RoleGlobalGrants roleId={role.id} editable={canManage} />
       {(save.isError || remove.isError) && (
-        <p className="text-xs text-red-400">{errorMessage(save.error ?? remove.error)}</p>
+        <ErrorText error={save.error ?? remove.error} />
       )}
       {(editable || (isBaseline && canManage)) && (
         <div className="flex items-center gap-2">

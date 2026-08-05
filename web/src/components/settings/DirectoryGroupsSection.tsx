@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, UsersRound } from "lucide-react";
-import { api, errorMessage } from "../../lib/api";
+import { api } from "../../lib/api";
 import { SEARCH_DEBOUNCE_MS, apiTeamGroupsPath } from "../../lib/constants";
 import { useDebounced } from "../../lib/hooks";
 import { groupsQuery, ldapGroupsQuery, teamsQuery } from "../../lib/queries";
@@ -16,6 +16,7 @@ import { TableSkeleton } from "../TableSkeleton";
 import { TextField } from "../TextField";
 import { ImportGroupsDialog } from "./DirectoryImportDialogs";
 import { settingsTableClasses } from "./SettingsPage";
+import { ErrorText } from "../ErrorText";
 
 const rowActionClasses =
   "rounded border border-strong px-2 py-0.5 text-[11px] text-fg-secondary cursor-pointer " +
@@ -224,7 +225,7 @@ function AddGroupToTeamDialog({
             </option>
           ))}
         </SelectField>
-        {add.isError && <p className="text-xs text-red-400">{errorMessage(add.error)}</p>}
+        {add.isError && <ErrorText error={add.error} />}
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
             Cancel

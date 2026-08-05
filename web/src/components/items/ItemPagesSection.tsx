@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen, Plus, X } from "lucide-react";
-import { api, errorMessage } from "../../lib/api";
+import { api } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import {
   PALETTE_SEARCH_LIMIT,
@@ -14,6 +14,9 @@ import {
 import { useDebounced, usePermissions } from "../../lib/hooks";
 import { pageSearchQuery, itemPagesQuery } from "../../lib/queries";
 import { Permission, type PageLinkedItem, type Item } from "../../lib/types";
+import { Button } from "../Button";
+import { IconButton } from "../IconButton";
+import { ErrorText } from "../ErrorText";
 
 /**
  * Docs block INSIDE the Related links card (spec 43): pages pages linked to
@@ -73,15 +76,14 @@ function UnlinkButton({ pageId, item }: { pageId: string; item: Item }) {
     onSettled: () => void invalidateEntities(queryClient, Entity.page),
   });
   return (
-    <button
-      type="button"
+    <IconButton
+      danger
       onClick={() => remove.mutate()}
       disabled={remove.isPending}
       aria-label="Unlink doc"
-      className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer disabled:opacity-50"
     >
       <X size={13} />
-    </button>
+    </IconButton>
   );
 }
 
@@ -105,14 +107,10 @@ function LinkDocPicker({ item }: { item: Item }) {
 
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="flex w-fit items-center gap-1.5 rounded border border-strong px-2 py-1 text-xs text-fg hover:bg-elevated cursor-pointer"
-      >
+      <Button variant="secondary" size="sm" className="w-fit" onClick={() => setOpen(true)}>
         <Plus size={12} aria-hidden />
         Link a page
-      </button>
+      </Button>
     );
   }
 
@@ -137,7 +135,7 @@ function LinkDocPicker({ item }: { item: Item }) {
           <X size={13} />
         </button>
       </div>
-      {link.isError && <p className="text-xs text-red-400">{errorMessage(link.error)}</p>}
+      {link.isError && <ErrorText error={link.error} />}
       {query.trim() !== "" && (
         <ul className="flex flex-col">
           {hits.map((hit) => (

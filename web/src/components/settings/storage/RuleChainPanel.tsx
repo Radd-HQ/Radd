@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, CornerDownRight, Pencil, Plus, Trash2 } from "lucide-react";
-import { api, errorMessage } from "../../../lib/api";
+import { api } from "../../../lib/api";
 import { ApiPath, apiStorageRulePath } from "../../../lib/constants";
 import { queryKeys, storageHostsQuery, storageRulesQuery } from "../../../lib/queries";
 import {
@@ -15,6 +15,7 @@ import { DropdownMenu } from "../../DropdownMenu";
 import { QueryError } from "../../QueryError";
 import { TableSkeleton } from "../../TableSkeleton";
 import { RuleDialog } from "./RuleDialog";
+import { ErrorText } from "../../ErrorText";
 
 const TYPE_LABELS: Record<StorageRuleTypeValue, string> = {
   [StorageRuleType.userChoice]: "Ask the uploader",
@@ -208,9 +209,7 @@ export function RuleChainPanel() {
         </ul>
       )}
       {(reorder.isError || toggle.isError || remove.isError) && (
-        <p className="mt-2 text-xs text-red-400">
-          {errorMessage(reorder.error ?? toggle.error ?? remove.error)}
-        </p>
+        <ErrorText className="mt-2" error={reorder.error ?? toggle.error ?? remove.error} />
       )}
       {(adding || editing) && (
         <RuleDialog

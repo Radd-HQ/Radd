@@ -10,6 +10,7 @@ import { EmptyState } from "../EmptyState";
 import { QueryError } from "../QueryError";
 import { TableSkeleton } from "../TableSkeleton";
 import { TextField } from "../TextField";
+import { ErrorText } from "../ErrorText";
 
 const sectionHeadClasses = "mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted";
 
@@ -113,7 +114,7 @@ export function AiPresetsSection() {
         </>
       )}
       {remove.isError && (
-        <p className="mt-2 text-xs text-red-400">{errorMessage(remove.error)}</p>
+        <ErrorText className="mt-2" error={remove.error} />
       )}
     </section>
   );

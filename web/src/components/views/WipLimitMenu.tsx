@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { MoreHorizontal } from "lucide-react";
 import { Button } from "../Button";
 import { DropdownMenu } from "../DropdownMenu";
+import { Popover } from "../Popover";
 
 /**
  * Column-header ⋯ menu for state-axis boards (spec 76): "Set WIP limit…" opens
@@ -64,15 +65,12 @@ export function WipLimitMenu({
         )}
       />
 
-      {editing && (
-        <>
-          {/* Click-away backdrop (the DisplayMenu pattern). */}
-          <div className="fixed inset-0 z-30" onClick={close} aria-hidden />
-          <div
-            role="dialog"
-            aria-label={`WIP limit for ${columnLabel}`}
-            className="absolute right-0 top-full z-40 mt-1 w-48 animate-menu-in rounded-lg border border-subtle bg-surface p-2 shadow-pop"
-          >
+      <Popover
+        open={editing}
+        onClose={close}
+        label={`WIP limit for ${columnLabel}`}
+        className="w-48 p-2"
+      >
             <form onSubmit={submit} className="flex flex-col gap-2">
               <label className="text-[11px] font-medium text-fg-secondary">
                 WIP limit for {columnLabel}
@@ -112,9 +110,7 @@ export function WipLimitMenu({
                 </Button>
               </div>
             </form>
-          </div>
-        </>
-      )}
+      </Popover>
     </span>
   );
 }

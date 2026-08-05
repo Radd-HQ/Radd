@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, ChevronLeft, ChevronRight, Plus, Tag } from "lucide-react";
-import { api, errorMessage } from "../lib/api";
+import { api } from "../lib/api";
 import { ApiPath } from "../lib/constants";
 import { TopBarQuery } from "../components/shell/TopBarSlot";
 import { QueryBar } from "../components/views/QueryBar";
@@ -53,6 +53,7 @@ import { SelectField } from "../components/SelectField";
 import { Spinner } from "../components/Spinner";
 import { Table, TBody, Td, THead, Th } from "../components/Table";
 import { TextField } from "../components/TextField";
+import { ErrorText } from "../components/ErrorText";
 
 const PERIODS: { value: TimesheetPeriodValue; label: string }[] = [
   { value: TimesheetPeriod.day, label: "Day" },
@@ -205,13 +206,9 @@ export function TimesheetPage() {
           >
             <ChevronLeft size={16} />
           </button>
-          <button
-            type="button"
-            onClick={() => setAnchor(new Date())}
-            className="rounded border border-strong px-2 py-0.5 text-xs text-fg-secondary hover:bg-elevated cursor-pointer"
-          >
+          <Button variant="secondary" size="sm" onClick={() => setAnchor(new Date())}>
             Today
-          </button>
+          </Button>
           <button
             type="button"
             onClick={() => setAnchor(shiftAnchor(period, anchor, 1))}
@@ -462,7 +459,7 @@ function LogGeneralTimeModal({ onClose }: { onClose: () => void }) {
           maxLength={2000}
         />
         {save.isError && (
-          <p className="text-xs text-red-400">{errorMessage(save.error)}</p>
+          <ErrorText error={save.error} />
         )}
         <div className="flex items-center justify-end gap-2">
           <Button variant="ghost" type="button" onClick={onClose}>

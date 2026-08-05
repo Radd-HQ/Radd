@@ -63,14 +63,15 @@ export function AttachmentsSection({ item, canEdit }: { item: Item; canEdit: boo
         </h3>
         {canEdit && (
           <>
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
+              className="ml-auto"
               onClick={() => inputRef.current?.click()}
-              className="ml-auto flex items-center gap-1 rounded-md border border-strong px-2 py-0.5 text-[11px] text-fg-secondary hover:border-emphasis hover:text-fg cursor-pointer"
             >
               <Upload size={11} aria-hidden />
               Upload
-            </button>
+            </Button>
             <input
               ref={inputRef}
               type="file"

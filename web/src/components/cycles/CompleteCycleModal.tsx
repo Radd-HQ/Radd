@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, errorMessage } from "../../lib/api";
+import { api } from "../../lib/api";
 import { apiCycleCompletePath } from "../../lib/constants";
 import { cycleLabel, sameLabel } from "../../lib/cycle-series";
 import { Entity, invalidateEntities } from "../../lib/cache";
@@ -9,6 +9,7 @@ import { ToastKind, pushToast } from "../../lib/toast";
 import { Button } from "../Button";
 import { Modal } from "../Modal";
 import { Select } from "../Select";
+import { ErrorText } from "../ErrorText";
 
 const BACKLOG = "__backlog__";
 
@@ -117,7 +118,7 @@ export function CompleteCycleModal({ cycle, cycles, openCount, onClose }: Props)
         )}
 
         {complete.isError && (
-          <p className="text-xs text-red-400">{errorMessage(complete.error)}</p>
+          <ErrorText error={complete.error} />
         )}
 
         <div className="flex justify-end gap-2">

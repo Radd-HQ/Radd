@@ -8,6 +8,7 @@ import { RoutePath, apiPageItemPath, apiPageItemsPath } from "../../lib/constant
 import { CATEGORY_META } from "../../lib/meta";
 import { pageItemsQuery } from "../../lib/queries";
 import type { PageLinkedItem, StateCategoryValue } from "../../lib/types";
+import { IconButton } from "../IconButton";
 
 /**
  * Linked-issues panel on a page (spec 43): key chip + title + state dot,
@@ -76,15 +77,14 @@ export function PageLinkedItems({ pageId, canWrite }: { pageId: string; canWrite
                 {item.state}
               </span>
               {canWrite && (
-                <button
-                  type="button"
+                <IconButton
+                  danger
                   onClick={() => remove.mutate(item.item_id)}
                   disabled={remove.isPending}
                   aria-label={`Unlink ${item.key}`}
-                  className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer disabled:opacity-50"
                 >
                   <X size={13} />
-                </button>
+                </IconButton>
               )}
             </li>
           ))}
@@ -100,14 +100,10 @@ export function PageLinkedItems({ pageId, canWrite }: { pageId: string; canWrite
             aria-label="Issue key"
             className="h-8 w-56 rounded-md border border-strong bg-surface px-2.5 font-mono text-xs text-heading placeholder:font-sans placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
           />
-          <button
-            type="submit"
-            disabled={add.isPending || !key.trim()}
-            className="flex items-center gap-1.5 rounded border border-strong px-2 py-1 text-xs text-fg hover:bg-elevated cursor-pointer disabled:opacity-50"
-          >
+          <Button variant="secondary" size="sm" type="submit" disabled={add.isPending || !key.trim()}>
             <Plus size={12} aria-hidden />
             Link
-          </button>
+          </Button>
           {add.isError && <span className="text-xs text-red-400">{errorMessage(add.error)}</span>}
         </form>
       )}

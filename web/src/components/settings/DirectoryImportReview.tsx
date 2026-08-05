@@ -77,10 +77,12 @@ export function DirectoryImportReview({
                 (m) => m.kind !== ImportMatchKind.email,
               );
 
+              // Callout tokens, not the Callout component — this row is an
+              // <li> inside the list, and a div would break the semantics.
               return (
                 <li
                   key={candidate.email}
-                  className="rounded-md border border-amber-500/40 bg-amber-500/5 p-2.5"
+                  className="rounded-md border border-callout-warning-border/60 bg-callout-warning-fill p-2.5"
                 >
                   <p className="text-[13px] text-heading">
                     {candidate.name}{" "}

@@ -20,6 +20,7 @@ import {
 } from "../../lib/types";
 import { SimilarCandidatesList } from "./AiSection";
 import type { AiResultRequest } from "./ai-results";
+import { ErrorText } from "../ErrorText";
 
 interface AiResultsPanelProps {
   request: AiResultRequest;
@@ -211,7 +212,7 @@ export function AiResultsPanel({ request, runId, onClose, className = "" }: AiRe
             <Markdown text={itemSummary.data?.summary ?? ""} />
           )
         ) : streamState === "error" ? (
-          <p className="text-xs text-red-400">{streamError}</p>
+          <ErrorText error={streamError} />
         ) : stream === "" ? (
           <p className="text-xs text-fg-muted">Reading…</p>
         ) : (

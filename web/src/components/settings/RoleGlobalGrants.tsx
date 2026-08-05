@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import { useOnLeaveIds } from "../PersonName";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Globe, Users, UsersRound } from "lucide-react";
-import { api, errorMessage } from "../../lib/api";
+import { api } from "../../lib/api";
 import { apiRoleGlobalGrantsPath } from "../../lib/constants";
 import { groupsQuery, queryKeys, roleGlobalGrantsQuery, teamsQuery, usersQuery } from "../../lib/queries";
 import type { GlobalGrant } from "../../lib/types";
 import { TokenMultiSelect, type TokenOption } from "../TokenMultiSelect";
+import { ErrorText } from "../ErrorText";
 
 /**
  * Who holds this role INSTANCE-WIDE (spec 87).
@@ -101,7 +102,7 @@ export function RoleGlobalGrants({ roleId, editable }: { roleId: string; editabl
           ariaLabel="Instance-wide role holders"
         />
       )}
-      {save.isError && <p className="mt-1 text-xs text-red-400">{errorMessage(save.error)}</p>}
+      {save.isError && <ErrorText className="mt-1" error={save.error} />}
     </section>
   );
 }

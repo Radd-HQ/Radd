@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Globe, Plus, ShieldCheck, Users, User as UserIcon, X } from "lucide-react";
-import { api, errorMessage } from "../../lib/api";
+import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { queryKeys, roleGrantsQuery, rolesQuery, teamsQuery, usersQuery } from "../../lib/queries";
 import { GrantSubject, type RoleGrantCreate } from "../../lib/types";
@@ -9,6 +9,8 @@ import { Button } from "../Button";
 import { Modal } from "../Modal";
 import { SelectField } from "../SelectField";
 import { SubjectPicker, type Subject } from "./SubjectPicker";
+import { IconButton } from "../IconButton";
+import { ErrorText } from "../ErrorText";
 
 /**
  * Who has access to ONE wiki space, and the way to give it (RADD-793).
@@ -91,15 +93,15 @@ export function SpaceAccessPanel({
                 )}
               </span>
               {canManage && (
-                <button
-                  type="button"
+                <IconButton
+                  danger
                   onClick={() => revoke.mutate(grant.id)}
                   disabled={revoke.isPending}
                   aria-label="Revoke grant"
-                  className="ml-auto rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer disabled:opacity-50"
+                  className="ml-auto"
                 >
                   <X size={13} />
-                </button>
+                </IconButton>
               )}
             </li>
           ))}
@@ -194,7 +196,7 @@ function GrantSpaceRoleDialog({
           add page.write to let them edit, comment.write to let them discuss.
         </p>
 
-        {grant.isError && <p className="text-xs text-red-400">{errorMessage(grant.error)}</p>}
+        {grant.isError && <ErrorText error={grant.error} />}
 
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, CircleAlert, Loader2, Play, Save, Wand2 } from "lucide-react";
-import { api, errorMessage } from "../../../lib/api";
+import { api } from "../../../lib/api";
 import { ApiPath } from "../../../lib/constants";
 import { fieldsQuery, jiraPlanQuery, queryKeys } from "../../../lib/queries";
 import {
@@ -28,6 +28,7 @@ import {
   VersionsTable,
 } from "./VocabTables";
 import { UsersTable } from "./UsersTable";
+import { ErrorText } from "../../ErrorText";
 
 type TabKey = keyof PlanMappings;
 
@@ -261,9 +262,7 @@ export function PlanEditor({
       )}
 
       {(save.isError || start.isError || validate.isError) && (
-        <p className="text-xs text-red-400">
-          {errorMessage(save.error ?? start.error ?? validate.error)}
-        </p>
+        <ErrorText error={save.error ?? start.error ?? validate.error} />
       )}
 
       <div className="flex flex-wrap items-center gap-2 border-t border-subtle pt-3">

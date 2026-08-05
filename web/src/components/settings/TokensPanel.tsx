@@ -7,6 +7,7 @@ import { formatDateOrNever } from "../../lib/dates";
 import { queryKeys, tokensQuery } from "../../lib/queries";
 import type { ApiToken, ApiTokenCreate, ApiTokenCreated } from "../../lib/types";
 import { Button } from "../Button";
+import { Callout } from "../Callout";
 import { EmptyState } from "../EmptyState";
 import { TableSkeleton } from "../TableSkeleton";
 import { TextField } from "../TextField";
@@ -93,8 +94,8 @@ function CreatedTokenPanel({
   };
 
   return (
-    <div className="mb-5 rounded-lg border border-amber-500/40 bg-amber-500/5 p-4">
-      <div className="mb-2 flex items-center gap-2 text-[13px] font-medium text-amber-300">
+    <Callout kind="warning" icon={null} className="mb-5 rounded-lg p-4">
+      <div className="mb-2 flex items-center gap-2 text-[13px] font-medium">
         <TriangleAlert size={15} aria-hidden />
         Copy “{created.name}” now — this token won't be shown again.
       </div>
@@ -124,7 +125,7 @@ function CreatedTokenPanel({
           <X size={15} />
         </button>
       </div>
-    </div>
+    </Callout>
   );
 }
 

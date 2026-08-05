@@ -25,6 +25,8 @@ import {
 } from "../../lib/types";
 import { Button } from "../Button";
 import { Select } from "../Select";
+import { IconButton } from "../IconButton";
+import { ErrorText } from "../ErrorText";
 
 interface Props {
   project: Project;
@@ -226,14 +228,10 @@ function LogWorkForm({ itemId }: { itemId: string }) {
 
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="flex w-fit items-center gap-1.5 rounded border border-strong px-2 py-1 text-xs text-fg hover:bg-elevated cursor-pointer"
-      >
+      <Button variant="secondary" size="sm" className="w-fit" onClick={() => setOpen(true)}>
         <Plus size={12} aria-hidden />
         Log work
-      </button>
+      </Button>
     );
   }
 
@@ -285,7 +283,7 @@ function LogWorkForm({ itemId }: { itemId: string }) {
         maxLength={2000}
         className="w-full rounded border border-strong bg-surface px-2 py-1 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
       />
-      {create.isError && <p className="text-xs text-red-400">{errorMessage(create.error)}</p>}
+      {create.isError && <ErrorText error={create.error} />}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" onClick={() => setOpen(false)}>
           Cancel
@@ -410,27 +408,24 @@ function WorklogRow({
       {entry.note && <span className="truncate text-fg-muted">— {entry.note}</span>}
       {canManage && (
         <span className="ml-auto flex shrink-0 items-center gap-0.5">
-          <button
-            type="button"
+          <IconButton
             onClick={() => {
               setTimeSpent(entry.time_spent);
               setNote(entry.note);
               setEditing(true);
             }}
             aria-label="Edit worklog"
-            className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-fg cursor-pointer"
           >
             <Pencil size={12} />
-          </button>
-          <button
-            type="button"
+          </IconButton>
+          <IconButton
+            danger
             onClick={() => remove.mutate()}
             disabled={remove.isPending}
             aria-label="Delete worklog"
-            className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer disabled:opacity-50"
           >
             <Trash2 size={12} />
-          </button>
+          </IconButton>
         </span>
       )}
     </li>

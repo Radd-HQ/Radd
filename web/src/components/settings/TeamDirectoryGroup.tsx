@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FolderSync, Plus, TriangleAlert, X } from "lucide-react";
-import { api, errorMessage } from "../../lib/api";
+import { api } from "../../lib/api";
 import { apiTeamDirectorySyncPath, apiTeamGroupPath, apiTeamGroupsPath } from "../../lib/constants";
 import { groupsQuery, queryKeys, teamGroupsQuery } from "../../lib/queries";
 import { pushToast, ToastKind } from "../../lib/toast";
 import type { DirectorySyncResult, RaddGroup, Team, TeamGroup } from "../../lib/types";
 import { Button } from "../Button";
+import { IconButton } from "../IconButton";
+import { ErrorText } from "../ErrorText";
 
 /**
  * The team's GROUP members (RADD-829). A team is always local now; it reaches
@@ -78,15 +80,14 @@ export function TeamGroupsSection({ team, canManage }: { team: Team; canManage: 
                 </span>
               )}
               {canManage && (
-                <button
-                  type="button"
+                <IconButton
+                  danger
                   onClick={() => removeGroup.mutate(group.group_id)}
                   disabled={removeGroup.isPending}
                   aria-label={`Remove ${group.name} from ${team.name}`}
-                  className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer disabled:opacity-50"
                 >
                   <X size={13} />
-                </button>
+                </IconButton>
               )}
             </li>
           ))}
@@ -108,7 +109,7 @@ export function TeamGroupsSection({ team, canManage }: { team: Team; canManage: 
           {picking ? (
             <div className="flex w-full max-w-md flex-col gap-2">
               {allGroups.isError ? (
-                <p className="text-xs text-red-400">{errorMessage(allGroups.error)}</p>
+                <ErrorText error={allGroups.error} />
               ) : allGroups.isPending ? (
                 <p className="text-xs text-fg-muted">Loading groups…</p>
               ) : addable.length === 0 ? (
@@ -149,9 +150,7 @@ export function TeamGroupsSection({ team, canManage }: { team: Team; canManage: 
         </div>
       )}
       {(addGroup.isError || removeGroup.isError || syncNow.isError) && (
-        <p className="mt-1 text-xs text-red-400">
-          {errorMessage(addGroup.error ?? removeGroup.error ?? syncNow.error)}
-        </p>
+        <ErrorText className="mt-1" error={addGroup.error ?? removeGroup.error ?? syncNow.error} />
       )}
     </section>
   );

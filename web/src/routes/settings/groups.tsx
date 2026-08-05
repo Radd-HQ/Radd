@@ -4,6 +4,7 @@ import { ListSearchInput } from "../../components/ListSearchInput";
 import { QueryError } from "../../components/QueryError";
 import { useListFilter } from "../../lib/list-filter";
 import { groupsQuery } from "../../lib/queries";
+import { formatDateTime } from "../../lib/dates";
 
 /**
  * Settings → Groups (RADD-833): the directory-mirrored list — name, dn,
@@ -91,7 +92,7 @@ export function GroupsSettingsPage() {
                     {group.directory_missing_since ? (
                       <span
                         className="inline-flex items-center gap-1 rounded border border-amber-500/40 px-1.5 py-px text-[11px] text-amber-400"
-                        title={`Stopped resolving in the directory ${new Date(group.directory_missing_since).toLocaleString()} — grants kept, removals held.`}
+                        title={`Stopped resolving in the directory ${formatDateTime(group.directory_missing_since)} — grants kept, removals held.`}
                       >
                         <AlertTriangle size={11} aria-hidden />
                         missing in AD

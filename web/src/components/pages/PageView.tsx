@@ -12,7 +12,7 @@ import {
   Printer,
   Trash2,
 } from "lucide-react";
-import { api, ApiError, errorMessage } from "../../lib/api";
+import { api, ApiError } from "../../lib/api";
 import { useAttachmentUploader } from "../../lib/useAttachmentUploader";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import {
@@ -43,6 +43,9 @@ import { PageInlineComments } from "./PageInlineComments";
 import { PageLabels } from "./PageLabels";
 import { PageLinkedItems } from "./PageLinkedItems";
 import { PageHistory } from "./PageHistory";
+import { IconButton } from "../IconButton";
+import { ErrorText } from "../ErrorText";
+import { Callout } from "../Callout";
 
 const Tab = { content: "content", history: "history" } as const;
 type TabValue = (typeof Tab)[keyof typeof Tab];
@@ -156,20 +159,21 @@ export function PageView({
     <PageExtensionCtx.Provider value={extensionContext}>
     <div className="px-6 py-5">
       {archived && (
-        <p className="mb-3 flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
-          <Archive size={13} aria-hidden />
-          This page is archived — it's hidden from the tree until restored.
-          {canManage && (
-            <button
-              type="button"
-              onClick={() => unarchive.mutate()}
-              className="ml-auto flex items-center gap-1 rounded border border-amber-500/40 px-1.5 py-0.5 hover:bg-amber-500/10 cursor-pointer"
-            >
-              <ArchiveRestore size={12} aria-hidden />
-              Restore
-            </button>
-          )}
-        </p>
+        <Callout kind="warning" icon={Archive} className="mb-3">
+          <div className="flex items-center gap-2">
+            This page is archived — it's hidden from the tree until restored.
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => unarchive.mutate()}
+                className="ml-auto flex items-center gap-1 rounded border border-callout-warning-border/60 px-1.5 py-0.5 hover:bg-callout-warning-border/10 cursor-pointer"
+              >
+                <ArchiveRestore size={12} aria-hidden />
+                Restore
+              </button>
+            )}
+          </div>
+        </Callout>
       )}
 
       <input
@@ -207,15 +211,14 @@ export function PageView({
           />
           <PageWatchButton pageId={page.id} />
           {canWrite && (
-            <button
-              type="button"
+            <IconButton
               onClick={() => setChangingUrl(true)}
               title="Change this page's URL"
               aria-label="Change URL"
-              className="flex rounded p-1 text-fg-faint hover:bg-elevated hover:text-fg cursor-pointer"
+              className="flex"
             >
               <Link2 size={13} aria-hidden />
-            </button>
+            </IconButton>
           )}
           {/* RADD-738: the export entry point, with the subpages choice offered
               WHERE the action is taken rather than buried in settings. */}
@@ -225,16 +228,15 @@ export function PageView({
             className="ml-1"
             widthClass="w-56"
             trigger={({ ref, toggle }) => (
-              <button
+              <IconButton
                 ref={ref}
-                type="button"
                 onClick={toggle}
                 title="Export as PDF"
                 aria-label="Export this page"
-                className="flex rounded p-1 text-fg-faint hover:bg-elevated hover:text-fg cursor-pointer"
+                className="flex"
               >
                 <Printer size={13} aria-hidden />
-              </button>
+              </IconButton>
             )}
             items={[
               {
@@ -266,29 +268,28 @@ export function PageView({
               editor. Offered where the page is, not in settings — the decision
               is about this page and is made while reading it. */}
           {canManage && (
-            <button
-              type="button"
+            <IconButton
               onClick={() => setRestricting(true)}
               title="Restrict who can see this page"
               aria-label="Restrict page"
-              className="ml-1 rounded p-1 text-fg-faint hover:bg-elevated hover:text-fg cursor-pointer"
+              className="ml-1"
             >
               <Lock size={13} aria-hidden />
-            </button>
+            </IconButton>
           )}
           {canWrite && !archived && (
-            <button
-              type="button"
+            <IconButton
               onClick={() => archive.mutate()}
               title="Archive — hidden from the tree until restored"
-              className="ml-1 rounded p-1 text-fg-faint hover:bg-elevated hover:text-fg cursor-pointer"
+              aria-label="Archive page"
+              className="ml-1"
             >
               <Archive size={13} aria-hidden />
-            </button>
+            </IconButton>
           )}
           {canManage && archived && (
-            <button
-              type="button"
+            <IconButton
+              danger
               onClick={() =>
                 void confirm({
                   title: "Delete page permanently",
@@ -300,10 +301,11 @@ export function PageView({
                 })
               }
               title="Delete permanently"
-              className="ml-1 rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer"
+              aria-label="Delete page permanently"
+              className="ml-1"
             >
               <Trash2 size={13} aria-hidden />
-            </button>
+            </IconButton>
           )}
         </span>
       </div>
@@ -311,9 +313,7 @@ export function PageView({
       <PageLabels pageId={page.id} labels={page.labels ?? []} canWrite={canWrite} />
 
       {(save.isError && !conflict) || archive.isError || hardDelete.isError ? (
-        <p className="mt-2 text-xs text-red-400">
-          {errorMessage(save.isError ? save.error : archive.isError ? archive.error : hardDelete.error)}
-        </p>
+        <ErrorText className="mt-2" error={save.isError ? save.error : archive.isError ? archive.error : hardDelete.error} />
       ) : null}
 
       {tab === Tab.history ? (
@@ -321,30 +321,32 @@ export function PageView({
       ) : editing ? (
         <div className="mt-3 flex flex-col gap-2">
           {conflict && (
-            <div className="flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
-              This page changed since you opened it — reload it (discarding your draft) or
-              overwrite.
-              <span className="ml-auto flex shrink-0 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setConflict(false);
-                    setEditing(false);
-                    invalidate();
-                  }}
-                  className="rounded border border-amber-500/40 px-1.5 py-0.5 hover:bg-amber-500/10 cursor-pointer"
-                >
-                  Reload
-                </button>
-                <button
-                  type="button"
-                  onClick={() => save.mutate({ body: draft })}
-                  className="rounded border border-amber-500/40 px-1.5 py-0.5 hover:bg-amber-500/10 cursor-pointer"
-                >
-                  Overwrite
-                </button>
-              </span>
-            </div>
+            <Callout kind="warning">
+              <div className="flex items-center gap-2">
+                This page changed since you opened it — reload it (discarding your draft) or
+                overwrite.
+                <span className="ml-auto flex shrink-0 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setConflict(false);
+                      setEditing(false);
+                      invalidate();
+                    }}
+                    className="rounded border border-callout-warning-border/60 px-1.5 py-0.5 hover:bg-callout-warning-border/10 cursor-pointer"
+                  >
+                    Reload
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => save.mutate({ body: draft })}
+                    className="rounded border border-callout-warning-border/60 px-1.5 py-0.5 hover:bg-callout-warning-border/10 cursor-pointer"
+                  >
+                    Overwrite
+                  </button>
+                </span>
+              </div>
+            </Callout>
           )}
           <RichEditor
             value={draft}

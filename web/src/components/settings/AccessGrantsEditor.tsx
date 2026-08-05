@@ -26,6 +26,8 @@ import { ScopePicker } from "./ScopePicker";
 import { ExpiryChip } from "./AccessInspector";
 import { GroupReachHint } from "./GroupReachHint";
 import { SUBJECT_ICON, SubjectPicker, type Subject } from "./SubjectPicker";
+import { IconButton } from "../IconButton";
+import { ErrorText } from "../ErrorText";
 
 /**
  * The one reusable access-grant editor (spec 92): lists a resource's grants
@@ -145,21 +147,21 @@ export function AccessGrantsEditor({
                     {projectKey.get(grant.project_id) ?? "?"}
                   </span>
                 )}
-                <button
-                  type="button"
+                <IconButton
+                  danger
                   onClick={() => revoke.mutate(grant.id)}
                   disabled={revoke.isPending}
                   aria-label="Revoke grant"
-                  className="ml-auto rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer disabled:opacity-50"
+                  className="ml-auto"
                 >
                   <X size={13} />
-                </button>
+                </IconButton>
               </li>
             );
           })}
         </ul>
       )}
-      {revoke.isError && <p className="text-xs text-red-400">{errorMessage(revoke.error)}</p>}
+      {revoke.isError && <ErrorText error={revoke.error} />}
 
       <AddGrantRow
         resourceType={resourceType}

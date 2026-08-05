@@ -38,6 +38,8 @@ import { TextField } from "../../components/TextField";
 import { TokenMultiSelect } from "../../components/TokenMultiSelect";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { QueryError } from "../../components/QueryError";
+import { IconButton } from "../../components/IconButton";
+import { ErrorText } from "../../components/ErrorText";
 
 /** Date range, or "Not scheduled" for a draft (dateless) staging cycle. */
 function dateRange(cycle: Cycle): string {
@@ -286,22 +288,22 @@ function SeriesRow({ series, canManage }: { series: CycleSeries; canManage: bool
       </label>
       {canManage && (
         <>
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => save.mutate()}
             disabled={!dirty || save.isPending}
-            className="rounded border border-strong px-2 py-0.5 text-xs text-fg hover:border-emphasis hover:text-heading cursor-pointer disabled:opacity-40"
           >
             {save.isPending ? "Saving…" : "Save"}
-          </button>
-          <button
-            type="button"
+          </Button>
+          <IconButton
+            danger
             onClick={() => remove.mutate()}
             title="Stop recurring (existing cycles are kept)"
-            className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer"
+            aria-label="Stop recurring"
           >
             <Trash2 size={13} />
-          </button>
+          </IconButton>
         </>
       )}
       {(save.isError || remove.isError) && (
@@ -359,13 +361,9 @@ function CycleRow({
       )}
       <span className="ml-auto shrink-0 text-xs text-fg-muted">{dateRange(cycle)}</span>
       {canManage && cycle.status === CycleStatus.active && (
-        <button
-          type="button"
-          onClick={onComplete}
-          className="shrink-0 rounded border border-strong px-2 py-0.5 text-xs text-fg hover:border-emphasis hover:text-heading cursor-pointer"
-        >
+        <Button variant="secondary" size="sm" className="shrink-0" onClick={onComplete}>
           Complete…
-        </button>
+        </Button>
       )}
       {canManage &&
         (confirming ? (
@@ -389,22 +387,19 @@ function CycleRow({
           </span>
         ) : (
           <>
-            <button
-              type="button"
+            <IconButton
               onClick={onEdit}
               aria-label={`Edit ${cycle.name}`}
-              className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-fg cursor-pointer"
             >
               <Pencil size={13} />
-            </button>
-            <button
-              type="button"
+            </IconButton>
+            <IconButton
+              danger
               onClick={() => setConfirming(true)}
               aria-label={`Delete ${cycle.name}`}
-              className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer"
             >
               <Trash2 size={13} />
-            </button>
+            </IconButton>
           </>
         ))}
       {remove.isError && <span className="text-xs text-red-400">{errorMessage(remove.error)}</span>}
@@ -626,7 +621,7 @@ function CycleModal({ cycle, onClose }: { cycle: Cycle | null; onClose: () => vo
             )}
           </div>
         )}
-        {save.isError && <p className="text-xs text-red-400">{errorMessage(save.error)}</p>}
+        {save.isError && <ErrorText error={save.error} />}
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
             Cancel

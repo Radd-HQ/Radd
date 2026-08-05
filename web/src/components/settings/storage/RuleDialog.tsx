@@ -21,6 +21,8 @@ import { Select } from "../../Select";
 import { SelectField } from "../../SelectField";
 import { TextField } from "../../TextField";
 import { TokenMultiSelect, type TokenOption } from "../../TokenMultiSelect";
+import { useKeyedRows } from "../../../lib/keyed-rows";
+import { IconButton } from "../../IconButton";
 
 /** Backend defaults mirrored for the form's initial state (LlmConfig). */
 const LLM_DEFAULT_PREFIXES = ["image/"];
@@ -75,6 +77,10 @@ export function RuleDialog({
   const [timeout, setTimeoutSeconds] = useState(
     String(existing?.config.timeout_seconds ?? LLM_DEFAULT_TIMEOUT_SECONDS),
   );
+  // Stable per-row keys (RADD-901): the range/answer rows are input+Select
+  // pairs, and keying by index re-keyed every row below a removal.
+  const rangeRows = useKeyedRows(ranges, setRanges);
+  const answerRows = useKeyedRows(answers, setAnswers);
 
   const hostOptions = hosts.map((host) => ({ value: host.id, label: host.name }));
 
@@ -152,7 +158,7 @@ export function RuleDialog({
               falls through.
             </p>
             {ranges.map((range, index) => (
-              <div key={index} className="flex items-center gap-2">
+              <div key={rangeRows.keys[index]} className="flex items-center gap-2">
                 <input
                   value={range.cidr}
                   onChange={(event) =>
@@ -178,24 +184,21 @@ export function RuleDialog({
                   aria-label={`Host for range ${index + 1}`}
                   className="w-44 shrink-0"
                 />
-                <button
-                  type="button"
-                  onClick={() =>
-                    setRanges((current) => current.filter((_, i) => i !== index))
-                  }
+                <IconButton
+                  danger
+                  onClick={() => rangeRows.removeAt(index)}
                   disabled={ranges.length <= 1}
                   aria-label={`Remove range ${index + 1}`}
-                  className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
                 >
                   <X size={13} aria-hidden />
-                </button>
+                </IconButton>
               </div>
             ))}
             <Button
               variant="ghost"
               size="sm"
               className="self-start"
-              onClick={() => setRanges((current) => [...current, { cidr: "", host_id: "" }])}
+              onClick={() => rangeRows.add({ cidr: "", host_id: "" })}
             >
               <Plus size={13} aria-hidden />
               Add range
@@ -223,7 +226,7 @@ export function RuleDialog({
             <div className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-fg-secondary">Answers</span>
               {answers.map((answer, index) => (
-                <div key={index} className="flex items-center gap-2">
+                <div key={answerRows.keys[index]} className="flex items-center gap-2">
                   <input
                     value={answer.answer}
                     onChange={(event) =>
@@ -252,26 +255,21 @@ export function RuleDialog({
                     aria-label={`Host for answer ${index + 1}`}
                     className="w-44 shrink-0"
                   />
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setAnswers((current) => current.filter((_, i) => i !== index))
-                    }
+                  <IconButton
+                    danger
+                    onClick={() => answerRows.removeAt(index)}
                     disabled={answers.length <= LLM_MIN_ANSWERS}
                     aria-label={`Remove answer ${index + 1}`}
-                    className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
                   >
                     <X size={13} aria-hidden />
-                  </button>
+                  </IconButton>
                 </div>
               ))}
               <Button
                 variant="ghost"
                 size="sm"
                 className="self-start"
-                onClick={() =>
-                  setAnswers((current) => [...current, { answer: "", host_id: "" }])
-                }
+                onClick={() => answerRows.add({ answer: "", host_id: "" })}
               >
                 <Plus size={13} aria-hidden />
                 Add answer

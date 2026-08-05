@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
-import { customFieldErrors, errorMessage } from "../../lib/api";
+import { customFieldErrors } from "../../lib/api";
 import type { BucketCreatePreset } from "../../lib/axis-dnd";
 import { PARENT_SEARCH_LIMIT } from "../../lib/constants";
 import { useDebounced, useItemWritability, usePointsEnabled } from "../../lib/hooks";
@@ -37,6 +37,8 @@ import { CustomFieldsForm } from "./CustomFieldsForm";
 import { DeflectionPanel } from "./DeflectionPanel";
 import { LabelsEditor } from "./LabelsEditor";
 import { LazyRichEditor as RichEditor } from "../editor/LazyRichEditor";
+import { IconButton } from "../IconButton";
+import { ErrorText } from "../ErrorText";
 
 interface NewItemModalProps {
   project: Project;
@@ -268,14 +270,12 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
                     {parentPick.key}
                   </span>
                   <span className="min-w-0 flex-1 truncate text-fg">{parentPick.title}</span>
-                  <button
-                    type="button"
+                  <IconButton
                     onClick={() => setParentPick(null)}
                     aria-label="Clear parent"
-                    className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-fg focus-visible:outline-2 focus-visible:outline-focus cursor-pointer"
                   >
                     <X size={13} aria-hidden />
-                  </button>
+                  </IconButton>
                 </div>
               ) : (
                 <>
@@ -439,7 +439,7 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
         )}
 
         {createItem.isError && Object.keys(fieldErrors).length === 0 && (
-          <p className="text-xs text-red-400">{errorMessage(createItem.error)}</p>
+          <ErrorText error={createItem.error} />
         )}
 
         <div className="flex justify-end gap-2">

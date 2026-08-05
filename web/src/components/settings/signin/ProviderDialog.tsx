@@ -18,6 +18,7 @@ import { SelectField } from "../../SelectField";
 import { StartingAccess } from "./StartingAccess";
 import { TextField } from "../../TextField";
 import { TokenMultiSelect } from "../../TokenMultiSelect";
+import { ErrorText } from "../../ErrorText";
 
 /** Labeled checkbox with an indented help line (the HostDialog idiom). */
 function CheckboxField({
@@ -306,7 +307,7 @@ export function ProviderDialog({
           onChange={setEnabled}
         />
 
-        {error && <p className="text-xs text-red-400">{error}</p>}
+        {error && <ErrorText error={error} />}
 
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose}>

@@ -14,6 +14,7 @@ import type { ViewGroup } from "../../lib/view-utils";
 import { BoardCard } from "../board/BoardCard";
 import { formatPoints } from "../items/ItemBadges";
 import { WipLimitMenu } from "./WipLimitMenu";
+import { IconButton } from "../IconButton";
 
 interface ViewBoardProps {
   groups: ViewGroup[];
@@ -147,15 +148,13 @@ export function ViewBoard({
                     />
                   )}
                   {onQuickAdd && (
-                    <button
-                      type="button"
+                    <IconButton
                       onClick={() => onQuickAdd({ key: group.key, label: group.label })}
                       aria-label={`Add issue to ${group.label}`}
                       title={`Add issue to ${group.label}`}
-                      className="cursor-pointer rounded p-1 text-fg-faint hover:bg-elevated hover:text-fg focus-visible:outline-2 focus-visible:outline-focus"
                     >
                       <Plus size={14} aria-hidden />
-                    </button>
+                    </IconButton>
                   )}
                 </span>
               </div>

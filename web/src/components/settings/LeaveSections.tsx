@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
-import { api, errorMessage } from "../../lib/api";
+import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { shortDate } from "../../lib/dates";
 import { useCurrentUser } from "../../lib/hooks";
@@ -12,6 +12,8 @@ import { Button } from "../Button";
 import { SelectField } from "../SelectField";
 import { Spinner } from "../Spinner";
 import { TextField } from "../TextField";
+import { IconButton } from "../IconButton";
+import { ErrorText } from "../ErrorText";
 
 /**
  * Leave UI, split across its two audiences (settings reorg 2026-08-01):
@@ -83,15 +85,15 @@ function PeriodList({
           )}
           <span className="min-w-0 truncate text-fg-muted">{period.label}</span>
           {!readonly && (
-            <button
-              type="button"
+            <IconButton
+              danger
               onClick={() => remove.mutate(period.id)}
               aria-label="Remove"
               title="Remove"
-              className="ml-auto rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer"
+              className="ml-auto"
             >
               <X size={13} />
-            </button>
+            </IconButton>
           )}
         </li>
       ))}
@@ -166,7 +168,7 @@ function AddPeriodForm({ kind }: { kind: "leave" | "holiday" }) {
       <Button type="submit" disabled={!canSave || save.isPending}>
         {save.isPending ? "Adding…" : kind === "holiday" ? "Add holiday" : "Add leave"}
       </Button>
-      {save.isError && <p className="w-full text-xs text-red-400">{errorMessage(save.error)}</p>}
+      {save.isError && <ErrorText className="w-full" error={save.error} />}
     </form>
   );
 }

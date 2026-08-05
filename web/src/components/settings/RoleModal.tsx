@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, errorMessage } from "../../lib/api";
+import { api } from "../../lib/api";
 import { ApiPath, ROLE_KEY_HINT, ROLE_KEY_PATTERN } from "../../lib/constants";
 import { queryKeys } from "../../lib/queries";
 import type { PermissionInfo, PermissionValue, Role, RoleCreate } from "../../lib/types";
@@ -8,6 +8,7 @@ import { Button } from "../Button";
 import { Modal } from "../Modal";
 import { TextField } from "../TextField";
 import { PermissionMatrix } from "./PermissionMatrix";
+import { ErrorText } from "../ErrorText";
 
 interface RoleModalProps {
   catalog: PermissionInfo[];
@@ -99,7 +100,7 @@ export function RoleModal({ catalog, onClose, onCreated }: RoleModalProps) {
           maxLength={500}
         />
         <PermissionMatrix catalog={catalog} selected={permissions} onToggle={toggle} />
-        {create.isError && <p className="text-xs text-red-400">{errorMessage(create.error)}</p>}
+        {create.isError && <ErrorText error={create.error} />}
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
             Cancel

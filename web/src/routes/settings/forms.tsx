@@ -13,6 +13,7 @@ import { TableSkeleton } from "../../components/TableSkeleton";
 import { FormEditor } from "../../components/forms/FormEditor";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { QueryError } from "../../components/QueryError";
+import { IconButton } from "../../components/IconButton";
 
 /**
  * Intake forms admin (spec 20/50) — per-project, gated on form.manage. The
@@ -163,22 +164,19 @@ function FormRow({
         </span>
       ) : (
         <>
-          <button
-            type="button"
+          <IconButton
             onClick={onEdit}
             aria-label={`Edit ${form.name}`}
-            className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-fg cursor-pointer"
           >
             <Pencil size={13} />
-          </button>
-          <button
-            type="button"
+          </IconButton>
+          <IconButton
+            danger
             onClick={() => setConfirming(true)}
             aria-label={`Delete ${form.name}`}
-            className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer"
           >
             <Trash2 size={13} />
-          </button>
+          </IconButton>
         </>
       )}
       {(toggle.isError || remove.isError) && (

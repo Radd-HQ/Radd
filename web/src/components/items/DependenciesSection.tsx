@@ -17,6 +17,7 @@ import {
 } from "../../lib/types";
 import { Button } from "../Button";
 import { Select } from "../Select";
+import { IconButton } from "../IconButton";
 
 /**
  * Dependency links for an item (spec 18/91): edges grouped by their directional
@@ -88,15 +89,14 @@ export function DependenciesSection({ project, item }: { project: Project; item:
                       </span>
                       <span className="truncate text-fg">{link.item.title}</span>
                     </Link>
-                    <button
-                      type="button"
+                    <IconButton
+                      danger
                       onClick={() => removeLink.mutate({ itemId: item.id, linkId: link.id })}
                       disabled={removeLink.isPending}
                       aria-label={`Remove link to ${link.item.key}`}
-                      className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 focus-visible:outline-2 focus-visible:outline-focus cursor-pointer disabled:opacity-50"
                     >
                       <X size={13} />
-                    </button>
+                    </IconButton>
                   </li>
                 ))}
               </ul>

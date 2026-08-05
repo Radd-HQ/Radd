@@ -13,6 +13,7 @@ import { SimilarCandidatesList } from "../items/AiSection";
 import { useOpenAiResults, type SimilarSeed } from "../items/ai-results";
 import { useEditorAi, type AiRun } from "./ai";
 import { AiActionPicker } from "./AiActionPicker";
+import { ErrorText } from "../ErrorText";
 
 const PANEL_WIDTH = 320;
 
@@ -268,7 +269,7 @@ export function AiReadMenu({
                         <Markdown text={itemSummary.data?.summary ?? ""} />
                       )
                     ) : summaryState === "error" ? (
-                      <p className="text-xs text-red-400">{summaryError}</p>
+                      <ErrorText error={summaryError} />
                     ) : summary === "" ? (
                       <p className="text-xs text-fg-muted">Reading…</p>
                     ) : (

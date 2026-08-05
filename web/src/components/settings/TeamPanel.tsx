@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link2, Plus, X } from "lucide-react";
-import { api, errorMessage } from "../../lib/api";
+import { api } from "../../lib/api";
 import {
   apiProjectTeamPath,
   apiProjectTeamsPath,
@@ -32,6 +32,8 @@ import { Select } from "../Select";
 import { SelectField } from "../SelectField";
 import { TeamGroupsSection } from "./TeamDirectoryGroup";
 import { TeamStewardship } from "./TeamStewardship";
+import { IconButton } from "../IconButton";
+import { ErrorText } from "../ErrorText";
 
 interface TeamPanelProps {
   team: Team;
@@ -162,7 +164,7 @@ export function TeamPanel({ team }: TeamPanelProps) {
         {members.isPending ? (
           <p className="text-xs text-fg-muted">Loading members…</p>
         ) : members.isError ? (
-          <p className="text-xs text-red-400">{errorMessage(members.error)}</p>
+          <ErrorText error={members.error} />
         ) : (members.data ?? []).length === 0 ? (
           <p className="text-xs text-fg-muted">No members yet.</p>
         ) : (
@@ -180,15 +182,15 @@ export function TeamPanel({ team }: TeamPanelProps) {
                   </span>
                 )}
                 {canEditMembers && !member.via_group && (
-                  <button
-                    type="button"
+                  <IconButton
+                    danger
                     onClick={() => removeMember.mutate(member.user_id)}
                     disabled={removeMember.isPending}
                     aria-label={`Remove ${member.name} from ${team.name}`}
-                    className="ml-auto rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer disabled:opacity-50"
+                    className="ml-auto"
                   >
                     <X size={13} />
-                  </button>
+                  </IconButton>
                 )}
               </li>
             ))}
@@ -218,7 +220,7 @@ export function TeamPanel({ team }: TeamPanelProps) {
           </form>
         )}
         {addMember.isError && (
-          <p className="mt-1 text-xs text-red-400">{errorMessage(addMember.error)}</p>
+          <ErrorText className="mt-1" error={addMember.error} />
         )}
       </section>
 
@@ -252,15 +254,14 @@ export function TeamPanel({ team }: TeamPanelProps) {
                       className="ml-auto"
                       options={roleList.map((role) => ({ value: role.id, label: role.name }))}
                     />
-                    <button
-                      type="button"
+                    <IconButton
+                      danger
                       onClick={() => detach.mutate(project.id)}
                       disabled={detach.isPending}
                       aria-label={`Detach ${team.name} from ${project.key}`}
-                      className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer disabled:opacity-50"
                     >
                       <X size={13} />
-                    </button>
+                    </IconButton>
                   </>
                 ) : (
                   <span className="ml-auto rounded border border-strong px-1.5 py-px text-[11px] text-fg-secondary">
@@ -302,9 +303,7 @@ export function TeamPanel({ team }: TeamPanelProps) {
           </form>
         )}
         {(attach.isError || changeRole.isError || detach.isError) && (
-          <p className="mt-1 text-xs text-red-400">
-            {errorMessage(attach.error ?? changeRole.error ?? detach.error)}
-          </p>
+          <ErrorText className="mt-1" error={attach.error ?? changeRole.error ?? detach.error} />
         )}
       </section>
 

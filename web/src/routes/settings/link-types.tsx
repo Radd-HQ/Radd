@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Globe, Link2, Pencil, Plus, Trash2 } from "lucide-react";
-import { api, errorMessage } from "../../lib/api";
+import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { useCurrentUser } from "../../lib/hooks";
 import { useListFilter } from "../../lib/list-filter";
@@ -24,6 +24,7 @@ import { Spinner } from "../../components/Spinner";
 import { TextField } from "../../components/TextField";
 import { ScopePicker } from "../../components/settings/ScopePicker";
 import { SettingsPage, settingsTableClasses } from "../../components/settings/SettingsPage";
+import { ErrorText } from "../../components/ErrorText";
 
 /**
  * Issue link types (spec 91): the relationships items can have. Built-ins
@@ -80,7 +81,7 @@ export function LinkTypesSettingsPage() {
       {types.isPending ? (
         <Spinner label="Loading link types…" />
       ) : types.isError ? (
-        <p className="text-xs text-red-400">{errorMessage(types.error)}</p>
+        <ErrorText error={types.error} />
       ) : (
         <>
           {all.length > 8 && (
@@ -369,7 +370,7 @@ function LinkTypeModal({
           </p>
         </div>
 
-        {save.isError && <p className="text-xs text-red-400">{errorMessage(save.error)}</p>}
+        {save.isError && <ErrorText error={save.error} />}
 
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>

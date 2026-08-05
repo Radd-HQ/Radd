@@ -28,6 +28,8 @@ import { TextField } from "../../components/TextField";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { TransitionsSection } from "../../components/settings/TransitionsSection";
 import { QueryError } from "../../components/QueryError";
+import { IconButton } from "../../components/IconButton";
+import { ErrorText } from "../../components/ErrorText";
 
 /**
  * Per-project workflow states (spec 50). The project comes from the URL context
@@ -214,39 +216,33 @@ function StateRow({
           )}
           {canManage && (
             <span className="flex items-center">
-              <button
-                type="button"
+              <IconButton
                 onClick={() => neighborUp && swap.mutate(neighborUp)}
                 disabled={!neighborUp || swap.isPending}
                 aria-label={`Move ${state.name} up`}
-                className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-fg cursor-pointer disabled:cursor-default disabled:opacity-30"
               >
                 <ArrowUp size={13} />
-              </button>
-              <button
-                type="button"
+              </IconButton>
+              <IconButton
                 onClick={() => neighborDown && swap.mutate(neighborDown)}
                 disabled={!neighborDown || swap.isPending}
                 aria-label={`Move ${state.name} down`}
-                className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-fg cursor-pointer disabled:cursor-default disabled:opacity-30"
               >
                 <ArrowDown size={13} />
-              </button>
+              </IconButton>
             </span>
           )}
           {canManage && (
-            <button
-              type="button"
+            <IconButton
               onClick={() => setEditing(true)}
               aria-label={`Rename ${state.name}`}
-              className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-fg cursor-pointer"
             >
               <Pencil size={13} />
-            </button>
+            </IconButton>
           )}
           {canManage && (
-            <button
-              type="button"
+            <IconButton
+              danger
               onClick={() => setDeleting(true)}
               disabled={state.is_default}
               title={
@@ -255,10 +251,9 @@ function StateRow({
                   : `Delete ${state.name}`
               }
               aria-label={`Delete ${state.name}`}
-              className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer disabled:cursor-default disabled:opacity-30"
             >
               <Trash2 size={13} />
-            </button>
+            </IconButton>
           )}
           {deleting && (
             <DeleteStateDialog
@@ -409,34 +404,29 @@ function StateCategoriesCard({
             </span>
             {canManage && (
               <>
-                <button
-                  type="button"
+                <IconButton
                   onClick={() => index > 0 && swap.mutate({ a: row, b: sorted[index - 1] })}
                   disabled={index === 0 || swap.isPending}
                   aria-label={`Move ${row.name} up`}
-                  className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-fg cursor-pointer disabled:cursor-default disabled:opacity-30"
                 >
                   <ArrowUp size={13} />
-                </button>
-                <button
-                  type="button"
+                </IconButton>
+                <IconButton
                   onClick={() => index < sorted.length - 1 && swap.mutate({ a: row, b: sorted[index + 1] })}
                   disabled={index === sorted.length - 1 || swap.isPending}
                   aria-label={`Move ${row.name} down`}
-                  className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-fg cursor-pointer disabled:cursor-default disabled:opacity-30"
                 >
                   <ArrowDown size={13} />
-                </button>
-                <button
-                  type="button"
+                </IconButton>
+                <IconButton
+                  danger
                   onClick={() => remove.mutate(row.id)}
                   disabled={row.is_builtin || remove.isPending}
                   title={row.is_builtin ? "Builtin categories cannot be deleted" : `Delete ${row.name}`}
                   aria-label={`Delete ${row.name}`}
-                  className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer disabled:cursor-default disabled:opacity-30"
                 >
                   <X size={14} />
-                </button>
+                </IconButton>
               </>
             )}
           </li>
@@ -473,9 +463,7 @@ function StateCategoriesCard({
         </form>
       )}
       {(add.isError || patch.isError || remove.isError || swap.isError) && (
-        <p className="mt-1 text-xs text-red-400">
-          {errorMessage(add.error ?? patch.error ?? remove.error ?? swap.error)}
-        </p>
+        <ErrorText className="mt-1" error={add.error ?? patch.error ?? remove.error ?? swap.error} />
       )}
     </section>
   );
@@ -544,7 +532,7 @@ function DeleteStateDialog({
           The move is recorded in each item&apos;s history. Transitions referencing this
           state are removed with it.
         </p>
-        {remove.isError && <p className="text-xs text-red-400">{errorMessage(remove.error)}</p>}
+        {remove.isError && <ErrorText error={remove.error} />}
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
             Cancel

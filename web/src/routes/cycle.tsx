@@ -133,14 +133,15 @@ export function CyclePage() {
           </span>
           {cycle.data.status === CycleStatus.active &&
             perms.global(Permission.cycleUpdate) && (
-              <button
-                type="button"
+              <Button
+                variant="secondary"
+                size="sm"
+                className="ml-auto"
                 onClick={() => setCompleting(true)}
-                className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-strong px-2.5 py-1 text-xs text-fg hover:border-emphasis hover:text-heading cursor-pointer"
               >
                 <CheckCircle2 size={13} aria-hidden />
                 Complete cycle
-              </button>
+              </Button>
             )}
         </div>
         {cycle.data.goal && (

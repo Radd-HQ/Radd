@@ -21,8 +21,11 @@ import {
   type FieldDef,
   type RuleAction,
 } from "../../lib/types";
+import { useKeyedRows } from "../../lib/keyed-rows";
+import { Button } from "../Button";
 import { SelectField } from "../SelectField";
 import { ActionParams } from "./ActionParams";
+import { IconButton } from "../IconButton";
 
 /** Picker options gathered once for every action row (spec 20 actions builder). */
 export interface PickerData {
@@ -155,18 +158,14 @@ export function ActionsBuilder({ value, onChange }: ActionsBuilderProps) {
   const pickers = usePickerData();
   const listId = useId();
 
+  // Stable per-row keys (RADD-901): rows are full of selects and param inputs,
+  // and keying by index re-keyed everything below a removal.
+  const rows = useKeyedRows(value, onChange);
   const update = (index: number, next: RuleAction) =>
     onChange(value.map((action, i) => (i === index ? next : action)));
-  const remove = (index: number) => onChange(value.filter((_, i) => i !== index));
-  const move = (index: number, delta: number) => {
-    const target = index + delta;
-    if (target < 0 || target >= value.length) return;
-    const next = [...value];
-    [next[index], next[target]] = [next[target], next[index]];
-    onChange(next);
-  };
+  const move = (index: number, delta: number) => rows.swap(index, index + delta);
   const add = () =>
-    onChange([...value, { type: ActionType.setState, params: defaultParams(ActionType.setState) }]);
+    rows.add({ type: ActionType.setState, params: defaultParams(ActionType.setState) });
 
   return (
     <div className="flex flex-col gap-2">
@@ -201,7 +200,7 @@ export function ActionsBuilder({ value, onChange }: ActionsBuilderProps) {
       <ul className="flex flex-col gap-2">
         {value.map((action, index) => (
           <li
-            key={index}
+            key={rows.keys[index]}
             className="flex items-start gap-2 rounded-md border border-subtle bg-surface/40 p-2.5"
           >
             <div className="flex flex-col gap-0.5 pt-5">
@@ -246,26 +245,22 @@ export function ActionsBuilder({ value, onChange }: ActionsBuilderProps) {
                 onParams={(params) => update(index, { ...action, params })}
               />
             </div>
-            <button
-              type="button"
-              onClick={() => remove(index)}
+            <IconButton
+              danger
+              onClick={() => rows.removeAt(index)}
               aria-label={`Remove action ${index + 1}`}
-              className="mt-6 rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer"
+              className="mt-6"
             >
               <Trash2 size={14} />
-            </button>
+            </IconButton>
           </li>
         ))}
       </ul>
 
-      <button
-        type="button"
-        onClick={add}
-        className="inline-flex w-fit items-center gap-1.5 rounded-md border border-strong px-2.5 py-1 text-xs text-fg hover:bg-elevated hover:text-heading cursor-pointer"
-      >
+      <Button variant="secondary" size="sm" className="w-fit" onClick={add}>
         <Plus size={13} aria-hidden />
         Add action
-      </button>
+      </Button>
     </div>
   );
 }

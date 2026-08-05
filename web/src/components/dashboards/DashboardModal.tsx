@@ -1,13 +1,14 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, errorMessage } from "../../lib/api";
+import { api } from "../../lib/api";
 import { ApiPath, RoutePath, apiDashboardPath } from "../../lib/constants";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import type { Dashboard, DashboardCreate, DashboardUpdate } from "../../lib/types";
 import { Button } from "../Button";
 import { Modal } from "../Modal";
 import { TextField } from "../TextField";
+import { ErrorText } from "../ErrorText";
 
 /**
  * New/Edit dashboard dialog (spec 75). Create takes just a name (any member —
@@ -73,7 +74,7 @@ export function DashboardModal({
             maxLength={2000}
           />
         )}
-        {save.isError && <p className="text-xs text-red-400">{errorMessage(save.error)}</p>}
+        {save.isError && <ErrorText error={save.error} />}
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
             Cancel

@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { ChevronDown } from "lucide-react";
 import { RoutePath } from "../../lib/constants";
 import { pagesQuery } from "../../lib/queries";
+import { Popover } from "../Popover";
 import type { PageBreadcrumb } from "../../lib/types";
 
 /**
@@ -48,28 +49,29 @@ export function BreadcrumbCrumb({
       >
         <ChevronDown size={11} aria-hidden />
       </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-[59]" onMouseDown={() => setOpen(false)} />
-          <div className="absolute left-0 top-full z-[60] mt-1 max-h-72 w-56 overflow-y-auto rounded-md border border-strong bg-overlay py-1 shadow-pop animate-menu-in">
-            {siblings.length === 0 ? (
-              <p className="px-3 py-1.5 text-[12px] text-fg-faint">Nothing else at this level.</p>
-            ) : (
-              siblings.map((sibling) => (
-                <Link
-                  key={sibling.id}
-                  to={RoutePath.page}
-                  params={{ spaceSlug, pageSlug: sibling.slug }}
-                  onClick={() => setOpen(false)}
-                  className="block truncate px-3 py-1.5 text-[13px] text-fg hover:bg-elevated"
-                >
-                  {sibling.title}
-                </Link>
-              ))
-            )}
-          </div>
-        </>
-      )}
+      <Popover
+        open={open}
+        onClose={() => setOpen(false)}
+        label={`Pages beside ${crumb.title}`}
+        align="start"
+        className="max-h-72 w-56 overflow-y-auto py-1"
+      >
+        {siblings.length === 0 ? (
+          <p className="px-3 py-1.5 text-[12px] text-fg-faint">Nothing else at this level.</p>
+        ) : (
+          siblings.map((sibling) => (
+            <Link
+              key={sibling.id}
+              to={RoutePath.page}
+              params={{ spaceSlug, pageSlug: sibling.slug }}
+              onClick={() => setOpen(false)}
+              className="block truncate px-3 py-1.5 text-[13px] text-fg hover:bg-elevated"
+            >
+              {sibling.title}
+            </Link>
+          ))
+        )}
+      </Popover>
     </span>
   );
 }

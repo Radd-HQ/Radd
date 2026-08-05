@@ -13,6 +13,8 @@ import { Modal } from "../../Modal";
 import { SelectField } from "../../SelectField";
 import { TokenMultiSelect } from "../../TokenMultiSelect";
 import { ScopePicker } from "../ScopePicker";
+import { useKeyedRows } from "../../../lib/keyed-rows";
+import { IconButton } from "../../IconButton";
 
 /**
  * What a NEW account gets from this provider, per rule (RADD-782).
@@ -41,6 +43,9 @@ export function StartingAccess({
   const projects = useQuery(projectsQuery());
   const teams = useQuery(teamsQuery());
 
+  // Stable per-row keys (RADD-901): rule cards are full of editors, and keying
+  // by index re-keyed every card below a removal.
+  const rows = useKeyedRows(rules, onChange);
   const patch = (index: number, next: Partial<SsoProvisioningRule>) =>
     onChange(rules.map((rule, i) => (i === index ? { ...rule, ...next } : rule)));
 
@@ -54,13 +59,13 @@ export function StartingAccess({
 
       {rules.map((rule, index) => (
         <RuleCard
-          key={index}
+          key={rows.keys[index]}
           rule={rule}
           roles={(roles.data ?? []).filter((role) => role.key !== BASELINE_ROLE_KEY)}
           projects={projects.data ?? []}
           teams={teams.data ?? []}
           onChange={(next) => patch(index, next)}
-          onRemove={() => onChange(rules.filter((_, i) => i !== index))}
+          onRemove={() => rows.removeAt(index)}
         />
       ))}
 
@@ -72,7 +77,7 @@ export function StartingAccess({
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => onChange([...rules, { name: "", domains: [], grants: [], team_ids: [] }])}
+          onClick={() => rows.add({ name: "", domains: [], grants: [], team_ids: [] })}
         >
           <Plus size={12} aria-hidden />
           Add rule
@@ -112,14 +117,13 @@ function RuleCard({
           aria-label="Rule name"
           className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-[13px] text-heading hover:border-subtle focus:border-strong focus:outline-none"
         />
-        <button
-          type="button"
+        <IconButton
+          danger
           onClick={onRemove}
           aria-label="Remove rule"
-          className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer"
         >
           <Trash2 size={13} aria-hidden />
-        </button>
+        </IconButton>
       </div>
 
       <div>

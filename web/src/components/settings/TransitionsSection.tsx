@@ -52,6 +52,9 @@ import { Button } from "../Button";
 import { SelectField } from "../SelectField";
 import { SubjectPicker, type Subject } from "./SubjectPicker";
 import { TokenMultiSelect, type TokenOption } from "../TokenMultiSelect";
+import { useKeyedRows } from "../../lib/keyed-rows";
+import { IconButton } from "../IconButton";
+import { ErrorText } from "../ErrorText";
 
 /** Any-state wildcard sentinel for the from-state selects ("" = NULL). */
 const ANY_STATE = "";
@@ -417,33 +420,28 @@ function TransitionRow({
         </SelectField>
         {canManage && (
           <div className="mb-1 ml-auto flex items-center gap-1">
-            <button
-              type="button"
+            <IconButton
               onClick={() => swapWith(neighbours[0])}
               disabled={!neighbours[0]}
               aria-label="Move transition up"
-              className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-fg disabled:opacity-30 cursor-pointer"
             >
               <ArrowUp size={13} />
-            </button>
-            <button
-              type="button"
+            </IconButton>
+            <IconButton
               onClick={() => swapWith(neighbours[1])}
               disabled={!neighbours[1]}
               aria-label="Move transition down"
-              className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-fg disabled:opacity-30 cursor-pointer"
             >
               <ArrowDown size={13} />
-            </button>
-            <button
-              type="button"
+            </IconButton>
+            <IconButton
+              danger
               onClick={() => remove.mutate()}
               disabled={remove.isPending}
               aria-label="Delete transition"
-              className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer"
             >
               <Trash2 size={13} />
-            </button>
+            </IconButton>
           </div>
         )}
       </div>
@@ -505,9 +503,7 @@ function TransitionRow({
         />
       )}
       {(patch.isError || remove.isError) && (
-        <p className="mt-1 text-xs text-red-400">
-          {errorMessage(patch.error ?? remove.error)}
-        </p>
+        <ErrorText className="mt-1" error={patch.error ?? remove.error} />
       )}
     </li>
   );
@@ -541,6 +537,9 @@ function ConditionListEditor({
 }) {
   // Rows whose operator still needs values live here until committable.
   const [drafts, setDrafts] = useState<Record<number, FieldConditionParams>>({});
+  // Stable per-row keys (RADD-901): the old `index:choiceId` composite still
+  // re-keyed (and remounted) every row below a removal.
+  const rows = useKeyedRows(conditions, onChange);
 
   const clearDraft = (index: number) =>
     setDrafts((current) => {
@@ -560,7 +559,7 @@ function ConditionListEditor({
 
   const removeAt = (index: number) => {
     clearDraft(index);
-    onChange(conditions.filter((_, i) => i !== index));
+    rows.removeAt(index);
   };
 
   const seed = (choice: FieldChoice): FieldConditionParams => ({
@@ -577,7 +576,7 @@ function ConditionListEditor({
       )}
       {conditions.map((params, index) => (
         <ConditionRow
-          key={`${index}:${choiceId(params)}`}
+          key={rows.keys[index]}
           params={drafts[index] ?? params}
           choices={choices}
           project={project}
@@ -594,7 +593,7 @@ function ConditionListEditor({
             value=""
             onChange={(event) => {
               const choice = choices.find((entry) => choiceId(entry) === event.target.value);
-              if (choice) onChange([...conditions, seed(choice)]);
+              if (choice) rows.add(seed(choice));
             }}
             disabled={pending}
           >
@@ -726,14 +725,13 @@ function ConditionRow({
       )}
       {incomplete && <span className="text-[11px] text-amber-400">choose a value</span>}
       {!disabled && (
-        <button
-          type="button"
+        <IconButton
+          danger
           onClick={onRemove}
           aria-label="Remove condition"
-          className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer"
         >
           <X size={13} />
-        </button>
+        </IconButton>
       )}
     </div>
   );

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useOnLeaveIds } from "../PersonName";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Users } from "lucide-react";
-import { api, errorMessage } from "../../lib/api";
+import { api } from "../../lib/api";
 import { apiFormSharingPath } from "../../lib/constants";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { queryKeys, teamsQuery, usersQuery } from "../../lib/queries";
@@ -13,6 +13,7 @@ import {
   type FormSharingUpdate,
 } from "../../lib/types";
 import { TokenMultiSelect, type TokenOption } from "../TokenMultiSelect";
+import { ErrorText } from "../ErrorText";
 
 interface FormSharingProps {
   formId: string;
@@ -80,7 +81,7 @@ export function FormSharing({ formId, projectId, shares: initial }: FormSharingP
         ariaLabel="Portal sharing"
       />
 
-      {put.isError && <p className="text-xs text-red-400">{errorMessage(put.error)}</p>}
+      {put.isError && <ErrorText error={put.error} />}
     </div>
   );
 }

@@ -9,6 +9,8 @@ import {
   type CardDisplayState,
 } from "../../lib/card-display";
 import type { ColumnDef } from "../../lib/columns";
+import { Button } from "../Button";
+import { Popover } from "../Popover";
 import { Select } from "../Select";
 
 export const LABEL_CAP_OPTIONS = [1, 2, 3, 5, 99] as const;
@@ -59,42 +61,40 @@ export function DisplayMenu({
 
   return (
     <div className="relative">
-      <button
-        type="button"
+      <Button
+        variant="secondary"
+        size="sm"
         onClick={() => setOpen((current) => !current)}
         aria-expanded={open}
         aria-haspopup="dialog"
-        className="flex items-center gap-1 rounded-md border border-strong px-2 py-1 text-xs text-fg-secondary hover:border-emphasis hover:text-fg cursor-pointer"
       >
         <SlidersHorizontal size={12} aria-hidden />
         Display
-      </button>
+      </Button>
 
-      {open && (
-        <>
-          {/* Click-away backdrop (same pattern as the context menu). */}
-          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} aria-hidden />
-          <div
-            role="dialog"
-            aria-label="Card display options"
-            className="absolute right-0 top-full z-40 mt-1 w-60 rounded-lg border border-strong bg-surface p-3 shadow-xl"
-          >
+      <Popover
+        open={open}
+        onClose={() => setOpen(false)}
+        label="Card display options"
+        className="w-60 p-3"
+      >
             {cardDesigner ? (
               <div>
                 <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted">
                   Card layout
                 </p>
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="w-full justify-center"
                   onClick={() => {
                     setOpen(false);
                     cardDesigner.onOpen();
                   }}
-                  className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-md border border-strong px-2 py-1.5 text-xs text-fg-secondary hover:border-emphasis hover:text-fg"
                 >
                   <LayoutTemplate size={13} aria-hidden />
                   {cardDesigner.canEdit ? "Design card…" : "View card layout…"}
-                </button>
+                </Button>
                 <p className="mt-2 text-[11px] text-fg-faint">
                   The card layout is part of this view — everyone sees it.
                   {cardDesigner.canEdit ? "" : " Only view editors change it."}
@@ -161,19 +161,18 @@ export function DisplayMenu({
               />
             </div>
 
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
+              className="mt-3 w-full justify-center"
               onClick={() => {
                 reset();
                 columnsEditor?.onResetWidths?.();
               }}
-              className="mt-3 w-full rounded-md border border-subtle px-2 py-1 text-xs text-fg-muted hover:border-strong hover:text-fg cursor-pointer"
             >
               Reset to defaults
-            </button>
-          </div>
-        </>
-      )}
+            </Button>
+      </Popover>
     </div>
   );
 }

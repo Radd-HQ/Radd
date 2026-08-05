@@ -6,6 +6,7 @@ import { PageBody } from "../components/pages/PageBody";
 import { PageExtensionCtx } from "../lib/page-extensions";
 import { headingAnchorId, headingsOf } from "../lib/markdown-outline";
 import type { PageSummary } from "../lib/types";
+import { formatDate } from "../lib/dates";
 import "./page-print.css";
 
 /**
@@ -90,7 +91,7 @@ export function PagePrintPage() {
           <h1>{page.title}</h1>
           <p className="radd-print-meta">
             Last edited by {author?.name ?? "someone"} on{" "}
-            {new Date(page.updated_at).toLocaleDateString()}
+            {formatDate(page.updated_at)}
           </p>
         </header>
 

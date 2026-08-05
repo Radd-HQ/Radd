@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, errorMessage } from "../../lib/api";
+import { api } from "../../lib/api";
 import {
   ApiPath,
   apiDashboardSharingPath,
@@ -12,6 +12,7 @@ import { Permission, type Dashboard, type ShareLevelValue } from "../../lib/type
 import { Button } from "../Button";
 import { Modal } from "../Modal";
 import { ViewSharingEditor, SERVER_PRIVATE, type LocalShare } from "../views/ViewSharingEditor";
+import { ErrorText } from "../ErrorText";
 
 /**
  * Sharing dialog for a dashboard (spec 75, on the spec-92 access framework since
@@ -113,7 +114,7 @@ export function DashboardSharingModal({
           onTransferTo={setTransferTo}
           noun="dashboard"
         />
-        {save.isError && <p className="text-xs text-red-400">{errorMessage(save.error)}</p>}
+        {save.isError && <ErrorText error={save.error} />}
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
             Cancel

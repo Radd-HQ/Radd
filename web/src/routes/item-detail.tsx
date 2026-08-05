@@ -49,6 +49,7 @@ import { AiResultsPanel } from "../components/items/AiResultsPanel";
 import { AiResultsContext, type AiResultRequest } from "../components/items/ai-results";
 import { RelatedLinksSection } from "../components/items/RelatedLinksSection";
 import { ItemPagesSection } from "../components/items/ItemPagesSection";
+import { Callout } from "../components/Callout";
 
 /** Debounce for text-ish custom-field edits before PATCHing. */
 const CUSTOM_FIELD_SAVE_DELAY_MS = 600;
@@ -321,10 +322,9 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
           <div className="@3xl:mr-[19.5rem]">
             <div className="mx-auto w-full max-w-[64rem]">
               {archived && (
-                <p className="mb-3 flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
-                  <Archive size={13} aria-hidden />
+                <Callout kind="warning" icon={Archive} className="mb-3">
                   This issue is archived — it's hidden from boards and lists until restored.
-                </p>
+                </Callout>
               )}
               <input
                 value={title}

@@ -1,13 +1,13 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { errorMessage } from "../../lib/api";
 import { RoutePath } from "../../lib/constants";
 import { useOpenIssueRef } from "../../lib/hooks";
 import { CATEGORY_META } from "../../lib/meta";
 import { childItemsQuery } from "../../lib/queries";
 import { compareChildrenOpenFirst } from "../../lib/view-utils";
 import { Spinner } from "../Spinner";
+import { ErrorText } from "../ErrorText";
 
 /**
  * A board card's children, listed in place (RADD-698).
@@ -45,7 +45,7 @@ export function CardChildren({ parentId }: { parentId: string }) {
       {children.isPending ? (
         <Spinner label="Loading children…" />
       ) : children.isError ? (
-        <p className="text-[11px] text-red-400">{errorMessage(children.error)}</p>
+        <ErrorText error={children.error} />
       ) : sorted.length === 0 ? (
         <p className="text-[11px] text-fg-faint">No children.</p>
       ) : (

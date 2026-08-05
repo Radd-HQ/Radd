@@ -15,6 +15,7 @@ import { PublicBadge } from "../components/pages/PublicBadge";
 import { QueryError } from "../components/QueryError";
 import { AiResultsPanel } from "../components/items/AiResultsPanel";
 import { AiResultsContext, type AiResultRequest } from "../components/items/ai-results";
+import { ErrorText } from "../components/ErrorText";
 
 /**
  * `/pages/$spaceSlug` (+ `/pages/$spaceSlug/$pageSlug`) — the two-pane pages
@@ -78,7 +79,7 @@ export function PageSpacePage() {
     return (
       <div className="p-6">
         {!space ? (
-          <p className="text-sm text-red-400">Page space not found.</p>
+          <ErrorText size="sm" error="Page space not found." />
         ) : (
           <QueryError label="pages" error={pages.error} />
         )}

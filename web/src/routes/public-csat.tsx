@@ -9,6 +9,7 @@ import type { PublicCsat, PublicCsatSubmit } from "../lib/types";
 import { Button } from "../components/Button";
 import { RaddTile } from "../components/RaddMark";
 import { Spinner } from "../components/Spinner";
+import { ErrorText } from "../components/ErrorText";
 
 const RATING_LABELS: Record<number, string> = {
   1: "Very dissatisfied",
@@ -168,7 +169,7 @@ function RatingForm({
           </label>
 
           {submit.isError && (
-            <p className="text-sm text-red-400">{errorMessage(submit.error)}</p>
+            <ErrorText size="sm" error={submit.error} />
           )}
 
           <div className="flex justify-end">

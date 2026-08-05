@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { RotateCcw, Save } from "lucide-react";
-import { api, errorMessage } from "../../lib/api";
+import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { SETTING_CHOICE_LABELS } from "../../lib/meta";
 import { scopedSettingsQuery } from "../../lib/queries";
@@ -10,6 +10,7 @@ import { Button } from "../Button";
 import { SelectField } from "../SelectField";
 import { Spinner } from "../Spinner";
 import { QueryError } from "../QueryError";
+import { ErrorText } from "../ErrorText";
 
 interface Props {
   scope: SettingScopeValue;
@@ -150,7 +151,7 @@ function SettingRow({
         )}
       </div>
       {(save.isError || reset.isError) && (
-        <p className="mt-1 text-xs text-red-400">{errorMessage(save.error ?? reset.error)}</p>
+        <ErrorText className="mt-1" error={save.error ?? reset.error} />
       )}
     </div>
   );

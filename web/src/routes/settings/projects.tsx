@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link2, Lock, Plus, UserRound, X } from "lucide-react";
-import { ApiError, api, errorMessage } from "../../lib/api";
+import { ApiError, api } from "../../lib/api";
 import {
   apiProjectMemberPath,
   apiProjectMembersPath,
@@ -34,6 +34,8 @@ import { SelectField } from "../../components/SelectField";
 import { TableSkeleton } from "../../components/TableSkeleton";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { QueryError } from "../../components/QueryError";
+import { IconButton } from "../../components/IconButton";
+import { ErrorText } from "../../components/ErrorText";
 
 /**
  * Project access admin (spec 09/50): direct user memberships and team
@@ -128,7 +130,7 @@ function MembersSection({ project, roles }: { project: Project; roles: Role[] })
       ) : members.isPending ? (
         <TableSkeleton rows={2} />
       ) : members.isError ? (
-        <p className="text-sm text-red-400">{errorMessage(members.error)}</p>
+        <ErrorText size="sm" error={members.error} />
       ) : (members.data ?? []).length === 0 ? (
         <EmptyState icon={UserRound} message="No direct members — access may come via teams." />
       ) : (
@@ -149,15 +151,14 @@ function MembersSection({ project, roles }: { project: Project; roles: Role[] })
                   className="ml-auto"
                   options={roleOptions(roles)}
                 />
-                <button
-                  type="button"
+                <IconButton
+                  danger
                   onClick={() => remove.mutate(member.user_id)}
                   disabled={remove.isPending}
                   aria-label={`Remove ${user?.name ?? member.user_id} from ${project.key}`}
-                  className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer disabled:opacity-50"
                 >
                   <X size={13} />
-                </button>
+                </IconButton>
               </li>
             );
           })}
@@ -195,9 +196,7 @@ function MembersSection({ project, roles }: { project: Project; roles: Role[] })
         </form>
       )}
       {(upsert.isError || changeRole.isError) && (
-        <p className="mt-1 text-xs text-red-400">
-          {errorMessage(upsert.error ?? changeRole.error)}
-        </p>
+        <ErrorText className="mt-1" error={upsert.error ?? changeRole.error} />
       )}
     </section>
   );
@@ -249,7 +248,7 @@ function TeamsSection({ project, roles }: { project: Project; roles: Role[] }) {
       {attachments.isPending ? (
         <TableSkeleton rows={2} />
       ) : attachments.isError ? (
-        <p className="text-sm text-red-400">{errorMessage(attachments.error)}</p>
+        <ErrorText size="sm" error={attachments.error} />
       ) : (attachments.data ?? []).length === 0 ? (
         <EmptyState icon={Link2} message="No teams attached." />
       ) : (
@@ -278,15 +277,14 @@ function TeamsSection({ project, roles }: { project: Project; roles: Role[] }) {
                       className="ml-auto"
                       options={roleOptions(roles)}
                     />
-                    <button
-                      type="button"
+                    <IconButton
+                      danger
                       onClick={() => detach.mutate(entry.team_id)}
                       disabled={detach.isPending}
                       aria-label={`Detach ${team?.name ?? entry.team_id} from ${project.key}`}
-                      className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer disabled:opacity-50"
                     >
                       <X size={13} />
-                    </button>
+                    </IconButton>
                   </>
                 ) : (
                   <span className="ml-auto rounded border border-strong px-1.5 py-px text-[11px] text-fg-secondary">
@@ -330,9 +328,7 @@ function TeamsSection({ project, roles }: { project: Project; roles: Role[] }) {
         </form>
       )}
       {(attach.isError || changeRole.isError || detach.isError) && (
-        <p className="mt-1 text-xs text-red-400">
-          {errorMessage(attach.error ?? changeRole.error ?? detach.error)}
-        </p>
+        <ErrorText className="mt-1" error={attach.error ?? changeRole.error ?? detach.error} />
       )}
     </section>
   );

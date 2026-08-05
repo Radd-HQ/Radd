@@ -28,6 +28,7 @@ import { TableSkeleton } from "../../components/TableSkeleton";
 import { TextField } from "../../components/TextField";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { useConfirm } from "../../components/ConfirmDialog";
+import { formatDateTime } from "../../lib/dates";
 
 const POLL_MS = 2000;
 
@@ -44,7 +45,7 @@ function bytes(size: number | null): string {
 }
 
 function when(iso: string | null): string {
-  return iso ? new Date(iso).toLocaleString() : "—";
+  return iso ? formatDateTime(iso) : "—";
 }
 
 /** Human summary of a {kind, minutes|time, weekdays} config. */

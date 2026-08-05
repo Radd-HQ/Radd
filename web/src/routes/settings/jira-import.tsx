@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, CircleAlert, Database } from "lucide-react";
-import { errorMessage } from "../../lib/api";
 import { useCurrentUser } from "../../lib/hooks";
 import { InstanceRole } from "../../lib/types";
 import { jiraStatusQuery } from "../../lib/queries";
@@ -13,6 +12,8 @@ import { PlanEditor } from "../../components/settings/jira/PlanEditor";
 import { PlansPanel } from "../../components/settings/jira/PlansPanel";
 import { RunsPanel } from "../../components/settings/jira/RunsPanel";
 import { SnapshotsPanel } from "../../components/settings/jira/SnapshotsPanel";
+import { ErrorText } from "../../components/ErrorText";
+import { Callout } from "../../components/Callout";
 
 /**
  * Import from Jira (spec 100) — a cache-first pipeline, in the order it runs.
@@ -60,7 +61,7 @@ export function JiraImportPage() {
         {status.isPending ? (
           <Spinner label="Checking the Jira connection…" />
         ) : status.isError ? (
-          <p className="text-xs text-red-400">{errorMessage(status.error)}</p>
+          <ErrorText error={status.error} />
         ) : !status.data.configured ? (
           <ConnectionNotice
             title="No Jira connection yet"
@@ -99,12 +100,9 @@ export function JiraImportPage() {
 
 function ConnectionNotice({ title, detail }: { title: string; detail: string }) {
   return (
-    <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
-      <p className="flex items-center gap-1.5 text-[13px] text-amber-200">
-        <CircleAlert size={14} />
-        {title}
-      </p>
-      {detail && <p className="mt-1 text-xs text-fg-secondary">{detail}</p>}
-    </div>
+    <Callout kind="warning" icon={CircleAlert} className="p-3">
+      <p className="text-[13px]">{title}</p>
+      {detail && <p className="mt-1 text-fg-secondary">{detail}</p>}
+    </Callout>
   );
 }

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { SlotId, useDisabledMatches } from "@radd/plugin-sdk";
-import { api, errorMessage } from "../../lib/api";
+import { api } from "../../lib/api";
 import {
   apiDashboardWidgetPath,
   apiDashboardWidgetsPath,
@@ -34,6 +34,7 @@ import { TextField } from "../TextField";
 import { Segmented } from "../reports/report-state";
 import { MEASURE_OPTIONS } from "../reports/measure";
 import { SlqEditor } from "../views/SlqEditor";
+import { ErrorText } from "../ErrorText";
 
 /** Widget-type picker entries (spec 75) — labels use "cycles", never "sprint". */
 const WIDGET_TYPE_OPTIONS: readonly { value: WidgetTypeValue; label: string }[] = [
@@ -385,7 +386,7 @@ export function WidgetModal({
         </SelectField>
 
         {save.isError && !saveSlqError && (
-          <p className="text-xs text-red-400">{errorMessage(save.error)}</p>
+          <ErrorText error={save.error} />
         )}
         {saveSlqError && (
           <p className="text-xs text-red-400">Query rejected on save: {saveSlqError.message}</p>

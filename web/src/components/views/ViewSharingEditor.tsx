@@ -6,6 +6,7 @@ import { groupsQuery, teamsQuery, usersQuery } from "../../lib/queries";
 import { GrantSubject, ShareLevel, type ShareLevelValue } from "../../lib/types";
 import { GroupReachHint } from "../settings/GroupReachHint";
 import { SubjectPicker, type Subject } from "../settings/SubjectPicker";
+import { useKeyedRows } from "../../lib/keyed-rows";
 import { Select } from "../Select";
 
 /**
@@ -64,6 +65,9 @@ export function ViewSharingEditor({
   const subjectFor = (share: LocalShare): Subject | null =>
     share.subjectId ? subjects.find((s) => s.type === share.kind && s.id === share.subjectId) ?? null : null;
 
+  // Stable per-row keys (RADD-901): each row is a picker + level select, and
+  // keying by index re-keyed every row below a removal.
+  const rows = useKeyedRows(shares, onShares);
   const setShare = (index: number, patch: Partial<LocalShare>) =>
     onShares(shares.map((share, i) => (i === index ? { ...share, ...patch } : share)));
 
@@ -100,7 +104,7 @@ export function ViewSharingEditor({
       </label>
 
       {shares.map((share, index) => (
-        <div key={index} className="flex items-center gap-2">
+        <div key={rows.keys[index]} className="flex items-center gap-2">
           <SubjectPicker
             subjects={subjects}
             value={subjectFor(share)}
@@ -129,7 +133,7 @@ export function ViewSharingEditor({
           <button
             type="button"
             aria-label="Remove share"
-            onClick={() => onShares(shares.filter((_, i) => i !== index))}
+            onClick={() => rows.removeAt(index)}
             className="text-fg-faint hover:text-red-400 cursor-pointer"
           >
             <Trash2 size={13} aria-hidden />
@@ -139,9 +143,7 @@ export function ViewSharingEditor({
 
       <button
         type="button"
-        onClick={() =>
-          onShares([...shares, { kind: "user", subjectId: "", level: ShareLevel.viewer }])
-        }
+        onClick={() => rows.add({ kind: "user", subjectId: "", level: ShareLevel.viewer })}
         className="w-fit text-xs text-fg-muted hover:text-fg cursor-pointer"
       >
         + Share with a person, team, or group

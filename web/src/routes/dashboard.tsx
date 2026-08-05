@@ -12,7 +12,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { api, errorMessage } from "../lib/api";
+import { api } from "../lib/api";
 import { Entity, invalidateEntities } from "../lib/cache";
 import { RoutePath, apiDashboardPath, apiDashboardWidgetPath } from "../lib/constants";
 import { dashboardQuery } from "../lib/queries";
@@ -27,6 +27,7 @@ import { WidgetBody } from "../components/dashboards/WidgetCard";
 import { TopBarQuery } from "../components/shell/TopBarSlot";
 import { QueryBar } from "../components/views/QueryBar";
 import { useSlqQueryState } from "../lib/slq-filter";
+import { ErrorText } from "../components/ErrorText";
 
 /** Literal col-span classes so Tailwind sees them (width = grid thirds 1..3). */
 const WIDTH_CLASSES: Record<number, string> = {
@@ -170,7 +171,7 @@ export function DashboardPage() {
       </header>
 
       {removeDashboard.isError && (
-        <p className="px-6 py-2 text-xs text-red-400">{errorMessage(removeDashboard.error)}</p>
+        <ErrorText className="px-6 py-2" error={removeDashboard.error} />
       )}
 
       <div className="flex-1 overflow-y-auto">

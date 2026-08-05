@@ -12,6 +12,7 @@ import { ListSearchInput } from "../components/ListSearchInput";
 import { Spinner } from "../components/Spinner";
 import { NewProjectModal } from "../components/projects/NewProjectModal";
 import { QueryError } from "../components/QueryError";
+import { formatDate } from "../lib/dates";
 
 export function ProjectsIndexPage() {
   // Global-scope project.create gates the affordance (spec 06 permission union).
@@ -90,7 +91,7 @@ export function ProjectsIndexPage() {
                     </span>
                     <span className="text-sm text-heading">{project.name}</span>
                     <span className="ml-auto text-xs text-fg-faint">
-                      {new Date(project.created_at).toLocaleDateString()}
+                      {formatDate(project.created_at)}
                     </span>
                   </Link>
                 </li>
