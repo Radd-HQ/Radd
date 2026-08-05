@@ -39,19 +39,7 @@ SPINE = {"auth", "projects", "items", "workflow", "teams", "fields"}
 #: non-spine models.py — frozen so the class cannot GROW. Shrunk by the
 #: RADD-887/888 seam work; never extended without a review.
 MODEL_IMPORT_ALLOWLIST: set[tuple[str, str]] = {
-    ("ai", "timelogging"),  # WorkCategory names for the NL prompt → timelogging.service fn
     ("auth", "pages"),  # RADD-791 space-scope reach → the RADD-892 inversion
-    ("dashboards", "access"),  # AccessGrant reads → access.resolution seam (RADD-887)
-    ("fields", "access"),  # same
-    ("views", "access"),  # same
-    ("pluginmgr", "access"),  # same
-    ("forms", "comments"),  # requester portal composition → owner services (RADD-887)
-    ("forms", "releases"),  # same
-    ("forms", "attachments"),  # same
-    ("ldap", "groups"),  # read helper → groups.service member_ids (RADD-887)
-    ("pages", "labels"),  # labels.service.by_ids (RADD-887)
-    ("search", "pages"),  # pages.search seam like ai uses (RADD-887)
-    ("teams", "groups"),  # Group type on the member seam → groups.service (RADD-887)
 }
 
 

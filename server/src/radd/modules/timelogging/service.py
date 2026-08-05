@@ -114,6 +114,17 @@ async def worklog_scope(
 # --- worklogs ---
 
 
+async def category_names(session: AsyncSession) -> list[str]:
+    """Every work-category NAME, archived included — the prompt-vocabulary seam
+    ai.nlrepair enumerates for NL→SLQ value repair (RADD-887). Archived names
+    stay in: a historical worklog may still carry one, and a repaired query
+    must be able to name it."""
+    return [
+        category.name
+        for category in await categories.list_categories(session, include_archived=True)
+    ]
+
+
 async def get_worklog(session: AsyncSession, worklog_id: uuid.UUID) -> Worklog:
     worklog = await session.get(Worklog, worklog_id)
     if worklog is None:

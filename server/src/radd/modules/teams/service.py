@@ -11,7 +11,7 @@ from radd.modules.auth.models import User
 from radd.modules.auth.types import BuiltinRoleKey
 from radd.modules.events import service as events
 from radd.modules.groups import service as groups_service
-from radd.modules.groups.models import Group
+from radd.modules.groups.service import Group
 from radd.modules.projects import service as projects_service
 
 from .models import ProjectTeam, Team, TeamManager, TeamMember

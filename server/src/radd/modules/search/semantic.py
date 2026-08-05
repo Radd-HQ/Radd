@@ -91,27 +91,22 @@ async def _docs(session: AsyncSession, user: User, q: str, candidates) -> list[S
     ranked = await candidates.doc_candidates(session, q, public_only=False, limit=_ASK_LIMIT)
     if not ranked:
         return []
-    from radd.modules.pages.models import Page
+    from radd.modules.pages import search as pages_search
 
-    pages = {
-        page.id: page
-        for page in (
-            await session.execute(
-                select(Page).where(
-                    Page.id.in_([page_id for page_id, _ in ranked]),
-                    Page.space_id.in_(readable),
-                )
-            )
-        ).scalars()
-    }
+    # The pages module answers which of the candidates are live and readable
+    # (non-archived + space-constrained) — the same seam deflection fuses over.
+    found = await pages_search.pages_by_ids(
+        session, [page_id for page_id, _ in ranked], space_ids=readable
+    )
+    pages = {row.page_id: row for row in found}
     results: list[SemanticDoc] = []
     for page_id, distance in ranked:
         page = pages.get(page_id)
-        if page is None or page.archived_at is not None:
+        if page is None:
             continue
         results.append(
             SemanticDoc(
-                page_id=page.id,
+                page_id=page.page_id,
                 space_id=page.space_id,
                 title=page.title,
                 score=round(max(0.0, 1.0 - distance), 3),

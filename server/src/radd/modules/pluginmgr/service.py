@@ -243,9 +243,9 @@ async def sweep_plugin_atoms(session: AsyncSession, plugin, actor_id: uuid.UUID 
     role is exactly what an access review needs to see."""
     import json
 
-    from sqlalchemy import delete as sa_delete, text as sa_text
+    from sqlalchemy import text as sa_text
 
-    from radd.modules.access.models import AccessGrant
+    from radd.modules.access import service as access_service
     from radd.modules.auth.types import split_permission
 
     declared = {p.key for p in plugin.permissions}
@@ -291,12 +291,7 @@ async def sweep_plugin_atoms(session: AsyncSession, plugin, actor_id: uuid.UUID 
                     sa_text("UPDATE api_tokens SET scopes = :scopes WHERE id = :id"),
                     {"scopes": json.dumps(data), "id": token_id},
                 )
-    dropped_grants = 0
-    if resource_types:
-        result = await session.execute(
-            sa_delete(AccessGrant).where(AccessGrant.resource_type.in_(resource_types))
-        )
-        dropped_grants = result.rowcount or 0
+    dropped_grants = await access_service.clear_resource_types(session, resource_types)
     summary = {
         "stripped_atoms": sorted(declared),
         "swept_roles": swept_roles,

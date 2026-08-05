@@ -29,7 +29,7 @@ from radd.db import SessionLocal
 from radd.modules.auth import service as auth_service
 from radd.modules.auth.models import User
 from radd.modules.groups import service as groups_service
-from radd.modules.groups.models import Group
+from radd.modules.groups.service import Group
 from radd.modules.teams import service as teams_service
 from radd.modules.teams.schemas import TeamCreate
 from radd.worker import PeriodicLoop
@@ -134,17 +134,7 @@ async def sync_login_membership(
 async def _with_user(
     session: AsyncSession, group: Group, user_id: uuid.UUID, *, add: bool
 ) -> set[uuid.UUID]:
-    from sqlalchemy import select
-
-    from radd.modules.groups.models import GroupMember
-
-    current = set(
-        (
-            await session.execute(
-                select(GroupMember.user_id).where(GroupMember.group_id == group.id)
-            )
-        ).scalars()
-    )
+    current = await groups_service.member_ids(session, group.id)
     return current | {user_id} if add else current - {user_id}
 
 

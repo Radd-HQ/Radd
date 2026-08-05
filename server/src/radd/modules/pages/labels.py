@@ -19,38 +19,49 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.modules.labels import service as labels_service
-from radd.modules.labels.models import Label
+from radd.modules.labels.service import Label
 
 from .models import Page, PageLabel, PageSpace
 from .schemas import PageLabelled
 
 
 async def labels_of(session: AsyncSession, page_id: uuid.UUID) -> list[Label]:
-    rows = await session.execute(
-        select(Label)
-        .join(PageLabel, PageLabel.label_id == Label.id)
-        .where(PageLabel.page_id == page_id)
-        .order_by(Label.name)
+    label_ids = list(
+        (
+            await session.execute(
+                select(PageLabel.label_id).where(PageLabel.page_id == page_id)
+            )
+        ).scalars()
     )
-    return list(rows.scalars())
+    found = await labels_service.labels_by_ids(session, label_ids)
+    return sorted(found.values(), key=lambda label: label.name)
 
 
 async def labels_for_pages(
     session: AsyncSession, page_ids: Sequence[uuid.UUID]
 ) -> dict[uuid.UUID, list[str]]:
-    """One query for a whole tree — the space view shows labels per row, and a
-    query per row is how a 200-page space becomes slow."""
+    """Two fixed queries for a whole tree (our rows, then the labels batch) —
+    the space view shows labels per row, and a query per row is how a 200-page
+    space becomes slow."""
     if not page_ids:
         return {}
-    rows = await session.execute(
-        select(PageLabel.page_id, Label.name)
-        .join(Label, Label.id == PageLabel.label_id)
-        .where(PageLabel.page_id.in_(page_ids))
-        .order_by(Label.name)
-    )
+    rows = (
+        await session.execute(
+            select(PageLabel.page_id, PageLabel.label_id).where(
+                PageLabel.page_id.in_(page_ids)
+            )
+        )
+    ).all()
+    if not rows:
+        return {}
+    labels = await labels_service.labels_by_ids(session, [lid for _, lid in rows])
     out: dict[uuid.UUID, list[str]] = {}
-    for page_id, name in rows.all():
-        out.setdefault(page_id, []).append(name)
+    for page_id, label_id in rows:
+        label = labels.get(label_id)
+        if label is not None:
+            out.setdefault(page_id, []).append(label.name)
+    for names in out.values():
+        names.sort()
     return out
 
 
@@ -79,12 +90,14 @@ async def pages_with_label(
     This is what `radd:label-list` renders — the "content by label" pattern that
     lets an index page maintain itself instead of being hand-curated.
     """
+    label = await labels_service.label_by_name(session, name)
+    if label is None:  # same answer the old Label.name join gave: no rows
+        return []
     query = (
         select(Page, PageSpace.slug)
         .join(PageLabel, PageLabel.page_id == Page.id)
-        .join(Label, Label.id == PageLabel.label_id)
         .join(PageSpace, PageSpace.id == Page.space_id)
-        .where(Label.name == name, Page.archived_at.is_(None))
+        .where(PageLabel.label_id == label.id, Page.archived_at.is_(None))
         .order_by(Page.title)
     )
     if space_slug:

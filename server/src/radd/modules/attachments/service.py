@@ -7,9 +7,10 @@ rows or entering the routing chain (blobs pin the default host).
 import logging
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 
 from fastapi import Response, UploadFile
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import NotFoundError
@@ -33,6 +34,8 @@ __all__ = [
     "save_upload",
     "get_attachment",
     "list_for_item",
+    "repoint",
+    "newest_per_parent",
     "delete_attachment",
     "download_response",
     "save_blob",
@@ -141,6 +144,57 @@ async def list_for_entity(
 
 async def list_for_item(session: AsyncSession, item_id: uuid.UUID) -> list[Attachment]:
     return await list_for_entity(session, AttachmentParentType.ITEM.value, item_id)
+
+
+async def repoint(
+    session: AsyncSession,
+    attachment_ids: list[uuid.UUID],
+    *,
+    from_entity_type: str,
+    from_entity_id: uuid.UUID,
+    to_entity_type: str,
+    to_entity_id: uuid.UUID,
+) -> int:
+    """Move the NAMED attachments from one parent to another, touching only rows
+    actually sitting on the from-parent — ids that don't match are ignored, not
+    errors. Consumed by forms.staging.claim (RADD-800 → RADD-887): the
+    from-filter IS that seam's ownership check — a stolen id names a row on
+    someone else's staging area and simply does not move. Returns how many did."""
+    if not attachment_ids:
+        return 0
+    owned = set(
+        (
+            await session.execute(
+                select(Attachment.id).where(
+                    Attachment.id.in_(attachment_ids),
+                    Attachment.entity_type == from_entity_type,
+                    Attachment.entity_id == from_entity_id,
+                )
+            )
+        ).scalars()
+    )
+    if not owned:
+        return 0
+    await session.execute(
+        update(Attachment)
+        .where(Attachment.id.in_(owned))
+        .values(entity_type=to_entity_type, entity_id=to_entity_id)
+    )
+    return len(owned)
+
+
+async def newest_per_parent(
+    session: AsyncSession, entity_type: str
+) -> list[tuple[uuid.UUID, datetime]]:
+    """(entity_id, newest created_at) per parent of this type, one grouped
+    query — consumed by forms.staging.sweep_abandoned (RADD-887) to find
+    staging areas nobody came back to without reading this module's table."""
+    rows = await session.execute(
+        select(Attachment.entity_id, func.max(Attachment.created_at))
+        .where(Attachment.entity_type == entity_type)
+        .group_by(Attachment.entity_id)
+    )
+    return [(entity_id, newest) for entity_id, newest in rows.all()]
 
 
 async def download_response(

@@ -19,9 +19,16 @@ from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.events import service as events
 from radd.modules.projects import service as projects_service
 
+# `AccessGrant` is re-exported here as the PUBLIC grant row type (RADD-887,
+# the events.Event pattern from RADD-886): the row is what the resolution
+# helpers and every share-shaped read return, and importing it from
+# access.models made four modules reach into another module's models file.
+# The ratchet test bans `access.models` outside this module.
 from .models import AccessGrant
 from .registry import get_spec
 from .types import AccessEntity, AccessEvent, GrantEffect, GrantSubject
+
+__all__ = ["AccessGrant"]  # re-exported public seam (see above)
 
 
 # --- queries ------------------------------------------------------------------
@@ -52,23 +59,42 @@ async def list_for_resource(
 
 
 async def grants_for_resources(
-    session: AsyncSession, resource_type: str, resource_ids: Iterable[str]
+    session: AsyncSession,
+    resource_type: str,
+    resource_ids: Iterable[str],
+    *,
+    include_expired: bool = False,
 ) -> dict[str, list[AccessGrant]]:
-    """Batch: {resource_id: grants} — one query for a page of fields/views (no N+1)."""
+    """Batch: {resource_id: grants} — one query for a page of fields/views (no N+1).
+
+    `include_expired=True` skips the RADD-820 liveness filter: the views/
+    dashboards share loaders (RADD-887) always loaded every row, and keep
+    that exact behavior."""
     ids = [str(r) for r in resource_ids]
     out: dict[str, list[AccessGrant]] = {rid: [] for rid in ids}
     if not ids:
         return out
-    result = await session.execute(
-        select(AccessGrant).where(
-            AccessGrant.resource_type == resource_type,
-            AccessGrant.resource_id.in_(ids),
-            _live_clause(),
-        )
-    )
+    conditions = [
+        AccessGrant.resource_type == resource_type,
+        AccessGrant.resource_id.in_(ids),
+    ]
+    if not include_expired:
+        conditions.append(_live_clause())
+    result = await session.execute(select(AccessGrant).where(*conditions))
     for grant in result.scalars():
         out.setdefault(grant.resource_id, []).append(grant)
     return out
+
+
+async def resource_ids_with_grants(session: AsyncSession, resource_type: str) -> set[str]:
+    """Distinct resource ids carrying ANY grant row (expired included) — drives
+    the fields module's `restricted` read flag (RADD-887)."""
+    rows = await session.execute(
+        select(AccessGrant.resource_id)
+        .where(AccessGrant.resource_type == resource_type)
+        .distinct()
+    )
+    return set(rows.scalars())
 
 
 async def get_grant(session: AsyncSession, grant_id: uuid.UUID) -> AccessGrant:
@@ -202,6 +228,43 @@ async def clear_resource(
             AccessGrant.resource_type == resource_type, AccessGrant.resource_id == resource_id
         )
     )
+
+
+async def remove_subject_grants(
+    session: AsyncSession,
+    resource_type: str,
+    resource_id: str,
+    *,
+    subject_type: GrantSubject,
+    subject_id: uuid.UUID,
+) -> None:
+    """Drop every grant ONE subject holds on one resource — the views/dashboards
+    ownership transfer clears the new owner's now-redundant share rows this way
+    (RADD-887). No REVOKED events, matching those callers: a transfer emits its
+    own UPDATED event."""
+    await session.execute(
+        delete(AccessGrant).where(
+            AccessGrant.resource_type == resource_type,
+            AccessGrant.resource_id == resource_id,
+            AccessGrant.subject_type == subject_type.value,
+            AccessGrant.subject_id == subject_id,
+        )
+    )
+
+
+async def clear_resource_types(
+    session: AsyncSession, resource_types: Iterable[str]
+) -> int:
+    """Drop EVERY grant of the given resource types, returning how many rows went
+    — pluginmgr's uninstall sweep (RADD-818) removes a departing plugin's grant
+    types wholesale (RADD-887). No per-row events: the sweep emits one summary."""
+    types = list(resource_types)
+    if not types:
+        return 0
+    result = await session.execute(
+        delete(AccessGrant).where(AccessGrant.resource_type.in_(types))
+    )
+    return result.rowcount or 0
 
 
 async def _emit(

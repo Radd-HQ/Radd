@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError, ForbiddenError, NotFoundError
 from radd.modules.access import service as access_service
-from radd.modules.access.models import AccessGrant
+from radd.modules.access.service import AccessGrant  # public re-export (RADD-887)
 from radd.modules.access.registry import ResourceSpec, register_resource
 from radd.modules.access.types import GrantSubject
 from radd.modules.auth import authz, service as users_service
@@ -78,18 +78,10 @@ async def _shares_by_view(
     if not view_ids:
         return {}
     id_map = {str(v): v for v in view_ids}
-    rows = (
-        await session.execute(
-            select(AccessGrant).where(
-                AccessGrant.resource_type == VIEW_RESOURCE,
-                AccessGrant.resource_id.in_(list(id_map)),
-            )
-        )
-    ).scalars().all()
-    result: dict[uuid.UUID, list[AccessGrant]] = {}
-    for grant in rows:
-        result.setdefault(id_map[grant.resource_id], []).append(grant)
-    return result
+    grants = await access_service.grants_for_resources(
+        session, VIEW_RESOURCE, list(id_map), include_expired=True
+    )
+    return {id_map[rid]: rows for rid, rows in grants.items()}
 
 
 def _grant_level(
@@ -813,13 +805,12 @@ async def transfer_ownership(
 async def _delete_user_shares(
     session: AsyncSession, view_id: uuid.UUID, user_id: uuid.UUID
 ) -> None:
-    await session.execute(
-        delete(AccessGrant).where(
-            AccessGrant.resource_type == VIEW_RESOURCE,
-            AccessGrant.resource_id == str(view_id),
-            AccessGrant.subject_type == GrantSubject.USER.value,
-            AccessGrant.subject_id == user_id,
-        )
+    await access_service.remove_subject_grants(
+        session,
+        VIEW_RESOURCE,
+        str(view_id),
+        subject_type=GrantSubject.USER,
+        subject_id=user_id,
     )
 
 

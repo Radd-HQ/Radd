@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.db import ilike_term
 from radd.exceptions import ForbiddenError, NotFoundError
 from radd.modules.access import resolution as access_res, service as access_service
-from radd.modules.access.models import AccessGrant
+from radd.modules.access.service import AccessGrant  # public re-export (RADD-887)
 from radd.modules.access.registry import ResourceSpec, register_resource
 from radd.modules.access.types import Access, GrantSubject
 from radd.modules.events import service as events
@@ -301,12 +301,7 @@ async def definitions_for_project(session: AsyncSession, project: Project) -> li
 
 async def restricted_field_ids(session: AsyncSession) -> set[str]:
     """Field ids (as strings) carrying any grant — used for the `restricted` read flag."""
-    rows = await session.execute(
-        select(AccessGrant.resource_id)
-        .where(AccessGrant.resource_type == FIELD_RESOURCE)
-        .distinct()
-    )
-    return set(rows.scalars())
+    return await access_service.resource_ids_with_grants(session, FIELD_RESOURCE)
 
 
 # --- field-level visibility (now the generic access framework, spec 92) -------

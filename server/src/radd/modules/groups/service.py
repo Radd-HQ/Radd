@@ -23,8 +23,14 @@ from radd.config import settings
 from radd.exceptions import NotFoundError
 from radd.modules.events import service as events
 
+# `Group` is re-exported here as the PUBLIC group type (the events `Event`
+# pattern, RADD-886/887): consumers that hold or annotate group rows — teams'
+# member seam, ldap's sync — import it from the service; the ratchet test bans
+# `groups.models` outside this module.
 from .models import Group, GroupMember, GroupParent
 from .types import GroupEntity, GroupEvent
+
+__all__ = ["Group"]  # re-exported public seam (see above)
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +86,16 @@ async def groups_by_dns(session: AsyncSession, dns: Iterable[str]) -> dict[str, 
         return {}
     result = await session.execute(select(Group).where(Group.dn.in_(wanted)))
     return {group.dn: group for group in result.scalars()}
+
+
+async def member_ids(session: AsyncSession, group_id: uuid.UUID) -> set[uuid.UUID]:
+    """The group's DIRECT member user-ids — NOT the transitive closure (that is
+    `group_user_ids`). Consumed by ldap.groupsync's login-time join/leave
+    (RADD-887), which edits one user against the group's current direct set."""
+    rows = await session.execute(
+        select(GroupMember.user_id).where(GroupMember.group_id == group_id)
+    )
+    return set(rows.scalars())
 
 
 async def direct_member_counts(

@@ -110,6 +110,26 @@ async def public_bodies_for_item(session: AsyncSession, item_id: uuid.UUID) -> l
     return list(result.scalars())
 
 
+async def public_comments_for_item(
+    session: AsyncSession, item_id: uuid.UUID
+) -> list[Comment]:
+    """PUBLIC comment rows on one item, oldest first — the requester-portal
+    thread (forms.requests.get_request, RADD-887). A requester may read exactly
+    the public conversation, never the internal one, and the visibility filter
+    lives HERE in the query — the RADD-785 rule — so no caller can compose a
+    view that leaks an internal note."""
+    result = await session.execute(
+        select(Comment)
+        .where(
+            Comment.entity_type == CommentParentType.ITEM,
+            Comment.entity_id == item_id,
+            Comment.visibility == CommentVisibility.PUBLIC.value,
+        )
+        .order_by(Comment.created_at)
+    )
+    return list(result.scalars())
+
+
 async def public_comment_times(
     session: AsyncSession, item_ids: Iterable[uuid.UUID]
 ) -> list[tuple[uuid.UUID, uuid.UUID, datetime]]:

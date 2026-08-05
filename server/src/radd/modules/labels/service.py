@@ -8,9 +8,14 @@ from radd.db import ilike_term
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.events import service as events
 
+# `Label` is re-exported here as the PUBLIC label type (the events `Event`
+# pattern, RADD-886/887): pages' label surface annotates label rows without
+# reaching into `labels.models` — the ratchet test bans that import elsewhere.
 from .models import Label
 from .schemas import LabelCreate, LabelUpdate
 from .types import LabelEntity, LabelEvent
+
+__all__ = ["Label"]  # re-exported public seam (see above)
 
 
 async def create_label(
@@ -120,6 +125,14 @@ async def resolve_labels(
 async def labels_by_ids(session: AsyncSession, ids: Iterable[uuid.UUID]) -> dict[uuid.UUID, Label]:
     result = await session.execute(select(Label).where(Label.id.in_(set(ids))))
     return {label.id: label for label in result.scalars()}
+
+
+async def label_by_name(session: AsyncSession, name: str) -> Label | None:
+    """Exact-name lookup, None when absent — consumed by pages.labels
+    (`radd:label-list` filters pages by ONE label, RADD-887) so the wiki never
+    joins this module's table itself. Names are unique (`create_label` and
+    `resolve_labels` both enforce it), so one row is the whole answer."""
+    return await session.scalar(select(Label).where(Label.name == name))
 
 
 async def _create(

@@ -189,12 +189,10 @@ async def category_candidates(
     key = "__worklog_category__"
     if key not in cache:
         try:
-            from sqlalchemy import select
-
-            from radd.modules.timelogging.models import WorkCategory
+            from radd.modules.timelogging import service as timelogging_service
         except ImportError:
             cache[key] = []
         else:
-            rows = (await session.execute(select(WorkCategory.name))).scalars().all()
-            cache[key] = [Candidate(name, label=None, detail="") for name in rows]
+            names = await timelogging_service.category_names(session)
+            cache[key] = [Candidate(name, label=None, detail="") for name in names]
     return cache[key]

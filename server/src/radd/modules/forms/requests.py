@@ -38,12 +38,12 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import ColumnElement, Select, func, or_, select
+from sqlalchemy import ColumnElement, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ForbiddenError, NotFoundError
 from radd.modules.auth.models import User
-from radd.modules.comments.models import Comment
+from radd.modules.comments import service as comments_service
 from radd.modules.comments.types import CommentParentType, CommentVisibility
 from radd.modules.items.models import WorkItem
 from radd.modules.projects import service as projects_service
@@ -80,21 +80,14 @@ async def visible_condition(session: AsyncSession, actor: User) -> ColumnElement
     return or_(specs["own"].where(relation_actor), specs["team"].where(relation_actor))
 
 
-def _public_comments(item_ids: list[uuid.UUID]) -> Select:
-    """Public comments on those items. The visibility filter is in the QUERY on
-    purpose — every derived number below inherits it, so none of them can
-    accidentally describe the internal thread."""
-    return select(Comment).where(
-        Comment.entity_type == CommentParentType.ITEM.value,
-        Comment.entity_id.in_(item_ids),
-        Comment.visibility == CommentVisibility.PUBLIC.value,
-    )
-
-
 async def _comment_signals(
     session: AsyncSession, items: list[WorkItem]
 ) -> dict[uuid.UUID, tuple[int, bool]]:
-    """`{item_id: (public_count, awaiting_requester)}` in ONE query, not 2N.
+    """`{item_id: (public_count, awaiting_requester)}` in ONE query, not 2N —
+    ridden on `comments_service.public_comment_times`, the owner's PUBLIC-only
+    seam (the SLA first-response feed), so the visibility filter every derived
+    number below depends on lives in the comments module's query and none of
+    them can accidentally describe the internal thread.
 
     `awaiting_requester` is "somebody answered me and I have not answered back",
     and it is computed as *the newest public comment by someone other than the
@@ -116,28 +109,17 @@ async def _comment_signals(
     item_ids = [item.id for item in items]
     if not item_ids:
         return {}
-    rows = (
-        await session.execute(
-            _public_comments(item_ids)
-            .with_only_columns(
-                Comment.entity_id,
-                Comment.author_id,
-                func.count(),
-                func.max(Comment.created_at),
-            )
-            .group_by(Comment.entity_id, Comment.author_id)
-        )
-    ).all()
+    rows = await comments_service.public_comment_times(session, item_ids)
     reporters = {item.id: item.reporter_id for item in items}
     counts: dict[uuid.UUID, int] = {}
     mine: dict[uuid.UUID, object] = {}
     theirs: dict[uuid.UUID, object] = {}
-    for entity_id, author_id, count, newest in rows:
-        counts[entity_id] = counts.get(entity_id, 0) + count
+    for entity_id, author_id, created_at in rows:
+        counts[entity_id] = counts.get(entity_id, 0) + 1
         bucket = mine if author_id == reporters.get(entity_id) else theirs
         current = bucket.get(entity_id)
-        if current is None or newest > current:
-            bucket[entity_id] = newest
+        if current is None or created_at > current:
+            bucket[entity_id] = created_at
     signals: dict[uuid.UUID, tuple[int, bool]] = {}
     for item_id in item_ids:
         answered = theirs.get(item_id)
@@ -211,10 +193,10 @@ async def _releases(session: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUI
     and until now the one part that never reached the person who asked."""
     if not ids:
         return {}
-    from radd.modules.releases.models import Release
+    from radd.modules.releases import service as releases_service
 
-    rows = await session.execute(select(Release.id, Release.version).where(Release.id.in_(ids)))
-    return dict(rows.all())
+    found = await releases_service.releases_by_ids(session, ids)
+    return {release_id: release.version for release_id, release in found.items()}
 
 
 async def _teams(session: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
@@ -276,13 +258,7 @@ async def get_request(session: AsyncSession, actor: User, key: str) -> PortalReq
     state = await session.get(State, item.state_id) if item.state_id else None
     [row] = await _hydrate(session, actor, [(item, state)])
 
-    comments = list(
-        (
-            await session.execute(
-                _public_comments([item.id]).order_by(Comment.created_at)
-            )
-        ).scalars()
-    )
+    comments = await comments_service.public_comments_for_item(session, item.id)
     authors = await _people(session, {c.author_id for c in comments})
     return PortalRequestDetail(
         **row.model_dump(),
@@ -310,7 +286,6 @@ async def add_request_comment(
     be a way to write into the internal thread, and a default is something a
     caller can override by sending the field.
     """
-    from radd.modules.comments import service as comments_service
     from radd.modules.comments.schemas import CommentCreate
 
     body = body.strip()

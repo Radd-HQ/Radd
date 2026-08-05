@@ -12,12 +12,12 @@ widgets.py.
 
 import uuid
 
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError, ForbiddenError, NotFoundError
 from radd.modules.access import service as access_service
-from radd.modules.access.models import AccessGrant
+from radd.modules.access.service import AccessGrant  # public re-export (RADD-887)
 from radd.modules.access.registry import ResourceSpec, register_resource
 from radd.modules.access.types import GrantSubject
 from radd.modules.auth import authz, service as users_service
@@ -81,22 +81,10 @@ async def _shares_by_dashboard(
     if not dashboard_ids:
         return {}
     id_map = {str(d): d for d in dashboard_ids}
-    rows = (
-        (
-            await session.execute(
-                select(AccessGrant).where(
-                    AccessGrant.resource_type == DASHBOARD_RESOURCE,
-                    AccessGrant.resource_id.in_(list(id_map)),
-                )
-            )
-        )
-        .scalars()
-        .all()
+    grants = await access_service.grants_for_resources(
+        session, DASHBOARD_RESOURCE, list(id_map), include_expired=True
     )
-    result: dict[uuid.UUID, list[AccessGrant]] = {}
-    for grant in rows:
-        result.setdefault(id_map[grant.resource_id], []).append(grant)
-    return result
+    return {id_map[rid]: rows for rid, rows in grants.items()}
 
 
 def _grant_level(
@@ -520,13 +508,12 @@ async def transfer_ownership(
 async def _delete_user_grants(
     session: AsyncSession, dashboard_id: uuid.UUID, user_id: uuid.UUID
 ) -> None:
-    await session.execute(
-        delete(AccessGrant).where(
-            AccessGrant.resource_type == DASHBOARD_RESOURCE,
-            AccessGrant.resource_id == str(dashboard_id),
-            AccessGrant.subject_type == GrantSubject.USER,
-            AccessGrant.subject_id == user_id,
-        )
+    await access_service.remove_subject_grants(
+        session,
+        DASHBOARD_RESOURCE,
+        str(dashboard_id),
+        subject_type=GrantSubject.USER,
+        subject_id=user_id,
     )
 
 

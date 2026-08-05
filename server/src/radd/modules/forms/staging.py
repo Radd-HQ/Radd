@@ -34,12 +34,10 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError
-from radd.modules.attachments import parents
-from radd.modules.attachments.models import Attachment
+from radd.modules.attachments import parents, service as attachments_service
 from radd.modules.attachments.types import AttachmentParentType
 from radd.modules.auth.models import User
 
@@ -107,29 +105,16 @@ async def claim(
     """
     if not attachment_ids:
         return 0
-    staging = staging_id_for(user)
-    owned = set(
-        (
-            await session.execute(
-                select(Attachment.id).where(
-                    Attachment.id.in_(attachment_ids),
-                    Attachment.entity_type == AttachmentParentType.FORM_SUBMISSION.value,
-                    Attachment.entity_id == staging,
-                )
-            )
-        ).scalars()
+    # The from-parent filter inside `repoint` is the ownership check described
+    # above: an id not sitting on the caller's own staging area does not move.
+    return await attachments_service.repoint(
+        session,
+        attachment_ids,
+        from_entity_type=AttachmentParentType.FORM_SUBMISSION.value,
+        from_entity_id=staging_id_for(user),
+        to_entity_type=AttachmentParentType.ITEM.value,
+        to_entity_id=item_id,
     )
-    if not owned:
-        return 0
-    await session.execute(
-        update(Attachment)
-        .where(Attachment.id.in_(owned))
-        .values(
-            entity_type=AttachmentParentType.ITEM.value,
-            entity_id=item_id,
-        )
-    )
-    return len(owned)
 
 
 async def sweep_abandoned(
@@ -155,9 +140,7 @@ async def sweep_abandoned(
     from datetime import UTC, datetime, timedelta
 
     cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=older_than_days)
-    rows = await session.execute(
-        select(Attachment.entity_id, func.max(Attachment.created_at))
-        .where(Attachment.entity_type == AttachmentParentType.FORM_SUBMISSION.value)
-        .group_by(Attachment.entity_id)
+    rows = await attachments_service.newest_per_parent(
+        session, AttachmentParentType.FORM_SUBMISSION.value
     )
-    return [area_id for area_id, newest in rows.all() if newest < cutoff]
+    return [area_id for area_id, newest in rows if newest < cutoff]

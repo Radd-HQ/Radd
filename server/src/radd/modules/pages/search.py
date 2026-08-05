@@ -68,13 +68,20 @@ async def search_pages(
 
 
 async def pages_by_ids(
-    session: AsyncSession, page_ids: list[uuid.UUID], *, public_only: bool = False
+    session: AsyncSession,
+    page_ids: list[uuid.UUID],
+    *,
+    public_only: bool = False,
+    space_ids: "set[uuid.UUID] | None" = None,
 ) -> list[DocSearchResult]:
     """Non-archived pages by id, result-shaped (spec 103: deflection fuses
     semantic candidates that FTS never surfaced, so it needs their titles).
     `public_only` re-checks the LIVE space flag (spec 106): the vector store
     carries a public flag copied at embed time, and the anonymous surface must
-    not trust it for a space flipped private since."""
+    not trust it for a space flipped private since. `space_ids` constrains to
+    the spaces a reader may see — search.semantic's Ask mode materializes its
+    ANN candidates through it (RADD-887), the same RADD-791 rule
+    `search_pages` applies."""
     if not page_ids:
         return []
     stmt = select(Page).where(Page.id.in_(page_ids), Page.archived_at.is_(None))
@@ -82,6 +89,8 @@ async def pages_by_ids(
         stmt = stmt.join(PageSpace, PageSpace.id == Page.space_id).where(
             PageSpace.public.is_(True)
         )
+    if space_ids is not None:
+        stmt = stmt.where(Page.space_id.in_(space_ids))
     return [
         DocSearchResult(page_id=page.id, space_id=page.space_id, title=page.title, snippet="")
         for page in (await session.execute(stmt)).scalars()
