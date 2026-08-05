@@ -139,7 +139,10 @@ export function PageTree({
   };
 
   return (
-    <div className="flex flex-col gap-0.5">
+    // data-page-tree: the print proof asserts this tree is ABSENT from the
+    // print view — without the attribute on the live tree the check passed
+    // vacuously against every page (RADD-880).
+    <div data-page-tree className="flex flex-col gap-0.5">
       {tree.map((node) => (
         <TreeRow
           key={node.row.id}
