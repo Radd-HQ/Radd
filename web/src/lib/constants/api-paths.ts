@@ -32,6 +32,8 @@ export const apiTeamAccessPath = (teamId: string) => `${ApiPath.teams}/${teamId}
 export const apiUserMergePath = (userId: string) => `${ApiPath.users}/${userId}/merge`;
 /** GET — what an account owns (spec 89); drives the delete dialog. */
 export const apiUserContentPath = (userId: string) => `${ApiPath.users}/${userId}/content`;
+export const apiSuccessorCheckPath = (userId: string, candidateId: string) =>
+  `${ApiPath.users}/${userId}/successor-check?candidate_id=${candidateId}`;
 export const apiTeamPath = (teamId: string) => `${ApiPath.teams}/${teamId}`;
 /** POST — on-demand reconcile of a linked team against AD (spec 84). */
 export const apiTeamDirectorySyncPath = (teamId: string) =>

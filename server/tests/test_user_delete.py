@@ -134,9 +134,11 @@ async def test_guards(db):
     auth_service.ensure_deletable(other, actor, actor, True)
 
 
-async def test_owned_team_follows_the_successor(db):
-    """teams.owner_id is ON DELETE SET NULL — without an explicit repoint the
-    team would be silently orphaned instead of inherited."""
+async def test_owned_team_goes_ownerless_not_inherited(db):
+    """RADD-784 reverses the spec-89 repoint: running a team is DELEGATION, not
+    content, so a delete leaves the team awaiting a deliberately chosen owner
+    (SET NULL) instead of silently handing the seat to the successor. A MERGE
+    still repoints it — one person."""
     from radd.modules.teams import service as teams_service
     from radd.modules.teams.schemas import TeamCreate
 
@@ -149,7 +151,7 @@ async def test_owned_team_follows_the_successor(db):
 
     await auth_service.delete_user(db, leaver.id, successor.id, actor=successor)
     await db.refresh(team)
-    assert team.owner_id == successor.id
+    assert team.owner_id is None
 
 
 async def test_every_blocking_reference_is_covered(db):

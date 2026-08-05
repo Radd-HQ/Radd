@@ -9,6 +9,7 @@ import {
   apiTeamGroupsPath,
   apiTeamMembersPath,
   apiUserAccessPath,
+  apiSuccessorCheckPath,
   apiUserContentPath,
   apiUserPermissionsPath,
 } from "../constants";
@@ -28,7 +29,7 @@ import type {
   PermissionSource,
   User,
   UserAccess,
-  UserContentSummary,
+  SuccessorCheck, UserContentSummary,
   UserSummary,
 } from "../types";
 
@@ -56,6 +57,15 @@ export const userContentQuery = (userId: string) =>
   queryOptions({
     queryKey: [...queryKeys.users, userId, "content"] as const,
     queryFn: () => api.get<UserContentSummary>(apiUserContentPath(userId)),
+    staleTime: 0,
+  });
+
+/** RADD-784: is this candidate a viable successor? Access never transfers on
+ * delete, so the delete dialog previews the gaps the server would refuse on. */
+export const successorCheckQuery = (userId: string, candidateId: string) =>
+  queryOptions({
+    queryKey: [...queryKeys.users, userId, "successor-check", candidateId] as const,
+    queryFn: () => api.get<SuccessorCheck>(apiSuccessorCheckPath(userId, candidateId)),
     staleTime: 0,
   });
 

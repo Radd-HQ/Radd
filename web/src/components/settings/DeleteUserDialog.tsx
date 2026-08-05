@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { TriangleAlert, Trash2 } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { apiUserPath } from "../../lib/constants";
-import { queryKeys, userContentQuery } from "../../lib/queries";
+import { queryKeys, successorCheckQuery, userContentQuery } from "../../lib/queries";
 import { pushToast, ToastKind } from "../../lib/toast";
 import type { User, UserContentSummary } from "../../lib/types";
 import { Button } from "../Button";
@@ -12,15 +12,16 @@ import { SelectField } from "../SelectField";
 import { PersonName } from "../PersonName";
 import { Spinner } from "../Spinner";
 
-/** The things that MOVE to the successor, in the order the dialog reads best. */
+/** The things that MOVE to the successor, in the order the dialog reads best.
+ * Owned teams are NOT here (RADD-784): running a team is delegation, not
+ * content — they go ownerless, called out separately below. */
 const MOVES: [keyof UserContentSummary, string][] = [
   ["reported_items", "issues reported"],
   ["assigned_items", "issues assigned"],
   ["comments", "comments"],
-  ["documents", "pages pages"],
+  ["documents", "wiki pages"],
   ["views", "saved views"],
   ["dashboards", "dashboards"],
-  ["owned_teams", "teams owned"],
   ["attachments", "attachments"],
   ["approvals", "approvals raised"],
 ];
@@ -46,6 +47,9 @@ export function DeleteUserDialog({
   const queryClient = useQueryClient();
   const [successor, setSuccessor] = useState("");
   const content = useQuery(userContentQuery(user.id));
+  // RADD-784: access never transfers, so the candidate must already hold at
+  // least what this account holds — previewed here, enforced by the server.
+  const check = useQuery({ ...successorCheckQuery(user.id, successor), enabled: !!successor });
 
   const remove = useMutation({
     mutationFn: () =>
@@ -64,6 +68,7 @@ export function DeleteUserDialog({
   const summary = content.data;
   const moving = summary ? MOVES.filter(([key]) => Number(summary[key]) > 0) : [];
   const ownsSomething = moving.length > 0 || Number(summary?.worklogs ?? 0) > 0;
+  const notViable = !!successor && check.data ? !check.data.viable : false;
   // A successor is only required when something would otherwise be orphaned, so
   // clearing out placeholder accounts stays a single confirm.
   const needsSuccessor = ownsSomething;
@@ -116,12 +121,20 @@ export function DeleteUserDialog({
           </>
         )}
 
+        {Number(summary?.owned_teams ?? 0) > 0 && (
+          <p className="text-xs text-fg-muted">
+            The <span className="text-fg">{summary?.owned_teams}</span>{" "}
+            {Number(summary?.owned_teams) === 1 ? "team they own goes" : "teams they own go"}{" "}
+            ownerless — pick each team's new owner deliberately afterwards.
+          </p>
+        )}
+
         {needsSuccessor && (
           <SelectField
             label="Who inherits their work?"
             value={successor}
             onChange={(event) => setSuccessor(event.target.value)}
-            hint="Required — everything above is reassigned to this person."
+            hint="Required — the content above is reassigned to this person. Their access (projects, roles, teams) is NOT: it dies with the account."
           >
             <option value="">Choose a user…</option>
             {candidates.map((candidate) => (
@@ -132,6 +145,31 @@ export function DeleteUserDialog({
           </SelectField>
         )}
 
+        {!!successor && check.isPending && <Spinner label="Checking their access…" />}
+        {notViable && (
+          <div className="flex items-start gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/5 p-2.5 text-xs text-amber-200">
+            <TriangleAlert size={13} className="mt-0.5 shrink-0" aria-hidden />
+            <div>
+              <p className="font-medium">
+                This person holds less access than {user.name}, so they can't inherit the work.
+              </p>
+              <p className="mt-1 text-amber-200/80">
+                Grant these first, or choose someone else:
+              </p>
+              <ul className="mt-1 flex flex-col gap-0.5">
+                {check.data?.gaps.map((gap) => (
+                  <li key={`${gap.scope_type}-${gap.scope_id ?? gap.label}`}>
+                    <span className="font-medium">{gap.label}</span>
+                    {": "}
+                    {gap.missing.slice(0, 8).join(", ")}
+                    {gap.missing.length > 8 ? ` (+${gap.missing.length - 8} more)` : ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
             Cancel
@@ -139,7 +177,12 @@ export function DeleteUserDialog({
           <Button
             className="text-red-300"
             onClick={() => remove.mutate()}
-            disabled={remove.isPending || content.isPending || (needsSuccessor && !successor)}
+            disabled={
+              remove.isPending ||
+              content.isPending ||
+              (needsSuccessor && !successor) ||
+              (!!successor && (check.isPending || notViable))
+            }
           >
             <Trash2 size={14} aria-hidden />
             {remove.isPending ? "Deleting…" : "Delete permanently"}

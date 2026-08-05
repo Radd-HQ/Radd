@@ -33,6 +33,8 @@ from .schemas import (
     PermissionSourceRead,
     ViewAsRead,
     ViewAsStart,
+    SuccessorCheck,
+    SuccessorGap,
     UserContentSummary,
     UserCreate,
     UserDirectoryEntry,
@@ -418,15 +420,35 @@ async def user_content(
     return UserContentSummary(**await service.user_content_summary(session, user_id))
 
 
+@user_router.get("/{user_id}/successor-check", response_model=SuccessorCheck)
+async def successor_check(
+    user_id: uuid.UUID, candidate_id: uuid.UUID, session: Session, actor: CurrentUser
+) -> SuccessorCheck:
+    """RADD-784: would `candidate_id` be a viable successor for deleting this
+    account? Access never transfers on delete, so the candidate must already
+    hold at least what the account holds — the gaps name what is missing, per
+    scope. The delete itself enforces the same check; this is the dialog's
+    preview."""
+    await authz.require(session, actor, authz.Permission.USER_MANAGE)
+    user = await service.get_user(session, user_id)
+    candidate = await service.get_user(session, candidate_id)
+    gaps = await service.successor_viability(session, user, candidate)
+    return SuccessorCheck(viable=not gaps, gaps=[SuccessorGap(**gap) for gap in gaps])
+
+
 _DELETE_DOC = (
     "HARD-delete a user (spec 89). Everything they authored — issues, comments, docs, views, "
-    "dashboards, owned teams, attachments, approvals — is reassigned to `reassign_to`, which is "
+    "dashboards, attachments, approvals — is reassigned to `reassign_to`, which is "
     "REQUIRED when the account owns anything (409 otherwise; use GET /users/{id}/content to "
     "check first). Their WORKLOGS are deleted rather than moved, so nobody is credited with "
-    "hours they did not work. Personal state (sessions, tokens, MFA, stars, memberships, "
-    "shares) dies with the account. Deleting yourself is a 409. The row really goes — use "
-    "PATCH /users/{id} {active:false} to merely revoke access, or POST /users/{id}/merge to "
-    "keep a deactivated shell for audit."
+    "hours they did not work. ACCESS dies with the account (RADD-784): project and team "
+    "memberships, role grants, delegation and shares are never inherited — and the successor "
+    "must already hold at least the account's effective permissions, or the delete is refused "
+    "naming what is missing (GET /users/{id}/successor-check?candidate_id= previews this). "
+    "Owned teams go ownerless rather than transferring. Personal state (sessions, tokens, "
+    "MFA, stars, watches, inbox) dies with the account. Deleting yourself is a 409. The row "
+    "really goes — use PATCH /users/{id} {active:false} to merely revoke access, or POST "
+    "/users/{id}/merge to keep a deactivated shell for audit."
 )
 
 

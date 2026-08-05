@@ -199,8 +199,10 @@ class UserAdminUpdate(BaseModel):
 
 class UserContentSummary(BaseModel):
     """What an account owns (spec 89) — drives the delete dialog. Everything here
-    moves to the successor EXCEPT `worklogs`, which are discarded: crediting
-    someone with hours they never worked would corrupt every time report."""
+    moves to the successor EXCEPT `worklogs`, which are discarded (crediting
+    someone with hours they never worked would corrupt every time report), and
+    `owned_teams`, which go ownerless (RADD-784: running a team is delegation,
+    not content — a new owner is chosen deliberately, never inherited)."""
 
     reported_items: int = 0
     assigned_items: int = 0
@@ -213,6 +215,26 @@ class UserContentSummary(BaseModel):
     approvals: int = 0
     worklogs: int = 0
     worklog_seconds: int = 0
+
+
+class SuccessorGap(BaseModel):
+    """One scope where a successor candidate holds less than the account being
+    deleted (RADD-784)."""
+
+    scope_type: str  # "instance" | "global" | "project" | "space"
+    label: str  # project KEY, or "global" / "instance" / "wiki space"
+    scope_id: uuid.UUID | None = None
+    missing: list[str]
+
+
+class SuccessorCheck(BaseModel):
+    """RADD-784: is this candidate viable? Access never transfers on delete, so
+    the successor must already hold at least what the account holds — `gaps`
+    names exactly what is missing, per scope, so the admin can grant it
+    deliberately or pick someone else."""
+
+    viable: bool
+    gaps: list[SuccessorGap]
 
 
 class DuplicateUserGroup(BaseModel):

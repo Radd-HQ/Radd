@@ -150,6 +150,21 @@ export interface DuplicateUserGroup {
 /** GET /users/{id}/content (spec 89) — what a delete would hand over. Everything
  * here moves to the successor EXCEPT worklogs, which are destroyed so nobody is
  * credited with hours they didn't work. */
+/** RADD-784: one scope where a successor candidate holds less than the account
+ * being deleted. Access never transfers on delete, so the candidate must
+ * already hold at least what the account holds. */
+export interface SuccessorGap {
+  scope_type: "instance" | "global" | "project" | "space";
+  label: string;
+  scope_id: string | null;
+  missing: string[];
+}
+
+export interface SuccessorCheck {
+  viable: boolean;
+  gaps: SuccessorGap[];
+}
+
 export interface UserContentSummary {
   reported_items: number;
   assigned_items: number;
