@@ -14,7 +14,7 @@ import {
   apiPageVersionPath,
   apiPageVersionsPath,
   apiPageSpacePagesPath,
-  apiItemDocsPath,
+  apiItemPagesPath,
 } from "../constants";
 import { queryKeys } from "./shared";
 import type {
@@ -152,7 +152,7 @@ export const itemPagesQuery = (itemId: string) =>
   queryOptions({
     queryKey: queryKeys.itemPages(itemId),
     meta: entityMeta(Entity.page),
-    queryFn: () => api.get<ItemPageRef[]>(apiItemDocsPath(itemId)),
+    queryFn: () => api.get<ItemPageRef[]>(apiItemPagesPath(itemId)),
     retry: false,
   });
 

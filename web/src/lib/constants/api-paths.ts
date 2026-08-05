@@ -192,7 +192,7 @@ export const apiPageItemsPath = (pageId: string) => `${ApiPath.pages}/${pageId}/
 export const apiPageItemPath = (pageId: string, itemId: string) =>
   `${ApiPath.pages}/${pageId}/items/${itemId}`;
 /** Pages linked to an issue (the issue page's Pages row). */
-export const apiItemDocsPath = (itemId: string) => `${ApiPath.items}/${itemId}/docs`;
+export const apiItemPagesPath = (itemId: string) => `${ApiPath.items}/${itemId}/pages`;
 
 /** AI paths (spec 46): on-demand summary + candidate duplicates for an item. */
 export const apiItemAiSummarizePath = (itemId: string) =>
