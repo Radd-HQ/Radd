@@ -1,0 +1,362 @@
+"""Trigger classification + condition matching + the read-only action planner,
+split out of `engine.py` (RADD-902) along its own "loop guard + trigger
+classification" / "condition matching" / "action planning" markers (formerly
+lines 72-425) — the planning-vs-applying seam the audit called out as the
+file's cleanest cut.
+
+Nothing here writes to the database or calls another module's service to
+MUTATE anything; `_plan` resolves one stored action into a `_Plan` the caller
+(`engine._apply_plan`) then executes. `engine.py` imports this module (never
+the other way — nothing here needs anything `engine.py` defines) and
+re-exports the public/test-visible names under its own name, so
+`from radd.modules.automations.engine import _plan, condition_matches, ...`
+is unaffected.
+
+`_signed_headers` did NOT move here even though it sits physically inside the
+original "action planning" section, right after `_plan` — its only consumer
+is `_apply_plan`, which is application code that stays in `engine.py`. Private
+helpers move with their consumer, not with the section they happened to be
+typed under.
+"""
+
+import uuid
+from dataclasses import dataclass
+from typing import Any
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from radd.config import settings
+from radd.modules.auth import service as auth
+from radd.modules.auth.models import User
+from radd.modules.comments.schemas import CommentCreate
+from radd.modules.comments.types import CommentVisibility
+from radd.modules.cycles import service as cycles_service
+from radd.modules.events.service import Event
+from radd.modules.fields import service as fields
+from radd.modules.fields.models import FieldDefinition
+from radd.modules.items import service as items, slq
+from radd.modules.items.enums import ItemEntity, Priority
+from radd.modules.items.models import WorkItem
+from radd.modules.items.schemas import ItemCreate, ItemUpdate
+from radd.modules.projects import service as projects_service
+from radd.modules.projects.models import Project
+from radd.modules.releases import service as releases_service
+from radd.modules.teams import service as teams_service
+from radd.modules.workflow import service as workflow
+
+from . import catalog, conditions
+from .email_action import resolve_recipient
+from .templating import render_template
+from .types import (
+    CLEAR_VALUE,
+    SYSTEM_ACTOR_ID,
+    ActionType,
+    AutomationEvent,
+    PlanKind,
+)
+
+# --- loop guard + trigger classification ---
+
+
+def is_automation_caused(event: Event) -> bool:
+    """True if this event was emitted by an engine-applied mutation (the loop guard)."""
+    return event.actor_id == SYSTEM_ACTOR_ID
+
+
+def should_process(event: Event) -> bool:
+    """A human/API event on a subscribable type — never an automation-caused one.
+    EXCEPTION (spec 69): the scheduler's synthetic `automation.scheduled` event is
+    system-emitted by design, so it bypasses the loop-guard skip — loop safety
+    holds because the item events a scheduled run emits carry the system actor,
+    which this predicate still rejects on the EVENT-rule path.
+
+    `silent` events (a bulk import, `events.quiet()`) never match: a rule that
+    assigns on create or transitions on a field change would otherwise fire once
+    per imported issue and rewrite the history being imported. Checked ahead of
+    the scheduled-event exception — an import is silent whatever it emits."""
+    if event.silent:
+        return False
+    if event.event_type == AutomationEvent.SCHEDULED.value:
+        return True
+    return event.event_type in catalog.TRIGGERS and not is_automation_caused(event)
+
+
+async def _resolve_target_item(session: AsyncSession, event: Event) -> WorkItem | None:
+    """The item a rule's SLQ + actions apply to: the event's entity when it IS an
+    item, else the payload's `item_id` (comments, worklogs, attachments, links —
+    the stream-wide convention). None for itemless events (cycles, docs, …)."""
+    item_id: uuid.UUID | None = None
+    if event.entity_type == ItemEntity.ITEM.value:
+        item_id = uuid.UUID(event.entity_id)
+    else:
+        raw = (event.payload or {}).get("item_id")
+        if raw:
+            try:
+                item_id = uuid.UUID(str(raw))
+            except ValueError:
+                return None
+    return None if item_id is None else await session.get(WorkItem, item_id)
+
+
+async def _event_facts(session: AsyncSession, event: Event) -> conditions.EventFacts:
+    actor = (
+        await session.get(User, event.actor_id) if event.actor_id is not None else None
+    )
+    return conditions.EventFacts(
+        event_type=event.event_type,
+        actor_id=str(event.actor_id) if event.actor_id else None,
+        actor_email=actor.email if actor else None,
+        actor_name=actor.name if actor else None,
+        payload=event.payload or {},
+    )
+
+
+# --- condition matching (reuses the SLQ compiler, filtered to the one item) ---
+
+
+async def _project_definitions(
+    session: AsyncSession, project: Project
+) -> dict[str, FieldDefinition]:
+    by_key: dict[str, FieldDefinition] = {}
+    for definition in await fields.definitions_for_project(session, project):
+        by_key.setdefault(definition.key, definition)
+    return by_key
+
+
+async def condition_matches(
+    session: AsyncSession, condition_slq: str, item: WorkItem, project: Project
+) -> bool:
+    """Does the item satisfy the rule's condition? Empty condition = always. Reuses the
+    SLQ compiler and runs the compiled WHERE guarded to this single item id."""
+    text = (condition_slq or "").strip()
+    if not text:
+        return True
+    compiled = await slq.compile_query(
+        session,
+        slq.parse(text),
+        definitions_by_key=await _project_definitions(session, project),
+        current_user_id=SYSTEM_ACTOR_ID,
+        project_id=project.id,
+    )
+    stmt = select(WorkItem.id).where(WorkItem.id == item.id)
+    if compiled.where is not None:
+        stmt = stmt.where(compiled.where)
+    return await session.scalar(stmt) is not None
+
+
+# --- action planning (shared by apply + dry-run preview; resolution does no writes) ---
+
+
+@dataclass
+class _Plan:
+    kind: PlanKind
+    detail: str
+    item_update: ItemUpdate | None = None
+    comment: CommentCreate | None = None
+    item_create: ItemCreate | None = None
+    # (url, json_body, signing_secret) for send_webhook / post_chat.
+    http: tuple[str, dict[str, Any], dict[str, str]] | None = None
+    # (user_id, message) for notify_user.
+    notify: tuple[uuid.UUID, str] | None = None
+    # (to_address, to_name, subject, body) for send_email (spec 66).
+    email: tuple[str, str, str, str] | None = None
+
+
+def _manual_facts() -> conditions.EventFacts:
+    """Stand-in facts for manual runs / previews — templates degrade verbatim."""
+    return conditions.EventFacts(
+        event_type="manual", actor_id=None, actor_email=None, actor_name=None, payload={}
+    )
+
+
+def _item_ctx(item: WorkItem | None, project: Project | None) -> dict[str, Any] | None:
+    if item is None or project is None:
+        return None
+    return {"key": f"{project.key}-{item.number}", "title": item.title, "id": str(item.id)}
+
+
+def _is_clear(value: str) -> bool:
+    return value.strip().lower() == CLEAR_VALUE
+
+
+async def _state_by_name(session: AsyncSession, project_id: uuid.UUID, name: str):
+    for state in await workflow.list_states(session, project_id):
+        if state.name == name:
+            return state
+    return None
+
+
+async def _team_by_name(session: AsyncSession, name: str):
+    for team in await teams_service.list_teams(session):
+        if team.name == name:
+            return team
+    return None
+
+
+async def _cycle_by_name(session: AsyncSession, name: str):
+    for cycle in await cycles_service.list_cycles(session):
+        if cycle.name == name:
+            return cycle
+    return None
+
+
+async def _current_labels(session: AsyncSession, item: WorkItem, system_user: User) -> list[str]:
+    read = await items.get_item(session, item.id, actor=system_user)
+    return list(read.labels)
+
+
+async def _project_by_key(session: AsyncSession, key: str) -> Project | None:
+    for project in await projects_service.list_projects(session):
+        if project.key.casefold() == key.strip().casefold():
+            return project
+    return None
+
+
+async def _plan(
+    session: AsyncSession,
+    action: dict,
+    item: WorkItem | None,
+    project: Project | None,
+    system_user: User,
+    *,
+    facts: conditions.EventFacts,
+    rule_name: str,
+) -> _Plan:
+    """Resolve one stored action — read-only. Returns the work to perform, or a
+    'skip' plan when a named target no longer resolves (logged, not fatal).
+    Item actions require `item`/`project` (the caller guarantees it); universal
+    actions (spec 58b) render their `{{token}}` templates from `facts`."""
+    action_type = ActionType(action["type"])
+    params = action["params"]
+    ictx = _item_ctx(item, project)
+    match action_type:
+        case ActionType.CREATE_ITEM:
+            target = await _project_by_key(session, params["project"])
+            if target is None:
+                return _Plan(PlanKind.SKIP, f"create_item: no project {params['project']!r}")
+            create = ItemCreate(
+                project_id=target.id,
+                title=render_template(params["title"], facts, ictx),
+                description=render_template(params.get("description", ""), facts, ictx),
+                priority=Priority(params["priority"]) if params.get("priority") else Priority.NORMAL,
+            )
+            return _Plan(
+                PlanKind.CREATE_ITEM, f"create_item in {target.key}: {create.title!r}", item_create=create
+            )
+        case ActionType.SEND_WEBHOOK:
+            body = {
+                "rule": rule_name,
+                "event_type": facts.event_type,
+                "actor": {
+                    "id": facts.actor_id,
+                    "email": facts.actor_email,
+                    "name": facts.actor_name,
+                },
+                "item": ictx,
+                "payload": facts.payload,
+            }
+            return _Plan(
+                PlanKind.HTTP,
+                f"send_webhook -> {params['url']}",
+                http=(params["url"], body, params.get("secret", "")),
+            )
+        case ActionType.POST_CHAT:
+            message = render_template(params["message"], facts, ictx)
+            return _Plan(
+                PlanKind.HTTP,
+                f"post_chat -> {params['webhook_url']}",
+                http=(params["webhook_url"], {"text": message}, ""),
+            )
+        case ActionType.NOTIFY_USER:
+            email = params["user"]
+            user = await auth.get_user_by_email(session, email)
+            if user is None:
+                return _Plan(PlanKind.SKIP, f"notify_user: no user {email!r}")
+            message = render_template(params["message"], facts, ictx)
+            return _Plan(PlanKind.NOTIFY, f"notify_user {email}", notify=(user.id, message))
+        case ActionType.SEND_EMAIL:
+            if not settings.smtp_host:
+                return _Plan(PlanKind.SKIP, "send_email: smtp not configured (smtp_host empty)")
+            recipient = await resolve_recipient(session, params["to"], item)
+            if recipient is None:
+                return _Plan(PlanKind.SKIP, f"send_email: no recipient resolves for {params['to']!r}")
+            address, name = recipient
+            return _Plan(
+                PlanKind.EMAIL,
+                f"send_email -> {address}",
+                email=(
+                    address,
+                    name,
+                    render_template(params["subject"], facts, ictx),
+                    render_template(params["body"], facts, ictx),
+                ),
+            )
+        case ActionType.SET_STATE:
+            name = params["state"]
+            state = await _state_by_name(session, project.id, name)
+            if state is None:
+                return _Plan(PlanKind.SKIP, f"set_state: no state {name!r} in {project.key}")
+            return _Plan(PlanKind.ITEM_UPDATE, f"set_state -> {name!r}", ItemUpdate(state_id=state.id))
+        case ActionType.SET_PRIORITY:
+            priority = Priority(params["priority"])
+            return _Plan(
+                PlanKind.ITEM_UPDATE, f"set_priority -> {priority.value}", ItemUpdate(priority=priority)
+            )
+        case ActionType.SET_ASSIGNEE:
+            email = params["assignee"]
+            if _is_clear(email):
+                return _Plan(PlanKind.ITEM_UPDATE, "set_assignee -> none", ItemUpdate(assignee_id=None))
+            user = await auth.get_user_by_email(session, email)
+            if user is None:
+                return _Plan(PlanKind.SKIP, f"set_assignee: no user {email!r}")
+            return _Plan(PlanKind.ITEM_UPDATE, f"set_assignee -> {email}", ItemUpdate(assignee_id=user.id))
+        case ActionType.SET_TEAM:
+            name = params["team"]
+            if _is_clear(name):
+                return _Plan(PlanKind.ITEM_UPDATE, "set_team -> none", ItemUpdate(team_id=None))
+            team = await _team_by_name(session, name)
+            if team is None:
+                return _Plan(PlanKind.SKIP, f"set_team: no team {name!r}")
+            return _Plan(PlanKind.ITEM_UPDATE, f"set_team -> {name!r}", ItemUpdate(team_id=team.id))
+        case ActionType.ADD_LABEL:
+            label = params["label"]
+            current = await _current_labels(session, item, system_user)
+            new = current if label in current else [*current, label]
+            note = " (already present)" if label in current else ""
+            return _Plan(PlanKind.ITEM_UPDATE, f"add_label {label!r}{note}", ItemUpdate(labels=new))
+        case ActionType.REMOVE_LABEL:
+            label = params["label"]
+            current = await _current_labels(session, item, system_user)
+            if label not in current:
+                return _Plan(PlanKind.SKIP, f"remove_label: {label!r} not on item")
+            new = [name for name in current if name != label]
+            return _Plan(PlanKind.ITEM_UPDATE, f"remove_label {label!r}", ItemUpdate(labels=new))
+        case ActionType.SET_CYCLE:
+            name = params["cycle"]
+            if _is_clear(name):
+                return _Plan(PlanKind.ITEM_UPDATE, "set_cycle -> none", ItemUpdate(cycle_id=None))
+            cycle = await _cycle_by_name(session, name)
+            if cycle is None:
+                return _Plan(PlanKind.SKIP, f"set_cycle: no cycle {name!r}")
+            return _Plan(PlanKind.ITEM_UPDATE, f"set_cycle -> {name!r}", ItemUpdate(cycle_id=cycle.id))
+        case ActionType.SET_RELEASE:
+            version = params["release"]
+            if _is_clear(version):
+                return _Plan(PlanKind.ITEM_UPDATE, "set_release -> none", ItemUpdate(release_id=None))
+            release = await releases_service.resolve_release(session, project.id, version)
+            if release is None:
+                return _Plan(PlanKind.SKIP, f"set_release: no release {version!r} in {project.key}")
+            return _Plan(
+                PlanKind.ITEM_UPDATE, f"set_release -> {version!r}", ItemUpdate(release_id=release.id)
+            )
+        case ActionType.SET_CUSTOM_FIELD:
+            key, value = params["key"], params["value"]
+            return _Plan(
+                PlanKind.ITEM_UPDATE, f"set_custom_field {key!r}", ItemUpdate(custom_fields={key: value})
+            )
+        case ActionType.ADD_COMMENT:
+            visibility = CommentVisibility(params.get("visibility", CommentVisibility.PUBLIC.value))
+            comment = CommentCreate(body=params["body"], visibility=visibility)
+            return _Plan(PlanKind.COMMENT, f"add_comment ({visibility.value})", comment=comment)
+    return _Plan(PlanKind.SKIP, f"unknown action {action_type}")  # pragma: no cover

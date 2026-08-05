@@ -13,7 +13,7 @@ import uuid
 import pytest
 
 from radd.exceptions import ConflictError, ForbiddenError
-from radd.modules.auth import authz, roles
+from radd.modules.auth import authz, authz_core, roles
 from radd.modules.auth.types import all_permission_keys
 from radd.modules.auth.authz import (
     Permission,
@@ -78,6 +78,11 @@ def patch_lookups(monkeypatch, *, permission_sets=(), global_permission_sets=(),
     be a constant that needed no query, and is now a row an admin can edit.
     `baseline=` defaults to the seeded set so these tests describe a stock
     instance; pass your own to model an admin who has retuned it.
+
+    Patched on `authz_core` (RADD-902: the pure core + `effective_permissions`/
+    `require` live in `radd.modules.auth.authz_core` now — `authz.py` only
+    re-exports them, and a monkeypatch on the facade's re-exported attribute
+    would not reach the call site running in `authz_core`'s own globals).
     """
 
     async def fake_permission_sets(session, user_id, project):
@@ -91,9 +96,9 @@ def patch_lookups(monkeypatch, *, permission_sets=(), global_permission_sets=(),
     async def fake_baseline(session):
         return seeded if baseline is None else frozenset(baseline)
 
-    monkeypatch.setattr(authz, "_project_permission_sets", fake_permission_sets)
-    monkeypatch.setattr(authz, "_global_permission_sets", fake_global_permission_sets)
-    monkeypatch.setattr(authz, "baseline_permissions", fake_baseline)
+    monkeypatch.setattr(authz_core, "_project_permission_sets", fake_permission_sets)
+    monkeypatch.setattr(authz_core, "_global_permission_sets", fake_global_permission_sets)
+    monkeypatch.setattr(authz_core, "baseline_permissions", fake_baseline)
 
 
 # --- builtin role definitions (global, immutable rows) ---

@@ -9,7 +9,7 @@ from datetime import datetime
 
 import pytest
 
-from radd.modules.ai import prompts, provider, service
+from radd.modules.ai import prompts, provider, service, similar
 from radd.modules.ai.types import (
     ANTHROPIC_VERSION,
     NL_MAX_ATTEMPTS,
@@ -317,7 +317,13 @@ async def test_similar_to_seed_is_semantic_first(monkeypatch):
     """When the vector pool answers, the OR-ed FTS pool must not
     even run — one shared common token was enough to surface an unrelated
     issue as a top 'text match'. FTS remains the fallback when semantic is
-    off/empty."""
+    off/empty.
+
+    Patched on `similar` (RADD-902: `_semantic_pool`/`search_service`/
+    `similar_to_seed` all live in `radd.modules.ai.similar` now — `service.py`
+    only re-exports them, and a monkeypatch on the facade's re-exported
+    attribute would not reach the call site running in `similar`'s own
+    globals)."""
     semantic = [
         SimilarCandidate(item_key="TD-9", title="nine", score=0.8, reason="semantic match")
     ]
@@ -328,9 +334,9 @@ async def test_similar_to_seed_is_semantic_first(monkeypatch):
     def fts_must_not_run(*args, **kwargs):
         raise AssertionError("FTS must not run when the semantic pool answers")
 
-    monkeypatch.setattr(service, "_semantic_pool", pool)
-    monkeypatch.setattr(service.search_service, "similar_to_text", fts_must_not_run)
-    result = await service.similar_to_seed(None, "seed", None, exclude_item_id=None, limit=5)
+    monkeypatch.setattr(similar, "_semantic_pool", pool)
+    monkeypatch.setattr(similar.search_service, "similar_to_text", fts_must_not_run)
+    result = await similar.similar_to_seed(None, "seed", None, exclude_item_id=None, limit=5)
     assert [c.item_key for c in result.candidates] == ["TD-9"]
     assert result.reranked is False
 
@@ -340,9 +346,9 @@ async def test_similar_to_seed_is_semantic_first(monkeypatch):
     async def fts(session, text, *, user=None, exclude_item_id=None, limit=10):
         return [(_hit("TD-1"), 0.8)]
 
-    monkeypatch.setattr(service, "_semantic_pool", empty_pool)
-    monkeypatch.setattr(service.search_service, "similar_to_text", fts)
-    result = await service.similar_to_seed(None, "seed", None, exclude_item_id=None, limit=5)
+    monkeypatch.setattr(similar, "_semantic_pool", empty_pool)
+    monkeypatch.setattr(similar.search_service, "similar_to_text", fts)
+    result = await similar.similar_to_seed(None, "seed", None, exclude_item_id=None, limit=5)
     assert [c.item_key for c in result.candidates] == ["TD-1"]
 
 
