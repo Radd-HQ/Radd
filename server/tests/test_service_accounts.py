@@ -200,10 +200,8 @@ def test_scope_round_trips_and_reports_its_projects():
         "global": ["page.read"],
         "projects": {str(project_id): ["item.create"]},
     }
-    assert scope.projects_allowing(Permission.ITEM_CREATE) == {project_id}
-    assert scope.projects_allowing(Permission.ITEM_DELETE) == set()
-    # a globally scoped atom applies in every project the scope names
-    assert scope.projects_allowing(Permission.PAGE_READ) == {project_id}
+    # (projects_allowing was deleted as dead product code, RADD-893 — the live
+    # per-project resolution is mcp/requirements.py's, covered by test_mcp.)
 
 
 def test_scope_shape_is_validated():

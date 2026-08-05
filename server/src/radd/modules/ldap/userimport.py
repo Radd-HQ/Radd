@@ -22,7 +22,7 @@ account's email address is not something to infer.
 """
 
 import uuid
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -230,10 +230,3 @@ async def apply_resolution(
     await auth_service.merge_users(session, look_alike.id, survivor.id, actor_id=actor_id)
     await adopt_directory_identity(session, survivor, directory_user)
     return survivor, created
-
-
-def resolutions_by_email(
-    entries: Sequence[tuple[str, ImportResolution, uuid.UUID | None]],
-) -> dict[str, tuple[ImportResolution, uuid.UUID | None]]:
-    """Index the admin's choices by lowercased email (the enumeration's key)."""
-    return {email.strip().lower(): (resolution, target) for email, resolution, target in entries}

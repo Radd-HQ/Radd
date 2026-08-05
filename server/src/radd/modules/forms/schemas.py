@@ -172,7 +172,6 @@ class FormRead(BaseModel):
     description_required: bool
     team_picker_enabled: bool
     allow_public: bool
-    public_token: str | None
     # Portal shares (spec 73) — populated on the form.manage surfaces (list/
     # update/sharing) for the builder; empty on the plain submit render.
     shares: list[FormShareRead] = Field(default_factory=list)
@@ -226,45 +225,11 @@ class PublicFormRead(BaseModel):
     fields: list[PublicFormField]
 
 
-class PublicFormSubmit(BaseModel):
-    """POST /public/forms/{token}: the FormSubmit shape plus who is asking.
-    The email is trusted (no verification loop, v1) — matching an active user
-    makes them the reporter, anything else becomes the item's mail contact."""
-
-    title: str = Field(min_length=1, max_length=500)
-    description: str = ""
-    values: dict[str, Any] = Field(default_factory=dict)
-    email: str = Field(min_length=3, max_length=320, pattern=r"^[^@\s]+@[^@\s]+$")
-    name: str = Field(default="", max_length=200)
-
-
 class PublicSubmitResult(BaseModel):
     """What an anonymous submitter learns: the created issue key, nothing more."""
 
     key: str
     title: str
-
-
-class PublicDeflectDoc(BaseModel):
-    """One public-KB hit under the public form's title input (spec 74) —
-    mirrors the authed deflect docs shape (search/schemas.DeflectDoc) so the
-    SPA panel can reuse its rendering. Defined here, not imported: forms must
-    not depend on the search module."""
-
-    id: uuid.UUID  # page id
-    space_id: uuid.UUID
-    title: str
-    space_name: str
-
-
-class PublicDeflectResponse(BaseModel):
-    """GET /public/forms/{token}/deflect — docs ONLY: resolved issues stay
-    internal; only public wiki pages deflect anonymous visitors."""
-
-    docs: list[PublicDeflectDoc]
-
-
-# --- requester portal (spec 73) ---
 
 
 class PortalProjectRef(BaseModel):

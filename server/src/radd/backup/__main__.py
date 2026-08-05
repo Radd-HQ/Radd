@@ -15,7 +15,6 @@ service functions with no HTTP layer, no plugin registry and no maintenance mode
 import argparse
 import asyncio
 import sys
-from datetime import datetime
 
 from radd.config import settings
 

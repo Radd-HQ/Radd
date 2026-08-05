@@ -552,6 +552,9 @@ async def list_service_accounts(session: Session, user: CurrentUser) -> list[Ser
 async def update_service_account(
     account_id: uuid.UUID, data: ServiceAccountUpdate, session: Session, user: CurrentUser
 ) -> ServiceAccountRead:
+    """Rename/deactivate. No SPA caller today — DELIBERATELY kept (RADD-893):
+    this is the only surface that can deactivate a compromised service account,
+    the same keep-reason as plugin uninstall."""
     await authz.require(session, user, authz.Permission.SERVICE_ACCOUNT_UPDATE)
     account = await service_accounts.update_account(session, account_id, data, actor_id=user.id)
     return await _account_read(session, account)

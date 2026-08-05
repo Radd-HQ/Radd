@@ -507,10 +507,6 @@ def base_permission(key: "Permission | str") -> str:
     return split_permission(key)[0]
 
 
-def permission_relation(key: "Permission | str") -> str:
-    return split_permission(key)[1]
-
-
 def qualify_permission(base: str, relation: str) -> str:
     """The canonical spelling: `@any` is never written out."""
     return base if relation == RELATION_ANY else f"{base}{RELATION_SEP}{relation}"
@@ -776,11 +772,6 @@ BUILTIN_ROLES: tuple[BuiltinRole, ...] = (
     ),
 )
 
-_BUILTIN_BY_KEY: dict[BuiltinRoleKey, BuiltinRole] = {role.key: role for role in BUILTIN_ROLES}
-
-
-def builtin_role(key: BuiltinRoleKey) -> BuiltinRole:
-    return _BUILTIN_BY_KEY[key]
 
 
 class AuthEvent(StrEnum):

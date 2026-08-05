@@ -63,11 +63,6 @@ def is_custom_field(field: str) -> bool:
     return field.startswith(CUSTOM_FIELD_PREFIX)
 
 
-def custom_field_key(field: str) -> str:
-    """The registry key behind a ``cf:<key>`` screen field id."""
-    return field[len(CUSTOM_FIELD_PREFIX) :]
-
-
 def default_placement(field: str) -> ScreenPlacement:
     """Placement for a field a screen doesn't mention. Builtins stay visible (PRIMARY,
     preserving the pre-screens view); custom fields default to SECONDARY so the noisy

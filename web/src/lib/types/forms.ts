@@ -51,7 +51,6 @@ export interface Form {
   /** Spec 62: the tokened no-login submit path. The token is minted on first
    * enable and KEPT on disable (re-enabling restores the same link). */
   allow_public: boolean;
-  public_token: string | null;
   /** Portal share grants (spec 73) — populated on the form.manage surfaces. */
   shares: FormShare[];
   created_at: string;

@@ -18,8 +18,8 @@ from radd.modules.auth.deps import CurrentUser
 from radd.modules.auth.models import User
 
 from . import service
-from .registry import all_specs, get_spec
-from .schemas import AccessGrantCreate, AccessGrantRead, ResourceSpecRead
+from .registry import get_spec
+from .schemas import AccessGrantCreate, AccessGrantRead
 from .types import AccessEntity
 
 router = APIRouter(prefix="/grants", tags=["access"])
@@ -40,24 +40,6 @@ async def _require_manage(
     if not await spec.can_manage(session, actor, resource_id, project_id):
         raise ForbiddenError(f"no permission to manage {resource_type} grants")
     return spec
-
-
-@router.get("/resources", response_model=list[ResourceSpecRead])
-async def list_resource_specs(user: CurrentUser) -> list[ResourceSpecRead]:
-    """The registered resource types + their grant models — the GrantsEditor reads
-    this to render access/subject choices for any resource (incl. plugins)."""
-    return [
-        ResourceSpecRead(
-            resource_type=spec.resource_type,
-            label=spec.label or spec.resource_type,
-            accesses=list(spec.accesses),
-            subjects=list(spec.subjects),
-            project_scoped=spec.project_scoped,
-            hierarchical=spec.hierarchical,
-            default_open=spec.default_open,
-        )
-        for spec in all_specs()
-    ]
 
 
 @router.get("", response_model=list[AccessGrantRead])

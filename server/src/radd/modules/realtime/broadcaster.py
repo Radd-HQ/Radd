@@ -36,7 +36,7 @@ async def _fan_out(event: Event) -> None:
             continue
         try:
             await websocket.send_json(message)
-        except Exception:
+        except Exception:  # a dead socket is dropped, not logged — churn is normal
             hub.unregister(websocket)
 
 
@@ -73,5 +73,5 @@ async def stop() -> None:
         hub.unregister(websocket)
         try:
             await websocket.close()
-        except Exception:
+        except Exception:  # closing an already-dead socket has nothing to report
             pass

@@ -14,7 +14,6 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd.config import settings
 from radd.exceptions import NotFoundError
 
 from . import search, service
@@ -99,52 +98,3 @@ async def search_public(
     return await search.search_pages(
         session, q, limit=limit, public_only=True, space_id=space_id
     )
-
-
-async def deflect_public(
-    session: AsyncSession, q: str, *, limit: int
-) -> list[DocSearchResult]:
-    """search_public fused with PUBLIC-ONLY semantic candidates when the ai
-    module is up (spec 106) — the public form's deflection. Deliberately a
-    separate function: the public KB search box stays plain FTS (an anonymous,
-    unthrottled surface shouldn't spend an embedding per keystroke; deflection
-    is client-debounced and worth it). Degrades to FTS on any failure, and
-    every semantic addition re-passes the LIVE public + non-archived filters —
-    the vector store's public flag is a copy taken at embed time."""
-    results = await search.search_pages(session, q, limit=limit, public_only=True)
-    semantic_ids = await _semantic_public_ids(session, q, limit=limit * 2)
-    if not semantic_ids:
-        return results
-    # Deferred: pure, kernel-bound ranking machinery (the SLQ-helpers rule:
-    # import, never copy). Only reachable with ai loaded, which depends on search.
-    from radd.modules.search import fusion
-
-    ordered_ids = [result.page_id for result in results]
-    by_id = {result.page_id: result for result in results}
-    fused = fusion.rrf_fuse([ordered_ids, semantic_ids])
-    missing = [page_id for page_id, _ in fused if page_id not in by_id]
-    for page in await search.pages_by_ids(session, missing, public_only=True):
-        by_id[page.page_id] = page
-    return [by_id[page_id] for page_id, _ in fused if page_id in by_id][:limit]
-
-
-async def _semantic_public_ids(
-    session: AsyncSession, q: str, *, limit: int
-) -> list[uuid.UUID]:
-    """Public-only semantic doc candidates via the ai seam (deferred,
-    feature-detected; [] on any failure)."""
-    from .types import AI_EMBEDDINGS_MODULE
-
-    if AI_EMBEDDINGS_MODULE not in settings.modules:
-        return []
-    try:
-        from radd.modules.ai.embeddings import candidates
-
-        if not await candidates.semantic_enabled(session):
-            return []
-        ranked = await candidates.doc_candidates(
-            session, q, public_only=True, limit=limit
-        )
-    except Exception:  # noqa: BLE001 — public deflection degrades to FTS, never 500s
-        return []
-    return [page_id for page_id, _ in ranked]

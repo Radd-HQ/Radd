@@ -111,17 +111,6 @@ def noise_reason(schema_key: str) -> str:
     return NOISE_REASONS.get(schema_key, "") if schema_key else ""
 
 
-def is_sprint_field(schema_key: str) -> bool:
-    """Spec 90 read `customfield_10002` unconditionally — so on an instance where
-    that ID is something else, its values were parsed as sprints and silently
-    created cycles named after whatever they happened to contain."""
-    return schema_key == JiraSchemaKey.SPRINT.value
-
-
-def is_epic_link_field(schema_key: str) -> bool:
-    return schema_key in (JiraSchemaKey.EPIC_LINK.value, JiraSchemaKey.PARENT_LINK.value)
-
-
 def find_by_schema_key(
     catalog: dict[str, dict], key: JiraSchemaKey | str
 ) -> list[str]:

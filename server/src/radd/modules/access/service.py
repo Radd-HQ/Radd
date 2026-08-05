@@ -9,7 +9,6 @@ lives in `resolution.py`; this is persistence + validation.
 from __future__ import annotations
 
 import uuid
-from collections import defaultdict
 from collections.abc import Iterable
 
 from sqlalchemy import delete, select
@@ -102,29 +101,6 @@ async def get_grant(session: AsyncSession, grant_id: uuid.UUID) -> AccessGrant:
     if grant is None:
         raise NotFoundError(AccessEntity.GRANT, grant_id)
     return grant
-
-
-async def subject_grants(
-    session: AsyncSession, subject_type: GrantSubject, subject_id: uuid.UUID
-) -> list[AccessGrant]:
-    result = await session.execute(
-        select(AccessGrant).where(
-            AccessGrant.subject_type == subject_type.value, AccessGrant.subject_id == subject_id
-        )
-    )
-    return list(result.scalars())
-
-
-async def subject_referenced(
-    session: AsyncSession, subject_type: GrantSubject, subject_id: uuid.UUID
-) -> bool:
-    """Does any access grant name this subject? (role/team deletion guard.)"""
-    row = await session.scalar(
-        select(AccessGrant.id)
-        .where(AccessGrant.subject_type == subject_type.value, AccessGrant.subject_id == subject_id)
-        .limit(1)
-    )
-    return row is not None
 
 
 # --- mutation -----------------------------------------------------------------

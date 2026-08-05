@@ -8,9 +8,7 @@ through these functions — the `mail_contacts` table stays private to this modu
 import asyncio
 import logging
 import uuid
-from collections.abc import Iterable
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd import smtp
@@ -24,16 +22,6 @@ logger = logging.getLogger(__name__)
 
 async def contact_for_item(session: AsyncSession, item_id: uuid.UUID) -> MailContact | None:
     return await session.get(MailContact, item_id)
-
-
-async def contacts_for_items(
-    session: AsyncSession, item_ids: Iterable[uuid.UUID]
-) -> dict[uuid.UUID, MailContact]:
-    ids = list(item_ids)
-    if not ids:
-        return {}
-    result = await session.execute(select(MailContact).where(MailContact.item_id.in_(ids)))
-    return {contact.item_id: contact for contact in result.scalars()}
 
 
 async def upsert_contact(

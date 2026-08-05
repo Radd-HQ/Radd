@@ -13,7 +13,6 @@ import logging
 import shutil
 import tempfile
 import uuid
-from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path

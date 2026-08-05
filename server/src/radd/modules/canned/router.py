@@ -9,7 +9,6 @@ from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.deps import CurrentUser
 from radd.modules.items import service as items_service
-from radd.modules.projects import service as projects_service
 
 from . import service
 from .render import render_canned

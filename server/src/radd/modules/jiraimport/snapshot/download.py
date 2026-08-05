@@ -48,6 +48,7 @@ from ..types import (
     TERMINAL_SNAPSHOT_STAGES,
     JiraCreds,
     Problem,
+    RunStage,
     ProblemKind,
     SnapshotCatalog,
     SnapshotStage,
@@ -167,10 +168,10 @@ def _fetch_children(creds: JiraCreds, jobs: list[tuple[str, str, int]]) -> dict[
             collected: list = []
             start_at = 0
             while True:
-                if kind == "comments":
+                if kind == RunStage.COMMENTS.value:
                     page = jira.issue_comments(key, start_at=start_at, max_results=CHILD_PAGE)
                     items = page.get("comments") or []
-                elif kind == "worklogs":
+                elif kind == RunStage.WORKLOGS.value:
                     page = jira.issue_worklogs(key, start_at=start_at, max_results=CHILD_PAGE)
                     items = page.get("worklogs") or []
                 else:
@@ -321,7 +322,7 @@ async def _run_child_backfill(
     THIS is the silent data loss in spec 90: Jira returns `{"comments": [...20],
     "total": 87}` and the old importer imported 20.
     """
-    stage = SnapshotStage.COMMENTS if kind == "comments" else SnapshotStage.WORKLOGS
+    stage = SnapshotStage.COMMENTS if kind == RunStage.COMMENTS.value else SnapshotStage.WORKLOGS
     await _advance(session, snapshot, stage)
     container, item_key = _CHILD_SHAPES[kind]
 
@@ -358,7 +359,7 @@ async def _apply_child_batch(
                 snapshot,
                 Problem(
                     kind=ProblemKind.COMMENTS_FETCH
-                    if kind == "comments"
+                    if kind == RunStage.COMMENTS.value
                     else ProblemKind.WORKLOGS_FETCH,
                     message=f"could not read the full {kind} list — only the first page is cached",
                     subject=key,

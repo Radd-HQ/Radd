@@ -30,7 +30,6 @@ from radd.modules.fields import service as fields_service
 from radd.modules.fields.types import FieldType
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemLinkCreate, ItemUpdate
-from radd.modules.projects import service as projects_service
 from radd.modules.releases import service as releases_service
 from radd.modules.releases.schemas import ReleaseCreate
 
@@ -46,7 +45,6 @@ from .types import (
     PendingRefKind,
     Problem,
     ProblemKind,
-    RunKind,
     RunStage,
     SnapshotCatalog,
 )

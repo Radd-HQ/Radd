@@ -25,6 +25,22 @@ class SsoProviderSource(StrEnum):
     USER = "user"
 
 
+# Discovery defaults per kind. GOOGLE is pinned because Google's issuer is a
+# fixed, well-known URL — an admin should paste a client id/secret and nothing else.
+KIND_DEFAULTS: dict[SsoKind, dict[str, str]] = {
+    SsoKind.GOOGLE: {
+        "issuer": "https://accounts.google.com",
+        "scopes": "openid email profile",
+        "name": "Google",
+    },
+    SsoKind.OIDC: {
+        "issuer": "",
+        "scopes": "openid email profile",
+        "name": "SSO",
+    },
+}
+
+
 class SsoEvent(StrEnum):
     LOGIN = "sso.login"  # a successful OIDC sign-in (audit)
     IDENTITY_LINKED = "sso.identity_linked"  # a provider identity bound to an existing account
@@ -42,27 +58,3 @@ class SsoEntity(StrEnum):
 WILDCARD_DOMAIN = "*"
 
 
-class SsoDenialReason(StrEnum):
-    """Why a technically-valid sign-in was refused. These are the messages a
-    person reads on the login page, so each names the fix, not the rule."""
-
-    UNVERIFIED_EMAIL = "unverified_email"
-    DOMAIN_NOT_ALLOWED = "domain_not_allowed"
-    AUTO_PROVISION_OFF = "auto_provision_off"
-    DEACTIVATED = "deactivated"
-
-
-# Discovery defaults per kind. GOOGLE is pinned because Google's issuer is a
-# fixed, well-known URL — an admin should paste a client id/secret and nothing else.
-KIND_DEFAULTS: dict[SsoKind, dict[str, str]] = {
-    SsoKind.GOOGLE: {
-        "issuer": "https://accounts.google.com",
-        "scopes": "openid email profile",
-        "name": "Google",
-    },
-    SsoKind.OIDC: {
-        "issuer": "",
-        "scopes": "openid email profile",
-        "name": "SSO",
-    },
-}

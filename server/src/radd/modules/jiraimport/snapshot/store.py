@@ -60,16 +60,6 @@ async def get_issue(
     return await session.get(JiraSnapshotIssue, (snapshot_id, jira_key))
 
 
-async def issue_keys(session: AsyncSession, snapshot_id: uuid.UUID) -> list[str]:
-    """Every key in the snapshot — the set an unresolved link is checked against."""
-    result = await session.execute(
-        select(JiraSnapshotIssue.jira_key)
-        .where(JiraSnapshotIssue.snapshot_id == snapshot_id)
-        .order_by(JiraSnapshotIssue.jira_key)
-    )
-    return list(result.scalars())
-
-
 async def count_issues(session: AsyncSession, snapshot_id: uuid.UUID) -> int:
     result = await session.execute(
         select(func.count())

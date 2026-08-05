@@ -47,12 +47,3 @@ class ForgejoEntity(StrEnum):
 
     CONNECTION = "forgejo_connection"
     REPO = "forgejo_repo"
-
-
-class ForgejoEvent(StrEnum):
-    CONNECTION_CREATED = "forgejo_connection.created"
-    CONNECTION_UPDATED = "forgejo_connection.updated"
-    CONNECTION_DELETED = "forgejo_connection.deleted"
-    REPO_CREATED = "forgejo_repo.created"
-    REPO_UPDATED = "forgejo_repo.updated"
-    REPO_DELETED = "forgejo_repo.deleted"

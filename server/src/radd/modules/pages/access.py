@@ -36,13 +36,6 @@ async def space_permissions(
     return await authz.effective_permissions(session, user, space_id=space_id)
 
 
-async def require_space(
-    session: AsyncSession, user: User, space_id: uuid.UUID, permission: Permission
-) -> frozenset[Permission]:
-    """403 unless the actor holds `permission` in the space."""
-    return await authz.require(session, user, permission, space_id=space_id)
-
-
 async def permissions_by_space(
     session: AsyncSession, user: User, space_ids: list[uuid.UUID]
 ) -> dict[uuid.UUID, frozenset[Permission]]:

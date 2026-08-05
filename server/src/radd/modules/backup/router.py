@@ -133,12 +133,6 @@ async def create_backup(data: BackupCreateRequest, session: Session, user: Curre
     return _as_run(run)
 
 
-@router.get("/runs", response_model=list[RunRead])
-async def list_runs(session: Session, user: CurrentUser) -> list[RunRead]:
-    _require_instance_admin(user)
-    return [_as_run(run) for run in await service.list_runs(session)]
-
-
 @router.get("/runs/{run_id}", response_model=RunRead)
 async def get_run(run_id: uuid.UUID, session: Session, user: CurrentUser) -> RunRead:
     """Stays live during maintenance so a restore can be watched to completion."""
@@ -276,12 +270,3 @@ async def restore_backup(
         session, name, actor=user, override_compatibility=data.override_compatibility
     )
     return _as_run(run)
-
-
-@router.post("/{name}/verify", response_model=BackupRead)
-async def verify_backup(name: str, user: CurrentUser) -> BackupRead:
-    """Prove an artifact is readable end to end, on demand."""
-    _require_instance_admin(user)
-    stored = _resolve(name)
-    await core.verify(name)
-    return _as_backup(stored)

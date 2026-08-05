@@ -12,7 +12,6 @@ from __future__ import annotations
 import logging
 import uuid
 from collections.abc import Awaitable, Callable
-from pathlib import Path
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -94,16 +93,6 @@ async def attachment_counts(session: AsyncSession) -> dict[uuid.UUID, tuple[int,
         ).group_by(Attachment.storage_host_id)
     )
     return {host_id: (count, int(total)) for host_id, count, total in result.all()}
-
-
-def backup_roots(hosts: list[StorageHost]) -> list[tuple[str, Path]]:
-    """(host name, root) for every filesystem host — what a backup can include.
-    S3-hosted bytes stay outside backups (documented in docs/deploy.md)."""
-    return [
-        (host.name, Path(host.root_dir or settings.attachments_dir))
-        for host in hosts
-        if host.host_type == StorageHostType.FILESYSTEM.value
-    ]
 
 
 # --- writes -------------------------------------------------------------------

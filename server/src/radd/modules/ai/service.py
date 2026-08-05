@@ -16,7 +16,6 @@ from typing import Any, TypeVar
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.modules.auth import authz
-from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
 from radd.modules.comments import service as comments_service
 from radd.modules.fields import service as fields_service

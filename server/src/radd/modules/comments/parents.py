@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import NotFoundError
+from radd.modules.items.enums import ItemEvent
 from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
@@ -88,10 +89,6 @@ def binding_for(entity_type: str) -> CommentParent:
     return binding
 
 
-def registered_types() -> list[str]:
-    return sorted(_BINDINGS)
-
-
 # --- the item binding (comments' own) -----------------------------------------
 
 
@@ -126,7 +123,7 @@ async def _item_write(session, user: User, entity_id: uuid.UUID, project):
 register_parent(
     CommentParent(
         entity_type=CommentParentType.ITEM.value,
-        deleted_event="item.deleted",
+        deleted_event=str(ItemEvent.DELETED),
         project_of=_item_project,
         require_read=_item_read,
         require_write=_item_write,

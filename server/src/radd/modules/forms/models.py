@@ -28,9 +28,9 @@ class Form(Base, TimestampMixin):
     release_version); unknown state/label/cycle/release names are stored verbatim and
     resolved at submit, an unknown assignee is rejected on write.
 
-    Public path (spec 62): `allow_public` opens the tokened, no-login submit route
-    `/public/forms/{public_token}`; the token is minted the first time public is
-    enabled and KEPT on disable, so re-enabling restores the same link.
+    `allow_public` survives as the PORTAL visibility flag; the spec-62 tokened
+    anonymous route (and its `public_token` column) died with RADD-828 — no
+    anonymous reporting.
     """
 
     __tablename__ = "forms"
@@ -65,7 +65,6 @@ class Form(Base, TimestampMixin):
     )
     # Public submit path (spec 62): token minted on first enable, kept on disable.
     allow_public: Mapped[bool] = mapped_column(Boolean, default=False)
-    public_token: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
 
 
 class FormShare(Base, TimestampMixin):

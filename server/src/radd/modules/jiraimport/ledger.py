@@ -123,12 +123,3 @@ async def records_for(
         query = query.where(JiraImportRecord.is_schema.is_(schema))
     result = await session.execute(query.order_by(JiraImportRecord.id.desc()))
     return list(result.scalars())
-
-
-async def summary(session: AsyncSession, run_id: uuid.UUID) -> dict[str, int]:
-    """`{entity_type: count}` — what a rollback would touch, for the pre-flight."""
-    counts: dict[str, int] = {}
-    for record in await records_for(session, run_id):
-        key = f"{record.entity_type}_{record.action}"
-        counts[key] = counts.get(key, 0) + 1
-    return counts

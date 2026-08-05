@@ -31,7 +31,7 @@ from radd.modules.auth.types import (
     BuiltinRoleKey,
     InstanceRole,
     PermissionScope,
-    builtin_role,
+    BUILTIN_ROLES,
 )
 
 
@@ -97,6 +97,12 @@ def patch_lookups(monkeypatch, *, permission_sets=(), global_permission_sets=(),
 
 
 # --- builtin role definitions (global, immutable rows) ---
+
+def builtin_role(key):
+    """The seeded-role spec by key — over the LIVE catalog (the product path);
+    the dedicated lookup fn was deleted as dead product code (RADD-893)."""
+    return next(role for role in BUILTIN_ROLES if role.key is key)
+
 
 
 def test_builtin_admin_holds_every_project_scoped_permission():

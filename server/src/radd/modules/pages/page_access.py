@@ -176,15 +176,3 @@ async def readable_page_ids(
         if has_access(grants, contexts[page.space_id], Access.READ.value, None, _PAGE_SPEC):
             readable.add(page.id)
     return readable
-
-
-async def restricted_page_ids(
-    session: AsyncSession, page_ids: list[uuid.UUID]
-) -> set[uuid.UUID]:
-    """Which of these pages carry ANY restriction — drives the padlock in the UI."""
-    if not page_ids:
-        return set()
-    grants = await access_service.grants_for_resources(
-        session, PAGE_RESOURCE, [str(page_id) for page_id in page_ids]
-    )
-    return {uuid.UUID(rid) for rid, rows in grants.items() if rows}

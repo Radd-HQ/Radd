@@ -343,20 +343,6 @@ class InferredType(StrEnum):
     UNKNOWN = "unknown"
 
 
-class ImportStage(StrEnum):
-    """Where a run is in the pipeline (spec 90). The order IS the pipeline:
-    fields are ensured, then issues (each provisioning any person Jira names that
-    Radd does not know — 2026-07-28), then — only once every issue exists — links
-    are relinked against the whole imported set."""
-
-    PENDING = "pending"
-    FIELDS = "fields"  # create the CREATE-action custom fields
-    ISSUES = "issues"  # page through JQL, create items + comments + worklogs
-    LINKS = "links"  # relink issue links to Radd items (web-link fallback)
-    DONE = "done"
-    FAILED = "failed"
-
-
 # Native Jira field ids that never map to a Radd custom field — they drive
 # built-in columns or are pure noise. The wizard hides them from the mapping grid.
 BUILTIN_JIRA_FIELDS: frozenset[str] = frozenset(

@@ -5,10 +5,9 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
-from radd.modules.auth import authz, service as auth
+from radd.modules.auth import service as auth
 from radd.modules.auth.deps import CurrentUser
 from radd.modules.items import service as items_service
-from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 
 from . import service

@@ -107,13 +107,3 @@ class SsoProviderPublic(BaseModel):
     kind: SsoKind
 
 
-class SsoIdentityRead(BaseModel):
-    """A federated login bound to an account (Settings → Users, profile)."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    provider_id: uuid.UUID
-    provider_name: str = ""
-    subject: str
-    email: str

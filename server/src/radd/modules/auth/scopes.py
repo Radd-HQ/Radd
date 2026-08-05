@@ -63,20 +63,6 @@ class TokenScope:
             )
         return _lattice_intersect(permissions, allowed)
 
-    def projects_allowing(self, permission: Permission) -> set[uuid.UUID]:
-        """Which projects this scope permits `permission` in — the input to the
-        MCP catalog's project enums (spec 114). Base-aware (RADD-823): a scope
-        carrying `item.read@team` still ALLOWS item.read somewhere (narrowed),
-        so the project stays in the catalog rather than vanishing."""
-        wanted = str(permission)
-        if any(split_permission(a)[0] == wanted for a in self.global_atoms):
-            return set(self.project_atoms)  # a globally scoped atom applies everywhere named
-        return {
-            pid
-            for pid, atoms in self.project_atoms.items()
-            if any(split_permission(a)[0] == wanted for a in atoms)
-        }
-
     def to_json(self) -> dict:
         return {
             GLOBAL_KEY: sorted(p.value for p in self.global_atoms),

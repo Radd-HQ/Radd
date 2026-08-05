@@ -46,12 +46,10 @@ class FieldEvent(StrEnum):
     CREATED = "field.created"
     UPDATED = "field.updated"  # emitted on permission-grant replacement
     DELETED = "field.deleted"  # spec 87 — definition + its grants; item values are orphaned
-    RULES_UPDATED = "field_rule.updated"  # builtin-field rule set replaced (spec 36)
 
 
 class FieldEntity(StrEnum):
     FIELD = "field"
-    FIELD_RULE = "field_rule"
 
 
 class BuiltinItemField(StrEnum):

@@ -16,7 +16,7 @@ from radd.config import settings
 from radd.modules.auth.models import User
 from radd.modules.comments import service as comments
 from radd.modules.comments.models import Comment
-from radd.modules.comments.parents import binding_for, registered_types
+from radd.modules.comments.parents import binding_for
 from radd.modules.comments.schemas import CommentCreate
 from radd.modules.comments.types import CommentParentType
 from radd.modules.pages import service as pages_service, spaces
@@ -56,7 +56,7 @@ async def page(db, admin):
 
 
 def test_both_parents_are_registered():
-    assert set(registered_types()) >= {"item", "page"}
+    assert binding_for("item") is not None and binding_for("page") is not None
 
 
 def test_an_unknown_parent_type_is_a_404_not_a_crash():

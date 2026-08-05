@@ -3,7 +3,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
-from .types import DuplicateKind, InstanceRole, Permission, PermissionScope, UserSource
+from .types import DuplicateKind, InstanceRole, PermissionScope, UserSource
 from radd.apitypes import UtcDatetime
 
 # Deliberately loose — deliverability is the mail server's problem. Normalized to lowercase.

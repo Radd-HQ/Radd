@@ -19,8 +19,8 @@ from radd.modules.auth.deps import CurrentUser
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 
-from .. import connections, ledger, relink, rollback as rollback_mod, runs
-from ..models import JiraPlan, JiraRun
+from .. import relink, rollback as rollback_mod, runs
+from ..models import JiraRun
 from ..plan import service as plan_service
 from ..plan.schemas import (
     PlanCreate,
@@ -28,7 +28,6 @@ from ..plan.schemas import (
     PlanUpdate,
     PlanValidation,
 )
-from ..snapshot import service as snapshot_service
 from ..types import JiraEntity, RunKind, RunStage
 from .schemas import (
     PendingSummary,
@@ -89,20 +88,6 @@ async def delete_plan(plan_id: uuid.UUID, session: Session, user: CurrentUser) -
     _admin(user)
     await plan_service.delete_plan(session, plan_id)
     await session.commit()
-
-
-@router.post("/plans/{plan_id}/resuggest", response_model=PlanRead)
-async def resuggest(plan_id: uuid.UUID, session: Session, user: CurrentUser) -> PlanRead:
-    """Re-profile the snapshot and rebuild the suggestions — for after a
-    re-download, or after creating fields by hand."""
-    _admin(user)
-    plan = await plan_service.get_plan(session, plan_id)
-    snapshot = await snapshot_service.require_complete(session, plan.snapshot_id)
-    plan.mappings = (await plan_service.build_suggestions(session, snapshot)).model_dump(
-        mode="json"
-    )
-    await session.commit()
-    return PlanRead.model_validate(plan)
 
 
 @router.post("/plans/{plan_id}/validate", response_model=PlanValidation)

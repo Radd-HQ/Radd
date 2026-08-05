@@ -1,16 +1,6 @@
 from enum import StrEnum
 
 
-class ProjectRole(StrEnum):
-    """Legacy fixed role ladder. Since spec 06 project roles are DATA (auth `roles`
-    table); this enum survives only as the fields module's `min_read_role`/
-    `min_write_role` levels until spec 07 replaces those with per-role/team grants."""
-
-    ADMIN = "admin"
-    MEMBER = "member"
-    VIEWER = "viewer"
-
-
 class TeamEvent(StrEnum):
     CREATED = "team.created"
     UPDATED = "team.updated"  # also emitted for membership and project-attachment changes

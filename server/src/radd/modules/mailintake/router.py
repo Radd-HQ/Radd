@@ -6,11 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
 from radd.exceptions import NotFoundError
-from radd.modules.auth import authz
-from radd.modules.auth.authz import Permission
 from radd.modules.auth.deps import CurrentUser
 from radd.modules.items import service as items_service
-from radd.modules.projects import service as projects_service
 
 from . import service
 from .schemas import MailContactRead

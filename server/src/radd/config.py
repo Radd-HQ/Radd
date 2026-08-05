@@ -234,7 +234,6 @@ class Settings(BaseSettings):
     jira_password: str = ""  # basic-auth password
     jira_verify_ssl: bool = True  # internal CA / self-signed → set false
     jira_timeout_seconds: float = 30.0
-    jira_page_size: int = 100  # JQL page size (Jira caps maxResults at 100 for /search)
     # Domain used to synthesize an address for a Jira user whose email Jira does
     # not expose, so a later AD import can match on email and adopt the
     # placeholder's work (spec 88). Empty = DERIVE it from the connection's host

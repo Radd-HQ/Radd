@@ -9,7 +9,6 @@ from .types import (
     BuiltinTarget,
     FieldAction,
     FieldScope,
-    ImportStage,
     FieldBand,
     InferredType,
     JiraAuthMode,
@@ -222,79 +221,4 @@ class FieldMappingEntry(BaseModel):
         return self
 
 
-class ImportPlanCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=200)
-    jira_project_key: str = Field(min_length=1, max_length=100)
-    jql: str = Field(min_length=1, max_length=5000)
-    radd_project_key: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9]{0,19}$")
-    radd_project_name: str = Field(min_length=1, max_length=200)
-    field_mappings: list[FieldMappingEntry] = Field(default_factory=list, max_length=500)
-
-
-class ImportPlanUpdate(BaseModel):
-    """PATCH — omitted keys unchanged."""
-
-    name: str | None = Field(default=None, min_length=1, max_length=200)
-    jql: str | None = Field(default=None, min_length=1, max_length=5000)
-    radd_project_key: str | None = Field(default=None, pattern=r"^[A-Za-z][A-Za-z0-9]{0,19}$")
-    radd_project_name: str | None = Field(default=None, min_length=1, max_length=200)
-    field_mappings: list[FieldMappingEntry] | None = None
-
-
-class ImportPlanRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    name: str
-    jira_project_key: str
-    jql: str
-    radd_project_key: str
-    radd_project_name: str
-    field_mappings: list[FieldMappingEntry]
-    created_at: UtcDatetime
-
-
-class SuggestMappingsRequest(BaseModel):
-    """POST /jira/plans/suggest — turn a preview's inferred schema into a
-    pre-filled mapping grid, given the custom fields Radd already has."""
-
-    fields: list[InferredFieldRead] = Field(min_length=1, max_length=500)
-
-
-class MappingProblemRead(BaseModel):
-    jira_id: str
-    message: str
-
-
-class ValidateMappingsResponse(BaseModel):
-    ok: bool
-    problems: list[MappingProblemRead] = Field(default_factory=list)
-
-
 # --- import runs (spec 90, phase 3) ------------------------------------------
-
-
-class ImportRunStart(BaseModel):
-    """POST /jira/runs — kick off a background import from a saved plan."""
-
-    plan_id: uuid.UUID
-
-
-class ImportRunRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    plan_id: uuid.UUID | None
-    jira_project_key: str
-    jql: str
-    radd_project_key: str
-    radd_project_name: str
-    # The snapshot of field mappings this run used — replayed by "Redo" so the
-    # wizard can reopen on the mapping step with the same choices, editable.
-    field_mappings: list[FieldMappingEntry] = Field(default_factory=list)
-    stage: ImportStage
-    counts: dict[str, int] = Field(default_factory=dict)
-    errors: list[str] = Field(default_factory=list)
-    started_at: UtcDatetime | None = None
-    finished_at: UtcDatetime | None = None
-    created_at: UtcDatetime

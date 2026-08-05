@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
-from radd.exceptions import ForbiddenError
 from radd.modules.auth.deps import CurrentUser
 from radd.modules.teams import service as teams_service
 
@@ -57,16 +56,6 @@ async def my_leave(session: Session, user: CurrentUser) -> list[LeaveRead]:
 async def holidays(session: Session, user: CurrentUser) -> list[LeaveRead]:
     """Team holidays, org-visible — knowing another region is off is the point."""
     return [await _read(session, p) for p in await service.list_holidays(session)]
-
-
-@router.get("/users/{user_id}", response_model=list[LeaveRead])
-async def user_leave(
-    user_id: uuid.UUID, session: Session, user: CurrentUser
-) -> list[LeaveRead]:
-    """A user's personal leave — self, their team stewards, or admins."""
-    if not await service.may_manage_user(session, user, user_id):
-        raise ForbiddenError("you can only view leave for yourself or your team's members")
-    return [await _read(session, p) for p in await service.list_for_user(session, user_id)]
 
 
 @router.get("/current", response_model=list[CurrentLeave])

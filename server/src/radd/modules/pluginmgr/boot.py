@@ -58,13 +58,3 @@ def resolve_boot_paths() -> tuple[str, ...]:
         if states.get(pid) == PluginState.ENABLED.value:
             paths.append(path)
     return tuple(paths)
-
-
-def enabled_installable_paths() -> tuple[str, ...]:
-    """Back-compat: just the ENABLED installable plugin paths."""
-    states = plugin_states()
-    return tuple(
-        path
-        for pid, (_plugin, path) in discovery.installable_plugins().items()
-        if states.get(pid) == PluginState.ENABLED.value
-    )

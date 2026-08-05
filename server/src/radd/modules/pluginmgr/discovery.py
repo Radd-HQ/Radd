@@ -73,8 +73,3 @@ def installable_plugins() -> dict[str, tuple[RaddPlugin, str]]:
 
 def all_known() -> dict[str, tuple[RaddPlugin, str]]:
     return {**core_plugins(), **installable_plugins()}
-
-
-def path_for(plugin_id: str) -> str | None:
-    entry = all_known().get(plugin_id)
-    return entry[1] if entry else None

@@ -11,7 +11,7 @@ from radd.exceptions import ForbiddenError, NotFoundError
 from radd.modules.access import resolution as access_res, service as access_service
 from radd.modules.access.service import AccessGrant  # public re-export (RADD-887)
 from radd.modules.access.registry import ResourceSpec, register_resource
-from radd.modules.access.types import Access, GrantSubject
+from radd.modules.access.types import Access
 from radd.modules.events import service as events
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project

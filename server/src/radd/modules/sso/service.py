@@ -38,7 +38,7 @@ from radd.modules.events import service as events
 
 from . import registry
 from .models import SsoProvider, UserIdentity
-from .types import WILDCARD_DOMAIN, SsoEntity, SsoEvent, SsoKind
+from .types import WILDCARD_DOMAIN, SsoEntity, SsoEvent
 
 logger = logging.getLogger(__name__)
 
@@ -218,14 +218,6 @@ async def _identity_for(
             UserIdentity.provider_id == provider.id, UserIdentity.subject == subject
         )
     )
-
-
-async def identities_for_user(session: AsyncSession, user_id: uuid.UUID) -> list[UserIdentity]:
-    result = await session.execute(
-        select(UserIdentity).where(UserIdentity.user_id == user_id).order_by(UserIdentity.created_at)
-    )
-    return list(result.scalars())
-
 
 
 def _rule_matches(domains: list[str], email: str) -> bool:
@@ -408,12 +400,11 @@ def flow_cookie_value(flow: dict) -> str:
 def parse_flow_cookie(value: str, ttl: int) -> dict | None:
     try:
         flow = json.loads(base64.urlsafe_b64decode(value.encode()))
-    except Exception:
+    except (ValueError, TypeError):  # bad base64/JSON — the two ways a cookie
+        # can be malformed; anything else should surface (RADD-898)
         return None
     if int(time.time()) - int(flow.get("at", 0)) > ttl:
         return None
     return flow
 
 
-def google_kind(provider: SsoProvider) -> bool:
-    return SsoKind(provider.kind) is SsoKind.GOOGLE

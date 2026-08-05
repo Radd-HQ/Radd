@@ -161,7 +161,19 @@ async def test_a_download_caches_every_issue_across_pages(db, monkeypatch, stub_
         await download.execute(snapshot_id)
         async with SessionLocal() as s:
             snapshot = await snapshot_service.get_snapshot(s, snapshot_id)
-            keys = await store.issue_keys(s, snapshot_id)
+            from sqlalchemy import select as _select
+
+            from radd.modules.jiraimport.models import JiraSnapshotIssue
+
+            keys = sorted(
+                (
+                    await s.execute(
+                        _select(JiraSnapshotIssue.jira_key).where(
+                            JiraSnapshotIssue.snapshot_id == snapshot_id
+                        )
+                    )
+                ).scalars()
+            )
         assert SnapshotStage(snapshot.stage) is SnapshotStage.DONE
         assert keys == ["SNAP-1", "SNAP-2", "SNAP-3"]
         assert snapshot.issue_count == 3

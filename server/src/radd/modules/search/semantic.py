@@ -12,8 +12,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
-from radd.modules.auth import authz
-from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
 
 from .models import SearchIndexRow
