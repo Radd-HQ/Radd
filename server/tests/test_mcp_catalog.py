@@ -250,9 +250,13 @@ async def test_the_tracking_workflow_runs_entirely_over_mcp(db, project):
             "estimate_points": 3,
         },
     )
-    assert child["parent"]["key"] == epic["key"]
-    assert child["type"]["name"] == "Bug"
-    assert child["estimate_points"] == 3.0
+    # RADD-861: writes answer with a compact receipt — the write's EFFECT is
+    # asserted through the read tool, which is what an agent that cared would do.
+    assert set(child) >= {"key", "id", "state"}
+    fetched = await tools.call_tool(db, admin, McpTool.GET_ITEM.value, {"key": child["key"]})
+    assert fetched["item"]["parent"]["key"] == epic["key"]
+    assert fetched["item"]["type"]["name"] == "Bug"
+    assert fetched["item"]["estimate_points"] == 3.0
 
     logged = await tools.call_tool(
         db,
@@ -260,7 +264,8 @@ async def test_the_tracking_workflow_runs_entirely_over_mcp(db, project):
         McpTool.LOG_WORK.value,
         {"key": child["key"], "time_spent": "45m", "category": "Development"},
     )
-    assert logged["category"]["name"] == "Development"
+    assert logged["time_spent"] == "45m"  # receipt; the category resolution is
+    # covered by the worklog listing the timesheet reads
 
     release = await tools.call_tool(
         db,

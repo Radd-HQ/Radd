@@ -183,6 +183,22 @@ async def _find_items(session: AsyncSession, actor: User, args: Mapping[str, Any
     }
 
 
+def _receipt(read) -> dict:
+    """RADD-861: WRITE tools answer with a receipt, not the hydrated item.
+
+    The agent just AUTHORED what a full echo would repeat — the multi-KB
+    description, the comment body — and every echoed byte sits in its context
+    for the session's remainder, re-read on every later call. Reads stay full
+    (that is their job); errors stay verbose (the reason text is the value).
+    """
+    return {
+        "key": read.key,
+        "id": str(read.id),
+        "state": getattr(getattr(read, "state", None), "name", None),
+        "updated_at": read.updated_at.isoformat() if getattr(read, "updated_at", None) else None,
+    }
+
+
 async def _link_items(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
     """Link two items by KEY (RADD-739).
 
@@ -289,7 +305,7 @@ async def _create_item(session: AsyncSession, actor: User, args: Mapping[str, An
         values["assignee_id"] = await _user_id_by_email(session, str(args["assignee_email"]))
     await _resolve_relational_writes(session, actor, project.id, args, values)
     read = await items_service.create_item(session, ItemCreate(**values), actor=actor)
-    return read.model_dump(mode="json")
+    return _receipt(read)
 
 
 async def _update_item(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
@@ -302,7 +318,7 @@ async def _update_item(session: AsyncSession, actor: User, args: Mapping[str, An
         values["assignee_id"] = await _user_id_by_email(session, str(email)) if email else None
     await _resolve_relational_writes(session, actor, current.project_id, args, values)
     read = await items_service.update_item(session, current.id, ItemUpdate(**values), actor=actor)
-    return read.model_dump(mode="json")
+    return _receipt(read)
 
 
 async def _comment_item(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
@@ -314,7 +330,8 @@ async def _comment_item(session: AsyncSession, actor: User, args: Mapping[str, A
         CommentCreate(body=str(args["body"]), visibility=visibility),
         actor=actor,
     )
-    return comment.model_dump(mode="json")
+    # RADD-861: the body just came FROM the agent — never echo it back.
+    return {"id": str(comment.id), "created_at": comment.created_at.isoformat()}
 
 
 async def _list_projects(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
@@ -389,7 +406,7 @@ async def _transition_item(session: AsyncSession, actor: User, args: Mapping[str
     read = await items_service.update_item(
         session, current.id, ItemUpdate(state_id=state_id), actor=actor
     )
-    return read.model_dump(mode="json")
+    return _receipt(read)
 
 
 async def _log_work(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
@@ -412,7 +429,11 @@ async def _log_work(session: AsyncSession, actor: User, args: Mapping[str, Any])
         author_id=actor.id,
         today=_date.today(),
     )
-    return entry.model_dump(mode="json")
+    return {
+        "id": str(entry.id),
+        "time_spent": entry.time_spent,
+        "worked_on": entry.worked_on.isoformat(),
+    }
 
 
 async def _update_worklog(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
@@ -446,7 +467,11 @@ async def _update_worklog(session: AsyncSession, actor: User, args: Mapping[str,
     read = await timelogging_service.update_worklog(
         session, worklog, WorklogUpdate(**values), actor.id
     )
-    return read.model_dump(mode="json")
+    return {
+        "id": str(read.id),
+        "time_spent": read.time_spent,
+        "worked_on": read.worked_on.isoformat(),
+    }
 
 
 async def _delete_worklog(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
@@ -559,7 +584,7 @@ async def _set_item_release(session: AsyncSession, actor: User, args: Mapping[st
     read = await items_service.update_item(
         session, current.id, ItemUpdate(release_id=release_id), actor=actor
     )
-    return read.model_dump(mode="json")
+    return _receipt(read)
 
 
 async def _list_users(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
