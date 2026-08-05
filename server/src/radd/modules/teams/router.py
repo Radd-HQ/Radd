@@ -1,9 +1,10 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.apitypes import TOTAL_COUNT_HEADER
 from radd.db import get_session
 from radd.modules.auth import authz, roles as auth_roles
 from radd.modules.auth.deps import CurrentUser
@@ -81,7 +82,14 @@ async def create_team(data: TeamCreate, session: Session, user: CurrentUser) -> 
 
 
 @team_router.get("", response_model=list[TeamRead])
-async def list_teams(session: Session, user: CurrentUser) -> list[TeamRead]:
+async def list_teams(
+    response: Response,
+    session: Session,
+    user: CurrentUser,
+    q: str | None = None,
+    limit: Annotated[int | None, Query(ge=1, le=500)] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[TeamRead]:
     # RADD-816 (F6): the catalog read is a deliverable atom now — Baseline-
     # seeded, so day-one behaviour is the old member floor, but REVOCABLE.
     if not await authz.holds(session, user, authz.Permission.TEAM_READ):
@@ -91,9 +99,11 @@ async def list_teams(session: Session, user: CurrentUser) -> list[TeamRead]:
     # widest project permissions rather than a global union that is now empty for
     # anyone whose access is project-scoped.
     permissions = frozenset().union(*readable.values())
+    if limit is not None:
+        response.headers[TOTAL_COUNT_HEADER] = str(await service.count_teams(session, q=q))
     return [
         await _team_read(session, t, user, permissions)
-        for t in await service.list_teams(session)
+        for t in await service.list_teams(session, q=q, limit=limit, offset=offset)
     ]
 
 

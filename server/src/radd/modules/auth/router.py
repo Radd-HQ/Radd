@@ -1,10 +1,11 @@
 import uuid
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
+from radd.apitypes import TOTAL_COUNT_HEADER
 from radd.db import get_session
 from radd.exceptions import ForbiddenError, UnauthorizedError
 
@@ -337,7 +338,14 @@ async def user_resource_access(
 
 
 @user_router.get("/directory", response_model=list[UserDirectoryEntry])
-async def list_user_directory(session: Session, actor: CurrentUser) -> list[UserDirectoryEntry]:
+async def list_user_directory(
+    response: Response,
+    session: Session,
+    actor: CurrentUser,
+    q: str | None = None,
+    limit: Annotated[int | None, Query(ge=1, le=500)] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[UserDirectoryEntry]:
     """Who exists, for anyone with an account (RADD-769).
 
     Authentication IS the gate, and that is the finding rather than a shortcut.
@@ -356,7 +364,10 @@ async def list_user_directory(session: Session, actor: CurrentUser) -> list[User
     as a UUID while appearing, correctly, in the schema and at /docs.
     `tests/test_route_shadowing.py` asserts it for the whole app.
     """
-    return [UserDirectoryEntry.model_validate(u) for u in await service.list_users(session)]
+    rows = await service.list_users(session, q=q, limit=limit, offset=offset)
+    if limit is not None:
+        response.headers[TOTAL_COUNT_HEADER] = str(await service.count_users(session, q=q))
+    return [UserDirectoryEntry.model_validate(u) for u in rows]
 
 
 @user_router.get("", response_model=list[UserRead])

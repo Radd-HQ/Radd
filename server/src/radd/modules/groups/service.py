@@ -15,9 +15,10 @@ import uuid
 from collections.abc import Iterable
 from datetime import UTC, datetime
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.db import ilike_term
 from radd.config import settings
 from radd.exceptions import NotFoundError
 from radd.modules.events import service as events
@@ -31,8 +32,26 @@ logger = logging.getLogger(__name__)
 # --- reads --------------------------------------------------------------------
 
 
-async def list_groups(session: AsyncSession) -> list[Group]:
-    return list((await session.execute(select(Group).order_by(Group.name))).scalars())
+async def list_groups(
+    session: AsyncSession,
+    *,
+    q: str | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+) -> list[Group]:
+    stmt = select(Group).order_by(Group.name)
+    if q:
+        stmt = stmt.where(Group.name.ilike(ilike_term(q)) | Group.dn.ilike(ilike_term(q)))
+    if limit is not None:
+        stmt = stmt.offset(offset).limit(limit)
+    return list((await session.execute(stmt)).scalars())
+
+
+async def count_groups(session: AsyncSession, *, q: str | None = None) -> int:
+    stmt = select(func.count()).select_from(Group)
+    if q:
+        stmt = stmt.where(Group.name.ilike(ilike_term(q)) | Group.dn.ilike(ilike_term(q)))
+    return (await session.execute(stmt)).scalar_one()
 
 
 async def get_group(session: AsyncSession, group_id: uuid.UUID) -> Group:

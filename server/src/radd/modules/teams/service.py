@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.db import ilike_term
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.auth import roles as auth_roles, service as auth
 from radd.modules.auth.models import User
@@ -44,8 +45,26 @@ async def create_team(
     return team
 
 
-async def list_teams(session: AsyncSession) -> list[Team]:
-    return list((await session.execute(select(Team).order_by(Team.name))).scalars())
+async def list_teams(
+    session: AsyncSession,
+    *,
+    q: str | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+) -> list[Team]:
+    stmt = select(Team).order_by(Team.name)
+    if q:
+        stmt = stmt.where(Team.name.ilike(ilike_term(q)))
+    if limit is not None:
+        stmt = stmt.offset(offset).limit(limit)
+    return list((await session.execute(stmt)).scalars())
+
+
+async def count_teams(session: AsyncSession, *, q: str | None = None) -> int:
+    stmt = select(func.count()).select_from(Team)
+    if q:
+        stmt = stmt.where(Team.name.ilike(ilike_term(q)))
+    return (await session.execute(stmt)).scalar_one()
 
 
 async def get_team(session: AsyncSession, team_id: uuid.UUID) -> Team:

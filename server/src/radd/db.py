@@ -29,6 +29,13 @@ class TimestampMixin:
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 
 
+def ilike_term(q: str) -> str:
+    """A user-supplied search term as a contains-ILIKE pattern, wildcards
+    escaped (RADD-883) — searching for "100%" must not match everything."""
+    escaped = q.strip().replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+    return f"%{escaped}%"
+
+
 engine = create_async_engine(settings.database_url)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 

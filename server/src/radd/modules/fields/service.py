@@ -3,9 +3,10 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.db import ilike_term
 from radd.exceptions import ForbiddenError, NotFoundError
 from radd.modules.access import resolution as access_res, service as access_service
 from radd.modules.access.models import AccessGrant
@@ -259,9 +260,30 @@ async def get_field(session: AsyncSession, field_id: uuid.UUID) -> FieldDefiniti
     return definition
 
 
-async def list_fields(session: AsyncSession) -> list[FieldDefinition]:
+async def list_fields(
+    session: AsyncSession,
+    *,
+    q: str | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+) -> list[FieldDefinition]:
     query = select(FieldDefinition).order_by(FieldDefinition.created_at)
+    if q:
+        query = query.where(
+            FieldDefinition.name.ilike(ilike_term(q)) | FieldDefinition.key.ilike(ilike_term(q))
+        )
+    if limit is not None:
+        query = query.offset(offset).limit(limit)
     return list((await session.execute(query)).scalars())
+
+
+async def count_fields(session: AsyncSession, *, q: str | None = None) -> int:
+    query = select(func.count()).select_from(FieldDefinition)
+    if q:
+        query = query.where(
+            FieldDefinition.name.ilike(ilike_term(q)) | FieldDefinition.key.ilike(ilike_term(q))
+        )
+    return (await session.execute(query)).scalar_one()
 
 
 async def definitions_for_project(session: AsyncSession, project: Project) -> list[FieldDefinition]:

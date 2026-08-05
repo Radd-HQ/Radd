@@ -1,9 +1,10 @@
 import uuid
 from collections.abc import Iterable, Sequence
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.db import ilike_term
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.events import service as events
 
@@ -21,9 +22,26 @@ async def create_label(
     return await _create(session, data.name, data.color, actor_id=actor_id)
 
 
-async def list_labels(session: AsyncSession) -> list[Label]:
-    result = await session.execute(select(Label).order_by(Label.name))
-    return list(result.scalars())
+async def list_labels(
+    session: AsyncSession,
+    *,
+    q: str | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+) -> list[Label]:
+    stmt = select(Label).order_by(Label.name)
+    if q:
+        stmt = stmt.where(Label.name.ilike(ilike_term(q)))
+    if limit is not None:
+        stmt = stmt.offset(offset).limit(limit)
+    return list((await session.execute(stmt)).scalars())
+
+
+async def count_labels(session: AsyncSession, *, q: str | None = None) -> int:
+    stmt = select(func.count()).select_from(Label)
+    if q:
+        stmt = stmt.where(Label.name.ilike(ilike_term(q)))
+    return (await session.execute(stmt)).scalar_one()
 
 
 async def get_label(session: AsyncSession, label_id: uuid.UUID) -> Label:

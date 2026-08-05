@@ -1,9 +1,10 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.apitypes import TOTAL_COUNT_HEADER
 from radd.db import get_session
 from radd.modules.auth import authz
 from radd.modules.auth.deps import CurrentUser
@@ -24,12 +25,21 @@ async def create_label(data: LabelCreate, session: Session, user: CurrentUser) -
 
 
 @router.get("", response_model=list[LabelRead])
-async def list_labels(session: Session, user: CurrentUser) -> list[LabelRead]:
+async def list_labels(
+    response: Response,
+    session: Session,
+    user: CurrentUser,
+    q: str | None = None,
+    limit: Annotated[int | None, Query(ge=1, le=500)] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[LabelRead]:
     # RADD-816 (F6): the catalog read is a deliverable atom now — Baseline-
     # seeded, so day-one behaviour is the old member floor, but REVOCABLE.
     if not await authz.holds(session, user, authz.Permission.LABEL_READ):
         return []
-    labels = await service.list_labels(session)
+    labels = await service.list_labels(session, q=q, limit=limit, offset=offset)
+    if limit is not None:
+        response.headers[TOTAL_COUNT_HEADER] = str(await service.count_labels(session, q=q))
     return [LabelRead.model_validate(label) for label in labels]
 
 

@@ -1,9 +1,10 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.apitypes import TOTAL_COUNT_HEADER
 from radd.db import get_session
 from radd.modules.auth import authz
 from radd.modules.auth.deps import CurrentUser
@@ -118,12 +119,22 @@ async def delete_field(field_id: uuid.UUID, session: Session, user: CurrentUser)
 
 
 @router.get("", response_model=list[FieldDefinitionRead])
-async def list_fields(session: Session, user: CurrentUser) -> list[FieldDefinitionRead]:
+async def list_fields(
+    response: Response,
+    session: Session,
+    user: CurrentUser,
+    q: str | None = None,
+    limit: Annotated[int | None, Query(ge=1, le=500)] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[FieldDefinitionRead]:
     # Member floor (RADD-788): item.read in SOME project, not the global atom.
     if not await authz.readable_projects(session, user):
         return []
     restricted_ids = await service.restricted_field_ids(session)
-    return [_to_read(f, restricted_ids) for f in await service.list_fields(session)]
+    fields = await service.list_fields(session, q=q, limit=limit, offset=offset)
+    if limit is not None:
+        response.headers[TOTAL_COUNT_HEADER] = str(await service.count_fields(session, q=q))
+    return [_to_read(f, restricted_ids) for f in fields]
 
 
 @router.get("/writable", response_model=FieldWritabilityRead)

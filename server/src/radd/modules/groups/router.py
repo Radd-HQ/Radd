@@ -5,10 +5,11 @@ builds the admin screen over this list."""
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.apitypes import TOTAL_COUNT_HEADER
 from radd.db import get_session
 from radd.modules.auth import authz
 from radd.modules.auth.deps import CurrentUser
@@ -27,14 +28,23 @@ class GroupReachRead(BaseModel):
 
 
 @router.get("", response_model=list[GroupRead])
-async def list_groups(session: Session, user: CurrentUser) -> list[GroupRead]:
+async def list_groups(
+    response: Response,
+    session: Session,
+    user: CurrentUser,
+    q: str | None = None,
+    limit: Annotated[int | None, Query(ge=1, le=500)] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[GroupRead]:
     """Every mirrored directory group. Member-floor visibility, like teams —
     the team panel names group members to anyone who can see the team.
     RADD-833: rows carry the TRANSITIVE member count (the number a grant
     resolves to — direct counts under-sell nested groups) and the nesting
     edges by name, so the admin screen reads without N+1 calls."""
     await authz.require_member(session, user)
-    rows = await service.list_groups(session)
+    rows = await service.list_groups(session, q=q, limit=limit, offset=offset)
+    if limit is not None:
+        response.headers[TOTAL_COUNT_HEADER] = str(await service.count_groups(session, q=q))
     ids = [g.id for g in rows]
     counts = await service.direct_member_counts(session, ids)
     parents, children = await service.nesting_edges(session, ids)

@@ -1,4 +1,4 @@
-"""Shared Pydantic field types for API schemas.
+"""Shared Pydantic field types + wire constants for API schemas.
 
 `UtcDatetime` serializes to ISO-8601 with a `Z` suffix. Our datetime columns are
 naive UTC (see `auth.security.utcnow`); without the suffix a browser's
@@ -21,3 +21,8 @@ def _to_utc_z(value: datetime) -> str:
 # Use in schemas instead of bare `datetime`. json-only so Python-mode dumps
 # (internal reuse) still yield a datetime object.
 UtcDatetime = Annotated[datetime, PlainSerializer(_to_utc_z, return_type=str, when_used="json")]
+
+# Header carrying the pre-pagination row count on list endpoints that accept
+# `limit`/`offset` (RADD-883). Set only when `limit` was passed — an unpaged
+# request already holds the full list.
+TOTAL_COUNT_HEADER = "X-Total-Count"

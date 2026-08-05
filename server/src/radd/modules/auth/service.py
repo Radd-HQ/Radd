@@ -4,10 +4,11 @@ import uuid
 from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
+from radd.db import ilike_term
 from radd.exceptions import ConflictError, NotFoundError, UnauthorizedError
 from radd.modules.events import service as events
 
@@ -64,18 +65,41 @@ async def list_users(
     q: str | None = None,
     source: UserSource | None = None,
     active: bool | None = None,
+    limit: int | None = None,
+    offset: int = 0,
 ) -> list[User]:
     """User directory, optionally filtered (spec 84): q matches email OR name
-    (case-insensitive substring), source/active match exactly."""
+    (case-insensitive substring, wildcards escaped), source/active match
+    exactly; limit/offset page (RADD-883)."""
     query = select(User).order_by(User.created_at)
     if q:
-        pattern = f"%{q.strip()}%"
+        pattern = ilike_term(q)
         query = query.where(User.email.ilike(pattern) | User.name.ilike(pattern))
     if source is not None:
         query = query.where(User.source == source.value)
     if active is not None:
         query = query.where(User.active == active)
+    if limit is not None:
+        query = query.offset(offset).limit(limit)
     return list((await session.execute(query)).scalars())
+
+
+async def count_users(
+    session: AsyncSession,
+    q: str | None = None,
+    source: UserSource | None = None,
+    active: bool | None = None,
+) -> int:
+    """Pre-pagination count for the directory/admin lists (RADD-883)."""
+    query = select(func.count()).select_from(User)
+    if q:
+        pattern = ilike_term(q)
+        query = query.where(User.email.ilike(pattern) | User.name.ilike(pattern))
+    if source is not None:
+        query = query.where(User.source == source.value)
+    if active is not None:
+        query = query.where(User.is_active == active)
+    return (await session.execute(query)).scalar_one()
 
 
 async def get_user(session: AsyncSession, user_id: uuid.UUID) -> User:
