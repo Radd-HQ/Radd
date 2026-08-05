@@ -73,7 +73,7 @@ async def item_timelog_batch(
 async def item_timelog(
     item_id: uuid.UUID, session: Session, user: CurrentUser
 ) -> ItemTimeSummary:
-    await _item_project(session, item_id, user)
+    _, project = await _item_project(session, item_id, user)
     return await service.item_summary(session, item_id, project)
 
 

@@ -119,3 +119,20 @@ async def test_batch_cap_is_schema_enforced(db):
     # The batch cap is a shape error — pydantic rejects it (422 at the boundary).
     with pytest.raises(ValidationError):
         TimelogBatchRequest(item_ids=[uuid.uuid4() for _ in range(TIMELOG_BATCH_MAX_ITEMS + 1)])
+
+
+async def test_item_timelog_endpoint_answers(db, actor):
+    """RADD-856: GET /items/{id}/timelog 500'd on the live 0.18.1 — the wave's
+    seam conversion dropped the tuple unpack (`project` undefined, a NameError
+    no test executed). This calls the ROUTER function itself, so a variable
+    slip in the handler can never again ship silently."""
+    from radd.modules.timelogging.worklog_router import item_timelog
+
+    project = await projects_service.create_project(
+        db, ProjectCreate(key=f"TL{uuid.uuid4().hex[:4].upper()}", name="Rail")
+    )
+    item = await items.create_item(
+        db, ItemCreate(project_id=project.id, title="rail summary"), actor
+    )
+    summary = await item_timelog(item.id, db, actor)
+    assert summary.logged_seconds == 0
