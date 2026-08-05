@@ -8,6 +8,7 @@ import { RoutePath, apiPageItemPath, apiPageItemsPath } from "../../lib/constant
 import { CATEGORY_META } from "../../lib/meta";
 import { pageItemsQuery } from "../../lib/queries";
 import type { PageLinkedItem, StateCategoryValue } from "../../lib/types";
+import { Button } from "../Button";
 import { IconButton } from "../IconButton";
 
 /**

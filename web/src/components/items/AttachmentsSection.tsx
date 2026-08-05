@@ -7,6 +7,7 @@ import { UploadCanceledError, useAttachmentUploader } from "../../lib/useAttachm
 import { attachmentUrl } from "../../lib/constants";
 import { attachmentsQuery } from "../../lib/queries";
 import { AttachmentParentType, type Attachment, type Item } from "../../lib/types";
+import { Button } from "../Button";
 import { Modal } from "../Modal";
 import { AccessGrantsEditor } from "../settings/AccessGrantsEditor";
 
