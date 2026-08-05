@@ -13,12 +13,35 @@ from radd.exceptions import ConflictError, ForbiddenError, NotFoundError, Unauth
 from radd.kernel import entities as kentities
 from radd.kernel import registries
 from radd.kernel import import_models, load_plugins
+from radd.kernel.sockets import Socket, provider as socket_provider
 from radd.clientip import ClientIpMiddleware
 from radd.maintenance import MaintenanceMiddleware
 from radd.middleware import CommitBeforeSendMiddleware
 
 # Repo-layout fallback for the built SPA; harmless when absent (API-only mode).
 _DEFAULT_WEB_DIST = Path(__file__).resolve().parents[3] / "web" / "dist"
+
+
+def _schedule_registered_tasks(backend: Any) -> list[Any]:
+    """Schedule every kernel-registered TaskSpec on the active task backend
+    (RADD-872). Until this reader existed, `registries.tasks` was write-only and
+    a registered periodic task — the RADD-820 access expiry sweep — never ran.
+    Enqueue-only specs (interval=None) have no periodic tick to schedule; a spec
+    without its own gate runs under the spec-48 worker split like every
+    hand-rolled loop."""
+    loops = []
+    for spec in registries.tasks.values():
+        if spec.interval is None:
+            continue
+        loops.append(
+            backend.schedule(
+                spec.name,
+                spec.run,
+                spec.interval,
+                gate=spec.gate or (lambda: settings.run_workers),
+            )
+        )
+    return loops
 
 
 def create_app() -> FastAPI:
@@ -43,7 +66,15 @@ def create_app() -> FastAPI:
         for plugin in plugins:
             for hook in plugin.on_startup:
                 await hook()
+        # RADD-872: kernel-registered TaskSpecs start after every plugin's own
+        # startup (their run functions may touch tables plugins just ensured).
+        task_backend = socket_provider(Socket.TASK_BACKEND, settings.task_backend)
+        task_loops = _schedule_registered_tasks(task_backend) if task_backend else []
+        for loop in task_loops:
+            await loop.start()
         yield
+        for loop in reversed(task_loops):
+            await loop.stop()
         for plugin in reversed(plugins):
             for hook in plugin.on_shutdown:
                 await hook()

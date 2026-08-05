@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     # background loops (webhooks/automations/notify/search/sla/googlechat/mail)
     # stay dormant. Realtime + storage init always run (they serve the web tier).
     run_workers: bool = True
+    # Which task_backend socket provider runs kernel-registered TaskSpecs
+    # (RADD-872). "localloop" is the built-in poll-loop runner; a celery-style
+    # plugin swaps in by registering another provider under its own name.
+    task_backend: str = "localloop"
 
     # Webhook dispatcher (see radd/modules/webhooks)
     webhook_poll_interval: float = 1.0
