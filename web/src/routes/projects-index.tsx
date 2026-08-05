@@ -4,9 +4,11 @@ import { useQuery } from "@tanstack/react-query";
 import { FolderKanban, Plus } from "lucide-react";
 import { RoutePath } from "../lib/constants";
 import { usePermissions } from "../lib/hooks";
+import { useListFilter } from "../lib/list-filter";
 import { projectsQuery } from "../lib/queries";
 import { Permission } from "../lib/types";
 import { Button } from "../components/Button";
+import { ListSearchInput } from "../components/ListSearchInput";
 import { Spinner } from "../components/Spinner";
 import { NewProjectModal } from "../components/projects/NewProjectModal";
 import { QueryError } from "../components/QueryError";
@@ -16,6 +18,10 @@ export function ProjectsIndexPage() {
   const canCreate = usePermissions().global(Permission.projectCreate);
   const projects = useQuery(projectsQuery());
   const [creating, setCreating] = useState(false);
+  // Hooks run before the pending/error early returns to keep the order stable.
+  const all = projects.data ?? [];
+  const search = useListFilter(all, (project) => [project.name, project.key]);
+  const list = search.filtered;
 
   if (projects.isPending) {
     return <Spinner label="Loading projects…" />;
@@ -29,8 +35,6 @@ export function ProjectsIndexPage() {
     );
   }
 
-  const list = projects.data ?? [];
-
   return (
     <div className="px-8 py-8">
       <div className="mb-5 flex items-center justify-between">
@@ -43,7 +47,7 @@ export function ProjectsIndexPage() {
         )}
       </div>
 
-      {list.length === 0 ? (
+      {all.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-subtle py-16 text-fg-muted">
           <FolderKanban size={24} aria-hidden />
           <p className="text-sm">No projects yet.</p>
@@ -55,25 +59,45 @@ export function ProjectsIndexPage() {
           )}
         </div>
       ) : (
-        <ul className="divide-y divide-subtle/80 rounded-lg border border-subtle">
-          {list.map((project) => (
-            <li key={project.id}>
-              <Link
-                to={RoutePath.project}
-                params={{ projectKey: project.key }}
-                className="flex items-center gap-3 px-4 py-3 hover:bg-surface/60 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
-              >
-                <span className="rounded bg-elevated px-1.5 py-0.5 font-mono text-xs text-fg">
-                  {project.key}
-                </span>
-                <span className="text-sm text-heading">{project.name}</span>
-                <span className="ml-auto text-xs text-fg-faint">
-                  {new Date(project.created_at).toLocaleDateString()}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <>
+          {all.length > 8 && (
+            <ListSearchInput
+              className="mb-3"
+              value={search.filter}
+              onChange={search.setFilter}
+              placeholder="Filter projects by name or key…"
+              total={all.length}
+              matched={list.length}
+              noun="projects"
+            />
+          )}
+          {list.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-subtle py-16 text-fg-muted">
+              <FolderKanban size={24} aria-hidden />
+              <p className="text-sm">No projects match “{search.filter.trim()}”.</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-subtle/80 rounded-lg border border-subtle">
+              {list.map((project) => (
+                <li key={project.id}>
+                  <Link
+                    to={RoutePath.project}
+                    params={{ projectKey: project.key }}
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-surface/60 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
+                  >
+                    <span className="rounded bg-elevated px-1.5 py-0.5 font-mono text-xs text-fg">
+                      {project.key}
+                    </span>
+                    <span className="text-sm text-heading">{project.name}</span>
+                    <span className="ml-auto text-xs text-fg-faint">
+                      {new Date(project.created_at).toLocaleDateString()}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
 
       {creating && <NewProjectModal onClose={() => setCreating(false)} />}

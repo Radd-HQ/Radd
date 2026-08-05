@@ -4,6 +4,7 @@ import { CheckCircle2, Pencil, Plus, Rocket, Trash2, X } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { ApiPath, apiReleasePath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
+import { useListFilter } from "../../lib/list-filter";
 import { RELEASE_STATUS_META } from "../../lib/meta";
 import { projectsQuery, queryKeys, releasesQuery } from "../../lib/queries";
 import {
@@ -15,6 +16,7 @@ import {
 } from "../../lib/types";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
+import { ListSearchInput } from "../../components/ListSearchInput";
 import { Modal } from "../../components/Modal";
 import { TableSkeleton } from "../../components/TableSkeleton";
 import { TextField } from "../../components/TextField";
@@ -34,7 +36,9 @@ export function ReleasesSettingsPage({ projectId }: { projectId?: string }) {
   // Releases are per-project: gate on THAT project's manage permission.
   const canManage = perms.project(project, Permission.releaseUpdate);
   const releases = useQuery({ ...releasesQuery(projectId ?? ""), enabled: Boolean(projectId) });
-  const list = releases.data ?? [];
+  const all = releases.data ?? [];
+  const search = useListFilter(all, (release) => [release.version, release.name]);
+  const list = search.filtered;
 
   return (
     <SettingsPage
@@ -55,23 +59,40 @@ export function ReleasesSettingsPage({ projectId }: { projectId?: string }) {
         <EmptyState icon={Rocket} message="Project not found." />
       ) : releases.isError ? (
         <QueryError label="releases" error={releases.error} />
-      ) : list.length === 0 ? (
+      ) : all.length === 0 ? (
         <EmptyState
           icon={Rocket}
           message={canManage ? "No releases yet — create one to plan a version." : "No releases yet."}
         />
       ) : (
-        <ul className="rounded-lg border border-subtle">
-          {list.map((release) => (
-            <ReleaseRow
-              key={release.id}
-              release={release}
-              projectId={project.id}
-              canManage={canManage}
-              onEdit={() => setModal({ release })}
+        <>
+          {all.length > 8 && (
+            <ListSearchInput
+              className="mb-3"
+              value={search.filter}
+              onChange={search.setFilter}
+              placeholder="Filter releases by version or name…"
+              total={all.length}
+              matched={list.length}
+              noun="releases"
             />
-          ))}
-        </ul>
+          )}
+          {list.length === 0 ? (
+            <EmptyState icon={Rocket} message={`No releases match “${search.filter.trim()}”.`} />
+          ) : (
+            <ul className="rounded-lg border border-subtle">
+              {list.map((release) => (
+                <ReleaseRow
+                  key={release.id}
+                  release={release}
+                  projectId={project.id}
+                  canManage={canManage}
+                  onEdit={() => setModal({ release })}
+                />
+              ))}
+            </ul>
+          )}
+        </>
       )}
 
       {modal && project && (

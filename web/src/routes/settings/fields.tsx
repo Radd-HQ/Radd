@@ -5,12 +5,14 @@ import { api, errorMessage } from "../../lib/api";
 import { ApiPath, apiFieldOptionsPath } from "../../lib/constants";
 import { TokenMultiSelect } from "../../components/TokenMultiSelect";
 import { usePermissions } from "../../lib/hooks";
+import { useListFilter } from "../../lib/list-filter";
 import { FIELD_TYPE_LABELS } from "../../lib/meta";
 import { fieldsQuery, projectsQuery, queryKeys } from "../../lib/queries";
 import { Permission, type FieldDef, type Project } from "../../lib/types";
 import { Button } from "../../components/Button";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { EmptyState } from "../../components/EmptyState";
+import { ListSearchInput } from "../../components/ListSearchInput";
 import { TableSkeleton } from "../../components/TableSkeleton";
 import { BuiltinFieldsSection } from "../../components/settings/BuiltinFieldsSection";
 import { AccessGrantsEditor } from "../../components/settings/AccessGrantsEditor";
@@ -37,7 +39,9 @@ export function FieldsSettingsPage() {
   const [creating, setCreating] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const list = fields.data ?? [];
+  const all = fields.data ?? [];
+  const search = useListFilter(all, (field) => [field.name, field.key]);
+  const list = search.filtered;
   const selected = list.find((f) => f.id === selectedId) ?? list[0] ?? null;
   const projectKeys = new Map((projects.data ?? []).map((p) => [p.id, p.key]));
 
@@ -72,7 +76,7 @@ export function FieldsSettingsPage() {
               )}
             </div>
 
-            {list.length === 0 ? (
+            {all.length === 0 ? (
               <EmptyState
                 icon={SlidersHorizontal}
                 message="No custom fields defined yet."
@@ -87,12 +91,33 @@ export function FieldsSettingsPage() {
               />
             ) : (
               <div className="grid gap-4 md:grid-cols-[minmax(200px,260px)_1fr]">
-                <FieldRail
-                  fields={list}
-                  selectedId={selected?.id ?? null}
-                  onSelect={setSelectedId}
-                  projectKeys={projectKeys}
-                />
+                <div className="flex flex-col">
+                  {all.length > 8 && (
+                    <ListSearchInput
+                      className="mb-2"
+                      value={search.filter}
+                      onChange={search.setFilter}
+                      placeholder="Filter fields…"
+                      ariaLabel="Filter fields by name or key"
+                      total={all.length}
+                      matched={list.length}
+                      noun="fields"
+                    />
+                  )}
+                  {list.length === 0 ? (
+                    <EmptyState
+                      icon={SlidersHorizontal}
+                      message={`No fields match “${search.filter.trim()}”.`}
+                    />
+                  ) : (
+                    <FieldRail
+                      fields={list}
+                      selectedId={selected?.id ?? null}
+                      onSelect={setSelectedId}
+                      projectKeys={projectKeys}
+                    />
+                  )}
+                </div>
                 {selected && (
                   <FieldDetail
                     key={selected.id}

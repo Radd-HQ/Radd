@@ -88,6 +88,10 @@ export function Sidebar() {
   const { data: dashboards } = useQuery(dashboardsQuery());
   /** Project the "New item" modal was opened for (from its sidebar row). */
   const [newItemProject, setNewItemProject] = useState<Project | null>(null);
+  // RADD-882: 82 projects at the perf dataset — the nav section gets a compact
+  // filter (name or key) once it outgrows a glance. Kept as a slim inline input
+  // rather than the settings-page ListSearchInput: the rail is nav, not a page.
+  const [projectFilter, setProjectFilter] = useState("");
   const [viewModalScope, setViewModalScope] = useState<ViewModalScope | null>(null);
   const [newDashboardOpen, setNewDashboardOpen] = useState(false);
   // Completed cycles are hidden by default to keep the rail focused
@@ -427,9 +431,28 @@ export function Sidebar() {
               collapsed={sectionCollapsed("projects")}
               onToggle={() => toggleSection("projects")}
             />
+            {!sectionCollapsed("projects") && projects.length > 10 && (
+              <input
+                type="search"
+                value={projectFilter}
+                onChange={(event) => setProjectFilter(event.target.value)}
+                placeholder="Filter projects…"
+                aria-label="Filter projects by name or key"
+                className="mx-1 mb-1 h-7 w-[calc(100%-0.5rem)] rounded-md border border-subtle bg-surface px-2 text-xs text-heading placeholder:text-fg-faint focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30"
+              />
+            )}
             {!sectionCollapsed("projects") && (
             <ul>
-              {projects.map((project) => (
+              {(projectFilter.trim()
+                ? projects.filter((project) => {
+                    const needle = projectFilter.trim().toLowerCase();
+                    return (
+                      project.name.toLowerCase().includes(needle) ||
+                      project.key.toLowerCase().includes(needle)
+                    );
+                  })
+                : projects
+              ).map((project) => (
                 <li key={project.id}>
                   <div className="group/project relative flex items-center">
                     <button

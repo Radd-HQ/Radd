@@ -4,10 +4,12 @@ import { Plus, Tags } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
+import { useListFilter } from "../../lib/list-filter";
 import { labelsQuery, queryKeys } from "../../lib/queries";
 import { Permission, type Label, type LabelCreate } from "../../lib/types";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
+import { ListSearchInput } from "../../components/ListSearchInput";
 import { TableSkeleton } from "../../components/TableSkeleton";
 import { TextField } from "../../components/TextField";
 import { SettingsPage } from "../../components/settings/SettingsPage";
@@ -23,7 +25,9 @@ export function LabelsSettingsPage() {
   // Label creation requires project.manage at global scope (backend rule).
   const canManage = perms.global(Permission.labelUpdate);
   const labels = useQuery(labelsQuery());
-  const list = labels.data ?? [];
+  const all = labels.data ?? [];
+  const search = useListFilter(all, (label) => [label.name]);
+  const list = search.filtered;
 
   return (
     <SettingsPage
@@ -36,35 +40,52 @@ export function LabelsSettingsPage() {
         <QueryError label="labels" error={labels.error} />
       ) : (
         <>
-          {list.length === 0 ? (
+          {all.length === 0 ? (
             <EmptyState icon={Tags} message="No labels yet — create one below or add one to an item." />
           ) : (
-            <ul className="rounded-lg border border-subtle">
-              {list.map((label) => (
-                <li
-                  key={label.id}
-                  className="flex items-center gap-3 border-b border-subtle/60 px-4 py-2.5 last:border-b-0"
-                >
-                  {label.color ? (
-                    <span
-                      className="size-3 shrink-0 rounded-full"
-                      style={{ backgroundColor: label.color }}
-                      aria-hidden
-                    />
-                  ) : (
-                    <span
-                      className={`size-3 shrink-0 rounded-full ${NO_COLOR_SWATCH_CLASS}`}
-                      aria-hidden
-                    />
-                  )}
-                  <span className="flex-1 text-[13px] text-heading">{label.name}</span>
-                  <span className="font-mono text-[11px] text-fg-faint">{label.color ?? "—"}</span>
-                  <span className="text-xs text-fg-faint">
-                    {new Date(label.created_at).toLocaleDateString()}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            <>
+              {all.length > 8 && (
+                <ListSearchInput
+                  className="mb-3"
+                  value={search.filter}
+                  onChange={search.setFilter}
+                  placeholder="Filter labels by name…"
+                  total={all.length}
+                  matched={list.length}
+                  noun="labels"
+                />
+              )}
+              {list.length === 0 ? (
+                <EmptyState icon={Tags} message={`No labels match “${search.filter.trim()}”.`} />
+              ) : (
+                <ul className="rounded-lg border border-subtle">
+                  {list.map((label) => (
+                    <li
+                      key={label.id}
+                      className="flex items-center gap-3 border-b border-subtle/60 px-4 py-2.5 last:border-b-0"
+                    >
+                      {label.color ? (
+                        <span
+                          className="size-3 shrink-0 rounded-full"
+                          style={{ backgroundColor: label.color }}
+                          aria-hidden
+                        />
+                      ) : (
+                        <span
+                          className={`size-3 shrink-0 rounded-full ${NO_COLOR_SWATCH_CLASS}`}
+                          aria-hidden
+                        />
+                      )}
+                      <span className="flex-1 text-[13px] text-heading">{label.name}</span>
+                      <span className="font-mono text-[11px] text-fg-faint">{label.color ?? "—"}</span>
+                      <span className="text-xs text-fg-faint">
+                        {new Date(label.created_at).toLocaleDateString()}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
           )}
           {canManage && <AddLabelForm />}
         </>

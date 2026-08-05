@@ -6,6 +6,10 @@ import { api } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { ApiPath, RoutePath, pageTreeExpandStorageKey } from "../../lib/constants";
 import type { Page, PageCreate } from "../../lib/types";
+import { ListSearchInput } from "../ListSearchInput";
+
+/** Below this many pages the tree needs no filter chrome (RADD-882). */
+const FILTER_THRESHOLD = 8;
 
 /** The bits a row must carry to render in the tree — satisfied by the authed
  * PageSummary AND the public-KB PublicPageNode (spec 74). */
@@ -86,7 +90,28 @@ export function PageTree({
   pageRoute?: PageRoutePath;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(() => loadExpanded(spaceId));
-  const tree = useMemo(() => buildTree(rows), [rows]);
+
+  // Title filter (RADD-882): a match renders with its ANCESTOR CHAIN — a hit
+  // must stay reachable in tree shape, never float as an orphan row.
+  const [filter, setFilter] = useState("");
+  const needle = filter.trim().toLowerCase();
+  const filtering = needle.length > 0;
+  const visibleRows = useMemo(() => {
+    if (!needle) return rows;
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    const keep = new Set<string>();
+    for (const row of rows) {
+      if (!row.title.toLowerCase().includes(needle)) continue;
+      let cursor: PageTreeRow | undefined = row;
+      for (let guard = 0; cursor && guard < rows.length; guard++) {
+        if (keep.has(cursor.id)) break;
+        keep.add(cursor.id);
+        cursor = cursor.parent_id ? byId.get(cursor.parent_id) : undefined;
+      }
+    }
+    return rows.filter((row) => keep.has(row.id));
+  }, [rows, needle]);
+  const tree = useMemo(() => buildTree(visibleRows), [visibleRows]);
 
   // RADD-714: open to the selected page on load. Landing on a deep page from
   // search or a link previously showed a collapsed tree that gave no clue where
@@ -138,11 +163,33 @@ export function PageTree({
     });
   };
 
+  // While filtering, every kept node is expanded — the matches must be VISIBLE,
+  // and the persisted expand state stays untouched for when the filter clears.
+  const effectiveExpanded = useMemo(
+    () => (filtering ? new Set(visibleRows.map((row) => row.id)) : expanded),
+    [filtering, visibleRows, expanded],
+  );
+
   return (
     // data-page-tree: the print proof asserts this tree is ABSENT from the
     // print view — without the attribute on the live tree the check passed
     // vacuously against every page (RADD-880).
     <div data-page-tree className="flex flex-col gap-0.5">
+      {rows.length > FILTER_THRESHOLD && (
+        <ListSearchInput
+          className="mb-1.5"
+          value={filter}
+          onChange={setFilter}
+          placeholder="Filter pages…"
+          ariaLabel="Filter pages by title"
+          total={rows.length}
+          matched={visibleRows.length}
+          noun="pages"
+        />
+      )}
+      {filtering && tree.length === 0 && (
+        <p className="px-1 py-1.5 text-xs text-fg-faint">No pages match “{filter.trim()}”.</p>
+      )}
       {tree.map((node) => (
         <TreeRow
           key={node.row.id}
@@ -150,7 +197,7 @@ export function PageTree({
           spaceSlug={spaceSlug}
           node={node}
           depth={0}
-          expanded={expanded}
+          expanded={effectiveExpanded}
           onToggle={toggle}
           selectedId={selectedId}
           ancestors={ancestorsOfSelected}

@@ -5,11 +5,13 @@ import { api, errorMessage } from "../../lib/api";
 import { apiAutomationPath } from "../../lib/constants";
 import { shortDateTime } from "../../lib/dates";
 import { usePermissions } from "../../lib/hooks";
+import { useListFilter } from "../../lib/list-filter";
 import { triggerLabel } from "../../lib/meta";
 import { automationCatalogQuery, automationsQuery, queryKeys } from "../../lib/queries";
 import { Permission, type Rule, type RuleUpdate } from "../../lib/types";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
+import { ListSearchInput } from "../../components/ListSearchInput";
 import { TableSkeleton } from "../../components/TableSkeleton";
 import { RuleEditor } from "../../components/automations/RuleEditor";
 import { SettingsPage } from "../../components/settings/SettingsPage";
@@ -22,7 +24,9 @@ export function AutomationsSettingsPage() {
   const rules = useQuery({ ...automationsQuery(), enabled: canManage });
   /** null = list mode; {rule} = editor mode (rule null → creating). */
   const [editing, setEditing] = useState<{ rule: Rule | null } | null>(null);
-  const list = rules.data ?? [];
+  const all = rules.data ?? [];
+  const search = useListFilter(all, (rule) => [rule.name]);
+  const list = search.filtered;
 
   if (canManage && editing) {
     return (
@@ -57,21 +61,38 @@ export function AutomationsSettingsPage() {
         />
       ) : rules.isError ? (
         <QueryError label="automation rules" error={rules.error} />
-      ) : list.length === 0 ? (
+      ) : all.length === 0 ? (
         <EmptyState
           icon={Zap}
           message="No automation rules yet — create one to react to item events."
         />
       ) : (
-        <ul className="rounded-lg border border-subtle">
-          {list.map((rule) => (
-            <RuleRow
-              key={rule.id}
-              rule={rule}
-              onEdit={() => setEditing({ rule })}
+        <>
+          {all.length > 8 && (
+            <ListSearchInput
+              className="mb-3"
+              value={search.filter}
+              onChange={search.setFilter}
+              placeholder="Filter rules by name…"
+              total={all.length}
+              matched={list.length}
+              noun="rules"
             />
-          ))}
-        </ul>
+          )}
+          {list.length === 0 ? (
+            <EmptyState icon={Zap} message={`No rules match “${search.filter.trim()}”.`} />
+          ) : (
+            <ul className="rounded-lg border border-subtle">
+              {list.map((rule) => (
+                <RuleRow
+                  key={rule.id}
+                  rule={rule}
+                  onEdit={() => setEditing({ rule })}
+                />
+              ))}
+            </ul>
+          )}
+        </>
       )}
     </SettingsPage>
   );

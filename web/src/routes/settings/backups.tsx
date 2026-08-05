@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, Download, HardDriveDownload, RotateCcw, ShieldCheck, Trash2, Upload } from "lucide-react";
 import { api, ApiError } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
+import { useListFilter } from "../../lib/list-filter";
 import {
   backupRunQuery,
   backupSchedulesQuery,
@@ -19,6 +20,7 @@ import {
 } from "../../lib/types";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
+import { ListSearchInput } from "../../components/ListSearchInput";
 import { Modal } from "../../components/Modal";
 import { QueryError } from "../../components/QueryError";
 import { Table, TBody, Td, THead, Th } from "../../components/Table";
@@ -411,6 +413,9 @@ function ArtifactsCard({
   });
 
   const busy = runId !== null || create.isPending;
+  const all = backups.data ?? [];
+  const search = useListFilter(all, (backup) => [backup.name]);
+  const list = search.filtered;
 
   return (
     <section>
@@ -451,9 +456,24 @@ function ArtifactsCard({
         <TableSkeleton rows={3} />
       ) : backups.isError ? (
         <QueryError label="backups" error={backups.error} />
-      ) : backups.data.length === 0 ? (
+      ) : all.length === 0 ? (
         <EmptyState icon={Archive} message="No backups yet — take one now or wait for the schedule." />
       ) : (
+        <>
+          {all.length > 8 && (
+            <ListSearchInput
+              className="mb-3"
+              value={search.filter}
+              onChange={search.setFilter}
+              placeholder="Filter backups by name…"
+              total={all.length}
+              matched={list.length}
+              noun="backups"
+            />
+          )}
+          {list.length === 0 ? (
+            <EmptyState icon={Archive} message={`No backups match “${search.filter.trim()}”.`} />
+          ) : (
         <div className="overflow-x-auto rounded-lg border border-subtle">
           <Table>
             <THead>
@@ -467,7 +487,7 @@ function ArtifactsCard({
               </tr>
             </THead>
             <TBody>
-              {backups.data.map((backup) => (
+              {list.map((backup) => (
                 <tr key={backup.name}>
                   <Td className="whitespace-nowrap">
                     <div className="text-fg">{when(backup.created_at)}</div>
@@ -527,6 +547,8 @@ function ArtifactsCard({
             </TBody>
           </Table>
         </div>
+          )}
+        </>
       )}
       {confirmDialog}
       {restoring && (

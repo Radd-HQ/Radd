@@ -4,6 +4,7 @@ import { Globe, Link2, Pencil, Plus, Trash2 } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { useCurrentUser } from "../../lib/hooks";
+import { useListFilter } from "../../lib/list-filter";
 import { linkTypesQuery, projectsQuery, queryKeys } from "../../lib/queries";
 import {
   InstanceRole,
@@ -16,6 +17,7 @@ import {
 import { Button } from "../../components/Button";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { EmptyState } from "../../components/EmptyState";
+import { ListSearchInput } from "../../components/ListSearchInput";
 import { Modal } from "../../components/Modal";
 import { SelectField } from "../../components/SelectField";
 import { Spinner } from "../../components/Spinner";
@@ -37,6 +39,14 @@ export function LinkTypesSettingsPage() {
   const [editing, setEditing] = useState<LinkTypeDef | null>(null);
   const [creating, setCreating] = useState(false);
   const projectKeys = new Map((projects.data ?? []).map((p) => [p.id, p.key]));
+  const all = types.data ?? [];
+  const search = useListFilter(all, (type) => [
+    type.name,
+    type.key,
+    type.outward_name,
+    type.inward_name,
+  ]);
+  const list = search.filtered;
 
   if (!isAdmin) {
     return (
@@ -72,31 +82,52 @@ export function LinkTypesSettingsPage() {
       ) : types.isError ? (
         <p className="text-xs text-red-400">{errorMessage(types.error)}</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-subtle">
-          <table className={settingsTableClasses.table}>
-            <thead>
-              <tr>
-                <th className={settingsTableClasses.head}>Type</th>
-                <th className={settingsTableClasses.head}>Outward</th>
-                <th className={settingsTableClasses.head}>Inward</th>
-                <th className={settingsTableClasses.head}>Direction</th>
-                <th className={settingsTableClasses.head}>Scope</th>
-                <th className={settingsTableClasses.head}>Usages</th>
-                <th className={settingsTableClasses.head} />
-              </tr>
-            </thead>
-            <tbody>
-              {(types.data ?? []).map((type) => (
-                <LinkTypeRow
-                  key={type.id}
-                  type={type}
-                  projectKeys={projectKeys}
-                  onEdit={() => setEditing(type)}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          {all.length > 8 && (
+            <ListSearchInput
+              className="mb-3"
+              value={search.filter}
+              onChange={search.setFilter}
+              placeholder="Filter link types…"
+              ariaLabel="Filter link types by name"
+              total={all.length}
+              matched={list.length}
+              noun="link types"
+            />
+          )}
+          {search.filtering && list.length === 0 ? (
+            <EmptyState
+              icon={Link2}
+              message={`No link types match “${search.filter.trim()}”.`}
+            />
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-subtle">
+              <table className={settingsTableClasses.table}>
+                <thead>
+                  <tr>
+                    <th className={settingsTableClasses.head}>Type</th>
+                    <th className={settingsTableClasses.head}>Outward</th>
+                    <th className={settingsTableClasses.head}>Inward</th>
+                    <th className={settingsTableClasses.head}>Direction</th>
+                    <th className={settingsTableClasses.head}>Scope</th>
+                    <th className={settingsTableClasses.head}>Usages</th>
+                    <th className={settingsTableClasses.head} />
+                  </tr>
+                </thead>
+                <tbody>
+                  {list.map((type) => (
+                    <LinkTypeRow
+                      key={type.id}
+                      type={type}
+                      projectKeys={projectKeys}
+                      onEdit={() => setEditing(type)}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
 
       {(creating || editing) && (

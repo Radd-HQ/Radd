@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, GitBranch, History, Plus, Server, Trash2, XCircle } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
@@ -11,6 +11,7 @@ import {
 } from "../../lib/constants";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { usePermissions } from "../../lib/hooks";
+import { useListFilter } from "../../lib/list-filter";
 import { forgejoConnectionsQuery, forgejoReposQuery, projectsQuery } from "../../lib/queries";
 import {
   Permission,
@@ -21,6 +22,7 @@ import {
 } from "../../lib/types";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
+import { ListSearchInput } from "../../components/ListSearchInput";
 import { QueryError } from "../../components/QueryError";
 import { SelectField } from "../../components/SelectField";
 import { TableSkeleton } from "../../components/TableSkeleton";
@@ -182,8 +184,29 @@ export function ForgejoSettingsPage() {
                     )}
                   </header>
 
+                  <RepoSearch repos={reposFor(connection.id)}>
+                    {(search) => (
+                      <>
+                        {reposFor(connection.id).length > 8 && (
+                          <div className="border-b border-subtle/60 px-4 py-2">
+                            <ListSearchInput
+                              value={search.filter}
+                              onChange={search.setFilter}
+                              placeholder="Filter repositories…"
+                              ariaLabel={`Filter repositories on ${connection.name}`}
+                              total={reposFor(connection.id).length}
+                              matched={search.filtered.length}
+                              noun="repositories"
+                            />
+                          </div>
+                        )}
                   <ul className="divide-y divide-subtle/60">
-                    {reposFor(connection.id).map((repo) => (
+                    {search.filtering && search.filtered.length === 0 && (
+                      <li className="px-4 py-3 text-xs text-fg-muted">
+                        No repositories match “{search.filter.trim()}”.
+                      </li>
+                    )}
+                    {search.filtered.map((repo) => (
                       <li key={repo.id} className="flex items-center gap-3 px-4 py-2">
                         <GitBranch size={13} className="text-fg-muted" aria-hidden />
                         <span className="flex-1 truncate font-mono text-[12px] text-fg">
@@ -271,6 +294,9 @@ export function ForgejoSettingsPage() {
                       </li>
                     )}
                   </ul>
+                      </>
+                    )}
+                  </RepoSearch>
                 </section>
               ))}
             </div>
@@ -335,4 +361,25 @@ export function ForgejoSettingsPage() {
       )}
     </SettingsPage>
   );
+}
+
+/**
+ * Per-connection repo filtering (RADD-882). The repos render inside the parent's
+ * map over connections, where a hook can't live — this render-prop wrapper owns
+ * the `useListFilter` state for one connection's list.
+ */
+function RepoSearch({
+  repos,
+  children,
+}: {
+  repos: ForgejoRepo[];
+  children: (search: {
+    filter: string;
+    setFilter: (next: string) => void;
+    filtered: ForgejoRepo[];
+    filtering: boolean;
+  }) => ReactNode;
+}) {
+  const search = useListFilter(repos, (repo) => [repo.full_name]);
+  return <>{children(search)}</>;
 }

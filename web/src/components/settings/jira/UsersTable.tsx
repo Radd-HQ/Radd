@@ -12,6 +12,11 @@ import { Button } from "../../Button";
 import { SelectField } from "../../SelectField";
 import { TextField } from "../../TextField";
 import { MappingSection } from "./MappingSection";
+import { useListFilter } from "../../../lib/list-filter";
+import { ListSearchInput } from "../../ListSearchInput";
+
+/** Below this many people the table needs no filter chrome (RADD-882). */
+const FILTER_THRESHOLD = 8;
 
 /**
  * What to do about every person Jira names (spec 100).
@@ -42,13 +47,23 @@ export function UsersTable({
   const users = useQuery(usersAdminQuery({}));
   const [fallbackId, setFallbackId] = useState("");
 
+  // "300 unmatched people is normal" — findable by name/address/key (RADD-882).
+  const search = useListFilter(rows, (r) => [r.display_name, r.jira_email, r.jira_key]);
   const unmatched = useMemo(
-    () => rows.filter((r) => r.action !== UserAction.match),
-    [rows],
+    () => search.filtered.filter((r) => r.action !== UserAction.match),
+    [search.filtered],
   );
-  const matched = useMemo(() => rows.filter((r) => r.action === UserAction.match), [rows]);
-  const missingAddress = unmatched.filter(
-    (r) => r.action === UserAction.placeholder && !r.placeholder_email,
+  const matched = useMemo(
+    () => search.filtered.filter((r) => r.action === UserAction.match),
+    [search.filtered],
+  );
+  // Bulk actions and the missing-address warning stay over the FULL set — a
+  // filter narrows what you see, never what "create placeholders for all" does.
+  const missingAddress = rows.filter(
+    (r) =>
+      r.action !== UserAction.match &&
+      r.action === UserAction.placeholder &&
+      !r.placeholder_email,
   ).length;
 
   const row = (entry: UserMapping) => {
@@ -189,11 +204,22 @@ export function UsersTable({
         </Button>
       </div>
 
+      {rows.length > FILTER_THRESHOLD && (
+        <ListSearchInput
+          value={search.filter}
+          onChange={search.setFilter}
+          placeholder="Filter people by name, address, or Jira key…"
+          total={rows.length}
+          matched={search.filtered.length}
+          noun="people"
+        />
+      )}
       <MappingSection
         title="Needs a decision"
         hint="Nobody in Radd matches these people."
         count={unmatched.length}
         defaultOpen
+        forceOpen={search.filtering}
       >
         {unmatched.map(row)}
       </MappingSection>
@@ -201,6 +227,7 @@ export function UsersTable({
         title="Already matched"
         hint="Radd already knows these people — nothing to decide."
         count={matched.length}
+        forceOpen={search.filtering}
       >
         {matched.map(row)}
       </MappingSection>

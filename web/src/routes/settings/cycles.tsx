@@ -7,7 +7,6 @@ import {
   ChevronRight,
   Pencil,
   Plus,
-  Search,
   Trash2,
   X,
 } from "lucide-react";
@@ -16,6 +15,7 @@ import { ApiPath, RoutePath, apiCyclePath, apiCycleSeriesPath } from "../../lib/
 import { WEEKDAY_LABELS, parseCycleName } from "../../lib/cycle-series";
 import { formatDate } from "../../lib/dates";
 import { usePermissions } from "../../lib/hooks";
+import { useListFilter } from "../../lib/list-filter";
 import { CYCLE_STATUS_META } from "../../lib/meta";
 import { cycleSeriesQuery, cyclesQuery, teamsQuery } from "../../lib/queries";
 import {
@@ -29,6 +29,7 @@ import {
 } from "../../lib/types";
 import { CompleteCycleModal } from "../../components/cycles/CompleteCycleModal";
 import { Button } from "../../components/Button";
+import { ListSearchInput } from "../../components/ListSearchInput";
 import { EmptyState } from "../../components/EmptyState";
 import { Modal } from "../../components/Modal";
 import { Select } from "../../components/Select";
@@ -50,22 +51,20 @@ export function CyclesSettingsPage() {
   const cycles = useQuery(cyclesQuery());
   const [modal, setModal] = useState<{ cycle: Cycle | null } | null>(null);
   const [completing, setCompleting] = useState<Cycle | null>(null);
-  // This page is the ONLY place completed cycles are visible, so the list only
-  // grows — a name filter is what makes it usable at 90+ cycles.
-  const [filter, setFilter] = useState("");
   // Completed cycles are the bulk of the list and the least often wanted, so
   // they get their own folded section rather than burying the live ones.
   const [completedOpen, setCompletedOpen] = useState(false);
   const all = cycles.data ?? [];
-  const needle = filter.trim().toLowerCase();
-  const list = needle
-    ? all.filter((cycle) => cycle.name.toLowerCase().includes(needle))
-    : all;
+  // This page is the ONLY place completed cycles are visible, so the list only
+  // grows — the shared list filter (RADD-882, extracted from here) keeps it
+  // usable at 90+ cycles.
+  const search = useListFilter(all, (cycle) => [cycle.name]);
+  const list = search.filtered;
   const live = list.filter((cycle) => cycle.status !== CycleStatus.completed);
   const completed = list.filter((cycle) => cycle.status === CycleStatus.completed);
   // While filtering, the fold opens itself: searching for a cycle that turns
   // out to be completed should FIND it, not hide it behind another click.
-  const showCompleted = completedOpen || needle.length > 0;
+  const showCompleted = completedOpen || search.filtering;
 
   return (
     <SettingsPage
@@ -91,28 +90,17 @@ export function CyclesSettingsPage() {
         />
       ) : (
         <>
-          <div className="mb-3 flex items-center gap-2">
-            <div className="relative min-w-0 flex-1">
-              <Search
-                size={14}
-                aria-hidden
-                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-faint"
-              />
-              <input
-                type="search"
-                value={filter}
-                onChange={(event) => setFilter(event.target.value)}
-                placeholder="Filter cycles by name…"
-                aria-label="Filter cycles by name"
-                className="h-8 w-full rounded-md border border-subtle bg-surface pl-8 pr-2.5 text-[13px] text-heading placeholder:text-fg-faint focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30"
-              />
-            </div>
-            <span className="shrink-0 text-xs tabular-nums text-fg-muted">
-              {needle ? `${list.length} of ${all.length}` : `${all.length} cycles`}
-            </span>
-          </div>
+          <ListSearchInput
+            className="mb-3"
+            value={search.filter}
+            onChange={search.setFilter}
+            placeholder="Filter cycles by name…"
+            total={all.length}
+            matched={list.length}
+            noun="cycles"
+          />
           {list.length === 0 ? (
-            <EmptyState icon={CalendarRange} message={`No cycles match “${filter.trim()}”.`} />
+            <EmptyState icon={CalendarRange} message={`No cycles match “${search.filter.trim()}”.`} />
           ) : (
             <>
               {live.length > 0 && (
@@ -146,8 +134,8 @@ export function CyclesSettingsPage() {
                       Completed
                     </span>
                     <span className="text-xs tabular-nums text-fg-faint">{completed.length}</span>
-                    {needle && (
-                      <span className="text-[11px] text-fg-faint">· matching “{filter.trim()}”</span>
+                    {search.filtering && (
+                      <span className="text-[11px] text-fg-faint">· matching “{search.filter.trim()}”</span>
                     )}
                   </button>
                   {showCompleted && (

@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, UsersRound } from "lucide-react";
+import { ListSearchInput } from "../../components/ListSearchInput";
 import { QueryError } from "../../components/QueryError";
+import { useListFilter } from "../../lib/list-filter";
 import { groupsQuery } from "../../lib/queries";
 
 /**
@@ -13,6 +15,9 @@ import { groupsQuery } from "../../lib/queries";
  */
 export function GroupsSettingsPage() {
   const groups = useQuery(groupsQuery());
+  const all = groups.data ?? [];
+  const search = useListFilter(all, (group) => [group.name, group.dn]);
+  const list = search.filtered;
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-6">
@@ -30,12 +35,28 @@ export function GroupsSettingsPage() {
 
       <QueryError label="groups" error={groups.error} />
 
-      {(groups.data ?? []).length === 0 ? (
+      {all.length === 0 ? (
         <p className="rounded-md border border-subtle p-4 text-xs text-fg-muted">
           No groups mirrored yet — import one from Settings → Directory, or wait for
           the periodic sync.
         </p>
       ) : (
+        <>
+          {all.length > 8 && (
+            <ListSearchInput
+              value={search.filter}
+              onChange={search.setFilter}
+              placeholder="Filter groups by name or DN…"
+              total={all.length}
+              matched={list.length}
+              noun="groups"
+            />
+          )}
+          {list.length === 0 ? (
+            <p className="rounded-md border border-subtle p-4 text-xs text-fg-muted">
+              No groups match “{search.filter.trim()}”.
+            </p>
+          ) : (
         <div className="overflow-x-auto rounded-md border border-subtle">
           <table className="w-full text-left text-xs">
             <thead>
@@ -48,7 +69,7 @@ export function GroupsSettingsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-subtle/60">
-              {(groups.data ?? []).map((group) => (
+              {list.map((group) => (
                 <tr key={group.id}>
                   <td className="px-3 py-2">
                     <div className="text-fg">{group.name}</div>
@@ -84,6 +105,8 @@ export function GroupsSettingsPage() {
             </tbody>
           </table>
         </div>
+          )}
+        </>
       )}
     </div>
   );

@@ -15,25 +15,30 @@ export function MappingSection({
   hint,
   count,
   defaultOpen = false,
+  forceOpen = false,
   children,
 }: {
   title: string;
   hint?: string;
   count: number;
   defaultOpen?: boolean;
+  /** Held open regardless of the toggle — a band filter (RADD-882) must never
+   * hide its matches behind a collapsed fold (the cycles-page rule). */
+  forceOpen?: boolean;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const isOpen = open || forceOpen;
   if (count === 0) return null;
   return (
     <div className="rounded-lg border border-subtle">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
+        aria-expanded={isOpen}
         className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-surface/60 cursor-pointer"
       >
-        {open ? (
+        {isOpen ? (
           <ChevronDown size={14} className="shrink-0 text-fg-muted" />
         ) : (
           <ChevronRight size={14} className="shrink-0 text-fg-muted" />
@@ -42,7 +47,7 @@ export function MappingSection({
         <span className="rounded bg-elevated px-1.5 text-[11px] text-fg-secondary">{count}</span>
         {hint && <span className="ml-2 truncate text-xs text-fg-faint">{hint}</span>}
       </button>
-      {open && (
+      {isOpen && (
         <div className="divide-y divide-subtle/60 border-t border-subtle">{children}</div>
       )}
     </div>

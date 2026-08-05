@@ -4,10 +4,12 @@ import { ChevronDown, ChevronRight, Plus, UsersRound } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
+import { useListFilter } from "../../lib/list-filter";
 import { queryKeys, teamsQuery } from "../../lib/queries";
 import { Permission, type Team, type TeamCreate } from "../../lib/types";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
+import { ListSearchInput } from "../../components/ListSearchInput";
 import { TableSkeleton } from "../../components/TableSkeleton";
 import { TextField } from "../../components/TextField";
 import { SettingsPage } from "../../components/settings/SettingsPage";
@@ -21,7 +23,9 @@ export function TeamsSettingsPage() {
   const canCreate = perms.global(Permission.teamCreate);
   const teams = useQuery(teamsQuery());
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const list = teams.data ?? [];
+  const all = teams.data ?? [];
+  const search = useListFilter(all, (team) => [team.name]);
+  const list = search.filtered;
 
   return (
     <SettingsPage
@@ -34,35 +38,55 @@ export function TeamsSettingsPage() {
         <QueryError label="teams" error={teams.error} />
       ) : (
         <>
-          {list.length === 0 ? (
+          {all.length === 0 ? (
             <EmptyState icon={UsersRound} message="No teams yet." />
           ) : (
-            <ul className="rounded-lg border border-subtle">
-              {list.map((team) => {
-                const expanded = expandedId === team.id;
-                return (
-                  <li key={team.id} className="border-b border-subtle/60 last:border-b-0">
-                    <button
-                      type="button"
-                      onClick={() => setExpandedId(expanded ? null : team.id)}
-                      aria-expanded={expanded}
-                      className="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-surface/60 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus cursor-pointer"
-                    >
-                      {expanded ? (
-                        <ChevronDown size={14} className="text-fg-muted" aria-hidden />
-                      ) : (
-                        <ChevronRight size={14} className="text-fg-muted" aria-hidden />
-                      )}
-                      <span className="text-[13px] font-medium text-heading">{team.name}</span>
-                      <span className="ml-auto text-xs text-fg-faint">
-                        {new Date(team.created_at).toLocaleDateString()}
-                      </span>
-                    </button>
-                    {expanded && <TeamPanel team={team} />}
-                  </li>
-                );
-              })}
-            </ul>
+            <>
+              {all.length > 8 && (
+                <ListSearchInput
+                  className="mb-3"
+                  value={search.filter}
+                  onChange={search.setFilter}
+                  placeholder="Filter teams by name…"
+                  total={all.length}
+                  matched={list.length}
+                  noun="teams"
+                />
+              )}
+              {list.length === 0 ? (
+                <EmptyState
+                  icon={UsersRound}
+                  message={`No teams match “${search.filter.trim()}”.`}
+                />
+              ) : (
+                <ul className="rounded-lg border border-subtle">
+                  {list.map((team) => {
+                    const expanded = expandedId === team.id;
+                    return (
+                      <li key={team.id} className="border-b border-subtle/60 last:border-b-0">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedId(expanded ? null : team.id)}
+                          aria-expanded={expanded}
+                          className="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-surface/60 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus cursor-pointer"
+                        >
+                          {expanded ? (
+                            <ChevronDown size={14} className="text-fg-muted" aria-hidden />
+                          ) : (
+                            <ChevronRight size={14} className="text-fg-muted" aria-hidden />
+                          )}
+                          <span className="text-[13px] font-medium text-heading">{team.name}</span>
+                          <span className="ml-auto text-xs text-fg-faint">
+                            {new Date(team.created_at).toLocaleDateString()}
+                          </span>
+                        </button>
+                        {expanded && <TeamPanel team={team} />}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </>
           )}
           {canCreate && (
             <NewTeamForm onCreated={(team) => setExpandedId(team.id)} />

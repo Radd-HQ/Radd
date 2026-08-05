@@ -10,6 +10,11 @@ import {
 } from "../../../lib/types";
 import { SelectField } from "../../SelectField";
 import { MappingSection, RowLabel } from "./MappingSection";
+import { useListFilter } from "../../../lib/list-filter";
+import { ListSearchInput } from "../../ListSearchInput";
+
+/** Below this many rows a mapping table needs no filter chrome (RADD-882). */
+const FILTER_THRESHOLD = 8;
 
 /** The Radd field types a "create" mapping can target (matches the server enum). */
 const CREATE_TYPES = ["text", "select", "multi_select", "number", "date", "user"] as const;
@@ -83,16 +88,30 @@ export function FieldsTable({
   const problemFor = new Map(problems.map((p) => [p.subject, p.message]));
   const isTarget = (r: FieldMappingEntry) =>
     Boolean(highlight) && (r.target_key === highlight || r.jira_id === highlight);
+  // 337 inbound fields at a live Jira: findable by name, id, or mapped key
+  // (RADD-882); a filtered band holds itself open so matches can't hide.
+  const search = useListFilter(rows, (r) => [r.jira_name, r.jira_id, r.target_key]);
   return (
     <div className="flex flex-col gap-3">
+      {rows.length > FILTER_THRESHOLD && (
+        <ListSearchInput
+          value={search.filter}
+          onChange={search.setFilter}
+          placeholder="Filter fields by name, id, or target key…"
+          total={rows.length}
+          matched={search.filtered.length}
+          noun="fields"
+        />
+      )}
       {BANDS.map(([band, title, hint]) => {
-        const inBand = rows.filter((r) => r.band === band);
+        const inBand = search.filtered.filter((r) => r.band === band);
         return (
           <MappingSection
             key={band}
             title={title}
             hint={hint}
             count={inBand.length}
+            forceOpen={search.filtering}
             // A problem inside a collapsed band would be invisible while the tab
             // badge insists something is wrong.
             defaultOpen={
