@@ -135,6 +135,18 @@ class ViewTransfer(BaseModel):
     user_id: uuid.UUID
 
 
+#: RADD-855: a per-view bucket order — keys only, capped, loosely validated
+#: (the card_layout idiom: departed keys are ignored at render).
+_bucket_order_field = Field(default=None, max_length=100)
+
+
+def _validate_bucket_order(value: list[str] | None) -> list[str] | None:
+    if value is None:
+        return None
+    cleaned = [str(key)[:200] for key in value if str(key).strip()]
+    return cleaned or None
+
+
 class ViewCreate(BaseModel):
     project_id: uuid.UUID | None = None  # None = global (spanning every project)
     name: str = Field(min_length=1, max_length=100)
@@ -161,12 +173,17 @@ class ViewCreate(BaseModel):
     columns: list[str] | None = Field(default=None, max_length=16)
     # Spec 109: the board-card layout; None = the type's default card.
     card_layout: CardLayout | None = None
+    # RADD-855: per-view bucket order (column axis / swimlane axis).
+    column_order: list[str] | None = _bucket_order_field
+    swimlane_order: list[str] | None = _bucket_order_field
     # Sharing at birth (spec 57). `shared` is the pre-57 alias: True and no
     # explicit global_access -> global_access = viewer.
     global_access: ShareLevel | None = None
     shares: list[ViewShareEntry] = Field(default_factory=list, max_length=50)
     shared: bool = False
     position: int = Field(default=0, ge=0)
+
+
 
 
 class ViewUpdate(BaseModel):
@@ -191,6 +208,9 @@ class ViewUpdate(BaseModel):
     columns: list[str] | None = Field(default=None, max_length=16)
     # Omitted = unchanged, explicit null = back to the type's default card (spec 109).
     card_layout: CardLayout | None = None
+    # RADD-855: per-view bucket order (column axis / swimlane axis).
+    column_order: list[str] | None = _bucket_order_field
+    swimlane_order: list[str] | None = _bucket_order_field
     position: int | None = Field(default=None, ge=0)
 
 
@@ -236,6 +256,9 @@ class ViewRead(BaseModel):
     columns: list[str] | None = None
     # Spec 109: the board-card layout; None = the type's default card.
     card_layout: CardLayout | None = None
+    # RADD-855: per-view bucket order (column axis / swimlane axis).
+    column_order: list[str] | None = _bucket_order_field
+    swimlane_order: list[str] | None = _bucket_order_field
     owner_id: uuid.UUID | None
     # Sharing (spec 57): who owns it, what every active user gets, and the
     # explicit grants; `shared` = visible beyond the owner (any of the above).

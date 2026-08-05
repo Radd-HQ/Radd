@@ -132,6 +132,9 @@ export interface View {
   columns?: string[] | null;
   /** Board-card layout (spec 109); null = the type's default card. */
   card_layout?: CardLayout | null;
+  /** RADD-855: per-view bucket order (keys; null = the axis's natural order). */
+  column_order?: string[] | null;
+  swimlane_order?: string[] | null;
   owner_id: string | null;
   /** Sharing (spec 57): the owner, the server-wide grant, explicit grants.
    * `global_access` = the wire name for "everyone on this server". */
@@ -179,4 +182,7 @@ export interface ViewUpdate {
   columns?: string[] | null;
   /** Card layout (spec 109); explicit null = back to the type's default card. */
   card_layout?: CardLayout | null;
+  /** RADD-855: per-view bucket order (keys; null = the axis's natural order). */
+  column_order?: string[] | null;
+  swimlane_order?: string[] | null;
 }

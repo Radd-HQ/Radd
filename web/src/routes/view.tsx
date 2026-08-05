@@ -78,7 +78,8 @@ import {
 import { combineQueryWithFilters, composeQueryWithBar } from "../lib/slq";
 import { useSlqPageFilter } from "../lib/slq-filter";
 import { orderBySlaUrgency } from "../lib/queue";
-import { axisLabel, groupItemsForView, type ViewGroup } from "../lib/view-utils";
+import { axisLabel, applyBucketOrder,
+  groupItemsForView, type ViewGroup } from "../lib/view-utils";
 import {
   DEFAULT_BOARD_SLOTS,
   DEFAULT_LIST_SLOTS,
@@ -102,6 +103,7 @@ import { NewItemModal } from "../components/items/NewItemModal";
 import { useRollupBatch } from "../components/items/RollupBar";
 import { useSlaBatch } from "../components/items/SlaChips";
 import { BulkActionBar } from "../components/views/BulkActionBar";
+import { BucketOrderMenu } from "../components/views/BucketOrderMenu";
 import { DisplayMenu } from "../components/views/DisplayMenu";
 import { QueryBar } from "../components/views/QueryBar";
 import { useSavedFilters, useNavPins } from "../lib/topbar-prefs";
@@ -560,6 +562,12 @@ export function ViewPage() {
       api.patch<View>(apiViewPath(viewId), { columns: columnIds }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.views }),
   });
+  // RADD-855: per-view bucket order — a shared view property, edit-gated.
+  const updateBucketOrder = useMutation({
+    mutationFn: (body: { column_order?: string[]; swimlane_order?: string[] }) =>
+      api.patch<View>(apiViewPath(viewId), body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.views }),
+  });
   // Card layout (spec 109): same idiom — null = back to the default card.
   const updateCardLayout = useMutation({
     mutationFn: (layout: View["card_layout"]) =>
@@ -620,10 +628,20 @@ export function ViewPage() {
   const columns: ViewGroup[] = useMemo(() => {
     if (!view) return [];
     if (!columnAxis) return [{ key: FLAT_GROUP_KEY, label: "All items", items: orderedItems }];
-    return groupItemsForView(orderedItems, columnAxis, axisContext);
+    // RADD-855: the view's own bucket order, over the axis's natural order.
+    return applyBucketOrder(
+      groupItemsForView(orderedItems, columnAxis, axisContext),
+      view.column_order,
+    );
   }, [view, orderedItems, columnAxis, axisContext]);
   const lanes: ViewGroup[] = useMemo(
-    () => (view && laneAxis ? groupItemsForView(orderedItems, laneAxis, axisContext) : []),
+    () =>
+      view && laneAxis
+        ? applyBucketOrder(
+            groupItemsForView(orderedItems, laneAxis, axisContext),
+            view.swimlane_order,
+          )
+        : [],
     [view, orderedItems, laneAxis, axisContext],
   );
 
@@ -945,6 +963,14 @@ export function ViewPage() {
               <RotateCcw size={12} aria-hidden />
               Reset view
             </Button>
+          )}
+          {!isQueue && !isRoadmap && Boolean(view?.can_edit) && columnAxis && (
+            <BucketOrderMenu
+              columns={columns}
+              lanes={laneAxis ? lanes : []}
+              onReorderColumns={(keys) => updateBucketOrder.mutate({ column_order: keys })}
+              onReorderLanes={(keys) => updateBucketOrder.mutate({ swimlane_order: keys })}
+            />
           )}
           {!isQueue && !isRoadmap && (
             <DisplayMenu

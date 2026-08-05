@@ -29,6 +29,7 @@ from radd.modules.projects import service as projects_service
 from .models import CardLayoutPreset, View, ViewMember
 from .schemas import (
     CARD_GRID_COLS,
+    _validate_bucket_order,
     CardLayout,
     CardPresetCreate,
     CardPresetUpdate,
@@ -257,6 +258,8 @@ async def _hydrate(session: AsyncSession, actor: User, views: list[View]) -> lis
                 card_layout=(
                     CardLayout.model_validate(view.card_layout) if view.card_layout else None
                 ),
+                column_order=view.column_order,
+                swimlane_order=view.swimlane_order,
                 owner_id=view.owner_id,
                 owner=ShareUserRef(id=owner.id, name=owner.name) if owner else None,
                 global_access=ShareLevel(view.global_access)
@@ -622,6 +625,8 @@ async def create_view(session: AsyncSession, data: ViewCreate, actor: User) -> V
     view.wip_limits = await _validate_wip_limits(session, view, data.wip_limits)
     view.columns = _validate_columns(data.columns)
     view.card_layout = _validate_card_layout(data.card_layout)
+    view.column_order = _validate_bucket_order(data.column_order)
+    view.swimlane_order = _validate_bucket_order(data.swimlane_order)
     session.add(view)
     await session.flush()
     for entry in data.shares:
@@ -720,6 +725,10 @@ async def update_view(
     # Omitted = unchanged; explicit null = back to the type's default card (spec 109).
     if "card_layout" in data.model_fields_set:
         view.card_layout = _validate_card_layout(data.card_layout)
+    # RADD-855: omitted = unchanged; explicit null/[] = natural order.
+    for order_field in ("column_order", "swimlane_order"):
+        if order_field in data.model_fields_set:
+            setattr(view, order_field, _validate_bucket_order(getattr(data, order_field)))
     if data.position is not None:
         view.position = data.position
     await session.flush()

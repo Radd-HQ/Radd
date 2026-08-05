@@ -163,6 +163,21 @@ export function axisOptions(
 }
 
 /**
+ * Apply a per-VIEW bucket order (RADD-855): keys named in `order` come first,
+ * in that order; everything else keeps its natural order after them. Unknown
+ * keys are ignored — a departed state or renamed category degrades to the
+ * natural order rather than breaking the board (the card_layout idiom).
+ */
+export function applyBucketOrder(groups: ViewGroup[], order: string[] | null | undefined): ViewGroup[] {
+  if (!order || order.length === 0) return groups;
+  const rank = new Map(order.map((key, index) => [key, index]));
+  const listed = groups.filter((g) => rank.has(g.key));
+  const rest = groups.filter((g) => !rank.has(g.key));
+  listed.sort((a, b) => (rank.get(a.key) ?? 0) - (rank.get(b.key) ?? 0));
+  return [...listed, ...rest];
+}
+
+/**
  * Bucket `items` along an axis token. Unknown/stale tokens (e.g. a cf field
  * the registry no longer exposes) degrade to a single flat bucket rather than
  * dropping items.

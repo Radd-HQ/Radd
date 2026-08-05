@@ -175,3 +175,40 @@ def test_view_axis_tokens():
     # the folded tier is GONE — its token must reject (no silent zombie axis)
     with pytest.raises(ValidationError):
         ViewCreate(name="g", view_type=ViewType.BOARD, group_by="state_group")
+
+
+async def test_view_bucket_order_round_trips_and_degrades(db):
+    """RADD-855: per-view bucket order — persists, isolates per view, and
+    unknown keys survive validation (they are ignored at render, the
+    card_layout idiom)."""
+    from radd.modules.views import service as views_service
+    from radd.modules.views.schemas import ViewCreate, ViewUpdate
+    from radd.modules.views.types import ViewType
+
+    admin = await _admin(db)
+    project = await projects_service.create_project(
+        db, ProjectCreate(key=f"VO{uuid.uuid4().hex[:4].upper()}", name="Order")
+    )
+    a = await views_service.create_view(
+        db,
+        ViewCreate(name="ordered", view_type=ViewType.BOARD, project_id=project.id,
+                   group_by="state_category"),
+        admin,
+    )
+    b = await views_service.create_view(
+        db,
+        ViewCreate(name="natural", view_type=ViewType.BOARD, project_id=project.id,
+                   group_by="state_category"),
+        admin,
+    )
+    updated = await views_service.update_view(
+        db, a.id, ViewUpdate(column_order=["done", "gone_key", "triage"]), admin
+    )
+    assert updated.column_order == ["done", "gone_key", "triage"]  # loose: kept, ignored at render
+    # isolation: the sibling stays natural
+    fresh_b = await views_service.get_view_read(db, b.id, actor=admin) if hasattr(views_service, "get_view_read") else None
+    listed = await views_service.list_views(db, actor=admin, project_id=project.id)
+    assert next(v for v in listed if v.id == b.id).column_order is None
+    # explicit null returns to natural order
+    cleared = await views_service.update_view(db, a.id, ViewUpdate(column_order=None), admin)
+    assert cleared.column_order is None

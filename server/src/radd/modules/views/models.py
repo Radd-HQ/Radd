@@ -32,6 +32,11 @@ class View(Base, TimestampMixin):
     query: Mapped[str] = mapped_column(Text, default="")  # SLQ
     group_by: Mapped[str | None] = mapped_column(Text)  # axis token; None = ungrouped
     swimlane_by: Mapped[str | None] = mapped_column(Text)  # axis token; None = no swimlanes
+    # RADD-855: per-VIEW bucket order — lists of bucket KEYS, loosely coupled
+    # like card_layout (unknown keys ignored, unlisted buckets append in
+    # natural order), so a renamed state or new category degrades gracefully.
+    column_order: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    swimlane_order: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     # Optional cycle-name REGEX narrowing the header set when an axis is `cycle`
     # (specs 23/56); None/'' = all cycles. Compile-validated; matched client-side.
     cycle_filter: Mapped[str | None] = mapped_column(Text)
