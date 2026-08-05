@@ -51,11 +51,22 @@ PAGE_EXTENSIONS: tuple[PageExtensionSpec, ...] = (
     PageExtensionSpec(
         name=PageExtensionName.CHILDREN,
         label="Child pages",
-        description="A list of the pages directly beneath this one.",
+        description="The pages beneath this one — linked, or embedded in full.",
         icon="folder-tree",
         params_schema={
             "type": "object",
-            "properties": {"depth": {**_DEPTH, "default": 1}},
+            "properties": {
+                "depth": {**_DEPTH, "default": 1},
+                # RADD-858: embed = transclude every child's live body (the
+                # radd:include machinery per child), naturally ordered — one
+                # unified page that updates itself as children arrive.
+                "mode": {
+                    "type": "string",
+                    "enum": ["links", "embed"],
+                    "default": "links",
+                    "description": "links = a list; embed = each child's full content, live.",
+                },
+            },
         },
     ),
     PageExtensionSpec(

@@ -12,6 +12,7 @@ import {
   OctagonAlert,
 } from "lucide-react";
 import { RoutePath } from "../../lib/constants";
+import { comparePagesNaturally } from "./PageTree";
 import {
   ExtensionCard,
   registerPageExtension,
@@ -119,6 +120,8 @@ function descendants(
     const key = row.parent_id ?? "";
     byParent.set(key, [...(byParent.get(key) ?? []), row]);
   }
+  // RADD-859: siblings render in natural order everywhere they list.
+  for (const siblings of byParent.values()) siblings.sort(comparePagesNaturally);
   const out: { page: PageSummary; level: number }[] = [];
   const walk = (parentId: string, level: number) => {
     if (level >= maxDepth) return;
@@ -138,6 +141,34 @@ function ChildPages({ params }: { params: Record<string, unknown> }) {
   const rows = useQuery({ ...pagesQuery(ctx.spaceId ?? ""), enabled: Boolean(ctx.spaceId) });
   const depth = params.depth === undefined ? 1 : clampDepth(params.depth);
   const list = descendants(rows.data ?? [], ctx.pageId, depth);
+  // RADD-858: embed transcludes every child's LIVE body via the same
+  // component radd:include uses (cycle guard inherited), each under its
+  // title — one unified page that updates itself as children arrive.
+  if (params.mode === "embed") {
+    return (
+      <div className="flex flex-col gap-1">
+        {list.length === 0 && (
+          <ExtensionCard label="Child pages">
+            <p className="text-[13px] text-fg-faint">No child pages yet.</p>
+          </ExtensionCard>
+        )}
+        {list.map(({ page }) => (
+          <section key={page.id}>
+            <h2 className="mt-4 mb-1 text-lg font-semibold text-heading">
+              <Link
+                to={RoutePath.page}
+                params={{ spaceSlug: ctx.spaceSlug ?? "", pageSlug: page.slug }}
+                className="hover:underline"
+              >
+                {page.title}
+              </Link>
+            </h2>
+            <IncludedPage params={{ page: page.slug }} />
+          </section>
+        ))}
+      </div>
+    );
+  }
   return (
     <ExtensionCard label="Child pages">
       {list.length === 0 ? (
