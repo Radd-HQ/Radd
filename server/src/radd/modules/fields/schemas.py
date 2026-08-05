@@ -10,10 +10,8 @@ from .types import SELECT_TYPES, FieldDisplay, FieldSource, FieldType
 
 class FieldDefinitionCreate(BaseModel):
     # Scope: empty = global; a non-empty list scopes the field to those projects
-    # (spec 90 follow-up). `project_id` is a legacy single-scope alias folded into
-    # `project_ids` — accept either, never both meaningfully.
+    # (spec 90 follow-up).
     project_ids: list[uuid.UUID] = Field(default_factory=list)
-    project_id: uuid.UUID | None = None
     key: str = Field(pattern=r"^[a-z][a-z0-9_]{0,49}$", description="Stable snake_case key")
     name: str = Field(min_length=1, max_length=200)
     type: FieldType
@@ -25,15 +23,6 @@ class FieldDefinitionCreate(BaseModel):
     display: FieldDisplay | None = None  # spec 52 — render hint (select/multi_select)
     # Seeded onto new items when the create payload omits this key. NULL = no default.
     default_value: Any | None = None
-
-    @model_validator(mode="after")
-    def _fold_legacy_scope(self) -> "FieldDefinitionCreate":
-        # A caller passing the legacy single `project_id` gets it folded into the
-        # list; an explicit `project_ids` wins. Dedupe, preserving order.
-        if not self.project_ids and self.project_id is not None:
-            self.project_ids = [self.project_id]
-        self.project_ids = list(dict.fromkeys(self.project_ids))
-        return self
 
     @model_validator(mode="after")
     def check_options(self) -> "FieldDefinitionCreate":

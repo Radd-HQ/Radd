@@ -4,8 +4,6 @@
  * since spec 101 also per-feature on `features` (toggle AND role resolvable). */
 export interface AiStatus {
   enabled: boolean;
-  provider: string | null;
-  model: string | null;
   features: Partial<Record<AiFeatureValue, boolean>>;
   /** Instance delivery preference: stream summaries/reasons progressively. */
   stream_responses: boolean;

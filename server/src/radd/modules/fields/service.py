@@ -120,7 +120,8 @@ _BUILTIN_SPEC = ResourceSpec(
 async def create_field(
     session: AsyncSession, data: FieldDefinitionCreate, actor_id: uuid.UUID | None = None
 ) -> FieldDefinition:
-    for project_id in data.project_ids:
+    scope_ids = list(dict.fromkeys(data.project_ids))  # dedupe, preserving order
+    for project_id in scope_ids:
         await projects_service.get_project(session, project_id)
     existing = await session.scalar(
         select(FieldDefinition.id).where(FieldDefinition.key == data.key)
@@ -132,7 +133,7 @@ async def create_field(
 
     definition = FieldDefinition(
         # Empty project_ids = global; otherwise scoped to those projects.
-        project_links=[FieldProject(project_id=pid) for pid in data.project_ids],
+        project_links=[FieldProject(project_id=pid) for pid in scope_ids],
         key=data.key,
         name=data.name,
         type=data.type.value,

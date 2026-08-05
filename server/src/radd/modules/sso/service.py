@@ -30,6 +30,7 @@ from jwt import PyJWKClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.config import settings
 from radd.exceptions import ForbiddenError
 from radd.modules.auth import service as auth_service
 from radd.modules.auth.models import User
@@ -73,7 +74,7 @@ async def metadata(provider: SsoProvider) -> dict:
     if cached is not None and time.monotonic() - cached[0] < METADATA_TTL_SECONDS:
         return cached[1]
     url = registry.issuer_of(provider).rstrip("/") + "/.well-known/openid-configuration"
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with httpx.AsyncClient(timeout=settings.sso_http_timeout_seconds) as client:
         response = await client.get(url)
         response.raise_for_status()
         document = response.json()
@@ -112,8 +113,6 @@ def code_challenge(verifier: str) -> str:
 def redirect_uri() -> str:
     """One callback for every provider — the flow cookie carries which. Keeping a
     single URI means adding a provider needs no new registration on our side."""
-    from radd.config import settings
-
     return settings.app_base_url.rstrip("/") + "/api/v1/auth/oidc/callback"
 
 
@@ -135,7 +134,7 @@ async def authorization_url(provider: SsoProvider, flow: dict) -> str:
 async def exchange_code(provider: SsoProvider, code: str, flow: dict) -> dict:
     """Code → verified id_token claims."""
     meta = await metadata(provider)
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with httpx.AsyncClient(timeout=settings.sso_http_timeout_seconds) as client:
         response = await client.post(
             meta["token_endpoint"],
             data={
@@ -351,10 +350,10 @@ async def provision(session: AsyncSession, provider: SsoProvider, claims: dict) 
 
     identity.email = email or identity.email
     identity.claims = {k: claims[k] for k in ("hd", "picture", "name") if k in claims}
-    if user.source in (UserSource.UNKNOWN, UserSource.EMAIL):
-        # spec 84: claim pre-84 SSO-only rows; RADD-828: an email-provisioned
-        # requester who signs in with the same verified address JOINS their
-        # account (keeping their tickets) and becomes able to log in.
+    if user.source == UserSource.EMAIL:
+        # RADD-828: an email-provisioned requester who signs in with the same
+        # verified address JOINS their account (keeping their tickets) and
+        # becomes able to log in.
         user.source = UserSource.OIDC
 
     if _syncs_roles(provider):

@@ -59,7 +59,7 @@ async def _make_field(db, project, key: str) -> str:
     await fields_service.create_field(
         db,
         FieldDefinitionCreate(
-            project_id=project.id, key=unique,
+            project_ids=[project.id], key=unique,
             name=unique.title(), type=FieldType.TEXT,
         ),
         actor_id=None,

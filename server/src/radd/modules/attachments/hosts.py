@@ -104,6 +104,12 @@ def _validate(host_type: StorageHostType, fields: dict) -> None:
             raise ConflictError(
                 AttachmentEntity.HOST, reason="a filesystem host can only deliver via proxy"
             )
+        # RADD-895: the row says where the bytes live — the "" sentinel that
+        # meant "read the env at runtime" is gone (a migration backfilled it).
+        if not fields.get("root_dir"):
+            raise ConflictError(
+                AttachmentEntity.HOST, reason="a filesystem host needs a root directory"
+            )
     elif not fields.get("endpoint") or not fields.get("bucket"):
         raise ConflictError(
             AttachmentEntity.HOST, reason="an s3 host needs an endpoint and a bucket"
@@ -178,6 +184,7 @@ def _column_state(host: StorageHost) -> dict:
     return {
         "endpoint": host.endpoint,
         "bucket": host.bucket,
+        "root_dir": host.root_dir,
         "delivery_mode": host.delivery_mode,
     }
 

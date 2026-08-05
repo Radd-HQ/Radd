@@ -141,7 +141,7 @@ export interface View {
   owner: ShareSubjectRef | null;
   global_access: ShareLevelValue | null;
   shares: ViewShare[];
-  /** Visible beyond the owner (server-wide, grants, or legacy owner-less). */
+  /** Visible beyond the owner (server-wide, grants, or seeded owner-less). */
   shared: boolean;
   /** Per-actor capabilities, computed server-side. */
   can_edit: boolean;

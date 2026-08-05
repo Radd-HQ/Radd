@@ -12,7 +12,7 @@ from radd.modules.items import service as items_service
 from radd.modules.projects import service as projects_service
 
 from . import catalog, engine, service
-from .types import MANUAL_TRIGGER, AutomationEntity
+from .types import AutomationEntity, AutomationTrigger
 from .schemas import (
     CatalogRead,
     OperatorInfo,
@@ -100,7 +100,7 @@ async def list_runnable_rules(session: Session, user: CurrentUser) -> list[Runna
     Member floor (RADD-788): item.read in SOME project, not the global atom."""
     if not await authz.readable_projects(session, user):
         return []
-    rules = await service.rules_for_trigger(session, MANUAL_TRIGGER)
+    rules = await service.rules_for_trigger(session, AutomationTrigger.MANUAL)
     return [RunnableRuleRead.model_validate(rule) for rule in rules]
 
 
@@ -143,7 +143,7 @@ async def run_rule(
     this WRITES — so it needs item.update on the item's project, not automation.manage:
     manual rules are curated by admins precisely so members can safely invoke them."""
     rule = await service.get_rule(session, rule_id)
-    if rule.trigger != MANUAL_TRIGGER:
+    if rule.trigger != AutomationTrigger.MANUAL:
         raise ConflictError(AutomationEntity.RULE, reason="only manual rules can be run directly")
     if not rule.enabled:
         raise ConflictError(AutomationEntity.RULE, reason="rule is disabled")

@@ -77,7 +77,7 @@ def test_entry_mapping_fallbacks_upn_and_username(monkeypatch):
 
 
 def test_bind_account_enabled_gate(monkeypatch):
-    from radd.modules.ldap.service import bind_account_enabled, user_search_base
+    from radd.modules.ldap.service import bind_account_enabled
 
     _overlay(monkeypatch, url="ldaps://ad.example.com:636")
     assert not bind_account_enabled()
@@ -89,11 +89,6 @@ def test_bind_account_enabled_gate(monkeypatch):
         user_domain="ad.example.com",
     )
     assert bind_account_enabled()
-    # search base defaults to the derived base DN when unset
-    monkeypatch.setattr(settings, "ldap_user_search_base", "")
-    assert user_search_base() == "DC=ad,DC=example,DC=com"
-    monkeypatch.setattr(settings, "ldap_user_search_base", "OU=Staff,DC=ad,DC=example,DC=com")
-    assert user_search_base() == "OU=Staff,DC=ad,DC=example,DC=com"
 
 
 def test_directory_entry_mapping_skips_emailless(monkeypatch):

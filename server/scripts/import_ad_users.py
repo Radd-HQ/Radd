@@ -18,6 +18,7 @@ The service password is read from the environment only — never a CLI flag.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import os
 import secrets
 import sys
@@ -28,6 +29,16 @@ import httpx
 from radd.modules.ldap import service as ldap_service
 
 DEFAULT_API = "http://localhost:8000/api/v1"
+
+
+async def _resolved_user_base() -> str:
+    """The cascade-resolved search base (Settings → Directory beats env) — the
+    script opens a short-lived DB session for it, so it can never disagree with
+    what the settings page shows (RADD-895 removed the raw-env fallback)."""
+    from radd.db import SessionLocal
+
+    async with SessionLocal() as session:
+        return await ldap_service.resolved_user_base(session)
 
 
 def provision(api: httpx.Client, users: list, dry_run: bool) -> tuple[int, int, int]:
@@ -69,9 +80,9 @@ def main() -> int:
               file=sys.stderr)
         return 1
 
-    print(f"binding {os.environ.get('RADD_LDAP_BIND_DN')} and enumerating "
-          f"{ldap_service.user_search_base()} ...")
-    directory_users = ldap_service.search_directory_users()
+    base = asyncio.run(_resolved_user_base())
+    print(f"binding {os.environ.get('RADD_LDAP_BIND_DN')} and enumerating {base} ...")
+    directory_users = ldap_service.search_directory_users("", base)
     print(f"found {len(directory_users)} directory users with an email")
 
     api = None

@@ -115,7 +115,9 @@ class Attachment(Base):
 
     @property
     def item_id(self) -> uuid.UUID | None:
-        """The owning item for item-parented rows (API back-compat + events)."""
+        """The owning item for item-parented rows. KEPT for the EVENT payloads
+        (service.py stamps it so notify/automations can item-scope); the REST
+        field it also fed was dropped in RADD-895 — read entity_type/entity_id."""
         if self.entity_type == AttachmentParentType.ITEM.value:
             return self.entity_id
         return None

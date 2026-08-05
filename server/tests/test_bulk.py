@@ -163,7 +163,7 @@ async def test_bulk_move_rekeys_maps_and_aliases(db, actor):
     await fields_service.create_field(
         db,
         FieldDefinitionCreate(
-            project_id=src.id, key="flavor", name="Flavor",
+            project_ids=[src.id], key="flavor", name="Flavor",
             type=FieldType.TEXT,
         ),
     )

@@ -139,7 +139,7 @@ async def transfer_view(
 
 _MEMBER_DOC = (
     "Curated membership (roadmap wave): pin/unpin an item to the view, idempotently. "
-    "Edit-gated like any definition write (owner/editor; legacy owner-less views: "
+    "Edit-gated like any definition write (owner/editor; seeded owner-less views: "
     "view.update). Reads flow through the item dialect — `GET /items?q=roadmap = "
     '"<view id or name>"` returns the hydrated, RBAC-scoped member set.'
 )

@@ -83,9 +83,6 @@ async def test_a_page_can_hold_a_discussion(db, admin, page):
     )
     assert read.entity_type == "page"
     assert read.entity_id == page.id
-    # `item_id` is null for a non-item parent, so an issue-side consumer that
-    # reads it gets nothing rather than a page id it would misuse.
-    assert read.item_id is None
 
     listed = await comments.list_comments(
         db, page.id, actor=admin, entity_type=CommentParentType.PAGE.value

@@ -45,9 +45,6 @@ class CommentRead(BaseModel):
     id: uuid.UUID
     entity_type: str = "item"  # RADD-717
     entity_id: uuid.UUID
-    #: The entity id when the parent IS an item, else null — so every existing
-    #: issue-side consumer keeps working unchanged.
-    item_id: uuid.UUID | None
     author: UserRef
     body: str
     visibility: CommentVisibility

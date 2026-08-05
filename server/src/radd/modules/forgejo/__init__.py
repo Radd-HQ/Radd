@@ -1,4 +1,3 @@
-from radd.config import settings
 from radd.kernel import CapabilitySpec
 from radd.kernel import RaddPlugin
 
@@ -23,7 +22,9 @@ plugin = RaddPlugin(
             "forgejo",
             "Forgejo connector",
             "connector",
-            check=lambda: {"enabled": bool(settings.forgejo_webhook_secret)},
+            # Spec 111 made connections rows and the env secret SEED-ONLY, so the
+            # pill counts ACTIVE rows (snapshot: sync check, refreshed on writes).
+            check=lambda: {"enabled": service.active_connection_count() > 0},
         ),
     ),
 )

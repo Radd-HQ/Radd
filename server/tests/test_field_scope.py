@@ -67,16 +67,6 @@ async def test_scope_resolution_global_single_and_multi(db):
     assert f"a_{tag}" not in in_b
 
 
-async def test_legacy_project_id_alias_folds_into_scope(db):
-    a = await _project(db, "Alpha")
-    tag = uuid.uuid4().hex[:6]
-    # The old single-project field: passing project_id still scopes it (compat).
-    field = await fields_service.create_field(
-        db, FieldDefinitionCreate(project_id=a.id, key=f"legacy_{tag}", name="Legacy", type=FieldType.TEXT)
-    )
-    assert field.project_ids == [a.id]
-
-
 async def test_widen_then_promote_to_global(db):
     a = await _project(db, "Alpha")
     b = await _project(db, "Beta")

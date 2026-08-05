@@ -76,7 +76,7 @@ async def instance_status(user: CurrentUser) -> InstanceStatusRead:
         smtp_configured=caps.get("smtp", {}).get("enabled", False),
         mfa_available=caps.get("mfa", {}).get("enabled", False),
         ai_provider=caps.get("ai", {}).get("provider", ""),
-        attachment_storage=caps.get("storage", {}).get("backend", settings.attachment_storage),
+        attachment_storage=caps.get("storage", {}).get("backend", ""),
         workers_enabled=caps.get("workers", {}).get("enabled", False),
         connectors={
             key: cap["enabled"]

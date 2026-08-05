@@ -46,7 +46,7 @@ async def _require_own(session: AsyncSession, user, team: Team) -> None:
     """Stricter tier: appointing managers and transferring ownership. Managers are
     deliberately excluded — a delegate must not be able to appoint further
     delegates or hand the team away."""
-    if team.owner_id is not None and team.owner_id == user.id:
+    if team.owner_id == user.id:
         return
     await authz.require(session, user, authz.Permission.TEAM_UPDATE)
 
@@ -67,7 +67,7 @@ async def _team_read(
         global_permissions = await authz.effective_permissions(session, user)
     read = TeamRead.model_validate(team)
     read.managers = await service.list_managers(session, team.id)
-    owns = team.owner_id is not None and team.owner_id == user.id
+    owns = team.owner_id == user.id
     steward = owns or await service.is_team_steward(session, user.id, team)
     read.can_manage = steward or authz.Permission.TEAM_UPDATE in global_permissions
     read.can_delete = owns or authz.Permission.TEAM_DELETE in global_permissions
@@ -124,7 +124,7 @@ async def delete_team(team_id: uuid.UUID, session: Session, user: CurrentUser) -
     """Delete a team (spec 87). Owner or a team.delete holder; 409 while the team
     still grants access to any project."""
     team = await service.get_team(session, team_id)
-    if not (team.owner_id is not None and team.owner_id == user.id):
+    if team.owner_id != user.id:
         await authz.require(session, user, authz.Permission.TEAM_DELETE)
     await service.delete_team(session, team_id, actor_id=user.id)
 

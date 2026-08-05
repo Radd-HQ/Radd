@@ -13,8 +13,8 @@ class InstanceRole(StrEnum):
 
 
 class UserSource(StrEnum):
-    """Where an account came from (spec 84). Set at creation going forward;
-    pre-existing rows were backfilled local (password hash present) / unknown."""
+    """Where an account came from (spec 84). Every creation point sets it
+    explicitly (RADD-895 migrated the last pre-84 `unknown` rows away)."""
 
     LOCAL = "local"  # password login (register/seed/POST /users)
     LDAP = "ldap"  # provisioned by a directory bind or AD import
@@ -22,7 +22,6 @@ class UserSource(StrEnum):
     JIRA = "jira"  # placeholder provisioned by the Jira importer (spec 90 follow-up)
     SERVICE = "service"  # spec 113 — a service account; authenticates by API key ONLY
     EMAIL = "email"  # RADD-828 — provisioned by mail ingest; cannot log in until SSO claims it
-    UNKNOWN = "unknown"  # pre-spec-84 SSO-only rows (upgraded on next login)
 
 
 class DuplicateKind(StrEnum):

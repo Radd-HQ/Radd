@@ -5,7 +5,7 @@ visibility = owner ∪ user/team grantees ∪ every active user when global_acce
 is set; non-visible → 404 (admins included — privacy over acknowledgment);
 editor grantees change the definition + widgets; the owner and OWNER-level
 grantees (co-owners) manage sharing, delete, and transfer. The only spec-57
-branch that does NOT exist here is the legacy owner-less fallback — every
+branch that does NOT exist here is the seeded owner-less fallback — every
 dashboard has an owner from birth. Widget CRUD + config validation live in
 widgets.py.
 """
@@ -280,7 +280,7 @@ async def _can_manage_dashboard(
 ) -> bool:
     """Who may manage a dashboard's share grants: the owner or a co-owner
     (OWNER-level grant). Mirrors `_require_manage` for the generic /grants
-    router. Dashboards are always owned, so there is no legacy owner-less
+    router. Dashboards are always owned, so there is no seeded owner-less
     fallback like views carry."""
     try:
         dashboard = await get_dashboard(session, uuid.UUID(resource_id))

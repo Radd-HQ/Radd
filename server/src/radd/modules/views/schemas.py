@@ -176,11 +176,9 @@ class ViewCreate(BaseModel):
     # RADD-855: per-view bucket order (column axis / swimlane axis).
     column_order: list[str] | None = _bucket_order_field
     swimlane_order: list[str] | None = _bucket_order_field
-    # Sharing at birth (spec 57). `shared` is the pre-57 alias: True and no
-    # explicit global_access -> global_access = viewer.
+    # Sharing at birth (spec 57): the level every active user gets (None = private).
     global_access: ShareLevel | None = None
     shares: list[ViewShareEntry] = Field(default_factory=list, max_length=50)
-    shared: bool = False
     position: int = Field(default=0, ge=0)
 
 

@@ -21,8 +21,10 @@ class Team(Base, TimestampMixin):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(200))
     # Spec 87: the person accountable for the team (the spec-57 ownership idiom).
-    # NULL on pre-87 rows — those fall back to the team.update atom, so an
-    # ownerless team is still administrable.
+    # Every team gets an owner at creation (RADD-895 backfilled the pre-87 rows);
+    # NULL only after the owner's account is hard-deleted (RADD-784 — ownership
+    # is delegation, not content, so it awaits a deliberately chosen new owner;
+    # managers and team.update holders administer the team meanwhile).
     owner_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), index=True
     )

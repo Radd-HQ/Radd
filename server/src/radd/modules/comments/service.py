@@ -1,6 +1,6 @@
 import uuid
 from collections.abc import Iterable
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +25,7 @@ from .types import (
     CommentVisibility,
 )
 from .visibility import internal_comment_visible
+from radd.clock import utcnow
 
 
 def _to_read(
@@ -34,9 +35,6 @@ def _to_read(
         id=comment.id,
         entity_type=comment.entity_type,
         entity_id=comment.entity_id,
-        # Kept so every existing issue-side caller is untouched: it is the
-        # entity id when the parent IS an item, and null otherwise.
-        item_id=comment.entity_id if comment.entity_type == CommentParentType.ITEM else None,
         author=UserRef(
             id=author.id,
             name=author.name,
@@ -463,7 +461,7 @@ async def set_resolved(
     await _require_author_or(
         session, comment, actor, project, others=binding.manage_permission
     )
-    comment.resolved_at = datetime.now(UTC).replace(tzinfo=None) if resolved else None
+    comment.resolved_at = utcnow() if resolved else None
     comment.resolved_by = actor.id if resolved else None
     await session.flush()
     author = await auth.get_user(session, comment.author_id)

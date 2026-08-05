@@ -133,7 +133,7 @@ async def test_bulk_move_checks_dropped_custom_field_writability(db, admin):
     member = await _member(db, src, dst)
     definition = await fields_service.create_field(
         db,
-        FieldDefinitionCreate(project_id=src.id, key="flavor", name="Flavor", type=FieldType.TEXT),
+        FieldDefinitionCreate(project_ids=[src.id], key="flavor", name="Flavor", type=FieldType.TEXT),
     )
     item = await items.create_item(
         db,
@@ -243,7 +243,7 @@ async def test_history_redacts_restricted_custom_field(db, admin):
     member = await _member(db, project)
     definition = await fields_service.create_field(
         db,
-        FieldDefinitionCreate(project_id=project.id, key="salary", name="Salary", type=FieldType.TEXT),
+        FieldDefinitionCreate(project_ids=[project.id], key="salary", name="Salary", type=FieldType.TEXT),
     )
     await access_service.add_grant(
         db,

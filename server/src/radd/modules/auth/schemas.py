@@ -66,7 +66,7 @@ class UserRead(BaseModel):
     avatar_emoji: str | None = None
     timezone: str = ""
     # Spec 84 user administration: where the account came from + last sign-in.
-    source: UserSource = UserSource.UNKNOWN
+    source: UserSource
     last_login_at: UtcDatetime | None = None
 
 

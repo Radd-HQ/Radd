@@ -308,13 +308,3 @@ async def test_login_membership_sync_joins_and_leaves_group_rows(db, admin):
     # Idempotent on a repeat login with the same memberships.
     await groupsync.sync_login_membership(db, user, mirrored, frozenset({dn_in}))
     assert user.id in await groups_service.group_user_ids(db, group_in.id)
-
-
-async def test_ldap_find_or_create_claims_unknown_source(db):
-    email = f"ad84-unknown-{uuid.uuid4().hex[:8]}@ad.example.com"
-    orphan = User(email=email, name="Pre 84", password_hash=None, source=UserSource.UNKNOWN)
-    db.add(orphan)
-    await db.flush()
-    du = DirectoryUser(username="pre84", email=email, name="Pre 84", is_admin=False)
-    user, created = await ldap_service.find_or_create_user(db, du)
-    assert not created and user.id == orphan.id and user.source == UserSource.LDAP

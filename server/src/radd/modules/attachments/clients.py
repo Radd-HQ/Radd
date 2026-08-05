@@ -77,7 +77,7 @@ async def buffer_upload(upload: UploadFile) -> tuple[BinaryIO, int]:
 
 class FilesystemClient:
     def __init__(self, host: StorageHost):
-        self._root = Path(host.root_dir or settings.attachments_dir)
+        self._root = Path(host.root_dir)
 
     def _path(self, storage_name: str) -> Path:
         return self._root / storage_name

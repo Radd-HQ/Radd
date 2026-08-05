@@ -35,10 +35,9 @@ class User(Base, TimestampMixin):
     instance_role: Mapped[str] = mapped_column(String(20), default=InstanceRole.MEMBER)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     # Spec 84: which auth system created the account (UserSource). Creation
-    # points set it explicitly (ldap/sso provision override the local default);
-    # the migration backfilled local/unknown from password_hash.
+    # points set it explicitly (ldap/sso provision override the local default).
     source: Mapped[str] = mapped_column(
-        String(20), default=UserSource.LOCAL, server_default=UserSource.UNKNOWN.value
+        String(20), default=UserSource.LOCAL, server_default=UserSource.LOCAL.value
     )
     # Stamped in create_session — sessions are only minted by the three login
     # paths (local/TOTP, LDAP, OIDC), so one seam covers them all (spec 84).

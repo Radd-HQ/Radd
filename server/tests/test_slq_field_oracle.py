@@ -118,7 +118,7 @@ async def test_restricted_custom_field_refuses_filter_and_sort(db, admin, projec
     definition = await fields_service.create_field(
         db,
         FieldDefinitionCreate(
-            project_id=project.id, key="salary", name="Salary", type=FieldType.NUMBER
+            project_ids=[project.id], key="salary", name="Salary", type=FieldType.NUMBER
         ),
     )
     await items.create_item(

@@ -25,8 +25,6 @@ export interface AttachmentTarget {
 
 export interface Attachment {
   id: string;
-  /** Legacy mirror of entity_id for item parents; null otherwise — read entity_id. */
-  item_id: string | null;
   entity_type: AttachmentParentTypeValue;
   entity_id: string;
   filename: string;

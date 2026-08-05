@@ -16,10 +16,6 @@ class AutomationTrigger(StrEnum):
     SCHEDULE = "schedule"
 
 
-# Legacy alias — the sentinel predates the enum (kept so callers read naturally).
-MANUAL_TRIGGER = AutomationTrigger.MANUAL.value
-
-
 #: The shape of a scheduled rule's `schedule` JSONB (spec 69). Promoted to the
 #: shared core util by spec 99 (backups schedule the same way); re-exported here
 #: so this module's own vocabulary still reads from one place.

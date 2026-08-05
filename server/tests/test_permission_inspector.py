@@ -125,7 +125,7 @@ async def test_resource_access_names_subject_label_and_default(db, member):
     project = await _project(db)
     definition = await fields_service.create_field(
         db,
-        FieldDefinitionCreate(project_id=project.id, key="sal", name="Salary", type=FieldType.TEXT),
+        FieldDefinitionCreate(project_ids=[project.id], key="sal", name="Salary", type=FieldType.TEXT),
     )
     role = await _role(db, "Payroll", [])
     await access_service.add_grant(
@@ -181,7 +181,7 @@ async def test_team_access_reports_attachments_and_grants(db, member):
     # A resource grant naming the team surfaces in the team's resource view.
     definition = await fields_service.create_field(
         db,
-        FieldDefinitionCreate(project_id=project.id, key="tf", name="TeamField", type=FieldType.TEXT),
+        FieldDefinitionCreate(project_ids=[project.id], key="tf", name="TeamField", type=FieldType.TEXT),
     )
     await access_service.add_grant(
         db,

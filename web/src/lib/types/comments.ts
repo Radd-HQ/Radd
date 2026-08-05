@@ -24,8 +24,6 @@ export interface Comment {
   /** RADD-717: what this hangs off — "item" or "page". */
   entity_type: string;
   entity_id: string;
-  /** The entity id when the parent IS an item, else null. */
-  item_id: string | null;
   author: UserRef;
   body: string;
   visibility: CommentVisibilityValue;

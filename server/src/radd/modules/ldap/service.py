@@ -151,14 +151,9 @@ def bind_account_enabled() -> bool:
     return bool(_conn.url and _conn.bind_dn and _conn.bind_password)
 
 
-def user_search_base() -> str:
-    return settings.ldap_user_search_base or base_dn()
-
-
 async def resolved_user_base(session: AsyncSession) -> str:
     """Spec 85: the cascade-resolved USERS base (instance override → env
-    RADD_LDAP_USER_SEARCH_BASE). Empty resolves to base_dn() at USE time —
-    the same fallback `user_search_base()` applies to the raw env value."""
+    RADD_LDAP_USER_SEARCH_BASE). Empty resolves to base_dn() at USE time."""
     value = str(
         await settings_service.resolve(session, SettingKey.LDAP_USER_SYNC_BASE) or ""
     ).strip()
@@ -252,14 +247,14 @@ def user_query_filter(q: str, exclude_disabled: bool = True) -> str:
 
 
 def search_directory_users(
-    q: str = "", base: str | None = None, exclude_disabled: bool = True
+    q: str, base: str, exclude_disabled: bool = True
 ) -> list[DirectoryUser]:
     """Bind with the SERVICE ACCOUNT and page the directory for user entries
     (spec 49; q narrowing added by spec 84). Blocking ldap3 — callers run it
     via asyncio.to_thread or a script. `base` (spec 85) is the cascade-resolved
-    search base from `resolved_user_base()`; None = the raw-env fallback (kept
-    for scripts/import_ad_users.py, which has no session)."""
-    search_base = base or user_search_base()
+    search base from `resolved_user_base()` — every caller resolves through the
+    settings cascade, so Settings → Directory is the one source of truth."""
+    search_base = base
     conn = service_connection()
     users: list[DirectoryUser] = []
     try:
@@ -369,7 +364,7 @@ async def find_or_create_user(
 ) -> tuple[User, bool]:
     """The spec-42 provision core, shared with the explicit imports (spec 84):
     find by email or create an SSO-only account (`password_hash NULL`,
-    source=ldap). A pre-84 `unknown`-source account is claimed as ldap."""
+    source=ldap)."""
     user = await auth_service.get_user_by_email(session, directory_user.email)
     if user is None:
         user = User(
@@ -381,8 +376,6 @@ async def find_or_create_user(
         session.add(user)
         await session.flush()
         return user, True
-    if user.source == UserSource.UNKNOWN:
-        user.source = UserSource.LDAP
     return user, False
 
 

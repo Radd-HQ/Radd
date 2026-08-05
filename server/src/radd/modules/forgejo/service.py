@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.config import settings
 from radd.db import SessionLocal
 from radd.exceptions import ConflictError, NotFoundError
+from radd.snapshot import Snapshot
 
 from .models import ForgejoConnection, ForgejoRepo
 from .schemas import ConnectionCreate, ConnectionUpdate, RepoCreate, RepoUpdate
@@ -65,6 +66,7 @@ async def create_connection(session: AsyncSession, data: ConnectionCreate) -> Fo
     )
     session.add(connection)
     await session.flush()
+    await refresh_connection_snapshot(session)
     return connection
 
 
@@ -87,6 +89,7 @@ async def update_connection(
     if data.verify_ssl is not None:
         connection.verify_ssl = data.verify_ssl
     await session.flush()
+    await refresh_connection_snapshot(session)
     return connection
 
 
@@ -94,6 +97,7 @@ async def delete_connection(session: AsyncSession, connection_id: uuid.UUID) -> 
     connection = await get_connection(session, connection_id)
     await session.delete(connection)
     await session.flush()
+    await refresh_connection_snapshot(session)
 
 
 async def repo_count(session: AsyncSession, connection_id: uuid.UUID) -> int:
@@ -198,31 +202,62 @@ async def resolve_for_payload(
     return None
 
 
+# --- capability snapshot ------------------------------------------------------
+
+# CapabilitySpec.check is sync — the attachments default-host idiom (RADD-899):
+# write-through on connection writes + TTL'd so extra web replicas converge. The
+# env secret is SEED-ONLY (spec 111); the connector pill answers from the ROWS.
+
+
+async def _load_active_count() -> int:
+    async with SessionLocal() as session:
+        rows = await session.execute(
+            select(func.count()).select_from(ForgejoConnection).where(ForgejoConnection.active)
+        )
+        return int(rows.scalar_one())
+
+
+_active_snapshot: Snapshot[int] = Snapshot(
+    "forgejo.active-connections", _load_active_count, initial=0
+)
+
+
+def active_connection_count() -> int:
+    return _active_snapshot.get()
+
+
+async def refresh_connection_snapshot(session: AsyncSession) -> None:
+    rows = await session.execute(
+        select(func.count()).select_from(ForgejoConnection).where(ForgejoConnection.active)
+    )
+    _active_snapshot.set(int(rows.scalar_one()))
+
+
 # --- env seed (spec-101 rule: the env key seeds ONE row, once) ---
 
 
 async def seed_from_env() -> None:
-    """Turn spec 47's `RADD_FORGEJO_WEBHOOK_SECRET` into a connection row, ONCE.
+    """Turn spec 47's `RADD_FORGEJO_WEBHOOK_SECRET` into a connection row, ONCE,
+    then warm the capability snapshot.
 
-    Runs only when the table is empty, so an admin who deletes or renames the
-    seeded row never has it reappear. The base URL is unknown to the env config
-    (spec 47 only ever needed the secret), so it is left blank for an admin to
-    fill in — the row exists so that webhooks keep verifying across the upgrade.
+    Seeding runs only when the table is empty, so an admin who deletes or renames
+    the seeded row never has it reappear. The base URL is unknown to the env
+    config (spec 47 only ever needed the secret), so it is left blank for an
+    admin to fill in — the row exists so that webhooks keep verifying across the
+    upgrade.
     """
     secret = settings.forgejo_webhook_secret.strip()
-    if not secret:
-        return
     async with SessionLocal() as session:
         rows = await session.execute(select(func.count()).select_from(ForgejoConnection))
-        if int(rows.scalar_one()) > 0:
-            return
-        session.add(
-            ForgejoConnection(
-                name="Forgejo",
-                base_url=settings.forgejo_base_url.rstrip("/"),
-                webhook_secret=secret,
-                active=True,
+        if secret and int(rows.scalar_one()) == 0:
+            session.add(
+                ForgejoConnection(
+                    name="Forgejo",
+                    base_url=settings.forgejo_base_url.rstrip("/"),
+                    webhook_secret=secret,
+                    active=True,
+                )
             )
-        )
-        await session.commit()
-        logger.info("forgejo: seeded one connection from RADD_FORGEJO_WEBHOOK_SECRET")
+            await session.commit()
+            logger.info("forgejo: seeded one connection from RADD_FORGEJO_WEBHOOK_SECRET")
+        await refresh_connection_snapshot(session)

@@ -11,9 +11,6 @@ class AttachmentRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    # Owning item for item-parented rows (property on the model) — kept so every
-    # pre-102 consumer of the API works unchanged; None for wiki-parented files.
-    item_id: uuid.UUID | None
     entity_type: str
     entity_id: uuid.UUID
     filename: str
@@ -37,7 +34,7 @@ class StorageHostCreate(BaseModel):
     bucket: str = Field(default="", max_length=200)
     region: str = Field(default="", max_length=100)
     secure: bool = False
-    root_dir: str = Field(default="", max_length=500)  # filesystem only; "" = env default
+    root_dir: str = Field(default="", max_length=500)  # filesystem only (required there)
     delivery_mode: DeliveryMode = DeliveryMode.PROXY
     presign_expiry_seconds: int | None = Field(default=None, ge=30, le=86400)
     user_selectable: bool = False

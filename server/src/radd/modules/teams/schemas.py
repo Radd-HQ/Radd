@@ -78,10 +78,8 @@ class TeamGroupRead(BaseModel):
 
 class ProjectTeamAttach(BaseModel):
     team_id: uuid.UUID
+    # None = the builtin member role (default semantics, not an alias).
     role_id: uuid.UUID | None = None
-    # Compat: a role KEY ("member", "triager", …) — used when role_id is
-    # omitted; defaults to the builtin member role.
-    role: str | None = Field(default=None, max_length=100)
 
 
 class ProjectTeamUpdate(BaseModel):

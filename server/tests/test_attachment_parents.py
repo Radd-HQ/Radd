@@ -113,7 +113,7 @@ async def test_item_parent_round_trip_with_bytes_on_disk(db, admin, host, tmp_pa
         upload=_upload(),
         actor_id=admin.id,
     )
-    assert attachment.item_id == item.id  # the back-compat property
+    assert attachment.item_id == item.id  # the event-payload property (model-only)
     assert attachment.storage_host_id == host.id
     stored = Path(host.root_dir) / attachment.storage_name
     assert stored.read_bytes() == b"png-bytes"

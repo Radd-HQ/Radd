@@ -309,7 +309,7 @@ async def is_team_steward(session: AsyncSession, user_id: uuid.UUID, team: Team)
     one of its managers? Callers combine this with the global `team.update` atom;
     keeping the two separate is what lets a team leader manage one team without
     being handed every team."""
-    if team.owner_id is not None and team.owner_id == user_id:
+    if team.owner_id == user_id:
         return True
     return await session.get(TeamManager, (team.id, user_id)) is not None
 
@@ -388,8 +388,8 @@ async def attach_project_team(
     team = await get_team(session, data.team_id)
     if data.role_id is not None:
         role = await auth_roles.get_role(session, data.role_id)
-    else:  # compat: role key, defaulting to the builtin member role
-        role = await auth_roles.role_by_key(session, data.role or BuiltinRoleKey.MEMBER)
+    else:  # default: the builtin member role
+        role = await auth_roles.role_by_key(session, BuiltinRoleKey.MEMBER)
     if await session.get(ProjectTeam, (project_id, data.team_id)):
         raise ConflictError(TeamEntity.PROJECT_TEAM, data.team_id)
     attachment = ProjectTeam(project_id=project_id, team_id=data.team_id, role_id=role.id)

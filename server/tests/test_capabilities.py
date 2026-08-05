@@ -34,16 +34,18 @@ def test_capability_checks_match_the_old_inline_logic():
     assert cm["workers"]["enabled"] == settings.run_workers
 
 
-async def test_storage_ai_and_sso_capabilities_reflect_their_db_snapshots():
-    """Specs 101/102/110 moved these off env: the sync capability checks read the
-    process-local snapshots the startup hooks (and admin writes) refresh."""
+async def test_storage_ai_sso_and_forgejo_capabilities_reflect_their_db_snapshots():
+    """Specs 101/102/110/111 moved these off env: the sync capability checks read
+    the process-local snapshots the startup hooks (and admin writes) refresh."""
     from radd.modules.ai import registry as ai_registry
     from radd.modules.attachments import hosts
+    from radd.modules.forgejo import service as forgejo_service
     from radd.modules.sso import registry as sso_registry
 
     await hosts.seed_from_env()  # empty table in a fresh test DB -> seeds one host
     await ai_registry.seed_from_env()  # inert without RADD_AI_PROVIDER; refreshes
     await sso_registry.seed_from_env()  # inert without RADD_OIDC_ISSUER; refreshes
+    await forgejo_service.seed_from_env()  # inert without the env secret; refreshes
     cm = _map()
     default = hosts.default_snapshot()
     assert cm["storage"]["enabled"] == bool(default)
@@ -53,6 +55,9 @@ async def test_storage_ai_and_sso_capabilities_reflect_their_db_snapshots():
     assert cm["ai"]["provider"] == (chat or {}).get("provider", "")
     assert cm["sso"]["enabled"] == bool(sso_registry.snapshot())
     assert cm["sso"]["providers"] == len(sso_registry.snapshot())
+    # Spec 111 made connections rows (env secret SEED-ONLY): the pill counts
+    # ACTIVE rows, so a UI-created connection lights it with no env at all.
+    assert cm["forgejo"]["enabled"] == (forgejo_service.active_connection_count() > 0)
 
 
 def test_connectors_derive_generically_from_the_connector_category():
@@ -64,7 +69,7 @@ def test_connectors_derive_generically_from_the_connector_category():
         "gitlab", "forgejo", "google_chat", "alertmanager", "email_intake",
     }
     assert connectors["gitlab"] == bool(settings.gitlab_webhook_secret)
-    assert connectors["forgejo"] == bool(settings.forgejo_webhook_secret)
+    # forgejo is row-backed since spec 111 — asserted in the snapshot test above.
     assert connectors["google_chat"] == bool(settings.googlechat_webhook_url)
     assert connectors["alertmanager"] == bool(settings.alertmanager_token)
     assert connectors["email_intake"] == bool(settings.mail_imap_host)

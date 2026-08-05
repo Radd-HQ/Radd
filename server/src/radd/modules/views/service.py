@@ -64,7 +64,7 @@ from .types import (
 )
 
 # Personal use of views (create private, edit own) only needs item.read in scope;
-# the view.* CRUD atoms gate server-wide broadcasts + legacy owner-less views.
+# the view.* CRUD atoms gate server-wide broadcasts + seeded owner-less views.
 PERSONAL_VIEW_PERMISSION = Permission.ITEM_READ
 
 
@@ -114,7 +114,7 @@ async def _can_manage_view(
     session: AsyncSession, actor: User, resource_id: str, project_id: uuid.UUID | None
 ) -> bool:
     """Who may manage a view's share grants: the owner, a co-owner (OWNER-level
-    grant), or — legacy owner-less views — a view.update holder in scope. Mirrors
+    grant), or — seeded owner-less views — a view.update holder in scope. Mirrors
     `_require_manage` for the generic /grants router."""
     try:
         view = await get_view(session, uuid.UUID(resource_id))
@@ -190,7 +190,7 @@ async def _scope_permissions(
 async def _hydrate(session: AsyncSession, actor: User, views: list[View]) -> list[ViewRead]:
     """Batch-build reads: sharing state + per-ACTOR capabilities (spec 57).
     can_edit = definition writes; can_manage = sharing + delete (owner, or the
-    view.update atom on LEGACY owner-less views)."""
+    view.update atom on SEEDED owner-less views)."""
     if not views:
         return []
     shares_map = await _shares_by_view(session, [v.id for v in views])
@@ -559,7 +559,7 @@ async def _require_manage(
 ) -> View:
     """Sharing changes + delete + transfer: the owner or an OWNER-level grantee
     (co-owner) — editor grantees edit content, they don't re-share or delete.
-    Legacy owner-less views fall back to the view.* RBAC atom (`legacy_atom`)."""
+    Seeded owner-less views fall back to the view.* RBAC atom (`legacy_atom`)."""
     view, grant = await _load_visible(session, view_id, actor)
     if view.owner_id == actor.id or grant is ShareLevel.OWNER:
         return view
@@ -591,8 +591,7 @@ def _validate_global_access(level: ShareLevel | None) -> str | None:
 async def create_view(session: AsyncSession, data: ViewCreate, actor: User) -> ViewRead:
     if data.project_id is not None:
         await projects_service.get_project(session, data.project_id)
-    # Pre-spec-57 alias: shared=true meant globally-visible.
-    global_access = data.global_access or (ShareLevel.VIEWER if data.shared else None)
+    global_access = data.global_access
     # Server-wide visibility is a broadcast — the view.create atom gates it.
     # Sharing with specific people/teams is a personal act: item.read suffices.
     permission = Permission.VIEW_CREATE if global_access is not None else PERSONAL_VIEW_PERMISSION
@@ -732,7 +731,7 @@ async def update_sharing(
     session: AsyncSession, view_id: uuid.UUID, data: ViewSharingUpdate, actor: User
 ) -> ViewRead:
     """Set the view's PUBLIC access level (spec 57 → spec 92): `global_access` = the
-    ShareLevel every active user gets, or null = not public. Owner-gated (legacy
+    ShareLevel every active user gets, or null = not public. Owner-gated (seeded
     owner-less: view.update); turning ON global visibility additionally needs
     view.create (it's a server-wide broadcast). Per-subject shares are managed
     grant-by-grant through the generic /grants API now."""
@@ -834,7 +833,7 @@ async def _emit(
         "name": view.name,
         "view_type": view.view_type,
         "project_id": str(view.project_id) if view.project_id else None,
-        # Visible beyond the owner (server-wide or legacy owner-less);
+        # Visible beyond the owner (server-wide or seeded owner-less);
         # per-grant shares ride along when the emitter changed them.
         "shared": view.owner_id is None or view.global_access is not None,
         "global_access": view.global_access,

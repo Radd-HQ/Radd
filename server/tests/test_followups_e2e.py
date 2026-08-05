@@ -66,7 +66,7 @@ async def test_default_value_seeded_when_key_omitted(db, admin, project):
     await fields_service.create_field(
         db,
         FieldDefinitionCreate(
-            project_id=project.id,
+            project_ids=[project.id],
             key="priority_band",
             name="Priority band",
             type=FieldType.SELECT,
@@ -95,7 +95,7 @@ async def test_default_value_edit_and_clear_via_patch(db, admin, project):
     field = await fields_service.create_field(
         db,
         FieldDefinitionCreate(
-            project_id=project.id,
+            project_ids=[project.id],
             key="region",
             name="Region",
             type=FieldType.TEXT,

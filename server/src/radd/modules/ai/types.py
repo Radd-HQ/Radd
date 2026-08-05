@@ -144,12 +144,12 @@ class AiInvalidQueryError(RaddError):
 
 
 class AiStatus(BaseModel):
-    """GET /ai/status — the frontend gates its AI affordances on `enabled` and,
-    since spec 101, per-feature on `features` (old fields kept for back-compat)."""
+    """GET /ai/status — the frontend gates its AI affordances on `enabled` (the
+    chat role resolves at all) and, since spec 101, per-feature on `features`
+    (toggle AND role resolvable). Both are current API; provider/model details
+    live on /ai/providers and /ai/roles."""
 
     enabled: bool
-    provider: str | None = None
-    model: str | None = None
     features: dict[str, bool] = {}
     # Instance delivery preference (not a feature — needs no role): stream
     # summaries/reasons progressively vs complete-then-show.

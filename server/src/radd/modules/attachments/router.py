@@ -1,5 +1,4 @@
-"""Attachment endpoints (spec 102): polymorphic canonical routes + the legacy
-item aliases every pre-102 consumer (SDK/MCP/importer) still calls.
+"""Attachment endpoints (spec 102): polymorphic canonical routes.
 
 Permission checks delegate to the parent binding (parents.py): item parents ->
 project-scoped item perms; page parents -> the global doc atoms. Delete
@@ -153,25 +152,6 @@ async def delete_attachment(
         if not allowed:
             raise ForbiddenError("you may only delete your own attachments here")
     await service.delete_attachment(session, attachment, actor_id=user.id)
-
-
-# --- legacy item aliases (pre-102 API surface, kept working) -------------------
-
-
-@router.post("/items/{item_id}/attachments", response_model=AttachmentRead, status_code=201)
-async def upload_item_attachment(
-    request: Request, item_id: uuid.UUID, file: UploadFile, session: Session, user: CurrentUser
-) -> AttachmentRead:
-    return await upload_attachment(
-        request, file, AttachmentParentType.ITEM, item_id, session, user
-    )
-
-
-@router.get("/items/{item_id}/attachments", response_model=list[AttachmentRead])
-async def list_item_attachments(
-    item_id: uuid.UUID, session: Session, user: CurrentUser
-) -> list[AttachmentRead]:
-    return await list_attachments(AttachmentParentType.ITEM, item_id, session, user)
 
 
 # --- the upload-choice context (spec 102 "always ask") -------------------------

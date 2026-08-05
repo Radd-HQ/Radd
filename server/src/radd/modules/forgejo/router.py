@@ -1,12 +1,10 @@
 import json
 import logging
-from types import SimpleNamespace
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd.config import settings
 from radd.db import get_session
 from radd.exceptions import ForbiddenError
 from radd.modules.auth import service as auth
@@ -17,7 +15,6 @@ from radd.modules.projects import service as projects_service
 from radd.modules.releases import pipeline
 from radd.modules.vcs import service as vcs
 from radd.modules.vcs.types import VcsProvider
-from radd.modules.workflow import service as workflow
 
 from . import parsing, service
 from .types import CiState, ForgejoEventKind
@@ -182,25 +179,19 @@ async def _transition_merged(session: AsyncSession, merged_items: list[Any]) -> 
     """Move each referenced item to the project's WAITING-for-release state (spec
     112): a merged PR means the work is done, not that it has shipped.
 
-    Falls back to the spec-47 env state name for a project that has not set the
-    pipeline up, so an existing deployment keeps its old behaviour.
+    A project that has not configured the release pipeline has no waiting state,
+    so its merged PRs simply do not auto-transition — set the pipeline states in
+    Settings → Releases to turn this on.
     """
     actor = await auth.get_user(session, SYSTEM_ACTOR_ID)
     count = 0
     for item in merged_items:
         project = await projects_service.get_project(session, item.project_id)
         target_id = await pipeline.waiting_state_id(session, project)
-        if target_id is None:
-            states = await workflow.list_states(session, item.project_id)
-            fallback = next(
-                (s for s in states if s.name == settings.forgejo_merge_transition_state), None
-            )
-            target_id = fallback.id if fallback else None
-        target = SimpleNamespace(id=target_id) if target_id else None
-        if target is None or item.state_id == target.id:
+        if target_id is None or item.state_id == target_id:
             continue
         try:
-            await items.update_item(session, item.id, ItemUpdate(state_id=target.id), actor)
+            await items.update_item(session, item.id, ItemUpdate(state_id=target_id), actor)
             count += 1
         except Exception:
             logger.exception("forgejo: merge transition failed for item %s", item.id)

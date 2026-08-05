@@ -23,9 +23,9 @@ from radd.modules.automations.engine import (
 from radd.modules.automations.schemas import RuleCreate
 from radd.modules.automations.types import (
     CLEAR_VALUE,
-    MANUAL_TRIGGER,
     SYSTEM_ACTOR_ID,
     ActionType,
+    AutomationTrigger,
 )
 from radd.modules.items.enums import ItemEvent, Priority
 
@@ -80,7 +80,7 @@ def test_should_process_covers_the_catalog_and_nothing_else():
 def test_catalog_is_sane():
     # MANUAL is deliberately NOT in the catalog: manual rules only run on demand via
     # POST /automations/{id}/run — the event engine must never fire them.
-    assert MANUAL_TRIGGER not in catalog.TRIGGERS
+    assert AutomationTrigger.MANUAL.value not in catalog.TRIGGERS
     assert catalog.TRIGGERS[ItemEvent.UPDATED.value].has_changes is True
     assert catalog.TRIGGERS[ItemEvent.UPDATED.value].item_scoped is True
     assert catalog.TRIGGERS["comment.created"].item_scoped is True
