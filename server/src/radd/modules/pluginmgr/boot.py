@@ -8,30 +8,42 @@
     (off by default, enable to turn on).
 
 A synchronous read (short-lived sync engine over the psycopg driver) so it runs
-before routers mount. Defensive: if the table doesn't exist yet it behaves as "no
-overrides" (everything default).
+before routers mount. Defensive ONLY for the fresh-database case: a missing
+`installed_plugins` table reads as "no overrides". Every other failure raises —
+answering "no overrides" on a transient DB error would silently change which
+plugins load (the spec-104 lesson: a swallowed error here means "disable
+changed nothing"), and a boot that cannot read its plugin state should fail
+loudly and restart, not guess (RADD-873).
 """
 
+import logging
+
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import ProgrammingError
 
 from radd.config import settings
 
 from . import discovery
 from .types import PluginState
 
+logger = logging.getLogger(__name__)
+
 
 def plugin_states() -> dict[str, str]:
-    """{plugin_id: state} for every installed_plugins row (empty if unavailable)."""
+    """{plugin_id: state} for every installed_plugins row (empty only when the
+    table does not exist yet — a fresh DB before the first migration)."""
+    engine = create_engine(settings.database_url)  # psycopg3 works sync + async
     try:
-        engine = create_engine(settings.database_url)  # psycopg3 works sync + async
-        try:
-            with engine.connect() as conn:
-                rows = conn.execute(text("SELECT id, state FROM installed_plugins")).all()
-                return {r[0]: r[1] for r in rows}
-        finally:
-            engine.dispose()
-    except Exception:
+        with engine.connect() as conn:
+            rows = conn.execute(text("SELECT id, state FROM installed_plugins")).all()
+            return {r[0]: r[1] for r in rows}
+    except ProgrammingError:
+        # UndefinedTable: alembic hasn't run yet. The one condition that
+        # legitimately means "everything default".
+        logger.info("installed_plugins missing — fresh database, no plugin overrides")
         return {}
+    finally:
+        engine.dispose()
 
 
 def resolve_boot_paths() -> tuple[str, ...]:
