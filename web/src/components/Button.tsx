@@ -25,8 +25,8 @@ const variantClasses: Record<ButtonVariantValue, string> = {
   [ButtonVariant.primary]: "bg-accent text-white hover:bg-accent-hover",
   [ButtonVariant.secondary]: "border border-subtle bg-elevated text-fg hover:border-strong",
   [ButtonVariant.ghost]: "text-fg-secondary hover:bg-overlay hover:text-heading",
-  [ButtonVariant.danger]: "bg-red-500/90 text-white hover:bg-red-500",
-  [ButtonVariant.dangerGhost]: "text-red-400 hover:bg-red-500/10 hover:text-red-300",
+  [ButtonVariant.danger]: "bg-status-danger/90 text-white hover:bg-status-danger",
+  [ButtonVariant.dangerGhost]: "text-status-danger-ink hover:bg-status-danger/10",
 };
 
 const sizeClasses: Record<ButtonSizeValue, string> = {

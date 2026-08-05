@@ -287,15 +287,19 @@ export const CYCLE_STATUS_META: Record<CycleStatusValue, StatusMeta> = {
     dotClassName: "bg-fg-secondary",
     pillClassName: "border-emphasis/60 bg-elevated/60 text-fg",
   },
+  // Upcoming/active ride the workflow-state scale (RADD-900): a queued cycle
+  // is the todo blue, a running one the progress green — the same traffic-light
+  // reading as items, and the raw blue-200/emerald-200 shades they used had no
+  // light remap (stock blue-200 on white is ~1.4:1).
   [CycleStatus.upcoming]: {
     label: "Upcoming",
-    dotClassName: "bg-blue-400",
-    pillClassName: "border-blue-400/30 bg-blue-400/10 text-blue-200",
+    dotClassName: "bg-chart-todo",
+    pillClassName: "border-chart-todo/40 bg-chart-todo/12 text-chart-todo-ink",
   },
   [CycleStatus.active]: {
     label: "Active",
-    dotClassName: "bg-emerald-400",
-    pillClassName: "border-emerald-400/30 bg-emerald-400/10 text-emerald-200",
+    dotClassName: "bg-chart-progress",
+    pillClassName: "border-chart-progress/40 bg-chart-progress/12 text-chart-progress-ink",
   },
   [CycleStatus.completed]: {
     label: "Completed",
@@ -363,16 +367,18 @@ export const REPORT_INTERVAL_ORDER: readonly ReportIntervalValue[] = [
   ReportInterval.week,
 ];
 
-/** Burnup line colors (spec 19): scope vs completed. */
-export const BURNUP_SCOPE_COLOR = "#818cf8"; // indigo-400
-export const BURNUP_COMPLETED_COLOR = "#34d399"; // emerald-400
+/** Burnup line colors (spec 19): scope vs completed. `var()` references like
+ * CATEGORY_CHART_COLORS above — the charts were still drawing the retired
+ * pre-Dusk indigo as hex, theme-blind (RADD-900). */
+export const BURNUP_SCOPE_COLOR = "var(--accent-fill)";
+export const BURNUP_COMPLETED_COLOR = "var(--status-success)";
 
 /** Accent for single-series bar charts (throughput, velocity). */
-export const CHART_ACCENT_COLOR = "#818cf8"; // indigo-400
+export const CHART_ACCENT_COLOR = "var(--accent-fill)";
 
 /** SLA trend colors (spec 63): targets met vs breached per week. */
-export const SLA_MET_COLOR = "#34d399"; // emerald-400
-export const SLA_BREACHED_COLOR = "#f87171"; // red-400
+export const SLA_MET_COLOR = "var(--status-success)";
+export const SLA_BREACHED_COLOR = "var(--status-danger)";
 
 // ---------------------------------------------------------------------------
 // Automations + intake forms (spec 20)

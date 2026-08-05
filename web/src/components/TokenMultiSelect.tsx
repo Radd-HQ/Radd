@@ -157,7 +157,7 @@ export function TokenMultiSelect({
           "focus-within:outline-none focus-within:ring-2 " +
           (disabled ? "opacity-60 " : "") +
           (invalid
-            ? "border-red-500/60 focus-within:border-red-400 focus-within:ring-red-400/30"
+            ? "border-status-danger/60 focus-within:border-status-danger focus-within:ring-status-danger/30"
             : "border-subtle focus-within:border-accent focus-within:ring-accent/30")
         }
       >

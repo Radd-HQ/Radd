@@ -13,8 +13,10 @@ import { StackedBarChart, type StackedBar } from "../charts/StackedBarChart";
 import { shortDate } from "../charts/chart-utils";
 import { CardBody, ScopeNote } from "./report-state";
 
-/** CSAT (spec 65) renders amber — the star color, distinct from met/breached. */
-const CSAT_COLOR = "#fbbf24"; // amber-400
+/** CSAT (spec 65) renders amber — the star color, distinct from met/breached.
+ * The warning fill IS star-amber per theme (RADD-900), so the bars follow the
+ * theme instead of pinning dark-tuned amber-400 onto white. */
+const CSAT_COLOR = "var(--status-warning)";
 
 function formatSeconds(seconds: number | null): string {
   if (seconds === null) return "—";

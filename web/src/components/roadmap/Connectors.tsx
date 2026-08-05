@@ -6,21 +6,25 @@ import { barRenderRightX, isBlocksViolation, type RoadmapRow } from "./roadmap-m
  * manual links (`blocks`/`relates`/`duplicates` — mentions are noise) whose
  * BOTH endpoints render as visible bars (filtered-out endpoints keep the red
  * "depends on" chip fallback), plus the live rubber band while a link drag is
- * in flight. `blocks` draws red — dashed AMBER when the edge is VIOLATED
- * (dependent starts on/before the blocker's end); `relates`/`duplicates` draw
- * neutral zinc. The overlay itself passes pointer events through, but each
- * elbow carries a wide invisible hit path — clicking one opens the link
- * popover (retype/remove) when the caller wires `onEdgeClick`.
+ * in flight. `blocks` draws danger red — dashed warning amber when the edge is
+ * VIOLATED (dependent starts on/before the blocker's end); `relates`/
+ * `duplicates` draw a neutral grey. The overlay itself passes pointer events
+ * through, but each elbow carries a wide invisible hit path — clicking one
+ * opens the link popover (retype/remove) when the caller wires `onEdgeClick`.
+ *
+ * Colors are `var()` references (RADD-900) so the SVG strokes follow the theme
+ * — the old hexes were theme-blind, and one comment still called indigo "the
+ * app's interaction accent" a full wave after the accent went periwinkle.
  */
 
-/** red-400 — matches the "depends on" chip the connectors replace. */
-const BLOCKS_COLOR = "#f87171";
-/** zinc-500 — the neutral relates/duplicates edges (spec 78). */
-const NEUTRAL_COLOR = "#71717a";
-/** amber-400 — a violated `blocks` ordering (spec 78). */
-const VIOLATION_COLOR = "#fbbf24";
-/** indigo-400 — the app's interaction accent. */
-const RUBBER_COLOR = "#818cf8";
+/** Matches the "depends on" chip the connectors replace. */
+const BLOCKS_COLOR = "var(--status-danger)";
+/** The neutral relates/duplicates edges (spec 78). */
+const NEUTRAL_COLOR = "var(--color-fg-muted)";
+/** A violated `blocks` ordering (spec 78). */
+const VIOLATION_COLOR = "var(--status-warning)";
+/** The app's interaction accent. */
+const RUBBER_COLOR = "var(--accent-fill)";
 /** Horizontal lead-in/out before a connector turns. */
 const STUB_PX = 8;
 /** Invisible click-target width over each elbow (spec 78). */

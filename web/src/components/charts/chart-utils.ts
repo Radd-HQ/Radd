@@ -18,10 +18,13 @@ export function niceScale(max: number, tickCount = 4): { max: number; ticks: num
   return { max: niceMax, ticks };
 }
 
-/** Shared SVG palette (dark theme): grid lines, axis text, muted text. */
-export const CHART_GRID = "#3f3f46"; // zinc-700
-export const CHART_AXIS_TEXT = "#a1a1aa"; // zinc-400
-export const CHART_MUTED_TEXT = "#71717a"; // zinc-500
+/** Shared SVG palette as `var()` references (RADD-900): grid lines, axis text,
+ * muted text. SVG fill/stroke resolve CSS variables, so the charts follow the
+ * theme remap like every other surface — the old hexes were STOCK zinc values
+ * from a ramp the app abandoned, and dark-tuned greys in light mode. */
+export const CHART_GRID = "var(--color-strong)";
+export const CHART_AXIS_TEXT = "var(--color-fg-secondary)";
+export const CHART_MUTED_TEXT = "var(--color-fg-muted)";
 
 // Re-exported so the report cards keep their one-stop chart-helpers import.
 export { shortDate } from "../../lib/dates";

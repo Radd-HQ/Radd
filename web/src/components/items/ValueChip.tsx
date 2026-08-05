@@ -1,9 +1,13 @@
 import { iconFor } from "../../lib/icons";
 
-/** Pick black or white text for legibility on a given hex background. */
+/** Pick black or white text for legibility on a given hex background. A color
+ * the luma read cannot parse (a `var()` reference without an explicit
+ * `textColor` — a caller bug per the prop doc) falls back to the theme's
+ * heading token rather than hardcoded white, which was invisible ink on light
+ * fills in light mode (RADD-900). */
 function textOn(hex: string): string {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
-  if (!m) return "#fff";
+  if (!m) return "var(--color-zinc-100)";
   const n = parseInt(m[1], 16);
   const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
   // Rec. 601 luma — light chips get dark text, dark chips get white.

@@ -186,6 +186,24 @@
   --color-chart-done-ink: var(--chart-done-ink);
   --color-chart-canceled-ink: var(--chart-canceled-ink);
 
+  /* Status tier (RADD-900). Danger/warning/success as SEMANTIC tokens, so the
+     kit's error rings, the danger button, chart series and one-off pills stop
+     re-deriving "red" from raw palette shades that the light remap may or may
+     not cover. Two roles, mirroring --chart-*:
+       base  the FILL — buttons, rings, washes, chart marks (>= 3:1 on its
+             backdrop; light values computed against white)
+       ink   the colour as TEXT — error paragraphs, tinted-pill text (>= 4.5:1
+             on the surface AND on a 10% tint of its own fill)
+     Dark values are the shades the app already rendered (red-500 fill /
+     red-400 ink, amber-400/300, emerald-400/300), so dark is visually
+     unchanged; light values are the computed deep steps. */
+  --color-status-danger: var(--status-danger);
+  --color-status-danger-ink: var(--status-danger-ink);
+  --color-status-warning: var(--status-warning);
+  --color-status-warning-ink: var(--status-warning-ink);
+  --color-status-success: var(--status-success);
+  --color-status-success-ink: var(--status-success-ink);
+
   /* Callout panels (RADD-715). A separate scale from --chart-*, which encodes
      WORKFLOW STATE: reusing "in progress" green to mean "success" would make a
      board legend and a page callout claim the same colour means two things.
@@ -276,6 +294,16 @@ html {
   --priority-high: #f97316;
   --priority-normal: #64748b;
   --priority-low: #71717a;
+
+  /* Status tier (dark) — RADD-900. The shades the app already rendered, named:
+     fills are red-500 / amber-400 / emerald-400, inks the 400/300 text steps
+     everything red/amber/emerald already used on dark surfaces. */
+  --status-danger: #ef4444; /* red-500 — 4.5:1 on --color-surface */
+  --status-danger-ink: #f87171; /* red-400 — 6.8:1 on the page */
+  --status-warning: #fbbf24; /* amber-400 */
+  --status-warning-ink: #fcd34d; /* amber-300 */
+  --status-success: #34d399; /* emerald-400 */
+  --status-success-ink: #6ee7b7; /* emerald-300 */
 
   /* Callouts (dark) — see the @theme block above for how these were derived. */
   --callout-info-fill: #11212c;
@@ -371,6 +399,17 @@ html.light {
   --priority-normal: #64748b;
   --priority-low: #8a8d93;
 
+  /* Status tier (light) — RADD-900. Deepened against white: fills clear the
+     3:1 non-text floor on the white panel (danger 4.8, warning 3.2, success
+     3.8), inks clear 4.5:1 on white AND on a 10% tint of their own fill
+     (danger 6.5, warning 5.0, success 5.5). */
+  --status-danger: #dc2626; /* red-600 */
+  --status-danger-ink: #b91c1c; /* red-700 */
+  --status-warning: #d97706; /* amber-600 */
+  --status-warning-ink: #b45309; /* amber-700 */
+  --status-success: #059669; /* emerald-600 */
+  --status-success-ink: #047857; /* emerald-700 */
+
   /* Callouts (light). The old markup used `text-sky-300` and friends — tuned
      for dark only, and unreadable on a light tint.
      Borders are computed against the PAGE background (#f4f6f9), not the white
@@ -407,6 +446,12 @@ html.light {
   --color-purple-300: #7e22ce; /* purple-700 — parent + child-count chips */
   --color-teal-300: #0f766e; /* teal-700 — story-point chips */
   --color-violet-300: #6d28d9; /* violet-700 — OIDC source badge */
+  /* Kind/priority ICON tints (RADD-900) — these shades rendered stock pastels
+     on white (~2.2:1). Deepened to 600-level; icon fills, so 3:1 is the floor
+     (orange 3.6, purple 5.4, blue 5.2 against white). */
+  --color-orange-400: #ea580c; /* orange-600 — High-priority icon */
+  --color-purple-400: #9333ea; /* purple-600 — Epic icon */
+  --color-blue-400: #2563eb; /* blue-600 — Issue icon */
 
   --shadow-lift-sm: 0 1px 2px rgb(0 0 0 / 0.08);
   --shadow-pop-md: 0 4px 16px rgb(0 0 0 / 0.12), 0 0 0 1px rgb(0 0 0 / 0.04);

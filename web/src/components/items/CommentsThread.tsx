@@ -376,10 +376,15 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
             placeholder={internalDraft ? "Write an internal note…" : "Write a comment…"}
             onSubmitShortcut={submitComment}
             quickActions={quickActions}
-            className={internalDraft ? "!border-amber-400/40 !bg-amber-950/30" : ""}
+            // Callout-warning tokens, computed per theme (RADD-900): the old
+            // amber-950/30 wash had no light remap — a near-black brown behind
+            // dark text on white. `!` stays because RichEditor appends this
+            // AFTER its own border/bg classes, where stylesheet order, not
+            // class order, would decide the winner.
+            className={internalDraft ? "!border-callout-warning-border/60 !bg-callout-warning-fill" : ""}
           />
           {createComment.isError && (
-            <p className="text-xs text-red-400">{errorMessage(createComment.error)}</p>
+            <p className="text-xs text-status-danger-ink">{errorMessage(createComment.error)}</p>
           )}
           <div className="flex justify-end">
             <Button type="submit" disabled={createComment.isPending || body.trim() === ""}>

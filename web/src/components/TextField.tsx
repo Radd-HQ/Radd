@@ -25,13 +25,13 @@ export function TextField({ label, hint, error, className = "", ...props }: Text
           "placeholder:text-fg-faint focus:outline-none focus:ring-2 " +
           "disabled:cursor-not-allowed disabled:opacity-70 " +
           (error
-            ? "border-red-500/60 focus:border-red-400 focus:ring-red-400/30 "
+            ? "border-status-danger/60 focus:border-status-danger focus:ring-status-danger/30 "
             : "border-subtle focus:border-accent focus:ring-accent/30 ") +
           className
         }
       />
       {error ? (
-        <p id={hintId} className="text-xs text-red-400">
+        <p id={hintId} className="text-xs text-status-danger-ink">
           {error}
         </p>
       ) : hint ? (

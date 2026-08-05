@@ -368,7 +368,7 @@ export function Select({
           "disabled:cursor-not-allowed disabled:opacity-70 " +
           sizeClasses[size] +
           (invalid
-            ? " border-red-500/60 focus:border-red-400 focus:ring-red-400/30 "
+            ? " border-status-danger/60 focus:border-status-danger focus:ring-status-danger/30 "
             : " border-subtle focus:border-accent focus:ring-accent/30 ") +
           triggerClassName
         }
