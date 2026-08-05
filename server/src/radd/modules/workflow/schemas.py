@@ -17,6 +17,9 @@ class StateCreate(BaseModel):
 class StateUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=100)
     position: int | None = None
+    # RADD-852: tri-state — absent = untouched, null = leave the group.
+    # Distinguished via model_fields_set in the service.
+    group_id: uuid.UUID | None = None
 
 
 class StateRead(BaseModel):
@@ -28,6 +31,7 @@ class StateRead(BaseModel):
     category: StateCategory
     position: int
     is_default: bool
+    group_id: uuid.UUID | None = None
     created_at: UtcDatetime
 
 
@@ -102,3 +106,27 @@ class AllowedTransitions(BaseModel):
 
     mode: TransitionMode
     targets: list[AllowedTarget]
+
+
+# --- state groups (RADD-852) --------------------------------------------------
+
+
+class StateGroupCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    color: str | None = Field(default=None, max_length=20)
+    position: int | None = None  # None = append
+
+
+class StateGroupUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    color: str | None = Field(default=None, max_length=20)
+    position: int | None = None
+
+
+class StateGroupRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    color: str | None
+    position: int

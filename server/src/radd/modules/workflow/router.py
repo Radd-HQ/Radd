@@ -10,7 +10,17 @@ from radd.modules.auth.deps import CurrentUser
 from radd.modules.projects import service as projects_service
 
 from . import service
-from .schemas import StateCreate, StateRead, StateUpdate
+from radd.exceptions import ForbiddenError
+from radd.modules.auth.types import InstanceRole
+
+from .schemas import (
+    StateCreate,
+    StateGroupCreate,
+    StateGroupRead,
+    StateGroupUpdate,
+    StateRead,
+    StateUpdate,
+)
 
 router = APIRouter(prefix="/states", tags=["workflow"])
 
@@ -66,3 +76,43 @@ async def delete_state(state_id: uuid.UUID, session: Session, user: CurrentUser)
     project = await projects_service.get_project(session, state.project_id)
     await authz.require(session, user, authz.Permission.STATE_DELETE, project=project)
     await service.delete_state(session, state_id, actor_id=user.id)
+
+
+# --- state groups (RADD-852) — instance-wide presentation tier ----------------
+# Reads ride membership like states; writes are instance-admin (the linktypes
+# precedent: instance-wide vocabulary, no per-project scope to gate on).
+
+group_router = APIRouter(prefix="/state-groups", tags=["workflow"])
+
+
+def _require_instance_admin(user) -> None:
+    if user.instance_role != InstanceRole.ADMIN.value:
+        raise ForbiddenError("managing state groups requires an instance admin")
+
+
+@group_router.get("", response_model=list[StateGroupRead])
+async def list_state_groups(session: Session, user: CurrentUser) -> list[StateGroupRead]:
+    await authz.require_member(session, user)
+    return [StateGroupRead.model_validate(g) for g in await service.list_state_groups(session)]
+
+
+@group_router.post("", response_model=StateGroupRead, status_code=201)
+async def create_state_group(
+    data: StateGroupCreate, session: Session, user: CurrentUser
+) -> StateGroupRead:
+    _require_instance_admin(user)
+    return StateGroupRead.model_validate(await service.create_state_group(session, data))
+
+
+@group_router.patch("/{group_id}", response_model=StateGroupRead)
+async def update_state_group(
+    group_id: uuid.UUID, data: StateGroupUpdate, session: Session, user: CurrentUser
+) -> StateGroupRead:
+    _require_instance_admin(user)
+    return StateGroupRead.model_validate(await service.update_state_group(session, group_id, data))
+
+
+@group_router.delete("/{group_id}", status_code=204)
+async def delete_state_group(group_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
+    _require_instance_admin(user)
+    await service.delete_state_group(session, group_id)

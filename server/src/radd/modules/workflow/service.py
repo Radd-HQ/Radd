@@ -9,8 +9,8 @@ from radd.modules.events import service as events
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 
-from .models import State, WorkflowTransition
-from .schemas import StateCreate, StateUpdate
+from .models import StateGroup, State, WorkflowTransition
+from .schemas import StateCreate, StateGroupCreate, StateGroupUpdate, StateUpdate
 from .types import DEFAULT_STATES, StateCategory, StateEntity, StateEvent
 
 
@@ -62,6 +62,12 @@ async def update_state(
         state.name = data.name
     if data.position is not None:
         state.position = data.position
+    if "group_id" in data.model_fields_set:
+        # RADD-852: null LEAVES the group (absent = untouched). Validate the
+        # target exists so a stale picker 404s instead of writing a dangle.
+        if data.group_id is not None:
+            await get_state_group(session, data.group_id)
+        state.group_id = data.group_id
     await session.flush()
     await _emit(session, StateEvent.UPDATED, state, actor_id)
     return state
@@ -175,3 +181,59 @@ async def _emit(
 # Re-export: the items-module enforcement seam (spec 61) — modules talk through
 # public service functions, and items already imports workflow.service.
 from .transitions import check_transition  # noqa: E402, F401
+
+
+# --- state groups (RADD-852): the presentation tier ---------------------------
+
+
+async def list_state_groups(session: AsyncSession) -> list[StateGroup]:
+    result = await session.execute(select(StateGroup).order_by(StateGroup.position, StateGroup.name))
+    return list(result.scalars())
+
+
+async def get_state_group(session: AsyncSession, group_id: uuid.UUID) -> StateGroup:
+    group = await session.get(StateGroup, group_id)
+    if group is None:
+        raise NotFoundError(StateEntity.STATE_GROUP, group_id)
+    return group
+
+
+async def create_state_group(session: AsyncSession, data: StateGroupCreate) -> StateGroup:
+    existing = await session.scalar(select(StateGroup).where(StateGroup.name == data.name))
+    if existing is not None:
+        raise ConflictError(StateEntity.STATE_GROUP, reason=f"group '{data.name}' already exists")
+    if data.position is None:
+        max_position = await session.scalar(select(func.max(StateGroup.position)))
+        position = (max_position or 0) + 1
+    else:
+        position = data.position
+    group = StateGroup(name=data.name, color=data.color, position=position)
+    session.add(group)
+    await session.flush()
+    return group
+
+
+async def update_state_group(
+    session: AsyncSession, group_id: uuid.UUID, data: StateGroupUpdate
+) -> StateGroup:
+    group = await get_state_group(session, group_id)
+    if data.name is not None and data.name != group.name:
+        clash = await session.scalar(select(StateGroup).where(StateGroup.name == data.name))
+        if clash is not None:
+            raise ConflictError(StateEntity.STATE_GROUP, reason=f"group '{data.name}' already exists")
+        group.name = data.name
+    if "color" in data.model_fields_set:
+        group.color = data.color
+    if data.position is not None:
+        group.position = data.position
+    await session.flush()
+    return group
+
+
+async def delete_state_group(session: AsyncSession, group_id: uuid.UUID) -> None:
+    """Hard delete. `states.group_id` is SET NULL by the FK — members degrade
+    to ungrouped; nothing semantic can break because the group never carried
+    semantics (that was the whole design)."""
+    group = await get_state_group(session, group_id)
+    await session.delete(group)
+    await session.flush()

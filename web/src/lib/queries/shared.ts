@@ -7,6 +7,7 @@ export const queryKeys = {
   authState: ["auth", "me"] as const,
   projects: ["projects"] as const,
   states: (projectId: string) => ["states", { projectId }] as const,
+  stateGroups: ["state-groups"] as const,
   allStates: ["states", "all"] as const,
   transitions: (projectId: string) => ["transitions", { projectId }] as const,
   allowedTransitions: (itemId: string) => ["allowedTransitions", { itemId }] as const,

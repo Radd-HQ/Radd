@@ -272,6 +272,7 @@ export const VIEW_TYPE_LABELS: Record<ViewTypeValue, string> = {
 export const VIEW_AXIS_LABELS: Record<ViewAxisValue, string> = {
   [ViewAxis.state]: "State",
   [ViewAxis.stateCategory]: "State category",
+  [ViewAxis.stateGroup]: "State group",
   [ViewAxis.assignee]: "Assignee",
   [ViewAxis.priority]: "Priority",
   [ViewAxis.kind]: "Kind",
@@ -283,6 +284,7 @@ export const VIEW_AXIS_LABELS: Record<ViewAxisValue, string> = {
 export const VIEW_AXIS_ORDER: readonly ViewAxisValue[] = [
   ViewAxis.state,
   ViewAxis.stateCategory,
+  ViewAxis.stateGroup,
   ViewAxis.assignee,
   ViewAxis.priority,
   ViewAxis.kind,

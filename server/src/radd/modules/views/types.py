@@ -28,6 +28,9 @@ class ViewAxis(StrEnum):
     # actually in flight" board. Bucketing is client-side like every axis;
     # membership comes from item.state.category, so no query changes.
     STATE_CATEGORY = "state_category"
+    # RADD-852: the user-defined presentation tier (state_groups rows) — the
+    # state keeps its category, the group is pure vocabulary.
+    STATE_GROUP = "state_group"
     ASSIGNEE = "assignee"
     PRIORITY = "priority"
     KIND = "kind"

@@ -20,6 +20,7 @@ import type {
   ProjectTeam,
   ScreenConfig,
   State,
+  StateGroup,
   Transition,
 } from "../types";
 
@@ -33,6 +34,15 @@ export const statesQuery = (projectId: string) =>
   queryOptions({
     queryKey: queryKeys.states(projectId),
     queryFn: () => api.get<State[]>(ApiPath.states, { query: { project_id: projectId } }),
+    staleTime: 60_000,
+  });
+
+/** State groups (RADD-852) — the user-defined presentation tier; any member
+ * may read (vocabulary), instance admins manage. */
+export const stateGroupsQuery = () =>
+  queryOptions({
+    queryKey: queryKeys.stateGroups,
+    queryFn: () => api.get<StateGroup[]>(ApiPath.stateGroups),
     staleTime: 60_000,
   });
 

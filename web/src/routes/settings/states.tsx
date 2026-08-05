@@ -5,17 +5,22 @@ import { api, errorMessage } from "../../lib/api";
 import { ApiPath, apiStatePath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
 import { CATEGORY_META, CATEGORY_ORDER } from "../../lib/meta";
-import { projectsQuery, queryKeys, statesQuery } from "../../lib/queries";
+import { projectsQuery, queryKeys, stateGroupsQuery, statesQuery } from "../../lib/queries";
 import {
   Permission,
   StateCategory,
   type State,
   type StateCategoryValue,
   type StateCreate,
+  type StateGroup,
   type StateUpdate,
 } from "../../lib/types";
+import { ApiPath as Api } from "../../lib/constants";
+import { useCurrentUser } from "../../lib/hooks";
+import { InstanceRole } from "../../lib/types";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
+import { Select } from "../../components/Select";
 import { SelectField } from "../../components/SelectField";
 import { TableSkeleton } from "../../components/TableSkeleton";
 import { TextField } from "../../components/TextField";
@@ -34,6 +39,9 @@ export function StatesSettingsPage({ projectId }: { projectId?: string }) {
   // States are per-project: gate on THAT project's manage permission.
   const canManage = perms.project(project, Permission.stateManage);
   const states = useQuery({ ...statesQuery(projectId ?? ""), enabled: Boolean(projectId) });
+  const groups = useQuery(stateGroupsQuery());
+  const me = useCurrentUser();
+  const isInstanceAdmin = me?.instance_role === InstanceRole.admin;
   const sorted = useMemo(
     () => [...(states.data ?? [])].sort((a, b) => a.position - b.position),
     [states.data],
@@ -66,6 +74,7 @@ export function StatesSettingsPage({ projectId }: { projectId?: string }) {
                 state={state}
                 projectId={project.id}
                 canManage={canManage}
+                groups={groups.data ?? []}
                 neighborUp={index > 0 ? sorted[index - 1] : null}
                 neighborDown={index < sorted.length - 1 ? sorted[index + 1] : null}
               />
@@ -75,6 +84,7 @@ export function StatesSettingsPage({ projectId }: { projectId?: string }) {
             )}
           </ul>
           {canManage && <AddStateForm projectId={project.id} />}
+          <StateGroupsCard groups={groups.data ?? []} canManage={isInstanceAdmin} />
           <TransitionsSection project={project} states={sorted} canManage={canManage} />
         </>
       )}
@@ -89,12 +99,14 @@ function StateRow({
   state,
   projectId,
   canManage,
+  groups,
   neighborUp,
   neighborDown,
 }: {
   state: State;
   projectId: string;
   canManage: boolean;
+  groups: StateGroup[];
   neighborUp: State | null;
   neighborDown: State | null;
 }) {
@@ -176,6 +188,23 @@ function StateRow({
             )}
           </span>
           <span className="text-xs text-fg-muted">{category.label}</span>
+          {/* RADD-852: presentation-group membership — pure vocabulary, so the
+              picker changes boards, never reports. */}
+          {canManage && groups.length > 0 && (
+            <Select
+              value={state.group_id ?? ""}
+              onChange={(value) => rename.mutate({ group_id: value === "" ? null : value })}
+              options={[
+                { value: "", label: "No group" },
+                ...groups.map((group) => ({ value: group.id, label: group.name })),
+              ]}
+            />
+          )}
+          {!canManage && state.group_id && (
+            <span className="text-xs text-fg-faint">
+              {groups.find((g) => g.id === state.group_id)?.name}
+            </span>
+          )}
           {canManage && (
             <span className="flex items-center">
               <button
@@ -264,5 +293,131 @@ function AddStateForm({ projectId }: { projectId: string }) {
         <span className="pb-2 text-xs text-red-400">{errorMessage(createState.error)}</span>
       )}
     </form>
+  );
+}
+
+
+/** RADD-852: manage the instance-wide presentation groups. Pure vocabulary —
+ * a group changes how boards bucket, never what reports count — so the card
+ * lives beside the states it groups. Writes are instance-admin. */
+function StateGroupsCard({ groups, canManage }: { groups: StateGroup[]; canManage: boolean }) {
+  const queryClient = useQueryClient();
+  const [name, setName] = useState("");
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.stateGroups });
+  const add = useMutation({
+    mutationFn: () => api.post<StateGroup>(Api.stateGroups, { name: name.trim() }),
+    onSuccess: () => {
+      setName("");
+      return invalidate();
+    },
+  });
+  const patch = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: Partial<StateGroup> }) =>
+      api.patch<StateGroup>(`${Api.stateGroups}/${id}`, body),
+    onSuccess: invalidate,
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => api.delete(`${Api.stateGroups}/${id}`),
+    onSuccess: invalidate,
+  });
+  const swap = useMutation({
+    mutationFn: async ({ a, b }: { a: StateGroup; b: StateGroup }) => {
+      await api.patch<StateGroup>(`${Api.stateGroups}/${a.id}`, { position: b.position });
+      await api.patch<StateGroup>(`${Api.stateGroups}/${b.id}`, { position: a.position });
+    },
+    onSuccess: invalidate,
+  });
+  const sorted = [...groups].sort((a, b) => a.position - b.position);
+
+  return (
+    <section className="mt-6" aria-label="State groups">
+      <h2 className="mb-1 text-sm font-medium text-heading">State groups</h2>
+      <p className="mb-2 text-xs text-fg-muted">
+        Optional, instance-wide grouping for boards and swimlanes ("group by State group").
+        Purely presentational: each state keeps its category, so reports and automations are
+        untouched. Assign states to a group with the picker on each row above.
+      </p>
+      <ul className="rounded-lg border border-subtle">
+        {sorted.map((group, index) => (
+          <li
+            key={group.id}
+            className="flex items-center gap-3 border-b border-subtle/60 px-4 py-2 last:border-b-0"
+          >
+            <input
+              type="color"
+              value={group.color ?? "#8b93a7"}
+              onChange={(event) => patch.mutate({ id: group.id, body: { color: event.target.value } })}
+              disabled={!canManage}
+              aria-label={`Colour for ${group.name}`}
+              className="size-5 shrink-0 cursor-pointer rounded border border-strong bg-transparent disabled:cursor-default"
+            />
+            <span className="flex-1 text-[13px] text-heading">{group.name}</span>
+            {canManage && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => index > 0 && swap.mutate({ a: group, b: sorted[index - 1] })}
+                  disabled={index === 0 || swap.isPending}
+                  aria-label={`Move ${group.name} up`}
+                  className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-fg cursor-pointer disabled:cursor-default disabled:opacity-30"
+                >
+                  <ArrowUp size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => index < sorted.length - 1 && swap.mutate({ a: group, b: sorted[index + 1] })}
+                  disabled={index === sorted.length - 1 || swap.isPending}
+                  aria-label={`Move ${group.name} down`}
+                  className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-fg cursor-pointer disabled:cursor-default disabled:opacity-30"
+                >
+                  <ArrowDown size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => remove.mutate(group.id)}
+                  disabled={remove.isPending}
+                  aria-label={`Delete ${group.name}`}
+                  className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer"
+                >
+                  <X size={14} />
+                </button>
+              </>
+            )}
+          </li>
+        ))}
+        {sorted.length === 0 && (
+          <li className="px-4 py-4 text-center text-xs text-fg-muted">
+            No groups yet — states bucket by their own order until you add some.
+          </li>
+        )}
+      </ul>
+      {canManage && (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (name.trim()) add.mutate();
+          }}
+          className="mt-2 flex items-center gap-2"
+        >
+          <TextField
+            label=""
+            aria-label="New group name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="New group name"
+            maxLength={100}
+          />
+          <Button type="submit" disabled={!name.trim() || add.isPending}>
+            <Plus size={13} aria-hidden />
+            Add group
+          </Button>
+        </form>
+      )}
+      {(add.isError || patch.isError || remove.isError) && (
+        <p className="mt-1 text-xs text-red-400">
+          {errorMessage(add.error ?? patch.error ?? remove.error)}
+        </p>
+      )}
+    </section>
   );
 }

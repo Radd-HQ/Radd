@@ -26,6 +26,7 @@ import {
   type Item,
   type ItemParentRef,
   type State,
+  type StateGroup,
 } from "./types";
 
 /**
@@ -85,6 +86,8 @@ export const NO_EPIC_LABEL = "No epic";
 export interface AxisContext {
   /** The view's project's states (undefined for all-projects views). */
   states?: State[];
+  /** State groups (RADD-852) — headers for the `state_group` axis. */
+  stateGroups?: StateGroup[];
   /** Registry definitions in scope — resolves `cf.<key>` option buckets. */
   fields?: FieldDef[];
   /** All cycles — the `cycle` axis header set (incl. empty staging cycles). */
@@ -174,6 +177,25 @@ export function groupItemsForView(
   switch (axis) {
     case ViewAxis.state:
       return groupByState(items, context.states);
+    case ViewAxis.stateGroup: {
+      // RADD-852: user-defined groups in their order, plus a trailing
+      // Ungrouped bucket. Membership goes item -> state -> group_id via the
+      // states list (the compact item.state ref does not carry the group).
+      const groupOf = new Map((context.states ?? []).map((s) => [s.id, s.group_id ?? null]));
+      const groups = [...(context.stateGroups ?? [])].sort((a, b) => a.position - b.position);
+      const buckets: ViewGroup[] = groups.map((g) => ({
+        key: g.id,
+        label: g.name,
+        items: items.filter((item) => groupOf.get(item.state.id) === g.id),
+      }));
+      const grouped = new Set(groups.map((g) => g.id));
+      buckets.push({
+        key: NO_VALUE_KEY,
+        label: "Ungrouped",
+        items: items.filter((item) => !grouped.has(groupOf.get(item.state.id) as string)),
+      });
+      return buckets;
+    }
     case ViewAxis.stateCategory:
       // RADD-851: the fixed tier — every category always present (an empty
       // Done column is information), membership from the state each item is in.

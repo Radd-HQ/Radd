@@ -22,6 +22,8 @@ export interface State {
   position: number;
   is_default: boolean;
   created_at: string;
+  /** RADD-852: optional presentation-group membership. */
+  group_id?: string | null;
 }
 
 export interface StateCreate {
@@ -35,6 +37,8 @@ export interface StateCreate {
 export interface StateUpdate {
   name?: string;
   position?: number;
+  /** RADD-852: null leaves the group; absent = untouched. */
+  group_id?: string | null;
 }
 
 /** Embedded state on ItemRead. */
@@ -146,4 +150,12 @@ export interface AllowedTarget {
 export interface AllowedTransitions {
   mode: TransitionModeValue;
   targets: AllowedTarget[];
+}
+
+/** A user-defined presentation tier over states (RADD-852) — no semantics. */
+export interface StateGroup {
+  id: string;
+  name: string;
+  color: string | null;
+  position: number;
 }

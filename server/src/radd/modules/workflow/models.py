@@ -8,6 +8,23 @@ from sqlalchemy.orm import Mapped, mapped_column
 from radd.db import Base, TimestampMixin
 
 
+class StateGroup(Base, TimestampMixin):
+    """A user-defined PRESENTATION tier over states (RADD-852, Hussein's call):
+    arbitrary name/colour/membership — even across categories — because the
+    group carries NO semantics. The state keeps its fixed category, so every
+    report, sweep, guard and rollover is untouched by whatever vocabulary an
+    instance invents here. Instance-wide: states from any project may join,
+    which is what makes a cross-project board group by them."""
+
+    __tablename__ = "state_groups"
+    __table_args__ = (UniqueConstraint("name"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(100))
+    color: Mapped[str | None] = mapped_column(String(20), nullable=True)  # hex, optional
+    position: Mapped[int] = mapped_column(Integer, default=0)
+
+
 class State(Base, TimestampMixin):
     __tablename__ = "states"
     __table_args__ = (UniqueConstraint("project_id", "name"),)
@@ -18,6 +35,11 @@ class State(Base, TimestampMixin):
     category: Mapped[str] = mapped_column(String(20))
     position: Mapped[int] = mapped_column(Integer)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    # RADD-852: optional membership in a presentation group. SET NULL on group
+    # delete — a vanished group degrades states to ungrouped, never blocks.
+    group_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("state_groups.id", ondelete="SET NULL"), nullable=True
+    )
 
 
 class WorkflowTransition(Base, TimestampMixin):
