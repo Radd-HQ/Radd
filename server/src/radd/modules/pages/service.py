@@ -5,6 +5,7 @@ content changes snapshot the PREVIOUS content into page_versions and bump
 `version`. Parent moves run the pure cycle guard in core.py.
 """
 
+import re
 import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -136,6 +137,10 @@ async def _next_position(
         )
     )
     return (highest or 0) + 1
+
+
+#: RADD-860: the slugs the create-flow placeholder produces — upgradeable.
+_PLACEHOLDER_SLUG_RE = re.compile(r"untitled(-\d+)?")
 
 
 async def _free_slug(
@@ -272,10 +277,21 @@ async def update_page(
     # RADD-702: the slug changes ONLY when asked. A title edit deliberately does
     # not touch it — the URL is a promise to whoever already has the link, and
     # "fixed a typo in the heading" is not a reason to break it.
+    # RADD-860: …except a PLACEHOLDER slug. Every UI-created page is born
+    # "Untitled" → `untitled-N`, and a URL nobody chose protects nobody — the
+    # first REAL title upgrades it. Established slugs stay immovable.
     if data.slug is not None and data.slug != page.slug:
         page.slug = await _free_slug(
             session, page.space_id, page_slugify(data.slug), exclude_id=page.id
         )
+        changed.append("slug")
+    elif (
+        data.title is not None
+        and data.title != page.title
+        and _PLACEHOLDER_SLUG_RE.fullmatch(page.slug)
+        and page_slugify(data.title) not in ("untitled", "page")
+    ):
+        page.slug = await _free_slug(session, page.space_id, data.title, exclude_id=page.id)
         changed.append("slug")
 
     if core.should_snapshot(page.title, page.body, data.title, data.body):

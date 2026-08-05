@@ -133,6 +133,8 @@ export interface PageCreate {
 /** Omitted = unchanged; parent_id null moves to root; a stale expected_version 409s. */
 export interface PageUpdate {
   title?: string;
+  /** RADD-860: the deliberate URL change (server suffixes on collision). */
+  slug?: string;
   body?: string;
   parent_id?: string | null;
   position?: number;

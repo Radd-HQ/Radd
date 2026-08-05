@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import {
+  Link2,
   Archive,
   ArchiveRestore,
   Download,
@@ -14,6 +16,7 @@ import { api, ApiError, errorMessage } from "../../lib/api";
 import { useAttachmentUploader } from "../../lib/useAttachmentUploader";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import {
+  RoutePath,
   apiPageExportPath,
   apiPagePath,
   apiPageUnarchivePath,
@@ -74,6 +77,8 @@ export function PageView({
   const [title, setTitle] = useState(page.title);
   const [editing, setEditing] = useState(false);
   const [restricting, setRestricting] = useState(false);
+  const [changingUrl, setChangingUrl] = useState(false);
+  const navigate = useNavigate();
   const [draft, setDraft] = useState(page.body);
   /** The version the edit session was OPENED at — the optimistic-concurrency
    * anchor. A realtime refetch may bump page.version mid-edit; saving must
@@ -201,6 +206,17 @@ export function PageView({
             icon={<History size={11} aria-hidden />}
           />
           <PageWatchButton pageId={page.id} />
+          {canWrite && (
+            <button
+              type="button"
+              onClick={() => setChangingUrl(true)}
+              title="Change this page's URL"
+              aria-label="Change URL"
+              className="flex rounded p-1 text-fg-faint hover:bg-elevated hover:text-fg cursor-pointer"
+            >
+              <Link2 size={13} aria-hidden />
+            </button>
+          )}
           {/* RADD-738: the export entry point, with the subpages choice offered
               WHERE the action is taken rather than buried in settings. */}
           <DropdownMenu
@@ -460,6 +476,29 @@ export function PageView({
         </>
       )}
       {confirmDialog}
+      {changingUrl && spaceSlug && (
+        <ChangeUrlDialog
+          page={page}
+          spaceSlug={spaceSlug}
+          onSave={(slug) => {
+            save.mutate(
+              { slug },
+              {
+                onSuccess: (updated) => {
+                  setChangingUrl(false);
+                  // The old slug is freed the moment the rename lands — move
+                  // to the canonical address rather than 404ing in place.
+                  navigate({
+                    to: RoutePath.page,
+                    params: { spaceSlug, pageSlug: updated.slug },
+                  });
+                },
+              },
+            );
+          }}
+          onClose={() => setChangingUrl(false)}
+        />
+      )}
       {restricting && (
         <Modal title={`Restrict "${page.title}"`} onClose={() => setRestricting(false)}>
           <AccessGrantsEditor
@@ -503,5 +542,57 @@ function TabButton({
       {icon}
       {label}
     </button>
+  );
+}
+
+
+/** RADD-860: the deliberate URL change RADD-702 reserved — a small dialog
+ * over the existing PATCH slug machinery (server-side collision suffixing;
+ * old UUID links stay alive). Pre-fills from the title, since "make the URL
+ * match the name" is the whole errand. */
+function ChangeUrlDialog({
+  page,
+  spaceSlug,
+  onSave,
+  onClose,
+}: {
+  page: Page;
+  spaceSlug: string;
+  onSave: (slug: string) => void;
+  onClose: () => void;
+}) {
+  const suggested = page.title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  const [slug, setSlug] = useState(page.slug.startsWith("untitled") ? suggested : page.slug);
+  return (
+    <Modal title="Change URL" onClose={onClose}>
+      <div className="flex flex-col gap-3">
+        <p className="text-[13px] text-fg-secondary">
+          The page moves to the new address immediately; links that used the page id keep
+          working, links that used the old slug do not. If another page holds the URL, a
+          numbered suffix is added.
+        </p>
+        <div className="flex items-center gap-1 text-[13px]">
+          <span className="text-fg-muted">/pages/{spaceSlug}/</span>
+          <input
+            value={slug}
+            onChange={(event) => setSlug(event.target.value)}
+            aria-label="New URL segment"
+            autoFocus
+            className="h-8 flex-1 rounded-md border border-strong bg-surface px-2 text-[13px] text-heading focus:outline-2 focus:outline-focus"
+          />
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={() => slug.trim() && onSave(slug.trim())} disabled={!slug.trim()}>
+            Change URL
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
