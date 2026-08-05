@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
 from radd.kernel import PermissionSpec
+from radd.kernel import SettingSpec
 
 from .enums import ItemEvent
 from .filters import FilterParseError
@@ -54,6 +55,24 @@ plugin = RaddPlugin(
     description=(
         "Work items: CRUD, per-project keys (TD-42), epic/issue/subtask hierarchy, "
         "assignee + team, custom fields inline everywhere, SLQ text queries (`q`)."
+    ),
+    # RADD-891: the story-points opt-in (spec 70) — moved off `settings.types`'s
+    # old hardcoded dict. Resolved directly by the SPA via
+    # `GET /scoped-settings/resolve` (`usePointsEnabled`), not by server code —
+    # items is still the true owner: `models.py`'s estimate_points column is
+    # what it gates.
+    settings_keys=(
+        SettingSpec(
+            key="estimation_points",
+            type="bool",
+            scopes=("instance", "project"),
+            label="Story points",
+            description=(
+                "Estimate items in story points (0–999, one decimal) alongside time "
+                "tracking (spec 70). Off by default — a project that hasn't opted in "
+                "shows no points UI; velocity/burnup can then report in points."
+            ),
+        ),
     ),
     depends_on=("projects", "workflow", "labels", "fields", "cycles", "releases", "auth", "teams", "events", "access", "itemtypes", "linktypes"),
     weak_depends=("approvals", "comments", "timelogging"),

@@ -4,6 +4,11 @@
 directly for a registered key call this instead so per-scope overrides apply.
 Absence of any row returns the env/config default, so switching a consumer over
 is behaviour-preserving until an override is written.
+
+RADD-891: the per-key POLICY (type, scopes, prose, default source) is no
+longer a static dict literal in `.types` — it is the kernel `SettingSpec` each
+owning module declares via `settings_keys=(...)` on its `RaddPlugin`,
+looked up live through `.types.setting_spec`/`SETTINGS_REGISTRY`.
 """
 
 import uuid
@@ -13,24 +18,26 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError
+from radd.kernel import SettingSpec, registries
 
 from .models import ScopedSetting
-from .types import SETTINGS_REGISTRY, SettingKey, SettingScope, SettingSpec, SettingType
+from .types import SettingKey, SettingScope, SettingType, setting_spec
 
 
 def _coerce(spec: SettingSpec, value: Any) -> Any:
     """Normalise a stored/incoming value to the spec's declared type; an
     enumerated setting rejects values outside its choices (409) — a typo must
     never reach a StrEnum coercion at read time."""
-    if spec.type is SettingType.INT:
+    type_ = SettingType(spec.type)
+    if type_ is SettingType.INT:
         return int(value)
-    if spec.type is SettingType.BOOL:
+    if type_ is SettingType.BOOL:
         return bool(value)
     text = str(value)
     if spec.choices is not None and text not in spec.choices:
         raise ConflictError(
             "scoped_setting",
-            reason=f"'{spec.key.value}' must be one of: {', '.join(spec.choices)}",
+            reason=f"'{spec.key}' must be one of: {', '.join(spec.choices)}",
         )
     return text
 
@@ -39,21 +46,15 @@ def _lookup_order(spec: SettingSpec, project_id: uuid.UUID | None) -> list[tuple
     """(scope, scope_id) pairs to try, narrowest first — restricted to the scopes the
     spec allows, so a stale narrower row can never shadow an instance-only key."""
     order: list[tuple[str, uuid.UUID | None]] = []
-    if project_id is not None and SettingScope.PROJECT in spec.scopes:
+    if project_id is not None and SettingScope.PROJECT.value in spec.scopes:
         order.append((SettingScope.PROJECT.value, project_id))
     order.append((SettingScope.INSTANCE.value, None))
     return order
 
 
-async def resolve(
-    session: AsyncSession,
-    key: SettingKey,
-    *,
-    project_id: uuid.UUID | None = None,
+async def _resolve_spec(
+    session: AsyncSession, spec: SettingSpec, project_id: uuid.UUID | None
 ) -> Any:
-    """The effective value of `key` in the given scope: the project override if
-    one exists, else the instance override, else the env/config default."""
-    spec = SETTINGS_REGISTRY[key]
     order = _lookup_order(spec, project_id)
     conditions = [
         and_(ScopedSetting.scope == scope, ScopedSetting.scope_id.is_(None))
@@ -64,7 +65,7 @@ async def resolve(
     rows = (
         await session.execute(
             select(ScopedSetting.scope, ScopedSetting.scope_id, ScopedSetting.value).where(
-                ScopedSetting.key == key.value, or_(*conditions)
+                ScopedSetting.key == spec.key, or_(*conditions)
             )
         )
     ).all()
@@ -73,6 +74,17 @@ async def resolve(
         if (scope, scope_id) in found:
             return _coerce(spec, found[(scope, scope_id)])
     return spec.default
+
+
+async def resolve(
+    session: AsyncSession,
+    key: SettingKey,
+    *,
+    project_id: uuid.UUID | None = None,
+) -> Any:
+    """The effective value of `key` in the given scope: the project override if
+    one exists, else the instance override, else the env/config default."""
+    return await _resolve_spec(session, setting_spec(key), project_id)
 
 
 async def set_value(
@@ -84,8 +96,8 @@ async def set_value(
 ) -> Any:
     """Upsert one override. Raises ConflictError if the key isn't settable at
     `scope` or `scope_id` is inconsistent with it (instance = no id, project = id)."""
-    spec = SETTINGS_REGISTRY[key]
-    if scope not in spec.scopes:
+    spec = setting_spec(key)
+    if scope.value not in spec.scopes:
         raise ConflictError(
             "scoped_setting", reason=f"'{key.value}' cannot be set at {scope.value} scope"
         )
@@ -147,18 +159,18 @@ async def list_for_scope(
         ).scalars()
     }
     result = []
-    for key, spec in SETTINGS_REGISTRY.items():
-        if scope not in spec.scopes:
+    for key, spec in registries.settings.items():
+        if scope.value not in spec.scopes:
             continue
-        effective = await resolve(session, key, project_id=project_id)
+        effective = await _resolve_spec(session, spec, project_id)
         result.append(
             {
-                "key": key.value,
-                "type": spec.type.value,
+                "key": key,
+                "type": spec.type,
                 "label": spec.label,
                 "description": spec.description,
                 "value": effective,
-                "set_here": key.value in set_here,
+                "set_here": key in set_here,
                 "default": spec.default,
                 "choices": list(spec.choices) if spec.choices else None,
                 "secret": spec.secret,

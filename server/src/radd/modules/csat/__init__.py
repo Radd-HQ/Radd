@@ -1,5 +1,6 @@
 from radd.kernel import EventTypeSpec, PluginUiManifest
 from radd.kernel import RaddPlugin
+from radd.kernel import SettingSpec
 
 from . import dispatcher
 from .public_router import router as public_router
@@ -14,6 +15,21 @@ plugin = RaddPlugin(
     "item resolves in a CSAT_ENABLED project; a tokened public page records the "
     "rating, which surfaces on the item and in the service-desk report.",
     depends_on=("projects", "auth", "items", "settings", "events", "mailintake", "workflow"),
+    # RADD-891: the sender's per-project opt-in — moved off `settings.types`'s
+    # old hardcoded dict.
+    settings_keys=(
+        SettingSpec(
+            key="csat_enabled",
+            type="bool",
+            scopes=("instance", "project"),
+            label="CSAT surveys",
+            description=(
+                "Email the requester a one-click satisfaction survey when their item "
+                "resolves (spec 65). Off by default — enable per service-desk project; "
+                "dev projects never send surveys."
+            ),
+        ),
+    ),
     routers=(router, public_router),
     on_startup=(dispatcher.start,),
     on_shutdown=(dispatcher.stop,),

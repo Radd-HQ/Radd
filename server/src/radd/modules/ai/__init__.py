@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 
 from radd.kernel import CapabilitySpec
 from radd.kernel import RaddPlugin
+from radd.kernel import SettingSpec
 
 from . import registry
 from .admin_router import router as admin_router
@@ -82,6 +83,80 @@ plugin = RaddPlugin(
         "env-seeded once. Dormant (404) while a feature's role is unconfigured."
     ),
     depends_on=("auth", "projects", "items", "fields", "comments", "search", "settings", "events", "pages", "timelogging"),
+    # RADD-891: the seven feature toggles (Settings → AI) — moved off
+    # `settings.types`'s old hardcoded dict.
+    settings_keys=(
+        SettingSpec(
+            key="ai_editor_actions",
+            type="bool",
+            scopes=("instance",),
+            label="Editor AI actions",
+            description=(
+                "AI writing actions in the rich editor (/refine, /format, preset and "
+                "freeform prompts) with streamed results and diff review. Also needs "
+                "the chat role assigned; users can additionally opt out per profile."
+            ),
+        ),
+        SettingSpec(
+            key="ai_semantic_search",
+            type="bool",
+            scopes=("instance",),
+            label="Semantic search",
+            description=(
+                "Meaning-based retrieval fused into search, similar-issues, and the "
+                "palette Ask mode. Needs the embeddings role assigned and the pgvector "
+                "extension installed in Postgres."
+            ),
+        ),
+        SettingSpec(
+            key="ai_storage_routing",
+            type="bool",
+            scopes=("instance",),
+            label="LLM storage routing",
+            description=(
+                "Lets LLM-type storage routing rules classify uploads (Settings → "
+                "Storage). Needs the vision role assigned; rules fall through to the "
+                "next rule while this is off."
+            ),
+        ),
+        SettingSpec(
+            key="ai_summarize",
+            type="bool",
+            scopes=("instance",),
+            label="Issue summarize",
+            description="The Summarize action on issues (chat role).",
+        ),
+        SettingSpec(
+            key="ai_nl_slq",
+            type="bool",
+            scopes=("instance",),
+            label="Natural language → SLQ",
+            description="The Ask-AI bar that turns plain language into an SLQ filter (chat role).",
+        ),
+        SettingSpec(
+            key="ai_similar_rerank",
+            type="bool",
+            scopes=("instance",),
+            label="Similar-issues LLM rerank",
+            description=(
+                "Rescore duplicate candidates with the chat model and explain why "
+                "each looks related. Off by default — it costs a chat-model round "
+                "trip per similar-issues open; similar issues keep working without "
+                "it (FTS/vector candidates only)."
+            ),
+        ),
+        SettingSpec(
+            key="ai_stream_responses",
+            type="bool",
+            scopes=("instance",),
+            label="Stream AI responses",
+            description=(
+                "Deliver issue summaries progressively and similar-issue candidates "
+                "immediately with reasoning filled in as the model produces it. Off = "
+                "each AI answer arrives complete, in one go."
+            ),
+        ),
+    ),
     routers=(router, admin_router, editor_router),
     exception_handlers=(
         (AiDisabledError, _disabled_handler),

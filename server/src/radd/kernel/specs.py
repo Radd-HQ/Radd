@@ -373,7 +373,48 @@ class IntegrationSpec:
     consumes: bool = False
 
 
-# --- settings (§ settings: keys + admin sections owned per plugin) ---
+# --- settings (§ settings: keys + admin sections owned per plugin, RADD-891) ---
+@dataclass(frozen=True)
+class SettingSpec:
+    """A scalar cascade setting a plugin contributes — the inversion of
+    `settings.types.SettingKey`'s old hardcoded catalog, mirroring
+    `PermissionSpec` (RADD-890). `settings` keeps the CASCADE MECHANISM
+    (resolution order project → instance → env, coercion, the
+    `/scoped-settings` API) and reads this catalog instead of hardcoding every
+    feature's tunables.
+
+    `type`/`scopes` are plain strings rather than `settings.types.SettingType`/
+    `SettingScope` — kernel purity forbids importing a module's enum here —
+    and `settings.service` coerces via `SettingType(spec.type)` at read time,
+    same as it already did for the enum form.
+    """
+
+    key: str
+    type: str  # "string" | "int" | "bool" (settings.types.SettingType values)
+    scopes: tuple[str, ...]  # cascade levels this key may be SET at: "instance" | "project"
+    label: str = ""
+    description: str = ""
+    # The `config.Settings` attribute supplying the env/config default, when it
+    # differs from the key itself (e.g. `ldap_user_sync_base` defaults to the
+    # pre-existing `RADD_LDAP_USER_SEARCH_BASE`). "" = same name as `key`.
+    config_attr: str = ""
+    # Enumerated STRING settings (spec 107): the only accepted values — a write
+    # outside the set 409s, and the generic settings editor renders a select.
+    choices: tuple[str, ...] | None = None
+    # The editor renders a masked input; the value itself stays admin-readable
+    # over the settings API (RADD-846's recorded decision).
+    secret: bool = False
+
+    @property
+    def default(self) -> Any:
+        """The ultimate fallback: the instance's env/config value. Kernel's own
+        domain per its charter (config/loader/lifecycle + "the settings
+        platform"), so importing `radd.config` here is not a plugin dependency."""
+        from radd.config import settings as _config
+
+        return getattr(_config, self.config_attr or self.key)
+
+
 @dataclass(frozen=True)
 class SettingSectionSpec:
     key: str

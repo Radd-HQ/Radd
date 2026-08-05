@@ -27,6 +27,7 @@ from .specs import (
     PermissionSpec,
     PluginUiManifest,
     SettingSectionSpec,
+    SettingSpec,
     RelationSpec,
     SlqFieldSpec,
     TaskSpec,
@@ -80,7 +81,7 @@ class RaddPlugin:
     automation_actions: tuple[Any, ...] = ()
     automation_conditions: tuple[Any, ...] = ()
     tasks: tuple[TaskSpec, ...] = ()
-    settings_keys: tuple[Any, ...] = ()
+    settings_keys: tuple[SettingSpec, ...] = ()  # scalar cascade settings this plugin owns (RADD-891)
     settings_sections: tuple[SettingSectionSpec, ...] = ()
     permissions: tuple[PermissionSpec, ...] = ()
     crud_resources: tuple[CrudResourceSpec, ...] = ()

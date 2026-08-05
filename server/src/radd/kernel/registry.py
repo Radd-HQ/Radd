@@ -27,6 +27,7 @@ from .specs import (
     NavItemSpec,
     PageExtensionSpec,
     PermissionSpec,
+    SettingSpec,
     SlqFieldSpec,
     ViewTypeSpec,
     WidgetTypeSpec,
@@ -61,6 +62,9 @@ class KernelRegistries:
     entities: dict[str, EntitySpec] = field(default_factory=dict)
     event_types: dict[str, EventTypeSpec] = field(default_factory=dict)
     permissions: dict[str, PermissionSpec] = field(default_factory=dict)
+    #: RADD-891: scalar cascade settings, keyed like `settings.types.SettingKey`'s
+    #: values — the inversion of that module's old hardcoded catalog dict.
+    settings: dict[str, SettingSpec] = field(default_factory=dict)
     #: (resource, key) -> what @key MEANS for that resource's rows (RADD-823).
     relations: dict[tuple[str, str], RelationSpec] = field(default_factory=dict)
     #: base atom -> the resource whose relations qualify it (RADD-844). Default
@@ -101,7 +105,7 @@ class KernelRegistries:
     def clear(self) -> None:
         for f in (
             self.plugins, self.entities, self.event_types, self.permissions,
-            self.relations, self.relation_domains, self.access_resources,
+            self.settings, self.relations, self.relation_domains, self.access_resources,
             self.crud_resources, self.capabilities, self.tasks, self.consumers,
             self.integrations, self.plugin_ui_dirs, self.slq_fields,
             self.view_types, self.widget_types, self.mcp_tools, self.page_extensions,
@@ -121,6 +125,8 @@ class KernelRegistries:
             self.event_types[et.event_type] = et
         for p in plugin.permissions:
             self.permissions[p.key] = p
+        for s in plugin.settings_keys:
+            self.settings[s.key] = s
         for r in plugin.relations:
             self.relations[(r.resource, r.key)] = r
         for atom, resource in plugin.relation_domains:
@@ -167,6 +173,8 @@ class KernelRegistries:
             self.event_types.pop(et.event_type, None)
         for p in plugin.permissions:
             self.permissions.pop(p.key, None)
+        for s in plugin.settings_keys:
+            self.settings.pop(s.key, None)
         for r in plugin.relations:
             self.relations.pop((r.resource, r.key), None)
         for atom, _resource in plugin.relation_domains:

@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin, SlqFieldSpec
 from radd.kernel import PermissionSpec
+from radd.kernel import SettingSpec
 
 from .slq import logged_by_item_ids
 
@@ -63,6 +64,54 @@ plugin = RaddPlugin(
         PermissionSpec("timesheet.view", "global", "See other people's timesheets (global)."),
     ),
     relations=(WORKLOG_OWN,),
+    # RADD-891: the scalar cascade keys timelogging/the timesheet read
+    # (`settings.service.resolve`) — moved out of `settings.types`'s old
+    # hardcoded `SETTINGS_REGISTRY` dict onto the module that owns them.
+    settings_keys=(
+        SettingSpec(
+            key="work_week_days",
+            type="string",
+            scopes=("instance", "project"),
+            label="Working week",
+            description=(
+                "Comma-separated working days (mon,tue,wed,thu,fri). Business-day SLAs "
+                "resolve this per item project; the instance sets the default, projects "
+                "override."
+            ),
+        ),
+        SettingSpec(
+            key="timelog_hours_per_day",
+            type="int",
+            scopes=("instance",),  # global — no per-project override (spec 67 follow-up)
+            label="Hours per working day",
+            description=(
+                "How many hours a '1d' duration means when logging time or setting "
+                "estimates. Global — one instance-wide value, so durations mean the "
+                "same thing on every timesheet and cycle handle."
+            ),
+        ),
+        SettingSpec(
+            key="timesheet_day_min_hours",
+            type="int",
+            scopes=("instance",),
+            label="Timesheet: minimum hours per workday",
+            description=(
+                "A working day (per the working week) with less than this logged is "
+                "flagged as under-logged on the timesheet's per-person view. Leave and "
+                "holiday days are never flagged."
+            ),
+        ),
+        SettingSpec(
+            key="timesheet_day_max_hours",
+            type="int",
+            scopes=("instance",),
+            label="Timesheet: maximum hours per day",
+            description=(
+                "Any day with more than this logged is flagged as over-logged on the "
+                "timesheet's per-person view."
+            ),
+        ),
+    ),
     description=(
         "Per-project time logging: worklogs (duration/day/work-category/note) + item "
         "estimates, and a global timesheet for day/week/month reports filterable by "

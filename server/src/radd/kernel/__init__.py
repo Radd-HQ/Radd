@@ -36,6 +36,7 @@ from .specs import (
     PermissionSpec,
     PluginUiManifest,
     SettingSectionSpec,
+    SettingSpec,
     SlqFieldContext,
     SlqFieldSpec,
     TaskSpec,
@@ -75,4 +76,5 @@ __all__ = [
     "NavItemSpec",
     "PluginUiManifest",
     "SettingSectionSpec",
+    "SettingSpec",
 ]

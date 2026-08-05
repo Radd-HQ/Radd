@@ -1,21 +1,66 @@
-"""Scalar settings registry (specs 50/67).
+"""Scalar settings registry (specs 50/67; RADD-891).
 
 A *scalar* setting is a single value that resolves project → instance, falling
 back to the env/config default (`config.Settings`). This is distinct from the
 *collection* cascade (custom fields, SLA policies, labels…) which is additive —
 those are NOT registered here. A setting opts into the scalar cascade by being
-registered below; only registered keys cascade (dev-rule 2: no magic values).
+registered as a `kernel.SettingSpec` (below via the live registry), not by
+being a member of an enum.
 
-Spec 67 collapsed the original three-level cascade (project → workspace →
-instance) to two: for a single-workspace deployment the workspace layer only
-duplicated the instance one.
+RADD-891: `SettingKey` used to be BOTH the catalog and the alias — every
+feature's tunables (`AI_*`, `LDAP_*`, `CSAT_ENABLED`, `RELEASE_*`,
+`WORKFLOW_TRANSITION_MODE`, `ESTIMATION_POINTS`, the timesheet keys) lived in
+one hardcoded `SETTINGS_REGISTRY` dict here, while the kernel `SettingSpec` /
+`RaddPlugin.settings_keys` fields that exist for exactly this (mirroring
+`PermissionSpec`, spec 93) were read by nothing. Mirroring RADD-890's fix for
+`auth.types.Permission`: every module now declares the keys IT reads —
+`settings_keys=(SettingSpec…),)` on its own `RaddPlugin` — and this module
+keeps the CASCADE MECHANISM (resolution order, coercion, the
+`/scoped-settings` API) while reading the kernel registry for each key's type,
+scopes, prose and default source.
+
+`SettingKey` SURVIVES as the typed alias surface — unlike `SettingSpec`, which
+moved to the kernel outright. The reason is the same import-order argument
+RADD-890 made for `Permission`: `SettingKey` is used as a FastAPI query-param
+type and a pydantic field type (`router.py`, `schemas.py`), both fixed at
+IMPORT time of this module's own plugin package — which the loader visits at
+a FIXED position in `config.Settings.modules` (early: right after `auth`),
+long before `ai`/`ldap`/`releases`/`timelogging`/`workflow`/`items`/`csat` have
+registered their keys. A `SettingKey` built from the live registry at that
+point would enumerate only the handful of keys owned by plugins loaded before
+`settings` — an enum whose membership depends on `RADD_MODULES` order. So the
+key STRINGS are ratcheted here exactly like `Permission`'s atoms, and
+`tests/test_setting_ownership.py` asserts both directions (registry ⊆ enum,
+enum ⊆ registry) so an addition to one side alone fails the suite.
+
+Unlike `Permission`, nothing here computes eagerly FROM the full key set at
+settings' own import time (there is no settings equivalent of auth's
+`PROJECT_PERMISSIONS`) — every read (`resolve`/`set_value`/`list_for_scope`)
+runs at REQUEST time, well after `load_plugins` has loaded every plugin. So the
+per-key POLICY (type, scopes, description, default source) is looked up LIVE
+from `radd.kernel.registries.settings` with no static mirror to keep in sync,
+unlike `Permission`'s `_PROJECT_SCOPED`/`_SPACE_SCOPED` tables.
 """
 
-from dataclasses import dataclass
+from collections.abc import Mapping
 from enum import StrEnum
-from typing import Any
 
-from radd.config import settings as _config
+from radd.kernel import SettingSpec
+
+# Re-exported for callers that used to import the dataclass from here — the
+# type itself now lives in the kernel (`radd.kernel.SettingSpec`), since a
+# plugin declaring `settings_keys=(SettingSpec(...),)` must be able to build
+# one without importing this module (settings depends on no feature plugin).
+__all__ = [
+    "SettingScope",
+    "SettingType",
+    "SettingKey",
+    "SettingSpec",
+    "SettingsEntity",
+    "SETTINGS_REGISTRY",
+    "all_setting_keys",
+    "setting_spec",
+]
 
 
 class SettingScope(StrEnum):
@@ -32,9 +77,13 @@ class SettingType(StrEnum):
 
 
 class SettingKey(StrEnum):
-    """A registered scalar setting. The value matches the `config.Settings`
-    attribute that supplies the ultimate instance default (the env fallback),
-    unless the spec names a different attribute via `config_attr`."""
+    """A registered scalar setting — RADD-891's typed alias surface.
+
+    Every atom's TYPE, SCOPES, prose and default source now live on the owning
+    module's `kernel.SettingSpec` contribution (`setting_spec(key)` below reads
+    it live); this enum is only the string call sites and FastAPI/pydantic
+    type-check against. See the module docstring for why it cannot be built
+    from the registry instead."""
 
     WORK_WEEK_DAYS = "work_week_days"
     TIMELOG_HOURS_PER_DAY = "timelog_hours_per_day"
@@ -46,9 +95,6 @@ class SettingKey(StrEnum):
     CSAT_ENABLED = "csat_enabled"
     ESTIMATION_POINTS = "estimation_points"
     # Directory settings page + automatic user sync (spec 85) — instance-only.
-    # RADD-846: the CONNECTION itself (spec-110 rule: env is seed-only) —
-    # each key matches its `config.Settings` attribute, so the env value is
-    # the fallback and an existing deploy keeps working untouched.
     LDAP_URL = "ldap_url"
     LDAP_USER_DOMAIN = "ldap_user_domain"
     LDAP_BIND_DN = "ldap_bind_dn"
@@ -74,343 +120,54 @@ class SettingKey(StrEnum):
     RELEASE_SHIPPED_STATE = "release_shipped_state"
 
 
-@dataclass(frozen=True)
-class SettingSpec:
-    key: SettingKey
-    type: SettingType
-    scopes: tuple[SettingScope, ...]  # scopes at which a value may be SET
-    label: str
-    description: str
-    # The `config.Settings` attribute supplying the env default when it differs
-    # from the key name (spec 85: `ldap_user_sync_base` defaults to the
-    # pre-existing RADD_LDAP_USER_SEARCH_BASE so deploys keep working).
-    config_attr: str | None = None
-    # Enumerated STRING settings (spec 107 cleanup): the only accepted values —
-    # writes outside the set 409 (a free-typed "gaurds" must never reach a
-    # StrEnum coercion at read time) and the generic settings editor renders a
-    # select instead of a text input.
-    choices: tuple[str, ...] | None = None
-    # RADD-846: the editor renders a masked input. The VALUE still reaches
-    # instance admins over the settings API — the recorded decision: same
-    # trust level as the person who set it, no write-only machinery.
-    secret: bool = False
-
-    @property
-    def default(self) -> Any:
-        """The ultimate fallback: the instance's env/config value."""
-        return getattr(_config, self.config_attr or self.key.value)
-
-
-SETTINGS_REGISTRY: dict[SettingKey, SettingSpec] = {
-    # --- spec 112: the release pipeline ---------------------------------
-    # State NAMES, not ids: a project's states are per-project rows, and a name
-    # is what an admin sees in the picker. Resolution is by name within the
-    # project, so a renamed state is a settings edit, not a broken pipeline.
-    SettingKey.RELEASE_WAITING_STATE: SettingSpec(
-        key=SettingKey.RELEASE_WAITING_STATE,
-        type=SettingType.STRING,
-        scopes=(SettingScope.INSTANCE, SettingScope.PROJECT),
-        label="Waiting-for-release state",
-        description=(
-            "The state a merged pull request moves work to: complete, not yet shipped. "
-            "Belongs to the DONE category, so throughput counts the day the work was "
-            "finished rather than the day someone cut a tag. Empty turns the pipeline off."
-        ),
-    ),
-    SettingKey.RELEASE_SHIPPED_STATE: SettingSpec(
-        key=SettingKey.RELEASE_SHIPPED_STATE,
-        type=SettingType.STRING,
-        scopes=(SettingScope.INSTANCE, SettingScope.PROJECT),
-        label="Shipped state",
-        description=(
-            "Where the release sweep moves waiting work when a version is published, "
-            "with the release recorded on each item. Empty turns the sweep off."
-        ),
-    ),
-    SettingKey.WORK_WEEK_DAYS: SettingSpec(
-        key=SettingKey.WORK_WEEK_DAYS,
-        type=SettingType.STRING,
-        scopes=(SettingScope.INSTANCE, SettingScope.PROJECT),
-        label="Working week",
-        description=(
-            "Comma-separated working days (mon,tue,wed,thu,fri). Business-day SLAs "
-            "resolve this per item project; the instance sets the default, projects "
-            "override."
-        ),
-    ),
-    SettingKey.TIMELOG_HOURS_PER_DAY: SettingSpec(
-        key=SettingKey.TIMELOG_HOURS_PER_DAY,
-        type=SettingType.INT,
-        scopes=(SettingScope.INSTANCE,),  # global — no per-project override (spec 67 follow-up)
-        label="Hours per working day",
-        description=(
-            "How many hours a '1d' duration means when logging time or setting estimates. "
-            "Global — one instance-wide value, so durations mean the same thing on every "
-            "timesheet and cycle handle."
-        ),
-    ),
-    SettingKey.TIMESHEET_DAY_MIN_HOURS: SettingSpec(
-        key=SettingKey.TIMESHEET_DAY_MIN_HOURS,
-        type=SettingType.INT,
-        scopes=(SettingScope.INSTANCE,),
-        label="Timesheet: minimum hours per workday",
-        description=(
-            "A working day (per the working week) with less than this logged is "
-            "flagged as under-logged on the timesheet's per-person view. Leave and "
-            "holiday days are never flagged."
-        ),
-    ),
-    SettingKey.TIMESHEET_DAY_MAX_HOURS: SettingSpec(
-        key=SettingKey.TIMESHEET_DAY_MAX_HOURS,
-        type=SettingType.INT,
-        scopes=(SettingScope.INSTANCE,),
-        label="Timesheet: maximum hours per day",
-        description=(
-            "Any day with more than this logged is flagged as over-logged on the "
-            "timesheet's per-person view."
-        ),
-    ),
-    SettingKey.WORKFLOW_TRANSITION_MODE: SettingSpec(
-        key=SettingKey.WORKFLOW_TRANSITION_MODE,
-        type=SettingType.STRING,
-        scopes=(SettingScope.INSTANCE, SettingScope.PROJECT),
-        # Mirror of workflow.types.TransitionMode (settings must not import a
-        # module that depends on it).
-        choices=("off", "guards", "strict"),
-        label="Workflow transition enforcement",
-        description=(
-            "Off: anyone can move items to any state — the transitions list is "
-            "ignored. Guarded: a move that has a transition defined must meet its "
-            "conditions and approvals; moves with no transition defined stay "
-            "allowed. Strict: the list becomes the complete map — a move with no "
-            "transition defined is blocked outright (and defined moves still check "
-            "their conditions). Set per project, or here for every project."
-        ),
-    ),
-    SettingKey.CSAT_ENABLED: SettingSpec(
-        key=SettingKey.CSAT_ENABLED,
-        type=SettingType.BOOL,
-        scopes=(SettingScope.INSTANCE, SettingScope.PROJECT),
-        label="CSAT surveys",
-        description=(
-            "Email the requester a one-click satisfaction survey when their item "
-            "resolves (spec 65). Off by default — enable per service-desk project; "
-            "dev projects never send surveys."
-        ),
-    ),
-    SettingKey.ESTIMATION_POINTS: SettingSpec(
-        key=SettingKey.ESTIMATION_POINTS,
-        type=SettingType.BOOL,
-        scopes=(SettingScope.INSTANCE, SettingScope.PROJECT),
-        label="Story points",
-        description=(
-            "Estimate items in story points (0–999, one decimal) alongside time "
-            "tracking (spec 70). Off by default — a project that hasn't opted in "
-            "shows no points UI; velocity/burnup can then report in points."
-        ),
-    ),
-    # Directory (spec 85) — instance-only, edited on Settings → Directory. An
-    # empty base DN means "the whole directory": consumers fall back to
-    # ldap.service.base_dn() at USE time (mirroring the raw-env helpers), so the
-    # registered default stays the verbatim env value.
-    SettingKey.LDAP_URL: SettingSpec(
-        key=SettingKey.LDAP_URL,
-        type=SettingType.STRING,
-        scopes=(SettingScope.INSTANCE,),
-        label="Server URL",
-        description=(
-            "The directory server, e.g. ldaps://ad.example.com:636. Empty = "
-            "LDAP sign-in disabled. Applies without a restart (RADD-846); the "
-            "RADD_LDAP_URL env value is the default."
-        ),
-    ),
-    SettingKey.LDAP_USER_DOMAIN: SettingSpec(
-        key=SettingKey.LDAP_USER_DOMAIN,
-        type=SettingType.STRING,
-        scopes=(SettingScope.INSTANCE,),
-        label="User domain",
-        description=(
-            "The UPN suffix people sign in with (user@THIS); also derives the "
-            "default base DN (ad.example.com → DC=ad,DC=example,DC=com)."
-        ),
-    ),
-    SettingKey.LDAP_BIND_DN: SettingSpec(
-        key=SettingKey.LDAP_BIND_DN,
-        type=SettingType.STRING,
-        scopes=(SettingScope.INSTANCE,),
-        label="Bind account DN",
-        description=(
-            "The service account for directory searches and sync, e.g. "
-            "CN=svc-radd,OU=Service Accounts,DC=ad,DC=example,DC=com. "
-            "Interactive sign-in stays direct-bind and never uses it."
-        ),
-    ),
-    SettingKey.LDAP_BIND_PASSWORD: SettingSpec(
-        key=SettingKey.LDAP_BIND_PASSWORD,
-        type=SettingType.STRING,
-        scopes=(SettingScope.INSTANCE,),
-        label="Bind account password",
-        description=(
-            "Stored as an instance setting readable by instance admins — the "
-            "same trust level as the person who set it."
-        ),
-        secret=True,
-    ),
-    SettingKey.LDAP_ADMIN_GROUPS: SettingSpec(
-        key=SettingKey.LDAP_ADMIN_GROUPS,
-        type=SettingType.STRING,
-        scopes=(SettingScope.INSTANCE,),
-        label="Admin groups",
-        description=(
-            "Comma-separated directory group CNs whose (transitive) members "
-            "sign in as instance admins. Empty = the directory carries no "
-            "role opinion (the spec-110 rule)."
-        ),
-    ),
-    SettingKey.LDAP_GROUP_SYNC_SECONDS: SettingSpec(
-        key=SettingKey.LDAP_GROUP_SYNC_SECONDS,
-        type=SettingType.INT,
-        scopes=(SettingScope.INSTANCE,),
-        label="Group sync interval (seconds)",
-        description=(
-            "How often mirrored groups re-ask the directory their transitive "
-            "member question — the worst-case window between an AD removal "
-            "and the grant stopping (a login updates that user sooner). "
-            "Applies from the next cycle, no restart (RADD-848)."
-        ),
-    ),
-    SettingKey.LDAP_USER_SYNC_BASE: SettingSpec(
-        key=SettingKey.LDAP_USER_SYNC_BASE,
-        type=SettingType.STRING,
-        scopes=(SettingScope.INSTANCE,),
-        label="User search base DN",
-        description=(
-            "Where directory users are searched (user sync, imports, group-member "
-            "resolution) — e.g. OU=Staff,DC=ad,DC=example,DC=com. Empty = the "
-            "whole directory."
-        ),
-        config_attr="ldap_user_search_base",
-    ),
-    SettingKey.LDAP_USER_SYNC_ENABLED: SettingSpec(
-        key=SettingKey.LDAP_USER_SYNC_ENABLED,
-        type=SettingType.BOOL,
-        scopes=(SettingScope.INSTANCE,),
-        label="Automatic user sync",
-        description=(
-            "Periodically import every directory user under the search base and "
-            "keep names in sync (spec 85). Needs the bind account and background "
-            "workers; off = manual imports and 'Sync now' only."
-        ),
-    ),
-    SettingKey.LDAP_USER_SYNC_DEACTIVATE_MISSING: SettingSpec(
-        key=SettingKey.LDAP_USER_SYNC_DEACTIVATE_MISSING,
-        type=SettingType.BOOL,
-        scopes=(SettingScope.INSTANCE,),
-        label="Deactivate missing users",
-        description=(
-            "When a directory-provisioned user vanishes from the directory, "
-            "deactivate the account (revokes sessions). Local and OIDC accounts "
-            "are never touched. Off by default so a transient AD outage cannot "
-            "lock people out."
-        ),
-    ),
-    SettingKey.LDAP_EXCLUDE_DISABLED: SettingSpec(
-        key=SettingKey.LDAP_EXCLUDE_DISABLED,
-        type=SettingType.BOOL,
-        scopes=(SettingScope.INSTANCE,),
-        label="Skip disabled directory accounts",
-        description=(
-            "Exclude accounts disabled in the directory (the AD ACCOUNTDISABLE bit) "
-            "from imports and sync. ON by default: on a real directory most entries "
-            "are leavers — one live instance had 2057 disabled accounts against 1031 "
-            "active ones — and importing them fills Radd with dead users. Turning it "
-            "OFF does NOT lose the history of people who have left: their existing "
-            "issues, comments and worklogs keep their attribution either way."
-        ),
-    ),
-    SettingKey.LDAP_GROUP_SEARCH_BASE: SettingSpec(
-        key=SettingKey.LDAP_GROUP_SEARCH_BASE,
-        type=SettingType.STRING,
-        scopes=(SettingScope.INSTANCE,),
-        label="Group search base DN",
-        description=(
-            "Where directory groups are searched for the group browser, links, "
-            "and imports — e.g. OU=Groups,DC=ad,DC=example,DC=com. Empty = the "
-            "whole directory."
-        ),
-    ),
-    SettingKey.AI_EDITOR_ACTIONS: SettingSpec(
-        key=SettingKey.AI_EDITOR_ACTIONS,
-        type=SettingType.BOOL,
-        scopes=(SettingScope.INSTANCE,),
-        label="Editor AI actions",
-        description=(
-            "AI writing actions in the rich editor (/refine, /format, preset and "
-            "freeform prompts) with streamed results and diff review. Also needs "
-            "the chat role assigned; users can additionally opt out per profile."
-        ),
-    ),
-    SettingKey.AI_SEMANTIC_SEARCH: SettingSpec(
-        key=SettingKey.AI_SEMANTIC_SEARCH,
-        type=SettingType.BOOL,
-        scopes=(SettingScope.INSTANCE,),
-        label="Semantic search",
-        description=(
-            "Meaning-based retrieval fused into search, similar-issues, and the "
-            "palette Ask mode. Needs the embeddings role assigned and the pgvector "
-            "extension installed in Postgres."
-        ),
-    ),
-    SettingKey.AI_STORAGE_ROUTING: SettingSpec(
-        key=SettingKey.AI_STORAGE_ROUTING,
-        type=SettingType.BOOL,
-        scopes=(SettingScope.INSTANCE,),
-        label="LLM storage routing",
-        description=(
-            "Lets LLM-type storage routing rules classify uploads (Settings → "
-            "Storage). Needs the vision role assigned; rules fall through to the "
-            "next rule while this is off."
-        ),
-    ),
-    SettingKey.AI_SUMMARIZE: SettingSpec(
-        key=SettingKey.AI_SUMMARIZE,
-        type=SettingType.BOOL,
-        scopes=(SettingScope.INSTANCE,),
-        label="Issue summarize",
-        description="The Summarize action on issues (chat role).",
-    ),
-    SettingKey.AI_NL_SLQ: SettingSpec(
-        key=SettingKey.AI_NL_SLQ,
-        type=SettingType.BOOL,
-        scopes=(SettingScope.INSTANCE,),
-        label="Natural language → SLQ",
-        description="The Ask-AI bar that turns plain language into an SLQ filter (chat role).",
-    ),
-    SettingKey.AI_SIMILAR_RERANK: SettingSpec(
-        key=SettingKey.AI_SIMILAR_RERANK,
-        type=SettingType.BOOL,
-        scopes=(SettingScope.INSTANCE,),
-        label="Similar-issues LLM rerank",
-        description=(
-            "Rescore duplicate candidates with the chat model and explain why "
-            "each looks related. Off by default — it costs a chat-model round "
-            "trip per similar-issues open; similar issues keep working without "
-            "it (FTS/vector candidates only)."
-        ),
-    ),
-    SettingKey.AI_STREAM_RESPONSES: SettingSpec(
-        key=SettingKey.AI_STREAM_RESPONSES,
-        type=SettingType.BOOL,
-        scopes=(SettingScope.INSTANCE,),
-        label="Stream AI responses",
-        description=(
-            "Deliver issue summaries progressively and similar-issue candidates "
-            "immediately with reasoning filled in as the model produces it. Off = "
-            "each AI answer arrives complete, in one go."
-        ),
-    ),
-}
-
-
 class SettingsEntity(StrEnum):
     SETTING = "scoped_setting"
+
+
+def all_setting_keys() -> frozenset[str]:
+    """Every key the system knows: the registry ∪ the typed alias enum (mirrors
+    `auth.types.all_permission_keys`)."""
+    from radd.kernel import registries
+
+    return frozenset({k.value for k in SettingKey} | set(registries.settings))
+
+
+def setting_spec(key: "SettingKey | str") -> SettingSpec:
+    """The owning module's declaration for `key` — type, scopes, prose, default
+    source — read LIVE from the kernel registry, so a hot-disabled plugin's
+    setting stops resolving in the same breath its routes unmount."""
+    from radd.kernel import registries
+
+    spec = registries.settings.get(str(key))
+    if spec is None:
+        raise KeyError(key)
+    return spec
+
+
+class _SettingCatalog(Mapping[str, SettingSpec]):
+    """`{key: SettingSpec}` over the LIVE kernel registry (RADD-891) — the
+    settings equivalent of `auth.types._DescriptionCatalog`/`PERMISSION_
+    DESCRIPTIONS`. Presented as a Mapping (not a function) so existing call
+    sites — `SETTINGS_REGISTRY[key]`, `SETTINGS_REGISTRY.items()` — keep
+    working unchanged, now composed from each owning plugin's own contribution
+    instead of one hardcoded dict literal."""
+
+    def __getitem__(self, key: "SettingKey | str") -> SettingSpec:
+        return setting_spec(key)
+
+    def __iter__(self):
+        from radd.kernel import registries
+
+        return iter(registries.settings)
+
+    def __len__(self) -> int:
+        from radd.kernel import registries
+
+        return len(registries.settings)
+
+
+#: `{key: SettingSpec}` — every registered scalar setting, live over the
+#: kernel registry. Kept as a module-level Mapping (rather than a function)
+#: for the same reason `auth.types.PERMISSION_DESCRIPTIONS` is: existing call
+#: sites subscript and iterate it like the old static dict.
+SETTINGS_REGISTRY: Mapping[str, SettingSpec] = _SettingCatalog()

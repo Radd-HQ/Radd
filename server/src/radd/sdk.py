@@ -36,6 +36,7 @@ from radd.kernel import (
     PluginUiManifest,
     RaddPlugin,
     SettingSectionSpec,
+    SettingSpec,
     SlqFieldSpec,
     TaskSpec,
     ViewTypeSpec,
