@@ -288,14 +288,23 @@ async def _next_rank(session: AsyncSession) -> float:
 
 async def _rebalance_ranks(session: AsyncSession) -> None:
     """Respace every item's rank by `item_rank_step` in current rank order — the
-    backstop for float midpoints collapsing after many insertions between a pair."""
-    rows = (
-        await session.execute(select(WorkItem.id).order_by(WorkItem.rank, WorkItem.created_at))
-    ).scalars()
-    for index, item_id in enumerate(rows, start=1):
-        await session.execute(
-            update(WorkItem).where(WorkItem.id == item_id).values(rank=index * settings.item_rank_step)
-        )
+    backstop for float midpoints collapsing after many insertions between a pair.
+
+    ONE set-based statement (RADD-878): the old per-row loop issued an UPDATE per
+    item — 503k statements inside the interactive drag request that tripped the
+    collapse. Deliberately GLOBAL: rank is a single instance-wide order (a
+    cross-project view ranks items against each other, and `_next_rank` is the
+    global min), so a per-project respace would corrupt the interleaving."""
+    ranked = select(
+        WorkItem.id.label("item_id"),
+        func.row_number().over(order_by=(WorkItem.rank, WorkItem.created_at)).label("rn"),
+    ).subquery()
+    await session.execute(
+        update(WorkItem)
+        .where(WorkItem.id == ranked.c.item_id)
+        .values(rank=ranked.c.rn * settings.item_rank_step)
+        .execution_options(synchronize_session=False)
+    )
     await session.flush()
 
 
