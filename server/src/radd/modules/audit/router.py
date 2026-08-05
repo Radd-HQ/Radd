@@ -25,6 +25,7 @@ async def audit_log(
     actor_id: uuid.UUID | None = None,
     start: datetime | None = None,
     end: datetime | None = None,
+    q: str | None = None,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> list[AuditEntry]:
@@ -38,6 +39,7 @@ async def audit_log(
         actor_id=actor_id,
         start=start,
         end=end,
+        q=q,
         limit=limit,
         offset=offset,
     )

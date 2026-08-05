@@ -1,11 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ScrollText } from "lucide-react";
 import { ApiError } from "../../lib/api";
 import { HISTORY_FIELD_LABELS, initials } from "../../lib/meta";
 import { auditQuery } from "../../lib/queries";
+import { SEARCH_DEBOUNCE_MS } from "../../lib/constants";
+import { useDebounced } from "../../lib/hooks";
 import type { AuditEntry, HistoryChange } from "../../lib/types";
 import { EmptyState } from "../../components/EmptyState";
+import { Pager } from "../../components/Pager";
 import { Select } from "../../components/Select";
 import { Table, TBody, Td, THead, Th } from "../../components/Table";
 import { TableSkeleton } from "../../components/TableSkeleton";
@@ -31,7 +34,7 @@ const ENTITY_OPTIONS: readonly (readonly [string, string])[] = [
   ["form", "Intake forms"],
 ];
 
-const AUDIT_LIMIT = 200;
+const AUDIT_PAGE_SIZE = 50;
 
 /**
  * Admin audit log — every attributable change across the server, read from
@@ -50,16 +53,39 @@ function AuditTable({
   entityType: string;
   onEntityType: (value: string) => void;
 }) {
-  const audit = useQuery(auditQuery({ entityType, limit: AUDIT_LIMIT }));
+  // RADD-884: server q (event type or payload text) + real paging — the page
+  // used to hardcode the first 200 rows of an unbounded trail.
+  const [q, setQ] = useState("");
+  const debouncedQ = useDebounced(q, SEARCH_DEBOUNCE_MS);
+  const [page, setPage] = useState(1);
+  useEffect(() => setPage(1), [debouncedQ, entityType]);
+  const audit = useQuery(
+    auditQuery({
+      entityType,
+      q: debouncedQ,
+      limit: AUDIT_PAGE_SIZE,
+      offset: (page - 1) * AUDIT_PAGE_SIZE,
+    }),
+  );
   const forbidden = audit.error instanceof ApiError && audit.error.status === 403;
 
   const filter = (
-    <Select
-      value={entityType}
-      onChange={onEntityType}
-      aria-label="Filter by entity"
-      options={ENTITY_OPTIONS.map(([value, label]) => ({ value, label }))}
-    />
+    <div className="flex items-center gap-2">
+      <input
+        type="search"
+        value={q}
+        onChange={(event) => setQ(event.target.value)}
+        placeholder="Search type or payload…"
+        aria-label="Search the audit trail"
+        className="h-8 w-56 rounded-md border border-subtle bg-surface px-2.5 text-[13px] text-heading placeholder:text-fg-faint focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30"
+      />
+      <Select
+        value={entityType}
+        onChange={onEntityType}
+        aria-label="Filter by entity"
+        options={ENTITY_OPTIONS.map(([value, label]) => ({ value, label }))}
+      />
+    </div>
   );
 
   return (
@@ -96,6 +122,16 @@ function AuditTable({
               ))}
             </TBody>
           </Table>
+        </div>
+      )}
+      {audit.data && (page > 1 || audit.data.length === AUDIT_PAGE_SIZE) && (
+        <div className="mt-3 flex justify-end">
+          <Pager
+            page={page}
+            // The trail is unbounded and uncounted: a short page ends it.
+            pageCount={audit.data.length < AUDIT_PAGE_SIZE ? page : null}
+            onPage={setPage}
+          />
         </div>
       )}
     </SettingsPage>

@@ -4,8 +4,10 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import Text, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from radd.db import ilike_term
 
 from .models import ConsumerOffset, Event
 from .quiet import is_quiet, quiet
@@ -61,6 +63,7 @@ async def query_events(
     actor_id: uuid.UUID | None = None,
     start: datetime | None = None,
     end: datetime | None = None,
+    q: str | None = None,
     ascending: bool = False,
     limit: int = 100,
     offset: int = 0,
@@ -69,8 +72,18 @@ async def query_events(
 
     Any combination of filters ANDs together; results are the newest first by
     default (id DESC). The events table is append-only, so this IS the audit trail.
+
+    `q` (RADD-884) matches the event type or anywhere in the payload text.
+    Newest-first with a LIMIT, Postgres stops as soon as the page fills — fast
+    for anything that occurs, a tail scan only for terms that never match,
+    which an admin page wears.
     """
     conditions = []
+    if q:
+        pattern = ilike_term(q)
+        conditions.append(
+            Event.event_type.ilike(pattern) | func.cast(Event.payload, Text).ilike(pattern)
+        )
     if entity_type is not None:
         conditions.append(Event.entity_type == entity_type)
     if entity_id is not None:

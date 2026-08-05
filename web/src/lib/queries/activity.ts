@@ -82,7 +82,10 @@ export const linkSearchQuery = (projectId: string, q: string, excludeId?: string
 export interface AuditParams {
   entityType?: string;
   actorId?: string;
+  /** Free-text match on event type or payload (RADD-884). */
+  q?: string;
   limit?: number;
+  offset?: number;
 }
 
 /** Admin audit trail (newest first) — the events log, filtered. Requires admin (403 handled). */
@@ -91,14 +94,18 @@ export const auditQuery = (params: AuditParams) =>
     queryKey: queryKeys.audit({
       entityType: params.entityType ?? "",
       actorId: params.actorId ?? "",
+      q: params.q ?? "",
       limit: String(params.limit ?? 100),
+      offset: String(params.offset ?? 0),
     }),
     queryFn: () =>
       api.get<AuditEntry[]>(ApiPath.audit, {
         query: {
           entity_type: params.entityType || undefined,
           actor_id: params.actorId || undefined,
+          q: params.q || undefined,
           limit: String(params.limit ?? 100),
+          offset: String(params.offset ?? 0),
         },
       }),
     retry: false,

@@ -29,7 +29,7 @@ interface RequestOptions {
   on401?: On401Value;
 }
 
-async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+async function rawRequest(path: string, options: RequestOptions = {}): Promise<Response> {
   const { method = "GET", body, query, on401 = On401.redirect } = options;
 
   const url = new URL(API_BASE + path, window.location.origin);
@@ -61,8 +61,32 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     throw new ApiError(response.status, detail);
   }
 
+  return response;
+}
+
+async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const response = await rawRequest(path, options);
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
+}
+
+/** Rows + the pre-pagination total from X-Total-Count (RADD-883). `total` is
+ * null when the server didn't send the header — an unpaged request. */
+export interface Paged<T> {
+  rows: T[];
+  total: number | null;
+}
+
+const TOTAL_COUNT_HEADER = "X-Total-Count";
+
+async function pagedRequest<T>(
+  path: string,
+  options: Omit<RequestOptions, "method" | "body"> = {},
+): Promise<Paged<T>> {
+  const response = await rawRequest(path, options);
+  const rows = (await response.json()) as T[];
+  const header = response.headers.get(TOTAL_COUNT_HEADER);
+  return { rows, total: header === null ? null : Number(header) };
 }
 
 async function errorDetail(response: Response): Promise<unknown> {
@@ -153,6 +177,9 @@ export function deniedCustomFieldKeys(error: unknown): string[] {
 export const api = {
   get: <T>(path: string, options?: Omit<RequestOptions, "method" | "body">) =>
     request<T>(path, options),
+  /** GET a paged list: rows + the X-Total-Count total (null when unpaged). */
+  getPaged: <T>(path: string, options?: Omit<RequestOptions, "method" | "body">) =>
+    pagedRequest<T>(path, options),
   post: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, "method" | "body">) =>
     request<T>(path, { ...options, method: "POST", body }),
   put: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, "method" | "body">) =>

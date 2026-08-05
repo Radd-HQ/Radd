@@ -108,7 +108,7 @@ export const queryKeys = {
   backups: () => ["backups"] as const,
   backupSchedules: () => ["backupSchedules"] as const,
   backupRun: (runId: string) => ["backupRun", { runId }] as const,
-  notifications: (unread: boolean) => ["notifications", { unread }] as const,
+  notifications: (unread: boolean, page = 1) => ["notifications", { unread, page }] as const,
   search: (q: string) => ["search", { q }] as const,
   attachments: (entityType: string, entityId: string) =>
     ["attachments", { entityType, entityId }] as const,

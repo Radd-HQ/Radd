@@ -69,7 +69,10 @@ export const successorCheckQuery = (userId: string, candidateId: string) =>
     staleTime: 0,
   });
 
-/** The admin Users table (spec 84): server-side q/source/active filters. */
+/** The admin Users table (spec 84): server-side q/source/active filters.
+ * UNPAGED — the full-set consumers (automations vocab, form defaults, the Jira
+ * user mapper) need every account with email; the settings TABLE pages via
+ * `usersAdminPageQuery` below. */
 export const usersAdminQuery = (filters: { q?: string; source?: string; active?: string }) => {
   const query: Record<string, string> = {};
   if (filters.q) query.q = filters.q;
@@ -78,6 +81,31 @@ export const usersAdminQuery = (filters: { q?: string; source?: string; active?:
   return queryOptions({
     queryKey: queryKeys.usersAdmin(query),
     queryFn: () => api.get<User[]>(ApiPath.users, { query }),
+    placeholderData: keepPreviousData,
+  });
+};
+
+/** Admin Users table page size (RADD-884) — the unfiltered table used to
+ * render all 3,088 directory rows at once. */
+export const USERS_PAGE_SIZE = 100;
+
+/** The settings Users TABLE: same filters, paged, with the X-Total-Count
+ * total (RADD-884). */
+export const usersAdminPageQuery = (filters: {
+  q?: string;
+  source?: string;
+  active?: string;
+  page: number;
+}) => {
+  const query: Record<string, string> = {};
+  if (filters.q) query.q = filters.q;
+  if (filters.source) query.source = filters.source;
+  if (filters.active) query.active = filters.active;
+  query.limit = String(USERS_PAGE_SIZE);
+  query.offset = String((filters.page - 1) * USERS_PAGE_SIZE);
+  return queryOptions({
+    queryKey: queryKeys.usersAdmin(query),
+    queryFn: () => api.getPaged<User>(ApiPath.users, { query }),
     placeholderData: keepPreviousData,
   });
 };

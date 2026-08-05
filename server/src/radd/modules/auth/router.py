@@ -372,15 +372,24 @@ async def list_user_directory(
 
 @user_router.get("", response_model=list[UserRead])
 async def list_users(
+    response: Response,
     session: Session,
     actor: CurrentUser,
     q: str | None = None,
     source: UserSource | None = None,
     active: bool | None = None,
+    limit: Annotated[int | None, Query(ge=1, le=500)] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[UserRead]:
-    """User directory with spec-84 admin filters."""
+    """User directory with spec-84 admin filters; limit/offset page (RADD-884)."""
     await authz.require(session, actor, authz.Permission.USER_MANAGE)
-    users = await service.list_users(session, q=q, source=source, active=active)
+    users = await service.list_users(
+        session, q=q, source=source, active=active, limit=limit, offset=offset
+    )
+    if limit is not None:
+        response.headers[TOTAL_COUNT_HEADER] = str(
+            await service.count_users(session, q=q, source=source, active=active)
+        )
     return [UserRead.model_validate(u) for u in users]
 
 

@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, ChevronDown, ChevronRight, Lock, UserRound } from "lucide-react";
 import { Link } from "@tanstack/react-router";
@@ -6,7 +6,7 @@ import { ApiError, api, errorMessage } from "../../lib/api";
 import { ApiPath, RoutePath, SEARCH_DEBOUNCE_MS, apiUserPath } from "../../lib/constants";
 import { useCurrentUser, useDebounced, usePermissions } from "../../lib/hooks";
 import { INSTANCE_ROLE_LABELS } from "../../lib/meta";
-import { queryKeys, usersAdminQuery } from "../../lib/queries";
+import { USERS_PAGE_SIZE, queryKeys, usersAdminPageQuery, usersAdminQuery } from "../../lib/queries";
 import {
   InstanceRole,
   Permission,
@@ -17,6 +17,7 @@ import {
 } from "../../lib/types";
 import { EmptyState } from "../../components/EmptyState";
 import { SelectField } from "../../components/SelectField";
+import { Pager } from "../../components/Pager";
 import { TableSkeleton } from "../../components/TableSkeleton";
 import { TextField } from "../../components/TextField";
 import { QueryError } from "../../components/QueryError";
@@ -56,12 +57,21 @@ export function UsersSettingsPage() {
   const debouncedQ = useDebounced(q, SEARCH_DEBOUNCE_MS);
   const [source, setSource] = useState("");
   const [active, setActive] = useState("");
+  // RADD-884: the unfiltered query used to render all 3,088 directory rows.
+  const [page, setPage] = useState(1);
+  useEffect(() => setPage(1), [debouncedQ, source, active]);
   // Spec 89: the account queued for hard deletion (its dialog owns the confirm).
   const [deleting, setDeleting] = useState<User | null>(null);
   const users = useQuery({
-    ...usersAdminQuery({ q: debouncedQ, source, active }),
+    ...usersAdminPageQuery({ q: debouncedQ, source, active, page }),
     enabled: canView,
     retry: false,
+  });
+  // Successor candidates need the FULL directory, not the visible page —
+  // fetched only while the delete dialog is open (RADD-884).
+  const allUsers = useQuery({
+    ...usersAdminQuery({}),
+    enabled: canView && deleting !== null,
   });
 
   const patchUser = useMutation({
@@ -75,7 +85,8 @@ export function UsersSettingsPage() {
   });
 
   const forbidden = users.error instanceof ApiError && users.error.status === 403;
-  const list = users.data ?? [];
+  const list = users.data?.rows ?? [];
+  const total = users.data?.total ?? null;
 
   return (
     <SettingsPage
@@ -155,6 +166,16 @@ export function UsersSettingsPage() {
               }}
             />
           )}
+          {total !== null && total > USERS_PAGE_SIZE && (
+            <div className="mt-3 flex justify-end">
+              <Pager
+                page={page}
+                pageCount={Math.ceil(total / USERS_PAGE_SIZE)}
+                total={total}
+                onPage={setPage}
+              />
+            </div>
+          )}
           {patchUser.isError && (
             <p className="mt-2 text-xs text-red-400">{errorMessage(patchUser.error)}</p>
           )}
@@ -162,7 +183,7 @@ export function UsersSettingsPage() {
           {deleting && (
             <DeleteUserDialog
               user={deleting}
-              candidates={(users.data ?? []).filter((u) => u.id !== deleting.id && u.active)}
+              candidates={(allUsers.data ?? []).filter((u) => u.id !== deleting.id && u.active)}
               onClose={() => setDeleting(null)}
             />
           )}

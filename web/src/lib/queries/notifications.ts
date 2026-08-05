@@ -14,13 +14,21 @@ import type {
   WatchersRead,
 } from "../types";
 
-/** Full notification list for the Inbox (spec 26). */
-export const notificationsQuery = (unread: boolean) =>
+/** Inbox page size (RADD-884) — the server pages at ≤200; before this the page
+ * hard-capped at the first 100 and older notifications were unreachable. */
+export const INBOX_PAGE_SIZE = 100;
+
+/** Full notification list for the Inbox (spec 26), paged (RADD-884). */
+export const notificationsQuery = (unread: boolean, page = 1) =>
   queryOptions({
-    queryKey: queryKeys.notifications(unread),
+    queryKey: queryKeys.notifications(unread, page),
     queryFn: () =>
       api.get<NotificationList>(ApiPath.notifications, {
-        query: { unread: unread ? "true" : undefined, limit: "100" },
+        query: {
+          unread: unread ? "true" : undefined,
+          limit: String(INBOX_PAGE_SIZE),
+          offset: String((page - 1) * INBOX_PAGE_SIZE),
+        },
       }),
     meta: entityMeta(Entity.notification),
     placeholderData: keepPreviousData,

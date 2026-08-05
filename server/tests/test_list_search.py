@@ -104,6 +104,22 @@ async def test_labels_endpoint_sets_total_header_only_when_paged(db, admin):
     assert TOTAL_COUNT_HEADER not in unpaged.headers
 
 
+async def test_audit_q_matches_type_and_payload(db):
+    """RADD-884: the audit trail's q matches the event type or payload text."""
+    from radd.modules.events.models import Event
+    from radd.modules.events.service import query_events
+
+    tag = _tag()
+    db.add(Event(event_type=f"probe.created", entity_type="probe", entity_id=tag,
+                 payload={"title": f"needle-{tag}"}))
+    db.add(Event(event_type=f"probe.created", entity_type="probe", entity_id=tag,
+                 payload={"title": "unrelated"}))
+    await db.flush()
+    hits = await query_events(db, q=f"needle-{tag}")
+    assert len(hits) == 1
+    assert hits[0].payload["title"] == f"needle-{tag}"
+
+
 async def test_directory_pagination_and_count(db):
     tag = _tag()
     for i in range(4):

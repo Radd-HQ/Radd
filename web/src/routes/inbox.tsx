@@ -7,17 +7,21 @@ import {
   useMarkAllNotificationsRead,
   useMarkNotificationsRead,
 } from "../lib/notify-mutations";
-import { notificationsQuery } from "../lib/queries";
+import { INBOX_PAGE_SIZE, notificationsQuery } from "../lib/queries";
 import type { Notification } from "../lib/types";
 import { Button } from "../components/Button";
 import { EmptyState } from "../components/EmptyState";
 import { NotificationRow } from "../components/notifications/NotificationRow";
+import { Pager } from "../components/Pager";
 import { Spinner } from "../components/Spinner";
 
 /** The personal notification Inbox (spec 26). */
 export function InboxPage() {
   const [unreadOnly, setUnreadOnly] = useState(false);
-  const { data, isPending } = useQuery(notificationsQuery(unreadOnly));
+  // RADD-884: the server pages; the page used to hard-cap at the first 100
+  // and anything older was unreachable.
+  const [page, setPage] = useState(1);
+  const { data, isPending } = useQuery(notificationsQuery(unreadOnly, page));
   const markRead = useMarkNotificationsRead();
   const markAllRead = useMarkAllNotificationsRead();
   const navigate = useNavigate();
@@ -42,7 +46,10 @@ export function InboxPage() {
           <input
             type="checkbox"
             checked={unreadOnly}
-            onChange={(event) => setUnreadOnly(event.target.checked)}
+            onChange={(event) => {
+              setUnreadOnly(event.target.checked);
+              setPage(1);
+            }}
             className="accent-accent"
           />
           Unread only
@@ -77,6 +84,16 @@ export function InboxPage() {
           </li>
         ))}
       </ul>
+      {data && (page > 1 || data.notifications.length === INBOX_PAGE_SIZE) && (
+        <div className="mt-3 flex justify-end">
+          <Pager
+            page={page}
+            // No total from this endpoint: a short page means we're on the last one.
+            pageCount={data.notifications.length < INBOX_PAGE_SIZE ? page : null}
+            onPage={setPage}
+          />
+        </div>
+      )}
     </div>
   );
 }
