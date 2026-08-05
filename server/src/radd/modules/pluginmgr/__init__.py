@@ -16,6 +16,7 @@ plugin = RaddPlugin(
     name="pluginmgr",
     description="Plugin lifecycle manager: install/enable/disable/uninstall + installed_plugins.",
     depends_on=("auth", "events"),
+    weak_depends=("access",),
     routers=(router,),
     # Admin lifecycle events — registered for audit/webhooks but NOT automation
     # triggers (trigger=False), so they don't clutter the rule builder.

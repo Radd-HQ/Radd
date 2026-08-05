@@ -15,7 +15,7 @@ plugin = RaddPlugin(
     description="Single sign-on (spec 40 → 110): a registry of OIDC providers "
     "(Google preset + generic issuers), code+PKCE flows, per-provider signup "
     "domain allowlists, and federated identities linked to existing accounts.",
-    depends_on=("events", "projects", "auth"),
+    depends_on=("events", "projects", "auth", "teams"),
     routers=(router, admin_router),
     on_startup=(_startup,),
     capabilities=(

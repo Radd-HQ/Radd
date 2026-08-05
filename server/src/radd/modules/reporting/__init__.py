@@ -13,5 +13,6 @@ plugin = RaddPlugin(
         "undeclarable in depends_on without a load-order cycle; see docs/modules.md."
     ),
     depends_on=("events", "projects", "auth", "workflow", "cycles", "items"),
+    weak_depends=("csat", "slas"),
     routers=(router,),
 )

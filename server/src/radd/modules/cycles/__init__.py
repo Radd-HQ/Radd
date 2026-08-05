@@ -11,7 +11,8 @@ plugin = RaddPlugin(
         "series (per-label auto-provisioned drafts) and a Jira-style complete flow. "
         "Status (draft/upcoming/active/completed) is derived, never stored."
     ),
-    depends_on=("projects", "auth", "events"),
+    depends_on=("projects", "auth", "events", "settings", "teams"),
+    weak_depends=("items", "timelogging"),
     routers=(router, series_router),
     event_types=(
         EventTypeSpec(CycleEvent.CREATED, "Cycle created", "Cycles"),

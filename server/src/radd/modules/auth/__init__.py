@@ -17,6 +17,7 @@ plugin = RaddPlugin(
         "role ladder; builtin global roles are ensured on startup."
     ),
     depends_on=("events", "projects"),
+    weak_depends=("access", "forms", "groups", "pages", "teams", "timelogging"),
     routers=(
         auth_router,
         user_router,

@@ -8,6 +8,7 @@ plugin = RaddPlugin(
     name="projects",
     description="Projects: global containers, keys, per-project item numbering.",
     depends_on=("events",),
+    weak_depends=("auth", "settings"),
     routers=(project_router, instance_router),
     event_types=(
         EventTypeSpec(ProjectEvent.PROJECT_CREATED, "Project created", "Admin"),

@@ -59,6 +59,12 @@ class RaddPlugin:
     api_version: str = KERNEL_API_VERSION
     core: bool = True  # reclassified builtins are core (non-disableable); externals set False
     depends_on: tuple[str, ...] = ()  # other plugin names that must load first
+    #: Cross-module imports the loader must NOT order by (RADD-885): deferred
+    #: reverse reaches ("teams calls items.service after both loaded") and
+    #: feature-detected optional seams. tests/test_module_contracts.py requires
+    #: every `radd.modules.X` import to appear in depends_on OR here — the
+    #: "# deferred: X loads after Y" comment, promoted to a declaration.
+    weak_depends: tuple[str, ...] = ()
     # Per-plugin dependencies (§14): the Python distributions + npm packages this
     # plugin needs. Builtins map to optional-dependency extras (radd[ldap,ai,…]); the
     # install step resolves them. Declarative here so the manifest is the single

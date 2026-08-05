@@ -81,7 +81,7 @@ plugin = RaddPlugin(
         "registry (spec 101): DB provider rows + chat/embeddings/vision roles, "
         "env-seeded once. Dormant (404) while a feature's role is unconfigured."
     ),
-    depends_on=("auth", "projects", "items", "fields", "comments", "search", "settings"),
+    depends_on=("auth", "projects", "items", "fields", "comments", "search", "settings", "events", "pages", "timelogging"),
     routers=(router, admin_router, editor_router),
     exception_handlers=(
         (AiDisabledError, _disabled_handler),

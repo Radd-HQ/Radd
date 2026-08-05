@@ -13,7 +13,7 @@ plugin = RaddPlugin(
     "requester (mail contact, else the reporter) a one-click rating survey when an "
     "item resolves in a CSAT_ENABLED project; a tokened public page records the "
     "rating, which surfaces on the item and in the service-desk report.",
-    depends_on=("projects", "auth", "items", "settings", "events", "mailintake"),
+    depends_on=("projects", "auth", "items", "settings", "events", "mailintake", "workflow"),
     routers=(router, public_router),
     on_startup=(dispatcher.start,),
     on_shutdown=(dispatcher.stop,),

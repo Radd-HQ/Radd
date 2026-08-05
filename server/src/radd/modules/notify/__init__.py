@@ -9,7 +9,8 @@ plugin = RaddPlugin(
     name="notify",
     description="Notifications + watchers: an outbox consumer fanning item/comment "
     "events into per-user in-app notifications and email digests.",
-    depends_on=("events", "projects", "auth", "items", "comments"),
+    depends_on=("events", "projects", "auth", "items", "comments", "teams"),
+    weak_depends=("participants",),
     routers=(router,),
     on_startup=(dispatcher.start,),
     on_shutdown=(dispatcher.stop,),

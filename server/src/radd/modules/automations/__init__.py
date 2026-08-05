@@ -10,18 +10,8 @@ plugin = RaddPlugin(
         "apply actions through the target services as a system actor, with a loop guard. "
         "Spec 69 adds schedule-triggered rules fired by a scheduler clock."
     ),
-    depends_on=(
-        "projects",
-        "auth",
-        "workflow",
-        "labels",
-        "cycles",
-        "releases",
-        "items",
-        "comments",
-        "teams",
-        "events",
-    ),
+    depends_on=("projects", "auth", "workflow", "labels", "cycles", "releases", "items", "comments", "teams", "events", "fields"),
+    weak_depends=("mailintake", "notify"),
     routers=(router,),
     on_startup=(dispatcher.start, scheduler.start),
     on_shutdown=(dispatcher.stop, scheduler.stop),

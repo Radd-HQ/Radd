@@ -27,10 +27,8 @@ plugin = RaddPlugin(
         "Spec 73 adds portal sharing (form_shares grant rows, PUT /forms/{id}/sharing) "
         "and the authenticated requester-portal directory under /portal/forms."
     ),
-    depends_on=(
-        "projects", "auth", "teams", "fields", "workflow", "labels", "cycles", "releases",
-        "items", "events",
-    ),
+    depends_on=("projects", "auth", "teams", "fields", "workflow", "labels", "cycles", "releases", "items", "events", "comments", "itemtypes"),
+    weak_depends=("attachments", "automations"),
     routers=(router, portal_router, portal_requests_router),
     exception_handlers=((FormValidationError, _form_validation_handler),),
     event_types=(

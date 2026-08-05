@@ -20,7 +20,7 @@ plugin = RaddPlugin(
         "views (Board/List/Planning) created by the project-created hook — "
         "ordinary views, editable and deletable like any other."
     ),
-    depends_on=("projects", "workflow", "items", "fields", "auth", "events", "access"),
+    depends_on=("projects", "workflow", "items", "fields", "auth", "events", "access", "groups", "teams"),
     routers=(router,),
     slq_fields=(
         SlqFieldSpec(

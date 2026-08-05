@@ -11,6 +11,7 @@ plugin = RaddPlugin(
         "local grouping is a Team; the directory's truth is a Group."
     ),
     depends_on=("events", "auth"),
+    weak_depends=("teams",),
     routers=(router,),
     event_types=(
         EventTypeSpec(GroupEvent.SYNCED, "Directory group synced", "Admin"),

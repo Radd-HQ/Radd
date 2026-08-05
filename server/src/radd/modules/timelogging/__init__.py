@@ -53,7 +53,7 @@ plugin = RaddPlugin(
         "team or person. Estimates/worklogs are module-owned so items stays independent. "
         "Default work categories seed on startup (ensure_seeded)."
     ),
-    depends_on=("events", "projects", "auth", "teams", "items"),
+    depends_on=("events", "projects", "auth", "teams", "items", "settings"),
     # `logged_by = me` on the ITEM dialect — see slq.py. Registered here rather
     # than hardcoded in items, so items keeps no knowledge of worklogs.
     slq_fields=(

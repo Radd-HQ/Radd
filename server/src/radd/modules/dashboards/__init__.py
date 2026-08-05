@@ -28,9 +28,7 @@ plugin = RaddPlugin(
         "404); every widget FETCHES through the existing read APIs at render "
         "time, so RBAC/visibility filtering is inherited, not reimplemented."
     ),
-    depends_on=(
-        "events", "projects", "auth", "teams", "items", "cycles", "views", "reporting"
-    ),
+    depends_on=("events", "projects", "auth", "teams", "items", "cycles", "views", "reporting", "access", "groups"),
     routers=(router,),
     exception_handlers=((WidgetConfigError, _config_handler),),
 )

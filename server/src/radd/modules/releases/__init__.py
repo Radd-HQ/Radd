@@ -10,7 +10,8 @@ plugin = RaddPlugin(
         "Project-scoped releases/versions. Ordinary API resources a CI service-account "
         "or the automations engine can POST to and assign — replaces the CI-writes-labels hack."
     ),
-    depends_on=("projects", "auth", "events"),
+    depends_on=("projects", "auth", "events", "settings", "workflow"),
+    weak_depends=("automations", "items"),
     routers=(router,),
     event_types=(
         EventTypeSpec(ReleaseEvent.CREATED, "Release created", "Releases"),

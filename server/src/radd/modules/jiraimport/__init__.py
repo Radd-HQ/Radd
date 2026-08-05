@@ -16,7 +16,7 @@ plugin = RaddPlugin(
     description="Jira import wizard (specs 90, 100): admin-managed Jira Server/DC "
     "connections — list projects, run JQL, infer an inbound schema, map fields to "
     "local custom fields, and run staged background imports.",
-    depends_on=("auth", "projects", "fields", "items", "workflow", "comments", "cycles", "attachments"),
+    depends_on=("auth", "projects", "fields", "items", "workflow", "comments", "cycles", "attachments", "events", "itemtypes", "linktypes", "notify", "releases", "timelogging", "weblinks"),
     on_startup=(
         # Carry a spec-90 environment configuration into a real connection row so
         # an existing deploy keeps working after the move to DB-managed connections.

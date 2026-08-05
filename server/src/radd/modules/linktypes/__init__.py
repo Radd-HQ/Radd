@@ -8,6 +8,7 @@ plugin = RaddPlugin(
     description="User-definable, scopeable issue link types (spec 91) — the catalog "
     "items resolves link labels + symmetry through.",
     depends_on=("projects", "events", "auth"),
+    weak_depends=("items",),
     routers=(router,),
     on_startup=(ensure_builtins,),
 )

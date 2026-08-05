@@ -30,7 +30,8 @@ plugin = RaddPlugin(
         "Per-project named states within fixed categories; seeds defaults on project "
         "creation. Optional transition graph with validation guards (spec 61)."
     ),
-    depends_on=("projects", "events", "auth", "settings"),
+    depends_on=("projects", "events", "auth", "settings", "teams"),
+    weak_depends=("approvals", "comments", "fields", "items", "timelogging"),
     routers=(router, category_router, transitions_router),
     exception_handlers=((TransitionError, _transition_handler),),
     event_types=(

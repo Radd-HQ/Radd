@@ -19,6 +19,6 @@ plugin = RaddPlugin(
     tasks=(TaskSpec(name="access.expiry-sweep", run=sweep_expired_grants, interval=3600.0),),
     description="Generic, scopeable, plugin-registerable access grants — the one ACL "
     "primitive fields/views/plugins share.",
-    depends_on=("projects", "events", "auth", "teams"),
+    depends_on=("projects", "events", "auth", "teams", "groups"),
     routers=(router,),
 )

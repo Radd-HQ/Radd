@@ -28,9 +28,8 @@ plugin = RaddPlugin(
         "Work items: CRUD, per-project keys (TD-42), epic/issue/subtask hierarchy, "
         "assignee + team, custom fields inline everywhere, SLQ text queries (`q`)."
     ),
-    depends_on=(
-        "projects", "workflow", "labels", "fields", "cycles", "releases", "auth", "teams", "events"
-    ),
+    depends_on=("projects", "workflow", "labels", "fields", "cycles", "releases", "auth", "teams", "events", "access", "itemtypes", "linktypes"),
+    weak_depends=("approvals", "comments", "timelogging"),
     routers=(router,),
     exception_handlers=(
         (FilterParseError, _filter_parse_handler),

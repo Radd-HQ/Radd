@@ -7,7 +7,7 @@ from .types import LabelEvent
 plugin = RaddPlugin(
     name="labels",
     description="Global labels: free-form tags, auto-created on first use (automation-friendly).",
-    depends_on=("projects", "events"),
+    depends_on=("projects", "events", "auth"),
     routers=(router,),
     event_types=(
         EventTypeSpec(LabelEvent.CREATED, "Label created", "Admin"),

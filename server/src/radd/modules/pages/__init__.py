@@ -31,7 +31,8 @@ plugin = RaddPlugin(
         "spaces readable without login under /public/pages (trees, page bodies, "
         "public-only FTS)."
     ),
-    depends_on=("events", "projects", "auth", "workflow", "items", "attachments", "labels", "comments", "notify"),
+    depends_on=("events", "projects", "auth", "workflow", "items", "attachments", "labels", "comments", "notify", "access", "groups", "search", "teams"),
+    weak_depends=("ai",),
     routers=(router, public_router),
     event_types=(
         EventTypeSpec(PageEvent.SPACE_CREATED, "Page space created", "Pages"),

@@ -67,7 +67,8 @@ plugin = RaddPlugin(
     description="File attachments on work items and wiki pages (spec 102): "
     "multiple storage hosts (filesystem/S3) as DB rows, per-host proxy or "
     "presigned delivery, routed uploads, blob API for other modules.",
-    depends_on=("events", "projects", "auth", "items"),
+    depends_on=("events", "projects", "auth", "items", "access", "groups", "teams"),
+    weak_depends=("ai",),
     # Per-plugin deps (§14): the S3 backend needs the MinIO SDK. Maps to the
     # `radd[s3]` extra; the default filesystem backend needs nothing extra.
     python_deps=("minio",),
