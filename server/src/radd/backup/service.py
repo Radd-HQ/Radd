@@ -167,7 +167,10 @@ def _attachments_dir(include: bool | None) -> Path | None:
     wanted = settings.backup_include_attachments_default if include is None else include
     if not wanted:
         return None
-    path = Path(default.get("root_dir") or settings.attachments_dir)
+    root = default.get("root_dir", "")
+    if not root:  # filesystem hosts always carry a root_dir (RADD-895)
+        return None
+    path = Path(root)
     return path if path.is_dir() else None
 
 

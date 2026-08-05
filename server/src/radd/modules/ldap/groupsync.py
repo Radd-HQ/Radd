@@ -39,10 +39,6 @@ from .types import DirectoryUnreachable, SyncKind
 
 logger = logging.getLogger(__name__)
 
-# Cap the error list persisted per run in directory_sync_state — the JSONB row
-# is a status line, not a log (shared with the user-sync loop, spec 85).
-MAX_RECORDED_ERRORS = 20
-
 
 class StaleDirectoryGroup(Exception):
     """The group no longer resolves in AD (spec 87) — renamed, moved, or
@@ -287,7 +283,7 @@ async def run_group_sync(session: AsyncSession) -> dict:
         "groups": groups_seen,
         "added": added_total,
         "removed": removed_total,
-        "errors": errors[:MAX_RECORDED_ERRORS],
+        "errors": errors[: settings.ldap_max_recorded_errors],
     }
     await state.record_run(session, SyncKind.GROUP_SYNC, payload)
     return payload

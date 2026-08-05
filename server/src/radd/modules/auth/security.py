@@ -2,9 +2,12 @@
 
 import hashlib
 import secrets
-from datetime import UTC, datetime
 
 from pwdlib import PasswordHash
+
+# Re-exported: expiry math predates radd.clock and callers (auth.service,
+# ldap.state, …) import `security.utcnow` — one clock, two doors (RADD-897).
+from radd.clock import utcnow  # noqa: F401
 
 from .types import PAT_PREFIX
 
@@ -35,6 +38,3 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def utcnow() -> datetime:
-    """Naive UTC, matching the timezone-naive DateTime columns."""
-    return datetime.now(UTC).replace(tzinfo=None)

@@ -1,7 +1,6 @@
 import uuid
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import UTC, datetime
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,9 +17,6 @@ from ..enums import ItemEntity
 from ..hierarchy import nearest_epic_case
 from ..models import ItemKeyAlias, WorkItem
 
-
-def _utcnow_naive() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 async def require_item(session: AsyncSession, item_id: uuid.UUID) -> WorkItem:

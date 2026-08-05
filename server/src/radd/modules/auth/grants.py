@@ -22,6 +22,7 @@ from radd.modules.events import service as events
 from .models import GlobalRoleGrant
 from .schemas import GlobalGrantEntry
 from .types import AuthEntity, AuthEvent
+from radd.clock import utcnow
 
 
 async def _subject_condition(session: AsyncSession, user_id: uuid.UUID):
@@ -45,9 +46,8 @@ async def _subject_condition(session: AsyncSession, user_id: uuid.UUID):
 def _live():
     """RADD-820: expiry applies AT RESOLUTION — an expired grant is absent the
     moment it passes, never 'until the sweep next runs'."""
-    from datetime import UTC, datetime
 
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = utcnow()
     return GlobalRoleGrant.expires_at.is_(None) | (GlobalRoleGrant.expires_at > now)
 
 

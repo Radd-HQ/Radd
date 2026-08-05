@@ -7,7 +7,7 @@ Split out of service.py in spec 63 (policy CRUD + first-match stay there).
 import math
 import uuid
 from collections.abc import Iterable, Sequence
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,6 +31,7 @@ from . import service, timers
 from .models import SlaItemState, SlaPolicy
 from .schemas import BatchTimerRead
 from .types import SlaEvent, SlaKind
+from radd.clock import utcnow
 
 FULL_DAY_MINUTES = 24 * 60
 # Non-working days / business windows shrink the active day: the pause horizon
@@ -38,9 +39,6 @@ FULL_DAY_MINUTES = 24 * 60
 HORIZON_SLACK_DAYS = 14
 ALL_WEEK: frozenset[int] = frozenset(range(7))
 
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 async def evaluate_items(
@@ -54,7 +52,7 @@ async def evaluate_items(
     Spec 63: callers must pass only items whose MATCHED policy is `policy`
     (first-match resolution) — this function evaluates, it does not select.
     """
-    now = now or _utcnow()
+    now = now or utcnow()
     id_list = list(item_ids)
     item_map = await items.items_by_ids(session, id_list)
     timelines = await reporting_timeline.build_item_timelines(session, id_list)
@@ -257,7 +255,7 @@ async def sync_states(
         )
     )
     rows = {row.item_id: row for row in result.scalars()}
-    now = _utcnow()
+    now = utcnow()
     emitted = 0
     for item_id, per_kind in evaluated.items():
         row = rows.get(item_id)

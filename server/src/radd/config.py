@@ -5,6 +5,12 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="RADD_", env_file=".env", extra="ignore")
 
     database_url: str = "postgresql+psycopg://radd:radd@localhost:5455/radd"
+    # Async engine pool (RADD-897): sized for one web replica + its background
+    # loops; pre-ping trades a cheap SELECT 1 per checkout for never handing a
+    # request a connection the database already dropped.
+    db_pool_size: int = 5
+    db_max_overflow: int = 10
+    db_pool_pre_ping: bool = True
     api_title: str = "Radd"
     api_prefix: str = "/api/v1"
     # Built SPA to serve at / (empty or missing dir = API-only). Default: the repo's web/dist.
@@ -45,6 +51,10 @@ class Settings(BaseSettings):
     automation_scheduler_interval: float = 60.0
     scheduler_tz: str = "UTC"
     automation_schedule_max_items: int = 200
+
+    # Event-cascade consumer (see radd/modules/events/cascade.py) — events read
+    # per iteration when draining kernel-registered cascades.
+    event_cascade_batch: int = 50
 
     # Notifications (see radd/modules/notify)
     notify_poll_interval: float = 1.0
@@ -106,6 +116,9 @@ class Settings(BaseSettings):
     # demote the AD admin whose account it just linked to.
     oidc_group_claim: str = "groups"
     oidc_admin_groups: str = ""
+    # Live tunable (not seed-only): per-request bound on the SSO HTTP round
+    # trips (issuer discovery, the code→token exchange).
+    sso_http_timeout_seconds: float = 10.0
 
     # LDAP/AD directory bind (see radd/modules/ldap). Empty url = disabled.
     # Direct bind: the user's own credentials authenticate the connection as
@@ -136,6 +149,9 @@ class Settings(BaseSettings):
     # a pathological directory degrades to "incomplete" (fails CLOSED — fewer
     # memberships resolved) instead of "down".
     group_nesting_max_depth: int = 10
+    # Cap on the error list persisted per sync run in directory_sync_state —
+    # the JSONB row is a status line, not a log (group + user sync loops).
+    ldap_max_recorded_errors: int = 20
     # Directory settings page + automatic user sync (spec 85). These four are
     # the CASCADE DEFAULTS for the registered instance-scope SettingKeys — an
     # instance override written on the Directory settings page wins over env.
@@ -213,13 +229,14 @@ class Settings(BaseSettings):
     # keeps verifying webhooks across the upgrade; rotation happens in the UI.
     forgejo_webhook_secret: str = ""
     forgejo_base_url: str = ""  # seed only: https://git.example.com
-    forgejo_merge_transition_state: str = ""  # spec 112 replaced this with per-project settings
     # Spec 112 cascade defaults (per-project overrides in Settings → Releases).
     release_waiting_state: str = ""
     release_shipped_state: str = ""
     # Backfill bounds (spec 111): how far back the API walk goes by default.
     forgejo_backfill_max_commits: int = 2000
     forgejo_api_page_size: int = 50
+    # Per-request bound on Forgejo API calls (connection test + backfill walk).
+    forgejo_http_timeout_seconds: float = 30.0
 
     # Jira import connector (see radd/modules/jiraimport, specs 90/100).
     # Spec 100 moved connections into the database (`jira_connections`), so these
@@ -245,6 +262,7 @@ class Settings(BaseSettings):
     googlechat_webhook_url: str = ""
     googlechat_event_types: str = "item.created,sla.breached,page.created"
     googlechat_poll_interval: float = 2.0
+    googlechat_batch: int = 100  # events read per consumer iteration
 
     # Alertmanager intake (see radd/modules/alertmanager). Empty token = disabled.
     alertmanager_token: str = ""
@@ -269,6 +287,7 @@ class Settings(BaseSettings):
     # are per-project OPT-IN, so the default stays off.
     csat_enabled: bool = False
     csat_poll_seconds: float = 5.0
+    csat_batch: int = 200  # events read per sender iteration
 
     # GitLab connector (see radd/modules/gitlab). Empty secret = endpoint disabled.
     gitlab_webhook_secret: str = ""

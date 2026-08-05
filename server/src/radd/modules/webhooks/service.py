@@ -5,7 +5,7 @@ import json
 import secrets as py_secrets
 import time
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
 import httpx
 from sqlalchemy import delete, select
@@ -15,6 +15,7 @@ from radd.config import settings
 from radd.exceptions import NotFoundError
 from radd.modules.events import service as events
 from radd.modules.events.service import Event
+from radd.clock import utcnow
 
 from .models import WebhookDelivery, WebhookEndpoint
 from .schemas import EndpointCreate, EndpointUpdate
@@ -27,9 +28,6 @@ from .types import (
     WebhookEvent,
 )
 
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def generate_secret() -> str:
@@ -146,7 +144,7 @@ async def fanout_events(session: AsyncSession) -> int:
         select(WebhookEndpoint).where(WebhookEndpoint.active.is_(True))
     )
     endpoints = list(result.scalars())
-    now = _utcnow()
+    now = utcnow()
     for event in batch:
         if event.silent:  # a bulk import must not fan 45k deliveries at subscribers
             continue
@@ -166,7 +164,7 @@ async def fanout_events(session: AsyncSession) -> int:
 
 
 async def attempt_due(session: AsyncSession, client: httpx.AsyncClient) -> int:
-    now = _utcnow()
+    now = utcnow()
     result = await session.execute(
         select(WebhookDelivery)
         .where(
@@ -232,4 +230,4 @@ def _schedule_retry(delivery: WebhookDelivery, error: str) -> None:
     if delivery.attempts > len(schedule):
         delivery.status = DeliveryStatus.DEAD.value
     else:
-        delivery.next_attempt_at = _utcnow() + timedelta(seconds=schedule[delivery.attempts - 1])
+        delivery.next_attempt_at = utcnow() + timedelta(seconds=schedule[delivery.attempts - 1])

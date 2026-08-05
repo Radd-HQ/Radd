@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,6 +32,7 @@ from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemLinkCreate, ItemUpdate
 from radd.modules.releases import service as releases_service
 from radd.modules.releases.schemas import ReleaseCreate
+from radd.clock import utcnow
 
 from . import apply, connections, ledger, provision, relink, transform
 from .client import browse_url
@@ -54,9 +55,6 @@ logger = logging.getLogger(__name__)
 MAX_RECORDED_PROBLEMS = 1000
 COMMIT_EVERY = 50  # issues per transaction — live progress without a huge txn
 
-
-def _now() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def _bump(run: JiraRun, key: str, by: int = 1) -> None:
@@ -94,7 +92,7 @@ async def execute(run_id: uuid.UUID) -> None:
         if actor is None or plan is None or snapshot is None:
             await _fail(session, run_id, "the plan, snapshot or actor no longer exists")
             return
-        run.started_at = _now()
+        run.started_at = utcnow()
         await session.commit()
 
         options = plan_service.options(plan)
@@ -111,7 +109,7 @@ async def execute(run_id: uuid.UUID) -> None:
         fresh = await session.get(JiraRun, run_id)
         if fresh is not None and RunStage(fresh.stage) not in TERMINAL_RUN_STAGES:
             fresh.stage = RunStage.DONE.value
-            fresh.finished_at = _now()
+            fresh.finished_at = utcnow()
             await session.commit()
 
 
@@ -155,7 +153,7 @@ async def _pipeline(
         _bump(run, f"{key}_created", value)
     if commit and provisioned.project_id is not None:
         plan.radd_project_id = provisioned.project_id
-        plan.provisioned_at = _now()
+        plan.provisioned_at = utcnow()
         run.project_id = provisioned.project_id
     await session.commit()
 
@@ -390,7 +388,7 @@ async def _cycles(
                     start_date=_as_date(entry.start_date),
                     end_date=_as_date(entry.end_date),
                 ),
-                today=_now().date(),
+                today=utcnow().date(),
             )
             await session.flush()
             if entry.complete_date and (stamp := _as_datetime(entry.complete_date)):
@@ -649,7 +647,7 @@ async def _fail(session: AsyncSession, run_id: uuid.UUID, message: str) -> None:
         return
     _problem(run, Problem(kind=ProblemKind.ITEM_FAILED, message=message))
     run.stage = RunStage.FAILED.value
-    run.finished_at = _now()
+    run.finished_at = utcnow()
     await session.commit()
 
 
@@ -665,6 +663,6 @@ async def mark_interrupted() -> None:
                 JiraRun.finished_at.is_(None),
                 JiraRun.stage.not_in([s.value for s in TERMINAL_RUN_STAGES]),
             )
-            .values(stage=RunStage.FAILED.value, finished_at=_now())
+            .values(stage=RunStage.FAILED.value, finished_at=utcnow())
         )
         await session.commit()

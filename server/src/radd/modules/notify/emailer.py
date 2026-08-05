@@ -6,7 +6,7 @@ import asyncio
 import logging
 import uuid
 from collections import defaultdict
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
 from sqlalchemy import select, update
 
@@ -18,12 +18,10 @@ from radd.modules.auth import service as auth
 from . import service
 from .models import Notification
 from .types import NotificationType
+from radd.clock import utcnow
 
 logger = logging.getLogger(__name__)
 
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def _line(notification: Notification) -> str:
@@ -61,7 +59,7 @@ async def run_once() -> int:
     Already-read or too-old rows are stamped without sending so the backlog drains."""
     if not settings.smtp_host:
         return 0
-    now = _utcnow()
+    now = utcnow()
     cutoff = now - timedelta(hours=settings.notify_email_max_age_hours)
     sent = 0
     async with SessionLocal() as session:

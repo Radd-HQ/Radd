@@ -26,6 +26,7 @@ from radd.modules.projects import service as projects_service
 from .models import AccessGrant
 from .registry import get_spec
 from .types import AccessEntity, AccessEvent, GrantEffect, GrantSubject
+from radd.clock import utcnow
 
 __all__ = ["AccessGrant"]  # re-exported public seam (see above)
 
@@ -36,9 +37,8 @@ __all__ = ["AccessGrant"]  # re-exported public seam (see above)
 def _live_clause():
     """RADD-820: expiry applies at RESOLUTION — filtered where grants LOAD, so
     the pure resolver never learns about clocks."""
-    from datetime import UTC, datetime
 
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = utcnow()
     return AccessGrant.expires_at.is_(None) | (AccessGrant.expires_at > now)
 
 
@@ -268,12 +268,11 @@ async def sweep_expired_grants() -> int:
     """RADD-820: delete expired rows from BOTH grant tables. Resolution already
     treats them as absent (the liveness clauses) — this only stops the tables
     accumulating corpses. Registered on the kernel task registry."""
-    from datetime import UTC, datetime
 
     from radd.db import SessionLocal
     from radd.modules.auth.models import GlobalRoleGrant
 
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = utcnow()
     async with SessionLocal() as session:
         removed = 0
         for model in (AccessGrant, GlobalRoleGrant):

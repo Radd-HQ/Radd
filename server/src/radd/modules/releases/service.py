@@ -1,6 +1,5 @@
 import uuid
 from collections.abc import Iterable
-from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,11 +11,8 @@ from radd.modules.projects import service as projects_service
 from .models import Release
 from .schemas import ReleaseCreate, ReleaseUpdate
 from .types import ReleaseEntity, ReleaseEvent, ReleaseStatus
+from radd.clock import utcnow
 
-
-def _now() -> datetime:
-    """Naive UTC, matching the server-side `now()` used for created_at/updated_at."""
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 async def create_release(
@@ -30,7 +26,7 @@ async def create_release(
         name=data.name,
         version=data.version,
         status=data.status.value,
-        released_at=_now() if data.status is ReleaseStatus.RELEASED else None,
+        released_at=utcnow() if data.status is ReleaseStatus.RELEASED else None,
         description=data.description,
     )
     session.add(release)
@@ -57,7 +53,7 @@ async def update_release(
         release.description = data.description
     if data.status is not None and data.status.value != release.status:
         if data.status is ReleaseStatus.RELEASED:
-            release.released_at = release.released_at or _now()
+            release.released_at = release.released_at or utcnow()
         else:  # back to planned: drop the timestamp so a later re-release re-stamps
             release.released_at = None
         release.status = data.status.value

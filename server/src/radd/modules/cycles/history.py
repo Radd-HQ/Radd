@@ -8,16 +8,14 @@ queryable past (SLQ `past_cycle`, the item view's "Previous cycles" chips).
 """
 
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import Cycle, ItemCycleRecord
+from radd.clock import utcnow
 
-
-def _now() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 async def record_cycle_change(
@@ -36,7 +34,7 @@ async def record_cycle_change(
     """
     if old_cycle_id == new_cycle_id:
         return
-    stamp = at or _now()
+    stamp = at or utcnow()
     if old_cycle_id is not None:
         await session.execute(
             update(ItemCycleRecord)

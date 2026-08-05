@@ -1,6 +1,5 @@
 import uuid
 from collections.abc import Iterable, Sequence
-from datetime import UTC, datetime
 
 from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -10,10 +9,8 @@ from radd.modules.events import service as events
 
 from .models import ItemWatcher, Notification, NotificationPref
 from .types import NotificationType, NotifyEntity, NotifyEvent
+from radd.clock import utcnow
 
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 # --- watchers ---
@@ -151,7 +148,7 @@ async def mark_read(
             Notification.id.in_(list(ids)),
             Notification.read_at.is_(None),
         )
-        .values(read_at=_utcnow())
+        .values(read_at=utcnow())
     )
 
 
@@ -159,7 +156,7 @@ async def mark_all_read(session: AsyncSession, user_id: uuid.UUID) -> None:
     await session.execute(
         update(Notification)
         .where(Notification.user_id == user_id, Notification.read_at.is_(None))
-        .values(read_at=_utcnow())
+        .values(read_at=utcnow())
     )
 
 

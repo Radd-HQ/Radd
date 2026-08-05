@@ -59,7 +59,9 @@ class ForgejoClient:
         if connection.api_token:
             headers["Authorization"] = f"token {connection.api_token}"
         self._client = httpx.AsyncClient(
-            headers=headers, verify=connection.verify_ssl, timeout=30
+            headers=headers,
+            verify=connection.verify_ssl,
+            timeout=settings.forgejo_http_timeout_seconds,
         )
 
     async def __aenter__(self) -> "ForgejoClient":

@@ -1,5 +1,4 @@
 import uuid
-from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +11,7 @@ from radd.modules.fields.models import FieldDefinition
 from radd.modules.items import slq
 
 from radd import schedule as schedule_math
+from radd.clock import utcnow
 from .models import AutomationRule, AutomationScheduleState
 from .schemas import RuleCreate, RuleRead, RuleUpdate
 from .types import (
@@ -50,9 +50,6 @@ def _serialize_actions(data: RuleCreate | RuleUpdate) -> list[dict]:
     return [action.model_dump(mode="json") for action in data.actions or []]
 
 
-def _utcnow() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
-
 
 def _check_schedule_consistency(rule: AutomationRule) -> None:
     """Spec 69 invariants after a write: `schedule` present iff the trigger is
@@ -82,7 +79,7 @@ async def _sync_schedule_state(session: AsyncSession, rule: AutomationRule) -> N
             await session.delete(state)
             await session.flush()
         return
-    next_run_at = schedule_math.next_run(rule.schedule, _utcnow(), settings.scheduler_tz)
+    next_run_at = schedule_math.next_run(rule.schedule, utcnow(), settings.scheduler_tz)
     if state is None:
         session.add(AutomationScheduleState(rule_id=rule.id, next_run_at=next_run_at))
     else:

@@ -28,7 +28,7 @@ import asyncio
 import io
 import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 from fastapi import UploadFile
@@ -54,6 +54,7 @@ from ..types import (
     SnapshotStage,
 )
 from . import service, store
+from radd.clock import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -73,9 +74,6 @@ _VOCABULARIES: tuple[tuple[SnapshotCatalog, str], ...] = (
     (SnapshotCatalog.RESOLUTIONS, "/resolution"),
 )
 
-
-def _now() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def _jira_updated(fields: dict[str, Any]) -> datetime | None:
@@ -551,7 +549,7 @@ async def execute(snapshot_id: uuid.UUID) -> None:
             )
             return
         creds = connections.creds_of(connection)
-        snapshot.started_at = _now()
+        snapshot.started_at = utcnow()
         await session.commit()
 
         try:
@@ -577,7 +575,7 @@ async def execute(snapshot_id: uuid.UUID) -> None:
         canceled = await _canceled(session, snapshot)
         await service.refresh_size(session, snapshot)
         snapshot.stage = (SnapshotStage.CANCELED if canceled else SnapshotStage.DONE).value
-        snapshot.finished_at = _now()
+        snapshot.finished_at = utcnow()
         await session.commit()
 
 
@@ -597,7 +595,7 @@ async def _fail(session: AsyncSession, snapshot_id: uuid.UUID, message: str) -> 
         return
     _problem(fresh, Problem(kind=ProblemKind.JIRA_UNREACHABLE, message=message))
     fresh.stage = SnapshotStage.FAILED.value
-    fresh.finished_at = _now()
+    fresh.finished_at = utcnow()
     await session.commit()
 
 
@@ -615,6 +613,6 @@ async def mark_interrupted() -> None:
                 JiraSnapshot.finished_at.is_(None),
                 JiraSnapshot.stage.not_in([s.value for s in TERMINAL_SNAPSHOT_STAGES]),
             )
-            .values(stage=SnapshotStage.FAILED.value, finished_at=_now())
+            .values(stage=SnapshotStage.FAILED.value, finished_at=utcnow())
         )
         await session.commit()

@@ -13,7 +13,6 @@ absent baseline.
 import logging
 import uuid
 from collections.abc import Iterable
-from datetime import UTC, datetime
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,6 +28,7 @@ from radd.modules.events import service as events
 # `groups.models` outside this module.
 from .models import Group, GroupMember, GroupParent
 from .types import GroupEntity, GroupEvent
+from radd.clock import utcnow
 
 __all__ = ["Group"]  # re-exported public seam (see above)
 
@@ -392,7 +392,7 @@ async def mark_missing(
     if already == missing:
         return
     group.directory_missing_since = (
-        datetime.now(UTC).replace(tzinfo=None) if missing else None
+        utcnow() if missing else None
     )
     await session.flush()
     await events.emit(

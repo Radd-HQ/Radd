@@ -30,7 +30,6 @@ from radd.modules.settings.types import SettingKey
 from radd.worker import PeriodicLoop
 
 from . import service, state
-from .groupsync import MAX_RECORDED_ERRORS
 from .types import SyncKind
 
 logger = logging.getLogger(__name__)
@@ -50,7 +49,7 @@ class UserSyncResult:
             "provisioned": self.provisioned,
             "updated": self.updated,
             "deactivated": self.deactivated,
-            "errors": self.errors[:MAX_RECORDED_ERRORS],
+            "errors": self.errors[: settings.ldap_max_recorded_errors],
         }
 
 

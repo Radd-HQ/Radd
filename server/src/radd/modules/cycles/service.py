@@ -1,6 +1,6 @@
 import uuid
 from collections.abc import Iterable
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, timedelta
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.auth.models import User
 from radd.modules.events import service as events
+from radd.clock import utcnow
 
 from .history import (  # noqa: F401 — the items module's public seam (spec 56)
     past_cycles_by_item_ids,
@@ -355,7 +356,7 @@ async def complete_cycle(
     moved = await items_service.move_open_cycle_items(
         session, cycle.id, target.id if target else None, actor
     )
-    cycle.completed_at = datetime.now(UTC).replace(tzinfo=None)
+    cycle.completed_at = utcnow()
     await session.flush()
     await _emit(session, CycleEvent.COMPLETED, cycle, actor.id)
 

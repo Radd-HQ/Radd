@@ -6,7 +6,6 @@ was down fires once on the next tick, never a replayed backlog. The engine's
 consumer path does the actual rule execution (engine.apply_scheduled)."""
 
 import logging
-from datetime import UTC, datetime
 
 from sqlalchemy import select
 
@@ -18,17 +17,15 @@ from radd.worker import PeriodicLoop
 from radd import schedule as schedule_math
 from .models import AutomationRule, AutomationScheduleState
 from .types import SYSTEM_ACTOR_ID, AutomationEntity, AutomationEvent
+from radd.clock import utcnow
 
 logger = logging.getLogger(__name__)
 
 
-def _utcnow() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
-
 
 async def run_once(session_factory=SessionLocal) -> int:
     """Fire every due scheduled rule once. Returns the number of events emitted."""
-    now = _utcnow()
+    now = utcnow()
     fired = 0
     async with session_factory() as session:
         result = await session.execute(

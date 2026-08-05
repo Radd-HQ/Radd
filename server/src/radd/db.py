@@ -36,7 +36,12 @@ def ilike_term(q: str) -> str:
     return f"%{escaped}%"
 
 
-engine = create_async_engine(settings.database_url)
+engine = create_async_engine(
+    settings.database_url,
+    pool_size=settings.db_pool_size,
+    max_overflow=settings.db_max_overflow,
+    pool_pre_ping=settings.db_pool_pre_ping,
+)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 

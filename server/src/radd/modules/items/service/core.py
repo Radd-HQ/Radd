@@ -24,11 +24,12 @@ from ..enums import ItemEntity, ItemEvent, ItemKind
 from ..models import ItemStar, WorkItem
 from ..schemas import ItemCreate, ItemRankUpdate, ItemRead, ItemUpdate
 from .links import sync_mention_links
+from radd.clock import utcnow
+
 from .queries import (
     _next_rank,
     _rebalance_ranks,
     _resolve_number,
-    _utcnow_naive,
     require_item,
 )
 from .read import _finish, _hydrate_one, get_item
@@ -290,7 +291,7 @@ async def set_archived(
     definitions = await fields.definitions_for_project(session, project)
     ctx = await _field_ctx(session, actor, project, permissions, definitions)
     before = await _hydrate_one(session, item, project, actor, permissions)
-    item.archived_at = _utcnow_naive() if archived else None
+    item.archived_at = utcnow() if archived else None
     await session.flush()
     return await _finish(
         session, item, project, ItemEvent.UPDATED, actor, ctx, definitions, permissions, before=before

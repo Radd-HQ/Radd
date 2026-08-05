@@ -7,7 +7,6 @@ credential-bearing endpoint eventually inherits the wrong dependency.
 """
 
 import uuid
-from datetime import UTC, datetime
 from typing import Annotated
 
 import httpx
@@ -18,6 +17,7 @@ from radd.config import settings
 from radd.db import get_session
 from radd.modules.auth import authz
 from radd.modules.auth.deps import CurrentUser
+from radd.clock import utcnow
 
 from . import backfill, service
 from .schemas import (
@@ -95,7 +95,9 @@ async def test_connection(
         return ConnectionTest(ok=False, detail="no base URL set")
     headers = {"Authorization": f"token {connection.api_token}"} if connection.api_token else {}
     try:
-        async with httpx.AsyncClient(verify=connection.verify_ssl, timeout=15) as client:
+        async with httpx.AsyncClient(
+            verify=connection.verify_ssl, timeout=settings.forgejo_http_timeout_seconds
+        ) as client:
             response = await client.get(
                 f"{connection.base_url}/api/v1/version", headers=headers
             )
@@ -158,6 +160,6 @@ async def backfill_repo(
             detail="this connection has no API token; backfill reads the Forgejo API",
         )
     report = await backfill.run(session, connection, repo, max_commits=max_commits)
-    repo.last_backfill_at = datetime.now(UTC).replace(tzinfo=None)
+    repo.last_backfill_at = utcnow()
     await session.flush()
     return report.as_dict()

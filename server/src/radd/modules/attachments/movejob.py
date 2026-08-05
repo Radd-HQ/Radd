@@ -14,7 +14,6 @@ import asyncio
 import io
 import logging
 import uuid
-from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,6 +25,7 @@ from . import hosts
 from .clients import client_for
 from .models import Attachment, AttachmentMoveJob
 from .types import AttachmentEntity, MoveJobState
+from radd.clock import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +97,7 @@ async def execute(job_id: uuid.UUID) -> None:
             job = await session.get(AttachmentMoveJob, job_id)
             if job is not None:
                 job.state = MoveJobState.FAILED.value
-                job.finished_at = datetime.now(timezone.utc).replace(tzinfo=None)
+                job.finished_at = utcnow()
                 await session.commit()
 
 
@@ -107,7 +107,7 @@ async def _execute(job_id: uuid.UUID) -> None:
         source = await hosts.get_host(session, job.source_host_id)
         target = await hosts.get_host(session, job.target_host_id)
         job.state = MoveJobState.RUNNING.value
-        job.started_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        job.started_at = utcnow()
         await session.commit()
 
     source_client, target_client = client_for(source), client_for(target)
@@ -162,7 +162,7 @@ async def _execute(job_id: uuid.UUID) -> None:
             job.state = MoveJobState.DONE.value
         else:
             job.state = MoveJobState.DONE_WITH_FAILURES.value
-        job.finished_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        job.finished_at = utcnow()
         await session.commit()
     logger.info("move job %s finished: %s", job_id, job.state)
 

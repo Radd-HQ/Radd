@@ -10,7 +10,6 @@ the dumps its worker sibling is taking.
 """
 
 import logging
-from datetime import UTC, datetime
 
 from sqlalchemy import select
 
@@ -21,16 +20,14 @@ from radd.worker import PeriodicLoop
 
 from . import service
 from .models import BackupSchedule
+from radd.clock import utcnow
 
 logger = logging.getLogger(__name__)
 
 
-def _utcnow() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
-
 
 async def run_once() -> None:
-    now = _utcnow()
+    now = utcnow()
     async with SessionLocal() as session:
         due = (
             await session.execute(

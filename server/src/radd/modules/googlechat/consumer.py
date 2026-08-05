@@ -20,7 +20,7 @@ from radd.modules.events import runner
 from radd.modules.events.service import Event
 
 from . import formatter
-from .types import BATCH_SIZE, CONSUMER_NAME, REQUEST_TIMEOUT
+from .types import CONSUMER_NAME, REQUEST_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ async def run_once() -> int:
         return formatter.format_message(event, selected=selected, base_url=settings.app_base_url)
 
     return await runner.run_head_seeded(
-        CONSUMER_NAME, batch_size=BATCH_SIZE, plan=plan, deliver=_deliver_all
+        CONSUMER_NAME, batch_size=settings.googlechat_batch, plan=plan, deliver=_deliver_all
     )
 
 

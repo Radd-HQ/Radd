@@ -39,7 +39,6 @@ from radd.modules.workflow.types import StateCategory
 
 from . import service
 from .types import (
-    BATCH,
     CONSUMER_NAME,
     RATING_LABELS,
     RATING_LINK_TEMPLATE,
@@ -151,7 +150,7 @@ async def _deliver_all(emails: list[SurveyEmail]) -> None:
 
 async def run_once() -> int:
     return await runner.run_head_seeded(
-        CONSUMER_NAME, batch_size=BATCH, plan=_plan, deliver=_deliver_all
+        CONSUMER_NAME, batch_size=settings.csat_batch, plan=_plan, deliver=_deliver_all
     )
 
 

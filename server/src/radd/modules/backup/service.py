@@ -8,7 +8,6 @@ rows that carry progress, and the events that land every action in the audit log
 import asyncio
 import logging
 import uuid
-from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select, update
@@ -25,6 +24,7 @@ from radd.schedule import ScheduleKind, next_run
 
 from .models import BackupRun, BackupSchedule
 from .schemas import ScheduleCreate, ScheduleUpdate
+from radd.clock import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +33,6 @@ logger = logging.getLogger(__name__)
 DEFAULT_SCHEDULE_NAME = "Nightly"
 DEFAULT_SCHEDULE_CONFIG: dict[str, Any] = {"kind": ScheduleKind.DAILY.value, "time": "03:00", "weekdays": []}
 
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 # --- schedules ---
@@ -64,7 +61,7 @@ async def create_schedule(
         include_attachments=data.include_attachments,
         keep_last=data.keep_last,
         keep_days=data.keep_days,
-        next_run_at=next_run(config, _utcnow(), settings.scheduler_tz) if data.enabled else None,
+        next_run_at=next_run(config, utcnow(), settings.scheduler_tz) if data.enabled else None,
         created_by_id=actor.id if actor else None,
     )
     session.add(schedule)
@@ -90,7 +87,7 @@ async def update_schedule(
     for key, value in fields.items():
         setattr(schedule, key, value)
     schedule.next_run_at = (
-        next_run(schedule.config, _utcnow(), settings.scheduler_tz) if schedule.enabled else None
+        next_run(schedule.config, utcnow(), settings.scheduler_tz) if schedule.enabled else None
     )
     await session.flush()
     await events.emit(
@@ -133,7 +130,7 @@ async def ensure_default_schedule(session: AsyncSession) -> None:
             config=DEFAULT_SCHEDULE_CONFIG,
             include_attachments=True,
             keep_last=settings.backup_retention_keep_last,
-            next_run_at=next_run(DEFAULT_SCHEDULE_CONFIG, _utcnow(), settings.scheduler_tz),
+            next_run_at=next_run(DEFAULT_SCHEDULE_CONFIG, utcnow(), settings.scheduler_tz),
         )
     )
     await session.flush()
@@ -172,7 +169,7 @@ async def _start_run(
         artifact_name=artifact_name,
         schedule_id=schedule_id,
         actor_id=actor.id if actor else None,
-        started_at=_utcnow(),
+        started_at=utcnow(),
     )
     session.add(run)
     await session.flush()
@@ -189,7 +186,7 @@ async def mark_interrupted() -> None:
             .values(
                 status=core.RunStatus.FAILED.value,
                 error="interrupted by a server restart",
-                finished_at=_utcnow(),
+                finished_at=utcnow(),
             )
         )
         await session.commit()
@@ -222,7 +219,7 @@ async def _finish(run_id: uuid.UUID, *, error: str | None, name: str | None = No
                 error=error,
                 artifact_name=name,
                 size_bytes=size,
-                finished_at=_utcnow(),
+                finished_at=utcnow(),
             )
         )
         await session.commit()
@@ -305,7 +302,7 @@ async def _record_schedule_result(schedule_id: str | None, *, error: str | None)
             update(BackupSchedule)
             .where(BackupSchedule.id == uuid.UUID(schedule_id))
             .values(
-                last_run_at=_utcnow(),
+                last_run_at=utcnow(),
                 last_status=(core.RunStatus.FAILED if error else core.RunStatus.SUCCEEDED).value,
                 last_error=error,
             )

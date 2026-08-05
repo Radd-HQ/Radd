@@ -46,12 +46,11 @@ from .models import Event
 logger = logging.getLogger(__name__)
 
 CONSUMER_NAME = "events.cascade"
-BATCH_SIZE = 50
 
 
 async def run_once() -> int:
     return await runner.run_head_seeded(
-        CONSUMER_NAME, batch_size=BATCH_SIZE, plan=_plan, deliver=_deliver
+        CONSUMER_NAME, batch_size=settings.event_cascade_batch, plan=_plan, deliver=_deliver
     )
 
 

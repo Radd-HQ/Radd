@@ -18,9 +18,6 @@ class CsatEntity(StrEnum):
 # The sender's cursor name in the events stream (consumer-offset pattern).
 CONSUMER_NAME = "csat.sender"
 
-# Events read per sender poll iteration (mirrors mailintake's outbound batch).
-BATCH = 200
-
 # The `changes` diff token for a state move (items/changes.py `diff_item_reads`).
 STATE_CHANGE_FIELD = "state"
 

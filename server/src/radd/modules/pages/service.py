@@ -7,7 +7,6 @@ content changes snapshot the PREVIOUS content into page_versions and bump
 
 import re
 import uuid
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select
@@ -38,13 +37,10 @@ from .schemas import (
 )
 from .spaces import get_space
 from .types import PageEntity, PageEvent, RestoreKind
+from radd.clock import utcnow
 
 __all__ = ["get_space"]  # re-exported: the space half of the module's seam
 
-
-def _now() -> datetime:
-    """Naive UTC, matching the server-side now() used for created_at/updated_at."""
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 async def _emit_page(
@@ -338,7 +334,7 @@ async def update_page(
 async def archive_page(session: AsyncSession, page_id: uuid.UUID, actor_id: uuid.UUID) -> None:
     page = await get_page(session, page_id)
     if page.archived_at is None:
-        page.archived_at = _now()
+        page.archived_at = utcnow()
         await session.flush()
         await _emit_page(
             session, PageEvent.PAGE_DELETED, page, actor_id,

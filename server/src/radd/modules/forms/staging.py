@@ -42,6 +42,7 @@ from radd.modules.attachments.types import AttachmentParentType
 from radd.modules.auth.models import User
 
 from .types import FormEntity, FormEvent
+from radd.clock import utcnow
 
 #: Fixed namespace for deriving a person's staging id. A constant, not a
 #: setting: changing it would strand every file already staged.
@@ -137,9 +138,9 @@ async def sweep_abandoned(
     A week is deliberately generous. Reclaiming a file somebody is still looking
     at is a worse failure than storing it a little longer.
     """
-    from datetime import UTC, datetime, timedelta
+    from datetime import timedelta
 
-    cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=older_than_days)
+    cutoff = utcnow() - timedelta(days=older_than_days)
     rows = await attachments_service.newest_per_parent(
         session, AttachmentParentType.FORM_SUBMISSION.value
     )

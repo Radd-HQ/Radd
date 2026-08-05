@@ -6,7 +6,6 @@ only skips the SYSTEM actor)."""
 
 import secrets
 import uuid
-from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,10 +19,8 @@ from radd.modules.projects import service as projects_service
 from .models import CsatSurvey
 from .schemas import PublicCsatRead, PublicCsatSubmit
 from .types import PAYLOAD_COMMENT_EXCERPT_CHARS, CsatEntity, CsatEvent
+from radd.clock import utcnow
 
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 async def survey_for_item(session: AsyncSession, item_id: uuid.UUID) -> CsatSurvey | None:
@@ -43,7 +40,7 @@ async def create_survey(
     """Mint the item's one-and-only survey row + emit csat.requested in the same
     transaction (the sender commits both with its cursor, before sending)."""
     survey = CsatSurvey(
-        item_id=item_id, token=secrets.token_urlsafe(32), sent_at=_utcnow()
+        item_id=item_id, token=secrets.token_urlsafe(32), sent_at=utcnow()
     )
     session.add(survey)
     await session.flush()
@@ -87,7 +84,7 @@ async def record_response(
     survey.rating = data.rating
     survey.comment = data.comment
     if survey.responded_at is None:
-        survey.responded_at = _utcnow()
+        survey.responded_at = utcnow()
     item = await items_service.require_item(session, survey.item_id)
     project = await projects_service.get_project(session, item.project_id)
     await events.emit(

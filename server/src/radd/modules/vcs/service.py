@@ -1,5 +1,4 @@
 import uuid
-from datetime import UTC, datetime
 from collections.abc import Sequence
 
 from sqlalchemy import select
@@ -13,6 +12,7 @@ from radd.modules.projects import service as projects_service
 from .models import ItemVcsLink
 from .schemas import VcsLinkCreate
 from .types import VcsEntity, VcsEvent, VcsProvider, VcsRefType
+from radd.clock import utcnow
 
 
 async def link_vcs(
@@ -156,6 +156,6 @@ async def set_ci_state(
     for link in links:
         link.ci_state = ci_state
         link.ci_url = ci_url
-        link.ci_updated_at = datetime.now(UTC).replace(tzinfo=None)
+        link.ci_updated_at = utcnow()
     await session.flush()
     return len(links)
