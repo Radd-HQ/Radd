@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.config import settings
 from radd.db import SessionLocal
 from radd.modules.events import runner
-from radd.modules.events.models import Event
+from radd.modules.events.service import Event
 from radd.worker import PeriodicLoop
 
 from .models import Attachment

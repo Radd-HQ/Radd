@@ -11,7 +11,7 @@ import logging
 from radd.config import settings
 from radd.db import SessionLocal
 from radd.modules.events import service as events
-from radd.modules.events.models import Event
+from radd.modules.events.service import Event
 
 from .hub import hub, should_deliver
 

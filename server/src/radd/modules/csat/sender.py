@@ -28,7 +28,7 @@ from radd.config import settings
 from radd.exceptions import NotFoundError
 from radd.modules.auth import service as auth_service
 from radd.modules.events import runner
-from radd.modules.events.models import Event
+from radd.modules.events.service import Event
 from radd.modules.items import service as items_service
 from radd.modules.items.enums import ItemEvent
 from radd.modules.items.models import WorkItem

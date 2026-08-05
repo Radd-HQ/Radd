@@ -27,7 +27,7 @@ from radd.modules.automations.types import SYSTEM_ACTOR_ID
 from radd.modules.comments import service as comments
 from radd.modules.comments.types import CommentEvent, CommentVisibility
 from radd.modules.events import runner
-from radd.modules.events.models import Event
+from radd.modules.events.service import Event
 from radd.modules.items import service as items
 from radd.modules.projects import service as projects_service
 

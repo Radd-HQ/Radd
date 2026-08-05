@@ -16,7 +16,7 @@ from radd.modules.auth import authz, service as auth
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
 from radd.modules.events import service as events
-from radd.modules.events.models import Event
+from radd.modules.events.service import Event
 from radd.modules.fields import service as fields
 from radd.modules.teams import service as teams
 from radd.modules.projects import service as projects_service

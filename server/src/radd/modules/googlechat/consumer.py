@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
 from radd.modules.events import runner
-from radd.modules.events.models import Event
+from radd.modules.events.service import Event
 
 from . import formatter
 from .types import BATCH_SIZE, CONSUMER_NAME, REQUEST_TIMEOUT

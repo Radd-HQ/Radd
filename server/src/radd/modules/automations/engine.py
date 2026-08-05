@@ -32,7 +32,7 @@ from radd.modules.comments.schemas import CommentCreate
 from radd.modules.comments.types import CommentVisibility
 from radd.modules.cycles import service as cycles_service
 from radd.modules.events import service as events
-from radd.modules.events.models import Event
+from radd.modules.events.service import Event
 from radd.modules.fields import service as fields
 from radd.modules.fields.models import FieldDefinition
 from radd.modules.items import service as items, slq

@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.config import settings
 from radd.exceptions import NotFoundError
 from radd.modules.events import service as events
-from radd.modules.events.models import Event
+from radd.modules.events.service import Event
 
 from .models import WebhookDelivery, WebhookEndpoint
 from .schemas import EndpointCreate, EndpointUpdate

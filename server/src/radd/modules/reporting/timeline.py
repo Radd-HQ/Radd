@@ -25,7 +25,7 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd.modules.events.models import Event
+from radd.modules.events.service import Event
 from radd.modules.items.enums import ItemEntity, ItemEvent
 from radd.modules.workflow.types import StateCategory
 

@@ -20,7 +20,7 @@ from radd.modules.comments.types import CommentEvent, CommentVisibility
 from radd.modules.comments.visibility import internal_comment_visible
 from radd.modules.teams import service as teams
 from radd.modules.events import service as events
-from radd.modules.events.models import Event
+from radd.modules.events.service import Event
 from radd.modules.items import service as items
 from radd.modules.items.enums import ItemEvent
 from radd.modules.items.models import WorkItem

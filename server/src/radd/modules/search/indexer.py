@@ -20,7 +20,7 @@ from radd.modules.auth.types import AuthEvent
 from radd.modules.comments import service as comments
 from radd.modules.comments.types import CommentEvent
 from radd.modules.events import service as events
-from radd.modules.events.models import Event
+from radd.modules.events.service import Event
 from radd.modules.fields.service import BUILTIN_RESOURCE
 from radd.modules.fields.types import BuiltinItemField
 from radd.modules.items.enums import ItemEvent

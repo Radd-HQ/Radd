@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 
 from fastapi import WebSocket
 
-from radd.modules.events.models import Event
+from radd.modules.events.service import Event
 
 from .types import NOTIFICATION_ENTITY
 

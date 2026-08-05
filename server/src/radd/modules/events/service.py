@@ -9,10 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import ilike_term
 
+# `Event` is re-exported here as the PUBLIC consumer payload type (RADD-886):
+# the row IS the contract every consumer loop receives, and importing it from
+# events.models made 13 modules reach into another module's models file. The
+# ratchet test bans `events.models` outside this module.
 from .models import ConsumerOffset, Event
 from .quiet import is_quiet, quiet
 
-__all__ = ["quiet", "is_quiet"]  # re-exported: `events.quiet()` at every call site
+__all__ = ["Event", "quiet", "is_quiet"]  # re-exported public seam (see above)
 
 
 async def emit(
