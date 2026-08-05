@@ -390,13 +390,20 @@ async def permission_catalog(session: Session, user: CurrentUser) -> list[Permis
     VOCABULARY, not data (atom names and descriptions carry no instance state),
     so it stays on the member floor rather than role.read (RADD-816)."""
     await authz.require_member(session, user)
-    # Builtins first, in enum order (parity), then any plugin-registered atoms
-    # (spec 93/A2 — a plugin's atoms appear in the matrix with no edit to auth).
-    builtin = [p.value for p in Permission]
-    builtin_set = set(builtin)
-    extra = sorted(k for k in all_permission_keys() if k not in builtin_set)
+    # Composed from the kernel permissions registry (RADD-890): every atom's
+    # scope and description is its owning module's declaration, whether that
+    # module is `items` or a third-party plugin — there is no core/plugin branch
+    # here, and there is nothing to edit in auth when a module adds one.
+    #
+    # The enum supplies DISPLAY ORDER only. It is a hand-curated grouping the
+    # matrix reads top-to-bottom (item.* beside each other, the CRUD triples
+    # after their umbrella), which sorting alphabetically would scatter; atoms
+    # it does not name follow, sorted.
+    ordered = [p.value for p in Permission]
+    named = set(ordered)
+    extra = sorted(k for k in all_permission_keys() if k not in named)
     catalog = []
-    for key in [*builtin, *extra]:
+    for key in [*ordered, *extra]:
         resource, action = permission_parts(key)
         catalog.append(
             PermissionRead(

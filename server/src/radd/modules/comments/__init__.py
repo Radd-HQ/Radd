@@ -1,5 +1,6 @@
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin, SlqFieldSpec
+from radd.kernel import PermissionSpec
 
 from .slq import commented_by_item_ids
 
@@ -31,6 +32,16 @@ register_relation_domain("comment.write", "item")
 
 plugin = RaddPlugin(
     name="comments",
+    permissions=(
+        PermissionSpec("comment.write", "project", "Comment on the project's work items."),
+        PermissionSpec("comment.read_internal", "project", "See internal (team-only) comments."),
+        PermissionSpec(
+            "comment.delete",
+            "project",
+            "Delete other people's comments.",
+            implied_by=("project.manage",),
+        ),
+    ),
     relations=(COMMENT_OWN,),
     relation_domains=(("comment.write", "item"),),
     description="Comments on work items: CRUD + comment.* events; counts feed item hydration.",

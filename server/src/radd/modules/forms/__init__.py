@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
+from radd.kernel import CrudResourceSpec, PermissionSpec
 
 from . import staging  # noqa: F401 — registers the staging attachment parent (RADD-800)
 from .portal_router import requests_router as portal_requests_router, router as portal_router
@@ -20,6 +21,12 @@ async def _form_validation_handler(request: Request, exc: FormValidationError) -
 
 plugin = RaddPlugin(
     name="forms",
+    permissions=(
+        PermissionSpec(
+            "form.manage", "project", "Create and manage the project's intake forms."
+        ),
+    ),
+    crud_resources=(CrudResourceSpec("form", "project", "intake forms", "form.manage"),),
     description=(
         "Template-scoped intake forms (spec 17): capture structured intake against the "
         "field registry and create a work item with defaults applied. Spec 62 adds the "

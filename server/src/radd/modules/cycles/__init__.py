@@ -1,11 +1,18 @@
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
+from radd.kernel import CrudResourceSpec
 
 from .router import router, series_router
 from .types import CycleEvent, SeriesEvent
 
 plugin = RaddPlugin(
     name="cycles",
+    crud_resources=(
+        CrudResourceSpec(
+            "cycle", "global", "cycles", "global.manage",
+            actions=("create", "read", "update", "delete"),
+        ),
+    ),
     description=(
         "Global cycles (iterations) spanning projects, with recurring "
         "series (per-label auto-provisioned drafts) and a Jira-style complete flow. "

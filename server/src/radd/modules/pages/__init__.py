@@ -8,6 +8,7 @@ PATCH contract).
 
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
+from radd.kernel import PermissionSpec
 
 from . import attachments_binding  # registers the page parent (spec 102)
 from . import comments_binding  # registers the page comment parent (RADD-717)
@@ -23,6 +24,18 @@ from . import mcptools
 
 plugin = RaddPlugin(
     name="pages",
+    # RADD-791: SPACE-scoped. They were global because a page had no scope to be
+    # checked against, which made per-space access inexpressible.
+    permissions=(
+        PermissionSpec("page.read", "space", "Read a wiki space and its pages."),
+        PermissionSpec(
+            "page.write", "space", "Create and edit pages in a space; link them to issues."
+        ),
+        PermissionSpec(
+            "page.manage", "space", "Manage a space; hard-delete and restore its pages."
+        ),
+        PermissionSpec("page.delete", "space", "Hard-delete pages.", implied_by=("page.manage",)),
+    ),
     # RADD-818: spec-92 resources ride the MANIFEST — the loader's clear()
     # wipes import-time registration, and the manifest is what survives it.
     access_resources=(_PAGE_SPEC,),

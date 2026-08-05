@@ -1,5 +1,6 @@
 from radd.kernel import CapabilitySpec
 from radd.kernel import RaddPlugin
+from radd.kernel import CrudResourceSpec
 
 from . import service
 from .admin_router import router as admin_router
@@ -8,6 +9,13 @@ from .router import router
 
 plugin = RaddPlugin(
     name="forgejo",
+    # Spec 111: hosts and their repositories. No coarse verb of its own — the
+    # umbrella is global.manage, the dashboard precedent.
+    crud_resources=(
+        CrudResourceSpec(
+            "vcsconn", "global", "version-control connections", "global.manage"
+        ),
+    ),
     core=False,  # optional plugin — disableable via the plugin manager
     description="Forgejo/Gitea connector (specs 47, 111): hosts and repositories as rows, a "
     "webhook receiver auto-linking branches/commits/PRs to items via the vcs seam, "

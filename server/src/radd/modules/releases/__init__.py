@@ -1,5 +1,6 @@
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
+from radd.kernel import CrudResourceSpec
 
 from .router import router
 from .types import ReleaseEvent
@@ -9,6 +10,8 @@ from . import mcptools
 
 plugin = RaddPlugin(
     name="releases",
+    # No coarse verb of its own: the umbrella is project.manage directly.
+    crud_resources=(CrudResourceSpec("release", "project", "releases", "project.manage"),),
     description=(
         "Project-scoped releases/versions. Ordinary API resources a CI service-account "
         "or the automations engine can POST to and assign — replaces the CI-writes-labels hack."

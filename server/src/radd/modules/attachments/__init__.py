@@ -1,6 +1,7 @@
 from radd.kernel import CapabilitySpec, EventTypeSpec, IntegrationSpec
 from radd.kernel.sockets import Socket
 from radd.kernel import RaddPlugin
+from radd.kernel import PermissionSpec
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
@@ -60,6 +61,24 @@ from .acl import _SPEC as _ATTACHMENT_SPEC
 plugin = RaddPlugin(
     cascades=lambda: gc.cascades(),
     name="attachments",
+    # RADD-790: attaching a file is its OWN authority. It used to be `item.update`,
+    # which conflated "may edit this issue" with "may add a file to it" — a role
+    # built to discuss an issue without editing it commented fine and 403'd the
+    # moment the editor pasted a screenshot, so it read as "commenting is broken".
+    permissions=(
+        PermissionSpec(
+            "attachment.create",
+            "project",
+            "Attach files to items and comments.",
+            implied_by=("project.manage",),
+        ),
+        PermissionSpec(
+            "attachment.delete",
+            "project",
+            "Delete anyone's attachments.",
+            implied_by=("project.manage",),
+        ),
+    ),
     # RADD-818: spec-92 resources ride the MANIFEST — the loader's clear()
     # wipes import-time registration, and the manifest is what survives it.
     access_resources=(_ATTACHMENT_SPEC,),

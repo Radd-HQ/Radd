@@ -2,6 +2,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from radd.kernel import RaddPlugin
+from radd.kernel import CrudResourceSpec
 
 from .router import router
 from .widgets import WidgetConfigError
@@ -15,6 +16,14 @@ from .service import _DASHBOARD_SPEC
 
 plugin = RaddPlugin(
     name="dashboards",
+    # Spec 75/87: create ONLY. dashboard.create is the broadcast gate on
+    # `global_access`; editing and deleting are owner/editor decisions (the spec-57
+    # ownership model dashboards shipped with), so no atom was ever consulted.
+    crud_resources=(
+        CrudResourceSpec(
+            "dashboard", "global", "dashboards", "global.manage", actions=("create",)
+        ),
+    ),
     # RADD-818: spec-92 resources ride the MANIFEST — the loader's clear()
     # wipes import-time registration, and the manifest is what survives it.
     access_resources=(_DASHBOARD_SPEC,),

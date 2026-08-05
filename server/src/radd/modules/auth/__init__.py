@@ -1,6 +1,7 @@
 from radd.kernel import RaddPlugin
 
 from . import subscribers
+from .permissions import AUTH_CRUD_RESOURCES, AUTH_PERMISSIONS
 from .roles_router import (
     permission_router,
     project_member_router,
@@ -34,5 +35,9 @@ plugin = RaddPlugin(
     # RADD-889: the directory/service-account tools of the spec-114 MCP catalog
     # live with their owner.
     mcp_tools=mcptools.MCP_TOOLS,
+    # RADD-890: auth's OWN atoms — the two umbrellas plus users/roles/members/
+    # service accounts. Every other module's atoms are declared by that module.
+    permissions=AUTH_PERMISSIONS,
+    crud_resources=AUTH_CRUD_RESOURCES,
     on_startup=(subscribers.ensure_seeded,),
 )

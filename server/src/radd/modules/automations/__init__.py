@@ -1,10 +1,19 @@
 from radd.kernel import RaddPlugin
+from radd.kernel import CrudResourceSpec, PermissionSpec
 
 from . import dispatcher, scheduler
 from .router import router
 
 plugin = RaddPlugin(
     name="automations",
+    permissions=(
+        PermissionSpec(
+            "automation.manage", "global", "Create and manage automation rules (global)."
+        ),
+    ),
+    crud_resources=(
+        CrudResourceSpec("automation", "global", "automation rules", "automation.manage"),
+    ),
     description=(
         "Event-driven rules engine (spec 15): match items by SLQ on item.created/updated, "
         "apply actions through the target services as a system actor, with a loop guard. "

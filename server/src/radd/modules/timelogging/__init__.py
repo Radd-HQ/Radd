@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin, SlqFieldSpec
+from radd.kernel import PermissionSpec
 
 from .slq import logged_by_item_ids
 
@@ -49,6 +50,18 @@ register_relation(WORKLOG_OWN)
 
 plugin = RaddPlugin(
     name="timelogging",
+    permissions=(
+        PermissionSpec(
+            "worklog.write", "project", "Log work on items and manage your own worklogs."
+        ),
+        PermissionSpec(
+            "worklog.delete",
+            "project",
+            "Delete other people's worklogs.",
+            implied_by=("project.manage",),
+        ),
+        PermissionSpec("timesheet.view", "global", "See other people's timesheets (global)."),
+    ),
     relations=(WORKLOG_OWN,),
     description=(
         "Per-project time logging: worklogs (duration/day/work-category/note) + item "

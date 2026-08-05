@@ -1,4 +1,5 @@
 from radd.kernel import RaddPlugin, SlqFieldSpec
+from radd.kernel import CrudResourceSpec
 
 from .router import router
 from .slqfield import roadmap_member_item_ids
@@ -8,6 +9,14 @@ from .service import _VIEW_SPEC
 
 plugin = RaddPlugin(
     name="views",
+    crud_resources=(
+        CrudResourceSpec("view", "project", "saved views", "project.manage"),
+        # Spec 109: the shared board-card layout preset library.
+        CrudResourceSpec(
+            "cardpreset", "global", "card layout presets", "global.manage",
+            actions=("create", "read", "update", "delete"),
+        ),
+    ),
     # RADD-818: spec-92 resources ride the MANIFEST — the loader's clear()
     # wipes import-time registration, and the manifest is what survives it.
     access_resources=(_VIEW_SPEC,),

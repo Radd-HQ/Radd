@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
+from radd.kernel import CrudResourceSpec, PermissionSpec
 
 from .openapi import augment_openapi
 from .router import router
@@ -22,6 +23,15 @@ from .service import _BUILTIN_SPEC, _FIELD_SPEC
 
 plugin = RaddPlugin(
     name="fields",
+    permissions=(
+        PermissionSpec(
+            "field.manage",
+            "project",
+            "Manage custom-field definitions and field access rules.",
+            implied_by=("project.manage",),
+        ),
+    ),
+    crud_resources=(CrudResourceSpec("field", "project", "custom fields", "field.manage"),),
     # RADD-818: spec-92 resources ride the MANIFEST — the loader's clear()
     # wipes import-time registration, and the manifest is what survives it.
     access_resources=(_FIELD_SPEC, _BUILTIN_SPEC),

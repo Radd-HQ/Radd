@@ -170,7 +170,16 @@ class PermissionSpec:
     #: added "space" — kept in step by the scope contract test (RADD-818).
     scope: str
     description: str = ""
-    implied_by: tuple[str, ...] = ()  # umbrella atoms that expand to this one
+    #: Umbrella atoms that expand to this one. RADD-890 wired it into
+    #: `auth.types.implied_map()` — it was declared in spec 93 and read by
+    #: nothing, so a plugin atom could not ride an umbrella at all.
+    implied_by: tuple[str, ...] = ()
+    #: The reverse edge: atoms a holder of THIS one also holds. Needed because
+    #: `implied_by` can only name the umbrella, and an implication may confer a
+    #: RELATION-QUALIFIED form that is not itself a catalog atom — `item.update`
+    #: confers `attachment.delete@own` (RADD-790/816), which has no PermissionSpec
+    #: of its own and must not appear in the catalog.
+    implies: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

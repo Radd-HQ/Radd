@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -32,7 +33,30 @@ class DuplicateKind(StrEnum):
 
 
 class Permission(StrEnum):
-    """One member per action class an endpoint can demand (enforced via authz.require)."""
+    """One member per action class an endpoint can demand (enforced via authz.require).
+
+    RADD-890: this enum is no longer the CATALOG — it is the typed alias surface
+    for call sites. Every atom below is DECLARED by the module that enforces it
+    (`permissions=(PermissionSpec…)` / `crud_resources=(CrudResourceSpec…)` on
+    its `RaddPlugin`), and the kernel permissions registry is what
+    `all_permission_keys`, `permission_scope_of`, `permission_description_of`,
+    `implied_map`, role validation and `GET /permissions` compose from. A new
+    module atom needs no edit here at all — the milestones plugin has always
+    worked that way, and now `item.read` works the same way.
+
+    Two things keep the alias honest. `tests/test_permission_ownership.py`
+    asserts registry ⊆ enum AND enum ⊆ registry, with matching scopes, so an
+    atom added here alone (or moved there alone) fails the suite. And auth
+    itself declares only the governance atoms it enforces
+    (`_AUTH_OWNED_RESOURCES` / `AUTH_PERMISSIONS` in `permissions.py`).
+
+    Why the alias survives at all: `PROJECT_PERMISSIONS` — and through it the
+    seeded Admin builtin role — is computed when THIS module is imported, which
+    is long before any feature plugin's manifest exists (auth is the third
+    module loaded). A `Permission` built from the registry would make the admin
+    role a function of import order; the members here, plus `_PROJECT_SCOPED`
+    below, are the minimum auth must know at import time, and the ratchet is
+    what stops that minimum from drifting."""
 
     GLOBAL_MANAGE = "global.manage"  # global settings + administration (was workspace.manage)
     PROJECT_CREATE = "project.create"
@@ -214,172 +238,108 @@ class GrantScopeKind(StrEnum):
     SPACE = "space"
 
 
+# --- scope: the ONE fact auth must know at import time (RADD-890) -------------
+#
+# Everything else about an atom — its prose, its label, its umbrella, its CRUD
+# family — is declared by the module that enforces it and read live from the
+# kernel registry. Scope cannot be, because `PROJECT_PERMISSIONS` (and through
+# it the seeded Admin builtin role) is computed while THIS module is imported,
+# which happens before any feature plugin's manifest exists. So auth keeps one
+# token per atom here, and `tests/test_permission_ownership.py` asserts it
+# equals the owning module's declared scope — the copy cannot drift.
+
+#: Atoms checked against a PROJECT.
+_PROJECT_SCOPED: frozenset[str] = frozenset({
+    "project.manage", "item.read", "item.create", "item.update", "worklog.write",
+    "comment.write", "comment.read_internal", "form.manage", "state.manage", "field.manage",
+    "item.delete", "comment.delete", "worklog.delete", "attachment.create",
+    "attachment.delete", "state.create", "state.update", "state.delete", "field.create",
+    "field.update", "field.delete", "release.create", "release.update", "release.delete",
+    "form.create", "form.update", "form.delete", "view.create", "view.update", "view.delete",
+    "member.create", "member.update", "member.delete", "issue_type.create",
+    "issue_type.update", "issue_type.delete",
+})
+
+#: Atoms checked against a WIKI SPACE (RADD-791). They were global because a
+#: page had no scope to be checked against, which made per-space access
+#: inexpressible and dropped page commenting on the floor — the comments
+#: binding resolved `comment.write` with project=None, so a project-scoped
+#: grant never reached it. A grant with no scope still applies everywhere.
+_SPACE_SCOPED: frozenset[str] = frozenset({
+    "page.read", "page.write", "page.manage", "page.delete",
+})
+
+#: Where each builtin atom is checked. GLOBAL is the default: an atom that is
+#: not bound to a project or a space is instance-wide by construction.
 PERMISSION_SCOPES: dict[Permission, PermissionScope] = {
-    Permission.GLOBAL_MANAGE: PermissionScope.GLOBAL,
-    Permission.PROJECT_CREATE: PermissionScope.GLOBAL,
-    Permission.PROJECT_MANAGE: PermissionScope.PROJECT,
-    Permission.ITEM_READ: PermissionScope.PROJECT,
-    Permission.ITEM_CREATE: PermissionScope.PROJECT,
-    Permission.ITEM_UPDATE: PermissionScope.PROJECT,
-    Permission.WORKLOG_WRITE: PermissionScope.PROJECT,
-    Permission.TIMESHEET_VIEW: PermissionScope.GLOBAL,
-    Permission.COMMENT_WRITE: PermissionScope.PROJECT,
-    Permission.COMMENT_READ_INTERNAL: PermissionScope.PROJECT,
-    Permission.FORM_MANAGE: PermissionScope.PROJECT,
-    Permission.USER_MANAGE: PermissionScope.GLOBAL,
-    Permission.AUTOMATION_MANAGE: PermissionScope.GLOBAL,
-    Permission.STATE_MANAGE: PermissionScope.PROJECT,
-    Permission.FIELD_MANAGE: PermissionScope.PROJECT,
-    Permission.WEBHOOK_MANAGE: PermissionScope.GLOBAL,
-    # RADD-791: the page atoms are SPACE-scoped now. They were global because a
-    # page had no scope to be checked against, which made per-space access
-    # inexpressible and dropped page commenting on the floor — the comments
-    # binding resolved `comment.write` with project=None, so a project-scoped
-    # grant never reached it. A grant with no scope still applies everywhere.
-    Permission.PAGE_READ: PermissionScope.SPACE,
-    Permission.PAGE_WRITE: PermissionScope.SPACE,
-    Permission.PAGE_MANAGE: PermissionScope.SPACE,
+    permission: (
+        PermissionScope.PROJECT
+        if permission.value in _PROJECT_SCOPED
+        else PermissionScope.SPACE
+        if permission.value in _SPACE_SCOPED
+        else PermissionScope.GLOBAL
+    )
+    for permission in Permission
 }
 
-PERMISSION_DESCRIPTIONS: dict[Permission, str] = {
-    Permission.GLOBAL_MANAGE: "Administer global settings and shared configuration.",
-    Permission.PROJECT_CREATE: "Create projects (global).",
-    Permission.PROJECT_MANAGE: "Manage a project: states, fields, labels, teams, members.",
-    Permission.ITEM_READ: "See the project's work items.",
-    Permission.ITEM_CREATE: "Create work items in the project.",
-    Permission.ITEM_UPDATE: "Edit the project's work items.",
-    Permission.WORKLOG_WRITE: "Log work on items and manage your own worklogs.",
-    Permission.TIMESHEET_VIEW: "See other people's timesheets (global).",
-    Permission.COMMENT_WRITE: "Comment on the project's work items.",
-    Permission.COMMENT_READ_INTERNAL: "See internal (team-only) comments.",
-    Permission.FORM_MANAGE: "Create and manage the project's intake forms.",
-    Permission.USER_MANAGE: "Create users and see the user directory.",
-    Permission.AUTOMATION_MANAGE: "Create and manage automation rules (global).",
-    Permission.STATE_MANAGE: "Manage the project's workflow states.",
-    Permission.FIELD_MANAGE: "Manage custom-field definitions and field access rules.",
-    Permission.WEBHOOK_MANAGE: "Manage webhook endpoints (global).",
-    Permission.PAGE_READ: "Read a wiki space and its pages.",
-    Permission.PAGE_WRITE: "Create and edit pages in a space; link them to issues.",
-    Permission.PAGE_MANAGE: "Manage a space; hard-delete and restore its pages.",
-}
+
+class _DescriptionCatalog(Mapping[str, str]):
+    """`{atom: prose}` over the LIVE registry (RADD-890).
+
+    A dict, until this change: auth carried one sentence per atom for every
+    module in the system. The prose belongs with the endpoint that refuses —
+    `pages` should be the thing that says what `page.write` means — so it moved
+    to the owning module's `PermissionSpec`/`CrudResourceSpec`, and this reads
+    it back. Presented as a Mapping rather than a function because the roles
+    matrix and the catalog test both treat it as one, and because a missing
+    entry should raise where it is asked for, not resolve to a lie.
+    """
+
+    def __getitem__(self, key: "Permission | str") -> str:
+        entry = _all_registered().get(base_permission(key))
+        if entry is None:
+            raise KeyError(key)
+        return entry[1]
+
+    def __iter__(self):
+        return iter(_all_registered())
+
+    def __len__(self) -> int:
+        return len(_all_registered())
+
+
+PERMISSION_DESCRIPTIONS: Mapping[str, str] = _DescriptionCatalog()
 
 # Umbrella permissions imply their per-entity actions (spec 36) — so pre-existing
 # roles holding project.manage keep full project control with zero backfill logic
 # at check time, while custom roles can now grant the granular actions alone.
-# Spec 50 extends this: each *.manage also implies its resource's CRUD atoms
-# (registered below), and expansion is applied transitively so project.manage ->
-# state.manage -> state.create/update/delete all resolve in one pass.
-IMPLIED_PERMISSIONS: dict[Permission, frozenset[Permission]] = {
-    Permission.PROJECT_MANAGE: frozenset(
-        {Permission.STATE_MANAGE, Permission.FIELD_MANAGE}
-    ),
-    # RADD-790: anyone who may edit an issue may attach to it. This is what makes
-    # splitting attachments off `item.update` a WIDENING and never a downgrade —
-    # every existing role keeps exactly what it had, with no data migration, and
-    # a role created tomorrow inherits the same rule. A backfill would have fixed
-    # only the rows that existed on the day it ran.
-    # RADD-816: `attachment.delete` now means ANYONE's (the uniform verb);
-    # what item.update carries is the @own form — the qualified atom is a
-    # plain string, which the whole implication machinery already speaks.
-    Permission.ITEM_UPDATE: frozenset(
-        {Permission.ATTACHMENT_CREATE, "attachment.delete@own"}
-    ),
-    Permission.GLOBAL_MANAGE: frozenset(
-        {
-            Permission.WEBHOOK_MANAGE,
-        }
-    ),
-}
+# Spec 50 extends this: each *.manage also implies its resource's CRUD atoms, and
+# expansion is applied transitively so project.manage -> state.manage ->
+# state.create/update/delete all resolve in one pass.
+#
+# RADD-890 emptied this map. Every entry it held was a statement about another
+# module's atoms — "project.manage covers workflow states", "editing an issue
+# lets you attach to it" — and each is now declared where it is enforced, via
+# `PermissionSpec.implied_by` / `.implies` and the `manage` umbrella on a
+# `CrudResourceSpec`. `implied_map()` reads them back. It stays as the seam for
+# an implication auth itself owns; there are none today.
+IMPLIED_PERMISSIONS: dict[Permission, frozenset[Permission]] = {}
 
 
-# --- resource × CRUD registry (spec 50) --------------------------------------
-
-
-@dataclass(frozen=True)
-class ResourceSpec:
-    """A resource exposing granular create/update/delete atoms + its umbrella."""
-
-    key: str
-    scope: PermissionScope
-    label: str
-    manage: Permission  # the coarse verb whose holders get all of this resource's atoms
-    actions: tuple[CrudAction, ...] = (CrudAction.CREATE, CrudAction.UPDATE, CrudAction.DELETE)
-
-
-# Every config resource with a full grantable create/update/delete triple. Reads
-# stay open to members (value-level read restriction is field grants /
-# comment visibility, not these) so there is no `read` atom here by design.
-CRUD_RESOURCES: tuple[ResourceSpec, ...] = (
-    ResourceSpec("state", PermissionScope.PROJECT, "workflow states", Permission.STATE_MANAGE),
-    ResourceSpec("field", PermissionScope.PROJECT, "custom fields", Permission.FIELD_MANAGE),
-    ResourceSpec("release", PermissionScope.PROJECT, "releases", Permission.PROJECT_MANAGE),
-    ResourceSpec("form", PermissionScope.PROJECT, "intake forms", Permission.FORM_MANAGE),
-    ResourceSpec("view", PermissionScope.PROJECT, "saved views", Permission.PROJECT_MANAGE),
-    ResourceSpec("member", PermissionScope.PROJECT, "project access", Permission.PROJECT_MANAGE),
-    ResourceSpec("issue_type", PermissionScope.PROJECT, "issue types", Permission.PROJECT_MANAGE),
-    ResourceSpec(
-        "label", PermissionScope.GLOBAL, "labels", Permission.GLOBAL_MANAGE,
-        actions=(CrudAction.CREATE, CrudAction.READ, CrudAction.UPDATE, CrudAction.DELETE),
-    ),
-    ResourceSpec("webhook", PermissionScope.GLOBAL, "webhooks", Permission.WEBHOOK_MANAGE),
-    ResourceSpec(
-        "canned", PermissionScope.GLOBAL, "canned responses", Permission.GLOBAL_MANAGE,
-        actions=(CrudAction.CREATE, CrudAction.READ, CrudAction.UPDATE, CrudAction.DELETE),
-    ),
-    # Spec 109: the shared board-card layout preset library.
-    ResourceSpec(
-        "cardpreset", PermissionScope.GLOBAL, "card layout presets", Permission.GLOBAL_MANAGE,
-        actions=(CrudAction.CREATE, CrudAction.READ, CrudAction.UPDATE, CrudAction.DELETE),
-    ),
-    ResourceSpec(
-        "automation", PermissionScope.GLOBAL, "automation rules", Permission.AUTOMATION_MANAGE
-    ),
-    ResourceSpec(
-        "cycle", PermissionScope.GLOBAL, "cycles", Permission.GLOBAL_MANAGE,
-        actions=(CrudAction.CREATE, CrudAction.READ, CrudAction.UPDATE, CrudAction.DELETE),
-    ),
-    # RADD-816: no sla.read — policy reads ride the project's item.read (the
-    # list is project-scoped), and a minted-but-unenforced atom is the dead
-    # class this change deletes.
-    ResourceSpec(
-        "sla", PermissionScope.GLOBAL, "SLA policies", Permission.GLOBAL_MANAGE,
-    ),
-    ResourceSpec(
-        "team", PermissionScope.GLOBAL, "teams", Permission.GLOBAL_MANAGE,
-        actions=(CrudAction.CREATE, CrudAction.READ, CrudAction.UPDATE, CrudAction.DELETE),
-    ),
-    ResourceSpec(
-        "role", PermissionScope.GLOBAL, "roles", Permission.GLOBAL_MANAGE,
-        actions=(CrudAction.CREATE, CrudAction.READ, CrudAction.UPDATE, CrudAction.DELETE),
-    ),
-    # Spec 89 restored the full triple: deleting a user is real, and gated by
-    # reassigning their work rather than by the atom not existing.
-    ResourceSpec("user", PermissionScope.GLOBAL, "users", Permission.USER_MANAGE),
-    # Spec 75: no dashboard.manage coarse verb exists — the umbrella is
-    # global.manage directly (the member/issue_type precedent). Spec 87: create
-    # only — dashboard.create is the broadcast gate on `global_access`, while
-    # editing and deleting are owner/editor decisions (spec-57 ownership), not atoms.
-    ResourceSpec(
-        "dashboard",
-        PermissionScope.GLOBAL,
-        "dashboards",
-        Permission.GLOBAL_MANAGE,
-        actions=(CrudAction.CREATE,),
-    ),
-    # Spec 111: Forgejo/Gitea hosts and their repositories. No coarse verb of its
-    # own — the umbrella is global.manage, the dashboard precedent.
-    ResourceSpec(
-        "vcsconn", PermissionScope.GLOBAL, "version-control connections", Permission.GLOBAL_MANAGE
-    ),
-    # Spec 113: service accounts sit beside users but are managed separately —
-    # granting someone the ability to mint agent keys is not the same as granting
-    # them the ability to edit people.
-    # RADD-816: no delete route exists, so no delete atom is minted.
-    ResourceSpec(
-        "service_account", PermissionScope.GLOBAL, "service accounts", Permission.GLOBAL_MANAGE,
-        actions=(CrudAction.CREATE, CrudAction.UPDATE),
-    ),
-)
+# --- resource × CRUD vocabulary (spec 50) ------------------------------------
+#
+# RADD-890 moved the RESOURCES out. `CRUD_RESOURCES` used to list every config
+# resource in the system — states, fields, releases, forms, views, labels,
+# webhooks, canned responses, card presets, automations, cycles, SLA policies,
+# teams, roles, users, dashboards, VCS connections, service accounts — from
+# inside auth, and the spec-93 `CrudResourceSpec` registry that exists for
+# exactly this had one client (`milestones`). Each resource is now declared on
+# the manifest of the plugin that serves its endpoints; auth declares its own
+# four (user/role/member/service_account) the same way, through the same
+# registry, with no special case.
+#
+# What stays here is the VOCABULARY the registry is expressed in: the four
+# verbs, and how a verb reads in a sentence.
 
 _ACTION_VERB: dict[CrudAction, str] = {
     CrudAction.CREATE: "Create",
@@ -388,58 +348,41 @@ _ACTION_VERB: dict[CrudAction, str] = {
     CrudAction.DELETE: "Delete",
 }
 
-# (resource_key, action) -> the Permission atom that governs it (drives the roles matrix).
-CRUD_MATRIX: dict[tuple[str, CrudAction], Permission] = {}
-
-for _res in CRUD_RESOURCES:
-    _implied: set[Permission] = set(IMPLIED_PERMISSIONS.get(_res.manage, frozenset()))
-    for _action in _res.actions:
-        _perm = Permission(f"{_res.key}.{_action.value}")
-        PERMISSION_SCOPES[_perm] = _res.scope
-        PERMISSION_DESCRIPTIONS[_perm] = f"{_ACTION_VERB[_action]} {_res.label}."
-        CRUD_MATRIX[(_res.key, _action)] = _perm
-        _implied.add(_perm)
-    IMPLIED_PERMISSIONS[_res.manage] = frozenset(_implied)
-
-# Content deletes — create/read/update keep their pre-existing atoms/verbs; only
-# the previously-missing delete verb is minted, riding the resource's admin umbrella.
-for _perm, _scope, _desc, _umbrella in (
-    (Permission.ITEM_DELETE, PermissionScope.PROJECT, "Hard-delete work items.",
-     Permission.PROJECT_MANAGE),
-    (Permission.COMMENT_DELETE, PermissionScope.PROJECT, "Delete other people's comments.",
-     Permission.PROJECT_MANAGE),
-    (Permission.WORKLOG_DELETE, PermissionScope.PROJECT, "Delete other people's worklogs.",
-     Permission.PROJECT_MANAGE),
-    (Permission.PAGE_DELETE, PermissionScope.SPACE, "Hard-delete pages.",
-     Permission.PAGE_MANAGE),
-    # RADD-790. Project-scoped like the item they hang off; both ride
-    # project.manage, and `item.update` implies them too (see below) so no role
-    # that can edit an issue loses the ability to attach to it.
-    (Permission.ATTACHMENT_CREATE, PermissionScope.PROJECT,
-     "Attach files to items and comments.", Permission.PROJECT_MANAGE),
-    # RADD-816: `delete` means ANYONE's, uniformly — the old "your own"
-    # meaning is the Baseline-seeded `attachment.delete@own` grant (Q4).
-    (Permission.ATTACHMENT_DELETE, PermissionScope.PROJECT,
-     "Delete anyone's attachments.", Permission.PROJECT_MANAGE),
-):
-    PERMISSION_SCOPES[_perm] = _scope
-    PERMISSION_DESCRIPTIONS[_perm] = _desc
-    IMPLIED_PERMISSIONS[_umbrella] = IMPLIED_PERMISSIONS.get(_umbrella, frozenset()) | {_perm}
-
 
 def implied_map() -> dict[str, frozenset[str]]:
-    """The umbrella→implied closure — builtin `IMPLIED_PERMISSIONS` MERGED with
-    plugin-contributed CRUD resources (spec 93/A2): a plugin's `manage` umbrella
-    implies its `key.action` atoms, read live from the kernel registry. In the
-    default config (no plugin CRUD resources) this equals the builtin map exactly."""
+    """The umbrella→implied closure, composed from the kernel registry.
+
+    Three contributions, all read live so a hot-disabled plugin's umbrella stops
+    expanding in the same breath its routes unmount:
+
+      - a `CrudResourceSpec`'s `manage` umbrella implies its `key.action` atoms
+        (spec 93/A2 — this half already worked, for plugins only);
+      - a `PermissionSpec.implied_by` names the umbrellas that expand TO it
+        (declared in spec 93, read by nothing until RADD-890 — which is why a
+        plugin atom could not ride an umbrella at all);
+      - a `PermissionSpec.implies` names what holding it confers, for the case
+        `implied_by` cannot express: a RELATION-QUALIFIED form that is not
+        itself a catalog atom (`item.update` -> `attachment.delete@own`).
+
+    `IMPLIED_PERMISSIONS` is merged first and is empty today — every implication
+    the system has is a statement about some module's own atoms.
+    """
     merged: dict[str, frozenset[str]] = {
         str(k): frozenset(str(x) for x in v) for k, v in IMPLIED_PERMISSIONS.items()
     }
+
+    def _add(umbrella: str, atoms: frozenset[str]) -> None:
+        merged[umbrella] = merged.get(umbrella, frozenset()) | atoms
+
     from radd.kernel import registries
 
     for spec in registries.crud_resources.values():
-        atoms = frozenset(f"{spec.key}.{a}" for a in spec.actions)
-        merged[spec.manage] = merged.get(spec.manage, frozenset()) | atoms
+        _add(spec.manage, frozenset(f"{spec.key}.{a}" for a in spec.actions))
+    for atom in registries.permissions.values():
+        for umbrella in atom.implied_by:
+            _add(umbrella, frozenset({atom.key}))
+        if atom.implies:
+            _add(atom.key, frozenset(atom.implies))
     return merged
 
 
@@ -547,18 +490,23 @@ def relations_held(
     )
 
 
-# --- plugin-contributable RBAC (spec 93 / A2) --------------------------------
-# Permission atoms and CRUD resources are no longer a closed enum + tuple: a
-# plugin declares `permissions=(PermissionSpec…)` / `crud_resources=(CrudResource
-# Spec…)` in its manifest, the loader puts them in the kernel registry, and these
-# merged-view accessors fold them in LIVE. Builtins come from the enum/tuple
-# above; the two are unioned so the roles matrix / catalog / admin set all include
-# plugin atoms with no edits to auth. In the default config the registry is empty,
-# so every accessor returns exactly the builtin set.
+# --- the catalog: composed from the kernel registry (spec 93 / A2, RADD-890) --
+# A module declares `permissions=(PermissionSpec…)` / `crud_resources=(CrudResource
+# Spec…)` on its manifest, the loader puts them in the kernel registry, and these
+# accessors are what every consumer reads — the roles matrix, GET /permissions,
+# the admin's effective set, role validation, the scope validator.
+#
+# Spec 93 built this for PLUGINS while core atoms stayed hardcoded in auth, so
+# the platform had two ways to define an atom and only one of them was used by
+# anything shipped. RADD-890 deleted the second: `items` declares `item.read`
+# through exactly the seam `milestones` uses, and these functions no longer
+# distinguish "builtin" from "contributed" because there is no difference left.
+# The union with the enum below is what keeps a *disabled* module's atoms
+# addressable in stored roles (RADD-818 sweeps them on uninstall, not disable).
 
 
 def _registered_crud_atoms() -> dict[str, tuple["PermissionScope", str]]:
-    """{atom: (scope, description)} for every plugin CRUD resource's atoms + umbrella."""
+    """{atom: (scope, description)} for every registered CRUD resource's atoms + umbrella."""
     from radd.kernel import registries
 
     out: dict[str, tuple[PermissionScope, str]] = {}
@@ -572,7 +520,9 @@ def _registered_crud_atoms() -> dict[str, tuple["PermissionScope", str]]:
 
 
 def _registered_atoms() -> dict[str, tuple["PermissionScope", str]]:
-    """{key: (scope, description)} for every plugin-contributed standalone atom."""
+    """{key: (scope, description)} for every registered standalone atom. Merged
+    AFTER the CRUD atoms so a bespoke umbrella sentence ("Create users and see
+    the user directory") wins over the generated "Manage users."."""
     from radd.kernel import registries
 
     return {
@@ -586,7 +536,7 @@ def _all_registered() -> dict[str, tuple["PermissionScope", str]]:
 
 
 def all_permission_keys() -> frozenset[str]:
-    """Every atom the system knows: builtin enum ∪ plugin-registered."""
+    """Every atom the system knows: the registry ∪ the typed alias enum."""
     return frozenset({p.value for p in Permission} | set(_all_registered()))
 
 
@@ -626,9 +576,9 @@ def checkable_at(key: "Permission | str") -> frozenset[PermissionScope]:
 
 
 def permission_description_of(key: "Permission | str") -> str:
-    desc = PERMISSION_DESCRIPTIONS.get(base_permission(key))  # type: ignore[arg-type]
-    if desc is not None:
-        return desc
+    """The owning module's sentence for this atom; "" once its plugin is
+    disabled — the atom is still addressable in stored roles, but nothing is
+    left to describe it."""
     reg = _all_registered().get(base_permission(key))
     return reg[1] if reg else ""
 

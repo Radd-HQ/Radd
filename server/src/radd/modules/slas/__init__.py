@@ -1,5 +1,6 @@
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
+from radd.kernel import CrudResourceSpec
 
 from . import engine
 from .router import router
@@ -7,6 +8,9 @@ from .types import SlaEvent
 
 plugin = RaddPlugin(
     name="slas",
+    # RADD-816: no sla.read — policy reads ride the project's item.read (the list is
+    # project-scoped), and a minted-but-unenforced atom is the dead class it deleted.
+    crud_resources=(CrudResourceSpec("sla", "global", "SLA policies", "global.manage"),),
     core=False,  # optional plugin — disableable via the plugin manager
     description="SLA policies + timers (specs 30/63): first-match policy "
     "resolution (priority filters, position order), response/resolution targets "

@@ -1,10 +1,20 @@
 from radd.kernel import RaddPlugin
+from radd.kernel import CrudResourceSpec, PermissionSpec
 
 from . import dispatcher
 from .router import router
 
 plugin = RaddPlugin(
     name="webhooks",
+    permissions=(
+        PermissionSpec(
+            "webhook.manage",
+            "global",
+            "Manage webhook endpoints (global).",
+            implied_by=("global.manage",),
+        ),
+    ),
+    crud_resources=(CrudResourceSpec("webhook", "global", "webhooks", "webhook.manage"),),
     description="Standard-Webhooks dispatcher: signed deliveries with retries, fed by the outbox.",
     depends_on=("projects", "events", "auth"),
     routers=(router,),

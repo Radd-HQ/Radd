@@ -18,7 +18,13 @@ import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from .types import Permission, qualify_permission, relation_meet, split_permission
+from .types import (
+    Permission,
+    all_permission_keys,
+    qualify_permission,
+    relation_meet,
+    split_permission,
+)
 
 GLOBAL_KEY = "global"
 PROJECTS_KEY = "projects"
@@ -64,10 +70,13 @@ class TokenScope:
         return _lattice_intersect(permissions, allowed)
 
     def to_json(self) -> dict:
+        # `str(...)`, not `.value`: an atom may be a registry-contributed string
+        # rather than an enum member (RADD-890), and a relation-qualified atom
+        # never was one.
         return {
-            GLOBAL_KEY: sorted(p.value for p in self.global_atoms),
+            GLOBAL_KEY: sorted(str(p) for p in self.global_atoms),
             PROJECTS_KEY: {
-                str(pid): sorted(p.value for p in atoms)
+                str(pid): sorted(str(p) for p in atoms)
                 for pid, atoms in self.project_atoms.items()
             },
         }
@@ -101,21 +110,36 @@ def _lattice_intersect(
 def _atoms(values: object, where: str) -> frozenset[Permission]:
     if not isinstance(values, list):
         raise ValueError(f"scope {where} must be a list of permission atoms")
+    # RADD-890: validated against the LIVE catalog (the kernel permissions
+    # registry ∪ the typed alias enum) — the same set the role editor validates
+    # against. It was the enum alone, which meant a plugin's atom could be
+    # granted through a role and then refused in a key scope: the spec-113
+    # intersection would have silently narrowed every scoped key that named one.
+    known = all_permission_keys()
     out: set = set()
     for value in values:
         base, _relation = split_permission(str(value))
-        try:
-            Permission(base)
-        except ValueError:
+        if base not in known:
             # Refuse at WRITE time. An unknown atom that silently never matches is
             # a scope that looks granted and is not — the worst failure mode here.
             # (The relation qualifier is validated shallowly here — base only —
             # because a scope is written before the owning plugin's relations
             # may be loaded; an unregistered qualifier resolves to nothing,
             # which for a KEY is the fail-closed direction.)
-            raise ValueError(f"unknown permission atom '{value}' in scope {where}") from None
-        out.add(Permission(str(value)) if str(value) == base else str(value))
+            raise ValueError(f"unknown permission atom '{value}' in scope {where}")
+        out.add(_atom(str(value), base))
     return frozenset(out)
+
+
+def _atom(value: str, base: str) -> "Permission | str":
+    """The enum member when there is one (so `.value`/identity keep working at
+    the ~1000 call sites that hold them), the raw string otherwise."""
+    if value != base:
+        return value  # relation-qualified: never an enum member
+    try:
+        return Permission(value)
+    except ValueError:
+        return value
 
 
 def parse_scope(raw: object) -> TokenScope | None:
