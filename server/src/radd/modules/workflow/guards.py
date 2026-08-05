@@ -15,7 +15,9 @@ from typing import Any
 
 from radd.exceptions import RaddError
 
+from radd.modules.fields.types import FieldType
 from .types import (
+    ApproverKind,
     BUILTIN_LABELS,
     DATE_BUILTINS,
     BuiltinField,
@@ -154,8 +156,8 @@ def _evaluate_field(params: Mapping[str, Any], snapshot: ItemSnapshot) -> str | 
         value = snapshot.custom_fields.get(key)
         label = snapshot.field_labels.get(key, key)
         field_type = str(params.get("type") or "")
-        numeric = field_type in ("number", "duration")
-        date_like = field_type == "date"
+        numeric = field_type in (FieldType.NUMBER.value, FieldType.DURATION.value)
+        date_like = field_type == FieldType.DATE.value
     else:
         value = snapshot.builtin.get(key)
         try:
@@ -173,7 +175,7 @@ def _approval_failure(params: Mapping[str, Any]) -> str:
     parts: list[str] = []
     for entry in params.get("approvers") or []:
         name = entry.get("name") or entry.get("id") or "?"
-        if entry.get("kind") == "team":
+        if entry.get("kind") == ApproverKind.TEAM.value:
             parts.append(f"{int(entry.get('required') or 1)} of {name}")
         else:
             parts.append(str(name))

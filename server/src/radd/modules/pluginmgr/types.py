@@ -1,6 +1,15 @@
 from enum import StrEnum
 
 
+class PluginOrigin(StrEnum):
+    """Where a plugin ships from (RADD-898): the main image + migration chain
+    (`bootstrap`) or the installable set (`installable`) — previously bare
+    strings compared across service.py."""
+
+    BOOTSTRAP = "bootstrap"
+    INSTALLABLE = "installable"
+
+
 class PluginState(StrEnum):
     """The lifecycle states (docs/plugin-platform.md §10). Core plugins are always
     ENABLED and locked. Non-core: DISCOVERED → INSTALLED (migrations up) → ENABLED

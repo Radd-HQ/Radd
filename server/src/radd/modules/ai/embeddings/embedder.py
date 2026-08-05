@@ -16,6 +16,7 @@ edits free. A silent content change to an ALREADY-embedded row is the one gap
 from __future__ import annotations
 
 import hashlib
+from enum import StrEnum
 import logging
 import uuid
 from dataclasses import dataclass
@@ -43,9 +44,19 @@ _ITEM_DELETE = "item.deleted"
 _PAGE_DELETE = "page.deleted"
 
 
+class EmbedTaskKind(StrEnum):
+    """What one embed task does (RADD-898) — was a comment-defined vocabulary
+    compared as bare literals in five places."""
+
+    ITEM = "item"
+    DOC = "doc"
+    DROP_ITEM = "drop_item"
+    DROP_DOC = "drop_doc"
+
+
 @dataclass(frozen=True)
 class EmbedTask:
-    kind: str  # "item" | "doc"
+    kind: EmbedTaskKind
     entity_id: uuid.UUID
 
 
@@ -64,15 +75,15 @@ def plan_for_event(
             return None
 
     if event_type in _ITEM_EVENTS:
-        return ("item", _coerce(entity_id))
+        return (EmbedTaskKind.ITEM, _coerce(entity_id))
     if event_type in _COMMENT_EVENTS:
-        return ("item", _coerce(payload.get("item_id")))
+        return (EmbedTaskKind.ITEM, _coerce(payload.get("item_id")))
     if event_type == _ITEM_DELETE:
-        return ("drop_item", _coerce(entity_id))
+        return (EmbedTaskKind.DROP_ITEM, _coerce(entity_id))
     if event_type in _PAGE_EVENTS:
-        return ("doc", _coerce(entity_id))
+        return (EmbedTaskKind.DOC, _coerce(entity_id))
     if event_type == _PAGE_DELETE:
-        return ("drop_doc", _coerce(entity_id))
+        return (EmbedTaskKind.DROP_DOC, _coerce(entity_id))
     return None
 
 
@@ -146,18 +157,18 @@ async def _plan(session: AsyncSession, event: Event) -> EmbedTask | None:
     if entity_id is None:
         return None
     # Deletes are planning-phase writes (the runner commits them with the cursor).
-    if kind == "drop_item":
+    if kind == EmbedTaskKind.DROP_ITEM:
         await store.delete_item(session, entity_id)
         return None
-    if kind == "drop_doc":
+    if kind == EmbedTaskKind.DROP_DOC:
         await store.delete_doc(session, entity_id)
         return None
     return EmbedTask(kind=kind, entity_id=entity_id)
 
 
 async def _deliver(tasks: list[EmbedTask]) -> None:
-    item_ids = list({t.entity_id for t in tasks if t.kind == "item"})
-    page_ids = list({t.entity_id for t in tasks if t.kind == "doc"})
+    item_ids = list({t.entity_id for t in tasks if t.kind == EmbedTaskKind.ITEM})
+    page_ids = list({t.entity_id for t in tasks if t.kind == EmbedTaskKind.DOC})
     async with SessionLocal() as session:
         resolved = await registry.resolve_role(session, AiRole.EMBEDDINGS)
         if resolved is None:

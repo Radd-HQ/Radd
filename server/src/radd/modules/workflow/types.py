@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from enum import StrEnum
 
+from radd.modules.fields.types import FieldType
+
 
 class StateCategory(StrEnum):
     """Fixed categories (Linear model): analytics, boards, and rollover key off these.
@@ -170,11 +172,11 @@ DATE_BUILTINS = frozenset({BuiltinField.START_DATE, BuiltinField.TARGET_DATE})
 def ops_for_field_type(field_type: str) -> frozenset[ConditionOp]:
     """Allowed operators for a CUSTOM field's registry type (fields.FieldType
     wire values — workflow stays ignorant of the fields module's enum)."""
-    if field_type in ("number", "duration"):
+    if field_type in (FieldType.NUMBER.value, FieldType.DURATION.value):
         return _MEMBERSHIP_OPS | _RANGE_OPS
-    if field_type == "date":
+    if field_type == FieldType.DATE.value:
         return _RANGE_OPS
-    if field_type == "boolean":
+    if field_type == FieldType.BOOLEAN.value:
         return frozenset({ConditionOp.SET, ConditionOp.EMPTY, ConditionOp.IS})
     return _MEMBERSHIP_OPS  # text, select, multi_select, user, url
 

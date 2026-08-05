@@ -53,6 +53,7 @@ from .models import AutomationRule
 from .schemas import ActionPreview, RuleTestResult
 from .templating import render_template
 from .types import (
+    PlanKind,
     CLEAR_VALUE,
     CONSUMER_NAME,
     ITEM_ACTIONS,
@@ -162,12 +163,12 @@ async def condition_matches(
 
 @dataclass
 class _Plan:
-    kind: str  # "item_update" | "comment" | "create_item" | "http" | "notify" | "email" | "skip"
+    kind: PlanKind
     detail: str
     item_update: ItemUpdate | None = None
     comment: CommentCreate | None = None
     item_create: ItemCreate | None = None
-    # (url, json_body, headers) for send_webhook / post_chat.
+    # (url, json_body, signing_secret) for send_webhook / post_chat.
     http: tuple[str, dict[str, Any], dict[str, str]] | None = None
     # (user_id, message) for notify_user.
     notify: tuple[uuid.UUID, str] | None = None
@@ -246,7 +247,7 @@ async def _plan(
         case ActionType.CREATE_ITEM:
             target = await _project_by_key(session, params["project"])
             if target is None:
-                return _Plan("skip", f"create_item: no project {params['project']!r}")
+                return _Plan(PlanKind.SKIP, f"create_item: no project {params['project']!r}")
             create = ItemCreate(
                 project_id=target.id,
                 title=render_template(params["title"], facts, ictx),
@@ -254,7 +255,7 @@ async def _plan(
                 priority=Priority(params["priority"]) if params.get("priority") else Priority.NORMAL,
             )
             return _Plan(
-                "create_item", f"create_item in {target.key}: {create.title!r}", item_create=create
+                PlanKind.CREATE_ITEM, f"create_item in {target.key}: {create.title!r}", item_create=create
             )
         case ActionType.SEND_WEBHOOK:
             body = {
@@ -269,14 +270,14 @@ async def _plan(
                 "payload": facts.payload,
             }
             return _Plan(
-                "http",
+                PlanKind.HTTP,
                 f"send_webhook -> {params['url']}",
                 http=(params["url"], body, params.get("secret", "")),
             )
         case ActionType.POST_CHAT:
             message = render_template(params["message"], facts, ictx)
             return _Plan(
-                "http",
+                PlanKind.HTTP,
                 f"post_chat -> {params['webhook_url']}",
                 http=(params["webhook_url"], {"text": message}, ""),
             )
@@ -284,18 +285,18 @@ async def _plan(
             email = params["user"]
             user = await auth.get_user_by_email(session, email)
             if user is None:
-                return _Plan("skip", f"notify_user: no user {email!r}")
+                return _Plan(PlanKind.SKIP, f"notify_user: no user {email!r}")
             message = render_template(params["message"], facts, ictx)
-            return _Plan("notify", f"notify_user {email}", notify=(user.id, message))
+            return _Plan(PlanKind.NOTIFY, f"notify_user {email}", notify=(user.id, message))
         case ActionType.SEND_EMAIL:
             if not settings.smtp_host:
-                return _Plan("skip", "send_email: smtp not configured (smtp_host empty)")
+                return _Plan(PlanKind.SKIP, "send_email: smtp not configured (smtp_host empty)")
             recipient = await resolve_recipient(session, params["to"], item)
             if recipient is None:
-                return _Plan("skip", f"send_email: no recipient resolves for {params['to']!r}")
+                return _Plan(PlanKind.SKIP, f"send_email: no recipient resolves for {params['to']!r}")
             address, name = recipient
             return _Plan(
-                "email",
+                PlanKind.EMAIL,
                 f"send_email -> {address}",
                 email=(
                     address,
@@ -308,70 +309,70 @@ async def _plan(
             name = params["state"]
             state = await _state_by_name(session, project.id, name)
             if state is None:
-                return _Plan("skip", f"set_state: no state {name!r} in {project.key}")
-            return _Plan("item_update", f"set_state -> {name!r}", ItemUpdate(state_id=state.id))
+                return _Plan(PlanKind.SKIP, f"set_state: no state {name!r} in {project.key}")
+            return _Plan(PlanKind.ITEM_UPDATE, f"set_state -> {name!r}", ItemUpdate(state_id=state.id))
         case ActionType.SET_PRIORITY:
             priority = Priority(params["priority"])
             return _Plan(
-                "item_update", f"set_priority -> {priority.value}", ItemUpdate(priority=priority)
+                PlanKind.ITEM_UPDATE, f"set_priority -> {priority.value}", ItemUpdate(priority=priority)
             )
         case ActionType.SET_ASSIGNEE:
             email = params["assignee"]
             if _is_clear(email):
-                return _Plan("item_update", "set_assignee -> none", ItemUpdate(assignee_id=None))
+                return _Plan(PlanKind.ITEM_UPDATE, "set_assignee -> none", ItemUpdate(assignee_id=None))
             user = await auth.get_user_by_email(session, email)
             if user is None:
-                return _Plan("skip", f"set_assignee: no user {email!r}")
-            return _Plan("item_update", f"set_assignee -> {email}", ItemUpdate(assignee_id=user.id))
+                return _Plan(PlanKind.SKIP, f"set_assignee: no user {email!r}")
+            return _Plan(PlanKind.ITEM_UPDATE, f"set_assignee -> {email}", ItemUpdate(assignee_id=user.id))
         case ActionType.SET_TEAM:
             name = params["team"]
             if _is_clear(name):
-                return _Plan("item_update", "set_team -> none", ItemUpdate(team_id=None))
+                return _Plan(PlanKind.ITEM_UPDATE, "set_team -> none", ItemUpdate(team_id=None))
             team = await _team_by_name(session, name)
             if team is None:
-                return _Plan("skip", f"set_team: no team {name!r}")
-            return _Plan("item_update", f"set_team -> {name!r}", ItemUpdate(team_id=team.id))
+                return _Plan(PlanKind.SKIP, f"set_team: no team {name!r}")
+            return _Plan(PlanKind.ITEM_UPDATE, f"set_team -> {name!r}", ItemUpdate(team_id=team.id))
         case ActionType.ADD_LABEL:
             label = params["label"]
             current = await _current_labels(session, item, system_user)
             new = current if label in current else [*current, label]
             note = " (already present)" if label in current else ""
-            return _Plan("item_update", f"add_label {label!r}{note}", ItemUpdate(labels=new))
+            return _Plan(PlanKind.ITEM_UPDATE, f"add_label {label!r}{note}", ItemUpdate(labels=new))
         case ActionType.REMOVE_LABEL:
             label = params["label"]
             current = await _current_labels(session, item, system_user)
             if label not in current:
-                return _Plan("skip", f"remove_label: {label!r} not on item")
+                return _Plan(PlanKind.SKIP, f"remove_label: {label!r} not on item")
             new = [name for name in current if name != label]
-            return _Plan("item_update", f"remove_label {label!r}", ItemUpdate(labels=new))
+            return _Plan(PlanKind.ITEM_UPDATE, f"remove_label {label!r}", ItemUpdate(labels=new))
         case ActionType.SET_CYCLE:
             name = params["cycle"]
             if _is_clear(name):
-                return _Plan("item_update", "set_cycle -> none", ItemUpdate(cycle_id=None))
+                return _Plan(PlanKind.ITEM_UPDATE, "set_cycle -> none", ItemUpdate(cycle_id=None))
             cycle = await _cycle_by_name(session, name)
             if cycle is None:
-                return _Plan("skip", f"set_cycle: no cycle {name!r}")
-            return _Plan("item_update", f"set_cycle -> {name!r}", ItemUpdate(cycle_id=cycle.id))
+                return _Plan(PlanKind.SKIP, f"set_cycle: no cycle {name!r}")
+            return _Plan(PlanKind.ITEM_UPDATE, f"set_cycle -> {name!r}", ItemUpdate(cycle_id=cycle.id))
         case ActionType.SET_RELEASE:
             version = params["release"]
             if _is_clear(version):
-                return _Plan("item_update", "set_release -> none", ItemUpdate(release_id=None))
+                return _Plan(PlanKind.ITEM_UPDATE, "set_release -> none", ItemUpdate(release_id=None))
             release = await releases_service.resolve_release(session, project.id, version)
             if release is None:
-                return _Plan("skip", f"set_release: no release {version!r} in {project.key}")
+                return _Plan(PlanKind.SKIP, f"set_release: no release {version!r} in {project.key}")
             return _Plan(
-                "item_update", f"set_release -> {version!r}", ItemUpdate(release_id=release.id)
+                PlanKind.ITEM_UPDATE, f"set_release -> {version!r}", ItemUpdate(release_id=release.id)
             )
         case ActionType.SET_CUSTOM_FIELD:
             key, value = params["key"], params["value"]
             return _Plan(
-                "item_update", f"set_custom_field {key!r}", ItemUpdate(custom_fields={key: value})
+                PlanKind.ITEM_UPDATE, f"set_custom_field {key!r}", ItemUpdate(custom_fields={key: value})
             )
         case ActionType.ADD_COMMENT:
             visibility = CommentVisibility(params.get("visibility", CommentVisibility.PUBLIC.value))
             comment = CommentCreate(body=params["body"], visibility=visibility)
-            return _Plan("comment", f"add_comment ({visibility.value})", comment=comment)
-    return _Plan("skip", f"unknown action {action_type}")  # pragma: no cover
+            return _Plan(PlanKind.COMMENT, f"add_comment ({visibility.value})", comment=comment)
+    return _Plan(PlanKind.SKIP, f"unknown action {action_type}")  # pragma: no cover
 
 
 def _signed_headers(body_bytes: bytes, secret: str) -> dict[str, str]:
@@ -391,14 +392,14 @@ async def _apply_plan(
     *,
     rule_name: str,
 ) -> None:
-    if plan.kind == "item_update" and plan.item_update is not None and item is not None:
+    if plan.kind is PlanKind.ITEM_UPDATE and plan.item_update is not None and item is not None:
         await items.update_item(session, item.id, plan.item_update, actor=system_user)
-    elif plan.kind == "comment" and plan.comment is not None and item is not None:
+    elif plan.kind is PlanKind.COMMENT and plan.comment is not None and item is not None:
         await comments.create_comment(session, item.id, plan.comment, actor=system_user)
-    elif plan.kind == "create_item" and plan.item_create is not None:
+    elif plan.kind is PlanKind.CREATE_ITEM and plan.item_create is not None:
         # Emitted item.created carries the system actor — the loop guard skips it.
         await items.create_item(session, plan.item_create, actor=system_user)
-    elif plan.kind == "http" and plan.http is not None:
+    elif plan.kind is PlanKind.HTTP and plan.http is not None:
         url, body, secret = plan.http
         body_bytes = json.dumps(body, separators=(",", ":"), sort_keys=True).encode()
         async with httpx.AsyncClient(timeout=settings.webhook_timeout) as client:
@@ -406,11 +407,11 @@ async def _apply_plan(
                 url, content=body_bytes, headers=_signed_headers(body_bytes, secret)
             )
             response.raise_for_status()
-    elif plan.kind == "email" and plan.email is not None:
+    elif plan.kind is PlanKind.EMAIL and plan.email is not None:
         # Sync smtplib off the loop; nothing is emitted — inherently loop-safe.
         to_address, to_name, subject, body = plan.email
         await asyncio.to_thread(smtp.send_message, to_address, subject, body, to_name=to_name)
-    elif plan.kind == "notify" and plan.notify is not None:
+    elif plan.kind is PlanKind.NOTIFY and plan.notify is not None:
         user_id, message = plan.notify
         await notify_service.create_notification(
             session,
@@ -507,7 +508,7 @@ async def _run_rule_actions(
                     facts=facts,
                     rule_name=rule.name,
                 )
-                if plan.kind == "skip":
+                if plan.kind is PlanKind.SKIP:
                     logger.info("automations: rule %s %s", rule.id, plan.detail)
                 else:
                     await _apply_plan(
@@ -718,7 +719,7 @@ async def preview(
                     ActionPreview(
                         type=ActionType(action["type"]),
                         params=action["params"],
-                        resolves=plan.kind != "skip",
+                        resolves=plan.kind is not PlanKind.SKIP,
                         detail=plan.detail,
                     )
                 )

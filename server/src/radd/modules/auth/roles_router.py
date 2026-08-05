@@ -32,6 +32,7 @@ from pydantic import BaseModel
 
 from .types import (
     AuthEntity,
+    InstanceRole,
     Permission,
     expand_permissions,
     all_permission_keys,
@@ -348,7 +349,7 @@ async def grant_help(
         (
             await session.execute(
                 sa_select(UserModel.name)
-                .where(UserModel.instance_role == "admin", UserModel.active.is_(True))
+                .where(UserModel.instance_role == InstanceRole.ADMIN.value, UserModel.active.is_(True))
                 .order_by(UserModel.name)
                 .limit(10)
             )

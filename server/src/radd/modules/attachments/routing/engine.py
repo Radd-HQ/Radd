@@ -14,6 +14,7 @@ from radd.kernel import sockets
 
 from .. import hosts
 from ..models import StorageHost, StorageRule
+from ..types import RuleType
 from .context import RoutingContext
 
 logger = logging.getLogger(__name__)
@@ -44,7 +45,7 @@ async def choice_reachable(
     for rule in await ordered_rules(session):
         if not rule.enabled:
             continue
-        if rule.rule_type == "user_choice":
+        if rule.rule_type == RuleType.USER_CHOICE.value:
             return True, None
         handler = handler_for(rule.rule_type)
         if handler is None:
@@ -53,12 +54,12 @@ async def choice_reachable(
             config = handler.config_model(**(rule.config or {}))
         except ValidationError:
             continue
-        if rule.rule_type == "cidr":
+        if rule.rule_type == RuleType.CIDR.value:
             from .rules import match_cidr
 
             if match_cidr(source_ip, config.ranges) is not None:
                 return False, rule.name  # the network decides; nothing reaches the ask
-        elif rule.rule_type == "llm":
+        elif rule.rule_type == RuleType.LLM.value:
             if not await _llm_live(session):
                 continue
             covered = {

@@ -13,11 +13,11 @@ from dataclasses import dataclass
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import NotFoundError
+from radd.modules.items.enums import ItemEvent
 from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
 from radd.modules.items import service as items_service
-from radd.modules.projects import service as projects_service
 
 from .types import AttachmentEntity, AttachmentParentType
 
@@ -109,7 +109,7 @@ async def _item_project_id(session: AsyncSession, item_id: uuid.UUID) -> uuid.UU
 register_parent(
     ParentBinding(
         entity_type=AttachmentParentType.ITEM.value,
-        deleted_event="item.deleted",
+        deleted_event=str(ItemEvent.DELETED),
         require_read=_item_read,
         require_write=_item_write,
         require_admin=_item_admin,

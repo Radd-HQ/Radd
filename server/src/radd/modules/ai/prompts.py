@@ -10,6 +10,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from radd.modules.fields.types import FieldType
+from radd.modules.ai.types import SlqDialect
 
 # --- NL -> SLQ ---
 
@@ -116,7 +117,7 @@ def nl_system_prompt(
     LIVE small value sets — without them the model maps "bugs" onto the generic
     `kind` instead of the Bug issue type (seen live).
     """
-    worklog = dialect == "worklog"
+    worklog = dialect == SlqDialect.WORKLOG.value
     key_prefix = "issue." if worklog else ""
     lines: list[str] = []
     for definition in definitions:

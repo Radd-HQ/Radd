@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError, NotFoundError
+from radd.modules.fields.types import FieldType
 from radd.modules.events import service as events
 from radd.modules.settings import service as settings_service
 from radd.modules.settings.types import SettingKey
@@ -165,9 +166,9 @@ def _validate_field_rule(params: dict, definitions: dict | None) -> None:
             raise _rule_error(f'operator "{op}" does not apply to "{definition.name}"')
         # Snapshot the registry type — comparison + phrasing at evaluation time.
         params["type"] = str(definition.type)
-        date_like = str(definition.type) == "date"
-        numeric = str(definition.type) in ("number", "duration")
-        if str(definition.type) == "boolean":
+        date_like = str(definition.type) == FieldType.DATE.value
+        numeric = str(definition.type) in (FieldType.NUMBER.value, FieldType.DURATION.value)
+        if str(definition.type) == FieldType.BOOLEAN.value:
             values = [str(v) for v in params.get("values") or []]
             if op is ConditionOp.IS and set(values) - {"true", "false"}:
                 raise _rule_error(f'"{definition.name}" values must be true or false')

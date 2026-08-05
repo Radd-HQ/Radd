@@ -8,10 +8,13 @@ status` inlined — the truth about each provider now lives in its own plugin.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from .registry import registries
 from .specs import CapabilitySpec
+
+logger = logging.getLogger(__name__)
 
 
 def describe(cap: CapabilitySpec) -> dict[str, Any]:
@@ -26,7 +29,10 @@ def describe(cap: CapabilitySpec) -> dict[str, Any]:
             res = cap.check() or {}
             enabled = bool(res.get("enabled", enabled))
             detail = {k: v for k, v in res.items() if k != "enabled"}
-        except Exception:  # a broken check must not blank the whole surface
+        except Exception:  # a broken check must not blank the whole surface —
+            # but a permanently-broken one used to read as "unconfigured"
+            # forever with the traceback lost (RADD-898).
+            logger.warning("capability %s check failed", cap.key, exc_info=True)
             enabled = False
             detail = {"error": "check failed"}
     return {

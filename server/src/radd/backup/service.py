@@ -11,7 +11,6 @@ can write it to a run row while the CLI just prints it.
 import asyncio
 import logging
 import shutil
-import tarfile
 import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -48,13 +47,15 @@ def _radd_version() -> str:
 
 async def _alembic_revision() -> str | None:
     from sqlalchemy import text
+    from sqlalchemy.exc import ProgrammingError
 
     from radd.db import engine
 
     async with engine.connect() as connection:
         try:
             return str((await connection.execute(text("SELECT version_num FROM alembic_version"))).scalar_one())
-        except Exception:  # noqa: BLE001 — an empty database has no such table
+        except ProgrammingError:  # an empty database has no such table (RADD-898:
+            # the broad catch also read "connection refused" as "no version")
             return None
 
 
@@ -158,9 +159,10 @@ def _attachments_dir(include: bool | None) -> Path | None:
     filesystem hosts are a documented gap until the per-host packing lands
     (docs/deploy.md)."""
     from radd.modules.attachments import hosts as storage_hosts
+    from radd.modules.attachments.types import StorageHostType
 
     default = storage_hosts.default_snapshot()
-    if default.get("type") != "filesystem":
+    if default.get("type") != StorageHostType.FILESYSTEM.value:
         return None
     wanted = settings.backup_include_attachments_default if include is None else include
     if not wanted:

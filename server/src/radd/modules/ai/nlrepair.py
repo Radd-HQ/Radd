@@ -23,6 +23,7 @@ from datetime import date
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.modules.fields.models import FieldDefinition
+from radd.modules.ai.types import SlqDialect
 from radd.modules.items.slq import (
     ME_LITERAL,
     NONE_LITERAL,
@@ -89,7 +90,7 @@ async def repair_query(
         source: str | None = field
         if field.startswith(_ISSUE_PREFIX):
             source = field.removeprefix(_ISSUE_PREFIX)
-        elif dialect == "worklog":
+        elif dialect == SlqDialect.WORKLOG.value:
             if field == _WORKLOG_CATEGORY:
                 return await category_candidates(session, cache)
             source = _WORKLOG_ALIASES.get(field)  # time/worked_on/note/issue: none

@@ -144,6 +144,20 @@ CONSUMER_NAME = "automations.engine"
 # (seeded by this module's migration so the comments.author_id FK resolves) AND the
 # loop guard: the engine skips any item event whose actor_id is this id, so an action
 # that re-triggers its own rule cannot spin. Instance-admin so authz never blocks it.
+class PlanKind(StrEnum):
+    """What a resolved automation action DOES (RADD-898) — the vocabulary the
+    engine's planner and applier share. Was a comment on `_Plan.kind`; a typo in
+    one branch was invisible."""
+
+    ITEM_UPDATE = "item_update"
+    COMMENT = "comment"
+    CREATE_ITEM = "create_item"
+    HTTP = "http"
+    NOTIFY = "notify"
+    EMAIL = "email"
+    SKIP = "skip"
+
+
 SYSTEM_ACTOR_ID = uuid.UUID("00000000-0000-0000-0000-000000a70a70")
 SYSTEM_ACTOR_EMAIL = "automation@radd.system"
 SYSTEM_ACTOR_NAME = "Automation"

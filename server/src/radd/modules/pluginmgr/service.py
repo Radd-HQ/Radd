@@ -18,7 +18,7 @@ from radd.modules.events import service as events
 
 from . import discovery
 from .models import InstalledPlugin
-from .types import PluginEntity, PluginEvent, PluginState
+from .types import PluginOrigin, PluginEntity, PluginEvent, PluginState
 
 
 @dataclass(frozen=True)
@@ -93,10 +93,10 @@ def _resolve_toggleable(plugin_id: str):
             raise ConflictError(
                 PluginEntity.PLUGIN, reason=f"{plugin_id} is a core plugin — always enabled"
             )
-        return plugin, path, "bootstrap"
+        return plugin, path, PluginOrigin.BOOTSTRAP.value
     inst = discovery.installable_plugins().get(plugin_id)
     if inst is not None:
-        return inst[0], inst[1], "installable"
+        return inst[0], inst[1], PluginOrigin.INSTALLABLE.value
     raise NotFoundError(PluginEntity.PLUGIN, plugin_id)
 
 
@@ -139,7 +139,7 @@ async def _upsert(session: AsyncSession, plugin, state: PluginState) -> Installe
 
 async def install(session: AsyncSession, plugin_id: str, actor_id: uuid.UUID | None = None) -> InstalledPlugin:
     plugin, _path, kind = _resolve_toggleable(plugin_id)
-    if kind == "bootstrap":  # ships in the main migration chain — install ⇒ ensure enabled
+    if kind == PluginOrigin.BOOTSTRAP.value:  # ships in the main migration chain — install ⇒ ensure enabled
         return await enable(session, plugin_id, actor_id)
     row = await _row(session, plugin_id)
     if row is None:
@@ -168,7 +168,7 @@ async def disable(session: AsyncSession, plugin_id: str, actor_id: uuid.UUID | N
     row = await _row(session, plugin_id)
     # An installable plugin must actually be enabled to disable; an optional bootstrap
     # plugin is enabled-by-default (no row), so disabling writes a DISABLED row.
-    if kind == "installable" and (row is None or row.state != PluginState.ENABLED.value):
+    if kind == PluginOrigin.INSTALLABLE.value and (row is None or row.state != PluginState.ENABLED.value):
         raise ConflictError(PluginEntity.PLUGIN, reason=f"{plugin_id} is not enabled")
     row = await _upsert(session, plugin, PluginState.DISABLED)
     await _emit(session, PluginEvent.DISABLED, plugin_id, actor_id)
@@ -315,7 +315,7 @@ async def uninstall(session: AsyncSession, plugin_id: str, actor_id: uuid.UUID |
     RADD-818: the atom sweep runs first, so roles/token scopes/grants never keep
     vocabulary the catalog no longer knows."""
     plugin, _path, kind = _resolve_toggleable(plugin_id)
-    if kind == "bootstrap":
+    if kind == PluginOrigin.BOOTSTRAP.value:
         raise ConflictError(
             PluginEntity.PLUGIN, reason=f"{plugin_id} is a builtin — disable it instead of uninstalling"
         )

@@ -132,6 +132,6 @@ async def test_provider(
     service.invalidate_caches(provider_id)
     try:
         meta = await service.metadata(provider)
-    except Exception as exc:
+    except Exception as exc:  # the probe button REPORTS failure; that is its job
         return ProbeResult(ok=False, error=f"could not reach the issuer: {exc}")
     return ProbeResult(ok=True, authorization_endpoint=meta.get("authorization_endpoint", ""))
