@@ -9,6 +9,9 @@ from .roles_router import (
 )
 from .router import auth_router, service_account_router, token_router, user_router
 
+# After the router chain on purpose: mcptools joins the loaded graph (RADD-889).
+from . import mcptools
+
 plugin = RaddPlugin(
     name="auth",
     description=(
@@ -28,5 +31,8 @@ plugin = RaddPlugin(
         permission_router,
         project_member_router,
     ),
+    # RADD-889: the directory/service-account tools of the spec-114 MCP catalog
+    # live with their owner.
+    mcp_tools=mcptools.MCP_TOOLS,
     on_startup=(subscribers.ensure_seeded,),
 )

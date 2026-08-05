@@ -48,6 +48,17 @@ async def get_project(session: AsyncSession, project_id: uuid.UUID) -> Project:
     return project
 
 
+async def get_by_key(session: AsyncSession, key: str) -> Project:
+    """Project by KEY (`TD`), case-insensitive. Keys are globally unique (the
+    spec-21 Jira model), so this is an unambiguous instance-wide address — the
+    one resolution every by-key surface shares (RADD-889 dedup of the MCP
+    tools' per-handler copies)."""
+    project = await session.scalar(select(Project).where(Project.key == key.upper()))
+    if project is None:
+        raise NotFoundError(ProjectEntity.PROJECT, key)
+    return project
+
+
 async def project_keys(session: AsyncSession, ids: Iterable[uuid.UUID]) -> dict[uuid.UUID, str]:
     rows = await session.execute(select(Project.id, Project.key).where(Project.id.in_(set(ids))))
     return dict(rows.all())

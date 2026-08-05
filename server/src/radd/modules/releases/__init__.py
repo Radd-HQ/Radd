@@ -4,6 +4,9 @@ from radd.kernel import RaddPlugin
 from .router import router
 from .types import ReleaseEvent
 
+# After the router chain on purpose: mcptools joins the loaded graph (RADD-889).
+from . import mcptools
+
 plugin = RaddPlugin(
     name="releases",
     description=(
@@ -13,6 +16,8 @@ plugin = RaddPlugin(
     depends_on=("projects", "auth", "events", "settings", "workflow"),
     weak_depends=("automations", "items"),
     routers=(router,),
+    # RADD-889: the release tools of the spec-114 MCP catalog live with their owner.
+    mcp_tools=mcptools.MCP_TOOLS,
     event_types=(
         EventTypeSpec(ReleaseEvent.CREATED, "Release created", "Releases"),
         EventTypeSpec(ReleaseEvent.UPDATED, "Release updated", "Releases"),

@@ -10,6 +10,11 @@ from .router import router
 from .service.visibility import ITEM_RELATIONS
 from .slq import SlqError
 
+# Imported AFTER the router chain: mcptools reaches sideways (service, workflow,
+# comments-deferred), so it must join an already-loaded graph rather than be the
+# first entry into it — an early import here is a collection-time cycle (RADD-889).
+from .mcptools import MCP_TOOLS
+
 
 async def _filter_parse_handler(request: Request, exc: FilterParseError) -> JSONResponse:
     return JSONResponse(status_code=422, content={"detail": str(exc)})
@@ -42,4 +47,6 @@ plugin = RaddPlugin(
     ),
     # RADD-823: what @own / @team MEAN for an item (D6 reporter; D13 item.team_id).
     relations=ITEM_RELATIONS,
+    # RADD-889: the item tools of the spec-45/114 MCP catalog live with their owner.
+    mcp_tools=MCP_TOOLS,
 )

@@ -265,6 +265,22 @@ class McpToolSpec:
     permission: str = ""
     project_scoped: bool = False  # visibility: show only where the atom holds (spec 114)
     project_param: str = ""  # input property naming the project; enum-rewritten + enforced
+    #: LIVE schema (RADD-889): when set, the catalog composer calls it with
+    #: keyword projections — today `custom_field_properties` (the field
+    #: registry's OpenAPI properties) and `link_types` (the instance's link-type
+    #: keys), the parameters `build_catalog` always took — instead of reading
+    #: `input_schema`. Builders accept ``**_`` so a new projection never breaks
+    #: an old one; `input_schema` stays as the same shape with the projections
+    #: empty, for pure consumers and as documentation.
+    input_schema_builder: Callable[..., dict[str, Any]] | None = None
+    #: When True (the default, and right for every NEW tool) the dispatcher
+    #: requires `permission` — on the `project_param` project when given —
+    #: before the handler runs, so a plugin cannot expose an unfiltered tool.
+    #: The migrated spec-45/114 builtins set False: their handlers already carry
+    #: enforcement at the service seam (row-level rules, require-ANYWHERE gates),
+    #: and a blanket global `require` on top would re-refuse the scoped keys
+    #: RADD-672 admitted. `permission` still drives the spec-114 catalog filter.
+    kernel_enforced: bool = True
 
 
 @dataclass(frozen=True)

@@ -18,6 +18,9 @@ from .types import PageEvent
 
 from .page_access import _PAGE_SPEC
 
+# After the router chain on purpose: mcptools joins the loaded graph (RADD-889).
+from . import mcptools
+
 plugin = RaddPlugin(
     name="pages",
     # RADD-818: spec-92 resources ride the MANIFEST — the loader's clear()
@@ -47,4 +50,8 @@ plugin = RaddPlugin(
         EventTypeSpec(PageEvent.LINK_DELETED, "Page↔issue link removed", "Pages", item_scoped=True),
     ),
     page_extensions=PAGE_EXTENSIONS,
+    # RADD-889: the doc tools of the spec-45 MCP catalog live with their owner —
+    # registration replaces the mcp pages_bridge feature probe, so disabling this
+    # plugin removes them from catalog + dispatch together.
+    mcp_tools=mcptools.MCP_TOOLS,
 )

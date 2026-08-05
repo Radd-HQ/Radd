@@ -14,7 +14,6 @@ actually built. `StorageBackend` and `TaskBackend` already have real providers.
 from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
 
-from radd.config import settings
 
 from .registry import registries
 

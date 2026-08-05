@@ -22,7 +22,7 @@ from datetime import date, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, ConfigDict, create_model
+from pydantic import ConfigDict, create_model
 from sqlalchemy import (
     JSON,
     Boolean,

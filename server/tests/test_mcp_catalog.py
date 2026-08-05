@@ -17,10 +17,10 @@ from radd.config import settings
 from radd.exceptions import ForbiddenError
 from radd.modules.auth import scopes
 from radd.modules.auth.models import User
-from radd.modules.auth.types import InstanceRole, Permission
+from radd.modules.auth.types import InstanceRole
 from radd.modules.mcp import tools
 from radd.modules.mcp.catalog import build_catalog
-from radd.modules.mcp.requirements import REQUIREMENTS, visible_catalog
+from radd.modules.mcp.requirements import requirement_for, visible_catalog
 from radd.modules.mcp.types import McpTool
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
@@ -77,10 +77,11 @@ async def _names(db, user) -> set[str]:
 
 
 async def test_every_tool_declares_what_it_needs():
-    """Every BUILTIN tool has a REQUIREMENTS row; registry tools carry theirs on
-    the spec (RADD-640), and anything in neither is hidden as a wiring bug."""
+    """Every tool carries its requirement ON its kernel spec (RADD-640/889 — the
+    builtin REQUIREMENTS table is gone), and anything unregistered is hidden as
+    a wiring bug."""
     catalog = build_catalog({}, include_pages=True)
-    assert {tool["name"] for tool in catalog} <= set(REQUIREMENTS)
+    assert all(requirement_for(tool["name"]) is not None for tool in catalog)
 
 
 async def test_admin_sees_the_admin_family(db, project):

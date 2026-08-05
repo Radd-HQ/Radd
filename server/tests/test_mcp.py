@@ -10,19 +10,20 @@ unit test (repo rule: tests only where they earn their keep).
 """
 
 import json
-import types
+from dataclasses import replace
 
 import httpx
 import pytest
 
 from radd.config import settings
 from radd.exceptions import NotFoundError
+from radd.kernel import registries
 from radd.modules.mcp import protocol, tools
 from radd.modules.mcp.protocol import JsonRpcError, JsonRpcRequest, parse_request
 from radd.modules.mcp.router import handle_request
 from radd.modules.mcp.types import (
     MCP_PROTOCOL_VERSION,
-    PAGES_MODULE_PATH,
+    PAGE_TOOLS,
     JsonRpcErrorCode,
     McpMethod,
     McpTool,
@@ -200,7 +201,12 @@ async def test_domain_error_becomes_is_error_result_and_rolls_back(monkeypatch):
     async def boom(session, actor, args):
         raise NotFoundError("item", "TD-9999")
 
-    monkeypatch.setitem(tools._HANDLERS, McpTool.GET_ITEM, boom)
+    # RADD-889: the handlers live on kernel specs now; stub the registered one.
+    monkeypatch.setitem(
+        registries.mcp_tools,
+        McpTool.GET_ITEM.value,
+        replace(registries.mcp_tools[McpTool.GET_ITEM.value], handler=boom),
+    )
     session = StubSession()
     result = await handle_request(
         session,
@@ -220,7 +226,11 @@ async def test_tool_success_is_json_text_content(monkeypatch):
     async def ok(session, actor, args):
         return {"echo": args["key"]}
 
-    monkeypatch.setitem(tools._HANDLERS, McpTool.GET_ITEM, ok)
+    monkeypatch.setitem(
+        registries.mcp_tools,
+        McpTool.GET_ITEM.value,
+        replace(registries.mcp_tools[McpTool.GET_ITEM.value], handler=ok),
+    )
     result = await handle_request(
         StubSession(),
         None,
@@ -269,45 +279,33 @@ def test_catalog_doc_tools_appear_only_when_docs_live():
 
 
 # --- docs feature detection ---
+# RADD-889: pages_bridge (the importlib probe of the pages service) is gone.
+# The doc tools are the pages plugin's OWN McpToolSpec contributions, so
+# availability IS registration: absent/disabled pages plugin -> no specs in the
+# kernel registry -> no doc tools, in catalog and dispatch alike.
 
 
-def test_docs_unavailable_when_module_not_enabled(monkeypatch):
-    monkeypatch.setattr(
-        settings, "modules", tuple(m for m in settings.modules if m != PAGES_MODULE_PATH)
-    )
+def test_docs_unavailable_when_pages_contributes_no_tools(monkeypatch):
+    for tool in PAGE_TOOLS:
+        monkeypatch.delitem(registries.mcp_tools, tool.value, raising=False)
     assert tools.pages_available() is False
 
 
-def test_pages_available_when_service_exposes_functions(monkeypatch):
-    fake = types.ModuleType(f"{PAGES_MODULE_PATH}.service")
-
-    async def get_page(session, page_id, actor):
-        return {"id": str(page_id), "title": "Farm runbook"}
-
-    async def search_pages(session, q, actor, limit=25):
-        return [{"title": "Farm runbook", "q": q}]
-
-    fake.get_page = get_page
-    fake.search_pages = search_pages
-    monkeypatch.setitem(__import__("sys").modules, f"{PAGES_MODULE_PATH}.service", fake)
-    if PAGES_MODULE_PATH not in settings.modules:
-        monkeypatch.setattr(settings, "modules", settings.modules + (PAGES_MODULE_PATH,))
+def test_pages_available_when_the_pages_plugin_is_registered():
+    # conftest loads the full plugin set; the pages manifest carries both specs.
     assert tools.pages_available() is True
 
 
-async def test_doc_handler_binds_by_parameter_name(monkeypatch):
+async def test_doc_handler_calls_the_pages_service(monkeypatch):
     seen = {}
 
-    async def get_page(session, page_id, actor):
+    async def get_page(session, page_id):
         seen["page_id"] = page_id
         return {"title": "Farm runbook"}
 
-    fake = types.ModuleType(f"{PAGES_MODULE_PATH}.service")
-    fake.get_page = get_page
-    fake.search = get_page  # anything callable satisfies detection
-    monkeypatch.setitem(__import__("sys").modules, f"{PAGES_MODULE_PATH}.service", fake)
-    if PAGES_MODULE_PATH not in settings.modules:
-        monkeypatch.setattr(settings, "modules", settings.modules + (PAGES_MODULE_PATH,))
+    from radd.modules.pages import service as pages_service
+
+    monkeypatch.setattr(pages_service, "get_page", get_page)
     page_id = "0d9f2c66-1cd5-4b25-9a90-1b1f4a2f3c11"
     result = await tools.call_tool(
         None, None, McpTool.GET_PAGE.value, {"id": page_id}

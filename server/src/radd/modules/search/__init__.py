@@ -3,6 +3,9 @@ from radd.kernel import RaddPlugin
 from . import dispatcher
 from .router import router
 
+# After the router chain on purpose: mcptools joins the loaded graph (RADD-889).
+from . import mcptools
+
 plugin = RaddPlugin(
     name="search",
     description="Postgres full-text search over items (key/title/description/public "
@@ -12,6 +15,8 @@ plugin = RaddPlugin(
     depends_on=("events", "projects", "auth", "workflow", "items", "comments", "access", "fields", "teams"),
     weak_depends=("ai", "pages"),
     routers=(router,),
+    # RADD-889: find_items (the spec-103 meaning search) lives with its owner.
+    mcp_tools=mcptools.MCP_TOOLS,
     on_startup=(dispatcher.start,),
     on_shutdown=(dispatcher.stop,),
 )

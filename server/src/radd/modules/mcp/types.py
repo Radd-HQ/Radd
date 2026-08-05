@@ -17,10 +17,9 @@ JSONRPC_VERSION = "2.0"
 # Notifications (no `id` member) are acknowledged with HTTP 202 and no body.
 HTTP_ACCEPTED = 202
 
-# tools/call result shaping.
-GET_ITEM_COMMENTS_TAIL = 10  # most-recent comments inlined by get_item
-SEARCH_LIMIT_DEFAULT = 25
-SEARCH_LIMIT_MAX = 100
+# tools/call result shaping (page budgets, comment tails) moved with the tools
+# to their owner modules (RADD-889); the shared clamp lives in
+# `radd.kernel.mcptools`.
 
 
 class JsonRpcErrorCode(IntEnum):
@@ -52,8 +51,10 @@ class McpContentType(StrEnum):
 
 
 class McpTool(StrEnum):
-    """The v1 tool catalog. Doc tools appear only when the pages module is
-    enabled AND exposes the service functions we need (feature-detected)."""
+    """The v1 tool catalog's wire NAMES. Since RADD-889 each tool is a kernel
+    `McpToolSpec` contributed by its owner module; this enum stays as the
+    stable name vocabulary + the catalog's builtin/plugin split (see
+    catalog.CATALOG_ORDER). Doc tools ride the pages plugin's registration."""
 
     SEARCH_ITEMS = "search_items"
     FIND_ITEMS = "find_items"  # text/meaning search (hybrid FTS+vector, spec 103)
@@ -82,11 +83,8 @@ class McpTool(StrEnum):
     CREATE_SERVICE_ACCOUNT = "create_service_account"
 
 
-# The doc tools ride the pages module (spec 43), which may be absent or a stub.
-WORKLOG_WINDOW_DAYS = 30  # spec 114: list_worklogs default window
-
+# The doc tools ride the pages plugin (spec 43), which may be absent or disabled.
 PAGE_TOOLS = frozenset({McpTool.GET_PAGE, McpTool.SEARCH_PAGES})
-PAGES_MODULE_PATH = "radd.modules.pages"
 
 
 #: Same headers the AI streams use: no buffering anywhere between here and the

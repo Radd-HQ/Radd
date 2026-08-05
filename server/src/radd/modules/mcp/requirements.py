@@ -7,13 +7,15 @@ they hold it. A tool with nowhere to run does not appear, and a tool that does
 carries an ENUM of the projects it may run in — so an agent cannot even name a
 project it may not write to.
 
-Hiding is presentation, not enforcement: every tool still calls `authz.require`,
-and a tool invoked without being listed fails exactly as it always did.
+Hiding is presentation, not enforcement: every tool still calls `authz.require`
+(in its handler's service seam, or — for kernel-enforced plugin tools — in the
+dispatcher), and a tool invoked without being listed fails exactly as it always
+did.
 
-Plugin-contributed tools (RADD-640) carry their requirement ON the spec, so the
-registry path is annotated by construction — which is what let the old
-show-unannotated-tools fallback become a hide-and-log: a tool in neither
-REQUIREMENTS nor the kernel registry is a wiring bug, not a contribution.
+Since RADD-889 every tool — builtin and plugin alike — carries its requirement
+ON its kernel `McpToolSpec` (the spec IS the annotation, RADD-640), so the
+whole surface is annotated by construction: a tool absent from the registry is
+a wiring bug, not a contribution, and is hidden.
 """
 
 import logging
@@ -31,8 +33,6 @@ from radd.modules.auth.types import Permission
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 
-from .types import McpTool
-
 logger = logging.getLogger(__name__)
 
 
@@ -48,60 +48,10 @@ class ToolRequirement:
     project_param: str | None = None
 
 
-REQUIREMENTS: dict[str, ToolRequirement] = {
-    # "What can I see" — item.read SOMEWHERE, exactly the handler's gate (RADD-672).
-    McpTool.LIST_PROJECTS.value: ToolRequirement(Permission.ITEM_READ, project_scoped=True),
-    McpTool.SEARCH_ITEMS.value: ToolRequirement(Permission.ITEM_READ, project_scoped=True),
-    McpTool.FIND_ITEMS.value: ToolRequirement(Permission.ITEM_READ, project_scoped=True),
-    McpTool.GET_ITEM.value: ToolRequirement(Permission.ITEM_READ, project_scoped=True),
-    McpTool.CREATE_ITEM.value: ToolRequirement(
-        Permission.ITEM_CREATE, project_scoped=True, project_param="project_key"
-    ),
-    McpTool.UPDATE_ITEM.value: ToolRequirement(Permission.ITEM_UPDATE, project_scoped=True),
-    McpTool.COMMENT_ITEM.value: ToolRequirement(Permission.COMMENT_WRITE, project_scoped=True),
-    # RADD-739: the same atom `items/service/links.py` already requires on the
-    # SOURCE item's project, so enforcement is inherited rather than re-derived.
-    McpTool.LINK_ITEMS.value: ToolRequirement(Permission.ITEM_UPDATE, project_scoped=True),
-    McpTool.UNLINK_ITEMS.value: ToolRequirement(Permission.ITEM_UPDATE, project_scoped=True),
-    McpTool.GET_PAGE.value: ToolRequirement(Permission.PAGE_READ),
-    McpTool.SEARCH_PAGES.value: ToolRequirement(Permission.PAGE_READ),
-    # --- spec 114 families ---
-    McpTool.GET_ALLOWED_TRANSITIONS.value: ToolRequirement(
-        Permission.ITEM_READ, project_scoped=True
-    ),
-    McpTool.TRANSITION_ITEM.value: ToolRequirement(Permission.ITEM_UPDATE, project_scoped=True),
-    McpTool.LOG_WORK.value: ToolRequirement(Permission.WORKLOG_WRITE, project_scoped=True),
-    McpTool.LIST_WORKLOGS.value: ToolRequirement(Permission.WORKLOG_WRITE, project_scoped=True),
-    # RADD-741: worklog.write is the CATALOG floor — anyone who may log time may
-    # correct their own entry. Editing someone else's still needs project.manage
-    # and deleting still needs worklog.delete, enforced per row by
-    # `timelogging.service.authorize_mutation`, which the REST router also uses.
-    McpTool.UPDATE_WORKLOG.value: ToolRequirement(Permission.WORKLOG_WRITE, project_scoped=True),
-    McpTool.DELETE_WORKLOG.value: ToolRequirement(Permission.WORKLOG_WRITE, project_scoped=True),
-    McpTool.LIST_RELEASES.value: ToolRequirement(
-        Permission.ITEM_READ, project_scoped=True, project_param="project_key"
-    ),
-    McpTool.CREATE_RELEASE.value: ToolRequirement(
-        Permission.RELEASE_CREATE, project_scoped=True, project_param="project_key"
-    ),
-    # Same atom as POST /releases/{id}/sweep (spec 112).
-    McpTool.SWEEP_RELEASE.value: ToolRequirement(
-        Permission.RELEASE_UPDATE, project_scoped=True, project_param="project_key"
-    ),
-    McpTool.SET_ITEM_RELEASE.value: ToolRequirement(Permission.ITEM_UPDATE, project_scoped=True),
-    McpTool.LIST_USERS.value: ToolRequirement(Permission.USER_MANAGE),
-    McpTool.LIST_SERVICE_ACCOUNTS.value: ToolRequirement(Permission.GLOBAL_MANAGE),
-    McpTool.CREATE_SERVICE_ACCOUNT.value: ToolRequirement(Permission.SERVICE_ACCOUNT_CREATE),
-}
-
-
 def requirement_for(name: str) -> ToolRequirement | None:
-    """The requirement for a tool by name: the builtin table first, else the
-    kernel registry (a plugin's spec IS its annotation, RADD-640). None means
-    the name is in neither — a wiring bug the caller should treat as hidden."""
-    builtin = REQUIREMENTS.get(name)
-    if builtin is not None:
-        return builtin
+    """The requirement for a tool by name, read off its registered spec (the
+    spec IS its annotation, RADD-640/889). None means the name is unregistered
+    — a wiring bug the caller should treat as hidden."""
     from radd.kernel import registries  # deferred: keep the kernel import lazy
 
     spec = registries.mcp_tools.get(name)
@@ -165,10 +115,10 @@ async def visible_catalog(
     for tool in catalog:
         requirement = requirement_for(tool["name"])
         if requirement is None:
-            # In neither the builtin table nor the kernel registry: a wiring bug.
-            # Since RADD-640 every legitimate tool is annotated by construction,
-            # so hide it — advertising a tool whose requirement nobody can state
-            # is how an unfiltered tool would slip out.
+            # Not in the kernel registry: a wiring bug. Since RADD-640 every
+            # legitimate tool is annotated by construction, so hide it —
+            # advertising a tool whose requirement nobody can state is how an
+            # unfiltered tool would slip out.
             logger.warning("mcp tool %r has no requirement; hiding it", tool["name"])
             continue
         if requirement.permission is None:
