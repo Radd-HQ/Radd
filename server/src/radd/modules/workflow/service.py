@@ -62,6 +62,10 @@ async def update_state(
         state.name = data.name
     if data.position is not None:
         state.position = data.position
+    if data.category is not None:
+        # RADD-853: re-categorising re-classifies the state's items for every
+        # category consumer from now on — the admin's call, like renaming.
+        state.category = data.category.value
     if "group_id" in data.model_fields_set:
         # RADD-852: null LEAVES the group (absent = untouched). Validate the
         # target exists so a stale picker 404s instead of writing a dangle.
@@ -74,7 +78,12 @@ async def update_state(
 
 
 async def delete_state(
-    session: AsyncSession, state_id: uuid.UUID, actor_id: uuid.UUID | None = None
+    session: AsyncSession,
+    state_id: uuid.UUID,
+    actor_id: uuid.UUID | None = None,
+    *,
+    reassign_to: uuid.UUID | None = None,
+    actor=None,
 ) -> None:
     """Delete a workflow state (spec 87 — the state.delete atom had no endpoint).
 
@@ -94,6 +103,19 @@ async def delete_state(
     # function, never by reading the items tables.
     from radd.modules.items import service as items_service
 
+    if reassign_to is not None:
+        # RADD-853 (the spec-89 delete-with-successor precedent): items move
+        # to the named successor first, through the items seam that emits per
+        # item. Same project only; the state itself is not a successor.
+        successor = await get_state(session, reassign_to)
+        if successor.id == state.id:
+            raise ConflictError(StateEntity.STATE, reason="a state cannot be its own successor")
+        if successor.project_id != state.project_id:
+            raise ConflictError(
+                StateEntity.STATE, reason="the successor must belong to the same project"
+            )
+        if actor is not None:
+            await items_service.reassign_state(session, state.id, successor.id, actor)
     in_use = await items_service.count_items_in_state(session, state_id)
     if in_use:
         raise ConflictError(

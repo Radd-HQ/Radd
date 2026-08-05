@@ -69,13 +69,18 @@ async def update_state(
 
 
 @router.delete("/{state_id}", status_code=204)
-async def delete_state(state_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
+async def delete_state(
+    state_id: uuid.UUID,
+    session: Session,
+    user: CurrentUser,
+    reassign_to: uuid.UUID | None = None,
+) -> None:
     """Delete a workflow state (spec 87). 409 while it is the project default or
     any item still sits in it."""
     state = await service.get_state(session, state_id)
     project = await projects_service.get_project(session, state.project_id)
     await authz.require(session, user, authz.Permission.STATE_DELETE, project=project)
-    await service.delete_state(session, state_id, actor_id=user.id)
+    await service.delete_state(session, state_id, actor_id=user.id, reassign_to=reassign_to, actor=user)
 
 
 # --- state groups (RADD-852) — instance-wide presentation tier ----------------

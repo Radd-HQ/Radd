@@ -16,6 +16,9 @@ class StateCreate(BaseModel):
 
 class StateUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=100)
+    # RADD-853: editable — re-classifies the state's items for every category
+    # consumer from that moment on (the admin's call, like renaming).
+    category: StateCategory | None = None
     position: int | None = None
     # RADD-852: tri-state — absent = untouched, null = leave the group.
     # Distinguished via model_fields_set in the service.

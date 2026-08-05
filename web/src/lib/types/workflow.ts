@@ -36,6 +36,8 @@ export interface StateCreate {
 /** PATCH /states/{id} — rename / reposition. */
 export interface StateUpdate {
   name?: string;
+  /** RADD-853: re-classifies the state's items from that moment on. */
+  category?: StateCategoryValue;
   position?: number;
   /** RADD-852: null leaves the group; absent = untouched. */
   group_id?: string | null;

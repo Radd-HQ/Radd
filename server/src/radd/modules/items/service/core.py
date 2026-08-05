@@ -249,6 +249,35 @@ async def update_item(
     )
 
 
+async def reassign_state(
+    session: AsyncSession, from_state_id: uuid.UUID, to_state_id: uuid.UUID, actor: User
+) -> int:
+    """Every item in `from_state` moves to `to_state` — the state-DELETION
+    repair (RADD-853, the spec-89 delete-with-successor precedent). Authorized
+    by the CALLER's state.delete gate, not per-item item.update, and it
+    deliberately BYPASSES transition guards: a guard refusing half the items
+    would strand the deletion mid-way, and the successor is explicit. Emits an
+    ordinary item.updated per item (with a before snapshot), so history,
+    watchers, search and reports see the move honestly. Returns the count."""
+    result = await session.execute(select(WorkItem).where(WorkItem.state_id == from_state_id))
+    items = list(result.scalars())
+    if not items:
+        return 0
+    project = await projects_service.get_project(session, items[0].project_id)
+    permissions = await authz.effective_permissions(session, actor, project=project)
+    definitions = await fields.definitions_for_project(session, project)
+    ctx = await _field_ctx(session, actor, project, permissions, definitions)
+    for item in items:
+        before = await _hydrate_one(session, item, project, actor, permissions)
+        item.state_id = to_state_id
+        await session.flush()
+        await _finish(
+            session, item, project, ItemEvent.UPDATED, actor, ctx, definitions, permissions,
+            before=before,
+        )
+    return len(items)
+
+
 async def set_archived(
     session: AsyncSession, item_id: uuid.UUID, archived: bool, actor: User
 ) -> ItemRead:

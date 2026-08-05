@@ -20,7 +20,7 @@ from radd.modules import workflow as _workflow  # noqa: F401  (project.created h
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.workflow import service as workflow
-from radd.modules.workflow.schemas import StateGroupCreate, StateGroupUpdate, StateUpdate
+from radd.modules.workflow.schemas import StateCreate, StateGroupCreate, StateGroupUpdate, StateUpdate
 
 
 @pytest.fixture
@@ -88,3 +88,67 @@ def test_view_axis_accepts_the_token():
     assert view.group_by == "state_group"
     with pytest.raises(ValidationError):
         ViewCreate(name="g", view_type=ViewType.BOARD, group_by="state_flavour")
+
+
+async def test_category_change_and_delete_with_successor(db):
+    """RADD-853: the category is editable in place, and deletion takes a
+    successor that inherits the state's items with per-item history."""
+    import uuid as _uuid
+
+    from radd.modules.auth.models import User
+    from radd.modules.items import service as items_service
+    from radd.modules.items.schemas import ItemCreate
+    from radd.modules.workflow.types import StateCategory
+
+    run = _uuid.uuid4().hex[:4].upper()
+    admin = User(
+        email=f"sd-{_uuid.uuid4().hex[:8]}@example.com", name="SD", instance_role="admin"
+    )
+    db.add(admin)
+    await db.flush()
+    project = await projects_service.create_project(
+        db, ProjectCreate(key=f"SD{run}", name="Del")
+    )
+    doomed = await workflow.create_state(
+        db, StateCreate(project_id=project.id, name=f"Doomed {run}", category=StateCategory.TODO)
+    )
+    # category editable in place
+    changed = await workflow.update_state(
+        db, doomed.id, StateUpdate(category=StateCategory.IN_PROGRESS)
+    )
+    assert changed.category == StateCategory.IN_PROGRESS.value
+
+    item = await items_service.create_item(
+        db, ItemCreate(project_id=project.id, title="survivor"), admin
+    )
+    moved = await items_service.update_item(
+        db, item.id, __import__("radd.modules.items.schemas", fromlist=["ItemUpdate"]).ItemUpdate(state_id=doomed.id), admin
+    )
+    assert moved.state.id == doomed.id
+
+    states = await workflow.list_states(db, project.id)
+    successor = next(s for s in states if s.is_default)
+    # in-use without a successor still refuses
+    with pytest.raises(ConflictError):
+        await workflow.delete_state(db, doomed.id, actor_id=admin.id)
+    # self and cross-project successors refuse
+    with pytest.raises(ConflictError):
+        await workflow.delete_state(
+            db, doomed.id, actor_id=admin.id, reassign_to=doomed.id, actor=admin
+        )
+    other_project = await projects_service.create_project(
+        db, ProjectCreate(key=f"SE{run}", name="Other")
+    )
+    foreign = (await workflow.list_states(db, other_project.id))[0]
+    with pytest.raises(ConflictError):
+        await workflow.delete_state(
+            db, doomed.id, actor_id=admin.id, reassign_to=foreign.id, actor=admin
+        )
+    # with a legal successor: items move, the state deletes
+    await workflow.delete_state(
+        db, doomed.id, actor_id=admin.id, reassign_to=successor.id, actor=admin
+    )
+    landed = await items_service.get_item(db, item.id, admin)
+    assert landed.state.id == successor.id
+    with pytest.raises(NotFoundError):
+        await workflow.get_state(db, doomed.id)

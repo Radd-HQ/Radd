@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Check, Pencil, Plus, Workflow, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, Pencil, Plus, Trash2, Workflow, X } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { ApiPath, apiStatePath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
@@ -15,7 +15,8 @@ import {
   type StateGroup,
   type StateUpdate,
 } from "../../lib/types";
-import { ApiPath as Api } from "../../lib/constants";
+import { ApiPath as Api, apiStatePath as statePath } from "../../lib/constants";
+import { Modal } from "../../components/Modal";
 import { useCurrentUser } from "../../lib/hooks";
 import { InstanceRole } from "../../lib/types";
 import { Button } from "../../components/Button";
@@ -75,6 +76,7 @@ export function StatesSettingsPage({ projectId }: { projectId?: string }) {
                 projectId={project.id}
                 canManage={canManage}
                 groups={groups.data ?? []}
+                siblings={sorted}
                 neighborUp={index > 0 ? sorted[index - 1] : null}
                 neighborDown={index < sorted.length - 1 ? sorted[index + 1] : null}
               />
@@ -100,6 +102,7 @@ function StateRow({
   projectId,
   canManage,
   groups,
+  siblings,
   neighborUp,
   neighborDown,
 }: {
@@ -107,11 +110,13 @@ function StateRow({
   projectId: string;
   canManage: boolean;
   groups: StateGroup[];
+  siblings: State[];
   neighborUp: State | null;
   neighborDown: State | null;
 }) {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [draft, setDraft] = useState(state.name);
   const category = CATEGORY_META[state.category];
 
@@ -187,7 +192,22 @@ function StateRow({
               </span>
             )}
           </span>
-          <span className="text-xs text-fg-muted">{category.label}</span>
+          {/* RADD-853: the category is editable in place — re-classifies the
+              state's items for every category consumer from now on. */}
+          {canManage ? (
+            <Select
+              value={state.category}
+              onChange={(value) =>
+                rename.mutate({ category: value as StateCategoryValue })
+              }
+              options={CATEGORY_ORDER.map((cat) => ({
+                value: cat,
+                label: CATEGORY_META[cat].label,
+              }))}
+            />
+          ) : (
+            <span className="text-xs text-fg-muted">{category.label}</span>
+          )}
           {/* RADD-852: presentation-group membership — pure vocabulary, so the
               picker changes boards, never reports. */}
           {canManage && groups.length > 0 && (
@@ -236,6 +256,30 @@ function StateRow({
             >
               <Pencil size={13} />
             </button>
+          )}
+          {canManage && (
+            <button
+              type="button"
+              onClick={() => setDeleting(true)}
+              disabled={state.is_default}
+              title={
+                state.is_default
+                  ? "The project's default state — make another state default first"
+                  : `Delete ${state.name}`
+              }
+              aria-label={`Delete ${state.name}`}
+              className="rounded p-1 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer disabled:cursor-default disabled:opacity-30"
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
+          {deleting && (
+            <DeleteStateDialog
+              state={state}
+              projectId={projectId}
+              siblings={siblings}
+              onClose={() => setDeleting(false)}
+            />
           )}
         </>
       )}
@@ -419,5 +463,87 @@ function StateGroupsCard({ groups, canManage }: { groups: StateGroup[]; canManag
         </p>
       )}
     </section>
+  );
+}
+
+
+/** RADD-853: delete a state with a SUCCESSOR for its items — the spec-89
+ * delete-with-a-successor precedent. The dialog names the item count and asks
+ * where they go (defaulting to the project's default state); the move runs
+ * server-side as an admin repair that records ordinary item history. */
+function DeleteStateDialog({
+  state,
+  projectId,
+  siblings,
+  onClose,
+}: {
+  state: State;
+  projectId: string;
+  siblings: State[];
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const others = siblings.filter((s) => s.id !== state.id);
+  const [successor, setSuccessor] = useState(
+    others.find((s) => s.is_default)?.id ?? others[0]?.id ?? "",
+  );
+  const count = useQuery({
+    queryKey: ["state-item-count", state.id] as const,
+    queryFn: () =>
+      api.get<{ total: number }>(Api.itemsCount, {
+        query: { project_id: projectId, state_id: state.id },
+      }),
+  });
+  const remove = useMutation({
+    mutationFn: () =>
+      api.delete(
+        `${statePath(state.id)}?reassign_to=${encodeURIComponent(successor)}`,
+      ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.states(projectId) });
+      onClose();
+    },
+  });
+  const n = count.data?.total;
+
+  return (
+    <Modal title={`Delete "${state.name}"`} onClose={onClose}>
+      <div className="flex flex-col gap-3">
+        <p className="text-[13px] text-fg-secondary">
+          {n === undefined
+            ? "Counting the items in this state…"
+            : n === 0
+              ? "No items are in this state."
+              : `${n} item${n === 1 ? "" : "s"} in this state will move to:`}
+        </p>
+        {(n === undefined || n > 0) && (
+          <Select
+            value={successor}
+            onChange={setSuccessor}
+            options={others.map((s) => ({
+              value: s.id,
+              label: `${s.name}${s.is_default ? " (default)" : ""}`,
+            }))}
+          />
+        )}
+        <p className="text-xs text-fg-muted">
+          The move is recorded in each item&apos;s history. Transitions referencing this
+          state are removed with it.
+        </p>
+        {remove.isError && <p className="text-xs text-red-400">{errorMessage(remove.error)}</p>}
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() => remove.mutate()}
+            disabled={remove.isPending || (others.length === 0 && (n ?? 1) > 0)}
+            className="text-red-400"
+          >
+            {remove.isPending ? "Deleting…" : "Delete state"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
