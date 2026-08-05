@@ -5,6 +5,12 @@ response bytes are sent. A client that reads its response and immediately issues
 dependent request can therefore miss the write (found in the wild by the Jira importer).
 Buffering the send until the inner app — including that teardown — finishes closes the
 race. Non-http scopes (websockets, lifespan) pass through untouched.
+
+Two response shapes bypass the buffer (RADD-877): event streams (buffering defeats
+them) and file deliveries (buffering holds the entire artifact in RAM — a multi-GB
+backup download accumulated in a Python list before the first byte left). Both are
+recognized from the response-start headers, and neither is ever the JSON API answer
+the commit race involves: a download commits nothing a follow-up request depends on.
 """
 
 from collections.abc import Awaitable, Callable
@@ -17,6 +23,17 @@ ASGIApp = Callable[[Any, Receive, Send], Awaitable[None]]
 
 
 _EVENT_STREAM = b"text/event-stream"
+
+
+def _flush_through(message: Message) -> bool:
+    """True for responses that must stream instead of buffer: SSE (spec 103) and
+    anything carrying Content-Disposition — every file-serving path (backup
+    download, attachment proxy/thumbnail, page PDF) sets one, and no JSON API
+    response does."""
+    headers = dict(message.get("headers") or ())
+    if headers.get(b"content-type", b"").startswith(_EVENT_STREAM):
+        return True
+    return b"content-disposition" in headers
 
 
 class CommitBeforeSendMiddleware:
@@ -36,18 +53,11 @@ class CommitBeforeSendMiddleware:
                 await send(message)
                 return
             buffered.append(message)
-            # SSE responses (spec 103 editor streaming) must NOT be held back —
-            # buffering a stream until the app finishes defeats it entirely. The
-            # commit race this middleware closes doesn't apply: a stream commits
-            # nothing a follow-up request depends on. Flush and pass through the
-            # moment an event-stream response starts.
-            if message["type"] == "http.response.start":
-                headers = dict(message.get("headers") or ())
-                if headers.get(b"content-type", b"").startswith(_EVENT_STREAM):
-                    streaming = True
-                    for held in buffered:
-                        await send(held)
-                    buffered.clear()
+            if message["type"] == "http.response.start" and _flush_through(message):
+                streaming = True
+                for held in buffered:
+                    await send(held)
+                buffered.clear()
 
         await self.app(scope, receive, buffer)
         for message in buffered:
