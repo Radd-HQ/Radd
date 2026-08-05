@@ -297,6 +297,23 @@ async def replace_members(
         from radd.modules.teams import service as teams  # deferred: teams loads after groups
 
         teams.forget_user_teams(session)
+        # Every membership write funnels through here (periodic reconcile,
+        # login join/leave, import), so this is the one honest place the
+        # registered `group.synced` trigger can fire — and only on actual
+        # change, never as a no-op heartbeat (RADD-874).
+        await events.emit(
+            session,
+            event_type=GroupEvent.SYNCED,
+            entity_type=GroupEntity.GROUP,
+            entity_id=group.id,
+            actor_id=None,
+            payload={
+                "dn": group.dn,
+                "name": group.name,
+                "added": len(adds),
+                "removed": len(removes),
+            },
+        )
     return len(adds), len(removes)
 
 
