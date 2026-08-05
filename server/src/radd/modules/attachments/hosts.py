@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
 from radd.db import SessionLocal
+from radd.snapshot import Snapshot
 from radd.exceptions import ConflictError, NotFoundError
 
 from .models import Attachment, StorageHost
@@ -241,22 +242,36 @@ async def _count(session: AsyncSession) -> int:
 
 # --- capability snapshot ------------------------------------------------------
 
-# CapabilitySpec.check is sync; this mirrors the ai registry's role snapshot.
-_default_snapshot: dict[str, str] = {}
+# CapabilitySpec.check is sync; this mirrors the ai registry's role snapshot —
+# write-through + TTL'd (RADD-899) so extra web replicas converge.
+
+
+def _default_of(host: "StorageHost | None") -> dict[str, str]:
+    if host is None:
+        return {}
+    return {"type": host.host_type, "name": host.name, "root_dir": host.root_dir}
+
+
+async def _load_default_snapshot() -> dict[str, str]:
+    from radd.db import SessionLocal
+
+    async with SessionLocal() as session:
+        result = await session.execute(select(StorageHost).where(StorageHost.is_default))
+        return _default_of(result.scalar_one_or_none())
+
+
+_default_snapshot: Snapshot[dict[str, str]] = Snapshot(
+    "attachments.default-host", _load_default_snapshot, initial={}
+)
 
 
 def default_snapshot() -> dict[str, str]:
-    return dict(_default_snapshot)
+    return dict(_default_snapshot.get())
 
 
 async def refresh_default_snapshot(session: AsyncSession) -> None:
     result = await session.execute(select(StorageHost).where(StorageHost.is_default))
-    host = result.scalar_one_or_none()
-    _default_snapshot.clear()
-    if host is not None:
-        _default_snapshot.update(
-            {"type": host.host_type, "name": host.name, "root_dir": host.root_dir}
-        )
+    _default_snapshot.set(_default_of(result.scalar_one_or_none()))
 
 
 # --- env seeding (startup) ----------------------------------------------------

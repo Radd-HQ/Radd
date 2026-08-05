@@ -25,15 +25,35 @@ from .models import (
 from .schemas import SsoProviderCreate, SsoProviderUpdate, SsoProvisioningRule as RuleSpec
 from .types import KIND_DEFAULTS, WILDCARD_DOMAIN, SsoEntity, SsoKind, SsoProviderSource
 
+from radd.snapshot import Snapshot
+
 logger = logging.getLogger(__name__)
 
 # [(id, name, kind)] for every ENABLED, fully-configured provider — what the
-# login page renders buttons from. Refreshed on write + at startup.
-_snapshot: list[dict] = []
+# login page renders buttons from. Write-through on admin edits + startup, and
+# TTL'd (RADD-899) so a second web replica converges without a restart.
+
+
+async def _load_snapshot() -> list[dict]:
+    from radd.db import SessionLocal
+
+    async with SessionLocal() as session:
+        return _snapshot_rows(await list_providers(session))
+
+
+def _snapshot_rows(rows) -> list[dict]:
+    return [
+        {"id": str(p.id), "name": p.name, "kind": p.kind}
+        for p in rows
+        if p.enabled and configured(p)
+    ]
+
+
+_snapshot: Snapshot[list[dict]] = Snapshot("sso.providers", _load_snapshot, initial=[])
 
 
 def snapshot() -> list[dict]:
-    return list(_snapshot)
+    return list(_snapshot.get())
 
 
 def configured(provider: SsoProvider) -> bool:
@@ -50,13 +70,7 @@ def scopes_of(provider: SsoProvider) -> str:
 
 
 async def refresh_snapshot(session: AsyncSession) -> None:
-    global _snapshot
-    rows = await list_providers(session)
-    _snapshot = [
-        {"id": str(p.id), "name": p.name, "kind": p.kind}
-        for p in rows
-        if p.enabled and configured(p)
-    ]
+    _snapshot.set(_snapshot_rows(await list_providers(session)))
 
 
 # --- CRUD ---------------------------------------------------------------------

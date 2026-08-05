@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
 from radd.db import SessionLocal
+from radd.snapshot import Snapshot
 from radd.exceptions import ConflictError, NotFoundError
 
 from .models import AiModelRole, AiPresetPrompt, AiProviderRow
@@ -291,25 +292,35 @@ async def delete_preset(session: AsyncSession, preset_id: uuid.UUID) -> None:
 # --- capability snapshot ------------------------------------------------------
 
 # CapabilitySpec.check is sync; it cannot query. This process-local snapshot of
-# {role: {"provider": name, "model": model}} is refreshed at startup and after
-# every admin write. A web-process write doesn't reach the worker's snapshot
-# until restart — harmless: the worker never serves /capabilities, and all real
-# work paths resolve from the DB.
-_role_snapshot: dict[str, dict[str, str]] = {}
+# {role: {"provider": name, "model": model}} is write-through on admin edits +
+# startup and TTL'd (RADD-899), so a second web replica converges within
+# settings.snapshot_ttl_seconds instead of at its next restart. Real work paths
+# still resolve from the DB.
+
+
+def _roles_of(pairs) -> dict[str, dict[str, str]]:
+    return {
+        row.role: {"provider": provider.name, "model": row.model or provider.default_model}
+        for row, provider in pairs
+    }
+
+
+async def _load_role_snapshot() -> dict[str, dict[str, str]]:
+    async with SessionLocal() as session:
+        return _roles_of(await list_roles(session))
+
+
+_role_snapshot: Snapshot[dict[str, dict[str, str]]] = Snapshot(
+    "ai.roles", _load_role_snapshot, initial={}
+)
 
 
 def role_snapshot() -> dict[str, dict[str, str]]:
-    return dict(_role_snapshot)
+    return dict(_role_snapshot.get())
 
 
 async def refresh_snapshot(session: AsyncSession) -> None:
-    pairs = await list_roles(session)
-    _role_snapshot.clear()
-    for row, provider in pairs:
-        _role_snapshot[row.role] = {
-            "provider": provider.name,
-            "model": row.model or provider.default_model,
-        }
+    _role_snapshot.set(_roles_of(await list_roles(session)))
 
 
 # --- env seeding (startup) ----------------------------------------------------

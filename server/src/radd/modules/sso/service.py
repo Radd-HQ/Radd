@@ -44,7 +44,11 @@ logger = logging.getLogger(__name__)
 
 # Per-provider caches — an instance runs several issuers now, so a single
 # module-level cache would have served Google's metadata for Okta's flow.
-_metadata_cache: dict[uuid.UUID, dict] = {}
+# Metadata entries carry a fetch time and expire (RADD-899): an IdP that moves
+# its endpoints used to keep failing until a Radd restart. Key rotation was
+# never the problem — PyJWKClient refreshes keys itself.
+METADATA_TTL_SECONDS = 3600.0
+_metadata_cache: dict[uuid.UUID, tuple[float, dict]] = {}
 _jwks_clients: dict[uuid.UUID, PyJWKClient] = {}
 
 
@@ -64,16 +68,17 @@ def invalidate_caches(provider_id: uuid.UUID | None = None) -> None:
 
 
 async def metadata(provider: SsoProvider) -> dict:
-    """Issuer discovery document, cached per provider for the process lifetime."""
+    """Issuer discovery document, cached per provider with a TTL (RADD-899)."""
     cached = _metadata_cache.get(provider.id)
-    if cached is None:
-        url = registry.issuer_of(provider).rstrip("/") + "/.well-known/openid-configuration"
-        async with httpx.AsyncClient(timeout=10) as client:
-            response = await client.get(url)
-            response.raise_for_status()
-            cached = response.json()
-        _metadata_cache[provider.id] = cached
-    return cached
+    if cached is not None and time.monotonic() - cached[0] < METADATA_TTL_SECONDS:
+        return cached[1]
+    url = registry.issuer_of(provider).rstrip("/") + "/.well-known/openid-configuration"
+    async with httpx.AsyncClient(timeout=10) as client:
+        response = await client.get(url)
+        response.raise_for_status()
+        document = response.json()
+    _metadata_cache[provider.id] = (time.monotonic(), document)
+    return document
 
 
 def _jwks(provider: SsoProvider, jwks_uri: str) -> PyJWKClient:

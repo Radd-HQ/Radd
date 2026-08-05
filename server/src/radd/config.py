@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     session_ttl_hours: int = 720
     session_cookie_secure: bool = False  # enable behind HTTPS
     token_last_used_throttle_seconds: int = 60  # min interval between PAT last_used_at writes
+    # Staleness bound for module-level snapshots (RADD-899) — capability pills,
+    # login-page provider buttons, the default-storage-host mirror. A second web
+    # replica converges within this window instead of "until restart".
+    snapshot_ttl_seconds: float = 30.0
 
     # Worker split (spec 48): false = this process serves web only; the
     # background loops (webhooks/automations/notify/search/sla/googlechat/mail)
