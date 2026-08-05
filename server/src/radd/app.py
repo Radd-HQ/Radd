@@ -80,6 +80,14 @@ def create_app() -> FastAPI:
                 await hook()
 
     app = FastAPI(title=settings.api_title, version=__version__, lifespan=lifespan)
+
+    @app.get("/health", include_in_schema=False)
+    async def health() -> dict[str, str]:
+        # Unprefixed liveness probe (RADD-870): CLAUDE.md and the helm chart
+        # assumed this endpoint for two waves before anything registered it —
+        # GET /health fell through to the SPA catch-all and answered index.html.
+        return {"status": "ok", "version": __version__}
+
     app.add_middleware(CommitBeforeSendMiddleware)
     # Resolves the client IP (trusted-proxy XFF walk) into request.state.client_ip.
     app.add_middleware(ClientIpMiddleware)

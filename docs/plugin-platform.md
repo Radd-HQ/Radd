@@ -1,7 +1,10 @@
 # Radd Plugin Platform — architecture & plan
 
-**Status:** design. This document is the reference for turning Radd from a
-*modular monolith with 45 in-repo modules* into a **kernel + plugins** platform where even
+**Status: design document, partially superseded.** The kernel (spec 93), the frontend
+plugin platform (spec 94), scoped keys (spec 113) and the MCP tool registry (spec 114) are
+**BUILT** — §-references to "today" below describe the pre-93 codebase. This document is
+the reference for turning Radd from a
+*modular monolith with ~54 in-repo modules* into a **kernel + plugins** platform where even
 builtin features are plugins, third-party developers can ship full featuresets (filesystem
 management, S3 storage, attachment filtering, Celery-backed automation workers, disk-package
 managers…), and everything a plugin exposes — endpoints, events, actions, tables, settings,
@@ -151,8 +154,9 @@ The event *data plane* is already a plugin architecture; the exploration confirm
   resource-specific code. **Every registry in §4 is this pattern, generalized.**
 - Disabling a module already means "fully gone" (drop it from the module list → tables never
   migrate, routers never mount, loops never start).
-- **`attachments/storage.py` already abstracts filesystem vs S3** — the "S3 as a plugin" ask is a
-  *formalization* of an abstraction that exists, not a greenfield build.
+- **`attachments/clients.py` + `attachments/hosts.py` abstract filesystem vs S3** (spec 102
+  rebuilt the old single-backend `attachments/storage.py` into multi-host `storage_hosts` rows) —
+  the "S3 as a plugin" ask is a *formalization* of an abstraction that exists, not a greenfield build.
 
 ## 3. The three backwards dependencies to invert (the actual problem)
 
@@ -161,7 +165,7 @@ registry the machinery iterates blind:
 
 | # | Backwards dependency today | Inversion |
 |---|---|---|
-| 1 | `automations/catalog.py` hardcodes `_SPECS` importing **21 modules' event enums** | Automations derives its trigger list from the kernel **event-type registry** (entity CRUD events auto-registered; custom events registered by the plugin via the events module) — no hardcoded catalog. Webhooks already work off the same stream. |
+| 1 | `automations/catalog.py` hardcoded `_SPECS` importing **21 modules' event enums** *(inverted — `TRIGGERS` now derives from `kernel.registries` live)* | Automations derives its trigger list from the kernel **event-type registry** (entity CRUD events auto-registered; custom events registered by the plugin via the events module) — no hardcoded catalog. Webhooks already work off the same stream. |
 | 2 | `projects` module computes every provider's `enabled()` **inline** for `/instance/status` | Each plugin **contributes a capability/status descriptor**; a `/capabilities` endpoint aggregates. |
 | 3 | Frontend `SETTINGS_NAV` / routes / sidebar are **hand-authored arrays** | The SPA renders nav/settings/routes **from a manifest** the backend assembles from plugin contributions (§8). |
 
@@ -342,8 +346,10 @@ action, and a service-desk plugin all consume the same permission-scoped SDK.
 
 ## 8. The frontend — the genuinely hard half
 
-The SPA has **no** plugin seam today (hardcoded route tree, sidebar JSX, two `SETTINGS_NAV` arrays,
-no capabilities endpoint). Backend plugins are useless if their UI can't appear. Two layers:
+*(Built in specs 93/94: the SPA now has the federation seam and `GET /capabilities` exists —
+`modules/capabilities/`, `docs/plugin-ui.md`.)* The SPA had **no** plugin seam (hardcoded route
+tree, sidebar JSX, two `SETTINGS_NAV` arrays, no capabilities endpoint). Backend plugins are
+useless if their UI can't appear. Two layers:
 
 **8a. A backend-assembled UI manifest + `/capabilities`.** One endpoint returns: enabled plugins,
 their nav items, settings sections, routes, widget slots, and capability/status flags — replacing
@@ -390,7 +396,7 @@ between "public API" and "internals" — plugins reach into `service.py` functio
 
 ---
 
-## 10. Lifecycle & the plugin manager
+## 10. Lifecycle & the plugin manager *(shipped — `modules/pluginmgr/`)*
 
 The kernel gains a **plugin manager** (service + admin UI) with a real lifecycle, replacing "edit
 `RADD_MODULES` and restart":

@@ -28,9 +28,6 @@ cd server && uv run pytest -q            # the suite builds its own throwaway da
 cd web && ./node_modules/.bin/tsc -b && ./node_modules/.bin/vite build
 ```
 
-`test_merge_coverage` currently flags `view_members.added_by`; that failure is
-known and not yours.
-
 **Building is not verifying.** A clean `tsc` proves nothing about whether a UI
 change renders correctly — `web/scripts/render-proof.mjs` shows the zero-dep
 pattern for driving headless Chromium and measuring the result. Several bugs

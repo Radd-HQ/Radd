@@ -12,7 +12,10 @@ podman compose exec app python -m radd.seed --email you@example.com --password �
 ```
 
 Attachments live on the `radd-data` volume (`RADD_ATTACHMENTS_DIR=/data/attachments`)
-unless you point `RADD_ATTACHMENT_STORAGE=s3` at an S3/MinIO bucket.
+by default. The `RADD_ATTACHMENT_STORAGE*` env settings only SEED the FIRST
+storage-host row on first boot (spec 102) — afterwards Settings → Storage owns
+storage entirely (multiple hosts, routing, delivery; Garage is the blessed
+S3-compatible server, MinIO CE is archived — see "Multi-host storage" below).
 
 **Behind a reverse proxy / ingress, set `RADD_TRUSTED_PROXIES`** to the proxy's
 IPs or CIDRs (comma-separated, e.g. `10.42.0.0/16`). Radd only honors
@@ -59,7 +62,7 @@ startup, no re-migration.
 `radd[localembed]` extra (fastembed: ONNX on CPU, no GPU/torch). In Settings →
 AI add a provider with wire shape **Built-in (CPU embeddings)** and assign it
 the embeddings role — done. Weights (~30–130 MB) download from Hugging Face on
-first use into `RADD_LOCAL_EMBED_CACHE` (default `var/models`); **pre-seed
+first use into `RADD_AI_LOCAL_EMBED_CACHE` (default `var/models`); **pre-seed
 that directory on air-gapped deploys**. Default model `BAAI/bge-small-en-v1.5`
 (384d); `GET /ai/local-embed` lists alternatives (multilingual included). The
 built-in backend is the zero-infra FALLBACK tier — ~20 texts/s on a desktop

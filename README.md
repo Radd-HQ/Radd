@@ -39,7 +39,7 @@ Import the Jira sample data — issues keep their **real Jira IDs 1:1** (interna
 
 ```bash
 uv run python scripts/import_jira.py --file scripts/sample_data/jira_sample.json \
-  --email you@example.com --password change-me --workspace main
+  --email you@example.com --password change-me
 ```
 
 Frontend development (requires npm): `cd web && npm install && npm run dev` → http://localhost:5173

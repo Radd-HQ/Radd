@@ -205,7 +205,9 @@ Teams are first-class workspace entities (name, members). Work items carry both 
 
 ## 8. Status & roadmap (updated)
 
-The original M0–M5 milestone plan was overtaken by fast iteration: the **tracker is built well past the "prototype,"** while several later pillars (SSO, wiki, extensions, AI) are still untouched. This section is the authoritative status; `docs/modules.md` is the per-module detail and the "Known simplifications" list.
+*(historical snapshot — for current state see git tags + docs/modules.md; kept as the running build log)*
+
+The original M0–M5 milestone plan was overtaken by fast iteration: the **tracker is built well past the "prototype,"** and the later pillars (SSO, wiki, extensions, AI) have all since landed (specs 40–48). `docs/modules.md` is the per-module detail and the "Known simplifications" list.
 
 ### ✅ Built and live (front-to-back, verified; served at `http://localhost:8000`)
 
@@ -217,12 +219,12 @@ The original M0–M5 milestone plan was overtaken by fast iteration: the **track
 - **Roles-as-data**: builtin admin/member/viewer + custom roles with permission sets; **full action RBAC** enforced on every endpoint through one `authz` seam; direct project membership + team-granted project roles.
 - **Field-level read/write permissions** granted to roles *or* teams *(originally a non-goal — now built)*; public/internal **comment visibility** gated by permission.
 - **Issue types (spec 51)**: a first-class per-project **Type** axis (Bug/Task/Story/Feature/Epic, configurable, colored chips) — the classification the tracker was missing, kept orthogonal to the epic/issue/subtask hierarchy. `itemtypes` module + `type_id` on items + SLQ `type` filter; rendered as OtherTracker-style chips on boards/lists/the issue rail; managed under project settings. Plus a **OtherTracker-style settings pass**: value-chips for Type/Priority/State, dismissible info banners on the config editors, and up/down reordering.
-- **Settings scope + RBAC CRUD (spec 50)**: full-CRUD permission model (77 atoms, `create/update/delete` on every resource incl. the missing `item/comment/worklog/doc.delete`; `*.manage` umbrellas expand transitively — backward-compatible); settings split into **instance / workspace / project** surfaces with **scope-gated nav** and per-project settings nested under `/p/$key/settings/*`; a **scalar-settings cascade** (`scoped_settings` — project → workspace → instance → env, first key `work_week_days`); **builtin-field READ grants** (blanked out of item representations); **per-team internal comments** (teams narrow the `comment.read_internal` audience, enforced on list/notify/history/MCP).
+- **Settings scope + RBAC CRUD (spec 50)**: full-CRUD permission model (77 atoms, `create/update/delete` on every resource incl. the missing `item/comment/worklog/doc.delete`; `*.manage` umbrellas expand transitively — backward-compatible); settings split into **instance / project** surfaces (spec 67 later retired the workspace layer) with **scope-gated nav** and per-project settings nested under `/p/$key/settings/*`; a **scalar-settings cascade** (`scoped_settings` — project → instance → env, first key `work_week_days`); **builtin-field READ grants** (blanked out of item representations); **per-team internal comments** (teams narrow the `comment.read_internal` audience, enforced on list/notify/history/MCP).
 
 **Work tracking**
 - Workspaces; projects with **globally-unique keys**; **key-addressed issues** at `/issues/TD-1234` (Jira `browse/` model).
 - Work items: epic/issue/subtask hierarchy, per-project numbering, **custom fields inline everywhere** via the registry, workflow states (fixed categories + custom names), labels, priorities, assignee + team, comments (public/internal), dependency links (blocks/relates/duplicates), start/target dates.
-- **Cycles/sprints** (workspace-level, span projects; **draft/staging cycles** with optional dates — a dateless cycle is a planning bucket, never active), **releases** (project-scoped, automation-writable).
+- **Cycles/sprints** (global since spec 86, span projects; **draft/staging cycles** with optional dates — a dateless cycle is a planning bucket, never active), **releases** (project-scoped, automation-writable).
 - **Saved views** (custom boards/lists) driven by **SLQ** — a JQL-like query language with server-driven **autocomplete** — plus **swimlane boards** on any field axis, and a **Cycle** grouping axis (every cycle a collapsible section with a status/dates/progress summary, an optional name-glob filter, and a Backlog bucket for un-cycled work).
 - **Automations** (event → SLQ-condition → action rules engine), **reporting** (throughput, cumulative flow, burnup, velocity, time-in-state), **intake forms**.
 - **Time logging + timesheets** (spec 22, per-project-optional): item estimate + worklogs (Jira-style durations, configurable work categories, notes), estimate/logged/remaining, and a workspace **timesheet** (day/week/month, filter by team or person, drill into a day/employee/issue).
@@ -231,7 +233,7 @@ The original M0–M5 milestone plan was overtaken by fast iteration: the **track
 - **Notifications + watchers + Inbox** (spec 26): assignment/@mention/state-change/comment fan-out from the outbox, auto-watch, `/inbox` + sidebar badge, SMTP email digests.
 - **Realtime** (spec 27): WebSocket tail of the outbox → entity-level cache invalidation; boards/issues/inbox live-update.
 - **Search + Cmd-K palette** (spec 28): Postgres FTS (key/title/description/public comments) + quick-open/navigation palette.
-- **Attachments + markdown editor** (spec 29): filesystem-backed uploads, paste-to-attach, safe markdown rendering, `@[Name](uuid)` mention autocomplete. WYSIWYG editing is Milkdown/Crepe (spec 54, §11).
+- **Attachments + markdown editor** (spec 29): filesystem-backed uploads, paste-to-attach, safe markdown rendering, `@[Name](uuid)` mention autocomplete. WYSIWYG editing is Milkdown with house-built chrome (spec 54, §11; RADD-745 removed `@milkdown/crepe`).
 - **Service desk** (spec 30): reporter/requester field (SLQ `reporter`), SLA policies + pause-aware timers + exactly-once breach events → notifications, canned responses.
 - **GitLab connector** (spec 31): webhook receiver auto-linking branches/commits/MRs via the vcs seam + optional merge transitions.
 - **"My Work" home + polish** (spec 32): personal landing dashboard (assigned/due-soon/starred/inbox/recently-viewed), saved-view CSV export, `/` palette hotkey.
@@ -291,6 +293,8 @@ while still listed as open):
 **Radd** — ردّ, Arabic for "reply / response." The name *is* the project's reply: to Atlassian and JetBrains, and to everyone who said a self-hosted, un-paywalled alternative was too much work or that there was no other option. Built out of defiance and to give back to open source — the "if you don't like it, build it yourself" answer, made real. Short and clean at the CLI (`radd`). Do a trademark / name-collision check before the public GitHub release; the code makes renaming cheap regardless (the product name lives in one place — the FastAPI title / SPA title — and the package is `radd`).
 
 ## 11. Immediate next steps
+
+*(historical snapshot — for current state see git tags + docs/modules.md; kept as the running build log)*
 
 **All original pillars shipped through spec 48; three more landed** —
 **spec 50** (settings scope + full-CRUD RBAC + scalar-settings cascade + builtin-field

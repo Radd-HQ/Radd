@@ -12,7 +12,7 @@ optional `embeddings` compose service (TEI), which Radd talks to as an ordinary
 OpenAI-shape provider — docs/deploy.md.
 
 Model weights download from Hugging Face on FIRST use into
-RADD_LOCAL_EMBED_CACHE (pre-seed that directory on air-gapped deploys —
+RADD_AI_LOCAL_EMBED_CACHE (pre-seed that directory on air-gapped deploys —
 docs/deploy.md). Loading is seconds-slow, so instances are cached per model
 and inference runs in a worker thread.
 """

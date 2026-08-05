@@ -41,12 +41,12 @@ spec:
           {{- include "radd.envFrom" . | nindent 10 }}
           readinessProbe:
             httpGet:
-              path: /api/v1/instance/login-options
+              path: /health
               port: 8000
             initialDelaySeconds: 3
           livenessProbe:
             httpGet:
-              path: /api/v1/instance/login-options
+              path: /health
               port: 8000
             initialDelaySeconds: 10
             periodSeconds: 30

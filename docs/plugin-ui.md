@@ -45,7 +45,7 @@ All ids are members of `SlotId` in `@radd/plugin-sdk`. `props` are what the host
 | `profileSection` | The user's Profile page | `{}` | per-user prefs; drop `<UserContributionToggles>` here | `routes/settings/profile.tsx` |
 | `pluginManagerSection` | A plugin's row in Settings → Plugins (admin) | `{plugin, pluginId}` | `match` = the plugin's registry name; drop `<GlobalContributionToggles>` here | `routes/settings/plugins.tsx` |
 | `sidebarNav` | Left sidebar nav | `{}` | today driven by the backend nav manifest | `components/shell/Sidebar.tsx` |
-| `dashboardWidget` | A dashboard widget type | `{config, widget}` | `match` = the widget-type key; pair with a `widget_types=` manifest entry | `components/dashboards/WidgetCard.tsx` |
+| `dashboardWidget` | A dashboard widget type | `{config, widget, filterQuery}` | `match` = the widget-type key; pair with a `widget_types=` manifest entry; `filterQuery` = the dashboard-wide SLQ filter (plugin widgets decide how to honor it) | `components/dashboards/WidgetCard.tsx` |
 | `itemAction` | An item's action menu | `{item}` | | *menu host* |
 
 A contribution is `{ id, render, order?, match?, title?, icon?, label?, toggleable? }`. `id` is
@@ -222,5 +222,3 @@ live.
   types (`register_*`) — a bounded backend follow-up.
 - **`settingsSection`** is available; wire it by dropping `<Slot id={SlotId.settingsSection}
   match="<pageKey>"/>` into whichever settings page should accept injected sections.
-</content>
-</invoke>
