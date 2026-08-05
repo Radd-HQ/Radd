@@ -102,9 +102,6 @@ export const apiWebLinkPath = (linkId: string) => `/web-links/${linkId}`;
 /** Version-control references (vcs module). */
 export const apiItemVcsLinksPath = (itemId: string) => `${ApiPath.items}/${itemId}/vcs-links`;
 export const apiVcsLinkPath = (linkId: string) => `/vcs-links/${linkId}`;
-/** PUT here replaces the field's full grant list (spec 07). */
-export const apiFieldPermissionsPath = (fieldId: string) =>
-  `${ApiPath.fields}/${fieldId}/permissions`;
 /** ADD options to a select field (additive-only — spec 100/107). */
 export const apiFieldOptionsPath = (fieldId: string) =>
   `${ApiPath.fields}/${fieldId}/options`;
@@ -130,24 +127,8 @@ export const apiPublicPagesTreePath = (spaceId: string) =>
 export const apiPublicPagesPagePath = (pageId: string) => `/public/pages/pages/${pageId}`;
 /** The shareable public-KB URL shown next to a space's Public toggle (spec 74). */
 export const publicKbSpaceUrl = (spaceId: string) => `${window.location.origin}/kb/${spaceId}`;
-/** The item's external requester (spec 62) — 404 when the item has none. */
-export const apiItemMailContactPath = (itemId: string) =>
-  `${ApiPath.items}/${itemId}/mail-contact`;
 /** Public (unauthenticated) CSAT survey path (spec 65): GET renders, POST rates. */
 export const apiPublicCsatPath = (token: string) => `/public/csat/${encodeURIComponent(token)}`;
-/** The item's ANSWERED CSAT survey (spec 65) — 404 until the requester responds. */
-export const apiItemCsatPath = (itemId: string) => `${ApiPath.items}/${itemId}/csat`;
-
-/** Approvals on workflow transitions (spec 71). */
-export const apiItemApprovalsPath = (itemId: string) => `${ApiPath.items}/${itemId}/approvals`;
-export const apiApprovalPath = (requestId: string) => `/approvals/${requestId}`;
-export const apiApprovalVotePath = (requestId: string) => `/approvals/${requestId}/vote`;
-
-/** Request participants (spec 72): users + teams following an item. */
-export const apiItemParticipantsPath = (itemId: string) =>
-  `${ApiPath.items}/${itemId}/participants`;
-export const apiItemParticipantPath = (itemId: string, participantId: string) =>
-  `${apiItemParticipantsPath(itemId)}/${participantId}`;
 
 /** Time-logging paths (spec 22). */
 export const apiItemWorklogsPath = (itemId: string) => `${ApiPath.items}/${itemId}/worklogs`;

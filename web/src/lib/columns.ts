@@ -20,20 +20,15 @@ export interface ColumnDef {
   cf?: FieldDef;
 }
 
-export const COLUMN_MIN_WIDTH = 56;
+const COLUMN_MIN_WIDTH = 56;
 export const COLUMN_MAX_WIDTH = 480;
 export const CUSTOM_COLUMN_PREFIX = "cf.";
 
 /** The leading Item zone (selection/star/kind/flag/key/title) is itself a
  * fixed, resizable column, stored under this pseudo id in the widths map. */
-export const TITLE_COLUMN_ID = "title";
-export const TITLE_DEFAULT_WIDTH = 440;
-export const TITLE_MIN_WIDTH = 240;
-export const TITLE_MAX_WIDTH = 880;
-
-export function titleWidthOf(widths: Record<string, number>): number {
-  return widths[TITLE_COLUMN_ID] ?? TITLE_DEFAULT_WIDTH;
-}
+const TITLE_COLUMN_ID = "title";
+const TITLE_MIN_WIDTH = 240;
+const TITLE_MAX_WIDTH = 880;
 
 /** Clamp a stored/dragged width — stale values from older layouts (or wild
  * drags) must never blow the table out sideways. */
@@ -45,7 +40,7 @@ export function clampWidth(id: string, px: number): number {
 
 /** Builtin columns, in the picker's order. Ids reuse the CardSlot vocabulary
  * where a slot exists (type/labels/…/state) so defaults map 1:1. */
-export const BUILTIN_COLUMNS: ColumnDef[] = [
+const BUILTIN_COLUMNS: ColumnDef[] = [
   { id: "type", label: "Issue type", width: 96, minWidth: COLUMN_MIN_WIDTH },
   { id: "parent", label: "Parent", width: 128, minWidth: COLUMN_MIN_WIDTH },
   { id: "labels", label: "Labels", width: 224, minWidth: 96 },
@@ -109,7 +104,7 @@ export function resolveColumns(ids: readonly string[], catalog: ColumnDef[]): Co
 }
 
 /** Mirrors the pre-columns slot presets so existing views feel unchanged. */
-export const DEFAULT_LIST_COLUMNS: readonly string[] = [
+const DEFAULT_LIST_COLUMNS: readonly string[] = [
   "type",
   "labels",
   "team",
@@ -118,9 +113,9 @@ export const DEFAULT_LIST_COLUMNS: readonly string[] = [
   "progress",
   "state",
 ];
-export const DEFAULT_PLANNING_COLUMNS: readonly string[] = ["priority", "assignee", "state"];
+const DEFAULT_PLANNING_COLUMNS: readonly string[] = ["priority", "assignee", "state"];
 /** Queue rows kept their fixed reporter/SLA feel (spec 64) as defaults. */
-export const DEFAULT_QUEUE_COLUMNS: readonly string[] = [
+const DEFAULT_QUEUE_COLUMNS: readonly string[] = [
   "type",
   "labels",
   "reporter",
@@ -152,7 +147,7 @@ function readWidths(viewId: string | undefined): Record<string, number> {
   }
 }
 
-export interface ColumnWidthsState {
+interface ColumnWidthsState {
   widths: Record<string, number>;
   /** Live update while dragging — state only. A boundary drag PATCHES both
    * neighbours atomically (two single-column writes would race each other). */

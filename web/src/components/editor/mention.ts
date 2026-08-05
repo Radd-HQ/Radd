@@ -36,7 +36,7 @@ export const KEY_ACTIONS: Record<string, "up" | "down" | "enter" | "escape"> = {
 };
 
 /** Milkdown plugin: detect `@`/`#` typing, report it to React, and route the nav
- * keys to the popup while it's open. Added via `crepe.editor.use(...)`. */
+ * keys to the popup while it's open. Registered with the editor via `.use(...)`. */
 export function mentionProsePlugin(store: MentionStore) {
   return $prose(
     () =>

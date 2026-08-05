@@ -17,7 +17,6 @@ export const AuthStatus = {
   /** /auth/me 404'd — auth module not deployed yet; API is open (dev). */
   anonymousDev: "anonymous_dev",
 } as const;
-export type AuthStatusValue = (typeof AuthStatus)[keyof typeof AuthStatus];
 
 export type AuthState =
   | { status: typeof AuthStatus.authenticated; user: Me }

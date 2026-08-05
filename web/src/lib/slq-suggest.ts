@@ -25,7 +25,6 @@ export const SlqDialect = {
   items: ApiPath.items,
   worklogs: ApiPath.timesheet,
 } as const;
-export type SlqDialectValue = (typeof SlqDialect)[keyof typeof SlqDialect];
 
 /**
  * Ask the server what the cursor position wants (spec 12). Best-effort:

@@ -145,17 +145,6 @@ export interface JiraProject {
   project_type: string;
 }
 
-export const InferredType = {
-  text: "text",
-  select: "select",
-  multi_select: "multi_select",
-  number: "number",
-  date: "date",
-  user: "user",
-  unknown: "unknown",
-} as const;
-export type InferredTypeValue = (typeof InferredType)[keyof typeof InferredType];
-
 /**
  * How much attention an inbound Jira field deserves (spec 100).
  *
@@ -172,29 +161,6 @@ export const FieldBand = {
   builtin: "builtin", // a native Jira column, handled without a mapping
 } as const;
 export type FieldBandValue = (typeof FieldBand)[keyof typeof FieldBand];
-
-export interface InferredField {
-  jira_id: string;
-  name: string;
-  inferred_type: InferredTypeValue;
-  populated: number;
-  sample_count: number;
-  populate_rate: number;
-  is_builtin: boolean;
-  distinct_count: number;
-  dominant_ratio: number;
-  band: FieldBandValue;
-  band_reason: string;
-  schema_key: string;
-  samples: string[];
-  distinct_values: string[] | null;
-}
-
-export interface JiraPreview {
-  total: number;
-  sampled: number;
-  fields: InferredField[];
-}
 
 export const FieldAction = {
   ignore: "ignore",
@@ -462,52 +428,4 @@ export interface PendingSummary {
   total: number;
   by_project: Record<string, number>;
   resolved: number;
-}
-
-export interface MappingProblem {
-  jira_id: string;
-  message: string;
-}
-
-export interface ValidateMappingsResponse {
-  ok: boolean;
-  problems: MappingProblem[];
-}
-
-export interface ImportPlan {
-  id: string;
-  name: string;
-  jira_project_key: string;
-  jql: string;
-  radd_project_key: string;
-  radd_project_name: string;
-  field_mappings: FieldMappingEntry[];
-  created_at: string;
-}
-
-export const ImportStage = {
-  pending: "pending",
-  fields: "fields",
-  issues: "issues",
-  links: "links",
-  done: "done",
-  failed: "failed",
-} as const;
-export type ImportStageValue = (typeof ImportStage)[keyof typeof ImportStage];
-
-export interface ImportRun {
-  id: string;
-  plan_id: string | null;
-  jira_project_key: string;
-  jql: string;
-  radd_project_key: string;
-  radd_project_name: string;
-  /** The mapping snapshot this run used — replayed by "Redo" to re-open the wizard. */
-  field_mappings: FieldMappingEntry[];
-  stage: ImportStageValue;
-  counts: Record<string, number>;
-  errors: string[];
-  started_at: string | null;
-  finished_at: string | null;
-  created_at: string;
 }

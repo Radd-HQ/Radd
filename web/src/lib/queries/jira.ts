@@ -69,14 +69,6 @@ export const jiraSnapshotsQuery = (pollMs = 1500) =>
       (query.state.data ?? []).every(snapshotSettled) ? false : pollMs,
   });
 
-export const jiraSnapshotQuery = (snapshotId: string, pollMs = 1500) =>
-  queryOptions({
-    queryKey: queryKeys.jiraSnapshot(snapshotId),
-    queryFn: () => api.get<JiraSnapshot>(`${ApiPath.jiraSnapshots}/${snapshotId}`),
-    refetchInterval: (query) =>
-      query.state.data && snapshotSettled(query.state.data) ? false : pollMs,
-  });
-
 /** Import plans — one per snapshot, holding every mapping decision. */
 export const jiraPlansQuery = () =>
   queryOptions({
@@ -100,15 +92,6 @@ export const jiraRunsQuery = (pollMs = 1500) =>
     queryKey: queryKeys.jiraRuns,
     queryFn: () => api.get<JiraRun[]>(ApiPath.jiraRuns),
     refetchInterval: (query) => ((query.state.data ?? []).every(runSettled) ? false : pollMs),
-  });
-
-export const jiraRunQuery = (runId: string, pollMs = 1200) =>
-  queryOptions({
-    queryKey: queryKeys.jiraRun(runId),
-    queryFn: () => api.get<JiraRun>(`${ApiPath.jiraRuns}/${runId}`),
-    enabled: Boolean(runId),
-    refetchInterval: (query) =>
-      query.state.data && runSettled(query.state.data) ? false : pollMs,
   });
 
 /** How many cross-project references are still waiting for their target. */

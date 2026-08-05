@@ -153,8 +153,7 @@
    node-view chrome is React we own, so its styling lives here rather than in a
    class the reset silently strips.
    A fixed 24px box, not padding around a 13px icon: `p-1` resolved to 0 inside
-   the editor and left a 13x13 target, which the proof now asserts against.
-   RADD-754 removes Crepe's stylesheet entirely; this block goes with it. */
+   the editor and left a 13x13 target, which the proof now asserts against. */
 .radd-rich-editor .milkdown .radd-extension-chrome button {
   width: 24px;
   height: 24px;

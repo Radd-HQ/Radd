@@ -116,14 +116,6 @@ export interface UserSummary {
   avatar_emoji?: string | null;
 }
 
-/** POST /users (spec 01). */
-export interface UserCreate {
-  email: string;
-  name: string;
-  password: string;
-  instance_role?: InstanceRoleValue;
-}
-
 /** PATCH /users/{id} (spec 84, instance admin) — omitted keys unchanged.
  * `instance_role` is THE role ladder (spec 86): admin|member, server-wide. */
 export interface UserAdminUpdate {

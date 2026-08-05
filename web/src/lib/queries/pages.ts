@@ -21,7 +21,6 @@ import type {
   PageLinkedItem,
   Page,
   PageBacklink,
-  PageTemplate,
   Comment,
   PageLabelled,
   PageExtensionSpec,
@@ -84,14 +83,6 @@ export const pageWatchQuery = (pageId: string) =>
   queryOptions({
     queryKey: queryKeys.pageWatch(pageId),
     queryFn: () => api.get<{ watching: boolean }>(apiPageWatchPath(pageId)),
-  });
-
-/** Templates usable in a space: its own plus the global ones (RADD-712). */
-export const pageTemplatesQuery = (spaceId: string) =>
-  queryOptions({
-    queryKey: queryKeys.pageTemplates(spaceId),
-    queryFn: () =>
-      api.get<PageTemplate[]>(ApiPath.pageTemplates, { query: { space_id: spaceId } }),
   });
 
 /** A space's flat page rows — the tree component assembles the hierarchy. */

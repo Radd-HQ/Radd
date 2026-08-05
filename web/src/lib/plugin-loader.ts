@@ -35,11 +35,6 @@ interface LoadedRemote {
 
 const loaded = new Map<string, LoadedRemote>();
 
-/** Diagnostics: the current load state of every remote the host has seen. */
-export function remoteStates(): LoadedRemote[] {
-  return [...loaded.values()];
-}
-
 function buildContext(name: string): PluginContext {
   return {
     plugin: name,
@@ -110,10 +105,4 @@ export async function syncPluginRemotes(remotes: PluginRemote[] | undefined): Pr
   // Load newly-enabled remotes (skip ones already loaded/quarantined this session).
   const toLoad = [...enabled.values()].filter((r) => !loaded.has(r.name));
   await Promise.all(toLoad.map(loadRemote));
-}
-
-/** Force a reload of a single remote (e.g. after a disable→enable cycle). */
-export async function reloadPluginRemote(remote: PluginRemote): Promise<void> {
-  unloadRemote(remote.name);
-  await loadRemote(remote);
 }

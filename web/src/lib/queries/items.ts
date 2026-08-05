@@ -9,7 +9,6 @@ import {
   apiAttachmentsPath,
   apiItemByKeyPath,
   apiItemCommentsPath,
-  apiItemPath,
 } from "../constants";
 import { queryKeys } from "./shared";
 import type {
@@ -34,34 +33,6 @@ export const itemsQuery = (projectId: string, archived = false) =>
           limit: String(ITEMS_PAGE_LIMIT),
         },
       }),
-  });
-
-/**
- * Infinite variant for the project List page (spec 41): pages of the API cap,
- * `getNextPageParam` = next offset while pages come back full.
- */
-export const infiniteItemsQuery = (projectId: string, archived = false) => ({
-  queryKey: queryKeys.itemsInfinite(projectId, archived),
-  meta: entityMeta(Entity.item),
-  initialPageParam: 0,
-  queryFn: ({ pageParam }: { pageParam: number }) =>
-    api.get<Item[]>(ApiPath.items, {
-      query: {
-        project_id: projectId,
-        archived: archived ? "true" : undefined,
-        limit: String(ITEMS_PAGE_LIMIT),
-        offset: String(pageParam),
-      },
-    }),
-  getNextPageParam: (lastPage: Item[], _all: Item[][], lastOffset: number) =>
-    lastPage.length === ITEMS_PAGE_LIMIT ? lastOffset + ITEMS_PAGE_LIMIT : undefined,
-});
-
-export const itemQuery = (itemId: string) =>
-  queryOptions({
-    queryKey: queryKeys.item(itemId),
-    meta: entityMeta(Entity.item),
-    queryFn: () => api.get<Item>(apiItemPath(itemId)),
   });
 
 /**

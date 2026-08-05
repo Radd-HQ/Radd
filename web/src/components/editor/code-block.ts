@@ -9,7 +9,6 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirro
 import {
   HighlightStyle,
   LanguageDescription,
-  StreamLanguage,
   syntaxHighlighting,
 } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
@@ -263,14 +262,3 @@ export function mountCodeMirror(options: {
     destroy: () => view.destroy(),
   };
 }
-
-/** Is the ProseMirror selection inside this node? Drives focus hand-off. */
-export function selectionInsideNode(pmView: PmView, pos: number | undefined): boolean {
-  if (pos === undefined) return false;
-  const node = pmView.state.doc.nodeAt(pos);
-  if (!node) return false;
-  const { from } = pmView.state.selection;
-  return from > pos && from < pos + node.nodeSize;
-}
-
-export { StreamLanguage };

@@ -30,10 +30,11 @@
 /*
  * Design-token foundation (UI modernization, phase A).
  *
- * Theming is STILL a variable remap: ~all components hardcode zinc-* and indigo-*
- * utilities, and Tailwind v4 compiles those to `var(--color-zinc-*)` references
- * that resolve against the per-theme values on `html` / `html.light` below.
- * On top of that remap sit three new token layers:
+ * Theming is a variable remap: the semantic tokens below consume the zinc and
+ * indigo scales (components use only the semantic utilities — `web/src` carries
+ * zero raw zinc-* or indigo-* classes), and Tailwind v4 compiles the scales to
+ * `var(--color-zinc-*)` references that resolve against the per-theme values on
+ * `html` / `html.light` below. On top of that remap sit three token layers:
  *   1. Semantic aliases (@theme inline) — bg-surface, text-fg-secondary,
  *      border-subtle, shadow-pop, … — inlined as var() references so they
  *      track the remap automatically in both themes.
@@ -241,10 +242,8 @@ html {
   --color-zinc-600: #6a7480; /* faintest text, emphasis borders */
   --color-zinc-500: #838d9a; /* muted text */
   --color-zinc-400: #98a1ad; /* secondary text */
-  --color-zinc-300: #bcc4ce; /* body text */
   --color-zinc-200: #d3d9e1; /* primary text */
   --color-zinc-100: #e6e9ee; /* headings */
-  --color-zinc-50: #f4f6f9;
 
   /* Accent (dark): a filled accent LIGHTENS on hover, and accent text sits
      light enough to read on dark panels. */
@@ -335,10 +334,8 @@ html.light {
   --color-zinc-600: #98a1ad; /* faintest text, emphasis borders */
   --color-zinc-500: #6f7987; /* muted text */
   --color-zinc-400: #525c69; /* secondary text */
-  --color-zinc-300: #3a434e; /* body text */
   --color-zinc-200: #242c36; /* primary text */
   --color-zinc-100: #141a22; /* headings */
-  --color-zinc-50: #0a0e13;
 
   /* Accent (light): the fill stays put so brand color is identical in both
      themes, but hover now DARKENS (dark theme lightens), and accent text

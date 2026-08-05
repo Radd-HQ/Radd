@@ -185,7 +185,6 @@ export const ApiPath = {
   mePreferences: "/auth/me/preferences",
   slqNl: "/slq/nl",
 } as const;
-export type ApiPathValue = (typeof ApiPath)[keyof typeof ApiPath];
 
 /** Reporting endpoints (spec 19; sla — spec 63) — all under `/reports`. */
 export const ApiReportPath = {
@@ -213,11 +212,7 @@ export const apiForgejoConnectionTestPath = (id: string) =>
 export const apiForgejoRepoPath = (id: string) => `${ApiPath.forgejoRepos}/${id}`;
 export const apiForgejoBackfillPath = (id: string) => `${ApiPath.forgejoRepos}/${id}/backfill`;
 
-/** Spec 113: one service account, and its keys. */
-export const apiServiceAccountPath = (id: string) => `${ApiPath.serviceAccounts}/${id}`;
+/** Spec 113: a service account's keys. */
 export const apiServiceAccountKeysPath = (id: string) => `${ApiPath.serviceAccounts}/${id}/keys`;
 export const apiServiceAccountKeyPath = (accountId: string, keyId: string) =>
   `${ApiPath.serviceAccounts}/${accountId}/keys/${keyId}`;
-
-/** Spec 112: ship everything waiting on a release. */
-export const apiReleaseSweepPath = (id: string) => `/releases/${id}/sweep`;

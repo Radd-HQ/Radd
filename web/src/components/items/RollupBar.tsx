@@ -4,9 +4,8 @@ import type { ItemRollup, RollupResponse } from "../../lib/types";
 import { formatPoints } from "./ItemBadges";
 
 /**
- * Epic progress (spec 76) — the shared rendering for the board/list "progress"
- * card slot (a slim done/total bar on epic-kind items) and the issue view's
- * "Epic progress" block, fed by the batched POST /items/rollup.
+ * Epic progress (spec 76) — the board/list "progress" card slot (a slim
+ * done/total bar on epic-kind items), fed by the batched POST /items/rollup.
  */
 
 /** "3/8 done · 5 pts of 13" — the shared tooltip/summary line. */
@@ -49,38 +48,6 @@ export function RollupRowBar({
         {rollup.done}/{rollup.total}
       </span>
     </span>
-  );
-}
-
-/** The issue view's "Epic progress" block — same numbers, bigger bar. */
-export function EpicProgressBlock({
-  rollup,
-  showPoints,
-}: {
-  rollup: ItemRollup | undefined;
-  showPoints: boolean;
-}) {
-  if (!rollup) return null;
-  if (rollup.total === 0) {
-    return <p className="text-[13px] text-fg-faint">No child items yet.</p>;
-  }
-  return (
-    <div className="flex flex-col gap-1.5">
-      <Bar rollup={rollup} className="h-1.5 w-full" />
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-fg-secondary">
-        <span className="tabular-nums">
-          {rollup.done}/{rollup.total} done
-        </span>
-        {rollup.in_progress > 0 && (
-          <span className="tabular-nums text-accent-text">{rollup.in_progress} in progress</span>
-        )}
-        {showPoints && rollup.points_total > 0 && (
-          <span className="tabular-nums">
-            {formatPoints(rollup.points_done)} pts of {formatPoints(rollup.points_total)}
-          </span>
-        )}
-      </div>
-    </div>
   );
 }
 

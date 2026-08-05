@@ -39,18 +39,6 @@ function groupsOf(specs: PageExtensionSpec[]) {
  * contributes a `PageExtensionSpec` appears here in a running Radd with no
  * frontend change, and disabling that plugin removes it again.
  */
-/** Kept for the render proofs, which look for `svg.radd-extension-toolbar-icon`.
- *  The toolbar itself renders a lucide component now (RADD-749); this was the
- *  markup a third-party toolbar builder demanded when it took strings. */
-export const EXTENSION_TOOLBAR_ICON = `
-  <svg xmlns="http://www.w3.org/2000/svg" class="radd-extension-toolbar-icon" width="24" height="24" viewBox="0 0 24 24">
-    <path
-      fill="currentColor"
-      d="M5 4h6v3.2a2.3 2.3 0 1 1 2 0V4h6v6h-3.2a2.3 2.3 0 1 0 0 4H19v6h-6v-3.2a2.3 2.3 0 1 0-2 0V20H5v-6h3.2a2.3 2.3 0 1 0 0-4H5V4z"
-    />
-  </svg>
-`;
-
 export function ExtensionPicker({
   at,
   onPick,

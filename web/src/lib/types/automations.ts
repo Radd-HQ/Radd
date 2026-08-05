@@ -129,7 +129,6 @@ export const EmailRecipient = {
   assignee: "assignee",
   contact: "contact",
 } as const;
-export type EmailRecipientValue = (typeof EmailRecipient)[keyof typeof EmailRecipient];
 
 /**
  * One rule action as sent to the API — `{type, params}` where params is

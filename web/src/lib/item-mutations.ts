@@ -17,7 +17,7 @@ import {
   apiItemStarPath,
 } from "./constants";
 import { queryKeys } from "./queries";
-import type { Item, ItemCreate, ItemLinkCreate, ItemUpdate, State, View } from "./types";
+import type { Item, ItemCreate, ItemLinkCreate, ItemUpdate, View } from "./types";
 
 /** Shared TanStack Query mutations for items (board, detail panel, modal). */
 
@@ -64,45 +64,6 @@ function transformPages(
     start += length;
   }
   return { ...old, pages };
-}
-
-/**
- * Drag-and-drop state move: optimistic — the card jumps columns immediately,
- * rolls back on error, and reconciles with the server response on settle.
- */
-export function useMoveItem(projectId: string) {
-  const queryClient = useQueryClient();
-  const listKey = queryKeys.items(projectId);
-  const pagedKey = queryKeys.itemsInfinite(projectId);
-
-  return useMutation({
-    mutationFn: ({ itemId, state }: { itemId: string; state: State }) =>
-      api.patch<Item>(apiItemPath(itemId), { state_id: state.id } satisfies ItemUpdate),
-    onMutate: async ({ itemId, state }) => {
-      await queryClient.cancelQueries({ queryKey: listKey });
-      await queryClient.cancelQueries({ queryKey: pagedKey });
-      const previous = queryClient.getQueryData<Item[]>(listKey);
-      const previousPaged = queryClient.getQueryData<ItemPages>(pagedKey);
-      const patch = (item: Item): Item =>
-        item.id === itemId
-          ? { ...item, state: { id: state.id, name: state.name, category: state.category } }
-          : item;
-      queryClient.setQueryData<Item[]>(listKey, (old) => old?.map(patch));
-      queryClient.setQueryData<ItemPages>(pagedKey, mapPages(patch));
-      return { previous, previousPaged };
-    },
-    onError: (error, _variables, context) => {
-      if (context?.previous) queryClient.setQueryData(listKey, context.previous);
-      if (context?.previousPaged) queryClient.setQueryData(pagedKey, context.previousPaged);
-      // Board drag skips the allowed-transitions pre-check — surface the 422's
-      // failure list (spec 61) instead of silently snapping the card back.
-      pushToast(errorMessage(error));
-    },
-    onSettled: (updated) => {
-      if (updated) cacheItem(queryClient, updated);
-      invalidateItemCaches(queryClient);
-    },
-  });
 }
 
 /** PATCH an item (detail panel edits); syncs every item cache so all surfaces update live. */

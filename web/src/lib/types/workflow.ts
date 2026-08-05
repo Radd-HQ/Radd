@@ -69,7 +69,6 @@ export const TransitionCheck = {
   requireField: "require_field",
   requireApproval: "require_approval",
 } as const;
-export type TransitionCheckValue = (typeof TransitionCheck)[keyof typeof TransitionCheck];
 
 /** What a require_field condition addresses (spec 107). */
 export const ConditionKind = { builtin: "builtin", custom: "custom" } as const;

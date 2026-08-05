@@ -33,10 +33,3 @@ export interface LinkTypeCreate {
   project_ids?: string[];
 }
 
-export interface LinkTypeUpdate {
-  name?: string;
-  outward_name?: string;
-  inward_name?: string;
-  direction?: LinkDirectionValue;
-  project_ids?: string[];
-}

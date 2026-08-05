@@ -269,7 +269,7 @@ export function useAllowedTransitions(itemId: string | undefined) {
   }, [query.data]);
 }
 
-export interface ItemWritability {
+interface ItemWritability {
   /** `item.update` on the project — the coarse gate for title/description/flag and every field. */
   canEdit: boolean;
   /** Whether a builtin field NAME (e.g. "priority", "assignee") or custom field KEY may be written:
@@ -367,7 +367,7 @@ export const SlqProbeStatus = {
   /** Non-parse failure (network, 5xx…) — `failure` is the message. */
   failed: "failed",
 } as const;
-export type SlqProbeStatusValue = (typeof SlqProbeStatus)[keyof typeof SlqProbeStatus];
+type SlqProbeStatusValue = (typeof SlqProbeStatus)[keyof typeof SlqProbeStatus];
 
 export interface SlqProbe {
   status: SlqProbeStatusValue;
@@ -420,7 +420,7 @@ export function useSlqValidation(
   };
 }
 
-export interface ProjectByKey {
+interface ProjectByKey {
   /** undefined while loading, null when no project matches the key. */
   project: Project | null | undefined;
 }
@@ -432,7 +432,7 @@ export function useProjectByKey(projectKey: string): ProjectByKey {
   return { project: projects.find((p) => p.key === projectKey) ?? null };
 }
 
-export interface ItemByKey {
+interface ItemByKey {
   /**
    * The item's project, resolved from its `project_id` against the readable
    * project list. undefined while loading, null when the item/project is absent.
@@ -475,7 +475,7 @@ export function useItemByKey(itemKey: string): ItemByKey {
  * component reads the caret and applies the chosen `insert`. `scope` carries
  * an optional project_id; `null` disables autocomplete entirely.
  */
-export interface SlqAutocomplete {
+interface SlqAutocomplete {
   open: boolean;
   suggestions: SlqSuggestion[];
   contextLabel: string | null;

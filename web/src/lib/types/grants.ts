@@ -36,17 +36,6 @@ export interface AccessGrantCreate {
   project_ids?: string[];
 }
 
-/** GET /grants/resources — a registered resource's grant model, for the GrantsEditor. */
-export interface ResourceGrantSpec {
-  resource_type: string;
-  label: string;
-  accesses: string[];
-  subjects: GrantSubjectValue[];
-  project_scoped: boolean;
-  hierarchical: boolean;
-  default_open: boolean;
-}
-
 // ---------------------------------------------------------------------------
 // Scopeable role grants (spec 91 — the unified Grant Role dialog)
 // ---------------------------------------------------------------------------

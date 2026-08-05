@@ -1,13 +1,11 @@
 /** Intake forms, portal, public submit, mail contacts, and CSAT. */
 
 import { queryOptions } from "@tanstack/react-query";
-import { ApiError, api } from "../api";
+import { api } from "../api";
 import { Entity, entityMeta } from "../cache";
 import {
   ApiPath,
   apiFormPath,
-  apiItemCsatPath,
-  apiItemMailContactPath,
   apiPortalFormPath,
   apiPublicCsatPath,
 } from "../constants";
@@ -16,8 +14,6 @@ import type {
   PortalRequest,
   PortalRequestDetail,
   Form,
-  ItemCsat,
-  MailContact,
   PortalForm,
   PortalGroup,
   PublicCsat,
@@ -72,26 +68,6 @@ export const portalFormQuery = (formId: string) =>
  */
 
 /**
- * The item's external requester (spec 62) — 404-quiet: most items have none,
- * so "no contact" resolves to null instead of erroring/retrying and the rail
- * chip simply doesn't render.
- */
-export const mailContactQuery = (itemId: string) =>
-  queryOptions({
-    queryKey: queryKeys.mailContact(itemId),
-    queryFn: async (): Promise<MailContact | null> => {
-      try {
-        return await api.get<MailContact>(apiItemMailContactPath(itemId));
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 404) return null;
-        throw error;
-      }
-    },
-    meta: entityMeta(Entity.item),
-    retry: false,
-  });
-
-/**
  * The PUBLIC CSAT rating page's payload (spec 65) — no login, the token is the
  * credential. 404 (unknown token) surfaces to the page as-is; no retry.
  */
@@ -99,26 +75,6 @@ export const publicCsatQuery = (token: string) =>
   queryOptions({
     queryKey: queryKeys.publicCsat(token),
     queryFn: () => api.get<PublicCsat>(apiPublicCsatPath(token)),
-    retry: false,
-  });
-
-/**
- * The item's ANSWERED CSAT survey (spec 65) — 404-quiet: the server 404s both
- * "never surveyed" and "not answered yet", so those resolve to null and the
- * rail chip simply doesn't render.
- */
-export const itemCsatQuery = (itemId: string) =>
-  queryOptions({
-    queryKey: queryKeys.itemCsat(itemId),
-    queryFn: async (): Promise<ItemCsat | null> => {
-      try {
-        return await api.get<ItemCsat>(apiItemCsatPath(itemId));
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 404) return null;
-        throw error;
-      }
-    },
-    meta: entityMeta(Entity.item),
     retry: false,
   });
 

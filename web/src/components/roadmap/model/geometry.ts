@@ -100,10 +100,6 @@ export function barRenderRightX(startIndex: number, endIndex: number, dayWidth: 
   return startIndex * dayWidth + barRenderWidth(startIndex, endIndex, dayWidth);
 }
 
-export function xFromDay(day: number, dayWidth: number): number {
-  return day * dayWidth;
-}
-
 /** The day cell containing a lane-local x (drop targeting). */
 export function dayFromX(x: number, dayWidth: number): number {
   return Math.floor(x / dayWidth);

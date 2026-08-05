@@ -29,12 +29,6 @@ export interface WebLinkCreate {
   category?: WebLinkCategoryValue;
 }
 
-export interface WebLinkUpdate {
-  url?: string;
-  title?: string;
-  category?: WebLinkCategoryValue;
-}
-
 // ---------------------------------------------------------------------------
 // Version control references (vcs module)
 // ---------------------------------------------------------------------------

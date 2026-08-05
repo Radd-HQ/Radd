@@ -87,12 +87,8 @@ export const queryKeys = {
   portalRequests: ["portalRequests"] as const,
   portalRequest: (key: string) => ["portalRequests", key] as const,
   portalForm: (formId: string) => ["portalForm", { formId }] as const,
-  mailContact: (itemId: string) => ["mailContact", { itemId }] as const,
-  itemApprovals: (itemId: string) => ["itemApprovals", { itemId }] as const,
   pendingApprovals: ["pendingApprovals"] as const,
-  itemParticipants: (itemId: string) => ["itemParticipants", { itemId }] as const,
   publicCsat: (token: string) => ["publicCsat", { token }] as const,
-  itemCsat: (itemId: string) => ["itemCsat", { itemId }] as const,
   itemTimelog: (itemId: string) => ["itemTimelog", { itemId }] as const,
   workCategories: (includeArchived: boolean) =>
     ["workCategories", { includeArchived }] as const,
@@ -132,7 +128,6 @@ export const queryKeys = {
   pageBacklinks: (pageId: string) => ["pageBacklinks", { pageId }] as const,
   pageComments: (pageId: string) => ["pageComments", { pageId }] as const,
   pageWatch: (pageId: string) => ["pageWatch", { pageId }] as const,
-  pageTemplates: (spaceId: string) => ["pageTemplates", { spaceId }] as const,
   pagesByLabel: (name: string, space: string) =>
     ["pagesByLabel", { name, space }] as const,
   pages: (spaceId: string) => ["pages", { spaceId }] as const,
@@ -176,10 +171,8 @@ export const queryKeys = {
   jiraStatus: ["jiraStatus"] as const,
   jiraProjects: (connectionId: string | null) => ["jiraProjects", { connectionId }] as const,
   jiraSnapshots: ["jiraSnapshots"] as const,
-  jiraSnapshot: (snapshotId: string) => ["jiraSnapshot", { snapshotId }] as const,
   jiraPlans: ["jiraPlans"] as const,
   jiraPlan: (planId: string) => ["jiraPlan", { planId }] as const,
   jiraPending: ["jiraPending"] as const,
   jiraRuns: ["jiraRuns"] as const,
-  jiraRun: (runId: string) => ["jiraRun", { runId }] as const,
 } as const;

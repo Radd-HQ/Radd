@@ -17,18 +17,6 @@ export const FieldType = {
 } as const;
 export type FieldTypeValue = (typeof FieldType)[keyof typeof FieldType];
 
-/** What a field-permission grant points at (spec 07). */
-export const FieldSubject = {
-  role: "role",
-  team: "team",
-} as const;
-export type FieldSubjectValue = (typeof FieldSubject)[keyof typeof FieldSubject];
-
-export const FieldAccess = {
-  read: "read",
-  write: "write",
-} as const;
-export type FieldAccessValue = (typeof FieldAccess)[keyof typeof FieldAccess];
 
 export const FieldDisplay = { chips: "chips", dropdown: "dropdown" } as const;
 export type FieldDisplayValue = (typeof FieldDisplay)[keyof typeof FieldDisplay];
@@ -107,11 +95,3 @@ export interface FieldDefCreate {
   default_value?: CustomFieldValue;
 }
 
-/** PATCH /fields/{id} — presentation + scope. Omitting project_ids leaves scope
- * unchanged; [] promotes to global; a non-empty list re-scopes to those projects. */
-export interface FieldDefUpdate {
-  name?: string;
-  display?: FieldDisplayValue | null;
-  default_value?: CustomFieldValue;
-  project_ids?: string[];
-}

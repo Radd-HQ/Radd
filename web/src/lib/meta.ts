@@ -36,7 +36,6 @@ import {
   SCHEDULE_TRIGGER,
   CommentVisibility,
   CycleStatus,
-  FieldAccess,
   FieldType,
   InstanceRole,
   ItemKind,
@@ -46,12 +45,10 @@ import {
   ReportInterval,
   StateCategory,
   ViewAxis,
-  ViewType,
   type ActionTypeValue,
   type BuiltinRuleField,
   type CommentVisibilityValue,
   type CycleStatusValue,
-  type FieldAccessValue,
   type FieldTypeValue,
   type InstanceRoleValue,
   type ItemKindValue,
@@ -61,7 +58,6 @@ import {
   type ReportIntervalValue,
   type StateCategoryValue,
   type ViewAxisValue,
-  type ViewTypeValue,
 } from "./types";
 
 /**
@@ -247,35 +243,10 @@ export const BUILTIN_FIELD_LABELS: Record<BuiltinRuleField, string> = {
   estimate_points: "Points",
 };
 
-/** Field-grant access labels (settings/fields permission editor, spec 07). */
-export const FIELD_ACCESS_LABELS: Record<FieldAccessValue, string> = {
-  [FieldAccess.read]: "Read",
-  [FieldAccess.write]: "Write",
-};
-
-export const FIELD_ACCESS_ORDER: readonly FieldAccessValue[] = [
-  FieldAccess.read,
-  FieldAccess.write,
-];
-
 /** The server-wide role ladder (spec 86): `users.instance_role`. */
 export const INSTANCE_ROLE_LABELS: Record<InstanceRoleValue, string> = {
   [InstanceRole.member]: "Member",
   [InstanceRole.admin]: "Admin",
-};
-
-export const INSTANCE_ROLE_ORDER: readonly InstanceRoleValue[] = [
-  InstanceRole.member,
-  InstanceRole.admin,
-];
-
-/** Saved-view enum display metadata (spec 09). */
-export const VIEW_TYPE_LABELS: Record<ViewTypeValue, string> = {
-  [ViewType.board]: "Board",
-  [ViewType.list]: "List",
-  [ViewType.planning]: "Planning",
-  [ViewType.queue]: "Queue",
-  [ViewType.roadmap]: "Roadmap",
 };
 
 /** Builtin view-axis labels (custom-field axes are labeled from the registry). */
@@ -364,21 +335,6 @@ export const LINK_GROUP_LABELS: Record<
   [ItemLinkType.duplicates]: { outgoing: "Duplicates", incoming: "Duplicated by" },
   [ItemLinkType.mentions]: { outgoing: "References", incoming: "Referenced by" },
 };
-
-/** Link-type options + ordering for the "add dependency" picker. `mentions` is
- * auto-derived, so it carries a label but is intentionally left out of the order. */
-export const LINK_TYPE_LABELS: Record<ItemLinkTypeValue, string> = {
-  [ItemLinkType.blocks]: "Blocks",
-  [ItemLinkType.relates]: "Relates to",
-  [ItemLinkType.duplicates]: "Duplicates",
-  [ItemLinkType.mentions]: "References",
-};
-
-export const LINK_TYPE_ORDER: readonly ItemLinkTypeValue[] = [
-  ItemLinkType.blocks,
-  ItemLinkType.relates,
-  ItemLinkType.duplicates,
-];
 
 /**
  * State-category fills for inline-SVG charts (spec 19), as `var()` references

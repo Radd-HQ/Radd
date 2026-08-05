@@ -134,6 +134,3 @@ export const iconFor = (name: string | null | undefined): LucideIcon | undefined
 /** The component for a name, falling back to the placeholder. */
 export const iconOrFallback = (name: string | null | undefined): LucideIcon =>
   iconFor(name) ?? FALLBACK_ICON;
-
-/** Every name this build can render — the list a picker would offer. */
-export const iconNames = (): string[] => Object.keys(ICONS).sort();

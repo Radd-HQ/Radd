@@ -117,7 +117,7 @@
   table,
   blockquote,
   .cm-editor,
-  .milkdown-code-block,
+  .radd-code-block,
   [data-callout-kind],
   [data-extension] {
     break-inside: avoid;

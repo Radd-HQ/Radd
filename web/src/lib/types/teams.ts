@@ -37,11 +37,6 @@ export interface TeamManagersUpdate {
   user_ids: string[];
 }
 
-/** PATCH /teams/{id}: rename (RADD-829 retired the AD-link fields). */
-export interface TeamUpdate {
-  name?: string;
-}
-
 /** GET /teams/{id}/members (RADD-829): direct rows plus group-carried people —
  * `via_group` names the carrier (null = a direct user row). */
 export interface TeamMember {
@@ -222,9 +217,4 @@ export interface ProjectTeam {
 export interface ProjectTeamAttach {
   team_id: string;
   role_id?: string;
-}
-
-/** PATCH /projects/{project_id}/teams/{team_id} (spec 06). */
-export interface ProjectTeamUpdate {
-  role_id: string;
 }

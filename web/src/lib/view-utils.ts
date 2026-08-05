@@ -76,14 +76,14 @@ export const NO_VALUE_KEY = "__none__";
 export const BACKLOG_KEY = "__backlog__";
 export const NO_EPIC_KEY = "__no_epic__";
 
-export const UNASSIGNED_LABEL = "Unassigned";
-export const NO_TEAM_LABEL = "No team";
-export const NO_VALUE_LABEL = "None";
-export const BACKLOG_LABEL = "Backlog";
-export const NO_EPIC_LABEL = "No epic";
+const UNASSIGNED_LABEL = "Unassigned";
+const NO_TEAM_LABEL = "No team";
+const NO_VALUE_LABEL = "None";
+const BACKLOG_LABEL = "Backlog";
+const NO_EPIC_LABEL = "No epic";
 
 /** Everything the axis groupers may need to resolve buckets. */
-export interface AxisContext {
+interface AxisContext {
   /** The view's project's states (undefined for all-projects views). */
   states?: State[];
   /** State categories (RADD-854) — the vocabulary rows the category axis
@@ -130,11 +130,11 @@ export function compareChildrenOpenFirst(a: Item, b: Item): number {
 }
 
 /** True for a `cf.<key>` custom-field axis token. */
-export function isCfAxis(axis: string): boolean {
+function isCfAxis(axis: string): boolean {
   return axis.startsWith(CF_AXIS_PREFIX);
 }
 
-export const cfAxisToken = (fieldKey: string): AxisToken => `${CF_AXIS_PREFIX}${fieldKey}`;
+const cfAxisToken = (fieldKey: string): AxisToken => `${CF_AXIS_PREFIX}${fieldKey}`;
 
 /** Human label for an axis token: builtin label, or the cf field's name. */
 export function axisLabel(axis: string, fields: FieldDef[] | undefined): string {
@@ -381,7 +381,7 @@ function compareCyclesForAxis(a: Cycle, b: Cycle): number {
  * invalid patterns on save; a stored-then-broken one degrades to match-all
  * rather than blanking the view.
  */
-export function matchesCycleFilter(name: string, pattern: string): boolean {
+function matchesCycleFilter(name: string, pattern: string): boolean {
   const trimmed = pattern.trim();
   if (!trimmed) return true;
   try {

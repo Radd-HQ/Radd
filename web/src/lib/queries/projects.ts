@@ -18,7 +18,6 @@ import type {
   Project,
   ProjectMember,
   ProjectTeam,
-  ScreenConfig,
   State,
   StateCategoryRow,
   Transition,
@@ -105,19 +104,6 @@ export const effectiveScreenQuery = (projectId: string, issueTypeId: string | nu
           : { project_id: projectId },
       }),
     staleTime: 60_000,
-  });
-
-/** A scope's stored screen, for the settings editor (project.manage). */
-export const screenConfigQuery = (projectId: string, issueTypeId: string | null) =>
-  queryOptions({
-    queryKey: queryKeys.screenConfig(projectId, issueTypeId),
-    queryFn: () =>
-      api.get<ScreenConfig>(ApiPath.screens, {
-        query: issueTypeId
-          ? { project_id: projectId, issue_type_id: issueTypeId }
-          : { project_id: projectId },
-      }),
-    staleTime: 30_000,
   });
 
 export const projectTeamsQuery = (projectId: string) =>

@@ -1,27 +1,11 @@
 /** Backups (spec 99) — instance-admin only. */
 
-/** Why an artifact exists. Only `scheduled` ones are ever auto-pruned. */
-export const BackupKind = {
-  manual: "manual",
-  scheduled: "scheduled",
-  preRestore: "pre_restore",
-  uploaded: "uploaded",
-} as const;
-export type BackupKindValue = (typeof BackupKind)[keyof typeof BackupKind];
-
 export const BACKUP_KIND_LABELS: Record<string, string> = {
   manual: "Manual",
   scheduled: "Scheduled",
   pre_restore: "Pre-restore",
   uploaded: "Uploaded",
 };
-
-export const RunStatus = {
-  pending: "pending",
-  running: "running",
-  succeeded: "succeeded",
-  failed: "failed",
-} as const;
 
 /** Stage labels for the progress line while a run is in flight. */
 export const RUN_STAGE_LABELS: Record<string, string> = {
