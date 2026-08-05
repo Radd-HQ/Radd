@@ -26,7 +26,18 @@ interface TreeNode {
   children: TreeNode[];
 }
 
-/** Flat rows → nested tree. Rows arrive position-sorted; orphans go to root. */
+/** RADD-859: siblings order NATURALLY (numeric-aware), not by creation —
+ * "0.18.1" belongs between "0.18.0" and "0.19.0" regardless of when the page
+ * was written, and plain alphabetical would put 0.10.0 before 0.2.0. Shared
+ * by the tree, radd:children and the child index so the three cannot drift. */
+export function comparePagesNaturally(
+  a: { title: string },
+  b: { title: string },
+): number {
+  return a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: "base" });
+}
+
+/** Flat rows → nested tree; siblings natural-sorted; orphans go to root. */
 export function buildTree(rows: PageTreeRow[]): TreeNode[] {
   const byId = new Map(rows.map((row) => [row.id, { row, children: [] } as TreeNode]));
   const roots: TreeNode[] = [];
@@ -35,6 +46,11 @@ export function buildTree(rows: PageTreeRow[]): TreeNode[] {
     if (parent) parent.children.push(node);
     else roots.push(node);
   }
+  const sortRec = (nodes: TreeNode[]) => {
+    nodes.sort((a, b) => comparePagesNaturally(a.row, b.row));
+    for (const node of nodes) sortRec(node.children);
+  };
+  sortRec(roots);
   return roots;
 }
 

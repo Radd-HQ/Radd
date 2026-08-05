@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { comparePagesNaturally } from "./PageTree";
 import { Link } from "@tanstack/react-router";
 import { FolderTree } from "lucide-react";
 import { RoutePath } from "../../lib/constants";
@@ -36,7 +37,9 @@ export function PageChildIndex({
   const authorPlacedOne = splitExtensionBlocks(body).some(
     (segment) => segment.kind === "extension" && INDEXING.has(segment.name),
   );
-  const children = (rows ?? []).filter((row) => row.parent_id === pageId);
+  const children = (rows ?? [])
+    .filter((row) => row.parent_id === pageId)
+    .sort(comparePagesNaturally); // RADD-859
 
   if (authorPlacedOne || children.length === 0) return null;
 
