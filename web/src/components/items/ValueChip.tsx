@@ -20,11 +20,16 @@ export function ValueChip({
   color,
   icon,
   size = 16,
+  textColor,
 }: {
   label: string;
   color: string;
   icon?: string | null;
   size?: number;
+  /** Explicit glyph color — REQUIRED when `color` is a `var()` reference,
+   * which the luma fallback cannot read (RADD-875). Chart/priority tokens
+   * pair with the non-inverting dark glyph the roadmap bars use. */
+  textColor?: string;
 }) {
   // `iconFor`, not `iconOrFallback`: a chip with no icon falls back to the
   // value's first LETTER, which reads better in 16px than a placeholder glyph.
@@ -38,7 +43,7 @@ export function ValueChip({
         width: size,
         height: size,
         backgroundColor: color,
-        color: textOn(color),
+        color: textColor ?? textOn(color),
         fontSize: Math.round(size * 0.6),
         lineHeight: 1,
       }}

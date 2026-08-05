@@ -93,6 +93,16 @@ export const PRIORITY_ORDER: readonly PriorityValue[] = [
   Priority.low,
 ];
 
+/** Priority chip fills as `var()` references (RADD-875) — theme-scaled in
+ * index.css beside `--chart-*`. The rail chip pairs them with the same
+ * non-inverting dark glyph the roadmap category bars use. */
+export const PRIORITY_FILLS: Record<PriorityValue, string> = {
+  [Priority.blocker]: "var(--priority-blocker)",
+  [Priority.high]: "var(--priority-high)",
+  [Priority.normal]: "var(--priority-normal)",
+  [Priority.low]: "var(--priority-low)",
+};
+
 export interface CategoryMeta {
   label: string;
   /** Dot/accent color for column headers and state selects. */

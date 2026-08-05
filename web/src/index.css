@@ -270,6 +270,14 @@ html {
   --chart-done-ink: #89909b;
   --chart-canceled-ink: #89909b;
 
+  /* Priority chip fills (dark) — RADD-875: the rail chips carried a second,
+     drifted copy of these as hardcoded hexes. One scale per theme, like
+     --chart-*; every fill carries the chip's dark glyph at >=3:1. */
+  --priority-blocker: #ef4444;
+  --priority-high: #f97316;
+  --priority-normal: #64748b;
+  --priority-low: #71717a;
+
   /* Callouts (dark) — see the @theme block above for how these were derived. */
   --callout-info-fill: #11212c;
   --callout-info-border: #336e99;
@@ -359,6 +367,12 @@ html.light {
   --chart-progress-ink: #1f7a45;
   --chart-done-ink: #5f6773;
   --chart-canceled-ink: #5f6773;
+
+  /* Priority chip fills (light) — deepened for white like the chart scale. */
+  --priority-blocker: #dc2626;
+  --priority-high: #ea580c;
+  --priority-normal: #64748b;
+  --priority-low: #8a8d93;
 
   /* Callouts (light). The old markup used `text-sky-300` and friends — tuned
      for dark only, and unreadable on a light tint.

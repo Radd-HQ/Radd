@@ -8,7 +8,12 @@ import {
   useItemWritability,
   usePointsEnabled,
 } from "../../lib/hooks";
-import { PRIORITY_META, PRIORITY_ORDER } from "../../lib/meta";
+import {
+  CATEGORY_CHART_COLORS,
+  PRIORITY_FILLS,
+  PRIORITY_META,
+  PRIORITY_ORDER,
+} from "../../lib/meta";
 import {
   effectiveScreenQuery,
   issueTypesQuery,
@@ -18,21 +23,13 @@ import {
 } from "../../lib/queries";
 import { ValueChip } from "./ValueChip";
 
-/** Chip hex per state category / priority (the OtherTracker colored-letter chips). */
-const CATEGORY_CHIP: Record<string, string> = {
-  triage: "#f59e0b",
-  backlog: "#71717a",
-  todo: "#3b82f6",
-  in_progress: "#eab308",
-  done: "#22c55e",
-  canceled: "#52525b",
-};
-const PRIORITY_CHIP: Record<string, string> = {
-  blocker: "#ef4444",
-  high: "#f97316",
-  normal: "#64748b",
-  low: "#3f3f46",
-};
+/* State/priority chips consume the theme token scales (RADD-875): the state
+ * chip reads `--chart-*` — the declared ONE source for state color, which this
+ * file used to shadow with a drifted hex map (In Progress painted yellow where
+ * the whole system paints it green) — and the priority chip reads the
+ * `--priority-*` scale beside it. Both pair with the non-inverting dark glyph
+ * the roadmap category bars use (the documented text-black exception). */
+const CHIP_GLYPH = "#18181b";
 
 /** A rail row: a value chip + its picker, side by side (State/Type/Priority). */
 function ChipSelect({ chip, children }: { chip: ReactNode; children: ReactNode }) {
@@ -257,7 +254,8 @@ export function IssueProperties({
           chip={
             <ValueChip
               label={item.state.name}
-              color={CATEGORY_CHIP[item.state.category] ?? "#71717a"}
+              color={CATEGORY_CHART_COLORS[item.state.category] ?? "var(--chart-backlog)"}
+              textColor={CHIP_GLYPH}
             />
           }
         >
@@ -299,7 +297,8 @@ export function IssueProperties({
           chip={
             <ValueChip
               label={PRIORITY_META[item.priority].label}
-              color={PRIORITY_CHIP[item.priority] ?? "#64748b"}
+              color={PRIORITY_FILLS[item.priority] ?? "var(--priority-normal)"}
+              textColor={CHIP_GLYPH}
             />
           }
         >
