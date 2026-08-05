@@ -76,6 +76,7 @@ function optionsFrom(children: ReactNode): SelectOption[] {
         value?: string | number;
         disabled?: boolean;
         title?: string;
+        label?: string;
         children?: ReactNode;
       };
       options.push({
@@ -83,6 +84,9 @@ function optionsFrom(children: ReactNode): SelectOption[] {
         label: props.children,
         disabled: props.disabled || undefined,
         title: props.title,
+        // Native `<option label>` = the declared searchable text — the only way
+        // filtering can see a component child like <PersonName/> (RADD-881).
+        text: props.label,
       });
     });
   };

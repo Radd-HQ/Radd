@@ -30,6 +30,9 @@ interface TokenMultiSelectProps {
   id?: string;
 }
 
+/** Dropdown render cap (RADD-881) — matches Select's filtering behavior: the
+ * highlight/keyboard space is the VISIBLE rows, a tail row names the rest. */
+const MAX_VISIBLE_MATCHES = 50;
 
 /**
  * One compact multi-select used across the app (replacing the tall wrapping-pill editors): selected
@@ -80,11 +83,18 @@ export function TokenMultiSelect({
     );
   }, [options, selected, t]);
 
+  // Render cap (RADD-881): 2,016 label options used to mount 2k DOM rows on
+  // every keystroke. Past the cap a tail row reports what's hiding.
+  const visible = filtered.length > MAX_VISIBLE_MATCHES
+    ? filtered.slice(0, MAX_VISIBLE_MATCHES)
+    : filtered;
+  const hiddenCount = filtered.length - visible.length;
+
   const termExists =
     t !== "" &&
     (options.some((o) => o.label.toLowerCase() === t) || value.some((v) => v.toLowerCase() === t));
   const showCreate = allowCreate && t !== "" && !termExists;
-  const navCount = filtered.length + (showCreate ? 1 : 0);
+  const navCount = visible.length + (showCreate ? 1 : 0);
 
   useEffect(() => setHighlight(0), [term, open]);
   useEffect(() => {
@@ -110,8 +120,8 @@ export function TokenMultiSelect({
   const removeValue = (v: string) => onChange(value.filter((x) => x !== v));
 
   const commitHighlight = () => {
-    if (showCreate && highlight === filtered.length) createValue(term);
-    else if (filtered[highlight]) addValue(filtered[highlight].value);
+    if (showCreate && highlight === visible.length) createValue(term);
+    else if (visible[highlight]) addValue(visible[highlight].value);
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -201,7 +211,7 @@ export function TokenMultiSelect({
           role="listbox"
           className="absolute left-0 top-full z-30 mt-1 max-h-56 w-full min-w-56 overflow-y-auto rounded-md border border-subtle bg-surface p-1 shadow-pop"
         >
-          {filtered.map((o) => {
+          {visible.map((o) => {
             flatIndex += 1;
             const idx = flatIndex;
             const groupHeader = o.group && o.group !== lastGroup ? o.group : null;
@@ -235,20 +245,25 @@ export function TokenMultiSelect({
               </li>
             );
           })}
+          {hiddenCount > 0 && (
+            <li className="px-2 py-1.5 text-[11px] text-fg-faint" aria-live="polite">
+              Keep typing — {hiddenCount.toLocaleString()} more match{hiddenCount === 1 ? "" : "es"}
+            </li>
+          )}
           {showCreate && (
             <li>
               <button
                 type="button"
                 role="option"
-                aria-selected={highlight === filtered.length}
-                onMouseEnter={() => setHighlight(filtered.length)}
+                aria-selected={highlight === visible.length}
+                onMouseEnter={() => setHighlight(visible.length)}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   createValue(term);
                 }}
                 className={
                   "flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs cursor-pointer " +
-                  (highlight === filtered.length
+                  (highlight === visible.length
                     ? "bg-overlay text-heading"
                     : "text-fg hover:bg-overlay/60")
                 }

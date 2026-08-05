@@ -277,7 +277,7 @@ export function TimesheetPage() {
                 { value: "", label: "Everyone" },
                 ...(users.data ?? [])
                   .filter((user) => user.active)
-                  .map((user) => ({ value: user.id, label: <PersonName user={user} /> })),
+                  .map((user) => ({ value: user.id, label: <PersonName user={user} />, text: user.name })),
               ]}
             />
           </>

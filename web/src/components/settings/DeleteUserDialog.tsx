@@ -138,7 +138,11 @@ export function DeleteUserDialog({
           >
             <option value="">Choose a user…</option>
             {candidates.map((candidate) => (
-              <option key={candidate.id} value={candidate.id}>
+              <option
+                key={candidate.id}
+                value={candidate.id}
+                label={`${candidate.name} · ${candidate.email}`}
+              >
                 <PersonName user={candidate} /> · {candidate.email}
               </option>
             ))}

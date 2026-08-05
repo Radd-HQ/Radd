@@ -335,7 +335,7 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
             {(users.data ?? [])
               .filter((user) => user.active)
               .map((user) => (
-                <option key={user.id} value={user.id}>
+                <option key={user.id} value={user.id} label={user.name}>
                   <PersonName user={user} />
                 </option>
               ))}

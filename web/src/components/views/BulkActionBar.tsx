@@ -211,7 +211,7 @@ export function BulkActionBar({
             { value: NONE, label: "Unassigned" },
             ...(users.data ?? [])
               .filter((user) => user.active && user.id !== currentUser?.id)
-              .map((user) => ({ value: user.id, label: <PersonName user={user} /> })),
+              .map((user) => ({ value: user.id, label: <PersonName user={user} />, text: user.name })),
           ],
           (value) => apply({ assignee_id: clearable(value) }),
           "assignee",

@@ -538,7 +538,7 @@ function AssigneePicker({ item, onPatch }: PickerProps) {
       {(users.data ?? [])
         .filter((user) => user.active)
         .map((user) => (
-          <option key={user.id} value={user.id}>
+          <option key={user.id} value={user.id} label={user.name}>
             <PersonName user={user} />
           </option>
         ))}
@@ -559,7 +559,7 @@ function ReporterPicker({ item, onPatch }: PickerProps) {
       {(users.data ?? [])
         .filter((user) => user.active)
         .map((user) => (
-          <option key={user.id} value={user.id}>
+          <option key={user.id} value={user.id} label={user.name}>
             <PersonName user={user} />
           </option>
         ))}
