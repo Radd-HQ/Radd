@@ -226,3 +226,35 @@ async def admin(db):
     db.add(user)
     await db.flush()
     return user
+
+
+async def test_the_preview_answers_with_the_engines_own_math(db, admin):
+    """The preview exists so a cron expression is readable before it is saved.
+    It is only worth anything if it agrees with the scheduler, which is why it
+    calls `next_run` rather than reimplementing anything — and why a refusal
+    comes back as text to show, not an exception to swallow."""
+    from radd.modules.automations.router import preview_schedule
+    from radd.modules.automations.schemas import SchedulePreviewRequest
+
+    monthly = await preview_schedule(
+        SchedulePreviewRequest(kind="monthly", time="09:00", day=31), admin
+    )
+    assert monthly.error is None
+    # The clamp, visible: consecutive months land on each month's last day.
+    assert len({run.month for run in monthly.next_runs}) == len(monthly.next_runs)
+    assert all(run.hour == 9 for run in monthly.next_runs)
+
+    weekly_cron = await preview_schedule(
+        SchedulePreviewRequest(kind="cron", expression="0 9 * * 1"), admin
+    )
+    assert weekly_cron.error is None
+    gaps = {
+        (b - a).days for a, b in zip(weekly_cron.next_runs, weekly_cron.next_runs[1:])
+    }
+    assert gaps == {7}
+
+    refused = await preview_schedule(
+        SchedulePreviewRequest(kind="cron", expression="* * * * *"), admin
+    )
+    assert refused.next_runs == []
+    assert "more often" in (refused.error or "")

@@ -1,9 +1,12 @@
 import uuid
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd import schedule as schedule_math
+from radd.config import settings
 from radd.db import get_session
 from radd.exceptions import ConflictError
 from radd.modules.auth import authz
@@ -33,6 +36,8 @@ from .schemas import (
     RuleTestRequest,
     RuleTestResult,
     RuleUpdate,
+    SchedulePreviewRead,
+    SchedulePreviewRequest,
     RunnableRuleRead,
     ScheduleKindInfo,
     SubjectInfo,
@@ -46,6 +51,10 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 # Rules act on items and run as an admin system actor, so managing them is admin-level:
 # AUTOMATION_MANAGE is global-scoped, held by instance admins only.
 _MANAGE = authz.Permission.AUTOMATION_MANAGE
+
+#: Occurrences returned by the schedule preview — enough to show a PATTERN
+#: (that a weekly rule really is weekly) without turning into a calendar.
+_PREVIEW_RUNS = 5
 
 
 @router.get("/catalog", response_model=CatalogRead)
@@ -163,6 +172,40 @@ async def delete_rule(rule_id: uuid.UUID, session: Session, user: CurrentUser) -
     )
     await service.delete_rule(session, rule_id, actor_id=user.id)
 
+
+
+@router.post("/schedule/preview", response_model=SchedulePreviewRead)
+async def preview_schedule(
+    data: SchedulePreviewRequest, user: CurrentUser
+) -> SchedulePreviewRead:
+    """When a schedule written here would actually run (RADD-912).
+
+    Served rather than computed in the browser because it must agree with the
+    engine, and the way to guarantee that is to call the same function. A cron
+    expression is unreadable without this — five fields and an OR rule nobody
+    remembers — and the preview doubles as the error message: an expression that
+    will be refused on save says so while it is still being typed.
+
+    Authenticated only. It reveals arithmetic, and both automation admins and
+    backup admins reach it through the same shared editor — which is also why it
+    lives here rather than in `backup`: this module already owns the schedule
+    vocabulary the API exposes (`catalog.schedule_kinds`). On an instance without
+    `automations` loaded the backup form simply shows no preview; it does not
+    fail, because the save path never depended on it.
+    """
+    cfg = data.model_dump(exclude_none=True)
+    tz = settings.scheduler_tz
+    try:
+        schedule_math.validate_config(cfg)
+    except ValueError as exc:
+        return SchedulePreviewRead(timezone=tz, error=str(exc))
+
+    runs: list[datetime] = []
+    at = datetime.now(UTC).replace(tzinfo=None)
+    for _ in range(_PREVIEW_RUNS):
+        at = schedule_math.next_run(cfg, at, tz)
+        runs.append(at)
+    return SchedulePreviewRead(timezone=tz, next_runs=runs)
 
 @router.get("/samples/events", response_model=EventSampleRead)
 async def event_samples(

@@ -39,6 +39,15 @@ export interface RuleSchedule {
   expression?: string | null;
 }
 
+/** POST /automations/schedule/preview — when a candidate schedule would run.
+ * Computed on the server so the answer is the engine's own arithmetic, and
+ * `error` carries the refusal the save would give (RADD-912). */
+export interface SchedulePreview {
+  timezone: string;
+  next_runs: string[];
+  error: string | null;
+}
+
 /** One subscribable event type, from GET /automations/catalog (spec 58). */
 export interface TriggerInfo {
   event_type: string;

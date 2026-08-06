@@ -1,4 +1,14 @@
-import { ScheduleKind, type RuleSchedule, type ScheduleKindValue } from "../lib/types";
+import { useEffect, useState } from "react";
+
+import { api } from "../lib/api";
+import { Callout, CalloutKind } from "./Callout";
+import { shortDateTime } from "../lib/dates";
+import {
+  ScheduleKind,
+  type RuleSchedule,
+  type SchedulePreview,
+  type ScheduleKindValue,
+} from "../lib/types";
 import { SelectField } from "./SelectField";
 
 /** Preset interval choices (minutes) — the spec-69 minutes/hours select. */
@@ -74,6 +84,45 @@ const timeInputClasses =
   "h-8 rounded-md border border-strong bg-surface px-2 text-[13px] text-heading " +
   "focus:outline-2 focus:outline-offset-1 focus:outline-focus [color-scheme:dark]";
 
+
+/** Debounce before asking the server, so typing a cron expression character by
+ * character does not fire six requests and settle on whichever answers last. */
+const PREVIEW_DEBOUNCE_MS = 350;
+
+/** When this schedule would actually run, straight from the engine's own math.
+ *
+ * Not computed here. A cron parser in the browser would be a second thing to be
+ * wrong, and the preview's whole value is that it agrees with what the server
+ * will do — including the refusals, which arrive as `error` and are shown before
+ * the form is saved rather than as a 409 afterwards.
+ */
+function useSchedulePreview(schedule: RuleSchedule): SchedulePreview | null {
+  const [preview, setPreview] = useState<SchedulePreview | null>(null);
+  const key = JSON.stringify(schedule);
+
+  useEffect(() => {
+    let live = true;
+    const timer = setTimeout(() => {
+      api
+        .post<SchedulePreview>("/automations/schedule/preview", JSON.parse(key))
+        .then((result) => {
+          if (live) setPreview(result);
+        })
+        .catch(() => {
+          // A failed preview is not a failed form — it stays silent and the save
+          // path keeps its own validation.
+          if (live) setPreview(null);
+        });
+    }, PREVIEW_DEBOUNCE_MS);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [key]);
+
+  return preview;
+}
+
 /** The schedule editor, shared by automations and backups (RADD-912).
  *
  * It lives here rather than under `automations/` because both features store the
@@ -88,6 +137,8 @@ export function ScheduleEditor({
   value: RuleSchedule;
   onChange: (schedule: RuleSchedule) => void;
 }) {
+  const preview = useSchedulePreview(value);
+
   const toggleWeekday = (day: number) => {
     const current = value.weekdays ?? [];
     const next = current.includes(day)
@@ -223,6 +274,23 @@ export function ScheduleEditor({
           </div>
         </div>
       )}
+
+      {/* What this schedule actually does. It is the only readable form of a cron
+          expression, and it is where the monthly clamp becomes visible: the 31st
+          previews as 31 Aug, 30 Sep, 31 Oct rather than needing a paragraph. */}
+      {preview?.error ? (
+        <Callout kind={CalloutKind.danger}>{preview.error}</Callout>
+      ) : preview && preview.next_runs.length > 0 ? (
+        <div className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-fg-secondary">Next runs</span>
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-fg-muted">
+            {preview.next_runs.map((iso) => (
+              <span key={iso}>{shortDateTime(iso)}</span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       <p className="text-[11px] text-fg-faint">
         Times run on the server's scheduler timezone (one instance clock).{" "}
         <strong className="font-medium text-fg-secondary">
