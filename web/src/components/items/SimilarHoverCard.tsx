@@ -19,12 +19,88 @@
  * cosmetic — this list is often at the BOTTOM of a form, where a card that only
  * ever opens downward is a card nobody can read.
  */
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { itemByKeyQuery } from "../../lib/queries";
 import { PRIORITY_META } from "../../lib/meta";
 import { previewText } from "../../lib/plain-text";
 import { AssigneeAvatar, PriorityIcon, StatePill } from "./ItemBadges";
+
+/** How long a pointer must rest before the preview opens. Long enough that
+ * sweeping a list fetches nothing, short enough that pausing feels answered.
+ * Matches the roadmap hover card, so the app has one dwell. */
+const HOVER_DWELL_MS = 350;
+
+/**
+ * The dwell/anchor/dismiss behaviour, shared by every list of suggested issues.
+ *
+ * Two components suggest issues and they are NOT the same one: the AI's
+ * "Similar issues" and deflection's "Previously resolved". The first version of
+ * this feature only wired the AI list, so the New Item window — which shows
+ * ONLY the deflection list — appeared to have no preview at all, and the
+ * submission form had it on one of its two sections. A hook rather than a
+ * second copy of the timer, because that is the shape that made it possible to
+ * miss the first time.
+ *
+ * Spread `handlers` on the row and render `<SimilarHoverCard>` when `anchor`
+ * is set.
+ */
+export function useIssuePreview() {
+  const rowRef = useRef<HTMLElement | null>(null);
+  const dwellRef = useRef<number | null>(null);
+  const [anchor, setAnchor] = useState<{ left: number; top: number; bottom: number } | null>(null);
+
+  const close = () => {
+    if (dwellRef.current !== null) window.clearTimeout(dwellRef.current);
+    dwellRef.current = null;
+    setAnchor(null);
+  };
+
+  const open = () => {
+    const rect = rowRef.current?.getBoundingClientRect();
+    if (rect) setAnchor({ left: rect.left, top: rect.top, bottom: rect.bottom });
+  };
+
+  const dwell = () => {
+    if (dwellRef.current !== null) window.clearTimeout(dwellRef.current);
+    dwellRef.current = window.setTimeout(open, HOVER_DWELL_MS);
+  };
+
+  // Escape closes it, and so does scrolling: the card is `fixed`, so its anchor
+  // would otherwise drift away from the row it describes.
+  useEffect(() => {
+    if (!anchor) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [anchor]);
+
+  // A pending dwell dies with the row — a timer firing after unmount sets state
+  // on nothing.
+  useEffect(() => close, []);
+
+  return {
+    anchor,
+    handlers: {
+      ref: (node: HTMLElement | null) => {
+        rowRef.current = node;
+      },
+      onMouseEnter: dwell,
+      onMouseLeave: close,
+      // Keyboard parity: tabbing to the row opens it immediately. A dwell means
+      // nothing without a pointer, and this is the only way a keyboard user
+      // gets the description at all.
+      onFocus: open,
+      onBlur: close,
+    },
+  };
+}
 
 const CARD_WIDTH_PX = 340;
 const CARD_GAP_PX = 8;

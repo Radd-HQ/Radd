@@ -5,6 +5,7 @@ import { DEFLECT_DEBOUNCE_MS, DEFLECT_MIN_QUERY_CHARS, RoutePath } from "../../l
 import { useDebounced, useOpenIssueRef } from "../../lib/hooks";
 import { deflectQuery } from "../../lib/queries";
 import type { DeflectPage, DeflectItem } from "../../lib/types";
+import { SimilarHoverCard, useIssuePreview } from "./SimilarHoverCard";
 
 interface DeflectionPanelProps {
   /** The half-typed issue title driving the lookup. */
@@ -83,21 +84,38 @@ export function DeflectItemsSection({ items }: { items: DeflectItem[] }) {
       </h3>
       <ul className="flex flex-col gap-0.5">
         {items.map((item) => (
-          <li key={item.key}>
-            <Link
-              to={RoutePath.issue}
-              params={{ itemKey: item.key }}
-              onClick={(event) => void openRef(item.key, event)}
-              className="group flex items-baseline gap-1.5 text-xs text-fg hover:text-accent-text"
-            >
-              <span className="shrink-0 font-mono text-[11px] text-fg-muted">{item.key}</span>
-              <span className="truncate underline-offset-2 group-hover:underline">
-                {item.title}
-              </span>
-            </Link>
-          </li>
+          <DeflectItemRow key={item.key} item={item} openRef={openRef} />
         ))}
       </ul>
     </section>
+  );
+}
+
+
+/** One suggested duplicate, with the same hover preview the AI's similar-issues
+ * list has (RADD-925). This is the list the New Item window shows — and, until
+ * now, the only one it showed, so the preview appeared to be missing there
+ * entirely. */
+function DeflectItemRow({
+  item,
+  openRef,
+}: {
+  item: DeflectItem;
+  openRef: ReturnType<typeof useOpenIssueRef>;
+}) {
+  const preview = useIssuePreview();
+  return (
+    <li {...preview.handlers}>
+      {preview.anchor && <SimilarHoverCard itemKey={item.key} anchor={preview.anchor} />}
+      <Link
+        to={RoutePath.issue}
+        params={{ itemKey: item.key }}
+        onClick={(event) => void openRef(item.key, event)}
+        className="group flex items-baseline gap-1.5 text-xs text-fg hover:text-accent-text"
+      >
+        <span className="shrink-0 font-mono text-[11px] text-fg-muted">{item.key}</span>
+        <span className="truncate underline-offset-2 group-hover:underline">{item.title}</span>
+      </Link>
+    </li>
   );
 }
