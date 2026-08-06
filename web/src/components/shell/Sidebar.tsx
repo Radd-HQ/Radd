@@ -51,6 +51,7 @@ import {
   subLinkClasses,
 } from "./SidebarRows";
 import { UserMenu } from "./UserMenu";
+import { modShortcut } from "../../lib/platform";
 
 /** Scope a New-view dialog was opened for: a project, or all-projects (null). */
 type ViewModalScope = { project: Project | null };
@@ -174,7 +175,7 @@ export function Sidebar() {
           <Search size={14} aria-hidden />
           Search
           <kbd className="ml-auto rounded border border-subtle px-1 text-[10px] text-fg-muted">
-            ⌘K
+            {modShortcut('K')}
           </kbd>
         </button>
 

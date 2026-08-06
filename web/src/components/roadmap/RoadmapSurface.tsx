@@ -71,6 +71,7 @@ import { RoadmapSelectionMenu } from "./RoadmapSelectionMenu";
 import { useRoadmapDraft } from "./useRoadmapDraft";
 import { useRoadmapViewport } from "./useRoadmapViewport";
 import { ExtendDirection, type ExtendDirectionValue } from "./useBarDrag";
+import { MOD_KEY, modShortcut, shiftModShortcut } from "../../lib/platform";
 
 export interface RoadmapSurfaceProps {
   /** The saved view being rendered (spec 79): `id` keys the per-view
@@ -754,7 +755,7 @@ export function RoadmapSurface({
                 onClick={draft.undo}
                 disabled={!draft.canUndo}
                 aria-label="Undo"
-                title={draft.undoLabel ? `Undo: ${draft.undoLabel} (⌘Z)` : "Nothing to undo"}
+                title={draft.undoLabel ? `Undo: ${draft.undoLabel} (${modShortcut("Z")})` : "Nothing to undo"}
                 className="flex h-7 items-center rounded-md border border-strong px-1.5 text-fg-secondary hover:border-emphasis hover:text-fg cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
               >
                 <Undo2 size={13} aria-hidden />
@@ -764,7 +765,7 @@ export function RoadmapSurface({
                 onClick={draft.redo}
                 disabled={!draft.canRedo}
                 aria-label="Redo"
-                title={draft.redoLabel ? `Redo: ${draft.redoLabel} (⇧⌘Z)` : "Nothing to redo"}
+                title={draft.redoLabel ? `Redo: ${draft.redoLabel} (${shiftModShortcut("Z")})` : "Nothing to redo"}
                 className="flex h-7 items-center rounded-md border border-strong px-1.5 text-fg-secondary hover:border-emphasis hover:text-fg cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
               >
                 <Redo2 size={13} aria-hidden />
@@ -778,7 +779,7 @@ export function RoadmapSurface({
                 size="sm"
                 disabled={!draft.dirty || editing.saving}
                 onClick={() => void editing.saveDraft()}
-                title="Nothing on this timeline touches the DB until you save (⌘-drag freely)"
+                title={`Nothing on this timeline touches the DB until you save (${MOD_KEY}-drag freely)`}
               >
                 {editing.saving
                   ? "Saving…"

@@ -10,6 +10,7 @@ import { RaddTile } from "../RaddMark";
 import { toggleInboxPeek } from "./InboxPeek";
 import { useSidebarPrefs } from "./sidebar-prefs";
 import { useTopBarSlotHost } from "./TopBarSlot";
+import { modShortcut } from "../../lib/platform";
 
 /**
  * The global top bar, FIRST row (Cairn-inspired), full viewport width: the
@@ -61,7 +62,7 @@ export function TopBar() {
           <Search size={13} aria-hidden className="shrink-0" />
           <span className="truncate">Search issues, docs — or ask…</span>
           <kbd className="ml-auto shrink-0 rounded border border-strong px-1.5 font-mono text-[10px] text-fg-muted">
-            ⌘K
+            {modShortcut('K')}
           </kbd>
         </button>
       )}

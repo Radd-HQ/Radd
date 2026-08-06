@@ -3,7 +3,7 @@
  *  Sections (Views / Dashboards / Pages / Cycles / project trees) are dropped on
  *  purpose — they are lists of NAMES, and a name does not survive being reduced
  *  to a 20px glyph. What stays is the fixed set of destinations, which is what
- *  a rail is good at. Everything else is one click away via ⌘K, which is why
+ *  a rail is good at. Everything else is one click away via the search shortcut, which is why
  *  Search is pinned first. */
 
 import { useQuery } from "@tanstack/react-query";
@@ -23,6 +23,7 @@ import { useNavFacts } from "../../lib/nav-facts";
 import { RoutePath } from "../../lib/constants";
 import { notificationsBadgeQuery } from "../../lib/queries";
 import { openCommandPalette } from "../CommandPalette";
+import { modShortcut } from "../../lib/platform";
 
 /** Icon-button geometry, shared by rail links and the rail's own buttons. */
 export const railButtonClasses =
@@ -84,7 +85,7 @@ export function SidebarRail({ pluginNav }: { pluginNav: { key: string; path: str
         type="button"
         onClick={openCommandPalette}
         className={`${railButtonClasses} cursor-pointer`}
-        title="Search — ⌘K"
+        title={`Search — ${modShortcut("K")}`}
         aria-label="Search"
       >
         <Search size={17} aria-hidden />

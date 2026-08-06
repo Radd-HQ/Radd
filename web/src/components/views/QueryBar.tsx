@@ -8,6 +8,7 @@ import { aiStatusQuery } from "../../lib/queries";
 import type { SlqPageFilter } from "../../lib/slq-filter";
 import type { NlQueryRequest, NlQueryResponse } from "../../lib/types";
 import { SlqEditor } from "./SlqEditor";
+import { modShortcut } from "../../lib/platform";
 
 const QueryMode = { slq: "slq", ask: "ask" } as const;
 type QueryModeValue = (typeof QueryMode)[keyof typeof QueryMode];
@@ -31,7 +32,7 @@ interface QueryBarProps {
  * teaches the query language. SLQ mode is the full editor — autocomplete,
  * validation, run-on-Enter — and a bar that arrives with a query already in
  * it (URL-synced state) starts there so the applied query stays visible.
- * ⌘I toggles the modes while the bar is focused. The toggle only exists
+ * The mod+I shortcut toggles the modes while the bar is focused. The toggle only exists
  * while AI is enabled; without it the bar is simply the SLQ editor. A
  * deliberate NON-feature: no auto-detection — a typo'd SLQ must fail loudly
  * as SLQ, never silently become an LLM prompt.
@@ -76,7 +77,7 @@ export function QueryBar({
       <div
         className="flex min-w-0 items-start gap-2 rounded-md border border-subtle bg-surface px-3 py-1 focus-within:border-strong"
         onKeyDown={(event) => {
-          // ⌘I / Ctrl+I flips the mode from either input (scoped to the bar,
+          // Cmd/Ctrl+I flips the mode from either input (scoped to the bar,
           // so pages with several query bars toggle only the focused one).
           if (
             (event.metaKey || event.ctrlKey) &&
@@ -141,7 +142,7 @@ export function QueryBar({
             <button
               type="button"
               aria-pressed={!askMode}
-              title="SLQ mode — ⌘I toggles"
+              title={`SLQ mode — ${modShortcut("I")} toggles`}
               onClick={() => setMode(QueryMode.slq)}
               className={
                 "rounded px-1.5 py-0.5 font-mono text-[10px] cursor-pointer transition-colors " +
@@ -153,7 +154,7 @@ export function QueryBar({
             <button
               type="button"
               aria-pressed={askMode}
-              title="Ask mode — ⌘I toggles"
+              title={`Ask mode — ${modShortcut("I")} toggles`}
               onClick={() => setMode(QueryMode.ask)}
               className={
                 "flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] cursor-pointer transition-colors " +
