@@ -12,7 +12,6 @@ from . import catalog, conditions
 from .types import (
     MAX_GRAPH_EDGES,
     MAX_GRAPH_NODES,
-    SCHEDULE_MIN_INTERVAL_MINUTES,
     ActionType,
     AutomationNodeKind,
     AutomationTrigger,
@@ -301,41 +300,26 @@ ActionAdapter: TypeAdapter[Action] = TypeAdapter(Action)
 
 
 class ScheduleConfig(BaseModel):
-    """{kind, minutes|time, weekdays}: interval every N>=5 minutes, daily at
-    HH:MM, or weekly at HH:MM on the listed weekdays (0=Mon, non-empty).
-    Times run on the instance clock (`settings.scheduler_tz`)."""
+    """A stored schedule: interval every N minutes, daily/weekly/monthly at a
+    wall-clock time, or a cron expression. Times run on the instance clock
+    (`settings.scheduler_tz`).
+
+    The SHAPE rules live in `radd.schedule` (RADD-909/910) — backups store the
+    same vocabulary, and the two copies of these checks had already drifted
+    apart before two more kinds were added to both."""
 
     kind: ScheduleKind
-    minutes: int | None = Field(default=None, ge=SCHEDULE_MIN_INTERVAL_MINUTES)
+    minutes: int | None = None
     time: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")
     weekdays: list[int] | None = None
+    #: Day of the month for a monthly schedule; clamped to the month's last day.
+    day: int | None = Field(default=None, ge=1, le=31)
+    #: Five-field cron expression.
+    expression: str | None = Field(default=None, max_length=200)
 
     @model_validator(mode="after")
     def _check_shape(self) -> "ScheduleConfig":
-        if self.kind is ScheduleKind.INTERVAL:
-            if self.minutes is None:
-                raise ValueError("an interval schedule needs `minutes`")
-            if self.time is not None or self.weekdays is not None:
-                raise ValueError("an interval schedule takes only `minutes`")
-            return self
-        if self.time is None:
-            raise ValueError(f"a {self.kind.value} schedule needs `time` (HH:MM)")
-        try:
-            schedule_math.parse_hh_mm(self.time)
-        except ValueError:
-            raise ValueError(f"invalid time {self.time!r} — expected HH:MM") from None
-        if self.minutes is not None:
-            raise ValueError(f"a {self.kind.value} schedule does not take `minutes`")
-        if self.kind is ScheduleKind.DAILY:
-            if self.weekdays is not None:
-                raise ValueError("a daily schedule does not take `weekdays`")
-            return self
-        if not self.weekdays:
-            raise ValueError("a weekly schedule needs at least one weekday (0=Mon)")
-        if any(day < 0 or day > 6 for day in self.weekdays):
-            raise ValueError("weekdays must be 0 (Mon) through 6 (Sun)")
-        if len(set(self.weekdays)) != len(self.weekdays):
-            raise ValueError("weekdays must not repeat")
+        schedule_math.validate_config(self.model_dump(exclude_none=True))
         return self
 
 

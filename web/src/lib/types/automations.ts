@@ -20,16 +20,23 @@ export const ScheduleKind = {
   interval: "interval",
   daily: "daily",
   weekly: "weekly",
+  monthly: "monthly",
+  cron: "cron",
 } as const;
 export type ScheduleKindValue = (typeof ScheduleKind)[keyof typeof ScheduleKind];
 
 /** interval: {minutes >= 5}; daily: {time "HH:MM"}; weekly: {time, weekdays
- * (0=Mon, non-empty)}. Times run on the server's scheduler timezone. */
+ * (0=Mon, non-empty)}; monthly: {time, day}; cron: {expression}. Times run on
+ * the server's scheduler timezone. */
 export interface RuleSchedule {
   kind: ScheduleKindValue;
   minutes?: number | null;
   time?: string | null;
   weekdays?: number[] | null;
+  /** Monthly: day of the month, clamped to the month's last day. */
+  day?: number | null;
+  /** Cron: a five-field expression, validated server-side. */
+  expression?: string | null;
 }
 
 /** One subscribable event type, from GET /automations/catalog (spec 58). */

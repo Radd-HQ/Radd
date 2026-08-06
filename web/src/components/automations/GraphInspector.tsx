@@ -50,7 +50,7 @@ import { Button, ButtonVariant } from "../Button";
 import { TextField } from "../TextField";
 import { SelectField } from "../SelectField";
 import { ConditionsBuilder } from "./ConditionsBuilder";
-import { ScheduleEditor, defaultSchedule } from "./ScheduleEditor";
+import { ScheduleEditor, defaultSchedule } from "../ScheduleEditor";
 
 interface GraphInspectorProps {
   node: AutomationNode | null;

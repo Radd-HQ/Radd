@@ -23,10 +23,6 @@ class AutomationTrigger(StrEnum):
 ScheduleKind = ScheduleKind
 
 
-# Floor for interval schedules (spec 69) — protects the engine from 1-minute loops.
-SCHEDULE_MIN_INTERVAL_MINUTES = 5
-
-
 class GroupOp(StrEnum):
     """Combinator of an event-condition group (spec 58) — nestable."""
 

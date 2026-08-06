@@ -29,6 +29,8 @@ import { TextField } from "../../components/TextField";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { formatDateTime } from "../../lib/dates";
+import { ScheduleEditor, isScheduleValid } from "../../components/ScheduleEditor";
+import { ScheduleKind, type RuleSchedule } from "../../lib/types";
 
 const POLL_MS = 2000;
 
@@ -48,11 +50,13 @@ function when(iso: string | null): string {
   return iso ? formatDateTime(iso) : "—";
 }
 
-/** Human summary of a {kind, minutes|time, weekdays} config. */
+/** Human summary of a stored schedule config. */
 function scheduleSummary(schedule: BackupSchedule): string {
-  const { kind, minutes, time, weekdays } = schedule.config;
-  if (kind === "interval") return `Every ${minutes} minutes`;
-  if (kind === "daily") return `Daily at ${time}`;
+  const { kind, minutes, time, weekdays, day, expression } = schedule.config as RuleSchedule;
+  if (kind === ScheduleKind.interval) return `Every ${minutes} minutes`;
+  if (kind === ScheduleKind.daily) return `Daily at ${time}`;
+  if (kind === ScheduleKind.cron) return `Cron: ${expression}`;
+  if (kind === ScheduleKind.monthly) return `Monthly on day ${day} at ${time}`;
   const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   const named = (weekdays ?? []).map((d) => days[d]).join(", ");
   return `${named} at ${time}`;
@@ -317,7 +321,11 @@ function ScheduleModal({
 }) {
   const client = useQueryClient();
   const [name, setName] = useState(schedule?.name ?? "Nightly");
-  const [time, setTime] = useState(schedule?.config.time ?? "03:00");
+  // The shared editor (RADD-912). This form used to hardcode "daily", so
+  // monthly and cron were accepted by the API and unreachable in the product.
+  const [config, setConfig] = useState<RuleSchedule>(
+    (schedule?.config as RuleSchedule) ?? { kind: ScheduleKind.daily, time: "03:00" },
+  );
   const [keepLast, setKeepLast] = useState(String(schedule?.keep_last ?? 7));
   const [attachments, setAttachments] = useState(schedule?.include_attachments ?? true);
 
@@ -325,7 +333,7 @@ function ScheduleModal({
     mutationFn: () => {
       const body = {
         name,
-        config: { kind: "daily" as const, time, weekdays: [] },
+        config,
         include_attachments: attachments,
         keep_last: Number(keepLast) || 1,
       };
@@ -343,7 +351,7 @@ function ScheduleModal({
     <Modal onClose={onClose} title={schedule ? "Edit schedule" : "Add schedule"}>
       <div className="flex flex-col gap-4">
         <TextField label="Name" value={name} onChange={(event) => setName(event.target.value)} />
-        <TextField label="Time (HH:MM)" value={time} onChange={(event) => setTime(event.target.value)} />
+        <ScheduleEditor value={config} onChange={setConfig} />
         <TextField
           label="Keep newest"
           type="number"
@@ -364,7 +372,10 @@ function ScheduleModal({
           <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={() => save.mutate()} disabled={save.isPending}>
+          <Button
+            onClick={() => save.mutate()}
+            disabled={save.isPending || !isScheduleValid(config)}
+          >
             {schedule ? "Save" : "Create"}
           </Button>
         </div>

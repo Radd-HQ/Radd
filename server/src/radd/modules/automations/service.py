@@ -255,6 +255,19 @@ def _check_trigger(trigger: graph.Node, nodes: list[graph.Node]) -> None:
             AutomationEntity.RULE,
             reason=f"trigger {trigger.id!r}: only a schedule trigger takes a schedule",
         )
+    if scheduled:
+        # The SHAPE, not just "is it a dict" (RADD-909). When triggers moved into
+        # node params for spec 116, `params` became an untyped envelope and the
+        # `ScheduleConfig` model stopped being applied to them — so a schedule
+        # missing its time, or naming a day that no month has, was stored happily
+        # and then blew up in the scheduler as a 500. Same seam the backup
+        # schedules validate through, so the two cannot disagree.
+        try:
+            schedule_math.validate_config(schedule)
+        except ValueError as exc:
+            raise ConflictError(
+                AutomationEntity.RULE, reason=f"trigger {trigger.id!r}: {exc}"
+            ) from exc
     if scheduled and any(n.kind is AutomationNodeKind.GATE for n in nodes):
         # A gate reads the EVENT, and a schedule has none. The check stays
         # graph-wide rather than per-branch because a gate anywhere downstream of

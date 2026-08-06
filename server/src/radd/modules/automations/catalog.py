@@ -112,6 +112,8 @@ SCHEDULE_KINDS: list[tuple[ScheduleKind, str]] = [
     (ScheduleKind.INTERVAL, "Every N minutes"),
     (ScheduleKind.DAILY, "Daily at a time"),
     (ScheduleKind.WEEKLY, "Weekly on chosen days"),
+    (ScheduleKind.MONTHLY, "Monthly on a chosen day"),
+    (ScheduleKind.CRON, "Custom (cron expression)"),
 ]
 
 

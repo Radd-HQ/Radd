@@ -23,6 +23,7 @@ dependencies = [
     # shipping 4 MB to every reader. It arrived transitively via the optional
     # `localembed` extra before, which meant a default install did not have it.
     "pillow>=11.0",
+    "croniter>=6.2.4",
 ]
 
 [project.optional-dependencies]

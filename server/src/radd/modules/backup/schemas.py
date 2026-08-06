@@ -6,35 +6,26 @@ from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
-from radd.schedule import ScheduleKind, parse_hh_mm
+from radd.schedule import ScheduleKind, validate_config
 
 
 class ScheduleConfig(BaseModel):
-    """{kind, minutes | time, weekdays} — the shared schedule vocabulary."""
+    """The shared schedule vocabulary — interval, daily, weekly, monthly, cron.
+
+    Monthly and cron arrived with RADD-909/910 for automations and land here for
+    free, because both modules store the same config and validate it through the
+    same rules in `radd.schedule`."""
 
     kind: ScheduleKind
-    minutes: int | None = Field(default=None, ge=5)
+    minutes: int | None = None
     time: str | None = None  # HH:MM, in settings.scheduler_tz
-    weekdays: list[int] = Field(default_factory=list)  # 0 = Monday
+    weekdays: list[int] | None = None  # 0 = Monday
+    day: int | None = Field(default=None, ge=1, le=31)
+    expression: str | None = Field(default=None, max_length=200)
 
     @model_validator(mode="after")
     def _check(self) -> "ScheduleConfig":
-        if self.kind is ScheduleKind.INTERVAL:
-            if self.minutes is None:
-                raise ValueError("an interval schedule needs `minutes` (>= 5)")
-            return self
-        if not self.time:
-            raise ValueError(f"a {self.kind.value} schedule needs `time` (HH:MM)")
-        try:
-            parse_hh_mm(self.time)
-        except ValueError as exc:
-            raise ValueError(f"invalid time {self.time!r} — expected HH:MM") from exc
-        if self.kind is ScheduleKind.WEEKLY and not self.weekdays:
-            raise ValueError("a weekly schedule needs at least one weekday (0=Mon)")
-        if self.kind is ScheduleKind.DAILY and self.weekdays:
-            raise ValueError("a daily schedule does not take `weekdays`")
-        if any(day < 0 or day > 6 for day in self.weekdays):
-            raise ValueError("weekdays are 0 (Mon) to 6 (Sun)")
+        validate_config(self.model_dump(exclude_none=True))
         return self
 
 

@@ -33,7 +33,7 @@ export function AutomationsSettingsPage() {
     return (
       <SettingsPage
         title={editing.rule ? "Edit automation rule" : "New automation rule"}
-        description="Any event as the trigger + conditions on the event itself (who acted, what changed) + an SLQ condition on the item + an ordered list of actions."
+        description="React to any event, or run on a schedule — daily, weekly, monthly or a cron expression. Conditions split issues down different branches, and actions can update them, notify people, or create new issues, which is how recurring maintenance tickets and periodic reviews get raised automatically."
       >
         <RuleEditor rule={editing.rule} onDone={() => setEditing(null)} />
       </SettingsPage>
