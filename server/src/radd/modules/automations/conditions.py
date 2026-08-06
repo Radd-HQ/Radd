@@ -105,7 +105,7 @@ def resolve_subject(
                 return []
             return _payload_path(entry, "to") or _payload_path(entry, "added")
         case ConditionSubject.STATE_CATEGORY:
-            return _payload_path(facts.payload, "state.category")
+            return _payload_path(facts.payload, "item.state.category")
         case ConditionSubject.PAYLOAD:
             return _payload_path(facts.payload, (qualifier or "").strip())
     return []  # pragma: no cover — exhaustive over the enum

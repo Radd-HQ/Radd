@@ -73,6 +73,8 @@ async def _invalid_query_handler(request: Request, exc: AiInvalidQueryError) -> 
     )
 
 
+from . import automation_node as ai_automation_node  # noqa: E402
+
 plugin = RaddPlugin(
     name="ai",
     core=False,  # optional plugin — disableable via the plugin manager
@@ -83,6 +85,14 @@ plugin = RaddPlugin(
         "env-seeded once. Dormant (404) while a feature's role is unconfigured."
     ),
     depends_on=("auth", "projects", "items", "fields", "comments", "search", "settings", "events", "pages", "timelogging"),
+    # The classifier node (spec 116 phase 2). Contributed, not hardcoded in
+    # `automations` — which is the whole point of the node registry: a module
+    # adds a node type to the canvas without the automations module learning it
+    # exists, and disabling this plugin removes it from the palette in the same
+    # breath. No dependency edge is needed either way: the node ships a spec and
+    # a planner, and imports nothing from `automations` — the kernel is the only
+    # thing both sides touch, which is what makes the seam a seam.
+    automation_nodes=(ai_automation_node.SPEC,),
     # RADD-891: the seven feature toggles (Settings → AI) — moved off
     # `settings.types`'s old hardcoded dict.
     settings_keys=(

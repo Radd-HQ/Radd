@@ -71,6 +71,10 @@ class Permission(StrEnum):
     FORM_MANAGE = "form.manage"  # project-scoped; create/edit/delete intake forms (spec 17)
     USER_MANAGE = "user.manage"
     AUTOMATION_MANAGE = "automation.manage"  # manage automation rules — global scope (spec 15)
+    # Build automations whose actions run as SOMEONE ELSE (spec 116). Without it
+    # an author's automations always act as the author; the field is not offered
+    # in the editor at all, and the API refuses it, so the two agree.
+    AUTOMATION_ACT_AS = "automation.act_as"
     # Per-entity manage actions (spec 36) — previously folded into project.manage /
     # global.manage; the umbrellas still imply them (IMPLIED_PERMISSIONS).
     STATE_MANAGE = "state.manage"  # project workflow states

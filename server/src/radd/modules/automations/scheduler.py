@@ -15,7 +15,7 @@ from radd.modules.events import service as events
 from radd.worker import PeriodicLoop
 
 from radd import schedule as schedule_math
-from .models import AutomationRule, AutomationScheduleState
+from .models import Automation, AutomationScheduleState, TriggerBinding
 from .types import SYSTEM_ACTOR_ID, AutomationEntity, AutomationEvent
 from radd.clock import utcnow
 
@@ -28,17 +28,28 @@ async def run_once(session_factory=SessionLocal) -> int:
     now = utcnow()
     fired = 0
     async with session_factory() as session:
+        # Joined through the trigger BINDING, not the automation: since spec 116
+        # a graph may hold several schedule triggers, each with its own clock,
+        # and the schedule to advance belongs to the node that came due.
         result = await session.execute(
-            select(AutomationScheduleState, AutomationRule)
-            .join(AutomationRule, AutomationRule.id == AutomationScheduleState.rule_id)
+            select(AutomationScheduleState, Automation, TriggerBinding)
+            .join(Automation, Automation.id == AutomationScheduleState.automation_id)
+            .join(
+                TriggerBinding,
+                (TriggerBinding.automation_id == AutomationScheduleState.automation_id)
+                & (TriggerBinding.node_id == AutomationScheduleState.node_id),
+            )
             .where(
                 AutomationScheduleState.next_run_at <= now,
-                AutomationRule.enabled.is_(True),
+                Automation.enabled.is_(True),
             )
         )
-        for state, rule in result.all():
-            if rule.schedule is None:  # defensive: state row without a config
-                logger.warning("automations: rule %s has schedule state but no schedule", rule.id)
+        for state, rule, binding in result.all():
+            if binding.schedule is None:  # defensive: state row without a config
+                logger.warning(
+                    "automations: %s trigger %s has schedule state but no schedule",
+                    rule.id, state.node_id,
+                )
                 await session.delete(state)
                 continue
             await events.emit(
@@ -49,11 +60,16 @@ async def run_once(session_factory=SessionLocal) -> int:
                 actor_id=SYSTEM_ACTOR_ID,  # system-emitted by design (spec 69)
                 payload={
                     "rule_id": str(rule.id),
+                    # WHICH trigger came due — the engine starts the run there,
+                    # so a graph with two schedules runs the right branch.
+                    "node_id": state.node_id,
                     "scheduled_for": state.next_run_at.isoformat(),
                 },
             )
             state.last_run_at = now
-            state.next_run_at = schedule_math.next_run(rule.schedule, now, settings.scheduler_tz)
+            state.next_run_at = schedule_math.next_run(
+                binding.schedule, now, settings.scheduler_tz
+            )
             fired += 1
         await session.commit()
     return fired

@@ -1,21 +1,27 @@
 import uuid
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
 from radd.modules.comments.types import CommentVisibility
-from radd.modules.items.enums import Priority
+from radd.modules.items.enums import ItemKind, Priority
 
 from radd import schedule as schedule_math
 
 from . import catalog, conditions
 from .types import (
+    MAX_GRAPH_EDGES,
+    MAX_GRAPH_NODES,
     SCHEDULE_MIN_INTERVAL_MINUTES,
     ActionType,
+    AutomationNodeKind,
     AutomationTrigger,
+    GraphOrientation,
     ConditionOperator,
     ConditionSubject,
     GroupOp,
+    NodeArity,
+    NodePort,
     ScheduleKind,
 )
 from radd.apitypes import UtcDatetime
@@ -110,10 +116,53 @@ class AddCommentParams(BaseModel):
 
 
 class CreateItemParams(BaseModel):
+    """Everything you can set on a new issue (spec 116).
+
+    Was four fields — project, title, description, priority — which meant an
+    automation could only ever file a stub someone then had to finish by hand.
+    Every name here resolves at APPLY time (state name, assignee email, cycle
+    name, parent key), not on write, because the target project's vocabulary can
+    change between saving the automation and running it; an unresolvable name
+    skip-logs with the name in the message rather than failing the run.
+
+    Every text field is a `{{token}}` template. `custom_fields` values are too,
+    when they are strings — a select's option or a text field's content is
+    exactly where "from {{item.key}}" belongs.
+    """
+
     project: str = Field(min_length=1)  # project KEY
     title: str = Field(min_length=1, max_length=500)  # template
     description: str = Field(default="", max_length=10_000)  # template
     priority: Priority | None = None
+    #: Issue type NAME (spec 51); None = the project's default.
+    type: str | None = Field(default=None, max_length=100)
+    #: epic | issue | subtask. A subtask needs `parent`; an epic forbids one.
+    kind: ItemKind | None = None
+    #: Workflow state NAME; None = the project's default (its first state).
+    state: str | None = Field(default=None, max_length=100)
+    #: User EMAIL, or "none". Names resolve per project at apply time.
+    assignee: str | None = Field(default=None, max_length=320)
+    #: Who it is filed BY. Defaults to the automation's acting identity, which is
+    #: the author unless the action names someone else — so the reporter matches
+    #: who the change is attributed to rather than being a second, silent choice.
+    reporter: str | None = Field(default=None, max_length=320)
+    team: str | None = Field(default=None, max_length=200)
+    cycle: str | None = Field(default=None, max_length=200)
+    release: str | None = Field(default=None, max_length=100)
+    #: Parent item KEY (TD-42). Required for a subtask.
+    parent: str | None = Field(default=None, max_length=64)
+    labels: list[str] = Field(default_factory=list, max_length=50)
+    flagged: bool = False
+    estimate_points: float | None = Field(default=None, ge=0, le=999)
+    #: ISO dates, or a relative literal the SLQ vocabulary already knows
+    #: ("today", "today+3d") — the same words the schedule filter uses, so one
+    #: date language covers the whole feature.
+    start_date: str | None = Field(default=None, max_length=32)
+    target_date: str | None = Field(default=None, max_length=32)
+    #: Custom fields by registry key. Validated against the target project's
+    #: definitions at apply time by the items service, exactly as a human create
+    #: would be — this does not get its own second validator.
+    custom_fields: dict[str, Any] = Field(default_factory=dict)
 
 
 class SendWebhookParams(BaseModel):
@@ -129,7 +178,11 @@ class PostChatParams(BaseModel):
 
 
 class NotifyUserParams(BaseModel):
-    user: str = Field(min_length=1)  # user email
+    #: A user email, or the role `reporter`/`assignee` — resolved against the
+    #: item at apply time, which only means anything at per-item arity. Roles
+    #: were added by RADD-918: "notify the assignee" previously had to name a
+    #: person, so it could not be written once for a whole project.
+    user: str = Field(min_length=1)
     message: str = Field(min_length=1, max_length=1000)  # template
 
 
@@ -235,6 +288,14 @@ Action = Annotated[
     Field(discriminator="type"),
 ]
 
+#: The union as a standalone validator. Before spec 116 an action's params were
+#: type-checked because `RuleCreate.actions` was `list[Action]`; a graph node's
+#: `params` is an untyped envelope, so the service revalidates each ACTION node
+#: through this. Without it a typo'd param would be stored happily and fail at
+#: 3am — the check moved, it did not go away. Phase 2 generalises this to a
+#: `params_schema` per node type, which is how a plugin's node gets the same.
+ActionAdapter: TypeAdapter[Action] = TypeAdapter(Action)
+
 
 # --- schedule config (spec 69) — the `schedule` JSONB of scheduled rules ---
 
@@ -281,48 +342,73 @@ class ScheduleConfig(BaseModel):
 # --- rule CRUD schemas ---
 
 
-def _known_trigger(value: str) -> str:
+def known_trigger(value: str) -> str:
+    """Public since spec 116: the trigger moved from a rule COLUMN with a field
+    validator to the trigger node's `params.event`, which this envelope does not
+    type — so the service calls this while validating the graph. Dropping the
+    check would make a typo'd event a silently dead automation rather than a 422."""
     if value not in set(AutomationTrigger) and value not in catalog.TRIGGERS:
         raise ValueError(f"unknown trigger {value!r} — see GET /automations/catalog")
     return value
 
 
+class NodeIn(BaseModel):
+    """One node of the graph (spec 116).
+
+    `params` is deliberately untyped here: what a node accepts is the business of
+    its TYPE, not of this envelope — a trigger takes `{event, schedule}`, a filter
+    `{slq}`, a gate `{conditions}`, an action whatever its action takes. Phase 2
+    makes that a `params_schema` on the node registry so a plugin's node validates
+    the same way; until then the service validates the params it knows about
+    (a filter's SLQ is compiled on write) and the rest are checked when planned.
+    """
+
+    id: str = Field(min_length=1, max_length=64)
+    kind: AutomationNodeKind
+    type: str = Field(min_length=1, max_length=100)
+    params: dict[str, Any] = Field(default_factory=dict)
+    # Canvas coordinates. Optional and ignored by the engine — `graph.parse`
+    # never reads them, so a graph laid out by hand and one laid out
+    # automatically execute identically. Absent means "no one has placed this
+    # node": the editor lays those out from the topology instead, which is what
+    # lets every migrated automation open on the canvas without a data migration.
+    x: float | None = None
+    y: float | None = None
+
+
+class EdgeIn(BaseModel):
+    source: str = Field(min_length=1, max_length=64)
+    #: Free-form, checked against the SOURCE NODE's real ports while validating
+    #: the graph — not against `NodePort`. Typing it as the enum here made the
+    #: five built-in names the only wireable ports, which silently disabled every
+    #: contributed node with dynamic outputs (RADD-918).
+    port: str = Field(default=NodePort.OUT.value, min_length=1, max_length=64)
+    target: str = Field(min_length=1, max_length=64)
+
+
 class RuleCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     enabled: bool = True
-    # An event type from the catalog ("item.updated", "comment.created", …) or a
-    # sentinel: "manual" (on-demand) / "schedule" (spec 69, needs `schedule`).
-    trigger: str = Field(max_length=100)
-    # Structured conditions on the EVENT itself (who/what changed); None = always.
-    event_conditions: ConditionGroup | None = None
-    condition_slq: str = Field(default="", max_length=4000)
-    actions: list[Action] = Field(min_length=1)
     position: int = 0
-    # Spec 69: present iff trigger == "schedule" (cross-checked in the service).
-    schedule: ScheduleConfig | None = None
-
-    @field_validator("trigger")
-    @classmethod
-    def _trigger_known(cls, value: str) -> str:
-        return _known_trigger(value)
+    #: Which way the canvas flows. Stored per automation, not per viewer.
+    orientation: GraphOrientation = GraphOrientation.VERTICAL
+    # The graph. `trigger` and `schedule` are NOT accepted here — they are
+    # denormalised from the trigger node by the service, so there is exactly one
+    # place that says which event starts this automation. Taking both would let a
+    # caller disagree with itself.
+    nodes: list[NodeIn] = Field(min_length=1, max_length=MAX_GRAPH_NODES)
+    edges: list[EdgeIn] = Field(default_factory=list, max_length=MAX_GRAPH_EDGES)
 
 
 class RuleUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     enabled: bool | None = None
-    trigger: str | None = Field(default=None, max_length=100)
-    # Explicit null clears the conditions (model_fields_set distinguishes).
-    event_conditions: ConditionGroup | None = None
-    condition_slq: str | None = Field(default=None, max_length=4000)
-    actions: list[Action] | None = Field(default=None, min_length=1)
     position: int | None = None
-    # Explicit null clears the schedule (model_fields_set distinguishes).
-    schedule: ScheduleConfig | None = None
-
-    @field_validator("trigger")
-    @classmethod
-    def _trigger_known(cls, value: str | None) -> str | None:
-        return value if value is None else _known_trigger(value)
+    orientation: GraphOrientation | None = None
+    # Replaced whole or not at all — see update_rule. Sending one without the
+    # other keeps the stored counterpart, and the pair is re-validated together.
+    nodes: list[NodeIn] | None = Field(default=None, min_length=1, max_length=MAX_GRAPH_NODES)
+    edges: list[EdgeIn] | None = Field(default=None, max_length=MAX_GRAPH_EDGES)
 
 
 class RuleRead(BaseModel):
@@ -331,19 +417,32 @@ class RuleRead(BaseModel):
     id: uuid.UUID
     name: str
     enabled: bool
-    trigger: str
-    event_conditions: dict[str, Any] | None
-    condition_slq: str
-    actions: list[dict[str, Any]]
+    nodes: list[dict[str, Any]]
+    edges: list[dict[str, Any]]
     position: int
+    orientation: GraphOrientation = GraphOrientation.VERTICAL
     # Spec 69: the stored schedule config + the scheduler's bookkeeping (the
     # next/last-run stamps live in automation_schedule_state — the service
     # hydrates them via `rule_reads`; None for event/manual rules).
+    #: One entry per TRIGGER node, with its scheduler stamps. A list rather than
+    #: the old scalar `schedule`/`next_run_at`/`last_run_at`, because a graph may
+    #: hold several triggers and a scalar could only describe one of them —
+    #: silently, which is the worst way to be wrong about when something runs.
+    triggers: list["TriggerRead"] = Field(default_factory=list)
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
+
+
+class TriggerRead(BaseModel):
+    """A trigger node projected for the editor: what fires it, and when next."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    node_id: str
+    event_type: str
     schedule: dict[str, Any] | None = None
     next_run_at: UtcDatetime | None = None
     last_run_at: UtcDatetime | None = None
-    created_at: UtcDatetime
-    updated_at: UtcDatetime
 
 
 # --- GET /automations/catalog — builder metadata for the UI ---
@@ -377,6 +476,84 @@ class ScheduleKindInfo(BaseModel):
     label: str
 
 
+class ContributedNodeInfo(BaseModel):
+    """A node type from the kernel registry (spec 116 phase 2).
+
+    Served rather than baked into the SPA for the same reason the trigger
+    catalogue is: what nodes exist is a function of which plugins are INSTALLED,
+    so a hardcoded palette would offer the AI classifier on an instance without
+    the AI module and miss anything a plugin adds."""
+
+    key: str
+    kind: str
+    label: str
+    description: str = ""
+    group: str = "Other"
+    params_schema: dict[str, Any] = Field(default_factory=dict)
+    #: Ports for the node's DEFAULT params. The editor recomputes them locally as
+    #: the form is edited (an AI classifier's ports are its answers), so this is
+    #: the starting shape, not the final word.
+    default_ports: list[str] = Field(default_factory=list)
+    needs_items: bool = True
+    permission: str = ""
+
+
+class NodeArityInfo(BaseModel):
+    """How one node type may read its packet (RADD-918).
+
+    `options` of length one means fixed, and the editor shows no control — a
+    toggle with a single setting is noise that teaches nothing."""
+
+    type: str
+    default: NodeArity
+    options: list[NodeArity]
+
+
+class TemplateTokenInfo(BaseModel):
+    token: str
+    description: str
+    needs_item: bool = False
+
+
+class PayloadPathInfo(BaseModel):
+    """One addressable path into an event payload, with values really seen at it.
+    The string is what `{{payload.<path>}}` and the payload condition take."""
+
+    path: str
+    examples: list[str] = Field(default_factory=list)
+    #: Inside a list — a template reading it may render several values, joined.
+    repeated: bool = False
+
+
+class EventSampleRead(BaseModel):
+    """What an event type actually carries, from the outbox (RADD-921).
+
+    Sampled from REAL events. A hand-written example per type would be a second
+    copy of a shape defined in twenty modules' `emit` calls, and it would drift
+    silently — the failure mode here is a payload that looks right and isn't."""
+
+    event_type: str
+    #: How many recent events the paths were derived from. 0 = this type has
+    #: never fired here, which the UI says rather than inventing a shape.
+    sampled: int
+    paths: list[PayloadPathInfo] = Field(default_factory=list)
+    #: Field names seen in `changes` diffs — what "field changed" can test. The
+    #: picker otherwise offers every custom-field key, including ones the diff
+    #: never names: a condition that can only ever be false.
+    changed_fields: list[str] = Field(default_factory=list)
+    #: One whole payload, verbatim, for when the flattened paths are not enough.
+    example: dict[str, Any] | None = None
+    #: Entity types this event is ABOUT (RADD-923). Each appears in the payload
+    #: as a canonical ref under its own key, written by the kernel — so
+    #: `subjects: ["item"]` means `{{payload.item.key}}` resolves whether or not
+    #: this instance has ever fired the event.
+    subjects: list[str] = Field(default_factory=list)
+    #: The event's OWN declared shape, beyond the refs. Present even when
+    #: `sampled` is 0, which is the case the samples panel could not answer:
+    #: sampling describes what HAS happened, declaration describes what WILL.
+    declared_schema: dict[str, Any] = Field(default_factory=dict)
+
+
 class CatalogRead(BaseModel):
     triggers: list[TriggerInfo]
     subjects: list[SubjectInfo]
@@ -385,13 +562,58 @@ class CatalogRead(BaseModel):
     # Spec 69: the "On a schedule" sentinel + the schedule kinds the builder offers.
     schedule_trigger: str = AutomationTrigger.SCHEDULE.value
     schedule_kinds: list[ScheduleKindInfo] = []
+    #: Node types contributed through the kernel registry.
+    contributed_nodes: list[ContributedNodeInfo] = []
+    #: How each node type reads its packet, built-in and contributed alike —
+    #: one table so the editor's default cannot disagree with the engine's.
+    node_arity: list[NodeArityInfo] = []
+    #: Whether the CALLER may make an action run as someone else. The editor
+    #: hides the field entirely when false — an affordance that is refused on
+    #: save is worse than one that is absent.
+    can_act_as: bool = False
+    #: `{{token}}` substitutions available in action text fields.
+    tokens: list[TemplateTokenInfo] = []
 
 
 # --- /test dry-run preview ---
 
 
 class RuleTestRequest(BaseModel):
-    item_id: uuid.UUID
+    #: The item to run against. OPTIONAL since RADD-921: a graph whose items come
+    #: from a search node or a schedule trigger has no seed, and demanding one
+    #: made exactly those graphs — the ones with the most to check — the ones
+    #: that could not be dry-run.
+    item_id: uuid.UUID | None = None
+    #: Which trigger to start from. A graph may hold several entry points and
+    #: they do different things; "the first one" is not a well-formed answer.
+    trigger_node_id: str | None = Field(default=None, max_length=64)
+
+
+class PortResult(BaseModel):
+    """What left one port of one node."""
+
+    port: str
+    count: int
+    #: Item keys, capped. The count is exact; this is a recognisable sample.
+    sample: list[str] = Field(default_factory=list)
+    #: False = the node did not emit this port AT ALL — a gate's untaken branch.
+    #: Distinct from a port that emitted zero items, which is a filter matching
+    #: nothing, and the two mean opposite things downstream.
+    taken: bool = True
+
+
+class NodeResult(BaseModel):
+    """One node's dry run: what arrived, and what left by each port."""
+
+    node_id: str
+    kind: str
+    type: str
+    #: False = never reached — detached from the trigger, or the budget ran out
+    #: before the walk got here.
+    ran: bool = True
+    incoming: int = 0
+    incoming_sample: list[str] = Field(default_factory=list)
+    ports: list[PortResult] = Field(default_factory=list)
 
 
 class ActionPreview(BaseModel):
@@ -399,13 +621,28 @@ class ActionPreview(BaseModel):
     params: dict[str, Any]
     resolves: bool  # would the action's target(s) resolve at apply time?
     detail: str
+    #: Which node planned it, and against which item. A graph runs the same
+    #: action type from several nodes and, at per-item arity, once per item — a
+    #: flat list of "would apply" could not say which was which.
+    node_id: str = ""
+    item_key: str = ""
 
 
 class RuleTestResult(BaseModel):
     rule_id: uuid.UUID
-    item_id: uuid.UUID
+    #: None when the run had no seed item (a schedule or search-fed graph).
+    item_id: uuid.UUID | None = None
     matched: bool
     would_apply: list[ActionPreview]
+    #: Which trigger the run started from.
+    trigger_node_id: str = ""
+    #: Per node, what arrived and what left by each port (RADD-921). The counts
+    #: answer "did my filter narrow anything"; the samples answer "did it keep
+    #: the right ones", which is the question someone debugging actually has.
+    nodes: list[NodeResult] = Field(default_factory=list)
+    #: Budget truncation, surfaced rather than buried in a log — a run that did
+    #: less and a run that had less to do look identical without it.
+    dropped: list[str] = Field(default_factory=list)
 
 
 class RunnableRuleRead(BaseModel):

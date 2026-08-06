@@ -50,3 +50,34 @@ def quiet(enabled: bool = True) -> Iterator[None]:
         yield
     finally:
         _quiet.reset(token)
+
+
+# --- automation causation (spec 116) -----------------------------------------
+
+_automated: ContextVar[bool] = ContextVar("radd_events_automated", default=False)
+
+
+def is_automated() -> bool:
+    """Whether the caller is running inside an `automated()` scope."""
+    return _automated.get()
+
+
+@contextmanager
+def automated(enabled: bool = True) -> Iterator[None]:
+    """Mark every event emitted in this scope as automation-caused.
+
+    THE LOOP GUARD, since "act as" (spec 116). Before it, the engine recognised
+    its own effects by their ACTOR: every engine mutation ran as SYSTEM_ACTOR_ID
+    and `should_process` skipped those. An action that can run as a real person
+    ends that — its events are indistinguishable from that person's own — so
+    causation moved onto the event and identity was left to mean identity.
+
+    A scope rather than a parameter for the same reason `quiet` is one: the emits
+    happen deep inside items/comments/worklogs, which must stay ignorant of who
+    is calling them, and a ContextVar survives `await`.
+    """
+    token = _automated.set(enabled)
+    try:
+        yield
+    finally:
+        _automated.reset(token)

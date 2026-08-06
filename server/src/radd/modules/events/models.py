@@ -42,4 +42,14 @@ class Event(Base):
     # citizen of the audit log and the search index; only the consumers that reach
     # outside the instance — notify, webhooks, automations, realtime — skip it.
     silent: Mapped[bool] = mapped_column(server_default=false(), default=False)
+    # Emitted by an automation's own action (spec 116 "act as"). THE LOOP GUARD.
+    #
+    # It used to be enough that engine mutations carried SYSTEM_ACTOR_ID: the
+    # engine skipped events whose actor was the system, so an action that
+    # re-matched its own trigger applied once. "Act as" ends that — an action can
+    # now run as a real person, whose events are indistinguishable from their
+    # own — so causation is recorded on the EVENT instead of inferred from who
+    # acted. Identity and causation are different questions and this is what
+    # keeps them apart.
+    automated: Mapped[bool] = mapped_column(server_default=false(), default=False)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())

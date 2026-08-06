@@ -1,25 +1,47 @@
+import logging
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.events import service as events
 from radd.modules.fields import service as fields
+from radd.modules.auth import authz
+from radd.modules.auth.models import User
+from radd.modules.auth.types import Permission
 from radd.modules.fields.models import FieldDefinition
 from radd.modules.items import slq
 
 from radd import schedule as schedule_math
 from radd.clock import utcnow
-from .models import AutomationRule, AutomationScheduleState
-from .schemas import RuleCreate, RuleRead, RuleUpdate
+from . import graph
+from . import nodes as nodes_registry
+from .models import Automation, AutomationScheduleState, TriggerBinding
+from .executor import ACTION_TYPE_PREFIX
+from .schemas import (
+    ActionAdapter,
+    RuleCreate,
+    RuleRead,
+    RuleUpdate,
+    TriggerRead,
+    known_trigger,
+)
+from .email_action import is_role
 from .types import (
+    ARITY_PARAM,
     SYSTEM_ACTOR_ID,
+    ActionType,
+    AutomationNodeKind,
     AutomationEntity,
     AutomationEvent,
     AutomationTrigger,
+    NodeArity,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 async def _scope_definitions(session: AsyncSession) -> dict[str, FieldDefinition]:
@@ -46,116 +68,347 @@ async def _validate_condition(session: AsyncSession, condition_slq: str) -> None
     )
 
 
-def _serialize_actions(data: RuleCreate | RuleUpdate) -> list[dict]:
-    return [action.model_dump(mode="json") for action in data.actions or []]
+async def _validate_graph(
+    session: AsyncSession,
+    nodes: list[dict],
+    edges: list[dict],
+    actor_id: uuid.UUID | None = None,
+) -> list[graph.Node]:
+    """Structure first, then the parts only a database can check.
 
+    `graph.validate` answers "is this a legal DAG with one trigger and real
+    ports"; it is pure, so it cannot know whether a filter's SLQ compiles. Both
+    run on write — the engine re-validates the structure on read, but a bad SLQ
+    caught here is a 422 on the form instead of a filter that silently matches
+    nothing at 3am.
+    """
+    try:
+        parsed_nodes, parsed_edges = graph.parse(nodes, edges)
+        triggers = graph.validate(parsed_nodes, parsed_edges, nodes_registry.ports_of)
+    except graph.GraphError as exc:
+        raise ConflictError(AutomationEntity.RULE, reason=str(exc)) from exc
 
+    for trigger in triggers:
+        try:
+            known_trigger(str(trigger.params.get("event") or AutomationTrigger.MANUAL))
+        except ValueError as exc:
+            raise ConflictError(AutomationEntity.RULE, reason=str(exc)) from exc
+        _check_trigger(trigger, parsed_nodes)
 
-def _check_schedule_consistency(rule: AutomationRule) -> None:
-    """Spec 69 invariants after a write: `schedule` present iff the trigger is
-    the schedule sentinel, and scheduled rules carry no event conditions
-    (there is no event). Raised as 409 per the form-error idiom."""
-    scheduled = rule.trigger == AutomationTrigger.SCHEDULE
-    if scheduled and rule.schedule is None:
-        raise ConflictError(AutomationEntity.RULE, reason="a scheduled rule needs a schedule")
-    if not scheduled and rule.schedule is not None:
-        raise ConflictError(
-            AutomationEntity.RULE, reason="only schedule-triggered rules take a schedule"
+    # `act_as` is a privilege, checked where it is WRITTEN. Checking it at run
+    # time instead would mean an automation that saves cleanly and then quietly
+    # refuses at 3am, and the field is hidden in the UI for anyone without the
+    # atom — a hidden field that the API still accepts is not a permission.
+    acting_as = {
+        str(node.params.get("act_as") or "").strip()
+        for node in parsed_nodes
+        if node.kind is AutomationNodeKind.ACTION and node.params.get("act_as")
+    }
+    if acting_as and actor_id is not None:
+        author = await session.get(User, actor_id)
+        if author is not None:
+            # A plain 403 naming the atom, not a 409: this is a permission
+            # failure, and the editor hides the field entirely for anyone
+            # without it — reaching here means the API was called directly.
+            await authz.require(session, author, Permission.AUTOMATION_ACT_AS)
+
+    for node in parsed_nodes:
+        _check_arity(node)
+        if node.kind in (AutomationNodeKind.FILTER, AutomationNodeKind.SOURCE):
+            # A source's query is compiled on write for the same reason a
+            # filter's is: a query that does not compile is an automation that
+            # finds nothing at 3am, and the form is where that is fixable.
+            await _validate_condition(session, str(node.params.get("slq") or ""))
+        elif node.kind is AutomationNodeKind.ACTION:
+            spec = nodes_registry.spec_for(node)
+            if spec is not None:
+                # A CONTRIBUTED action (RADD-923) is not in the built-in union and
+                # never will be — that is the point of it. Its own params_schema
+                # is the check, and its declared atom is enforced HERE, where the
+                # automation is written, for the same reason `act_as` is: a
+                # permission that only bites at 3am is not a permission.
+                _check_node_schema(node, spec)
+                await _require_node_permission(session, spec, actor_id)
+                continue
+            # Params are an untyped envelope on the wire; the action union is
+            # what type-checks them, exactly as it did when they were a rule
+            # column. A ValidationError here is a 422 on the form.
+            ActionAdapter.validate_python(
+                {"type": node.type.removeprefix(ACTION_TYPE_PREFIX), "params": node.params}
+            )
+            _check_recipient_arity(node)
+
+    detached = {n.id for n in parsed_nodes} - graph.is_reachable(
+        [t.id for t in triggers], parsed_nodes, parsed_edges
+    )
+    if detached:
+        # Not fatal — someone mid-build has every right to a dangling node — but
+        # it is the quietest way for an automation to do nothing, so it is said
+        # out loud rather than discovered later.
+        logger.info(
+            "automations: nodes not reachable from any trigger and will never run: %s",
+            ", ".join(sorted(detached)),
         )
-    if scheduled and rule.event_conditions is not None:
+    return triggers
+
+
+def _check_node_schema(node: graph.Node, spec) -> None:
+    """A contributed node's params against its own JSON Schema (RADD-923).
+
+    Deliberately shallow — required keys and enum membership. A full JSON Schema
+    validator here would be a second, stricter opinion than the SPA's generated
+    form, and the two disagreeing is worse than either being loose: it produces a
+    form that saves a value it just offered.
+    """
+    schema = spec.params_schema or {}
+    properties = schema.get("properties") or {}
+    for key in schema.get("required") or []:
+        if not str(node.params.get(key) or "").strip():
+            raise ConflictError(
+                AutomationEntity.RULE,
+                reason=f"node {node.id!r} ({spec.key}): {key!r} is required",
+            )
+    for key, rule in properties.items():
+        allowed = rule.get("enum")
+        value = node.params.get(key)
+        if allowed and value is not None and value not in allowed:
+            raise ConflictError(
+                AutomationEntity.RULE,
+                reason=(
+                    f"node {node.id!r} ({spec.key}): {key!r} must be one of "
+                    f"{', '.join(map(str, allowed))}"
+                ),
+            )
+
+
+async def _require_node_permission(session: AsyncSession, spec, actor_id) -> None:
+    """A contributed node's declared atom, checked where the automation is WRITTEN.
+
+    Same rule as `act_as`: an automation that saves cleanly and then refuses at
+    3am is worse than one that refuses now, and the editor hides what the caller
+    cannot use — so reaching here without the atom means the API was called
+    directly."""
+    if not spec.permission or actor_id is None:
+        return
+    author = await session.get(User, actor_id)
+    if author is not None:
+        await authz.require(session, author, spec.permission)
+
+
+def _check_arity(node: graph.Node) -> None:
+    """A stored `arity` must be one the node type actually offers.
+
+    Pydantic ignores unknown params, so a typo would otherwise be accepted and
+    silently fall back to the default — the automation would run in a mode
+    nobody chose, and the editor would keep showing the mode they typed."""
+    raw = node.params.get(ARITY_PARAM)
+    if raw is None:
+        return
+    rule = nodes_registry.arity_rule(node.type)
+    if str(raw) not in {option.value for option in rule.options}:
         raise ConflictError(
             AutomationEntity.RULE,
-            reason="a scheduled rule cannot have event conditions (there is no event)",
+            reason=(
+                f"node {node.id!r} ({node.type}) cannot run {str(raw)!r} — "
+                f"it supports {', '.join(option.value for option in rule.options)}"
+            ),
         )
 
 
-async def _sync_schedule_state(session: AsyncSession, rule: AutomationRule) -> None:
-    """(Re)compute the rule's automation_schedule_state row: enabled scheduled
-    rules get a fresh next_run_at; everything else drops the row."""
-    state = await session.get(AutomationScheduleState, rule.id)
-    active = rule.trigger == AutomationTrigger.SCHEDULE and rule.enabled
-    if not active:
-        if state is not None:
-            await session.delete(state)
-            await session.flush()
+def _check_recipient_arity(node: graph.Node) -> None:
+    """A ROLE recipient names a property of one item, so the action must run per
+    item to have one.
+
+    Caught on write rather than at run time because the failure is invisible
+    otherwise: `send_email` addressed to `reporter` at set arity resolves no
+    recipient and skip-logs, which is exactly what "email each reporter" did on
+    every scheduled run before RADD-918 — a configured, saved, enabled
+    automation that had never once sent a message.
+    """
+    action = node.type.removeprefix(ACTION_TYPE_PREFIX)
+    if action not in (ActionType.SEND_EMAIL.value, ActionType.NOTIFY_USER.value):
         return
-    next_run_at = schedule_math.next_run(rule.schedule, utcnow(), settings.scheduler_tz)
-    if state is None:
-        session.add(AutomationScheduleState(rule_id=rule.id, next_run_at=next_run_at))
-    else:
-        state.next_run_at = next_run_at
+    target = str(node.params.get("to") or node.params.get("user") or "")
+    if is_role(target) and nodes_registry.arity_of(node) is not NodeArity.ITEM:
+        raise ConflictError(
+            AutomationEntity.RULE,
+            reason=(
+                f"node {node.id!r}: {target!r} is a property of one issue, so this "
+                f"action must run once per item — it would resolve no recipient "
+                f"otherwise. Name an address instead, or switch it to per item."
+            ),
+        )
+
+
+def _check_trigger(trigger: graph.Node, nodes: list[graph.Node]) -> None:
+    """Spec 69 invariants, per TRIGGER node. Raised as 409 per the form-error idiom."""
+    event = str(trigger.params.get("event") or AutomationTrigger.MANUAL)
+    schedule = trigger.params.get("schedule")
+    scheduled = event == AutomationTrigger.SCHEDULE
+    if scheduled and not isinstance(schedule, dict):
+        raise ConflictError(
+            AutomationEntity.RULE,
+            reason=f"trigger {trigger.id!r}: a schedule trigger needs a schedule",
+        )
+    if not scheduled and schedule is not None:
+        raise ConflictError(
+            AutomationEntity.RULE,
+            reason=f"trigger {trigger.id!r}: only a schedule trigger takes a schedule",
+        )
+    if scheduled and any(n.kind is AutomationNodeKind.GATE for n in nodes):
+        # A gate reads the EVENT, and a schedule has none. The check stays
+        # graph-wide rather than per-branch because a gate anywhere downstream of
+        # a schedule trigger can only ever evaluate against nothing.
+        raise ConflictError(
+            AutomationEntity.RULE,
+            reason="a scheduled automation cannot gate on event conditions (there is no event)",
+        )
+
+
+async def _sync_triggers(
+    session: AsyncSession, rule: Automation, triggers: list[graph.Node]
+) -> None:
+    """Rebuild the automation's trigger bindings and their scheduler state.
+
+    The graph is the source of truth; these rows are the index the engine and the
+    scheduler query. Rebuilt wholesale on every write rather than diffed — a
+    graph is small, and a diff is where a stale binding survives a node rename
+    and keeps firing an automation nobody can see the trigger for.
+
+    Schedule state is preserved per node where it can be: a rule saved for an
+    unrelated reason must not silently reset a daily trigger's next_run_at and
+    skip a day.
+    """
+    existing_states = {
+        (state.automation_id, state.node_id): state
+        for state in (
+            await session.execute(
+                select(AutomationScheduleState).where(
+                    AutomationScheduleState.automation_id == rule.id
+                )
+            )
+        ).scalars()
+    }
+    # Read the OLD schedules before the bindings go, so "did this trigger's
+    # schedule change" can be answered without a second copy of it on the state
+    # row. Without this the only options are re-anchoring every save (which can
+    # push a daily run past its window) or never re-anchoring (which ignores an
+    # edit).
+    previous_schedules = {
+        binding.node_id: binding.schedule
+        for binding in (
+            await session.execute(
+                select(TriggerBinding).where(TriggerBinding.automation_id == rule.id)
+            )
+        ).scalars()
+    }
+    await session.execute(
+        delete(TriggerBinding).where(TriggerBinding.automation_id == rule.id)
+    )
+
+    keep: set[tuple[uuid.UUID, str]] = set()
+    for trigger in triggers:
+        event = str(trigger.params.get("event") or AutomationTrigger.MANUAL)
+        schedule = trigger.params.get("schedule")
+        schedule = schedule if isinstance(schedule, dict) else None
+        session.add(
+            TriggerBinding(
+                automation_id=rule.id,
+                node_id=trigger.id,
+                event_type=event,
+                schedule=schedule,
+            )
+        )
+        if event != AutomationTrigger.SCHEDULE or not rule.enabled or schedule is None:
+            continue
+        key = (rule.id, trigger.id)
+        keep.add(key)
+        state = existing_states.get(key)
+        next_run_at = schedule_math.next_run(schedule, utcnow(), settings.scheduler_tz)
+        if state is None:
+            session.add(
+                AutomationScheduleState(
+                    automation_id=rule.id, node_id=trigger.id, next_run_at=next_run_at
+                )
+            )
+        elif previous_schedules.get(trigger.id) != schedule:
+            # Only re-anchor when the SCHEDULE itself changed. Recomputing on
+            # every save would let a rename push a daily run past its window.
+            state.next_run_at = next_run_at
+
+    for key, state in existing_states.items():
+        if key not in keep:
+            await session.delete(state)
     await session.flush()
+
+
+def _dump(models) -> list[dict]:
+    return [m.model_dump(mode="json") for m in models or []]
 
 
 async def create_rule(
     session: AsyncSession, data: RuleCreate, actor_id: uuid.UUID | None = None
-) -> AutomationRule:
-    await _validate_condition(session, data.condition_slq)
-    rule = AutomationRule(
+) -> Automation:
+    nodes, edges = _dump(data.nodes), _dump(data.edges)
+    triggers = await _validate_graph(session, nodes, edges, actor_id)
+    rule = Automation(
         name=data.name,
         enabled=data.enabled,
-        trigger=data.trigger,
-        event_conditions=(
-            data.event_conditions.model_dump(mode="json") if data.event_conditions else None
-        ),
-        condition_slq=data.condition_slq,
-        actions=_serialize_actions(data),
+        nodes=nodes,
+        edges=edges,
         position=data.position,
-        schedule=(
-            data.schedule.model_dump(mode="json", exclude_none=True) if data.schedule else None
-        ),
+        orientation=data.orientation,
+        created_by_id=actor_id,
     )
-    _check_schedule_consistency(rule)
     session.add(rule)
     await session.flush()
-    await _sync_schedule_state(session, rule)
+    await _sync_triggers(session, rule, triggers)
     await _emit(session, AutomationEvent.CREATED, rule, actor_id)
     return rule
 
 
 async def update_rule(
     session: AsyncSession, rule_id: uuid.UUID, data: RuleUpdate, actor_id: uuid.UUID | None = None
-) -> AutomationRule:
+) -> Automation:
     rule = await get_rule(session, rule_id)
     if data.name is not None:
         rule.name = data.name
     if data.enabled is not None:
         rule.enabled = data.enabled
-    if data.trigger is not None:
-        rule.trigger = data.trigger
-    if "event_conditions" in data.model_fields_set:
-        rule.event_conditions = (
-            data.event_conditions.model_dump(mode="json") if data.event_conditions else None
-        )
-    if "condition_slq" in data.model_fields_set:
-        condition = data.condition_slq or ""
-        await _validate_condition(session, condition)
-        rule.condition_slq = condition
-    if data.actions is not None:
-        rule.actions = _serialize_actions(data)
     if data.position is not None:
         rule.position = data.position
-    if "schedule" in data.model_fields_set:
-        rule.schedule = (
-            data.schedule.model_dump(mode="json", exclude_none=True) if data.schedule else None
-        )
-    _check_schedule_consistency(rule)
+
+    # The graph is replaced whole or not at all. A partial update — new nodes
+    # against old edges — is a graph nobody validated, and the halfway state is
+    # exactly where a dangling edge would survive.
+    if data.orientation is not None:
+        rule.orientation = data.orientation
+
+    if "nodes" in data.model_fields_set or "edges" in data.model_fields_set:
+        nodes = _dump(data.nodes) if data.nodes is not None else rule.nodes
+        edges = _dump(data.edges) if data.edges is not None else rule.edges
+        triggers = await _validate_graph(session, nodes, edges, actor_id)
+        rule.nodes, rule.edges = nodes, edges
+    else:
+        parsed = graph.parse(rule.nodes, rule.edges)
+        triggers = graph.validate(*parsed, nodes_registry.ports_of)
+
     await session.flush()
-    await _sync_schedule_state(session, rule)
+    await _sync_triggers(session, rule, triggers)
     await _emit(session, AutomationEvent.UPDATED, rule, actor_id)
     return rule
 
 
-async def get_rule(session: AsyncSession, rule_id: uuid.UUID) -> AutomationRule:
-    rule = await session.get(AutomationRule, rule_id)
+async def get_rule(session: AsyncSession, rule_id: uuid.UUID) -> Automation:
+    rule = await session.get(Automation, rule_id)
     if rule is None:
         raise NotFoundError(AutomationEntity.RULE, rule_id)
     return rule
 
 
-async def list_rules(session: AsyncSession) -> list[AutomationRule]:
+async def list_rules(session: AsyncSession) -> list[Automation]:
     result = await session.execute(
-        select(AutomationRule).order_by(AutomationRule.position, AutomationRule.created_at)
+        select(Automation).order_by(Automation.position, Automation.created_at)
     )
     return list(result.scalars())
 
@@ -170,18 +423,39 @@ async def delete_rule(
 
 async def rules_for_trigger(
     session: AsyncSession, trigger: str
-) -> list[AutomationRule]:
-    """Enabled rules whose trigger (event type or "manual") matches, in
-    evaluation order (engine seam)."""
+) -> list[tuple[Automation, str]]:
+    """Enabled automations with a trigger binding for this event, paired with the
+    NODE ID that matched, in evaluation order (engine seam).
+
+    The node id is returned rather than looked up again because a graph may hold
+    several triggers and the run must start at the one that fired — starting at
+    "the trigger" is no longer a well-formed idea."""
     result = await session.execute(
-        select(AutomationRule)
+        select(Automation, TriggerBinding.node_id)
+        .join(TriggerBinding, TriggerBinding.automation_id == Automation.id)
         .where(
-            AutomationRule.enabled.is_(True),
-            AutomationRule.trigger == trigger,
+            Automation.enabled.is_(True),
+            TriggerBinding.event_type == trigger,
         )
-        .order_by(AutomationRule.position, AutomationRule.created_at)
+        .order_by(Automation.position, Automation.created_at)
     )
-    return list(result.scalars())
+    return [(automation, node_id) for automation, node_id in result.all()]
+
+
+async def manual_trigger_node(session: AsyncSession, rule_id: uuid.UUID) -> str | None:
+    """The id of this automation's MANUAL trigger node, or None if it has none.
+
+    "Is this a manual rule?" used to be a column read. Since spec 116 an
+    automation may hold several triggers, so the question is really "does it have
+    a manual entry point, and which node is it" — the run must start THERE, or a
+    graph that also fires on a schedule would run the Monday branch when someone
+    pressed the button."""
+    return await session.scalar(
+        select(TriggerBinding.node_id).where(
+            TriggerBinding.automation_id == rule_id,
+            TriggerBinding.event_type == AutomationTrigger.MANUAL.value,
+        )
+    )
 
 
 async def schedule_states(
@@ -196,28 +470,67 @@ async def schedule_states(
     return {state.rule_id: state for state in result.scalars()}
 
 
-async def rule_reads(session: AsyncSession, rules: list[AutomationRule]) -> list[RuleRead]:
-    """RuleRead payloads with next/last-run stamps batch-hydrated from
-    automation_schedule_state (None for event/manual rules)."""
-    states = await schedule_states(session, [rule.id for rule in rules])
+async def rule_reads(session: AsyncSession, rules: list[Automation]) -> list[RuleRead]:
+    """RuleRead payloads with each trigger's scheduler stamps, batch-hydrated.
+
+    Batched deliberately: the settings list renders every automation, and a
+    per-rule query here is the N+1 that turns a 30-automation page into 60
+    round trips."""
+    ids = [rule.id for rule in rules]
+    bindings: dict[uuid.UUID, list[TriggerBinding]] = {}
+    states: dict[tuple[uuid.UUID, str], AutomationScheduleState] = {}
+    if ids:
+        for binding in (
+            await session.execute(
+                select(TriggerBinding).where(TriggerBinding.automation_id.in_(ids))
+            )
+        ).scalars():
+            bindings.setdefault(binding.automation_id, []).append(binding)
+        for state in (
+            await session.execute(
+                select(AutomationScheduleState).where(
+                    AutomationScheduleState.automation_id.in_(ids)
+                )
+            )
+        ).scalars():
+            states[(state.automation_id, state.node_id)] = state
+
     reads: list[RuleRead] = []
     for rule in rules:
-        state = states.get(rule.id)
-        reads.append(
-            RuleRead.model_validate(rule).model_copy(
-                update={
-                    "next_run_at": state.next_run_at if state else None,
-                    "last_run_at": state.last_run_at if state else None,
-                }
+        triggers = []
+        for binding in sorted(bindings.get(rule.id, []), key=lambda b: b.node_id):
+            state = states.get((rule.id, binding.node_id))
+            triggers.append(
+                TriggerRead(
+                    node_id=binding.node_id,
+                    event_type=binding.event_type,
+                    schedule=binding.schedule,
+                    next_run_at=state.next_run_at if state else None,
+                    last_run_at=state.last_run_at if state else None,
+                )
             )
-        )
+        reads.append(RuleRead.model_validate(rule).model_copy(update={"triggers": triggers}))
     return reads
+
+
+def _trigger_events(rule: Automation) -> set[str]:
+    """The event types this graph's trigger nodes name, read off the graph.
+
+    Read from `nodes` rather than the binding rows because `_emit` runs inside
+    the same transaction that rebuilt them, and the graph is the source of truth
+    either way."""
+    events_named: set[str] = set()
+    for node in rule.nodes or []:
+        if isinstance(node, dict) and node.get("kind") == AutomationNodeKind.TRIGGER.value:
+            params = node.get("params") or {}
+            events_named.add(str(params.get("event") or AutomationTrigger.MANUAL))
+    return events_named
 
 
 async def _emit(
     session: AsyncSession,
     event_type: AutomationEvent,
-    rule: AutomationRule,
+    rule: Automation,
     actor_id: uuid.UUID | None,
 ) -> None:
     await events.emit(
@@ -226,5 +539,12 @@ async def _emit(
         entity_type=AutomationEntity.RULE,
         entity_id=rule.id,
         actor_id=actor_id,
-        payload={"name": rule.name, "trigger": rule.trigger, "enabled": rule.enabled},
+        # `triggers` (plural) since spec 116: a graph may fire from several
+        # entry points, so a single `trigger` key could only ever name one of
+        # them and would quietly misdescribe the rest.
+        payload={
+            "name": rule.name,
+            "triggers": sorted(_trigger_events(rule)),
+            "enabled": rule.enabled,
+        },
     )

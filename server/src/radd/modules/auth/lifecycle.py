@@ -51,6 +51,12 @@ _MERGE_REPOINT: tuple[tuple[str, str], ...] = (
     ("access_grants", "granted_by"),
     ("global_role_grants", "granted_by"),
     ("comments", "author_id"),
+    # Spec 116: an automation's author, and the identity its actions run as by
+    # default. Repointed rather than nulled — a merge asserts one person, so the
+    # surviving identity keeps authoring (and running) it. Nulling would silently
+    # drop the automation back to the system actor, quietly widening what it can
+    # do.
+    ("automations", "created_by_id"),
     # RADD-726: who closed an inline thread. Plain attribution — a merge should
     # show the surviving identity as having resolved it, same as authorship.
     ("comments", "resolved_by"),

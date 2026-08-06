@@ -8,7 +8,7 @@ import { usePermissions } from "../../lib/hooks";
 import { useListFilter } from "../../lib/list-filter";
 import { triggerLabel } from "../../lib/meta";
 import { automationCatalogQuery, automationsQuery, queryKeys } from "../../lib/queries";
-import { Permission, type Rule, type RuleUpdate } from "../../lib/types";
+import { NodeKind, Permission, type Rule, type RuleUpdate } from "../../lib/types";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { ListSearchInput } from "../../components/ListSearchInput";
@@ -115,23 +115,43 @@ function RuleRow({ rule, onEdit }: { rule: Rule; onEdit: () => void }) {
     mutationFn: () => api.delete<void>(apiAutomationPath(rule.id)),
     onSuccess: invalidate,
   });
+  // Spec 116: actions are ACTION nodes of the graph, not a flat list.
+  const actionCount = rule.nodes.filter((node) => node.kind === NodeKind.action).length;
+  // The soonest upcoming run across every schedule trigger — with several
+  // clocks, "next run" is the earliest of them, not whichever sorted first.
+  const nextRun = rule.triggers
+    .map((trigger) => trigger.next_run_at)
+    .filter((stamp): stamp is string => Boolean(stamp))
+    .sort()[0];
 
   return (
     <li className="flex items-center gap-3 border-b border-subtle/60 px-4 py-2.5 last:border-b-0">
       <Workflow size={14} className="shrink-0 text-accent-text" aria-hidden />
       <span className="truncate text-[13px] font-medium text-heading">{rule.name}</span>
-      <span className="rounded border border-strong px-1.5 py-px text-[10px] uppercase tracking-wide text-fg-secondary">
-        {triggerLabel(rule.trigger, catalog.data)}
-      </span>
-      <span className="text-[11px] text-fg-faint">
-        {rule.actions.length} action{rule.actions.length === 1 ? "" : "s"}
-      </span>
-      {rule.schedule && (
-        <span className="text-[11px] text-fg-muted">
-          {rule.next_run_at && rule.enabled ? `next ${shortDateTime(rule.next_run_at)}` : null}
-          {rule.next_run_at && rule.enabled && rule.last_run_at ? " · " : null}
-          {rule.last_run_at ? `last ${shortDateTime(rule.last_run_at)}` : null}
+      {/* Every trigger, not just one: a graph may fire from several, and showing
+          the first would misdescribe when this automation actually runs. */}
+      {rule.triggers.length === 0 ? (
+        <span
+          className="rounded border border-strong px-1.5 py-px text-[10px] uppercase tracking-wide text-fg-faint"
+          title="No trigger node — this automation can never run"
+        >
+          no trigger
         </span>
+      ) : (
+        rule.triggers.map((trigger) => (
+          <span
+            key={trigger.node_id}
+            className="shrink-0 rounded border border-strong px-1.5 py-px text-[10px] uppercase tracking-wide text-fg-secondary"
+          >
+            {triggerLabel(trigger.event_type, catalog.data)}
+          </span>
+        ))
+      )}
+      <span className="shrink-0 text-[11px] text-fg-faint">
+        {actionCount} action{actionCount === 1 ? "" : "s"}
+      </span>
+      {nextRun && rule.enabled && (
+        <span className="shrink-0 text-[11px] text-fg-muted">next {shortDateTime(nextRun)}</span>
       )}
 
       <label className="ml-auto flex shrink-0 cursor-pointer items-center gap-1.5 text-[11px] text-fg-secondary">

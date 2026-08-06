@@ -36,17 +36,23 @@ from radd.modules.events.service import Event
 from radd.modules.fields import service as fields
 from radd.modules.fields.models import FieldDefinition
 from radd.modules.items import service as items, slq
-from radd.modules.items.enums import ItemEntity, Priority
+from radd.modules.items.enums import ItemEntity, ItemKind, Priority
 from radd.modules.items.models import WorkItem
 from radd.modules.items.schemas import ItemCreate, ItemUpdate
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
+from datetime import date
+
+from radd.modules.items.slq.helpers import relative_date
+from radd.modules.items.slq.parser import Value
+from radd.modules.itemtypes import service as itemtypes_service
+from radd.modules.items.service import queries as items_queries
 from radd.modules.releases import service as releases_service
 from radd.modules.teams import service as teams_service
 from radd.modules.workflow import service as workflow
 
 from . import catalog, conditions
-from .email_action import resolve_recipient
+from .email_action import is_role, resolve_recipient, resolve_user
 from .templating import render_template
 from .types import (
     CLEAR_VALUE,
@@ -60,8 +66,17 @@ from .types import (
 
 
 def is_automation_caused(event: Event) -> bool:
-    """True if this event was emitted by an engine-applied mutation (the loop guard)."""
-    return event.actor_id == SYSTEM_ACTOR_ID
+    """True if this event was emitted by an engine-applied mutation (the loop guard).
+
+    Reads the event's own `automated` marker, not its actor. Since spec 116 an
+    action may run AS a real person, so "the actor is the system user" no longer
+    answers "did an automation cause this" — and inferring it from identity would
+    let any act-as automation re-trigger itself forever.
+
+    The actor check stays as a second arm: the scheduler and older rows predate
+    the marker, and an event with the system actor is automation-caused either
+    way."""
+    return bool(getattr(event, "automated", False)) or event.actor_id == SYSTEM_ACTOR_ID
 
 
 def should_process(event: Event) -> bool:
@@ -83,20 +98,24 @@ def should_process(event: Event) -> bool:
 
 
 async def _resolve_target_item(session: AsyncSession, event: Event) -> WorkItem | None:
-    """The item a rule's SLQ + actions apply to: the event's entity when it IS an
-    item, else the payload's `item_id` (comments, worklogs, attachments, links —
-    the stream-wide convention). None for itemless events (cycles, docs, …)."""
-    item_id: uuid.UUID | None = None
-    if event.entity_type == ItemEntity.ITEM.value:
-        item_id = uuid.UUID(event.entity_id)
-    else:
-        raw = (event.payload or {}).get("item_id")
-        if raw:
-            try:
-                item_id = uuid.UUID(str(raw))
-            except ValueError:
-                return None
-    return None if item_id is None else await session.get(WorkItem, item_id)
+    """The item a rule's actions apply to.
+
+    ONE rule since RADD-922: `payload.item.id`, which every item-scoped event
+    carries. It used to be two — the entity id when the entity was an item, the
+    payload's `item_id` otherwise — because the item events were the only ones
+    that did not name the item in their payload. The entity fallback stays for
+    the item events' own `entity_id`, which is the same value and free.
+    """
+    raw = ((event.payload or {}).get("item") or {}).get("id")
+    if not raw and event.entity_type == ItemEntity.ITEM.value:
+        raw = event.entity_id
+    if not raw:
+        return None
+    try:
+        item_id = uuid.UUID(str(raw))
+    except ValueError:
+        return None
+    return await session.get(WorkItem, item_id)
 
 
 async def _event_facts(session: AsyncSession, event: Event) -> conditions.EventFacts:
@@ -170,10 +189,133 @@ def _manual_facts() -> conditions.EventFacts:
     )
 
 
+async def _plan_create_item(
+    session: AsyncSession,
+    params: dict,
+    target: Project,
+    system_user: User,
+    facts: conditions.EventFacts,
+    ictx: dict[str, Any] | None,
+    items: list[dict[str, Any]] | None = None,
+) -> "_Plan":
+    """Resolve every named target into the ItemCreate the items service wants.
+
+    Names, not ids, all the way through — an automation is written against a
+    project's vocabulary ("In Review", "Bug", "alice@…") and must keep working
+    when the underlying rows are recreated. Anything that will not resolve
+    SKIPS with the name in the message, because a create that silently drops the
+    assignee is worse than one that does not happen.
+    """
+    text = lambda value: render_template(str(value), facts, ictx, items)  # noqa: E731
+
+    create_kwargs: dict[str, Any] = {
+        "project_id": target.id,
+        "title": text(params["title"]),
+        "description": text(params.get("description", "")),
+        "priority": Priority(params["priority"]) if params.get("priority") else Priority.NORMAL,
+        "flagged": bool(params.get("flagged")),
+    }
+    if params.get("kind"):
+        create_kwargs["kind"] = ItemKind(params["kind"])
+    if params.get("estimate_points") is not None:
+        create_kwargs["estimate_points"] = params["estimate_points"]
+
+    if name := params.get("type"):
+        found = next(
+            (t for t in await itemtypes_service.list_types(session, target.id)
+             if t.name == text(name)),
+            None,
+        )
+        if found is None:
+            return _Plan(PlanKind.SKIP, f"create_item: no issue type {name!r} in {target.key}")
+        create_kwargs["type_id"] = found.id
+    if name := params.get("state"):
+        found = await _state_by_name(session, target.id, text(name))
+        if found is None:
+            return _Plan(PlanKind.SKIP, f"create_item: no state {name!r} in {target.key}")
+        create_kwargs["state_id"] = found.id
+    for key in ("assignee", "reporter"):
+        if value := params.get(key):
+            if _is_clear(str(value)):
+                continue
+            found = await auth.get_user_by_email(session, text(value))
+            if found is None:
+                return _Plan(PlanKind.SKIP, f"create_item: no user {value!r} for {key}")
+            create_kwargs[f"{key}_id"] = found.id
+    if name := params.get("team"):
+        found = await _team_by_name(session, text(name))
+        if found is None:
+            return _Plan(PlanKind.SKIP, f"create_item: no team {name!r}")
+        create_kwargs["team_id"] = found.id
+    if name := params.get("cycle"):
+        found = await _cycle_by_name(session, text(name))
+        if found is None:
+            return _Plan(PlanKind.SKIP, f"create_item: no cycle {name!r}")
+        create_kwargs["cycle_id"] = found.id
+    if version := params.get("release"):
+        found = await releases_service.resolve_release(session, target.id, text(version))
+        if found is None:
+            return _Plan(PlanKind.SKIP, f"create_item: no release {version!r} in {target.key}")
+        create_kwargs["release_id"] = found.id
+    if key := params.get("parent"):
+        found = await items_queries.find_item_by_key(session, text(key))
+        if found is None:
+            return _Plan(PlanKind.SKIP, f"create_item: no item {key!r} to parent under")
+        create_kwargs["parent_id"] = found.id
+    for field in ("start_date", "target_date"):
+        if value := params.get(field):
+            resolved = _resolve_date(text(value))
+            if resolved is None:
+                return _Plan(PlanKind.SKIP, f"create_item: {field} {value!r} is not a date")
+            create_kwargs[field] = resolved
+
+    labels = [text(label) for label in (params.get("labels") or []) if str(label).strip()]
+    custom = {
+        key: text(value) if isinstance(value, str) else value
+        for key, value in (params.get("custom_fields") or {}).items()
+    }
+    if labels:
+        create_kwargs["labels"] = labels
+    if custom:
+        # Validated by the items service against the target project's field
+        # definitions — the same path a human create takes, rather than a second
+        # validator here that could disagree with it.
+        create_kwargs["custom_fields"] = custom
+
+    create = ItemCreate(**create_kwargs)
+    return _Plan(
+        PlanKind.CREATE_ITEM,
+        f"create_item in {target.key}: {create.title!r}",
+        item_create=create,
+    )
+
+
+def _resolve_date(value: str) -> date | None:
+    """An ISO date, or a relative literal the SLQ vocabulary already knows."""
+    relative = relative_date(Value(value), date.today())
+    if relative is not None:
+        return relative
+    try:
+        return date.fromisoformat(value.strip())
+    except ValueError:
+        return None
+
+
 def _item_ctx(item: WorkItem | None, project: Project | None) -> dict[str, Any] | None:
     if item is None or project is None:
         return None
     return {"key": f"{project.key}-{item.number}", "title": item.title, "id": str(item.id)}
+
+
+def items_ctx(scope: list[tuple[WorkItem, Project | None]]) -> list[dict[str, Any]]:
+    """The set an action is speaking for, as template/webhook context.
+
+    One shape for both arities (RADD-918): the whole packet when the action runs
+    once, the single item when it runs per item. That is what lets `{{items.keys}}`
+    and the webhook's `items[]` read correctly in either mode without the planner
+    knowing which one it is in.
+    """
+    return [ctx for item, project in scope if (ctx := _item_ctx(item, project)) is not None]
 
 
 def _is_clear(value: str) -> bool:
@@ -222,27 +364,26 @@ async def _plan(
     *,
     facts: conditions.EventFacts,
     rule_name: str,
+    items: list[dict[str, Any]] | None = None,
 ) -> _Plan:
     """Resolve one stored action — read-only. Returns the work to perform, or a
     'skip' plan when a named target no longer resolves (logged, not fatal).
-    Item actions require `item`/`project` (the caller guarantees it); universal
-    actions (spec 58b) render their `{{token}}` templates from `facts`."""
+
+    `item` is the ONE item this invocation targets (per-item arity, or a set of
+    exactly one); `items` is everything it speaks for, which is what the
+    set-shaped tokens and the webhook body render from. Both are supplied by the
+    executor, so the planner never asks which arity it is in."""
     action_type = ActionType(action["type"])
     params = action["params"]
     ictx = _item_ctx(item, project)
+    text = lambda value: render_template(str(value), facts, ictx, items)  # noqa: E731
     match action_type:
         case ActionType.CREATE_ITEM:
-            target = await _project_by_key(session, params["project"])
+            target = await _project_by_key(session, text(params["project"]))
             if target is None:
                 return _Plan(PlanKind.SKIP, f"create_item: no project {params['project']!r}")
-            create = ItemCreate(
-                project_id=target.id,
-                title=render_template(params["title"], facts, ictx),
-                description=render_template(params.get("description", ""), facts, ictx),
-                priority=Priority(params["priority"]) if params.get("priority") else Priority.NORMAL,
-            )
-            return _Plan(
-                PlanKind.CREATE_ITEM, f"create_item in {target.key}: {create.title!r}", item_create=create
+            return await _plan_create_item(
+                session, params, target, system_user, facts, ictx, items
             )
         case ActionType.SEND_WEBHOOK:
             body = {
@@ -254,6 +395,10 @@ async def _plan(
                     "name": facts.actor_name,
                 },
                 "item": ictx,
+                # The SET, which the body could not carry before (RADD-918): a
+                # scheduled run posted `"item": null` and a count, so a receiver
+                # could not tell which issues the automation was about.
+                "items": items or [],
                 "payload": facts.payload,
             }
             return _Plan(
@@ -262,35 +407,46 @@ async def _plan(
                 http=(params["url"], body, params.get("secret", "")),
             )
         case ActionType.POST_CHAT:
-            message = render_template(params["message"], facts, ictx)
             return _Plan(
                 PlanKind.HTTP,
                 f"post_chat -> {params['webhook_url']}",
-                http=(params["webhook_url"], {"text": message}, ""),
+                http=(params["webhook_url"], {"text": text(params["message"])}, ""),
             )
         case ActionType.NOTIFY_USER:
-            email = params["user"]
-            user = await auth.get_user_by_email(session, email)
+            target_user = params["user"]
+            if is_role(target_user):
+                # A role names a property of ONE item — per-item arity supplies
+                # it. "Notify the assignee" was previously inexpressible: the
+                # param took a literal address only.
+                user_id = await resolve_user(session, target_user, item)
+                if user_id is None:
+                    return _Plan(
+                        PlanKind.SKIP, f"notify_user: no {target_user} on the target item"
+                    )
+                return _Plan(
+                    PlanKind.NOTIFY,
+                    f"notify_user ({target_user})",
+                    notify=(user_id, text(params["message"])),
+                )
+            user = await auth.get_user_by_email(session, text(target_user))
             if user is None:
-                return _Plan(PlanKind.SKIP, f"notify_user: no user {email!r}")
-            message = render_template(params["message"], facts, ictx)
-            return _Plan(PlanKind.NOTIFY, f"notify_user {email}", notify=(user.id, message))
+                return _Plan(PlanKind.SKIP, f"notify_user: no user {target_user!r}")
+            return _Plan(
+                PlanKind.NOTIFY,
+                f"notify_user {target_user}",
+                notify=(user.id, text(params["message"])),
+            )
         case ActionType.SEND_EMAIL:
             if not settings.smtp_host:
                 return _Plan(PlanKind.SKIP, "send_email: smtp not configured (smtp_host empty)")
-            recipient = await resolve_recipient(session, params["to"], item)
+            recipient = await resolve_recipient(session, text(params["to"]), item)
             if recipient is None:
                 return _Plan(PlanKind.SKIP, f"send_email: no recipient resolves for {params['to']!r}")
             address, name = recipient
             return _Plan(
                 PlanKind.EMAIL,
                 f"send_email -> {address}",
-                email=(
-                    address,
-                    name,
-                    render_template(params["subject"], facts, ictx),
-                    render_template(params["body"], facts, ictx),
-                ),
+                email=(address, name, text(params["subject"]), text(params["body"])),
             )
         case ActionType.SET_STATE:
             name = params["state"]
@@ -357,6 +513,10 @@ async def _plan(
             )
         case ActionType.ADD_COMMENT:
             visibility = CommentVisibility(params.get("visibility", CommentVisibility.PUBLIC.value))
-            comment = CommentCreate(body=params["body"], visibility=visibility)
+            # Templated like every other body of text an automation writes. It
+            # was the one that was not, so `{{actor.name}}` in a comment posted
+            # the literal braces — the token panel offers it and the field
+            # silently ignored it.
+            comment = CommentCreate(body=text(params["body"]), visibility=visibility)
             return _Plan(PlanKind.COMMENT, f"add_comment ({visibility.value})", comment=comment)
     return _Plan(PlanKind.SKIP, f"unknown action {action_type}")  # pragma: no cover

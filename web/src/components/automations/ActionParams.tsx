@@ -202,13 +202,23 @@ export function ActionParams({ action, pickers, listId, onParams }: ActionParams
             label="User"
             value={str(p.user)}
             onChange={(event) => set({ user: event.target.value })}
+            hint="A role notifies whoever holds it on each item, so the automation is written once for the whole project."
           >
             <option value="">Select…</option>
-            {pickers.userEmails.map((user) => (
-              <option key={user.email} value={user.email}>
-                {user.name} ({user.email})
-              </option>
-            ))}
+            {/* Roles (RADD-918). The param took a literal address only, so
+                "notify the assignee" had to name a person and stopped being
+                true the moment the issue was reassigned. */}
+            <optgroup label="By role on the item">
+              <option value="assignee">Its assignee</option>
+              <option value="reporter">Its reporter</option>
+            </optgroup>
+            <optgroup label="A specific person">
+              {pickers.userEmails.map((user) => (
+                <option key={user.email} value={user.email}>
+                  {user.name} ({user.email})
+                </option>
+              ))}
+            </optgroup>
           </SelectField>
           <TextField
             label="Message"
@@ -226,9 +236,12 @@ export function ActionParams({ action, pickers, listId, onParams }: ActionParams
   }
 }
 
-/** Shared hint for template-capable text params (spec 58b). */
+/** Shared hint for template-capable text params (spec 58b). The full list is in
+ * the collapsible token reference below the params; this names the ones people
+ * reach for, including the set-shaped `{{items.keys}}` an action running once
+ * over many items needs. */
 const TEMPLATE_HINT =
-  "Templates: {{event_type}}, {{actor.name}}, {{payload.<path>}}, {{item.key}}";
+  "Templates: {{item.key}}, {{items.keys}}, {{actor.name}}, {{event_type}}, {{payload.<path>}}";
 
 interface ParamsControlProps {
   pickers: PickerData;
@@ -296,7 +309,7 @@ function SendEmailParams({
         value={str(params.to)}
         list={recipientsId}
         placeholder="reporter / assignee / contact / someone@example.com"
-        hint="A role (contact = the external requester) or a literal address"
+        hint="A role (contact = the external requester) or a literal address. A role belongs to ONE issue, so choosing one makes this run per item."
         onChange={(event) => set({ to: event.target.value })}
       />
       <TextField

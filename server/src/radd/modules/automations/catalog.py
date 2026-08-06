@@ -20,7 +20,8 @@ from dataclasses import dataclass
 from radd.kernel import registries
 from radd.kernel.specs import EventTypeSpec
 
-from .types import ConditionOperator, ConditionSubject, ScheduleKind
+from .nodes import arity_rule
+from .types import BUILTIN_ARITY, ArityRule, ConditionOperator, ConditionSubject, ScheduleKind
 
 
 def triggers() -> dict[str, EventTypeSpec]:
@@ -38,6 +39,21 @@ def __getattr__(name: str):
     if name == "TRIGGERS":
         return registries.triggers()
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def node_arities() -> dict[str, ArityRule]:
+    """node type -> how it may read its packet, for EVERY node type the editor
+    can offer — built-in and contributed alike.
+
+    Served rather than mirrored in the SPA (RADD-918). The alternative was a
+    second copy of "create_item defaults to once, set_state is always per item"
+    in TypeScript, and a default that disagrees with the server is invisible: the
+    editor shows one thing, the run does another, and nothing fails to compile.
+    """
+    return {
+        **{node_type: rule for node_type, rule in BUILTIN_ARITY.items()},
+        **{key: arity_rule(key) for key in registries.automation_nodes},
+    }
 
 
 # --- builder metadata (served by GET /automations/catalog for the UI) ---

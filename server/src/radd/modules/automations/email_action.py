@@ -42,6 +42,38 @@ async def _active_user_email(
     return user.email, user.name
 
 
+def is_role(value: str) -> bool:
+    """Whether a `to` param names a ROLE rather than a literal address.
+
+    Public because arity depends on it (RADD-918): a role resolves against ONE
+    item, so an action addressed to `reporter` only means anything per item. The
+    editor forces per-item mode when a role is chosen instead of letting someone
+    build the version that skip-logs on every multi-item run — which is what
+    "email each reporter" did for the whole life of the feature.
+    """
+    try:
+        EmailRecipient(value.strip().lower())
+    except ValueError:
+        return False
+    return True
+
+
+async def resolve_user(
+    session: AsyncSession, role: str, item: WorkItem | None
+) -> uuid.UUID | None:
+    """The USER a person-role names on `item` — for in-app notification, where
+    an email address is not the identifier. `contact` is deliberately absent: a
+    mail contact has no account to notify."""
+    if item is None:
+        return None
+    match role.strip().lower():
+        case EmailRecipient.REPORTER:
+            return item.reporter_id
+        case EmailRecipient.ASSIGNEE:
+            return item.assignee_id
+    return None
+
+
 async def resolve_recipient(
     session: AsyncSession, to: str, item: WorkItem | None
 ) -> tuple[str, str] | None:
@@ -52,7 +84,10 @@ async def resolve_recipient(
     except ValueError:
         return value, ""  # a literal address
     if item is None:
-        return None  # role recipients need the event's target item
+        # A role names a property of ONE item. Reaching here means the action ran
+        # at SET arity over a set with no single target — the editor forces
+        # per-item mode for roles, so this is the API-called path.
+        return None
     match role:
         case EmailRecipient.REPORTER:
             return await _active_user_email(session, item.reporter_id)

@@ -29,8 +29,15 @@ def group(op, *conditions):
 
 
 UPDATE_PAYLOAD = {
-    "state": {"name": "Done", "category": "done"},
-    "labels": ["backend", "urgent"],
+    # The canonical shape (RADD-922): everything about the ITEM is under `item`;
+    # `changes` describes the EVENT and stays at the root.
+    "item": {
+        "id": "00000000-0000-0000-0000-0000000000aa",
+        "key": "TD-1",
+        "title": "a title",
+        "state": {"name": "Done", "category": "done"},
+        "labels": ["backend", "urgent"],
+    },
     "changes": [
         {"field": "state", "from": "In Progress", "to": "Done"},
         {"field": "assignee", "from": None, "to": "Someone Else"},
@@ -87,8 +94,10 @@ def test_state_category_reads_the_post_event_state():
 
 def test_payload_path_with_list_fanout():
     f = facts(UPDATE_PAYLOAD)
-    assert matches(f, group("all", cond("payload", "contains", "urgent", qualifier="labels")))
-    assert matches(f, group("all", cond("payload", "eq", "Done", qualifier="state.name")))
+    # Paths are `item.…` now (RADD-922) — one addressing rule for every
+    # item-scoped event, instead of item events being the only flat ones.
+    assert matches(f, group("all", cond("payload", "contains", "urgent", qualifier="item.labels")))
+    assert matches(f, group("all", cond("payload", "eq", "Done", qualifier="item.state.name")))
     assert matches(f, group("all", cond("payload", "not_set", qualifier="nope.deeper")))
 
 
@@ -162,7 +171,7 @@ def test_custom_field_diffs_match_by_key():
 def test_render_template_tokens():
     from radd.modules.automations.templating import render_template
 
-    f = facts({"name": "PIPE - 118", "state": {"category": "done"}, "labels": ["a", "b"]})
+    f = facts({"name": "PIPE - 118", "item": {"state": {"category": "done"}}, "labels": ["a", "b"]})
     out = render_template(
         "{{event_type}} on {{payload.name}} by {{actor.name}}: {{payload.labels}} {{nope}}",
         f,

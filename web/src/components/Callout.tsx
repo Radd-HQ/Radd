@@ -1,7 +1,7 @@
 import type { HTMLAttributes, ReactNode } from "react";
 import { CircleAlert, CircleCheck, Info, TriangleAlert, type LucideIcon } from "lucide-react";
 
-const CalloutKind = {
+export const CalloutKind = {
   info: "info",
   success: "success",
   warning: "warning",

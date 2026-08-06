@@ -206,62 +206,126 @@ async def _project(db, key_prefix="SC"):
 
 
 def _scheduled_rule_data(*, condition_slq="", enabled=True) -> RuleCreate:
+    """A scheduled automation as a graph (spec 116).
+
+    Note where the SLQ goes: on the TRIGGER as `query`, not on a filter node. A
+    schedule has no event and therefore no target item, so its trigger is what
+    PRODUCES the initial item set; filters downstream only narrow one. Putting it
+    on a filter would leave the automation filtering an empty set — running,
+    matching nothing, and looking perfectly healthy. The d116graphs migration
+    makes the same distinction for upgraded rows."""
+    trigger_params: dict = {
+        "event": AutomationTrigger.SCHEDULE.value,
+        "schedule": {"kind": "interval", "minutes": 30},
+    }
+    if condition_slq:
+        trigger_params["query"] = condition_slq
     return RuleCreate.model_validate(
         {
             "name": "nightly",
             "enabled": enabled,
-            "trigger": AutomationTrigger.SCHEDULE.value,
-            "condition_slq": condition_slq,
-            "actions": [{"type": "set_priority", "params": {"priority": "high"}}],
-            "schedule": {"kind": "interval", "minutes": 30},
+            "nodes": [
+                {"id": "trigger", "kind": "trigger", "type": "trigger.event", "params": trigger_params},
+                {
+                    "id": "a0",
+                    "kind": "action",
+                    "type": "action.set_priority",
+                    "params": {"priority": "high"},
+                },
+            ],
+            "edges": [{"source": "trigger", "port": "out", "target": "a0"}],
         }
     )
 
 
 async def test_schedule_state_synced_on_create_update_enable(db, admin):
     rule = await automations.create_rule(db, _scheduled_rule_data(), admin.id)
-    state = await db.get(AutomationScheduleState, rule.id)
+    # Keyed by (automation, node) since spec 116 — two schedule triggers in one
+    # graph keep two independent clocks.
+    state = await db.get(AutomationScheduleState, (rule.id, "trigger"))
     assert state is not None and state.last_run_at is None
     gap = state.next_run_at - _utcnow()
     assert timedelta(minutes=29) <= gap <= timedelta(minutes=31)  # interval anchors on now
 
     # Disable drops the row; re-enable recomputes it.
     await automations.update_rule(db, rule.id, RuleUpdate(enabled=False), admin.id)
-    assert await db.get(AutomationScheduleState, rule.id) is None
+    assert await db.get(AutomationScheduleState, (rule.id, "trigger")) is None
     await automations.update_rule(db, rule.id, RuleUpdate(enabled=True), admin.id)
-    assert await db.get(AutomationScheduleState, rule.id) is not None
+    assert await db.get(AutomationScheduleState, (rule.id, "trigger")) is not None
 
-    # RuleRead hydration carries the stamps.
+    # RuleRead hydration carries the stamps, per trigger.
     reads = await automations.rule_reads(db, [rule])
-    assert reads[0].schedule == {"kind": "interval", "minutes": 30}
-    assert reads[0].next_run_at is not None and reads[0].last_run_at is None
+    assert [t.event_type for t in reads[0].triggers] == ["schedule"]
+    assert reads[0].triggers[0].schedule == {"kind": "interval", "minutes": 30}
+    assert reads[0].triggers[0].next_run_at is not None
+    assert reads[0].triggers[0].last_run_at is None
+
+
+def _graph(*, trigger_params: dict, extra_nodes=(), extra_edges=()) -> RuleCreate:
+    """A one-action graph with the trigger's params under test.
+
+    Built from a dict rather than by model_copy-ing `_scheduled_rule_data()`:
+    `trigger` and `schedule` are no longer FIELDS of RuleCreate (they are derived
+    from the trigger node), so `model_copy(update={"trigger": ...})` would attach
+    an attribute nothing reads and the assertion would pass vacuously."""
+    return RuleCreate.model_validate(
+        {
+            "name": "bad",
+            "nodes": [
+                {"id": "trigger", "kind": "trigger", "type": "trigger.event", "params": trigger_params},
+                {"id": "a0", "kind": "action", "type": "action.set_priority",
+                 "params": {"priority": "high"}},
+                *extra_nodes,
+            ],
+            "edges": [{"source": "trigger", "port": "out", "target": "a0"}, *extra_edges],
+        }
+    )
 
 
 async def test_schedule_consistency_409s(db, admin):
-    # schedule on a non-schedule trigger
-    data = _scheduled_rule_data()
-    data = data.model_copy(update={"trigger": ItemEvent.CREATED.value})
+    # a schedule on a non-schedule trigger
     with pytest.raises(ConflictError):
-        await automations.create_rule(db, data, admin.id)
-    # schedule trigger without a schedule
-    data = _scheduled_rule_data().model_copy(update={"schedule": None})
+        await automations.create_rule(
+            db,
+            _graph(
+                trigger_params={
+                    "event": ItemEvent.CREATED.value,
+                    "schedule": {"kind": "interval", "minutes": 30},
+                }
+            ),
+            admin.id,
+        )
+    # a schedule trigger with no schedule
     with pytest.raises(ConflictError):
-        await automations.create_rule(db, data, admin.id)
-    # scheduled rule with event conditions
-    data = RuleCreate.model_validate(
-        {
-            "name": "bad",
-            "trigger": AutomationTrigger.SCHEDULE.value,
-            "event_conditions": {
-                "op": "all",
-                "conditions": [{"subject": "actor", "operator": "is_set"}],
-            },
-            "actions": [{"type": "set_priority", "params": {"priority": "high"}}],
-            "schedule": {"kind": "interval", "minutes": 30},
-        }
-    )
+        await automations.create_rule(
+            db, _graph(trigger_params={"event": AutomationTrigger.SCHEDULE.value}), admin.id
+        )
+    # a scheduled automation that gates on event conditions — there is no event
     with pytest.raises(ConflictError):
-        await automations.create_rule(db, data, admin.id)
+        await automations.create_rule(
+            db,
+            _graph(
+                trigger_params={
+                    "event": AutomationTrigger.SCHEDULE.value,
+                    "schedule": {"kind": "interval", "minutes": 30},
+                },
+                extra_nodes=[
+                    {
+                        "id": "gate",
+                        "kind": "gate",
+                        "type": "gate.event",
+                        "params": {
+                            "conditions": {
+                                "op": "all",
+                                "conditions": [{"subject": "actor", "operator": "is_set"}],
+                            }
+                        },
+                    }
+                ],
+                extra_edges=[{"source": "gate", "port": "true", "target": "a0"}],
+            ),
+            admin.id,
+        )
 
 
 # --- DB: the scheduled engine path ---
@@ -319,7 +383,12 @@ async def test_scheduled_run_applies_item_actions_to_matching_items_only(db, adm
     emitted = list(result.scalars())
     assert len(emitted) == 2
     for event in emitted:
-        assert event.actor_id == SYSTEM_ACTOR_ID
+        # Spec 116: the action ran as the automation's AUTHOR, so the actor is a
+        # real person — and the loop guard holds anyway because causation is
+        # recorded on the event. Asserting both together is the point: identity
+        # moved, `should_process` did not change its answer.
+        assert event.actor_id == rule.created_by_id
+        assert event.automated is True
         assert engine.should_process(event) is False
     # The synthetic scheduler event itself IS processed despite the system actor.
     assert engine.should_process(_scheduled_event(rule)) is True
@@ -403,9 +472,9 @@ async def test_due_soon_emitted_once_with_stamps(db, admin):
     item.created_at = _utcnow() - timedelta(minutes=45)  # 15m remaining of 60
     await db.flush()
 
-    keys = {item.id: "SD-1"}
+    refs = {item.id: {"id": str(item.id), "key": "SD-1"}}
     evaluated = await evaluation.evaluate_items(db, policy, [item.id])
-    emitted = await evaluation.sync_states(db, policy, evaluated, keys)
+    emitted = await evaluation.sync_states(db, policy, evaluated, refs)
     assert emitted == 1
     state = await db.get(SlaItemState, (item.id, policy.id))
     assert state.warned_response_at is not None
@@ -414,7 +483,7 @@ async def test_due_soon_emitted_once_with_stamps(db, admin):
     events_result = await db.execute(
         select(Event).where(Event.event_type == SlaEvent.DUE_SOON.value)
     )
-    due_soon_events = [e for e in events_result.scalars() if e.payload.get("item_id") == str(item.id)]
+    due_soon_events = [e for e in events_result.scalars() if e.payload.get("item", {}).get("id") == str(item.id)]
     assert len(due_soon_events) == 1
     payload = due_soon_events[0].payload
     assert payload["policy_name"] == "warned" and payload["kind"] == "response"
@@ -422,7 +491,7 @@ async def test_due_soon_emitted_once_with_stamps(db, admin):
 
     # Second pass: warned already — nothing new fires.
     evaluated = await evaluation.evaluate_items(db, policy, [item.id])
-    assert await evaluation.sync_states(db, policy, evaluated, keys) == 0
+    assert await evaluation.sync_states(db, policy, evaluated, refs) == 0
 
 
 async def test_due_soon_not_emitted_once_breached(db, admin):
@@ -447,9 +516,9 @@ async def test_due_soon_not_emitted_once_breached(db, admin):
     item.created_at = _utcnow() - timedelta(hours=2)  # long past the target
     await db.flush()
 
-    keys = {item.id: "SB-1"}
+    refs = {item.id: {"id": str(item.id), "key": "SB-1"}}
     evaluated = await evaluation.evaluate_items(db, policy, [item.id])
-    emitted = await evaluation.sync_states(db, policy, evaluated, keys)
+    emitted = await evaluation.sync_states(db, policy, evaluated, refs)
     assert emitted == 1  # the breach — no warning for an already-missed target
     state = await db.get(SlaItemState, (item.id, policy.id))
     assert state.response_breached_at is not None

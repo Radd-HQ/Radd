@@ -42,7 +42,7 @@ export interface PickerData {
 const uniqueSorted = (values: string[]) => [...new Set(values)].sort((a, b) => a.localeCompare(b));
 
 /** Fetch the global pickers plus per-project state/release names. */
-function usePickerData(): PickerData {
+export function usePickerData(): PickerData {
   // The ADMIN directory (RADD-769): an automation stores its assignee by
   // EMAIL, so this picker needs the address as a VALUE, not as decoration —
   // which is the half of the directory that stays behind `user.manage`.

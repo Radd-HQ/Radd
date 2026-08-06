@@ -20,7 +20,7 @@ from radd.modules.automations.engine import (
     is_automation_caused,
     should_process,
 )
-from radd.modules.automations.schemas import RuleCreate
+from radd.modules.automations.schemas import ActionAdapter, RuleCreate
 from radd.modules.automations.types import (
     CLEAR_VALUE,
     SYSTEM_ACTOR_ID,
@@ -92,27 +92,55 @@ def test_catalog_is_sane():
 # --- action-union validation (validated on rule write) ---
 
 
+def linear_graph(actions: list[dict], *, trigger: str = "item.created", slq: str = "") -> dict:
+    """The canonical linear graph: trigger -> [filter] -> action chain.
+
+    Same shape the d116graphs migration produces from a pre-graph rule, so these
+    tests exercise what upgraded instances actually hold."""
+    nodes: list[dict] = [
+        {"id": "trigger", "kind": "trigger", "type": "trigger.event", "params": {"event": trigger}}
+    ]
+    edges: list[dict] = []
+    previous, port = "trigger", "out"
+    if slq:
+        nodes.append({"id": "filter", "kind": "filter", "type": "filter.slq", "params": {"slq": slq}})
+        edges.append({"source": previous, "port": port, "target": "filter"})
+        previous, port = "filter", "matched"
+    for index, action in enumerate(actions):
+        node_id = f"a{index}"
+        nodes.append(
+            {
+                "id": node_id,
+                "kind": "action",
+                "type": f"action.{action['type']}",
+                "params": action.get("params", {}),
+            }
+        )
+        edges.append({"source": previous, "port": port, "target": node_id})
+        previous, port = node_id, "out"
+    return {"name": "r", "nodes": nodes, "edges": edges}
+
+
 def _rule(actions: list[dict]) -> RuleCreate:
-    return RuleCreate.model_validate(
-        {
-            "name": "r",
-            "trigger": "item.created",
-            "actions": actions,
-        }
-    )
+    return RuleCreate.model_validate(linear_graph(actions))
+
+
+# The action union moved (spec 116): it used to type-check `RuleCreate.actions`;
+# a node's `params` is an untyped envelope, so `service._validate_graph` runs
+# each ACTION node through `ActionAdapter`. These test the adapter directly —
+# asserting through RuleCreate would now pass for the wrong reason, because the
+# model rejects the graph SHAPE before it ever looks at an action's params.
 
 
 def test_action_union_accepts_each_type():
-    rule = _rule(
-        [
-            {"type": "set_state", "params": {"state": "In Review"}},
-            {"type": "set_priority", "params": {"priority": "high"}},
-            {"type": "add_label", "params": {"label": "urgent"}},
-            {"type": "set_custom_field", "params": {"key": "risk", "value": 3}},
-            {"type": "add_comment", "params": {"body": "hi", "visibility": "internal"}},
-        ]
-    )
-    assert [a.type for a in rule.actions] == [
+    actions = [
+        {"type": "set_state", "params": {"state": "In Review"}},
+        {"type": "set_priority", "params": {"priority": "high"}},
+        {"type": "add_label", "params": {"label": "urgent"}},
+        {"type": "set_custom_field", "params": {"key": "risk", "value": 3}},
+        {"type": "add_comment", "params": {"body": "hi", "visibility": "internal"}},
+    ]
+    assert [ActionAdapter.validate_python(a).type for a in actions] == [
         ActionType.SET_STATE,
         ActionType.SET_PRIORITY,
         ActionType.ADD_LABEL,
@@ -123,19 +151,19 @@ def test_action_union_accepts_each_type():
 
 def test_action_union_rejects_unknown_type():
     with pytest.raises(ValidationError):
-        _rule([{"type": "delete_item", "params": {}}])
+        ActionAdapter.validate_python({"type": "delete_item", "params": {}})
 
 
 def test_action_union_rejects_bad_params():
     with pytest.raises(ValidationError):
-        _rule([{"type": "set_priority", "params": {"priority": "urgent"}}])  # not a Priority
+        ActionAdapter.validate_python({"type": "set_priority", "params": {"priority": "urgent"}})
     with pytest.raises(ValidationError):
-        _rule([{"type": "set_state", "params": {}}])  # missing state name
+        ActionAdapter.validate_python({"type": "set_state", "params": {}})
 
 
-def test_rule_requires_at_least_one_action():
+def test_a_graph_needs_at_least_a_trigger_node():
     with pytest.raises(ValidationError):
-        _rule([])
+        RuleCreate.model_validate({"name": "r", "nodes": [], "edges": []})
 
 
 # --- clear sentinel + read-only planner (no session for these branches) ---
@@ -253,23 +281,30 @@ async def test_plan_send_webhook_carries_event_and_rule():
 
 
 def test_action_union_accepts_universal_actions():
-    rule = _rule(
-        [
-            {"type": "create_item", "params": {"project": "TD", "title": "Retro for {{payload.name}}"}},
-            {"type": "send_webhook", "params": {"url": "https://x.example/h"}},
-            {"type": "post_chat", "params": {"webhook_url": "https://chat.example/h", "message": "m"}},
-            {"type": "notify_user", "params": {"user": "a@b.c", "message": "m"}},
-        ]
-    )
-    assert [a.type for a in rule.actions] == [
+    actions = [
+        {"type": "create_item", "params": {"project": "TD", "title": "Retro for {{payload.name}}"}},
+        {"type": "send_webhook", "params": {"url": "https://x.example/h"}},
+        {"type": "post_chat", "params": {"webhook_url": "https://chat.example/h", "message": "m"}},
+        {"type": "notify_user", "params": {"user": "a@b.c", "message": "m"}},
+    ]
+    assert [ActionAdapter.validate_python(a).type for a in actions] == [
         ActionType.CREATE_ITEM,
         ActionType.SEND_WEBHOOK,
         ActionType.POST_CHAT,
         ActionType.NOTIFY_USER,
     ]
-    # non-http URL rejected
+    # And they survive the graph envelope, which is where they now live.
+    rule = _rule(actions)
+    assert [n.type for n in rule.nodes if n.kind.value == "action"] == [
+        "action.create_item",
+        "action.send_webhook",
+        "action.post_chat",
+        "action.notify_user",
+    ]
+    # non-http URL rejected — asserted on the adapter, because the graph
+    # envelope no longer types node params and _rule() would happily accept it.
     with pytest.raises(ValidationError):
-        _rule([{"type": "send_webhook", "params": {"url": "ftp://nope"}}])
+        ActionAdapter.validate_python({"type": "send_webhook", "params": {"url": "ftp://nope"}})
 
 
 def test_item_actions_registry_covers_exactly_the_item_bound_types():

@@ -1,0 +1,758 @@
+"""Walking an automation graph (spec 116).
+
+`graph.py` says whether a graph is legal and in what order its nodes run. This
+module says what each node MEANS: a gate evaluates event conditions, a filter
+compiles SLQ and splits the item set, an action plans and applies.
+
+The split matters because the walk is the part with I/O — sessions, the SLQ
+compiler, the target services — and keeping it out of `graph.py` is what lets the
+structure rules be unit-tested without a database.
+
+Two invariants live here rather than in the caller:
+
+* **Budget.** A linear rule cost `items x actions`; a graph costs
+  `items x nodes x fan-out`. `RunBudget` caps node executions and item-actions,
+  and a run that hits a cap **records what it dropped**. A cap that truncates
+  silently makes a run that did less look identical to a run that had less to do.
+* **Best-effort per action.** Each action still runs inside a SAVEPOINT, so one
+  failing action rolls back only itself and the walk continues — the behaviour
+  `_run_rule_actions` had before graphs, kept because the alternative is one bad
+  webhook URL stopping every downstream branch.
+"""
+
+from __future__ import annotations
+
+import logging
+import uuid
+from dataclasses import dataclass, field
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from radd.config import settings
+from radd.modules.auth.models import User
+from radd.modules.items.models import WorkItem
+from radd.modules.events import service as events
+from radd.modules.projects.models import Project
+
+from . import conditions, graph
+from .gates import GATE_EVALUATORS
+from .nodes import arity_of, needs_items, ports_of, spec_for
+from .graph import Edge, Node, Packet
+# Node-type keys live in `types.py` — the schemas and the arity table name them
+# too, and a type spelled differently in two places is a wire constant with no
+# compiler behind it. Imported (not redefined) so `executor.ACTION_TYPE_PREFIX`
+# keeps resolving for existing callers.
+from .types import (  # noqa: F401 — re-exported for callers importing them here
+    ACTION_TYPE_PREFIX,
+    TYPE_FILTER_SLQ,
+    TYPE_GATE_EVENT,
+    TYPE_SEARCH_SLQ,
+    AutomationNodeKind,
+    NodeArity,
+    NodePort,
+    PlanKind,
+    SearchMode,
+)
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class RunBudget:
+    """What a single graph run is allowed to spend, and what it had to drop."""
+
+    max_nodes: int
+    max_item_actions: int
+    nodes_run: int = 0
+    item_actions_run: int = 0
+    dropped: list[str] = field(default_factory=list)
+
+    def take_node(self, node: Node) -> bool:
+        if self.nodes_run >= self.max_nodes:
+            self.dropped.append(f"node {node.id!r} ({node.type}) — node budget {self.max_nodes} reached")
+            return False
+        self.nodes_run += 1
+        return True
+
+    def take_item_actions(self, node: Node, count: int) -> int:
+        """How many of `count` item-actions this node may run. Returns 0..count,
+        recording the shortfall rather than trimming in silence."""
+        remaining = max(0, self.max_item_actions - self.item_actions_run)
+        allowed = min(count, remaining)
+        if allowed < count:
+            self.dropped.append(
+                f"node {node.id!r} ({node.type}) — {count - allowed} of {count} items skipped, "
+                f"item-action budget {self.max_item_actions} reached"
+            )
+        self.item_actions_run += allowed
+        return allowed
+
+    @property
+    def exhausted(self) -> bool:
+        return self.nodes_run >= self.max_nodes or self.item_actions_run >= self.max_item_actions
+
+
+def new_budget() -> RunBudget:
+    return RunBudget(
+        max_nodes=settings.automation_graph_max_node_runs,
+        max_item_actions=settings.automation_graph_max_item_actions,
+    )
+
+
+@dataclass
+class PlannedAction:
+    """One action a node resolved, before it was (or was not) applied."""
+
+    node_id: str
+    action_type: str
+    params: dict
+    item_id: uuid.UUID | None
+    resolves: bool  # False = the planner returned SKIP (a named target has gone)
+    detail: str
+
+
+@dataclass
+class RunReport:
+    """What the walk did — per node, so a dry run can show where items went and a
+    real run can explain itself. `dropped` is the budget's, surfaced not buried.
+
+    `plans` is collected whether or not the run applied. That is what makes the
+    dry run free rather than a second implementation: the same code decides, and
+    only the applying is switched off."""
+
+    per_node: dict[str, dict[str, int]] = field(default_factory=dict)
+    plans: list[PlannedAction] = field(default_factory=list)
+    dropped: list[str] = field(default_factory=list)
+    #: node id -> ports that did not fire at all this run. Distinct from a port
+    #: that fired with zero items; the editor renders them differently because
+    #: they mean different things.
+    not_taken: dict[str, list[str]] = field(default_factory=dict)
+    #: node id -> port -> the item ids that LEFT by it, capped. Counts alone
+    #: answer "did my filter narrow anything"; they cannot answer "did it keep
+    #: the right ones", which is the question someone debugging a graph actually
+    #: has. Ids rather than keys: this module never loads an item it does not
+    #: need, and the caller resolves keys once for the whole report.
+    port_items: dict[str, dict[str, tuple[uuid.UUID, ...]]] = field(default_factory=dict)
+    #: node id -> what ARRIVED, capped the same way.
+    incoming_items: dict[str, tuple[uuid.UUID, ...]] = field(default_factory=dict)
+
+    def record(self, node: Node, packet: Packet, outgoing: dict[str, Packet]) -> None:
+        self.per_node[node.id] = {
+            "in": len(packet.item_ids),
+            **{str(port): len(out.item_ids) for port, out in outgoing.items()},
+        }
+        self.incoming_items[node.id] = packet.item_ids[:SAMPLE_ITEMS]
+        self.port_items[node.id] = {
+            str(port): out.item_ids[:SAMPLE_ITEMS] for port, out in outgoing.items()
+        }
+
+    def untaken(self, node: Node, ports: list[str]) -> None:
+        if ports:
+            self.not_taken[node.id] = ports
+
+
+#: How many item ids a report keeps per port. Enough to recognise what came
+#: through, small enough that a 200-item scheduled run does not build a report
+#: bigger than the work it describes — the count beside it is always exact.
+SAMPLE_ITEMS = 10
+
+
+async def walk(
+    session: AsyncSession,
+    *,
+    nodes: list[Node],
+    edges: list[Edge],
+    trigger: Node,
+    initial: Packet,
+    system_user: User,
+    automation_name: str,
+    budget: RunBudget,
+    apply: bool = True,
+) -> RunReport:
+    """Execute the graph. `apply=False` plans without applying — the dry-run path,
+    which is only free because a node plans before it applies."""
+    report = RunReport()
+    order = graph.topological_order(nodes, edges)
+    inbound = graph.inbound(edges)
+
+    #: (node id, port) -> what that port emitted. One key space, so a node id can
+    #: never be confused with a port of the same name.
+    #:
+    #: A port MISSING from this map is not the same as one that emitted an empty
+    #: packet, and the difference is the whole of branch semantics: a gate emits
+    #: only the port it took, so the branch it did not take never runs, while a
+    #: filter emits both because an empty subset is a real answer ("nothing
+    #: matched — tell me"). Before RADD-918 a gate emitted an empty packet on the
+    #: untaken port, so a `send_email` wired to `false` fired on every run where
+    #: the gate PASSED — universal actions ignore emptiness by design.
+    emitted: dict[tuple[str, str], Packet] = {}
+
+    for node in order:
+        if node.id == trigger.id:
+            packet = initial
+        else:
+            arriving = [
+                emitted[(edge.source, edge.port)]
+                for edge in inbound.get(node.id, [])
+                if (edge.source, edge.port) in emitted
+            ]
+            if not arriving:
+                continue  # detached from the trigger, or every feeder ran out of budget
+            packet = arriving[0]
+            for extra in arriving[1:]:
+                packet = packet.merge(extra)
+
+        if not budget.take_node(node):
+            break
+
+        outputs = await _run_node(
+            session,
+            node=node,
+            packet=packet,
+            system_user=system_user,
+            automation_name=automation_name,
+            budget=budget,
+            apply=apply,
+            report=report,
+        )
+        report.record(node, packet, outputs)
+        for port, out_packet in outputs.items():
+            emitted[(node.id, port)] = out_packet
+        # Ports the node did NOT emit are recorded as untaken, so the editor can
+        # grey the branch rather than showing it as "0 items" — which reads as
+        # "it ran and found nothing".
+        report.untaken(node, [p for p in ports_of(node) if p not in outputs])
+
+    report.dropped = list(budget.dropped)
+    if report.dropped:
+        logger.warning(
+            "automations: %s hit a run budget; %s", automation_name, "; ".join(report.dropped)
+        )
+    return report
+
+
+async def _run_node(
+    session: AsyncSession,
+    *,
+    node: Node,
+    packet: Packet,
+    system_user: User,
+    automation_name: str,
+    budget: RunBudget,
+    apply: bool,
+    report: RunReport,
+) -> dict[str, Packet]:
+    """One node, dispatched on two axes rather than four special cases
+    (RADD-918): what the node DOES (produce / route / act) and how it reads its
+    packet (`NodeArity`). Filter-vs-gate and item-action-vs-universal-action were
+    the same distinction written twice."""
+    if node.kind is AutomationNodeKind.TRIGGER:
+        return {NodePort.OUT.value: packet}
+
+    if node.kind is AutomationNodeKind.SOURCE:
+        return {NodePort.OUT.value: await _run_source(session, node, packet, automation_name)}
+
+    if node.kind in (AutomationNodeKind.GATE, AutomationNodeKind.FILTER):
+        return await _run_router(session, node, packet, system_user)
+
+    created = await _run_action(
+        session,
+        node=node,
+        packet=packet,
+        system_user=system_user,
+        automation_name=automation_name,
+        budget=budget,
+        apply=apply,
+        report=report,
+    )
+    # An action passes its INPUT through unchanged, which is what makes chains
+    # work: filter -> label -> comment all act on the same set. What it MADE
+    # leaves by a separate port, so "create a follow-up, then assign it" is a
+    # wire rather than a special case.
+    outputs = {NodePort.OUT.value: packet}
+    if NodePort.CREATED.value in ports_of(node):
+        outputs[NodePort.CREATED.value] = packet.with_items(created)
+    return outputs
+
+
+# --- sources: the only nodes that PRODUCE items ------------------------------
+
+
+async def _run_source(
+    session: AsyncSession, node: Node, packet: Packet, automation_name: str
+) -> Packet:
+    """Run a search node's query and emit what it found."""
+    if node.type != TYPE_SEARCH_SLQ:
+        logger.error("automations: %s: unknown source node type %r", automation_name, node.type)
+        return packet.with_items(())
+
+    from . import search  # deferred: search reaches into planning's helpers
+
+    try:
+        found = await search.find_items(
+            session,
+            str(node.params.get("slq") or ""),
+            project_key=str(node.params.get("project") or ""),
+            label=f"{automation_name} / {node.id}",
+        )
+    except Exception:
+        # A query that no longer compiles (a custom field was deleted) must not
+        # take the whole automation down — it emits nothing, which the run report
+        # shows as a source that found zero.
+        logger.exception("automations: %s: search node %s failed", automation_name, node.id)
+        return packet.with_items(())
+
+    mode = str(node.params.get("mode") or SearchMode.REPLACE.value)
+    if mode == SearchMode.ADD.value:
+        return packet.with_items((*packet.item_ids, *found))
+    return packet.with_items(found)
+
+
+# --- routers: gates and filters, which differ only in how they read the packet ---
+
+
+async def _run_router(
+    session: AsyncSession, node: Node, packet: Packet, actor: User
+) -> dict[str, Packet]:
+    """Send the packet down one port, or split it across all of them.
+
+    * **SET arity — ROUTE.** One answer for the whole packet, which leaves by one
+      port. The other ports emit NOTHING, so the branches not taken do not run.
+    * **ITEM arity — PARTITION.** Each item leaves by the port its own answer
+      names. Every port emits, including the empty ones: a subset of nothing is
+      a real answer, and "and for everything else…" is how the unmatched port
+      has always worked.
+    """
+    ports = ports_of(node)
+    if arity_of(node) is NodeArity.SET:
+        chosen = await _route(session, node, packet, actor)
+        if chosen not in ports:
+            logger.error(
+                "automations: node %s (%s) chose port %r, which it does not emit", node.id, node.type, chosen
+            )
+            return {}
+        return {chosen: packet}
+
+    assigned = await _partition(session, node, packet, actor)
+    return {
+        port: packet.with_items([i for i in packet.item_ids if assigned.get(i) == port])
+        for port in ports
+    }
+
+
+async def _route(session: AsyncSession, node: Node, packet: Packet, actor: User) -> str:
+    """The single port a SET-arity router sends its packet down."""
+    spec = spec_for(node)
+    if spec is not None and spec.plan is not None:
+        return await _run_registered_gate(session, node, packet, actor)
+
+    evaluator = GATE_EVALUATORS.get(node.type)
+    if evaluator is not None:
+        passed = evaluator(packet.facts, node.params)
+    else:
+        # `gate.event` — the pre-revision condition tree. Still executed so
+        # stored graphs keep working; no longer offered in the palette, because
+        # a node called "event conditions" taught nobody what it tested.
+        passed = conditions.matches(packet.facts, node.params.get("conditions"))
+    return (NodePort.TRUE if passed else NodePort.FALSE).value
+
+
+async def _partition(
+    session: AsyncSession, node: Node, packet: Packet, actor: User
+) -> dict[uuid.UUID, str]:
+    """item id -> the port it leaves by, for an ITEM-arity router."""
+    if packet.is_empty:
+        return {}
+
+    spec = spec_for(node)
+    if spec is not None:
+        return await _partition_registered(session, node, packet, actor, spec)
+    if node.type == TYPE_FILTER_SLQ:
+        return await _partition_slq(session, node, packet)
+    logger.error("automations: node %s (%s) cannot run per item", node.id, node.type)
+    return {}
+
+
+async def _partition_slq(
+    session: AsyncSession, node: Node, packet: Packet
+) -> dict[uuid.UUID, str]:
+    """The SLQ filter: matched / unmatched. An empty query matches everything,
+    which is what a half-built filter should do — narrow nothing, not drop
+    everything."""
+    from .planning import condition_matches  # deferred: planning imports this module's siblings
+
+    text = str(node.params.get("slq") or "").strip()
+    if not text:
+        return {item_id: NodePort.MATCHED.value for item_id in packet.item_ids}
+
+    assigned: dict[uuid.UUID, str] = {}
+    for item, project in await _load(session, packet.item_ids):
+        if project is None:
+            assigned[item.id] = NodePort.UNMATCHED.value
+            continue
+        try:
+            hit = await condition_matches(session, text, item, project)
+        except Exception:
+            logger.exception("automations: filter %s failed on item %s", node.id, item.id)
+            hit = False
+        assigned[item.id] = (NodePort.MATCHED if hit else NodePort.UNMATCHED).value
+    return assigned
+
+
+async def _partition_registered(
+    session: AsyncSession, node: Node, packet: Packet, actor: User, spec
+) -> dict[uuid.UUID, str]:
+    """Ask a CONTRIBUTED router for each item's port.
+
+    `plan_items` when the node has one — a node that knows its per-item work
+    batches or parallelises should say so itself, because the executor shares one
+    session across the walk and cannot safely run those calls concurrently on its
+    behalf. Otherwise `plan` once per single-item packet, which is correct for
+    any node and is the whole feature for a cheap one.
+    """
+    ports = tuple(spec.ports_for(node.params))
+    if not ports:
+        return {}
+    fallback = ports[-1]
+
+    if spec.plan_items is not None:
+        try:
+            answers = await spec.plan_items(
+                _NodeContext(session=session, node=node, packet=packet, actor=actor)
+            )
+        except Exception:
+            logger.exception(
+                "automations: node %s (%s) failed per-item; taking its fallback port",
+                node.id, node.type,
+            )
+            return {item_id: fallback for item_id in packet.item_ids}
+        return {
+            item_id: (str(answers.get(item_id)) if str(answers.get(item_id)) in ports else fallback)
+            for item_id in packet.item_ids
+        }
+
+    if spec.plan is None:
+        return {item_id: fallback for item_id in packet.item_ids}
+    return {
+        item_id: await _run_registered_gate(session, node, packet.with_items((item_id,)), actor)
+        for item_id in packet.item_ids
+    }
+
+
+async def _load(
+    session: AsyncSession, item_ids: tuple[uuid.UUID, ...]
+) -> list[tuple[WorkItem, Project | None]]:
+    """Items with their projects, in the packet's order — the order is observable
+    (comments land in it), so it is not left to the database."""
+    if not item_ids:
+        return []
+    rows = (
+        await session.execute(
+            select(WorkItem, Project)
+            .outerjoin(Project, Project.id == WorkItem.project_id)
+            .where(WorkItem.id.in_(item_ids))
+        )
+    ).all()
+    by_id = {item.id: (item, project) for item, project in rows}
+    return [by_id[i] for i in item_ids if i in by_id]
+
+
+async def _run_registered_gate(
+    session: AsyncSession, node: Node, packet: Packet, actor: User
+) -> str:
+    """Ask a contributed gate which port the packet leaves by.
+
+    Failures return the spec's LAST port — every contributed gate declares a
+    fallback as its final port for exactly this — rather than raising, so one
+    unreachable provider cannot stop a graph that has other branches.
+    """
+    spec = spec_for(node)
+    ports = tuple(spec.ports_for(node.params)) if spec else ()
+    if not spec or not spec.plan or not ports:
+        return ""
+    if packet.is_empty and needs_items(node):
+        # The node said it has nothing to say about no items. Its fallback port
+        # rather than a guess, and rather than an unanswerable question sent to
+        # whatever service it wraps.
+        return ports[-1]
+    try:
+        chosen = await spec.plan(
+            _NodeContext(session=session, node=node, packet=packet, actor=actor)
+        )
+    except Exception:
+        logger.exception("automations: node %s (%s) failed; taking its fallback port", node.id, node.type)
+        return ports[-1]
+    return str(chosen) if str(chosen) in ports else ports[-1]
+
+
+@dataclass
+class _NodeContext:
+    """What a contributed node's planner is handed. Deliberately small: a session
+    for its own reads, the node it is, and the packet — not the whole engine."""
+
+    session: AsyncSession
+    node: Node
+    packet: Packet
+    #: Who the automation runs as. A contributed node reads THROUGH this, so its
+    #: prompt can only contain what that identity could already see, and an
+    #: action applies with exactly that identity's rights.
+    actor: User
+    #: The ids of the node's DECLARED subject this invocation is for (RADD-923):
+    #: one id per call at item arity, the whole set at set arity. A node acting
+    #: on milestones gets milestone ids and never sees the item machinery.
+    subject_ids: tuple[uuid.UUID, ...] = ()
+
+
+async def _actor_for(session: AsyncSession, node: Node, default: User) -> User:
+    """Who this action runs as.
+
+    `act_as` on the node names a user by email; absent, the automation's author
+    (passed in as `default`). Falls back to the default when the named account no
+    longer resolves — an automation must not stop working because someone left,
+    and it must not silently escalate either, which is why it falls back to the
+    author rather than to the system actor.
+    """
+    email = str(node.params.get("act_as") or "").strip()
+    if not email:
+        return default
+    found = (
+        await session.execute(select(User).where(User.email == email, User.active.is_(True)))
+    ).scalar_one_or_none()
+    if found is None:
+        logger.warning(
+            "automations: node %s acts as %r, which no longer resolves — using the author",
+            node.id, email,
+        )
+        return default
+    return found
+
+
+async def _run_action(
+    session: AsyncSession,
+    *,
+    node: Node,
+    packet: Packet,
+    system_user: User,
+    automation_name: str,
+    budget: RunBudget,
+    apply: bool,
+    report: RunReport,
+) -> list[uuid.UUID]:
+    """Fire the action once, or once per item, per its arity. Returns the ids of
+    anything it CREATED, for the `created` port."""
+    from .types import ActionType
+
+    # A CONTRIBUTED action first (RADD-923). Until now a plugin could declare an
+    # action node and the executor would drop it — `ActionType(action_name)`
+    # raised, it logged "unknown action type", and the node silently never ran.
+    # So a plugin could say "when my deployment finishes" and "if the AI says
+    # it's risky", but never "…then do my thing".
+    spec = spec_for(node)
+    if spec is not None and spec.plan is not None:
+        await _run_contributed_action(
+            session,
+            node=node,
+            spec=spec,
+            packet=packet,
+            system_user=system_user,
+            automation_name=automation_name,
+            budget=budget,
+            apply=apply,
+            report=report,
+        )
+        return []
+
+    action_name = node.type.removeprefix(ACTION_TYPE_PREFIX)
+    try:
+        ActionType(action_name)
+    except ValueError:
+        # An unknown action type halts THIS node loudly rather than being skipped
+        # in silence — most often a plugin that has been uninstalled.
+        logger.error("automations: %s: unknown action node type %r", automation_name, node.type)
+        budget.dropped.append(f"node {node.id!r} — unknown action type {node.type!r}")
+        return []
+
+    stored = {"type": action_name, "params": node.params}
+    actor = await _actor_for(session, node, system_user)
+    loaded = await _load(session, packet.item_ids)
+
+    if arity_of(node) is NodeArity.SET:
+        # ONE run for the whole packet — a digest webhook, a single triage
+        # ticket. It still fires on an empty packet: "nothing matched today, tell
+        # me" is a real automation, and it is why empty sets propagate at all.
+        #
+        # A packet holding exactly ONE item passes it as the target, which is
+        # what makes `{{item.key}}` resolve on an event-triggered run. With
+        # several there is no single item the run is "about" and the item tokens
+        # are blank by construction — `{{items.keys}}` is the set-shaped answer.
+        item, project = loaded[0] if len(loaded) == 1 else (None, None)
+        created = await _one(
+            session, node, stored, item, project, actor, packet, loaded,
+            automation_name, apply, report,
+        )
+        return [created] if created is not None else []
+
+    if packet.is_empty:
+        logger.info(
+            "automations: %s: per-item action %s skipped — nothing reached node %s",
+            automation_name, action_name, node.id,
+        )
+        return []
+
+    # Metered whatever the action is. Before RADD-918 only the ten item-mutating
+    # actions consumed budget, because they were the only ones that could fan
+    # out; a per-item webhook would otherwise be the one unbounded thing in the
+    # engine.
+    allowed = budget.take_item_actions(node, len(loaded))
+    created: list[uuid.UUID] = []
+    for item, project in loaded[:allowed]:
+        made = await _one(
+            session, node, stored, item, project, actor, packet, [(item, project)],
+            automation_name, apply, report,
+        )
+        if made is not None:
+            created.append(made)
+    return created
+
+
+async def _run_contributed_action(
+    session: AsyncSession,
+    *,
+    node: Node,
+    spec,
+    packet: Packet,
+    system_user: User,
+    automation_name: str,
+    budget: RunBudget,
+    apply: bool,
+    report: RunReport,
+) -> None:
+    """Run a plugin's action node (RADD-923).
+
+    Contained by construction, and every clause here is one of the containments:
+
+    * it acts on the ids of its DECLARED subject, so a milestone action never has
+      to know how an item-shaped packet is assembled;
+    * `plan` runs on every walk including a dry run, which is what makes the
+      report free and identical to the real thing;
+    * `apply` runs inside the executor's SAVEPOINT, inside its `RunBudget`, and
+      inside `events.automated()` — so a plugin action cannot spin the engine,
+      cannot escape the budget, and cannot take the branch down when it raises;
+    * it runs as the `act_as` actor, so it cannot escalate past whoever the
+      automation is allowed to act as.
+    """
+    ids = packet.ids_of(spec.subject or graph.ITEM_SUBJECT)
+    actor = await _actor_for(session, node, system_user)
+    per_item = arity_of(node) is NodeArity.ITEM
+
+    if per_item and not ids:
+        logger.info(
+            "automations: %s: %s skipped — no %s reached node %s",
+            automation_name, node.type, spec.subject, node.id,
+        )
+        return
+
+    batches: list[tuple[uuid.UUID, ...]] = (
+        [(one,) for one in ids[: budget.take_item_actions(node, len(ids))]]
+        if per_item
+        else [tuple(ids)]
+    )
+    for batch in batches:
+        try:
+            async with session.begin_nested():
+                ctx = _NodeContext(
+                    session=session, node=node, packet=packet, actor=actor, subject_ids=batch
+                )
+                plan = await spec.plan(ctx)
+                resolves = bool(getattr(plan, "resolves", plan is not None))
+                report.plans.append(
+                    PlannedAction(
+                        node_id=node.id,
+                        action_type=node.type,
+                        params=dict(node.params),
+                        item_id=batch[0] if batch else None,
+                        resolves=resolves,
+                        detail=str(getattr(plan, "detail", plan or "")),
+                    )
+                )
+                if apply and resolves and spec.apply is not None:
+                    # THE LOOP GUARD covers whatever the plugin emits, exactly as
+                    # it covers a built-in action.
+                    with events.automated():
+                        await spec.apply(ctx, plan)
+        except Exception:
+            logger.exception(
+                "automations: contributed action %s of %s failed", node.id, automation_name
+            )
+
+
+async def _one(
+    session: AsyncSession,
+    node: Node,
+    stored: dict,
+    item: WorkItem | None,
+    project: Project | None,
+    actor: User,
+    packet: Packet,
+    scope: list[tuple[WorkItem, Project | None]],
+    automation_name: str,
+    apply: bool,
+    report: RunReport,
+) -> uuid.UUID | None:
+    """Plan one action, then apply it — inside a SAVEPOINT so a failure rolls back
+    only itself. The plan is recorded either way, which is what lets a dry run
+    report exactly what a real run would have done.
+
+    `scope` is the items this ONE invocation speaks for: the whole packet at set
+    arity, the single item at item arity. It is what the set-shaped tokens and
+    the webhook's `items[]` render from, so a per-item webhook describes its own
+    item and a digest describes all of them, with no branch in the planner.
+
+    Returns the id of anything created, for the `created` port.
+    """
+    from .engine import _apply_plan
+    from .planning import _plan, items_ctx
+
+    try:
+        async with session.begin_nested():
+            plan = await _plan(
+                session, stored, item, project, actor,
+                facts=packet.facts, rule_name=automation_name,
+                items=items_ctx(scope),
+            )
+            report.plans.append(
+                PlannedAction(
+                    node_id=node.id,
+                    action_type=str(stored["type"]),
+                    params=dict(stored.get("params") or {}),
+                    item_id=item.id if item is not None else None,
+                    resolves=plan.kind is not PlanKind.SKIP,
+                    detail=plan.detail,
+                )
+            )
+            if plan.kind is PlanKind.SKIP:
+                logger.info("automations: %s %s", automation_name, plan.detail)
+                return None
+            if not apply:
+                return None
+            # THE LOOP GUARD. Every event this mutation emits is marked
+            # automation-caused, whoever it ran as — which is the whole
+            # reason `act as` is safe: identity moved, causation did not.
+            with events.automated():
+                return await _apply_plan(session, plan, item, actor, rule_name=automation_name)
+    except Exception:
+        logger.exception(
+            "automations: node %s of %s failed (item %s)",
+            node.id, automation_name, item.id if item is not None else "—",
+        )
+    return None
+
+
+async def load_graph(automation) -> tuple[list[Node], list[Edge], list[Node]]:
+    """Parse and re-validate a stored graph, returning its TRIGGERS. Validation
+    runs on write too; doing it again here is deliberate, so a row edited around
+    the API cannot wedge the consumer."""
+    nodes, edges = graph.parse(automation.nodes or [], automation.edges or [])
+    triggers = graph.validate(nodes, edges, ports_of)
+    return nodes, edges, triggers

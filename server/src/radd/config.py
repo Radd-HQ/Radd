@@ -51,6 +51,12 @@ class Settings(BaseSettings):
     automation_scheduler_interval: float = 60.0
     scheduler_tz: str = "UTC"
     automation_schedule_max_items: int = 200
+    # Graph runs (spec 116). A linear rule cost `items x actions`; a graph costs
+    # `items x nodes x fan-out`, so a run needs a ceiling on both axes. Hitting
+    # either is RECORDED in the run report, never applied in silence — a run that
+    # quietly did less is indistinguishable from a run that had less to do.
+    automation_graph_max_node_runs: int = 200
+    automation_graph_max_item_actions: int = 2000
 
     # Event-cascade consumer (see radd/modules/events/cascade.py) — events read
     # per iteration when draining kernel-registered cascades.
@@ -193,6 +199,26 @@ class Settings(BaseSettings):
     ai_embed_max_chars: int = 8000
     # Budget for the semantic half of a hybrid search — past it, FTS-only.
     ai_search_timeout_seconds: float = 2.0
+    # Spec 116: how much text the automation AI-classifier node may send in one
+    # prompt. There is no principled value — the real limit is the configured
+    # model's context window, which the provider registry does not record, so
+    # this is a deliberately generous default you raise or lower to match yours
+    # (~40k characters is roughly 10k tokens, comfortable for an 8k-token model
+    # with room for the answer). It is spent on WHOLE items: the digest includes
+    # each item entirely or not at all, and names how many it left out, rather
+    # than truncating a description mid-sentence and cutting the very line that
+    # decides the classification.
+    ai_automation_context_chars: int = 40_000
+    #: How many items ONE per-item AI classifier node may classify in a single
+    #: run. Separate from (and far below) `automation_graph_max_item_actions`
+    #: because these are model round trips, not database writes: at roughly a
+    #: second each, the action budget of 2000 would park a consumer iteration for
+    #: half an hour. Items past the cap take the node's fallback port — routed,
+    #: never silently dropped.
+    ai_automation_max_classifications: int = 50
+    #: Concurrent model calls for one per-item classifier node. The contexts are
+    #: built first, on the walk's single session; only the provider calls overlap.
+    ai_automation_classify_concurrency: int = 8
     # Where the built-in CPU embedding backend caches model weights (downloaded
     # from Hugging Face on first use; pre-seed on air-gapped deploys).
     ai_local_embed_cache: str = "var/models"

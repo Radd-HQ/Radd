@@ -1,6 +1,6 @@
 import type { ButtonHTMLAttributes } from "react";
 
-const ButtonVariant = {
+export const ButtonVariant = {
   primary: "primary",
   secondary: "secondary",
   ghost: "ghost",

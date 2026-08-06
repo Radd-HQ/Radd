@@ -10,6 +10,14 @@ plugin = RaddPlugin(
         PermissionSpec(
             "automation.manage", "global", "Create and manage automation rules (global)."
         ),
+        PermissionSpec(
+            "automation.act_as",
+            "global",
+            "Build automations whose actions run as someone else. Without it an "
+            "author's automations always act as the author, and the Act as field "
+            "is not offered at all — an affordance that is refused on save is "
+            "worse than one that is absent.",
+        ),
     ),
     crud_resources=(
         CrudResourceSpec("automation", "global", "automation rules", "automation.manage"),
@@ -19,7 +27,7 @@ plugin = RaddPlugin(
         "apply actions through the target services as a system actor, with a loop guard. "
         "Spec 69 adds schedule-triggered rules fired by a scheduler clock."
     ),
-    depends_on=("projects", "auth", "workflow", "labels", "cycles", "releases", "items", "comments", "teams", "events", "fields"),
+    depends_on=("projects", "auth", "workflow", "labels", "cycles", "releases", "items", "comments", "teams", "events", "fields", "itemtypes",),
     weak_depends=("mailintake", "notify"),
     routers=(router,),
     on_startup=(dispatcher.start, scheduler.start),
