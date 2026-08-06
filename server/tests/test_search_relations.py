@@ -56,17 +56,21 @@ async def admin(db) -> User:
 
 
 def _event(item, project, *, reporter=None, assignee=None, team=None):
-    """The real payload shape: a full ItemRead dump carries NESTED refs."""
+    """The real payload shape (RADD-922): everything about the item nested under
+    `item`, with NESTED refs for the relations."""
     return SimpleNamespace(
         entity_id=str(item.id),
         payload={
-            "project_id": str(project.id),
-            "key": item.key,
-            "title": item.title,
-            "description": "",
-            "reporter": {"id": str(reporter)} if reporter else None,
-            "assignee": {"id": str(assignee)} if assignee else None,
-            "team": {"id": str(team)} if team else None,
+            "item": {
+                "id": str(item.id),
+                "project": {"id": str(project.id), "key": project.key, "name": project.name},
+                "key": item.key,
+                "title": item.title,
+                "description": "",
+                "reporter": {"id": str(reporter)} if reporter else None,
+                "assignee": {"id": str(assignee)} if assignee else None,
+                "team": {"id": str(team)} if team else None,
+            }
         },
     )
 
@@ -110,10 +114,13 @@ async def test_partial_payload_never_nulls_a_good_mirror(db, admin):
     bare = SimpleNamespace(
         entity_id=str(item.id),
         payload={
-            "project_id": str(project.id),
-            "key": item.key,
-            "title": item.title,
-            "description": "",
+            "item": {
+                "id": str(item.id),
+                "project": {"id": str(project.id), "key": project.key, "name": project.name},
+                "key": item.key,
+                "title": item.title,
+                "description": "",
+            }
         },
     )
     await indexer._index_item(db, bare)

@@ -161,6 +161,26 @@ async def users_by_ids(session: AsyncSession, ids: Iterable[uuid.UUID]) -> dict[
     return {user.id: user for user in result.scalars()}
 
 
+def user_ref(user: User | None) -> dict[str, str] | None:
+    """`{id, name, email}` for an event payload (RADD-922).
+
+    One shape for every person named in the stream. Emitters used to write bare
+    `author_id` / `requester` / `user_id` columns, so a webhook body or a chat
+    message that wanted to say WHO had to resolve a uuid it was handed — and
+    mostly did not, and printed the uuid."""
+    if user is None:
+        return None
+    return {"id": str(user.id), "name": user.name, "email": user.email}
+
+
+async def user_ref_by_id(
+    session: AsyncSession, user_id: uuid.UUID | None
+) -> dict[str, str] | None:
+    if user_id is None:
+        return None
+    return user_ref((await users_by_ids(session, [user_id])).get(user_id))
+
+
 async def users_by_emails(session: AsyncSession, emails: Iterable[str]) -> dict[str, User]:
     """email (lowercased) → User for the given set — the directory-reconcile
     matcher (spec 84): unknown directory members simply don't resolve."""

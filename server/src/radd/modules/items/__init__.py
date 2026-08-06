@@ -1,7 +1,7 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-from radd.kernel import EventTypeSpec
+from radd.kernel import EntityRefSpec, EventTypeSpec
 from radd.kernel import RaddPlugin
 from radd.kernel import PermissionSpec, ProjectPurgeSpec
 from radd.kernel import SettingSpec
@@ -9,6 +9,7 @@ from radd.kernel import SettingSpec
 from .enums import ItemEvent
 from .filters import FilterParseError
 from .router import router
+from .service.refs import item_ref
 from .service.visibility import ITEM_RELATIONS
 from .slq import SlqError
 
@@ -82,10 +83,20 @@ plugin = RaddPlugin(
         (SlqError, _slq_handler),
     ),
     event_types=(
-        EventTypeSpec(ItemEvent.CREATED, "Item created", "Items", item_scoped=True),
-        EventTypeSpec(ItemEvent.UPDATED, "Item updated", "Items", item_scoped=True, has_changes=True),
-        EventTypeSpec(ItemEvent.DELETED, "Item deleted", "Items"),
+        EventTypeSpec(
+            ItemEvent.CREATED, "Item created", "Items",
+            item_scoped=True, subjects=("item",),
+        ),
+        EventTypeSpec(
+            ItemEvent.UPDATED, "Item updated", "Items",
+            item_scoped=True, has_changes=True, subjects=("item",),
+        ),
+        EventTypeSpec(ItemEvent.DELETED, "Item deleted", "Items", subjects=("item",)),
     ),
+    # RADD-923: how an item describes itself inside ANY event payload. Declared
+    # once here; eleven other modules name `item` as a subject and none of them
+    # builds the shape — the kernel does, so it cannot come out differently.
+    entity_refs=(EntityRefSpec("item", item_ref, label="Issue"),),
     # RADD-823: what @own / @team MEAN for an item (D6 reporter; D13 item.team_id).
     relations=ITEM_RELATIONS,
     # RADD-892: `work_items.project_id` carries no ON DELETE CASCADE, so a dying

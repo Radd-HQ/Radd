@@ -50,7 +50,7 @@ async def create_survey(
         entity_type=ItemEntity.ITEM,
         entity_id=item_id,
         actor_id=None,
-        payload={"item_id": str(item_id), "key": item_key},
+        subjects={"item": item_id},
     )
     return survey
 
@@ -93,9 +93,8 @@ async def record_response(
         entity_type=ItemEntity.ITEM,
         entity_id=item.id,
         actor_id=None,  # the requester has no user account
+        subjects={"item": item.id},
         payload={
-            "item_id": str(item.id),
-            "key": f"{project.key}-{item.number}",
             "rating": data.rating,
             "comment": data.comment[:PAYLOAD_COMMENT_EXCERPT_CHARS],
         },

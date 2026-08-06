@@ -1,6 +1,7 @@
 """The read pipeline: hydrate → emit → permission-filtered ItemRead."""
 
 import uuid
+from typing import Any
 from collections.abc import Sequence
 from datetime import datetime
 
@@ -79,9 +80,23 @@ async def _finish(
     read = await _hydrate_one(session, item, project, actor, permissions)
     # Event payloads keep the FULL custom_fields — stream consumers are trusted
     # (docs/modules.md); only API responses are filtered per-actor.
-    payload = read.model_dump(mode="json")
+    #
+    # Nested under `item` (RADD-922), like every other item-scoped event, so one
+    # rule — `payload.item.<field>` — addresses the item whatever produced the
+    # event. This one carries the WHOLE read rather than the compact ref: an item
+    # event is about the item, so it should say everything about it. `project` is
+    # promoted from the read's bare `project_id` to the same `{id, key, name}`
+    # object the ref uses, because a receiver that has to look up a project by
+    # uuid to name it has been handed half an answer.
+    payload: dict[str, Any] = {
+        "item": {
+            **read.model_dump(mode="json"),
+            "project": {"id": str(project.id), "key": project.key, "name": project.name},
+        }
+    }
     # Field-level diff for the History tab / audit (and richer webhook/automation
     # signals). Computed from the pre-mutation snapshot; omitted on create.
+    # Stays TOP-LEVEL: it describes the event, not the item.
     if before is not None:
         changes = diff_item_reads(before, read, field_names=field_name_map(definitions))
         if changes:

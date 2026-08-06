@@ -110,10 +110,10 @@ async def save_upload(
         entity_type=AttachmentEntity.ATTACHMENT,
         entity_id=attachment.id,
         actor_id=actor_id,
+        # None for a doc-parented attachment — the parent is polymorphic and
+        # only an item parent has an item subject.
+        subjects={"item": attachment.item_id},
         payload={
-            # item_id stays for item parents so notify/automation item-scoping
-            # keeps working; a doc-parented event simply has no item.
-            "item_id": str(attachment.item_id) if attachment.item_id else None,
             "entity_type": attachment.entity_type,
             "entity_id": str(attachment.entity_id),
             "filename": attachment.filename,
@@ -236,8 +236,12 @@ async def delete_attachment(
 ) -> None:
     storage_name = attachment.storage_name
     host_id = attachment.storage_host_id
+    # Resolved BEFORE the delete: the row is gone two lines down, which is
+    # exactly when a consumer cannot go and look the rest up.
+    # The attachment's OWN fields are captured before the row goes; the item is
+    # unaffected by this delete, so its subject resolves normally at emit.
+    item_id = attachment.item_id
     payload = {
-        "item_id": str(attachment.item_id) if attachment.item_id else None,
         "entity_type": attachment.entity_type,
         "entity_id": str(attachment.entity_id),
         "filename": attachment.filename,
@@ -259,6 +263,7 @@ async def delete_attachment(
         entity_type=AttachmentEntity.ATTACHMENT,
         entity_id=entity_id,
         actor_id=actor_id,
+        subjects={"item": item_id},
         payload=payload,
     )
 

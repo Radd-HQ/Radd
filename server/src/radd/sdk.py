@@ -22,12 +22,14 @@ from typing import Any
 # --- kernel surface (eager; safe, no module deps) ---
 from radd.db import Base, TimestampMixin, get_session
 from radd.kernel import (
+    AutomationNodeSpec,
     KERNEL_API_VERSION,
     CapabilitySpec,
     ConsumerSpec,
     CrudResourceSpec,
     EntityFieldSpec,
     EntitySpec,
+    EntityRefSpec,
     EventTypeSpec,
     IntegrationSpec,
     McpToolSpec,

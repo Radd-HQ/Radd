@@ -15,6 +15,8 @@ from typing import Any, get_origin
 from fastapi import APIRouter, Request, Response
 
 from .specs import (
+    EntityRefSpec,
+    AutomationNodeSpec,
     CapabilitySpec,
     ConsumerSpec,
     CrudResourceSpec,
@@ -80,6 +82,10 @@ class RaddPlugin:
     routers: tuple[APIRouter, ...] = ()
     entities: tuple[EntitySpec, ...] = ()
     event_types: tuple[EventTypeSpec, ...] = ()
+    #: How this plugin's entities describe themselves inside an event payload
+    #: (RADD-923). Declared once; the kernel uses it whenever ANY module names
+    #: this entity as an event subject, so nobody hand-builds the shape.
+    entity_refs: tuple[EntityRefSpec, ...] = ()
     consumers: tuple[ConsumerSpec, ...] = ()
     automation_actions: tuple[Any, ...] = ()
     automation_conditions: tuple[Any, ...] = ()
@@ -104,6 +110,9 @@ class RaddPlugin:
     view_types: tuple[ViewTypeSpec, ...] = ()  # custom saved-view types
     widget_types: tuple[WidgetTypeSpec, ...] = ()  # custom dashboard widget types
     mcp_tools: tuple[McpToolSpec, ...] = ()  # MCP tools (RADD-640; filtered + enforced by the kernel)
+    #: Automation graph node types (spec 116 phase 2) — what the canvas palette
+    #: offers and what the executor knows how to run.
+    automation_nodes: tuple[AutomationNodeSpec, ...] = ()
     page_extensions: tuple[PageExtensionSpec, ...] = ()  # page fenced blocks (RADD-709)
     #: Rows that die with a parent (RADD-745). A FACTORY, not a tuple: the set is
     #: derived from a binding registry that other modules populate at import

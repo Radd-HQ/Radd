@@ -48,6 +48,7 @@ from .hosts import entity_host
 from .registry import registries
 from .specs import (
     CrudResourceSpec,
+    EntityRefSpec,
     EntityFieldSpec,
     EntitySpec,
     EventTypeSpec,
@@ -125,6 +126,10 @@ def _event_types(spec: EntitySpec) -> tuple[EventTypeSpec, ...]:
             item_scoped=False,
             has_changes=(verb == "updated"),
             entity_type=spec.key,
+            # RADD-923: the entity is its own subject, so a milestone event
+            # carries a milestone ref and an action node declaring
+            # `subject="milestone"` receives it — with no plugin code at all.
+            subjects=(spec.key,),
         )
         for verb in ("created", "updated", "deleted")
     )
@@ -141,11 +146,49 @@ def _project_purge(spec: EntitySpec) -> ProjectPurgeSpec:
     return ProjectPurgeSpec(name=f"entity:{spec.key}", tables=(spec.table,), order=10)
 
 
+def _ref_builder(spec: EntitySpec, model: type):
+    """A canonical ref for a declared entity, generated from its own fields.
+
+    The shape mirrors the hand-written item ref: `id` plus whatever names the row
+    (`title`/`name`), plus `project` when the entity is project-scoped. A plugin
+    author writes none of it — which is the point. The alternative was every
+    plugin inventing its own payload shape, and the tracker already ran that
+    experiment: RADD-922 found fourteen of them.
+    """
+    label_field = next(
+        (f.name for f in spec.fields if f.name in ("title", "name", "label")), None
+    )
+
+    async def ref(session, entity_id):
+        row = await session.get(model, entity_id)
+        if row is None:
+            return None
+        out = {"id": str(row.id), "entity_type": spec.key}
+        if label_field:
+            out["title"] = getattr(row, label_field, None)
+        if spec.project_scoped and getattr(row, "project_id", None) is not None:
+            # Resolved through the SAME ref the projects plugin registered, so a
+            # plugin entity names its project exactly as an item does.
+            project_ref = registries.entity_refs.get("project")
+            out["project"] = (
+                await project_ref.ref(session, row.project_id)
+                if project_ref
+                else {"id": str(row.project_id)}
+            )
+        return out
+
+    return ref
+
+
 def register_entity(spec: EntitySpec) -> type:
-    """Auto-wire an entity: build the model + register its CRUD-resource RBAC atoms
-    and created/updated/deleted event types into the kernel registries. Idempotent."""
+    """Auto-wire an entity: build the model + register its CRUD-resource RBAC atoms,
+    created/updated/deleted event types, and the payload ref those events carry
+    (RADD-923). Idempotent."""
     model = build_model(spec)
     registries.crud_resources.setdefault(spec.key, _crud_resource(spec))
+    registries.entity_refs.setdefault(
+        spec.key, EntityRefSpec(spec.key, _ref_builder(spec, model), label=spec.label)
+    )
     for et in _event_types(spec):
         registries.event_types.setdefault(et.event_type, et)
     if spec.project_scoped:
@@ -210,16 +253,17 @@ def crud_router(spec: EntitySpec) -> APIRouter:
         await entity_host().require(session, user, atom, project_id=pid)
 
     async def _emit(session: AsyncSession, verb: str, obj, actor_id) -> None:
-        payload = {"id": str(obj.id)}
-        if project_scoped:
-            payload["project_id"] = str(obj.project_id)
+        # RADD-923: the id, not a shape. What lands in the payload is the
+        # entity's canonical ref — the same one every other module sees — rather
+        # than the `{id, project_id}` stub this used to write, which forced a
+        # webhook receiver to call back for so much as a title.
         await entity_host().emit(
             session,
             event_type=f"{key}.{verb}",
             entity_type=key,
             entity_id=obj.id,
             actor_id=actor_id,
-            payload=payload,
+            subjects={key: obj.id},
         )
 
     async def _get(session: AsyncSession, obj_id: uuid.UUID):

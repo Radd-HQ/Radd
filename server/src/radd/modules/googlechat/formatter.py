@@ -17,6 +17,12 @@ def _issue_url(base_url: str, key: str) -> str:
     return f"{base_url}/issues/{key}"
 
 
+def _item(payload: dict) -> dict:
+    """The canonical item ref (RADD-922). This file branched on the SPELLING —
+    `key` for item events, `item_key` for SLA events — for one concept."""
+    return payload.get("item") or {}
+
+
 def format_message(event: EventLike, *, selected: frozenset[str], base_url: str) -> str | None:
     """Compact text message for the selected event types; None = do not post
     (unselected type, or a selected type with no formatter/no usable payload)."""
@@ -24,13 +30,13 @@ def format_message(event: EventLike, *, selected: frozenset[str], base_url: str)
         return None
     payload = event.payload or {}
     if event.event_type == ITEM_CREATED_EVENT:
-        key = payload.get("key", "")
+        key = _item(payload).get("key", "")
         if not key:
             return None
-        title = payload.get("title", "")
+        title = _item(payload).get("title", "")
         return f"New item {key}: {title}\n{_issue_url(base_url, key)}"
     if event.event_type == SLA_BREACHED_EVENT:
-        key = payload.get("item_key", "")
+        key = _item(payload).get("key", "")
         if not key:
             return None
         policy = payload.get("policy_name", "")

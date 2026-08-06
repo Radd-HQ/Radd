@@ -114,13 +114,18 @@ async def _item(db, admin, project, **kwargs):
 
 
 def test_moved_to_done_is_pure_over_the_payload():
-    done_state = {"category": StateCategory.DONE.value}
-    assert sender.moved_to_done({"changes": [{"field": "state"}], "state": done_state})
+    # `state` lives under `item` since RADD-922 — one addressing rule for every
+    # item-scoped event.
+    done = {"item": {"state": {"category": StateCategory.DONE.value}}}
+    assert sender.moved_to_done({**done, "changes": [{"field": "state"}]})
     # No state change in the diff (e.g. an assignee edit while already done).
-    assert not sender.moved_to_done({"changes": [{"field": "assignee"}], "state": done_state})
+    assert not sender.moved_to_done({**done, "changes": [{"field": "assignee"}]})
     # State moved, but not INTO done.
     assert not sender.moved_to_done(
-        {"changes": [{"field": "state"}], "state": {"category": StateCategory.IN_PROGRESS.value}}
+        {
+            "changes": [{"field": "state"}],
+            "item": {"state": {"category": StateCategory.IN_PROGRESS.value}},
+        }
     )
     assert not sender.moved_to_done({})  # create-shaped payload: no changes at all
 
@@ -164,7 +169,7 @@ async def test_sender_prefers_contact_over_reporter(db, admin, project, smtp_on)
         event_types=[CsatEvent.REQUESTED.value],
     )
     assert len(requested) == 1 and requested[0].actor_id is None
-    assert requested[0].payload["key"] == item.key
+    assert requested[0].payload["item"]["key"] == item.key
 
 
 async def test_sender_falls_back_to_reporter_and_sends_once_only(db, admin, project, smtp_on):

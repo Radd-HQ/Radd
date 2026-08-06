@@ -23,12 +23,14 @@ from .registry import (
 )
 from .hosts import EntityHost, entity_host, set_entity_host
 from .specs import (
+    AutomationNodeSpec,
     CapabilitySpec,
     CascadeSpec,
     ConsumerSpec,
     CrudResourceSpec,
     EntityFieldSpec,
     EntitySpec,
+    EntityRefSpec,
     EventTypeSpec,
     GrantScopeSpec,
     IntegrationSpec,
@@ -61,6 +63,7 @@ __all__ = [
     "register_crud_resource",
     "register_capability",
     "register_integration",
+    "EntityRefSpec",
     "EventTypeSpec",
     "CapabilitySpec",
     "CascadeSpec",
@@ -75,6 +78,7 @@ __all__ = [
     "TaskSpec",
     "ConsumerSpec",
     "IntegrationSpec",
+    "AutomationNodeSpec",
     "McpToolSpec",
     "PageExtensionSpec",
     "NavItemSpec",

@@ -56,7 +56,8 @@ class EntityHost(Protocol):
         entity_type: str,
         entity_id: Any,
         actor_id: Any,
-        payload: dict[str, Any],
+        payload: dict[str, Any] | None = None,
+        subjects: dict[str, Any] | None = None,
     ) -> None: ...
 
 

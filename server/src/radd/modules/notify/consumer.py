@@ -154,6 +154,16 @@ async def recipient_ids(session: AsyncSession, item_id: uuid.UUID) -> frozenset[
     return frozenset(recipients)
 
 
+
+def _ref(payload: dict) -> dict:
+    """The canonical item ref every item-scoped event carries (RADD-922).
+
+    This file used to reconstruct the issue key FOUR ways — `payload["key"]` for
+    item events, `payload["item_key"]` for SLA events, and a database round trip
+    for the two families that carried neither. One shape, one read."""
+    return payload.get("item") or {}
+
+
 async def _handle_item_event(session: AsyncSession, event: Event, *, watch_only: bool) -> None:
     payload = event.payload or {}
     item_id = uuid.UUID(event.entity_id)
@@ -181,8 +191,8 @@ async def _handle_item_event(session: AsyncSession, event: Event, *, watch_only:
         event=event,
         item_id=item_id,
         project=project,
-        item_key=payload.get("key", ""),
-        item_title=payload.get("title", ""),
+        item_key=_ref(payload).get("key", ""),
+        item_title=_ref(payload).get("title", ""),
         watch_only=watch_only,
         item=item,
     )
@@ -192,7 +202,7 @@ async def _handle_comment_created(
     session: AsyncSession, event: Event, *, watch_only: bool
 ) -> None:
     payload = event.payload or {}
-    item_id = uuid.UUID(payload["item_id"])
+    item_id = uuid.UUID(_ref(payload)["id"])
     item = await items.require_item(session, item_id)
     project = await projects_service.get_project(session, item.project_id)
     mention_ids: frozenset[uuid.UUID] = frozenset()
@@ -208,8 +218,8 @@ async def _handle_comment_created(
         event=event,
         item_id=item_id,
         project=project,
-        item_key=f"{project.key}-{item.number}",
-        item_title=item.title,
+        item_key=_ref(payload).get("key", ""),
+        item_title=_ref(payload).get("title", ""),
         watch_only=watch_only,
         item=item,
     )
@@ -220,7 +230,7 @@ async def _handle_sla_event(
 ) -> None:
     """sla.breached and (spec 69) sla.due_soon: same fan-out, different type."""
     payload = event.payload or {}
-    item_id = uuid.UUID(payload["item_id"])
+    item_id = uuid.UUID(_ref(payload)["id"])
     item = await items.require_item(session, item_id)
     project = await projects_service.get_project(session, item.project_id)
     watchers = await recipient_ids(session, item_id)
@@ -238,8 +248,8 @@ async def _handle_sla_event(
         event=event,
         item_id=item_id,
         project=project,
-        item_key=payload.get("item_key", ""),
-        item_title=item.title,
+        item_key=_ref(payload).get("key", ""),
+        item_title=_ref(payload).get("title", ""),
         item=item,
     )
 
@@ -249,7 +259,7 @@ async def _handle_approval_event(session: AsyncSession, event: Event) -> None:
     wire-string idiom keeps notify from importing approvals, which loads later);
     approved/declined → the requester."""
     payload = event.payload or {}
-    item_id = uuid.UUID(payload["item_id"])
+    item_id = uuid.UUID(_ref(payload)["id"])
     item = await items.require_item(session, item_id)
     project = await projects_service.get_project(session, item.project_id)
     if event.event_type == APPROVAL_REQUESTED_EVENT:
@@ -269,8 +279,8 @@ async def _handle_approval_event(session: AsyncSession, event: Event) -> None:
         event=event,
         item_id=item_id,
         project=project,
-        item_key=f"{project.key}-{item.number}",
-        item_title=item.title,
+        item_key=_ref(payload).get("key", ""),
+        item_title=_ref(payload).get("title", ""),
         item=item,
     )
 

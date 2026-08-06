@@ -138,8 +138,8 @@ async def _emit(
         entity_type=ItemEntity.ITEM,
         entity_id=item.id,
         actor_id=actor.id,
+        subjects={"item": item.id},
         payload={
-            "item_id": str(item.id),
             "user": {"id": str(read.user.id), "name": read.user.name} if read.user else None,
             "team": {"id": str(read.team.id), "name": read.team.name} if read.team else None,
             # Scalar display name for the History one-liner (`_DETAIL_KEYS`).

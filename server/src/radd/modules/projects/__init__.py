@@ -1,4 +1,4 @@
-from radd.kernel import EventTypeSpec, GrantScopeSpec
+from radd.kernel import EntityRefSpec, EventTypeSpec, GrantScopeSpec
 from radd.kernel import RaddPlugin
 
 from . import service
@@ -16,6 +16,8 @@ plugin = RaddPlugin(
     routers=(project_router, instance_router),
     # RADD-889: list_projects of the spec-45 MCP catalog lives with its owner.
     mcp_tools=mcptools.MCP_TOOLS,
+    # RADD-923: how a project describes itself in an event payload.
+    entity_refs=(EntityRefSpec("project", service.project_ref, label="Project"),),
     event_types=(
         EventTypeSpec(ProjectEvent.PROJECT_CREATED, "Project created", "Admin"),
     ),

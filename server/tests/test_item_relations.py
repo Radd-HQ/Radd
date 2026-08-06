@@ -165,13 +165,24 @@ async def test_search_inherits_the_relation_filter(db, scenario):
                 {
                     "entity_id": str(item.id),
                     "payload": {
-                        "project_id": str(project.id),
-                        "key": item.key,
-                        "title": item.title,
-                        "description": "",
-                        "reporter": {"id": str(item.reporter.id)} if item.reporter else None,
-                        "assignee": None,
-                        "team": {"id": str(item.team.id)} if item.team else None,
+                        # Nested under `item` (RADD-922) — one shape for every
+                        # item-scoped event.
+                        "item": {
+                            "id": str(item.id),
+                            "project": {
+                                "id": str(project.id),
+                                "key": project.key,
+                                "name": project.name,
+                            },
+                            "key": item.key,
+                            "title": item.title,
+                            "description": "",
+                            "reporter": (
+                                {"id": str(item.reporter.id)} if item.reporter else None
+                            ),
+                            "assignee": None,
+                            "team": {"id": str(item.team.id)} if item.team else None,
+                        }
                     },
                 },
             )(),

@@ -77,7 +77,7 @@ def plan_for_event(
     if event_type in _ITEM_EVENTS:
         return (EmbedTaskKind.ITEM, _coerce(entity_id))
     if event_type in _COMMENT_EVENTS:
-        return (EmbedTaskKind.ITEM, _coerce(payload.get("item_id")))
+        return (EmbedTaskKind.ITEM, _coerce((payload.get("item") or {}).get("id")))
     if event_type == _ITEM_DELETE:
         return (EmbedTaskKind.DROP_ITEM, _coerce(entity_id))
     if event_type in _PAGE_EVENTS:

@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.config import settings
 from radd.db import SessionLocal
 from radd.modules.items import service as items
-from radd.modules.projects import service as projects_service
 from radd.worker import PeriodicLoop
 
 from . import evaluation, service
@@ -53,10 +52,10 @@ async def _evaluate_project(
     if not candidates:
         return 0
     item_map = await items.items_by_ids(session, candidates)
-    keys = await projects_service.project_keys(session, {project_id})
-    item_keys = {
-        item_id: f"{keys[project_id]}-{item.number}" for item_id, item in item_map.items()
-    }
+    # The canonical ref per candidate (RADD-922). One extra join each, on a loop
+    # that already loads every item — and it removes the four ways a consumer
+    # used to reconstruct the key from an SLA event.
+    item_refs = {item_id: await items.item_ref(session, item_id) for item_id in item_map}
     grouped: dict[uuid.UUID, list[uuid.UUID]] = {}
     policy_by_id = {policy.id: policy for policy in policies}
     for item_id, item in item_map.items():
@@ -72,7 +71,7 @@ async def _evaluate_project(
             continue
         evaluated = await evaluation.evaluate_items(session, policy, open_ids)
         emitted += await evaluation.sync_states(
-            session, policy, evaluated, item_keys
+            session, policy, evaluated, item_refs
         )
     return emitted
 

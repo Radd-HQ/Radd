@@ -39,7 +39,7 @@ def register(reg):
     reg.on("item.created", on_created)   # glob over the event type: item.*, *, exact
 
 def on_created(client, event):
-    client.add_comment(event.payload["item_id"], "Welcome aboard!")
+    client.add_comment(event.payload["item"]["id"], "Welcome aboard!")
 ```
 
 Callbacks receive `(client, event)`: `client` is a `RaddClient` (authenticated,
@@ -47,6 +47,11 @@ ready for `get/post/patch/delete` plus `find_item`, `create_item`,
 `update_item`, `add_comment`, `events`), `event` is a frozen dataclass with
 `id`, `event_type`, `entity_type`, `entity_id`, `payload`, `created_at`,
 `actor_id`.
+
+**Every item-scoped event carries `payload["item"]`** — one ref with `id`, `key`,
+`title`, `project`, `state`, `team` and `assignee`, whether the event was an
+item update, a comment, a worklog, an attachment, an SLA breach or an approval.
+A plugin written against one is written against all of them.
 
 **3. Run the daemon:**
 

@@ -256,7 +256,7 @@ def _event(event_type: str, payload: dict) -> SimpleNamespace:
 
 def test_googlechat_formats_item_created():
     text = format_message(
-        _event("item.created", {"key": "TD-12", "title": "Farm down"}),
+        _event("item.created", {"item": {"key": "TD-12", "title": "Farm down"}}),
         selected=SELECTED,
         base_url="https://radd.example.com",
     )
@@ -267,7 +267,7 @@ def test_googlechat_formats_sla_breached():
     text = format_message(
         _event(
             "sla.breached",
-            {"item_key": "TD-12", "policy_name": "Support", "kind": "response"},
+            {"item": {"key": "TD-12"}, "policy_name": "Support", "kind": "response"},
         ),
         selected=SELECTED,
         base_url="https://radd.example.com",

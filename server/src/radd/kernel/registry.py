@@ -15,12 +15,14 @@ from pathlib import Path
 
 from .plugin import RaddPlugin
 from .specs import (
+    AutomationNodeSpec,
     RelationSpec,
     CapabilitySpec,
     CascadeSpec,
     ConsumerSpec,
     CrudResourceSpec,
     EntitySpec,
+    EntityRefSpec,
     EventTypeSpec,
     GrantScopeSpec,
     IntegrationSpec,
@@ -64,6 +66,9 @@ class KernelRegistries:
     plugins: dict[str, RaddPlugin] = field(default_factory=dict)
     entities: dict[str, EntitySpec] = field(default_factory=dict)
     event_types: dict[str, EventTypeSpec] = field(default_factory=dict)
+    #: entity type -> how to describe it in an event payload (RADD-923). Read by
+    #: `events.emit` to expand `subjects={"item": id}` into a canonical ref.
+    entity_refs: dict[str, EntityRefSpec] = field(default_factory=dict)
     permissions: dict[str, PermissionSpec] = field(default_factory=dict)
     #: RADD-891: scalar cascade settings, keyed like `settings.types.SettingKey`'s
     #: values — the inversion of that module's old hardcoded catalog dict.
@@ -93,6 +98,8 @@ class KernelRegistries:
     view_types: dict[str, ViewTypeSpec] = field(default_factory=dict)  # plugin saved-view types
     widget_types: dict[str, WidgetTypeSpec] = field(default_factory=dict)  # plugin dashboard widgets
     mcp_tools: dict[str, McpToolSpec] = field(default_factory=dict)  # plugin MCP tools (RADD-640)
+    #: Automation graph node types (spec 116 phase 2), keyed by their spec key.
+    automation_nodes: dict[str, AutomationNodeSpec] = field(default_factory=dict)
     page_extensions: dict[str, PageExtensionSpec] = field(default_factory=dict)  # RADD-709
     #: Which plugin contributed each page extension (RADD-748). The registry is
     #: the only thing that knows — the spec is authored BY the plugin, so a
@@ -113,12 +120,13 @@ class KernelRegistries:
 
     def clear(self) -> None:
         for f in (
-            self.plugins, self.entities, self.event_types, self.permissions,
+            self.plugins, self.entities, self.event_types, self.entity_refs, self.permissions,
             self.settings, self.relations, self.relation_domains, self.access_resources,
             self.crud_resources, self.nav_facts, self.grant_scopes, self.project_purges,
             self.capabilities, self.tasks, self.consumers,
             self.integrations, self.plugin_ui_dirs, self.slq_fields,
             self.view_types, self.widget_types, self.mcp_tools, self.page_extensions,
+            self.automation_nodes,
             self.page_extension_sources,
         ):
             f.clear()
@@ -133,6 +141,8 @@ class KernelRegistries:
             self.entities[e.key] = e
         for et in plugin.event_types:
             self.event_types[et.event_type] = et
+        for er in plugin.entity_refs:
+            self.entity_refs[er.entity_type] = er
         for p in plugin.permissions:
             self.permissions[p.key] = p
         for s in plugin.settings_keys:
@@ -161,6 +171,8 @@ class KernelRegistries:
             self.widget_types[wt.key] = wt
         for mt in plugin.mcp_tools:
             self.mcp_tools[mt.name] = mt
+        for node in plugin.automation_nodes:
+            self.automation_nodes[node.key] = node
         for px in plugin.page_extensions:
             self.page_extensions[px.name] = px
             self.page_extension_sources[px.name] = ContributionSource(plugin=plugin.name)
@@ -187,6 +199,8 @@ class KernelRegistries:
             self.entities.pop(e.key, None)
         for et in plugin.event_types:
             self.event_types.pop(et.event_type, None)
+        for er in plugin.entity_refs:
+            self.entity_refs.pop(er.entity_type, None)
         for p in plugin.permissions:
             self.permissions.pop(p.key, None)
         for s in plugin.settings_keys:
@@ -215,6 +229,8 @@ class KernelRegistries:
             self.widget_types.pop(wt.key, None)
         for mt in plugin.mcp_tools:
             self.mcp_tools.pop(mt.name, None)
+        for node in plugin.automation_nodes:
+            self.automation_nodes.pop(node.key, None)
         for px in plugin.page_extensions:
             self.page_extensions.pop(px.name, None)
             self.page_extension_sources.pop(px.name, None)

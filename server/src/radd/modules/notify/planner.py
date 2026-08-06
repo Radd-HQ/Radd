@@ -43,12 +43,12 @@ def parse_mention_candidates(text: str) -> tuple[set[str], set[str]]:
 
 
 def _assignee_id(payload: dict) -> uuid.UUID | None:
-    assignee = payload.get("assignee")
+    assignee = (payload.get("item") or {}).get("assignee")
     return uuid.UUID(assignee["id"]) if assignee else None
 
 
 def _reporter_id(payload: dict) -> uuid.UUID | None:
-    reporter = payload.get("reporter")
+    reporter = (payload.get("item") or {}).get("reporter")
     return uuid.UUID(reporter["id"]) if reporter else None
 
 

@@ -79,7 +79,8 @@ class AuthEntityHost:
         entity_type: str,
         entity_id: Any,
         actor_id: Any,
-        payload: dict[str, Any],
+        payload: dict[str, Any] | None = None,
+        subjects: dict[str, Any] | None = None,
     ) -> None:
         from radd.modules.events import service as events
 
@@ -90,6 +91,7 @@ class AuthEntityHost:
             entity_id=entity_id,
             actor_id=actor_id,
             payload=payload,
+            subjects=subjects,
         )
 
 

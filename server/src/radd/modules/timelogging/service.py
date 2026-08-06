@@ -470,13 +470,15 @@ async def _emit(
         entity_type=TimelogEntity.WORKLOG,
         entity_id=worklog.id,
         actor_id=actor_id,
+        # None for itemless (spec 59) entries — a general worklog has a project
+        # but no item, which is the whole point of spec 59.
+        subjects={"item": worklog.item_id},
         payload={
-            # None for itemless (spec 59) entries — consumers already treat a
-            # missing/None item_id as "no target item".
-            "item_id": str(worklog.item_id) if worklog.item_id else None,
+            # None for itemless (spec 59) entries — a general worklog has a
+            # project but no item, which is the whole point of spec 59.
             "project_id": str(worklog.project_id) if worklog.project_id else None,
             "category_id": str(worklog.category_id) if worklog.category_id else None,
-            "author_id": str(worklog.author_id),
+            "author": await auth_service.user_ref_by_id(session, worklog.author_id),
             "worked_on": worklog.worked_on.isoformat(),
             "time_spent_seconds": worklog.time_spent_seconds,
         },

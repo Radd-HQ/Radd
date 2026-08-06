@@ -79,7 +79,8 @@ async def run_once() -> int:
 
 async def _plan_reply(session: AsyncSession, event: Event) -> OutboundReply | None:
     payload = event.payload or {}
-    item_id = uuid.UUID(payload["item_id"])
+    # RADD-922: the canonical ref every item-scoped event carries.
+    item_id = uuid.UUID(payload["item"]["id"])
     contact = await service.contact_for_item(session, item_id)
     if not should_reply(
         has_contact=contact is not None,

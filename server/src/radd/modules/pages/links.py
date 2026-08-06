@@ -38,7 +38,8 @@ async def _emit_link(
         entity_type=PageEntity.PAGE,
         entity_id=page.id,
         actor_id=actor_id,
-        payload={"title": page.title, "item_id": str(item_id), "item_key": item_key},
+        subjects={"item": item_id},
+        payload={"title": page.title},
     )
 
 

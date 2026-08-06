@@ -26,7 +26,7 @@ def test_plan_for_event_mapping():
     page_id = str(uuid.uuid4())
     assert embedder.plan_for_event("item.created", item_id, {}) == ("item", uuid.UUID(item_id))
     assert embedder.plan_for_event("item.updated", item_id, {}) == ("item", uuid.UUID(item_id))
-    assert embedder.plan_for_event("comment.created", "77", {"item_id": item_id}) == (
+    assert embedder.plan_for_event("comment.created", "77", {"item": {"id": item_id}}) == (
         "item",
         uuid.UUID(item_id),
     )

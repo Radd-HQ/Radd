@@ -228,18 +228,22 @@ async def _emit(
         entity_type=CommentEntity.COMMENT,
         entity_id=comment.id,
         actor_id=actor_id,
+        subjects={
+            # The kernel resolves it; None when the parent is a page, not an item.
+            "item": (
+                comment.entity_id if comment.entity_type == CommentParentType.ITEM else None
+            )
+        },
         payload={
-            # Both shapes: `item_id` keeps every existing consumer (notify,
-            # webhooks, automations, the extensions SDK) working untouched, and
-            # is null when the parent is not an item.
+            # The polymorphic parent, which may be a page rather than an item.
             "entity_type": comment.entity_type,
             "entity_id": str(comment.entity_id),
-            "item_id": (
-                str(comment.entity_id)
-                if comment.entity_type == CommentParentType.ITEM
-                else None
-            ),
-            "author_id": str(comment.author_id),
+            # The canonical item ref (RADD-922), None when the parent is not an
+            # item. It replaces the bare `item_id` that every consumer then had
+            # to resolve into a key and a project of its own accord.
+            # A REF, not a bare id: a notification that says "3f2a-…" wrote a
+            # comment is a notification nobody can read.
+            "author": await auth.user_ref_by_id(session, comment.author_id),
             "visibility": comment.visibility,
             "excerpt": comment.body[:EXCERPT_MAX_CHARS],
             "visible_to_teams": sorted(str(team_id) for team_id in (visible_to_teams or set())),

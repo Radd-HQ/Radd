@@ -10,6 +10,7 @@ the kernel. This plugin is `core=False`: the plugin manager can disable it.
 
 from radd.sdk import NavItemSpec, PluginUiManifest, RaddPlugin
 
+from .automation import SPEC as SET_STATUS_NODE
 from .mcptool import LIST_MILESTONES
 from .spec import SPEC
 
@@ -21,7 +22,11 @@ plugin = RaddPlugin(
     description="Project milestones — the plugin-platform north-star (entity + nav, all auto-wired).",
     depends_on=("projects", "auth", "events"),
     entities=(SPEC,),
-    mcp_tools=(LIST_MILESTONES,),  # RADD-640: agents see milestones too, kernel-filtered
+    mcp_tools=(LIST_MILESTONES,),
+    # RADD-923: the plugin contributes the ACTION that responds to its own
+    # auto-wired events — the other half of the north-star. No edits to
+    # `automations`, the kernel or the SPA.
+    automation_nodes=(SET_STATUS_NODE,),  # RADD-640: agents see milestones too, kernel-filtered
     ui=PluginUiManifest(
         nav=(
             NavItemSpec(

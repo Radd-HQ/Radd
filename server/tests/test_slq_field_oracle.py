@@ -196,10 +196,13 @@ def _item_event(item, project, description):
     return SimpleNamespace(
         entity_id=str(item.id),
         payload={
-            "project_id": str(project.id),
-            "key": item.key,
-            "title": item.title,
-            "description": description,
+            "item": {
+                "id": str(item.id),
+                "project": {"id": str(project.id), "key": project.key, "name": project.name},
+                "key": item.key,
+                "title": item.title,
+                "description": description,
+            }
         },
     )
 

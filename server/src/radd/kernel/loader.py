@@ -61,7 +61,44 @@ def load_plugins(paths: tuple[str, ...]) -> list[RaddPlugin]:
                 kentities.register_entity(spec)
                 registries.entity_routers.append(kentities.crud_router(spec))
         plugins.append(plugin)
+    _check_subjects(plugins)
     return plugins
+
+
+def _check_subjects(plugins: list[RaddPlugin]) -> None:
+    """Every declared event subject must have a registered `EntityRefSpec`
+    (RADD-923), and every contributed action node's subject too.
+
+    Checked after the whole set has loaded, not per plugin: the ref may be
+    contributed by a plugin listed later, and ordering is `depends_on`'s job, not
+    this check's.
+
+    Boot is the cheapest place to find this. An event promising a subject nothing
+    can resolve produces an automation that saves cleanly, enables cleanly and
+    then does nothing at 3am — the failure mode this whole seam exists to remove,
+    so it must not be reintroduced by the seam itself.
+    """
+    known = set(registries.entity_refs)
+    problems: list[str] = []
+    for plugin in plugins:
+        for event in plugin.event_types:
+            for subject in event.subjects:
+                if subject not in known:
+                    problems.append(
+                        f"{plugin.id!r}: event {event.event_type!r} names subject "
+                        f"{subject!r}, which no plugin describes"
+                    )
+        for node in plugin.automation_nodes:
+            if node.kind == "action" and node.subject and node.subject not in known:
+                problems.append(
+                    f"{plugin.id!r}: action node {node.key!r} acts on subject "
+                    f"{node.subject!r}, which no plugin describes"
+                )
+    if problems:
+        raise PluginLoadError(
+            "unresolvable event subjects — register an EntityRefSpec for each: "
+            + "; ".join(problems)
+        )
 
 
 def import_models(paths: tuple[str, ...]) -> None:

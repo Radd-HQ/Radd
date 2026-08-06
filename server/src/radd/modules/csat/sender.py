@@ -66,7 +66,7 @@ def moved_to_done(payload: dict) -> bool:
     changes = payload.get("changes") or []
     if not any(change.get("field") == STATE_CHANGE_FIELD for change in changes):
         return False
-    state = payload.get("state") or {}
+    state = ((payload.get("item") or {}).get("state")) or {}
     return state.get("category") == StateCategory.DONE.value
 
 
@@ -123,8 +123,9 @@ async def process_event(session: AsyncSession, event: Event) -> SurveyEmail | No
     recipient = await resolve_recipient(session, item)
     if recipient is None:
         return None
-    key = payload.get("key") or str(item_id)
-    title = payload.get("title") or ""
+    item_ref = payload.get("item") or {}
+    key = item_ref.get("key") or str(item_id)
+    title = item_ref.get("title") or ""
     survey = await service.create_survey(
         session, item_id=item_id, item_key=key
     )

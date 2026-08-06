@@ -8,7 +8,7 @@ Kept deliberately pure: this module imports nothing from `radd.modules.*`, so th
 kernel never depends on a plugin. Specs carry data + light callables only.
 """
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 import uuid
 from dataclasses import dataclass, field
 from typing import Any
@@ -85,6 +85,49 @@ class EventTypeSpec:
     has_changes: bool = False  # payload carries a field diff (old/new subjects work)
     trigger: bool = True  # appears in the automation trigger catalog
     entity_type: str = ""  # the entity this event is about (for auto-registered CRUD events)
+    #: Entity types this event is ABOUT (RADD-923) — `("item",)`, `("item",
+    #: "release")`, `("milestone",)`. Each must have a registered `EntityRefSpec`
+    #: or the plugin refuses to LOAD: an event promising a subject nothing can
+    #: resolve is an automation that silently does nothing at 3am, and boot is
+    #: the cheapest place to find out.
+    #:
+    #: The emitter passes these as IDS and the kernel writes the refs, so a
+    #: declared subject is a promise the emitter cannot forget to keep.
+    subjects: tuple[str, ...] = ()
+    #: JSON Schema for the event's OWN data — not the subject refs, which the
+    #: kernel writes and therefore already knows the shape of. Deriving beats
+    #: declaring: a schema that repeats what the kernel generated is a second
+    #: copy that drifts. This covers only the remainder (`{"environment": …}`).
+    #:
+    #: Served by `GET /automations/samples/events`, which otherwise has nothing
+    #: to show for an event type that has never fired on this instance.
+    payload_schema: dict[str, Any] = field(default_factory=dict)
+
+
+# --- entity refs (RADD-923: the kernel owns SUBJECTS, plugins own data) -------
+@dataclass(frozen=True)
+class EntityRefSpec:
+    """How to describe one entity type inside an event payload.
+
+    Registered once by the module that owns the entity; used by `events.emit` to
+    expand `subjects={"item": id}` into `payload["item"] = {id, key, title, …}`.
+
+    **Why the kernel resolves rather than the emitter building.** RADD-922 found
+    fourteen hand-built shapes for the same idea, fixed them, and left an AST
+    test to keep them fixed — a test that is only necessary because the shape is
+    still hand-built. Handing the kernel an ID deletes the failure mode instead
+    of policing it: you cannot forget to build a ref you never build, and eleven
+    emitters stop needing `depends_on items` to describe an item.
+
+    `ref(session, entity_id) -> dict | None`. None means the row has gone, which
+    is a real answer — a delete event resolves its subject BEFORE the row goes,
+    and anything racing it legitimately finds nothing.
+    """
+
+    entity_type: str
+    ref: Callable[..., Any]
+    #: Human label for the catalog/dev tooling.
+    label: str = ""
 
 
 # --- capabilities (§3 chokepoint 2: /capabilities aggregator) ---
@@ -243,6 +286,83 @@ class ConsumerSpec:
 
     name: str
     description: str = ""
+
+
+# --- automation nodes (spec 116 phase 2: the canvas palette is contributed) ---
+@dataclass(frozen=True)
+class AutomationNodeSpec:
+    """A node type an automation graph can hold, contributed by a module.
+
+    Before this, node behaviour was a closed set of `if kind is …` branches in
+    the executor and a hardcoded palette in the SPA — so the AI module could not
+    offer a classifier node, and every new condition meant editing `automations`.
+
+    Two things make ports part of the SPEC rather than of the KIND:
+
+    * A condition node is one named test ("field changed", "changed by"), and
+      each names its own outputs.
+    * `ports_for(params)` lets a node's outputs depend on its CONFIGURATION — an
+      AI classifier with four user-defined answers has four outputs. A fixed
+      `ports` tuple could not express that, and the graph validator has to know
+      the real set or it cannot reject an edge naming a port that will not exist.
+
+    `plan(ctx) -> NodeOutcome` decides what the node does; it never applies. That
+    split is what gives dry-run for free and is enforced by the executor calling
+    planners only.
+
+    `params_schema` is JSON Schema. The SPA generates a form from it when the
+    plugin ships no component of its own, which is the same deal PageExtensionSpec
+    offers — a plugin gets a usable editor without writing React.
+    """
+
+    key: str  # "filter.slq", "gate.field_changed", "ai.classify"
+    kind: str  # AutomationNodeKind value — fixes whether it filters, gates or acts
+    label: str
+    description: str = ""
+    group: str = "Other"  # palette section
+    params_schema: dict[str, Any] = field(default_factory=dict)
+    #: Outputs for a given params dict. Static nodes ignore the argument.
+    ports_for: Callable[[Mapping[str, Any]], tuple[str, ...]] = lambda _params: ("out",)
+    #: False = runs even when nothing reached it (webhook, chat, "nothing matched").
+    needs_items: bool = True
+    #: How the node reads its packet — a `NodeArity` value, "set" or "item"
+    #: (RADD-918). SET runs once over the whole set; ITEM runs per item, which
+    #: for a routing node means PARTITIONING the set across its ports rather
+    #: than sending all of it down one. Strings rather than the enum because the
+    #: kernel may not import a module's vocabulary.
+    arity: str = "set"
+    #: Arities the author may choose between. Empty = fixed at `arity`, and the
+    #: editor shows no control — a toggle with one setting teaches nothing.
+    arity_options: tuple[str, ...] = ()
+    #: Atom required to USE this node in an automation; "" = any author.
+    permission: str = ""
+    #: Which SUBJECT this node acts on (RADD-923) — the entity type it wants out
+    #: of the packet. "item" for everything built in; a plugin's own entity for
+    #: an action on its own rows. The executor hands `ctx.subject_ids` the ids of
+    #: exactly this type, so a node that acts on milestones never has to know
+    #: how an item-shaped packet is put together.
+    subject: str = "item"
+    #: `plan(ctx) -> port name`, used at SET arity: one answer for the packet.
+    #: On an ACTION node it returns a `NodePlan`-shaped object (`detail`,
+    #: `resolves`) describing what it WOULD do, and writes nothing.
+    plan: Callable[..., Any] | None = None
+    #: `apply(ctx, plan)` — an ACTION node's other half (RADD-923).
+    #:
+    #: The split is the safety property, not a style preference. `plan` runs on
+    #: every walk including a dry run, so the report is free and identical to the
+    #: real thing; `apply` runs only when applying, inside the executor's
+    #: SAVEPOINT, inside its `RunBudget`, and inside the `events.automated()`
+    #: scope. A contributed action therefore cannot spin the engine, cannot
+    #: escape the budget, and cannot take a branch down when it raises.
+    apply: Callable[..., Any] | None = None
+    #: `plan_items(ctx) -> {item_id: port name}`, used at ITEM arity, where the
+    #: node PARTITIONS its input across its ports. Optional: without it the
+    #: executor falls back to calling `plan` once per single-item packet, which
+    #: is correct for any node and is the whole feature for a cheap one. A node
+    #: whose per-item work is expensive overrides it — only the node knows
+    #: whether its calls can be batched or run concurrently, so that decision
+    #: does not belong in the executor.
+    plan_items: Callable[..., Any] | None = None
 
 
 # --- MCP tools (RADD-640: the spec-114 catalog becomes plugin-registerable) ---

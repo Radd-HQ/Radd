@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy import Text, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.config import settings
 from radd.db import ilike_term
 
 # `Event` is re-exported here as the PUBLIC consumer payload type (RADD-886):
@@ -14,9 +15,9 @@ from radd.db import ilike_term
 # events.models made 13 modules reach into another module's models file. The
 # ratchet test bans `events.models` outside this module.
 from .models import ConsumerOffset, Event
-from .quiet import is_quiet, quiet
+from .quiet import automated, is_automated, is_quiet, quiet
 
-__all__ = ["Event", "quiet", "is_quiet"]  # re-exported public seam (see above)
+__all__ = ["Event", "quiet", "is_quiet", "automated", "is_automated"]  # re-exported public seam (see above)
 
 
 async def emit(
@@ -27,8 +28,10 @@ async def emit(
     entity_id: object,
     actor_id: uuid.UUID | None = None,
     payload: dict[str, Any] | None = None,
+    subjects: dict[str, Any] | None = None,
     occurred_at: datetime | None = None,
     silent: bool | None = None,
+    automated_cause: bool | None = None,
 ) -> None:
     """Append to the outbox inside the caller's transaction — commits or rolls back with it.
 
@@ -37,7 +40,15 @@ async def emit(
 
     `silent` defaults to whether the caller is inside an `events.quiet()` scope, so
     a bulk import marks its whole event stream without any service in the call
-    chain having to know an import is running. Pass it explicitly to override."""
+    chain having to know an import is running. Pass it explicitly to override.
+
+    **`subjects` are IDS; the kernel writes the shape (RADD-923.)** Pass
+    `subjects={"item": item_id}` and `payload["item"]` becomes the canonical ref
+    for that entity, resolved through `registries.entity_refs`. Emitters do not
+    build refs, so they cannot build them differently — which is what fourteen
+    of them had done before RADD-922 fixed it by hand.
+    """
+    payload = await _with_subjects(session, payload, subjects)
     event = Event(
         event_type=str(event_type),
         entity_type=str(entity_type),
@@ -45,10 +56,56 @@ async def emit(
         actor_id=actor_id,
         payload=payload or {},
         silent=is_quiet() if silent is None else silent,
+        automated=is_automated() if automated_cause is None else automated_cause,
     )
     if occurred_at is not None:
         event.created_at = occurred_at.replace(tzinfo=None)
     session.add(event)
+
+
+async def _with_subjects(
+    session: AsyncSession,
+    payload: dict[str, Any] | None,
+    subjects: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Expand `{entity_type: id}` into canonical refs on the payload (RADD-923).
+
+    The kernel registry is the only thing this module reaches for — `events` still
+    depends on no plugin, which is the property that lets it load first.
+
+    An entity type with no registered ref is a PROGRAMMING error, and the loader
+    already refuses to boot a plugin whose declared subjects are unresolvable.
+    Reaching here means an undeclared subject was passed at a call site, so it
+    raises in debug and degrades to a bare id in production — a slightly thin
+    payload is a better outcome than a failed user write, because the event is a
+    side effect of somebody else's action.
+    """
+    from radd.kernel.registry import registries
+
+    result = dict(payload or {})
+    for entity_type, entity_id in (subjects or {}).items():
+        if entity_id is None:
+            result[entity_type] = None
+            continue
+        spec = registries.entity_refs.get(entity_type)
+        if spec is None:
+            if settings.debug:
+                raise RuntimeError(
+                    f"event subject {entity_type!r} has no registered EntityRefSpec — "
+                    f"declare one on the plugin that owns the entity"
+                )
+            result[entity_type] = {"id": str(entity_id)}
+            continue
+        if entity_type in result:
+            # The plugin's own data would be overwritten by the ref, or vice
+            # versa. Either way somebody is about to read the wrong thing, so it
+            # fails where it can still be fixed rather than silently resolving.
+            raise RuntimeError(
+                f"event payload already has {entity_type!r}; it collides with the "
+                f"subject ref of the same name — rename the payload key"
+            )
+        result[entity_type] = await spec.ref(session, entity_id)
+    return result
 
 
 async def read_after(session: AsyncSession, after: int, limit: int) -> list[Event]:
@@ -117,7 +174,7 @@ async def entity_activity(
 ) -> list[Event]:
     """The full chronological activity feed for one entity: events emitted directly
     on it (`entity_type`/`entity_id`) UNION events of `related_event_types` whose
-    payload `item_id` points back at it (comments, worklogs, links attached to it).
+    payload `item.id` points back at it (comments, worklogs, links attached to it).
     Ordered oldest→newest. `entity_type` is a parameter so events stays domain-agnostic.
     """
     key = str(entity_id)
@@ -127,7 +184,8 @@ async def entity_activity(
         clauses.append(
             and_(
                 Event.event_type.in_(list(related_event_types)),
-                Event.payload["item_id"].astext == key,
+                # RADD-922: the canonical ref, not the old bare `item_id`.
+                Event.payload["item"]["id"].astext == key,
             )
         )
     result = await session.execute(

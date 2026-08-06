@@ -83,18 +83,23 @@ def _build(item_id: uuid.UUID, events: list[Event]) -> ItemTimeline:
     timeline = ItemTimeline(item_id=item_id, project_id=None, kind=None)
     prev_category: StateCategory | None = None
     for event in events:
-        payload = event.payload
-        state = payload.get("state") or {}
+        # One nested ref (RADD-922): state, cycle, project and kind are all
+        # properties of the ITEM, and reading them off the payload root only
+        # worked because item events used to dump the read flat.
+        item = event.payload.get("item") or {}
+        state = item.get("state") or {}
+        if not state:
+            continue  # an item event with no state snapshot cannot place a segment
         state_id = uuid.UUID(state["id"])
         category = StateCategory(state["category"])
-        cycle = payload.get("cycle")
+        cycle = item.get("cycle")
         cycle_id = uuid.UUID(cycle["id"]) if cycle else None
         at = event.created_at
 
-        if timeline.project_id is None and payload.get("project_id"):
-            timeline.project_id = uuid.UUID(payload["project_id"])
+        if timeline.project_id is None and item.get("project"):
+            timeline.project_id = uuid.UUID(item["project"]["id"])
         if timeline.kind is None:
-            timeline.kind = payload.get("kind")
+            timeline.kind = item.get("kind")
         timeline.cycle_history.append((at, cycle_id))
 
         state_changed = not timeline.segments or timeline.segments[-1].state_id != state_id
@@ -162,7 +167,7 @@ async def item_ids_for_project(session: AsyncSession, project_id: uuid.UUID) -> 
             select(Event.entity_id).where(
                 Event.entity_type == str(ItemEntity.ITEM),
                 Event.event_type == str(ItemEvent.CREATED),
-                Event.payload["project_id"].astext == str(project_id),
+                Event.payload["item"]["project"]["id"].astext == str(project_id),
             )
         )
     ).scalars()
@@ -176,7 +181,7 @@ async def item_ids_for_cycle(session: AsyncSession, cycle_id: uuid.UUID) -> list
             select(Event.entity_id)
             .where(
                 Event.entity_type == str(ItemEntity.ITEM),
-                Event.payload["cycle"]["id"].astext == str(cycle_id),
+                Event.payload["item"]["cycle"]["id"].astext == str(cycle_id),
             )
             .distinct()
         )

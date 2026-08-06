@@ -154,7 +154,7 @@ async def item_history(session: AsyncSession, item_id: uuid.UUID, actor: User) -
             continue
         changes = _redact_changes(changes, restricted_cf, builtin_denied)
         if event.event_type == ItemEvent.CREATED:
-            detail: dict[str, Any] | None = {"title": payload.get("title")}
+            detail: dict[str, Any] | None = {"title": (payload.get("item") or {}).get("title")}
         elif is_update:
             detail = None
         else:

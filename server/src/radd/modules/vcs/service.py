@@ -120,8 +120,8 @@ async def _emit(
         entity_type=VcsEntity.VCS_LINK,
         entity_id=link.id,
         actor_id=actor_id,
+        subjects={"item": link.item_id},
         payload={
-            "item_id": str(link.item_id),
             "ref_type": link.ref_type,
             "provider": link.provider,
             "title": link.title,

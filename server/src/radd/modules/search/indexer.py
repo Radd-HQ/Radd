@@ -128,18 +128,22 @@ async def _restricted_scope(session: AsyncSession) -> tuple[bool, set[uuid.UUID]
 
 
 async def _index_item(session: AsyncSession, event: Event) -> None:
-    payload = event.payload or {}
-    if "project_id" not in payload:
+    # RADD-922: one nested `item`, so the guard is "is this an item event at
+    # all" rather than the old `if "project_id" not in payload: return` — which
+    # made a payload missing a field indistinguishable from an item that should
+    # not be indexed.
+    item = (event.payload or {}).get("item") or {}
+    if not item:
         return
-    project_id = uuid.UUID(payload["project_id"])
+    project_id = uuid.UUID((item.get("project") or {})["id"])
     everywhere, scoped = await _restricted_scope(session)
     restricted = everywhere or project_id in scoped
     row = {
         "item_id": uuid.UUID(event.entity_id),
         "project_id": project_id,
-        "key": payload.get("key", ""),
-        "title": payload.get("title", ""),
-        "description": "" if restricted else payload.get("description", ""),
+        "key": item.get("key", ""),
+        "title": item.get("title", ""),
+        "description": "" if restricted else item.get("description", ""),
     }
     # RADD-841: relation anchors, only when the payload SPEAKS about them — a
     # partial payload must not null a good mirror (the startup sweep repairs
@@ -149,8 +153,8 @@ async def _index_item(session: AsyncSession, event: Event) -> None:
         ("assignee_id", "assignee"),
         ("team_id", "team"),
     ):
-        if ref_key in payload:
-            ref = payload.get(ref_key) or {}
+        if ref_key in item:
+            ref = item.get(ref_key) or {}
             row[column] = uuid.UUID(ref["id"]) if ref.get("id") else None
     await session.execute(
         pg_insert(SearchIndexRow)
@@ -232,7 +236,7 @@ async def sync_description_restriction(session: AsyncSession) -> None:
 
 async def _reindex_comments(session: AsyncSession, event: Event) -> None:
     payload = event.payload or {}
-    item_id = uuid.UUID(payload["item_id"])
+    item_id = uuid.UUID((payload.get("item") or {})["id"])
     row = await session.get(SearchIndexRow, item_id)
     if row is None:
         return  # item never indexed (shouldn't happen — created precedes comments)

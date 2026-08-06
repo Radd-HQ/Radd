@@ -93,6 +93,80 @@ milestone → get a first-class feature" becomes a few lines.
 path — most plugins never need the hatch, and the ones that do (disk manager, storage backends) stay
 inside the mediation contract.
 
+## 0.6 Subjects: the kernel owns the shape, the plugin owns the data (RADD-923)
+
+The mediation principle above says a plugin declares intent. Event payloads were the place it was
+least true: `emit(payload={...})` took an untyped dict, so every emitter invented its own shape and
+fourteen of them did — the issue key was `key` on some events, `item_key` on others, and absent from
+nine. RADD-922 unified them by hand and left an AST test to keep them unified, which is a test that
+is only necessary because the shape is still hand-built.
+
+**So the emitter passes IDS and the kernel writes the shape.**
+
+```python
+await events.emit(
+    session,
+    event_type=DeployEvent.FINISHED,
+    entity_type="deployment", entity_id=deployment.id,
+    subjects={"item": item_id, "release": release_id},   # ids — the plugin's half
+    payload={"environment": "prod", "duration_s": 214},  # the plugin's own data
+)
+```
+
+Each entity type registers **one** `EntityRefSpec`, and `payload["item"]` / `payload["release"]`
+become canonical refs. You cannot forget to build a ref you never build; eleven emitters stopped
+importing `items` just to describe an item. A key collision between a plugin's own data and a subject
+ref is a hard error at emit — somebody would otherwise read the wrong thing.
+
+**A declared `EntitySpec` gets all of this free.** `milestones/spec.py` declares five fields; the
+kernel generates the ref from them, its CRUD events declare `subjects=("milestone",)`, and the
+generated emit passes the id. A project-scoped entity resolves its `project` through the projects
+plugin's own ref, so a plugin entity names its project exactly as an item does.
+
+**Declaration is checked at BOOT.** An event naming a subject nothing describes, or an action node
+acting on one, refuses to load. The alternative is an automation that saves cleanly, enables cleanly,
+and does nothing at 3am — which is the failure this whole seam exists to remove, so the seam must not
+reintroduce it.
+
+**`EventTypeSpec.payload_schema` declares only the remainder.** The kernel wrote the refs and
+therefore already knows their shape; a schema that repeats them is a second copy that drifts. What is
+left is the plugin's own data, and serving it beside the sampled paths is what lets the builder
+describe an event that has never fired on this instance. Sampling says what HAS happened; declaration
+says what WILL. Validated in dev/test only — a malformed payload must not fail a user's write, because
+the event is a side effect of somebody else's action.
+
+### Contributed actions
+
+A plugin could contribute a trigger and a gate but not an ACTION: the executor did
+`ActionType(node.type)`, which raises for anything outside the built-in enum, logged "unknown action
+type", and dropped the node. So a plugin could say *"when my deployment finishes"* and *"if the AI
+thinks it's risky"*, and never *"…then do my thing"*.
+
+`AutomationNodeSpec` gains `subject` and `apply`:
+
+```python
+AutomationNodeSpec(
+    key="milestone.set_status", kind="action", label="Set milestone status",
+    subject="milestone",            # which ids the executor hands it
+    permission="milestone.update",  # required to USE the node, checked on WRITE
+    arity="item", params_schema=..., plan=plan, apply=apply,
+)
+```
+
+The plan/apply split is the containment, not a style preference. `plan` runs on every walk including
+a dry run, which makes the report free and identical to the real thing. `apply` runs inside the
+executor's SAVEPOINT, inside its `RunBudget`, and inside `events.automated()` — so a contributed
+action **cannot** spin the engine, **cannot** escape the budget, and **cannot** take the branch down
+when it raises. A plugin gets loop safety by doing nothing.
+
+The SPA generates the node's form from `params_schema` (`SchemaFields`) — the promise
+`AutomationNodeSpec` already made and nothing kept: a contributed node without a hardcoded editor
+used to render an empty inspector.
+
+**North star:** `milestones/automation.py` — the plugin's own event, the kernel's ref, the plugin's
+own action on its own entity, with zero edits to `automations`, the kernel or the SPA
+(`tests/test_event_subjects.py`, `web/scripts/plugin-contribution-proof.mjs`).
+
 ## 1. Kernel vs. plugins
 
 Split the codebase into a **small kernel** and a **fleet of plugins** (builtin plugins live in the

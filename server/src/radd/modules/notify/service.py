@@ -41,7 +41,7 @@ async def watch(
         entity_type=NotifyEntity.WATCHER,
         entity_id=item_id,
         actor_id=user_id,
-        payload={"item_id": str(item_id)},
+        subjects={"item": item_id},
     )
 
 
@@ -60,7 +60,7 @@ async def unwatch(
         entity_type=NotifyEntity.WATCHER,
         entity_id=item_id,
         actor_id=user_id,
-        payload={"item_id": str(item_id)},
+        subjects={"item": item_id},
     )
 
 

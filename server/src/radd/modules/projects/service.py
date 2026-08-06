@@ -41,6 +41,17 @@ async def list_projects(session: AsyncSession) -> list[Project]:
     return list((await session.execute(select(Project).order_by(Project.created_at))).scalars())
 
 
+async def project_ref(session: AsyncSession, project_id) -> dict | None:
+    """The canonical `{id, key, name}` for a project inside an event payload
+    (RADD-923). Registered as this plugin's `EntityRefSpec`, so every module that
+    names a project as an event subject — and every auto-wired plugin entity that
+    is project-scoped — gets the same three fields without writing them."""
+    project = await session.get(Project, project_id)
+    if project is None:
+        return None
+    return {"id": str(project.id), "key": project.key, "name": project.name}
+
+
 async def get_project(session: AsyncSession, project_id: uuid.UUID) -> Project:
     project = await session.get(Project, project_id)
     if project is None:

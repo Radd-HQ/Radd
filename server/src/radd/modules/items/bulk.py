@@ -273,8 +273,17 @@ async def _move_one(
     changes = diff_item_reads(before, after, field_names=field_name_map(definitions))
     changes.insert(0, {"field": "project", "from": source.key, "to": target.key})
     changes.insert(1, {"field": "key", "from": old_key, "to": after.key})
-    payload = after.model_dump(mode="json")
-    payload["changes"] = changes
+    # Same shape as `read._finish` (RADD-922): the whole read under `item`, with
+    # `project` promoted to a ref, and `changes` at the root because it describes
+    # the EVENT. A cross-project move is still an item.updated, and a consumer
+    # must not have to know which code path produced it.
+    payload = {
+        "item": {
+            **after.model_dump(mode="json"),
+            "project": {"id": str(target.id), "key": target.key, "name": target.name},
+        },
+        "changes": changes,
+    }
     await events.emit(
         session,
         event_type=ItemEvent.UPDATED,

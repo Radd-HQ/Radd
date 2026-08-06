@@ -326,24 +326,22 @@ async def _emit(
             request.requested_by
         )
     payload: dict = {
-        "item_id": str(request.item_id),
         "to_state": state.name,
-        "requester": (
-            {"id": str(requester.id), "name": requester.name} if requester else None
-        ),
+        "requester": auth.user_ref(requester),
         "approved_count": approved_count,
         # Spec 107: the human summary of the per-entry rules — notifications
         # render it verbatim ("Hussein Jarrar; 2 of DevOps").
         "approvers_summary": _approvers_summary(request.approvers or []),
     }
     if verdict is not None:
-        payload["voter"] = {"id": str(actor.id), "name": actor.name}
+        payload["voter"] = auth.user_ref(actor)
         payload["verdict"] = verdict
     payload.update(extra or {})
     await events.emit(
         session,
         event_type=event_type,
         entity_type=ItemEntity.ITEM,
+        subjects={"item": request.item_id},
         entity_id=request.item_id,
         actor_id=actor.id,
         payload=payload,

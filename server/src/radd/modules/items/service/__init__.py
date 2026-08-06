@@ -45,10 +45,13 @@ from .queries import (
     require_readable_item,
 )
 from .read import get_item, get_item_by_key
+from .refs import item_ref, ref_from
 from .visibility import denied_slq_fields, ensure_item_relation, relation_read_clause
 
 __all__ = [
     "add_item_link",
+    "item_ref",
+    "ref_from",
     "denied_slq_fields",
     "ensure_item_relation",
     "relation_read_clause",

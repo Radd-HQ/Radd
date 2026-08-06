@@ -321,14 +321,20 @@ async def delete_item(session: AsyncSession, item_id: uuid.UUID, actor: User) ->
             ItemEntity.ITEM,
             reason=f"item has {child_count} child item(s) — delete or re-parent them first",
         )
-    key = f"{(await projects_service.project_keys(session, [project.id]))[project.id]}-{item.number}"
+    # The full ref, like every other item-scoped event (RADD-922). It used to be
+    # three hand-picked fields, so a webhook receiver saw a completely different
+    # object on delete than on update — and the item is gone a line later, which
+    # is exactly when a consumer cannot go and look the rest up.
+    # Emitted while the row is still present (the delete is ~15 lines down), so
+    # the kernel resolves the subject normally — a delete event is exactly when a
+    # consumer cannot go and look the rest up afterwards.
     await events.emit(
         session,
         event_type=ItemEvent.DELETED,
         entity_type=ItemEntity.ITEM,
         entity_id=item.id,
         actor_id=actor.id,
-        payload={"key": key, "title": item.title, "project_id": str(project.id)},
+        subjects={"item": item.id},
     )
     # RADD-717: the polymorphic comment column carries no FK, so its rows do not
     # cascade with the item. Deferred import — items must not depend on comments

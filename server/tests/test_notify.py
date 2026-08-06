@@ -45,7 +45,7 @@ def test_parse_mentions_empty_and_plain_text():
 
 
 def test_create_assigns_and_watches():
-    payload = {"assignee": {"id": str(ASSIGNEE), "name": "A"}}
+    payload = {"item": {"assignee": {"id": str(ASSIGNEE), "name": "A"}}}
     plan = planner.plan_item_created(payload, ACTOR, frozenset())
     assert plan.watch == {ACTOR, ASSIGNEE}
     assert _types_by_user(plan) == {ASSIGNEE: NotificationType.ASSIGNED}
@@ -53,14 +53,14 @@ def test_create_assigns_and_watches():
 
 def test_create_never_notifies_the_actor():
     # Self-assignment on create: watch yes, notification no.
-    payload = {"assignee": {"id": str(ACTOR), "name": "A"}}
+    payload = {"item": {"assignee": {"id": str(ACTOR), "name": "A"}}}
     plan = planner.plan_item_created(payload, ACTOR, frozenset({ACTOR}))
     assert plan.watch == {ACTOR}
     assert plan.notifications == []
 
 
 def test_create_mentions_notify():
-    plan = planner.plan_item_created({"assignee": None}, ACTOR, frozenset({MENTIONED}))
+    plan = planner.plan_item_created({"item": {"assignee": None}}, ACTOR, frozenset({MENTIONED}))
     assert _types_by_user(plan) == {MENTIONED: NotificationType.MENTIONED}
 
 
@@ -80,7 +80,7 @@ def test_update_state_change_notifies_watchers_not_actor():
 def test_update_assignment_beats_state_change():
     # New assignee also watches: one ASSIGNED notification, not two.
     payload = {
-        "assignee": {"id": str(ASSIGNEE), "name": "A"},
+        "item": {"assignee": {"id": str(ASSIGNEE), "name": "A"}},
         "changes": [
             {"field": "assignee", "from": None, "to": "A"},
             {"field": "state", "from": "Todo", "to": "Doing"},
@@ -94,7 +94,7 @@ def test_update_assignment_beats_state_change():
 
 
 def test_update_without_relevant_changes_plans_nothing():
-    payload = {"assignee": None, "changes": [{"field": "title", "from": "a", "to": "b"}]}
+    payload = {"item": {"assignee": None}, "changes": [{"field": "title", "from": "a", "to": "b"}]}
     plan = planner.plan_item_updated(payload, ACTOR, frozenset({WATCHER}), frozenset())
     assert plan.notifications == [] and plan.watch == set()
 
@@ -103,21 +103,20 @@ def test_update_without_relevant_changes_plans_nothing():
 
 
 def test_create_reporter_auto_watches_without_a_ping():
-    payload = {"assignee": None, "reporter": {"id": str(REPORTER), "name": "R"}}
+    payload = {"item": {"assignee": None, "reporter": {"id": str(REPORTER), "name": "R"}}}
     plan = planner.plan_item_created(payload, ACTOR, frozenset())
     assert plan.watch == {ACTOR, REPORTER}
     assert plan.notifications == []  # watching, not a notification
 
 
 def test_create_without_reporter_watches_only_the_actor():
-    plan = planner.plan_item_created({"assignee": None, "reporter": None}, ACTOR, frozenset())
+    plan = planner.plan_item_created({"item": {"assignee": None, "reporter": None}}, ACTOR, frozenset())
     assert plan.watch == {ACTOR}
 
 
 def test_update_reporter_change_watches_the_new_reporter():
     payload = {
-        "assignee": None,
-        "reporter": {"id": str(REPORTER), "name": "R"},
+        "item": {"assignee": None, "reporter": {"id": str(REPORTER), "name": "R"}},
         "changes": [{"field": "reporter", "from": None, "to": "R"}],
     }
     plan = planner.plan_item_updated(payload, ACTOR, frozenset(), frozenset())
@@ -129,8 +128,7 @@ def test_update_untouched_reporter_is_not_rewatched():
     # The snapshot always carries the reporter; only a `reporter` CHANGE watches
     # them (an unwatch must stick when unrelated fields move).
     payload = {
-        "assignee": None,
-        "reporter": {"id": str(REPORTER), "name": "R"},
+        "item": {"assignee": None, "reporter": {"id": str(REPORTER), "name": "R"}},
         "changes": [{"field": "title", "from": "a", "to": "b"}],
     }
     plan = planner.plan_item_updated(payload, ACTOR, frozenset(), frozenset())

@@ -213,15 +213,17 @@ def _sla_payload(
     item_id: uuid.UUID,
     kind: SlaKind,
     status: timers.TimerStatus,
-    item_keys: dict[uuid.UUID, str],
+    item_refs: dict[uuid.UUID, dict],
 ) -> dict:
+    """`item_key` became `item` (RADD-922). It was the only place in the codebase
+    that spelled the issue key that way, which is why `googlechat/formatter.py`
+    had two branches for one concept and `notify/consumer.py` had four."""
     return {
-        "item_id": str(item_id),
+        "item": item_refs.get(item_id),
         "policy_id": str(policy.id),
         "policy_name": policy.name,
         "kind": kind.value,
         "due_at": status.due_at.isoformat() if status.due_at else None,
-        "item_key": item_keys.get(item_id, ""),
     }
 
 
@@ -241,7 +243,7 @@ async def sync_states(
     session: AsyncSession,
     policy: SlaPolicy,
     evaluated: dict[uuid.UUID, dict[SlaKind, tuple[int, timers.TimerStatus]]],
-    item_keys: dict[uuid.UUID, str],
+    item_refs: dict[uuid.UUID, dict],
 ) -> int:
     """Upsert bookkeeping rows; emit sla.breached for NEW breaches and (spec 69)
     sla.due_soon ONCE per item/policy/kind when the warning window opens.
@@ -275,7 +277,7 @@ async def sync_states(
                     entity_type=ItemEntity.ITEM,
                     entity_id=item_id,
                     actor_id=None,
-                    payload=_sla_payload(policy, item_id, kind, status, item_keys),
+                    payload=_sla_payload(policy, item_id, kind, status, item_refs),
                 )
                 emitted += 1
             warned = getattr(row, f"warned_{prefix}_at")
@@ -288,7 +290,7 @@ async def sync_states(
                     entity_id=item_id,
                     actor_id=None,
                     payload={
-                        **_sla_payload(policy, item_id, kind, status, item_keys),
+                        **_sla_payload(policy, item_id, kind, status, item_refs),
                         "remaining_seconds": status.remaining_seconds,
                     },
                 )
