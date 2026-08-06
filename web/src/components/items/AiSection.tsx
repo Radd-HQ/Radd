@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { FileSearch, Sparkles } from "lucide-react";
@@ -7,6 +8,7 @@ import { aiStatusQuery } from "../../lib/queries";
 import type { Item, SimilarCandidate } from "../../lib/types";
 import { Button } from "../Button";
 import { useOpenAiResults } from "./ai-results";
+import { SimilarHoverCard } from "./SimilarHoverCard";
 
 /**
  * "AI" section in the issue rail (spec 46): on-demand summarize +
@@ -73,7 +75,13 @@ export function SimilarCandidatesList({
   );
 }
 
-/** One scored candidate: key + title as a link, score as a percent chip. */
+/** How long a pointer must rest before the preview opens. Long enough that
+ * sweeping the list fetches nothing, short enough that pausing feels answered.
+ * Matches the roadmap hover card, so the app has one dwell. */
+const HOVER_DWELL_MS = 350;
+
+/** One scored candidate: key + title as a link, score as a percent chip, and a
+ * hover preview so relevance is checkable without opening it (RADD-924). */
 function SimilarRow({
   candidate,
   onOpen,
@@ -82,8 +90,58 @@ function SimilarRow({
   onOpen?: () => void;
 }) {
   const openRef = useOpenIssueRef();
+  const rowRef = useRef<HTMLLIElement>(null);
+  const dwellRef = useRef<number | null>(null);
+  const [anchor, setAnchor] = useState<{ left: number; top: number; bottom: number } | null>(null);
+
+  const close = () => {
+    if (dwellRef.current !== null) window.clearTimeout(dwellRef.current);
+    dwellRef.current = null;
+    setAnchor(null);
+  };
+
+  const open = () => {
+    const rect = rowRef.current?.getBoundingClientRect();
+    if (rect) setAnchor({ left: rect.left, top: rect.top, bottom: rect.bottom });
+  };
+
+  const dwell = () => {
+    if (dwellRef.current !== null) window.clearTimeout(dwellRef.current);
+    dwellRef.current = window.setTimeout(open, HOVER_DWELL_MS);
+  };
+
+  // Escape closes it, and it closes on scroll because the card is `fixed` — its
+  // anchor would otherwise drift away from the row it describes.
+  useEffect(() => {
+    if (!anchor) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [anchor]);
+
+  // Any pending dwell dies with the row — a timer that fires after unmount sets
+  // state on nothing.
+  useEffect(() => close, []);
+
   return (
-    <li className="rounded-md border border-subtle bg-surface/50 px-2.5 py-1.5">
+    <li
+      ref={rowRef}
+      className="rounded-md border border-subtle bg-surface/50 px-2.5 py-1.5"
+      onMouseEnter={dwell}
+      onMouseLeave={close}
+      // Keyboard parity: tabbing to the link opens it immediately. A dwell makes
+      // no sense without a pointer, and the preview is the only way a keyboard
+      // user gets the description at all.
+      onFocus={open}
+      onBlur={close}
+    >
+      {anchor && <SimilarHoverCard itemKey={candidate.item_key} anchor={anchor} />}
       <div className="flex items-center gap-2">
         <Link
           to={RoutePath.issue}
