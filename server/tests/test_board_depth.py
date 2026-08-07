@@ -17,7 +17,7 @@ from radd.config import settings as config
 from radd.exceptions import ConflictError
 from radd.modules.auth import roles as auth_roles
 from radd.modules.auth.schemas import RoleCreate
-from radd.modules.auth.models import ProjectMember, User
+from radd.modules.auth.models import GlobalRoleGrant, User
 from radd.modules.auth.types import InstanceRole, Permission
 from radd.modules.items import rollup, service as items
 from radd.modules.items.enums import ItemKind
@@ -284,7 +284,7 @@ async def test_rollup_visibility_filter_and_caps(db, actor):
             permissions=[Permission.ITEM_READ],
         ),
     )
-    db.add(ProjectMember(project_id=project.id, user_id=other.id, role_id=role.id))
+    db.add(GlobalRoleGrant(project_id=project.id, user_id=other.id, role_id=role.id))
     await db.flush()
     # The per-actor permission map memoises per request/session; the first
     # rollup call above cached the pre-grant answer.

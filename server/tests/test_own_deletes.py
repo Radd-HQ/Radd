@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from radd.config import settings as config
 from radd.exceptions import ForbiddenError
 from radd.modules.auth import authz, roles as auth_roles
-from radd.modules.auth.models import ProjectMember, User
+from radd.modules.auth.models import GlobalRoleGrant, User
 from radd.modules.auth.types import BuiltinRoleKey, Permission
 
 # Side effect: workflow's project.created hook seeds default states.
@@ -56,7 +56,7 @@ async def rig(db):
         db, ProjectCreate(key=f"OD{uuid.uuid4().hex[:4].upper()}", name="O")
     )
     member_role = await auth_roles.role_by_key(db, BuiltinRoleKey.MEMBER)
-    db.add(ProjectMember(project_id=project.id, user_id=author.id, role_id=member_role.id))
+    db.add(GlobalRoleGrant(project_id=project.id, user_id=author.id, role_id=member_role.id))
     await db.flush()
     item = await items.create_item(
         db, ItemCreate(project_id=project.id, title="own-delete rig"), admin
@@ -80,7 +80,7 @@ async def test_non_author_without_the_atom_is_refused(db, rig):
     db.add(stranger)
     await db.flush()
     member_role = await auth_roles.role_by_key(db, BuiltinRoleKey.MEMBER)
-    db.add(ProjectMember(project_id=project.id, user_id=stranger.id, role_id=member_role.id))
+    db.add(GlobalRoleGrant(project_id=project.id, user_id=stranger.id, role_id=member_role.id))
     await db.flush()
     with pytest.raises(ForbiddenError):
         await comments.delete_comment(db, comment.id, stranger)

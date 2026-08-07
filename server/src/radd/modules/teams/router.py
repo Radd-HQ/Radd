@@ -6,16 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.apitypes import TOTAL_COUNT_HEADER
 from radd.db import get_session
-from radd.modules.auth import authz, roles as auth_roles
+from radd.modules.auth import authz
 from radd.modules.auth.deps import CurrentUser
-from radd.modules.projects import service as projects_service
 
 from . import service
-from .models import ProjectTeam, Team
+from .models import Team
 from .schemas import (
-    ProjectTeamAttach,
-    ProjectTeamRead,
-    ProjectTeamUpdate,
     TeamCreate,
     TeamGroupAdd,
     TeamGroupRead,
@@ -28,7 +24,6 @@ from .schemas import (
 )
 
 team_router = APIRouter(prefix="/teams", tags=["teams"])
-project_team_router = APIRouter(prefix="/projects", tags=["teams"])
 
 Session = Annotated[AsyncSession, Depends(get_session)]
 
@@ -249,75 +244,3 @@ async def team_access(team_id: uuid.UUID, session: Session, user: CurrentUser) -
             for s in resources
         ],
     }
-
-
-async def _attachment_reads(
-    session: AsyncSession, attachments: list[ProjectTeam]
-) -> list[ProjectTeamRead]:
-    """Hydrate the granted role's key onto each attachment (one batched lookup)."""
-    roles = await auth_roles.roles_by_ids(session, {a.role_id for a in attachments})
-    return [
-        ProjectTeamRead(
-            project_id=a.project_id,
-            team_id=a.team_id,
-            role_id=a.role_id,
-            role=roles[a.role_id].key,
-        )
-        for a in attachments
-    ]
-
-
-@project_team_router.post(
-    "/{project_id}/teams", response_model=ProjectTeamRead, status_code=201
-)
-async def attach_project_team(
-    project_id: uuid.UUID, data: ProjectTeamAttach, session: Session, user: CurrentUser
-) -> ProjectTeamRead:
-    project = await projects_service.get_project(session, project_id)
-    await authz.require(session, user, authz.Permission.MEMBER_CREATE, project=project)
-    # RADD-826 (D14): a delegate cannot attach a role carrying atoms they do
-    # not hold at THIS project's scope.
-    if not await authz.holds(session, user, authz.Permission.ROLE_UPDATE):
-        from radd.modules.auth import roles as auth_roles
-        from radd.modules.auth.roles_router import ensure_delegated_role_coverage
-
-        await ensure_delegated_role_coverage(
-            session, user, await auth_roles.get_role(session, data.role_id), project
-        )
-    attachment = await service.attach_project_team(session, project_id, data, actor_id=user.id)
-    return (await _attachment_reads(session, [attachment]))[0]
-
-
-@project_team_router.get("/{project_id}/teams", response_model=list[ProjectTeamRead])
-async def list_project_teams(
-    project_id: uuid.UUID, session: Session, user: CurrentUser
-) -> list[ProjectTeamRead]:
-    project = await projects_service.get_project(session, project_id)
-    await authz.require(session, user, authz.Permission.ITEM_READ, project=project)
-    attachments = await service.list_project_teams(session, project_id)
-    return await _attachment_reads(session, attachments)
-
-
-@project_team_router.patch("/{project_id}/teams/{team_id}", response_model=ProjectTeamRead)
-async def update_project_team(
-    project_id: uuid.UUID,
-    team_id: uuid.UUID,
-    data: ProjectTeamUpdate,
-    session: Session,
-    user: CurrentUser,
-) -> ProjectTeamRead:
-    project = await projects_service.get_project(session, project_id)
-    await authz.require(session, user, authz.Permission.MEMBER_UPDATE, project=project)
-    attachment = await service.update_project_team(
-        session, project_id, team_id, data, actor_id=user.id
-    )
-    return (await _attachment_reads(session, [attachment]))[0]
-
-
-@project_team_router.delete("/{project_id}/teams/{team_id}", status_code=204)
-async def detach_project_team(
-    project_id: uuid.UUID, team_id: uuid.UUID, session: Session, user: CurrentUser
-) -> None:
-    project = await projects_service.get_project(session, project_id)
-    await authz.require(session, user, authz.Permission.MEMBER_DELETE, project=project)
-    await service.detach_project_team(session, project_id, team_id, actor_id=user.id)

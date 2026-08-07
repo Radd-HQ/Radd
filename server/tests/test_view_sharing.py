@@ -16,7 +16,7 @@ from radd.modules.access import service as access_service
 from radd.modules.access.types import GrantSubject
 from radd.modules.auth import roles as auth_roles
 from radd.modules.auth.schemas import RoleCreate
-from radd.modules.auth.models import ProjectMember, User
+from radd.modules.auth.models import GlobalRoleGrant, User
 from radd.modules.auth.types import InstanceRole, Permission
 from radd.modules.teams import service as teams_service
 from radd.modules.teams.schemas import TeamCreate
@@ -251,8 +251,8 @@ async def test_queue_type_and_view_counts(db):
     )
     db.add_all(
         [
-            ProjectMember(project_id=project.id, user_id=owner.id, role_id=reader.id),
-            ProjectMember(project_id=project.id, user_id=grantee.id, role_id=reader.id),
+            GlobalRoleGrant(project_id=project.id, user_id=owner.id, role_id=reader.id),
+            GlobalRoleGrant(project_id=project.id, user_id=grantee.id, role_id=reader.id),
         ]
     )
     await db.flush()

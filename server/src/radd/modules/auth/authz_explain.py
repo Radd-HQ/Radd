@@ -20,7 +20,7 @@ from radd.modules.projects.models import Project
 
 from . import grants
 from .authz_core import baseline_permissions
-from .models import ProjectMember, Role, User
+from .models import Role, User
 from .types import GrantScopeKind, InstanceRole, expand_permissions
 
 
@@ -156,20 +156,10 @@ async def permission_sources(
         return [g.name for g in path] if path else None
 
     if project is not None:
-        member_rows = await session.execute(
-            select(ProjectMember.role_id).where(
-                ProjectMember.user_id == user.id, ProjectMember.project_id == project.id
-            )
-        )
-        channels += [
-            (rid, "project", "membership", None, None, None) for rid in member_rows.scalars()
-        ]
-        from radd.modules.teams import service as teams  # deferred: teams loads after auth
-
-        for team_name, rid in await teams.team_role_pairs_for_project(
-            session, user.id, project.id
-        ):
-            channels.append((rid, "project", "team", team_name, None, None))
+        # RADD-929: `project_members` and `project_teams` used to contribute two
+        # more channels here. Both are grants now, so the `attributed` loop below
+        # — which already knew how to name a direct / team / group carrier —
+        # covers every route a role takes to this project.
         for row, via, carrier, carrier_group in attributed:
             if row.project_id == project.id:
                 channels.append(
@@ -236,18 +226,15 @@ async def team_permission_sources(session: AsyncSession, team_id: uuid.UUID) -> 
     """What membership of this team confers (RADD-809) — the question a team
     owner actually has, and nothing answered before.
 
-    Rows are NOT deduped across scopes the way the user view is: a role
-    attached on project X and a role granted on project Y are different facts,
-    so uniqueness is (atom, role, scope label).
+    Rows are NOT deduped across scopes the way the user view is: a role granted
+    on project X and the same role granted on project Y are different facts, so
+    uniqueness is (atom, role, scope label).
     """
-    from radd.modules.teams import service as teams  # deferred: teams loads after auth
-
-    channels: list[tuple[uuid.UUID, str, str, str | None]] = []
+    # RADD-929: `project_teams` used to contribute a second channel here, labelled
+    # "attached", beside the grants. That is precisely the duplication this panel
+    # made visible — one team's entitlement on one project listed twice under two
+    # names — and both rows are grants now.
     project_ids: set[uuid.UUID] = set()
-    for project_id, role_id in await teams.team_project_role_rows(session, team_id):
-        channels.append((role_id, "project", "attached", None))
-        project_ids.add(project_id)
-    attach_rows = await teams.team_project_role_rows(session, team_id)
     grant_rows = await grants.grants_for_subject(session, team_id=team_id)
     for grant in grant_rows:
         if grant.project_id is not None:
@@ -262,7 +249,7 @@ async def team_permission_sources(session: AsyncSession, team_id: uuid.UUID) -> 
         {g.space_id for g in grant_rows if g.space_id is not None},
     )
 
-    role_ids = {rid for rid, _, _, _ in channels} | {g.role_id for g in grant_rows}
+    role_ids = {g.role_id for g in grant_rows}
     roles: dict[uuid.UUID, Role] = {}
     if role_ids:
         rows = await session.execute(select(Role).where(Role.id.in_(role_ids)))
@@ -289,10 +276,6 @@ async def team_permission_sources(session: AsyncSession, team_id: uuid.UUID) -> 
                 scope_label=scope_label,
             )
 
-    for project_id, role_id in attach_rows:
-        role = roles.get(role_id)
-        if role is not None:
-            record(role, scope="project", via="attached", scope_label=keys.get(project_id))
     for grant in grant_rows:
         role = roles.get(grant.role_id)
         if role is None:
@@ -331,13 +314,7 @@ async def all_held_role_ids(session: AsyncSession, user: User) -> set[uuid.UUID]
     """Every role the user holds through ANY channel at ANY scope — the subject
     set the resource-access inspector matches role-subject grants against
     (RADD-809). Off the request path."""
-    from radd.modules.teams import service as teams  # deferred: teams loads after auth
-
-    member_rows = await session.execute(
-        select(ProjectMember.role_id).where(ProjectMember.user_id == user.id).distinct()
-    )
-    held = set(member_rows.scalars())
-    held |= await teams.team_granted_role_ids_anywhere(session, user.id)
-    # RADD-832: every grant CHANNEL (direct, team, group), not just direct rows.
-    held |= await grants.held_role_ids_anywhere(session, user.id)
-    return held
+    # RADD-832: every grant CHANNEL (direct, team, group), not just direct rows —
+    # and since RADD-929 that is every channel there is, membership and team
+    # attachment having become grants.
+    return await grants.held_role_ids_anywhere(session, user.id)

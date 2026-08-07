@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from radd.config import settings as config
 from radd.exceptions import ForbiddenError
 from radd.modules.auth import authz, roles as auth_roles
-from radd.modules.auth.models import ProjectMember, User
+from radd.modules.auth.models import GlobalRoleGrant, User
 from radd.modules.auth.roles_router import ensure_delegated_role_coverage
 from radd.modules.auth.schemas import RoleCreate
 from radd.modules.auth.types import Permission
@@ -63,7 +63,7 @@ async def rig(db):
             ],
         ),
     )
-    db.add(ProjectMember(project_id=project.id, user_id=delegate.id, role_id=admin_ish.id))
+    db.add(GlobalRoleGrant(project_id=project.id, user_id=delegate.id, role_id=admin_ish.id))
     await db.flush()
     return delegate, project
 
@@ -124,7 +124,7 @@ async def test_relation_qualified_roles_compare_by_the_lattice(db, rig):
             permissions=[Permission.MEMBER_CREATE, "item.update@own"],
         ),
     )
-    db.add(ProjectMember(project_id=project.id, user_id=holder.id, role_id=own_role.id))
+    db.add(GlobalRoleGrant(project_id=project.id, user_id=holder.id, role_id=own_role.id))
     await db.flush()
     any_role = await auth_roles.create_role(
         db,

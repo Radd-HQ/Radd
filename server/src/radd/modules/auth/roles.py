@@ -3,7 +3,7 @@
 Builtin roles (admin/member/viewer) are global rows, ensured idempotently on
 startup (subscribers.ensure_seeded) and by the seed script. Builtin permission
 sets are immutable; deletion requires a role to be custom AND unreferenced
-(project_members / project_teams) — 409 otherwise.
+(any role grant) — 409 otherwise.
 """
 
 import uuid
@@ -13,13 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.events import service as events
-from radd.modules.projects import service as projects_service
-from radd.modules.projects.models import Project
 
-from .models import ProjectMember, Role
-from .schemas import ProjectMemberUpsert, RoleCreate, RoleUpdate
-from .service import get_user
-from .types import BUILTIN_ROLES, AuthEntity, AuthEvent, BuiltinRoleKey, UserChange
+from .models import Role
+from .schemas import RoleCreate, RoleUpdate
+from .types import BUILTIN_ROLES, AuthEntity, AuthEvent, BuiltinRoleKey
 
 
 # --- pure guards (unit-tested) ---
@@ -154,20 +151,12 @@ async def delete_role(
     session: AsyncSession, role_id: uuid.UUID, actor_id: uuid.UUID | None = None
 ) -> None:
     role = await get_role(session, role_id)
-    # Deferred import: teams loads after auth in the module assembly (same tolerated
-    # backward edge as authz -> teams.service).
-    from radd.modules.teams import service as teams
-
     from . import grants
 
-    directly_assigned = await session.scalar(
-        select(func.count()).select_from(ProjectMember).where(ProjectMember.role_id == role_id)
-    )
-    referenced = (
-        bool(directly_assigned)
-        or await teams.role_referenced(session, role_id)
-        or await grants.role_referenced(session, role_id)  # spec 87
-    )
+    # RADD-929: one table to ask. `project_members` and `project_teams` used to
+    # need their own reference checks here; both are grants now, so a role in use
+    # anywhere is a role some grant names.
+    referenced = await grants.role_referenced(session, role_id)
     ensure_deletable(role, referenced=referenced)
     await _emit_role(session, AuthEvent.ROLE_DELETED, role, actor_id=actor_id)
     await session.delete(role)
@@ -184,89 +173,4 @@ async def _emit_role(
         entity_id=role.id,
         actor_id=actor_id,
         payload={"key": role.key, "name": role.name, "permissions": list(role.permissions)},
-    )
-
-
-# --- project members ---
-
-
-async def list_project_members(
-    session: AsyncSession, project_id: uuid.UUID
-) -> list[ProjectMember]:
-    await projects_service.get_project(session, project_id)
-    result = await session.execute(
-        select(ProjectMember).where(ProjectMember.project_id == project_id)
-    )
-    return list(result.scalars())
-
-
-async def add_project_member(
-    session: AsyncSession,
-    project_id: uuid.UUID,
-    data: ProjectMemberUpsert,
-    actor_id: uuid.UUID | None = None,
-) -> ProjectMember:
-    project = await projects_service.get_project(session, project_id)
-    await get_user(session, data.user_id)
-    await get_role(session, data.role_id)
-    if await session.get(ProjectMember, (project_id, data.user_id)):
-        raise ConflictError(AuthEntity.PROJECT_MEMBER, data.user_id)
-    member = ProjectMember(project_id=project_id, user_id=data.user_id, role_id=data.role_id)
-    session.add(member)
-    await session.flush()
-    await _emit_member(session, project, member, UserChange.PROJECT_MEMBER_ADDED, actor_id)
-    return member
-
-
-async def update_project_member(
-    session: AsyncSession,
-    project_id: uuid.UUID,
-    user_id: uuid.UUID,
-    role_id: uuid.UUID,
-    actor_id: uuid.UUID | None = None,
-) -> ProjectMember:
-    project = await projects_service.get_project(session, project_id)
-    member = await session.get(ProjectMember, (project_id, user_id))
-    if member is None:
-        raise NotFoundError(AuthEntity.PROJECT_MEMBER, user_id)
-    await get_role(session, role_id)
-    member.role_id = role_id
-    await session.flush()
-    await _emit_member(session, project, member, UserChange.PROJECT_MEMBER_ROLE_CHANGED, actor_id)
-    return member
-
-
-async def remove_project_member(
-    session: AsyncSession,
-    project_id: uuid.UUID,
-    user_id: uuid.UUID,
-    actor_id: uuid.UUID | None = None,
-) -> None:
-    project = await projects_service.get_project(session, project_id)
-    member = await session.get(ProjectMember, (project_id, user_id))
-    if member is None:
-        raise NotFoundError(AuthEntity.PROJECT_MEMBER, user_id)
-    await _emit_member(session, project, member, UserChange.PROJECT_MEMBER_REMOVED, actor_id)
-    await session.delete(member)
-    await session.flush()
-
-
-async def _emit_member(
-    session: AsyncSession,
-    project: Project,
-    member: ProjectMember,
-    action: UserChange,
-    actor_id: uuid.UUID | None,
-) -> None:
-    await events.emit(
-        session,
-        event_type=AuthEvent.USER_UPDATED,
-        entity_type=AuthEntity.USER,
-        entity_id=member.user_id,
-        actor_id=actor_id,
-        payload={
-            "action": action,
-            "project_id": str(member.project_id),
-            "role_id": str(member.role_id),
-        },
     )

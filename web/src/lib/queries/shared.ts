@@ -35,7 +35,6 @@ export const queryKeys = {
   ldapSyncStatus: ["ldapSyncStatus"] as const,
   teams: ["teams"] as const,
   teamMembers: (teamId: string) => ["teamMembers", { teamId }] as const,
-  projectTeams: (projectId: string) => ["projectTeams", { projectId }] as const,
   tokens: ["tokens"] as const,
   views: ["views"] as const,
   viewCounts: (viewIds: readonly string[], extraQ?: string) =>
@@ -61,7 +60,6 @@ export const queryKeys = {
   permissionsCatalog: ["permissionsCatalog"] as const,
   roles: ["roles"] as const,
   roleGlobalGrants: (roleId: string) => ["roles", roleId, "global-grants"] as const,
-  projectMembers: (projectId: string) => ["projectMembers", { projectId }] as const,
   cycles: (status?: CycleStatusValue) => ["cycles", { status: status ?? null }] as const,
   cycle: (cycleId: string) => ["cycle", { cycleId }] as const,
   releases: (projectId: string) => ["releases", { projectId }] as const,

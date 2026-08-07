@@ -21,7 +21,7 @@ from radd.exceptions import ForbiddenError
 from radd.modules.access import service as access_service
 from radd.modules.access.types import GrantSubject
 from radd.modules.auth import roles as auth_roles
-from radd.modules.auth.models import ProjectMember, User
+from radd.modules.auth.models import GlobalRoleGrant, User
 from radd.modules.auth.schemas import RoleCreate
 from radd.modules.auth.types import BuiltinRoleKey, InstanceRole
 from radd.modules.fields import service as fields_service
@@ -79,7 +79,7 @@ async def _member(db, *projects) -> User:
     await auth_roles.ensure_builtin_roles(db)
     role = await auth_roles.role_by_key(db, BuiltinRoleKey.MEMBER)
     for project in projects:
-        db.add(ProjectMember(project_id=project.id, user_id=user.id, role_id=role.id))
+        db.add(GlobalRoleGrant(project_id=project.id, user_id=user.id, role_id=role.id))
     await db.flush()
     return user
 

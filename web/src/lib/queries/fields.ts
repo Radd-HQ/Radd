@@ -33,28 +33,35 @@ export const grantsQuery = (resourceType: string, resourceId: string) =>
   });
 
 /** Role grants (spec 91) held by one subject — the team/user Roles section. */
-/** Role grants by SUBJECT (a team/user's Roles tab) or by SPACE (RADD-793 —
- *  "who was given access to this space", the question an admin actually asks). */
-export const roleGrantsQuery = (subject: {
-  teamId?: string;
-  userId?: string;
-  groupId?: string;
-  spaceId?: string;
-}) => {
-  const key = subject.teamId
-    ? `team_id=${subject.teamId}`
-    : subject.userId
-      ? `user_id=${subject.userId}`
-      : subject.groupId
-        ? `group_id=${subject.groupId}`
-        : `space_id=${subject.spaceId}`;
+/**
+ * Role grants by SUBJECT (a team/user/group's Roles tab) or by SCOPE — a space
+ * (RADD-793) or a project (RADD-929). The scope directions are the question an
+ * admin actually asks: "who was given access to this?"
+ *
+ * The parameter name is the server's, so adding a direction is one entry here.
+ * The previous shape spelled the same choice out three times — a ternary chain,
+ * a query key and an `enabled` guard — and the guard had dropped `groupId`,
+ * which meant every group's grants query was permanently disabled and the
+ * `groupId` subject the API supports was unreachable no matter who called it.
+ */
+const GRANT_QUERY_PARAM = {
+  teamId: "team_id",
+  userId: "user_id",
+  groupId: "group_id",
+  spaceId: "space_id",
+  projectId: "project_id",
+} as const;
+
+export const roleGrantsQuery = (subject: Partial<Record<keyof typeof GRANT_QUERY_PARAM, string>>) => {
+  const named = (Object.keys(GRANT_QUERY_PARAM) as (keyof typeof GRANT_QUERY_PARAM)[]).find(
+    (field) => subject[field],
+  );
+  const id = named ? subject[named] : undefined;
   return queryOptions({
-    queryKey: [
-      ...queryKeys.roleGrants,
-      subject.teamId ?? subject.userId ?? subject.spaceId ?? "",
-    ] as const,
-    queryFn: () => api.get<RoleGrant[]>(`${ApiPath.roleGrants}?${key}`),
-    enabled: Boolean(subject.teamId || subject.userId || subject.spaceId),
+    queryKey: [...queryKeys.roleGrants, named ?? "", id ?? ""] as const,
+    queryFn: () =>
+      api.get<RoleGrant[]>(`${ApiPath.roleGrants}?${GRANT_QUERY_PARAM[named!]}=${id!}`),
+    enabled: Boolean(id),
     staleTime: 30_000,
   });
 };

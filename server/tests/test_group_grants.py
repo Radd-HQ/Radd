@@ -22,7 +22,7 @@ from radd.modules.access import resolution, service as access_service
 from radd.modules.access.registry import ResourceSpec
 from radd.modules.access.types import GrantSubject
 from radd.modules.auth import authz, grants as role_grants, roles as auth_roles
-from radd.modules.auth.models import ProjectMember, User
+from radd.modules.auth.models import GlobalRoleGrant, User
 from radd.modules.auth.schemas import RoleCreate
 from radd.modules.auth.types import BuiltinRoleKey, Permission
 from radd.modules.groups import service as groups_service
@@ -183,7 +183,7 @@ async def test_view_shared_with_parent_group_is_visible_to_nested_member(db):
     )
     member_role = await auth_roles.role_by_key(db, BuiltinRoleKey.MEMBER)
     for actor in (owner, member, outsider):
-        db.add(ProjectMember(project_id=project.id, user_id=actor.id, role_id=member_role.id))
+        db.add(GlobalRoleGrant(project_id=project.id, user_id=actor.id, role_id=member_role.id))
     await db.flush()
     parent, _child = await _nested_pair(db, member)
     view = await views_service.create_view(

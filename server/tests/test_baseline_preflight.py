@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings as config
 from radd.modules.auth import authz, preflight, roles as auth_roles
-from radd.modules.auth.models import ProjectMember, User
+from radd.modules.auth.models import GlobalRoleGrant, User
 from radd.modules.auth.schemas import RoleCreate
 from radd.modules.auth.types import BuiltinRoleKey, InstanceRole, Permission
 
@@ -72,7 +72,7 @@ async def test_report_names_who_loses_and_where(db):
             permissions=[Permission.ITEM_READ, Permission.PAGE_READ],
         ),
     )
-    db.add(ProjectMember(project_id=project.id, user_id=granted.id, role_id=role.id))
+    db.add(GlobalRoleGrant(project_id=project.id, user_id=granted.id, role_id=role.id))
     await db.flush()
 
     report = await preflight.baseline_preflight(

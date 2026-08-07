@@ -5,7 +5,6 @@ from . import entityhost  # noqa: F401 — installs the kernel's EntityHost (RAD
 from .permissions import AUTH_CRUD_RESOURCES, AUTH_PERMISSIONS
 from .roles_router import (
     permission_router,
-    project_member_router,
     role_grant_router,
     role_router,
 )
@@ -38,8 +37,7 @@ plugin = RaddPlugin(
         role_router,
         role_grant_router,
         permission_router,
-        project_member_router,
-    ),
+        ),
     # RADD-889: the directory/service-account tools of the spec-114 MCP catalog
     # live with their owner.
     mcp_tools=mcptools.MCP_TOOLS,

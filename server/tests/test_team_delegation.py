@@ -107,12 +107,11 @@ async def test_transfer_keeps_previous_owner_as_manager_and_refuses_inactive(db)
 
 
 async def test_delete_refuses_while_the_team_grants_project_access(db):
-    from radd.modules.auth import roles as auth_roles
+    from radd.modules.auth import grants as auth_grants, roles as auth_roles
     from radd.modules.auth.types import BuiltinRoleKey
     from radd.modules.projects import service as projects_service
     from radd.modules.projects.schemas import ProjectCreate
-    from radd.modules.teams.schemas import ProjectTeamAttach
-
+    
     owner = await _user(db, "Owner", instance_role=InstanceRole.ADMIN)
     team = await _team(db, owner)
     project = await projects_service.create_project(
@@ -121,14 +120,15 @@ async def test_delete_refuses_while_the_team_grants_project_access(db):
     # No app boot in these tests — ensure the startup-seeded builtin roles exist.
     await auth_roles.ensure_builtin_roles(db)
     role = await auth_roles.role_by_key(db, BuiltinRoleKey.MEMBER)
-    await teams_service.attach_project_team(
-        db, project.id, ProjectTeamAttach(team_id=team.id, role_id=role.id), actor_id=owner.id
+    # RADD-929: entitling a team to a project is a project-scoped role grant.
+    grant = await auth_grants.create_grant(
+        db, role.id, team_id=team.id, project_id=project.id, actor_id=owner.id
     )
 
     with pytest.raises(ConflictError):  # would silently revoke everyone's access
         await teams_service.delete_team(db, team.id, actor_id=owner.id)
 
-    await teams_service.detach_project_team(db, project.id, team.id, actor_id=owner.id)
+    await auth_grants.delete_grant(db, grant.id, actor_id=owner.id)
 
     # Items naming the team block it too — work_items.team_id is RESTRICT, so
     # without the guard this would surface as a 500 instead of an answer.

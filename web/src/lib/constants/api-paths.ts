@@ -52,13 +52,6 @@ export const apiGroupReachPath = (groupId: string) => `${ApiPath.groups}/${group
 export const apiTeamGroupsPath = (teamId: string) => `${ApiPath.teams}/${teamId}/groups`;
 export const apiTeamGroupPath = (teamId: string, groupId: string) =>
   `${ApiPath.teams}/${teamId}/groups/${groupId}`;
-export const apiProjectTeamsPath = (projectId: string) => `${ApiPath.projects}/${projectId}/teams`;
-export const apiProjectTeamPath = (projectId: string, teamId: string) =>
-  `${ApiPath.projects}/${projectId}/teams/${teamId}`;
-export const apiProjectMembersPath = (projectId: string) =>
-  `${ApiPath.projects}/${projectId}/members`;
-export const apiProjectMemberPath = (projectId: string, userId: string) =>
-  `${ApiPath.projects}/${projectId}/members/${userId}`;
 export const apiViewPath = (viewId: string) => `${ApiPath.views}/${viewId}`;
 /** PUT — replace the view's full sharing state (spec 57). */
 export const apiViewSharingPath = (viewId: string) => `${ApiPath.views}/${viewId}/sharing`;

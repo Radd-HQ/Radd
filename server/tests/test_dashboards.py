@@ -18,7 +18,7 @@ from radd.config import settings
 from radd.exceptions import ConflictError, ForbiddenError, NotFoundError
 from radd.modules.auth import roles as auth_roles
 from radd.modules.auth.schemas import RoleCreate
-from radd.modules.auth.models import ProjectMember, User
+from radd.modules.auth.models import GlobalRoleGrant, User
 from radd.modules.auth.types import InstanceRole, Permission
 from radd.modules.dashboards import service as dashboards, widgets as dashboard_widgets
 from radd.modules.dashboards.schemas import (
@@ -323,7 +323,7 @@ async def test_items_count_matches_ids_total_under_visibility(db):
             permissions=[Permission.ITEM_READ],
         ),
     )
-    db.add(ProjectMember(project_id=home_project.id, user_id=actor.id, role_id=role.id))
+    db.add(GlobalRoleGrant(project_id=home_project.id, user_id=actor.id, role_id=role.id))
     await db.flush()
     filters = ItemListFilters(project_id=home_project.id)
     ids = await bulk.list_item_ids(db, actor=actor, filters=filters)

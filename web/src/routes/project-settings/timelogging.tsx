@@ -4,9 +4,15 @@ import { api, errorMessage } from "../../lib/api";
 import { apiProjectTimeloggingPath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
 import { projectsQuery, projectTimeloggingQuery, queryKeys } from "../../lib/queries";
-import { Permission, type Project, type ProjectTimeLogging } from "../../lib/types";
+import {
+  Permission,
+  SettingScope,
+  type Project,
+  type ProjectTimeLogging,
+} from "../../lib/types";
 import { EmptyState } from "../../components/EmptyState";
 import { TableSkeleton } from "../../components/TableSkeleton";
+import { ScopedSettingsEditor } from "../../components/settings/ScopedSettingsEditor";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 
 /**
@@ -29,9 +35,27 @@ export function ProjectTimeloggingSettingsPage({ projectId }: { projectId?: stri
       ) : !project ? (
         <EmptyState icon={FolderKanban} message="Project not found." />
       ) : (
-        <ul className="rounded-lg border border-subtle">
-          <ProjectEnableRow project={project} />
-        </ul>
+        <>
+          <ul className="rounded-lg border border-subtle">
+            <ProjectEnableRow project={project} />
+          </ul>
+          {/* RADD-930: the working week arrived here from project → General.
+              It is a time-logging setting that SLAs also read — business-day
+              targets resolve it per item project — so it belongs beside the
+              toggle that decides whether this project logs time at all. */}
+          <section aria-label="Working days" className="mt-8">
+            <h3 className="text-[13px] font-semibold text-heading">Working days</h3>
+            <p className="mb-3 mt-0.5 text-xs text-fg-muted">
+              Which days count as worked here. The timesheet flags under- and over-logged
+              days against this, and business-day SLA targets resolve it per item project.
+            </p>
+            <ScopedSettingsEditor
+              scope={SettingScope.project}
+              scopeId={project.id}
+              section="timelogging"
+            />
+          </section>
+        </>
       )}
     </SettingsPage>
   );

@@ -19,7 +19,7 @@ from radd.modules.approvals.models import ApprovalRequest
 from radd.modules.approvals.schemas import ApprovalRequestCreate, ApprovalVoteCreate
 from radd.modules.approvals.types import ApprovalStatus, ApprovalVerdict
 from radd.modules.auth import roles as auth_roles
-from radd.modules.auth.models import ProjectMember, User
+from radd.modules.auth.models import GlobalRoleGrant, User
 from radd.modules.auth.types import BuiltinRoleKey, InstanceRole
 from radd.modules.events import service as events
 from radd.modules.items import service as items
@@ -74,7 +74,7 @@ async def _member(db, name: str, project=None) -> User:
         # aren't there on a fresh database — ensure them (idempotent).
         await auth_roles.ensure_builtin_roles(db)
         role = await auth_roles.role_by_key(db, BuiltinRoleKey.MEMBER)
-        db.add(ProjectMember(project_id=project.id, user_id=user.id, role_id=role.id))
+        db.add(GlobalRoleGrant(project_id=project.id, user_id=user.id, role_id=role.id))
     await db.flush()
     return user
 

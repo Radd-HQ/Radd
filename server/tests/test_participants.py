@@ -15,7 +15,7 @@ from radd.config import settings as config
 from radd.exceptions import ConflictError, ForbiddenError
 from radd.modules.auth import roles as auth_roles
 from radd.modules.auth.schemas import RoleCreate
-from radd.modules.auth.models import ProjectMember, User
+from radd.modules.auth.models import GlobalRoleGrant, User
 from radd.modules.auth.types import InstanceRole, Permission
 from radd.modules.items import service as items
 from radd.modules.items.schemas import ItemCreate
@@ -116,11 +116,11 @@ async def test_reporter_without_item_update_manages_participants(db, actor):
             permissions=[Permission.ITEM_READ],
         ),
     )
-    db.add(ProjectMember(project_id=project.id, user_id=bystander.id, role_id=role.id))
+    db.add(GlobalRoleGrant(project_id=project.id, user_id=bystander.id, role_id=role.id))
     # The colleague needs read too for the self-leave leg below — being a
     # participant does NOT itself confer item visibility (RADD-844 tracks
     # whether it should become a relation).
-    db.add(ProjectMember(project_id=project.id, user_id=colleague.id, role_id=role.id))
+    db.add(GlobalRoleGrant(project_id=project.id, user_id=colleague.id, role_id=role.id))
     await db.flush()
     with pytest.raises(ForbiddenError):
         await participants.add_participant(

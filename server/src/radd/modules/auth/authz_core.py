@@ -24,7 +24,7 @@ from radd.exceptions import ForbiddenError
 from radd.modules.projects.models import Project
 
 from . import grants
-from .models import ProjectMember, Role, User
+from .models import Role, User
 from .types import (
     BuiltinRoleKey,
     InstanceRole,
@@ -130,26 +130,17 @@ async def is_admin(session: AsyncSession, user: User) -> bool:
 async def _granted_role_ids(
     session: AsyncSession, user_id: uuid.UUID, project: Project
 ) -> set[uuid.UUID]:
-    """Role ids the user holds on the project: direct membership + team
-    attachments + instance-wide grants (spec 87 — a globally granted role
-    applies on every project, so its project-scoped atoms are live too)."""
-    role_ids = set(
-        (
-            await session.execute(
-                select(ProjectMember.role_id).where(
-                    ProjectMember.project_id == project.id, ProjectMember.user_id == user_id
-                )
-            )
-        ).scalars()
-    )
-    # Deferred import: auth loads before teams in the module assembly, so a top-level
-    # import would re-enter half-initialized packages during startup.
-    from radd.modules.teams import service as teams
+    """Role ids the user holds on the project.
 
-    role_ids |= await teams.team_granted_role_ids(session, user_id, project.id)
-    # Grants that apply here: global (every project) + those scoped to this project.
-    role_ids |= await grants.granted_role_ids(session, user_id, project.id)
-    return role_ids
+    ONE table since RADD-929. This used to union three — `project_members`,
+    `project_teams`, and the grants — which produced identical results by three
+    routes: a role reached the user the same way whether the row lived in a
+    membership table or a grant, so the tables were three spellings of one fact.
+    `grants.granted_role_ids` already resolves every subject kind (direct, team,
+    transitive directory group) and folds in the instance-wide grants, which
+    apply on every project.
+    """
+    return await grants.granted_role_ids(session, user_id, project.id)
 
 
 async def _permission_sets_for_roles(

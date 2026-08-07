@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from radd.config import settings as config
 from radd.exceptions import ForbiddenError, NotFoundError
 from radd.modules.auth import authz, roles as auth_roles
-from radd.modules.auth.models import ProjectMember, User
+from radd.modules.auth.models import GlobalRoleGrant, User
 from radd.modules.auth.schemas import RoleCreate
 from radd.modules.auth.types import BuiltinRoleKey
 
@@ -67,7 +67,7 @@ async def _grant(db, user, project, atoms):
     role = await auth_roles.create_role(
         db, RoleCreate(key=f"ir{uuid.uuid4().hex[:6]}", name="R", permissions=atoms)
     )
-    db.add(ProjectMember(project_id=project.id, user_id=user.id, role_id=role.id))
+    db.add(GlobalRoleGrant(project_id=project.id, user_id=user.id, role_id=role.id))
     await db.flush()
 
 

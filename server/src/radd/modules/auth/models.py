@@ -137,7 +137,7 @@ class GlobalRoleGrant(Base, TimestampMixin):
     project membership.
 
     Rows die with the user/team/project (FK CASCADE); the role is RESTRICTed while
-    any grant references it, matching project_members/project_teams.
+    any grant references it — the one table that now holds every grant.
     """
 
     __tablename__ = "global_role_grants"
@@ -198,15 +198,3 @@ class GlobalRoleGrant(Base, TimestampMixin):
     )
 
 
-class ProjectMember(Base):
-    """Direct user → project role assignment (complements team-granted roles)."""
-
-    __tablename__ = "project_members"
-
-    project_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True
-    )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
-    )
-    role_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("roles.id"))  # RESTRICT on delete

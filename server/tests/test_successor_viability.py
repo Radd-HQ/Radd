@@ -30,7 +30,7 @@ from radd.config import settings
 from radd.exceptions import ConflictError
 from radd.modules import workflow  # noqa: F401 — registers the default-state hook
 from radd.modules.auth import authz, roles as auth_roles, service as auth_service
-from radd.modules.auth.models import ProjectMember, Role, User
+from radd.modules.auth.models import GlobalRoleGrant, Role, User
 from radd.modules.auth.service import _permission_gaps, successor_viability
 from radd.modules.auth.types import BuiltinRoleKey, InstanceRole
 from radd.modules.items import service as items_service
@@ -76,7 +76,7 @@ async def _member_role_id(db) -> uuid.UUID:
 
 async def _join(db, project, user) -> None:
     db.add(
-        ProjectMember(
+        GlobalRoleGrant(
             project_id=project.id, user_id=user.id, role_id=await _member_role_id(db)
         )
     )
@@ -135,17 +135,21 @@ async def test_equal_successor_passes_and_access_dies(db):
         )
     ).scalar()
     assert reporter == peer.id
-    # … access did NOT: the peer has their own membership row and ONLY that one
+    # … access did NOT: the peer keeps their OWN project grant and only that one
+    # (RADD-929 — project membership is a project-scoped role grant).
     memberships = (
         await db.execute(
-            text("SELECT count(*) FROM project_members WHERE user_id = :u"), {"u": peer.id}
+            text(
+                "SELECT count(*) FROM global_role_grants "
+                "WHERE user_id = :u AND project_id IS NOT NULL"
+            ),
+            {"u": peer.id},
         )
     ).scalar()
     assert memberships == 1
     leftovers = (
         await db.execute(
             text(
-                "SELECT count(*) FROM project_members WHERE user_id = :u UNION ALL "
                 "SELECT count(*) FROM global_role_grants WHERE user_id = :u UNION ALL "
                 "SELECT count(*) FROM team_members WHERE user_id = :u"
             ),

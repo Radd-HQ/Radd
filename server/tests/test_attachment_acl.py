@@ -28,7 +28,7 @@ from radd.modules.attachments.types import (
 )
 from radd.modules.auth import roles as auth_roles
 from radd.modules.auth.schemas import RoleCreate
-from radd.modules.auth.models import ProjectMember, User
+from radd.modules.auth.models import GlobalRoleGrant, User
 from radd.modules.auth.types import InstanceRole, Permission
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate
@@ -89,7 +89,7 @@ async def setup(db, tmp_path):
             permissions=[Permission.ITEM_READ],
         ),
     )
-    db.add(ProjectMember(project_id=project.id, user_id=member.id, role_id=read_role.id))
+    db.add(GlobalRoleGrant(project_id=project.id, user_id=member.id, role_id=read_role.id))
     await db.flush()
     attachment = await service.save_upload(
         db,
@@ -129,7 +129,7 @@ async def test_a_user_grant_restricts_everyone_else(db, setup):
             permissions=[Permission.ITEM_READ],
         ),
     )
-    db.add(ProjectMember(project_id=item.project_id, user_id=chosen.id, role_id=role.id))
+    db.add(GlobalRoleGrant(project_id=item.project_id, user_id=chosen.id, role_id=role.id))
     await db.flush()
     await _grant(db, attachment.id, GrantSubject.USER.value, chosen.id)
     assert await acl.attachment_readable(db, chosen, attachment) is True

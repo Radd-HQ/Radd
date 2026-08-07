@@ -6,16 +6,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import ilike_term
 from radd.exceptions import ConflictError, NotFoundError
-from radd.modules.auth import roles as auth_roles, service as auth
+from radd.modules.auth import service as auth
 from radd.modules.auth.models import User
-from radd.modules.auth.types import BuiltinRoleKey
 from radd.modules.events import service as events
 from radd.modules.groups import service as groups_service
 from radd.modules.groups.service import Group
-from radd.modules.projects import service as projects_service
 
-from .models import ProjectTeam, Team, TeamManager, TeamMember
-from .schemas import ProjectTeamAttach, ProjectTeamUpdate, TeamCreate, TeamUpdate
+from .models import Team, TeamManager, TeamMember
+from .schemas import TeamCreate, TeamUpdate
 from .types import TeamChange, TeamEntity, TeamEvent
 
 
@@ -110,17 +108,28 @@ async def delete_team(
     `work_items.team_id` is RESTRICT, so asking first turns what would be a 500
     into an answer that says what to do. Members, managers and any instance-wide
     grants held by the team go with it (FK CASCADE).
+
+    RADD-929: the project count comes from the team's project-scoped ROLE GRANTS.
+    It used to count `project_teams` rows, which stopped being the whole answer
+    the moment a team could also be entitled by a grant — a team holding a
+    project only by grant deleted silently.
     """
     team = await get_team(session, team_id)
-    attached = await session.scalar(
-        select(func.count()).select_from(ProjectTeam).where(ProjectTeam.team_id == team_id)
+    from radd.modules.auth import grants as auth_grants  # deferred: auth loads first
+
+    attached = len(
+        {
+            grant.project_id
+            for grant in await auth_grants.grants_for_subject(session, team_id=team_id)
+            if grant.project_id is not None
+        }
     )
     if attached:
         raise ConflictError(
             TeamEntity.TEAM,
             reason=(
-                f"'{team.name}' still grants access to {attached} project(s) — detach it there "
-                "first so the access loss is deliberate"
+                f"'{team.name}' still grants access to {attached} project(s) — revoke those "
+                "roles first so the access loss is deliberate"
             ),
         )
     # Deferred import: items loads after teams — a public service call, not a
@@ -375,100 +384,6 @@ async def transfer_ownership(
     return team
 
 
-# --- project attachments ---
-
-
-async def attach_project_team(
-    session: AsyncSession,
-    project_id: uuid.UUID,
-    data: ProjectTeamAttach,
-    actor_id: uuid.UUID | None = None,
-) -> ProjectTeam:
-    await projects_service.get_project(session, project_id)
-    team = await get_team(session, data.team_id)
-    if data.role_id is not None:
-        role = await auth_roles.get_role(session, data.role_id)
-    else:  # default: the builtin member role
-        role = await auth_roles.role_by_key(session, BuiltinRoleKey.MEMBER)
-    if await session.get(ProjectTeam, (project_id, data.team_id)):
-        raise ConflictError(TeamEntity.PROJECT_TEAM, data.team_id)
-    attachment = ProjectTeam(project_id=project_id, team_id=data.team_id, role_id=role.id)
-    session.add(attachment)
-    await session.flush()
-    await _emit_updated(
-        session,
-        team,
-        actor_id,
-        {
-            "action": TeamChange.PROJECT_ATTACHED,
-            "project_id": str(project_id),
-            "role_id": str(role.id),
-            "role": role.key,
-        },
-    )
-    return attachment
-
-
-async def update_project_team(
-    session: AsyncSession,
-    project_id: uuid.UUID,
-    team_id: uuid.UUID,
-    data: ProjectTeamUpdate,
-    actor_id: uuid.UUID | None = None,
-) -> ProjectTeam:
-    await projects_service.get_project(session, project_id)
-    team = await get_team(session, team_id)
-    attachment = await session.get(ProjectTeam, (project_id, team_id))
-    if attachment is None:
-        raise NotFoundError(TeamEntity.PROJECT_TEAM, team_id)
-    role = await auth_roles.get_role(session, data.role_id)
-    attachment.role_id = role.id
-    await session.flush()
-    await _emit_updated(
-        session,
-        team,
-        actor_id,
-        {
-            "action": TeamChange.PROJECT_ROLE_CHANGED,
-            "project_id": str(project_id),
-            "role_id": str(role.id),
-            "role": role.key,
-        },
-    )
-    return attachment
-
-
-async def detach_project_team(
-    session: AsyncSession,
-    project_id: uuid.UUID,
-    team_id: uuid.UUID,
-    actor_id: uuid.UUID | None = None,
-) -> None:
-    await projects_service.get_project(session, project_id)
-    team = await get_team(session, team_id)
-    result = await session.execute(
-        delete(ProjectTeam).where(
-            ProjectTeam.project_id == project_id, ProjectTeam.team_id == team_id
-        )
-    )
-    if result.rowcount == 0:
-        raise NotFoundError(TeamEntity.PROJECT_TEAM, team_id)
-    await _emit_updated(
-        session,
-        team,
-        actor_id,
-        {"action": TeamChange.PROJECT_DETACHED, "project_id": str(project_id)},
-    )
-
-
-async def list_project_teams(session: AsyncSession, project_id: uuid.UUID) -> list[ProjectTeam]:
-    await projects_service.get_project(session, project_id)
-    result = await session.execute(
-        select(ProjectTeam).where(ProjectTeam.project_id == project_id)
-    )
-    return list(result.scalars())
-
-
 # --- helpers other modules import (the authz engine + spec 07 build on these) ---
 
 
@@ -522,95 +437,6 @@ async def user_team_ids(session: AsyncSession, user_id: uuid.UUID) -> set[uuid.U
     resolved = set(result.scalars())
     session.info[key] = resolved
     return resolved
-
-
-async def team_granted_role_ids(
-    session: AsyncSession, user_id: uuid.UUID, project_id: uuid.UUID
-) -> set[uuid.UUID]:
-    """Role ids the user's teams grant on the project (consumed by auth.authz)."""
-    result = await session.execute(
-        select(ProjectTeam.role_id)
-        .join(TeamMember, TeamMember.team_id == ProjectTeam.team_id)
-        .where(
-            await _membership_filter(session, user_id),
-            ProjectTeam.project_id == project_id,
-        )
-        .distinct()
-    )
-    return set(result.scalars())
-
-
-async def team_role_pairs_for_project(
-    session: AsyncSession, user_id: uuid.UUID, project_id: uuid.UUID
-) -> list[tuple[str, uuid.UUID]]:
-    """(team name, role id) pairs the user's teams grant on the project — the
-    inspector's provenance variant of `team_granted_role_ids` (RADD-809): same
-    rows, keeping WHICH team carried each role."""
-    result = await session.execute(
-        select(Team.name, ProjectTeam.role_id)
-        .join(TeamMember, TeamMember.team_id == ProjectTeam.team_id)
-        .join(Team, Team.id == ProjectTeam.team_id)
-        .where(
-            await _membership_filter(session, user_id),
-            ProjectTeam.project_id == project_id,
-        )
-        .distinct()
-    )
-    return [(name, role_id) for name, role_id in result.all()]
-
-
-async def team_granted_role_ids_anywhere(
-    session: AsyncSession, user_id: uuid.UUID
-) -> set[uuid.UUID]:
-    """Every role the user's teams grant on ANY project (the RADD-809 inspector's
-    all-scopes subject set)."""
-    result = await session.execute(
-        select(ProjectTeam.role_id)
-        .join(TeamMember, TeamMember.team_id == ProjectTeam.team_id)
-        .where(await _membership_filter(session, user_id))
-        .distinct()
-    )
-    return set(result.scalars())
-
-
-async def team_project_role_rows(
-    session: AsyncSession, team_id: uuid.UUID
-) -> list[tuple[uuid.UUID, uuid.UUID]]:
-    """(project id, role id) for every project this team is attached to — what
-    membership of the team confers (the RADD-809 team inspector)."""
-    result = await session.execute(
-        select(ProjectTeam.project_id, ProjectTeam.role_id).where(
-            ProjectTeam.team_id == team_id
-        )
-    )
-    return [(project_id, role_id) for project_id, role_id in result.all()]
-
-
-async def team_granted_role_ids_for_projects(
-    session: AsyncSession, user_id: uuid.UUID, project_ids: Iterable[uuid.UUID]
-) -> dict[uuid.UUID, set[uuid.UUID]]:
-    """Batched `team_granted_role_ids` for list hydration (one query for N projects)."""
-    result = await session.execute(
-        select(ProjectTeam.project_id, ProjectTeam.role_id)
-        .join(TeamMember, TeamMember.team_id == ProjectTeam.team_id)
-        .where(
-            await _membership_filter(session, user_id),
-            ProjectTeam.project_id.in_(set(project_ids)),
-        )
-        .distinct()
-    )
-    granted: dict[uuid.UUID, set[uuid.UUID]] = {}
-    for project_id, role_id in result.all():
-        granted.setdefault(project_id, set()).add(role_id)
-    return granted
-
-
-async def role_referenced(session: AsyncSession, role_id: uuid.UUID) -> bool:
-    """Does any project↔team attachment still grant this role? (role deletion guard)"""
-    row = await session.scalar(
-        select(ProjectTeam.project_id).where(ProjectTeam.role_id == role_id).limit(1)
-    )
-    return row is not None
 
 
 async def _emit_updated(

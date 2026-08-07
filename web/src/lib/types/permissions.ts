@@ -8,6 +8,15 @@ export const Permission = {
   globalManage: "global.manage",
   projectCreate: "project.create",
   projectManage: "project.manage",
+  /**
+   * RADD-826: delegated project entitlement — grant/revoke a role ON this
+   * project without global `role.update`. `project.manage` implies both. Named
+   * here rather than spelled as a bare string at each call site, which is how
+   * the project-settings nav had been gating its Access tab.
+   */
+  memberCreate: "member.create",
+  memberUpdate: "member.update",
+  memberDelete: "member.delete",
   itemRead: "item.read",
   itemCreate: "item.create",
   itemUpdate: "item.update",
@@ -209,11 +218,6 @@ export interface ProjectMember {
   role_id: string;
   /** The role's key, hydrated for display. */
   role: string;
-}
-
-export interface ProjectMemberUpsert {
-  user_id: string;
-  role_id: string;
 }
 
 /** RADD-825: the Baseline pre-flight report — the consequence of storing a

@@ -83,15 +83,3 @@ class TeamMember(Base):
     )
 
 
-class ProjectTeam(Base):
-    """Team ↔ project attachment granting a role (`roles` table, auth module — spec 06)."""
-
-    __tablename__ = "project_teams"
-
-    project_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True
-    )
-    team_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("teams.id", ondelete="CASCADE"), primary_key=True
-    )
-    role_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("roles.id"))  # RESTRICT on delete

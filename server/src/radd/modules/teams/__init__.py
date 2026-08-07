@@ -2,7 +2,7 @@ from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
 from radd.kernel import CrudResourceSpec
 
-from .router import project_team_router, team_router
+from .router import team_router
 from .types import TeamEvent
 
 plugin = RaddPlugin(
@@ -16,7 +16,7 @@ plugin = RaddPlugin(
     description="Global teams, team membership (users AND groups), and project↔team role attachments.",
     depends_on=("events", "projects", "auth", "groups"),
     weak_depends=("access", "items"),
-    routers=(team_router, project_team_router),
+    routers=(team_router,),
     event_types=(
         EventTypeSpec(TeamEvent.CREATED, "Team created", "Admin"),
         EventTypeSpec(TeamEvent.UPDATED, "Team updated", "Admin"),

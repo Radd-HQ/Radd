@@ -26,7 +26,7 @@ from .authz_core import (
     floor_permissions,
     holds_base,
 )
-from .models import ProjectMember, Role, User
+from .models import Role, User
 from .types import InstanceRole, Permission, all_permission_keys
 
 #: Key prefix for the per-request memo of `readable_projects` (per actor).
@@ -58,19 +58,11 @@ async def permissions_for_projects(
 
     project_ids = [project.id for project in projects]
     granted: dict[uuid.UUID, set[uuid.UUID]] = {project_id: set() for project_id in project_ids}
-    direct = await session.execute(
-        select(ProjectMember.project_id, ProjectMember.role_id).where(
-            ProjectMember.user_id == user.id, ProjectMember.project_id.in_(project_ids)
-        )
-    )
-    for project_id, role_id in direct.all():
-        granted[project_id].add(role_id)
-    from radd.modules.teams import service as teams  # deferred: teams loads after auth
-
-    for project_id, role_ids in (
-        await teams.team_granted_role_ids_for_projects(session, user.id, project_ids)
-    ).items():
-        granted[project_id] |= role_ids
+    # RADD-929: two more queries used to run here — `project_members` and the
+    # teams module's `project_teams` join — producing role ids the two grant
+    # lookups below now produce on their own. Three tables, one fact; the batch
+    # path lost a query per hydration along with the duplication.
+    #
     # Instance-wide grants (spec 87) apply on every project — one lookup, not N.
     global_role_ids = await grants.granted_role_ids(session, user.id)
     for role_ids in granted.values():

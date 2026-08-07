@@ -518,25 +518,6 @@ class PermissionRead(BaseModel):
     action: str  # spec 50: the verb half (create/read/update/delete/manage/…) — matrix column
 
 
-class ProjectMemberUpsert(BaseModel):
-    user_id: uuid.UUID
-    role_id: uuid.UUID
-
-
-class ProjectMemberRoleUpdate(BaseModel):
-    role_id: uuid.UUID
-
-
-class ProjectMemberRead(BaseModel):
-    project_id: uuid.UUID
-    user_id: uuid.UUID
-    role_id: uuid.UUID
-    role: str  # the role's key, hydrated for display
-
-
-# --- the Baseline pre-flight (RADD-825) --------------------------------------
-
-
 class BaselinePreflightRequest(BaseModel):
     """The Baseline as the admin is ABOUT to store it."""
 

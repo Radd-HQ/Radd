@@ -1,34 +1,22 @@
 import { useState, type FormEvent } from "react";
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link2, Plus, X } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Plus, X } from "lucide-react";
 import { api } from "../../lib/api";
-import {
-  apiProjectTeamPath,
-  apiProjectTeamsPath,
-  apiTeamMemberPath,
-  apiTeamMembersPath,
-} from "../../lib/constants";
+import { apiTeamMemberPath, apiTeamMembersPath } from "../../lib/constants";
 import { useCurrentUser, usePermissions } from "../../lib/hooks";
 import { TeamAccessSection } from "./AccessInspector";
 import { RoleGrantsSection } from "./RoleGrantsSection";
 import {
-  projectTeamsQuery,
-  projectsQuery,
   queryKeys,
-  rolesQuery,
   teamMembersQuery,
   usersQuery,
 } from "../../lib/queries";
 import {
   Permission,
-  type ProjectTeam,
-  type ProjectTeamAttach,
-  type Role,
   type Team,
   type TeamMember,
 } from "../../lib/types";
 import { Button } from "../Button";
-import { Select } from "../Select";
 import { SelectField } from "../SelectField";
 import { TeamGroupsSection } from "./TeamDirectoryGroup";
 import { TeamStewardship } from "./TeamStewardship";
@@ -64,31 +52,11 @@ export function TeamPanel({ team }: TeamPanelProps) {
   const members = useQuery(teamMembersQuery(team.id));
   // GET /users needs user.manage — only fetched when an affordance needs names.
   const users = useQuery({ ...usersQuery, enabled: canManageTeam, retry: false });
-  const projects = useQuery(projectsQuery());
-  const roles = useQuery(rolesQuery());
 
   const [userId, setUserId] = useState("");
-  const [projectId, setProjectId] = useState("");
-  const [roleId, setRoleId] = useState("");
-
-  // A team's attachments live under each project — collect them across projects.
-  const attachmentQueries = useQueries({
-    queries: (projects.data ?? []).map((project) => projectTeamsQuery(project.id)),
-  });
-  const attachments = (projects.data ?? []).flatMap((project, index) =>
-    (attachmentQueries[index]?.data ?? [])
-      .filter((attachment: ProjectTeam) => attachment.team_id === team.id)
-      .map((attachment: ProjectTeam) => ({ project, attachment })),
-  );
 
   const memberIds = new Set((members.data ?? []).map((member) => member.user_id));
   const candidates = (users.data ?? []).filter((user) => user.active && !memberIds.has(user.id));
-  const attachedProjectIds = new Set(attachments.map((entry) => entry.project.id));
-  const attachableProjects = (projects.data ?? []).filter(
-    (project) =>
-      !attachedProjectIds.has(project.id) && perms.project(project, Permission.projectManage),
-  );
-
   const addMember = useMutation({
     mutationFn: (body: { user_id: string }) =>
       api.post<TeamMember>(apiTeamMembersPath(team.id), body),
@@ -104,50 +72,13 @@ export function TeamPanel({ team }: TeamPanelProps) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.teamMembers(team.id) }),
   });
 
-  const invalidateProjectTeams = (targetProjectId: string) =>
-    queryClient.invalidateQueries({ queryKey: queryKeys.projectTeams(targetProjectId) });
 
-  const attach = useMutation({
-    mutationFn: ({ targetProjectId, body }: { targetProjectId: string; body: ProjectTeamAttach }) =>
-      api.post<ProjectTeam>(apiProjectTeamsPath(targetProjectId), body),
-    onSuccess: async (_created, { targetProjectId }) => {
-      await invalidateProjectTeams(targetProjectId);
-      setProjectId("");
-    },
-  });
 
-  const changeRole = useMutation({
-    mutationFn: ({ targetProjectId, newRoleId }: { targetProjectId: string; newRoleId: string }) =>
-      api.patch<ProjectTeam>(apiProjectTeamPath(targetProjectId, team.id), { role_id: newRoleId }),
-    onSuccess: (_updated, { targetProjectId }) => invalidateProjectTeams(targetProjectId),
-  });
-
-  const detach = useMutation({
-    mutationFn: (targetProjectId: string) =>
-      api.delete<void>(apiProjectTeamPath(targetProjectId, team.id)),
-    onSuccess: (_result, targetProjectId) => invalidateProjectTeams(targetProjectId),
-  });
 
   const onAddMember = (event: FormEvent) => {
     event.preventDefault();
     if (userId) addMember.mutate({ user_id: userId });
   };
-
-  const onAttach = (event: FormEvent) => {
-    event.preventDefault();
-    if (projectId && roleId) {
-      attach.mutate({ targetProjectId: projectId, body: { team_id: team.id, role_id: roleId } });
-    }
-  };
-
-  const roleList = roles.data ?? [];
-  const roleName = (id: string) => roleList.find((role) => role.id === id)?.name ?? "?";
-  const roleOptions = (list: Role[]) =>
-    list.map((role) => (
-      <option key={role.id} value={role.id}>
-        {role.name}
-      </option>
-    ));
 
   return (
     <div className="border-t border-subtle/60 bg-surface/30 px-4 py-4">
@@ -221,89 +152,6 @@ export function TeamPanel({ team }: TeamPanelProps) {
         )}
         {addMember.isError && (
           <ErrorText className="mt-1" error={addMember.error} />
-        )}
-      </section>
-
-      <section aria-label={`${team.name} projects`}>
-        <h4 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
-          Projects
-        </h4>
-        {attachments.length === 0 ? (
-          <p className="text-xs text-fg-muted">Not attached to any project.</p>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {attachments.map(({ project, attachment }) => (
-              <li key={project.id} className="flex items-center gap-2 text-[13px]">
-                <Link2 size={12} className="text-fg-faint" aria-hidden />
-                <span className="rounded bg-elevated px-1 font-mono text-[11px] text-fg">
-                  {project.key}
-                </span>
-                <span className="truncate text-fg">{project.name}</span>
-                {perms.project(project, Permission.projectManage) ? (
-                  <>
-                    <Select
-                      aria-label={`Role of ${team.name} in ${project.key}`}
-                      value={attachment.role_id}
-                      onChange={(newRoleId) =>
-                        changeRole.mutate({
-                          targetProjectId: project.id,
-                          newRoleId,
-                        })
-                      }
-                      size="sm"
-                      className="ml-auto"
-                      options={roleList.map((role) => ({ value: role.id, label: role.name }))}
-                    />
-                    <IconButton
-                      danger
-                      onClick={() => detach.mutate(project.id)}
-                      disabled={detach.isPending}
-                      aria-label={`Detach ${team.name} from ${project.key}`}
-                    >
-                      <X size={13} />
-                    </IconButton>
-                  </>
-                ) : (
-                  <span className="ml-auto rounded border border-strong px-1.5 py-px text-[11px] text-fg-secondary">
-                    {roleName(attachment.role_id)}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-        {attachableProjects.length > 0 && (
-          <form onSubmit={onAttach} className="mt-3 flex items-end gap-2">
-            <div className="flex-1">
-              <SelectField
-                label="Attach to project"
-                value={projectId}
-                onChange={(event) => setProjectId(event.target.value)}
-              >
-                <option value="">Choose a project…</option>
-                {attachableProjects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.key} — {project.name}
-                  </option>
-                ))}
-              </SelectField>
-            </div>
-            <SelectField
-              label="Role"
-              value={roleId}
-              onChange={(event) => setRoleId(event.target.value)}
-            >
-              <option value="">Choose a role…</option>
-              {roleOptions(roleList)}
-            </SelectField>
-            <Button type="submit" variant="ghost" disabled={!projectId || !roleId || attach.isPending}>
-              <Plus size={13} aria-hidden />
-              Attach
-            </Button>
-          </form>
-        )}
-        {(attach.isError || changeRole.isError || detach.isError) && (
-          <ErrorText className="mt-1" error={attach.error ?? changeRole.error ?? detach.error} />
         )}
       </section>
 

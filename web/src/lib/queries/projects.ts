@@ -6,8 +6,6 @@ import { Entity, entityMeta } from "../cache";
 import {
   ApiPath,
   apiItemAllowedTransitionsPath,
-  apiProjectMembersPath,
-  apiProjectTeamsPath,
   apiProjectTransitionsPath,
 } from "../constants";
 import { queryKeys } from "./shared";
@@ -16,8 +14,6 @@ import type {
   EffectiveScreen,
   IssueType,
   Project,
-  ProjectMember,
-  ProjectTeam,
   State,
   StateCategoryRow,
   Transition,
@@ -104,18 +100,4 @@ export const effectiveScreenQuery = (projectId: string, issueTypeId: string | nu
           : { project_id: projectId },
       }),
     staleTime: 60_000,
-  });
-
-export const projectTeamsQuery = (projectId: string) =>
-  queryOptions({
-    queryKey: queryKeys.projectTeams(projectId),
-    queryFn: () => api.get<ProjectTeam[]>(apiProjectTeamsPath(projectId)),
-  });
-
-/** Direct project members — requires project.manage (settings/projects handles 403). */
-export const projectMembersQuery = (projectId: string) =>
-  queryOptions({
-    queryKey: queryKeys.projectMembers(projectId),
-    queryFn: () => api.get<ProjectMember[]>(apiProjectMembersPath(projectId)),
-    retry: false,
   });

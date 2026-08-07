@@ -126,7 +126,6 @@ _MERGE_REPOINT: tuple[tuple[str, str], ...] = (
 _MERGE_DEDUPE: tuple[tuple[str, tuple[str, ...], str], ...] = (
     ("item_watchers", ("item_id",), "user_id"),
     ("item_stars", ("item_id",), "user_id"),
-    ("project_members", ("project_id",), "user_id"),
     ("team_members", ("team_id",), "user_id"),
     # RADD-829: directory-group memberships — the next sync would converge them
     # anyway, but a merge must not strand rows on the deleted account meanwhile.
@@ -158,7 +157,6 @@ _MERGE_PURGE: tuple[str, ...] = ("sessions", "api_tokens", "user_totp", "notific
 # shares, subscriptions, the inbox. Deleted explicitly rather than left to FK
 # cascade so the behaviour is written down, not implied by schema options.
 _DELETE_WITH_ACCOUNT: tuple[tuple[str, str], ...] = (
-    ("project_members", "user_id"),
     ("team_members", "user_id"),
     ("group_members", "user_id"),
     ("team_managers", "user_id"),

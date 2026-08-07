@@ -219,6 +219,30 @@ async def grants_for_subject(
     return list(result.scalars())
 
 
+async def grants_for_project(
+    session: AsyncSession, project_id: uuid.UUID
+) -> list[GlobalRoleGrant]:
+    """Every grant bound to one project (RADD-929) — the project's Access screen.
+
+    The `grants_for_space` shape for the other scope, and the read that replaces
+    `project_members` + `project_teams`: those two tables expressed exactly this
+    row (subject × role × project) and were unioned into the same
+    `_granted_role_ids` result, so "who has access to this project" now has one
+    answer instead of three lists that had to be read together.
+
+    Instance-wide grants are deliberately excluded, same reasoning as spaces: the
+    panel answers "who was given access to THIS project", and folding in
+    everyone with a global role would make revoking look possible where it is
+    not.
+    """
+    result = await session.execute(
+        select(GlobalRoleGrant)
+        .where(GlobalRoleGrant.project_id == project_id)
+        .order_by(GlobalRoleGrant.created_at)
+    )
+    return list(result.scalars())
+
+
 async def grants_for_space(
     session: AsyncSession, space_id: uuid.UUID
 ) -> list[GlobalRoleGrant]:

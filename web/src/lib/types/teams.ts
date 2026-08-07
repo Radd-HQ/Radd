@@ -214,7 +214,3 @@ export interface ProjectTeam {
   role: string;
 }
 
-export interface ProjectTeamAttach {
-  team_id: string;
-  role_id?: string;
-}

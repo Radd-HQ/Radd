@@ -76,18 +76,3 @@ class TeamGroupRead(BaseModel):
     directory_missing_since: UtcDatetime | None = None
 
 
-class ProjectTeamAttach(BaseModel):
-    team_id: uuid.UUID
-    # None = the builtin member role (default semantics, not an alias).
-    role_id: uuid.UUID | None = None
-
-
-class ProjectTeamUpdate(BaseModel):
-    role_id: uuid.UUID
-
-
-class ProjectTeamRead(BaseModel):
-    project_id: uuid.UUID
-    team_id: uuid.UUID
-    role_id: uuid.UUID
-    role: str  # the role's key, hydrated for display

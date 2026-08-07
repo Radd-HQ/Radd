@@ -13,12 +13,7 @@ import {
 } from "lucide-react";
 import { RoutePath } from "../../lib/constants";
 import { useProjectByKey, usePermissions, type PermissionChecks } from "../../lib/hooks";
-import {
-  Permission,
-  SettingScope,
-  WORKFLOW_TRANSITION_MODE_KEY,
-  type Project,
-} from "../../lib/types";
+import { PROJECT_HOMED_SECTIONS, Permission, SettingScope, type Project } from "../../lib/types";
 import { ScopedSettingsEditor } from "../../components/settings/ScopedSettingsEditor";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { Spinner } from "../../components/Spinner";
@@ -85,7 +80,7 @@ const PROJECT_SETTINGS_NAV: readonly {
     icon: UserRound,
     // RADD-826 (D3): delegated access management — member.create in THIS
     // project opens the screen; project.manage implies it.
-    show: (perms, project) => perms.project(project, "member.create"),
+    show: (perms, project) => perms.project(project, Permission.memberCreate),
   },
   {
     to: RoutePath.projectSettingsReleases,
@@ -176,15 +171,19 @@ export function ProjectGeneralSettings() {
   return (
     <SettingsPage
       title="General"
-      description="Project overrides for the cascaded settings. Each falls back to the instance default (Settings → General)."
+      description="Project overrides for the cascaded settings that don't belong to a tab of their own. Each falls back to the instance default (Settings → General)."
     >
       {project ? (
+        // RADD-930: the REMAINDER, not everything. The release states, the
+        // working week and the CSAT opt-in now declare their own tabs, and the
+        // enforcement mode declares Workflow — which also retires the
+        // hand-written `key !== WORKFLOW_TRANSITION_MODE_KEY` exclude that used
+        // to keep a second, free-text copy of that dropdown off this page.
         <ScopedSettingsEditor
           scope={SettingScope.project}
           scopeId={project.id}
-          // The enforcement mode has a dedicated dropdown on Settings →
-          // Workflow — a second, free-text copy here only invited typos.
-          filter={(row) => row.key !== WORKFLOW_TRANSITION_MODE_KEY}
+          homed={PROJECT_HOMED_SECTIONS}
+          emptyLabel="Every cascaded setting for this project lives on one of the tabs beside this one."
         />
       ) : null}
     </SettingsPage>

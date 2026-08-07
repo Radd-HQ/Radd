@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings as config
 from radd.modules.auth import roles as auth_roles
-from radd.modules.auth.models import ProjectMember, User
+from radd.modules.auth.models import GlobalRoleGrant, User
 from radd.modules.auth.types import BuiltinRoleKey, InstanceRole
 from radd.modules.items import rollup, service as items
 from radd.modules.items.schemas import ItemCreate, ItemLinkCreate
@@ -84,7 +84,7 @@ async def world(db, admin):
     db.add(member)
     await db.flush()
     member_role = await auth_roles.role_by_key(db, BuiltinRoleKey.MEMBER)
-    db.add(ProjectMember(project_id=project_a.id, user_id=member.id, role_id=member_role.id))
+    db.add(GlobalRoleGrant(project_id=project_a.id, user_id=member.id, role_id=member_role.id))
     await db.flush()
 
     epic_b = await items.create_item(

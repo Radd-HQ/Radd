@@ -18,14 +18,14 @@ from radd.config import settings as config
 from radd.modules.access import inspect as access_inspect, service as access_service
 from radd.modules.access.types import GrantSubject
 from radd.modules.auth import authz, grants as auth_grants, roles as auth_roles
-from radd.modules.auth.models import ProjectMember, User
+from radd.modules.auth.models import GlobalRoleGrant, User
 from radd.modules.auth.schemas import RoleCreate
 from radd.modules.auth.types import BuiltinRoleKey, InstanceRole
 from radd.modules.fields import service as fields_service
 from radd.modules.fields.schemas import FieldDefinitionCreate
 from radd.modules.fields.types import FieldAccess, FieldType
 from radd.modules.teams import service as teams_service
-from radd.modules.teams.schemas import ProjectTeamAttach, TeamCreate
+from radd.modules.teams.schemas import TeamCreate
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 
@@ -68,14 +68,16 @@ async def _role(db, name, permissions):
 async def test_sources_carry_channel_scope_and_backlink(db, member):
     project = await _project(db)
     role = await _role(db, "Painters", ["item.update"])
-    db.add(ProjectMember(project_id=project.id, user_id=member.id, role_id=role.id))
+    db.add(GlobalRoleGrant(project_id=project.id, user_id=member.id, role_id=role.id))
     await db.flush()
 
     sources = await authz.permission_sources(db, member, project=project)
     row = next(s for s in sources if s.permission == "item.update")
     assert row.kind == "role" and row.role_name == "Painters"
     assert row.role_id == role.id
-    assert row.scope == "project" and row.via == "membership"
+    # RADD-929: a direct project entitlement IS a grant — there is no separate
+    # "membership" channel for it to arrive through any more.
+    assert row.scope == "project" and row.via == "grant"
 
     baseline_row = next(s for s in sources if s.kind == "baseline")
     baseline_role = await auth_roles.role_by_key(db, BuiltinRoleKey.BASELINE)
@@ -87,9 +89,7 @@ async def test_sources_name_the_carrying_team(db, member):
     role = await _role(db, "Wranglers", ["cycle.create"])
     team = await teams_service.create_team(db, TeamCreate(name=f"T{uuid.uuid4().hex[:6]}"))
     await teams_service.add_team_member(db, team.id, member.id)
-    await teams_service.attach_project_team(
-        db, project.id, ProjectTeamAttach(team_id=team.id, role_id=role.id)
-    )
+    db.add(GlobalRoleGrant(project_id=project.id, team_id=team.id, role_id=role.id))
 
     sources = await authz.permission_sources(db, member, project=project)
     row = next(s for s in sources if s.permission == "cycle.create")
@@ -138,7 +138,7 @@ async def test_resource_access_names_subject_label_and_default(db, member):
         project_id=project.id,
     )
     # The member holds the role via a project membership.
-    db.add(ProjectMember(project_id=project.id, user_id=member.id, role_id=role.id))
+    db.add(GlobalRoleGrant(project_id=project.id, user_id=member.id, role_id=role.id))
     await db.flush()
 
     role_ids = await authz.all_held_role_ids(db, member)
@@ -161,20 +161,21 @@ async def test_resource_access_names_subject_label_and_default(db, member):
     assert views_section.default_open is False and views_section.hierarchical is True
 
 
-async def test_team_access_reports_attachments_and_grants(db, member):
+async def test_team_access_reports_project_and_global_grants(db, member):
     project = await _project(db)
     role = await _role(db, "Crew", ["item.read"])
     team = await teams_service.create_team(db, TeamCreate(name=f"T{uuid.uuid4().hex[:6]}"))
-    await teams_service.attach_project_team(
-        db, project.id, ProjectTeamAttach(team_id=team.id, role_id=role.id)
-    )
+    db.add(GlobalRoleGrant(project_id=project.id, team_id=team.id, role_id=role.id))
     wiki_role = await _role(db, "Wiki", ["page.read"])
     await auth_grants.create_grant(db, role_id=wiki_role.id, team_id=team.id)
 
     atoms = await authz.team_permission_sources(db, team.id)
-    attached = next(a for a in atoms if a.permission == "item.read")
-    assert attached.via == "attached" and attached.scope == "project"
-    assert attached.scope_label == project.key
+    # RADD-929: both rows are grants; the SCOPE is what distinguishes them, which
+    # is the distinction that was actually meaningful. The old "attached" channel
+    # listed a team's project entitlement a second time under a second name.
+    on_project = next(a for a in atoms if a.permission == "item.read")
+    assert on_project.via == "grant" and on_project.scope == "project"
+    assert on_project.scope_label == project.key
     granted = next(a for a in atoms if a.permission == "page.read")
     assert granted.via == "grant" and granted.scope == "global"
 

@@ -3,8 +3,9 @@
 Roles are data (`roles` table: builtin admin/member/viewer + custom rows).
 A user's effective permissions on a project are the UNION of:
 
-- the role their direct `project_members` row grants,
-- the roles their teams' `project_teams` attachments grant,
+- the roles granted to them directly, to a team they are on, or to a directory
+  group that contains them (RADD-929 folded direct membership and team
+  attachments into those grants — one table, one resolution path),
 - the roles granted to them instance-wide (`global_role_grants`, spec 87),
 - the **Baseline role**, held by EVERY ACTIVE user without being granted
   (spec 86: being an active user of the server IS membership).

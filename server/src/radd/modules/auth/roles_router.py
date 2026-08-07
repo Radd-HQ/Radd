@@ -1,4 +1,9 @@
-"""Roles CRUD, the permission catalog, and direct project membership (spec 06)."""
+"""Roles CRUD, the permission catalog, and role grants.
+
+RADD-929 removed the `/projects/{id}/members` endpoints: direct membership is a
+role grant scoped to the project, so `/role-grants` reads it (`?project_id=`) and
+writes it, under the scope-derived authorization RADD-826 already built.
+"""
 
 import uuid
 from typing import Annotated
@@ -11,7 +16,6 @@ from radd.modules.projects import service as projects_service
 
 from . import authz, preflight, grants, roles
 from .deps import CurrentUser
-from .models import ProjectMember
 from radd.exceptions import ConflictError, ForbiddenError
 
 from .schemas import (
@@ -20,9 +24,6 @@ from .schemas import (
     GlobalGrantRead,
     GlobalGrantsUpdate,
     PermissionRead,
-    ProjectMemberRead,
-    ProjectMemberRoleUpdate,
-    ProjectMemberUpsert,
     RoleCreate,
     RoleGrantCreate,
     RoleRead,
@@ -69,7 +70,6 @@ async def ensure_delegated_role_coverage(
 role_router = APIRouter(prefix="/roles", tags=["roles"])
 role_grant_router = APIRouter(prefix="/role-grants", tags=["roles"])
 permission_router = APIRouter(prefix="/permissions", tags=["roles"])
-project_member_router = APIRouter(prefix="/projects", tags=["project members"])
 
 Session = Annotated[AsyncSession, Depends(get_session)]
 
@@ -159,24 +159,13 @@ async def role_impact(role_id: uuid.UUID, session: Session, user: CurrentUser) -
     from radd.modules.groups import service as groups_service
     from radd.modules.teams import service as teams_service
 
-    from .models import GlobalRoleGrant, ProjectMember
+    from .models import GlobalRoleGrant
 
-    holders: set[uuid.UUID] = set(
-        (
-            await session.execute(
-                sa_select(ProjectMember.user_id).where(ProjectMember.role_id == role_id)
-            )
-        ).scalars()
-    )
-    from radd.modules.teams.models import ProjectTeam
-
-    team_ids = set(
-        (
-            await session.execute(
-                sa_select(ProjectTeam.team_id).where(ProjectTeam.role_id == role_id)
-            )
-        ).scalars()
-    )
+    # RADD-929: two more subject sources used to be read here (`project_members`
+    # for users, `project_teams` for teams). Both are grants, so the loop below
+    # collects every holder from one table.
+    holders: set[uuid.UUID] = set()
+    team_ids: set[uuid.UUID] = set()
     grant_rows = list(
         (
             await session.execute(
@@ -237,23 +226,29 @@ async def list_role_grants(
     user_id: uuid.UUID | None = None,
     group_id: uuid.UUID | None = None,
     space_id: uuid.UUID | None = None,
+    project_id: uuid.UUID | None = None,
 ) -> list[GlobalGrantRead]:
-    """Role grants, by SUBJECT (the team/user/group Roles tab) or by SPACE
-    (RADD-793).
+    """Role grants, by SUBJECT (the team/user/group Roles tab), by SPACE
+    (RADD-793), or by PROJECT (RADD-929).
 
-    Exactly one of team_id/user_id/group_id/space_id. The space direction is
-    the one an admin actually asks — "who has access to this space?" — and
-    asking it by walking every user was not an answer.
+    Exactly one of team_id/user_id/group_id/space_id/project_id. The scope
+    directions are the ones an admin actually asks — "who has access to this
+    space / this project?" — and asking that by walking every user was not an
+    answer. The project direction replaces the `project_members` +
+    `project_teams` reads: three lists that had to be read together to answer
+    one question.
     """
     await authz.require_member(session, user)
-    named = [x for x in (team_id, user_id, group_id, space_id) if x is not None]
+    named = [x for x in (team_id, user_id, group_id, space_id, project_id) if x is not None]
     if len(named) != 1:
         raise ConflictError(
             AuthEntity.GLOBAL_GRANT,
-            reason="exactly one of team_id/user_id/group_id/space_id",
+            reason="exactly one of team_id/user_id/group_id/space_id/project_id",
         )
     if space_id is not None:
         rows = await grants.grants_for_space(session, space_id)
+    elif project_id is not None:
+        rows = await grants.grants_for_project(session, project_id)
     else:
         rows = await grants.grants_for_subject(
             session, user_id=user_id, team_id=team_id, group_id=group_id
@@ -360,13 +355,18 @@ async def grant_help(
         from radd.modules.projects import service as projects_service
 
         project = await projects_service.get_project(session, project_id)
-        members = await roles.list_project_members(session, project.id)
-        role_map = await roles.roles_by_ids(session, {m.role_id for m in members})
+        # RADD-929: the project's grants, not its membership rows. This read a
+        # user-only table, so a delegate entitled through a team or a directory
+        # group was never named — the 403 said "ask an admin" to people whose
+        # own team lead could have fixed it.
+        project_grants = await grants.grants_for_project(session, project.id)
+        role_map = await roles.roles_by_ids(session, {g.role_id for g in project_grants})
         delegate_ids = [
-            m.user_id
-            for m in members
+            g.user_id
+            for g in project_grants
+            if g.user_id is not None
             if authz.holds_base(
-                expand_permissions(set(role_map[m.role_id].permissions)),
+                expand_permissions(set(role_map[g.role_id].permissions)),
                 Permission.MEMBER_CREATE,
             )
         ]
@@ -415,82 +415,3 @@ async def permission_catalog(session: Session, user: CurrentUser) -> list[Permis
             )
         )
     return catalog
-
-
-# --- direct project membership ---
-
-
-async def _member_read(session: Session, member: ProjectMember) -> ProjectMemberRead:
-    role = await roles.get_role(session, member.role_id)
-    return ProjectMemberRead(
-        project_id=member.project_id,
-        user_id=member.user_id,
-        role_id=member.role_id,
-        role=role.key,
-    )
-
-
-@project_member_router.get("/{project_id}/members", response_model=list[ProjectMemberRead])
-async def list_project_members(
-    project_id: uuid.UUID, session: Session, user: CurrentUser
-) -> list[ProjectMemberRead]:
-    project = await projects_service.get_project(session, project_id)
-    await authz.require(session, user, Permission.PROJECT_MANAGE, project=project)
-    members = await roles.list_project_members(session, project_id)
-    keys = await roles.roles_by_ids(session, {m.role_id for m in members})
-    return [
-        ProjectMemberRead(
-            project_id=m.project_id,
-            user_id=m.user_id,
-            role_id=m.role_id,
-            role=keys[m.role_id].key,
-        )
-        for m in members
-    ]
-
-
-@project_member_router.post(
-    "/{project_id}/members", response_model=ProjectMemberRead, status_code=201
-)
-async def add_project_member(
-    project_id: uuid.UUID, data: ProjectMemberUpsert, session: Session, user: CurrentUser
-) -> ProjectMemberRead:
-    project = await projects_service.get_project(session, project_id)
-    await authz.require(session, user, Permission.MEMBER_CREATE, project=project)
-    if not await authz.holds(session, user, Permission.ROLE_UPDATE):
-        await ensure_delegated_role_coverage(
-            session, user, await roles.get_role(session, data.role_id), project
-        )
-    member = await roles.add_project_member(session, project_id, data, actor_id=user.id)
-    return await _member_read(session, member)
-
-
-@project_member_router.patch(
-    "/{project_id}/members/{user_id}", response_model=ProjectMemberRead
-)
-async def update_project_member(
-    project_id: uuid.UUID,
-    user_id: uuid.UUID,
-    data: ProjectMemberRoleUpdate,
-    session: Session,
-    user: CurrentUser,
-) -> ProjectMemberRead:
-    project = await projects_service.get_project(session, project_id)
-    await authz.require(session, user, Permission.MEMBER_UPDATE, project=project)
-    if not await authz.holds(session, user, Permission.ROLE_UPDATE):
-        await ensure_delegated_role_coverage(
-            session, user, await roles.get_role(session, data.role_id), project
-        )
-    member = await roles.update_project_member(
-        session, project_id, user_id, data.role_id, actor_id=user.id
-    )
-    return await _member_read(session, member)
-
-
-@project_member_router.delete("/{project_id}/members/{user_id}", status_code=204)
-async def remove_project_member(
-    project_id: uuid.UUID, user_id: uuid.UUID, session: Session, user: CurrentUser
-) -> None:
-    project = await projects_service.get_project(session, project_id)
-    await authz.require(session, user, Permission.MEMBER_DELETE, project=project)
-    await roles.remove_project_member(session, project_id, user_id, actor_id=user.id)
