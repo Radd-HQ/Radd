@@ -530,6 +530,14 @@ function PointsField({ item, onPatch }: PickerProps) {
  * People options grouped by whether they can actually reach this project
  * (RADD-938).
  *
+ * A plain FUNCTION, not a component, and that is load-bearing. `SelectField`
+ * builds its list by walking its own `children` for `<option>`/`<optgroup>`
+ * elements (arrays and fragments included) — it cannot see inside a component
+ * element, which falls through the walk and is silently dropped. Shipped as
+ * `<PeopleOptions/>` in 0.25.0 and the assignee and reporter dropdowns rendered
+ * empty on the live instance: same failure mode the optgroup support was added
+ * to fix, reached a different way.
+ *
  * Everyone is still listed — hiding a colleague gives no reason and reads as a
  * bug — but the ones who cannot see the project are separated and labelled, so
  * assigning work to someone who will never find it is a visible choice rather
@@ -538,7 +546,7 @@ function PointsField({ item, onPatch }: PickerProps) {
  * `has_access === undefined` means the directory was fetched without a project
  * (no project context yet): one flat list, exactly as before.
  */
-function PeopleOptions({ users }: { users: UserSummary[] }) {
+function peopleOptions(users: UserSummary[]) {
   const active = users.filter((user) => user.active);
   const asked = active.some((user) => user.has_access !== undefined && user.has_access !== null);
   const option = (user: UserSummary) => (
@@ -569,7 +577,7 @@ function AssigneePicker({ item, onPatch }: PickerProps) {
       onChange={(event) => onPatch({ assignee_id: event.target.value || null })}
     >
       <option value="">Unassigned</option>
-      <PeopleOptions users={users.data ?? []} />
+      {peopleOptions(users.data ?? [])}
     </SelectField>
   );
 }
@@ -584,7 +592,7 @@ function ReporterPicker({ item, onPatch }: PickerProps) {
       onChange={(event) => onPatch({ reporter_id: event.target.value || null })}
     >
       <option value="">Unknown</option>
-      <PeopleOptions users={users.data ?? []} />
+      {peopleOptions(users.data ?? [])}
     </SelectField>
   );
 }
