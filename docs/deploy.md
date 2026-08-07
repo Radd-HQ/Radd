@@ -227,6 +227,49 @@ an encrypted tar, so `python -m radd.backup restore` is the supported path. With
 `RADD_BACKUP_ENCRYPTION=false` the payload is a plain tar containing
 `database.dump`, restorable with `pg_restore` directly.
 
+## Email service desk (RADD-951 wave)
+
+**Radd never terminates a mail protocol.** It reads a mailbox and hands messages
+to a relay; a hosted provider does the rest.
+
+The radd-hq.com deployment runs on **Migadu**, with three mailboxes:
+
+| mailbox | role |
+|---|---|
+| `help@radd-hq.com` | ticket intake — Radd POLLS this over IMAP |
+| `agent@radd-hq.com` | the identity Radd SENDS as (`RADD_SMTP_FROM`) |
+| `git@radd-hq.com` | Forgejo's own notifications; nothing to do with Radd |
+
+```
+customer ──▶ help@ (Migadu)  ──IMAP 993──▶ Radd poller ──▶ issue / comment
+Radd ──SMTP 587──▶ Migadu ──▶ participants     From: agent@   Reply-To: help@
+```
+
+**Why polling rather than a push webhook here.** The ISP drops port 25 in both
+directions, so this host cannot receive SMTP — which is what the original design
+routed around with Cloudflare Email Routing and an HTTPS Worker. IMAP was never
+blocked by that: it is an *outbound* connection on 993. With a real mailbox the
+poller is simply fewer moving parts, and since RADD-951 it runs through the same
+`intake.accept` core as the webhook, so it inherits threading, dedup, quote
+stripping, attachments and the loop guards.
+
+`POST /api/v1/integrations/email` remains for push sources (a Gmail adapter, or
+a Worker if one is ever wanted). With `RADD_EMAIL_INGEST_SECRET` unset it
+**rejects every request** — an unused endpoint is a closed one.
+
+Settings that matter, and the trap in each:
+
+| variable | value here | why it matters |
+|---|---|---|
+| `RADD_MAIL_IMAP_HOST/PORT/USERNAME/PASSWORD` | Migadu, `help@` | unset host = intake is off entirely |
+| `RADD_MAIL_PROJECT_KEY` | a real project key | naming no project makes every new ticket fail; the webhook answers 503 rather than bouncing the sender |
+| `RADD_SMTP_FROM` | `Radd <agent@radd-hq.com>` | also the self-loop guard's comparison — mail from this address arriving in `help@` is dropped |
+| `RADD_EMAIL_INGEST_ADDRESS` | `help@radd-hq.com` | the `Reply-To` on every outbound message, and the second half of the loop guard |
+
+Plain `help@`, deliberately not `help+token@`: sub-addressing is rewritten or
+stripped by exactly the corporate mail systems this feature targets, which is
+why threading matches on `In-Reply-To`/`References` instead (RADD-954).
+
 ## Environment reference (the load-bearing subset)
 
 Every setting lives in `server/src/radd/config.py` (env prefix `RADD_`,
@@ -241,7 +284,8 @@ Every setting lives in `server/src/radd/config.py` (env prefix `RADD_`,
 | `RADD_WEB_DIST` | repo `web/dist` | built SPA to serve |
 | `RADD_MODULES` | all | ordered module assembly (the plugin system) |
 | `RADD_ATTACHMENT_STORAGE` / `RADD_S3_*` | filesystem | attachment backend |
-| `RADD_SMTP_*` | disabled | email digests |
+| `RADD_SMTP_*` | disabled | outbound mail: digests, acks, comment replies |
+| `RADD_EMAIL_INGEST_SECRET` | disabled | HMAC for `POST /integrations/email`. **Empty rejects everything** |
 | `RADD_OIDC_*` | disabled | SSO (spec 40) |
 | `RADD_LDAP_*` | disabled | AD directory login (spec 42) |
 | `RADD_AI_*` | disabled | AI layer (spec 46) |

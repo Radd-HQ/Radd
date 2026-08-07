@@ -300,6 +300,38 @@ async def test_a_list_address_is_not_treated_as_a_loop(db, world):
     assert outcome.result is intake.Result.CREATED
 
 
+def test_our_own_addresses_cover_every_transport(monkeypatch):
+    """ONE definition (RADD-959). It was two — the webhook built the set from the
+    from-address plus the ingest address, the poller from the from-address plus
+    the IMAP account — so which addresses counted as "us" depended on how the
+    message arrived. Under the Migadu topology BOTH matter: Radd sends as
+    `agent@` and polls `help@`, and mail from the first landing in the second is
+    exactly the loop."""
+    monkeypatch.setattr(settings, "smtp_from_address", "Radd <agent@radd-hq.com>")
+    monkeypatch.setattr(settings, "email_ingest_address", "help@radd-hq.com")
+    monkeypatch.setattr(settings, "mail_imap_username", "HELP@radd-hq.com")
+    assert loops.own_addresses() == {"agent@radd-hq.com", "help@radd-hq.com"}
+
+
+async def test_mail_from_the_sending_identity_into_the_polled_box_is_a_loop(db, world, monkeypatch):
+    """The failure the Migadu topology makes reachable: Radd sends as `agent@`,
+    polls `help@`, and its own message arrives back in the box it reads."""
+    monkeypatch.setattr(settings, "smtp_from_address", "Radd <agent@radd-hq.com>")
+    monkeypatch.setattr(settings, "email_ingest_address", "help@radd-hq.com")
+    monkeypatch.setattr(settings, "mail_imap_username", "help@radd-hq.com")
+    _, project, _ = world
+    outcome = await intake.accept(
+        db,
+        parsing.parse_email(
+            raw_message(sender="Radd <agent@radd-hq.com>", message_id="<echo@radd>")
+        ),
+        raw=b"",
+        default_project_key=project.key,
+        own_addresses=loops.own_addresses(),
+    )
+    assert outcome.result is intake.Result.IGNORED
+
+
 def test_the_rate_limiter_stops_a_runaway_sender():
     limiter = loops.RateLimiter(limit=3, window=60.0)
     assert [limiter.allow("bot@x.com", now=0.0) for _ in range(4)] == [True, True, True, False]

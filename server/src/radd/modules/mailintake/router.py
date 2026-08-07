@@ -97,7 +97,7 @@ async def ingest_email(
             plan,
             raw=raw,
             default_project_key=settings.mail_project_key,
-            own_addresses=_own_addresses(),
+            own_addresses=loops.own_addresses(),
             envelope_from=x_radd_envelope_from,
         )
         await session.commit()
@@ -124,15 +124,6 @@ def _status(response: Response, code: int, body: dict) -> dict:
     response.status_code = code
     return body
 
-
-def _own_addresses() -> set[str]:
-    """Every address Radd sends AS — what the self-loop guard compares against."""
-    from email.utils import parseaddr
-
-    addresses = {parseaddr(settings.smtp_from_address)[1].lower()}
-    if settings.email_ingest_address:
-        addresses.add(settings.email_ingest_address.lower())
-    return {address for address in addresses if address}
 
 
 @router.get("/items/{item_id}/mail-contact", response_model=MailContactRead)

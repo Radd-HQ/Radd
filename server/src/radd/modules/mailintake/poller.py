@@ -17,7 +17,7 @@ import logging
 from radd.config import settings
 from radd.db import SessionLocal
 
-from . import intake, parsing, service
+from . import intake, loops, parsing, service
 from .types import SEEN_FLAG
 
 logger = logging.getLogger(__name__)
@@ -84,7 +84,13 @@ async def run_once() -> int:
                     plan,
                     raw=raw,
                     default_project_key=settings.mail_project_key,
-                    own_addresses=own_addresses(),
+                    own_addresses=loops.own_addresses(),
+                    # IMAP exposes no envelope sender, so the rate limiter is
+                    # keyed on the FROM HEADER here — which is forgeable. That
+                    # is acceptable for a circuit breaker (a loop's messages
+                    # carry a consistent From, and the Auto-Submitted and
+                    # self-address guards do not depend on it) and would not be
+                    # acceptable for anything that granted access.
                     envelope_from=plan.sender_email,
                 )
                 await session.commit()
@@ -104,12 +110,3 @@ async def run_once() -> int:
     await asyncio.to_thread(mark_seen, processed)
     return len(processed)
 
-
-def own_addresses() -> set[str]:
-    """Every address Radd sends AS — the self-loop guard's comparison set."""
-    from email.utils import parseaddr
-
-    found = {parseaddr(settings.smtp_from_address)[1].lower()}
-    if settings.mail_imap_username:
-        found.add(settings.mail_imap_username.lower())
-    return {address for address in found if address}
