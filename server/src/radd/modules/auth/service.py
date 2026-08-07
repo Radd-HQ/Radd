@@ -103,6 +103,32 @@ async def create_user(
     return user
 
 
+def _user_filters(
+    query,
+    *,
+    q: str | None,
+    source: UserSource | None,
+    active: bool | None,
+):
+    """THE directory filter (RADD-936). One builder, two callers.
+
+    `list_users` and `count_users` used to construct this predicate separately,
+    and the copies drifted: the count filtered on `User.is_active`, a column that
+    does not exist, so every paginated + status-filtered request 500'd — which is
+    exactly and only what Settings → Users sends. Neither `?active=true` nor
+    `?limit=25` alone touches the broken line, so nothing else on the instance
+    ever hit it.
+    """
+    if q:
+        pattern = ilike_term(q)
+        query = query.where(User.email.ilike(pattern) | User.name.ilike(pattern))
+    if source is not None:
+        query = query.where(User.source == source.value)
+    if active is not None:
+        query = query.where(User.active == active)
+    return query
+
+
 async def list_users(
     session: AsyncSession,
     q: str | None = None,
@@ -114,14 +140,9 @@ async def list_users(
     """User directory, optionally filtered (spec 84): q matches email OR name
     (case-insensitive substring, wildcards escaped), source/active match
     exactly; limit/offset page (RADD-883)."""
-    query = select(User).order_by(User.created_at)
-    if q:
-        pattern = ilike_term(q)
-        query = query.where(User.email.ilike(pattern) | User.name.ilike(pattern))
-    if source is not None:
-        query = query.where(User.source == source.value)
-    if active is not None:
-        query = query.where(User.active == active)
+    query = _user_filters(
+        select(User).order_by(User.created_at), q=q, source=source, active=active
+    )
     if limit is not None:
         query = query.offset(offset).limit(limit)
     return list((await session.execute(query)).scalars())
@@ -133,15 +154,13 @@ async def count_users(
     source: UserSource | None = None,
     active: bool | None = None,
 ) -> int:
-    """Pre-pagination count for the directory/admin lists (RADD-883)."""
-    query = select(func.count()).select_from(User)
-    if q:
-        pattern = ilike_term(q)
-        query = query.where(User.email.ilike(pattern) | User.name.ilike(pattern))
-    if source is not None:
-        query = query.where(User.source == source.value)
-    if active is not None:
-        query = query.where(User.is_active == active)
+    """Pre-pagination count for the directory/admin lists (RADD-883). Shares
+    `_user_filters` with `list_users` — the count and the page must answer the
+    same question, and they stopped doing so once the predicate was written
+    twice."""
+    query = _user_filters(
+        select(func.count()).select_from(User), q=q, source=source, active=active
+    )
     return (await session.execute(query)).scalar_one()
 
 

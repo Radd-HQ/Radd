@@ -134,3 +134,35 @@ async def test_directory_pagination_and_count(db):
     rows = await auth_service.list_users(db, q=f"Directory {tag}", limit=3, offset=0)
     assert len(rows) == 3
     assert await auth_service.count_users(db, q=f"Directory {tag}") == 4
+
+
+async def test_directory_count_honours_every_filter(db):
+    """RADD-936: the count and the page must answer the SAME question.
+
+    `count_users` had its own copy of the predicate and filtered on
+    `User.is_active`, a column that does not exist — so `?limit=&active=` 500'd,
+    which is precisely and only what Settings → Users sends. Neither parameter
+    alone reaches the broken branch, which is why every existing test passed.
+    """
+    tag = _tag()
+    for i in range(5):
+        db.add(
+            User(
+                email=f"filt-{tag}-{i}@example.com",
+                name=f"Filtered {tag} {i}",
+                instance_role=InstanceRole.MEMBER.value,
+                active=i < 3,
+            )
+        )
+    await db.flush()
+
+    for active, expected in ((None, 5), (True, 3), (False, 2)):
+        assert await auth_service.count_users(db, q=f"Filtered {tag}", active=active) == expected
+        # The count describes the unpaginated set the page is a window onto.
+        page = await auth_service.list_users(
+            db, q=f"Filtered {tag}", active=active, limit=2, offset=0
+        )
+        assert len(page) == min(2, expected)
+        assert len(
+            await auth_service.list_users(db, q=f"Filtered {tag}", active=active)
+        ) == expected
