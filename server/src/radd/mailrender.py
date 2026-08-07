@@ -271,6 +271,29 @@ def digest_line(entry: DigestEntry, *, divider: bool = True) -> RenderedMail:
     )
 
 
+def notice(entry: DigestEntry, *, reason: str) -> RenderedMail:
+    """ONE notification as its own email — the per-event message, as opposed to
+    the batched `digest` (RADD-968).
+
+    Same vocabulary, none of the batching chrome: the footer is the recipient's
+    own reason, because "you have email digests on" is not why this arrived.
+    A comment has its own renderer (`comment_reply`) that quotes the full body;
+    this is what every other type gets.
+    """
+    head = f"{entry.subject} — {entry.headline}" if entry.subject else entry.headline
+    body = [head, ""]
+    if entry.excerpt:
+        body.append(f'"{entry.excerpt}"')
+    if entry.url:
+        body.append(f"View the issue: {entry.url}")
+    body.append(reason)
+    text = "\n".join(body)
+    content = digest_line(entry, divider=False).html
+    if entry.url:
+        content += _button(entry.url, "View issue")
+    return RenderedMail(text=text, html=_document(content, footer=_esc(reason)))
+
+
 def digest(entries: Sequence[DigestEntry], *, inbox: str) -> RenderedMail:
     """The batched notification email. `inbox` is the recipient's inbox URL —
     the one link that is always right when a line's own is missing."""

@@ -1,15 +1,17 @@
-"""One mail rendering layer (RADD-967).
+"""One mail rendering layer (RADD-967), narrowed to the requester (RADD-968).
 
-The outbound reply had NO tests before this — which is how it shipped for two
+The outbound reply had NO tests before RADD-967 — which is how it shipped for two
 waves as the bare comment body: no author, no issue key, no link, plain text
 only. So this file covers both halves of that gap.
 
-- **Who** gets a reply: the watcher set minus the author, the SYSTEM actor never,
-  inactive/emailless accounts never, and the external contact added without
-  displacing a watcher who happens to share the address.
+- **Who** gets an outbound reply: the external `mail_contact`, and only them.
+  RADD-968 deleted the watcher loop here — it was a SECOND fan-out beside the
+  one that decides the inbox, and the two disagreed about permissions, teams and
+  mutes. Users are mailed by `notify.mailer` now (`test_notify_mailer.py`), so
+  what is pinned here is the leg notify structurally cannot serve plus the guard
+  against mailing a staff member twice.
 - **What it says**: text AND html, both carrying the author, the body and the
-  issue URL; the footer differing by why the recipient is on the thread; the
-  subject byte-stable so nobody's client splits the conversation.
+  issue URL; the footer differing by why the recipient is on the thread.
 - **Escaping**: a comment is markdown, never markup — a `<script>` in a comment
   and a `<b>` in someone's display name arrive as text in the html part.
 - **The digest**: nine notification types, nine distinct lines (there used to be
@@ -36,9 +38,16 @@ from radd.modules.comments.types import CommentEntity, CommentEvent
 from radd.modules.events import service as events_service
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate
-from radd.modules.mailintake import outbound, reply, service as mail_service, threading
-from radd.modules.mailintake.types import MailDirection, MailRecipientKind
-from radd.modules.notify import emailer, service as notify_service
+from radd.modules.mailintake import (
+    outbound,
+    reply,
+    service as mail_service,
+    threading,
+    transport as mail_transport,
+)
+from radd.modules.mailintake.models import MailSender
+from radd.modules.mailintake.types import MailDirection, MailRecipientKind, MailSenderKind
+from radd.modules.notify import emailer, lines, service as notify_service
 from radd.modules.notify.models import Notification
 from radd.modules.notify.types import NotificationType
 from radd.modules.projects import service as projects_service
@@ -91,48 +100,69 @@ async def _user(db, *, name: str, email: str, active: bool = True) -> User:
     return user
 
 
+def _sender_row() -> MailSender:
+    """A sender row, never added to a session — `_thread_headers` only reads it."""
+    return MailSender(
+        name="Test relay",
+        kind=MailSenderKind.SMTP.value,
+        from_address="agent@radd-hq.com",
+        reply_to="help@radd-hq.com",
+        host="smtp.test",
+        port=25,
+    )
+
+
 # --- who gets it -------------------------------------------------------------
 
 
-async def test_the_recipient_set_is_watchers_minus_the_author_plus_the_contact(db, world):
+async def test_the_outbound_reply_goes_to_the_contact_and_no_watcher(db, world):
+    """RADD-968: watchers are notify's fan-out, not this one.
+
+    Mailing them from here too meant a watcher who had lost `item.read` still
+    received the comment, a participant-TEAM member received nothing, and a muted
+    type was muted in-app only — three disagreements between the mail and the
+    inbox that only one fan-out can end.
+    """
     agent, _project, item = world
     suffix = uuid.uuid4().hex[:8]
     watcher = await _user(db, name="Wanda Watcher", email=f"wanda-{suffix}@example.com")
-    departed = await _user(
-        db, name="Gone", email=f"gone-{suffix}@example.com", active=False
-    )
-    # An account with no address cannot be mailed; it must not become an empty To.
-    addressless = await _user(db, name="No Mail", email="")
-    await notify_service.add_watchers(
-        db, item.id, [agent.id, watcher.id, departed.id, addressless.id, SYSTEM_ACTOR_ID]
-    )
+    await notify_service.add_watchers(db, item.id, [agent.id, watcher.id, SYSTEM_ACTOR_ID])
     await mail_service.upsert_contact(
         db, item.id, email="Customer@vip.example.com", name="Cass Customer"
     )
 
-    recipients = await reply.recipients_for(db, item.id, agent.id)
+    recipients = await reply.recipients_for(db, item.id)
 
-    by_email = {r.email.lower(): r for r in recipients}
-    assert set(by_email) == {watcher.email.lower(), "customer@vip.example.com"}
-    assert by_email[watcher.email.lower()].kind is MailRecipientKind.WATCHER
-    assert by_email["customer@vip.example.com"].kind is MailRecipientKind.REQUESTER
+    assert [(r.email, r.kind) for r in recipients] == [
+        ("customer@vip.example.com", MailRecipientKind.REQUESTER)
+    ]
 
 
-async def test_a_watcher_who_is_also_the_contact_keeps_the_watcher_wording(db, world):
-    """`setdefault`, not assignment: a staff member who raised the ticket by
-    email is on it as a colleague, and telling them "you contacted us" would be
-    both wrong and a second copy of the same message."""
-    agent, _project, item = world
+async def test_an_item_with_no_contact_mails_nobody_from_here(db, world):
+    """The whole leg is the external requester. No contact, no outbound reply —
+    the people on the issue are reached by notify."""
+    _agent, _project, item = world
+    await notify_service.add_watchers(db, item.id, [(await _user(db, name="W", email=f"w-{uuid.uuid4().hex[:8]}@example.com")).id])
+
+    assert await reply.recipients_for(db, item.id) == ()
+
+
+async def test_a_contact_who_is_an_active_user_is_skipped_not_addressed_as_a_customer(db, world):
+    """A staff member who once raised a ticket by email is BOTH a contact and a
+    user. Notify mails them as a colleague; sending from here as well would be a
+    second copy of the same comment, addressed "you contacted us"."""
+    _agent, _project, item = world
     staff = await _user(
         db, name="Sam Staff", email=f"sam-{uuid.uuid4().hex[:8]}@example.com"
     )
-    await notify_service.add_watchers(db, item.id, [staff.id])
     await mail_service.upsert_contact(db, item.id, email=staff.email.upper(), name="Sam")
 
-    recipients = await reply.recipients_for(db, item.id, agent.id)
+    assert await reply.recipients_for(db, item.id) == ()
 
-    assert len(recipients) == 1
-    assert recipients[0].kind is MailRecipientKind.WATCHER
+    # A DEPARTED account is not a person notify can mail, so the contact stands.
+    staff.active = False
+    await db.flush()
+    assert [r.email for r in await reply.recipients_for(db, item.id)] == [staff.email.lower()]
 
 
 # --- what it says ------------------------------------------------------------
@@ -147,13 +177,12 @@ def _reply(*, author: str = "Ada Agent", body: str = "We have restarted it.") ->
         author=author,
         item=mailrender.ItemMail(key="MR-1", title="Printer on fire", base_url=BASE_URL),
         recipients=(),
-        in_reply_to=None,
     )
 
 
 def test_both_parts_name_the_author_quote_the_comment_and_link_the_issue():
     planned = _reply()
-    message = reply.render(planned, reply.Recipient("wanda@example.com", "Wanda"))
+    message = reply.render(planned, reply.Recipient("cass@vip.example.com", "Cass"))
     for part in (message.text, message.html):
         assert "Ada Agent" in part
         assert "We have restarted it." in part
@@ -162,16 +191,27 @@ def test_both_parts_name_the_author_quote_the_comment_and_link_the_issue():
 
 
 def test_the_footer_says_why_this_address_is_on_the_thread():
+    """One comment, one renderer, two channels — and the footer is the only
+    thing that differs. A watcher is a colleague following an issue they can
+    open; the requester is a customer with no account whose only interface is
+    replying. One "you are receiving this" line cannot honestly say both, which
+    is why the body is composed per recipient rather than once.
+    """
     planned = _reply()
-    watcher = reply.render(planned, reply.Recipient("wanda@example.com", "Wanda"))
     requester = reply.render(
         planned,
         reply.Recipient("cass@vip.example.com", "Cass", MailRecipientKind.REQUESTER),
     )
-    assert "watching MR-1" in watcher.text
+    # RADD-968: the watcher half is notify's, and it passes its OWN wording —
+    # `mailrender` takes the reason as text so neither module imports the other.
+    watcher = mailrender.comment_reply(
+        planned.item,
+        author=planned.author,
+        body=planned.body,
+        reason=lines.MAIL_REASON_TEMPLATE.format(key="MR-1"),
+    )
+    assert "follow MR-1" in watcher.text
     assert "contacted us about MR-1" in requester.text
-    # Same comment, different footer — that is the ONLY thing that differs, and
-    # it is why the body is composed per address rather than once.
     assert watcher.text != requester.text
     assert requester.html != watcher.html
 
@@ -181,7 +221,7 @@ def test_nothing_a_person_typed_survives_as_markup():
     would mean shipping user-authored html into a mail client."""
     message = reply.render(
         _reply(author="<b>Eve</b>", body="<script>alert(1)</script>\nsecond line"),
-        reply.Recipient("wanda@example.com", "Wanda"),
+        reply.Recipient("cass@vip.example.com", "Cass"),
     )
     assert "<script>" not in message.html
     assert "<b>Eve</b>" not in message.html
@@ -198,18 +238,11 @@ def test_a_trailing_slash_on_the_base_url_does_not_double_up():
     assert mailrender.inbox_url(BASE_URL + "//") == f"{BASE_URL}/inbox"
 
 
-async def test_the_planned_reply_keeps_the_thread_subject_and_names_the_author(db, world):
-    """Subject continuity is untouched by the rewrite: it is the ORIGINAL stored
-    subject with one `Re: `, because re-deriving it from the item title splits
-    the conversation in every participant's client on the next rename."""
+async def test_the_planned_reply_names_the_author_and_addresses_the_contact(db, world):
+    """The plan is the ingredients, not a finished message: threading and the
+    subject are resolved by the transport at SEND time (RADD-968), so nothing
+    here can go stale between planning and delivery."""
     agent, _project, item = world
-    await threading.record(
-        db,
-        message_id="<orig@ext>",
-        item_id=item.id,
-        direction=MailDirection.INBOUND,
-        subject="Printer on fire again",
-    )
     await mail_service.upsert_contact(
         db, item.id, email=f"cass-{uuid.uuid4().hex[:8]}@vip.example.com", name="Cass"
     )
@@ -226,14 +259,38 @@ async def test_the_planned_reply_keeps_the_thread_subject_and_names_the_author(d
     planned = await outbound._plan_reply(db, events[0])
 
     assert planned is not None
-    assert planned.subject == "Re: Printer on fire again"
     # The author ref the event has always carried, and outbound never read.
     assert planned.author == "Ada Agent"
     assert planned.item.key.endswith(f"-{item.number}")
     assert planned.item.base_url == BASE_URL + "/"
+    assert [r.kind for r in planned.recipients] == [MailRecipientKind.REQUESTER]
     message = reply.render(planned, planned.recipients[0])
     assert "Ada Agent" in message.text
     assert f"{BASE_URL}/issues/{planned.item.key}" in message.html
+
+
+async def test_the_thread_subject_survives_a_rename(db, world):
+    """Subject continuity, now pinned at the seam that decides it: the ORIGINAL
+    stored subject with one `Re: `, never re-derived from the item title —
+    re-deriving splits the conversation in every participant's client on the
+    next rename."""
+    _agent, _project, item = world
+    await threading.record(
+        db,
+        message_id="<orig@ext>",
+        item_id=item.id,
+        direction=MailDirection.INBOUND,
+        subject="Printer on fire again",
+    )
+    row = _sender_row()
+    headers, subject = await mail_transport._thread_headers(
+        db, item.id, row=row, subject="[MR-1] A totally different title"
+    )
+
+    assert subject == "Re: Printer on fire again"
+    assert headers["In-Reply-To"] == "<orig@ext>"
+    assert headers["References"] == "<orig@ext>"
+    assert headers["Reply-To"] == row.reply_to
 
 
 # --- the digest --------------------------------------------------------------
@@ -270,32 +327,32 @@ def _notification(type_: NotificationType, payload: dict) -> Notification:
 
 
 def test_every_notification_type_gets_its_own_line():
-    """The bug this closes: `_line` had four branches and an else, so an SLA
+    """The bug this closes: the headline had four branches and an else, so an SLA
     breach, an approval request, an automation message and a wiki page edit all
     arrived as "Someone commented"."""
-    lines = {
+    rendered = {
         type_: mailrender.digest_line(
-            emailer._entry(_notification(type_, payload), {})
+            lines.entry(_notification(type_, payload), {})
         ).text
         for type_, payload in DIGEST_PAYLOADS.items()
     }
-    assert set(lines) == set(NotificationType), "a type with no representative payload"
-    assert len(set(lines.values())) == len(NotificationType), f"duplicate lines: {lines}"
-    assert "Ada Agent assigned you" in lines[NotificationType.ASSIGNED]
-    assert "To Do → In Progress" in lines[NotificationType.STATE_CHANGED]
-    assert "breached" in lines[NotificationType.SLA_BREACH]
-    assert "due soon" in lines[NotificationType.SLA_DUE_SOON]
-    assert "Escalated to tier 2" in lines[NotificationType.AUTOMATION]
-    assert "requested your approval to move to Released" in lines[NotificationType.APPROVAL]
+    assert set(rendered) == set(NotificationType), "a type with no representative payload"
+    assert len(set(rendered.values())) == len(NotificationType), f"duplicate lines: {rendered}"
+    assert "Ada Agent assigned you" in rendered[NotificationType.ASSIGNED]
+    assert "To Do → In Progress" in rendered[NotificationType.STATE_CHANGED]
+    assert "breached" in rendered[NotificationType.SLA_BREACH]
+    assert "due soon" in rendered[NotificationType.SLA_DUE_SOON]
+    assert "Escalated to tier 2" in rendered[NotificationType.AUTOMATION]
+    assert "requested your approval to move to Released" in rendered[NotificationType.APPROVAL]
 
 
 def test_an_issue_line_links_the_issue_and_a_page_line_links_the_page():
     """`page_updated` carries no item at all (RADD-719) — it used to be rendered
     with `/issues/` and an empty key, i.e. a link to nothing."""
-    commented = emailer._entry(
+    commented = lines.entry(
         _notification(NotificationType.COMMENTED, DIGEST_PAYLOADS[NotificationType.COMMENTED]), {}
     )
-    page = emailer._entry(
+    page = lines.entry(
         _notification(
             NotificationType.PAGE_UPDATED, DIGEST_PAYLOADS[NotificationType.PAGE_UPDATED]
         ),
@@ -308,7 +365,7 @@ def test_an_issue_line_links_the_issue_and_a_page_line_links_the_page():
 def test_a_notification_with_no_item_key_carries_no_link():
     """Automation notifications carry `{message, rule}` and nothing else, so the
     line degrades to the message rather than to `/issues/` with nothing after."""
-    entry = emailer._entry(
+    entry = lines.entry(
         Notification(
             user_id=uuid.uuid4(),
             type=NotificationType.AUTOMATION.value,
@@ -331,9 +388,9 @@ def test_the_actor_is_resolved_from_the_id_when_the_payload_has_no_name():
         key: value for key, value in notification.payload.items() if key != "actor_name"
     }
     notification.actor_id = actor_id
-    anonymous = mailrender.digest_line(emailer._entry(notification, {})).text
+    anonymous = mailrender.digest_line(lines.entry(notification, {})).text
     assert "Someone edited the page" in anonymous
-    named = emailer._entry(notification, {actor_id: "Hussein Jarrar"})
+    named = lines.entry(notification, {actor_id: "Hussein Jarrar"})
     line = mailrender.digest_line(named).text
     assert "Hussein Jarrar edited the page" in line
     # The title is the line's subject (and its link), printed once.

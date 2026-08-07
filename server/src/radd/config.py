@@ -69,6 +69,13 @@ class Settings(BaseSettings):
     # Email digests: one batched email per user per interval. Empty smtp_host = disabled.
     notify_email_interval: float = 300.0
     notify_email_max_age_hours: int = 24
+    # Per-event mail (RADD-968): the second, FASTER loop that mails the
+    # notification rows whose type is in the immediate-email set, so a comment
+    # reaches its watchers now rather than at the next digest window. Rows it
+    # sends are stamped `emailed_at`, which is what keeps the digest from
+    # repeating them.
+    notify_mail_poll_interval: float = 5.0
+    notify_mail_batch: int = 100
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_username: str = ""

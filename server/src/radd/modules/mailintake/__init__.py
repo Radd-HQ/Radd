@@ -12,15 +12,17 @@ plugin = RaddPlugin(
     description="Email-to-issue intake (spec 47) + the requester loop (spec 62): an "
     "IMAP poller turning unseen messages into items (or reply comments on a keyed "
     "subject) as the system actor, mail_contacts for external requesters, ack "
-    "emails, and an outbound consumer mailing public comments back to the contact.",
+    "emails, an outbound consumer mailing public comments back to the contact, and "
+    "the `service.send_item_mail` transport every module mails an issue through.",
     # attachments: mail parts become item attachments through the spec-102
     # polymorphic seam (RADD-956).
-    # attachments: mail parts become item attachments (RADD-956).
-    # notify: watchers ARE the participant set, so outbound reuses that fan-out
-    # rather than growing a second recipient model that would drift (RADD-955).
+    # notify is GONE from this list (RADD-968): outbound used to mail notify's
+    # watcher set, a second fan-out beside the one deciding the inbox. Users are
+    # mailed by notify now, which reaches this module the other way — a deferred,
+    # feature-detected call to `service.send_item_mail`.
     depends_on=(
         "projects", "auth", "items", "comments", "automations", "events",
-        "attachments", "notify",
+        "attachments",
     ),
     # RADD-961: the AI routing rule reaches `ai` DEFERRED and feature-detected —
     # the module is optional and disableable, and a missing one must fall through

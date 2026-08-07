@@ -1,8 +1,13 @@
-"""Public seam for mail contacts + the acknowledgment email (spec 62).
+"""Public seam for mail contacts, the acknowledgment, and the item-mail transport.
 
 Other modules (forms' public submits, the csat sender's recipient resolution
 [spec 65]; automations in spec 66) address external requesters exclusively
 through these functions — the `mail_contacts` table stays private to this module.
+
+`send_item_mail` / `outbound_configured` are re-exported from `transport.py`
+(RADD-968): they are the seam NOTIFY calls to mail a user about an issue, and a
+caller looks for a module's public functions here, not in a file named after the
+implementation.
 """
 
 import asyncio
@@ -15,7 +20,16 @@ from radd import mailrender, smtp
 from radd.config import settings
 
 from .models import MailContact
+from .transport import outbound_configured, send_item_mail
 from .types import ACK_SUBJECT_TEMPLATE
+
+__all__ = [
+    "contact_for_item",
+    "outbound_configured",
+    "send_ack",
+    "send_item_mail",
+    "upsert_contact",
+]
 
 logger = logging.getLogger(__name__)
 
@@ -81,3 +95,4 @@ async def send_ack(*, email: str, name: str, item_key: str, title: str, message_
         )
     except Exception:
         logger.exception("mailintake: ack send to %s for %s failed", email, item_key)
+

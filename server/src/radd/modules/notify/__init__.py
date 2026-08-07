@@ -8,9 +8,13 @@ from .types import NotifyEvent
 plugin = RaddPlugin(
     name="notify",
     description="Notifications + watchers: an outbox consumer fanning item/comment "
-    "events into per-user in-app notifications and email digests.",
+    "events into per-user in-app notifications, a per-event mailer, and email digests.",
     depends_on=("events", "projects", "auth", "items", "comments", "teams"),
-    weak_depends=("participants",),
+    # participants: the recipient union (spec 72), resolved at fan-out time.
+    # mailintake: the mail TRANSPORT (RADD-968) — `service.send_item_mail`,
+    # reached deferred + feature-detected so a disabled/absent mail plugin
+    # degrades to the env relay rather than silencing notification email.
+    weak_depends=("participants", "mailintake"),
     routers=(router,),
     on_startup=(dispatcher.start,),
     on_shutdown=(dispatcher.stop,),

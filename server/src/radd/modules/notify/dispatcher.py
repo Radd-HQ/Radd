@@ -1,16 +1,26 @@
-"""In-process loops (consumer + email digests), mirroring webhooks/dispatcher.py.
-Moves to the dedicated worker entrypoint when that lands (single-instance today)."""
+"""In-process loops (consumer + per-event mail + email digests), mirroring
+webhooks/dispatcher.py. Moves to the dedicated worker entrypoint when that lands
+(single-instance today)."""
 
 from radd.config import settings
 from radd.worker import PeriodicLoop
 
-from . import consumer, emailer
+from . import consumer, emailer, mailer
 
 _consumer_loop = PeriodicLoop(
     consumer.run_once,
     interval=lambda: settings.notify_poll_interval,
     name="notify-consumer",
     enabled=lambda: settings.run_workers,  # web-only process skips (spec 48 worker split)
+)
+# RADD-968: the fast half of the email pair — the types that earn their own
+# message the moment they happen. It stamps `emailed_at`, which is exactly what
+# the digest's selection already skips, so the two never double-send.
+_mail_loop = PeriodicLoop(
+    mailer.run_once,
+    interval=lambda: settings.notify_mail_poll_interval,
+    name="notify-mailer",
+    enabled=lambda: settings.run_workers,
 )
 _email_loop = PeriodicLoop(
     emailer.run_once,
@@ -23,9 +33,11 @@ _email_loop = PeriodicLoop(
 
 async def start() -> None:
     await _consumer_loop.start()
+    await _mail_loop.start()
     await _email_loop.start()
 
 
 async def stop() -> None:
     await _consumer_loop.stop()
+    await _mail_loop.stop()
     await _email_loop.stop()
