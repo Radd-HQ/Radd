@@ -36,7 +36,6 @@ import { useConfirm } from "../ConfirmDialog";
 import { DropdownMenu } from "../DropdownMenu";
 import { PageExtensionCtx } from "../../lib/page-extensions";
 import { PageBacklinksPanel } from "./PageBacklinksPanel";
-import { PageChildIndex } from "./PageChildIndex";
 import { PageComments } from "./PageComments";
 import { PageWatchButton } from "./PageWatchButton";
 import { PageInlineComments } from "./PageInlineComments";
@@ -449,18 +448,14 @@ export function PageView({
             <PageLinkedItems pageId={page.id} canWrite={canWrite} />
           </section>
 
-          {/* RADD-713: shown on every page, not only where someone remembered
-              to place the extension — "what points at me" is the direction a
-              wiki is navigated, and it cannot be opt-in per page. The
-              `radd:backlinks` extension exists for putting it INLINE instead. */}
-          {/* RADD-714: what is under this page, for anyone who arrived from
-              search or a link rather than the tree. */}
-          <PageChildIndex
-            pageId={page.id}
-            spaceId={page.space_id}
-            spaceSlug={spaceSlug ?? ""}
-            body={page.body}
-          />
+          {/* RADD-944 deleted the automatic subpage index that used to sit
+              here. Children are the page tree's job, and the author's, via
+              `radd:children`/`radd:toc` — RADD-714's own suppression rule
+              (stand aside when an extension is present) conceded that the
+              placed version was the better one. Backlinks stay automatic
+              below: "what points at me" cannot be expressed inline any other
+              way, which is why `radd:backlinks` is the INLINE alternative
+              rather than the only way to get them. */}
 
           {/* RADD-726: anchored threads beside the passage they are about. */}
           <PageInlineComments
