@@ -44,7 +44,7 @@ from radd.modules.items.schemas import ItemCreate
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 
-from . import loops, quoting, service, threading
+from . import loops, quoting, routing, service, threading
 from .parsing import EmailPlan, MailAttachment
 from .types import (
     EMAIL_LABEL,
@@ -122,6 +122,7 @@ async def accept(
     default_project_key: str,
     own_addresses: set[str],
     envelope_from: str = "",
+    source_id: uuid.UUID | None = None,
 ) -> Outcome:
     """Take one parsed message all the way to an issue or a comment.
 
@@ -155,7 +156,16 @@ async def accept(
     target = await _resolve_thread(session, plan)
     if target is not None:
         return await _append(session, plan, raw=raw, item_id=target)
-    return await _create(session, plan, raw=raw, default_project_key=default_project_key)
+    # Routing runs ONLY here — the first message in a thread. A reply resolved
+    # above and never reaches the chain, so the AI classifier can never
+    # re-decide the project on message four (RADD-961).
+    return await _create(
+        session,
+        plan,
+        raw=raw,
+        default_project_key=default_project_key,
+        source_id=source_id,
+    )
 
 
 async def _resolve_thread(session: AsyncSession, plan: EmailPlan) -> uuid.UUID | None:
@@ -214,10 +224,15 @@ async def _append(
 
 
 async def _create(
-    session: AsyncSession, plan: EmailPlan, *, raw: bytes, default_project_key: str
+    session: AsyncSession,
+    plan: EmailPlan,
+    *,
+    raw: bytes,
+    default_project_key: str,
+    source_id: uuid.UUID | None = None,
 ) -> Outcome:
     actor = await auth.get_user(session, SYSTEM_ACTOR_ID)
-    project = await _target_project(session, plan, default_project_key)
+    project = await _target_project(session, plan, default_project_key, source_id)
     sender = await _sender_user(session, plan)
     body = plan.body or EMPTY_BODY_PLACEHOLDER
     description = body if sender is not None else SENDER_NOTE_TEMPLATE.format(
@@ -367,17 +382,48 @@ async def _touch_contact(session: AsyncSession, item_id: uuid.UUID, plan: EmailP
 
 
 async def _target_project(
-    session: AsyncSession, plan: EmailPlan, default_key: str
+    session: AsyncSession,
+    plan: EmailPlan,
+    default_key: str,
+    source_id: uuid.UUID | None = None,
 ) -> Project:
-    """Plus-address routing (spec 62) for a FIRST contact — `support+td@…` opens
-    in project TD. This is routing, not threading: an unknown tag falls back to
-    the default rather than failing, which is why plus-addressing is acceptable
-    here and not as the threading mechanism (RADD-954)."""
+    """Where a NEW issue opens, in precedence order (RADD-958/961):
+
+        1. the source's rule chain — alias, sender, subject, then the AI classifier
+        2. a plus-address tag (`support+td@`), the spec-62 convention
+        3. the source's default project
+        4. RADD_MAIL_PROJECT_KEY
+
+    The chain is first, because it is the configured, visible answer; the plus
+    tag stays underneath it so anything already using `support+td@` keeps
+    working. Every layer falls THROUGH rather than failing — a message must
+    always land somewhere.
+    """
+    decision = await routing.decide(session, plan, source_id=source_id)
+    if decision.project_id is not None:
+        project = await projects_service.get_project(session, decision.project_id)
+        if project is not None:
+            logger.info(
+                "mailintake: %s → %s (%s)", plan.message_id, project.key, decision.reason
+            )
+            return project
+        # A rule naming a deleted project must not swallow the message.
+        logger.warning("mailintake: rule %r names a missing project", decision.matched_rule_name)
     projects = await projects_service.list_projects(session)
     if plan.project_key is not None:
         tagged = next((p for p in projects if p.key == plan.project_key), None)
         if tagged is not None:
             return tagged
+    if source_id is not None:
+        from .models import MailSource
+
+        source = await session.get(MailSource, source_id)
+        if source is not None and source.default_project_id is not None:
+            fallback = next(
+                (p for p in projects if p.id == source.default_project_id), None
+            )
+            if fallback is not None:
+                return fallback
     key = (default_key or "").upper()
     if not key:
         raise ConflictError(MailEntity.MAIL, reason="no default project configured for mail")

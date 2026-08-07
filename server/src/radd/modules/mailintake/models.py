@@ -1,7 +1,18 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, func
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    func,
+)
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from radd.db import Base, TimestampMixin
@@ -73,4 +84,100 @@ class MailMessage(Base):
     subject: Mapped[str] = mapped_column(String(998), default="")
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), index=True
+    )
+
+
+class MailSource(Base, TimestampMixin):
+    """Where mail comes IN (RADD-958).
+
+    A row per ingest point, so pointing Radd at a customer's own
+    `support@company.com` is configuration rather than a deployment. `kind`
+    selects the implementation — the seam that makes a Gmail adapter a class
+    plus a row.
+
+    Env seeds the first row on an empty database and is then never read again:
+    the spec-101 rule Sign-in, Storage and AI all follow and that email was the
+    last holdout from.
+    """
+
+    __tablename__ = "mail_sources"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(200))
+    kind: Mapped[str] = mapped_column(String(32))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    #: The address this source accepts mail for — `help@radd-hq.com`. Also what
+    #: outbound puts in Reply-To, and half of the self-loop guard's set.
+    address: Mapped[str] = mapped_column(String(320), default="")
+    #: webhook: the HMAC secret. imap: the mailbox password. Write-only over the
+    #: API, like every other credential in this instance.
+    secret: Mapped[str] = mapped_column(Text, default="")
+    host: Mapped[str] = mapped_column(String(255), default="")  # imap only
+    port: Mapped[int] = mapped_column(Integer, default=993)
+    username: Mapped[str] = mapped_column(String(320), default="")
+    folder: Mapped[str] = mapped_column(String(120), default="INBOX")
+    #: Where a message lands when NO rule matches. The chain narrows from here.
+    default_project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
+    )
+
+
+class MailSender(Base, TimestampMixin):
+    """Where mail goes OUT (RADD-958). `from_address` is also the self-loop
+    guard's comparison: mail from it arriving at a source IS the loop."""
+
+    __tablename__ = "mail_senders"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(200))
+    kind: Mapped[str] = mapped_column(String(32))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    from_address: Mapped[str] = mapped_column(String(320), default="")
+    #: Overrides the source's address when set. Normally blank, so replies go
+    #: back to the mailbox that received the original.
+    reply_to: Mapped[str] = mapped_column(String(320), default="")
+    host: Mapped[str] = mapped_column(String(255), default="")
+    port: Mapped[int] = mapped_column(Integer, default=587)
+    username: Mapped[str] = mapped_column(String(320), default="")
+    secret: Mapped[str] = mapped_column(Text, default="")
+    starttls: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+
+
+class MailRule(Base, TimestampMixin):
+    """One step of a source's ordered routing chain (RADD-958/961).
+
+    Before this, where a message landed was one line: a plus-address tag if it
+    named a real project, else one instance-wide default. "Mail to `pipeline@`
+    opens in DEV" was inexpressible.
+
+    **Deliberately small.** A rule decides where a message lands, BEFORE an item
+    exists; an automation reacts to the item and `mail.received` once it does
+    (RADD-960). Anything expressible as an automation belongs there — let this
+    grow and it becomes a second, worse automation engine with no graph editor
+    and no run history.
+
+    First enabled match by `position` wins; no match falls to the source's
+    default project.
+    """
+
+    __tablename__ = "mail_rules"
+    __table_args__ = (Index("ix_mail_rules_source_position", "source_id", "position"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    source_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("mail_sources.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(200))
+    rule_type: Mapped[str] = mapped_column(String(32))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    position: Mapped[float] = mapped_column(Float, default=0, server_default="0")
+    #: Per-type config, validated by the handler's own pydantic model — the
+    #: storage-rule shape, so a plugin's rule kind needs no column here.
+    config: Mapped[dict] = mapped_column(JSONB, default=dict)
+    #: The outcome. NULL project on a matching rule means "this rule only
+    #: decorates" — it still stops the chain, which is the surprising part and
+    #: why the UI has to show what matched.
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=True
     )

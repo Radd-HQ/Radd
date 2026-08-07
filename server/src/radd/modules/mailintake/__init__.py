@@ -22,6 +22,11 @@ plugin = RaddPlugin(
         "projects", "auth", "items", "comments", "automations", "events",
         "attachments", "notify",
     ),
+    # RADD-961: the AI routing rule reaches `ai` DEFERRED and feature-detected —
+    # the module is optional and disableable, and a missing one must fall through
+    # to the next rule rather than cost a customer their email. Same edge
+    # `attachments` declares for its own LLM storage rule.
+    weak_depends=("ai",),
     routers=(router,),
     on_startup=(dispatcher.start,),
     on_shutdown=(dispatcher.stop,),

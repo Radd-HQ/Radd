@@ -56,6 +56,10 @@ class EmailPlan:
     #: knowing when a body reads oddly: the converter is lossy by design.
     html_derived: bool = False
     attachments: tuple[MailAttachment, ...] = ()
+    #: Every address this was delivered to, lower-cased (RADD-958). Aliases share
+    #: a mailbox on most hosts, so `pipeline@` vs `help@` is ONLY visible here —
+    #: the IMAP connection cannot tell them apart.
+    recipients: tuple[str, ...] = ()
 
 
 def extract_reply_key(subject: str) -> str | None:
@@ -86,6 +90,26 @@ def extract_project_key(message: EmailMessage) -> str | None:
             if PROJECT_KEY_RE.fullmatch(tag):
                 return tag.upper()
     return None
+
+
+def extract_recipients(message: EmailMessage) -> tuple[str, ...]:
+    """Every delivery address on the message, deduped and lower-cased (RADD-958).
+
+    The same four headers `extract_project_key` walks — that function reads them
+    for a plus-tag and throws the addresses away, which is why alias routing had
+    nothing to match on.
+
+    This is the ONLY place `pipeline@` and `help@` are distinguishable: on most
+    hosts an alias delivers into a shared mailbox, so the IMAP connection sees
+    one inbox and the alias survives only in the headers.
+    """
+    found: dict[str, None] = {}
+    for header in PLUS_ADDRESS_HEADERS:
+        values = [str(value) for value in (message.get_all(header) or [])]
+        for _, address in getaddresses(values):
+            if "@" in address:
+                found.setdefault(address.strip().lower(), None)
+    return tuple(found)
 
 
 def _body(message: EmailMessage) -> tuple[str, bool]:
@@ -167,4 +191,5 @@ def parse_email(raw: bytes) -> EmailPlan:
         from_header=from_header,
         html_derived=html_derived,
         attachments=_attachments(message),
+        recipients=extract_recipients(message),
     )

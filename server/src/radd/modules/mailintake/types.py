@@ -31,6 +31,32 @@ class MailEvent(StrEnum):
     FAILED = "mail.failed"
 
 
+class MailSourceKind(StrEnum):
+    """How mail reaches Radd. A kind is a registered implementation resolved by
+    ROW, so a Gmail adapter is a class plus a row (RADD-958)."""
+
+    WEBHOOK = "webhook"   # HTTPS push (a Worker today, Gmail push later)
+    IMAP = "imap"         # a polled mailbox — what radd-hq.com runs (RADD-959)
+
+
+class MailSenderKind(StrEnum):
+    SMTP = "smtp"
+
+
+class MailRuleType(StrEnum):
+    """Builtin routing-rule kinds (RADD-958/961).
+
+    Cheap first by convention: the three deterministic kinds cost nothing, `llm`
+    costs an inference, so the seeded order puts it last and only mail no other
+    rule claimed pays for it.
+    """
+
+    RECIPIENT = "recipient"      # the alias it was delivered to — help@ vs pipeline@
+    SENDER = "sender"            # a sender address, or a whole @domain
+    SUBJECT = "subject"          # a case-insensitive substring of the Subject
+    LLM = "llm"                  # classify the CONTENT into a project (RADD-961)
+
+
 class MailDirection(StrEnum):
     """Which way a `mail_messages` row went. Threading only ever resolves
     against OUTBOUND ids (what a reply's In-Reply-To can name); dedup only ever
