@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Plus, X } from "lucide-react";
@@ -15,13 +15,16 @@ import { IconButton } from "../IconButton";
  * Linked-issues section on a page (spec 43): key chip + title + state dot, plus
  * an add-by-key input (`TD-123`) when the caller may write pages.
  *
- * **It owns its heading and it collapses** (RADD-943). Empty, this was a
- * heading, a "no linked issues yet", a 224px input and a button — ~90px of
- * chrome on every page in the wiki, most of which will never link an issue. It
- * opens when it has something to show and stays shut when it does not, which is
- * the same judgement `PageBacklinksPanel` makes by rendering nothing at all;
- * the difference is that this one has an action inside it, so it has to stay
- * reachable.
+ * **It owns its heading and it starts collapsed — always** (RADD-943/945).
+ * RADD-943 opened it whenever it had links, on the theory that hiding content
+ * is worse than hiding chrome. That is only true when the reader cannot tell
+ * the content is there, and the count chip is precisely how they can:
+ * `LINKED ISSUES 12` beside a chevron carries everything needed to decide
+ * whether to open it. Auto-opening instead put twelve rows between the body
+ * and the discussion on every release-notes page.
+ *
+ * Open/closed is per-mount and deliberately not remembered. A page's linked
+ * issues are reference material; opening one page's says nothing about the next.
  *
  * Rows the page's TEXT produced carry no unlink button. Offering an X that
  * reappears on the next save would be a lie about who owns the link — the body
@@ -34,11 +37,6 @@ export function PageLinkedItems({ pageId, canWrite }: { pageId: string; canWrite
   const [open, setOpen] = useState(false);
 
   const list = items.data ?? [];
-  // Open once the first links arrive, and only then — a reader who shut the
-  // section keeps it shut, because `open` is only forced in one direction.
-  useEffect(() => {
-    if (list.length > 0) setOpen(true);
-  }, [list.length]);
 
   const invalidate = () => void invalidateEntities(queryClient, Entity.page, Entity.item);
   const add = useMutation({

@@ -68,27 +68,39 @@ async function main() {
   checks["headless chrome reports a real pointer"] = await session.hoverCapable();
 
   // --- the page whose text names two issues ---
+  // Collapsed FIRST (RADD-945), so the rows are read only after a real click:
+  // the count chip renders while shut, the rows do not.
   await session.navigate(`${baseUrl}/pages/${spaceSlug}/${linkedSlug}`, 1000);
   let linked = { present: false };
   for (let i = 0; i < 40; i++) {
     await sleep(500);
     linked = await session.eval(PROBE);
-    if (linked.present && linked.rows.length === 2) break;
+    if (linked.present && linked.countChip === "2") break;
   }
 
   checks["the section is present"] = linked.present;
-  checks["both mentioned issues are listed, unasked"] = linked.rows.length === 2;
-  checks["the count chip agrees with the rows"] = linked.countChip === "2";
-  checks["it opens itself when it has links"] = linked.expanded === true;
+  checks["the count chip reports both links while shut"] = linked.countChip === "2";
+  // RADD-945: collapsed means collapsed, links or no links. The chip is what
+  // makes that acceptable — it is how a reader knows there is anything here.
+  checks["it starts collapsed even WITH links"] = linked.expanded === false;
+  checks["…rendering no rows at all until asked"] = linked.rows.length === 0;
+  checks["…and no add form"] = linked.hasAddForm === false;
+
+  await session.click('button[aria-expanded]', (t) => /linked issues/i.test(t));
+  await sleep(400);
+  const expanded = await session.eval(PROBE);
+
+  checks["one click opens it"] = expanded.expanded === true;
+  checks["both mentioned issues are listed, unasked"] = expanded.rows.length === 2;
   checks["no derived row offers an unlink button"] =
-    linked.rows.length > 0 && linked.rows.every((r) => !r.hasUnlink);
+    expanded.rows.length > 0 && expanded.rows.every((r) => !r.hasUnlink);
   checks["each derived row says where it came from"] =
-    linked.rows.length > 0 && linked.rows.every((r) => r.marker);
-  checks["the editor token form linked"] = linked.rows.some((r) => r.key === "GRX-100918");
-  checks["the URL form linked"] = linked.rows.some((r) => r.key === "GRX-100917");
+    expanded.rows.length > 0 && expanded.rows.every((r) => r.marker);
+  checks["the editor token form linked"] = expanded.rows.some((r) => r.key === "GRX-100918");
+  checks["the URL form linked"] = expanded.rows.some((r) => r.key === "GRX-100917");
   checks["a key named in PROSE did not link"] =
-    linked.mentionsProseOnlyKey && !linked.rows.some((r) => r.key.startsWith("SV7SY"));
-  checks["a writer can still add one by hand"] = linked.hasAddForm;
+    expanded.mentionsProseOnlyKey && !expanded.rows.some((r) => r.key.startsWith("SV7SY"));
+  checks["a writer can still add one by hand"] = expanded.hasAddForm;
   // The RADD-944 pair. The first makes the second mean something: asserting
   // "no subpage index" on a page with no subpages proves nothing at all.
   checks["the page under test HAS a child"] = linked.treeChildOf === true;
@@ -116,7 +128,8 @@ async function main() {
   checks["no console errors"] = session.consoleErrors.length === 0;
 
   const failed = report(checks, {
-    linked: { ...linked, rows: linked.rows },
+    collapsed: { expanded: linked.expanded, chip: linked.countChip, rows: linked.rows.length },
+    expanded: { expanded: expanded.expanded, rows: expanded.rows },
     empty: { expanded: empty.expanded, sectionHeight: empty.sectionHeight },
     consoleErrors: session.consoleErrors.slice(0, 5),
   });
