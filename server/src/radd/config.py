@@ -1,3 +1,4 @@
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -73,7 +74,19 @@ class Settings(BaseSettings):
     smtp_username: str = ""
     smtp_password: str = ""
     smtp_starttls: bool = True
-    smtp_from_address: str = "Radd <radd@localhost>"
+    # RADD_SMTP_FROM **or** RADD_SMTP_FROM_ADDRESS. The field name implies the
+    # latter, every document and the deployment say the former, and for months
+    # only the unwritten one was read — so outbound mail went out as
+    # `radd@localhost`, which a real relay refuses because it hosts no such
+    # mailbox. A wire constant with no compiler behind it: it type-checks
+    # nowhere and simply does nothing. Both names work now; the short one is
+    # what people actually type.
+    smtp_from_address: str = Field(
+        default="Radd <radd@localhost>",
+        validation_alias=AliasChoices(
+            "RADD_SMTP_FROM", "RADD_SMTP_FROM_ADDRESS", "smtp_from_address"
+        ),
+    )
     # Absolute base URL used in outbound links (email digests, connectors).
     app_base_url: str = "http://localhost:8000"
 
