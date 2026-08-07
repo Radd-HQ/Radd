@@ -307,6 +307,15 @@ class Settings(BaseSettings):
     # a contact (needs smtp_host); the outbound consumer mails public comments back.
     mail_send_ack: bool = True
     mail_outbound_poll_seconds: float = 5.0
+    # HTTPS ingest (RADD-953). The shared secret the Cloudflare Email Worker
+    # signs each raw message with — `openssl rand -base64 32`. EMPTY REJECTS
+    # EVERYTHING, the same safe default as forgejo_webhook_secret: an
+    # unauthenticated, internet-reachable endpoint that creates issues is the
+    # worst way to discover a missing environment variable.
+    email_ingest_secret: str = ""
+    # The address mail is accepted for. Informational for now — it is what the
+    # Reply-To on outbound carries, and what a source row will name (RADD-958).
+    email_ingest_address: str = ""
 
     # CSAT surveys (see radd/modules/csat, spec 65). `csat_enabled` is the
     # instance default of the SettingKey.CSAT_ENABLED scalar cascade — surveys
