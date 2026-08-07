@@ -145,10 +145,24 @@ async def default_sender(session: AsyncSession) -> MailSender | None:
 
 
 async def own_addresses(session: AsyncSession) -> set[str]:
-    """Every address this instance sends as or receives at — the self-loop
-    guard's comparison set, now from rows (RADD-959 unified it; this moves it
-    off env). Falls back to the env values so an instance mid-migration, with
-    rows not yet seeded, still has a working guard."""
+    """Every address this instance sends AS or can be reached at — the self-loop
+    guard's comparison set.
+
+    **THE definition, and now the only one** (RADD-959 unified two; RADD-970
+    deleted the env-only copy that had survived in `loops.py`). It was once the
+    webhook building the set from the SMTP from-address plus the ingest address
+    and the poller building it from the from-address plus the IMAP account, so
+    which addresses counted as "us" depended on how the message arrived. The
+    day two such definitions disagree, the guard stops firing on one path with
+    nothing raised anywhere.
+
+    Under the Migadu topology this is `agent@radd-hq.com` (what Radd sends as)
+    ∪ `help@radd-hq.com` (what it polls). Both matter: mail from the first
+    landing in the second is precisely the loop.
+
+    Falls back to the env values so an instance mid-migration, with rows not yet
+    seeded, still has a working guard.
+    """
     found: set[str] = set()
     for source in await list_sources(session):
         found.update({source.address, source.username})

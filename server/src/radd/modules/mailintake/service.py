@@ -7,16 +7,15 @@ through these functions — the `mail_contacts` table stays private to this modu
 `send_item_mail` / `outbound_configured` are re-exported from `transport.py`
 (RADD-968): they are the seam NOTIFY calls to mail a user about an issue, and a
 caller looks for a module's public functions here, not in a file named after the
-implementation.
+implementation. Since RADD-970 the ack goes out through it too, so there is no
+mail leaving this module by any other route.
 """
 
-import asyncio
-import logging
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd import mailrender, smtp
+from radd import mailrender
 from radd.config import settings
 
 from .models import MailContact
@@ -30,8 +29,6 @@ __all__ = [
     "send_item_mail",
     "upsert_contact",
 ]
-
-logger = logging.getLogger(__name__)
 
 
 async def contact_for_item(session: AsyncSession, item_id: uuid.UUID) -> MailContact | None:
@@ -67,32 +64,59 @@ async def upsert_contact(
     return contact
 
 
-async def send_ack(*, email: str, name: str, item_key: str, title: str, message_id: str | None = None) -> None:
-    """Acknowledge a newly created item to its contact — subject `[KEY] title`
-    (the key threads their replies back), In-Reply-To when we hold an inbound
-    Message-ID. Silently skipped when SMTP is unconfigured or acks are off;
-    a delivery failure is logged, never raised (an ack must not fail intake).
+async def send_ack(
+    session: AsyncSession | None = None,
+    *,
+    item_id: uuid.UUID,
+    email: str,
+    name: str,
+    item_key: str,
+    title: str,
+) -> None:
+    """Acknowledge a newly created item to its contact, through the ONE transport
+    (RADD-970).
 
-    Body composed by `radd.mailrender` (RADD-967), text + html, like every other
-    mail Radd sends. The env gate and the send path are deliberately untouched:
-    moving acks onto a `mail_senders` row is its own change.
+    It used to dial `radd.smtp` directly off the environment, hand-building its
+    In-Reply-To from the id the caller carried. Three things follow from routing
+    it through `send_item_mail` instead:
+
+    * it sends from the **default `mail_senders` row** (env relay as the
+      fallback, exactly as before), so an admin who configured a sender in
+      Settings → Email and set no `RADD_SMTP_*` finally gets acks;
+    * the ack's OWN outbound Message-ID is recorded against the item, so when
+      the requester replies to the receipt — the message their client is most
+      likely to reply to, since it is the only one Radd sent them — it threads
+      on a header instead of falling back to the subject key;
+    * a failure is emitted as `mail.failed`, not only logged (RADD-960).
+
+    In-Reply-To now comes from the message store rather than a parameter. That
+    is not a shortcut: intake records the inbound id inside the transaction it
+    then commits, and BOTH callers ack post-commit, so the store already holds
+    the message being answered. One source for the thread beats a copy passed by
+    hand — the copy is what goes stale.
+
+    Subject stays `[KEY] title` verbatim (`pin_subject`), because the bracketed
+    key is the threading fallback and the requester's own subject carries none.
+    Still gated on `mail_send_ack`, still never raises: `send_item_mail` returns
+    None for "nowhere to send from", which is the `outbound_configured` question
+    asked at the only moment it can be answered without a second round trip.
+
+    `session` is optional and forwarded: production acks post-commit and passes
+    nothing, while a caller inside a transaction (a test) hands over its own.
     """
-    if not settings.smtp_host or not settings.mail_send_ack:
+    if not settings.mail_send_ack:
         return
-    headers = {"In-Reply-To": message_id, "References": message_id} if message_id else None
     rendered = mailrender.acknowledgement(
         mailrender.ItemMail(key=item_key, title=title, base_url=settings.app_base_url)
     )
-    try:
-        await asyncio.to_thread(
-            smtp.send_message,
-            email,
-            ACK_SUBJECT_TEMPLATE.format(key=item_key, title=title),
-            rendered.text,
-            to_name=name,
-            headers=headers,
-            html_body=rendered.html,
-        )
-    except Exception:
-        logger.exception("mailintake: ack send to %s for %s failed", email, item_key)
+    await send_item_mail(
+        session,
+        item_id=item_id,
+        to_address=email,
+        to_name=name,
+        subject=ACK_SUBJECT_TEMPLATE.format(key=item_key, title=title),
+        text=rendered.text,
+        html=rendered.html,
+        pin_subject=True,
+    )
 

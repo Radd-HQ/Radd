@@ -25,6 +25,7 @@ import uuid
 from email.message import EmailMessage
 
 import pytest
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd import mailrender, smtp
@@ -39,13 +40,15 @@ from radd.modules.events import service as events_service
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate
 from radd.modules.mailintake import (
+    intake,
     outbound,
+    parsing,
     reply,
     service as mail_service,
     threading,
     transport as mail_transport,
 )
-from radd.modules.mailintake.models import MailSender
+from radd.modules.mailintake.models import MailMessage, MailSender
 from radd.modules.mailintake.types import MailDirection, MailRecipientKind, MailSenderKind
 from radd.modules.notify import emailer, lines, service as notify_service
 from radd.modules.notify.models import Notification
@@ -412,12 +415,20 @@ def test_the_digest_renders_both_parts_and_always_offers_the_inbox():
 
 
 class _FakeSmtp:
-    """Enough of smtplib.SMTP to capture one composed message."""
+    """Enough of smtplib.SMTP to capture one composed message — and WHICH RELAY
+    it was handed to.
+
+    The dial is recorded because from outside the process that is the only thing
+    that distinguishes a `mail_senders` ROW from the environment relay
+    (RADD-970): the composed message looks the same either way, so a test that
+    only inspects the message cannot tell whether the row was used at all.
+    """
 
     sent: list[EmailMessage] = []
+    dialled: list[tuple[str, int]] = []
 
-    def __init__(self, *args, **kwargs):
-        pass
+    def __init__(self, host="", port=0, *args, **kwargs):
+        type(self).dialled.append((host, port))
 
     def __enter__(self):
         return self
@@ -437,6 +448,7 @@ class _FakeSmtp:
 
 def test_send_message_with_html_produces_multipart_alternative(monkeypatch):
     _FakeSmtp.sent = []
+    _FakeSmtp.dialled = []
     monkeypatch.setattr(smtp.smtplib, "SMTP", _FakeSmtp)
     message_id = smtp.send_message(
         "wanda@example.com",
@@ -465,6 +477,7 @@ def test_send_message_with_html_produces_multipart_alternative(monkeypatch):
 
 def test_send_message_without_html_stays_a_single_plain_part(monkeypatch):
     _FakeSmtp.sent = []
+    _FakeSmtp.dialled = []
     monkeypatch.setattr(smtp.smtplib, "SMTP", _FakeSmtp)
     smtp.send_message(
         "wanda@example.com",
@@ -480,3 +493,228 @@ def test_send_message_without_html_stays_a_single_plain_part(monkeypatch):
         ),
     )
     assert _FakeSmtp.sent[-1].get_content_type() == "text/plain"
+
+
+# --- the acknowledgement, on the same transport (RADD-970) --------------------
+
+
+@pytest.fixture
+async def no_senders(db):
+    """Disable every `mail_senders` row already committed to the test database.
+
+    `registry.default_sender` reads the table, not a fixture — a row another
+    module committed (or an app-startup test seeded from env) would otherwise
+    decide which relay these tests dial, and "the row was used" would be true by
+    accident. Disabled inside the transaction, so it rolls back with everything.
+    """
+    await db.execute(update(MailSender).values(enabled=False))
+
+
+@pytest.fixture
+def relay(monkeypatch):
+    """A captured SMTP relay. Returns the fake class — `.sent` and `.dialled`."""
+    _FakeSmtp.sent = []
+    _FakeSmtp.dialled = []
+    monkeypatch.setattr(smtp.smtplib, "SMTP", _FakeSmtp)
+    return _FakeSmtp
+
+
+def _row_relay(db) -> MailSender:
+    row = MailSender(
+        name=f"Rows {uuid.uuid4().hex[:6]}",
+        kind=MailSenderKind.SMTP.value,
+        is_default=True,
+        from_address="agent@radd-hq.com",
+        reply_to="help@radd-hq.com",
+        host="smtp.rowrelay.test",
+        port=2525,
+        starttls=False,
+    )
+    db.add(row)
+    return row
+
+
+async def _requester_wrote(db, item, *, subject="my printer is on fire") -> str:
+    """The inbound message intake recorded before the ack fires — on BOTH call
+    paths, which commit the intake transaction first for exactly this reason."""
+    message_id = f"<{uuid.uuid4().hex}@vip.example>"
+    await threading.record(
+        db,
+        message_id=message_id,
+        item_id=item.id,
+        direction=MailDirection.INBOUND,
+        subject=subject,
+    )
+    await db.flush()
+    return message_id
+
+
+async def test_the_ack_leaves_through_the_default_sender_row(
+    db, world, relay, no_senders, monkeypatch
+):
+    """The ack used to dial `radd.smtp` straight off `RADD_SMTP_*`, which meant
+    an admin who configured a sender in Settings → Email and set no environment
+    got replies and notifications and no receipts — the one message a requester
+    always expects.
+
+    With no env relay configured at all, the ROW is what gets dialled, and the
+    headers come from the message store rather than a parameter carried by hand.
+    """
+    _agent, project, item = world
+    key = f"{project.key}-{item.number}"
+    monkeypatch.setattr(settings, "smtp_host", "")  # nothing to fall back to
+    _row_relay(db)
+    inbound_id = await _requester_wrote(db, item)
+
+    await mail_service.send_ack(
+        db,
+        item_id=item.id,
+        email="cass@vip.example.com",
+        name="Cass Customer",
+        item_key=key,
+        title=item.title,
+    )
+
+    assert relay.dialled == [("smtp.rowrelay.test", 2525)]
+    sent = relay.sent[-1]
+    # The bracketed key SURVIVES: it is the subject-line threading fallback, and
+    # the stored thread subject at this moment is the requester's own, which has
+    # no key in it. `pin_subject` exists for this one message.
+    assert str(sent["Subject"]) == f"[{key}] {item.title}"
+    assert str(sent["In-Reply-To"]) == inbound_id
+    assert str(sent["References"]) == inbound_id
+    assert str(sent["Reply-To"]) == "help@radd-hq.com"
+    assert "Cass Customer" in str(sent["To"])
+    assert sent.get_content_type() == "multipart/alternative"  # text + html, as ever
+
+
+async def test_pinning_the_subject_changes_nothing_a_client_threads_on(db, world):
+    """The design decision, stated where it can be checked: `pin_subject` is a
+    property of the SUBJECT LINE alone.
+
+    Its sibling `test_the_thread_subject_survives_a_rename` pins the unpinned
+    behaviour the reply consumer depends on — one `Re: ` over the stored subject
+    — and this asserts the two differ in exactly that field, so pinning the ack
+    cannot quietly become a second threading rule.
+    """
+    _agent, _project, item = world
+    inbound_id = await _requester_wrote(db, item, subject="Printer on fire again")
+    row = _sender_row()
+
+    free, free_subject = await mail_transport._thread_headers(
+        db, item.id, row=row, subject="[MR-1] A totally different title"
+    )
+    pinned, pinned_subject = await mail_transport._thread_headers(
+        db, item.id, row=row, subject="[MR-1] A totally different title", pin_subject=True
+    )
+
+    assert free_subject == "Re: Printer on fire again"
+    assert pinned_subject == "[MR-1] A totally different title"
+    assert free == pinned == {
+        "Reply-To": row.reply_to,
+        "In-Reply-To": inbound_id,
+        "References": inbound_id,
+    }
+
+
+async def test_the_ack_still_goes_out_through_the_env_relay_when_no_row_exists(
+    db, world, relay, no_senders, monkeypatch
+):
+    """A seed-era instance has no sender row — `seeding` only writes one when
+    `RADD_SMTP_HOST` was set at first boot. `send_ack` has always had this
+    fallback, and moving it onto the transport must not quietly drop it."""
+    _agent, project, item = world
+    monkeypatch.setattr(settings, "smtp_host", "relay.env.test")
+    monkeypatch.setattr(settings, "smtp_port", 1025)
+    monkeypatch.setattr(settings, "smtp_starttls", False)
+    monkeypatch.setattr(settings, "smtp_username", "")
+    monkeypatch.setattr(settings, "smtp_from_address", "Radd <agent@radd-hq.com>")
+    monkeypatch.setattr(settings, "email_ingest_address", "help@radd-hq.com")
+
+    await mail_service.send_ack(
+        db,
+        item_id=item.id,
+        email="cass@vip.example.com",
+        name="Cass",
+        item_key=f"{project.key}-{item.number}",
+        title=item.title,
+    )
+
+    assert relay.dialled == [("relay.env.test", 1025)]
+    assert str(relay.sent[-1]["Reply-To"]) == "help@radd-hq.com"
+
+
+async def test_a_reply_to_the_ack_threads_back_onto_the_issue(
+    db, world, relay, no_senders, monkeypatch
+):
+    """Why recording the ack's own Message-ID matters.
+
+    The receipt is the only message most requesters ever get from Radd, so it is
+    the one they hit Reply on. Its id previously went nowhere, and the reply fell
+    through to the subject key — which a client that rewrites the subject, or a
+    person who edits it, does not carry. This subject deliberately has no key in
+    it, so nothing but the recorded header can resolve it.
+    """
+    _agent, project, item = world
+    monkeypatch.setattr(settings, "smtp_host", "")
+    _row_relay(db)
+    await _requester_wrote(db, item)
+
+    await mail_service.send_ack(
+        db,
+        item_id=item.id,
+        email="cass@vip.example.com",
+        name="Cass",
+        item_key=f"{project.key}-{item.number}",
+        title=item.title,
+    )
+    ack_id = str(relay.sent[-1]["Message-ID"])
+
+    stored = await db.execute(
+        select(MailMessage.message_id, MailMessage.direction).where(
+            MailMessage.item_id == item.id
+        )
+    )
+    assert (ack_id, MailDirection.OUTBOUND.value) in set(stored.all())
+
+    incoming = EmailMessage()
+    incoming["Subject"] = "thanks!"  # no key at all
+    incoming["From"] = "Cass <cass@vip.example.com>"
+    incoming["To"] = "help@radd-hq.com"
+    incoming["Message-ID"] = f"<{uuid.uuid4().hex}@vip.example>"
+    incoming["In-Reply-To"] = ack_id
+    incoming.set_content("That fixed it.")
+    raw = incoming.as_bytes()
+
+    outcome = await intake.accept(
+        db,
+        parsing.parse_email(raw),
+        raw=raw,
+        default_project_key=project.key,
+        own_addresses=set(),
+    )
+
+    assert outcome.result is intake.Result.APPENDED
+    assert outcome.item_id == item.id
+
+
+async def test_the_ack_toggle_still_silences_it(db, world, relay, no_senders, monkeypatch):
+    """`RADD_MAIL_SEND_ACK` survives the move — it is a product decision (some
+    desks do not want a receipt), not a piece of the env configuration that
+    RADD-958 replaced with rows."""
+    _agent, project, item = world
+    monkeypatch.setattr(settings, "mail_send_ack", False)
+    monkeypatch.setattr(settings, "smtp_host", "relay.env.test")
+    _row_relay(db)
+    await db.flush()
+
+    await mail_service.send_ack(
+        db,
+        item_id=item.id,
+        email="cass@vip.example.com",
+        name="Cass",
+        item_key=f"{project.key}-{item.number}",
+        title=item.title,
+    )
+
+    assert relay.sent == [] and relay.dialled == []

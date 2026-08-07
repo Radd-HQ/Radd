@@ -23,10 +23,10 @@ from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate
-from radd.modules.mailintake import intake, loops, parsing, quoting, threading
+from radd.modules.mailintake import intake, loops, parsing, quoting, registry, threading
 from radd.modules.mailintake.html_body import html_to_text
-from radd.modules.mailintake.models import MailMessage
-from radd.modules.mailintake.types import MailDirection
+from radd.modules.mailintake.models import MailMessage, MailSender, MailSource
+from radd.modules.mailintake.types import MailDirection, MailSenderKind, MailSourceKind
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 
@@ -300,26 +300,30 @@ async def test_a_list_address_is_not_treated_as_a_loop(db, world):
     assert outcome.result is intake.Result.CREATED
 
 
-def test_our_own_addresses_cover_every_transport(monkeypatch):
-    """ONE definition (RADD-959). It was two — the webhook built the set from the
-    from-address plus the ingest address, the poller from the from-address plus
-    the IMAP account — so which addresses counted as "us" depended on how the
-    message arrived. Under the Migadu topology BOTH matter: Radd sends as
-    `agent@` and polls `help@`, and mail from the first landing in the second is
-    exactly the loop."""
-    monkeypatch.setattr(settings, "smtp_from_address", "Radd <agent@radd-hq.com>")
-    monkeypatch.setattr(settings, "email_ingest_address", "help@radd-hq.com")
-    monkeypatch.setattr(settings, "mail_imap_username", "HELP@radd-hq.com")
-    assert loops.own_addresses() == {"agent@radd-hq.com", "help@radd-hq.com"}
-
-
-async def test_mail_from_the_sending_identity_into_the_polled_box_is_a_loop(db, world, monkeypatch):
+async def test_mail_from_the_sending_identity_into_the_polled_box_is_a_loop(db, world):
     """The failure the Migadu topology makes reachable: Radd sends as `agent@`,
-    polls `help@`, and its own message arrives back in the box it reads."""
-    monkeypatch.setattr(settings, "smtp_from_address", "Radd <agent@radd-hq.com>")
-    monkeypatch.setattr(settings, "email_ingest_address", "help@radd-hq.com")
-    monkeypatch.setattr(settings, "mail_imap_username", "help@radd-hq.com")
+    polls `help@`, and its own message arrives back in the box it reads.
+
+    Driven through `registry.own_addresses` — the ONE definition since RADD-970
+    deleted the env-only `loops.own_addresses` beside it. Two definitions of
+    "us" is how the guard comes to fire on the webhook path and not the polled
+    one, silently; so the guard is tested against the set production builds,
+    from the ROWS an admin actually configured.
+    """
     _, project, _ = world
+    db.add(MailSource(
+        name=f"in-{uuid.uuid4().hex[:6]}", kind=MailSourceKind.IMAP.value,
+        address="help@radd-hq.com", username="help@radd-hq.com", host="imap.test",
+    ))
+    db.add(MailSender(
+        name=f"out-{uuid.uuid4().hex[:6]}", kind=MailSenderKind.SMTP.value,
+        host="smtp.test", from_address="Radd <agent@radd-hq.com>",
+    ))
+    await db.flush()
+
+    own = await registry.own_addresses(db)
+    assert {"agent@radd-hq.com", "help@radd-hq.com"} <= own
+
     outcome = await intake.accept(
         db,
         parsing.parse_email(
@@ -327,7 +331,7 @@ async def test_mail_from_the_sending_identity_into_the_polled_box_is_a_loop(db, 
         ),
         raw=b"",
         default_project_key=project.key,
-        own_addresses=loops.own_addresses(),
+        own_addresses=own,
     )
     assert outcome.result is intake.Result.IGNORED
 

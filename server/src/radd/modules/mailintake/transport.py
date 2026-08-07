@@ -126,7 +126,7 @@ async def _session(session: AsyncSession | None):
 
 
 async def _thread_headers(
-    session: AsyncSession, item_id: uuid.UUID, *, row, subject: str
+    session: AsyncSession, item_id: uuid.UUID, *, row, subject: str, pin_subject: bool = False
 ) -> tuple[dict[str, str], str]:
     """Headers + the subject that keeps this item's thread ONE conversation.
 
@@ -134,10 +134,15 @@ async def _thread_headers(
     it from the item title means renaming an issue silently splits the
     conversation in every participant's client. `subject` is only the opening
     line, for an item that has never been mailed about.
+
+    `pin_subject` suppresses that preference — see `send_item_mail`. It touches
+    the subject ONLY: the headers a client actually threads on are built from
+    the store either way.
     """
-    stored = await threading.thread_subject(session, item_id)
-    if stored:
-        subject = stored if stored.lower().startswith("re:") else f"Re: {stored}"
+    if not pin_subject:
+        stored = await threading.thread_subject(session, item_id)
+        if stored:
+            subject = stored if stored.lower().startswith("re:") else f"Re: {stored}"
     # Plain `help@`, no token: sub-addressing is stripped or rewritten by exactly
     # the corporate systems this feature targets (RADD-954).
     headers = {"Reply-To": row.reply_to or row.from_address}
@@ -158,12 +163,27 @@ async def send_item_mail(
     text: str,
     html: str = "",
     comment_id: uuid.UUID | None = None,
+    pin_subject: bool = False,
 ) -> str | None:
     """Mail one person about one issue. Returns the Message-ID that went on the
     wire, or None when nothing was sent (no relay, no address, a failure).
 
     `subject` is the OPENING subject — `[KEY] Title` — used only while the item
     has no mail thread; after that the stored one wins, prefixed `Re: `.
+
+    **`pin_subject=True` sends `subject` verbatim instead**, and exactly one
+    caller passes it: the acknowledgement (RADD-970). The reason is narrow and
+    worth stating, because "prefer the stored subject" is otherwise the right
+    answer everywhere. The ack's bracketed key IS the subject-line threading
+    fallback (`parsing.extract_reply_key`) — the last resort for a client that
+    drops In-Reply-To and References. At the moment the ack goes out, the stored
+    thread subject is the REQUESTER'S own ("my printer is on fire"), which
+    carries no key: preferring it would delete that fallback on the very message
+    that is the only place it can be established. Nothing else is pinned,
+    because every later message replies to one that already carried a key.
+
+    Pinning changes the line a human reads and nothing a client threads on:
+    Reply-To, In-Reply-To and References still come from the message store.
 
     Never raises: a caller mailing a list must not lose the rest of it to one
     unreachable address, and a reply is not worth a retry queue. The failure is
@@ -183,7 +203,9 @@ async def send_item_mail(
         sender, row = await _sender(db)
         if sender is None:
             return None
-        headers, subject = await _thread_headers(db, item_id, row=row, subject=subject)
+        headers, subject = await _thread_headers(
+            db, item_id, row=row, subject=subject, pin_subject=pin_subject
+        )
         try:
             sent = await sender.send(
                 OutboundMessage(

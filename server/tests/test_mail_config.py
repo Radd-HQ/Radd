@@ -16,13 +16,23 @@ import uuid
 from email.message import EmailMessage
 
 import pytest
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings
 from radd.exceptions import ConflictError
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
-from radd.modules.mailintake import intake, parsing, registry, resolve, seeding, senders
+from radd.modules.mailintake import (
+    intake,
+    parsing,
+    poller,
+    registry,
+    resolve,
+    seeding,
+    senders,
+    service as mail_service,
+)
 from radd.modules.mailintake.models import MailRule, MailSender, MailSource
 from radd.modules.mailintake.types import (
     KIND_DEFAULTS,
@@ -256,6 +266,154 @@ async def test_own_addresses_unions_every_row(db):
     await db.flush()
     found = await registry.own_addresses(db)
     assert {"help@radd-hq.com", "agent@radd-hq.com"} <= found
+
+
+# --- the poller's gate is the ROWS (RADD-970) --------------------------------------
+
+
+def test_the_poll_loop_starts_without_any_mail_env_at_all(monkeypatch):
+    """**The regression this issue exists for**, and the only place it is
+    visible: the gate is on the LOOP, so no amount of exercising `run_once`
+    catches it.
+
+    `enabled` was `run_workers and bool(settings.mail_imap_host)`. RADD-958 moved
+    mailboxes into `mail_sources` rows and left that line alone, so on an
+    instance configured entirely through Settings → Email the poller task was
+    never even created — a complete row, a lit capability pill, and a mailbox
+    filling up in silence.
+
+    It now reads `run_workers` alone, matching the outbound consumer that always
+    had that posture. Asserted on the private predicate deliberately: calling
+    `start()` would begin polling, and the predicate IS the bug.
+    """
+    from radd.modules.mailintake import dispatcher
+
+    monkeypatch.setattr(settings, "mail_imap_host", "")
+    monkeypatch.setattr(settings, "mail_imap_username", "")
+    monkeypatch.setattr(settings, "run_workers", True)
+    assert dispatcher._poll_loop._enabled() is True
+    # The two loops agree, which is the point — one posture, one place to change.
+    assert dispatcher._outbound_loop._enabled() is True
+
+    monkeypatch.setattr(settings, "run_workers", False)
+    assert dispatcher._poll_loop._enabled() is False  # the spec-48 web/worker split stands
+
+
+class _SessionHandle:
+    """Hands the poller the TEST transaction instead of a committed one.
+
+    `poller.run_once` opens its own `SessionLocal` — right in production, and
+    invisible to a test whose rows are never committed. `commit` becomes a flush
+    for the same reason: the fixture's rollback has to stay in charge, or a
+    poller test leaves a project and an item in the test database.
+    """
+
+    def __init__(self, session) -> None:
+        self._session = session
+
+    def __call__(self):
+        return self
+
+    async def __aenter__(self):
+        return self._session
+
+    async def __aexit__(self, *args):
+        return False
+
+
+@pytest.fixture
+async def poll_against_the_test_session(db, monkeypatch):
+    """Isolate the poll: only this test's sources exist, and it runs in-transaction."""
+    await db.execute(update(MailSource).values(enabled=False))
+    monkeypatch.setattr(poller, "SessionLocal", _SessionHandle(db))
+
+    async def flush_instead_of_commit():
+        await db.flush()
+
+    monkeypatch.setattr(db, "commit", flush_instead_of_commit)
+    # No env mail configuration AT ALL — the point of the test.
+    monkeypatch.setattr(settings, "mail_imap_host", "")
+    monkeypatch.setattr(settings, "mail_imap_username", "")
+    return db
+
+
+async def test_the_poller_polls_a_row_configured_instance_with_no_env(
+    db, world, monkeypatch, poll_against_the_test_session
+):
+    """One poll, end to end, on an instance with NO mail environment at all: the
+    row's resolved host is dialled, the message becomes an item in the source's
+    default project, the uid is flagged `\\Seen`, and the ack is handed the item
+    it acknowledges.
+
+    The loop's gate is its sibling above — `run_once` was always callable, which
+    is exactly why the bug survived RADD-958. This test is the other half: that
+    a tick with rows and no env does the whole job.
+    """
+    _, default, _ = world
+    source = MailSource(
+        name="Rows only", kind=MailSourceKind.IMAP.value, address="help@radd-hq.com",
+        host="imap.rowsonly.test", username="help@radd-hq.com", secret="pw",
+        default_project_id=default.id,
+    )
+    db.add(source)
+    await db.flush()
+
+    dialled: list[str] = []
+    flagged: list[tuple[str, list[str]]] = []
+    acked: list[dict] = []
+
+    def fake_fetch(row):
+        dialled.append(resolve.source_host(row))
+        # A sender nobody else committed, so the contact (and therefore the ack)
+        # is this test's own rather than whatever the account table already held.
+        return [("42", message(sender=f"jane-{uuid.uuid4().hex[:8]}@customer.example",
+                               subject="Printer on fire"))]
+
+    def fake_mark_seen(row, uids):
+        flagged.append((row.name, list(uids)))
+
+    async def fake_send_ack(session=None, **kwargs):
+        acked.append(kwargs)
+
+    monkeypatch.setattr(poller, "fetch_unseen", fake_fetch)
+    monkeypatch.setattr(poller, "mark_seen", fake_mark_seen)
+    monkeypatch.setattr(mail_service, "send_ack", fake_send_ack)
+
+    assert await poller.run_once() == 1
+    assert dialled == ["imap.rowsonly.test"], "the ROW's host, with no env to fall back on"
+    assert flagged == [("Rows only", ["42"])]
+
+    from radd.modules.items.models import WorkItem
+
+    rows = await db.execute(
+        select(WorkItem).where(WorkItem.project_id == default.id)
+    )
+    assert [item.title for item in rows.scalars()] == ["Printer on fire"]
+    # The ack carries the item it acknowledges (RADD-970) — In-Reply-To is read
+    # back out of the message store, so the id is no longer passed by hand.
+    assert acked and acked[0]["item_id"] is not None
+
+
+async def test_the_poller_does_nothing_at_all_with_no_polled_sources(
+    db, monkeypatch, poll_against_the_test_session
+):
+    """The other half of the gate. The loop now starts on `run_workers` alone,
+    so "is there anything to poll" is asked here, once a tick.
+
+    The `own_addresses` trap is the load-bearing assertion: it says the early
+    return happens BEFORE the second query, so the tick an instance with no
+    mailboxes pays every 60 seconds forever is exactly one indexed SELECT. A
+    gate that costs the whole read is a gate someone eventually removes.
+    """
+    def fake_fetch(row):  # pragma: no cover - the assertion is that it never runs
+        raise AssertionError(f"dialled {row.name} with no polled sources")
+
+    async def boom(session):  # pragma: no cover - ditto
+        raise AssertionError("read own_addresses before finding out there was nothing to poll")
+
+    monkeypatch.setattr(poller, "fetch_unseen", fake_fetch)
+    monkeypatch.setattr(registry, "own_addresses", boom)
+    assert await poller.run_once() == 0
 
 
 # --- env seeding is once-only -----------------------------------------------------

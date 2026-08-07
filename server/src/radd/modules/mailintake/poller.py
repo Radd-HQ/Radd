@@ -73,9 +73,19 @@ def mark_seen(source: MailSource, uids: list[str]) -> None:
 
 
 async def run_once() -> int:
-    """Poll every configured mailbox. Returns the messages processed."""
+    """Poll every configured mailbox. Returns the messages processed.
+
+    **The zero-source early return IS the poller's gate (RADD-970).** The loop
+    itself only asks whether this process runs workers; whether there is
+    anything to poll is a question about ROWS, and `PeriodicLoop.enabled` is
+    sync and cannot ask the database. So it is asked here, once a tick, and an
+    instance with no mailboxes pays one indexed SELECT a minute for the property
+    that an admin adding one in Settings → Email needs no restart.
+    """
     async with SessionLocal() as session:
         sources = await registry.polled_sources(session)
+        if not sources:
+            return 0
         own = await registry.own_addresses(session)
         # Detach what the blocking side needs: the session closes before the
         # thread runs, and a lazily-loaded attribute there would raise.
@@ -120,13 +130,16 @@ async def _drain(source: MailSource, default_project_id, own: set[str]) -> int:
                     default_project_id=default_project_id,
                 )
                 await session.commit()
-            if outcome.ack is not None:  # post-commit: never ack a rolled-back item
+            # Post-commit: never ack a rolled-back item — and, since RADD-970,
+            # also what puts the inbound Message-ID in the store before the ack
+            # reads it back out as In-Reply-To.
+            if outcome.ack is not None:
                 await service.send_ack(
+                    item_id=outcome.ack.item_id,
                     email=outcome.ack.email,
                     name=outcome.ack.name,
                     item_key=outcome.ack.item_key,
                     title=outcome.ack.title,
-                    message_id=outcome.ack.message_id or None,
                 )
         except Exception:
             # Flagged `\\Seen` anyway below — a poison message must not wedge

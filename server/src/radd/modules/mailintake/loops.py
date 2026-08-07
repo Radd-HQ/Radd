@@ -119,28 +119,10 @@ class RateLimiter:
 #: The process-wide limiter the ingest endpoint consults.
 limiter = RateLimiter()
 
-
-def own_addresses() -> set[str]:
-    """Every address Radd sends AS or can be reached at (RADD-959).
-
-    ONE definition, called by every transport. It was two — the webhook built it
-    from the SMTP from-address plus the ingest address, the poller from the
-    from-address plus the IMAP account — which meant the set the self-loop guard
-    compares against depended on how the message arrived. A third source would
-    have grown a third definition, and the day two of them disagreed the guard
-    would stop firing on one path with nothing raised anywhere.
-
-    Under the Migadu topology this is `agent@radd-hq.com` (what Radd sends as)
-    ∪ `help@radd-hq.com` (what it polls). Both matter: mail from the first
-    landing in the second is precisely the loop.
-    """
-    from email.utils import parseaddr
-
-    from radd.config import settings
-
-    found = {
-        parseaddr(settings.smtp_from_address)[1],
-        settings.email_ingest_address,
-        settings.mail_imap_username,
-    }
-    return {address.strip().lower() for address in found if address and address.strip()}
+# `own_addresses` is NOT here. It was, from RADD-959 until RADD-970, reading the
+# environment — and by then `registry.own_addresses` was building the same set
+# from `mail_sources` / `mail_senders` rows and was what both transports called.
+# Two definitions of "us" is the exact failure RADD-959 collapsed one pair for:
+# the guard stops firing on whichever path reads the stale one, silently. This
+# file states the DECISION (above) and the registry answers what the addresses
+# are — which is a row question, and this module has no session.

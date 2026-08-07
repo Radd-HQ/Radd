@@ -107,11 +107,21 @@ class Outcome:
 
 @dataclass(frozen=True)
 class AckPlan:
+    """Everything one acknowledgement needs, so a caller reads `outcome.ack` and
+    nothing else.
+
+    `item_id` replaced `message_id` (RADD-970). The ack is mailed by the same
+    transport as everything else now, and that resolves In-Reply-To from
+    `mail_messages` — which already holds the inbound id recorded a few lines
+    above, in the transaction the caller commits before acking. Carrying the id
+    onward as well would be a second copy of a fact the store owns.
+    """
+
+    item_id: uuid.UUID
     email: str
     name: str
     item_key: str
     title: str
-    message_id: str
 
 
 async def accept(
@@ -292,11 +302,11 @@ async def _create(
         item_id=created.id,
         item_key=created.key,
         ack=AckPlan(
+            item_id=created.id,
             email=plan.sender_email,
             name=plan.sender_name,
             item_key=created.key,
             title=created.title,
-            message_id=plan.message_id,
         ),
     )
 
