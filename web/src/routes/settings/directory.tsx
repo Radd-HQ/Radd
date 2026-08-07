@@ -8,9 +8,6 @@ import { useCurrentUser } from "../../lib/hooks";
 import { instanceStatusQuery, ldapSyncStatusQuery, queryKeys } from "../../lib/queries";
 import { pushToast, ToastKind } from "../../lib/toast";
 import {
-  DIRECTORY_CONNECTION_KEYS,
-  DIRECTORY_GROUP_KEYS,
-  DIRECTORY_USER_SYNC_KEYS,
   InstanceRole,
   SettingScope,
   type DirectorySyncState,
@@ -21,6 +18,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { Spinner } from "../../components/Spinner";
 import { QueryError } from "../../components/QueryError";
 import { DirectoryGroupsSection } from "../../components/settings/DirectoryGroupsSection";
+import { MirroredGroupsSection } from "../../components/settings/MirroredGroupsSection";
 import { ImportUsersDialog } from "../../components/settings/DirectoryImportDialogs";
 import { ScopedSettingsEditor } from "../../components/settings/ScopedSettingsEditor";
 import { SettingsPage } from "../../components/settings/SettingsPage";
@@ -128,7 +126,7 @@ export function DirectorySettingsPage() {
             <div className="mb-3">
               <ScopedSettingsEditor
                 scope={SettingScope.instance}
-                filter={(row) => DIRECTORY_CONNECTION_KEYS.includes(row.key)}
+                section="directory.connection"
               />
             </div>
           </section>
@@ -163,7 +161,7 @@ export function DirectorySettingsPage() {
             )}
             <ScopedSettingsEditor
               scope={SettingScope.instance}
-              filter={(row) => DIRECTORY_USER_SYNC_KEYS.includes(row.key)}
+              section="directory.usersync"
               disabled={!directoryReady}
             />
             {syncNow.isError && (
@@ -190,11 +188,14 @@ export function DirectorySettingsPage() {
             <div className="mb-3">
               <ScopedSettingsEditor
                 scope={SettingScope.instance}
-                filter={(row) => DIRECTORY_GROUP_KEYS.includes(row.key)}
+                section="directory.groups"
                 disabled={!directoryReady}
               />
             </div>
             <DirectoryGroupsSection directoryReady={directoryReady} />
+            {/* RADD-931: what Radd has actually mirrored, and — the control the
+                deleted Settings → Groups tab never had — who it grants roles to. */}
+            <MirroredGroupsSection directoryReady={directoryReady} />
             <p className="mt-2 text-xs text-fg-muted">
               {syncStatus.isPending
                 ? "Loading last run…"
