@@ -8,6 +8,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from radd.db import Base
 
+from .types import default_email_type_values
+
 
 class ItemWatcher(Base):
     """A user following an item — added manually or auto-watched (assign/comment/create)."""
@@ -49,12 +51,26 @@ class Notification(Base):
 
 
 class NotificationPref(Base):
-    """Per-user notification preferences. No row = all defaults: every type on,
-    email digest on. `muted_types` holds NotificationType wire strings."""
+    """Per-user notification preferences — a per-type CHANNEL matrix (RADD-686).
+
+    No row = all defaults: every type reaches the inbox, `DEFAULT_EMAIL_TYPES`
+    are also mailed as they happen, digest on. Both list columns hold
+    NotificationType wire strings.
+
+    **Email requires inbox.** `muted_types` silences BOTH channels, because a
+    muted type never becomes a notification row and rows are what get mailed
+    (`mailer`). `email_types` is therefore always stored disjoint from
+    `muted_types` — `service.set_prefs` normalises rather than rejecting, so a
+    raw API caller cannot store a contradiction the mailer would have to
+    interpret.
+    """
 
     __tablename__ = "notification_prefs"
 
     user_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
     muted_types: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    # A row written without naming the column means the documented defaults —
+    # the same answer an absent row gives. `[]` would mean "email nothing".
+    email_types: Mapped[list[str]] = mapped_column(JSONB, default=default_email_type_values)
     email_digest: Mapped[bool] = mapped_column(default=True)
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())

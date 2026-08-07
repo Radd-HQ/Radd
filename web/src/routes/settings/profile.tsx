@@ -7,13 +7,7 @@ import { ApiPath } from "../../lib/constants";
 import { AuthStatus } from "../../lib/auth";
 import { useAuthState } from "../../lib/hooks";
 import { mePreferencesQuery, queryKeys } from "../../lib/queries";
-import {
-  NotificationType,
-  type Me,
-  type NotificationPrefs,
-  type NotificationTypeValue,
-  type ProfileUpdate,
-} from "../../lib/types";
+import { type Me, type ProfileUpdate } from "../../lib/types";
 import { Avatar } from "../../components/Avatar";
 import { EDITOR_AI_PREF_KEY } from "../../components/editor/ai";
 import {
@@ -30,6 +24,7 @@ import { Button } from "../../components/Button";
 import { Select } from "../../components/Select";
 import { TextField } from "../../components/TextField";
 import { MyLeaveSection } from "../../components/settings/LeaveSections";
+import { NotificationPrefsPanel } from "../../components/settings/NotificationPrefsPanel";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { TokensPanel } from "../../components/settings/TokensPanel";
 import { TotpPanel } from "../../components/settings/TotpPanel";
@@ -71,8 +66,9 @@ export function ProfileSettingsPage() {
       <section className="mt-8 border-t border-subtle pt-6">
         <h2 className="mb-1 text-sm font-semibold text-fg">Notifications</h2>
         <p className="mb-4 text-xs text-fg-muted">
-          Which events reach your inbox — and whether unread ones are batched into an
-          email digest.
+          Which events reach your inbox, and which of those also email you as they happen.
+          Email needs the inbox on — anything muted is never raised at all. Whatever you
+          are not emailed about individually can still arrive in the digest below.
         </p>
         <NotificationPrefsPanel />
       </section>
@@ -262,75 +258,6 @@ function ProfileForm({ user }: { user: Me }) {
 }
 
 
-/** Theme + density (spec 39) — per-browser, applied instantly. */
-const NOTIFY_TYPE_LABELS: Record<NotificationTypeValue, string> = {
-  [NotificationType.assigned]: "Assigned to me",
-  [NotificationType.mentioned]: "Mentions",
-  [NotificationType.stateChanged]: "State changes on watched issues",
-  [NotificationType.commented]: "Comments on watched issues",
-  [NotificationType.slaBreach]: "SLA breaches",
-  [NotificationType.slaDueSoon]: "SLA due-soon warnings",
-  [NotificationType.automation]: "Automation rules",
-  [NotificationType.pageUpdated]: "Changes to pages I watch",
-  [NotificationType.approval]: "Approval requests & decisions",
-};
-
-function NotificationPrefsPanel() {
-  const queryClient = useQueryClient();
-  const prefs = useQuery({
-    queryKey: ["notification-prefs"] as const,
-    queryFn: () => api.get<NotificationPrefs>("/notifications/preferences"),
-  });
-  const save = useMutation({
-    mutationFn: (next: NotificationPrefs) =>
-      api.put<NotificationPrefs>("/notifications/preferences", next),
-    onSuccess: (data) => queryClient.setQueryData(["notification-prefs"], data),
-  });
-
-  if (prefs.isPending) return <p className="text-xs text-fg-faint">Loading preferences…</p>;
-  if (prefs.isError)
-    return <p className="text-xs text-red-400">Failed to load: {errorMessage(prefs.error)}</p>;
-
-  const current = prefs.data;
-  const muted = new Set(current.muted_types);
-  const toggleType = (type: NotificationTypeValue) => {
-    const next = new Set(muted);
-    if (next.has(type)) next.delete(type);
-    else next.add(type);
-    save.mutate({ muted_types: [...next], email_digest: current.email_digest });
-  };
-
-  return (
-    <div className="flex max-w-md flex-col gap-2">
-      {(Object.keys(NOTIFY_TYPE_LABELS) as NotificationTypeValue[]).map((type) => (
-        <label key={type} className="flex items-center gap-2 text-[13px] text-fg">
-          <input
-            type="checkbox"
-            checked={!muted.has(type)}
-            onChange={() => toggleType(type)}
-            disabled={save.isPending}
-            className="size-3.5 accent-accent"
-          />
-          {NOTIFY_TYPE_LABELS[type]}
-        </label>
-      ))}
-      <label className="mt-2 flex items-center gap-2 border-t border-subtle pt-3 text-[13px] text-fg">
-        <input
-          type="checkbox"
-          checked={current.email_digest}
-          onChange={() =>
-            save.mutate({ muted_types: current.muted_types, email_digest: !current.email_digest })
-          }
-          disabled={save.isPending}
-          className="size-3.5 accent-accent"
-        />
-        Email digest of unread notifications
-      </label>
-      {save.isError && <ErrorText error={save.error} />}
-    </div>
-  );
-}
-
 /** The editor-AI opt-out (specs 101/103), stored server-side in the preferences
  * dict (spec 94 shallow-merge PUT) so it follows the account across browsers.
  * An absent key means enabled; the key lives with the editor wiring in
@@ -366,6 +293,7 @@ function EditorAiPanel() {
   );
 }
 
+/** Theme + density (spec 39) — per-browser, applied instantly. */
 function AppearanceSection() {
   const [theme, setThemeState] = useState<ThemeValue>(getTheme());
   const [density, setDensityState] = useState<DensityValue>(getDensity());

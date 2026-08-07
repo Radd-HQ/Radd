@@ -120,6 +120,7 @@ export const queryKeys = {
   reportSla: (projectId: string | null, weeks: number, q?: string) =>
     ["report", "sla", { projectId, weeks }, { q: q ?? "" }] as const,
   notificationsBadge: ["notificationsBadge"] as const,
+  notificationPrefs: ["notificationPrefs"] as const,
   itemWatchers: (itemId: string) => ["itemWatchers", { itemId }] as const,
   pageSpaces: ["pageSpaces"] as const,
   pageExtensions: ["pageExtensions"] as const,

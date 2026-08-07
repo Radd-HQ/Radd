@@ -11,7 +11,7 @@ from radd.modules.items import service as items_service
 from radd.modules.projects.models import Project
 
 from . import service
-from .models import Notification
+from .models import Notification, NotificationPref
 from .schemas import (
     MarkReadRequest,
     NotificationActor,
@@ -66,28 +66,37 @@ async def list_notifications(
     )
 
 
+def _prefs_read(prefs: NotificationPref) -> NotificationPrefsRead:
+    return NotificationPrefsRead(
+        muted_types=[NotificationType(value) for value in prefs.muted_types],
+        email_types=[NotificationType(value) for value in prefs.email_types],
+        email_digest=prefs.email_digest,
+    )
+
+
 @router.get("/notifications/preferences", response_model=NotificationPrefsRead)
 async def get_preferences(session: Session, user: CurrentUser) -> NotificationPrefsRead:
     prefs = await service.get_prefs(session, user.id)
     if prefs is None:
-        return NotificationPrefsRead()  # defaults: everything on
-    return NotificationPrefsRead(
-        muted_types=[NotificationType(value) for value in prefs.muted_types],
-        email_digest=prefs.email_digest,
-    )
+        # Defaults: every type in the inbox, the personally-directed four mailed.
+        return NotificationPrefsRead()
+    return _prefs_read(prefs)
 
 
 @router.put("/notifications/preferences", response_model=NotificationPrefsRead)
 async def put_preferences(
     data: NotificationPrefsUpdate, session: Session, user: CurrentUser
 ) -> NotificationPrefsRead:
+    # Read back from the row, not the request: `set_prefs` normalises muted
+    # types out of `email_types`, and the client must see what was stored.
     prefs = await service.set_prefs(
-        session, user.id, muted_types=data.muted_types, email_digest=data.email_digest
+        session,
+        user.id,
+        muted_types=data.muted_types,
+        email_types=data.email_types,
+        email_digest=data.email_digest,
     )
-    return NotificationPrefsRead(
-        muted_types=[NotificationType(value) for value in prefs.muted_types],
-        email_digest=prefs.email_digest,
-    )
+    return _prefs_read(prefs)
 
 
 @router.post("/notifications/read", status_code=204)

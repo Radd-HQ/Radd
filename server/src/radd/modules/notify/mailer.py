@@ -17,10 +17,13 @@ second copy of that policy, which is what drifted the first time. So this loop
 reads notifications, not events — and every permission question is answered by
 the row's existence.
 
-**What gets mailed now** is `DEFAULT_IMMEDIATE_EMAIL_TYPES`, which is
-`{COMMENTED}`: exactly the behaviour watchers already had, now arriving through
-the gated path. RADD-686 replaces the constant with a per-user preference; until
-then a constant is honest about being one.
+**What gets mailed is now the RECIPIENT's answer** (RADD-686). Each row is kept
+or dropped by its own user's `email_types` — `DEFAULT_EMAIL_TYPES` when they
+have never saved a preference. That is why the filter is in Python rather than
+in `_pending`'s WHERE: the predicate is per-user, so a SQL type filter could
+only be the union of everybody's, which is every type as soon as two people
+disagree. Dropped rows are left unstamped and the digest takes them, which is
+what makes "inbox only" a channel choice rather than a mute.
 
 Rows are stamped `emailed_at` on send, so the digest — whose selection is
 already `emailed_at IS NULL` — never repeats what went out here. The two
@@ -52,21 +55,11 @@ from radd.modules.auth.models import User
 from radd.modules.comments import service as comments
 from radd.modules.events import service as events
 
-from . import lines
+from . import lines, service
 from .models import Notification
 from .types import NotificationType
 
 logger = logging.getLogger(__name__)
-
-#: The types that earn their own email the moment they happen, rather than
-#: waiting for the digest window.
-#:
-#: One member, deliberately. Watchers have always been emailed about comments
-#: (by `mailintake.outbound`, ungated); every other type has always waited for
-#: the digest. Widening the set here would be a behaviour change smuggled into a
-#: refactor. RADD-686 replaces this constant with a per-user preference, at
-#: which point it becomes the DEFAULT rather than the rule.
-DEFAULT_IMMEDIATE_EMAIL_TYPES = frozenset({NotificationType.COMMENTED})
 
 
 async def run_once() -> int:
@@ -85,9 +78,7 @@ async def run_batch(session: AsyncSession) -> int:
     committed, rather than re-implementing the loop's body in the test and
     proving only that the copy works.
     """
-    if not DEFAULT_IMMEDIATE_EMAIL_TYPES:
-        return 0
-    rows = await _pending(session)
+    rows = await _wanted(session, await _pending(session))
     if not rows:
         return 0
     if not await _can_send(session):
@@ -117,7 +108,7 @@ async def run_batch(session: AsyncSession) -> int:
 
 
 async def _pending(session: AsyncSession) -> list[Notification]:
-    """Unemailed, unread, recent rows of an immediate type.
+    """Unemailed, unread, recent rows — the candidates, before preferences.
 
     UNREAD because a notification you have already opened is not worth an email;
     RECENT (the digest's own `notify_email_max_age_hours`) because a worker that
@@ -131,12 +122,24 @@ async def _pending(session: AsyncSession) -> list[Notification]:
             Notification.emailed_at.is_(None),
             Notification.read_at.is_(None),
             Notification.created_at >= cutoff,
-            Notification.type.in_([type_.value for type_ in DEFAULT_IMMEDIATE_EMAIL_TYPES]),
         )
         .order_by(Notification.created_at, Notification.id)
         .limit(settings.notify_mail_batch)
     )
     return list(result.scalars())
+
+
+async def _wanted(session: AsyncSession, rows: list[Notification]) -> list[Notification]:
+    """The candidates their own recipient asked to be emailed about (RADD-686).
+
+    One query for the whole batch, then a membership test per row. What is
+    dropped here stays unstamped on purpose: the digest is the other half of the
+    channel choice, not a fallback.
+    """
+    if not rows:
+        return []
+    wanted = await service.email_types_by_user(session, {row.user_id for row in rows})
+    return [row for row in rows if row.type in wanted.get(row.user_id, frozenset())]
 
 
 async def _actor_names(

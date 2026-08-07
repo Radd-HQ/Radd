@@ -11,6 +11,7 @@ import {
 import { queryKeys } from "./shared";
 import type {
   NotificationList,
+  NotificationPrefs,
   WatchersRead,
 } from "../types";
 
@@ -48,6 +49,17 @@ export const notificationsBadgeQuery = queryOptions({
   meta: entityMeta(Entity.notification),
   refetchInterval: NOTIFICATIONS_POLL_MS,
 });
+
+/**
+ * The caller's per-type channel matrix (RADD-686): inbox = NOT in `muted_types`,
+ * email = in `email_types`. Read here rather than inline in the settings panel
+ * so the key and the path are the ones every other read uses.
+ */
+export const notificationPrefsQuery = () =>
+  queryOptions({
+    queryKey: queryKeys.notificationPrefs,
+    queryFn: () => api.get<NotificationPrefs>(ApiPath.notificationPrefs),
+  });
 
 /** Watcher list + whether the current user watches (spec 26). */
 export const itemWatchersQuery = (itemId: string) =>

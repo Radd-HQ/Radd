@@ -96,6 +96,8 @@ export const ApiPath = {
   backups: "/backups",
   // Personal notifications (spec 26).
   notifications: "/notifications",
+  // The caller's per-type inbox/email channel matrix (spec 26; RADD-686).
+  notificationPrefs: "/notifications/preferences",
   // Full-text + key search (spec 28).
   search: "/search",
   // KB deflection for the new-issue flow (spec 66).

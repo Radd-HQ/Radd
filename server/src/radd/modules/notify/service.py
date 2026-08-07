@@ -8,7 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.modules.events import service as events
 
 from .models import ItemWatcher, Notification, NotificationPref
-from .types import NotificationType, NotifyEntity, NotifyEvent
+from .types import (
+    NotificationType,
+    NotifyEntity,
+    NotifyEvent,
+    default_email_type_values,
+)
 from radd.clock import utcnow
 
 
@@ -192,13 +197,25 @@ async def set_prefs(
     user_id: uuid.UUID,
     *,
     muted_types: list[NotificationType],
+    email_types: list[NotificationType],
     email_digest: bool,
 ) -> NotificationPref:
+    """Full replace of one user's channel matrix. Returns the NORMALISED row.
+
+    A muted type is dropped from `email_types` here rather than 422'd: muting
+    already silences both channels by construction (no row, nothing to mail), so
+    "email me about X, but never notify me about X" is not a conflict to resolve
+    — it is a statement with one meaning. The UI cannot produce it; a raw API
+    caller gets that meaning stored instead of a contradiction, and reads it
+    back in the response.
+    """
     prefs = await session.get(NotificationPref, user_id)
     if prefs is None:
         prefs = NotificationPref(user_id=user_id)
         session.add(prefs)
-    prefs.muted_types = [muted.value for muted in muted_types]
+    muted = {type_.value for type_ in muted_types}
+    prefs.muted_types = [type_.value for type_ in muted_types]
+    prefs.email_types = [type_.value for type_ in email_types if type_.value not in muted]
     prefs.email_digest = email_digest
     await session.flush()
     return prefs
@@ -215,6 +232,27 @@ async def muted_types_by_user(
         select(NotificationPref).where(NotificationPref.user_id.in_(ids))
     )
     return {prefs.user_id: set(prefs.muted_types) for prefs in result.scalars()}
+
+
+async def email_types_by_user(
+    session: AsyncSession, user_ids: Iterable[uuid.UUID]
+) -> dict[uuid.UUID, frozenset[str]]:
+    """Mailer seam: which types each recipient wants EMAILED as they happen.
+
+    Lives beside `muted_types_by_user` because it answers the same kind of
+    question, but it returns an entry for EVERY id asked for — absent row means
+    `DEFAULT_EMAIL_TYPES`, and a partial dict read with `.get(id, ())` would
+    silently mean "email nothing", the exact opposite of the documented default.
+    """
+    ids = set(user_ids)
+    if not ids:
+        return {}
+    result = await session.execute(
+        select(NotificationPref).where(NotificationPref.user_id.in_(ids))
+    )
+    stored = {prefs.user_id: frozenset(prefs.email_types) for prefs in result.scalars()}
+    fallback = frozenset(default_email_type_values())
+    return {user_id: stored.get(user_id, fallback) for user_id in ids}
 
 
 async def digest_disabled_users(

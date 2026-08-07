@@ -22,9 +22,18 @@ export const NotificationType = {
 } as const;
 export type NotificationTypeValue = (typeof NotificationType)[keyof typeof NotificationType];
 
-/** GET/PUT /notifications/preferences — the caller's own settings. */
+/**
+ * GET/PUT /notifications/preferences — the caller's per-type channel matrix
+ * (RADD-686). Inbox = NOT in `muted_types`; email = in `email_types`.
+ *
+ * Email requires inbox: a muted type never becomes a notification row, and rows
+ * are what get mailed, so the server drops muted entries from `email_types` on
+ * save and the PUT response is always the normalised pair. PUT is a full
+ * replace — every field is required.
+ */
 export interface NotificationPrefs {
   muted_types: NotificationTypeValue[];
+  email_types: NotificationTypeValue[];
   email_digest: boolean;
 }
 

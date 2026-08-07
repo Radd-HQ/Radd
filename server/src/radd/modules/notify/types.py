@@ -23,6 +23,40 @@ class NotificationType(StrEnum):
     PAGE_UPDATED = "page_updated"
 
 
+#: The types a user gets an EMAIL about the moment they happen, when they have
+#: expressed no preference (RADD-686). No prefs row means exactly this set.
+#:
+#: The personally-directed, high-signal four: someone assigned you the work,
+#: named you, replied to you, or is waiting on your decision. The ambient types
+#: (state changes on things you watch, SLA timers, automation pings) stay in the
+#: digest by default, because an inbox that mails everything is an inbox nobody
+#: reads. Every type is switchable per-user either way — this is the default,
+#: not the rule — which is what the module constant it replaces (RADD-968's
+#: hard-coded `{commented}`) could never be.
+DEFAULT_EMAIL_TYPES: frozenset[NotificationType] = frozenset(
+    {
+        NotificationType.ASSIGNED,
+        NotificationType.MENTIONED,
+        NotificationType.COMMENTED,
+        NotificationType.APPROVAL,
+    }
+)
+
+
+def default_email_types() -> list[NotificationType]:
+    """`DEFAULT_EMAIL_TYPES` in NotificationType declaration order.
+
+    A frozenset has no order, and the stored JSON array, the API response and
+    the checkbox column all need one that does not shuffle between processes.
+    """
+    return [type_ for type_ in NotificationType if type_ in DEFAULT_EMAIL_TYPES]
+
+
+def default_email_type_values() -> list[str]:
+    """The same list as wire strings — what the column actually stores."""
+    return [type_.value for type_ in default_email_types()]
+
+
 # Wire strings for the slas module's timer events (specs 30/69). Constants, not
 # imports — slas loads AFTER notify in RADD_MODULES; keep in sync with SlaEvent.
 SLA_BREACHED_EVENT = "sla.breached"

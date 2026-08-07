@@ -9,10 +9,12 @@ where four had been serving nine) and moved out when RADD-968 gave notify a
 second email channel — the per-event `mailer.py`. Two channels rendering the
 same nine types from two files is how the four-sentence bug happens again.
 
-**This loop is now the SLOWER half of a pair.** Rows whose type is in
-`mailer.DEFAULT_IMMEDIATE_EMAIL_TYPES` are mailed individually within seconds
-and stamped `emailed_at`; the selection below already skips stamped rows, so the
-dedup between the two channels costs no new column and no new query.
+**This loop is now the SLOWER half of a pair.** Rows whose type the recipient
+put in their `email_types` (RADD-686) are mailed individually within seconds by
+`mailer` and stamped `emailed_at`; the selection below already skips stamped
+rows, so the dedup between the two channels costs no new column and no new
+query. Everything else lands here — which is what makes "inbox only, digest me"
+a real answer rather than silence.
 """
 
 import asyncio

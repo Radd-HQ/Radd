@@ -14,10 +14,12 @@ would prove nothing about the two callers that were broken. So those two callers
 are driven for real. Rows are flushed, never committed; the session rolls back.
 """
 
+import importlib.util
 import uuid
+from pathlib import Path
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings as config
@@ -25,7 +27,16 @@ from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.notify import planner, service as notify_service
 from radd.modules.notify.models import Notification
-from radd.modules.notify.types import NotificationType
+# The endpoint itself, not the module: `notify.router` is the APIRouter object
+# the package re-exports, which shadows the module of that name.
+from radd.modules.notify.router import put_preferences
+from radd.modules.notify.schemas import NotificationPrefsUpdate
+from radd.modules.notify.types import (
+    DEFAULT_EMAIL_TYPES,
+    NotificationType,
+    default_email_type_values,
+    default_email_types,
+)
 
 ACTOR = uuid.uuid4()
 ASSIGNEE = uuid.uuid4()
@@ -198,7 +209,24 @@ async def _user(db, name: str) -> User:
 
 
 async def _mute(db, user: User, type_: NotificationType) -> None:
-    await notify_service.set_prefs(db, user.id, muted_types=[type_], email_digest=True)
+    await notify_service.set_prefs(
+        db,
+        user.id,
+        muted_types=[type_],
+        email_types=default_email_types(),  # the defaults, untouched by the mute
+        email_digest=True,
+    )
+
+
+def _load_migration(name: str):
+    """Import one revision file by name — `migrations/` is a script directory,
+    not a package, so there is nothing to import normally."""
+    path = Path(__file__).resolve().parents[1] / "migrations" / "versions" / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 async def _count(db, user: User, type_: NotificationType) -> int:
@@ -285,3 +313,99 @@ async def test_prefetched_preferences_are_authoritative(db):
 
     assert await _count(db, muted, NotificationType.COMMENTED) == 0
     assert await _count(db, heard, NotificationType.COMMENTED) == 1
+
+
+# --- the channel matrix (RADD-686) --------------------------------------------
+
+
+async def test_muting_a_type_drops_it_from_the_email_column_on_save(db):
+    """Email requires inbox, and the SERVER says so rather than trusting the UI.
+
+    "Email me about comments, but never raise a comment notification" is not a
+    conflict needing a 422 — a muted type never becomes a row and rows are what
+    get mailed, so the request has exactly one coherent meaning and `set_prefs`
+    stores it. The PUT response is read back off the row for the same reason: a
+    raw API caller has to be able to see what was kept.
+    """
+    user = await _user(db, "Contradictory")
+
+    result = await put_preferences(
+        NotificationPrefsUpdate(
+            muted_types=[NotificationType.COMMENTED],
+            email_types=[NotificationType.COMMENTED, NotificationType.MENTIONED],
+            email_digest=True,
+        ),
+        db,
+        user,
+    )
+
+    assert result.muted_types == [NotificationType.COMMENTED]
+    assert result.email_types == [NotificationType.MENTIONED]
+    # The stored row, not just the reply — the mailer reads the column.
+    prefs = await notify_service.get_prefs(db, user.id)
+    assert prefs.email_types == [NotificationType.MENTIONED.value]
+
+
+async def test_a_user_with_no_prefs_row_resolves_to_the_default_email_set(db):
+    """The mailer's seam returns an answer for EVERY id it is asked about,
+    because absent means `DEFAULT_EMAIL_TYPES` — not the empty set that a
+    `.get(id, ())` over a partial dict (the shape `muted_types_by_user` uses,
+    where absent really does mean none) would have silently produced."""
+    saved, never = await _user(db, "Saved"), await _user(db, "Never saved")
+    await notify_service.set_prefs(
+        db, saved.id, muted_types=[], email_types=[NotificationType.APPROVAL], email_digest=True
+    )
+
+    resolved = await notify_service.email_types_by_user(db, [saved.id, never.id])
+
+    assert resolved[saved.id] == frozenset({NotificationType.APPROVAL.value})
+    assert resolved[never.id] == frozenset(type_.value for type_ in DEFAULT_EMAIL_TYPES)
+
+
+async def test_the_migration_backfills_existing_rows_with_the_default_email_set(db):
+    """A preferences row saved before RADD-686 must come out of the migration
+    with the DEFAULT set, not an empty one: everyone who had ever saved a
+    preference already got comment mail, and `[]` would silence a channel they
+    never turned off.
+
+    The suite's database is created at head, so there are no legacy rows to
+    observe — the only honest way to test the backfill is to run it. The column
+    is dropped, a pre-RADD-686 row is written, and the migration's own
+    `upgrade()` is replayed through alembic's operations proxy. All of it inside
+    the test transaction, which rolls the DDL back too (Postgres DDL is
+    transactional), so no other test sees a table mid-migration.
+    """
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    migration = _load_migration("d686emailtypes_notification_email_channel_per_type")
+    user_id = uuid.uuid4()
+    await db.execute(text("ALTER TABLE notification_prefs DROP COLUMN email_types"))
+    await db.execute(
+        text(
+            "INSERT INTO notification_prefs (user_id, muted_types, email_digest) "
+            "VALUES (:user_id, '[]'::jsonb, true)"
+        ),
+        {"user_id": user_id},
+    )
+
+    def _upgrade(connection) -> None:
+        with Operations.context(MigrationContext.configure(connection)):
+            migration.upgrade()
+
+    await db.run_sync(lambda session: _upgrade(session.connection()))
+
+    stored = await db.execute(
+        text("SELECT email_types FROM notification_prefs WHERE user_id = :user_id"),
+        {"user_id": user_id},
+    )
+    assert stored.scalar_one() == default_email_type_values()
+    # The default is dropped afterwards on purpose: the policy lives in
+    # `notify.types`, and a copy left in the schema is a second source of truth.
+    remaining = await db.execute(
+        text(
+            "SELECT column_default FROM information_schema.columns "
+            "WHERE table_name = 'notification_prefs' AND column_name = 'email_types'"
+        )
+    )
+    assert remaining.scalar_one() is None
