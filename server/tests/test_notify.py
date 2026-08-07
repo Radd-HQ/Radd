@@ -1,15 +1,30 @@
-"""Notify planning core (spec 26).
+"""Notify planning core (spec 26) + the delivery choke point (RADD-971).
 
 Pure, DB-free tests of the invariants everything else leans on: the actor is
 never self-notified, one notification per user per event with personal types
 (assigned/mentioned) beating ambient ones (state_changed/commented), auto-watch
 sets, and the mention grammar. The full consumer (permission filtering, mention
 resolution, email digests) is exercised against a live DB by the demo flows.
+
+The last section is DB-backed, because the mute preference is now enforced at
+the WRITE (`service.create_notification`) rather than in the outbox consumer —
+and the whole point of that move is that the producers which never go near the
+consumer inherit it. Testing the planner cannot see that; testing the seam alone
+would prove nothing about the two callers that were broken. So those two callers
+are driven for real. Rows are flushed, never committed; the session rolls back.
 """
 
 import uuid
 
-from radd.modules.notify import planner
+import pytest
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from radd.config import settings as config
+from radd.modules.auth.models import User
+from radd.modules.auth.types import InstanceRole
+from radd.modules.notify import planner, service as notify_service
+from radd.modules.notify.models import Notification
 from radd.modules.notify.types import NotificationType
 
 ACTOR = uuid.uuid4()
@@ -156,3 +171,117 @@ def test_comment_carries_visibility_for_internal_filtering():
     payload = {"excerpt": "secret", "visibility": "internal"}
     plan = planner.plan_comment_created(payload, ACTOR, frozenset({WATCHER}), frozenset())
     assert plan.notifications[0].detail["visibility"] == "internal"
+
+
+# --- the mute is enforced at the write, so every producer inherits it (RADD-971) ---
+
+
+@pytest.fixture
+async def db():
+    engine = create_async_engine(config.database_url)
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+    async with maker() as session:
+        yield session
+        await session.rollback()
+    await engine.dispose()
+
+
+async def _user(db, name: str) -> User:
+    user = User(
+        email=f"mute-{uuid.uuid4().hex[:8]}@example.com",
+        name=name,
+        instance_role=InstanceRole.MEMBER.value,
+    )
+    db.add(user)
+    await db.flush()
+    return user
+
+
+async def _mute(db, user: User, type_: NotificationType) -> None:
+    await notify_service.set_prefs(db, user.id, muted_types=[type_], email_digest=True)
+
+
+async def _count(db, user: User, type_: NotificationType) -> int:
+    rows = await db.execute(
+        select(func.count())
+        .select_from(Notification)
+        .where(Notification.user_id == user.id, Notification.type == type_.value)
+    )
+    return int(rows.scalar_one())
+
+
+async def test_automation_notify_action_obeys_the_mute(db):
+    """`automation` is created by a direct call from the automation engine, which
+    never touches the outbox consumer — the mute used to be checked only there,
+    so this checkbox did nothing."""
+    from radd.modules.automations.engine import _apply_plan
+    from radd.modules.automations.planning import _Plan
+    from radd.modules.automations.types import PlanKind
+
+    muted, heard = await _user(db, "Muted"), await _user(db, "Hearing")
+    await _mute(db, muted, NotificationType.AUTOMATION)
+
+    for user in (muted, heard):
+        await _apply_plan(
+            db,
+            _Plan(PlanKind.NOTIFY, "notify_user", notify=(user.id, "the build broke")),
+            None,
+            heard,  # the system actor stand-in: unused by the NOTIFY branch
+            rule_name="Ping on breakage",
+        )
+
+    assert await _count(db, muted, NotificationType.AUTOMATION) == 0
+    # The control: without it, a seam that wrote nothing at all would pass.
+    assert await _count(db, heard, NotificationType.AUTOMATION) == 1
+
+
+async def test_page_update_fan_out_obeys_the_mute(db):
+    """`page_updated` is the other direct caller — a synchronous in-request
+    fan-out over the page's watchers, again bypassing the consumer."""
+    from radd.modules.pages import service as pages, spaces, watchers as page_watchers
+    from radd.modules.pages.schemas import PageCreate, PageSpaceCreate, PageUpdate
+
+    author = await _user(db, "Author")
+    muted, heard = await _user(db, "Muted"), await _user(db, "Hearing")
+    await _mute(db, muted, NotificationType.PAGE_UPDATED)
+
+    slug = f"mute-{uuid.uuid4().hex[:8]}"
+    space = await spaces.create_space(db, PageSpaceCreate(name=slug, slug=slug), author.id)
+    page = await pages.create_page(
+        db, PageCreate(space_id=space.id, title="Runbook", slug="runbook", body="v1"), author.id
+    )
+    for user in (muted, heard):
+        await page_watchers.watch(db, page.id, user.id)
+
+    # The real edit path: update_page fans out to the watchers itself.
+    await pages.update_page(db, page.id, PageUpdate(body="v2 — restart order changed"), author.id)
+
+    assert await _count(db, muted, NotificationType.PAGE_UPDATED) == 0
+    assert await _count(db, heard, NotificationType.PAGE_UPDATED) == 1
+
+
+async def test_prefetched_preferences_are_authoritative(db):
+    """The consumer's shape: it batch-reads the whole recipient set's preferences
+    in one query and hands each row's answer down, so the choke point costs no
+    query per notification. A caller that passes nothing gets the lookup — slower,
+    never wrong — which is what the two callers above rely on."""
+    muted, heard = await _user(db, "Muted"), await _user(db, "Hearing")
+    await _mute(db, muted, NotificationType.COMMENTED)
+
+    prefetched = await notify_service.muted_types_by_user(db, [muted.id, heard.id])
+    assert prefetched == {muted.id: {NotificationType.COMMENTED.value}}
+
+    for user in (muted, heard):
+        await notify_service.create_notification(
+            db,
+            user_id=user.id,
+            type_=NotificationType.COMMENTED,
+            event_id=None,
+            item_id=None,
+            actor_id=None,
+            payload={},
+            muted_types=prefetched.get(user.id, ()),
+        )
+
+    assert await _count(db, muted, NotificationType.COMMENTED) == 0
+    assert await _count(db, heard, NotificationType.COMMENTED) == 1

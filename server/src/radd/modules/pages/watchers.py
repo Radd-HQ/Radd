@@ -69,10 +69,18 @@ async def notify_watchers(
     The payload carries what the inbox row needs to render and to link — title,
     slugs, the version — resolved now rather than joined later, the same way item
     notifications do it, so the entry stays accurate after a rename.
+
+    Whoever muted `page_updated` is dropped by `create_notification` itself
+    (RADD-971) — this fan-out only PREFETCHES the preference for the recipient
+    set, because it runs inside the request that saved the page and a lookup per
+    watcher would put that cost on the editor. Returns how many were actually
+    written, so a muted watcher is not counted as told.
     """
     recipients = [uid for uid in await watcher_ids(session, page.id) if uid != actor_id]
+    muted = await notify.muted_types_by_user(session, recipients)
+    sent = 0
     for user_id in recipients:
-        await notify.create_notification(
+        notification = await notify.create_notification(
             session,
             user_id=user_id,
             type_=NotificationType.PAGE_UPDATED,
@@ -86,5 +94,8 @@ async def notify_watchers(
                 "title": page.title,
                 "version": version,
             },
+            muted_types=muted.get(user_id, ()),
         )
-    return len(recipients)
+        if notification is not None:
+            sent += 1
+    return sent

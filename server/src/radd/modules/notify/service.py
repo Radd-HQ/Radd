@@ -1,5 +1,5 @@
 import uuid
-from collections.abc import Iterable, Sequence
+from collections.abc import Collection, Iterable, Sequence
 
 from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -87,7 +87,27 @@ async def create_notification(
     item_id: uuid.UUID | None,
     actor_id: uuid.UUID | None,
     payload: dict,
-) -> Notification:
+    muted_types: Collection[str] | None = None,
+) -> Notification | None:
+    """Write one notification for one recipient — unless they MUTED this type.
+
+    The mute check lives here because this is the one function every producer
+    calls (RADD-971). It used to live in the outbox consumer alone, so the two
+    types created by a direct call — `automation` (automations/engine.py) and
+    `page_updated` (pages/watchers.py) — never saw a preference at all: their
+    checkboxes on Settings → Profile changed nothing. Enforcing at the write
+    means a new producer inherits the preference instead of re-implementing it.
+
+    `muted_types` is an optional PREFETCH for callers that fan out to a known
+    recipient set (`muted_types_by_user` resolves the whole set in one query, so
+    the loop costs nothing per row). `None` means "look it up" — a caller that
+    forgets it is slower, never wrong. Returns None when the type was muted.
+    """
+    if muted_types is None:
+        prefs = await get_prefs(session, user_id)
+        muted_types = prefs.muted_types if prefs is not None else ()
+    if type_.value in muted_types:
+        return None
     notification = Notification(
         user_id=user_id,
         event_id=event_id,
