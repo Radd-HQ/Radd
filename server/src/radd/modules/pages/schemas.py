@@ -232,6 +232,9 @@ class PageLinkedItem(BaseModel):
     title: str
     state: str
     state_category: str
+    #: The page's TEXT mentions it (RADD-943) — the link is reconciled on every
+    #: save, so it is not the reader's to remove. False = someone typed the key.
+    derived: bool = False
 
 
 class ItemPageRef(BaseModel):

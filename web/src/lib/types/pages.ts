@@ -159,6 +159,9 @@ export interface PageLinkedItem {
   title: string;
   state: string;
   state_category: string;
+  /** The page's TEXT mentions this issue (RADD-943): the link is reconciled on
+   *  every save, so it is not the reader's to unlink — edit the body instead. */
+  derived: boolean;
 }
 
 /** A page linked to an issue (the issue page's Pages row). */

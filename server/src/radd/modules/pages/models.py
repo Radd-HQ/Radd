@@ -174,7 +174,18 @@ class PageWatcher(Base):
 
 
 class ItemPageLink(Base):
-    """Issue ↔ doc-page association (both directions surface it)."""
+    """Issue ↔ doc-page association (both directions surface it).
+
+    `derived` splits the table in two (RADD-943). A MANUAL row is user data:
+    someone typed a key, and no body edit may remove it. A DERIVED row is owned
+    by the page's text — reconciled wholesale on every body change from the
+    issue references the body actually carries, so deleting the mention deletes
+    the link. The same split `item_links` expresses through `link_type`
+    (`mentions` vs. the manual types), which items has maintained since spec 52.
+
+    A key that is both mentioned and manually linked stays manual: the manual
+    row records a decision, and the mention is only evidence.
+    """
 
     __tablename__ = "item_page_links"
 
@@ -186,3 +197,4 @@ class ItemPageLink(Base):
     )
     created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    derived: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")

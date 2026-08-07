@@ -19,6 +19,7 @@ from . import (
     backlinks,
     core,
     labels as page_labels,
+    mentions as page_mentions,
     templates as page_templates,
     watchers as page_watchers,
 )
@@ -234,6 +235,7 @@ async def create_page(
     session.add(page)
     await session.flush()
     await backlinks.reindex(session, page)  # RADD-713
+    await page_mentions.reindex(session, page)  # RADD-943
     await _emit_page(
         session, PageEvent.PAGE_CREATED, page, actor_id,
         {"title": page.title, "space_id": str(space.id)},
@@ -315,6 +317,7 @@ async def update_page(
     # N inserts behind dragging a page in the tree.
     if "body" in changed:
         await backlinks.reindex(session, page)
+        await page_mentions.reindex(session, page)
     payload = {"title": page.title, "version": page.version, "changed": changed}
     if moved:
         await _emit_page(session, PageEvent.PAGE_MOVED, page, actor_id, payload)
@@ -464,6 +467,11 @@ async def restore_version(
     page.version += 1
     page.updated_by = actor_id
     await session.flush()
+    # A restore replaces the body, so both derived indexes describe the version
+    # that was just superseded. RADD-713 missed this leg — the backlinks index
+    # has been stale after every restore since it shipped.
+    await backlinks.reindex(session, page)
+    await page_mentions.reindex(session, page)
     await _emit_page(
         session, PageEvent.PAGE_RESTORED, page, actor_id,
         {

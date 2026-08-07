@@ -55,9 +55,16 @@ async def link_item(
     project = await projects_service.get_project(session, item.project_id)
     await authz.require(session, actor, authz.Permission.ITEM_READ, project=project)
     existing = await session.get(ItemPageLink, (item.id, page.id))
-    if existing is not None:
+    if existing is not None and not existing.derived:
         raise ConflictError("page_link", item_key)
-    session.add(ItemPageLink(item_id=item.id, page_id=page.id, created_by=actor.id))
+    if existing is not None:
+        # The body already mentions it and someone linked it anyway: that is a
+        # request to make the link permanent, not a duplicate. Promoting beats
+        # 409ing on a row the caller never created and cannot see the origin of.
+        existing.derived = False
+        existing.created_by = actor.id
+    else:
+        session.add(ItemPageLink(item_id=item.id, page_id=page.id, created_by=actor.id))
     await session.flush()
     key = f"{project.key}-{item.number}"
     await _emit_link(
@@ -80,6 +87,13 @@ async def unlink_item(
     link = await session.get(ItemPageLink, (item_id, page_id))
     if link is None:
         raise NotFoundError("page_link", item_id)
+    if link.derived:
+        # Deleting it would succeed and then be undone by the next save. Say so
+        # instead: the body is where this link lives (RADD-943).
+        raise ConflictError(
+            "page_link",
+            reason="this link comes from the page text — remove the mention to remove it",
+        )
     await session.delete(link)
     await session.flush()
     await _emit_link(
@@ -93,13 +107,16 @@ async def linked_items(
     """Items linked to a page, hydrated for display and filtered to projects
     the caller may read (item.read)."""
     await get_page(session, page_id)
-    item_ids = list(
+    origin = dict(
         (
             await session.execute(
-                select(ItemPageLink.item_id).where(ItemPageLink.page_id == page_id)
+                select(ItemPageLink.item_id, ItemPageLink.derived).where(
+                    ItemPageLink.page_id == page_id
+                )
             )
-        ).scalars()
+        ).all()
     )
+    item_ids = list(origin)
     if not item_ids:
         return []
     items = await items_service.items_by_ids(session, item_ids)
@@ -130,6 +147,7 @@ async def linked_items(
                 title=item.title,
                 state=state.name if state else "",
                 state_category=state.category if state else "",
+                derived=origin[item.id],
             )
         )
     return sorted(results, key=lambda linked: linked.key)

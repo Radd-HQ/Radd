@@ -441,12 +441,9 @@ export function PageView({
             <p className="mt-3 px-1.5 text-[13px] text-fg-faint">This page is empty.</p>
           )}
 
-          <section className="mt-8 border-t border-subtle pt-4">
-            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-              Linked issues
-            </h3>
-            <PageLinkedItems pageId={page.id} canWrite={canWrite} />
-          </section>
+          {/* RADD-943: the panel owns its heading, because whether it is open
+              is a property of what it contains. */}
+          <PageLinkedItems pageId={page.id} canWrite={canWrite} />
 
           {/* RADD-944 deleted the automatic subpage index that used to sit
               here. Children are the page tree's job, and the author's, via

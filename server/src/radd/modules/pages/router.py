@@ -17,6 +17,7 @@ from . import (
     export as page_export,
     labels as page_labels,
     links,
+    mentions as page_mentions,
     search,
     service,
     spaces,
@@ -231,6 +232,26 @@ async def list_page_extensions(session: Session, user: CurrentUser) -> list[Page
         )
         for spec in sorted(registries.page_extensions.values(), key=lambda s: s.label)
     ]
+
+
+@router.post("/pages/reindex")
+async def reindex_pages(session: Session, user: CurrentUser) -> dict[str, int]:
+    """Rebuild both derived indexes over every live page (RADD-943).
+
+    Page→page backlinks and page→issue links are maintained on save, so they
+    only exist for content that passed the save path — a page written before
+    either shipped, or created by an importer, carries neither. This is the one
+    call that fixes that, and it is idempotent: both indexes are derived from
+    the body, so running it twice changes nothing.
+
+    Registered BEFORE `/pages/{page_id}`, or the literal segment would be parsed
+    as a UUID and never reached (RADD-761).
+    """
+    await authz.require(session, user, authz.Permission.PAGE_MANAGE)
+    return {
+        "backlinks": await backlinks.reindex_all(session),
+        "item_links": await page_mentions.reindex_all(session),
+    }
 
 
 @router.get("/pages/by-path/{space_slug}/{page_slug}", response_model=PageRead)
