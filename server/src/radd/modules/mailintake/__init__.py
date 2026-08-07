@@ -12,7 +12,15 @@ plugin = RaddPlugin(
     "IMAP poller turning unseen messages into items (or reply comments on a keyed "
     "subject) as the system actor, mail_contacts for external requesters, ack "
     "emails, and an outbound consumer mailing public comments back to the contact.",
-    depends_on=("projects", "auth", "items", "comments", "automations", "events"),
+    # attachments: mail parts become item attachments through the spec-102
+    # polymorphic seam (RADD-956).
+    # attachments: mail parts become item attachments (RADD-956).
+    # notify: watchers ARE the participant set, so outbound reuses that fan-out
+    # rather than growing a second recipient model that would drift (RADD-955).
+    depends_on=(
+        "projects", "auth", "items", "comments", "automations", "events",
+        "attachments", "notify",
+    ),
     routers=(router,),
     on_startup=(dispatcher.start,),
     on_shutdown=(dispatcher.stop,),

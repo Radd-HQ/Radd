@@ -108,7 +108,9 @@ async def test_mail_ingest_provisions_and_reuses_the_requester(db):
     """An unknown sender becomes an EMAIL-source account; the second email
     from the same address reuses it instead of forking a duplicate."""
     from radd.modules.mailintake.parsing import EmailPlan
-    from radd.modules.mailintake.poller import _sender_user
+    # RADD-951 moved sender resolution out of the poller into the shared intake
+    # core — the poller and the webhook are now two callers of one path.
+    from radd.modules.mailintake.intake import _sender_user
 
     email = f"cust-{uuid.uuid4().hex[:8]}@customers.example.com"
     plan = EmailPlan(
