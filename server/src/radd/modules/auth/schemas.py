@@ -167,13 +167,58 @@ class ResourceTypeAccessRead(BaseModel):
 
 class AccessSummaryRead(BaseModel):
     """Effective answers, as COUNTS (RADD-809 — guard-level conclusions are
-    workflow-data-dependent and out of scope)."""
+    workflow-data-dependent and out of scope).
+
+    RADD-933 split the read count in two. `readable_projects` counted with
+    `holds_base`, which is right for a GATE — `item.read@own` genuinely holds
+    `item.read` in qualified form (RADD-823) — and wrong for a SUMMARY: an
+    account holding nothing but the Baseline's `item.read@own` was reported as
+    reading items in all 97 projects, which an admin reads as "sees
+    everything". What was true is "can read their OWN items there", and for an
+    account that has never logged in that is no items at all.
+
+    So: `readable_projects` is now the UNQUALIFIED count, and
+    `own_readable_projects` is the remainder reachable only through a qualifier.
+    Dropping the qualified projects entirely was rejected — `item.read@own` is
+    real access to real rows, and an admin auditing a leaver needs to see it.
+    The fault was conflation, not inclusion.
+    """
 
     readable_projects: int
+    #: Projects where the atom is held ONLY in qualified form (own/participant/…).
+    own_readable_projects: int = 0
     updatable_projects: int
+    own_updatable_projects: int = 0
     total_projects: int
     readable_spaces: int | None = None  # None = pages module not installed
     total_spaces: int | None = None
+
+
+class CarrierGrantRead(BaseModel):
+    """One role a carrier confers, and where."""
+
+    role_name: str
+    scope: str  # "global" | "project" | "space"
+    scope_label: str | None = None
+
+
+class MembershipRead(BaseModel):
+    """A team or directory group the person belongs to, and what it confers
+    (RADD-933).
+
+    The Users page could list a person's DIRECT grants and their resulting
+    atoms, but not the carriers in between — so "why can they see this?" had no
+    answer on the page, and a team that confers nothing today (the common case)
+    was invisible even though it is exactly the row that explains tomorrow's
+    change when someone grants a role to it.
+    """
+
+    kind: str  # "team" | "group"
+    id: uuid.UUID
+    name: str
+    #: Groups only: the nesting chain from the granted group down to the member.
+    path: list[str] | None = None
+    confers: list[CarrierGrantRead] = []
 
 
 class UserAccessRead(BaseModel):
@@ -182,6 +227,8 @@ class UserAccessRead(BaseModel):
 
     resources: list[ResourceTypeAccessRead]
     summary: AccessSummaryRead
+    #: RADD-933 — the carriers between "granted to" and "held by".
+    memberships: list[MembershipRead] = []
 
 
 class TeamAccessRead(BaseModel):

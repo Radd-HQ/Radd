@@ -17,6 +17,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { Users, UsersRound } from "lucide-react";
 import { RoutePath } from "../../lib/constants";
 import {
   pageSpacesQuery,
@@ -25,7 +26,7 @@ import {
   userAccessQuery,
   userPermissionsQuery,
 } from "../../lib/queries";
-import type { PermissionSource, ResourceTypeAccess } from "../../lib/types";
+import { GrantSubject, type Membership, type PermissionSource, type ResourceTypeAccess } from "../../lib/types";
 import { SelectField } from "../SelectField";
 import { ErrorText } from "../ErrorText";
 
@@ -233,9 +234,14 @@ export function ResourceAccessSection({ userId }: { userId: string }) {
       <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
         Resource access
       </p>
+      {/* RADD-933: full reach and own-items-only reach are DIFFERENT answers.
+          Counted together, an account holding nothing but the Baseline's
+          `item.read@own` reported "can read items in 97 of 97 projects", which
+          reads as "sees everything" and is why a correctly-revoked account
+          looked like it was still leaking. */}
       <p className="text-xs text-fg-secondary">
-        Can read items in <strong>{summary.readable_projects}</strong> and edit in{" "}
-        <strong>{summary.updatable_projects}</strong> of {summary.total_projects} projects
+        Can read <strong>every item</strong> in {summary.readable_projects} and edit in{" "}
+        {summary.updatable_projects} of {summary.total_projects} projects
         {summary.readable_spaces != null && summary.total_spaces != null ? (
           <>
             {" "}
@@ -245,7 +251,76 @@ export function ResourceAccessSection({ userId }: { userId: string }) {
         ) : null}
         .
       </p>
+      {(summary.own_readable_projects > 0 || summary.own_updatable_projects > 0) && (
+        <p className="text-xs text-fg-muted">
+          Beyond that, only <strong>their own</strong> (or participating) items: readable in{" "}
+          {summary.own_readable_projects}, editable in {summary.own_updatable_projects} further
+          projects. That is real access to real rows — it is simply not the same as reading the
+          project.
+        </p>
+      )}
+      <MembershipsSection memberships={data.memberships ?? []} />
       <ResourceSections sections={data.resources} subject="they" />
+    </div>
+  );
+}
+
+/**
+ * The carriers between "granted to" and "held by" (RADD-933).
+ *
+ * The Users page could list a person's DIRECT grants and the atoms they end up
+ * with, and nothing in between — so "which teams is this person on, and what do
+ * they confer?" had no answer on the page that answers every other access
+ * question. A carrier that confers nothing is still listed, and says so: it is
+ * exactly the row that will explain the change when someone later grants a role
+ * to that team.
+ */
+function MembershipsSection({ memberships }: { memberships: Membership[] }) {
+  if (memberships.length === 0) {
+    return (
+      <p className="text-xs text-fg-muted">On no teams or directory groups.</p>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
+        Teams and groups
+      </p>
+      <ul className="flex flex-col gap-1">
+        {memberships.map((entry) => {
+          const Icon = entry.kind === GrantSubject.group ? UsersRound : Users;
+          return (
+            <li key={`${entry.kind}:${entry.id}`} className="flex flex-wrap items-center gap-1.5 text-xs">
+              <Icon size={12} className="shrink-0 text-fg-faint" aria-hidden />
+              <span className="text-fg">{entry.name}</span>
+              {entry.path && entry.path.length > 1 && (
+                <span
+                  className="text-[11px] text-fg-faint"
+                  title={`Nesting chain, granted group first: ${entry.path.join(" ← ")}`}
+                >
+                  ({entry.path.length - 1} level{entry.path.length > 2 ? "s" : ""} down)
+                </span>
+              )}
+              {entry.confers.length === 0 ? (
+                <span className="text-[11px] text-fg-faint">grants nothing</span>
+              ) : (
+                entry.confers.map((grant, index) => (
+                  <span
+                    key={`${grant.role_name}-${grant.scope_label ?? "global"}-${index}`}
+                    className="rounded border border-strong px-1.5 py-px text-[11px] text-fg-secondary"
+                  >
+                    {grant.role_name}
+                    <span className="text-fg-faint">
+                      {" · "}
+                      {grant.scope_label ?? "everywhere"}
+                    </span>
+                  </span>
+                ))
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

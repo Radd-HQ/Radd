@@ -169,16 +169,40 @@ export interface ResourceTypeAccess {
 }
 
 export interface AccessSummary {
+  /** RADD-933: projects where the atom is held UNQUALIFIED — real full reach. */
   readable_projects: number;
   updatable_projects: number;
+  /** Projects reachable only through a qualifier (`@own`/`@participant`).
+   *  Counted separately because folding them in reported an account holding
+   *  nothing but the Baseline's `item.read@own` as reading every project. */
+  own_readable_projects: number;
+  own_updatable_projects: number;
   total_projects: number;
   readable_spaces: number | null;
   total_spaces: number | null;
 }
 
+/** One role a team/group confers on its members, and where (RADD-933). */
+export interface CarrierGrant {
+  role_name: string;
+  scope: string;
+  scope_label: string | null;
+}
+
+/** A team or directory group the person belongs to (RADD-933). */
+export interface Membership {
+  kind: string; // team | group
+  id: string;
+  name: string;
+  /** Groups only: nesting chain, granted group first. */
+  path: string[] | null;
+  confers: CarrierGrant[];
+}
+
 export interface UserAccess {
   resources: ResourceTypeAccess[];
   summary: AccessSummary;
+  memberships: Membership[];
 }
 
 export interface TeamAccess {

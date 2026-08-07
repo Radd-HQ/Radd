@@ -10,10 +10,12 @@ from radd.db import get_session
 from radd.exceptions import ForbiddenError, UnauthorizedError
 from radd.kernel import registries
 
-from . import authz, roles as roles_service, service, service_accounts, totp
+from . import authz, grants, roles as roles_service, service, service_accounts, totp
 from .deps import CurrentUser
 from .models import User
 from .schemas import (
+    CarrierGrantRead,
+    MembershipRead,
     AccessSummaryRead,
     ServiceAccountCreate,
     ServiceAccountRead,
@@ -43,7 +45,15 @@ from .schemas import (
     UserMergeRequest,
     UserRead,
 )
-from .types import SESSION_COOKIE_NAME, GrantScopeKind, InstanceRole, UserSource
+from .types import (
+    RELATION_ANY,
+    SESSION_COOKIE_NAME,
+    GrantScopeKind,
+    InstanceRole,
+    UserSource,
+    relations_held,
+)
+from radd.modules.access.types import GrantSubject
 
 # The 401 detail the login form keys on to show the code field (spec 48).
 TOTP_REQUIRED = "totp_required"
@@ -264,6 +274,48 @@ async def user_permissions(
     return [PermissionSourceRead.model_validate(s, from_attributes=True) for s in sources]
 
 
+async def _carrier_grants(
+    session: AsyncSession,
+    *,
+    team_id: uuid.UUID | None = None,
+    group_id: uuid.UUID | None = None,
+) -> list[CarrierGrantRead]:
+    """What a team or group CONFERS on its members (RADD-933).
+
+    Returns an empty list rather than being omitted when the carrier grants
+    nothing, because "you are on this team and it gives you nothing" is a real
+    and common answer — and it is the row that explains the change when someone
+    later grants a role to that team.
+    """
+    from radd.modules.projects import service as projects_service
+
+    rows = await grants.grants_for_subject(session, team_id=team_id, group_id=group_id)
+    if not rows:
+        return []
+    role_names = await roles_service.roles_by_ids(session, {row.role_id for row in rows})
+    project_keys = await projects_service.project_keys(
+        session, {row.project_id for row in rows if row.project_id is not None}
+    )
+    space_names = await authz.scope_labels(
+        session, GrantScopeKind.SPACE, {row.space_id for row in rows if row.space_id is not None}
+    )
+    out: list[CarrierGrantRead] = []
+    for row in rows:
+        if row.project_id is not None:
+            scope, label = "project", project_keys.get(row.project_id)
+        elif row.space_id is not None:
+            scope, label = "space", space_names.get(row.space_id)
+        else:
+            scope, label = "global", None
+        role = role_names.get(row.role_id)
+        out.append(
+            CarrierGrantRead(
+                role_name=role.name if role else "?", scope=scope, scope_label=label
+            )
+        )
+    return out
+
+
 @user_router.get("/{user_id}/access", response_model=UserAccessRead)
 async def user_resource_access(
     user_id: uuid.UUID, session: Session, actor: CurrentUser
@@ -298,9 +350,56 @@ async def user_resource_access(
         group_names={gid: group.name for gid, group in groups_by_id.items()},
     )
 
-    readable = await authz.require_anywhere(session, target, authz.Permission.ITEM_READ)
-    updatable = await authz.require_anywhere(session, target, authz.Permission.ITEM_UPDATE)
+    # RADD-933: the two counts are UNQUALIFIED vs qualified-only. `holds_base`
+    # (what require_anywhere gates on) is right for a gate and wrong for a
+    # summary — see AccessSummaryRead.
+    def _split_reach(
+        held: dict[uuid.UUID, frozenset[str]], atom: str
+    ) -> tuple[int, int]:
+        full = qualified = 0
+        for permissions in held.values():
+            relations = relations_held(permissions, atom)
+            if RELATION_ANY in relations:
+                full += 1
+            elif relations:
+                qualified += 1
+        return full, qualified
+
+    readable_full, readable_own = _split_reach(
+        await authz.require_anywhere(session, target, authz.Permission.ITEM_READ),
+        authz.Permission.ITEM_READ,
+    )
+    updatable_full, updatable_own = _split_reach(
+        await authz.require_anywhere(session, target, authz.Permission.ITEM_UPDATE),
+        authz.Permission.ITEM_UPDATE,
+    )
     total_projects = len(await projects_service.list_projects(session))
+
+    # The carriers between "granted to" and "held by" (RADD-933). team_ids and
+    # group_ids are already resolved above for the resource attribution; this
+    # endpoint used to compute them and return neither, so the Users page could
+    # not say which teams a person was on — let alone what those teams conferred.
+    memberships: list[MembershipRead] = []
+    for team_id, team in sorted(teams_by_id.items(), key=lambda kv: kv[1].name):
+        memberships.append(
+            MembershipRead(
+                kind=GrantSubject.TEAM.value,
+                id=team_id,
+                name=team.name,
+                confers=await _carrier_grants(session, team_id=team_id),
+            )
+        )
+    for group_id, group in sorted(groups_by_id.items(), key=lambda kv: kv[1].name):
+        path = await groups_service.membership_path(session, target.id, group_id)
+        memberships.append(
+            MembershipRead(
+                kind=GrantSubject.GROUP.value,
+                id=group_id,
+                name=group.name,
+                path=[g.name for g in path] if path else None,
+                confers=await _carrier_grants(session, group_id=group_id),
+            )
+        )
     # RADD-892: how much of a SCOPE KIND the actor reaches is the scope owner's
     # answer — spaces carry per-space ACLs auth cannot compute. Absent kind (or a
     # kind that cannot answer, like project, whose readability is an atom
@@ -317,12 +416,15 @@ async def user_resource_access(
             for section in resources
         ],
         summary=AccessSummaryRead(
-            readable_projects=len(readable),
-            updatable_projects=len(updatable),
+            readable_projects=readable_full,
+            own_readable_projects=readable_own,
+            updatable_projects=updatable_full,
+            own_updatable_projects=updatable_own,
             total_projects=total_projects,
             readable_spaces=readable_spaces,
             total_spaces=total_spaces,
         ),
+        memberships=memberships,
     )
 
 
