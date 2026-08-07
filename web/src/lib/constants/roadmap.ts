@@ -71,10 +71,17 @@ export const ROADMAP_STRUCTURE_QUERY =
 export const ROADMAP_EPICS_ONLY_QUERY =
   "kind = epic OR (kind = issue AND epic IS NOT EMPTY AND " +
   "start IS NOT EMPTY AND target IS NOT EMPTY)";
-/** Default-on recency policy ("Show closed" toggles it off): closed items
- *  keep drawing while their bar ended within ~3 months, then drop out. */
-export const ROADMAP_RECENT_CLOSED_QUERY =
-  "category NOT IN (done, canceled) OR target >= today-12w";
+/** What "Show closed" OFF means, and it means what it says (RADD-946).
+ *
+ *  It used to be a recency policy — `… OR target >= today-12w` — so closed work
+ *  kept drawing until its bar was about three months old. On any project
+ *  younger than that, which is most of them, turning the toggle off changed
+ *  nothing a reader could see, and the control read as broken.
+ *
+ *  Recently-finished context beside live work is genuinely useful; it is what
+ *  turning the toggle ON is for. It cannot also be the OFF behaviour, or OFF
+ *  has no observable meaning. */
+export const ROADMAP_RECENT_CLOSED_QUERY = "category NOT IN (done, canceled)";
 /** The tray pool: open items missing a full start+target window. Epics with
  *  a derived (children-union) bar are deduped out client-side. */
 export const ROADMAP_TRAY_QUERY =

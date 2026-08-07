@@ -95,8 +95,8 @@ export interface RoadmapSurfaceProps {
   /** Tray base SLQ (view query + tray clause) — the tray pages it itself. */
   trayQuery: string;
   trayProjectId: string | null;
-  /** "Show closed" (perf wave): false = the default recency filter applies
-   *  (closed items drop out ~3 months after their bar ends). */
+  /** "Show closed": false = done/canceled items are not drawn at all (RADD-946
+   *  — it was a ~3-month recency window, which made the control look dead). */
   showClosed: boolean;
   onToggleShowClosed: () => void;
   /** "Epics only": only epics + their scheduled children draw (standalone
@@ -725,7 +725,7 @@ export function RoadmapSurface({
           type="button"
           onClick={onToggleShowClosed}
           aria-pressed={showClosed}
-          title="Closed (done/canceled) items are hidden by default once their bar ended more than ~3 months ago — toggle to draw the full history."
+          title="Done and canceled items are hidden — toggle to draw finished work alongside what is live."
           className={`flex h-7 items-center gap-1 rounded-md border px-2 text-xs cursor-pointer ${
             showClosed
               ? "border-accent/60 bg-accent/15 text-accent-text"
