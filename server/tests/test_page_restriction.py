@@ -213,6 +213,107 @@ async def test_a_role_subject_grant_resolves_in_the_space(db):
     assert not await page_access.page_access(db, other, page)
 
 
+# --- the restriction runs down the tree (RADD-948) ------------------------------
+
+
+async def _child(db, space, actor, parent, title="2026 bands"):
+    return await pages_service.create_page(
+        db,
+        PageCreate(space_id=space.id, title=title, body="numbers", parent_id=parent.id),
+        actor.id,
+    )
+
+
+async def test_restricting_a_parent_closes_its_whole_subtree(db):
+    """The failure RADD-792 chose: sensitive material is naturally a parent page
+    with children, so leaving children open was the DEFAULT outcome."""
+    admin = await _admin(db)
+    space = await _space(db, admin)
+    parent = await _page(db, space, admin, title="Compensation")
+    child = await _child(db, space, admin, parent)
+    grandchild = await _child(db, space, admin, child, title="Appendix")
+    insider, outsider = await _user(db, "Insider"), await _user(db, "Outsider")
+    for person in (insider, outsider):
+        await _grant_space_read(db, person, space)
+
+    await _restrict(db, parent, admin, user_id=insider.id)
+
+    for page in (parent, child, grandchild):
+        assert await page_access.page_access(db, insider, page)
+        assert not await page_access.page_access(db, outsider, page)
+
+
+async def test_a_childs_own_grant_cannot_reopen_what_an_ancestor_closed(db):
+    """Nearest-ancestor-wins would let a grant on the child re-open the subtree —
+    the same hole one level down. Access may only narrow as you descend."""
+    admin = await _admin(db)
+    space = await _space(db, admin)
+    parent = await _page(db, space, admin, title="Compensation")
+    child = await _child(db, space, admin, parent)
+    insider, outsider = await _user(db, "Insider"), await _user(db, "Outsider")
+    for person in (insider, outsider):
+        await _grant_space_read(db, person, space)
+
+    await _restrict(db, parent, admin, user_id=insider.id)
+    await _restrict(db, child, admin, user_id=outsider.id)  # names the excluded person
+
+    assert not await page_access.page_access(db, outsider, child)
+    # …and the child's own grant still narrows: the insider passes the parent but
+    # is not named on the child.
+    assert not await page_access.page_access(db, insider, child)
+    assert await page_access.page_access(db, insider, parent)
+
+
+async def test_an_ancestor_restriction_hides_children_from_the_tree_and_search(db):
+    """The batched path resolves ancestors that are NOT in the input list — a
+    search returns matches, never their lineage."""
+    admin = await _admin(db)
+    space = await _space(db, admin)
+    parent = await _page(db, space, admin, title="Compensation")
+    child = await _child(db, space, admin, parent, title="Zorblatt band table")
+    insider, outsider = await _user(db, "Insider"), await _user(db, "Outsider")
+    for person in (insider, outsider):
+        await _grant_space_read(db, person, space)
+    await _restrict(db, parent, admin, user_id=insider.id)
+
+    outsider_tree = await pages_service.list_pages(db, space.id, actor=outsider)
+    assert {row.id for row in outsider_tree} == set()
+
+    hits = await pages_search.search_pages(db, "Zorblatt", limit=10)
+    assert child.id in {hit.page_id for hit in hits}, "fixture: the child must be findable"
+    for_outsider = await pages_service.drop_restricted_results(db, outsider, hits)
+    assert child.id not in {hit.page_id for hit in for_outsider}
+
+
+async def test_a_space_manager_still_reads_the_whole_subtree(db):
+    admin = await _admin(db)
+    space = await _space(db, admin)
+    parent = await _page(db, space, admin, title="Compensation")
+    child = await _child(db, space, admin, parent)
+    manager = await _user(db, "Wiki admin")
+    await _grant_space_read(db, manager, space, Permission.PAGE_MANAGE)
+    await _restrict(db, parent, admin, user_id=admin.id)
+
+    assert await page_access.page_access(db, manager, parent)
+    assert await page_access.page_access(db, manager, child)
+
+
+async def test_a_loop_in_the_data_reads_as_a_finite_path(db):
+    """`would_create_cycle` guards the write path; a loop already in the data
+    must not hang the request — the same defence the move guard gets."""
+    admin = await _admin(db)
+    space = await _space(db, admin)
+    one = await _page(db, space, admin, title="One")
+    two = await _child(db, space, admin, one, title="Two")
+    one.parent_id = two.id  # straight into the table, past the guard
+    await db.flush()
+    reader = await _user(db)
+    await _grant_space_read(db, reader, space)
+
+    assert await page_access.page_access(db, reader, two)
+    assert await page_access.readable_page_ids(db, reader, [one, two]) == {one.id, two.id}
+
+
 async def test_batched_and_single_answers_agree(db):
     """`readable_page_ids` is the batch behind every list surface; if it drifted
     from `page_access` the tree would disagree with what opening a page does."""

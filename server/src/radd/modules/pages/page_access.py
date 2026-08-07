@@ -9,20 +9,33 @@ carries a restriction, only the people named on it can reach it. That is exactly
 `default_open` in `access/resolution.py`, which custom fields already use — so
 this is a `ResourceSpec` registration, not a new mechanism.
 
-## The two layers compose, and the order matters
+## The three layers compose, and the order matters
 
     SPACE  decides whether you are in the room at all   (a role grant)
-    PAGE   can only NARROW within it                    (an access grant)
+    PATH   every restriction from the root down to here (RADD-948)
+    PAGE   its own                                      (an access grant)
 
 A page grant never WIDENS past the space. Someone with no access to the space
 cannot be let into one page by a grant on it — otherwise the space boundary
 would be advisory, and "restrict this page" would become a way to hand out
 access to a space you were never given.
 
-`hierarchical` on the spec is about ordered access LEVELS (viewer<editor<owner),
-NOT the page tree. Child pages do not inherit a parent's restriction; that is a
-tree-level affordance nobody has asked for yet, and guessing at it would mean
-someone finds their subtree quietly invisible.
+**And a restriction runs down the tree** (RADD-948). Every grant set on the
+ancestor path must pass, plus the page's own. RADD-792 shipped the opposite —
+"child pages do not inherit a parent's restriction; guessing at it would mean
+someone finds their subtree quietly invisible" — and that traded a subtree
+quietly INVISIBLE for a subtree quietly VISIBLE, which is the worse of the two
+by a wide margin. Sensitive material is naturally written as a parent page with
+children, so leaving children open was the default outcome, not the edge case.
+
+It is deliberately every ancestor rather than the nearest one. Nearest-wins lets
+a child re-open what its parent closed: put any grant on the child and someone
+excluded above reaches it by search or direct link — the same hole, one level
+down, and exactly what the space rule already forbids. Access may only narrow as
+you descend.
+
+`hierarchical` on the spec is unrelated: it means ordered access LEVELS
+(viewer<editor<owner), not the page tree.
 """
 
 from __future__ import annotations
@@ -116,20 +129,44 @@ async def _subject_context(
     )
 
 
+async def _ancestor_path(session: AsyncSession, page: Page) -> list[uuid.UUID]:
+    """`page` and every ancestor above it, nearest first.
+
+    Bounded by a seen-set rather than trusting the tree: `core.would_create_cycle`
+    guards the write path, but a loop already in the data must read as a finite
+    path, not hang the request (the same defence `test_pages` pins for moves).
+    """
+    from sqlalchemy import select
+
+    chain = [page.id]
+    seen = {page.id}
+    parent_id = page.parent_id
+    while parent_id is not None and parent_id not in seen:
+        chain.append(parent_id)
+        seen.add(parent_id)
+        parent_id = await session.scalar(select(Page.parent_id).where(Page.id == parent_id))
+    return chain
+
+
 async def page_access(
     session: AsyncSession, user: User, page: Page, access: str = Access.READ.value
 ) -> bool:
-    """May this actor read (or write) this ONE page?
+    """May this actor read (or write) this page?
 
-    Space first, page second — and the page half can only take access away.
+    Space first, then every restriction on the path down to it — each layer can
+    only take access away.
     """
     space_held = await space_access.space_permissions(session, user, page.space_id)
     needed = Permission.PAGE_READ if access == Access.READ.value else Permission.PAGE_WRITE
     if needed not in space_held:
         return False
-    grants = await access_service.list_for_resource(session, PAGE_RESOURCE, str(page.id))
-    if not grants:
-        return True  # unrestricted: the space's answer stands
+    path = await _ancestor_path(session, page)
+    grants_by_page = await access_service.grants_for_resources(
+        session, PAGE_RESOURCE, [str(page_id) for page_id in path]
+    )
+    restricted = [grants for grants in (grants_by_page.get(str(p)) for p in path) if grants]
+    if not restricted:
+        return True  # nothing on the path: the space's answer stands
     if Permission.PAGE_MANAGE in space_held:
         # The resource-owned manager rule (RADD-816 moved it here from the
         # framework): a space's page.manage holder administers restrictions,
@@ -137,7 +174,7 @@ async def page_access(
         # never a framework bypass.
         return True
     ctx = await _subject_context(session, user, page.space_id, can_manage=False)
-    return has_access(grants, ctx, access, None, _PAGE_SPEC)
+    return all(has_access(grants, ctx, access, None, _PAGE_SPEC) for grants in restricted)
 
 
 async def readable_page_ids(
@@ -151,10 +188,38 @@ async def readable_page_ids(
     """
     if not pages:
         return set()
+    from sqlalchemy import select
+
     space_ids = {page.space_id for page in pages}
     space_perms = await space_access.permissions_by_space(session, user, list(space_ids))
+
+    # The parent map for every involved space, in ONE query (RADD-948). An
+    # ancestor is usually NOT in `pages` — FTS returns matches, not their
+    # lineage — so the path cannot be resolved from the input alone. Ids and
+    # parents only: no bodies, no titles.
+    parent_of: dict[uuid.UUID, uuid.UUID | None] = dict(
+        (
+            await session.execute(
+                select(Page.id, Page.parent_id).where(Page.space_id.in_(space_ids))
+            )
+        ).all()
+    )
+
+    def path_of(page_id: uuid.UUID) -> list[uuid.UUID]:
+        chain = [page_id]
+        seen = {page_id}
+        parent = parent_of.get(page_id)
+        while parent is not None and parent not in seen:  # loop-safe, see _ancestor_path
+            chain.append(parent)
+            seen.add(parent)
+            parent = parent_of.get(parent)
+        return chain
+
+    paths = {page.id: path_of(page.id) for page in pages}
     grants_by_page = await access_service.grants_for_resources(
-        session, PAGE_RESOURCE, [str(page.id) for page in pages]
+        session,
+        PAGE_RESOURCE,
+        [str(page_id) for path in paths.values() for page_id in path],
     )
     contexts: dict[uuid.UUID, SubjectContext] = {}
     readable: set[uuid.UUID] = set()
@@ -162,8 +227,12 @@ async def readable_page_ids(
         held = space_perms.get(page.space_id, frozenset())
         if Permission.PAGE_READ not in held:
             continue
-        grants = grants_by_page.get(str(page.id)) or []
-        if not grants:
+        restricted = [
+            grants
+            for grants in (grants_by_page.get(str(p)) for p in paths[page.id])
+            if grants
+        ]
+        if not restricted:
             readable.add(page.id)
             continue
         if Permission.PAGE_MANAGE in held:
@@ -173,6 +242,7 @@ async def readable_page_ids(
             contexts[page.space_id] = await _subject_context(
                 session, user, page.space_id, can_manage=False
             )
-        if has_access(grants, contexts[page.space_id], Access.READ.value, None, _PAGE_SPEC):
+        ctx = contexts[page.space_id]
+        if all(has_access(g, ctx, Access.READ.value, None, _PAGE_SPEC) for g in restricted):
             readable.add(page.id)
     return readable

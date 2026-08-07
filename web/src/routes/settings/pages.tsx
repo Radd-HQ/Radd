@@ -68,7 +68,7 @@ export function PagesSettingsPage() {
   return (
     <SettingsPage
       title="Page spaces"
-      description="Wiki spaces, each holding a page tree. A space is a grant SCOPE (RADD-791): who reads, writes and comments in it is a role granted there. Managing a space needs page.manage in it."
+      description="Wiki spaces, each holding a page tree. A space is a grant SCOPE: who reads, writes and comments in it is a role granted there. Managing a space needs page.manage in it."
     >
       {spaces.isPending ? (
         <TableSkeleton rows={3} />

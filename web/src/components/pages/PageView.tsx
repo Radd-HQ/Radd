@@ -501,8 +501,11 @@ export function PageView({
             description={
               <>
                 Unrestricted, this page is visible to everyone with access to its space.
-                Naming anyone below closes it to everyone else — and a grant here can only
-                narrow: it never gives access to a space someone was not already given.
+                Naming anyone below closes it to everyone else — <strong>and its
+                subpages with it</strong>: a restriction applies to the whole subtree
+                beneath this page. A grant here can only ever narrow — it never gives
+                access to a space someone was not already given, and a subpage's own
+                restriction cannot re-open what this one closes.
               </>
             }
           />
