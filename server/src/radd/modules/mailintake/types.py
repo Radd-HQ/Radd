@@ -57,6 +57,20 @@ class MailRuleType(StrEnum):
     LLM = "llm"                  # classify the CONTENT into a project (RADD-961)
 
 
+class MailRecipientKind(StrEnum):
+    """Why an address is on an outbound reply (RADD-967).
+
+    It decides one thing — the footer's wording — and that is worth an enum
+    because the two are not interchangeable: a colleague is watching an issue
+    they can open, and the requester is a customer who has no account and whose
+    only interface is replying. A single "you are receiving this" line would be
+    wrong for one of them whichever way it was written.
+    """
+
+    WATCHER = "watcher"
+    REQUESTER = "requester"
+
+
 class MailDirection(StrEnum):
     """Which way a `mail_messages` row went. Threading only ever resolves
     against OUTBOUND ids (what a reply's In-Reply-To can name); dedup only ever
@@ -119,14 +133,19 @@ OUTBOUND_BATCH = 200
 
 # Acknowledgment sent when intake/public-form submission creates an item with a
 # contact. The bracketed key in the subject is what threads the requester's
-# replies back onto the item (parsing.extract_reply_key).
+# replies back onto the item (parsing.extract_reply_key) — which is why the
+# SUBJECTS live here as wire constants while the bodies live in
+# `radd.mailrender` with every other rendering decision (RADD-967).
 ACK_SUBJECT_TEMPLATE = "[{key}] {title}"
-ACK_BODY_TEMPLATE = (
-    "Your request has been received and is being tracked as {key}.\n"
-    "\n"
-    "We'll follow up by email. You can reply to this message to add details —\n"
-    "replies are attached to the ticket automatically (keep [{key}] in the subject).\n"
-)
 
 # Outbound reply to the contact when an agent leaves a PUBLIC comment.
 REPLY_SUBJECT_TEMPLATE = "Re: [{key}] {title}"
+
+# Why each recipient is being written to — the footer of an outbound reply.
+REPLY_REASON_TEMPLATES = {
+    MailRecipientKind.WATCHER: "You are watching {key} — reply to this email to comment.",
+    MailRecipientKind.REQUESTER: (
+        "You are receiving this because you contacted us about {key} — "
+        "reply to this email to add to the ticket."
+    ),
+}

@@ -24,27 +24,32 @@ INBOUND id — and stored nothing it sent. So when a requester replied, their
 to the subject key. Every outbound message now goes into `mail_messages`, keyed
 by **the id the sender reports having actually used** (`MailSender.send`'s return
 value), not the one composed here.
+
+RADD-967 moved the recipient set and the message body into `reply.py` (over
+`radd.mailrender`): the reply used to be the bare comment text, so a watcher got
+a paragraph with no author, no issue and no link. This file is now the consumer
+— cursor, sender, delivery, outcome events.
 """
 
 import logging
 import uuid
-from dataclasses import dataclass, field
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd import mailrender
+from radd.config import settings
 from radd.db import SessionLocal
 from radd.modules.automations.types import SYSTEM_ACTOR_ID
-from radd.modules.auth import service as auth
 from radd.modules.comments import service as comments
 from radd.modules.comments.types import CommentEvent, CommentVisibility
 from radd.modules.events import runner, service as events
 from radd.modules.events.service import Event
 from radd.modules.items import service as items
-from radd.modules.notify import service as notify
 from radd.modules.projects import service as projects_service
 
-from . import registry, service, threading
+from . import registry, threading
 from .providers import OutboundMessage
+from .reply import OutboundReply, recipients_for, render
 from .senders import SmtpSender
 from .types import (
     OUTBOUND_BATCH,
@@ -58,22 +63,10 @@ from .types import (
 
 logger = logging.getLogger(__name__)
 
-
-@dataclass(frozen=True)
-class Recipient:
-    email: str
-    name: str = ""
-
-
-@dataclass(frozen=True)
-class OutboundReply:
-    item_id: uuid.UUID
-    comment_id: uuid.UUID
-    subject: str
-    body: str
-    recipients: tuple[Recipient, ...]
-    in_reply_to: str | None
-    references: tuple[str, ...] = field(default_factory=tuple)
+#: What a comment with no resolvable author is attributed to. An event whose
+#: `author` ref is missing is a bug upstream, but "commented" with an empty name
+#: in front of it is a broken sentence in someone's mailbox.
+UNKNOWN_AUTHOR = "Someone"
 
 
 def should_reply(*, has_recipients: bool, visibility: str, actor_id: uuid.UUID | None) -> bool:
@@ -121,36 +114,11 @@ async def run_once() -> int:
     )
 
 
-async def _recipients(
-    session: AsyncSession, item, author_id: uuid.UUID | None
-) -> tuple[Recipient, ...]:
-    """Everyone following this issue, minus whoever wrote the comment.
-
-    Watchers already ARE the participant set: notify auto-watches the reporter,
-    commenters and anyone added as a participant (spec 72), so reusing it keeps
-    one fan-out mechanism rather than growing a second recipient model that
-    would drift from the one deciding in-app notifications.
-    """
-    found: dict[str, Recipient] = {}
-    for user_id in await notify.watcher_ids(session, item.id):
-        if user_id == author_id or user_id == SYSTEM_ACTOR_ID:
-            continue
-        user = await auth.get_user(session, user_id)
-        if user is None or not user.active or not user.email:
-            continue
-        found[user.email.lower()] = Recipient(email=user.email, name=user.name or "")
-    # The external requester is not a user row, so they are never a watcher.
-    contact = await service.contact_for_item(session, item.id)
-    if contact is not None:
-        found.setdefault(contact.email.lower(), Recipient(contact.email, contact.name))
-    return tuple(found.values())
-
-
 async def _plan_reply(session: AsyncSession, event: Event) -> OutboundReply | None:
     payload = event.payload or {}
     item_id = uuid.UUID(payload["item"]["id"])  # RADD-922: the canonical ref
     item = await items.require_item(session, item_id)
-    recipients = await _recipients(session, item, event.actor_id)
+    recipients = await recipients_for(session, item_id, event.actor_id)
     if not should_reply(
         has_recipients=bool(recipients),
         visibility=payload.get("visibility", CommentVisibility.PUBLIC.value),
@@ -175,6 +143,11 @@ async def _plan_reply(session: AsyncSession, event: Event) -> OutboundReply | No
         comment_id=comment_id,
         subject=subject,
         body=body or payload.get("excerpt", ""),
+        # The author ref the comment event has always carried (RADD-922) and
+        # this consumer never read — which is why a reply arrived as an
+        # unattributed paragraph.
+        author=(payload.get("author") or {}).get("name") or UNKNOWN_AUTHOR,
+        item=mailrender.ItemMail(key=key, title=item.title, base_url=settings.app_base_url),
         recipients=recipients,
         in_reply_to=chain[-1] if chain else None,
         references=tuple(chain),
@@ -206,12 +179,17 @@ async def _deliver(reply: OutboundReply) -> None:
     failed: list[str] = []
     for recipient in reply.recipients:
         try:
+            # Composed PER RECIPIENT: the footer says why this address is on the
+            # thread, and a watcher and the external requester are on it for
+            # different reasons (RADD-967).
+            message = render(reply, recipient)
             sent = await sender.send(
                 OutboundMessage(
                     to_address=recipient.email,
                     to_name=recipient.name,
                     subject=reply.subject,
-                    body=reply.body,
+                    body=message.text,
+                    html_body=message.html,
                     headers=headers,
                 )
             )

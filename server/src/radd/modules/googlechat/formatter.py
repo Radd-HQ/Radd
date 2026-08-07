@@ -3,6 +3,8 @@ tests/test_connectors.py. Returns None for events the notifier does not post."""
 
 from typing import Any, Protocol
 
+from radd.mailrender import issue_url, site
+
 from .types import PAGE_CREATED_EVENT, ITEM_CREATED_EVENT, SLA_BREACHED_EVENT
 
 
@@ -11,10 +13,6 @@ class EventLike(Protocol):
 
     event_type: str
     payload: dict[str, Any]
-
-
-def _issue_url(base_url: str, key: str) -> str:
-    return f"{base_url}/issues/{key}"
 
 
 def _item(payload: dict) -> dict:
@@ -34,17 +32,17 @@ def format_message(event: EventLike, *, selected: frozenset[str], base_url: str)
         if not key:
             return None
         title = _item(payload).get("title", "")
-        return f"New item {key}: {title}\n{_issue_url(base_url, key)}"
+        return f"New item {key}: {title}\n{issue_url(base_url, key)}"
     if event.event_type == SLA_BREACHED_EVENT:
         key = _item(payload).get("key", "")
         if not key:
             return None
         policy = payload.get("policy_name", "")
         kind = payload.get("kind", "")
-        return f"SLA breached ({kind}) on {key} — policy {policy}\n{_issue_url(base_url, key)}"
+        return f"SLA breached ({kind}) on {key} — policy {policy}\n{issue_url(base_url, key)}"
     if event.event_type == PAGE_CREATED_EVENT:
         title = payload.get("title", "")
         if not title:
             return None
-        return f"New page: {title}\n{base_url}"
+        return f"New page: {title}\n{site(base_url)}"
     return None

@@ -40,6 +40,7 @@ class SmtpSender:
             message.body,
             to_name=message.to_name,
             headers=dict(message.headers),
+            html_body=message.html_body or None,
             config=smtp.SmtpConfig(
                 host=self._row.host,
                 port=self._row.port,

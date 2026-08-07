@@ -1,7 +1,8 @@
 """Shared synchronous SMTP send helper (spec 62).
 
-One place composes and ships an outbound plain-text email over the `smtp_*`
-settings; callers wrap it in `asyncio.to_thread` (stdlib smtplib blocks).
+One place ships an outbound email over the `smtp_*` settings; callers wrap it in
+`asyncio.to_thread` (stdlib smtplib blocks). What the message SAYS is composed in
+`radd/mailrender.py` (RADD-967) — this file is transport.
 The "is SMTP configured at all" guard stays at the CALLERS — an empty
 `smtp_host` means their whole feature is disabled, which each caller decides
 for itself (notify skips the digest loop, mailintake skips acks/replies).
@@ -60,8 +61,14 @@ def send_message(
     to_name: str = "",
     headers: Mapping[str, str] | None = None,
     config: SmtpConfig | None = None,
+    html_body: str | None = None,
 ) -> str:
-    """Send one plain-text email; return the `Message-ID` that was ACTUALLY SENT.
+    """Send one email; return the `Message-ID` that was ACTUALLY SENT.
+
+    `body` is the plain-text part and is never optional: an html-only message is
+    the one a text client, a screen reader and every spam filter reads as empty.
+    Passing `html_body` makes the message `multipart/alternative` — same content,
+    two renderings, the client picks (RADD-967).
 
     The return value is not a convenience (RADD-955). Threading depends on
     storing the id the provider used, and the two can differ: SMTP lets a client
@@ -89,6 +96,10 @@ def send_message(
     if not message.get("Message-ID"):
         message["Message-ID"] = make_msgid()
     message.set_content(body)
+    if html_body:
+        # After set_content, so the text part stays FIRST — `multipart/alternative`
+        # is ordered worst-to-best and a client shows the last part it can render.
+        message.add_alternative(html_body, subtype="html")
     with smtplib.SMTP(cfg.host, cfg.port, timeout=SMTP_TIMEOUT_SECONDS) as smtp:
         if cfg.starttls:
             smtp.starttls()

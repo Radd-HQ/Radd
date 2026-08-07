@@ -38,12 +38,18 @@ class RawMessage:
 
 @dataclass(frozen=True)
 class OutboundMessage:
-    """One message a sender is asked to deliver."""
+    """One message a sender is asked to deliver.
+
+    `body` is the plain-text part; `html_body` the optional richer rendering of
+    the SAME content (RADD-967). Both are composed by `radd.mailrender`, so a
+    sender never decides what a message looks like — only how it travels.
+    """
 
     to_address: str
     subject: str
     body: str
     to_name: str = ""
+    html_body: str = ""
     headers: Mapping[str, str] = field(default_factory=dict)
 
 

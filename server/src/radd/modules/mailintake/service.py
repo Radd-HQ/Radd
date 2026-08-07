@@ -11,11 +11,11 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd import smtp
+from radd import mailrender, smtp
 from radd.config import settings
 
 from .models import MailContact
-from .types import ACK_BODY_TEMPLATE, ACK_SUBJECT_TEMPLATE
+from .types import ACK_SUBJECT_TEMPLATE
 
 logger = logging.getLogger(__name__)
 
@@ -57,18 +57,27 @@ async def send_ack(*, email: str, name: str, item_key: str, title: str, message_
     """Acknowledge a newly created item to its contact — subject `[KEY] title`
     (the key threads their replies back), In-Reply-To when we hold an inbound
     Message-ID. Silently skipped when SMTP is unconfigured or acks are off;
-    a delivery failure is logged, never raised (an ack must not fail intake)."""
+    a delivery failure is logged, never raised (an ack must not fail intake).
+
+    Body composed by `radd.mailrender` (RADD-967), text + html, like every other
+    mail Radd sends. The env gate and the send path are deliberately untouched:
+    moving acks onto a `mail_senders` row is its own change.
+    """
     if not settings.smtp_host or not settings.mail_send_ack:
         return
     headers = {"In-Reply-To": message_id, "References": message_id} if message_id else None
+    rendered = mailrender.acknowledgement(
+        mailrender.ItemMail(key=item_key, title=title, base_url=settings.app_base_url)
+    )
     try:
         await asyncio.to_thread(
             smtp.send_message,
             email,
             ACK_SUBJECT_TEMPLATE.format(key=item_key, title=title),
-            ACK_BODY_TEMPLATE.format(key=item_key),
+            rendered.text,
             to_name=name,
             headers=headers,
+            html_body=rendered.html,
         )
     except Exception:
         logger.exception("mailintake: ack send to %s for %s failed", email, item_key)
