@@ -71,7 +71,13 @@ function StatusGrid({ status }: { status: InstanceStatus }) {
         detail={status.ldap_bind_account ? "bind account on" : "no bind account"}
         to={RoutePath.settingsDirectory}
       />
-      <StatusPill label="SMTP (email)" on={status.smtp_configured} />
+      {/* RADD-958: clicking opens Settings → Email. Mail is configured in the
+          product now, not only in the environment. */}
+      <StatusPill
+        label="Email"
+        on={status.smtp_configured}
+        to={RoutePath.settingsEmail}
+      />
       <StatusPill label="TOTP MFA" on={status.mfa_available} />
       {/* Clicking opens Settings → AI (spec 101) — providers/roles/toggles live there. */}
       <StatusPill

@@ -49,6 +49,8 @@ export const SettingsSection = {
   ai: "ai",
   // Attachment storage hosts + delivery (spec 102) — admin only.
   storage: "storage",
+  // Mail sources/senders + the routing chain (RADD-958) — admin only.
+  email: "email",
   // SSO provider registry + signup domain allowlists (spec 110) — admin only.
   signIn: "sign-in",
   // Operator monitoring: DB health, counts, worker lag — admin only.
@@ -166,6 +168,8 @@ export const RoutePath = {
   settingsAi: `${SETTINGS_SEGMENT}/${SettingsSection.ai}`,
   /** Attachment storage hosts + delivery modes (spec 102, admin). */
   settingsStorage: `${SETTINGS_SEGMENT}/${SettingsSection.storage}`,
+  /** Mail sources, senders and routing rules (RADD-958, admin). */
+  settingsEmail: `${SETTINGS_SEGMENT}/${SettingsSection.email}`,
   /** SSO providers + per-provider signup domain allowlists (spec 110, admin). */
   settingsSignIn: `${SETTINGS_SEGMENT}/${SettingsSection.signIn}`,
   settingsMonitoring: `${SETTINGS_SEGMENT}/${SettingsSection.monitoring}`,

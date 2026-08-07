@@ -19,7 +19,17 @@ from ..providers import OutboundMessage
 
 
 class SmtpSender:
+    """Sends over one `mail_senders` row (RADD-958).
+
+    The row is the whole configuration — host, credentials, identity — so an
+    instance can hold several and outbound picks by `is_default` rather than by
+    whatever the environment last said.
+    """
+
     kind = "smtp"
+
+    def __init__(self, row) -> None:
+        self._row = row
 
     async def send(self, message: OutboundMessage) -> str:
         # stdlib smtplib blocks; every caller in this codebase threads it.
@@ -30,4 +40,12 @@ class SmtpSender:
             message.body,
             to_name=message.to_name,
             headers=dict(message.headers),
+            config=smtp.SmtpConfig(
+                host=self._row.host,
+                port=self._row.port,
+                username=self._row.username,
+                password=self._row.secret,
+                starttls=self._row.starttls,
+                from_address=self._row.from_address,
+            ),
         )

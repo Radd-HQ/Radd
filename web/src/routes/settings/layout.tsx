@@ -13,6 +13,7 @@ import {
   DatabaseZap,
   GitBranch,
   HardDrive,
+  Mail,
   KeyRound,
   Link2,
   MessageSquareQuote,
@@ -210,6 +211,15 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         to: RoutePath.settingsStorage,
         label: "Storage",
         icon: HardDrive,
+        show: (g) => g.instanceAdmin,
+      },
+      {
+        // Mail sources/senders + the routing chain (RADD-958). Configuration
+        // that used to be environment-only, which meant an operator with sops
+        // rather than an admin with a form.
+        to: RoutePath.settingsEmail,
+        label: "Email",
+        icon: Mail,
         show: (g) => g.instanceAdmin,
       },
       {

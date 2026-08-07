@@ -123,6 +123,7 @@ async def accept(
     own_addresses: set[str],
     envelope_from: str = "",
     source_id: uuid.UUID | None = None,
+    default_project_id: uuid.UUID | None = None,
 ) -> Outcome:
     """Take one parsed message all the way to an issue or a comment.
 
@@ -165,6 +166,7 @@ async def accept(
         raw=raw,
         default_project_key=default_project_key,
         source_id=source_id,
+        default_project_id=default_project_id,
     )
 
 
@@ -230,9 +232,12 @@ async def _create(
     raw: bytes,
     default_project_key: str,
     source_id: uuid.UUID | None = None,
+    default_project_id: uuid.UUID | None = None,
 ) -> Outcome:
     actor = await auth.get_user(session, SYSTEM_ACTOR_ID)
-    project = await _target_project(session, plan, default_project_key, source_id)
+    project = await _target_project(
+        session, plan, default_project_key, source_id, default_project_id
+    )
     sender = await _sender_user(session, plan)
     body = plan.body or EMPTY_BODY_PLACEHOLDER
     description = body if sender is not None else SENDER_NOTE_TEMPLATE.format(
@@ -386,6 +391,7 @@ async def _target_project(
     plan: EmailPlan,
     default_key: str,
     source_id: uuid.UUID | None = None,
+    default_project_id: uuid.UUID | None = None,
 ) -> Project:
     """Where a NEW issue opens, in precedence order (RADD-958/961):
 
@@ -414,16 +420,15 @@ async def _target_project(
         tagged = next((p for p in projects if p.key == plan.project_key), None)
         if tagged is not None:
             return tagged
-    if source_id is not None:
+    if default_project_id is None and source_id is not None:
         from .models import MailSource
 
         source = await session.get(MailSource, source_id)
-        if source is not None and source.default_project_id is not None:
-            fallback = next(
-                (p for p in projects if p.id == source.default_project_id), None
-            )
-            if fallback is not None:
-                return fallback
+        default_project_id = source.default_project_id if source else None
+    if default_project_id is not None:
+        fallback = next((p for p in projects if p.id == default_project_id), None)
+        if fallback is not None:
+            return fallback
     key = (default_key or "").upper()
     if not key:
         raise ConflictError(MailEntity.MAIL, reason="no default project configured for mail")

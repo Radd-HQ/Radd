@@ -11,7 +11,7 @@ from radd.exceptions import NotFoundError
 from radd.modules.auth.deps import CurrentUser
 from radd.modules.items import service as items_service
 
-from . import intake, loops, parsing, service
+from . import intake, loops, parsing, registry, service
 from .schemas import MailContactRead
 from .sources import webhook
 from .types import MAX_BODY_BYTES, MailEntity
@@ -61,7 +61,12 @@ async def ingest_email(
         # have rejected beats inventing a second limit.
         return _status(response, 413, {"error": "message too large"})
 
-    secret = settings.email_ingest_secret
+    # The SOURCE row decides the secret and the routing (RADD-958). Resolved by
+    # envelope recipient, so one instance can serve several ingest addresses with
+    # different secrets — a per-tenant property the single env secret could not
+    # express. Falls back to the env secret while no row exists yet.
+    source = await registry.source_for_address(session, x_radd_envelope_to)
+    secret = source.secret if source is not None else settings.email_ingest_secret
     if not webhook.verify_signature(raw, x_radd_signature, secret):
         # Deliberately identical for "no secret configured", "no signature sent"
         # and "wrong signature": a caller learning WHICH is a caller learning
@@ -97,8 +102,10 @@ async def ingest_email(
             plan,
             raw=raw,
             default_project_key=settings.mail_project_key,
-            own_addresses=loops.own_addresses(),
+            own_addresses=await registry.own_addresses(session),
             envelope_from=x_radd_envelope_from,
+            source_id=source.id if source is not None else None,
+            default_project_id=source.default_project_id if source is not None else None,
         )
         await session.commit()
     except Exception:  # noqa: BLE001 — see above; the status is the point

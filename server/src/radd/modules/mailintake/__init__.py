@@ -1,8 +1,8 @@
-from radd.config import settings
 from radd.kernel import CapabilitySpec, EventTypeSpec, PluginUiManifest
 from radd.kernel import RaddPlugin
 
-from . import dispatcher
+from . import dispatcher, registry
+from .config_router import router as config_router
 from .router import router
 from .types import MailEvent
 
@@ -27,15 +27,19 @@ plugin = RaddPlugin(
     # to the next rule rather than cost a customer their email. Same edge
     # `attachments` declares for its own LLM storage rule.
     weak_depends=("ai",),
-    routers=(router,),
-    on_startup=(dispatcher.start,),
+    routers=(router, config_router),
+    # Seed rows from env BEFORE the poller starts, or the first tick finds
+    # no sources on a fresh instance (RADD-958).
+    on_startup=(registry.seed_from_env, dispatcher.start),
     on_shutdown=(dispatcher.stop,),
     capabilities=(
         CapabilitySpec(
             "email_intake",
             "Email-to-issue intake",
             "connector",
-            check=lambda: {"enabled": bool(settings.mail_imap_host)},
+            # Rows, not env — the sync check reads the snapshot the registry
+            # refreshes on seed and on every write.
+            check=registry.capability_state,
         ),
     ),
     # RADD-960: the mail channel's own events, so a rule can tell a customer's

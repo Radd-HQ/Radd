@@ -107,3 +107,81 @@ export type ForgejoBackfillReport = {
   linked: number;
   unknown_keys: string[];
 };
+
+
+// ---------------------------------------------------------------------------
+// Mail configuration (RADD-958) — Settings → Email
+// ---------------------------------------------------------------------------
+
+export const MailSourceKind = { webhook: "webhook", imap: "imap" } as const;
+export type MailSourceKindValue = (typeof MailSourceKind)[keyof typeof MailSourceKind];
+
+export const MailRuleType = {
+  recipient: "recipient",
+  sender: "sender",
+  subject: "subject",
+  llm: "llm",
+} as const;
+export type MailRuleTypeValue = (typeof MailRuleType)[keyof typeof MailRuleType];
+
+/** Where mail comes IN. `has_secret` never carries the value — secrets are
+ *  write-only here, the same rule Storage/Sign-in/AI follow. */
+export interface MailSource {
+  id: string;
+  name: string;
+  kind: MailSourceKindValue;
+  enabled: boolean;
+  address: string;
+  host: string;
+  port: number;
+  username: string;
+  folder: string;
+  default_project_id: string | null;
+  has_secret: boolean;
+  rule_count: number;
+}
+
+/** Where mail goes OUT. */
+export interface MailSender {
+  id: string;
+  name: string;
+  kind: "smtp";
+  enabled: boolean;
+  is_default: boolean;
+  from_address: string;
+  reply_to: string;
+  host: string;
+  port: number;
+  username: string;
+  starttls: boolean;
+  has_secret: boolean;
+}
+
+/** One step of a source's ordered chain. First enabled match wins. */
+export interface MailRule {
+  id: string;
+  source_id: string;
+  name: string;
+  rule_type: MailRuleTypeValue;
+  enabled: boolean;
+  position: number;
+  config: Record<string, unknown>;
+  project_id: string | null;
+}
+
+/** A test send reports the Message-ID the RELAY used — the value threading
+ *  depends on (RADD-955), so showing it makes "did that work" verifiable. */
+export interface MailTestResult {
+  ok: boolean;
+  message_id: string;
+  error: string;
+}
+
+/** The dry run: where would a message like this land, and what decided. */
+export interface RoutingPreviewResult {
+  project_id: string | null;
+  project_key: string;
+  matched_rule_id: string | null;
+  matched_rule_name: string;
+  reason: string;
+}

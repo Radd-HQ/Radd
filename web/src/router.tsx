@@ -62,6 +62,7 @@ import { ForgejoSettingsPage } from "./routes/settings/forgejo";
 import { ServiceAccountsSettingsPage } from "./routes/settings/service-accounts";
 import { AiSettingsPage } from "./routes/settings/ai";
 import { StorageSettingsPage } from "./routes/settings/storage";
+import { EmailSettingsPage } from "./routes/settings/email";
 import { SignInSettingsPage } from "./routes/settings/sign-in";
 import { MonitoringSettingsPage } from "./routes/settings/monitoring";
 import { ProfileSettingsPage } from "./routes/settings/profile";
@@ -528,6 +529,13 @@ const settingsStorageRoute = createRoute({
   component: StorageSettingsPage,
 });
 
+/** Mail sources, senders and the routing chain (RADD-958) — instance-admin only. */
+const settingsEmailRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: SettingsSection.email,
+  component: EmailSettingsPage,
+});
+
 /** SSO providers + signup domain allowlists (spec 110) — instance-admin only. */
 const settingsSignInRoute = createRoute({
   getParentRoute: () => settingsRoute,
@@ -699,6 +707,7 @@ const routeTree = rootRoute.addChildren([
       settingsDocsRoute,
       settingsAiRoute,
       settingsStorageRoute,
+  settingsEmailRoute,
       settingsSignInRoute,
       settingsMonitoringRoute,
       settingsHolidaysRoute,

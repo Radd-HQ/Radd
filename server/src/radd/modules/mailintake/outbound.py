@@ -32,7 +32,6 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd.config import settings
 from radd.db import SessionLocal
 from radd.modules.automations.types import SYSTEM_ACTOR_ID
 from radd.modules.auth import service as auth
@@ -44,7 +43,7 @@ from radd.modules.items import service as items
 from radd.modules.notify import service as notify
 from radd.modules.projects import service as projects_service
 
-from . import service, threading
+from . import registry, service, threading
 from .providers import OutboundMessage
 from .senders import SmtpSender
 from .types import (
@@ -54,6 +53,7 @@ from .types import (
     MailDirection,
     MailEntity,
     MailEvent,
+    MailSenderKind,
 )
 
 logger = logging.getLogger(__name__)
@@ -90,14 +90,25 @@ def should_reply(*, has_recipients: bool, visibility: str, actor_id: uuid.UUID |
     return True
 
 
-def _sender():
-    """The configured `MailSender`. One kind so far; a row-driven registry is
-    RADD-958's job and slots in here without touching anything above."""
-    return SmtpSender() if settings.smtp_host else None
+async def _sender(session: AsyncSession):
+    """The configured `MailSender`, built from its ROW (RADD-958).
+
+    Returns (sender, row) or (None, None). A kind maps to an implementation
+    here and nowhere else, which is what makes a Gmail adapter a class plus a
+    row rather than an edit to this module.
+    """
+    row = await registry.default_sender(session)
+    if row is None:
+        return None, None
+    if row.kind == MailSenderKind.SMTP.value:
+        return SmtpSender(row), row
+    logger.warning("mailintake: no sender implementation for kind %r", row.kind)
+    return None, None
 
 
 async def _plan(session: AsyncSession, event: Event) -> OutboundReply | None:
-    if _sender() is None:  # unconfigured = advance silently, plan nothing
+    sender, _ = await _sender(session)
+    if sender is None:  # unconfigured = advance silently, plan nothing
         return None
     if event.event_type != CommentEvent.CREATED.value:
         return None
@@ -176,13 +187,14 @@ async def _deliver_all(replies: list[OutboundReply]) -> None:
 
 
 async def _deliver(reply: OutboundReply) -> None:
-    sender = _sender()
-    if sender is None:
+    async with SessionLocal() as session:
+        sender, row = await _sender(session)
+    if sender is None or row is None:
         return
     headers = {
         # Plain `help@`, no token: sub-addressing is stripped or rewritten by
         # exactly the corporate systems this feature targets (RADD-954).
-        "Reply-To": settings.email_ingest_address or settings.smtp_from_address,
+        "Reply-To": row.reply_to or row.from_address,
     }
     if reply.in_reply_to:
         headers["In-Reply-To"] = reply.in_reply_to

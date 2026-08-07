@@ -12,6 +12,7 @@ CSAT (spec 65) and the automation send_email action (spec 66).
 
 import smtplib
 from collections.abc import Mapping
+from dataclasses import dataclass
 from email.message import EmailMessage
 from email.utils import make_msgid
 
@@ -21,6 +22,36 @@ from radd.config import settings
 SMTP_TIMEOUT_SECONDS = 15.0
 
 
+@dataclass(frozen=True)
+class SmtpConfig:
+    """One relay's settings. Passed explicitly by `mailintake`, which reads them
+    from a `mail_senders` ROW (RADD-958); omitted by every other caller, which
+    still uses the `smtp_*` environment settings.
+
+    Both paths exist on purpose. Mail-as-a-channel is configurable in the UI;
+    notification digests, CSAT and the automation send_email action are instance
+    plumbing that has never needed a second relay.
+    """
+
+    host: str
+    port: int
+    username: str
+    password: str
+    starttls: bool
+    from_address: str
+
+
+def _env_config() -> SmtpConfig:
+    return SmtpConfig(
+        host=settings.smtp_host,
+        port=settings.smtp_port,
+        username=settings.smtp_username,
+        password=settings.smtp_password,
+        starttls=settings.smtp_starttls,
+        from_address=settings.smtp_from_address,
+    )
+
+
 def send_message(
     to_address: str,
     subject: str,
@@ -28,6 +59,7 @@ def send_message(
     *,
     to_name: str = "",
     headers: Mapping[str, str] | None = None,
+    config: SmtpConfig | None = None,
 ) -> str:
     """Send one plain-text email; return the `Message-ID` that was ACTUALLY SENT.
 
@@ -46,9 +78,10 @@ def send_message(
     delivery failure — callers choose between retry (notify digests) and
     log-and-drop.
     """
+    cfg = config or _env_config()
     message = EmailMessage()
     message["Subject"] = subject
-    message["From"] = settings.smtp_from_address
+    message["From"] = cfg.from_address
     message["To"] = f"{to_name} <{to_address}>" if to_name else to_address
     for key, value in (headers or {}).items():
         if value:
@@ -56,11 +89,11 @@ def send_message(
     if not message.get("Message-ID"):
         message["Message-ID"] = make_msgid()
     message.set_content(body)
-    with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=SMTP_TIMEOUT_SECONDS) as smtp:
-        if settings.smtp_starttls:
+    with smtplib.SMTP(cfg.host, cfg.port, timeout=SMTP_TIMEOUT_SECONDS) as smtp:
+        if cfg.starttls:
             smtp.starttls()
-        if settings.smtp_username:
-            smtp.login(settings.smtp_username, settings.smtp_password)
+        if cfg.username:
+            smtp.login(cfg.username, cfg.password)
         smtp.send_message(message)
     # Read BACK off the message, not from the local variable — this is the value
     # that went on the wire.
