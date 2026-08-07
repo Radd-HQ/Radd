@@ -94,6 +94,13 @@ export const PermissionScope = {
 } as const;
 export type PermissionScopeValue = (typeof PermissionScope)[keyof typeof PermissionScope];
 
+/** One qualifier an atom may carry (RADD-939): own, team, assigned, participant. */
+export interface RelationOption {
+  key: string;
+  /** The relation's own prose — "they reported", "shared with them". */
+  label: string;
+}
+
 /** One row of GET /permissions — feeds the roles matrix UI. */
 export interface PermissionInfo {
   key: PermissionValue;
@@ -103,6 +110,61 @@ export interface PermissionInfo {
   resource: string;
   /** Spec 50: the verb half (create/read/update/delete/manage/…) — matrix column. */
   action: string;
+  /** RADD-939: the qualifiers this atom may carry, from the server's relation
+   *  registry. Empty = unqualifiable, and the row is a plain checkbox. */
+  relations?: RelationOption[];
+}
+
+/** The unqualified form — "anything", the widest reading of an atom. */
+export const RELATION_ANY = "any";
+
+/**
+ * Which forms of `atom` a role holds (RADD-939).
+ *
+ * A SET, not one value, because that is the server's model: `relations_held`
+ * returns a frozenset and the gate passes when ANY held relation contains the
+ * one being checked. The seeded Baseline depends on it — `item.read@own` AND
+ * `item.read@participant` together mean "items they reported, or were shared
+ * into", which no single qualifier expresses.
+ *
+ * Worth stating because the single-valued version of this function was written
+ * first and was wrong in the quiet way: it returned the first match, so editing
+ * the Baseline would have dropped its second qualifier with nothing on screen
+ * to show it had gone.
+ *
+ * `[]` = not held. `[RELATION_ANY]` = the bare atom, which subsumes every
+ * qualifier.
+ */
+export function heldRelations(
+  selected: readonly PermissionValue[],
+  atom: PermissionValue,
+): string[] {
+  const held: string[] = [];
+  for (const entry of selected) {
+    if (entry === atom) held.push(RELATION_ANY);
+    else if (entry.startsWith(`${atom}@`)) held.push(entry.slice(atom.length + 1));
+  }
+  return held;
+}
+
+/**
+ * Replace every form of `atom` with exactly `relations` (empty = drop it).
+ *
+ * `RELATION_ANY` is exclusive by construction: it subsumes every qualifier, so
+ * keeping one beside it would be redundant and would read as though the
+ * narrowing still meant something.
+ */
+export function withRelations(
+  selected: readonly PermissionValue[],
+  atom: PermissionValue,
+  relations: readonly string[],
+): PermissionValue[] {
+  const without = selected.filter(
+    (entry) => entry !== atom && !entry.startsWith(`${atom}@`),
+  );
+  if (relations.length === 0) return without;
+  if (relations.includes(RELATION_ANY)) return [...without, atom];
+  return [...without, ...relations.map((relation) => `${atom}@${relation}`)];
 }
 
 /** GET /roles (spec 06) — global role registry. Builtin rows are immutable. */

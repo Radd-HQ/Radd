@@ -559,6 +559,18 @@ class RoleGrantCreate(BaseModel):
         return self
 
 
+class RelationOptionRead(BaseModel):
+    """One qualifier an atom may carry (RADD-939): `own`, `team`, `participant`…
+
+    `label` is the relation's own prose ("they reported", "shared with them"),
+    written to complete the sentence the matrix draws — the role grants this
+    verb for items *they reported*.
+    """
+
+    key: str
+    label: str
+
+
 class PermissionRead(BaseModel):
     """One row of the GET /permissions catalog (feeds the admin matrix UI)."""
 
@@ -567,6 +579,13 @@ class PermissionRead(BaseModel):
     scope: PermissionScope
     resource: str  # spec 50: the resource half of the key (item, state, …) — matrix grouping
     action: str  # spec 50: the verb half (create/read/update/delete/manage/…) — matrix column
+    #: RADD-939: the relation qualifiers this atom may carry, so the matrix can
+    #: draw `item.read@own` instead of rendering it as nothing. Resolved through
+    #: the atom's relation DOMAIN — the same lookup `_validate_atoms` uses to
+    #: accept a write, deliberately: a catalog that offered a combination the
+    #: validator rejects (or hid one it accepts) would be a second opinion about
+    #: one rule, and the two would drift.
+    relations: list[RelationOptionRead] = []
 
 
 class BaselinePreflightRequest(BaseModel):

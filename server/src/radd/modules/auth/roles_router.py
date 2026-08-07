@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
+from radd.kernel import registries
 from radd.modules.projects import service as projects_service
 
 from . import authz, preflight, grants, roles
@@ -24,6 +25,7 @@ from .schemas import (
     GlobalGrantRead,
     GlobalGrantsUpdate,
     PermissionRead,
+    RelationOptionRead,
     RoleCreate,
     RoleGrantCreate,
     RoleRead,
@@ -405,6 +407,11 @@ async def permission_catalog(session: Session, user: CurrentUser) -> list[Permis
     catalog = []
     for key in [*ordered, *extra]:
         resource, action = permission_parts(key)
+        # RADD-939: the qualifiers this atom may carry. `relation_domain` is the
+        # atom's own resource unless its module declared a parent (RADD-844 —
+        # `comment.write` qualifies against the ITEM the comment lands on), and
+        # it is the same resolution the write validator uses.
+        relations = registries.relations_for(registries.relation_domain(key))
         catalog.append(
             PermissionRead(
                 key=key,
@@ -412,6 +419,10 @@ async def permission_catalog(session: Session, user: CurrentUser) -> list[Permis
                 scope=permission_scope_of(key),
                 resource=resource,
                 action=action,
+                relations=[
+                    RelationOptionRead(key=relation_key, label=spec.label)
+                    for relation_key, spec in sorted(relations.items())
+                ],
             )
         )
     return catalog

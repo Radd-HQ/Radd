@@ -13,6 +13,7 @@ import {
   type PermissionValue,
   type Role,
   type RoleUpdate,
+  withRelations,
 } from "../../lib/types";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
@@ -269,12 +270,11 @@ function RolePanel({ role, catalog, canManage }: RolePanelProps) {
     selected.length !== role.permissions.length ||
     selected.some((permission) => !role.permissions.includes(permission));
 
-  const toggle = (permission: PermissionValue) =>
-    setSelected((previous) =>
-      previous.includes(permission)
-        ? previous.filter((entry) => entry !== permission)
-        : [...previous, permission],
-    );
+  // RADD-939: relations are a SET per atom (the Baseline holds item.read@own AND
+  // @participant), so the editor replaces the atom's whole form-set rather than
+  // one value — the single-valued version dropped the second qualifier silently.
+  const setRelations = (permission: PermissionValue, relations: string[]) =>
+    setSelected((previous) => withRelations(previous, permission, relations));
 
   return (
     <div className="flex flex-col gap-4 border-t border-subtle/60 bg-surface/30 px-4 py-4">
@@ -308,7 +308,7 @@ function RolePanel({ role, catalog, canManage }: RolePanelProps) {
       <PermissionMatrix
         catalog={catalog}
         selected={selected}
-        onToggle={permissionsEditable ? toggle : undefined}
+        onChange={permissionsEditable ? setRelations : undefined}
       />
       {isBaseline && canManage && <BaselinePreflight selected={selected} />}
       {/* Spec 87: builtin roles are immutable but still grantable instance-wide,

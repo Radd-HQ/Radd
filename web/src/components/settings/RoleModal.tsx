@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { ApiPath, ROLE_KEY_HINT, ROLE_KEY_PATTERN } from "../../lib/constants";
 import { queryKeys } from "../../lib/queries";
-import type { PermissionInfo, PermissionValue, Role, RoleCreate } from "../../lib/types";
+import { withRelations, type PermissionInfo, type PermissionValue, type Role, type RoleCreate } from "../../lib/types";
 import { Button } from "../Button";
 import { Modal } from "../Modal";
 import { TextField } from "../TextField";
@@ -57,12 +57,9 @@ export function RoleModal({ catalog, onClose, onCreated }: RoleModalProps) {
     });
   };
 
-  const toggle = (permission: PermissionValue) =>
-    setPermissions((previous) =>
-      previous.includes(permission)
-        ? previous.filter((entry) => entry !== permission)
-        : [...previous, permission],
-    );
+  // RADD-939 — see the roles page: an atom's relations are a set.
+  const setRelations = (permission: PermissionValue, relations: string[]) =>
+    setPermissions((previous) => withRelations(previous, permission, relations));
 
   return (
     <Modal title="New role" onClose={onClose} wide>
@@ -99,7 +96,7 @@ export function RoleModal({ catalog, onClose, onCreated }: RoleModalProps) {
           placeholder="What this role is for"
           maxLength={500}
         />
-        <PermissionMatrix catalog={catalog} selected={permissions} onToggle={toggle} />
+        <PermissionMatrix catalog={catalog} selected={permissions} onChange={setRelations} />
         {create.isError && <ErrorText error={create.error} />}
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
