@@ -48,6 +48,7 @@ export const Permission = {
   releaseUpdate: "release.update",
   labelRead: "label.read",
   labelUpdate: "label.update",
+  labelDelete: "label.delete",
   cannedRead: "canned.read",
   cannedUpdate: "canned.update",
   slaUpdate: "sla.update",

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Tags } from "lucide-react";
+import { Check, Pencil, Plus, Tags, Trash2, X } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
@@ -8,7 +8,9 @@ import { useListFilter } from "../../lib/list-filter";
 import { labelsQuery, queryKeys } from "../../lib/queries";
 import { Permission, type Label, type LabelCreate } from "../../lib/types";
 import { Button } from "../../components/Button";
+import { useConfirm } from "../../components/ConfirmDialog";
 import { EmptyState } from "../../components/EmptyState";
+import { IconButton } from "../../components/IconButton";
 import { ListSearchInput } from "../../components/ListSearchInput";
 import { TableSkeleton } from "../../components/TableSkeleton";
 import { TextField } from "../../components/TextField";
@@ -24,15 +26,19 @@ export function LabelsSettingsPage() {
   const perms = usePermissions();
   // Label creation requires project.manage at global scope (backend rule).
   const canManage = perms.global(Permission.labelUpdate);
+  // RADD-950: a separate atom, and a separate control. Someone who may tidy a
+  // name is not necessarily someone who may strip a label off every issue.
+  const canDelete = perms.global(Permission.labelDelete);
   const labels = useQuery(labelsQuery());
   const all = labels.data ?? [];
   const search = useListFilter(all, (label) => [label.name]);
   const list = search.filtered;
+  const [confirmDialog, confirm] = useConfirm();
 
   return (
     <SettingsPage
       title="Labels"
-      description="Global labels. Items also auto-create labels on first use; rename/delete isn't supported by the API yet."
+      description="Global labels, shared by issues and pages. Items also auto-create one on first use, which is why this list grows on its own."
     >
       {labels.isPending ? (
         <TableSkeleton rows={4} />
@@ -60,28 +66,13 @@ export function LabelsSettingsPage() {
               ) : (
                 <ul className="rounded-lg border border-subtle">
                   {list.map((label) => (
-                    <li
+                    <LabelRow
                       key={label.id}
-                      className="flex items-center gap-3 border-b border-subtle/60 px-4 py-2.5 last:border-b-0"
-                    >
-                      {label.color ? (
-                        <span
-                          className="size-3 shrink-0 rounded-full"
-                          style={{ backgroundColor: label.color }}
-                          aria-hidden
-                        />
-                      ) : (
-                        <span
-                          className={`size-3 shrink-0 rounded-full ${NO_COLOR_SWATCH_CLASS}`}
-                          aria-hidden
-                        />
-                      )}
-                      <span className="flex-1 text-[13px] text-heading">{label.name}</span>
-                      <span className="font-mono text-[11px] text-fg-faint">{label.color ?? "—"}</span>
-                      <span className="text-xs text-fg-faint">
-                        {new Date(label.created_at).toLocaleDateString()}
-                      </span>
-                    </li>
+                      label={label}
+                      canManage={canManage}
+                      canDelete={canDelete}
+                      confirm={confirm}
+                    />
                   ))}
                 </ul>
               )}
@@ -90,7 +81,133 @@ export function LabelsSettingsPage() {
           {canManage && <AddLabelForm />}
         </>
       )}
+      {confirmDialog}
     </SettingsPage>
+  );
+}
+
+/** One label: swatch, name, colour, created — plus rename and delete for
+ *  whoever holds the atoms (RADD-950; both endpoints have existed since spec 87
+ *  and this page used to claim otherwise). */
+function LabelRow({
+  label,
+  canManage,
+  canDelete,
+  confirm,
+}: {
+  label: Label;
+  canManage: boolean;
+  canDelete: boolean;
+  confirm: ReturnType<typeof useConfirm>[1];
+}) {
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(label.name);
+  const [color, setColor] = useState(label.color ?? DEFAULT_LABEL_COLOR);
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.labels });
+  const save = useMutation({
+    mutationFn: (body: { name: string; color: string }) =>
+      api.patch<Label>(`${ApiPath.labels}/${label.id}`, body),
+    onSuccess: async () => {
+      await invalidate();
+      setEditing(false);
+    },
+  });
+  const remove = useMutation({
+    mutationFn: () => api.delete<void>(`${ApiPath.labels}/${label.id}`),
+    onSuccess: invalidate,
+  });
+
+  const commit = () => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    if (trimmed === label.name && color === (label.color ?? DEFAULT_LABEL_COLOR)) {
+      setEditing(false);
+      return;
+    }
+    save.mutate({ name: trimmed, color });
+  };
+
+  return (
+    <li className="flex items-center gap-3 border-b border-subtle/60 px-4 py-2.5 last:border-b-0">
+      {editing ? (
+        <>
+          <input
+            type="color"
+            value={color}
+            onChange={(event) => setColor(event.target.value)}
+            aria-label={`Colour for ${label.name}`}
+            className="h-6 w-8 shrink-0 cursor-pointer rounded border border-strong bg-surface p-0.5"
+          />
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") commit();
+              if (event.key === "Escape") setEditing(false);
+            }}
+            aria-label={`Rename ${label.name}`}
+            maxLength={100}
+            autoFocus
+            className="h-7 flex-1 rounded-md border border-strong bg-surface px-2 text-[13px] text-heading focus:outline-2 focus:outline-offset-1 focus:outline-focus"
+          />
+          <IconButton onClick={commit} disabled={save.isPending} aria-label="Save label">
+            <Check size={13} />
+          </IconButton>
+          <IconButton onClick={() => setEditing(false)} aria-label="Cancel rename">
+            <X size={13} />
+          </IconButton>
+        </>
+      ) : (
+        <>
+          <span
+            className={`size-3 shrink-0 rounded-full ${label.color ? "" : NO_COLOR_SWATCH_CLASS}`}
+            style={label.color ? { backgroundColor: label.color } : undefined}
+            aria-hidden
+          />
+          <span className="flex-1 text-[13px] text-heading">{label.name}</span>
+          <span className="font-mono text-[11px] text-fg-faint">{label.color ?? "—"}</span>
+          <span className="text-xs text-fg-faint">
+            {new Date(label.created_at).toLocaleDateString()}
+          </span>
+          {canManage && (
+            <IconButton onClick={() => setEditing(true)} aria-label={`Edit ${label.name}`}>
+              <Pencil size={13} />
+            </IconButton>
+          )}
+          {canDelete && (
+            <IconButton
+              danger
+              disabled={remove.isPending}
+              aria-label={`Delete ${label.name}`}
+              onClick={() =>
+                void confirm({
+                  title: `Delete "${label.name}"`,
+                  // No count: `labels` deliberately does not read the items
+                  // module's tables, and reaching across that seam to decorate
+                  // a dialog is not worth the coupling.
+                  message:
+                    `Remove "${label.name}" from every issue and page that carries it, ` +
+                    "and delete the label. This cannot be undone.",
+                  confirmLabel: "Delete label",
+                  danger: true,
+                }).then((ok) => {
+                  if (ok) remove.mutate();
+                })
+              }
+            >
+              <Trash2 size={13} />
+            </IconButton>
+          )}
+        </>
+      )}
+      {(save.isError || remove.isError) && (
+        <span className="text-xs text-red-400">
+          {errorMessage(save.isError ? save.error : remove.error)}
+        </span>
+      )}
+    </li>
   );
 }
 
