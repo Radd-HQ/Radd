@@ -194,6 +194,20 @@ export const apiSsoProviderTestPath = (providerId: string) =>
 export const ssoLoginPath = (providerId?: string) =>
   providerId ? `${ApiPath.ssoLogin}?provider_id=${providerId}` : ApiPath.ssoLogin;
 
+/** Mail configuration paths (RADD-958/969) — instance admin only. */
+export const apiMailSourcePath = (sourceId: string) => `${ApiPath.mailSources}/${sourceId}`;
+export const apiMailSourceRulesPath = (sourceId: string) =>
+  `${apiMailSourcePath(sourceId)}/rules`;
+export const apiMailSourceRulesOrderPath = (sourceId: string) =>
+  `${apiMailSourceRulesPath(sourceId)}/order`;
+/** POST — where would a message like this land? Nothing is created or sent. */
+export const apiMailSourcePreviewPath = (sourceId: string) =>
+  `${apiMailSourcePath(sourceId)}/preview`;
+export const apiMailSenderPath = (senderId: string) => `${ApiPath.mailSenders}/${senderId}`;
+export const apiMailSenderTestPath = (senderId: string) =>
+  `${apiMailSenderPath(senderId)}/test`;
+export const apiMailRulePath = (ruleId: string) => `${ApiPath.mailRules}/${ruleId}`;
+
 /** Storage host paths (spec 102) — instance admin only. */
 export const apiStorageHostPath = (hostId: string) => `${ApiPath.storageHosts}/${hostId}`;
 export const apiStorageHostDefaultPath = (hostId: string) =>

@@ -15,7 +15,9 @@ import asyncio
 
 from radd import smtp
 
+from .. import resolve
 from ..providers import OutboundMessage
+from ..types import MailSenderKind
 
 
 class SmtpSender:
@@ -24,9 +26,12 @@ class SmtpSender:
     The row is the whole configuration — host, credentials, identity — so an
     instance can hold several and outbound picks by `is_default` rather than by
     whatever the environment last said.
+
+    Connection details are RESOLVED, not read off the row (RADD-969): a Gmail
+    or Outlook row stores none, and the kind's preset answers them here.
     """
 
-    kind = "smtp"
+    kind = MailSenderKind.SMTP.value
 
     def __init__(self, row) -> None:
         self._row = row
@@ -42,11 +47,11 @@ class SmtpSender:
             headers=dict(message.headers),
             html_body=message.html_body or None,
             config=smtp.SmtpConfig(
-                host=self._row.host,
-                port=self._row.port,
-                username=self._row.username,
+                host=resolve.sender_host(self._row),
+                port=resolve.sender_port(self._row),
+                username=resolve.sender_username(self._row),
                 password=self._row.secret,
-                starttls=self._row.starttls,
+                starttls=resolve.sender_starttls(self._row),
                 from_address=self._row.from_address,
             ),
         )

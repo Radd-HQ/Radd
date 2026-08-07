@@ -172,6 +172,12 @@ export const ApiPath = {
   // UNAUTHENTICATED — the login page's buttons (label + kind only).
   ssoPublicProviders: "/auth/sso/providers",
   ssoLogin: "/auth/oidc/login",
+  // Mail configuration (RADD-958/969) — instance admin: Settings → Email.
+  mailSources: "/mail/sources",
+  mailSenders: "/mail/senders",
+  mailRules: "/mail/rules",
+  /** Per-kind defaults — what the add-a-source/sender form prefills itself with. */
+  mailKinds: "/mail/kinds",
   monitoringOverview: "/monitoring/overview",
   // Storage host registry (spec 102) — instance admin: Settings → Storage.
   storageHosts: "/storage/hosts",

@@ -31,9 +31,8 @@ from radd.config import settings
 from radd.db import SessionLocal
 from radd.modules.events import service as events
 
-from . import registry, threading
+from . import registry, senders, threading
 from .providers import OutboundMessage
-from .senders import SmtpSender
 from .types import MailDirection, MailEntity, MailEvent, MailSenderKind
 
 logger = logging.getLogger(__name__)
@@ -43,12 +42,19 @@ logger = logging.getLogger(__name__)
 class _EnvSender:
     """The environment relay wearing a `mail_senders` row's shape.
 
-    A seed-era instance has no sender row — `registry.seed_from_env` only writes
+    A seed-era instance has no sender row — `seeding.seed_from_env` only writes
     one when `RADD_SMTP_HOST` is set at first boot, and an instance that gained
     SMTP later has none at all. `send_ack` has always had this fallback; without
     it here, upgrading would SILENTLY stop every notification email on exactly
     those instances. A frozen dataclass rather than a detached `MailSender`, so
     nothing can flush a synthetic row into the table.
+
+    It carries a `kind` because RADD-969 made every connection detail resolve
+    against the kind's preset (`resolve.py`), and an env relay IS the custom
+    `smtp` kind: a named host from the environment is by definition not Gmail's.
+    Stating that here is cheaper than teaching `resolve` and `SmtpSender` to
+    tolerate a kindless duck — that would put a branch in every one of the six
+    resolvers to serve one caller.
     """
 
     host: str
@@ -78,17 +84,20 @@ def _env_sender() -> _EnvSender | None:
 async def _sender(session: AsyncSession):
     """The configured sender, built from its ROW (RADD-958), else the env relay.
 
-    Returns `(sender, row)` or `(None, None)`. A kind maps to an implementation
-    here and nowhere else, which is what makes a Gmail adapter a class plus a row
-    rather than an edit to every caller.
+    Returns `(sender, row)` or `(None, None)`. The kind→implementation map is
+    `senders.sender_for` and lives nowhere else (RADD-969) — this file and the
+    settings test-send both call it, so a Gmail sender row that the transport
+    happily uses cannot be one the test button calls unimplemented. It is also
+    what makes a Gmail adapter a class plus a row rather than an edit here.
     """
     row = await registry.default_sender(session) or _env_sender()
     if row is None:
         return None, None
-    if row.kind == MailSenderKind.SMTP.value:
-        return SmtpSender(row), row
-    logger.warning("mailintake: no sender implementation for kind %r", row.kind)
-    return None, None
+    sender = senders.sender_for(row)
+    if sender is None:
+        logger.warning("mailintake: no sender implementation for kind %r", row.kind)
+        return None, None
+    return sender, row
 
 
 async def outbound_configured(session: AsyncSession) -> bool:

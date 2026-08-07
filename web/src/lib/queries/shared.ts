@@ -150,6 +150,11 @@ export const queryKeys = {
   aiRoles: ["aiRoles"] as const,
   aiPresets: ["aiPresets"] as const,
   aiEmbeddingCoverage: ["aiEmbeddingCoverage"] as const,
+  // Mail configuration (RADD-958/969) — Settings → Email.
+  mailSources: ["mailSources"] as const,
+  mailSenders: ["mailSenders"] as const,
+  mailKinds: ["mailKinds"] as const,
+  mailRules: (sourceId: string) => ["mailRules", { sourceId }] as const,
   monitoringOverview: ["monitoringOverview"] as const,
   // Storage host registry + routing chain + move jobs (spec 102).
   storageHosts: ["storageHosts"] as const,

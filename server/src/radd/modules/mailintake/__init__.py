@@ -1,9 +1,10 @@
 from radd.kernel import CapabilitySpec, EventTypeSpec, PluginUiManifest
 from radd.kernel import RaddPlugin
 
-from . import dispatcher, registry
+from . import dispatcher, registry, seeding
 from .config_router import router as config_router
 from .router import router
+from .rules_router import router as rules_router
 from .types import MailEvent
 
 plugin = RaddPlugin(
@@ -29,10 +30,10 @@ plugin = RaddPlugin(
     # to the next rule rather than cost a customer their email. Same edge
     # `attachments` declares for its own LLM storage rule.
     weak_depends=("ai",),
-    routers=(router, config_router),
+    routers=(router, config_router, rules_router),
     # Seed rows from env BEFORE the poller starts, or the first tick finds
     # no sources on a fresh instance (RADD-958).
-    on_startup=(registry.seed_from_env, dispatcher.start),
+    on_startup=(seeding.seed_from_env, dispatcher.start),
     on_shutdown=(dispatcher.stop,),
     capabilities=(
         CapabilitySpec(

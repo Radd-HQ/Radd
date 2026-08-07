@@ -110,11 +110,54 @@ export type ForgejoBackfillReport = {
 
 
 // ---------------------------------------------------------------------------
-// Mail configuration (RADD-958) — Settings → Email
+// Mail configuration (RADD-958/969) — Settings → Email
 // ---------------------------------------------------------------------------
 
-export const MailSourceKind = { webhook: "webhook", imap: "imap" } as const;
+/** How mail reaches Radd. `google`/`outlook` are PRESETS over IMAP, not separate
+ *  transports: the row leaves the connection blank and the kind answers it. */
+export const MailSourceKind = {
+  webhook: "webhook",
+  imap: "imap",
+  google: "google",
+  outlook: "outlook",
+} as const;
 export type MailSourceKindValue = (typeof MailSourceKind)[keyof typeof MailSourceKind];
+
+/** Where mail goes out. `google`/`outlook` are SMTP with the connection answered. */
+export const MailSenderKind = {
+  smtp: "smtp",
+  google: "google",
+  outlook: "outlook",
+} as const;
+export type MailSenderKindValue = (typeof MailSenderKind)[keyof typeof MailSenderKind];
+
+/**
+ * One entry of `GET /mail/kinds` (RADD-969) — what the add form prefills itself
+ * with, per the spec-110 `SsoKindInfo` pattern.
+ *
+ * `preset` is the flag the form branches on: true means the connection is
+ * answered, so host/port/TLS are HIDDEN rather than shown pre-filled — a field
+ * showing `imap.gmail.com` invites an edit, and the edited value would then
+ * outlive the preset it was copied from.
+ */
+export interface MailKindInfo {
+  /** A `MailSourceKindValue` under `sources`, a `MailSenderKindValue` under `senders`. */
+  kind: string;
+  name: string;
+  summary: string;
+  host: string;
+  port: number;
+  starttls: boolean;
+  guidance: string;
+  help_url: string;
+  preset: boolean;
+}
+
+/** Both halves in one response — the two dialogs share a query. */
+export interface MailKinds {
+  sources: MailKindInfo[];
+  senders: MailKindInfo[];
+}
 
 export const MailRuleType = {
   recipient: "recipient",
@@ -132,6 +175,7 @@ export interface MailSource {
   kind: MailSourceKindValue;
   enabled: boolean;
   address: string;
+  /** RAW, as stored — blank on a preset kind. What the EDIT FORM shows. */
   host: string;
   port: number;
   username: string;
@@ -139,22 +183,33 @@ export interface MailSource {
   default_project_id: string | null;
   has_secret: boolean;
   rule_count: number;
+  /** What the poller will actually use: the row value or the kind's preset
+   *  (RADD-969). What the LIST shows. */
+  resolved_host: string;
+  resolved_port: number;
+  resolved_username: string;
 }
 
 /** Where mail goes OUT. */
 export interface MailSender {
   id: string;
   name: string;
-  kind: "smtp";
+  kind: MailSenderKindValue;
   enabled: boolean;
   is_default: boolean;
   from_address: string;
   reply_to: string;
+  /** RAW, as stored — blank on a preset kind. */
   host: string;
   port: number;
   username: string;
   starttls: boolean;
   has_secret: boolean;
+  /** What the relay will actually be dialled with (RADD-969). */
+  resolved_host: string;
+  resolved_port: number;
+  resolved_username: string;
+  resolved_starttls: boolean;
 }
 
 /** One step of a source's ordered chain. First enabled match wins. */

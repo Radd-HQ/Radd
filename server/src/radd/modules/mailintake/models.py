@@ -17,6 +17,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from radd.db import Base, TimestampMixin
 
+from .types import DEFAULT_IMAP_FOLDER, DEFAULT_IMAP_PORT, DEFAULT_SMTP_PORT
+
 
 class MailContact(Base, TimestampMixin):
     """The external requester behind an item (spec 62) — captured when intake or a
@@ -112,10 +114,12 @@ class MailSource(Base, TimestampMixin):
     #: webhook: the HMAC secret. imap: the mailbox password. Write-only over the
     #: API, like every other credential in this instance.
     secret: Mapped[str] = mapped_column(Text, default="")
+    #: BLANK on a preset kind (gmail/outlook), which answers it at read time —
+    #: `resolve.source_host`. Storing the preset's value would freeze it.
     host: Mapped[str] = mapped_column(String(255), default="")  # imap only
-    port: Mapped[int] = mapped_column(Integer, default=993)
+    port: Mapped[int] = mapped_column(Integer, default=DEFAULT_IMAP_PORT)
     username: Mapped[str] = mapped_column(String(320), default="")
-    folder: Mapped[str] = mapped_column(String(120), default="INBOX")
+    folder: Mapped[str] = mapped_column(String(120), default=DEFAULT_IMAP_FOLDER)
     #: Where a message lands when NO rule matches. The chain narrows from here.
     default_project_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
@@ -137,8 +141,9 @@ class MailSender(Base, TimestampMixin):
     #: Overrides the source's address when set. Normally blank, so replies go
     #: back to the mailbox that received the original.
     reply_to: Mapped[str] = mapped_column(String(320), default="")
+    #: BLANK on a preset kind — see `MailSource.host`.
     host: Mapped[str] = mapped_column(String(255), default="")
-    port: Mapped[int] = mapped_column(Integer, default=587)
+    port: Mapped[int] = mapped_column(Integer, default=DEFAULT_SMTP_PORT)
     username: Mapped[str] = mapped_column(String(320), default="")
     secret: Mapped[str] = mapped_column(Text, default="")
     starttls: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")

@@ -16,7 +16,46 @@ import uuid
 
 from pydantic import BaseModel, Field
 
-from .types import MailRuleType, MailSenderKind, MailSourceKind
+from .types import (
+    DEFAULT_IMAP_FOLDER,
+    DEFAULT_IMAP_PORT,
+    DEFAULT_SMTP_PORT,
+    MailRuleType,
+    MailSenderKind,
+    MailSourceKind,
+)
+
+
+class MailKindInfo(BaseModel):
+    """What the add-a-source / add-a-sender form needs to prefill itself
+    (RADD-969) — the spec-110 `GET /sso/kinds` shape.
+
+    `host`/`port`/`starttls` describe the kind's TRANSPORT for the half this
+    entry belongs to: IMAP under `sources`, SMTP under `senders`. `preset` is
+    the one the form branches on — true means the connection is answered, so
+    those fields are hidden rather than shown pre-filled: a field showing
+    `imap.gmail.com` invites someone to edit it, and the edited value would then
+    outlive the preset.
+    """
+
+    #: A `MailSourceKind` value under `sources`, a `MailSenderKind` under `senders`.
+    kind: str
+    name: str
+    summary: str = ""
+    host: str = ""
+    port: int = 0
+    starttls: bool = True
+    #: The operational precondition (app passwords), when there is one.
+    guidance: str = ""
+    help_url: str = ""
+    preset: bool = False
+
+
+class MailKinds(BaseModel):
+    """Both halves in one response — the two dialogs share a query."""
+
+    sources: list[MailKindInfo]
+    senders: list[MailKindInfo]
 
 
 class MailSourceRead(BaseModel):
@@ -25,6 +64,8 @@ class MailSourceRead(BaseModel):
     kind: MailSourceKind
     enabled: bool
     address: str
+    #: RAW, as stored — blank on a preset kind, which is what the edit form has
+    #: to show so a saved round trip does not freeze the preset into the row.
     host: str
     port: int
     username: str
@@ -32,6 +73,11 @@ class MailSourceRead(BaseModel):
     default_project_id: uuid.UUID | None
     has_secret: bool
     rule_count: int = 0
+    #: What the poller will actually use (RADD-969) — row value or the kind's
+    #: preset. The LIST reads these; the FORM reads the raw ones above.
+    resolved_host: str = ""
+    resolved_port: int = 0
+    resolved_username: str = ""
 
 
 class MailSourceWrite(BaseModel):
@@ -39,10 +85,12 @@ class MailSourceWrite(BaseModel):
     kind: MailSourceKind
     enabled: bool = True
     address: str = ""
+    #: Blank on a preset kind. A stored value overrides the preset.
     host: str = ""
-    port: int = 993
+    #: 0 = unset, so the preset answers. Non-zero overrides it.
+    port: int = DEFAULT_IMAP_PORT
     username: str = ""
-    folder: str = "INBOX"
+    folder: str = DEFAULT_IMAP_FOLDER
     default_project_id: uuid.UUID | None = None
     #: Omitted = unchanged. "" = clear.
     secret: str | None = None
@@ -61,6 +109,10 @@ class MailSenderRead(BaseModel):
     username: str
     starttls: bool
     has_secret: bool
+    resolved_host: str = ""
+    resolved_port: int = 0
+    resolved_username: str = ""
+    resolved_starttls: bool = True
 
 
 class MailSenderWrite(BaseModel):
@@ -71,7 +123,7 @@ class MailSenderWrite(BaseModel):
     from_address: str = ""
     reply_to: str = ""
     host: str = ""
-    port: int = 587
+    port: int = DEFAULT_SMTP_PORT
     username: str = ""
     starttls: bool = True
     secret: str | None = None

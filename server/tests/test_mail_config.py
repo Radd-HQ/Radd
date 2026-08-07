@@ -16,15 +16,20 @@ import uuid
 from email.message import EmailMessage
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings
+from radd.exceptions import ConflictError
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
-from radd.modules.mailintake import intake, parsing, registry
+from radd.modules.mailintake import intake, parsing, registry, resolve, seeding, senders
 from radd.modules.mailintake.models import MailRule, MailSender, MailSource
-from radd.modules.mailintake.types import MailRuleType, MailSenderKind, MailSourceKind
+from radd.modules.mailintake.types import (
+    KIND_DEFAULTS,
+    MailRuleType,
+    MailSenderKind,
+    MailSourceKind,
+)
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 
@@ -135,7 +140,7 @@ async def test_the_dry_run_parses_addresses_the_way_a_real_message_does(db, worl
     A dry run that disagrees with the live chain is worse than no dry run: it
     reports a working rule as broken and sends someone off to fix nothing.
     """
-    from radd.modules.mailintake.config_router import preview_routing
+    from radd.modules.mailintake.rules_router import preview_routing
     from radd.modules.mailintake.config_schemas import RoutingPreviewRequest
 
     actor, default, dev = world
@@ -267,7 +272,7 @@ async def test_seeding_does_nothing_once_a_row_exists(db, monkeypatch):
     db.add(MailSource(name="already here", kind=MailSourceKind.IMAP.value, host="h", username="u"))
     await db.flush()
 
-    await registry._seed(db)
+    await seeding.seed(db)
 
     names = [s.name for s in await registry.list_sources(db)]
     assert names == ["already here"], "env must not add a second source"
@@ -288,7 +293,7 @@ async def test_seeding_creates_a_source_and_sender_on_an_empty_instance(db, monk
         await db.delete(row)
     await db.flush()
 
-    await registry._seed(db)
+    await seeding.seed(db)
 
     sources = await registry.list_sources(db)
     senders = await registry.list_senders(db)
@@ -312,3 +317,254 @@ async def test_the_capability_snapshot_tracks_rows_not_env(db):
         db, MailSource(name="in", kind=MailSourceKind.IMAP.value, host="h", username="u")
     )
     assert registry.capability_state()["enabled"] is True
+
+
+# --- kind presets: Gmail / Outlook (RADD-969) --------------------------------------
+
+
+async def test_a_preset_kind_answers_the_connection_the_row_leaves_blank():
+    """The spec-110 rule, copied: the ROW STORES BLANK where the preset answers.
+
+    Baking `smtp.gmail.com` into the row at save time looks identical on day one
+    and is wrong the day the preset changes — every existing row would keep the
+    old value. So the row holds nothing and resolution happens on the way out.
+    """
+    row = MailSender(
+        name="Gmail", kind=MailSenderKind.GOOGLE.value, host="", port=0,
+        from_address="Radd Support <support@radd-hq.com>", starttls=False,
+    )
+    assert resolve.sender_host(row) == "smtp.gmail.com"
+    assert resolve.sender_port(row) == 587
+    # `starttls` has no "unset", and the form HIDES it for a preset kind — so the
+    # preset decides rather than a stale false riding out of a hidden control.
+    assert resolve.sender_starttls(row) is True
+    # Gmail's login IS the mailbox, so the form does not ask for it twice.
+    assert resolve.sender_username(row) == "support@radd-hq.com"
+
+
+async def test_an_explicit_value_beats_the_preset():
+    """A preset is a default, not a lock — a relay in front of Gmail stays
+    expressible."""
+    row = MailSender(
+        name="Relay", kind=MailSenderKind.GOOGLE.value, host="smtp.corp.example",
+        port=2525, username="svc", from_address="a@x.com",
+    )
+    assert resolve.sender_host(row) == "smtp.corp.example"
+    assert resolve.sender_port(row) == 2525
+    assert resolve.sender_username(row) == "svc"
+
+
+async def test_an_unknown_kind_resolves_to_nothing_rather_than_raising():
+    """A row written by a newer version must degrade past the poller, not stop
+    it walking the mailboxes that do work."""
+    row = MailSource(name="future", kind="pigeon", host="", username="")
+    assert resolve.source_host(row) == ""
+    assert resolve.source_pollable(row) is False
+
+
+async def test_polled_sources_includes_a_preset_mailbox_with_no_host(db):
+    """Gmail and Outlook are polled exactly like IMAP, so the completeness check
+    reads RESOLVED values — otherwise a correctly configured Gmail source is
+    skipped silently for the rest of its life."""
+    gmail = MailSource(
+        name="gmail", kind=MailSourceKind.GOOGLE.value, address="help@radd-hq.com",
+        username="help@radd-hq.com", secret="app-password", host="", port=0,
+    )
+    # Nothing but the address: the username falls back to it, so this is complete.
+    outlook = MailSource(
+        name="outlook", kind=MailSourceKind.OUTLOOK.value, address="help@radd-hq.com",
+        secret="app-password", host="", port=0,
+    )
+    db.add_all([gmail, outlook])
+    await db.flush()
+
+    found = {s.name: s for s in await registry.polled_sources(db)}
+    assert {"gmail", "outlook"} <= set(found)
+    assert resolve.source_host(found["gmail"]) == "imap.gmail.com"
+    assert resolve.source_port(found["gmail"]) == 993
+    assert resolve.source_host(found["outlook"]) == "outlook.office365.com"
+    assert resolve.source_username(found["outlook"]) == "help@radd-hq.com"
+
+
+async def test_a_hand_configured_row_without_a_host_is_refused(db):
+    """Saved-and-silently-skipped is indistinguishable, from the form, from
+    working. The silence is right for a row someone is still editing and wrong
+    for the moment they press Save."""
+    with pytest.raises(ConflictError):
+        await registry.save_source(
+            db, MailSource(name="no host", kind=MailSourceKind.IMAP.value, username="u")
+        )
+    with pytest.raises(ConflictError):
+        await registry.save_sender(
+            db, MailSender(name="no host", kind=MailSenderKind.SMTP.value, from_address="a@x.com")
+        )
+
+
+async def test_a_preset_row_saves_with_no_host_at_all(db):
+    saved = await registry.save_source(
+        db,
+        MailSource(
+            name="gmail-ok", kind=MailSourceKind.GOOGLE.value, address="help@radd-hq.com",
+            host="", port=0, secret="app-password",
+        ),
+    )
+    assert saved.host == "", "the preset answers it; the row must stay blank"
+    sender = await registry.save_sender(
+        db,
+        MailSender(
+            name="gmail-out", kind=MailSenderKind.GOOGLE.value,
+            from_address="a@radd-hq.com", host="", port=0,
+        ),
+    )
+    assert sender.host == ""
+    # A webhook has no host to speak of and must stay savable.
+    await registry.save_source(
+        db, MailSource(name="hook-ok", kind=MailSourceKind.WEBHOOK.value, secret="s")
+    )
+
+
+async def test_the_kinds_endpoint_tells_the_form_what_each_preset_answers(db, world):
+    """The add form asks the SERVER what a kind means (spec 110's GET /sso/kinds).
+    A client-side copy of `smtp.gmail.com` would need a redeploy to change, which
+    is the whole point of not hardcoding it."""
+    from radd.modules.mailintake.config_router import list_kinds
+
+    actor, _, _ = world
+    kinds = await list_kinds(db, actor)
+
+    source_kinds = {k.kind: k for k in kinds.sources}
+    sender_kinds = {k.kind: k for k in kinds.senders}
+    assert set(source_kinds) == {k.value for k in MailSourceKind}
+    assert set(sender_kinds) == {k.value for k in MailSenderKind}
+
+    google_source = source_kinds[MailSourceKind.GOOGLE.value]
+    assert google_source.preset is True and google_source.host == "imap.gmail.com"
+    assert google_source.help_url.startswith("https://support.google.com/")
+    assert google_source.guidance, "an app-password precondition nobody states is an auth failure"
+
+    outlook_sender = sender_kinds[MailSenderKind.OUTLOOK.value]
+    assert outlook_sender.preset is True
+    assert (outlook_sender.host, outlook_sender.port, outlook_sender.starttls) == (
+        "smtp-mail.outlook.com", 587, True,
+    )
+    # The kinds an operator configures in full: `preset` false is what makes the
+    # form SHOW host/port instead of hiding them.
+    assert source_kinds[MailSourceKind.IMAP.value].preset is False
+    assert sender_kinds[MailSenderKind.SMTP.value].preset is False
+    assert source_kinds[MailSourceKind.WEBHOOK.value].preset is False
+
+
+async def test_a_google_sender_dispatches_to_the_smtp_transport(db, world, monkeypatch):
+    """Gmail is SMTP with the connection answered. ONE dispatch point, so the
+    test button cannot answer "no implementation" for a kind the RADD-968
+    transport is sending through happily — which is what two copies produced."""
+    from radd import smtp
+    from radd.modules.mailintake.config_router import test_sender
+    from radd.modules.mailintake.config_schemas import MailTestRequest
+
+    actor, _, _ = world
+    row = MailSender(
+        name="Gmail out", kind=MailSenderKind.GOOGLE.value, host="", port=0,
+        from_address="Radd <agent@radd-hq.com>", secret="app-password", starttls=False,
+    )
+    db.add(row)
+    await db.flush()
+
+    assert isinstance(senders.sender_for(row), senders.SmtpSender)
+
+    used: dict = {}
+
+    def fake_send(
+        to_address, subject, body, *, to_name="", headers=None, html_body=None, config=None
+    ):
+        used["config"] = config
+        return "<sent@gmail>"
+
+    monkeypatch.setattr(smtp, "send_message", fake_send)
+    result = await test_sender(row.id, MailTestRequest(to_address="you@example.com"), db, actor)
+
+    assert result.ok and result.message_id == "<sent@gmail>"
+    config = used["config"]
+    assert (config.host, config.port, config.starttls) == ("smtp.gmail.com", 587, True)
+    assert config.username == "agent@radd-hq.com"
+
+
+async def test_a_hostless_preset_row_is_what_the_transport_sends_through(db, world, monkeypatch):
+    """The seam between the RADD-968 transport and RADD-969 resolution.
+
+    `outbound_configured` and `default_sender` both used to read `row.host`, and
+    a Gmail row stores none — so notification mail and requester replies would
+    have reported "nothing to send from" on an instance whose settings page said
+    it was configured, while the test button sent fine. Both now go through
+    `resolve`, and the transport dispatches through `senders.sender_for`, which
+    is the only reason a preset sender works for anything but the test.
+    """
+    from radd import smtp
+    from radd.modules.items import service as items_service
+    from radd.modules.items.schemas import ItemCreate
+    from radd.modules.mailintake import transport
+
+    actor, project, _ = world
+    item = await items_service.create_item(
+        db, ItemCreate(project_id=project.id, title="Printer on fire"), actor
+    )
+
+    row = MailSender(
+        name="Gmail out", kind=MailSenderKind.GOOGLE.value, host="", port=0,
+        from_address="agent@radd-hq.com", reply_to="help@radd-hq.com",
+        secret="app-password", is_default=True,
+    )
+    await registry.save_sender(db, row)  # accepted with no host at all
+
+    assert await registry.default_sender(db) is not None
+    assert await transport.outbound_configured(db) is True
+
+    used: dict = {}
+
+    def fake_send(
+        to_address, subject, body, *, to_name="", headers=None, html_body=None, config=None
+    ):
+        used["config"] = config
+        used["headers"] = headers
+        return "<sent@gmail>"
+
+    monkeypatch.setattr(smtp, "send_message", fake_send)
+    sent = await transport.send_item_mail(
+        db, item_id=item.id, to_address="jane@customer.example",
+        subject="[MC-1] Hello", text="body",
+    )
+
+    assert sent == "<sent@gmail>"
+    config = used["config"]
+    assert (config.host, config.port, config.starttls) == ("smtp.gmail.com", 587, True)
+    assert config.username == "agent@radd-hq.com"  # the login IS the mailbox
+    assert used["headers"]["Reply-To"] == "help@radd-hq.com"
+
+
+async def test_the_env_relay_resolves_as_the_custom_smtp_kind(monkeypatch):
+    """`_EnvSender` carries `kind="smtp"` so `resolve` treats it as the
+    hand-configured kind it is. Were it to answer a preset kind, the env's own
+    host would be overridden by Gmail's — a seed-era instance would silently
+    start dialling the wrong relay."""
+    monkeypatch.setattr(settings, "smtp_host", "relay.internal")
+    monkeypatch.setattr(settings, "smtp_port", 2525)
+    monkeypatch.setattr(settings, "smtp_starttls", False)
+    monkeypatch.setattr(settings, "smtp_username", "")
+
+    from radd.modules.mailintake import transport
+
+    relay = transport._env_sender()
+    assert relay is not None
+    assert isinstance(senders.sender_for(relay), senders.SmtpSender)
+    assert resolve.sender_host(relay) == "relay.internal"
+    assert resolve.sender_port(relay) == 2525
+    assert resolve.sender_starttls(relay) is False  # the row wins; no preset to override
+    assert resolve.sender_username(relay) == ""  # not a preset kind, so no address fallback
+
+
+async def test_every_kind_has_a_preset_entry():
+    """A kind with no entry would raise inside the kinds endpoint the moment it
+    was added — a failure at the form, not at the point of the mistake."""
+    for kind in (*MailSourceKind, *MailSenderKind):
+        assert kind in KIND_DEFAULTS, f"{kind} has no preset entry"
+        assert KIND_DEFAULTS[kind].name

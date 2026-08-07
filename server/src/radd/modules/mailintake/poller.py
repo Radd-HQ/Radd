@@ -23,9 +23,9 @@ import logging
 
 from radd.db import SessionLocal
 
-from . import intake, parsing, registry, service
+from . import intake, parsing, registry, resolve, service
 from .models import MailSource
-from .types import SEEN_FLAG
+from .types import DEFAULT_IMAP_FOLDER, SEEN_FLAG
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +34,12 @@ logger = logging.getLogger(__name__)
 
 
 def _connect(source: MailSource) -> imaplib.IMAP4_SSL:
-    imap = imaplib.IMAP4_SSL(source.host, source.port)
-    imap.login(source.username, source.secret)
-    imap.select(source.folder or "INBOX")
+    # Resolved, not raw (RADD-969): a Gmail/Outlook row stores no host, port or
+    # username — its kind's preset answers them, and the poll is otherwise the
+    # same poll.
+    imap = imaplib.IMAP4_SSL(resolve.source_host(source), resolve.source_port(source))
+    imap.login(resolve.source_username(source), source.secret)
+    imap.select(source.folder or DEFAULT_IMAP_FOLDER)
     return imap
 
 

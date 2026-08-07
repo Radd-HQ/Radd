@@ -1,14 +1,13 @@
-"""Settings → Email's API (RADD-958).
+"""Settings → Email's API: sources, senders, and the kind catalog (RADD-958/969).
 
-Admin-gated CRUD over the three config tables, plus the two operations that turn
-this from a form into something an operator can trust: a **test send** that
-reports the Message-ID the relay actually used, and a **routing preview** that
-answers "where would this land" without sending anything.
+Admin-gated CRUD over the connection rows, plus the operation that turns this
+from a form into something an operator can trust: a **test send** reporting the
+Message-ID the relay actually used, because a credential form with no test makes
+"is it working" a question you can only answer by waiting for a customer to
+complain. The routing chain and its dry run live in `rules_router`.
 
-Both exist because of the same lesson from Settings → Storage: an ordered rule
-chain nobody can dry-run makes "why did this go there" unanswerable, and a
-credential form with no test makes "is it working" a question you can only answer
-by waiting for a customer to complain.
+`GET /mail/kinds` is the spec-110 pattern (RADD-969): the add form asks the
+server what a kind means instead of shipping its own copy of `smtp.gmail.com`.
 """
 
 from __future__ import annotations
@@ -20,40 +19,37 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
-from radd.exceptions import NotFoundError
 from radd.modules.auth import authz
 from radd.modules.auth.deps import CurrentUser
-from radd.modules.projects import service as projects_service
 
-from . import registry, routing
+from . import registry, resolve, senders
 from .config_schemas import (
-    MailRuleRead,
-    MailRuleReorder,
-    MailRuleWrite,
+    MailKindInfo,
+    MailKinds,
     MailSenderRead,
     MailSenderWrite,
     MailSourceRead,
     MailSourceWrite,
     MailTestRequest,
     MailTestResult,
-    RoutingPreviewRequest,
-    RoutingPreviewResult,
 )
-from .models import MailRule, MailSender, MailSource
-from .parsing import EmailPlan
+from .models import MailSender, MailSource
 from .providers import OutboundMessage
-from .senders import SmtpSender
-from .types import MailEntity, MailSenderKind
+from .types import KIND_DEFAULTS, MailSenderKind, MailSourceKind
 
 router = APIRouter(prefix="/mail", tags=["mailintake"])
 
 Session = Annotated[AsyncSession, Depends(get_session)]
 
 
-async def _admin(session: AsyncSession, user) -> None:
+async def require_mail_admin(session: AsyncSession, user) -> None:
     """Mail configuration is instance plumbing: credentials, an internet-facing
     ingest secret, and which project strangers' mail opens in. `global.manage`,
-    like Storage and Sign-in — deliberately not a per-project atom."""
+    like Storage and Sign-in — deliberately not a per-project atom.
+
+    Public because `rules_router` gates on the same atom, and two copies of an
+    authz decision is how one of them ends up different.
+    """
     await authz.require(session, user, authz.Permission.GLOBAL_MANAGE)
 
 
@@ -63,6 +59,8 @@ def _source_read(row: MailSource, rule_count: int = 0) -> MailSourceRead:
         host=row.host, port=row.port, username=row.username, folder=row.folder,
         default_project_id=row.default_project_id, has_secret=bool(row.secret),
         rule_count=rule_count,
+        resolved_host=resolve.source_host(row), resolved_port=resolve.source_port(row),
+        resolved_username=resolve.source_username(row),
     )
 
 
@@ -72,6 +70,48 @@ def _sender_read(row: MailSender) -> MailSenderRead:
         is_default=row.is_default, from_address=row.from_address, reply_to=row.reply_to,
         host=row.host, port=row.port, username=row.username, starttls=row.starttls,
         has_secret=bool(row.secret),
+        resolved_host=resolve.sender_host(row), resolved_port=resolve.sender_port(row),
+        resolved_username=resolve.sender_username(row),
+        resolved_starttls=resolve.sender_starttls(row),
+    )
+
+
+# --- kinds ---------------------------------------------------------------------
+
+
+@router.get("/kinds", response_model=MailKinds)
+async def list_kinds(session: Session, user: CurrentUser) -> MailKinds:
+    """What each kind answers on the operator's behalf (RADD-969).
+
+    The spec-110 `GET /sso/kinds` shape: the form asks the server what a kind
+    means rather than carrying its own copy of `smtp.gmail.com`. That copy is
+    what a preset is for — one that lives on the client would have to be
+    redeployed to change, which is the whole point of not hardcoding it.
+    """
+    await require_mail_admin(session, user)
+    return MailKinds(
+        sources=[_source_kind_info(kind) for kind in MailSourceKind],
+        senders=[_sender_kind_info(kind) for kind in MailSenderKind],
+    )
+
+
+def _source_kind_info(kind: MailSourceKind) -> MailKindInfo:
+    preset = KIND_DEFAULTS[kind]
+    return MailKindInfo(
+        kind=kind.value, name=preset.name, summary=preset.summary,
+        host=preset.imap_host, port=preset.imap_port,
+        guidance=preset.guidance, help_url=preset.help_url,
+        preset=preset.answers_imap,
+    )
+
+
+def _sender_kind_info(kind: MailSenderKind) -> MailKindInfo:
+    preset = KIND_DEFAULTS[kind]
+    return MailKindInfo(
+        kind=kind.value, name=preset.name, summary=preset.summary,
+        host=preset.smtp_host, port=preset.smtp_port, starttls=preset.smtp_starttls,
+        guidance=preset.guidance, help_url=preset.help_url,
+        preset=preset.answers_smtp,
     )
 
 
@@ -80,7 +120,7 @@ def _sender_read(row: MailSender) -> MailSenderRead:
 
 @router.get("/sources", response_model=list[MailSourceRead])
 async def list_sources(session: Session, user: CurrentUser) -> list[MailSourceRead]:
-    await _admin(session, user)
+    await require_mail_admin(session, user)
     out = []
     for row in await registry.list_sources(session):
         rules = await registry.list_rules(session, row.id)
@@ -92,7 +132,7 @@ async def list_sources(session: Session, user: CurrentUser) -> list[MailSourceRe
 async def create_source(
     data: MailSourceWrite, session: Session, user: CurrentUser
 ) -> MailSourceRead:
-    await _admin(session, user)
+    await require_mail_admin(session, user)
     row = MailSource(**data.model_dump(exclude={"secret"}), secret=data.secret or "")
     return _source_read(await registry.save_source(session, row))
 
@@ -101,7 +141,7 @@ async def create_source(
 async def update_source(
     source_id: uuid.UUID, data: MailSourceWrite, session: Session, user: CurrentUser
 ) -> MailSourceRead:
-    await _admin(session, user)
+    await require_mail_admin(session, user)
     row = await registry.get_source(session, source_id)
     for key, value in data.model_dump(exclude={"secret"}).items():
         setattr(row, key, value)
@@ -113,7 +153,7 @@ async def update_source(
 
 @router.delete("/sources/{source_id}", status_code=204)
 async def delete_source(source_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
-    await _admin(session, user)
+    await require_mail_admin(session, user)
     await registry.delete_source(session, source_id)
 
 
@@ -122,7 +162,7 @@ async def delete_source(source_id: uuid.UUID, session: Session, user: CurrentUse
 
 @router.get("/senders", response_model=list[MailSenderRead])
 async def list_senders(session: Session, user: CurrentUser) -> list[MailSenderRead]:
-    await _admin(session, user)
+    await require_mail_admin(session, user)
     return [_sender_read(row) for row in await registry.list_senders(session)]
 
 
@@ -130,7 +170,7 @@ async def list_senders(session: Session, user: CurrentUser) -> list[MailSenderRe
 async def create_sender(
     data: MailSenderWrite, session: Session, user: CurrentUser
 ) -> MailSenderRead:
-    await _admin(session, user)
+    await require_mail_admin(session, user)
     row = MailSender(**data.model_dump(exclude={"secret"}), secret=data.secret or "")
     return _sender_read(await registry.save_sender(session, row))
 
@@ -139,7 +179,7 @@ async def create_sender(
 async def update_sender(
     sender_id: uuid.UUID, data: MailSenderWrite, session: Session, user: CurrentUser
 ) -> MailSenderRead:
-    await _admin(session, user)
+    await require_mail_admin(session, user)
     row = await registry.get_sender(session, sender_id)
     for key, value in data.model_dump(exclude={"secret"}).items():
         setattr(row, key, value)
@@ -150,7 +190,7 @@ async def update_sender(
 
 @router.delete("/senders/{sender_id}", status_code=204)
 async def delete_sender(sender_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
-    await _admin(session, user)
+    await require_mail_admin(session, user)
     await registry.delete_sender(session, sender_id)
 
 
@@ -166,18 +206,24 @@ async def test_sender(
     Message-ID is the one the relay reported (RADD-955) — the value threading
     actually depends on.
     """
-    await _admin(session, user)
+    await require_mail_admin(session, user)
     row = await registry.get_sender(session, sender_id)
-    if row.kind != MailSenderKind.SMTP.value:
+    # ONE dispatch point (RADD-969) — `senders.sender_for`, the same call
+    # `transport.send_item_mail` makes for every real message. When this branch
+    # carried its own kind check, a kind the transport sent through answered
+    # "no implementation" here.
+    sender = senders.sender_for(row)
+    if sender is None:
         return MailTestResult(ok=False, error=f"no implementation for kind {row.kind!r}")
     try:
-        message_id = await SmtpSender(row).send(
+        message_id = await sender.send(
             OutboundMessage(
                 to_address=data.to_address,
                 subject="Radd test message",
                 body=(
                     "This is a test from Settings → Email.\n\n"
-                    f"Sent through {row.name} ({row.host}:{row.port}) as "
+                    f"Sent through {row.name} "
+                    f"({resolve.sender_host(row)}:{resolve.sender_port(row)}) as "
                     f"{row.from_address}.\n"
                 ),
                 headers={"Reply-To": row.reply_to} if row.reply_to else {},
@@ -187,125 +233,3 @@ async def test_sender(
     except Exception as exc:  # noqa: BLE001 — the error IS the answer
         return MailTestResult(ok=False, error=f"{type(exc).__name__}: {exc}"[:400])
 
-
-# --- rules ---------------------------------------------------------------------
-
-
-@router.get("/sources/{source_id}/rules", response_model=list[MailRuleRead])
-async def list_rules(
-    source_id: uuid.UUID, session: Session, user: CurrentUser
-) -> list[MailRuleRead]:
-    await _admin(session, user)
-    await registry.get_source(session, source_id)
-    return [MailRuleRead.model_validate(r, from_attributes=True)
-            for r in await registry.list_rules(session, source_id)]
-
-
-@router.post("/sources/{source_id}/rules", response_model=MailRuleRead, status_code=201)
-async def create_rule(
-    source_id: uuid.UUID, data: MailRuleWrite, session: Session, user: CurrentUser
-) -> MailRuleRead:
-    await _admin(session, user)
-    await registry.get_source(session, source_id)
-    row = MailRule(
-        source_id=source_id,
-        name=data.name,
-        rule_type=data.rule_type.value,
-        enabled=data.enabled,
-        config=data.config,
-        project_id=data.project_id,
-        position=data.position
-        if data.position is not None
-        else await registry.next_rule_position(session, source_id),
-    )
-    session.add(row)
-    await session.flush()
-    return MailRuleRead.model_validate(row, from_attributes=True)
-
-
-@router.patch("/rules/{rule_id}", response_model=MailRuleRead)
-async def update_rule(
-    rule_id: uuid.UUID, data: MailRuleWrite, session: Session, user: CurrentUser
-) -> MailRuleRead:
-    await _admin(session, user)
-    row = await session.get(MailRule, rule_id)
-    if row is None:
-        raise NotFoundError(MailEntity.MAIL, rule_id)
-    row.name = data.name
-    row.rule_type = data.rule_type.value
-    row.enabled = data.enabled
-    row.config = data.config
-    row.project_id = data.project_id
-    if data.position is not None:
-        row.position = data.position
-    await session.flush()
-    return MailRuleRead.model_validate(row, from_attributes=True)
-
-
-@router.delete("/rules/{rule_id}", status_code=204)
-async def delete_rule(rule_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
-    await _admin(session, user)
-    row = await session.get(MailRule, rule_id)
-    if row is not None:
-        await session.delete(row)
-        await session.flush()
-
-
-@router.put("/sources/{source_id}/rules/order", response_model=list[MailRuleRead])
-async def reorder_rules(
-    source_id: uuid.UUID, data: MailRuleReorder, session: Session, user: CurrentUser
-) -> list[MailRuleRead]:
-    """Rewrite the whole chain's order. Sent whole because a drag is ONE intent —
-    applying it as N updates leaves a half-ordered chain if one fails, and the
-    order is the semantics here."""
-    await _admin(session, user)
-    rows = {row.id: row for row in await registry.list_rules(session, source_id)}
-    for position, rule_id in enumerate(data.rule_ids, start=1):
-        if rule_id in rows:
-            rows[rule_id].position = float(position)
-    await session.flush()
-    return [MailRuleRead.model_validate(r, from_attributes=True)
-            for r in await registry.list_rules(session, source_id)]
-
-
-@router.post("/sources/{source_id}/preview", response_model=RoutingPreviewResult)
-async def preview_routing(
-    source_id: uuid.UUID, data: RoutingPreviewRequest, session: Session, user: CurrentUser
-) -> RoutingPreviewResult:
-    """Where would a message like this land? Nothing is created or sent."""
-    await _admin(session, user)
-    source = await registry.get_source(session, source_id)
-    # Parse the ADDRESSES out, exactly as `parsing.extract_recipients` does for a
-    # real message. Feeding the raw header text here would make the dry run
-    # disagree with the live chain: `Pipeline Team <PIPELINE@radd-hq.com>` would
-    # not match a rule that does match it in production — the preview would
-    # report a working rule as broken, which is worse than having no preview.
-    from email.utils import getaddresses, parseaddr
-
-    plan = EmailPlan(
-        subject=data.subject,
-        sender_name="",
-        sender_email=parseaddr(data.sender)[1].strip().lower(),
-        body=data.body,
-        item_key=None,
-        recipients=tuple(
-            address.strip().lower()
-            for _, address in getaddresses([data.recipient])
-            if "@" in address
-        ),
-    )
-    decision = await routing.decide(session, plan, source_id=source_id)
-    project_id = decision.project_id or source.default_project_id
-    key = ""
-    if project_id is not None:
-        project = next(
-            (p for p in await projects_service.list_projects(session) if p.id == project_id), None
-        )
-        key = project.key if project else ""
-    return RoutingPreviewResult(
-        project_id=project_id,
-        project_key=key,
-        matched_rule_id=decision.matched_rule_id,
-        matched_rule_name=decision.matched_rule_name,
-        reason=decision.reason if decision.project_id else "no rule matched — source default",
-    )
