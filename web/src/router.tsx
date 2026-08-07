@@ -44,7 +44,6 @@ import {
 import { GeneralSettingsPage } from "./routes/settings/general";
 import { AutomationsSettingsPage } from "./routes/settings/automations";
 import { CyclesSettingsPage } from "./routes/settings/cycles";
-import { GroupsSettingsPage } from "./routes/settings/groups";
 import { FieldsSettingsPage } from "./routes/settings/fields";
 import { LinkTypesSettingsPage } from "./routes/settings/link-types";
 import { LabelsSettingsPage } from "./routes/settings/labels";
@@ -65,7 +64,6 @@ import { AiSettingsPage } from "./routes/settings/ai";
 import { StorageSettingsPage } from "./routes/settings/storage";
 import { SignInSettingsPage } from "./routes/settings/sign-in";
 import { MonitoringSettingsPage } from "./routes/settings/monitoring";
-import { HolidaysSettingsPage } from "./routes/settings/holidays";
 import { ProfileSettingsPage } from "./routes/settings/profile";
 import { InstanceSettingsPage } from "./routes/settings/instance";
 import { PagesSettingsPage } from "./routes/settings/pages";
@@ -409,10 +407,14 @@ const settingsCyclesRoute = createRoute({
   component: CyclesSettingsPage,
 });
 
+/** RADD-931: the mirror table folded into Settings → Directory, where the live
+ *  browse already was — and gained the role-grant control it never had. */
 const settingsGroupsRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: SettingsSection.groups,
-  component: GroupsSettingsPage,
+  beforeLoad: () => {
+    throw redirect({ to: RoutePath.settingsDirectory, replace: true });
+  },
 });
 
 const settingsTeamsRoute = createRoute({
@@ -540,11 +542,15 @@ const settingsMonitoringRoute = createRoute({
   component: MonitoringSettingsPage,
 });
 
-/** Per-team public holidays (People group) — the admin half of the old Leave page. */
+/** RADD-932: holidays merged into Settings → Time logging, beside the working
+ *  week they interrupt. The path stays registered so a bookmark lands on the
+ *  section rather than a not-found. */
 const settingsHolidaysRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: SettingsSection.holidays,
-  component: HolidaysSettingsPage,
+  beforeLoad: () => {
+    throw redirect({ to: RoutePath.settingsTimelogging, replace: true });
+  },
 });
 
 /**

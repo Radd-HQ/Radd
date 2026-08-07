@@ -1,12 +1,13 @@
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, ArchiveRestore, Clock, Plus } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { apiWorkCategoryPath, ApiPath } from "../../lib/constants";
-import { usePermissions } from "../../lib/hooks";
+import { usePermissions, usePluginEnabled } from "../../lib/hooks";
 import { workCategoriesQuery } from "../../lib/queries";
 import {
   Permission,
+  SettingScope,
   type WorkCategory,
   type WorkCategoryCreate,
   type WorkCategoryUpdate,
@@ -15,22 +16,76 @@ import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { TableSkeleton } from "../../components/TableSkeleton";
 import { TextField } from "../../components/TextField";
+import { TeamHolidaysSection } from "../../components/settings/LeaveSections";
+import { ScopedSettingsEditor } from "../../components/settings/ScopedSettingsEditor";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { IconButton } from "../../components/IconButton";
 
 /**
- * Global time-logging admin (spec 50): the shared work categories people pick
- * when logging. Per-project ENABLEMENT lives under each project
- * (`/p/$projectKey/settings/timelogging`), so this page stays global-only.
+ * Instance-wide time-logging admin (spec 50; RADD-932).
+ *
+ * Was "Work categories" — a tab named after one of its sections. It now holds
+ * every instance-scope answer to "what is a working day here, and how much of
+ * one": the shared categories, what a `1d` duration means, the timesheet's
+ * under/over-logged thresholds, the default working week, and per-team public
+ * holidays (previously a separate People-group tab).
+ *
+ * Holidays belong at THIS scope, not under a project's Time logging tab: they
+ * are per-TEAM and feed both the timesheet's away cells and business-day SLA
+ * resolution, so a project is the wrong axis for them entirely. Per-project
+ * ENABLEMENT stays under each project.
  */
 export function TimeloggingSettingsPage() {
+  // `leave` is an optional plugin — with it disabled the endpoint is unmounted,
+  // so the section is dropped rather than left to render a 404 (RADD-928).
+  const leaveEnabled = usePluginEnabled("leave");
+
   return (
     <SettingsPage
-      title="Work categories"
-      description="Curate the work categories people pick when logging time. Enable time logging for a project from that project's settings."
+      title="Time logging"
+      description="Instance-wide time policy: the categories people pick, what a working day means, and the holidays that interrupt it. Enable time logging for a project from that project's settings."
     >
-      <CategoriesSection />
+      <Section
+        title="Work categories"
+        hint="What people pick when logging time. Archived categories stay on old worklogs but leave the picker."
+      >
+        <CategoriesSection />
+      </Section>
+
+      <Section
+        title="What a working day means"
+        hint="Durations, the default working week, and the thresholds the timesheet flags a day against. A project can override the working week under its own Time logging tab."
+      >
+        <ScopedSettingsEditor scope={SettingScope.instance} section="timelogging" />
+      </Section>
+
+      {leaveEnabled && (
+        <Section
+          title="Holidays"
+          hint="Per-team public holidays — regional teams differ, which is the point. They mark every current member of the team away on the timesheet and exempt those days from the outlier flags above."
+        >
+          <TeamHolidaysSection />
+        </Section>
+      )}
     </SettingsPage>
+  );
+}
+
+function Section({
+  title,
+  hint,
+  children,
+}: {
+  title: string;
+  hint: string;
+  children: ReactNode;
+}) {
+  return (
+    <section aria-label={title} className="mb-8 last:mb-0">
+      <h3 className="text-[13px] font-semibold text-heading">{title}</h3>
+      <p className="mb-3 mt-0.5 text-xs text-fg-muted">{hint}</p>
+      {children}
+    </section>
   );
 }
 
