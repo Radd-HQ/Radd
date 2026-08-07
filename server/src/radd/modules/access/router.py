@@ -18,8 +18,8 @@ from radd.modules.auth.deps import CurrentUser
 from radd.modules.auth.models import User
 
 from . import service
-from .registry import get_spec
-from .schemas import AccessGrantCreate, AccessGrantRead
+from .registry import all_specs, get_spec
+from .schemas import AccessGrantCreate, AccessGrantRead, ResourceSpecRead
 from .types import AccessEntity
 
 router = APIRouter(prefix="/grants", tags=["access"])
@@ -40,6 +40,41 @@ async def _require_manage(
     if not await spec.can_manage(session, actor, resource_id, project_id):
         raise ForbiddenError(f"no permission to manage {resource_type} grants")
     return spec
+
+
+@router.get("/resources", response_model=list[ResourceSpecRead])
+async def list_resource_specs(user: CurrentUser) -> list[ResourceSpecRead]:
+    """Every registered resource's grant MODEL — which accesses exist, which
+    subject kinds apply, whether grants can be project-scoped (RADD-947).
+
+    `ResourceSpecRead` was written for this route and the route was never added,
+    so `AccessGrantsEditor` grew its own answer instead: it took `accesses` and
+    `subjectKinds` as props from each call site and rendered the project
+    ScopePicker unconditionally — including for `page`, whose spec sets
+    `project_scoped=False` and whose write path answers "page grants can't be
+    scoped". A UI that offers what the validator rejects is a second opinion
+    about one rule, and this is the same registry the validator reads.
+
+    No `can_manage` check: this is the SHAPE of the access model, not anyone's
+    grants, and the editor needs it before it can render the form that would be
+    authorized. Any signed-in caller may read it.
+
+    Declared before `/{grant_id}` — Starlette matches in declaration order, so a
+    literal segment written after a UUID pattern is unreachable (RADD-761).
+    """
+    del user  # authentication is the gate; the catalog itself is not sensitive
+    return [
+        ResourceSpecRead(
+            resource_type=spec.resource_type,
+            label=spec.label or spec.resource_type,
+            accesses=list(spec.accesses),
+            subjects=list(spec.subjects),
+            project_scoped=spec.project_scoped,
+            hierarchical=spec.hierarchical,
+            default_open=spec.default_open,
+        )
+        for spec in sorted(all_specs(), key=lambda s: s.label or s.resource_type)
+    ]
 
 
 @router.get("", response_model=list[AccessGrantRead])

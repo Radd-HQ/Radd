@@ -9,6 +9,7 @@ import { queryKeys } from "./shared";
 import type {
   AccessGrant,
   FieldDef,
+  GrantResourceSpec,
   Label,
   LinkTypeDef,
   RoleGrant,
@@ -19,6 +20,19 @@ export const fieldsQuery = () =>
     queryKey: queryKeys.fields,
     queryFn: () => api.get<FieldDef[]>(ApiPath.fields),
     staleTime: 60_000,
+  });
+
+/**
+ * Every registered resource's GRANT MODEL (RADD-947) — accesses, subject kinds,
+ * whether grants can be project-scoped. Instance-wide and effectively static
+ * (it changes only when a plugin mounts), so it caches for the session and
+ * every open editor shares one fetch.
+ */
+export const grantResourcesQuery = () =>
+  queryOptions({
+    queryKey: [...queryKeys.grants, "resources"] as const,
+    queryFn: () => api.get<GrantResourceSpec[]>(`${ApiPath.grants}/resources`),
+    staleTime: 5 * 60_000,
   });
 
 /** Access grants (spec 92) on a resource — the reusable GrantsEditor reads this. */

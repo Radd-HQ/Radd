@@ -5,6 +5,7 @@ import { api, errorMessage } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { ApiPath } from "../../lib/constants";
 import {
+  grantResourcesQuery,
   grantsQuery,
   groupsQuery,
   projectsQuery,
@@ -29,23 +30,44 @@ import { SUBJECT_ICON, SubjectPicker, type Subject } from "./SubjectPicker";
 import { IconButton } from "../IconButton";
 import { ErrorText } from "../ErrorText";
 
+const DEFAULT_ACCESSES = ["read", "write"];
+const DEFAULT_SUBJECT_KINDS: GrantSubjectValue[] = [
+  GrantSubject.role,
+  GrantSubject.team,
+  GrantSubject.user,
+  GrantSubject.group,
+];
+
 /**
  * The one reusable access-grant editor (spec 92): lists a resource's grants
  * (subject → access, scoped) and adds new ones via a subject picker (roles /
  * teams / users) + access + the shared ScopePicker. Works for ANY registered
  * resource (custom fields, builtin fields, views, plugins) — pass its
- * resource_type/id + the accesses it exposes.
+ * resource_type/id.
+ *
+ * **It reads the resource's own spec** (RADD-947). `GET /grants/resources`
+ * serves the same registry the write path validates against, so the form cannot
+ * offer something the server refuses. Before this, `accesses` and `subjectKinds`
+ * came from each call site and the project ScopePicker rendered unconditionally
+ * — which put a "on <projects>" control on the page-restriction dialog, whose
+ * spec sets `project_scoped=False` and whose write path answers "page grants
+ * can't be scoped".
+ *
+ * The props remain as an override for a caller that genuinely knows better, and
+ * as the fallback for a resource type the registry does not know.
  */
 export function AccessGrantsEditor({
   resourceType,
   resourceId,
-  accesses = ["read", "write"],
-  subjectKinds = [GrantSubject.role, GrantSubject.team, GrantSubject.user, GrantSubject.group],
+  accesses,
+  subjectKinds,
   description,
 }: {
   resourceType: string;
   resourceId: string;
+  /** Override the spec's accesses. Omit — the registry is the better answer. */
   accesses?: string[];
+  /** Override the spec's subject kinds. Omit; see above. */
   subjectKinds?: GrantSubjectValue[];
   /** Override for the intro line — resources whose grant semantics read
    * differently (attachments) say so here instead of the field-flavored default. */
@@ -58,19 +80,28 @@ export function AccessGrantsEditor({
   const users = useQuery({ ...usersQuery, retry: false });
   const groups = useQuery(groupsQuery());
   const projects = useQuery(projectsQuery());
+  const resources = useQuery(grantResourcesQuery());
+
+  const spec = resources.data?.find((r) => r.resource_type === resourceType);
+  const effectiveAccesses = accesses ?? spec?.accesses ?? DEFAULT_ACCESSES;
+  const effectiveSubjectKinds = subjectKinds ?? spec?.subjects ?? DEFAULT_SUBJECT_KINDS;
+  // Unknown resource type → keep the pre-947 behaviour rather than silently
+  // dropping a control someone may need.
+  const projectScoped = spec?.project_scoped ?? true;
 
   const subjects = useMemo<Subject[]>(() => {
+    const kinds = effectiveSubjectKinds;
     const out: Subject[] = [];
-    if (subjectKinds.includes(GrantSubject.role))
+    if (kinds.includes(GrantSubject.role))
       out.push(...(roles.data ?? []).map((r) => ({ type: GrantSubject.role, id: r.id, name: r.name })));
-    if (subjectKinds.includes(GrantSubject.team))
+    if (kinds.includes(GrantSubject.team))
       out.push(...(teams.data ?? []).map((t) => ({ type: GrantSubject.team, id: t.id, name: t.name })));
-    if (subjectKinds.includes(GrantSubject.user))
+    if (kinds.includes(GrantSubject.user))
       out.push(...(users.data ?? []).map((u) => ({ type: GrantSubject.user, id: u.id, name: u.name })));
-    if (subjectKinds.includes(GrantSubject.group))
+    if (kinds.includes(GrantSubject.group))
       out.push(...(groups.data ?? []).map((g) => ({ type: GrantSubject.group, id: g.id, name: g.name })));
     return out;
-  }, [roles.data, teams.data, users.data, groups.data, subjectKinds]);
+  }, [roles.data, teams.data, users.data, groups.data, effectiveSubjectKinds]);
 
   const nameOf = (g: AccessGrant) =>
     subjects.find((s) => s.type === g.subject_type && s.id === g.subject_id)?.name ?? "—";
@@ -99,7 +130,8 @@ export function AccessGrantsEditor({
           <>
             No grants = open: anyone who can read the item sees this, anyone who can edit sets it.
             A <strong>read</strong> grant restricts reading to the listed subjects; a{" "}
-            <strong>write</strong> grant restricts editing. Scope each grant global or to projects.
+            <strong>write</strong> grant restricts editing.{" "}
+            {projectScoped && <>Scope each grant global or to projects. </>}
             Managers always pass.
           </>
         )}
@@ -138,15 +170,18 @@ export function AccessGrantsEditor({
                   </span>
                 )}
                 {grant.expires_at && <ExpiryChip expiresAt={grant.expires_at} />}
-                {grant.project_id === null ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] text-emerald-300">
-                    <Globe size={10} /> Global
-                  </span>
-                ) : (
-                  <span className="rounded bg-elevated px-1 font-mono text-[11px] text-fg">
-                    {projectKey.get(grant.project_id) ?? "?"}
-                  </span>
-                )}
+                {/* RADD-947: a scope chip on an unscopeable resource says
+                    "Global" on every row — a distinction with no alternative. */}
+                {projectScoped &&
+                  (grant.project_id === null ? (
+                    <span className="inline-flex items-center gap-1 text-[11px] text-emerald-300">
+                      <Globe size={10} /> Global
+                    </span>
+                  ) : (
+                    <span className="rounded bg-elevated px-1 font-mono text-[11px] text-fg">
+                      {projectKey.get(grant.project_id) ?? "?"}
+                    </span>
+                  ))}
                 <IconButton
                   danger
                   onClick={() => revoke.mutate(grant.id)}
@@ -166,9 +201,10 @@ export function AccessGrantsEditor({
       <AddGrantRow
         resourceType={resourceType}
         resourceId={resourceId}
-        accesses={accesses}
+        accesses={effectiveAccesses}
         subjects={subjects}
         projects={projects.data ?? []}
+        projectScoped={projectScoped}
         onAdded={invalidate}
       />
     </div>
@@ -181,6 +217,7 @@ function AddGrantRow({
   accesses,
   subjects,
   projects,
+  projectScoped,
   onAdded,
 }: {
   resourceType: string;
@@ -188,6 +225,9 @@ function AddGrantRow({
   accesses: string[];
   subjects: Subject[];
   projects: Project[];
+  /** From the resource's spec (RADD-947). False = the sentence ends at the
+   *  access level, and `project_ids` is never sent. */
+  projectScoped: boolean;
   onAdded: () => void;
 }) {
   const [subject, setSubject] = useState<Subject | null>(null);
@@ -206,7 +246,7 @@ function AddGrantRow({
         access,
         effect,
         expires_at: expiresAt ? new Date(expiresAt).toISOString() : undefined,
-        project_ids: projectIds,
+        project_ids: projectScoped ? projectIds : [],
       };
       return api.post(ApiPath.grants, body);
     },
@@ -242,8 +282,14 @@ function AddGrantRow({
         options={accesses.map((a) => ({ value: a, label: a }))}
       />
 
-      <span className="text-xs text-fg-muted">on</span>
-      <ScopePicker value={projectIds} onChange={setProjectIds} projects={projects} />
+      {/* RADD-947: only where the resource actually scopes. A page belongs to a
+          space, so "on <projects>" was a control whose only outcome was a 409. */}
+      {projectScoped && (
+        <>
+          <span className="text-xs text-fg-muted">on</span>
+          <ScopePicker value={projectIds} onChange={setProjectIds} projects={projects} />
+        </>
+      )}
 
       {/* RADD-820: temporary elevation that actually ends. Empty = permanent. */}
       <input

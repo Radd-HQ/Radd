@@ -23,6 +23,27 @@ export interface AccessGrant {
   created_at: string;
 }
 
+/**
+ * `GET /grants/resources` — one registered resource's access MODEL (RADD-947).
+ *
+ * The mirror of the server's `ResourceSpec`, and the reason the editor no longer
+ * takes these as per-call-site props: the registry that answers this is the same
+ * one the write path validates against, so the form cannot offer a combination
+ * the server refuses.
+ */
+export interface GrantResourceSpec {
+  resource_type: string;
+  label: string;
+  accesses: string[];
+  subjects: GrantSubjectValue[];
+  /** false ⇒ grants carry no project scope; the editor shows no ScopePicker. */
+  project_scoped: boolean;
+  /** Ordered levels (viewer<editor<owner) vs independent flags (read/write). */
+  hierarchical: boolean;
+  /** No grants = open (fields, pages) or closed (views). */
+  default_open: boolean;
+}
+
 /** POST /grants — global (empty project_ids) or one grant per project. */
 export interface AccessGrantCreate {
   resource_type: string;
