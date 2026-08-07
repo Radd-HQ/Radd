@@ -6,7 +6,6 @@ import {
   Blocks,
   BookOpen,
   Bot,
-  CalendarOff,
   CalendarRange,
   CircleUserRound,
   Clock,
@@ -52,6 +51,16 @@ interface SettingsNavItem {
   label: string;
   icon: LucideIcon;
   show: (g: NavGate) => boolean;
+  /**
+   * The plugin this tab is a surface OF (RADD-928). A `core=False` plugin can be
+   * disabled at runtime, which unmounts its router — so a tab left behind
+   * renders a page whose every fetch 404s. Naming the owner here is what lets
+   * the gate below withdraw the tab with the plugin.
+   *
+   * Only optional plugins need it: a core plugin cannot be disabled, so
+   * omitting it means "always mounted", not "unknown".
+   */
+  plugin?: string;
 }
 
 /**
@@ -99,8 +108,10 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         show: (g) => g.ws(Permission.cycleUpdate),
       },
       {
+        // RADD-932: was "Work categories" — a tab named after one of its
+        // sections. Now every instance-scope time policy, holidays included.
         to: RoutePath.settingsTimelogging,
-        label: "Work categories",
+        label: "Time logging",
         icon: Clock,
         show: (g) => g.ws(Permission.globalManage),
       },
@@ -121,6 +132,7 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         to: RoutePath.settingsForgejo,
         label: "Forgejo",
         icon: GitBranch,
+        plugin: "forgejo",
         show: (g) => g.ws(Permission.globalManage),
       },
     ],
@@ -145,14 +157,6 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         show: (g) => g.ws(Permission.globalManage),
       },
       {
-        to: RoutePath.settingsGroups,
-        label: "Groups",
-        icon: FolderTree,
-        // RADD-833: the directory mirror — read-only; whoever can see users
-        // can see the groups that carry their access.
-        show: (g) => g.ws(Permission.userManage),
-      },
-      {
         to: RoutePath.settingsTeams,
         label: "Teams",
         icon: UsersRound,
@@ -166,19 +170,8 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         icon: ShieldCheck,
         show: (g) => g.ws(Permission.roleUpdate),
       },
-      {
-        // Per-team public holidays — the admin half of the old Leave page
-        // (personal absences live on Profile since the reorg).
-        to: RoutePath.settingsHolidays,
-        label: "Holidays",
-        icon: CalendarOff,
-        show: (g) => g.instanceAdmin,
-      },
     ],
   },
-  // Directory/LDAP settings (spec 85) deliberately have NO nav tab — they're
-  // reached by clicking the LDAP/AD row on the Server Overview page (the
-  // status rows ARE the navigation for deploy-level surfaces;).
   {
     label: "Server",
     items: [
@@ -201,6 +194,7 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         to: RoutePath.settingsPages,
         label: "Page spaces",
         icon: BookOpen,
+        plugin: "pages",
         show: (g) => g.ws(Permission.pageManage),
       },
       {
@@ -208,6 +202,7 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         to: RoutePath.settingsAi,
         label: "AI",
         icon: Sparkles,
+        plugin: "ai",
         show: (g) => g.instanceAdmin,
       },
       {
@@ -218,10 +213,21 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         show: (g) => g.instanceAdmin,
       },
       {
+        // RADD-931: the directory is CONFIGURATION — connection, sync schedules,
+        // group mirror — and was reachable only by clicking a status row on
+        // Overview, a hangover from when it was status.
+        to: RoutePath.settingsDirectory,
+        label: "Directory",
+        icon: FolderTree,
+        plugin: "ldap",
+        show: (g) => g.instanceAdmin,
+      },
+      {
         // SSO providers + per-provider signup domain allowlists (spec 110).
         to: RoutePath.settingsSignIn,
         label: "Sign-in",
         icon: KeyRound,
+        plugin: "sso",
         show: (g) => g.instanceAdmin,
       },
       {
@@ -236,6 +242,7 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         to: RoutePath.settingsMonitoring,
         label: "Monitoring",
         icon: Activity,
+        plugin: "monitoring",
         show: (g) => g.instanceAdmin,
       },
       {
@@ -244,6 +251,7 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         to: RoutePath.settingsJiraImport,
         label: "Import from Jira",
         icon: DatabaseZap,
+        plugin: "jiraimport",
         show: (g) => g.instanceAdmin,
       },
       {
@@ -262,11 +270,29 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
   },
 ];
 
+/**
+ * Where a plugin's own settings tab lives, if it has one (RADD-928).
+ *
+ * Derived from the SAME table the sidebar renders, so the Plugins page and the
+ * sidebar cannot disagree about which surface belongs to which plugin — the
+ * failure mode a second hardcoded map would have. This is what makes every
+ * plugin's configuration reachable FROM its plugin, per `docs/plugin-ui.md`,
+ * without duplicating the page into an accordion row.
+ */
+export function settingsPathForPlugin(name: string): { to: string; label: string } | null {
+  for (const group of SETTINGS_NAV_GROUPS) {
+    const match = group.items.find((item) => item.plugin === name);
+    if (match) return { to: match.to, label: match.label };
+  }
+  return null;
+}
+
 /** Settings shell: secondary nav on the left (scope-gated), active section in the Outlet. */
 export function SettingsLayout() {
   const perms = usePermissions();
   const user = useCurrentUser();
   const { data: projects } = useQuery(projectsQuery());
+  const { data: manifest } = useQuery(capabilitiesQuery);
 
   const gate: NavGate = {
     // "ws" is historical shorthand — this is the GLOBAL-scope check (spec 67).
@@ -275,15 +301,21 @@ export function SettingsLayout() {
     instanceAdmin: user?.instance_role === InstanceRole.admin,
     managesTeams: Boolean(user?.manages_teams),
   };
+  // RADD-928: a tab whose owning plugin is disabled is withdrawn. `plugins` is
+  // the manifest's list of what is actually MOUNTED right now, so this tracks a
+  // hot enable/disable without a reload — and while the manifest is in flight
+  // every gated tab is hidden, which is the right way round: a tab that appears
+  // a beat late reads as loading, one that vanishes reads as a bug.
+  const mounted = new Set(manifest?.plugins ?? []);
+  const isMounted = (item: SettingsNavItem) => !item.plugin || mounted.has(item.plugin);
   const visibleGroups = SETTINGS_NAV_GROUPS.map((group) => ({
     label: group.label,
-    items: group.items.filter((item) => item.show(gate)),
+    items: group.items.filter((item) => item.show(gate) && isMounted(item)),
   })).filter((group) => group.items.length > 0);
 
   // Plugin-contributed settings pages (spec 94): federated plugins register a `settings.page` slot
   // and a `section: "settings"` nav item; they appear here alongside the builtin tabs, gated by the
   // viewer's atoms + the plugin's capability — with no edit to this array.
-  const { data: manifest } = useQuery(capabilitiesQuery);
   const enabledCaps = new Set(
     (manifest?.capabilities ?? []).filter((c) => c.enabled).map((c) => c.key),
   );

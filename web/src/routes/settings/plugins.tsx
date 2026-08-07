@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Slot, SlotId, useSlotMatch } from "@radd/plugin-sdk";
-import { Blocks, ChevronDown, ChevronRight, Lock } from "lucide-react";
+import { Blocks, ChevronDown, ChevronRight, Lock, SlidersHorizontal } from "lucide-react";
 import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { pluginsQuery, queryKeys } from "../../lib/queries";
@@ -10,6 +11,7 @@ import { Button } from "../../components/Button";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { Spinner } from "../../components/Spinner";
 import { QueryError } from "../../components/QueryError";
+import { settingsPathForPlugin } from "./layout";
 
 const STATE_STYLES: Record<string, string> = {
   enabled: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",
@@ -50,6 +52,7 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
   // `pluginManagerSection` widget keyed by its registry name — the kernel forces nothing. If it did,
   // the row gets an expander revealing that plugin-owned admin UI (its GlobalContributionToggles).
   const adminSection = useSlotMatch(SlotId.pluginManagerSection, plugin.name);
+  const settingsLink = settingsPathForPlugin(plugin.name);
   const hasSection = adminSection !== undefined;
   const [open, setOpen] = useState(false);
 
@@ -101,6 +104,19 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
             <p className="mt-0.5 truncate text-[12px] text-fg-muted">{plugin.description}</p>
           )}
         </div>
+        {/* RADD-928: a plugin that owns a settings tab links to it from here, so
+            "where do I configure this?" is answered on the plugin's own row —
+            the discoverability a dedicated tab otherwise costs. Only while
+            enabled: the tab is withdrawn with the plugin. */}
+        {enabled && settingsLink && (
+          <Link
+            to={settingsLink.to}
+            className="flex items-center gap-1 rounded-md px-2 py-1 text-[12px] text-accent-text hover:bg-elevated hover:text-accent-text-strong focus-visible:outline-2 focus-visible:outline-focus"
+          >
+            <SlidersHorizontal size={12} aria-hidden />
+            {settingsLink.label}
+          </Link>
+        )}
         {plugin.core ? (
           <span className="flex items-center gap-1 text-[12px] text-fg-muted">
             <Lock size={12} aria-hidden /> Core

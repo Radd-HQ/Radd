@@ -18,6 +18,7 @@ import {
 import {
   allowedTransitionsQuery,
   authStateQuery,
+  capabilitiesQuery,
   fieldWritabilityQuery,
   instanceConfigQuery,
   itemByKeyQuery,
@@ -244,6 +245,24 @@ export function useDurationConfig(): DurationConfig {
 export function usePointsEnabled(projectId?: string): boolean {
   const { data } = useQuery(resolvedSettingQuery(SettingKey.estimationPoints, projectId));
   return data?.value === true;
+}
+
+/**
+ * Is this plugin currently enabled (RADD-928)?
+ *
+ * The backing field — `plugins` on the capabilities manifest — has existed
+ * since spec 93 and was read by nothing: every optional plugin's host-side UI
+ * was hardcoded, so disabling one left its settings tab and its sections in
+ * place, pointed at endpoints the loader had just unmounted.
+ *
+ * Loading answers `false`, deliberately: a surface that flashes in and then
+ * vanishes reads as a bug, whereas one that appears a beat late reads as
+ * loading. Anything gated on this must therefore be additive — never the
+ * disabled half of a switch.
+ */
+export function usePluginEnabled(name: string): boolean {
+  const { data } = useQuery(capabilitiesQuery);
+  return (data?.plugins ?? []).includes(name);
 }
 
 /**
