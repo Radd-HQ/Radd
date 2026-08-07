@@ -124,45 +124,73 @@ def categorize(issue_type: str, labels: list[str]) -> str:
 SUMMARY_CHARS = 320
 
 #: Opening labels the body template uses; stripped so the summary starts at the
-#: actual claim (see _lead).
+#: actual claim (see _lead). Punctuation-free, because the label appears both as
+#: a heading (`## What is wrong`) and inline (`**What is wrong.** The role…`).
+#: The contractions are not stylistic variants to be tolerant about — they are
+#: what several bodies actually say ("**What's wrong.** `group_by` accepts…"),
+#: and without them the label survives into the summary of every entry on those
+#: pages, which is the defect this list exists to remove.
 LEAD_LABELS = (
-    "what is wrong.",
-    "what is wrong:",
-    "what is wanted.",
-    "what is wanted:",
-    "what changes.",
-    "what changes:",
-    "what is missing.",
-    "what is missing:",
+    "what is wrong",
+    "what's wrong",
+    "what is wanted",
+    "what's wanted",
+    "what changes",
+    "what's changed",
+    "what is missing",
+    "what's missing",
 )
+
+#: Leading markers that make a line STRUCTURE rather than content: an ATX
+#: heading, a blockquote, a list bullet. Stripped before deciding what a block
+#: is, and the reason RADD-942 existed — every body in this tracker opens
+#: `## What is wrong`, the `##` was never removed, so the heading ITSELF became
+#: the summary of every entry in the 0.25.0 notes.
+_BLOCK_MARKER_RE = re.compile(r"^(?:#{1,6}\s+|>\s*|[-*+]\s+|\d+[.)]\s+)+")
 
 
 def _lead(description: str) -> str:
     """The issue's opening statement, as one line.
 
     The house style opens a body with **What is wrong** / **What is wanted**
-    followed by the actual claim, so the first non-heading sentence is the most
-    informative line available — far better than a commit subject, which is a
-    label rather than an explanation.
+    followed by the actual claim, so the first paragraph that is not a heading
+    is the most informative line available — far better than a commit subject,
+    which is a label rather than an explanation.
+
+    The result is inlined into a markdown list item, so it must not be able to
+    START a block: an ATX heading interrupts a paragraph in CommonMark, which is
+    how `## What is wrong` came to render as a document heading half-way down a
+    bullet list.
     """
+    in_fence = False
     for block in description.split("\n\n"):
-        text = " ".join(block.split())
+        # A fenced block may itself contain blank lines, so splitting on "\n\n"
+        # can land inside one — track the fences rather than trusting the split.
+        fences = block.count("```")
+        if in_fence:
+            in_fence = fences % 2 == 0
+            continue
+        if fences:
+            in_fence = fences % 2 == 1
+            continue
+        text = _BLOCK_MARKER_RE.sub("", " ".join(block.split())).strip()
         if not text:
             continue
-        # Skip a lone bold heading; take the paragraph that carries the point.
-        stripped = text.strip("*_ ")
-        if stripped.lower().rstrip(".:") in {"what is wrong", "what is wanted", "what changes"}:
-            continue
-        text = text.replace("**", "")
-        # The house style opens with a bold label on the SAME line as the claim
-        # ("**What is wrong.** The role was set to…"). The label is structure,
-        # not information, once the entry is already under a category heading.
+        text = text.replace("**", "").replace("__", "")
+        # The label is structure, not information, once the entry is already
+        # under a category heading — whether it stands alone as a heading or
+        # opens the claim's own sentence.
+        # A typographic apostrophe is the same word to a reader and a different
+        # string to startswith; the editor produces both.
+        lowered = text.lower().replace("’", "'")
         for label in LEAD_LABELS:
-            if text.lower().startswith(label):
+            if lowered.startswith(label):
                 text = text[len(label) :].lstrip(" .:—-")
                 break
+        if not text:  # the label was the whole block; the claim is the next one
+            continue
         if len(text) > SUMMARY_CHARS:
-            text = text[: SUMMARY_CHARS].rsplit(" ", 1)[0] + "…"
+            text = text[:SUMMARY_CHARS].rsplit(" ", 1)[0] + "…"
         return text
     return ""
 
@@ -272,6 +300,18 @@ def _headline(log: Changelog, grouped: dict, counted: int) -> str:
 
 
 def _entry_lines(entry: Entry, base_url: str, repo_url: str) -> list[str]:
+    """One entry: what it is, what it says, where it came from.
+
+    **Markdown only, no inline HTML** (RADD-942). The same body is posted to
+    Forgejo AND rendered by Radd's own CommonMark viewer, which does not do raw
+    HTML — the `<sub>` this used to wrap the metadata in printed literally as
+    `<sub>b74ca6d1</sub>` on every line of the 0.25.0 page. What both renderers
+    agree on is the whole budget.
+
+    Every line but the last ends in a HARD BREAK (two trailing spaces):
+    consecutive lines inside a list item are lazy continuation and would
+    otherwise render as one run-on paragraph.
+    """
     text = entry.text()
     head = (
         f"- [{entry.key}]({base_url}/issues/{entry.key}) **{text}**"
@@ -285,10 +325,13 @@ def _entry_lines(entry: Entry, base_url: str, repo_url: str) -> list[str]:
         meta.append(f"{entry.points:g} pts")
     commit = f"[`{entry.sha}`]({repo_url}/commit/{entry.sha})" if repo_url else f"`{entry.sha}`"
     meta.append(commit)
-    lines = [head, f"  <sub>{' · '.join(meta)}</sub>"]
+    # Provenance LAST: the claim is what a reader is here for, and the sha is
+    # what they reach for once they believe it.
+    lines = [head]
     if entry.summary:
         lines.append(f"  {entry.summary}")
-    return lines
+    lines.append(f"  {' · '.join(meta)}")
+    return [f"{line}  " for line in lines[:-1]] + lines[-1:]
 
 
 def main() -> int:
