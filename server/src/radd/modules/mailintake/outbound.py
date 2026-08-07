@@ -38,7 +38,7 @@ from radd.modules.automations.types import SYSTEM_ACTOR_ID
 from radd.modules.auth import service as auth
 from radd.modules.comments import service as comments
 from radd.modules.comments.types import CommentEvent, CommentVisibility
-from radd.modules.events import runner
+from radd.modules.events import runner, service as events
 from radd.modules.events.service import Event
 from radd.modules.items import service as items
 from radd.modules.notify import service as notify
@@ -52,6 +52,8 @@ from .types import (
     OUTBOUND_CONSUMER_NAME,
     REPLY_SUBJECT_TEMPLATE,
     MailDirection,
+    MailEntity,
+    MailEvent,
 )
 
 logger = logging.getLogger(__name__)
@@ -188,6 +190,8 @@ async def _deliver(reply: OutboundReply) -> None:
         headers["References"] = " ".join(reply.references)
 
     sent_ids: list[str] = []
+    delivered: list[str] = []
+    failed: list[str] = []
     for recipient in reply.recipients:
         try:
             sent = await sender.send(
@@ -199,13 +203,16 @@ async def _deliver(reply: OutboundReply) -> None:
                     headers=headers,
                 )
             )
+            delivered.append(recipient.email)
             if sent:
                 sent_ids.append(sent)
         except Exception:
             # Log and move on — one unreachable address must not cost the others
             # their copy, and a reply is not worth a retry queue.
             logger.exception("mailintake: outbound reply to %s failed (dropped)", recipient.email)
+            failed.append(recipient.email)
 
+    await _emit_outcome(reply, delivered=delivered, failed=failed)
     if not sent_ids:
         return
     # Store what the SENDER SAID it used, not what we composed (RADD-955). SMTP
@@ -224,5 +231,43 @@ async def _deliver(reply: OutboundReply) -> None:
                 direction=MailDirection.OUTBOUND,
                 subject=reply.subject,
                 comment_id=reply.comment_id,
+            )
+        await session.commit()
+
+
+async def _emit_outcome(
+    reply: OutboundReply, *, delivered: list[str], failed: list[str]
+) -> None:
+    """Report what the channel did (RADD-960).
+
+    A failure here is currently a log line and nothing else, which means "the
+    customer never got the reply" is invisible to every screen and every rule.
+    `mail.failed` is item-scoped so a rule can flag the ticket — that is the
+    whole point of emitting it rather than logging harder.
+
+    Its own session: the consumer's cursor is already committed by this point
+    (at-most-once, by design), so there is no transaction left to join.
+    """
+    if not delivered and not failed:
+        return
+    async with SessionLocal() as session:
+        for event_type, addresses in (
+            (MailEvent.SENT, delivered),
+            (MailEvent.FAILED, failed),
+        ):
+            if not addresses:
+                continue
+            await events.emit(
+                session,
+                event_type=event_type,
+                entity_type=MailEntity.MAIL,
+                entity_id=reply.item_id,
+                subjects={"item": reply.item_id},
+                payload={
+                    "recipients": addresses,
+                    "recipient_count": len(addresses),
+                    "subject": reply.subject,
+                    # No body, for the reason in intake._mail_facts.
+                },
             )
         await session.commit()

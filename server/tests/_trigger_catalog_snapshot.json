@@ -1,422 +1,446 @@
 {
- "approval.approved": {
-  "group": "Service desk",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "Approval granted"
- },
- "approval.canceled": {
-  "group": "Service desk",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "Approval canceled"
- },
- "approval.declined": {
-  "group": "Service desk",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "Approval declined"
- },
- "approval.requested": {
-  "group": "Service desk",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "Approval requested"
- },
- "approval.voted": {
-  "group": "Service desk",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "Approval vote cast"
- },
- "attachment.created": {
-  "group": "Attachments",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "Attachment added"
- },
- "attachment.deleted": {
-  "group": "Attachments",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "Attachment removed"
- },
- "comment.created": {
-  "group": "Comments",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "Comment added"
- },
- "comment.deleted": {
-  "group": "Comments",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "Comment deleted"
- },
- "comment.updated": {
-  "group": "Comments",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "Comment edited"
- },
- "csat.requested": {
-  "group": "Service desk",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "CSAT survey sent"
- },
- "csat.responded": {
-  "group": "Service desk",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "CSAT response received"
- },
- "cycle.completed": {
-  "group": "Cycles",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Cycle completed"
- },
- "cycle.created": {
-  "group": "Cycles",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Cycle created"
- },
- "cycle.deleted": {
-  "group": "Cycles",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Cycle deleted"
- },
- "cycle.updated": {
-  "group": "Cycles",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Cycle updated"
- },
- "cycle_series.created": {
-  "group": "Cycles",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Cycle series created"
- },
- "cycle_series.deleted": {
-  "group": "Cycles",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Cycle series deleted"
- },
- "cycle_series.updated": {
-  "group": "Cycles",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Cycle series updated"
- },
- "field.created": {
-  "group": "Admin",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Custom field created"
- },
- "field.updated": {
-  "group": "Admin",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Custom field updated"
- },
- "form.created": {
-  "group": "Admin",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Intake form created"
- },
- "form.updated": {
-  "group": "Admin",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Intake form updated"
- },
- "group.missing": {
-  "group": "Admin",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Directory group missing"
- },
- "group.restored": {
-  "group": "Admin",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Directory group restored"
- },
- "group.synced": {
-  "group": "Admin",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Directory group synced"
- },
- "issue_type.created": {
-  "group": "Admin",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Issue type created"
- },
- "issue_type.updated": {
-  "group": "Admin",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Issue type updated"
- },
- "item.created": {
-  "group": "Items",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "Item created"
- },
- "item.deleted": {
-  "group": "Items",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Item deleted"
- },
- "item.participant_added": {
-  "group": "Service desk",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "Participant added"
- },
- "item.participant_removed": {
-  "group": "Service desk",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "Participant removed"
- },
- "item.unwatched": {
-  "group": "Items",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "Item unwatched"
- },
- "item.updated": {
-  "group": "Items",
-  "has_changes": true,
-  "item_scoped": true,
-  "label": "Item updated"
- },
- "item.watched": {
-  "group": "Items",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "Item watched"
- },
- "label.created": {
-  "group": "Admin",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Label created"
- },
- "leave.created": {
-  "group": "People",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Leave recorded"
- },
- "leave.deleted": {
-  "group": "People",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Leave removed"
- },
- "page.created": {
-  "group": "Pages",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Page created"
- },
- "page.deleted": {
-  "group": "Pages",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Page deleted"
- },
- "page.moved": {
-  "group": "Pages",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Page moved"
- },
- "page.restored": {
-  "group": "Pages",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Page restored"
- },
- "page.updated": {
-  "group": "Pages",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Page updated"
- },
- "page_link.created": {
-  "group": "Pages",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "Page\u2194issue link added"
- },
- "page_link.deleted": {
-  "group": "Pages",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "Page\u2194issue link removed"
- },
- "page_space.created": {
-  "group": "Pages",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Page space created"
- },
- "page_space.deleted": {
-  "group": "Pages",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Page space deleted"
- },
- "page_space.updated": {
-  "group": "Pages",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Page space updated"
- },
- "project.created": {
-  "group": "Admin",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Project created"
- },
- "release.created": {
-  "group": "Releases",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Release created"
- },
- "release.deleted": {
-  "group": "Releases",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Release deleted"
- },
- "release.updated": {
-  "group": "Releases",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Release updated"
- },
- "sla.breached": {
-  "group": "Items",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "SLA breached"
- },
- "sla.due_soon": {
-  "group": "Service desk",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "SLA due soon"
- },
- "state.created": {
-  "group": "Admin",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Workflow state created"
- },
- "state.updated": {
-  "group": "Admin",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Workflow state updated"
- },
- "team.created": {
-  "group": "Admin",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Team created"
- },
- "team.updated": {
-  "group": "Admin",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Team updated"
- },
- "vcs.linked": {
-  "group": "Links",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "VCS ref linked"
- },
- "vcs.unlinked": {
-  "group": "Links",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "VCS ref unlinked"
- },
- "vcs.updated": {
-  "group": "Links",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "VCS ref updated"
- },
- "weblink.created": {
-  "group": "Links",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "Web link added"
- },
- "weblink.deleted": {
-  "group": "Links",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "Web link removed"
- },
- "weblink.updated": {
-  "group": "Links",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "Web link edited"
- },
- "workflow_transition.created": {
-  "group": "Admin",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Workflow transition created"
- },
- "workflow_transition.deleted": {
-  "group": "Admin",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Workflow transition deleted"
- },
- "workflow_transition.updated": {
-  "group": "Admin",
-  "has_changes": false,
-  "item_scoped": false,
-  "label": "Workflow transition updated"
- },
- "worklog.created": {
-  "group": "Time logging",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "Work logged"
- },
- "worklog.deleted": {
-  "group": "Time logging",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "Worklog deleted"
- },
- "worklog.updated": {
-  "group": "Time logging",
-  "has_changes": false,
-  "item_scoped": true,
-  "label": "Worklog edited"
- }
+  "approval.approved": {
+    "group": "Service desk",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "Approval granted"
+  },
+  "approval.canceled": {
+    "group": "Service desk",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "Approval canceled"
+  },
+  "approval.declined": {
+    "group": "Service desk",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "Approval declined"
+  },
+  "approval.requested": {
+    "group": "Service desk",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "Approval requested"
+  },
+  "approval.voted": {
+    "group": "Service desk",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "Approval vote cast"
+  },
+  "attachment.created": {
+    "group": "Attachments",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "Attachment added"
+  },
+  "attachment.deleted": {
+    "group": "Attachments",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "Attachment removed"
+  },
+  "comment.created": {
+    "group": "Comments",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "Comment added"
+  },
+  "comment.deleted": {
+    "group": "Comments",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "Comment deleted"
+  },
+  "comment.updated": {
+    "group": "Comments",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "Comment edited"
+  },
+  "csat.requested": {
+    "group": "Service desk",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "CSAT survey sent"
+  },
+  "csat.responded": {
+    "group": "Service desk",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "CSAT response received"
+  },
+  "cycle.completed": {
+    "group": "Cycles",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Cycle completed"
+  },
+  "cycle.created": {
+    "group": "Cycles",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Cycle created"
+  },
+  "cycle.deleted": {
+    "group": "Cycles",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Cycle deleted"
+  },
+  "cycle.updated": {
+    "group": "Cycles",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Cycle updated"
+  },
+  "cycle_series.created": {
+    "group": "Cycles",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Cycle series created"
+  },
+  "cycle_series.deleted": {
+    "group": "Cycles",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Cycle series deleted"
+  },
+  "cycle_series.updated": {
+    "group": "Cycles",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Cycle series updated"
+  },
+  "field.created": {
+    "group": "Admin",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Custom field created"
+  },
+  "field.updated": {
+    "group": "Admin",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Custom field updated"
+  },
+  "form.created": {
+    "group": "Admin",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Intake form created"
+  },
+  "form.updated": {
+    "group": "Admin",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Intake form updated"
+  },
+  "group.missing": {
+    "group": "Admin",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Directory group missing"
+  },
+  "group.restored": {
+    "group": "Admin",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Directory group restored"
+  },
+  "group.synced": {
+    "group": "Admin",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Directory group synced"
+  },
+  "issue_type.created": {
+    "group": "Admin",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Issue type created"
+  },
+  "issue_type.updated": {
+    "group": "Admin",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Issue type updated"
+  },
+  "item.created": {
+    "group": "Items",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "Item created"
+  },
+  "item.deleted": {
+    "group": "Items",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Item deleted"
+  },
+  "item.participant_added": {
+    "group": "Service desk",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "Participant added"
+  },
+  "item.participant_removed": {
+    "group": "Service desk",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "Participant removed"
+  },
+  "item.unwatched": {
+    "group": "Items",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "Item unwatched"
+  },
+  "item.updated": {
+    "group": "Items",
+    "has_changes": true,
+    "item_scoped": true,
+    "label": "Item updated"
+  },
+  "item.watched": {
+    "group": "Items",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "Item watched"
+  },
+  "label.created": {
+    "group": "Admin",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Label created"
+  },
+  "leave.created": {
+    "group": "People",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Leave recorded"
+  },
+  "leave.deleted": {
+    "group": "People",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Leave removed"
+  },
+  "mail.dropped": {
+    "group": "Email",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Email discarded"
+  },
+  "mail.failed": {
+    "group": "Email",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "Email delivery failed"
+  },
+  "mail.received": {
+    "group": "Email",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "Email received"
+  },
+  "mail.sent": {
+    "group": "Email",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "Email sent"
+  },
+  "page.created": {
+    "group": "Pages",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Page created"
+  },
+  "page.deleted": {
+    "group": "Pages",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Page deleted"
+  },
+  "page.moved": {
+    "group": "Pages",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Page moved"
+  },
+  "page.restored": {
+    "group": "Pages",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Page restored"
+  },
+  "page.updated": {
+    "group": "Pages",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Page updated"
+  },
+  "page_link.created": {
+    "group": "Pages",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "Page\u2194issue link added"
+  },
+  "page_link.deleted": {
+    "group": "Pages",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "Page\u2194issue link removed"
+  },
+  "page_space.created": {
+    "group": "Pages",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Page space created"
+  },
+  "page_space.deleted": {
+    "group": "Pages",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Page space deleted"
+  },
+  "page_space.updated": {
+    "group": "Pages",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Page space updated"
+  },
+  "project.created": {
+    "group": "Admin",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Project created"
+  },
+  "release.created": {
+    "group": "Releases",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Release created"
+  },
+  "release.deleted": {
+    "group": "Releases",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Release deleted"
+  },
+  "release.updated": {
+    "group": "Releases",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Release updated"
+  },
+  "sla.breached": {
+    "group": "Items",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "SLA breached"
+  },
+  "sla.due_soon": {
+    "group": "Service desk",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "SLA due soon"
+  },
+  "state.created": {
+    "group": "Admin",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Workflow state created"
+  },
+  "state.updated": {
+    "group": "Admin",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Workflow state updated"
+  },
+  "team.created": {
+    "group": "Admin",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Team created"
+  },
+  "team.updated": {
+    "group": "Admin",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Team updated"
+  },
+  "vcs.linked": {
+    "group": "Links",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "VCS ref linked"
+  },
+  "vcs.unlinked": {
+    "group": "Links",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "VCS ref unlinked"
+  },
+  "vcs.updated": {
+    "group": "Links",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "VCS ref updated"
+  },
+  "weblink.created": {
+    "group": "Links",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "Web link added"
+  },
+  "weblink.deleted": {
+    "group": "Links",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "Web link removed"
+  },
+  "weblink.updated": {
+    "group": "Links",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "Web link edited"
+  },
+  "workflow_transition.created": {
+    "group": "Admin",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Workflow transition created"
+  },
+  "workflow_transition.deleted": {
+    "group": "Admin",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Workflow transition deleted"
+  },
+  "workflow_transition.updated": {
+    "group": "Admin",
+    "has_changes": false,
+    "item_scoped": false,
+    "label": "Workflow transition updated"
+  },
+  "worklog.created": {
+    "group": "Time logging",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "Work logged"
+  },
+  "worklog.deleted": {
+    "group": "Time logging",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "Worklog deleted"
+  },
+  "worklog.updated": {
+    "group": "Time logging",
+    "has_changes": false,
+    "item_scoped": true,
+    "label": "Worklog edited"
+  }
 }

@@ -1,9 +1,10 @@
 from radd.config import settings
-from radd.kernel import CapabilitySpec, PluginUiManifest
+from radd.kernel import CapabilitySpec, EventTypeSpec, PluginUiManifest
 from radd.kernel import RaddPlugin
 
 from . import dispatcher
 from .router import router
+from .types import MailEvent
 
 plugin = RaddPlugin(
     name="mailintake",
@@ -31,6 +32,25 @@ plugin = RaddPlugin(
             "connector",
             check=lambda: {"enabled": bool(settings.mail_imap_host)},
         ),
+    ),
+    # RADD-960: the mail channel's own events, so a rule can tell a customer's
+    # REPLY from an agent typing in the UI. `item_scoped` is what makes SLQ
+    # conditions and item actions apply — "reopen when the customer replies"
+    # becomes one rule. `mail.dropped` is not item-scoped because by definition
+    # there is no item.
+    event_types=(
+        EventTypeSpec(
+            MailEvent.RECEIVED, "Email received", "Email", item_scoped=True,
+            subjects=("item",),
+        ),
+        EventTypeSpec(
+            MailEvent.SENT, "Email sent", "Email", item_scoped=True, subjects=("item",),
+        ),
+        EventTypeSpec(
+            MailEvent.FAILED, "Email delivery failed", "Email", item_scoped=True,
+            subjects=("item",),
+        ),
+        EventTypeSpec(MailEvent.DROPPED, "Email discarded", "Email"),
     ),
     # Federated UI (spec 94): the external-requester chip in the issue rail
     # (web/remotes/mailintake), rendered by the host via the issue.panel.section slot.

@@ -36,6 +36,8 @@ def test_trigger_registry_reproduces_the_catalog_exactly():
         assert current[et] == expected, f"{et}: {current[et]} != {expected}"
 
 
-def test_trigger_count_is_70():
+def test_trigger_count_is_74():
     # RADD-829 added the three group.* events (synced/missing/restored).
-    assert len(_current_triggers()) == 70
+    # RADD-960 added the four mail.* events — the mail channel became something
+    # a rule can see, rather than only the item/comment it happened to produce.
+    assert len(_current_triggers()) == 74

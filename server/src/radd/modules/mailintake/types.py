@@ -13,6 +13,24 @@ class MailEntity(StrEnum):
     SENDER = "mail_sender"
 
 
+class MailEvent(StrEnum):
+    """What the mail channel itself did (RADD-960).
+
+    Before these, `mailintake` emitted nothing of its own — automations could see
+    the ITEM intake created and the COMMENT it appended, but never that the cause
+    was email. A rule could not tell a customer's reply from an agent typing in
+    the UI, which is the distinction a service desk runs on.
+
+    They need no edit to `automations`: `catalog.TRIGGERS` derives live from the
+    kernel event-type registry, so declaring them on the manifest is enough.
+    """
+
+    RECEIVED = "mail.received"
+    SENT = "mail.sent"
+    DROPPED = "mail.dropped"
+    FAILED = "mail.failed"
+
+
 class MailDirection(StrEnum):
     """Which way a `mail_messages` row went. Threading only ever resolves
     against OUTBOUND ids (what a reply's In-Reply-To can name); dedup only ever

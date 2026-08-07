@@ -37,6 +37,7 @@ from radd.modules.auth import service as auth
 from radd.modules.auth.models import User
 from radd.modules.automations.types import SYSTEM_ACTOR_ID
 from radd.modules.comments import service as comments
+from radd.modules.events import service as events
 from radd.modules.comments.schemas import CommentCreate
 from radd.modules.items import service as items
 from radd.modules.items.schemas import ItemCreate
@@ -54,9 +55,34 @@ from .types import (
     TITLE_MAX_CHARS,
     MailDirection,
     MailEntity,
+    MailEvent,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _mail_facts(plan: EmailPlan) -> dict:
+    """What a rule may condition on — and deliberately not the body (RADD-960).
+
+    Event payloads are readable by anything that can read the stream, and an
+    inbound mail body is customer content that already lives on the item behind
+    the item's own read gate. Copying it into the stream would quietly widen who
+    can see it, with no screen anywhere admitting that.
+
+    `sender_domain` is split out because "from a VIP domain" is the condition
+    people actually write, and asking every rule author to re-derive it from the
+    address means half of them get it wrong.
+    """
+    _, _, domain = plan.sender_email.partition("@")
+    return {
+        "sender": plan.sender_email,
+        "sender_domain": domain,
+        "sender_name": plan.sender_name,
+        "subject": plan.subject,
+        "message_id": plan.message_id,
+        "html_derived": plan.html_derived,
+        "attachment_count": len(plan.attachments),
+    }
 
 
 class Result(StrEnum):
@@ -112,6 +138,15 @@ async def accept(
     )
     if verdict.drop:
         logger.info("mailintake: dropped message %s — %s", plan.message_id, verdict.reason)
+        # Emitted, not only logged: a silent drop and a bug are indistinguishable
+        # from outside, and a log line is not queryable (RADD-960).
+        await events.emit(
+            session,
+            event_type=MailEvent.DROPPED,
+            entity_type=MailEntity.MAIL,
+            entity_id=uuid.uuid4(),
+            payload={**_mail_facts(plan), "reason": verdict.reason},
+        )
         return Outcome(Result.IGNORED, reason=verdict.reason)
 
     if await threading.is_duplicate(session, plan.message_id):
@@ -167,6 +202,14 @@ async def _append(
     )
     await _touch_contact(session, item_id, plan)
     item = await items.require_item(session, item_id)
+    await events.emit(
+        session,
+        event_type=MailEvent.RECEIVED,
+        entity_type=MailEntity.MAIL,
+        entity_id=item_id,
+        subjects={"item": item_id},
+        payload={**_mail_facts(plan), "created_item": False},
+    )
     return Outcome(Result.APPENDED, item_id=item_id, item_key=await _key(session, item))
 
 
@@ -201,6 +244,15 @@ async def _create(
         item_id=created.id,
         direction=MailDirection.INBOUND,
         subject=plan.subject,
+    )
+
+    await events.emit(
+        session,
+        event_type=MailEvent.RECEIVED,
+        entity_type=MailEntity.MAIL,
+        entity_id=created.id,
+        subjects={"item": created.id},
+        payload={**_mail_facts(plan), "created_item": True},
     )
 
     from radd.modules.auth.types import UserSource
