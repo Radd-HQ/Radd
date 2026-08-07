@@ -548,10 +548,13 @@ def test_should_reply_happy_path_and_full_refusal_matrix():
     from radd.modules.mailintake.outbound import should_reply
 
     agent = uuid.uuid4()
-    ok = dict(has_contact=True, visibility="public", actor_id=agent)
+    # RADD-955 widened the gate from "has a mail contact" to "has anyone to
+    # mail": recipients are now the item's participants, so an issue with no
+    # external requester still mails its watchers.
+    ok = dict(has_recipients=True, visibility="public", actor_id=agent)
     assert should_reply(**ok) is True
-    # No contact — the item was raised by a registered user, nothing to mail.
-    assert should_reply(**{**ok, "has_contact": False}) is False
+    # Nobody to mail — nothing to send.
+    assert should_reply(**{**ok, "has_recipients": False}) is False
     # Internal notes never leave the building.
     assert should_reply(**{**ok, "visibility": "internal"}) is False
     # SYSTEM actor = inbound-mail comments / automation comments — no echo loop.
