@@ -65,6 +65,7 @@ plugin = RaddPlugin(
                 "transition defined is blocked outright (and defined moves still check "
                 "their conditions). Set per project, or here for every project."
             ),
+            section="workflow",
         ),
     ),
     description=(

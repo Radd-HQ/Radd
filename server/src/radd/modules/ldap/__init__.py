@@ -26,6 +26,7 @@ plugin = RaddPlugin(
     settings_keys=(
         SettingSpec(
             key="ldap_url",
+            section="directory.connection",
             type="string",
             scopes=("instance",),
             label="Server URL",
@@ -37,6 +38,7 @@ plugin = RaddPlugin(
         ),
         SettingSpec(
             key="ldap_user_domain",
+            section="directory.connection",
             type="string",
             scopes=("instance",),
             label="User domain",
@@ -47,6 +49,7 @@ plugin = RaddPlugin(
         ),
         SettingSpec(
             key="ldap_bind_dn",
+            section="directory.connection",
             type="string",
             scopes=("instance",),
             label="Bind account DN",
@@ -58,6 +61,7 @@ plugin = RaddPlugin(
         ),
         SettingSpec(
             key="ldap_bind_password",
+            section="directory.connection",
             type="string",
             scopes=("instance",),
             label="Bind account password",
@@ -69,6 +73,7 @@ plugin = RaddPlugin(
         ),
         SettingSpec(
             key="ldap_admin_groups",
+            section="directory.connection",
             type="string",
             scopes=("instance",),
             label="Admin groups",
@@ -80,6 +85,7 @@ plugin = RaddPlugin(
         ),
         SettingSpec(
             key="ldap_group_sync_seconds",
+            section="directory.groups",
             type="int",
             scopes=("instance",),
             label="Group sync interval (seconds)",
@@ -92,6 +98,7 @@ plugin = RaddPlugin(
         ),
         SettingSpec(
             key="ldap_user_sync_base",
+            section="directory.usersync",
             type="string",
             scopes=("instance",),
             label="User search base DN",
@@ -104,6 +111,7 @@ plugin = RaddPlugin(
         ),
         SettingSpec(
             key="ldap_user_sync_enabled",
+            section="directory.usersync",
             type="bool",
             scopes=("instance",),
             label="Automatic user sync",
@@ -115,6 +123,7 @@ plugin = RaddPlugin(
         ),
         SettingSpec(
             key="ldap_user_sync_deactivate_missing",
+            section="directory.usersync",
             type="bool",
             scopes=("instance",),
             label="Deactivate missing users",
@@ -127,6 +136,7 @@ plugin = RaddPlugin(
         ),
         SettingSpec(
             key="ldap_exclude_disabled",
+            section="directory.usersync",
             type="bool",
             scopes=("instance",),
             label="Skip disabled directory accounts",
@@ -141,6 +151,7 @@ plugin = RaddPlugin(
         ),
         SettingSpec(
             key="ldap_group_search_base",
+            section="directory.groups",
             type="string",
             scopes=("instance",),
             label="Group search base DN",

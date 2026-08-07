@@ -86,6 +86,7 @@ plugin = RaddPlugin(
                 "resolve this per item project; the instance sets the default, projects "
                 "override."
             ),
+            section="timelogging",
         ),
         SettingSpec(
             key="timelog_hours_per_day",
@@ -97,6 +98,7 @@ plugin = RaddPlugin(
                 "estimates. Global — one instance-wide value, so durations mean the "
                 "same thing on every timesheet and cycle handle."
             ),
+            section="timelogging",
         ),
         SettingSpec(
             key="timesheet_day_min_hours",
@@ -108,6 +110,7 @@ plugin = RaddPlugin(
                 "flagged as under-logged on the timesheet's per-person view. Leave and "
                 "holiday days are never flagged."
             ),
+            section="timelogging",
         ),
         SettingSpec(
             key="timesheet_day_max_hours",
@@ -118,6 +121,7 @@ plugin = RaddPlugin(
                 "Any day with more than this logged is flagged as over-logged on the "
                 "timesheet's per-person view."
             ),
+            section="timelogging",
         ),
     ),
     description=(

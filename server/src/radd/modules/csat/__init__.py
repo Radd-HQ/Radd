@@ -28,6 +28,7 @@ plugin = RaddPlugin(
                 "resolves (spec 65). Off by default — enable per service-desk project; "
                 "dev projects never send surveys."
             ),
+            section="sla",
         ),
     ),
     routers=(router, public_router),

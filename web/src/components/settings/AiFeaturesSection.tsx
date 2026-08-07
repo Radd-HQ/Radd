@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { aiRolesQuery } from "../../lib/queries";
 import {
-  AI_FEATURE_SETTING_KEYS,
   AiRole,
   SettingScope,
   type AiRoleValue,
@@ -43,7 +42,7 @@ export function AiFeaturesSection() {
       </p>
       <ScopedSettingsEditor
         scope={SettingScope.instance}
-        filter={(row) => AI_FEATURE_SETTING_KEYS.includes(row.key)}
+        section="ai"
       />
       {missing.map((entry) => (
         <p key={entry.role} className="mt-2 text-xs text-amber-400/90">

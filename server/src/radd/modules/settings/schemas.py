@@ -21,6 +21,9 @@ class ScopedSettingRead(BaseModel):
     choices: list[str] | None = None
     # RADD-846: the editor masks the input (the value itself stays admin-readable).
     secret: bool = False
+    # RADD-930: the settings surface this key belongs on ("" = the General page).
+    # Declared by the owning plugin so placement travels with the setting.
+    section: str = ""
 
 
 class ScopedSettingWrite(BaseModel):

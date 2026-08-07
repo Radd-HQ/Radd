@@ -11,6 +11,7 @@ import { projectsQuery, queryKeys, releasesQuery } from "../../lib/queries";
 import {
   Permission,
   ReleaseStatus,
+  SettingScope,
   type Release,
   type ReleaseCreate,
   type ReleaseUpdate,
@@ -22,6 +23,7 @@ import { ListSearchInput } from "../../components/ListSearchInput";
 import { Modal } from "../../components/Modal";
 import { TableSkeleton } from "../../components/TableSkeleton";
 import { TextField } from "../../components/TextField";
+import { ScopedSettingsEditor } from "../../components/settings/ScopedSettingsEditor";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { QueryError } from "../../components/QueryError";
 import { IconButton } from "../../components/IconButton";
@@ -97,6 +99,27 @@ export function ReleasesSettingsPage({ projectId }: { projectId?: string }) {
             </ul>
           )}
         </>
+      )}
+
+      {/* RADD-930: the two states that DRIVE the list above (spec 112), on the
+          page that uses them. They used to sit on project → General, where
+          "Shipped state" read as trivia with nothing nearby saying what moves
+          work there. */}
+      {project && (
+        <section aria-label="Release pipeline" className="mt-8">
+          <h3 className="text-[13px] font-semibold text-heading">Release pipeline</h3>
+          <p className="mb-3 mt-0.5 text-xs text-fg-muted">
+            Publishing a version <strong>sweeps</strong> every item sitting in the waiting
+            state into the shipped state and records the release on each one. Both are state
+            names, resolved within this project — renaming a state is a settings edit here,
+            not a broken pipeline. Leave either empty to turn that half off.
+          </p>
+          <ScopedSettingsEditor
+            scope={SettingScope.project}
+            scopeId={project.id}
+            section="releases"
+          />
+        </section>
       )}
 
       {modal && project && (

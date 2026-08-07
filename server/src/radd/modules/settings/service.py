@@ -174,6 +174,7 @@ async def list_for_scope(
                 "default": spec.default,
                 "choices": list(spec.choices) if spec.choices else None,
                 "secret": spec.secret,
+                "section": spec.section,
             }
         )
     return result

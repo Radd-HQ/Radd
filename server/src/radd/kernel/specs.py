@@ -593,6 +593,13 @@ class SettingSpec:
     # The editor renders a masked input; the value itself stays admin-readable
     # over the settings API (RADD-846's recorded decision).
     secret: bool = False
+    # RADD-930: which settings SURFACE this key belongs on — the owning plugin's
+    # call, not the kernel's, and not re-derived client-side. "" = the scope's
+    # General page. General renders the REMAINDER (empty sections plus any
+    # section this build has no surface for), so a departed or misspelt section
+    # can never make a setting unreachable — the reason it is computed by
+    # subtraction rather than given a section name of its own.
+    section: str = ""
 
     @property
     def default(self) -> Any:

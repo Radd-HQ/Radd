@@ -5,7 +5,13 @@ import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { SETTING_CHOICE_LABELS } from "../../lib/meta";
 import { scopedSettingsQuery } from "../../lib/queries";
-import { SettingScope, type ScopedSetting, type SettingScopeValue } from "../../lib/types";
+import {
+  SettingScope,
+  inSection,
+  withoutSections,
+  type ScopedSetting,
+  type SettingScopeValue,
+} from "../../lib/types";
 import { Button } from "../Button";
 import { SelectField } from "../SelectField";
 import { Spinner } from "../Spinner";
@@ -16,11 +22,27 @@ interface Props {
   scope: SettingScopeValue;
   /** Omit for instance scope; the project id otherwise. */
   scopeId?: string;
-  /** Show only matching rows (spec 85: the Directory page picks its own keys
-   * and General excludes them — same registry, no duplicated surface). */
-  filter?: (row: ScopedSetting) => boolean;
+  /**
+   * Which rows this surface owns (RADD-930) — the `section` the owning plugin
+   * declared, matching that section and anything under it. Pass `homed`
+   * instead on a General page.
+   *
+   * This replaces the hand-maintained key arrays each surface used to carry
+   * (`DIRECTORY_CONNECTION_KEYS`, `AI_FEATURE_SETTING_KEYS`, …): those had to be
+   * edited in two repos' worth of places whenever a plugin added a key, and a
+   * key nobody remembered to list silently landed on General.
+   */
+  section?: string;
+  /** General pages only: the section roots that DO have a surface at this
+   * scope. Everything else — no section, or a section with no home here — is
+   * rendered, so a setting can never fall through the cracks. */
+  homed?: readonly string[];
   /** Grey out the editors (spec 85: directory keys without a bind account). */
   disabled?: boolean;
+  /** Escape hatch for a surface that needs a predicate rather than a section. */
+  filter?: (row: ScopedSetting) => boolean;
+  /** Shown instead of the default when this surface owns no rows. */
+  emptyLabel?: string;
 }
 
 /**
@@ -28,15 +50,30 @@ interface Props {
  * Reusable at either scope: shows each setting's effective value, whether it's
  * overridden here (vs inherited), Save writes the override, Reset clears it.
  */
-export function ScopedSettingsEditor({ scope, scopeId, filter, disabled }: Props) {
+export function ScopedSettingsEditor({
+  scope,
+  scopeId,
+  section,
+  homed,
+  filter,
+  disabled,
+  emptyLabel,
+}: Props) {
   const query = useQuery(scopedSettingsQuery(scope, scopeId));
   if (query.isPending) return <Spinner label="Loading settings…" />;
   if (query.isError) {
     return <QueryError label="settings" error={query.error} />;
   }
-  const rows = filter ? query.data.filter(filter) : query.data;
+  let rows: readonly ScopedSetting[] = query.data;
+  if (section !== undefined) rows = inSection(rows, section);
+  if (homed !== undefined) rows = withoutSections(rows, homed);
+  if (filter) rows = rows.filter(filter);
   if (rows.length === 0) {
-    return <p className="text-xs text-fg-muted">No cascaded settings apply at this scope.</p>;
+    return (
+      <p className="text-xs text-fg-muted">
+        {emptyLabel ?? "No cascaded settings apply at this scope."}
+      </p>
+    );
   }
   return (
     <div className="flex flex-col gap-3">

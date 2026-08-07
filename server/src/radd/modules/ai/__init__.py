@@ -98,6 +98,7 @@ plugin = RaddPlugin(
     settings_keys=(
         SettingSpec(
             key="ai_editor_actions",
+            section="ai",
             type="bool",
             scopes=("instance",),
             label="Editor AI actions",
@@ -109,6 +110,7 @@ plugin = RaddPlugin(
         ),
         SettingSpec(
             key="ai_semantic_search",
+            section="ai",
             type="bool",
             scopes=("instance",),
             label="Semantic search",
@@ -120,6 +122,7 @@ plugin = RaddPlugin(
         ),
         SettingSpec(
             key="ai_storage_routing",
+            section="ai",
             type="bool",
             scopes=("instance",),
             label="LLM storage routing",
@@ -131,6 +134,7 @@ plugin = RaddPlugin(
         ),
         SettingSpec(
             key="ai_summarize",
+            section="ai",
             type="bool",
             scopes=("instance",),
             label="Issue summarize",
@@ -138,6 +142,7 @@ plugin = RaddPlugin(
         ),
         SettingSpec(
             key="ai_nl_slq",
+            section="ai",
             type="bool",
             scopes=("instance",),
             label="Natural language → SLQ",
@@ -145,6 +150,7 @@ plugin = RaddPlugin(
         ),
         SettingSpec(
             key="ai_similar_rerank",
+            section="ai",
             type="bool",
             scopes=("instance",),
             label="Similar-issues LLM rerank",
@@ -157,6 +163,7 @@ plugin = RaddPlugin(
         ),
         SettingSpec(
             key="ai_stream_responses",
+            section="ai",
             type="bool",
             scopes=("instance",),
             label="Stream AI responses",

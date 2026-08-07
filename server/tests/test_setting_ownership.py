@@ -98,3 +98,27 @@ def test_every_key_default_resolves():
     for plugin in registries.plugins.values():
         for spec in plugin.settings_keys:
             spec.default  # noqa: B018 — the assertion IS "this doesn't raise"
+
+
+def test_every_section_is_a_usable_slug():
+    """RADD-930: `section` places a key on a settings surface, and the SPA
+    matches it EXACTLY (a page claims `x`, which also takes `x.<card>`). It is a
+    wire constant with no compiler behind it, so a stray capital or trailing
+    space produces a key that is simply never claimed.
+
+    That failure is deliberately survivable — a General page renders the
+    REMAINDER, so an unclaimed key still appears, just in the wrong place. This
+    test is what turns "wrong place, nobody notices" into a red suite.
+    """
+    for plugin in registries.plugins.values():
+        for spec in plugin.settings_keys:
+            section = spec.section
+            if not section:
+                continue
+            assert section == section.strip(), f"{spec.key}: section {section!r} has padding"
+            for part in section.split("."):
+                assert part, f"{spec.key}: section {section!r} has an empty path segment"
+                assert part.islower() and part.isalnum(), (
+                    f"{spec.key}: section segment {part!r} is not a lowercase slug"
+                )
+

@@ -6,9 +6,10 @@ import { Entity, invalidateEntities } from "../../lib/cache";
 import { usePermissions } from "../../lib/hooks";
 import { PRIORITY_META } from "../../lib/meta";
 import { slaPoliciesQuery } from "../../lib/queries";
-import { Permission, type SlaPolicy } from "../../lib/types";
+import { Permission, SettingScope, type SlaPolicy } from "../../lib/types";
 import { EmptyState } from "../../components/EmptyState";
 import { TableSkeleton } from "../../components/TableSkeleton";
+import { ScopedSettingsEditor } from "../../components/settings/ScopedSettingsEditor";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { NewSlaPolicyForm, minutesLabel, windowLabel } from "../../components/settings/SlaPolicyForm";
 import { QueryError } from "../../components/QueryError";
@@ -163,6 +164,22 @@ export function ProjectSlaSettingsPage({ projectId }: { projectId?: string }) {
             </ul>
           )}
           {canManage && <NewSlaPolicyForm projectId={projectId} nextPosition={list.length} />}
+
+          {/* RADD-930: CSAT arrived here from project → General. It is the other
+              half of the service-desk loop these policies open — the survey
+              fires when the item the timers were running against resolves. */}
+          <section aria-label="Satisfaction surveys" className="mt-8">
+            <h3 className="text-[13px] font-semibold text-heading">After resolution</h3>
+            <p className="mb-3 mt-0.5 text-xs text-fg-muted">
+              What happens once the timers above stop.
+            </p>
+            <ScopedSettingsEditor
+              scope={SettingScope.project}
+              scopeId={projectId}
+              section="sla"
+              emptyLabel="No post-resolution settings — the CSAT plugin is disabled."
+            />
+          </section>
         </>
       )}
     </SettingsPage>

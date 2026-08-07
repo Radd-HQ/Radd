@@ -34,7 +34,52 @@ export interface ScopedSetting {
   choices?: string[] | null;
   /** RADD-846: render a masked input (the value itself is admin-readable). */
   secret?: boolean;
+  /** RADD-930: the settings surface this key belongs on, declared by the owning
+   * plugin. "" (or absent) = the scope's General page. */
+  section?: string;
 }
+
+/**
+ * Placing a setting by the surface it declares (RADD-930).
+ *
+ * A `section` is a dotted path: its ROOT names the page, and anything deeper
+ * names a card within it (`directory.connection` vs `directory.groups`), so one
+ * page can lay its own rows out in groups without a second vocabulary.
+ *
+ * `inSection` matches a section and everything under it. `withoutSections` is
+ * what a General page renders: the REMAINDER — rows with no section, plus rows
+ * whose root names a surface that doesn't exist at this scope (the release
+ * states have a Releases tab per project but not per instance) or at all.
+ * Computing General by subtraction rather than giving it a section name of its
+ * own is what makes a departed or misspelt section degrade to "appears on
+ * General" instead of "silently unreachable".
+ */
+const sectionRoot = (row: ScopedSetting) => (row.section ?? "").split(".")[0];
+
+export function inSection(rows: readonly ScopedSetting[], section: string): ScopedSetting[] {
+  return rows.filter((row) => {
+    const own = row.section ?? "";
+    return own === section || own.startsWith(`${section}.`);
+  });
+}
+
+export function withoutSections(
+  rows: readonly ScopedSetting[],
+  homed: readonly string[],
+): ScopedSetting[] {
+  const claimed = new Set(homed);
+  return rows.filter((row) => !claimed.has(sectionRoot(row)));
+}
+
+/** Section roots that have their own surface at each scope — everything else
+ *  falls back to that scope's General page (see `withoutSections`). */
+export const INSTANCE_HOMED_SECTIONS: readonly string[] = ["directory", "ai", "timelogging"];
+export const PROJECT_HOMED_SECTIONS: readonly string[] = [
+  "releases",
+  "timelogging",
+  "sla",
+  "workflow",
+];
 
 /** Registered scalar setting keys the SPA reads by name (mirror of the backend
  * `SettingKey` — only the ones with a client-side gate are listed). */
@@ -62,47 +107,6 @@ export const SettingKey = {
   aiStreamResponses: "ai_stream_responses",
 } as const;
 export type SettingKeyValue = (typeof SettingKey)[keyof typeof SettingKey];
-
-/** The directory keys live on the Directory page (spec 85) — the General tab's
- * instance editor filters them out so they aren't scattered across two tabs. */
-export const DIRECTORY_USER_SYNC_KEYS: readonly string[] = [
-  SettingKey.ldapUserSyncBase,
-  // Whether leavers are imported at all — the setting that decides how much of a
-  // real directory lands in Radd (one live instance: 2057 disabled vs 1031 active).
-  SettingKey.ldapExcludeDisabled,
-  SettingKey.ldapUserSyncEnabled,
-  SettingKey.ldapUserSyncDeactivateMissing,
-];
-export const DIRECTORY_GROUP_KEYS: readonly string[] = [
-  SettingKey.ldapGroupSearchBase,
-  // RADD-848: the revocation window, visible and editable where it matters.
-  SettingKey.ldapGroupSyncSeconds,
-];
-/** RADD-846: the connection itself — editable, env as seed/fallback. */
-export const DIRECTORY_CONNECTION_KEYS: readonly string[] = [
-  SettingKey.ldapUrl,
-  SettingKey.ldapUserDomain,
-  SettingKey.ldapBindDn,
-  SettingKey.ldapBindPassword,
-  SettingKey.ldapAdminGroups,
-];
-export const DIRECTORY_SETTING_KEYS: readonly string[] = [
-  ...DIRECTORY_CONNECTION_KEYS,
-  ...DIRECTORY_USER_SYNC_KEYS,
-  ...DIRECTORY_GROUP_KEYS,
-];
-
-/** The AI feature toggles live on Settings → AI (spec 101) — the General tab's
- * instance editor filters them out, same registry as the directory keys. */
-export const AI_FEATURE_SETTING_KEYS: readonly string[] = [
-  SettingKey.aiEditorActions,
-  SettingKey.aiSemanticSearch,
-  SettingKey.aiStorageRouting,
-  SettingKey.aiSummarize,
-  SettingKey.aiNlSlq,
-  SettingKey.aiSimilarRerank,
-  SettingKey.aiStreamResponses,
-];
 
 /** GET /scoped-settings/resolve — one key's cascade-resolved value (spec 70):
  * the project override if any, else the instance override, else the default. */

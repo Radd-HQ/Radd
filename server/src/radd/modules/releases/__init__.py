@@ -39,6 +39,7 @@ plugin = RaddPlugin(
                 "Belongs to the DONE category, so throughput counts the day the work was "
                 "finished rather than the day someone cut a tag. Empty turns the pipeline off."
             ),
+            section="releases",
         ),
         SettingSpec(
             key="release_shipped_state",
@@ -49,6 +50,7 @@ plugin = RaddPlugin(
                 "Where the release sweep moves waiting work when a version is published, "
                 "with the release recorded on each item. Empty turns the sweep off."
             ),
+            section="releases",
         ),
     ),
     routers=(router,),
