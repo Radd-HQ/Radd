@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ForbiddenError
+from radd.kernel import registries
 from radd.modules.projects.models import Project
 
 from . import grants
@@ -96,6 +97,58 @@ async def permissions_for_projects(
             project.id,
         )
         for project in projects
+    }
+
+
+async def visible_projects(
+    session: AsyncSession, user: User
+) -> dict[uuid.UUID, frozenset[Permission]]:
+    """The projects this actor should be OFFERED (RADD-937).
+
+    `require_anywhere(item.read)` answers "where could they read something",
+    and `holds_base` counts a qualified atom as its base — correct, because
+    `item.read@own` really does let them read their own rows there. Used as a
+    LIST that made every project on the instance appear for an account holding
+    nothing but the Baseline, since "your own rows, anywhere" covers everywhere.
+
+    So visibility is the union of two different facts:
+
+    * **entitled** — `item.read` held UNQUALIFIED, i.e. by a grant. The project
+      is theirs whether or not anything is in it.
+    * **related** — held qualified AND the relationship is real: they have an
+      item there, their team does, or they are a participant. This is what keeps
+      a person's own tickets visible after every grant is revoked, which is the
+      half that made emptying the Baseline unacceptable.
+
+    Requiring the qualified read as well as the relationship is deliberate: with
+    the own-item atoms removed from the Baseline, having an item somewhere
+    confers nothing, because the actor cannot read it. The operator lever keeps
+    working.
+
+    The relationships come from the kernel registry, so this function names no
+    module that produces one — `items` and `participants` contribute, and the
+    next one does too without editing this.
+    """
+    reachable = await require_anywhere(session, user, Permission.ITEM_READ)
+    entitled = {
+        project_id: permissions
+        for project_id, permissions in reachable.items()
+        if Permission.ITEM_READ in permissions
+    }
+    qualified = {
+        project_id: permissions
+        for project_id, permissions in reachable.items()
+        if project_id not in entitled
+    }
+    if not qualified:
+        return entitled
+    related: set[uuid.UUID] = set()
+    for spec in registries.project_relations.values():
+        related |= await spec.resolve(session, user)
+    return entitled | {
+        project_id: permissions
+        for project_id, permissions in qualified.items()
+        if project_id in related
     }
 
 

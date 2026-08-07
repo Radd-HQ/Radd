@@ -252,3 +252,29 @@ async def _validate_team_subject(
             ParticipantEntity.PARTICIPANT,
             reason=f"team {team_id} does not exist",
         )
+
+
+async def projects_with_participation(session: AsyncSession, user) -> set[uuid.UUID]:
+    """Projects holding an item this actor is a PARTICIPANT on (RADD-937).
+
+    Direct rows and team rows alike: a team participant row stays live (the
+    notify consumer resolves current membership at fan-out), so visibility
+    resolves the same way rather than snapshotting who was on the team when the
+    row was written.
+
+    Contributed to the kernel's project-relation registry so the visibility
+    resolver never learns that participants exist.
+    """
+    from radd.modules.teams import service as teams  # deferred: teams loads first
+
+    team_ids = await teams.user_team_ids(session, user.id)
+    condition = ItemParticipant.user_id == user.id
+    if team_ids:
+        condition = condition | ItemParticipant.team_id.in_(team_ids)
+    rows = await session.execute(
+        select(WorkItem.project_id)
+        .join(ItemParticipant, ItemParticipant.item_id == WorkItem.id)
+        .where(condition)
+        .distinct()
+    )
+    return set(rows.scalars())

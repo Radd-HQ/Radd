@@ -25,6 +25,7 @@ from .specs import (
     EntityRefSpec,
     EventTypeSpec,
     GrantScopeSpec,
+    ProjectRelationSpec,
     IntegrationSpec,
     McpToolSpec,
     NavFactSpec,
@@ -92,6 +93,9 @@ class KernelRegistries:
     #: grant binds to, and the rows that die with a project.
     nav_facts: dict[str, NavFactSpec] = field(default_factory=dict)
     grant_scopes: dict[str, GrantScopeSpec] = field(default_factory=dict)
+    #: RADD-937: why an actor can SEE a project without being granted it.
+    #: Read blind by the visibility resolver, which names no contributor.
+    project_relations: dict[str, ProjectRelationSpec] = field(default_factory=dict)
     project_purges: dict[str, ProjectPurgeSpec] = field(default_factory=dict)
     capabilities: dict[str, CapabilitySpec] = field(default_factory=dict)
     slq_fields: dict[str, SlqFieldSpec] = field(default_factory=dict)  # plugin SLQ query fields
@@ -159,6 +163,8 @@ class KernelRegistries:
             self.nav_facts[nf.key] = nf
         for gs in plugin.grant_scopes:
             self.grant_scopes[gs.key] = gs
+        for pr in plugin.project_relations:
+            self.project_relations[pr.key] = pr
         for pp in plugin.project_purges:
             self.project_purges[pp.name] = pp
         for cap in plugin.capabilities:
@@ -217,6 +223,8 @@ class KernelRegistries:
             self.nav_facts.pop(nf.key, None)
         for gs in plugin.grant_scopes:
             self.grant_scopes.pop(gs.key, None)
+        for pr in plugin.project_relations:
+            self.project_relations.pop(pr.key, None)
         for pp in plugin.project_purges:
             self.project_purges.pop(pp.name, None)
         for cap in plugin.capabilities:

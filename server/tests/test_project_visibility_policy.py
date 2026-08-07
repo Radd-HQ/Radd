@@ -38,6 +38,9 @@ from radd.config import settings as config
 from radd.modules.auth import authz, roles as auth_roles
 from radd.modules.auth.models import GlobalRoleGrant, User
 from radd.modules.auth.types import BuiltinRoleKey, InstanceRole, Permission
+from radd.modules.items import service as items
+from radd.modules.items.models import WorkItem
+from radd.modules.items.schemas import ItemCreate
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 
@@ -146,3 +149,79 @@ async def test_the_lever_costs_the_own_item_read_it_was_there_for(db):
         "stripping the Baseline also removes the reporter's read of their own "
         "ticket — the coupling RADD-935 exists to break"
     )
+
+
+# --- RADD-937: visibility follows the work ------------------------------------
+
+
+async def test_a_relationship_makes_one_project_visible_and_not_the_rest(db):
+    """The model the operator asked for: you see a project you have something
+    in, and nothing else.
+
+    Before this, the qualified Baseline listed BOTH projects — "your own rows,
+    anywhere" covered everywhere. The atoms are unchanged; what changed is that
+    the relationship must be real.
+    """
+    await _baseline(db, ["item.read@own", "item.read@participant"])
+    mine, theirs = await _projects(db)
+    person = await _user(db)
+    admin = await _user(db, InstanceRole.ADMIN)
+    created = await items.create_item(
+        db, ItemCreate(project_id=mine.id, title="a ticket I filed"), admin
+    )
+    # Reported BY the person — the @own relation (RADD-823 D6).
+    item_row = await db.get(WorkItem, created.id)
+    item_row.reporter_id = person.id
+    await db.flush()
+
+    visible = await authz.visible_projects(db, person)
+    assert mine.id in visible, "a project holding their own item must be visible"
+    assert theirs.id not in visible, (
+        "a project they have nothing in must not be — this is the 97-projects bug"
+    )
+
+
+async def test_no_relationship_and_no_grant_sees_nothing(db):
+    """The account the whole thread started from, at its cleanest."""
+    await _baseline(db, ["item.read@own", "item.read@participant"])
+    await _projects(db)
+    person = await _user(db)
+    assert await authz.visible_projects(db, person) == {}
+
+
+async def test_a_grant_shows_the_project_with_nothing_in_it(db):
+    """Entitlement does not need a relationship. A granted project is yours
+    whether or not anyone has filed anything there yet — otherwise a new
+    project would be invisible to the team that just got access to it."""
+    await _baseline(db, ["item.read@own"])
+    granted, _other = await _projects(db)
+    person = await _user(db)
+    member = await auth_roles.role_by_key(db, BuiltinRoleKey.MEMBER)
+    db.add(GlobalRoleGrant(role_id=member.id, user_id=person.id, project_id=granted.id))
+    await db.flush()
+
+    visible = await authz.visible_projects(db, person)
+    assert granted.id in visible
+    assert Permission.ITEM_READ in visible[granted.id]
+
+
+async def test_the_baseline_lever_still_works_over_the_relationship(db):
+    """RADD-935's operator lever survives: with no qualified read at all, having
+    an item somewhere confers nothing, because they could not read it anyway.
+
+    This is why the resolver requires BOTH — take the qualifier away and the
+    relationship stops mattering, so an operator who wants strict entitlement
+    can still have it.
+    """
+    await _baseline(db, [])
+    mine = (await _projects(db, 1))[0]
+    person = await _user(db)
+    admin = await _user(db, InstanceRole.ADMIN)
+    created = await items.create_item(
+        db, ItemCreate(project_id=mine.id, title="unreadable to them"), admin
+    )
+    item_row = await db.get(WorkItem, created.id)
+    item_row.reporter_id = person.id
+    await db.flush()
+
+    assert await authz.visible_projects(db, person) == {}

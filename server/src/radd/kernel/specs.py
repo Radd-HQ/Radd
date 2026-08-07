@@ -473,6 +473,37 @@ class NavFactSpec:
 
 
 @dataclass(frozen=True)
+class ProjectRelationSpec:
+    """Why an actor can see a project WITHOUT having been granted it (RADD-937).
+
+    Qualified permissions (`item.read@own`, `@participant`) say "you may read
+    your own rows anywhere", which the project list read as "every project is
+    yours" — an account with no grants at all was listed against all 97. The
+    fix is not to drop the qualifier, which is what people's own tickets rest
+    on, but to require that the relationship is REAL: you see a project you
+    actually have something in.
+
+    Each spec answers, for one kind of relationship, "which projects does this
+    actor have something in?". `items` contributes reported/assigned/team-owned;
+    `participants` contributes participation. The resolver reads whatever is
+    registered and names none of them — `auth` must not grow an import of
+    `items` to answer a question about items, and the next module that creates a
+    relationship (worklogs: "I logged time there") contributes without editing
+    it. The RADD-892 inversion, one registry over.
+
+    A module that is not loaded contributes nothing, which narrows visibility
+    rather than widening it — the safe direction for a fail case.
+    """
+
+    key: str  # "reported" | "assigned" | "team" | "participant" | …
+    #: Shown when explaining why a project is visible; keep it a sentence
+    #: fragment that completes "visible because …".
+    label: str
+    #: (session, user) -> the project ids the actor has this relationship with.
+    resolve: Callable[[Any, Any], Awaitable[set[Any]]]
+
+
+@dataclass(frozen=True)
 class GrantScopeSpec:
     """A kind of thing a role grant can be BOUND to — spec 91's project scope,
     RADD-791's wiki space.

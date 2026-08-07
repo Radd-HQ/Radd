@@ -23,6 +23,7 @@ from .specs import (
     EntitySpec,
     EventTypeSpec,
     GrantScopeSpec,
+    ProjectRelationSpec,
     IntegrationSpec,
     CascadeSpec,
     McpToolSpec,
@@ -104,6 +105,8 @@ class RaddPlugin:
     #: which of its tables die with a project.
     nav_facts: tuple[NavFactSpec, ...] = ()
     grant_scopes: tuple[GrantScopeSpec, ...] = ()
+    #: RADD-937 — what makes a project visible without a grant on it.
+    project_relations: tuple[ProjectRelationSpec, ...] = ()
     project_purges: tuple[ProjectPurgeSpec, ...] = ()
     capabilities: tuple[CapabilitySpec, ...] = ()
     slq_fields: tuple[SlqFieldSpec, ...] = ()  # custom SLQ query fields (e.g. `note ~ "x"`)

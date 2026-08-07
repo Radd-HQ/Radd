@@ -9,7 +9,6 @@ import {
   ChevronRight,
   Clock,
   ConciergeBell,
-  FolderSearch,
   House,
   Layers,
   LayoutDashboard,
@@ -121,27 +120,6 @@ export function Sidebar() {
   // view needs only item.read in scope (views/service.PERSONAL_VIEW_PERMISSION)
   // — sharing is gated separately inside the modal. The all-projects scope
   // means "anywhere", not "globally" (RADD-788).
-  /**
-   * The rail lists projects the viewer is ENTITLED to (RADD-934), not every
-   * project they could open.
-   *
-   * `GET /projects` gates on `require_anywhere(item.read)`, and that gate is
-   * lattice-aware: `item.read@own` HOLDS `item.read` (RADD-823). Correct for a
-   * gate — someone holding @own may read their own items anywhere, so the
-   * project must stay openable or an issue assigned to them in a project they
-   * are not a member of becomes unreachable. Wrong for a discovery surface: an
-   * account with no grants at all was shown every project on the instance, each
-   * one empty when opened.
-   *
-   * `perms.project` matches atoms EXACTLY (no lattice), so asking it for plain
-   * `item.read` is the distinction — no new wire field, the atoms are already
-   * on each row.
-   */
-  const entitledProjects = (projects ?? []).filter((project) =>
-    perms.project(project, Permission.itemRead),
-  );
-  const ownOnlyProjectCount = (projects ?? []).length - entitledProjects.length;
-
   const canCreateView = perms.anyProject(Permission.itemRead);
   const cycleList = cycles ?? [];
   const liveCycles = selectableCycles(cycleList);
@@ -454,7 +432,7 @@ export function Sidebar() {
               collapsed={sectionCollapsed("projects")}
               onToggle={() => toggleSection("projects")}
             />
-            {!sectionCollapsed("projects") && entitledProjects.length > 10 && (
+            {!sectionCollapsed("projects") && projects.length > 10 && (
               <input
                 type="search"
                 value={projectFilter}
@@ -467,14 +445,14 @@ export function Sidebar() {
             {!sectionCollapsed("projects") && (
             <ul>
               {(projectFilter.trim()
-                ? entitledProjects.filter((project) => {
+                ? projects.filter((project) => {
                     const needle = projectFilter.trim().toLowerCase();
                     return (
                       project.name.toLowerCase().includes(needle) ||
                       project.key.toLowerCase().includes(needle)
                     );
                   })
-                : entitledProjects
+                : projects
               ).map((project) => (
                 <li key={project.id}>
                   <div className="group/project relative flex items-center">
@@ -577,20 +555,6 @@ export function Sidebar() {
                 </li>
               ))}
             </ul>
-            )}
-            {/* RADD-934: the rail is honest about what it is NOT showing. These
-                projects stay fully reachable — My Work, search and a direct link
-                all open them — they are just not advertised, because the viewer
-                can only see rows they own there. */}
-            {!sectionCollapsed("projects") && ownOnlyProjectCount > 0 && (
-              <Link
-                to={RoutePath.projects}
-                className="mx-1 flex items-center gap-1.5 rounded-md px-1.5 py-1.5 text-[12px] text-fg-faint hover:bg-overlay hover:text-fg-secondary focus-visible:outline-2 focus-visible:outline-focus"
-                title="You can open these, but only items you own or take part in are visible in them."
-              >
-                <FolderSearch size={12} aria-hidden />
-                {ownOnlyProjectCount} more with only your own items
-              </Link>
             )}
           </div>
         )}

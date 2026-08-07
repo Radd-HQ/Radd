@@ -46,7 +46,13 @@ from .queries import (
 )
 from .read import get_item, get_item_by_key
 from .refs import item_ref, ref_from
-from .visibility import denied_slq_fields, ensure_item_relation, relation_read_clause
+from .visibility import (
+    denied_slq_fields,
+    ensure_item_relation,
+    projects_with_team_items,
+    projects_with_user_items,
+    relation_read_clause,
+)
 
 __all__ = [
     "add_item_link",
@@ -54,6 +60,8 @@ __all__ = [
     "ref_from",
     "denied_slq_fields",
     "ensure_item_relation",
+    "projects_with_team_items",
+    "projects_with_user_items",
     "relation_read_clause",
     "count_items_assigned_to_team",
     "count_items_in_state",

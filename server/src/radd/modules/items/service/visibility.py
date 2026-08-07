@@ -4,7 +4,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from sqlalchemy import false
+from sqlalchemy import false, select
 
 from radd.exceptions import ForbiddenError
 from radd.kernel.registry import register_relation
@@ -442,3 +442,47 @@ async def denied_slq_fields(
         if any(g.access == fields.Access.READ.value for g in grants):
             denied |= set(_BUILTIN_TO_SLQ_FIELDS.get(name, ()))
     return frozenset(denied)
+
+
+# --- project visibility (RADD-937) --------------------------------------------
+
+
+async def projects_with_user_items(session: AsyncSession, user) -> set[uuid.UUID]:
+    """Projects the actor personally has an item in — reported OR assigned.
+
+    Half of the answer to "why can this person see this project without a grant
+    on it". A qualified read (`item.read@own`) says they may read their own rows
+    ANYWHERE, which the project list used to read as "every project"; requiring
+    the relationship to be real is what turns that into the projects they
+    actually work in.
+
+    Kept as ONE query over the two columns rather than two: `work_items` indexes
+    both, so the planner ORs the bitmaps and the whole thing is a 2.2 ms index
+    scan over 503k rows — cheap enough to run per request, which is why this is
+    resolved live instead of being materialised into a membership table that
+    would then need keeping in step.
+    """
+    rows = await session.execute(
+        select(WorkItem.project_id)
+        .where((WorkItem.reporter_id == user.id) | (WorkItem.assignee_id == user.id))
+        .distinct()
+    )
+    return set(rows.scalars())
+
+
+async def projects_with_team_items(session: AsyncSession, user) -> set[uuid.UUID]:
+    """Projects where one of the actor's TEAMS owns an item (`work_items.team_id`).
+
+    The item's own team, nothing inferred — the same reading `@team` already has
+    in the relation above, so "my team's work" means one thing across the
+    codebase rather than two.
+    """
+    from radd.modules.teams import service as teams  # deferred: teams loads before items
+
+    team_ids = await teams.user_team_ids(session, user.id)
+    if not team_ids:
+        return set()
+    rows = await session.execute(
+        select(WorkItem.project_id).where(WorkItem.team_id.in_(team_ids)).distinct()
+    )
+    return set(rows.scalars())

@@ -1,12 +1,13 @@
 from sqlalchemy import false, or_, select
 
-from radd.kernel import EventTypeSpec, PluginUiManifest
+from radd.kernel import EventTypeSpec, PluginUiManifest, ProjectRelationSpec
 from radd.kernel import RaddPlugin
 from radd.kernel.registry import register_relation
 from radd.kernel.specs import RelationSpec
 from radd.modules.items.models import WorkItem
 
 from .models import ItemParticipant
+from . import service
 from .router import router
 from .types import ParticipantEvent
 
@@ -37,6 +38,15 @@ ITEM_PARTICIPANT = RelationSpec(
 register_relation(ITEM_PARTICIPANT)
 
 plugin = RaddPlugin(
+    # RADD-937: being shared into an item makes its project visible — the
+    # same "second reporter" reading the relation above already has.
+    project_relations=(
+        ProjectRelationSpec(
+            key="participant",
+            label="you are a participant on an item here",
+            resolve=service.projects_with_participation,
+        ),
+    ),
     name="participants",
     core=False,  # optional plugin — disableable via the plugin manager
     description=(

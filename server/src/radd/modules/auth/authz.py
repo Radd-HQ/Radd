@@ -60,6 +60,7 @@ from .authz_batch import (
     readable_projects as readable_projects,
     require_anywhere as require_anywhere,
     require_member as require_member,
+    visible_projects as visible_projects,
 )
 from .authz_core import (
     _BASELINE_CACHE_KEY as _BASELINE_CACHE_KEY,

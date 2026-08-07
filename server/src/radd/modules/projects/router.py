@@ -118,9 +118,15 @@ async def create_project(data: ProjectCreate, session: Session, user: CurrentUse
 
 @project_router.get("", response_model=list[ProjectRead])
 async def list_projects(session: Session, user: CurrentUser) -> list[ProjectRead]:
-    # RADD-672: the projects where the caller holds item.read — a member's floor
-    # matches every project (unchanged), a spec-113 scoped key sees exactly what
-    # it may read instead of a global-atom 403.
-    per_project = await authz.require_anywhere(session, user, authz.Permission.ITEM_READ)
+    # RADD-937: the projects the caller should be OFFERED — entitled (item.read
+    # held unqualified, i.e. granted) plus the ones they have actual work in.
+    #
+    # This used to be `require_anywhere(item.read)`, which is the REACHABILITY
+    # answer: `holds_base` counts `item.read@own` as holding `item.read`, so an
+    # account with no grants at all was listed against every project on the
+    # instance. Reachability is still the right gate everywhere it is used to
+    # SCOPE rows — your own items must keep surfacing wherever they are — it is
+    # only wrong as the answer to "which projects are yours".
+    per_project = await authz.visible_projects(session, user)
     projects = [p for p in await service.list_projects(session) if p.id in per_project]
     return [_project_read(p, per_project[p.id]) for p in projects]

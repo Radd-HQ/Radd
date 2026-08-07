@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 
 from radd.kernel import EntityRefSpec, EventTypeSpec
 from radd.kernel import RaddPlugin
-from radd.kernel import PermissionSpec, ProjectPurgeSpec
+from radd.kernel import PermissionSpec, ProjectPurgeSpec, ProjectRelationSpec
 from radd.kernel import SettingSpec
 
 from .enums import ItemEvent
@@ -11,6 +11,9 @@ from .filters import FilterParseError
 from .router import router
 from .service.refs import item_ref
 from .service.visibility import ITEM_RELATIONS
+# AFTER the submodule imports above, deliberately: binding the package
+# attribute earlier re-enters `items.schemas` before it is initialised.
+from . import service
 from .slq import SlqError
 
 # Imported AFTER the router chain: mcptools reaches sideways (service, workflow,
@@ -103,6 +106,20 @@ plugin = RaddPlugin(
     # project takes its items with it explicitly. Ordered after the tables that
     # point AT an item (order 20) and before the states/types it points at.
     project_purges=(ProjectPurgeSpec(name="items", tables=("work_items",), order=50),),
+    # RADD-937: an item you reported/are assigned, or that your team owns,
+    # makes its project visible even with no grant on it.
+    project_relations=(
+        ProjectRelationSpec(
+            key="item",
+            label="you reported or are assigned an item here",
+            resolve=service.projects_with_user_items,
+        ),
+        ProjectRelationSpec(
+            key="team_item",
+            label="one of your teams owns an item here",
+            resolve=service.projects_with_team_items,
+        ),
+    ),
     # RADD-889: the item tools of the spec-45/114 MCP catalog live with their owner.
     mcp_tools=MCP_TOOLS,
 )
