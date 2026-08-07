@@ -106,6 +106,10 @@ class UserDirectoryEntry(BaseModel):
     source: str
     avatar_color: str | None = None
     avatar_emoji: str | None = None
+    #: RADD-938 — only when the caller passed `project_id`: does this person hold
+    #: item.read on THAT project through a grant? `None` means the question was
+    #: not asked, which is different from "no" and must not render as a warning.
+    has_access: bool | None = None
 
 
 class PermissionSourceRead(BaseModel):

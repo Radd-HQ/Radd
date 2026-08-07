@@ -19,9 +19,10 @@ import {
   issueTypesQuery,
   itemSlaQuery,
   teamsQuery,
-  usersQuery,
+  projectDirectoryQuery,
 } from "../../lib/queries";
 import { ValueChip } from "./ValueChip";
+import type { UserSummary } from "../../lib/types";
 
 /* State/priority chips consume the theme token scales (RADD-875): the state
  * chip reads `--chart-*` — the declared ONE source for state color, which this
@@ -525,9 +526,42 @@ function PointsField({ item, onPatch }: PickerProps) {
   );
 }
 
-/** Assignee picker (`GET /users`) — spec-02 field. */
+/**
+ * People options grouped by whether they can actually reach this project
+ * (RADD-938).
+ *
+ * Everyone is still listed — hiding a colleague gives no reason and reads as a
+ * bug — but the ones who cannot see the project are separated and labelled, so
+ * assigning work to someone who will never find it is a visible choice rather
+ * than an invisible mistake.
+ *
+ * `has_access === undefined` means the directory was fetched without a project
+ * (no project context yet): one flat list, exactly as before.
+ */
+function PeopleOptions({ users }: { users: UserSummary[] }) {
+  const active = users.filter((user) => user.active);
+  const asked = active.some((user) => user.has_access !== undefined && user.has_access !== null);
+  const option = (user: UserSummary) => (
+    <option key={user.id} value={user.id} label={user.name}>
+      <PersonName user={user} />
+    </option>
+  );
+  if (!asked) return <>{active.map(option)}</>;
+  const withAccess = active.filter((user) => user.has_access);
+  const without = active.filter((user) => !user.has_access);
+  return (
+    <>
+      {withAccess.map(option)}
+      {without.length > 0 && (
+        <optgroup label="No access to this project">{without.map(option)}</optgroup>
+      )}
+    </>
+  );
+}
+
+/** Assignee picker — the project-annotated directory (RADD-938). */
 function AssigneePicker({ item, onPatch }: PickerProps) {
-  const users = useQuery(usersQuery);
+  const users = useQuery(projectDirectoryQuery(item.project_id));
   return (
     <SelectField
       label="Assignee"
@@ -535,20 +569,14 @@ function AssigneePicker({ item, onPatch }: PickerProps) {
       onChange={(event) => onPatch({ assignee_id: event.target.value || null })}
     >
       <option value="">Unassigned</option>
-      {(users.data ?? [])
-        .filter((user) => user.active)
-        .map((user) => (
-          <option key={user.id} value={user.id} label={user.name}>
-            <PersonName user={user} />
-          </option>
-        ))}
+      <PeopleOptions users={users.data ?? []} />
     </SelectField>
   );
 }
 
 /** Reporter/requester picker (spec 30) — who raised the issue; defaults to creator. */
 function ReporterPicker({ item, onPatch }: PickerProps) {
-  const users = useQuery(usersQuery);
+  const users = useQuery(projectDirectoryQuery(item.project_id));
   return (
     <SelectField
       label="Reporter"
@@ -556,13 +584,7 @@ function ReporterPicker({ item, onPatch }: PickerProps) {
       onChange={(event) => onPatch({ reporter_id: event.target.value || null })}
     >
       <option value="">Unknown</option>
-      {(users.data ?? [])
-        .filter((user) => user.active)
-        .map((user) => (
-          <option key={user.id} value={user.id} label={user.name}>
-            <PersonName user={user} />
-          </option>
-        ))}
+      <PeopleOptions users={users.data ?? []} />
     </SelectField>
   );
 }

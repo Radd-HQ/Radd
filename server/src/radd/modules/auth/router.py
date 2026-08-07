@@ -434,6 +434,7 @@ async def list_user_directory(
     session: Session,
     actor: CurrentUser,
     q: str | None = None,
+    project_id: uuid.UUID | None = None,
     limit: Annotated[int | None, Query(ge=1, le=500)] = None,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[UserDirectoryEntry]:
@@ -458,7 +459,36 @@ async def list_user_directory(
     rows = await service.list_users(session, q=q, limit=limit, offset=offset)
     if limit is not None:
         response.headers[TOTAL_COUNT_HEADER] = str(await service.count_users(session, q=q))
-    return [UserDirectoryEntry.model_validate(u) for u in rows]
+    entries = [UserDirectoryEntry.model_validate(u) for u in rows]
+
+    # RADD-938: `project_id` annotates each row with whether that person can
+    # actually reach the project, for the controls that attach someone TO work
+    # — assignee, participants, add-team. Without it the pickers offered every
+    # account with no hint, so you could assign an issue to someone who would
+    # never find it and learn about it days later.
+    #
+    # Annotated, never filtered. Hiding a colleague gives no reason and reads as
+    # a bug; and under RADD-937 adding a no-access person as a participant is
+    # exactly what makes the project visible to them, so the pick must stay
+    # possible. The SPA groups and labels.
+    #
+    # Resolved as a SET once — asking `effective_permissions` per row would be
+    # one resolution per account in the directory.
+    #
+    # Gated on the CALLER's own read of that project. Without this, any
+    # authenticated account could ask "who has access to <project I cannot
+    # see>?" and enumerate its membership — the directory is deliberately open
+    # to everyone (RADD-769), so an ungated annotation would have widened it
+    # from "who exists" to "who is on what". Silently unannotated rather than a
+    # 403: `has_access=None` already means "not asked", and a picker that cannot
+    # ask still works.
+    if project_id is not None:
+        visible = await authz.visible_projects(session, actor)
+        if project_id in visible:
+            entitled = await grants.users_entitled_to_project(session, project_id)
+            for entry in entries:
+                entry.has_access = entry.id in entitled
+    return entries
 
 
 @user_router.get("", response_model=list[UserRead])

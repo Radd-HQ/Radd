@@ -517,11 +517,25 @@ def test_user_directory_entry_exposes_no_administrative_fields():
     an account uses is not a secret the way an address is, and without it a
     picker rendered a service account exactly like a colleague — defeating the
     "never mistaken for a person" intent the service-accounts module states.
+    REVISED AGAIN (RADD-938): `has_access` joined it, and it is a different KIND
+    of field — not a fact about the account at all, but about the CALLER's
+    project. It is populated only when the caller passes a `project_id` and can
+    see that project themselves; otherwise it stays None. Ungated it would have
+    turned an open "who exists" directory into "who is on what", enumerable for
+    projects the caller cannot see.
     """
     from radd.modules.auth.schemas import UserDirectoryEntry, UserRead
 
     exposed = set(UserDirectoryEntry.model_fields)
-    assert exposed == {"id", "name", "active", "source", "avatar_color", "avatar_emoji"}
+    assert exposed == {
+        "id",
+        "name",
+        "active",
+        "source",
+        "avatar_color",
+        "avatar_emoji",
+        "has_access",
+    }
     administrative = {"email", "instance_role", "last_login_at", "timezone"}
     assert exposed & administrative == set()
     # The administrative shape still carries them: this is a split by audience,

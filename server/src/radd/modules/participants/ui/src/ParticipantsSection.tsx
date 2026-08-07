@@ -28,6 +28,9 @@ interface ParticipantsData {
 }
 interface UserLite extends Ref {
   active: boolean;
+  /** RADD-938 — set when the directory is fetched for a project: can this
+   *  person actually reach it? Undefined means the question was not asked. */
+  has_access?: boolean | null;
 }
 interface TeamLite {
   id: string;
@@ -44,14 +47,19 @@ export function ParticipantsSection({ item }: { item: Item }) {
   });
   const canManage = Boolean(data?.can_manage);
   const users = useQuery({
-    queryKey: ["radd-remote", "participants-users"],
+    queryKey: ["radd-remote", "participants-users", item.project_id],
     // The member-floor directory (RADD-769), not `/users` — that one is gated on
     // `user.manage`, which nobody needs in order to add a participant. This was
     // gated correctly on `can_manage` and still 403'd, because the gate that
     // mattered was on the endpoint rather than on the affordance. A plugin
     // remote reaches the API the same way the host does, so it inherits the
     // same rule.
-    queryFn: () => api.get<UserLite[]>("/users/directory"),
+    // RADD-938: scoped to THIS project, so each row says whether that person
+    // can reach it. This picker is where it matters most — sharing an item with
+    // someone is the deliberate act of involving them, and doing it blind means
+    // the person may never be able to open what you shared.
+    queryFn: () =>
+      api.get<UserLite[]>(`/users/directory?project_id=${item.project_id}`),
     enabled: canManage,
   });
   const teams = useQuery({
@@ -185,14 +193,35 @@ export function ParticipantsSection({ item }: { item: Item }) {
             onChange={(e) => e.target.value && add.mutate({ user_id: e.target.value })}
           >
             <option value="">Choose a user…</option>
-            {(users.data ?? [])
-              .filter((u) => u.active && !participantUserIds.has(u.id))
-              .map((u) => (
+            {(() => {
+              // Everyone is still offered — under RADD-937 adding a no-access
+              // person as a participant is exactly what makes the project
+              // visible to them, so hiding them would remove the fix. They are
+              // separated and labelled instead.
+              const candidates = (users.data ?? []).filter(
+                (u) => u.active && !participantUserIds.has(u.id),
+              );
+              const label = (u: UserLite) =>
+                `${u.name}${onLeaveIds.has(u.id) ? " (away)" : ""}`;
+              const asked = candidates.some((u) => u.has_access != null);
+              const row = (u: UserLite) => (
                 <option key={u.id} value={u.id}>
-                  {u.name}
-                  {onLeaveIds.has(u.id) ? " (away)" : ""}
+                  {label(u)}
                 </option>
-              ))}
+              );
+              if (!asked) return candidates.map(row);
+              const without = candidates.filter((u) => !u.has_access);
+              return (
+                <>
+                  {candidates.filter((u) => u.has_access).map(row)}
+                  {without.length > 0 && (
+                    <optgroup label="No access to this project — adding them grants it">
+                      {without.map(row)}
+                    </optgroup>
+                  )}
+                </>
+              );
+            })()}
           </Select>
           <Select
             label="Add team"

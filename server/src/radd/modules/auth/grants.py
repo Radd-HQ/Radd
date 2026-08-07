@@ -463,3 +463,52 @@ async def replace_grants(
         },
     )
     return await list_grants(session, role_id)
+
+
+async def users_entitled_to_project(
+    session: AsyncSession, project_id: uuid.UUID
+) -> set[uuid.UUID]:
+    """Every account entitled to a project through a GRANT (RADD-938).
+
+    The reverse of the usual question. `effective_permissions` answers
+    "what may this person do here", which is the wrong shape for a picker —
+    asking it per row would be one resolution per account in the directory.
+    This resolves the SET once: the grants that apply here (project-scoped plus
+    instance-wide, which reach every project), flattened through their subjects.
+
+    Entitlement means a grant, deliberately. It does NOT include the
+    relationship-derived visibility of RADD-937 — someone who can see a project
+    because they filed a ticket in it is not therefore a sensible assignee, and
+    a picker that offered them would be recommending the thing this exists to
+    warn about.
+
+    Admins are not enumerated: they bypass every check and adding ~all of them
+    to every picker's "has access" set would say less, not more.
+    """
+    from radd.modules.groups import service as groups_service  # deferred
+    from radd.modules.teams import service as teams  # deferred
+
+    rows = (
+        await session.execute(
+            select(GlobalRoleGrant).where(
+                (GlobalRoleGrant.project_id == project_id) | _unscoped(),
+                _live(),
+            )
+        )
+    ).scalars()
+
+    users: set[uuid.UUID] = set()
+    team_ids: set[uuid.UUID] = set()
+    group_ids: set[uuid.UUID] = set()
+    for row in rows:
+        if row.user_id is not None:
+            users.add(row.user_id)
+        elif row.team_id is not None:
+            team_ids.add(row.team_id)
+        elif row.group_id is not None:
+            group_ids.add(row.group_id)
+    for team_id in team_ids:
+        users |= {u.id for u, _via in await teams.member_users_with_via(session, team_id)}
+    if group_ids:
+        users |= await groups_service.users_for_groups(session, group_ids)
+    return users

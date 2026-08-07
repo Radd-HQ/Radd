@@ -51,6 +51,28 @@ export const usersQuery = queryOptions({
   staleTime: 60_000,
 });
 
+/**
+ * The same directory, annotated for ONE project (RADD-938).
+ *
+ * For the controls that attach a person TO work — assignee, reporter,
+ * participants — where "who exists" is not enough: each row gains `has_access`,
+ * so a picker can put entitled people first and mark the rest instead of
+ * offering everyone identically and letting you assign an issue to someone who
+ * will never see it.
+ *
+ * Annotation, not filtering. The server marks; the UI groups. Adding a
+ * no-access person as a participant is precisely what makes the project visible
+ * to them (RADD-937), so the pick has to stay possible.
+ */
+export const projectDirectoryQuery = (projectId: string | undefined) =>
+  queryOptions({
+    queryKey: [...queryKeys.users, "project", projectId ?? ""] as const,
+    queryFn: () =>
+      api.get<UserSummary[]>(ApiPath.userDirectory, { query: { project_id: projectId! } }),
+    enabled: Boolean(projectId),
+    staleTime: 60_000,
+  });
+
 /** What a user owns (spec 89) — fetched when the delete dialog opens, never cached
  * long: it decides whether a successor is required. */
 export const userContentQuery = (userId: string) =>

@@ -116,6 +116,10 @@ export interface UserSummary {
   source: string;
   avatar_color?: string | null;
   avatar_emoji?: string | null;
+  /** RADD-938 — only when the row was fetched with a `project_id`: does this
+   *  person hold item.read on THAT project through a grant? `undefined`/`null`
+   *  means the question was not asked, which must not render as a warning. */
+  has_access?: boolean | null;
 }
 
 /** PATCH /users/{id} (spec 84, instance admin) — omitted keys unchanged.
