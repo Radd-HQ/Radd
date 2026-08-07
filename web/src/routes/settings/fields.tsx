@@ -1,15 +1,18 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Plus, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { api } from "../../lib/api";
+import { Entity, invalidateEntities } from "../../lib/cache";
 import { ApiPath, apiFieldOptionsPath } from "../../lib/constants";
 import { TokenMultiSelect } from "../../components/TokenMultiSelect";
 import { usePermissions } from "../../lib/hooks";
 import { useListFilter } from "../../lib/list-filter";
 import { FIELD_TYPE_LABELS } from "../../lib/meta";
 import { fieldsQuery, projectsQuery, queryKeys } from "../../lib/queries";
-import { Permission, type FieldDef, type Project } from "../../lib/types";
-import { Button } from "../../components/Button";
+import { FieldType, Permission, type FieldDef, type Project } from "../../lib/types";
+import { Button, ButtonVariant } from "../../components/Button";
+import { Modal } from "../../components/Modal";
+import { SelectField } from "../../components/SelectField";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { EmptyState } from "../../components/EmptyState";
 import { ListSearchInput } from "../../components/ListSearchInput";
@@ -303,14 +306,15 @@ function Row({
 
 /**
  * A select field's option catalog (spec 107 cleanup): count + filter + a
- * CAPPED scrolling list instead of an unbounded pill wall, and an ADD control
- * over the spec-100 additive-only seam. There is deliberately no remove or
- * rename — items already store those values and would silently go invalid.
+ * CAPPED scrolling list instead of an unbounded pill wall, an ADD control over
+ * the spec-100 additive-only seam, and — since RADD-949 — a REMOVE that asks
+ * what happens to the items holding the value before it does anything.
  */
 function FieldOptionsSection({ field, canManage }: { field: FieldDef; canManage: boolean }) {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState("");
   const [staged, setStaged] = useState<string[]>([]);
+  const [removing, setRemoving] = useState<string | null>(null);
 
   const add = useMutation({
     mutationFn: () =>
@@ -346,9 +350,20 @@ function FieldOptionsSection({ field, canManage }: { field: FieldDef; canManage:
           {visible.map((option) => (
             <span
               key={option}
-              className="rounded border border-strong bg-elevated/60 px-1.5 py-0.5 text-[11px] text-fg"
+              className="flex items-center gap-1 rounded border border-strong bg-elevated/60 py-0.5 pl-1.5 pr-1 text-[11px] text-fg"
             >
               {option}
+              {canManage && options.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setRemoving(option)}
+                  aria-label={`Remove option ${option}`}
+                  title={`Remove "${option}"`}
+                  className="rounded p-0.5 text-fg-faint hover:bg-strong hover:text-fg cursor-pointer"
+                >
+                  <X size={10} aria-hidden />
+                </button>
+              )}
             </span>
           ))}
         </div>
@@ -380,12 +395,114 @@ function FieldOptionsSection({ field, canManage }: { field: FieldDef; canManage:
           </div>
           {add.isError && <ErrorText error={add.error} />}
           <p className="text-[11px] text-fg-faint">
-            Adding options is always safe. Existing options can&apos;t be removed or renamed —
-            items already store their values.
+            Adding an option is always safe. Removing one asks where its items should go
+            first. Renaming is not offered — every saved view, automation and form that
+            names the old value would keep compiling and match nothing.
           </p>
         </>
       )}
+      {removing !== null && (
+        <RemoveOptionDialog
+          field={field}
+          value={removing}
+          onClose={() => setRemoving(null)}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * "Remove this option — and then what?" (RADD-949).
+ *
+ * The question is asked with its own number in it (a dry-run count), because
+ * accepting a migration whose size you cannot see is not consent. What the
+ * dialog offers is decided by the FIELD, matching `service.remove_option`
+ * exactly: a multi_select needs no substitute, a required single-select must
+ * name one, an optional one may clear.
+ */
+function RemoveOptionDialog({
+  field,
+  value,
+  onClose,
+}: {
+  field: FieldDef;
+  value: string;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const survivors = (field.options ?? []).filter((option) => option !== value);
+  const multi = field.type === FieldType.multi_select;
+  const CLEAR = "";
+  const [replaceWith, setReplaceWith] = useState(field.required ? survivors[0] : CLEAR);
+
+  const usage = useQuery({
+    queryKey: [...queryKeys.fields, field.id, "usage", value] as const,
+    queryFn: () =>
+      api.get<{ items: number }>(
+        `${apiFieldOptionsPath(field.id)}/usage?value=${encodeURIComponent(value)}`,
+      ),
+  });
+
+  const remove = useMutation({
+    mutationFn: () =>
+      api.post<FieldDef>(`${apiFieldOptionsPath(field.id)}/remove`, {
+        value,
+        replace_with: multi || replaceWith === CLEAR ? null : replaceWith,
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.fields });
+      await invalidateEntities(queryClient, Entity.item);
+      onClose();
+    },
+  });
+
+  const count = usage.data?.items;
+  return (
+    <Modal title={`Remove "${value}"`} onClose={onClose}>
+      <div className="flex flex-col gap-3">
+        <p className="text-[13px] text-fg-secondary">
+          {count === undefined
+            ? "Counting the items that use it…"
+            : count === 0
+              ? "No items use this option — removing it changes nothing else."
+              : multi
+                ? `${count} item${count === 1 ? "" : "s"} list this option. It will be removed from each of them; the rest of their selections stay.`
+                : `${count} item${count === 1 ? "" : "s"} hold this option. Choose where they go.`}
+        </p>
+
+        {!multi && count !== 0 && (
+          <SelectField
+            label="Move those items to"
+            value={replaceWith}
+            onChange={(event) => setReplaceWith(event.target.value)}
+          >
+            {/* Clearing is offered only where the field permits it. A required
+                field with no value is the invalid state this dialog avoids. */}
+            {!field.required && <option value={CLEAR}>— leave empty —</option>}
+            {survivors.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </SelectField>
+        )}
+
+        {remove.isError && <ErrorText error={remove.error} />}
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant={ButtonVariant.danger}
+            onClick={() => remove.mutate()}
+            disabled={remove.isPending || usage.isPending}
+          >
+            {remove.isPending ? "Removing…" : "Remove option"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

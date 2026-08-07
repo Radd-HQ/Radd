@@ -73,10 +73,24 @@ class FieldWritabilityRead(BaseModel):
 
 class FieldOptionsExtend(BaseModel):
     """POST /fields/{id}/options — ADD options to a select field (spec 100's
-    additive-only seam, exposed for the settings UI in spec 107's cleanup).
-    Removing/renaming stays impossible: items already store those values."""
+    additive-only seam, exposed for the settings UI in spec 107's cleanup)."""
 
     values: list[str] = Field(min_length=1)
+
+
+class FieldOptionRemove(BaseModel):
+    """POST /fields/{id}/options/remove — drop one option and say what happens
+    to the items holding it (RADD-949).
+
+    `replace_with` is resolved through `model_fields_set` so an OMITTED
+    replacement differs from an explicit null: omitting it on a required
+    single-select is a mistake worth a 422, while `null` is a deliberate "clear
+    the value" that only an optional field may ask for. A multi_select ignores
+    it — dropping one value from a list needs no substitute.
+    """
+
+    value: str = Field(min_length=1)
+    replace_with: str | None = None
 
 
 class FieldDefinitionUpdate(BaseModel):

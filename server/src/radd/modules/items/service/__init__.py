@@ -28,6 +28,11 @@ from .core import (
     unstar_item,
     update_item,
 )
+from .customvalues import (
+    count_with_value,
+    drop_from_multi_select,
+    migrate_custom_field_value,
+)
 from .links import add_item_link, link_search, remove_item_link, sync_mention_links
 from .listing import list_items, validate_slq
 from .queries import (
@@ -65,6 +70,9 @@ __all__ = [
     "relation_read_clause",
     "count_items_assigned_to_team",
     "count_items_in_state",
+    "count_with_value",
+    "drop_from_multi_select",
+    "migrate_custom_field_value",
     "reassign_state",
     "create_item",
     "cycle_points_totals",

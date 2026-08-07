@@ -233,6 +233,106 @@ async def extend_options(
     return added
 
 
+async def option_usage(session: AsyncSession, field_id: uuid.UUID, value: str) -> int:
+    """How many items carry `value` for this field — so the UI can ask the
+    removal question with the number in it (RADD-949)."""
+    from radd.modules.items import service as items_service
+
+    definition = await get_field(session, field_id)
+    return await items_service.count_with_value(session, definition.key, value)
+
+
+async def remove_option(
+    session: AsyncSession,
+    field_id: uuid.UUID,
+    value: str,
+    *,
+    replace_with: str | None = None,
+    actor_id: uuid.UUID | None = None,
+) -> int:
+    """REMOVE an option from a select field, migrating the items that hold it.
+
+    `extend_options` above is additive because "removing is dangerous" — items
+    already store the value and would silently become invalid. That is an
+    argument for making the caller SAY what happens to those items, not for
+    refusing forever: a field otherwise accumulates every value anyone ever
+    typed, and an importer's strays are permanent.
+
+    The decision is forced by the field, never defaulted:
+
+      * **multi_select** — no replacement exists to ask for. The value is dropped
+        from each item's list, and a shorter list is still valid.
+      * **single select, required** — `replace_with` must name a SURVIVING
+        option. Clearing would leave items violating their own field, which is
+        the invalid state this whole function exists to avoid.
+      * **single select, optional** — `replace_with` may be None, which clears
+        the value.
+
+    The field's own `default_value` is migrated in the same transaction. A
+    default pointing at a removed option is the same invalidity one level up,
+    and it is the one nobody would think to check — it would seed the dead value
+    onto every item created afterwards.
+
+    Returns the number of items touched.
+    """
+    from radd.modules.items import service as items_service
+
+    definition = await get_field(session, field_id)
+    field_type = FieldType(definition.type)
+    if field_type not in SELECT_TYPES:
+        raise FieldValidationError([f"{definition.key} is not a select field"])
+    existing = list(definition.options or [])
+    if value not in existing:
+        raise FieldValidationError([f"{definition.key} has no option '{value}'"])
+    survivors = [option for option in existing if option != value]
+    if not survivors:
+        raise FieldValidationError(
+            [f"{definition.key} would have no options left — delete the field instead"]
+        )
+
+    multi = field_type is FieldType.MULTI_SELECT
+    if not multi:
+        if replace_with is not None and replace_with not in survivors:
+            # Catches the obvious mistake of naming the option being removed.
+            raise FieldValidationError(
+                [f"'{replace_with}' is not one of {definition.key}'s remaining options"]
+            )
+        if replace_with is None and definition.required:
+            raise FieldValidationError(
+                [f"{definition.key} is required — name an option to move its items to"]
+            )
+
+    if multi:
+        touched = await items_service.drop_from_multi_select(session, definition.key, value)
+    else:
+        touched = await items_service.migrate_custom_field_value(
+            session, definition.key, value, replace_with
+        )
+
+    if definition.default_value == value:
+        definition.default_value = None if multi else replace_with
+    elif multi and isinstance(definition.default_value, list):
+        definition.default_value = [v for v in definition.default_value if v != value] or None
+    # A new list, not a mutation: JSONB columns only persist on reassignment.
+    definition.options = survivors
+    await session.flush()
+    await _refresh_cache(session)
+    await events.emit(
+        session,
+        event_type=FieldEvent.UPDATED,
+        entity_type=FieldEntity.FIELD,
+        entity_id=definition.id,
+        actor_id=actor_id,
+        payload={
+            "key": definition.key,
+            "option_removed": value,
+            "replaced_with": replace_with,
+            "items_migrated": touched,
+        },
+    )
+    return touched
+
+
 async def delete_field(
     session: AsyncSession, field_id: uuid.UUID, actor_id: uuid.UUID | None = None
 ) -> None:

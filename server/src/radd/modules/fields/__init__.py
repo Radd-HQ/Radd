@@ -37,6 +37,11 @@ plugin = RaddPlugin(
     access_resources=(_FIELD_SPEC, _BUILTIN_SPEC),
     description="Field-definition registry: the single source of truth for dynamic schema.",
     depends_on=("projects", "events", "auth", "teams", "access"),  # access: grant resource
+    # RADD-949: removing a select option rewrites the values items already store,
+    # and `work_items.custom_fields` is items'. A DEFERRED reverse reach — items
+    # depends on fields, so a hard edge would be a cycle — through the public
+    # `items.service` seam, never the table.
+    weak_depends=("items",),
     routers=(router,),
     exception_handlers=((FieldValidationError, _validation_handler),),
     openapi_augmentors=(augment_openapi,),

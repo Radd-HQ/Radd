@@ -15,6 +15,7 @@ from .schemas import (
     FieldDefinitionCreate,
     FieldDefinitionRead,
     FieldDefinitionUpdate,
+    FieldOptionRemove,
     FieldOptionsExtend,
     FieldWritabilityRead,
 )
@@ -96,13 +97,51 @@ async def add_field_options(
     field_id: uuid.UUID, data: FieldOptionsExtend, session: Session, user: CurrentUser
 ) -> FieldDefinitionRead:
     """ADD options to a select field — the spec-100 additive-only seam, exposed
-    for the settings UI. Removing/renaming an option stays impossible over the
-    API: items already store those values and would silently become invalid."""
+    for the settings UI. Removal is its own route below, because it has to ask
+    what happens to the items already holding the value."""
     field = await service.get_field(session, field_id)
     await _require_manage_on_scopes(
         session, user, field.project_ids, permission=authz.Permission.FIELD_UPDATE
     )
     await service.extend_options(session, field_id, data.values, actor_id=user.id)
+    updated = await service.get_field(session, field_id)
+    return _to_read(updated, await service.restricted_field_ids(session))
+
+
+@router.get("/{field_id}/options/usage", response_model=dict[str, int])
+async def option_usage(
+    field_id: uuid.UUID, value: str, session: Session, user: CurrentUser
+) -> dict[str, int]:
+    """How many items hold `value` — the dry run behind the removal dialog, so
+    the question carries its own number (RADD-949)."""
+    field = await service.get_field(session, field_id)
+    await _require_manage_on_scopes(
+        session, user, field.project_ids, permission=authz.Permission.FIELD_UPDATE
+    )
+    return {"items": await service.option_usage(session, field_id, value)}
+
+
+@router.post("/{field_id}/options/remove", response_model=FieldDefinitionRead)
+async def remove_field_option(
+    field_id: uuid.UUID, data: FieldOptionRemove, session: Session, user: CurrentUser
+) -> FieldDefinitionRead:
+    """REMOVE one option, migrating the items that hold it (RADD-949).
+
+    Declared AFTER `/{field_id}/options` but they do not collide — different
+    paths, and both literal past the id. `replace_with` is only meaningful for a
+    single select; see `service.remove_option` for which combinations are legal.
+    """
+    field = await service.get_field(session, field_id)
+    await _require_manage_on_scopes(
+        session, user, field.project_ids, permission=authz.Permission.FIELD_UPDATE
+    )
+    await service.remove_option(
+        session,
+        field_id,
+        data.value,
+        replace_with=data.replace_with,
+        actor_id=user.id,
+    )
     updated = await service.get_field(session, field_id)
     return _to_read(updated, await service.restricted_field_ids(session))
 
