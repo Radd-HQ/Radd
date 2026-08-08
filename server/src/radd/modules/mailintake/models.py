@@ -10,6 +10,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -21,23 +22,48 @@ from .types import DEFAULT_IMAP_FOLDER, DEFAULT_IMAP_PORT, DEFAULT_SMTP_PORT
 
 
 class MailContact(Base, TimestampMixin):
-    """The external requester behind an item (spec 62) — captured when intake or a
-    public form submission resolves the sender to NO active user. One contact per
-    item (v1): a later distinct sender on the same thread only refreshes
-    `last_message_id`, never the address. Acks, outbound comment replies, and
-    CSAT surveys (spec 65) address this row.
+    """An external person on an item's mail thread (spec 62, n-ary since RADD-980).
+
+    **`item_id` used to be the PRIMARY KEY**, which said "one external contact
+    per ticket, ever". Real desk mail does not have that shape: a customer CCs a
+    colleague, a colleague replies instead, an account manager is copied on the
+    first message. Every one of them was invisible to Radd — the second sender
+    only refreshed `last_message_id`, so their address was never recorded and the
+    answer went to one person out of the three who asked.
+
+    So a contact is now a ROW, unique per `(item_id, email)`, and `is_primary`
+    marks the one the item's other machinery still means when it says "the
+    requester": the CSAT survey, the `contact` recipient role of the send_email
+    action, and the singular `GET /items/{id}/mail-contact`. Exactly one row per
+    item carries it — the FIRST contact captured, which on a mail-born ticket is
+    the person who wrote in.
+
+    `last_message_id` is per contact for the same reason the table is n-ary:
+    it is "the last thing THIS person said", and one column shared by three
+    people is a fact about none of them.
     """
 
     __tablename__ = "mail_contacts"
+    __table_args__ = (
+        # One row per address per item. The unique constraint is what makes
+        # `upsert_contact` idempotent across a thread — a CC on every message
+        # must refresh one row, not accumulate one per message.
+        UniqueConstraint("item_id", "email", name="uq_mail_contacts_item_id_email"),
+    )
 
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     item_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("work_items.id", ondelete="CASCADE"), primary_key=True
+        ForeignKey("work_items.id", ondelete="CASCADE"), index=True
     )
     email: Mapped[str] = mapped_column(String(320))
     name: Mapped[str] = mapped_column(String(200), default="")
-    # Most recent INBOUND RFC Message-ID on the thread — feeds the outbound
-    # In-Reply-To/References headers so replies land in the requester's thread.
+    # Most recent INBOUND RFC Message-ID this contact sent — per contact since
+    # RADD-980, so a CC's reply cannot overwrite the requester's own.
     last_message_id: Mapped[str | None] = mapped_column(String(998), nullable=True)
+    #: The one this item's singular seams mean. First contact captured wins, and
+    #: nothing demotes it: a ticket's requester does not change because someone
+    #: was copied in on message four.
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
 
 class MailMessage(Base):

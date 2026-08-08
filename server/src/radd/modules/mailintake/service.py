@@ -13,6 +13,7 @@ mail leaving this module by any other route.
 
 import uuid
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd import mailrender
@@ -24,15 +25,59 @@ from .types import ACK_SUBJECT_TEMPLATE
 
 __all__ = [
     "contact_for_item",
+    "contacts_for_item",
     "outbound_configured",
     "send_ack",
     "send_item_mail",
     "upsert_contact",
 ]
 
+#: Primary first, then oldest, then alphabetical. Used by both reads, so "the
+#: primary" and "the first of all of them" can never disagree — the standing
+#: risk of keeping a singular seam beside a plural one.
+#:
+#: The address is the last tiebreak rather than the id because `created_at` is
+#: `func.now()`, and Postgres' `now()` is TRANSACTION time: every contact
+#: captured from ONE message carries an identical timestamp, so "which came
+#: first" has no answer among them and a uuid4 tiebreak would shuffle the rail
+#: on every read. (The same trap `forms.requests._comment_signals` documents.)
+_CONTACT_ORDER = (MailContact.is_primary.desc(), MailContact.created_at, MailContact.email)
+
 
 async def contact_for_item(session: AsyncSession, item_id: uuid.UUID) -> MailContact | None:
-    return await session.get(MailContact, item_id)
+    """The item's PRIMARY contact — its requester, or None.
+
+    Unchanged in meaning for every existing caller (CSAT's recipient, the
+    send_email `contact` role, the singular endpoint) even though the table is
+    now n-ary (RADD-980): each of those addresses ONE person, and the person
+    they mean is whoever raised the ticket.
+
+    **Filtered on `is_primary`, not merely ordered by it.** An item whose only
+    external addresses were COPIED IN has no requester here — it was raised by
+    a real user, and its reporter is who those seams should fall back to.
+    Answering with the oldest row instead would send a satisfaction survey to a
+    bystander about a ticket they never opened.
+    """
+    return await session.scalar(
+        select(MailContact)
+        .where(MailContact.item_id == item_id, MailContact.is_primary.is_(True))
+        .order_by(*_CONTACT_ORDER)
+    )
+
+
+async def contacts_for_item(
+    session: AsyncSession, item_id: uuid.UUID
+) -> list[MailContact]:
+    """Everyone external on this item's mail thread, primary first (RADD-980).
+
+    This is what an OUTBOUND reply fans out over: the requester CC'd their
+    colleague, and answering only the person whose address happened to be in
+    `From:` is how two of the three people who asked never hear back.
+    """
+    rows = await session.execute(
+        select(MailContact).where(MailContact.item_id == item_id).order_by(*_CONTACT_ORDER)
+    )
+    return list(rows.scalars())
 
 
 async def upsert_contact(
@@ -42,17 +87,36 @@ async def upsert_contact(
     email: str,
     name: str = "",
     message_id: str | None = None,
+    copied_in: bool = False,
 ) -> MailContact:
-    """Create the item's contact, or refresh an existing one. One contact per
-    item (v1): an existing row keeps its address — a threaded reply from a
-    second sender only advances `last_message_id` (and fills a blank name)."""
-    contact = await session.get(MailContact, item_id)
+    """Record one external address on an item, or refresh what is known about it.
+
+    Keyed on `(item_id, email)` since RADD-980, so a CC copied on every message
+    refreshes ONE row rather than accumulating one per message. `message_id`
+    advances that contact's own last-said marker and nobody else's.
+
+    **The first person who WROTE becomes the primary; somebody merely copied in
+    never does.** `copied_in` is the only lever, and it can only withhold the
+    badge — it cannot award it, and nothing demotes an existing primary. A flag
+    that could promote is a flag some caller eventually passes for a CC, and
+    then a ticket's requester silently changes on message four.
+
+    That asymmetry is what makes the fallbacks land right. An issue an agent
+    raised in the UI, that a customer later emails into, gains its requester the
+    moment they write. An issue a colleague raised BY EMAIL, with a customer
+    copied in, gains no primary at all — so CSAT and the send_email `contact`
+    role fall through to the reporter, who is that colleague.
+    """
+    address = email.strip().lower()
+    existing = await contacts_for_item(session, item_id)
+    contact = next((row for row in existing if row.email == address), None)
     if contact is None:
         contact = MailContact(
             item_id=item_id,
-            email=email.lower(),
+            email=address,
             name=name,
             last_message_id=message_id or None,
+            is_primary=not copied_in and not any(row.is_primary for row in existing),
         )
         session.add(contact)
     else:

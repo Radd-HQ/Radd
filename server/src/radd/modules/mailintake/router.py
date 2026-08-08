@@ -136,12 +136,34 @@ def _status(response: Response, code: int, body: dict) -> dict:
 
 
 
+@router.get("/items/{item_id}/mail-contacts", response_model=list[MailContactRead])
+async def item_mail_contacts(
+    item_id: uuid.UUID, session: Session, user: CurrentUser
+) -> list[MailContactRead]:
+    """Everyone external on the item's mail thread, primary first (RADD-980).
+
+    An empty LIST rather than a 404 for an item with none: the answer to "who
+    else is on this thread" is legitimately nobody, and a collection that 404s
+    makes every caller write an error branch for the ordinary case.
+    """
+    await items_service.require_readable_item(session, item_id, user)
+    return [
+        MailContactRead.model_validate(contact)
+        for contact in await service.contacts_for_item(session, item_id)
+    ]
+
+
 @router.get("/items/{item_id}/mail-contact", response_model=MailContactRead)
 async def item_mail_contact(
     item_id: uuid.UUID, session: Session, user: CurrentUser
 ) -> MailContactRead:
-    """The item's external requester (spec 62) — 404 when the item has none
-    (most items: anything raised by a registered user)."""
+    """The item's PRIMARY external requester (spec 62) — 404 when it has none.
+
+    Kept singular and 404-quiet exactly as it shipped, because that is a
+    contract with clients this repo does not build. RADD-980 changed only which
+    of several rows it means: the primary, i.e. the person the ticket was raised
+    by. The plural endpoint above is the new surface.
+    """
     await items_service.require_readable_item(session, item_id, user)
     contact = await service.contact_for_item(session, item_id)
     if contact is None:

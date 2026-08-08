@@ -58,26 +58,34 @@ class OutboundReply:
 
 
 async def recipients_for(session: AsyncSession, item_id: uuid.UUID) -> tuple[Recipient, ...]:
-    """The external requester on this issue, and nobody else (RADD-968).
+    """Every external person on this issue's mail thread (RADD-968, RADD-980).
 
     Users are reached by notify's mailer, off the notification rows that already
     passed `item.read`, the relation gate, the internal-comment filter and the
-    per-user mute. Mailing them from here as well was the duplicate fan-out this
-    change deletes.
+    per-user mute. Mailing them from here as well was the duplicate fan-out
+    RADD-968 deleted.
 
-    One guard remains: an address that belongs to an ACTIVE user is skipped. A
-    staff member who once raised a ticket by email is a `mail_contact` AND a
-    watcher, and would otherwise receive the same comment twice — once as a
-    colleague, once addressed as a customer.
+    **It reads the plural seam since RADD-980.** A customer CCs their colleague,
+    or the colleague replies instead; both are contacts on the item, and
+    answering only the primary meant one of the people who asked never heard
+    back — an outcome nothing surfaced, because a reply that WAS sent looks
+    identical to a reply that was sent to everyone.
+
+    One guard remains, and it is applied PER ADDRESS rather than to the set: an
+    address belonging to an ACTIVE user is skipped, because a staff member who
+    once raised a ticket by email is a contact AND a watcher and would otherwise
+    get the same comment twice, once addressed as a customer. Per address is the
+    part that changed — a single staff contact used to silence the whole reply.
     """
-    contact = await service.contact_for_item(session, item_id)
-    if contact is None:
-        return ()
-    # `get_user_by_email` lowercases; contacts are stored lowercased on write.
-    user = await auth.get_user_by_email(session, contact.email)
-    if user is not None and user.active:
-        return ()
-    return (Recipient(contact.email, contact.name, MailRecipientKind.REQUESTER),)
+    contacts = await service.contacts_for_item(session, item_id)
+    recipients: list[Recipient] = []
+    for contact in contacts:
+        # `get_user_by_email` lowercases; contacts are stored lowercased on write.
+        user = await auth.get_user_by_email(session, contact.email)
+        if user is not None and user.active:
+            continue
+        recipients.append(Recipient(contact.email, contact.name, MailRecipientKind.REQUESTER))
+    return tuple(recipients)
 
 
 def render(reply: OutboundReply, recipient: Recipient) -> mailrender.RenderedMail:

@@ -30,7 +30,7 @@ from enum import StrEnum
 from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd.exceptions import ConflictError
+from radd.exceptions import ConflictError, ForbiddenError
 from radd.modules.attachments import service as attachments_service
 from radd.modules.attachments.types import AttachmentParentType
 from radd.modules.auth import service as auth
@@ -175,6 +175,7 @@ async def accept(
         plan,
         raw=raw,
         default_project_key=default_project_key,
+        own_addresses=own_addresses,
         source_id=source_id,
         default_project_id=default_project_id,
     )
@@ -188,6 +189,16 @@ async def _resolve_thread(session: AsyncSession, plan: EmailPlan) -> uuid.UUID |
     key names a different issue than its headers follows the headers: the key is
     text a human can edit or a list can mangle, the headers are what the client
     generated.
+
+    **The subject-key leg is gated on the sender (RADD-981).** Header threading
+    is not: an `In-Reply-To` names an id Radd generated and told exactly one
+    person, so possessing it is itself the evidence. `[PROJ-412]` is not — it is
+    a guessable string in a text field, and any stranger who typed it wrote
+    straight into somebody else's ticket, where the outbound consumer then
+    mailed their words to that ticket's requester. `_may_thread_by_subject_key`
+    is what closes that; a refused message becomes a NEW routed issue rather
+    than being dropped, because a stranger with the wrong subject line is still
+    a person asking for help.
     """
     candidates = threading.thread_candidates(plan.in_reply_to, plan.references)
     item_id = await threading.item_for_message_ids(session, candidates)
@@ -195,9 +206,107 @@ async def _resolve_thread(session: AsyncSession, plan: EmailPlan) -> uuid.UUID |
         return item_id
     if plan.item_key is not None:
         item = await items.find_item_by_key(session, plan.item_key)
-        if item is not None:
+        if item is not None and await _may_thread_by_subject_key(session, item, plan):
             return item.id
     return None
+
+
+async def _may_thread_by_subject_key(session: AsyncSession, item, plan: EmailPlan) -> bool:
+    """Is this sender entitled to write into the issue their subject line names?
+
+    Three ways to be, in the order they cost a query:
+
+        an address already on the item's mail thread   they are in the conversation
+        the item's reporter                            they raised it
+        any active REAL account                        staff, on any ticket
+
+    The third is broad on purpose: an agent forwarding a ticket to a colleague,
+    or replying from a phone that mangled the headers, must not be told their
+    mail opened a duplicate. What it excludes is the case that matters — a
+    `UserSource.EMAIL` account, which is what an unknown sender is provisioned
+    as (RADD-828). Otherwise one email to the desk would earn a stranger the
+    right to type into every issue whose key they can guess, and keys are
+    sequential.
+    """
+    if not plan.sender_email:
+        return False
+    contacts = await service.contacts_for_item(session, item.id)
+    if any(contact.email == plan.sender_email for contact in contacts):
+        return True
+    user = await auth.get_user_by_email(session, plan.sender_email)
+    if user is None or not user.active:
+        return False
+    if user.id == item.reporter_id:
+        return True  # the requester, whatever their account is sourced from
+    from radd.modules.auth.types import UserSource
+
+    return user.source != UserSource.EMAIL.value
+
+
+async def _reply_comment(session: AsyncSession, item_id: uuid.UUID, plan: EmailPlan):
+    """Write the mailed reply as a comment, and say WHO it is from (RADD-981).
+
+    Every inbound reply used to be authored by the SYSTEM actor with the sender
+    named in a `Email reply from …:` line of the body. For a customer with no
+    account that is the only honest answer. For a colleague replying to a
+    notification it was wrong in four places at once, all of them invisible from
+    the diff: the issue read as if a robot had spoken, the outbound consumer's
+    SYSTEM gate refused to relay it to the requester, the SLA response timer
+    skipped it as a non-answer, and — because notify excludes the ACTOR — the
+    agent was notified of their own comment while nobody else's exclusion
+    applied.
+
+    So a REAL account (active, not one of the `UserSource.EMAIL` accounts intake
+    provisions) becomes the comment's author and the body is the mail, verbatim.
+    Everyone else keeps the SYSTEM attribution and the prefix.
+
+    **Attribution is not authorisation.** `From:` is forgeable — the header this
+    whole module treats as a claim — so the comment goes through
+    `create_comment`, which enforces that person's own `comment.write` on that
+    project, rather than the caller-authorised seam. A sender who cannot write
+    there falls back to SYSTEM: the message still lands, and nothing was granted
+    on the strength of a header. Returns `(comment, author)`; the author is what
+    the attachments are stored as, so the mail arrives as one person's act.
+    """
+    # Quoted history is stripped from the COMMENT only; `raw` is retained by the
+    # caller, so an over-eager strip is recoverable.
+    body = quoting.strip_quotes(plan.body) or EMPTY_BODY_PLACEHOLDER
+    author = await _reply_author(session, plan)
+    if author is not None:
+        try:
+            comment = await comments.create_comment(
+                session, item_id, CommentCreate(body=body), author
+            )
+            return comment, author
+        except ForbiddenError:
+            logger.info(
+                "mailintake: %s may not comment on %s — attributing the reply to the system",
+                plan.sender_email,
+                item_id,
+            )
+    system = await auth.get_user(session, SYSTEM_ACTOR_ID)
+    comment = await comments.create_comment(
+        session,
+        item_id,
+        CommentCreate(body=REPLY_COMMENT_TEMPLATE.format(sender=_sender(plan), body=body)),
+        system,
+    )
+    return comment, system
+
+
+async def _reply_author(session: AsyncSession, plan: EmailPlan) -> User | None:
+    """The real account behind a mailed reply, or None for a customer.
+
+    `_sender_user` still runs — an unknown sender is still provisioned as a
+    requester (RADD-828), which is what makes them addressable at all — and this
+    only decides whether that account is a person Radd already knew.
+    """
+    user = await _sender_user(session, plan)
+    if user is None:
+        return None
+    from radd.modules.auth.types import UserSource
+
+    return None if user.source == UserSource.EMAIL.value else user
 
 
 async def _append(
@@ -208,16 +317,7 @@ async def _append(
     item_id: uuid.UUID,
     source_id: uuid.UUID | None = None,
 ) -> Outcome:
-    actor = await auth.get_user(session, SYSTEM_ACTOR_ID)
-    # Quoted history is stripped from the COMMENT only; `raw` is retained by the
-    # caller, so an over-eager strip is recoverable.
-    body = quoting.strip_quotes(plan.body) or EMPTY_BODY_PLACEHOLDER
-    comment = await comments.create_comment(
-        session,
-        item_id,
-        CommentCreate(body=REPLY_COMMENT_TEMPLATE.format(sender=_sender(plan), body=body)),
-        actor,
-    )
+    comment, actor = await _reply_comment(session, item_id, plan)
     await _store_attachments(session, item_id, plan.attachments, actor_id=actor.id)
     await threading.record(
         session,
@@ -250,6 +350,7 @@ async def _create(
     *,
     raw: bytes,
     default_project_key: str,
+    own_addresses: set[str] | None = None,
     source_id: uuid.UUID | None = None,
     default_project_id: uuid.UUID | None = None,
 ) -> Outcome:
@@ -297,30 +398,98 @@ async def _create(
         payload={**_mail_facts(plan), "created_item": True},
     )
 
-    from radd.modules.auth.types import UserSource
-
-    email_sourced = sender is not None and sender.source == UserSource.EMAIL.value
-    if (sender is not None and not email_sourced) or not plan.sender_email:
-        return Outcome(Result.CREATED, item_id=created.id, item_key=created.key)
-    await service.upsert_contact(
-        session,
-        created.id,
-        email=plan.sender_email,
-        name=plan.sender_name,
-        message_id=plan.message_id or None,
-    )
+    await _capture_contacts(session, created.id, plan, own_addresses=own_addresses or set())
     return Outcome(
         Result.CREATED,
         item_id=created.id,
         item_key=created.key,
-        ack=AckPlan(
-            item_id=created.id,
+        # RADD-995: the receipt is a property of the MESSAGE, not of the sender's
+        # account status — see `_ack_plan`.
+        ack=_ack_plan(plan, created, own_addresses or set()),
+    )
+
+
+def _ack_plan(plan: EmailPlan, created, own_addresses: set[str]) -> "AckPlan | None":
+    """The acknowledgement for a mail-born issue, or None (RADD-995).
+
+    **It used to be a contact feature**, and that was the bug: the ack was
+    planned only on the branch that captured a `mail_contact`, so an ordinary
+    recognised user — an OIDC colleague mailing the desk — became the reporter,
+    got no contact row, and received nothing at all. Silently, because every
+    other part of that path worked.
+
+    A receipt answers a MESSAGE. Whoever sent it gets one, account or not; the
+    only refusals are an address we cannot answer (no `From:`) and one of our
+    own, which would be a mail loop with a friendly subject line. The loop
+    guards already dropped that message before `_create` ran — this is the same
+    judgment restated at the point that would compose the reply, so the ack can
+    never become the one path that re-opens the loop.
+
+    Still gated on `mail_send_ack` inside `send_ack`, and still only on CREATE:
+    an ack per reply would be an autoresponder.
+    """
+    if not plan.sender_email or _is_ours(plan.sender_email, own_addresses):
+        return None
+    return AckPlan(
+        item_id=created.id,
+        email=plan.sender_email,
+        name=plan.sender_name,
+        item_key=created.key,
+        title=created.title,
+    )
+
+
+async def _capture_contacts(
+    session: AsyncSession,
+    item_id: uuid.UUID,
+    plan: EmailPlan,
+    *,
+    own_addresses: set[str],
+) -> None:
+    """Everyone external on the FIRST message becomes a contact (RADD-980).
+
+    The sender is captured first and as a WRITER, which is what makes them the
+    item's primary contact; the To/Cc addresses are captured `copied_in`, which
+    is what stops one of them inheriting that badge on a ticket a colleague
+    raised by mail.
+
+    Three exclusions on the recipient sweep, each for its own reason: our OWN
+    addresses (we are not a party to the conversation, we are the desk), the
+    sender (already captured, and their `From:` need not match the `To:` they
+    used), and any address belonging to a REAL account — a copied-in colleague
+    is a user, and users are reached by notify through the rows that decide
+    their inbox. Mailing them from here as well would be the duplicate fan-out
+    RADD-968 deleted.
+    """
+    if plan.sender_email and not await _is_real_account(session, plan.sender_email):
+        await service.upsert_contact(
+            session,
+            item_id,
             email=plan.sender_email,
             name=plan.sender_name,
-            item_key=created.key,
-            title=created.title,
-        ),
-    )
+            message_id=plan.message_id or None,
+        )
+    for address in plan.recipients:
+        if _is_ours(address, own_addresses) or address == plan.sender_email:
+            continue
+        if await _is_real_account(session, address):
+            continue
+        await service.upsert_contact(session, item_id, email=address, copied_in=True)
+
+
+def _is_ours(address: str, own_addresses: set[str]) -> bool:
+    """Is this one of the desk's own addresses, sub-addressing included?
+
+    `support+td@` is spec 62's plus-address routing convention and therefore
+    expected traffic on the To line, but `registry.own_addresses` holds the
+    mailbox (`support@`) — so a literal comparison files our own alias as an
+    external requester, puts it in the issue rail, and mails it every reply.
+    """
+    if address in own_addresses:
+        return True
+    local, _, domain = address.partition("@")
+    base, plus, _tag = local.partition("+")
+    return bool(plus and domain) and f"{base}@{domain}" in own_addresses
 
 
 async def _store_attachments(
@@ -391,21 +560,51 @@ async def _sender_user(session: AsyncSession, plan: EmailPlan) -> User | None:
     return user
 
 
+async def _is_real_account(session: AsyncSession, email: str) -> bool:
+    """Does this address belong to a person with a genuine Radd account?
+
+    ACTIVE, and NOT one of the `UserSource.EMAIL` accounts intake provisions for
+    unknown senders (RADD-828) — those exist precisely so a customer has a
+    reporter id, and treating one as staff would delete the contact row that is
+    the only way to write back to them.
+
+    **It looks up; it never provisions.** That distinction is the RADD-980 bug
+    it replaces: `_touch_contact` asked `_sender_user(...) is None`, and that
+    function CREATES an account for an unknown address — so the test it was
+    guarding could effectively never be true, and a second sender on a thread
+    was never recorded.
+    """
+    from radd.modules.auth.types import UserSource
+
+    user = await auth.get_user_by_email(session, email)
+    return user is not None and user.active and user.source != UserSource.EMAIL.value
+
+
 async def _touch_contact(session: AsyncSession, item_id: uuid.UUID, plan: EmailPlan) -> None:
-    contact = await service.contact_for_item(session, item_id)
-    if contact is not None:
-        await service.upsert_contact(
-            session, item_id, email=contact.email, message_id=plan.message_id or None
-        )
+    """Advance THIS sender's contact row, or open one for a new external voice.
+
+    Both halves changed in RADD-980. `last_message_id` used to be advanced on
+    whichever single contact the item had, whoever had actually written — one
+    column standing in for three people's threads. And a genuinely new external
+    sender is now recorded as a secondary contact instead of being dropped, so
+    the colleague a customer looped in hears the answer too.
+
+    CC capture is deliberately NOT repeated here. A reply's `To:` line carries
+    everyone the mail client happened to keep, including addresses that were
+    dropped from the conversation on purpose; only somebody who actually WROTE
+    joins the thread after the first message.
+    """
+    if not plan.sender_email:
         return
-    if plan.sender_email and await _sender_user(session, plan) is None:
-        await service.upsert_contact(
-            session,
-            item_id,
-            email=plan.sender_email,
-            name=plan.sender_name,
-            message_id=plan.message_id or None,
-        )
+    if await _is_real_account(session, plan.sender_email):
+        return  # a colleague replying by mail is a user, reached by notify
+    await service.upsert_contact(
+        session,
+        item_id,
+        email=plan.sender_email,
+        name=plan.sender_name,
+        message_id=plan.message_id or None,
+    )
 
 
 async def _target_project(

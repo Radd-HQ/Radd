@@ -152,10 +152,16 @@ export interface PublicSubmitResult {
   title: string;
 }
 
-/** GET /items/{id}/mail-contact — the item's external requester (404 = none). */
+/**
+ * One external person on an item's mail thread (RADD-980).
+ *
+ * `GET /items/{id}/mail-contacts` returns them all, primary first (empty list = none);
+ * `GET /items/{id}/mail-contact` still returns the PRIMARY alone, 404 when there is none.
+ */
 export interface MailContact {
   email: string;
   name: string;
+  is_primary: boolean;
 }
 
 // ---------------------------------------------------------------------------
