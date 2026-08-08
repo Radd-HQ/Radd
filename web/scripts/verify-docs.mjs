@@ -101,15 +101,28 @@ try {
         last = n;
         await new Promise((r) => setTimeout(r, 250));
       }
+      // Images are checked by FETCHING each src, not by reading `naturalWidth`.
+      // An <img> is a native browser request: it carries cookies, not the
+      // Authorization header this harness injects into `fetch`. So every
+      // attachment renders broken in a capture and loads perfectly for a real
+      // signed-in reader. Trusting the DOM here would fail every page in the
+      // set for a reason that does not exist outside this browser.
       const seen = await session.eval(
-        `(() => {
+        `(async () => {
           const b = document.querySelector("[data-page-body]");
           if (!b) return null;
-          const imgs = [...b.querySelectorAll("img")];
+          const srcs = [...b.querySelectorAll("img")].map((i) => i.getAttribute("src")).filter(Boolean);
+          let broken = 0;
+          for (const src of srcs) {
+            try {
+              const r = await fetch(src, { method: "GET" });
+              if (!r.ok) broken++;
+            } catch { broken++; }
+          }
           return {
             headings: b.querySelectorAll("h1,h2,h3").length,
-            images: imgs.length,
-            brokenImages: imgs.filter((i) => i.complete && i.naturalWidth === 0).length,
+            images: srcs.length,
+            brokenImages: broken,
           };
         })()`,
       );

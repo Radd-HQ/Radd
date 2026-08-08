@@ -334,9 +334,15 @@ export async function goto(session, path, { waitFor, quietMs = 700, timeoutMs = 
   }
   // A capture of the login screen is the classic silent failure: the image is
   // real, the run is green, and every screenshot shows a password box.
-  const loggedOut = await session.eval(
-    `location.pathname.startsWith("/login") || !!document.querySelector('input[type="password"]')`,
-  );
+  //
+  // The test is the ROUTE, not the presence of a password input. "Any password
+  // field means logged out" is wrong on the settings pages that legitimately
+  // render one — /settings/directory has a bind-account password, /settings/email
+  // an SMTP password — and it refused to capture them at all. A writer worked
+  // around it by navigating in-app, which is one step from working around the
+  // write gate too. A false alarm that trains people to route around the guard
+  // is worse than no guard.
+  const loggedOut = await session.eval(`location.pathname.startsWith("/login")`);
   if (loggedOut) throw new Error(`goto(${path}): landed on the login screen — the token did not authenticate`);
   return url;
 }

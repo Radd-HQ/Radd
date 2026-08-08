@@ -273,6 +273,25 @@ for (const doc of ordered) {
 const IMAGE = /!\[([^\]]*)\]\(([^)]+)\)/g;
 const WIKILINK = /\[\[([^\]]+)\]\]/g;
 
+/**
+ * Apply a replacement to prose only, never to code.
+ *
+ * `[[` is not a rare sequence in code: a Python annotation ending in
+ * `dict[str, Any]]` or `list[P]]` matches the wiki-link pattern exactly, and
+ * rewriting one silently corrupts a sample the developer guide is citing from
+ * the repository. Fenced blocks and inline spans are held out.
+ */
+function replaceOutsideCode(text, pattern, replacer) {
+  // Split on fenced blocks first, keeping them, then on inline code spans.
+  const parts = text.split(/(^\s{0,3}(?:`{3,}|~{3,})[\s\S]*?^\s{0,3}(?:`{3,}|~{3,})[ \t]*$|`[^`\n]+`)/gm);
+  return parts
+    .map((part, index) => (index % 2 === 1 ? part : part.replace(pattern, replacer)))
+    .join("");
+}
+
+/** A link written across a line break is still that link — writers hard-wrap. */
+const linkTitle = (raw) => raw.replace(/\s+/g, " ").trim();
+
 let uploads = 0;
 let skipped = 0;
 
@@ -304,10 +323,11 @@ for (const doc of ordered) {
     }
   }
 
-  // Cross-links. An unresolved [[Title]] is left as plain text rather than
-  // turned into a broken link, and it is reported.
-  body = body.replace(WIKILINK, (whole, title) => {
-    const target = published.get(title.trim()) || byTitle.get(title.trim());
+  // Cross-links, in prose only. An unresolved [[Title]] is left as plain text
+  // rather than turned into a broken link, and it is reported.
+  body = replaceOutsideCode(body, WIKILINK, (whole, raw) => {
+    const title = linkTitle(raw);
+    const target = published.get(title) || byTitle.get(title);
     if (!target || !target.slug) {
       console.log(`  UNRESOLVED link [[${title}]]  (${doc.title})`);
       return title;
