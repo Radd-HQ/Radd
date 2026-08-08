@@ -14,11 +14,16 @@ import { Modal } from "../../Modal";
 import { TextField } from "../../TextField";
 
 /** Per-status chrome for the rule trace. Errored is deliberately the loudest
- * thing on the panel: it is the outcome the destination line cannot express. */
+ * thing on the panel: it is the outcome the destination line cannot express.
+ *
+ * RADD-993: `text-status-danger-ink`, not the raw `text-red-400` this shipped
+ * with. In dark they are the same hex; in light the semantic token is the one
+ * that deepens (6.47:1 against the dialog surface, where the raw shade left
+ * 4.83:1), which is the whole reason the remap exists. */
 const STATUS_STYLE: Record<MailRuleStatusValue, { label: string; text: string }> = {
   [MailRuleStatus.matched]: { label: "matched", text: "text-accent-text-strong" },
   [MailRuleStatus.declined]: { label: "no match", text: "text-fg-muted" },
-  [MailRuleStatus.errored]: { label: "failed", text: "text-red-400" },
+  [MailRuleStatus.errored]: { label: "failed", text: "text-status-danger-ink" },
 };
 
 /**
@@ -101,8 +106,12 @@ function PreviewResult({ result }: { result: RoutingPreviewResult }) {
   return (
     <div className="flex flex-col gap-2">
       {crashed.length > 0 && (
-        <div className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-[13px]">
-          <span className="font-medium text-red-400">
+        // RADD-993: the `--callout-danger-*` scale, whose ink is TUNED to its
+        // own fill (4.51:1 light, 4.56:1 dark). The raw `text-red-400` on
+        // `bg-red-500/10` it replaces was a tint the light remap only half
+        // reached, and the loudest thing on the panel was the least legible.
+        <div className="rounded-md border border-callout-danger-border/60 bg-callout-danger-fill px-3 py-2 text-[13px]">
+          <span className="font-medium text-callout-danger-ink">
             {crashed.length === 1
               ? "1 rule failed and was skipped"
               : `${crashed.length} rules failed and were skipped`}
