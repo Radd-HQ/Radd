@@ -57,6 +57,28 @@ check(
   false,
 );
 
+// --- RADD-1006, second pass: code must not classify the prose ---------------
+//
+// Dropping `{{` from the gate fixed four pages and left nine broken. The other
+// alternatives misfire on ordinary technical writing just as badly, and always
+// for the same reason: something inside a CODE SAMPLE decided how the prose
+// around it was parsed. These are all real constructs from the published guide.
+
+const unionType = "## Declare an event type\n\nText.\n\n```python\ndef emit(payload: dict[str, Any | None]) -> None: ...\n```\n\n## Next\n";
+check("a Python union type in a fence leaves the body alone", jiraToMarkdown(unionType), unionType);
+
+const inlineUnion = "## Grammar\n\nA value is `list[str | None]` here.\n\n## Next\n";
+check("a union type in an inline span leaves the body alone", jiraToMarkdown(inlineUnion), inlineUnion);
+
+const codeMacro = "## The permission atom\n\nText.\n\n```\nJira wrote {code} blocks like this.\n```\n\n## Next\n";
+check("the text {code} inside a fence leaves the body alone", jiraToMarkdown(codeMacro), codeMacro);
+
+const jiraHeadingSample = "## Three ways to find work\n\nText.\n\n```\nh2. An old Jira heading, quoted\n```\n\n## Next\n";
+check("a quoted Jira heading in a fence leaves the body alone", jiraToMarkdown(jiraHeadingSample), jiraHeadingSample);
+
+const tableSample = "## Tables\n\nText.\n\n```\n||Header||Header||\n```\n\n## Next\n";
+check("a quoted Jira table in a fence leaves the body alone", jiraToMarkdown(tableSample), tableSample);
+
 // --- Genuine Jira bodies must still convert ---------------------------------
 //
 // Removing `{{` from the gate must not stop real Jira text from being handled.

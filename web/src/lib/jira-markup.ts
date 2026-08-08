@@ -140,8 +140,27 @@ function convertLines(text: string): string {
   return out.join("\n");
 }
 
+/**
+ * Fenced blocks and inline spans, for holding CODE out of the Jira gate.
+ *
+ * RADD-1006, second pass. Dropping `{{` fixed four pages and left nine broken,
+ * because the other alternatives misfire on ordinary technical writing just as
+ * badly. `\[[^\]\n]*\|` matches a Python union — `list[str | None]`,
+ * `dict[str, Any | None]` — so every developer page quoting a real signature
+ * was classified as Jira. `\{code` matches a sentence about a `{code}` macro,
+ * and `^h[1-6]\.` matches a line that begins `h2.` in a sample.
+ *
+ * The common shape is that a CODE SAMPLE decided how the PROSE around it was
+ * parsed. It never should: a fenced block is quoted material, and what it
+ * quotes says nothing about the document quoting it. So the gate now runs on
+ * the text with code removed.
+ */
+const CODE_RE = /^\s{0,3}(`{3,}|~{3,})[\s\S]*?^\s{0,3}\1[ \t]*$|`[^`\n]+`/gm;
+
 export function jiraToMarkdown(text: string): string {
-  if (!text || !HAS_JIRA_RE.test(text)) return text ?? "";
+  if (!text) return "";
+  // Strip code before asking the question, then convert the ORIGINAL text.
+  if (!HAS_JIRA_RE.test(text.replace(CODE_RE, ""))) return text;
 
   const blocks: string[] = [];
   let out = text.replace(
