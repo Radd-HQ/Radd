@@ -53,6 +53,7 @@ from radd.db import SessionLocal
 from radd.modules.auth import service as auth
 from radd.modules.auth.models import User
 from radd.modules.comments import service as comments
+from radd.modules.comments.types import CommentEvent
 from radd.modules.events import service as events
 
 from . import lines, service
@@ -227,16 +228,27 @@ async def _send(
 
 
 async def _comment_id(session: AsyncSession, notification: Notification) -> uuid.UUID | None:
-    """The comment this notification is about.
+    """The comment this notification is about — or None when it is about none.
 
     The payload carries only a 200-char excerpt, so the comment has to be found
     through the outbox row the notification was fanned out from — `event_id` →
     the `comment.created` event, whose `entity_id` IS the comment.
+
+    **The event-type check is load-bearing** (found by RADD-978). Every event
+    carries an `entity_id`, and for the item family that id is the ITEM, so
+    without it this function returned an item's uuid AS a comment id; the
+    transport then wrote it to `mail_messages.comment_id` and the whole tick died
+    on a foreign-key violation. It had never fired because the only rows anybody
+    had mailed with an `event_id` set came from `comment.created` —
+    `participant_added` is the first type mailed from a different event, and
+    `assigned`, `state_changed` and a description `mentioned` (all reachable from
+    the preference matrix, `assigned`/`mentioned` by default) were one saved
+    preference away from the same crash.
     """
     if notification.event_id is None:
         return None
     event = await events.get_event(session, notification.event_id)
-    if event is None:
+    if event is None or event.event_type != CommentEvent.CREATED.value:
         return None
     try:
         return uuid.UUID(event.entity_id)
