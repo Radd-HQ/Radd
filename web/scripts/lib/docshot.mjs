@@ -44,13 +44,20 @@ const READ_METHODS = ["GET", "HEAD", "OPTIONS"];
 /**
  * Read-only endpoints that are POSTs anyway.
  *
- * Deliberately EMPTY at the start. The honest way to populate it is to run a
- * capture, read the blocked-call report, and add the paths that turn out to be
- * reads — guessing produces an allowlist that is both too wide (a write slips
- * through) and too narrow (a panel stays broken). Each entry must be justified
- * by a panel that does not render without it.
+ * Started EMPTY on purpose, and populated from evidence: run a capture, read
+ * the blocked-call report, and add only the paths that turn out to be reads.
+ * Guessing produces an allowlist that is both too wide (a write slips through)
+ * and too narrow (a panel stays broken).
+ *
+ * Both entries below are batch READS that take an id list, which is why they
+ * are POSTs — a GET cannot carry the body. They fire on an ordinary board or
+ * item page load, so without them every such capture reported blocked writes
+ * and lost its rollup and time-tracking chrome.
  */
-const READ_ONLY_POSTS = [];
+const READ_ONLY_POSTS = [
+  "^/api/v1/items/rollup$",
+  "^/api/v1/items/timelog/batch$",
+];
 
 /**
  * The page-context gate. Installed with `Page.addScriptToEvaluateOnNewDocument`
@@ -287,7 +294,24 @@ export async function capture(session, { out, clipTo, fullPage = false, padding 
   const { writeFile, mkdir } = await import("node:fs/promises");
   const { dirname } = await import("node:path");
   await mkdir(dirname(out), { recursive: true });
-  await writeFile(out, Buffer.from(data, "base64"));
+  const bytes = Buffer.from(data, "base64");
+  await writeFile(out, bytes);
+
+  // A clip aimed at an element BELOW THE FOLD captures a blank rectangle: the
+  // element has a real bounding box, so nothing errors, the run says "ok", and
+  // the file is a solid-colour PNG of the right size. It is the same failure
+  // shape as a vacuous test — green, and describing nothing. A flat PNG
+  // compresses to almost nothing, so size per pixel catches it cheaply.
+  if (clipTo && params.clip) {
+    const pixels = params.clip.width * params.clip.height;
+    if (pixels > 10000 && bytes.length / pixels < 0.02) {
+      throw new Error(
+        `capture: ${clipTo} produced a blank image (${bytes.length} bytes for ` +
+          `${Math.round(params.clip.width)}x${Math.round(params.clip.height)}). ` +
+          `Scroll it into view first with a { "scrollTo": "<selector>" } action.`,
+      );
+    }
+  }
   return out;
 }
 
