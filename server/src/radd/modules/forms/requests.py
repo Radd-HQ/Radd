@@ -43,6 +43,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ForbiddenError, NotFoundError
 from radd.modules.auth.models import User
+from radd.modules.automations.types import SYSTEM_ACTOR_ID
 from radd.modules.comments import service as comments_service
 from radd.modules.comments.types import CommentParentType, CommentVisibility
 from radd.modules.items.models import WorkItem
@@ -105,6 +106,16 @@ async def _comment_signals(
     Comparing strictly resolves a tie the conservative way: if we cannot show
     somebody spoke after you, we do not tell you they did. A marker that nags
     wrongly is worse than one that occasionally stays quiet.
+
+    **The SYSTEM actor answers nobody (RADD-981).** It is the author of every
+    inbound-mail comment from a person with no account — so a requester emailing
+    the desk lit up their OWN row with "somebody answered you", pointing at the
+    message they had just sent. It also authors automation comments, which are
+    an acknowledgement rather than a reply. `slas.evaluation` reached the same
+    conclusion for the first-response timer and skips the same id; this is that
+    judgment applied to the marker a requester actually sees. The comment is
+    still COUNTED — it is a real public message on the thread, and hiding it
+    from the count would make the number disagree with the conversation.
     """
     item_ids = [item.id for item in items]
     if not item_ids:
@@ -116,6 +127,8 @@ async def _comment_signals(
     theirs: dict[uuid.UUID, object] = {}
     for entity_id, author_id, created_at in rows:
         counts[entity_id] = counts.get(entity_id, 0) + 1
+        if author_id == SYSTEM_ACTOR_ID:
+            continue  # neither bucket: it is not the requester, and it is not an answer
         bucket = mine if author_id == reporters.get(entity_id) else theirs
         current = bucket.get(entity_id)
         if current is None or created_at > current:
