@@ -1,14 +1,18 @@
 import uuid
 from collections.abc import Collection, Iterable, Sequence
+from typing import TypeGuard
 
 from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.modules.auth.models import User
+from radd.modules.auth.types import UserSource
 from radd.modules.events import service as events
 
 from .models import ItemWatcher, Notification, NotificationPref
 from .types import (
+    SYSTEM_ACTOR_ID,
     NotificationType,
     NotifyEntity,
     NotifyEvent,
@@ -80,6 +84,42 @@ async def is_watching(session: AsyncSession, item_id: uuid.UUID, user_id: uuid.U
     return await session.get(ItemWatcher, (item_id, user_id)) is not None
 
 
+# --- who has a mailbox ---
+
+
+def mailable_user(user: User | None) -> TypeGuard[User]:
+    """Is there a PERSON's mailbox behind this account? (RADD-996)
+
+    Both email loops ask this before composing anything, and both treat a False
+    the way they have always treated an inactive or address-less recipient:
+    stamp the row and move on. That is deliberate — the answer is a property of
+    the ACCOUNT, not of this attempt, so a retry can only produce the same
+    answer more slowly. (A delivery failure is the other case, and it retries;
+    see `retry.py`.)
+
+    Four kinds of account are not a person to mail:
+
+    * inactive, and address-less — the two this predicate absorbed;
+    * `UserSource.SERVICE` — a spec-113 service account. `radd-agent@service.
+      radd.local` does not receive; a key's account carries an address because
+      the column requires one, not because anyone reads it. Live evidence: those
+      accounts have been getting notification mail since v0.29.0, and the relay
+      was rate-limited for repeatedly posting to addresses that bounce;
+    * the system actor — `automation@radd.system`, the identity mail intake and
+      every engine write carry.
+
+    Inbox rows for a service account are left alone: they cost nothing, and a
+    key's owner reading its notifications through the API is a coherent thing to
+    want. Mail is the part with a bill attached. The system actor is refused a
+    row outright — `create_notification` — because nothing reads its inbox.
+    """
+    if user is None or not user.active or not user.email:
+        return False
+    if user.id == SYSTEM_ACTOR_ID:
+        return False
+    return user.source != UserSource.SERVICE.value
+
+
 # --- notifications ---
 
 
@@ -108,6 +148,19 @@ async def create_notification(
     the loop costs nothing per row). `None` means "look it up" — a caller that
     forgets it is slower, never wrong. Returns None when the type was muted.
     """
+    # RADD-996: nobody reads the system actor's inbox, so it is not told things.
+    #
+    # This is also what settles the CLEANUP question the same bug raised. The
+    # planner no longer follows the system actor, but `item_watchers` already
+    # holds a row for it on every ticket that has ever arrived by email, and
+    # those rows keep arriving here through the ordinary watcher fan-out. They
+    # are left in place: a watcher row is inert once nothing is planned from it,
+    # and deleting rows in a migration to tidy a list nobody displays is a
+    # destructive write bought for cosmetics. This line is what makes leaving
+    # them cost nothing — the alternative was a DELETE that would have to be
+    # written again the next time something auto-watched a robot.
+    if user_id == SYSTEM_ACTOR_ID:
+        return None
     if muted_types is None:
         prefs = await get_prefs(session, user_id)
         muted_types = prefs.muted_types if prefs is not None else ()

@@ -1,6 +1,7 @@
 """Enums, wire constants, and the mention grammar for the notify module."""
 
 import re
+import uuid
 from enum import StrEnum
 
 
@@ -90,6 +91,17 @@ APPROVAL_DECLINED_EVENT = "approval.declined"
 # sync with ParticipantEvent.ADDED. There is deliberately no constant for the
 # REMOVE event: nobody needs telling they stopped being copied in.
 PARTICIPANT_ADDED_EVENT = "item.participant_added"
+
+#: The engine's system actor (`automations.types.SYSTEM_ACTOR_ID`) — the identity
+#: every automated write carries, mail intake's items and comments included.
+#:
+#: A constant for a different reason than the three above: automations loads
+#: BEFORE notify, so importing it would be legal. It stays a literal because
+#: `planner.py` is pure policy with no `radd.modules` import at all, and because
+#: one sentinel uuid is not worth a module edge on a dependency list that is
+#: otherwise exactly the spine. `test_notify.py` asserts the two are the same
+#: uuid, so this cannot drift — the risk the idiom above has always carried.
+SYSTEM_ACTOR_ID = uuid.UUID("00000000-0000-0000-0000-000000a70a70")
 
 
 class NotifyEvent(StrEnum):

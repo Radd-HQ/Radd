@@ -43,7 +43,7 @@ import logging
 import uuid
 from datetime import timedelta
 
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd import mailrender, smtp

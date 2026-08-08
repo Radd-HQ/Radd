@@ -8,12 +8,18 @@ Invariants encoded here:
 - The actor is never notified about their own action.
 - One notification per user per event — precedence: assigned/mentioned (personal)
   beat state_changed/commented (ambient watching).
+- The system actor is never auto-watched (RADD-996 — see `Plan.follow`).
 """
 
 import uuid
 from dataclasses import dataclass, field
 
-from .types import MENTION_EMAIL_RE, MENTION_TOKEN_RE, NotificationType
+from .types import (
+    MENTION_EMAIL_RE,
+    MENTION_TOKEN_RE,
+    SYSTEM_ACTOR_ID,
+    NotificationType,
+)
 
 
 @dataclass(frozen=True)
@@ -32,6 +38,32 @@ class Plan:
         if any(planned.user_id == user_id for planned in self.notifications):
             return  # precedence: first plan wins (personal types are added first)
         self.notifications.append(PlannedNotification(user_id, type_, detail))
+
+    def follow(self, user_id: uuid.UUID | None) -> None:
+        """Auto-watch someone — unless they are not a someone (RADD-996).
+
+        EVERY watch this file plans goes through here, because the exclusion is a
+        property of the identity rather than of the moment it appears: the system
+        actor can be a creator, an assignee or a reporter, and a guard written at
+        one of those three would be a guard missing at the other two.
+
+        Mail intake creates its items and posts its reply comments AS the system
+        actor, so auto-watching the creator put `automation@radd.system` on the
+        watcher list of every ticket that has ever arrived by email — and each
+        human reply then fanned a `commented` notification out to a robot, which
+        the mailer dutifully tried to deliver to an address that does not
+        receive. `mailintake.outbound` has excluded the same actor from its own
+        recipients since spec 62; this is the other half of that rule.
+
+        The guard is here rather than in `service.add_watchers` on purpose. That
+        function is a dumb idempotent write with two other callers — jiraimport
+        restores a source system's watcher list through it verbatim — and WHO
+        should follow an issue is a planning question. Deciding it in the writer
+        would put policy where two unrelated callers inherit it silently.
+        """
+        if user_id is None or user_id == SYSTEM_ACTOR_ID:
+            return
+        self.watch.add(user_id)
 
 
 def parse_mention_candidates(text: str) -> tuple[set[str], set[str]]:
@@ -58,18 +90,15 @@ def plan_item_created(
     mention_ids: frozenset[uuid.UUID],
 ) -> Plan:
     plan = Plan()
-    if actor_id is not None:
-        plan.watch.add(actor_id)
+    plan.follow(actor_id)
     assignee = _assignee_id(payload)
     if assignee is not None:
-        plan.watch.add(assignee)
+        plan.follow(assignee)
         if assignee != actor_id:
             plan._add(assignee, NotificationType.ASSIGNED, {})
     # Spec 62: the reporter auto-watches what they raised — updates and replies
     # then reach them through the ordinary watcher machinery (watch, no ping).
-    reporter = _reporter_id(payload)
-    if reporter is not None:
-        plan.watch.add(reporter)
+    plan.follow(_reporter_id(payload))
     for user_id in mention_ids:
         if user_id != actor_id:
             plan._add(user_id, NotificationType.MENTIONED, {"source": "description"})
@@ -87,14 +116,12 @@ def plan_item_updated(
     if "assignee" in changes:
         assignee = _assignee_id(payload)
         if assignee is not None:
-            plan.watch.add(assignee)
+            plan.follow(assignee)
             if assignee != actor_id:
                 plan._add(assignee, NotificationType.ASSIGNED, {})
     # Spec 62: re-filing on someone's behalf — the NEW reporter starts watching.
     if "reporter" in changes:
-        reporter = _reporter_id(payload)
-        if reporter is not None:
-            plan.watch.add(reporter)
+        plan.follow(_reporter_id(payload))
     if "description" in changes:
         for user_id in mention_ids:
             if user_id != actor_id:
@@ -196,8 +223,7 @@ def plan_comment_created(
     mention_ids: frozenset[uuid.UUID],
 ) -> Plan:
     plan = Plan()
-    if actor_id is not None:
-        plan.watch.add(actor_id)
+    plan.follow(actor_id)
     excerpt = payload.get("excerpt", "")
     visibility = payload.get("visibility", "public")
     for user_id in mention_ids:

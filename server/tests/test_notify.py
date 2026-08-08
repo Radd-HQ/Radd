@@ -32,10 +32,16 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from radd.config import settings as config
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
+from radd.modules.automations.types import SYSTEM_ACTOR_ID
 from radd.modules.events import service as events_service
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate
-from radd.modules.notify import consumer, planner, service as notify_service
+from radd.modules.notify import (
+    consumer,
+    planner,
+    service as notify_service,
+    types as notify_types,
+)
 from radd.modules.notify.models import Notification
 from radd.modules.participants import service as participants
 from radd.modules.participants.schemas import ParticipantAdd
@@ -178,6 +184,58 @@ def test_update_untouched_reporter_is_not_rewatched():
     assert plan.watch == set()
 
 
+# --- the system actor is not a person (RADD-996) ---
+
+
+def test_the_notify_copy_of_the_system_actor_id_matches_the_engines():
+    """`notify.types` keeps its own literal so `planner.py` imports no module at
+    all (and notify's dependency list stays the spine). This is the pin that
+    makes that safe — the whole risk of the wire-constant idiom is drift, and it
+    is the risk the four constants above carry with nothing checking them."""
+    assert notify_types.SYSTEM_ACTOR_ID == SYSTEM_ACTOR_ID
+
+
+def test_an_item_created_by_the_system_actor_watches_nobody():
+    """RADD-996: mail intake creates items AS the system actor, so auto-watching
+    the creator put `automation@radd.system` on the watcher list of every ticket
+    that has ever arrived by email — and a human replying then fanned a
+    `commented` row to a robot, which the mailer tried to deliver to an address
+    that does not receive. The reporter arm is asserted in the same breath
+    because an intake-created item whose sender matched no account has none, and
+    one whose sender matched the system actor would have the same problem."""
+    payload = {
+        "item": {
+            "assignee": None,
+            "reporter": {"id": str(SYSTEM_ACTOR_ID), "name": "Automation"},
+        }
+    }
+    plan = planner.plan_item_created(payload, SYSTEM_ACTOR_ID, frozenset())
+    assert plan.watch == set()
+    assert plan.notifications == []
+
+
+def test_a_comment_posted_by_the_system_actor_watches_nobody():
+    """The other half, and the one the live incident actually ran through: an
+    emailed REPLY is posted as the system actor too, so the comment author
+    auto-watch is a second door onto the same watcher row."""
+    plan = planner.plan_comment_created(
+        {"excerpt": "the customer replied", "visibility": "public"},
+        SYSTEM_ACTOR_ID,
+        frozenset(),
+        frozenset(),
+    )
+    assert plan.watch == set()
+
+
+def test_a_real_person_is_still_watched_when_the_system_actor_is_around():
+    """The control: the guard is about one identity, not about automation. An
+    item the engine creates and assigns to a person still follows that person."""
+    payload = {"item": {"assignee": {"id": str(ASSIGNEE), "name": "A"}}}
+    plan = planner.plan_item_created(payload, SYSTEM_ACTOR_ID, frozenset())
+    assert plan.watch == {ASSIGNEE}
+    assert _types_by_user(plan) == {ASSIGNEE: NotificationType.ASSIGNED}
+
+
 # --- comment created ---
 
 
@@ -286,6 +344,47 @@ async def _count(db, user: User, type_: NotificationType) -> int:
 async def _rows(db, user: User) -> list[Notification]:
     rows = await db.execute(select(Notification).where(Notification.user_id == user.id))
     return list(rows.scalars())
+
+
+async def test_the_system_actor_is_refused_a_notification_row(db):
+    """RADD-996's cleanup decision, asserted rather than described.
+
+    `item_watchers` already holds a system-actor row on every ticket that
+    arrived by email, and no migration removes them — rows nobody displays are
+    not worth a destructive write. What makes leaving them free is the refusal
+    at the write choke point: they can go on being planned from and produce
+    nothing. Driven through the same seam the mute uses, for the same reason —
+    it is the one function every producer of a notification calls.
+    """
+    author = await _user(db, "Author")
+    item_id = uuid.uuid4()  # `notifications.item_id` carries no FK
+    created = await notify_service.create_notification(
+        db,
+        user_id=SYSTEM_ACTOR_ID,
+        type_=NotificationType.COMMENTED,
+        event_id=None,
+        item_id=item_id,
+        actor_id=author.id,
+        payload={"excerpt": "any update?"},
+    )
+
+    assert created is None
+    rows = await db.execute(
+        select(func.count())
+        .select_from(Notification)
+        .where(Notification.item_id == item_id)
+    )
+    assert rows.scalar_one() == 0
+    # The control: the same call for a real person writes the row.
+    assert await notify_service.create_notification(
+        db,
+        user_id=author.id,
+        type_=NotificationType.COMMENTED,
+        event_id=None,
+        item_id=item_id,
+        actor_id=author.id,
+        payload={"excerpt": "any update?"},
+    ) is not None
 
 
 async def test_automation_notify_action_obeys_the_mute(db):
