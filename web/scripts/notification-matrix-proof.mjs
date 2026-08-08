@@ -4,8 +4,8 @@
  * `tsc` and `vite build` cannot see any of what matters here:
  *
  *  - that the grid actually LAYS OUT as a matrix — two labelled columns over
- *    nine rows of two checkboxes. A wrong `grid-cols` template type-checks and
- *    ships a column of eighteen stray boxes;
+ *    one row of two checkboxes per notification type. A wrong `grid-cols`
+ *    template type-checks and ships a single column of stray boxes;
  *  - that Email is DISABLED and reads unchecked while Inbox is off. That is the
  *    whole "email requires inbox" rule at the surface, and it is a runtime
  *    property of a `disabled` attribute driven by fetched state — a broken
@@ -28,6 +28,12 @@ const PORT = 9457;
 const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-notification-matrix-proof");
 const PREFS = "/api/v1/notifications/preferences";
 const SHOT = resolve(process.env.TMPDIR || "/tmp", "notification-matrix.png");
+/** `NotificationType` members — bump with the enum (10 since RADD-978's
+ *  `participant_added`). A literal, because the proof runs in a browser against
+ *  a built bundle and has no import of the TS enum; a check that silently
+ *  accepts "some rows" would not notice a type losing its row, which is what
+ *  this one exists to catch. */
+const NOTIFY_TYPE_COUNT = 10;
 
 /** The panel's own state, measured rather than assumed. */
 const READ_MATRIX = `(() => {
@@ -76,7 +82,7 @@ async function main() {
     if (matrix.rows.length) break;
   }
   context.rows = matrix.rows.length;
-  checks["every notification type has a row"] = matrix.rows.length === 9;
+  checks["every notification type has a row"] = matrix.rows.length === NOTIFY_TYPE_COUNT;
   checks["…under an Inbox and an Email column header"] =
     matrix.headers.includes("Inbox") && matrix.headers.includes("Email");
   // A matrix, not a list: the two boxes of a row share a baseline, and the two

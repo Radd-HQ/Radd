@@ -106,7 +106,7 @@ class DigestEntry:
 
     The headline is already a sentence when it gets here: what a `page_updated`
     or an `approval` reads like is knowledge the `notify` module owns (it owns
-    the enum), and teaching this module the nine types would put the vocabulary
+    the enum), and teaching this module those types would put the vocabulary
     in two places.
     """
 
@@ -252,7 +252,7 @@ def acknowledgement(item: ItemMail, *, reason: str = "") -> RenderedMail:
 
 def digest_line(entry: DigestEntry, *, divider: bool = True) -> RenderedMail:
     """One notification, both halves. Public because the digest's shape is what
-    a test pins — nine types have to produce nine distinct lines.
+    a test pins — every notification type has to produce a distinct line.
 
     `divider` is off for the last line: a rule under the final row reads as a
     section that lost its content, not as a separator.

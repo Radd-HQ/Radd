@@ -7,7 +7,7 @@ empty RADD_SMTP_HOST (the default) disables the loop entirely.
 vocabulary used to live here (RADD-967 gave all nine types their own sentence,
 where four had been serving nine) and moved out when RADD-968 gave notify a
 second email channel — the per-event `mailer.py`. Two channels rendering the
-same nine types from two files is how the four-sentence bug happens again.
+same types from two files is how the four-sentence bug happens again.
 
 **This loop is now the SLOWER half of a pair.** Rows whose type the recipient
 put in their `email_types` (RADD-686) are mailed individually within seconds by
@@ -51,7 +51,7 @@ def _send_digest(to_address: str, to_name: str, message: mailrender.RenderedMail
 
 def compose(notifications: list[Notification], actor_names: dict[uuid.UUID, str]) -> mailrender.RenderedMail:
     """One user's pending notifications as a digest. Pure given its arguments —
-    which is what makes "nine types, nine lines" testable."""
+    which is what makes "one distinct line per type" testable."""
     return mailrender.digest(
         [lines.entry(notification, actor_names) for notification in notifications],
         inbox=mailrender.inbox_url(settings.app_base_url),

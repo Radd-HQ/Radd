@@ -12,9 +12,16 @@ and the whole point of that move is that the producers which never go near the
 consumer inherit it. Testing the planner cannot see that; testing the seam alone
 would prove nothing about the two callers that were broken. So those two callers
 are driven for real. Rows are flushed, never committed; the session rolls back.
+
+RADD-978's section is DB-backed for the same reason twice over: what was missing
+was that the consumer never HANDLED `item.participant_added`, and what makes the
+recipient allowed to hear about it is the participant row itself. Neither is
+visible to a pure planner test or to a hand-built event, so those tests drive the
+real `participants.add_participant` and the real consumer.
 """
 
 import importlib.util
+import json
 import uuid
 from pathlib import Path
 
@@ -25,13 +32,23 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from radd.config import settings as config
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
-from radd.modules.notify import planner, service as notify_service
+from radd.modules.events import service as events_service
+from radd.modules.items import service as items_service
+from radd.modules.items.schemas import ItemCreate
+from radd.modules.notify import consumer, planner, service as notify_service
 from radd.modules.notify.models import Notification
+from radd.modules.participants import service as participants
+from radd.modules.participants.schemas import ParticipantAdd
+from radd.modules.projects import service as projects_service
+from radd.modules.projects.schemas import ProjectCreate
+from radd.modules.teams import service as teams_service
+from radd.modules.teams.schemas import TeamCreate
 # The endpoint itself, not the module: `notify.router` is the APIRouter object
 # the package re-exports, which shadows the module of that name.
 from radd.modules.notify.router import put_preferences
 from radd.modules.notify.schemas import NotificationPrefsUpdate
 from radd.modules.notify.types import (
+    CONSUMER_NAME,
     DEFAULT_EMAIL_TYPES,
     NotificationType,
     default_email_type_values,
@@ -184,6 +201,34 @@ def test_comment_carries_visibility_for_internal_filtering():
     assert plan.notifications[0].detail["visibility"] == "internal"
 
 
+# --- participant added (RADD-978) ---
+
+
+def test_participant_added_notifies_the_added_user():
+    added = uuid.uuid4()
+    plan = planner.plan_participant_added(
+        {"user": {"id": str(added), "name": "Ada"}, "team": None}, ACTOR
+    )
+    assert _types_by_user(plan) == {added: NotificationType.PARTICIPANT_ADDED}
+    # The write path already watched them (`participants.add_participant` calls
+    # `notify.add_watchers`); a second mechanism here would agree only by luck.
+    assert plan.watch == set()
+
+
+def test_participant_added_plans_nothing_for_a_team():
+    """A team row resolves to CURRENT members at fan-out time, so there is no
+    stable set to address — and the membership is ambient, not personal."""
+    plan = planner.plan_participant_added(
+        {"user": None, "team": {"id": str(uuid.uuid4()), "name": "Desk"}}, ACTOR
+    )
+    assert plan.notifications == [] and plan.watch == set()
+
+
+def test_participant_added_never_notifies_the_actor():
+    plan = planner.plan_participant_added({"user": {"id": str(ACTOR), "name": "A"}}, ACTOR)
+    assert plan.notifications == []
+
+
 # --- the mute is enforced at the write, so every producer inherits it (RADD-971) ---
 
 
@@ -236,6 +281,11 @@ async def _count(db, user: User, type_: NotificationType) -> int:
         .where(Notification.user_id == user.id, Notification.type == type_.value)
     )
     return int(rows.scalar_one())
+
+
+async def _rows(db, user: User) -> list[Notification]:
+    rows = await db.execute(select(Notification).where(Notification.user_id == user.id))
+    return list(rows.scalars())
 
 
 async def test_automation_notify_action_obeys_the_mute(db):
@@ -315,6 +365,126 @@ async def test_prefetched_preferences_are_authoritative(db):
     assert await _count(db, heard, NotificationType.COMMENTED) == 1
 
 
+# --- participant_added, end to end (RADD-978) ---------------------------------
+#
+# The planner tests above are pure, so they cannot see the two things that were
+# actually broken: the consumer did not HANDLE `item.participant_added` at all,
+# and the recipient has no standing in the project until the participant row
+# exists. Both only answer when the real `participants.add_participant` writes
+# the row, emits the real event, and the real consumer reads it — so that is
+# what these drive. A hand-built event would have proved neither.
+
+
+async def _admin(db, name: str) -> User:
+    """Someone who can share an item — `add_participant` wants item.update or
+    the reporter's identity."""
+    user = User(
+        email=f"share-{uuid.uuid4().hex[:8]}@example.com",
+        name=name,
+        instance_role=InstanceRole.ADMIN.value,
+    )
+    db.add(user)
+    await db.flush()
+    return user
+
+
+async def _shareable_item(db, actor: User):
+    project = await projects_service.create_project(
+        db, ProjectCreate(key=f"PA{uuid.uuid4().hex[:4].upper()}", name="Participants")
+    )
+    item = await items_service.create_item(
+        db, ItemCreate(project_id=project.id, title="Printer on fire"), actor
+    )
+    return project, item
+
+
+async def _share(db, item, actor: User, **subject) -> None:
+    """One real add, consumed by the real consumer.
+
+    The cursor is parked at the current head first, so the batch this reads is
+    exactly the event the add emits — not whatever else the suite has written.
+    """
+    head = await events_service.latest_event_id(db)
+    await events_service.set_offset(db, CONSUMER_NAME, head)
+    await participants.add_participant(db, item.id, ParticipantAdd(**subject), actor)
+    await db.flush()
+    await consumer._consume(db, watch_only=False)
+
+
+async def test_a_direct_participant_is_told_they_were_added(db):
+    """The gap RADD-978 closes: the add auto-watched them, so every LATER event
+    reached them and the add itself reached nobody.
+
+    The recipient holds nothing on the project — no role grant, just an account.
+    They pass the consumer's per-row read gate through the Baseline's
+    `item.read@participant`, i.e. through the very row that is being announced.
+    """
+    actor = await _admin(db, "Ada Agent")
+    project, item = await _shareable_item(db, actor)
+    colleague = await _user(db, "Colleague")
+
+    await _share(db, item, actor, user_id=colleague.id)
+
+    (row,) = await _rows(db, colleague)
+    assert row.type == NotificationType.PARTICIPANT_ADDED.value
+    assert row.item_id == item.id and row.actor_id == actor.id
+    # Display values resolved at WRITE time, like every other type — a later
+    # rename cannot make the inbox row lie about what it told you.
+    assert row.payload["item_key"] == f"{project.key}-{item.number}"
+    assert row.payload["item_title"] == "Printer on fire"
+    assert row.payload["actor_name"] == "Ada Agent"
+
+
+async def test_adding_a_team_notifies_nobody_personally(db):
+    """A team row resolves to CURRENT members at fan-out time (that is what makes
+    joining a team join its shared tickets), so there is no stable set to
+    address and the membership is ambient by design."""
+    actor = await _admin(db, "Ada Agent")
+    _project, item = await _shareable_item(db, actor)
+    member = await _user(db, "Team Member")
+    team = await teams_service.create_team(
+        db, TeamCreate(name=f"Desk {uuid.uuid4().hex[:6]}")
+    )
+    await teams_service.add_team_member(db, team.id, member.id)
+
+    await _share(db, item, actor, team_id=team.id)
+    assert await _rows(db, member) == []
+
+    # The control: the same person, added DIRECTLY, does get told — so the empty
+    # list above is the team rule, not a fan-out that reaches nobody at all.
+    await _share(db, item, actor, user_id=member.id)
+    assert [row.type for row in await _rows(db, member)] == [
+        NotificationType.PARTICIPANT_ADDED.value
+    ]
+
+
+async def test_adding_yourself_as_a_participant_is_silent(db):
+    """The actor is never notified about their own action — the invariant every
+    other type in this file already holds to."""
+    actor = await _admin(db, "Ada Agent")
+    _project, item = await _shareable_item(db, actor)
+
+    await _share(db, item, actor, user_id=actor.id)
+
+    assert await _rows(db, actor) == []
+
+
+async def test_muting_participant_added_silences_it(db):
+    """The mute is enforced inside `create_notification` (RADD-971), so this type
+    inherited it the moment it was created through that seam. The control user is
+    the point: without one, "no row" could equally mean the consumer never ran."""
+    actor = await _admin(db, "Ada Agent")
+    _project, item = await _shareable_item(db, actor)
+    muted, heard = await _user(db, "Muted"), await _user(db, "Hearing")
+    await _mute(db, muted, NotificationType.PARTICIPANT_ADDED)
+
+    await _share(db, item, actor, user_id=muted.id)
+    await _share(db, item, actor, user_id=heard.id)
+
+    assert await _rows(db, muted) == []
+    assert await _count(db, heard, NotificationType.PARTICIPANT_ADDED) == 1
+
+
 # --- the channel matrix (RADD-686) --------------------------------------------
 
 
@@ -362,11 +532,19 @@ async def test_a_user_with_no_prefs_row_resolves_to_the_default_email_set(db):
     assert resolved[never.id] == frozenset(type_.value for type_ in DEFAULT_EMAIL_TYPES)
 
 
-async def test_the_migration_backfills_existing_rows_with_the_default_email_set(db):
+async def test_the_migration_backfills_existing_rows_with_its_frozen_default_set(db):
     """A preferences row saved before RADD-686 must come out of the migration
     with the DEFAULT set, not an empty one: everyone who had ever saved a
     preference already got comment mail, and `[]` would silence a channel they
     never turned off.
+
+    What it is compared against is the migration's OWN frozen literal, not
+    `default_email_type_values()`. This assertion used to read the live constant,
+    and RADD-978 is what showed why it cannot: adding `participant_added` to
+    `DEFAULT_EMAIL_TYPES` failed a test about a backfill that ran months earlier.
+    A migration keeps meaning what it meant the day it ran; the accepted
+    consequence (stated in `notify.types`) is that the two drift apart by exactly
+    the types added since, which is asserted below rather than hidden.
 
     The suite's database is created at head, so there are no legacy rows to
     observe — the only honest way to test the backfill is to run it. The column
@@ -399,7 +577,14 @@ async def test_the_migration_backfills_existing_rows_with_the_default_email_set(
         text("SELECT email_types FROM notification_prefs WHERE user_id = :user_id"),
         {"user_id": user_id},
     )
-    assert stored.scalar_one() == default_email_type_values()
+    frozen = json.loads(migration._DEFAULT_EMAIL_TYPES)
+    assert stored.scalar_one() == frozen
+    # And the drift is a strict subset, in one direction only: every type the
+    # backfill wrote is still a default, and `participant_added` (RADD-978, no
+    # migration by decision) is the one a pre-existing row does not carry.
+    assert set(frozen) < {type_.value for type_ in DEFAULT_EMAIL_TYPES}
+    assert NotificationType.PARTICIPANT_ADDED.value not in frozen
+    assert NotificationType.PARTICIPANT_ADDED.value in default_email_type_values()
     # The default is dropped afterwards on purpose: the policy lives in
     # `notify.types`, and a copy left in the schema is a second source of truth.
     remaining = await db.execute(

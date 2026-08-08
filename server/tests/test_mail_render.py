@@ -313,6 +313,9 @@ DIGEST_PAYLOADS = {
         "space_slug": "ops",
         "page_slug": "render-farm-runbook",
     },
+    # RADD-978: the issue IS the subject line, so the detail is empty like
+    # `assigned` — the headline names the actor and the verb, nothing else.
+    NotificationType.PARTICIPANT_ADDED: {},
 }
 
 
@@ -347,6 +350,7 @@ def test_every_notification_type_gets_its_own_line():
     assert "due soon" in rendered[NotificationType.SLA_DUE_SOON]
     assert "Escalated to tier 2" in rendered[NotificationType.AUTOMATION]
     assert "requested your approval to move to Released" in rendered[NotificationType.APPROVAL]
+    assert "added you to the issue" in rendered[NotificationType.PARTICIPANT_ADDED]
 
 
 def test_an_issue_line_links_the_issue_and_a_page_line_links_the_page():

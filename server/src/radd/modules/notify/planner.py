@@ -168,6 +168,27 @@ def plan_approval_decided(
     return plan
 
 
+def plan_participant_added(payload: dict, actor_id: uuid.UUID | None) -> Plan:
+    """RADD-978: being shared into an issue tells the person it happened.
+
+    Exactly ONE recipient — the added USER, from the event's `user` ref. A TEAM
+    add plans nothing: a team row resolves to CURRENT members at fan-out time
+    (that is what makes joining a team join its shared tickets), so there is no
+    stable set to address, and the membership is ambient rather than personally
+    directed. Someone who adds themself hears nothing, like every other type.
+
+    No `watch` entry: `participants.add_participant` already auto-watched the
+    direct user through `notify.add_watchers` on the write path. Adding it here
+    too would be a second mechanism agreeing by luck.
+    """
+    plan = Plan()
+    user = payload.get("user") or {}
+    user_id = uuid.UUID(user["id"]) if user.get("id") else None
+    if user_id is not None and user_id != actor_id:
+        plan._add(user_id, NotificationType.PARTICIPANT_ADDED, {})
+    return plan
+
+
 def plan_comment_created(
     payload: dict,
     actor_id: uuid.UUID | None,

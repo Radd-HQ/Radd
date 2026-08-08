@@ -21,24 +21,41 @@ class NotificationType(StrEnum):
     # RADD-719: a watched wiki page changed. Carries no item — the payload
     # holds the page's slugs so the inbox row can link without a join.
     PAGE_UPDATED = "page_updated"
+    # RADD-978: someone SHARED an item with you (spec 72's direct user
+    # participant). The add auto-watches, so every LATER event reached them —
+    # the add itself told nobody, which is the one moment they had no idea the
+    # issue existed. A team add plans nothing personal: team rows resolve live
+    # at fan-out and are ambient by design.
+    PARTICIPANT_ADDED = "participant_added"
 
 
 #: The types a user gets an EMAIL about the moment they happen, when they have
 #: expressed no preference (RADD-686). No prefs row means exactly this set.
 #:
-#: The personally-directed, high-signal four: someone assigned you the work,
-#: named you, replied to you, or is waiting on your decision. The ambient types
-#: (state changes on things you watch, SLA timers, automation pings) stay in the
-#: digest by default, because an inbox that mails everything is an inbox nobody
-#: reads. Every type is switchable per-user either way — this is the default,
-#: not the rule — which is what the module constant it replaces (RADD-968's
-#: hard-coded `{commented}`) could never be.
+#: The personally-directed, high-signal set: someone assigned you the work,
+#: named you, replied to you, is waiting on your decision, or pulled you into an
+#: issue (RADD-978). The ambient types (state changes on things you watch, SLA
+#: timers, automation pings) stay in the digest by default, because an inbox that
+#: mails everything is an inbox nobody reads. Every type is switchable per-user
+#: either way — this is the default, not the rule — which is what the module
+#: constant it replaces (RADD-968's hard-coded `{commented}`) could never be.
+#:
+#: **Known asymmetry (RADD-978, accepted).** `participant_added` was added to
+#: this set AFTER `d686emailtypes` backfilled every existing `notification_prefs`
+#: row with the four types this set then held. So a user who has ever saved a
+#: preference does NOT get this one by email until they tick the box, while a
+#: user with no row does — the default and the stored rows disagree by exactly
+#: this type. No migration corrects it on purpose: rewriting a stored preference
+#: to add a channel the person never asked for is worse than the inconsistency,
+#: and the row is theirs to edit. Any type added here later inherits the same
+#: rule — the default applies to people who have not spoken, not to everyone.
 DEFAULT_EMAIL_TYPES: frozenset[NotificationType] = frozenset(
     {
         NotificationType.ASSIGNED,
         NotificationType.MENTIONED,
         NotificationType.COMMENTED,
         NotificationType.APPROVAL,
+        NotificationType.PARTICIPANT_ADDED,
     }
 )
 
@@ -67,6 +84,12 @@ SLA_DUE_SOON_EVENT = "sla.due_soon"
 APPROVAL_REQUESTED_EVENT = "approval.requested"
 APPROVAL_APPROVED_EVENT = "approval.approved"
 APPROVAL_DECLINED_EVENT = "approval.declined"
+
+# Wire string for the participants module's add event (spec 72; RADD-978) — the
+# same idiom again, participants loads AFTER notify (and is disableable); keep in
+# sync with ParticipantEvent.ADDED. There is deliberately no constant for the
+# REMOVE event: nobody needs telling they stopped being copied in.
+PARTICIPANT_ADDED_EVENT = "item.participant_added"
 
 
 class NotifyEvent(StrEnum):

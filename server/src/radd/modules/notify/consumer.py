@@ -34,6 +34,7 @@ from .types import (
     APPROVAL_DECLINED_EVENT,
     APPROVAL_REQUESTED_EVENT,
     CONSUMER_NAME,
+    PARTICIPANT_ADDED_EVENT,
     SLA_BREACHED_EVENT,
     SLA_DUE_SOON_EVENT,
     NotificationType,
@@ -56,6 +57,7 @@ _HANDLED = {
     APPROVAL_REQUESTED_EVENT,
     APPROVAL_APPROVED_EVENT,
     APPROVAL_DECLINED_EVENT,
+    PARTICIPANT_ADDED_EVENT,
 }
 
 # SLA timer events fan out identically; only the notification type differs.
@@ -115,6 +117,11 @@ async def _handle(session: AsyncSession, event: Event, *, watch_only: bool) -> N
     elif event.event_type == APPROVAL_REQUESTED_EVENT or event.event_type in _APPROVAL_DECISIONS:
         if not watch_only:  # approvals never touch the watcher graph (spec 71)
             await _handle_approval_event(session, event)
+    elif event.event_type == PARTICIPANT_ADDED_EVENT:
+        # The watcher row was written by participants on the WRITE path, so this
+        # handler has nothing to contribute to a watch-only bootstrap pass.
+        if not watch_only:
+            await _handle_participant_added(session, event)
     else:
         await _handle_item_event(session, event, watch_only=watch_only)
 
@@ -287,6 +294,39 @@ async def _handle_approval_event(session: AsyncSession, event: Event) -> None:
         plan = planner.plan_approval_decided(
             payload, event.actor_id, requester_id, _APPROVAL_DECISIONS[event.event_type]
         )
+    await _apply(
+        session,
+        plan,
+        event=event,
+        item_id=item_id,
+        project=project,
+        item_key=_ref(payload).get("key", ""),
+        item_title=_ref(payload).get("title", ""),
+        item=item,
+    )
+
+
+async def _handle_participant_added(session: AsyncSession, event: Event) -> None:
+    """RADD-978: tell the person they were shared into an issue.
+
+    The wire-string idiom again — participants loads after notify and may be
+    disabled, so this file knows the event by its name and reads its payload,
+    never the module. The plan is built FIRST because a team add plans nothing
+    and there is then nothing to look anything up for.
+
+    The recipient still passes `_allowed` like every other type. Note what makes
+    that pass: the participant ROW already exists (the event is emitted after the
+    write), so the Baseline's `item.read@participant` answers the RADD-817
+    per-row gate for someone with no other standing in the project — the share
+    is what confers the read the notification is checked against.
+    """
+    payload = event.payload or {}
+    plan = planner.plan_participant_added(payload, event.actor_id)
+    if not plan.notifications:
+        return
+    item_id = uuid.UUID(_ref(payload)["id"])
+    item = await items.require_item(session, item_id)
+    project = await projects_service.get_project(session, item.project_id)
     await _apply(
         session,
         plan,

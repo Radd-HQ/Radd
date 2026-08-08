@@ -48,7 +48,7 @@ from radd.modules.comments.schemas import CommentCreate
 from radd.modules.comments.types import CommentVisibility
 from radd.modules.events import service as events_service
 from radd.modules.items import service as items_service
-from radd.modules.items.schemas import ItemCreate
+from radd.modules.items.schemas import ItemCreate, ItemUpdate
 from radd.modules.mailintake import intake, parsing, threading as mail_threading
 from radd.modules.mailintake.models import MailMessage, MailSender, MailSource
 from radd.modules.mailintake.types import MailDirection, MailSenderKind, MailSourceKind
@@ -59,6 +59,8 @@ from radd.modules.notify.types import (
     DEFAULT_EMAIL_TYPES,
     NotificationType,
 )
+from radd.modules.participants import service as participants
+from radd.modules.participants.schemas import ParticipantAdd
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 
@@ -247,6 +249,19 @@ async def _notify(db, user: User, type_: NotificationType, item, **detail) -> No
             **detail,
         },
     )
+
+
+async def _share(db, item, actor: User, **subject) -> None:
+    """A real participant add (RADD-978), consumed by the real consumer.
+
+    The cursor is parked at the current head first, so the batch this reads is
+    exactly the event the add emits.
+    """
+    head = await events_service.latest_event_id(db)
+    await events_service.set_offset(db, CONSUMER_NAME, head)
+    await participants.add_participant(db, item.id, ParticipantAdd(**subject), actor)
+    await db.flush()
+    await consumer._consume(db, watch_only=False)
 
 
 async def _rows(db, user_id: uuid.UUID) -> list[Notification]:
@@ -503,6 +518,147 @@ async def test_a_user_who_never_saved_a_preference_gets_the_default_set(
     assert "Ada Agent mentioned you in the comment" in _text(message)
     unmailed = [row.type for row in await _rows(db, newcomer.id) if row.emailed_at is None]
     assert unmailed == [NotificationType.STATE_CHANGED.value]
+
+
+async def test_being_shared_into_an_issue_mails_the_person_it_reaches(
+    db, world, relay, sender_row, quiet_backlog
+):
+    """RADD-978, end to end: the real add, the real consumer, the real tick.
+
+    `participant_added` is personally directed, so it joins `DEFAULT_EMAIL_TYPES`
+    — someone shared into an issue hears about it now, not in tomorrow's digest,
+    which is the whole point of telling them at all. The recipient holds nothing
+    on the project: they pass the consumer's read gate through the Baseline's
+    `item.read@participant`, i.e. through the row being announced.
+    """
+    agent, project, item = world
+    colleague = await _user(db, name="Colleague", email=f"p-{uuid.uuid4().hex[:8]}@example.com")
+    assert await notify_service.get_prefs(db, colleague.id) is None, "the absence IS the fixture"
+    assert NotificationType.PARTICIPANT_ADDED in DEFAULT_EMAIL_TYPES
+
+    await _share(db, item, agent, user_id=colleague.id)
+
+    assert await mailer.run_batch(db) == 1
+
+    key = f"{project.key}-{item.number}"
+    (message,) = _addressed(relay, colleague.email)
+    assert str(message["Subject"]) == f"[{key}] Printer on fire"
+    text = _text(message)
+    assert "Ada Agent added you to the issue" in text, "the line must name who shared it"
+    assert f"{BASE_URL}/issues/{key}" in text, "and link the issue they can now open"
+
+
+async def test_a_preference_saved_before_the_type_existed_does_not_mail_it(
+    db, world, relay, sender_row, quiet_backlog
+):
+    """The asymmetry RADD-978 accepted, asserted rather than assumed.
+
+    `d686emailtypes` backfilled every existing preferences row with the four
+    types that were default THEN, and no migration adds this one — rewriting a
+    stored preference to switch on a channel the person never asked for is worse
+    than the inconsistency. So an explicit row from that backfill gets the inbox
+    row and no mail, while the newcomer above gets both. The row is left
+    UNSTAMPED, so the digest still carries it: this is a channel choice, not
+    silence.
+    """
+    agent, _project, item = world
+    settled = await _user(db, name="Settled", email=f"s-{uuid.uuid4().hex[:8]}@example.com")
+    # Verbatim what the migration wrote, not `default_email_types()` — the point
+    # is a row that predates the type.
+    await _channels(
+        db,
+        settled,
+        email_types=[
+            NotificationType.ASSIGNED,
+            NotificationType.MENTIONED,
+            NotificationType.COMMENTED,
+            NotificationType.APPROVAL,
+        ],
+    )
+
+    await _share(db, item, agent, user_id=settled.id)
+
+    assert await mailer.run_batch(db) == 0
+    assert _addressed(relay, settled.email) == []
+    (row,) = await _rows(db, settled.id)
+    assert row.type == NotificationType.PARTICIPANT_ADDED.value
+    assert row.emailed_at is None, "the digest can no longer see it"
+
+
+async def test_a_type_mailed_from_a_non_comment_event_does_not_crash_the_tick(
+    db, world, relay, sender_row, quiet_backlog
+):
+    """The bug RADD-978 surfaced, asserted in the type it was always reachable
+    from rather than only in the new one.
+
+    `mailer._comment_id` resolved the notification's event blindly, and an ITEM
+    event's `entity_id` is the item — so the transport was handed an item uuid as
+    a comment id and the tick died on a foreign-key violation. `assigned` is in
+    `DEFAULT_EMAIL_TYPES`, so this was one assignment away on every instance with
+    mailintake configured. It never fired in this file because every non-comment
+    case here was written with `event_id=None`, which is the one shape that
+    cannot reach the lookup.
+    """
+    agent, project, item = world
+    assignee = await _user(db, name="Ash Assignee", email=f"as-{uuid.uuid4().hex[:8]}@example.com")
+    await _grant(db, assignee, BuiltinRoleKey.MEMBER, project.id)
+    head = await events_service.latest_event_id(db)
+    await events_service.set_offset(db, CONSUMER_NAME, head)
+    await items_service.update_item(db, item.id, ItemUpdate(assignee_id=assignee.id), agent)
+    await db.flush()
+    await consumer._consume(db, watch_only=False)
+
+    assert await mailer.run_batch(db) == 1
+
+    (message,) = _addressed(relay, assignee.email)
+    assert "Ada Agent assigned you" in _text(message)
+    # Threaded on the ITEM with no comment attached — which is what the transport
+    # has to be told, rather than being handed the item's id as one.
+    stored = await db.execute(
+        select(MailMessage.comment_id).where(MailMessage.item_id == item.id)
+    )
+    assert list(stored.scalars()) == [None]
+
+
+async def test_an_item_update_reaches_its_assignee_and_the_people_it_mentions(
+    db, world, relay, sender_row, quiet_backlog
+):
+    """The row half of the same find, and the more serious one.
+
+    RADD-922 nested the item event payload under `item`; `_handle_item_event`
+    went on reading a top-level `project_id` and a top-level `description`. The
+    first raised KeyError inside the consumer's per-event SAVEPOINT — logged,
+    skipped, cursor advanced — so `assigned`, `state_changed` and description
+    `mentioned` produced nothing for anyone; the second silently mention-scanned
+    an empty string. No test drove this handler over a REAL item event, which is
+    the only reason a dead third of the notification types looked healthy.
+    """
+    agent, project, item = world
+    assignee = await _user(db, name="Ash", email=f"ash-{uuid.uuid4().hex[:8]}@example.com")
+    named = await _user(db, name="Nina Named", email=f"n-{uuid.uuid4().hex[:8]}@example.com")
+    for user in (assignee, named):
+        await _grant(db, user, BuiltinRoleKey.MEMBER, project.id)
+    head = await events_service.latest_event_id(db)
+    await events_service.set_offset(db, CONSUMER_NAME, head)
+
+    await items_service.update_item(
+        db,
+        item.id,
+        ItemUpdate(
+            assignee_id=assignee.id,
+            description=f"Handing over — @[Nina Named]({named.id}) has the runbook.",
+        ),
+        agent,
+    )
+    await db.flush()
+    await consumer._consume(db, watch_only=False)
+
+    assert [row.type for row in await _rows(db, assignee.id)] == [
+        NotificationType.ASSIGNED.value
+    ]
+    assert [row.type for row in await _rows(db, named.id)] == [
+        NotificationType.MENTIONED.value
+    ]
 
 
 # --- the two channels' hand-off ----------------------------------------------

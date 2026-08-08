@@ -19,6 +19,10 @@ export const NotificationType = {
   /** RADD-719: a watched wiki page changed. Carries no item — `detail` holds the
    *  page's slugs so the row can link without a join. */
   pageUpdated: "page_updated",
+  /** RADD-978: someone shared an issue with you (spec 72's direct user
+   *  participant). No detail — the item key/title carry the whole line. A TEAM
+   *  add produces nothing: team rows resolve live at fan-out and are ambient. */
+  participantAdded: "participant_added",
 } as const;
 export type NotificationTypeValue = (typeof NotificationType)[keyof typeof NotificationType];
 

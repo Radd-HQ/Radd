@@ -7,6 +7,7 @@ import {
   ShieldCheck,
   Timer,
   UserRoundPlus,
+  Users,
   Zap,
 } from "lucide-react";
 import { shortDate } from "../../lib/dates";
@@ -41,6 +42,12 @@ export function notificationSummary(notification: Notification): string {
     }
     case NotificationType.pageUpdated:
       return `${actor} edited ${notification.detail.title ?? "a page"}`;
+    // RADD-978. "…as a participant" rather than the email's "…to the issue":
+    // the row appends " on KEY" itself, so this is the phrasing that survives
+    // it. It needs its own case at all because the fallback below claims
+    // someone commented — the bug RADD-967 fixed on the server side.
+    case NotificationType.participantAdded:
+      return `${actor} added you as a participant`;
     default:
       return `${actor} commented`;
   }
@@ -56,6 +63,7 @@ const TYPE_ICONS = {
   [NotificationType.automation]: Zap,
   [NotificationType.approval]: ShieldCheck,
   [NotificationType.pageUpdated]: FileText,
+  [NotificationType.participantAdded]: Users,
 } as const;
 
 /** One notification row (shared by the Inbox page and the top-bar peek). */

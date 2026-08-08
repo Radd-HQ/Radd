@@ -14,6 +14,7 @@ import { ErrorText } from "../ErrorText";
 const NOTIFY_TYPE_LABELS: Record<NotificationTypeValue, string> = {
   [NotificationType.assigned]: "Assigned to me",
   [NotificationType.mentioned]: "Mentions",
+  [NotificationType.participantAdded]: "Added as a participant",
   [NotificationType.stateChanged]: "State changes on watched issues",
   [NotificationType.commented]: "Comments on watched issues",
   [NotificationType.slaBreach]: "SLA breaches",

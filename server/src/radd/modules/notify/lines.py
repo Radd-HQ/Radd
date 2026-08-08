@@ -1,6 +1,6 @@
 """What a notification SAYS — one vocabulary, two channels (RADD-967, RADD-968).
 
-This module owns `NotificationType`, so the nine sentences belong here. What
+This module owns `NotificationType`, so every type's sentence belongs here. What
 they LOOK like is `radd.mailrender`'s decision; this file only ever produces
 words and a `DigestEntry`.
 
@@ -67,6 +67,11 @@ def headline(type_: NotificationType, actor: str, payload: dict) -> str:
         if action == "declined":
             return f"{actor} declined the move to {target}"
         return f"{actor} requested your approval to move to {target}"
+    if type_ is NotificationType.PARTICIPANT_ADDED:
+        # No object named here either: the issue is the line's SUBJECT and its
+        # link (`entry` renders "[KEY] Title" beside it), so this reads as one
+        # sentence with what follows it (RADD-978).
+        return f"{actor} added you to the issue"
     if type_ is NotificationType.PAGE_UPDATED:
         # The page's title is the line's SUBJECT (and its link), so naming it
         # here too would print it twice — `entry` (RADD-719).
