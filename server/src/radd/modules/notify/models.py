@@ -47,6 +47,15 @@ class Notification(Base):
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     read_at: Mapped[datetime | None]
     emailed_at: Mapped[datetime | None]
+    # RADD-997: per-row send backoff, shared by the mailer and the digest and
+    # applied in `retry.py`. A failed send used to leave the row exactly as the
+    # selection found it, so the 5-second mailer re-tried it every tick for the
+    # whole 24-hour age window — an SMTP connection and a `mail.failed` event
+    # each time. `email_attempts` counts failures; `email_next_try` is the
+    # earliest tick allowed to reconsider the row (NULL = now, which is every
+    # row that has never failed). Exhausting the ladder stamps `emailed_at`.
+    email_attempts: Mapped[int] = mapped_column(default=0, server_default="0")
+    email_next_try: Mapped[datetime | None]
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 

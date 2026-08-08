@@ -56,7 +56,7 @@ from radd.modules.comments import service as comments
 from radd.modules.comments.types import CommentEvent
 from radd.modules.events import service as events
 
-from . import lines, service
+from . import lines, retry, service
 from .models import Notification
 from .types import NotificationType
 
@@ -88,22 +88,35 @@ async def run_batch(session: AsyncSession) -> int:
         return 0
     actor_names = await _actor_names(session, rows)
     users = await auth.users_by_ids(session, {row.user_id for row in rows})
+    now = utcnow()
     sent = 0
     stamped: list[uuid.UUID] = []
     for row in rows:
         user = users.get(row.user_id)
-        if user is None or not user.active or not user.email:
-            stamped.append(row.id)  # nowhere to send it; never retry it
+        if not service.mailable_user(user):
+            # Inactive, address-less, a spec-113 SERVICE account or the system
+            # actor (RADD-996) — none of them a mailbox. Nowhere to send it;
+            # never retry it.
+            stamped.append(row.id)
             continue
-        if await _send(session, row, user, actor_names):
+        if await _send(
+            session,
+            row,
+            user,
+            actor_names,
+            emit_failure=retry.reports_failure(row.email_attempts),
+        ):
             sent += 1
             stamped.append(row.id)
-        # A DELIVERY failure leaves the row unstamped, so the next tick retries
-        # it — bounded by `_pending`'s age window, after which the digest takes
-        # it. Stamping here would lose the message to one relay blip.
+        elif retry.record_failure(row, now):
+            # RADD-997: a DELIVERY failure is still worth retrying — one relay
+            # blip must not lose the message — but it now costs the row its
+            # place in the queue, and the ladder ends. Before this, "unstamped"
+            # meant "selected again in five seconds", for a day.
+            stamped.append(row.id)
     if stamped:
         await session.execute(
-            update(Notification).where(Notification.id.in_(stamped)).values(emailed_at=utcnow())
+            update(Notification).where(Notification.id.in_(stamped)).values(emailed_at=now)
         )
     return sent
 
@@ -115,14 +128,24 @@ async def _pending(session: AsyncSession) -> list[Notification]:
     RECENT (the digest's own `notify_email_max_age_hours`) because a worker that
     was down for a week must not empty the backlog into everyone's mailbox one
     message at a time. Stale rows are left for the digest, which stamps them.
+
+    NOT BACKED OFF (RADD-997): a row that has failed is invisible until its
+    `email_next_try`. In SQL rather than in the loop deliberately — a Python
+    skip would let a handful of failing rows fill `notify_mail_batch` and starve
+    the healthy ones behind them, which is the shape the incident had.
     """
-    cutoff = utcnow() - timedelta(hours=settings.notify_email_max_age_hours)
+    now = utcnow()
+    cutoff = now - timedelta(hours=settings.notify_email_max_age_hours)
     result = await session.execute(
         select(Notification)
         .where(
             Notification.emailed_at.is_(None),
             Notification.read_at.is_(None),
             Notification.created_at >= cutoff,
+            or_(
+                Notification.email_next_try.is_(None),
+                Notification.email_next_try <= now,
+            ),
         )
         .order_by(Notification.created_at, Notification.id)
         .limit(settings.notify_mail_batch)
@@ -176,8 +199,18 @@ async def _send(
     notification: Notification,
     user: User,
     actor_names: dict[uuid.UUID, str],
+    *,
+    emit_failure: bool = True,
 ) -> bool:
-    """Compose and deliver one notification. True when it went out."""
+    """Compose and deliver one notification. True when it went out.
+
+    `emit_failure` is passed straight to the transport and is the whole of
+    RADD-997's event half: the transport reports every send's outcome, which is
+    right for its other two callers (a reply and an ack are sent once), and
+    wrong for a loop that will try the same message again in a minute. The
+    RETRY is what makes a failure uninteresting, and the retry lives here — so
+    the suppression does too, rather than teaching the transport about ladders.
+    """
     payload = notification.payload or {}
     key = payload.get("item_key") or ""
     item = mailrender.ItemMail(
@@ -223,6 +256,7 @@ async def _send(
             text=message.text,
             html=message.html,
             comment_id=await _comment_id(session, notification),
+            emit_failure=emit_failure,
         )
     )
 

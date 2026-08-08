@@ -30,7 +30,9 @@ takes the Message-ID off the composed message and feeds it back through
 transport actually stored.
 """
 
+import smtplib
 import uuid
+from datetime import timedelta
 from email.message import EmailMessage
 
 import pytest
@@ -42,17 +44,23 @@ from radd.config import settings
 from radd.modules.auth import grants
 from radd.modules.auth.models import User
 from radd.modules.auth.roles import role_by_key
-from radd.modules.auth.types import BuiltinRoleKey, InstanceRole
+from radd.modules.auth.types import BuiltinRoleKey, InstanceRole, UserSource
 from radd.modules.comments import service as comments_service
 from radd.modules.comments.schemas import CommentCreate
 from radd.modules.comments.types import CommentVisibility
 from radd.modules.events import service as events_service
+from radd.modules.events.models import Event
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate, ItemUpdate
 from radd.modules.mailintake import intake, parsing, threading as mail_threading
 from radd.modules.mailintake.models import MailMessage, MailSender, MailSource
-from radd.modules.mailintake.types import MailDirection, MailSenderKind, MailSourceKind
-from radd.modules.notify import consumer, emailer, mailer, service as notify_service
+from radd.modules.mailintake.types import (
+    MailDirection,
+    MailEvent,
+    MailSenderKind,
+    MailSourceKind,
+)
+from radd.modules.notify import consumer, emailer, mailer, retry, service as notify_service
 from radd.modules.notify.models import Notification
 from radd.modules.notify.types import (
     CONSUMER_NAME,
@@ -74,12 +82,23 @@ DESK_FROM = "support@radd-hq.com"
 
 
 class _FakeSmtp:
-    """Enough of smtplib.SMTP to capture every composed message."""
+    """Enough of smtplib.SMTP to capture every composed message.
+
+    `dials` counts CONNECTIONS, not messages — that is the number RADD-996 and
+    RADD-997 are both about. A recipient with no mailbox and a row inside its
+    backoff must cost the relay nothing, and "no message was captured" cannot
+    tell the difference between not connecting and connecting to say nothing.
+
+    `fail` raises from the send, which is the shape a refusal (a rate limit, an
+    unknown recipient, a dead relay) has by the time it reaches this seam.
+    """
 
     sent: list[EmailMessage] = []
+    dials: int = 0
+    fail: bool = False
 
     def __init__(self, *args, **kwargs):
-        pass
+        type(self).dials += 1
 
     def __enter__(self):
         return self
@@ -94,6 +113,8 @@ class _FakeSmtp:
         pass
 
     def send_message(self, message):
+        if type(self).fail:
+            raise smtplib.SMTPException("relay refused this message (test)")
         type(self).sent.append(message)
 
 
@@ -111,9 +132,20 @@ async def db():
 def relay(monkeypatch):
     """A captured SMTP relay + a known base URL. Returns the sent list."""
     _FakeSmtp.sent = []
+    _FakeSmtp.dials = 0
+    _FakeSmtp.fail = False
     monkeypatch.setattr(smtp.smtplib, "SMTP", _FakeSmtp)
     monkeypatch.setattr(settings, "app_base_url", BASE_URL)
     return _FakeSmtp.sent
+
+
+@pytest.fixture
+def env_relay(monkeypatch):
+    """The environment relay the DIGEST sends over (it has never used a sender
+    row). Separate from `relay`, which fakes the socket for both channels."""
+    monkeypatch.setattr(settings, "smtp_host", "smtp.env.test")
+    monkeypatch.setattr(settings, "smtp_starttls", False)
+    monkeypatch.setattr(settings, "smtp_from_address", RELAY_FROM)
 
 
 @pytest.fixture
@@ -738,6 +770,205 @@ async def test_a_recipient_with_no_mailbox_is_stamped_rather_than_retried_foreve
         (row,) = await _rows(db, user.id)
         assert row.emailed_at is not None
     assert relay == []
+
+
+# --- accounts that are not mailboxes (RADD-996) -------------------------------
+
+
+async def _service_account(db) -> User:
+    """A spec-113 service account, exactly as `create_service_account` makes one:
+    `UserSource.SERVICE`, an address at a domain that does not receive."""
+    user = User(
+        email=f"agent-{uuid.uuid4().hex[:8]}@service.radd.local",
+        name="CI agent",
+        instance_role=InstanceRole.MEMBER.value,
+        source=UserSource.SERVICE.value,
+    )
+    db.add(user)
+    await db.flush()
+    return user
+
+
+async def test_a_service_account_is_stamped_without_the_relay_being_dialled(
+    db, world, relay, sender_row, quiet_backlog
+):
+    """RADD-996: `radd-agent@service.radd.local` is not a mailbox.
+
+    Service accounts have been receiving notification mail since v0.29.0, and
+    the live incident is what it costs — the relay was rate-limited partly for
+    repeatedly posting to addresses that bounce. The skip is PERMANENT, so the
+    row is stamped like the inactive/address-less case: retrying can only
+    produce the same answer more slowly.
+
+    `dials` rather than `sent` is the assertion, because a message that is never
+    composed still costs a connection if the loop reaches the relay at all.
+    """
+    _agent, _project, item = world
+    robot = await _service_account(db)
+    await _notify(db, robot, NotificationType.COMMENTED, item, excerpt="Any update?")
+
+    assert await mailer.run_batch(db) == 0
+
+    assert _FakeSmtp.dials == 0, "the relay was dialled for an address that does not receive"
+    (row,) = await _rows(db, robot.id)
+    assert row.emailed_at is not None, "unstamped means the digest tries the same address"
+    # The control: the same batch, one line later, with a person on it.
+    human = await _user(db, name="Hana", email=f"h-{uuid.uuid4().hex[:8]}@example.com")
+    await _notify(db, human, NotificationType.COMMENTED, item, excerpt="Any update?")
+    assert await mailer.run_batch(db) == 1
+    assert _FakeSmtp.dials == 1
+
+
+async def test_the_digest_skips_a_service_account_and_stamps_it(
+    db, world, relay, env_relay, quiet_backlog
+):
+    """The other loop, which had the same bug and no end-to-end test at all.
+
+    `state_changed` is deliberately not in `DEFAULT_EMAIL_TYPES`, so these rows
+    are the digest's by construction rather than by the mailer having passed
+    over them.
+    """
+    _agent, _project, item = world
+    robot = await _service_account(db)
+    human = await _user(db, name="Hana", email=f"h-{uuid.uuid4().hex[:8]}@example.com")
+    for user in (robot, human):
+        await _notify(
+            db, user, NotificationType.STATE_CHANGED, item, **{"from": "Open", "to": "Done"}
+        )
+
+    assert await emailer.run_batch(db) == 1
+
+    assert _addressed(relay, robot.email) == []
+    assert len(_addressed(relay, human.email)) == 1
+    for user in (robot, human):
+        (row,) = await _rows(db, user.id)
+        assert row.emailed_at is not None, "the backlog must drain either way"
+
+
+# --- delivery failures back off (RADD-997) ------------------------------------
+
+
+async def _failures(db, item_id: uuid.UUID) -> list[Event]:
+    result = await db.execute(
+        select(Event).where(
+            Event.event_type == MailEvent.FAILED.value, Event.entity_id == str(item_id)
+        )
+    )
+    return list(result.scalars())
+
+
+async def test_a_failed_send_waits_out_a_delay_instead_of_retrying_every_tick(
+    db, world, relay, sender_row, quiet_backlog
+):
+    """The incident, in one row (RADD-997).
+
+    A failure left the row exactly as `_pending` had found it, so the 5-second
+    mailer selected it again on the next tick, and the next, for the whole
+    24-hour age window: an SMTP connection and a `mail.failed` event per
+    recipient per five seconds. The row now carries its own backoff, and the
+    second tick is the assertion that matters — the relay is not dialled at all.
+    """
+    _agent, _project, item = world
+    watcher = await _user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
+    await _notify(db, watcher, NotificationType.COMMENTED, item, excerpt="Any update?")
+    _FakeSmtp.fail = True
+
+    assert await mailer.run_batch(db) == 0
+
+    (row,) = await _rows(db, watcher.id)
+    assert row.emailed_at is None, "one relay blip must not lose the message"
+    assert row.email_attempts == 1
+    assert row.email_next_try is not None
+    assert row.email_next_try - mailer.utcnow() <= retry.EMAIL_RETRY_DELAYS[0]
+    dialled = _FakeSmtp.dials
+
+    assert await mailer.run_batch(db) == 0
+    assert _FakeSmtp.dials == dialled, "the row was reconsidered inside its own backoff"
+
+    # The delay passes and the relay recovers: the message goes, once.
+    _FakeSmtp.fail = False
+    row.email_next_try = mailer.utcnow() - timedelta(seconds=1)
+    await db.flush()
+
+    assert await mailer.run_batch(db) == 1
+
+    assert len(_addressed(relay, watcher.email)) == 1
+    assert row.emailed_at is not None
+    assert row.email_attempts == 1, "a success does not rewrite what happened before it"
+
+
+async def test_the_ladder_ends_in_a_stamp_and_exactly_two_failure_events(
+    db, world, relay, sender_row, quiet_backlog
+):
+    """Giving up, and the event half of the same fix.
+
+    The stamp is the terminal state because the digest's selection is
+    `emailed_at IS NULL` — leaving the row unstamped would hand an address that
+    has refused four times straight to the other loop. And `mail.failed` is
+    emitted on the FIRST failure and the LAST one only: the event is item-scoped
+    and drives automations and the activity feed, so it answers "did this person
+    hear from us", which the retries in between do not re-answer.
+    """
+    _agent, _project, item = world
+    watcher = await _user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
+    await _notify(db, watcher, NotificationType.COMMENTED, item, excerpt="Any update?")
+    _FakeSmtp.fail = True
+
+    row = None
+    for attempt in range(len(retry.EMAIL_RETRY_DELAYS) + 1):
+        assert await mailer.run_batch(db) == 0
+        (row,) = await _rows(db, watcher.id)
+        assert row.email_attempts == attempt + 1
+        if row.emailed_at is None:
+            row.email_next_try = mailer.utcnow() - timedelta(seconds=1)
+            await db.flush()
+
+    assert row.emailed_at is not None, "the ladder must end, or the row lives for a day"
+    assert row.email_attempts == len(retry.EMAIL_RETRY_DELAYS) + 1
+    assert len(await _failures(db, item.id)) == 2
+
+    # Nothing looks at the row again — not this loop…
+    dialled = _FakeSmtp.dials
+    assert await mailer.run_batch(db) == 0
+    assert _FakeSmtp.dials == dialled
+    # …and not the digest, whose selection is exactly the stamp.
+    pending = await db.execute(
+        select(Notification.id).where(
+            Notification.emailed_at.is_(None), Notification.user_id == watcher.id
+        )
+    )
+    assert list(pending.scalars()) == []
+
+
+async def test_a_failed_digest_takes_the_same_ladder(
+    db, world, relay, env_relay, quiet_backlog
+):
+    """The digest's retry was gentler (300s, one message per user rather than
+    one per row) and equally unbounded. Same columns, same ladder, same terminal
+    stamp — written once in `retry.py` so the two loops cannot drift apart."""
+    _agent, _project, item = world
+    watcher = await _user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
+    await _notify(
+        db, watcher, NotificationType.STATE_CHANGED, item, **{"from": "Open", "to": "Done"}
+    )
+    _FakeSmtp.fail = True
+
+    assert await emailer.run_batch(db) == 0
+
+    (row,) = await _rows(db, watcher.id)
+    assert row.emailed_at is None
+    assert row.email_attempts == 1
+    assert row.email_next_try is not None
+    dialled = _FakeSmtp.dials
+    assert await emailer.run_batch(db) == 0
+    assert _FakeSmtp.dials == dialled
+
+    for _ in range(len(retry.EMAIL_RETRY_DELAYS)):
+        row.email_next_try = mailer.utcnow() - timedelta(seconds=1)
+        await db.flush()
+        assert await emailer.run_batch(db) == 0
+
+    assert row.emailed_at is not None, "an address that refuses forever is given up on"
 
 
 # --- transport ----------------------------------------------------------------

@@ -204,6 +204,7 @@ async def send_item_mail(
     html: str = "",
     comment_id: uuid.UUID | None = None,
     pin_subject: bool = False,
+    emit_failure: bool = True,
 ) -> str | None:
     """Mail one person about one issue. Returns the Message-ID that went on the
     wire, or None when nothing was sent (no relay, no address, a failure).
@@ -230,6 +231,18 @@ async def send_item_mail(
     logged AND emitted as `mail.failed` against the item, because "the customer
     never got it" being only a log line is what made it invisible to every
     screen and every rule (RADD-960).
+
+    **`emit_failure=False` suppresses that event for one send** (RADD-997), and
+    exactly one caller passes it: notify's mailer, on the attempts BETWEEN the
+    first failure and the last. The default answers for everyone else, and it is
+    the right default — a reply and an ack are each sent once, so their failure
+    is final the moment it happens and the event is the only record of it. A
+    RETRYING caller is the different case: `mail.failed` is item-scoped and
+    drives automations and the activity feed, i.e. it answers "did this person
+    hear from us", and re-answering it every five seconds while the same message
+    is still being attempted is noise in a stream every consumer reads. The
+    knob is here rather than a rule inside `_emit_outcome` because whether
+    another attempt is coming is the caller's knowledge, not this file's.
 
     The recorded id is the one the SENDER REPORTS (`MailSender.send`'s return
     value), not the one composed: SMTP honours a client-set id and the Gmail API
@@ -263,7 +276,8 @@ async def send_item_mail(
             logger.exception(
                 "mailintake: mail to %s about %s failed (dropped)", to_address, item_id
             )
-            await _emit_outcome(db, item_id, MailEvent.FAILED, to_address, subject)
+            if emit_failure:
+                await _emit_outcome(db, item_id, MailEvent.FAILED, to_address, subject)
             return None
         if sent:
             await threading.record(
