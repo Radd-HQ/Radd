@@ -219,19 +219,33 @@ ACK_BODY = (
     "replies are attached to the ticket automatically (keep [{key}] in the subject)."
 )
 
+#: The receipt's link affordance, one label for both parts. Deliberately SECOND
+#: to `ACK_BODY` in both renderings — see `acknowledgement`.
+ACK_LINK_LABEL = "View the ticket"
+
 
 def acknowledgement(item: ItemMail, *, reason: str = "") -> RenderedMail:
     """The receipt an external requester gets when their mail opens a ticket.
 
-    No "View issue" button: the requester has no account, so the link is a login
-    page. The reply-by-email instruction IS their interface.
+    **It carries the issue URL in both parts (RADD-977).** RADD-967 deliberately
+    left it out — "the requester has no account, so the link is a login page" —
+    and that reasoning is now stale twice over: intake PROVISIONS an account for
+    an unknown sender (RADD-828), and on an instance with SSO the sender is very
+    often a colleague who is already signed in. A receipt with no way to look at
+    the thing it acknowledges is a dead end for both of them, and a login page is
+    a recoverable one.
+
+    Reply-by-email stays the PRIMARY wording: it is the interface that works for
+    every requester, signed in or not, so the prose comes first and the link
+    follows it in both parts. The `[{key}]` subject mechanics are untouched.
     """
     body = ACK_BODY.format(key=item.key)
-    text = f"{item.label}\n\n{body}\n"
+    text = f"{item.label}\n\n{body}\n\n{ACK_LINK_LABEL}: {item.url}\n"
     content = (
         f'<div style="font-size:12px;color:{MUTED};padding-bottom:10px;'
         f'border-bottom:1px solid {BORDER};margin-bottom:16px;">{_esc(item.label)}</div>'
         f"<div>{_lines(body)}</div>"
+        f'<div style="margin-top:18px;">{_button(item.url, ACK_LINK_LABEL)}</div>'
     )
     return RenderedMail(text=text, html=_document(content, footer=_esc(reason)))
 
