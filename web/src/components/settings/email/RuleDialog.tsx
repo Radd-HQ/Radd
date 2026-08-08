@@ -115,7 +115,12 @@ export function RuleDialog({
               label="Prompt"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              hint="The model picks from the categories below and can never invent a project. If AI is off or slow, the chain simply continues to the next rule."
+              hint={
+                "The model picks from the categories below and can never invent a project. " +
+                'It is always offered one extra answer — "None of these" — so off-topic mail ' +
+                "falls to the source default as a decision rather than a failure. If AI is " +
+                "off or slow, the chain simply continues to the next rule."
+              }
             />
             <div className="flex flex-col gap-2">
               <span className="text-xs font-medium text-fg-secondary">Categories → project</span>

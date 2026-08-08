@@ -30,6 +30,7 @@ from .config_schemas import (
     MailRuleWrite,
     RoutingPreviewRequest,
     RoutingPreviewResult,
+    RoutingRuleOutcome,
 )
 from .models import MailRule
 from .parsing import EmailPlan
@@ -157,4 +158,16 @@ async def preview_routing(
         matched_rule_id=decision.matched_rule_id,
         matched_rule_name=decision.matched_rule_name,
         reason=decision.reason if decision.project_id else "no rule matched — source default",
+        # The per-rule trace (RADD-989). Without it "no rule matched — source
+        # default" is the answer for a chain whose only rule CRASHED, and the
+        # admin's next move is to rewrite a rule that was already correct.
+        outcomes=[
+            RoutingRuleOutcome(
+                rule_id=outcome.rule_id,
+                rule_name=outcome.rule_name,
+                status=outcome.status.value,
+                detail=outcome.detail,
+            )
+            for outcome in decision.outcomes
+        ],
     )

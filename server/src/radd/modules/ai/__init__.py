@@ -93,8 +93,12 @@ plugin = RaddPlugin(
     # a planner, and imports nothing from `automations` — the kernel is the only
     # thing both sides touch, which is what makes the seam a seam.
     automation_nodes=(ai_automation_node.SPEC,),
-    # RADD-891: the seven feature toggles (Settings → AI) — moved off
-    # `settings.types`'s old hardcoded dict.
+    # RADD-891: the feature toggles (Settings → AI) — moved off `settings.types`'s
+    # old hardcoded dict. Every `AiFeature` member needs a row here AND both dicts
+    # in `features.py`; `test_ai_features.py` asserts all three agree, because a
+    # feature that reaches `feature_enabled` with no setting registered raises
+    # KeyError at its call site (RADD-989: `mail_routing` shipped that way and every
+    # llm mail rule fell through silently for a release).
     settings_keys=(
         SettingSpec(
             key="ai_editor_actions",
@@ -130,6 +134,18 @@ plugin = RaddPlugin(
                 "Lets LLM-type storage routing rules classify uploads (Settings → "
                 "Storage). Needs the vision role assigned; rules fall through to the "
                 "next rule while this is off."
+            ),
+        ),
+        SettingSpec(
+            key="ai_mail_routing",
+            section="ai",
+            type="bool",
+            scopes=("instance",),
+            label="LLM mail routing",
+            description=(
+                "Lets AI-type mail routing rules pick the project a new message "
+                "opens in from its content (Settings → Email). Needs the chat role "
+                "assigned; rules fall through to the next rule while this is off."
             ),
         ),
         SettingSpec(

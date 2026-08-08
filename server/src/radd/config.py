@@ -248,6 +248,7 @@ class Settings(BaseSettings):
     ai_editor_actions: bool = True
     ai_semantic_search: bool = True
     ai_storage_routing: bool = True
+    ai_mail_routing: bool = True
     ai_summarize: bool = True
     ai_nl_slq: bool = True
     # OFF by default: the rerank buys reasons + rescoring at the

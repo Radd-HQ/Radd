@@ -192,6 +192,31 @@ class MailRuleType(StrEnum):
     LLM = "llm"                  # classify the CONTENT into a project (RADD-961)
 
 
+class MailRuleStatus(StrEnum):
+    """What ONE rule did on ONE message (RADD-989) — the dry run's vocabulary.
+
+    The distinction the preview exists for: a rule that ran and did not claim the
+    message (DECLINED) and a rule that crashed and was skipped (ERRORED) both
+    leave the chain continuing, and reporting them the same way is how a broken
+    rule reads as a working one. `feature_enabled` raising for an unregistered
+    feature was invisible for a release precisely because its outcome rendered as
+    "no rule matched — source default".
+    """
+
+    MATCHED = "matched"
+    DECLINED = "declined"
+    ERRORED = "errored"
+
+
+#: The extra choice every llm rule offers the model on top of its own answers
+#: (RADD-989). Without it "none of these apply" is inexpressible: the model must
+#: pick from an enumerated list, so an off-topic email forces a wrong category and
+#: the source default becomes reachable only by FAILURE. With it, declining is a
+#: verdict — and one the dry run can name. Appended at ask time, never stored as
+#: an answer row, so it cannot be edited into meaning something else.
+NO_MATCH_ANSWER = "None of these"
+
+
 class MailRecipientKind(StrEnum):
     """Why an address is on an outbound reply (RADD-967).
 

@@ -11,6 +11,14 @@ a unit test and route everything to the default in production.
 **The AI classifier must never cost a message.** A misrouted ticket is an
 annoyance; a customer email dropped because a model was slow is not survivable,
 and every failure path here is one a naive implementation gets wrong by raising.
+
+**And it must actually classify** (RADD-989). Every test below the fold used to
+pin only the FALL-THROUGH side — disabled, no answers, raising — so the feature
+shipped with `AiFeature.MAIL_ROUTING` missing from both of `ai.features`'
+dispatch tables, `feature_enabled` raised KeyError at its call site, the chain's
+per-rule `except` logged "rule raised, skipped", and every llm rule declined
+every message for a release with a green suite. A suite that only proves the
+safe direction proves the feature is safely absent.
 """
 
 import uuid
@@ -24,9 +32,16 @@ from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.mailintake import intake, parsing, routing
 from radd.modules.mailintake.models import MailRule, MailSource
-from radd.modules.mailintake.types import MailRuleType, MailSourceKind
+from radd.modules.mailintake.types import (
+    NO_MATCH_ANSWER,
+    MailRuleStatus,
+    MailRuleType,
+    MailSourceKind,
+)
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
+from radd.modules.settings import service as settings_service
+from radd.modules.settings.types import SettingKey, SettingScope
 
 
 @pytest.fixture
@@ -74,6 +89,81 @@ def message(*, to="help@radd-hq.com", sender="Jane <jane@customer.example>", sub
     msg["Message-ID"] = message_id or f"<{uuid.uuid4().hex}@x>"
     msg.set_content(body)
     return msg.as_bytes()
+
+
+@pytest.fixture
+async def admin(db):
+    """Someone who may run the dry run. Created here rather than picked out of the
+    table, so the test cannot silently start asserting about a leftover account."""
+    user = User(
+        email=f"ma-{uuid.uuid4().hex[:6]}@example.com",
+        name="Mail admin",
+        instance_role=InstanceRole.ADMIN.value,
+    )
+    db.add(user)
+    await db.flush()
+    return user
+
+
+@pytest.fixture
+async def chat_role(db):
+    """A RESOLVABLE chat role.
+
+    `feature_enabled` is toggle AND role, so a test that stubbed the gate itself
+    would pass for a reason production never has. This assigns a real role row
+    against an unreachable endpoint — the model call is stubbed separately, so
+    nothing leaves the process.
+    """
+    from radd.modules.ai import registry as ai_registry
+    from radd.modules.ai.schemas import AiProviderCreate, AiRoleAssign
+    from radd.modules.ai.types import AiRole, AiWireShape
+
+    provider = await ai_registry.create_provider(
+        db,
+        AiProviderCreate(
+            name=f"stub-{uuid.uuid4().hex[:8]}",
+            wire_shape=AiWireShape.OPENAI,
+            base_url="http://stub.invalid/v1",
+            api_key="key-1",
+            default_model="stub-model",
+        ),
+    )
+    await ai_registry.set_role(db, AiRole.CHAT, AiRoleAssign(provider_id=provider.id))
+    return provider
+
+
+def _stub_choice(monkeypatch, answer):
+    """Replace the ONE model call with a canned answer (or an exception to raise),
+    and hand back the list of calls so a test can assert the model was reached —
+    "the classifier declined" and "the classifier was never asked" are the two
+    outcomes this whole issue is about telling apart."""
+    from radd.modules.ai import client as ai_client
+
+    calls: list[dict] = []
+
+    async def fake_complete_choice(session, role, *, prompt, choices, **kwargs):
+        calls.append({"role": role, "prompt": prompt, "choices": list(choices)})
+        if isinstance(answer, BaseException):
+            raise answer
+        return answer
+
+    monkeypatch.setattr(ai_client, "complete_choice", fake_complete_choice)
+    return calls
+
+
+async def _set_mail_routing(db, enabled: bool):
+    await settings_service.set_value(
+        db, SettingKey.AI_MAIL_ROUTING, SettingScope.INSTANCE, None, enabled
+    )
+
+
+def _llm_rule(source, dev, **overrides):
+    config = {
+        "prompt": "classify",
+        "answers": [{"answer": "dev", "project_id": str(dev.id)}],
+    }
+    config.update(overrides)
+    return _rule(source, MailRuleType.LLM.value, config)
 
 
 def _rule(source, rule_type, config, *, project=None, position=0.0, enabled=True):
@@ -182,29 +272,104 @@ async def test_subject_matching_is_a_substring_not_a_regex(db, world):
 # --- the AI classifier's failure paths -------------------------------------------
 
 
-async def test_the_llm_rule_falls_through_when_ai_is_disabled(db, world):
-    """The property that matters more than the classification. The ai module is
-    optional and its toggle can be off; neither may cost a customer their email."""
+async def test_an_llm_rule_classifies_and_routes_when_the_feature_is_on(
+    db, world, chat_role, monkeypatch
+):
+    """**The RADD-989 regression.** With the toggle on, the chat role assigned and
+    the model answering a configured category, the rule must MATCH.
+
+    Nothing here stubs the gate: `feature_enabled` runs for real over the settings
+    cascade and the role registry, so removing either `AiFeature.MAIL_ROUTING`
+    entry from `ai.features` puts the KeyError back and fails this test. Every
+    other llm test in this file passes with the feature entirely broken — that is
+    what let the bug ship.
+    """
     source, _, dev = world
-    db.add(_rule(source, MailRuleType.LLM.value,
-                 {"prompt": "classify", "answers": [{"answer": "dev", "project_id": str(dev.id)}]}))
+    await _set_mail_routing(db, True)
+    calls = _stub_choice(monkeypatch, "dev")
+    db.add(_llm_rule(source, dev))
     await db.flush()
+
+    decision = await routing.decide(db, parsing.parse_email(message()), source_id=source.id)
+    assert calls, "the classifier was never asked — the gate refused before the model"
+    assert decision.project_id == dev.id
+    assert decision.outcomes[-1].status is MailRuleStatus.MATCHED
+
+
+async def test_the_model_is_always_offered_a_none_of_these_answer(
+    db, world, chat_role, monkeypatch
+):
+    """Off-topic mail must be able to DECLINE (RADD-989).
+
+    The answer set is enumerated, so without an escape hatch the model is cornered
+    into a wrong category on every message that fits none of them — the source
+    default would be reachable only by failure. The extra choice is appended at
+    ask time, never stored, so it cannot be edited into meaning something else.
+    """
+    source, default, dev = world
+    await _set_mail_routing(db, True)
+    calls = _stub_choice(monkeypatch, NO_MATCH_ANSWER)
+    db.add(_llm_rule(source, dev))
+    await db.flush()
+
     plan = parsing.parse_email(message())
-    # MAIL_ROUTING is off by default, so this exercises the toggle path.
     decision = await routing.decide(db, plan, source_id=source.id)
+    assert calls[0]["choices"] == ["dev", NO_MATCH_ANSWER]
     assert decision.project_id is None
+    # A verdict, not a breakage — and intake resolves it to the source default.
+    assert decision.outcomes[-1].status is MailRuleStatus.DECLINED
+    assert NO_MATCH_ANSWER in decision.outcomes[-1].detail
+    assert (await intake._target_project(db, plan, "", source.id)).id == default.id
 
 
-async def test_an_llm_rule_with_no_answers_is_a_no_op(db, world):
+async def test_the_feature_being_off_declines_rather_than_erroring(
+    db, world, chat_role, monkeypatch
+):
+    """An admin switching the toggle off is configuration, not a fault: the rule
+    must read as DECLINED so the dry run does not cry wolf. It must also cost no
+    inference — the gate runs before the model, not after it."""
+    source, _, dev = world
+    await _set_mail_routing(db, False)
+    calls = _stub_choice(monkeypatch, "dev")
+    db.add(_llm_rule(source, dev))
+    await db.flush()
+
+    decision = await routing.decide(db, parsing.parse_email(message()), source_id=source.id)
+    assert decision.project_id is None
+    assert decision.outcomes[-1].status is MailRuleStatus.DECLINED
+    assert not calls
+
+
+async def test_the_llm_rule_falls_through_when_no_chat_role_is_assigned(db, world, monkeypatch):
+    """The other half of the gate. The toggle can be on while the role is
+    unassigned — a fresh instance's normal state — and that may not cost a
+    customer their email either."""
+    source, _, dev = world
+    await _set_mail_routing(db, True)
+    calls = _stub_choice(monkeypatch, "dev")
+    db.add(_llm_rule(source, dev))
+    await db.flush()
+
+    decision = await routing.decide(db, parsing.parse_email(message()), source_id=source.id)
+    assert decision.project_id is None and not calls
+    assert decision.outcomes[-1].status is MailRuleStatus.DECLINED
+
+
+async def test_an_llm_rule_with_no_answers_is_reported_as_broken(db, world):
+    """It can never match, so DECLINED would advertise broken configuration as
+    working. The message still routes on."""
     source, _, _ = world
     db.add(_rule(source, MailRuleType.LLM.value, {"prompt": "classify", "answers": []}))
     await db.flush()
-    assert (await routing.decide(db, parsing.parse_email(message()), source_id=source.id)).project_id is None
+    decision = await routing.decide(db, parsing.parse_email(message()), source_id=source.id)
+    assert decision.project_id is None
+    assert decision.outcomes[-1].status is MailRuleStatus.ERRORED
 
 
 async def test_a_rule_that_raises_is_skipped_and_the_chain_continues(db, world):
     """One broken rule must not cost the message — and must not stop a later
-    rule that would have matched."""
+    rule that would have matched. It is recorded as ERRORED: surviving a failure
+    is not the same as pretending it did not happen."""
     source, _, dev = world
     db.add(_rule(source, "not-a-real-type", {}, position=1))
     db.add(_rule(source, MailRuleType.RECIPIENT.value, {"addresses": ["help@radd-hq.com"]},
@@ -212,6 +377,60 @@ async def test_a_rule_that_raises_is_skipped_and_the_chain_continues(db, world):
     await db.flush()
     decision = await routing.decide(db, parsing.parse_email(message()), source_id=source.id)
     assert decision.project_id == dev.id
+    assert [o.status for o in decision.outcomes] == [
+        MailRuleStatus.ERRORED, MailRuleStatus.MATCHED
+    ]
+
+
+async def test_a_classifier_that_raises_reads_as_failed_in_the_dry_run(
+    db, world, admin, chat_role, monkeypatch
+):
+    """The preview must say CRASHED, never "no rule matched" (RADD-989).
+
+    Both outcomes leave the message on the source default, so a preview that
+    reports only the destination describes a broken rule and an inapplicable one
+    identically — and the admin's next move is to rewrite a rule that was already
+    correct. That is exactly how the KeyError survived a release.
+    """
+    from radd.modules.mailintake.config_schemas import RoutingPreviewRequest
+    from radd.modules.mailintake.rules_router import preview_routing
+
+    source, default, dev = world
+    await _set_mail_routing(db, True)
+    _stub_choice(monkeypatch, RuntimeError("boom"))
+    db.add(_llm_rule(source, dev))
+    await db.flush()
+
+    result = await preview_routing(
+        source.id, RoutingPreviewRequest(recipient="help@radd-hq.com"), db, admin
+    )
+    # Still routed — a failure never costs the message…
+    assert result.project_id == default.id
+    # …and the trace says why, loudly enough to act on.
+    assert [o.status for o in result.outcomes] == [MailRuleStatus.ERRORED.value]
+    assert "boom" in result.outcomes[0].detail
+
+
+async def test_the_dry_run_records_every_rule_it_consulted(db, world, admin):
+    """The trace is the chain, in order, up to the match — a deterministic rule
+    that declined is as much of an answer as the one that matched."""
+    from radd.modules.mailintake.config_schemas import RoutingPreviewRequest
+    from radd.modules.mailintake.rules_router import preview_routing
+
+    source, _, dev = world
+    db.add(_rule(source, MailRuleType.SUBJECT.value, {"contains": ["[URGENT]"]},
+                 project=dev, position=1))
+    db.add(_rule(source, MailRuleType.RECIPIENT.value, {"addresses": ["help@radd-hq.com"]},
+                 project=dev, position=2))
+    await db.flush()
+
+    result = await preview_routing(
+        source.id, RoutingPreviewRequest(recipient="help@radd-hq.com", subject="hello"), db, admin
+    )
+    assert [o.status for o in result.outcomes] == [
+        MailRuleStatus.DECLINED.value, MailRuleStatus.MATCHED.value
+    ]
+    assert result.project_id == dev.id
 
 
 async def test_a_source_with_no_rules_routes_nowhere_rather_than_raising(db, world):

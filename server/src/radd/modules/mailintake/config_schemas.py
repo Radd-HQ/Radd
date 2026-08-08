@@ -193,9 +193,28 @@ class RoutingPreviewRequest(BaseModel):
     body: str = ""
 
 
+class RoutingRuleOutcome(BaseModel):
+    """One rule's verdict on the sample message (RADD-989).
+
+    `status` is a `MailRuleStatus` value. The one that earns this schema its
+    place is `errored`: a rule that CRASHED and a rule that declined both let the
+    chain continue to the source default, and a preview that reports only the
+    destination describes them identically — so a broken rule reads as an
+    inapplicable one, which is how a KeyError went unnoticed for a release.
+    """
+
+    rule_id: uuid.UUID | None = None
+    rule_name: str = ""
+    status: str = ""
+    detail: str = ""
+
+
 class RoutingPreviewResult(BaseModel):
     project_id: uuid.UUID | None
     project_key: str = ""
     matched_rule_id: uuid.UUID | None = None
     matched_rule_name: str = ""
     reason: str = ""
+    #: Every rule consulted, in chain order, up to and including the match.
+    #: Additive — the destination fields above are unchanged.
+    outcomes: list[RoutingRuleOutcome] = []

@@ -110,6 +110,7 @@ class SettingKey(StrEnum):
     AI_EDITOR_ACTIONS = "ai_editor_actions"
     AI_SEMANTIC_SEARCH = "ai_semantic_search"
     AI_STORAGE_ROUTING = "ai_storage_routing"
+    AI_MAIL_ROUTING = "ai_mail_routing"
     AI_SUMMARIZE = "ai_summarize"
     AI_NL_SLQ = "ai_nl_slq"
     AI_SIMILAR_RERANK = "ai_similar_rerank"

@@ -14,17 +14,23 @@ const ROLE_FEATURES: readonly { role: AiRoleValue; label: string; features: stri
   {
     role: AiRole.chat,
     label: "chat",
-    features: "editor AI actions, issue summarize, natural language → SLQ, similar-issues rerank",
+    features:
+      "editor AI actions, issue summarize, natural language → SLQ, similar-issues rerank, " +
+      "LLM mail routing",
   },
   { role: AiRole.embeddings, label: "embeddings", features: "semantic search" },
   { role: AiRole.vision, label: "vision", features: "LLM storage routing" },
 ];
 
 /**
- * The six instance-scope feature toggles (spec 101) — the same scoped-settings
+ * The instance-scope feature toggles (spec 101) — the same scoped-settings
  * registry as General, filtered to the AI keys. A feature is live only when its
  * toggle is on AND its role resolves, so unassigned roles get a hint line here
  * (per-toggle disabling doesn't fit ScopedSettingsEditor's API — don't fork it).
+ *
+ * The rows are NOT listed here: they come from the backend `SettingSpec`s the ai
+ * plugin declares, so a new toggle appears by being registered. Only the
+ * role→features prose below is a hand-kept mirror of `features.FEATURE_ROLE`.
  */
 export function AiFeaturesSection() {
   const roles = useQuery(aiRolesQuery());

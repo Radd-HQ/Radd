@@ -235,6 +235,24 @@ export interface MailTestResult {
   error: string;
 }
 
+/** What one rule did on the sample message (RADD-989). `errored` is the reason
+ * this exists: a rule that CRASHED and one that simply declined both let the
+ * chain fall to the source default, so a destination alone describes them
+ * identically — and a broken rule reads as an inapplicable one. */
+export const MailRuleStatus = {
+  matched: "matched",
+  declined: "declined",
+  errored: "errored",
+} as const;
+export type MailRuleStatusValue = (typeof MailRuleStatus)[keyof typeof MailRuleStatus];
+
+export interface RoutingRuleOutcome {
+  rule_id: string | null;
+  rule_name: string;
+  status: MailRuleStatusValue;
+  detail: string;
+}
+
 /** The dry run: where would a message like this land, and what decided. */
 export interface RoutingPreviewResult {
   project_id: string | null;
@@ -242,4 +260,6 @@ export interface RoutingPreviewResult {
   matched_rule_id: string | null;
   matched_rule_name: string;
   reason: string;
+  /** Every rule consulted, in chain order, up to and including the match. */
+  outcomes: RoutingRuleOutcome[];
 }
