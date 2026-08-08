@@ -65,8 +65,21 @@ const EMOTICON_RE = new RegExp(
 // A quick gate: only touch text that actually looks like Jira markup. The ambiguous
 // rules (bold, `#` lists, strike, emoticons) are safe to run *because* of this gate —
 // a gated text is Jira-origin, where `# x` is a list item, never a Markdown heading.
+//
+// RADD-1006: `\{\{` used to be one of the alternatives, and it broke that
+// invariant. Two braces is not evidence of Jira origin — it is Radd's OWN
+// template syntax (`{{variable}}` in a canned response, `{{token}}` in an
+// automation action) and it appears in any JSX or templating sample. A native
+// markdown body containing `{{` anywhere, a fenced code block included, was
+// therefore run through the Jira rules, and `convertLines` rewrote every
+// `## Heading` into `····1. Heading` — four leading spaces, which markdown then
+// renders as an indented code block. The page kept its prose and lost every
+// heading, with nothing logged and nothing to see in the stored body.
+//
+// Jira monospace still converts for genuinely Jira-origin text: such a body
+// carries at least one of the unambiguous signals below.
 const HAS_JIRA_RE =
-  /\{code|\{noformat[:}]|\{quote\}|\{panel[:}]|\{color[:}]|\{anchor:|^\{toc|\{\{|\[[^\]\n]*\||\[(?:https?|mailto):|\[~|^h[1-6]\.|^\s*\|\|[^|]|!\S+\.(?:png|jpe?g|gif|webp|svg|bmp)(?:\|[^!\n]*)?!/m;
+  /\{code|\{noformat[:}]|\{quote\}|\{panel[:}]|\{color[:}]|\{anchor:|^\{toc|\[[^\]\n]*\||\[(?:https?|mailto):|\[~|^h[1-6]\.|^\s*\|\|[^|]|!\S+\.(?:png|jpe?g|gif|webp|svg|bmp)(?:\|[^!\n]*)?!/m;
 
 // Sentinel that protects stashed code blocks from the inline rules — a control char
 // that never appears in real prose. (fromCharCode keeps the source free of raw controls.)
