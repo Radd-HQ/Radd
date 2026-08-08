@@ -265,6 +265,39 @@ async def test_the_reply_marker_tracks_who_spoke_last(db, admin):
     assert [r for r in await row() if r.key == filed.key][0].awaiting_requester is False
 
 
+async def test_the_requesters_own_emailed_reply_does_not_light_the_marker(db, admin):
+    """RADD-981. A mailed reply from someone with no account is authored by the
+    SYSTEM actor, and SYSTEM is not the reporter — so the marker read "somebody
+    answered you" and pointed at the message the requester had just sent
+    themselves. `slas.evaluation` skips the same id for the first-response timer
+    for the same reason; this is that judgment applied to the marker a person
+    actually looks at.
+
+    The comment is still COUNTED: it is a real public message on the thread, and
+    a count that disagrees with the conversation is its own bug.
+    """
+    from radd.modules.automations.types import SYSTEM_ACTOR_ID
+    from radd.modules.auth import service as auth_service
+
+    requester = await _member(db)
+    project = await _project(db)
+    form = await _shared_form(db, admin, project, requester)
+    filed = await _file(db, form, requester)
+    system = await auth_service.get_user(db, SYSTEM_ACTOR_ID)
+
+    await comments_service.create_comment(
+        db,
+        filed.id,
+        CommentCreate(body="Email reply from Cass:\n\nStill broken.",
+                      visibility=CommentVisibility.PUBLIC),
+        system,
+        entity_type=CommentParentType.ITEM.value,
+    )
+    [row] = [r for r in await requests_service.list_my_requests(db, requester) if r.key == filed.key]
+    assert row.awaiting_requester is False
+    assert row.comment_count == 1
+
+
 async def test_a_requester_reply_is_public_and_authored_by_them(db, admin):
     """A requester holds `comment.write` nowhere; the relationship is the grant.
     The reply must land as THEIRS and as PUBLIC."""

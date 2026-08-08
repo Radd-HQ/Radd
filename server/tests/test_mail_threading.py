@@ -13,6 +13,7 @@ session, because the invariant is about what the WRITE PATH stored.
 
 import uuid
 from email.message import EmailMessage
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select
@@ -69,11 +70,15 @@ def raw_message(
     auto_submitted=None,
     html=None,
     attachments=(),
+    to="help@radd-hq.com",
+    cc=None,
 ) -> bytes:
     message = EmailMessage()
     message["Subject"] = subject
     message["From"] = sender
-    message["To"] = "help@radd-hq.com"
+    message["To"] = to
+    if cc:
+        message["Cc"] = cc
     if message_id:
         message["Message-ID"] = message_id
     if in_reply_to:
@@ -97,7 +102,10 @@ async def _accept(db, raw: bytes, project_key: str, **kwargs):
         parsing.parse_email(raw),
         raw=raw,
         default_project_key=project_key,
-        own_addresses=kwargs.pop("own_addresses", {"radd@radd-hq.com"}),
+        # The desk's own address is in the set, as `registry.own_addresses`
+        # builds it from the source rows in production — RADD-980 reads it to
+        # decide which To/Cc addresses are external people rather than us.
+        own_addresses=kwargs.pop("own_addresses", {"radd@radd-hq.com", "help@radd-hq.com"}),
         **kwargs,
     )
 
@@ -199,11 +207,80 @@ async def test_headers_beat_a_subject_key_naming_a_different_issue(db, world):
     assert outcome.item_id == item.id
 
 
-async def test_the_subject_key_still_works_as_a_last_resort(db, world):
+async def test_the_subject_key_still_works_as_a_last_resort_for_someone_on_the_thread(db, world):
+    """The fallback for a client that drops In-Reply-To and References — still
+    there, now for the people the conversation belongs to (RADD-981). Here: an
+    address already recorded as a contact on the item."""
+    from radd.modules.mailintake import service as mail_service
+
+    _, project, item = world
+    key = f"{project.key}-{item.number}"
+    await mail_service.upsert_contact(db, item.id, email="jane@example.com", name="Jane")
+    outcome = await _accept(
+        db, raw_message(subject=f"Re: [{key}] hello", message_id="<r4@ext>"), project.key
+    )
+    assert outcome.result is intake.Result.APPENDED
+    assert outcome.item_id == item.id
+
+
+async def test_a_colleague_may_thread_by_subject_key_on_any_issue(db, world):
+    """Deliberately broad: an agent forwarding a ticket, or replying from a
+    client that mangled the headers, must not be told their mail opened a
+    duplicate. What the gate excludes is the account an unknown SENDER is
+    provisioned as, not staff."""
+    actor, project, item = world
+    key = f"{project.key}-{item.number}"
+    outcome = await _accept(
+        db,
+        raw_message(sender=f"Agent <{actor.email}>", subject=f"Re: [{key}] hello",
+                    message_id="<r4b@ext>"),
+        project.key,
+    )
+    assert outcome.result is intake.Result.APPENDED
+    assert outcome.item_id == item.id
+
+
+async def test_a_stranger_naming_an_issue_key_opens_a_new_one_instead(db, world):
+    """RADD-981. `[PROJ-412]` is a guessable string in a text field — keys are
+    sequential — and the subject key was the ONLY check on it. So a stranger who
+    typed one wrote into somebody else's ticket, and the outbound consumer then
+    mailed their words to that ticket's requester.
+
+    Refused, not dropped: a stranger with the wrong subject line is still a
+    person asking for help, so the message becomes a new routed issue.
+    """
     _, project, item = world
     key = f"{project.key}-{item.number}"
     outcome = await _accept(
-        db, raw_message(subject=f"Re: [{key}] hello", message_id="<r4@ext>"), project.key
+        db,
+        raw_message(
+            sender="Mallory <mallory@elsewhere.example>",
+            subject=f"Re: [{key}] give me the details",
+            message_id="<snoop@ext>",
+        ),
+        project.key,
+    )
+    assert outcome.result is intake.Result.CREATED
+    assert outcome.item_id != item.id
+
+
+async def test_a_stripped_key_still_threads_the_contact_by_header(db, world):
+    """The gate touches the SUBJECT-KEY leg alone. An In-Reply-To names an id
+    Radd generated and told exactly one person, so holding it IS the evidence —
+    and it is what a real client sends when the human edits the subject."""
+    _, project, item = world
+    await threading.record(
+        db, message_id="<sent-9@radd>", item_id=item.id, direction=MailDirection.OUTBOUND
+    )
+    outcome = await _accept(
+        db,
+        raw_message(
+            sender="Cass <cass@vip.example.com>",
+            subject="my printer, again",  # no key at all
+            in_reply_to="<sent-9@radd>",
+            message_id="<r4c@ext>",
+        ),
+        project.key,
     )
     assert outcome.result is intake.Result.APPENDED
     assert outcome.item_id == item.id
@@ -230,6 +307,326 @@ async def test_an_inbound_message_is_recorded_so_replies_to_IT_thread(db, world)
     )
     assert second.result is intake.Result.APPENDED
     assert second.item_id == first.item_id
+
+
+# --- attribution (RADD-981) ------------------------------------------------------
+
+
+async def _comments_on(db, item_id):
+    from radd.modules.comments import service as comments_service
+
+    return await comments_service.public_comments_for_item(db, item_id)
+
+
+async def test_an_agents_mailed_reply_is_their_own_comment(db, world):
+    """Every inbound reply used to be a SYSTEM comment with the sender named in
+    the body. For a customer with no account that is the only honest answer; for
+    a colleague replying to a notification it was wrong in four places at once —
+    the issue read as if a robot had spoken, the outbound consumer's SYSTEM gate
+    refused to relay it to the requester, the SLA response timer skipped it as a
+    non-answer, and notify (which excludes the ACTOR) notified the agent of
+    their own comment while nobody else's exclusion applied."""
+    actor, project, item = world
+    await threading.record(
+        db, message_id="<sent-a1@radd>", item_id=item.id, direction=MailDirection.OUTBOUND
+    )
+    await _accept(
+        db,
+        raw_message(
+            sender=f"Ada Agent <{actor.email}>",
+            body="Engineer dispatched.",
+            in_reply_to="<sent-a1@radd>",
+            message_id="<agent-reply@ext>",
+        ),
+        project.key,
+    )
+
+    [comment] = await _comments_on(db, item.id)
+    assert comment.author_id == actor.id, "attributed to the person, not the system"
+    assert comment.body == "Engineer dispatched."
+    assert "Email reply from" not in comment.body
+
+
+async def test_a_customers_mailed_reply_stays_a_system_comment(db, world):
+    """The other half, and the reason the prefix survives: an unknown sender is
+    provisioned as a `UserSource.EMAIL` requester (RADD-828), and attributing a
+    forgeable `From:` to that account would make the header an identity."""
+    from radd.modules.automations.types import SYSTEM_ACTOR_ID
+
+    _, project, item = world
+    await threading.record(
+        db, message_id="<sent-a2@radd>", item_id=item.id, direction=MailDirection.OUTBOUND
+    )
+    await _accept(
+        db,
+        raw_message(
+            sender="Cass <cass@vip.example.com>",
+            body="Still broken.",
+            in_reply_to="<sent-a2@radd>",
+            message_id="<cust-reply@ext>",
+        ),
+        project.key,
+    )
+
+    [comment] = await _comments_on(db, item.id)
+    assert comment.author_id == SYSTEM_ACTOR_ID
+    assert comment.body.startswith("Email reply from Cass <cass@vip.example.com>:")
+
+
+async def test_attribution_is_not_authorisation(db, world):
+    """`From:` is a claim this module treats as forgeable everywhere else, so the
+    comment goes through the ordinary write door and is checked against that
+    person's own `comment.write`. Someone who cannot write there falls back to
+    SYSTEM: the message still lands, and nothing was granted on a header."""
+    from radd.modules.auth.types import InstanceRole, UserSource
+    from radd.modules.automations.types import SYSTEM_ACTOR_ID
+
+    _, project, item = world
+    outsider = User(
+        email=f"nobody-{uuid.uuid4().hex[:8]}@example.com",
+        name="No Permissions",
+        instance_role=InstanceRole.MEMBER.value,
+        source=UserSource.LOCAL.value,
+    )
+    db.add(outsider)
+    await db.flush()
+    await threading.record(
+        db, message_id="<sent-a3@radd>", item_id=item.id, direction=MailDirection.OUTBOUND
+    )
+    await _accept(
+        db,
+        raw_message(
+            sender=f"Nobody <{outsider.email}>",
+            body="let me in",
+            in_reply_to="<sent-a3@radd>",
+            message_id="<outsider@ext>",
+        ),
+        project.key,
+    )
+
+    [comment] = await _comments_on(db, item.id)
+    assert comment.author_id == SYSTEM_ACTOR_ID
+    assert "Email reply from" in comment.body
+
+
+# --- contacts (RADD-980) ---------------------------------------------------------
+
+
+async def _contacts(db, item_id) -> dict[str, bool]:
+    """`{email: is_primary}` for an item — the whole shape of the change."""
+    from radd.modules.mailintake import service as mail_service
+
+    return {c.email: c.is_primary for c in await mail_service.contacts_for_item(db, item_id)}
+
+
+async def test_the_cc_line_becomes_contacts_and_the_sender_is_the_primary(db, world):
+    """`extract_recipients` has harvested To/Cc since RADD-958 and only ROUTING
+    read it. So a customer who copied two colleagues raised a ticket that knew
+    about one of the three, and answering it reached one of the three."""
+    _, project, _ = world
+    outcome = await _accept(
+        db,
+        raw_message(
+            sender="Cass <cass@vip.example.com>",
+            cc="Bill <bill@vip.example.com>, ops@vip.example.com",
+            message_id="<cc1@ext>",
+        ),
+        project.key,
+    )
+
+    assert await _contacts(db, outcome.item_id) == {
+        "cass@vip.example.com": True,  # she wrote it
+        "bill@vip.example.com": False,
+        "ops@vip.example.com": False,
+    }
+
+
+async def test_a_cc_that_is_a_real_user_is_a_colleague_not_a_contact(db, world):
+    """A copied-in staff member is reached by notify, off the rows that decide
+    their inbox. Recording them here as well is the duplicate fan-out RADD-968
+    deleted — they would get the comment twice, once addressed "you contacted
+    us". Our OWN desk address is excluded for the adjacent reason: we are not a
+    party to the conversation."""
+    actor, project, _ = world
+    outcome = await _accept(
+        db,
+        raw_message(
+            sender="Cass <cass@vip.example.com>",
+            to=f"help@radd-hq.com, {actor.email}",
+            message_id="<cc2@ext>",
+        ),
+        project.key,
+    )
+
+    assert await _contacts(db, outcome.item_id) == {"cass@vip.example.com": True}
+
+
+async def test_our_own_plus_addressed_alias_is_not_an_external_requester(db, world):
+    """`support+td@` is spec 62's routing convention, so it is expected traffic
+    on the To line — but `own_addresses` holds the MAILBOX. A literal comparison
+    files the desk's own alias as a requester, shows it in the issue rail, and
+    mails it every reply."""
+    _, project, _ = world
+    outcome = await _accept(
+        db,
+        raw_message(
+            sender="Cass <cass@vip.example.com>",
+            to=f"help+{project.key.lower()}@radd-hq.com",
+            message_id="<plus1@ext>",
+        ),
+        project.key,
+    )
+
+    assert await _contacts(db, outcome.item_id) == {"cass@vip.example.com": True}
+
+
+async def test_a_second_sender_on_the_thread_is_recorded(db, world):
+    """The bug this replaces was a guard that could not fire: `_touch_contact`
+    asked `_sender_user(...) is None`, and that function PROVISIONS an account
+    for an unknown address — so it was never None, and a colleague answering on
+    the customer's behalf was never recorded at all."""
+    _, project, _ = world
+    first = await _accept(
+        db, raw_message(sender="Cass <cass@vip.example.com>", message_id="<t1@ext>"), project.key
+    )
+    await _accept(
+        db,
+        raw_message(
+            sender="Bill <bill@vip.example.com>",
+            subject="Re: Hello",
+            in_reply_to="<t1@ext>",
+            message_id="<t2@ext>",
+        ),
+        project.key,
+    )
+
+    assert await _contacts(db, first.item_id) == {
+        "cass@vip.example.com": True,   # unmoved: she raised it
+        "bill@vip.example.com": False,
+    }
+
+
+async def test_a_reply_advances_only_the_sender_s_own_last_message(db, world):
+    """`last_message_id` used to be advanced on whichever single contact the item
+    had, whoever had actually written."""
+    from radd.modules.mailintake import service as mail_service
+
+    _, project, _ = world
+    first = await _accept(
+        db, raw_message(sender="cass@vip.example.com", message_id="<l1@ext>"), project.key
+    )
+    await _accept(
+        db,
+        raw_message(
+            sender="bill@vip.example.com",
+            subject="Re: Hello",
+            in_reply_to="<l1@ext>",
+            message_id="<l2@ext>",
+        ),
+        project.key,
+    )
+
+    stored = {
+        c.email: c.last_message_id
+        for c in await mail_service.contacts_for_item(db, first.item_id)
+    }
+    assert stored == {"cass@vip.example.com": "<l1@ext>", "bill@vip.example.com": "<l2@ext>"}
+
+
+async def test_an_agent_raised_issue_gains_its_requester_when_they_write_in(db, world):
+    """An issue raised in the UI has no contact at all, so a customer's mail onto
+    that thread produced a comment nobody could answer — the reply consumer plans
+    nothing without a recipient. The first external person to WRITE is the
+    requester, whether or not the issue was born from mail.
+
+    Threaded on a HEADER, the way this reaches an agent-raised issue in
+    practice: somebody was mailed about it (notify, or a `send_email` action),
+    and the customer replied to that message.
+    """
+    _, project, item = world
+    await threading.record(
+        db,
+        message_id="<told-them@radd>",
+        item_id=item.id,
+        direction=MailDirection.OUTBOUND,
+        subject="An existing ticket",
+    )
+    await _accept(
+        db,
+        raw_message(
+            sender="Cass <cass@vip.example.com>",
+            subject="Re: An existing ticket",
+            in_reply_to="<told-them@radd>",
+            message_id="<agent1@ext>",
+        ),
+        project.key,
+    )
+
+    assert await _contacts(db, item.id) == {"cass@vip.example.com": True}
+
+
+# --- the acknowledgement (RADD-995) ----------------------------------------------
+
+
+async def test_a_recognised_user_mailing_the_desk_gets_a_receipt(db, world):
+    """Caught live. A colleague signed in with Google mailed the desk, became the
+    reporter of a real ticket, and heard nothing back — because the ack was
+    planned on the branch that captured a `mail_contact`, and a recognised user
+    never gets one. Every other part of that path worked, so there was nothing
+    to notice.
+
+    A receipt answers a MESSAGE. The two facts are independent now: this item
+    has an ack and no contact.
+    """
+    actor, project, _ = world
+    outcome = await _accept(
+        db,
+        raw_message(sender=f"Ada Agent <{actor.email}>", subject="my laptop", message_id="<u1@ext>"),
+        project.key,
+    )
+
+    assert outcome.result is intake.Result.CREATED
+    assert outcome.ack is not None
+    assert outcome.ack.email == actor.email
+    assert outcome.ack.item_key == outcome.item_key
+    assert await _contacts(db, outcome.item_id) == {}, "a user is not a contact"
+
+
+async def test_a_contact_still_gets_the_same_receipt(db, world):
+    """The path that always worked, pinned beside the one that did not — the
+    change must be additive, not a swap."""
+    _, project, _ = world
+    outcome = await _accept(
+        db,
+        raw_message(sender="Cass <cass@vip.example.com>", message_id="<u2@ext>"),
+        project.key,
+    )
+
+    assert outcome.ack is not None and outcome.ack.email == "cass@vip.example.com"
+    assert await _contacts(db, outcome.item_id) == {"cass@vip.example.com": True}
+
+
+async def test_nothing_addressed_to_ourselves_is_ever_acked(db, world):
+    """Two guards, and the second is the one RADD-995 had to state. The loop
+    check drops our own mail before an item exists at all; `_ack_plan` refuses
+    the same address independently, so widening the ack from "senders with a
+    contact" to "every sender" cannot become the one path that re-opens the
+    loop.
+    """
+    _, project, _ = world
+    dropped = await _accept(
+        db, raw_message(sender="Radd <radd@radd-hq.com>", message_id="<u3@ext>"), project.key
+    )
+    assert dropped.result is intake.Result.IGNORED and dropped.ack is None
+
+    created = SimpleNamespace(id=uuid.uuid4(), key="MT-1", title="t")
+    ours = parsing.parse_email(raw_message(sender="Radd <radd@radd-hq.com>", message_id="<u4@ext>"))
+    assert intake._ack_plan(ours, created, {"radd@radd-hq.com"}) is None
+    assert intake._ack_plan(ours, created, set()) is not None, "the guard, not an empty plan"
+
+    # No `From:` at all: nowhere to send a receipt to.
+    anonymous = parsing.parse_email(raw_message(sender="", message_id="<u5@ext>"))
+    assert intake._ack_plan(anonymous, created, set()) is None
 
 
 # --- idempotency -----------------------------------------------------------------

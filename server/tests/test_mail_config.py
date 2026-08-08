@@ -848,7 +848,11 @@ async def _arrived(db, source: MailSource, project, *, sender_email: str) -> uui
         parsing.parse_email(message(sender=sender_email, subject="Printer on fire")),
         raw=b"",
         default_project_key="",
-        own_addresses=set(),
+        # The desk's own address, as `registry.own_addresses` supplies it in
+        # production. Since RADD-980 intake reads this set to decide which To/Cc
+        # addresses are external people, and an empty one makes `help@` a
+        # contact — i.e. makes Radd a party to its own conversation.
+        own_addresses={source.address.lower()},
         source_id=source.id,
         default_project_id=project.id,
     )

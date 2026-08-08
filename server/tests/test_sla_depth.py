@@ -214,3 +214,85 @@ async def test_sla_report_smoke(db, admin):
     # Project scoping: an unrelated project sees an all-zero window.
     empty = (await reporting.sla_report(db, uuid.uuid4(), weeks=2)).buckets
     assert sum(b.items for b in empty) == 0
+
+
+def _raw(*, sender, subject, body, message_id, in_reply_to=None) -> bytes:
+    from email.message import EmailMessage
+
+    m = EmailMessage()
+    m["Subject"] = subject
+    m["From"] = sender
+    m["To"] = "help@radd-hq.com"
+    m["Message-ID"] = message_id
+    if in_reply_to:
+        m["In-Reply-To"] = in_reply_to
+    m.set_content(body)
+    return m.as_bytes()
+
+
+async def test_an_agents_emailed_reply_satisfies_the_response_target(db, admin):
+    """RADD-981, at the seam that decides whether an answer COUNTS.
+
+    The first-response feed skips the reporter (answering yourself is not a
+    response) and the SYSTEM actor (an automation's acknowledgement is not one
+    either). Every inbound-mail comment used to be SYSTEM-authored — so an agent
+    who answered a customer BY EMAIL, the ordinary way a service desk works,
+    left the response timer running until it breached, while the same words
+    typed into the UI stopped it. Nothing reported that anywhere; the breach
+    simply arrived.
+    """
+    from radd.modules.mailintake import intake, parsing, threading as mail_threading
+    from radd.modules.mailintake.types import MailDirection
+
+    run = uuid.uuid4().hex[:6]
+    project = await _project(db, run, f"SM{run[:2].upper()}")
+    policy = await slas.create_policy(
+        db,
+        PolicyCreate(project_id=project.id, name="Desk", response_minutes=60),
+        actor_id=admin.id,
+    )
+
+    incoming = _raw(
+        sender="Cass <cass@vip.example.com>",
+        subject="Printer on fire",
+        body="please help",
+        message_id=f"<sla-in-{run}@ext>",
+    )
+    opened = await intake.accept(
+        db,
+        parsing.parse_email(incoming),
+        raw=incoming,
+        default_project_key=project.key,
+        own_addresses={"help@radd-hq.com"},
+    )
+    assert opened.result is intake.Result.CREATED
+    before = await evaluation.evaluate_items(db, policy, [opened.item_id])
+    assert before[opened.item_id][SlaKind.RESPONSE][1].met_at is None
+
+    # The agent replies to a notification about the ticket, so it threads on a
+    # header — the ordinary shape, and the one the RADD-981 subject-key gate
+    # leaves untouched.
+    await mail_threading.record(
+        db,
+        message_id=f"<sla-out-{run}@radd>",
+        item_id=opened.item_id,
+        direction=MailDirection.OUTBOUND,
+    )
+    answer = _raw(
+        sender=f"Ada Agent <{admin.email}>",
+        subject="Re: Printer on fire",
+        body="Engineer dispatched.",
+        message_id=f"<sla-reply-{run}@ext>",
+        in_reply_to=f"<sla-out-{run}@radd>",
+    )
+    replied = await intake.accept(
+        db,
+        parsing.parse_email(answer),
+        raw=answer,
+        default_project_key=project.key,
+        own_addresses={"help@radd-hq.com"},
+    )
+    assert replied.item_id == opened.item_id
+
+    after = await evaluation.evaluate_items(db, policy, [opened.item_id])
+    assert after[opened.item_id][SlaKind.RESPONSE][1].met_at is not None

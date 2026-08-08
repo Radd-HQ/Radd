@@ -168,6 +168,106 @@ async def test_a_contact_who_is_an_active_user_is_skipped_not_addressed_as_a_cus
     assert [r.email for r in await reply.recipients_for(db, item.id)] == [staff.email.lower()]
 
 
+async def test_the_reply_fans_out_to_every_contact_primary_first(db, world):
+    """RADD-980. A customer CCs their colleague, or the colleague answers instead;
+    both are on the thread, and a reply that reaches one of them is a reply the
+    other never saw — with nothing anywhere admitting it, because a message that
+    WAS sent looks exactly like a message sent to everybody.
+
+    The order is pinned too: primary, then the rest alphabetically. Contacts
+    captured from ONE message share a transaction timestamp, so `created_at`
+    cannot separate them and an id tiebreak would reorder the issue rail on
+    every read.
+    """
+    _agent, _project, item = world
+    await mail_service.upsert_contact(db, item.id, email="cass@vip.example.com", name="Cass")
+    await mail_service.upsert_contact(
+        db, item.id, email="Ops@vip.example.com", name="Ops", copied_in=True
+    )
+    await mail_service.upsert_contact(db, item.id, email="bill@vip.example.com", copied_in=True)
+
+    assert [r.email for r in await reply.recipients_for(db, item.id)] == [
+        "cass@vip.example.com",  # the primary leads: she raised it
+        "bill@vip.example.com",
+        "ops@vip.example.com",
+    ]
+
+
+async def test_one_staff_contact_no_longer_silences_the_whole_reply(db, world):
+    """The active-user skip is per ADDRESS, not per item.
+
+    It was written when a ticket had at most one contact, so `return ()` was the
+    same statement. With three it is not: a colleague copied into a customer's
+    thread would have cancelled the customer's reply as well.
+    """
+    _agent, _project, item = world
+    staff = await _user(db, name="Sam Staff", email=f"sam-{uuid.uuid4().hex[:8]}@example.com")
+    await mail_service.upsert_contact(db, item.id, email="cass@vip.example.com", name="Cass")
+    await mail_service.upsert_contact(db, item.id, email=staff.email, copied_in=True)
+
+    assert [r.email for r in await reply.recipients_for(db, item.id)] == ["cass@vip.example.com"]
+
+
+async def test_a_copied_in_address_never_becomes_the_requester(db, world):
+    """`contact_for_item` is what CSAT, the automation `contact` role and the
+    singular endpoint all mean by "the requester", and RADD-980 must not let a
+    bystander inherit it: an issue whose only external address was COPIED IN has
+    no requester here, so those seams fall through to the reporter — who, on
+    exactly that shape of ticket, is the colleague who raised it."""
+    _agent, _project, item = world
+    await mail_service.upsert_contact(
+        db, item.id, email="watching@vip.example.com", copied_in=True
+    )
+
+    assert await mail_service.contact_for_item(db, item.id) is None
+    assert [c.email for c in await mail_service.contacts_for_item(db, item.id)] == [
+        "watching@vip.example.com"
+    ]
+
+    # …and the first person who actually WRITES takes the badge.
+    await mail_service.upsert_contact(db, item.id, email="cass@vip.example.com", name="Cass")
+    primary = await mail_service.contact_for_item(db, item.id)
+    assert primary is not None and primary.email == "cass@vip.example.com"
+
+
+async def test_a_contacts_last_message_is_their_own(db, world):
+    """One column shared by three people is a fact about none of them. It fed the
+    outbound In-Reply-To before `mail_messages` existed, and a CC's reply
+    overwriting the requester's own was invisible either way."""
+    _agent, _project, item = world
+    await mail_service.upsert_contact(
+        db, item.id, email="cass@vip.example.com", message_id="<cass-1@ext>"
+    )
+    await mail_service.upsert_contact(
+        db, item.id, email="ops@vip.example.com", message_id="<ops-1@ext>", copied_in=True
+    )
+
+    stored = {c.email: c.last_message_id for c in await mail_service.contacts_for_item(db, item.id)}
+    assert stored == {"cass@vip.example.com": "<cass-1@ext>", "ops@vip.example.com": "<ops-1@ext>"}
+
+
+async def test_two_contacts_on_one_item_are_storable_and_one_address_is_not_twice(db, world):
+    """The reshape (`d980contacts`) stated as its observable consequence.
+
+    `item_id` was the PRIMARY KEY, so the first assertion was a unique violation
+    until this migration; `(item_id, email)` is now the constraint, so the second
+    still is — which is what makes `upsert_contact` idempotent across a thread
+    rather than accumulating a row per message.
+    """
+    from sqlalchemy.exc import IntegrityError
+
+    from radd.modules.mailintake.models import MailContact
+
+    _agent, _project, item = world
+    await mail_service.upsert_contact(db, item.id, email="one@vip.example.com")
+    await mail_service.upsert_contact(db, item.id, email="two@vip.example.com", copied_in=True)
+    assert len(await mail_service.contacts_for_item(db, item.id)) == 2
+
+    db.add(MailContact(item_id=item.id, email="one@vip.example.com"))
+    with pytest.raises(IntegrityError):
+        await db.flush()
+
+
 # --- what it says ------------------------------------------------------------
 
 
@@ -270,6 +370,64 @@ async def test_the_planned_reply_names_the_author_and_addresses_the_contact(db, 
     message = reply.render(planned, planned.recipients[0])
     assert "Ada Agent" in message.text
     assert f"{BASE_URL}/issues/{planned.item.key}" in message.html
+
+
+async def test_an_agents_mailed_reply_is_relayed_and_excludes_them_from_notify(db, world):
+    """RADD-981, at the two seams that read a comment's ACTOR.
+
+    Both were broken by the same fact: a mailed reply was authored by SYSTEM.
+    `should_reply` refuses a SYSTEM comment — deliberately, to stop an
+    inbound-mail comment echoing straight back out — so an agent who answered a
+    customer BY EMAIL was never relayed to that customer, while the same words
+    typed into the UI were. And notify excludes the actor from its fan-out, so
+    with SYSTEM as the actor the agent was notified of their own reply and
+    nobody's exclusion applied.
+    """
+    from radd.modules.mailintake import parsing as mail_parsing, threading as mail_threading
+    from radd.modules.notify import planner
+
+    agent, project, item = world
+    colleague = await _user(db, name="Cal", email=f"cal-{uuid.uuid4().hex[:8]}@example.com")
+    await mail_service.upsert_contact(db, item.id, email="cass@vip.example.com", name="Cass")
+    await mail_threading.record(
+        db, message_id="<told@radd>", item_id=item.id, direction=MailDirection.OUTBOUND
+    )
+
+    incoming = EmailMessage()
+    incoming["Subject"] = "Re: Printer on fire"
+    incoming["From"] = f"Ada Agent <{agent.email}>"
+    incoming["To"] = "help@radd-hq.com"
+    incoming["Message-ID"] = f"<{uuid.uuid4().hex}@example.com>"
+    incoming["In-Reply-To"] = "<told@radd>"
+    incoming.set_content("Engineer dispatched.")
+    raw = incoming.as_bytes()
+    outcome = await intake.accept(
+        db,
+        mail_parsing.parse_email(raw),
+        raw=raw,
+        default_project_key=project.key,
+        own_addresses={"help@radd-hq.com"},
+    )
+    assert outcome.result is intake.Result.APPENDED
+
+    [event] = await events_service.query_events(
+        db,
+        entity_type=CommentEntity.COMMENT.value,
+        event_types=[CommentEvent.CREATED.value],
+        limit=1,
+    )
+    assert event.actor_id == agent.id, "the actor IS the attribution both seams read"
+
+    planned = await outbound._plan_reply(db, event)
+    assert planned is not None, "a SYSTEM-authored reply is refused — this one must not be"
+    assert [r.email for r in planned.recipients] == ["cass@vip.example.com"]
+    assert "Engineer dispatched." in planned.body
+
+    plan = planner.plan_comment_created(
+        event.payload, event.actor_id, frozenset({agent.id, colleague.id}), frozenset()
+    )
+    notified = {n.user_id for n in plan.notifications}
+    assert colleague.id in notified and agent.id not in notified
 
 
 async def test_the_thread_subject_survives_a_rename(db, world):
@@ -731,6 +889,53 @@ async def test_a_reply_to_the_ack_threads_back_onto_the_issue(
 
     assert outcome.result is intake.Result.APPENDED
     assert outcome.item_id == item.id
+
+
+async def test_a_user_sender_receives_the_receipt_end_to_end(
+    db, world, relay, no_senders, monkeypatch
+):
+    """RADD-995, driven through the whole path rather than the plan alone.
+
+    Intake plans it, the caller acks post-commit, and what leaves the relay is
+    the same `[KEY] title` receipt with the issue link a contact has had since
+    RADD-977 — which matters most for exactly this sender, since a recognised
+    user CAN follow that link.
+    """
+    agent, project, _ = world
+    monkeypatch.setattr(settings, "smtp_host", "")  # nothing to fall back to
+    _row_relay(db)
+
+    incoming = EmailMessage()
+    incoming["Subject"] = "my laptop will not charge"
+    incoming["From"] = f"Ada Agent <{agent.email}>"
+    incoming["To"] = "help@radd-hq.com"
+    incoming["Message-ID"] = f"<{uuid.uuid4().hex}@example.com>"
+    incoming.set_content("It stopped overnight.")
+    raw = incoming.as_bytes()
+    outcome = await intake.accept(
+        db,
+        parsing.parse_email(raw),
+        raw=raw,
+        default_project_key=project.key,
+        own_addresses={"help@radd-hq.com"},
+    )
+    assert outcome.ack is not None, "a recognised user got no receipt at all — the RADD-995 bug"
+
+    await mail_service.send_ack(
+        db,
+        item_id=outcome.ack.item_id,
+        email=outcome.ack.email,
+        name=outcome.ack.name,
+        item_key=outcome.ack.item_key,
+        title=outcome.ack.title,
+    )
+
+    sent = relay.sent[-1]
+    assert agent.email in str(sent["To"])
+    assert str(sent["Subject"]) == f"[{outcome.item_key}] my laptop will not charge"
+    # In-Reply-To comes off the inbound row intake recorded, as it does for a contact.
+    assert str(sent["In-Reply-To"]) == str(incoming["Message-ID"])
+    assert f"{BASE_URL}/issues/{outcome.item_key}" in sent.get_body(("plain",)).get_content()
 
 
 async def test_the_ack_toggle_still_silences_it(db, world, relay, no_senders, monkeypatch):
