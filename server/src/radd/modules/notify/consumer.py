@@ -172,7 +172,10 @@ async def _handle_item_event(session: AsyncSession, event: Event, *, watch_only:
 
     mention_ids: frozenset[uuid.UUID] = frozenset()
     if not watch_only and (created or "description" in changed_fields):
-        mention_ids = await _resolve_mentions(session, payload.get("description", ""))
+        # Under the ref since RADD-922 (see below) — this read a top-level
+        # `description`, so it always scanned "" and a description mention
+        # notified nobody.
+        mention_ids = await _resolve_mentions(session, _ref(payload).get("description") or "")
 
     if created:
         plan = planner.plan_item_created(payload, event.actor_id, mention_ids)
@@ -180,7 +183,18 @@ async def _handle_item_event(session: AsyncSession, event: Event, *, watch_only:
         watchers = await recipient_ids(session, item_id)
         plan = planner.plan_item_updated(payload, event.actor_id, watchers, mention_ids)
 
-    project = await projects_service.get_project(session, uuid.UUID(payload["project_id"]))
+    # RADD-978: RADD-922 nested the item payload under `item` and promoted the
+    # project to an `{id, key, name}` ref; this line kept reading a TOP-LEVEL
+    # `project_id` that item events had stopped carrying. Every `item.created`
+    # and `item.updated` therefore raised KeyError inside the per-event
+    # SAVEPOINT, was logged and skipped, and the cursor moved on — so `assigned`,
+    # `state_changed` and description `mentioned` reached nobody at all, and the
+    # auto-watch graph stopped growing from item activity. Nothing failed
+    # loudly; the only symptom was silence. This is what a wire constant with no
+    # compiler behind it costs.
+    project = await projects_service.get_project(
+        session, uuid.UUID(_ref(payload)["project"]["id"])
+    )
     # RADD-817: the row itself, for per-recipient relation gating in _allowed
     # (this handler used to never load it; a deleted item means no gate needed
     # — the notification describes something already gone).
