@@ -113,12 +113,18 @@ async def record(
     direction: MailDirection,
     subject: str = "",
     comment_id: uuid.UUID | None = None,
+    source_id: uuid.UUID | None = None,
 ) -> MailMessage | None:
     """Store one message id against its item.
 
     Returns None when the id is already stored — the concurrent-retry case. The
     caller reads that as "duplicate", which is the same answer `is_duplicate`
     would have given had it won the race.
+
+    `source_id` is the mail source the message ARRIVED at, and only an INBOUND
+    caller has one to pass (RADD-979): `intake.accept` knows its source, while
+    an outbound row is the answer to a question this column asks. It is what
+    `origin_source_id` reads back to decide which identity replies leave under.
     """
     if not message_id:
         return None
@@ -133,10 +139,38 @@ async def record(
         comment_id=comment_id,
         direction=direction.value,
         subject=subject[:998],
+        source_id=source_id,
     )
     session.add(row)
     await session.flush()
     return row
+
+
+async def origin_source_id(session: AsyncSession, item_id: uuid.UUID) -> uuid.UUID | None:
+    """Which mail source this item's conversation ARRIVED at (RADD-979), or None.
+
+    **The EARLIEST inbound row that names one**, not the latest. A thread often
+    gains addresses — someone CCs `sales@` on message four, and that message is
+    recorded against its own source too. Taking the newest would hand the
+    conversation's identity to whichever mailbox happened to be copied last,
+    changing the From address mid-conversation for the one person who never
+    asked for it.
+
+    None is the common answer: an item raised in the UI has no mail origin at
+    all, and an instance that never bound a sender never reads the result. One
+    lookup on the `(item_id, created_at)` index, so asking per outbound message
+    costs the same as asking once.
+    """
+    return await session.scalar(
+        select(MailMessage.source_id)
+        .where(
+            MailMessage.item_id == item_id,
+            MailMessage.direction == MailDirection.INBOUND.value,
+            MailMessage.source_id.is_not(None),
+        )
+        .order_by(MailMessage.created_at)
+        .limit(1)
+    )
 
 
 async def thread_chain(session: AsyncSession, item_id: uuid.UUID, limit: int = 20) -> list[str]:

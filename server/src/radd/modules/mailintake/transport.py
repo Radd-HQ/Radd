@@ -13,6 +13,10 @@ headers off the message store, the id the provider actually used, and the
 `mail.sent`/`mail.failed` events. `mailintake.service` re-exports it, because
 this is a public seam and `service.py` is where other modules look.
 
+Since RADD-979 the sender is resolved PER ITEM (see `_sender`), and that it
+happens here and nowhere else is the point: three callers inherit the identity
+of the address a conversation arrived at without knowing sources exist.
+
 That split is what makes notification mail a conversation rather than a
 broadcast: it threads on the item, carries the sender's Reply-To, and a reply
 lands back on the same issue through intake.
@@ -81,8 +85,33 @@ def _env_sender() -> _EnvSender | None:
     )
 
 
-async def _sender(session: AsyncSession):
+async def _origin_sender(session: AsyncSession, item_id: uuid.UUID):
+    """The sender bound to the source this item's mail ARRIVED at, or None."""
+    source_id = await threading.origin_source_id(session, item_id)
+    if source_id is None:
+        return None
+    return await registry.bound_sender(session, source_id)
+
+
+async def _sender(session: AsyncSession, item_id: uuid.UUID | None = None):
     """The configured sender, built from its ROW (RADD-958), else the env relay.
+
+    **Resolution order (RADD-979):**
+
+        1. the sender bound to the item's ORIGIN SOURCE   the address it arrived at
+        2. the default `mail_senders` row                  the instance's identity
+        3. the environment relay                           the seed-era fallback
+
+    Step 1 is the new one, and it is the whole of RADD-979. Which identity
+    answers a conversation is a property of the ADDRESS it arrived at, not of
+    the instance: a ticket raised at `help@` used to be replied to by `agent@`
+    because the sender was one instance-wide choice, so the requester never saw
+    the address they had written to on anything Radd sent back.
+
+    **This is the ONE resolution point**, which is why replies, acknowledgements
+    and notify's per-event mail all inherit it without knowing it exists — they
+    all ride `send_item_mail`. Putting the lookup at any of those three callers
+    would have been three copies of it, and the third would have been forgotten.
 
     Returns `(sender, row)` or `(None, None)`. The kind→implementation map is
     `senders.sender_for` and lives nowhere else (RADD-969) — this file and the
@@ -90,7 +119,8 @@ async def _sender(session: AsyncSession):
     happily uses cannot be one the test button calls unimplemented. It is also
     what makes a Gmail adapter a class plus a row rather than an edit here.
     """
-    row = await registry.default_sender(session) or _env_sender()
+    row = await _origin_sender(session, item_id) if item_id is not None else None
+    row = row or await registry.default_sender(session) or _env_sender()
     if row is None:
         return None, None
     sender = senders.sender_for(row)
@@ -102,9 +132,19 @@ async def _sender(session: AsyncSession):
 
 async def outbound_configured(session: AsyncSession) -> bool:
     """Is there anywhere to send FROM at all? A caller with a loop to run asks
-    once per tick rather than discovering it per recipient."""
+    once per tick rather than discovering it per recipient.
+
+    Deliberately item-INDEPENDENT — it gates a loop, which has no item yet — so
+    it asks the default question and then, since RADD-979, whether any source
+    binds a sender of its own. Both halves are needed: an instance whose relays
+    are each bound to one source has no default at all (`default_sender` refuses
+    to guess between two enabled rows), and answering False there would silence
+    every message that in fact had somewhere to go.
+    """
     sender, _ = await _sender(session)
-    return sender is not None
+    if sender is not None:
+        return True
+    return await registry.any_bound_sender(session)
 
 
 @asynccontextmanager
@@ -200,7 +240,9 @@ async def send_item_mail(
     if not to_address:
         return None
     async with _session(session) as db:
-        sender, row = await _sender(db)
+        # Per ITEM, not per instance (RADD-979): the identity the recipient
+        # should see is the address their conversation arrived at.
+        sender, row = await _sender(db, item_id)
         if sender is None:
             return None
         headers, subject = await _thread_headers(

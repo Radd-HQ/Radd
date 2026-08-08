@@ -181,6 +181,9 @@ export interface MailSource {
   username: string;
   folder: string;
   default_project_id: string | null;
+  /** "Send replies from" (RADD-979) — the sender that answers for this address.
+   *  null = the default sender, which is what every source did before. */
+  sender_id: string | null;
   has_secret: boolean;
   rule_count: number;
   /** What the poller will actually use: the row value or the kind's preset

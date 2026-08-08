@@ -83,6 +83,17 @@ class MailMessage(Base):
         ForeignKey("comments.id", ondelete="SET NULL"), nullable=True
     )
     direction: Mapped[str] = mapped_column(String(16))
+    #: Which source the message ARRIVED at (RADD-979) — the item's mail ORIGIN.
+    #: Written on INBOUND rows only; NULL on everything outbound, and on every
+    #: item that was never born from mail. It is the fact outbound reads back to
+    #: answer from the address the conversation actually lives on: a ticket
+    #: raised at `help@` was previously replied to by whichever single sender
+    #: was marked default, so the requester never saw the address they wrote to.
+    #: `SET NULL` because losing the origin costs a fallback to the default
+    #: sender, and cascading would delete the thread with the mailbox.
+    source_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("mail_sources.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     subject: Mapped[str] = mapped_column(String(998), default="")
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), index=True
@@ -123,6 +134,13 @@ class MailSource(Base, TimestampMixin):
     #: Where a message lands when NO rule matches. The chain narrows from here.
     default_project_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
+    )
+    #: "Send replies from" — the sender that ANSWERS for this address (RADD-979).
+    #: NULL = the default sender, which is what every source did before.
+    #: `SET NULL` on the relay's deletion: a binding is a preference, and losing
+    #: it must degrade to the default rather than take the mailbox with it.
+    sender_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("mail_senders.id", ondelete="SET NULL"), nullable=True
     )
 
 

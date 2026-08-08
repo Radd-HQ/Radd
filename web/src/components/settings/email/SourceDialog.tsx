@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import { api } from "../../../lib/api";
 import { ApiPath, apiMailSourcePath } from "../../../lib/constants";
-import { mailKindsQuery, projectsQuery, queryKeys } from "../../../lib/queries";
+import { mailKindsQuery, mailSendersQuery, projectsQuery, queryKeys } from "../../../lib/queries";
 import { MailSourceKind, type MailSourceKindValue, type MailSource } from "../../../lib/types";
 import { Button, ButtonVariant } from "../../Button";
 import { useConfirm } from "../../ConfirmDialog";
@@ -33,6 +33,7 @@ export function SourceDialog({
   const queryClient = useQueryClient();
   const kinds = useQuery(mailKindsQuery());
   const projects = useQuery(projectsQuery());
+  const senders = useQuery(mailSendersQuery());
   const [confirmDialog, confirm] = useConfirm();
   const [form, setForm] = useState({
     name: source?.name ?? "",
@@ -44,6 +45,7 @@ export function SourceDialog({
     username: source?.username ?? "",
     folder: source?.folder ?? "",
     default_project_id: source?.default_project_id ?? "",
+    sender_id: source?.sender_id ?? "",
     secret: "",
   });
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
@@ -59,6 +61,13 @@ export function SourceDialog({
   // An untouched name takes the kind's — otherwise picking the default kind and
   // filling everything else leaves Save disabled with nothing saying why.
   const name = form.name.trim() || info?.name || "";
+  // Enabled senders, plus whichever one this source is already bound to. A
+  // binding whose relay was later paused must stay VISIBLE: dropping it from
+  // the list would make the field read "default sender" while the row says
+  // otherwise, and the next save would silently make that true.
+  const senderOptions = (senders.data ?? []).filter(
+    (s) => s.enabled || s.id === form.sender_id,
+  );
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.mailSources });
   const save = useMutation({
@@ -71,6 +80,7 @@ export function SourceDialog({
         host: showConnection ? form.host : "",
         port: showConnection ? port : 0,
         default_project_id: form.default_project_id || null,
+        sender_id: form.sender_id || null,
       };
       // Omitted = unchanged, so editing a port never re-types a password.
       if (!form.secret) delete body.secret;
@@ -197,6 +207,21 @@ export function SourceDialog({
           {(projects.data ?? []).map((p) => (
             <option key={p.id} value={p.id}>
               {p.key} · {p.name}
+            </option>
+          ))}
+        </SelectField>
+        <SelectField
+          label="Send replies from"
+          value={form.sender_id}
+          onChange={(e) => set("sender_id", e.target.value)}
+          hint="The identity Radd answers from — replies, acknowledgements and notifications alike. Blank uses the default sender, so a ticket raised here could be answered from another address."
+        >
+          <option value="">— default sender —</option>
+          {senderOptions.map((s) => (
+            <option key={s.id} value={s.id}>
+              {`${s.name}${s.from_address ? ` · ${s.from_address}` : ""}${
+                s.enabled ? "" : " (disabled)"
+              }`}
             </option>
           ))}
         </SelectField>

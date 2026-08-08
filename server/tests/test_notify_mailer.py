@@ -49,9 +49,9 @@ from radd.modules.comments.types import CommentVisibility
 from radd.modules.events import service as events_service
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate
-from radd.modules.mailintake import intake, parsing
-from radd.modules.mailintake.models import MailMessage, MailSender
-from radd.modules.mailintake.types import MailSenderKind
+from radd.modules.mailintake import intake, parsing, threading as mail_threading
+from radd.modules.mailintake.models import MailMessage, MailSender, MailSource
+from radd.modules.mailintake.types import MailDirection, MailSenderKind, MailSourceKind
 from radd.modules.notify import consumer, emailer, mailer, service as notify_service
 from radd.modules.notify.models import Notification
 from radd.modules.notify.types import (
@@ -65,6 +65,10 @@ from radd.modules.projects.schemas import ProjectCreate
 BASE_URL = "https://radd.example.com"
 RELAY_FROM = "agent@radd-hq.com"
 RELAY_REPLY_TO = "help@radd-hq.com"
+#: A SECOND identity, bound to one mail source (RADD-979). Distinct from the
+#: default relay in both fields, so an assertion on either says which one
+#: actually answered.
+DESK_FROM = "support@radd-hq.com"
 
 
 class _FakeSmtp:
@@ -706,3 +710,78 @@ async def test_the_subject_opens_the_thread_and_then_follows_it(
 
     subjects = [str(m["Subject"]) for m in _addressed(relay, watcher.email)]
     assert subjects == [f"[{key}] Printer on fire", f"Re: [{key}] Printer on fire"]
+
+
+async def test_notification_mail_leaves_from_the_source_the_ticket_arrived_at(
+    db, world, relay, no_senders, quiet_backlog
+):
+    """RADD-979's third leg — and the one that shows the resolution point is
+    SHARED rather than copied.
+
+    Notify knows nothing about mail sources: it hands the transport an item and
+    a recipient and is done. A ticket that arrived at the support desk is
+    nonetheless mailed to its watchers AS the desk, because which identity
+    answers is decided once, inside `transport._sender`, and every caller rides
+    it. Had the lookup been added at the reply consumer instead, this leg would
+    have kept signing as the instance default with nothing anywhere saying so —
+    which is the same shape of bug as the two fan-outs RADD-968 merged.
+    """
+    agent, project, item = world
+    house = MailSender(
+        name=f"House {uuid.uuid4().hex[:6]}",
+        kind=MailSenderKind.SMTP.value,
+        is_default=True,
+        from_address=RELAY_FROM,
+        reply_to=RELAY_REPLY_TO,
+        host="smtp.house.test",
+        port=25,
+        starttls=False,
+    )
+    desk = MailSender(
+        name=f"Desk {uuid.uuid4().hex[:6]}",
+        kind=MailSenderKind.SMTP.value,
+        from_address=DESK_FROM,
+        reply_to=DESK_FROM,
+        host="smtp.desk.test",
+        port=25,
+        starttls=False,
+    )
+    db.add_all([house, desk])
+    await db.flush()
+    source = MailSource(
+        name=f"Support {uuid.uuid4().hex[:6]}",
+        kind=MailSourceKind.IMAP.value,
+        address=DESK_FROM,
+        host="imap.test",
+        username=DESK_FROM,
+        secret="pw",
+        sender_id=desk.id,
+    )
+    db.add(source)
+    await db.flush()
+    # The item's mail ORIGIN. Recorded directly here because what is under test
+    # is the lookup, not intake's passing of the source — `test_mail_config.py`
+    # drives that half through `intake.accept`.
+    await mail_threading.record(
+        db,
+        message_id=f"<{uuid.uuid4().hex}@customer.example>",
+        item_id=item.id,
+        direction=MailDirection.INBOUND,
+        subject="Printer on fire",
+        source_id=source.id,
+    )
+
+    watcher = await _user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
+    await notify_service.add_watchers(db, item.id, [watcher.id])
+    await _grant(db, watcher, BuiltinRoleKey.MEMBER, project.id)
+    await _comment(db, item, agent, "Engineer dispatched.")
+    await consumer._consume(db, watch_only=False)
+
+    assert await mailer.run_batch(db) == 1
+
+    message = _addressed(relay, watcher.email)[0]
+    assert str(message["From"]) == DESK_FROM
+    assert str(message["Reply-To"]) == DESK_FROM
+    # The default relay exists, is enabled and is marked — it simply is not the
+    # one that answers for this conversation.
+    assert house.is_default is True

@@ -166,7 +166,7 @@ async def accept(
 
     target = await _resolve_thread(session, plan)
     if target is not None:
-        return await _append(session, plan, raw=raw, item_id=target)
+        return await _append(session, plan, raw=raw, item_id=target, source_id=source_id)
     # Routing runs ONLY here — the first message in a thread. A reply resolved
     # above and never reaches the chain, so the AI classifier can never
     # re-decide the project on message four (RADD-961).
@@ -201,7 +201,12 @@ async def _resolve_thread(session: AsyncSession, plan: EmailPlan) -> uuid.UUID |
 
 
 async def _append(
-    session: AsyncSession, plan: EmailPlan, *, raw: bytes, item_id: uuid.UUID
+    session: AsyncSession,
+    plan: EmailPlan,
+    *,
+    raw: bytes,
+    item_id: uuid.UUID,
+    source_id: uuid.UUID | None = None,
 ) -> Outcome:
     actor = await auth.get_user(session, SYSTEM_ACTOR_ID)
     # Quoted history is stripped from the COMMENT only; `raw` is retained by the
@@ -221,6 +226,10 @@ async def _append(
         direction=MailDirection.INBOUND,
         subject=plan.subject,
         comment_id=getattr(comment, "id", None),
+        # The source is recorded on every inbound row, replies included
+        # (RADD-979) — but the ORIGIN is the earliest of them, so a mailbox
+        # copied in later never takes over the identity replies leave under.
+        source_id=source_id,
     )
     await _touch_contact(session, item_id, plan)
     item = await items.require_item(session, item_id)
@@ -274,6 +283,9 @@ async def _create(
         item_id=created.id,
         direction=MailDirection.INBOUND,
         subject=plan.subject,
+        # The item's mail ORIGIN (RADD-979): this row is the earliest inbound
+        # one by construction, so it is what decides the reply identity.
+        source_id=source_id,
     )
 
     await events.emit(

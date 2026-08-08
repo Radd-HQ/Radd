@@ -144,6 +144,44 @@ async def default_sender(session: AsyncSession) -> MailSender | None:
     return enabled[0] if len(enabled) == 1 else None
 
 
+async def bound_sender(session: AsyncSession, source_id: uuid.UUID) -> MailSender | None:
+    """The sender a source ANSWERS FROM, when it names one that can still send.
+
+    "Send replies from" (RADD-979): the identity a requester should see is the
+    address they wrote to, which is a property of the SOURCE — not of the
+    instance, which is all `default_sender` can express.
+
+    Disabled, deleted or unreachable falls through to None, and the caller's
+    next step is the default sender. That is deliberate: a binding is a
+    preference about which identity is nicer, and pausing a relay must not
+    silently stop the mail on every source pointed at it.
+    """
+    source = await session.get(MailSource, source_id)
+    if source is None or source.sender_id is None:
+        return None
+    sender = await session.get(MailSender, source.sender_id)
+    if sender is None or not sender.enabled or not resolve.sender_host(sender):
+        return None
+    return sender
+
+
+async def any_bound_sender(session: AsyncSession) -> bool:
+    """Does ANY source name a sender that could send? — the second half of
+    `transport.outbound_configured` (RADD-979).
+
+    Without it, an instance whose two relays are each bound to their own source
+    reports "nowhere to send from": `default_sender` refuses to guess between
+    two enabled rows, so the loops would plan nothing while every real message
+    had somewhere to go.
+    """
+    rows = await session.execute(
+        select(MailSender)
+        .join(MailSource, MailSource.sender_id == MailSender.id)
+        .where(MailSender.enabled.is_(True))
+    )
+    return any(resolve.sender_host(row) for row in rows.scalars())
+
+
 async def own_addresses(session: AsyncSession) -> set[str]:
     """Every address this instance sends AS or can be reached at — the self-loop
     guard's comparison set.

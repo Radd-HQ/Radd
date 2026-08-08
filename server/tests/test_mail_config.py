@@ -10,21 +10,37 @@ So the assertions here are deliberately about REACHABILITY, not about matching:
 that env seeds a row, that a source's own default is used, that a polled source
 carries its id into intake, and that seeding is once-only. The matching itself is
 `test_mail_routing.py`'s job.
+
+The last section is RADD-979's, and it is the same shape of question one step
+further out: a source now names the SENDER that answers for it, so what is
+pinned is that the binding is reachable from every message the transport sends —
+the reply, the acknowledgement and (in `test_notify_mailer.py`) notification
+mail — because all three ride one resolution point.
 """
 
 import uuid
+from datetime import timedelta
 from email.message import EmailMessage
 
 import pytest
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from radd import smtp
+from radd.clock import utcnow
 from radd.config import settings
 from radd.exceptions import ConflictError
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
+from radd.modules.comments import service as comments_service
+from radd.modules.comments.schemas import CommentCreate
+from radd.modules.comments.types import CommentEntity, CommentEvent
+from radd.modules.events import service as events_service
+from radd.modules.items import service as items_service
+from radd.modules.items.schemas import ItemCreate
 from radd.modules.mailintake import (
     intake,
+    outbound,
     parsing,
     poller,
     registry,
@@ -32,10 +48,13 @@ from radd.modules.mailintake import (
     seeding,
     senders,
     service as mail_service,
+    threading as mail_threading,
+    transport as mail_transport,
 )
-from radd.modules.mailintake.models import MailRule, MailSender, MailSource
+from radd.modules.mailintake.models import MailMessage, MailRule, MailSender, MailSource
 from radd.modules.mailintake.types import (
     KIND_DEFAULTS,
+    MailDirection,
     MailRuleType,
     MailSenderKind,
     MailSourceKind,
@@ -726,3 +745,359 @@ async def test_every_kind_has_a_preset_entry():
     for kind in (*MailSourceKind, *MailSenderKind):
         assert kind in KIND_DEFAULTS, f"{kind} has no preset entry"
         assert KIND_DEFAULTS[kind].name
+
+
+# --- the source answers for itself (RADD-979) --------------------------------
+
+
+class _FakeSmtp:
+    """Enough of smtplib.SMTP to capture what was composed and WHICH relay it
+    was handed to.
+
+    The DIAL is the load-bearing half here. Two senders compose byte-identical
+    bodies for the same message, so a test that only inspects the content cannot
+    tell which identity the recipient actually saw — the host and the `From`
+    line are the only things that differ.
+    """
+
+    sent: list[EmailMessage] = []
+    dialled: list[tuple[str, int]] = []
+
+    def __init__(self, host="", port=0, *args, **kwargs):
+        type(self).dialled.append((host, port))
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def starttls(self):
+        pass
+
+    def login(self, *args):
+        pass
+
+    def send_message(self, message):
+        type(self).sent.append(message)
+
+
+@pytest.fixture
+def relay(monkeypatch):
+    """A captured SMTP relay and NO environment one, so a message that goes out
+    went out through a ROW rather than through a fallback nobody configured."""
+    _FakeSmtp.sent = []
+    _FakeSmtp.dialled = []
+    monkeypatch.setattr(smtp.smtplib, "SMTP", _FakeSmtp)
+    monkeypatch.setattr(settings, "smtp_host", "")
+    return _FakeSmtp
+
+
+@pytest.fixture
+async def no_senders(db):
+    """Disable every `mail_senders` row already committed to the test database.
+
+    `default_sender` reads the table, not a fixture — a row another module
+    committed would otherwise decide which relay these tests dial, and "the
+    binding was used" would be true by accident. Inside the transaction, so it
+    rolls back with everything else.
+    """
+    await db.execute(update(MailSender).values(enabled=False))
+
+
+def _relay_row(
+    db, name: str, host: str, address: str, *, is_default: bool = False, enabled: bool = True
+) -> MailSender:
+    row = MailSender(
+        name=f"{name}-{uuid.uuid4().hex[:6]}",
+        kind=MailSenderKind.SMTP.value,
+        enabled=enabled,
+        is_default=is_default,
+        from_address=address,
+        host=host,
+        port=25,
+        starttls=False,
+    )
+    db.add(row)
+    return row
+
+
+def _mailbox(db, project, *, address: str, sender: MailSender | None = None) -> MailSource:
+    row = MailSource(
+        name=f"box-{uuid.uuid4().hex[:6]}",
+        kind=MailSourceKind.IMAP.value,
+        address=address,
+        host="imap.test",
+        username=address,
+        secret="pw",
+        default_project_id=project.id,
+        sender_id=sender.id if sender is not None else None,
+    )
+    db.add(row)
+    return row
+
+
+async def _arrived(db, source: MailSource, project, *, sender_email: str) -> uuid.UUID:
+    """One real message in through `source` — the ORIGIN the transport reads
+    back. Driven through `intake.accept` rather than by writing a
+    `mail_messages` row by hand, because whether intake passes its source down
+    is half of what this feature is.
+    """
+    outcome = await intake.accept(
+        db,
+        parsing.parse_email(message(sender=sender_email, subject="Printer on fire")),
+        raw=b"",
+        default_project_key="",
+        own_addresses=set(),
+        source_id=source.id,
+        default_project_id=project.id,
+    )
+    assert outcome.item_id is not None
+    return outcome.item_id
+
+
+def _sent_from(sent: EmailMessage) -> str:
+    return str(sent["From"])
+
+
+def _flush_instead_of_commit(db):
+    async def commit():
+        await db.flush()
+
+    return commit
+
+
+async def test_the_ack_and_the_reply_both_leave_from_the_source_they_arrived_at(
+    db, world, relay, no_senders, monkeypatch
+):
+    """RADD-979, driven through two of the three real callers.
+
+    Before it, every outbound message left from the single default sender: a
+    ticket raised at `help@` was answered by `agent@`, so the address the
+    requester wrote to never appeared on anything Radd sent back. The fix is ONE
+    resolution point inside the transport — which is exactly why proving it for
+    the acknowledgement and the reply says something about notification mail
+    too, and why the third leg is driven for real in `test_notify_mailer.py`
+    rather than re-implemented here.
+    """
+    actor, project, _ = world
+    house = _relay_row(db, "House", "smtp.house.test", "agent@radd-hq.com", is_default=True)
+    desk = _relay_row(db, "Desk", "smtp.desk.test", "help@radd-hq.com")
+    await db.flush()
+    source = _mailbox(db, project, address="help@radd-hq.com", sender=desk)
+    await db.flush()
+
+    # The requester is a DEPARTED account, which is what gives the outbound
+    # reply leg a recipient at all: RADD-828 provisions an EMAIL user for an
+    # unknown sender, and `recipients_for` hands an ACTIVE user to notify.
+    departed = User(
+        email=f"cass-{uuid.uuid4().hex[:8]}@vip.example.com",
+        name="Cass Customer",
+        active=False,
+        instance_role=InstanceRole.MEMBER.value,
+    )
+    db.add(departed)
+    await db.flush()
+    item_id = await _arrived(db, source, project, sender_email=departed.email)
+
+    await mail_service.send_ack(
+        db,
+        item_id=item_id,
+        email=departed.email,
+        name="Cass Customer",
+        item_key=f"{project.key}-1",
+        title="Printer on fire",
+    )
+
+    comment = await comments_service.create_comment(
+        db, item_id, CommentCreate(body="Engineer dispatched."), actor
+    )
+    events = await events_service.query_events(
+        db,
+        entity_type=CommentEntity.COMMENT.value,
+        entity_id=str(comment.id),
+        event_types=[CommentEvent.CREATED.value],
+        limit=1,
+    )
+    planned = await outbound._plan_reply(db, events[0])
+    assert planned is not None, "no contact to reply to — that would be the fixture, not the code"
+    monkeypatch.setattr(outbound, "SessionLocal", _SessionHandle(db))
+    monkeypatch.setattr(db, "commit", _flush_instead_of_commit(db))
+    await outbound._deliver(planned)
+
+    assert relay.dialled == [("smtp.desk.test", 25), ("smtp.desk.test", 25)]
+    assert {_sent_from(sent) for sent in relay.sent} == {"help@radd-hq.com"}
+    assert house.from_address not in {_sent_from(sent) for sent in relay.sent}
+
+    # The origin is recorded on the INBOUND row and nowhere else: an outbound
+    # row is the ANSWER to the question this column asks, not another asking of it.
+    rows = (
+        await db.execute(
+            select(MailMessage.direction, MailMessage.source_id).where(
+                MailMessage.item_id == item_id
+            )
+        )
+    ).all()
+    assert {direction for direction, origin in rows if origin is not None} == {
+        MailDirection.INBOUND.value
+    }
+    assert [origin for direction, origin in rows if direction == MailDirection.INBOUND.value] == [
+        source.id
+    ]
+
+
+async def test_a_source_that_binds_nothing_still_answers_from_the_default_sender(
+    db, world, relay, no_senders
+):
+    """NULL is not a gap: it is precisely the behaviour every source had before
+    RADD-979, which is why the column could be added with no data migration."""
+    _actor, project, _ = world
+    house = _relay_row(db, "House", "smtp.house.test", "agent@radd-hq.com", is_default=True)
+    _relay_row(db, "Desk", "smtp.desk.test", "help@radd-hq.com")
+    await db.flush()
+    source = _mailbox(db, project, address="help@radd-hq.com")  # bound to nothing
+    await db.flush()
+    item_id = await _arrived(
+        db, source, project, sender_email=f"j-{uuid.uuid4().hex[:8]}@customer.example"
+    )
+
+    assert await mail_transport.send_item_mail(
+        db, item_id=item_id, to_address="cass@vip.example.com", subject="hello", text="hi"
+    )
+
+    assert relay.dialled == [("smtp.house.test", 25)]
+    assert _sent_from(relay.sent[-1]) == house.from_address
+
+
+async def test_an_item_that_never_arrived_by_mail_uses_the_default_sender(
+    db, world, relay, no_senders
+):
+    """By far the common case — anything raised in the UI. The origin lookup
+    answers None and resolution carries on exactly as it did before, which is
+    what keeps it cheap enough to ask per outbound message."""
+    actor, project, _ = world
+    house = _relay_row(db, "House", "smtp.house.test", "agent@radd-hq.com", is_default=True)
+    desk = _relay_row(db, "Desk", "smtp.desk.test", "help@radd-hq.com")
+    await db.flush()
+    _mailbox(db, project, address="help@radd-hq.com", sender=desk)  # bound, and irrelevant here
+    await db.flush()
+    item = await items_service.create_item(
+        db, ItemCreate(project_id=project.id, title="Raised in the UI"), actor
+    )
+
+    await mail_transport.send_item_mail(
+        db, item_id=item.id, to_address="wanda@example.com", subject="hello", text="hi"
+    )
+
+    assert relay.dialled == [("smtp.house.test", 25)]
+    assert _sent_from(relay.sent[-1]) == house.from_address
+
+
+async def test_a_paused_relay_falls_through_instead_of_silencing_its_sources(
+    db, world, relay, no_senders
+):
+    """Disabling a relay is an operational act about that relay, not a decision
+    to stop writing to everyone who ever mailed the boxes pointed at it. The
+    binding is a preference about which identity is nicer; the fallback is what
+    stops that preference becoming an outage."""
+    _actor, project, _ = world
+    house = _relay_row(db, "House", "smtp.house.test", "agent@radd-hq.com", is_default=True)
+    desk = _relay_row(db, "Desk", "smtp.desk.test", "help@radd-hq.com", enabled=False)
+    await db.flush()
+    source = _mailbox(db, project, address="help@radd-hq.com", sender=desk)
+    await db.flush()
+    item_id = await _arrived(
+        db, source, project, sender_email=f"j-{uuid.uuid4().hex[:8]}@customer.example"
+    )
+
+    await mail_transport.send_item_mail(
+        db, item_id=item_id, to_address="cass@vip.example.com", subject="hello", text="hi"
+    )
+
+    assert relay.dialled == [("smtp.house.test", 25)]
+    assert _sent_from(relay.sent[-1]) == house.from_address
+
+
+async def test_deleting_the_bound_sender_nulls_the_binding_and_not_the_source(
+    db, world, relay, no_senders
+):
+    """`ON DELETE SET NULL`, OBSERVED rather than read off the migration file.
+    Removing a relay must degrade a binding to the default — not take the
+    mailbox with it, and not leave a row the settings form can no longer save."""
+    _actor, project, _ = world
+    house = _relay_row(db, "House", "smtp.house.test", "agent@radd-hq.com", is_default=True)
+    desk = _relay_row(db, "Desk", "smtp.desk.test", "help@radd-hq.com")
+    await db.flush()
+    source = _mailbox(db, project, address="help@radd-hq.com", sender=desk)
+    await db.flush()
+    item_id = await _arrived(
+        db, source, project, sender_email=f"j-{uuid.uuid4().hex[:8]}@customer.example"
+    )
+
+    await registry.delete_sender(db, desk.id)
+    await db.refresh(source)  # the database applied it, not the ORM
+
+    assert source.sender_id is None
+    await registry.save_source(db, source)  # and the form still saves the row
+    await mail_transport.send_item_mail(
+        db, item_id=item_id, to_address="cass@vip.example.com", subject="hello", text="hi"
+    )
+
+    assert relay.dialled == [("smtp.house.test", 25)]
+    assert _sent_from(relay.sent[-1]) == house.from_address
+
+
+async def test_the_origin_is_the_earliest_inbound_source_not_the_latest(db, world):
+    """A long thread gains addresses: someone CCs a second mailbox on message
+    four, and that message is recorded against its own source too. Taking the
+    NEWEST would hand the conversation's identity to whichever box happened to
+    be copied in last — changing the From address mid-conversation for the one
+    person who never asked for it.
+
+    Timestamps are set explicitly because Postgres' `now()` is the TRANSACTION
+    timestamp: rows written together tie, so relying on insert order would
+    assert nothing at all about the ORDER BY.
+    """
+    actor, project, _ = world
+    first = _mailbox(db, project, address="help@radd-hq.com")
+    second = _mailbox(db, project, address="sales@radd-hq.com")
+    await db.flush()
+    item = await items_service.create_item(
+        db, ItemCreate(project_id=project.id, title="Printer on fire"), actor
+    )
+    # The None row is a pre-RADD-979 message: inbound, older than either, and
+    # naming no source. It must be SKIPPED rather than answered with None.
+    for source, minutes_ago in ((None, 30), (first, 20), (second, 5)):
+        row = await mail_threading.record(
+            db,
+            message_id=f"<{uuid.uuid4().hex}@customer.example>",
+            item_id=item.id,
+            direction=MailDirection.INBOUND,
+            source_id=source.id if source is not None else None,
+        )
+        row.created_at = utcnow() - timedelta(minutes=minutes_ago)
+    await db.flush()
+
+    assert await mail_threading.origin_source_id(db, item.id) == first.id
+
+
+async def test_a_relay_only_a_source_names_still_counts_as_somewhere_to_send_from(
+    db, world, relay, no_senders
+):
+    """`outbound_configured` gates the loops, and `default_sender` refuses to
+    guess between two enabled rows. So an instance whose relays each belong to
+    their own mailbox has NO default at all — and answering "nowhere to send
+    from" there would silence every message that in fact had somewhere to go."""
+    _actor, project, _ = world
+    assert await mail_transport.outbound_configured(db) is False  # no rows, no env
+
+    desk = _relay_row(db, "Desk", "smtp.desk.test", "help@radd-hq.com")
+    _relay_row(db, "Sales", "smtp.sales.test", "sales@radd-hq.com")
+    await db.flush()
+    assert await registry.default_sender(db) is None, "ambiguity resolves to None, by design"
+    assert await mail_transport.outbound_configured(db) is False
+
+    _mailbox(db, project, address="help@radd-hq.com", sender=desk)
+    await db.flush()
+
+    assert await mail_transport.outbound_configured(db) is True

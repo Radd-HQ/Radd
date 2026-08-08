@@ -71,6 +71,8 @@ class MailSourceRead(BaseModel):
     username: str
     folder: str
     default_project_id: uuid.UUID | None
+    #: "Send replies from" (RADD-979) — NULL means the default sender.
+    sender_id: uuid.UUID | None = None
     has_secret: bool
     rule_count: int = 0
     #: What the poller will actually use (RADD-969) — row value or the kind's
@@ -92,6 +94,9 @@ class MailSourceWrite(BaseModel):
     username: str = ""
     folder: str = DEFAULT_IMAP_FOLDER
     default_project_id: uuid.UUID | None = None
+    #: The sender that answers for this address (RADD-979). None = the default
+    #: sender, which is what every source did before the binding existed.
+    sender_id: uuid.UUID | None = None
     #: Omitted = unchanged. "" = clear.
     secret: str | None = None
 

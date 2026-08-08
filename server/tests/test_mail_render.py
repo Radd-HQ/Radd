@@ -549,6 +549,34 @@ async def _requester_wrote(db, item, *, subject="my printer is on fire") -> str:
     return message_id
 
 
+def test_the_ack_carries_the_issue_link_in_both_parts():
+    """RADD-977. RADD-967 left the link out on purpose — "the requester has no
+    account, so the link is a login page" — and that reasoning is stale twice
+    over: intake PROVISIONS an account for an unknown sender (RADD-828), and on
+    an SSO instance the sender is very often a colleague who is already signed
+    in. A receipt with no way to look at the thing it acknowledges is a dead end
+    for both; a login page is recoverable.
+
+    What must NOT change is which instruction leads. Reply-by-email is the
+    interface that works for every requester whether they can sign in or not, so
+    it stays first in both parts and the link follows it — asserted by position,
+    because "the link is present" is true of a version that buries the sentence.
+    """
+    item = mailrender.ItemMail(key="MR-1", title="Printer on fire", base_url=BASE_URL + "/")
+    message = mailrender.acknowledgement(item)
+    url = f"{BASE_URL}/issues/MR-1"
+
+    assert url in message.text
+    assert f'href="{url}"' in message.html
+    assert mailrender.ACK_LINK_LABEL in message.text
+    assert mailrender.ACK_LINK_LABEL in message.html
+    for part in (message.text, message.html):
+        assert part.index("reply to this message") < part.index(url), "the link led"
+    # The subject mechanics are untouched: the bracketed key is what
+    # `parsing.extract_reply_key` threads a header-less reply on.
+    assert f"[{item.key}] in the subject" in message.text
+
+
 async def test_the_ack_leaves_through_the_default_sender_row(
     db, world, relay, no_senders, monkeypatch
 ):
@@ -586,6 +614,9 @@ async def test_the_ack_leaves_through_the_default_sender_row(
     assert str(sent["Reply-To"]) == "help@radd-hq.com"
     assert "Cass Customer" in str(sent["To"])
     assert sent.get_content_type() == "multipart/alternative"  # text + html, as ever
+    # RADD-977: the receipt the requester actually receives carries the link.
+    assert f"{BASE_URL}/issues/{key}" in sent.get_body(("plain",)).get_content()
+    assert f'href="{BASE_URL}/issues/{key}"' in sent.get_body(("html",)).get_content()
 
 
 async def test_pinning_the_subject_changes_nothing_a_client_threads_on(db, world):

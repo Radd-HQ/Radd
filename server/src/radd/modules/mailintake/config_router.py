@@ -57,7 +57,8 @@ def _source_read(row: MailSource, rule_count: int = 0) -> MailSourceRead:
     return MailSourceRead(
         id=row.id, name=row.name, kind=row.kind, enabled=row.enabled, address=row.address,
         host=row.host, port=row.port, username=row.username, folder=row.folder,
-        default_project_id=row.default_project_id, has_secret=bool(row.secret),
+        default_project_id=row.default_project_id, sender_id=row.sender_id,
+        has_secret=bool(row.secret),
         rule_count=rule_count,
         resolved_host=resolve.source_host(row), resolved_port=resolve.source_port(row),
         resolved_username=resolve.source_username(row),

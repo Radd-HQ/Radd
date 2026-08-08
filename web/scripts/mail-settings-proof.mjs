@@ -12,7 +12,12 @@
  *  - the kind picker actually CHANGES the form (RADD-969). The preset branch is
  *    a conditional render driven by a fetched catalog: a broken query, a renamed
  *    wire field or a kind mismatch all type-check and all leave the connection
- *    fields showing — which reads as "the preset does nothing".
+ *    fields showing — which reads as "the preset does nothing";
+ *  - "Send replies from" (RADD-979) is present on EVERY kind, and defaults to
+ *    the blank option rather than to whichever sender happens to be first. Both
+ *    halves are invisible to `tsc`: the field sits beside three conditional
+ *    branches, and a select whose value matched no option would silently show —
+ *    and on the next Save, silently store — the first real sender in the list.
  *
  * Usage: node scripts/mail-settings-proof.mjs <baseUrl> <email> <password>
  */
@@ -81,6 +86,13 @@ async function main() {
         open: /New mail source/i.test(text),
         hasKind: labels.some((l) => /where mail comes from/i.test(l)),
         hasDefaultProject: labels.some((l) => /default project/i.test(l)),
+        // RADD-979. The blank option IS an option — a picker offering only real
+        // senders would make "use the default" unexpressible, and the control
+        // would come up showing a binding nobody chose.
+        hasSenderBinding: labels.some((l) => /send replies from/i.test(l)),
+        senderReadsAsDefault: [...dialog.querySelectorAll("button")].some((b) =>
+          /default sender/i.test(b.textContent || ""),
+        ),
         // The preset branch: hidden connection fields + the app-password note.
         hasHost: labels.some((l) => /^host$/i.test(l.trim())),
         hasPort: labels.some((l) => /^port$/i.test(l.trim())),
@@ -95,6 +107,7 @@ async function main() {
 
   let form = { open: false };
   let custom = { hasHost: false };
+  let hook = { hasSenderBinding: false };
   let presetShot = null;
   if (page.addSource) {
     await session.click("button", (t) => /add source/i.test(t));
@@ -110,6 +123,14 @@ async function main() {
     await session.click('[role="option"]', (t) => /IMAP mailbox/i.test(t));
     await sleep(500);
     custom = await readForm();
+
+    // And once more on the WEBHOOK branch, which replaces username/folder with
+    // an instruction panel: "every kind" is three different renders, not one.
+    await session.click("button", (t) => /IMAP mailbox/i.test(t));
+    await sleep(300);
+    await session.click('[role="option"]', (t) => /^Webhook/i.test(t));
+    await sleep(500);
+    hook = await readForm();
   }
   checks["the source form opens"] = form.open === true;
   checks["…asks where mail comes from"] = form.hasKind === true;
@@ -123,6 +144,12 @@ async function main() {
   checks["a plain IMAP mailbox asks for host and port"] =
     custom.hasHost === true && custom.hasPort === true;
   checks["…and drops the preset's guidance with it"] = custom.guidance === false;
+  checks["every kind offers 'Send replies from'"] =
+    form.hasSenderBinding === true &&
+    custom.hasSenderBinding === true &&
+    hook.hasSenderBinding === true;
+  checks["…reading as the default sender until one is chosen"] =
+    form.senderReadsAsDefault === true && hook.senderReadsAsDefault === true;
 
   const shot = await session.send("Page.captureScreenshot", { format: "png" });
   checks["no console errors"] = session.consoleErrors.length === 0;
@@ -132,6 +159,7 @@ async function main() {
     page,
     form,
     custom,
+    hook,
     consoleErrors: session.consoleErrors.slice(0, 5),
   });
   const { writeFileSync } = await import("node:fs");
