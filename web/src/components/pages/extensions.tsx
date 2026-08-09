@@ -25,6 +25,7 @@ import type { PageSummary } from "../../lib/types";
 import { Markdown, MarkdownSourceCtx } from "../../lib/markdown";
 import { IncludedPage } from "./IncludedPage";
 import { NewFromTemplate } from "./NewFromTemplate";
+import { IMPORT_EXTENSIONS } from "./ImportExtensions";
 
 /**
  * The first-party page extensions (RADD-710 / RADD-715).
@@ -390,6 +391,9 @@ const EXTENSIONS: PageExtension[] = [
     description: "A button that creates a child page from a template.",
     render: (params) => <NewFromTemplate params={params} />,
   },
+  // Spec 117. Split into their own module only because this file was at its size
+  // limit; registration stays here, in the one loop below.
+  ...IMPORT_EXTENSIONS,
 ];
 
 for (const extension of EXTENSIONS) registerPageExtension(extension);

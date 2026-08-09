@@ -54,6 +54,11 @@ class PageExtensionName(StrEnum):
     INCLUDE = "include"
     LABEL_LIST = "label-list"
     NEW_FROM_TEMPLATE = "new-from-template"
+    # Spec 117. Contributed for the Confluence importer, but ordinary extensions:
+    # nothing about them knows where a page came from.
+    UNSUPPORTED_MACRO = "unsupported-macro"
+    EXPAND = "expand"
+    ITEMS = "items"
 
 
 class RestoreKind(StrEnum):

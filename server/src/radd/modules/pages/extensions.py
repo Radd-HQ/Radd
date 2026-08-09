@@ -135,6 +135,79 @@ PAGE_EXTENSIONS: tuple[PageExtensionSpec, ...] = (
             },
         },
     ),
+    # --- spec 117 -----------------------------------------------------------
+    # Contributed for the Confluence importer, but ordinary extensions: a person
+    # can insert any of them, and nothing about them knows about Confluence.
+    PageExtensionSpec(
+        name=PageExtensionName.UNSUPPORTED_MACRO,
+        label="Unsupported macro",
+        description="An imported macro Radd cannot render yet, kept verbatim.",
+        icon="puzzle",
+        params_schema={
+            "type": "object",
+            "required": ["macro"],
+            "properties": {
+                "macro": {"type": "string", "description": "The original macro's name."},
+                "params": {
+                    "type": "object",
+                    "description": "The original macro's parameters, verbatim.",
+                },
+                "body": {
+                    "type": "string",
+                    "format": "markdown",
+                    "description": "The macro's content, converted.",
+                },
+            },
+        },
+    ),
+    PageExtensionSpec(
+        name=PageExtensionName.EXPAND,
+        label="Expand",
+        description="A collapsible section — click the title to reveal it.",
+        icon="chevron-right",
+        params_schema={
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "default": "Details",
+                    "description": "The always-visible summary line.",
+                },
+                "text": {
+                    "type": "string",
+                    "format": "markdown",
+                    "description": "What the section reveals.",
+                },
+            },
+        },
+    ),
+    PageExtensionSpec(
+        name=PageExtensionName.ITEMS,
+        label="Issue query",
+        description="Issues matching an SLQ query, as a table.",
+        icon="list-checks",
+        params_schema={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "An SLQ query over items, e.g. project = TD AND status = Open.",
+                },
+                # Kept when a Confluence `jiraissues` macro's JQL could not be
+                # translated: the page then shows what the query WAS, rather than
+                # a guess that returns plausible rows.
+                "source_jql": {
+                    "type": "string",
+                    "description": "The original Jira query, when this came from an import.",
+                },
+                "unsupported": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Set when the original query needs rewriting by hand.",
+                },
+            },
+        },
+    ),
     PageExtensionSpec(
         name=PageExtensionName.NEW_FROM_TEMPLATE,
         label="New page from template",
