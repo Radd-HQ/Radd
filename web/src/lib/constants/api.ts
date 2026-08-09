@@ -48,6 +48,13 @@ export const ApiPath = {
   // Spec 100: cross-project references still waiting for their target.
   jiraPending: "/jira/pending",
   jiraRelink: "/jira/relink",
+  // Confluence importer (spec 117). Same four phases as the Jira one.
+  confluenceConnections: "/confluence/connections",
+  confluenceStatus: "/confluence/status",
+  confluenceSpaces: "/confluence/spaces",
+  confluenceSnapshots: "/confluence/snapshots",
+  confluencePlans: "/confluence/plans",
+  confluenceRuns: "/confluence/runs",
   tokens: "/tokens",
   projects: "/projects",
   // Phase 2+ consumers:

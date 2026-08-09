@@ -10,6 +10,7 @@ export * from "./settings";
 export * from "./permissions";
 export * from "./users";
 export * from "./jira-import";
+export * from "./confluence-import";
 export * from "./backups";
 export * from "./teams";
 export * from "./workflow";

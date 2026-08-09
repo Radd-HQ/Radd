@@ -208,6 +208,15 @@ def test_a_plain_img_resolves_like_an_ac_image():
     assert "?w=400" in result.markdown
 
 
+def test_a_filename_with_spaces_still_makes_a_link():
+    """Confluence filenames routinely contain spaces, and `![a](b c.png)` is not
+    a link — the renderer prints it literally. Caught by importing a real page."""
+    body = (
+        '<ac:image><ri:attachment ri:filename="Screen shot 1.png"/></ac:image>'
+    )
+    assert "![Screen shot 1.png](<Screen shot 1.png>)" in convert(body).markdown
+
+
 def test_an_external_img_keeps_its_url():
     body = '<p><img src="https://example.com/logo.png" alt="logo"/></p>'
     assert "![logo](https://example.com/logo.png)" in convert(body).markdown

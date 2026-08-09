@@ -50,6 +50,7 @@ import { LabelsSettingsPage } from "./routes/settings/labels";
 import { UsersSettingsPage } from "./routes/settings/users";
 import { DirectorySettingsPage } from "./routes/settings/directory";
 import { JiraImportPage } from "./routes/settings/jira-import";
+import { ConfluenceImportPage } from "./routes/settings/confluence-import";
 import { RolesSettingsPage } from "./routes/settings/roles";
 import { TeamsSettingsPage } from "./routes/settings/teams";
 import { TimeloggingSettingsPage } from "./routes/settings/timelogging";
@@ -445,6 +446,13 @@ const settingsJiraImportRoute = createRoute({
   component: JiraImportPage,
 });
 
+/** Confluence import wizard (spec 117) — instance-admin only. */
+const settingsConfluenceImportRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: SettingsSection.confluenceImport,
+  component: ConfluenceImportPage,
+});
+
 const settingsRolesRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: SettingsSection.roles,
@@ -694,6 +702,7 @@ const routeTree = rootRoute.addChildren([
       settingsUsersRoute,
       settingsDirectoryRoute,
       settingsJiraImportRoute,
+      settingsConfluenceImportRoute,
       settingsRolesRoute,
       settingsTokensRoute,
       settingsAutomationsRoute,

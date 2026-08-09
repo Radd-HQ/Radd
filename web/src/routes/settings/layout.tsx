@@ -10,6 +10,7 @@ import {
   CircleUserRound,
   Clock,
   DatabaseBackup,
+  BookUp,
   DatabaseZap,
   GitBranch,
   HardDrive,
@@ -262,6 +263,14 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         label: "Import from Jira",
         icon: DatabaseZap,
         plugin: "jiraimport",
+        show: (g) => g.instanceAdmin,
+      },
+      {
+        // Confluence import wizard (spec 117) — the wiki half of the migration.
+        to: RoutePath.settingsConfluenceImport,
+        label: "Import from Confluence",
+        icon: BookUp,
+        plugin: "confluenceimport",
         show: (g) => g.instanceAdmin,
       },
       {

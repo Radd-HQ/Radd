@@ -179,4 +179,13 @@ export const queryKeys = {
   jiraPlan: (planId: string) => ["jiraPlan", { planId }] as const,
   jiraPending: ["jiraPending"] as const,
   jiraRuns: ["jiraRuns"] as const,
+  confluenceConnections: ["confluenceConnections"] as const,
+  confluenceStatus: ["confluenceStatus"] as const,
+  confluenceSpaces: (connectionId: string | null) =>
+    ["confluenceSpaces", { connectionId }] as const,
+  confluenceTree: (spaceKey: string) => ["confluenceTree", { spaceKey }] as const,
+  confluenceSnapshots: ["confluenceSnapshots"] as const,
+  confluencePlans: ["confluencePlans"] as const,
+  confluencePlan: (planId: string) => ["confluencePlan", { planId }] as const,
+  confluenceRuns: ["confluenceRuns"] as const,
 } as const;

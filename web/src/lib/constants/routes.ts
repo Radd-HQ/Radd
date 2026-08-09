@@ -30,6 +30,7 @@ export const SettingsSection = {
   directory: "directory",
   // Jira import wizard (spec 90) — admin only.
   jiraImport: "jira-import",
+  confluenceImport: "confluence-import",
   roles: "roles",
   tokens: "tokens",
   automations: "automations",
@@ -155,6 +156,7 @@ export const RoutePath = {
   /** Consolidated Directory/LDAP settings (spec 85): user sync + group import/links. */
   settingsDirectory: `${SETTINGS_SEGMENT}/${SettingsSection.directory}`,
   settingsJiraImport: `${SETTINGS_SEGMENT}/${SettingsSection.jiraImport}`,
+  settingsConfluenceImport: `${SETTINGS_SEGMENT}/${SettingsSection.confluenceImport}`,
   settingsRoles: `${SETTINGS_SEGMENT}/${SettingsSection.roles}`,
   settingsTokens: `${SETTINGS_SEGMENT}/${SettingsSection.tokens}`,
   /** Automation rules admin (spec 20, global, `automation.manage`). */

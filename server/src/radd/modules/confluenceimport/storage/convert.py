@@ -55,6 +55,17 @@ def _escape(text: str) -> str:
     return _ESCAPE_RE.sub(r"\\\1", text)
 
 
+def _md_url(url: str) -> str:
+    """A markdown link target that survives a space.
+
+    Confluence filenames routinely contain them ("Screenshot 2025-02-07 at
+    15.37.38.png"), and `![alt](a b.png)` is not a link at all — the renderer
+    shows the literal text. Angle brackets are the markdown-native escape, and
+    they are harmless on a URL that never needed them.
+    """
+    return f"<{url}>" if url and (" " in url or ")" in url) else url
+
+
 @dataclass(slots=True)
 class ConvertResult:
     markdown: str
@@ -299,7 +310,7 @@ class _Renderer:
         url_node = node.find("ri:url")
         alt = node.attrs.get("ac:alt", "")
         if url_node is not None:
-            return f"![{alt}]({url_node.attrs.get('ri:value', '')})"
+            return f"![{alt}]({_md_url(url_node.attrs.get('ri:value', ''))})"
         if attachment is None:
             return ""
         filename = attachment.attrs.get("ri:filename", "")
@@ -311,13 +322,13 @@ class _Renderer:
                 f"image {filename!r} has no imported attachment",
                 subject=filename,
             )
-            return f"![{alt or filename}]({filename})"
+            return f"![{alt or filename}]({_md_url(filename)})"
         # RADD-751: the width rides in the URL as ?w=, so the endpoint serves fewer
         # bytes than the original when the document asks for a smaller image.
         width = node.attrs.get("ac:width", "")
         if width.isdigit():
             url = f"{url}{'&' if '?' in url else '?'}w={width}"
-        return f"![{alt or filename}]({url})"
+        return f"![{alt or filename}]({_md_url(url)})"
 
     def html_image(self, node: Node) -> str:
         """A plain `<img>`, which on a real corpus is the COMMON form.
@@ -331,7 +342,7 @@ class _Renderer:
         alt = node.attrs.get("alt", "")
         match = _DOWNLOAD_SRC_RE.search(src)
         if match is None:
-            return f"![{alt}]({src})" if src else ""
+            return f"![{alt}]({_md_url(src)})" if src else ""
         from urllib.parse import unquote
 
         filename = unquote(match.group(1))
@@ -343,11 +354,11 @@ class _Renderer:
                 f"image {filename!r} has no imported attachment",
                 subject=filename,
             )
-            return f"![{alt or filename}]({filename})"
+            return f"![{alt or filename}]({_md_url(filename)})"
         width = node.attrs.get("width", "")
         if width.isdigit():
             url = f"{url}{'&' if '?' in url else '?'}w={width}"
-        return f"![{alt or filename}]({url})"
+        return f"![{alt or filename}]({_md_url(url)})"
 
     def ac_link(self, node: Node) -> str:
         """`<ac:link>` wraps a typed reference: a page, a user, an attachment."""
@@ -387,7 +398,7 @@ class _Renderer:
             filename = attachment.attrs.get("ri:filename", "")
             self.result.attachment_refs.add(filename)
             url = self.ctx.attachment_url(filename)
-            return f"[{label or filename}]({url or filename})"
+            return f"[{label or filename}]({_md_url(url or filename)})"
         return label
 
     def _external_page(self, title: str, space: str) -> str:
