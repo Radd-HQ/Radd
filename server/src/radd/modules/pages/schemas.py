@@ -9,7 +9,21 @@ SLUG_PATTERN = r"^[a-z0-9][a-z0-9-]{0,99}$"
 # --- spaces ---
 
 
-class PageSpaceCreate(BaseModel):
+class ExternalIdentity(BaseModel):
+    """Where a row came from, for callers that import (spec 117).
+
+    Honored only when the caller passes a permission set carrying
+    `page.manage` — the same shape `CommentCreate` uses for its author/timestamp
+    overrides, so an ordinary request cannot reach these by adding two fields to
+    its JSON body.
+    """
+
+    #: The INSTANCE, not the product: `confluence:wiki.example.com`.
+    external_source: str = Field(default="", max_length=200)
+    external_id: str = Field(default="", max_length=200)
+
+
+class PageSpaceCreate(ExternalIdentity):
     name: str = Field(min_length=1, max_length=200)
     # Omitted -> derived from the name (slugs are cosmetic; URLs use ids).
     slug: str | None = Field(default=None, pattern=SLUG_PATTERN)
@@ -48,7 +62,7 @@ class PageSpaceRead(BaseModel):
 # --- pages ---
 
 
-class PageCreate(BaseModel):
+class PageCreate(ExternalIdentity):
     space_id: uuid.UUID
     parent_id: uuid.UUID | None = None
     title: str = Field(min_length=1, max_length=500)
@@ -60,6 +74,12 @@ class PageCreate(BaseModel):
     #: RADD-712: start from a template's shape. Ignored when `body` is given —
     #: an explicit body is a deliberate choice and must win.
     template: str | None = None
+    #: Spec 117 import overrides, honored only for a caller holding page.manage.
+    #: An import STATES the author; falling back to the actor credits whoever ran
+    #: it with thousands of other people's pages (the spec-90 mistake).
+    author_id: uuid.UUID | None = None
+    created_at: UtcDatetime | None = None
+    updated_at: UtcDatetime | None = None
 
 
 class PageUpdate(BaseModel):
@@ -75,6 +95,10 @@ class PageUpdate(BaseModel):
     parent_id: uuid.UUID | None = None
     position: float | None = None
     expected_version: int | None = Field(default=None, ge=1)
+    #: Spec 117 import overrides (page.manage only). `author_id` credits the
+    #: revision's real editor; `updated_at` backdates it.
+    author_id: uuid.UUID | None = None
+    updated_at: UtcDatetime | None = None
 
 
 class PageBacklink(BaseModel):

@@ -12,10 +12,43 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
 from radd.db import Base, TimestampMixin
+
+# Spec 117. Where a row came from, when something outside Radd made it.
+#
+# The Jira importer never needed this: it maps `DEV-123` onto Radd `DEV-123`, so
+# the item KEY is the external identity and a re-import upserts on it. A page has
+# no such handle — a UUID, and a slug that is cosmetic and frozen after create —
+# so without a column the mapping lives only in an importer's run ledger, which is
+# scoped to one run, deleted by its rollback, and gone when the plugin is removed.
+# That breaks re-import (duplicates instead of updates), cross-run link resolution
+# (import one space in March and another in June) and provenance.
+#
+# `external_source` names the INSTANCE, not the product — `confluence:<host>` —
+# because two Confluence servers both have a page `12345`. Generic on purpose:
+# `pages` must not learn the word Confluence, and the next importer must not have
+# to invent its own map table. Empty on everything a person made here.
+EXTERNAL_SOURCE_CHARS = 200
+EXTERNAL_ID_CHARS = 200
+
+
+def _external_unique(table: str) -> Index:
+    """Unique `(source, id)` — but only for rows that HAVE one.
+
+    Partial, because every natively-created row carries the same empty pair and a
+    plain unique constraint would let exactly one of them exist.
+    """
+    return Index(
+        f"uq_{table}_external",
+        "external_source",
+        "external_id",
+        unique=True,
+        postgresql_where=text("external_id <> ''"),
+    )
 
 
 class PageSpace(Base, TimestampMixin):
@@ -25,7 +58,10 @@ class PageSpace(Base, TimestampMixin):
     """
 
     __tablename__ = "page_spaces"
-    __table_args__ = (UniqueConstraint("slug", name="uq_page_spaces_slug"),)
+    __table_args__ = (
+        UniqueConstraint("slug", name="uq_page_spaces_slug"),
+        _external_unique("page_spaces"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(200))
@@ -34,6 +70,14 @@ class PageSpace(Base, TimestampMixin):
     position: Mapped[float] = mapped_column(Float, default=0, server_default="0")
     # Spec 74: opt-in PUBLIC space — readable without login via /public/pages.
     public: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # Spec 117 — see EXTERNAL_SOURCE_CHARS above. A re-imported space must land in
+    # the space it made, not create "Space PIP (2)".
+    external_source: Mapped[str] = mapped_column(
+        String(EXTERNAL_SOURCE_CHARS), default="", server_default=""
+    )
+    external_id: Mapped[str] = mapped_column(
+        String(EXTERNAL_ID_CHARS), default="", server_default=""
+    )
 
 
 class Page(Base, TimestampMixin):
@@ -52,6 +96,7 @@ class Page(Base, TimestampMixin):
     __table_args__ = (
         Index("ix_pages_space_parent", "space_id", "parent_id"),
         UniqueConstraint("space_id", "slug", name="uq_pages_space_slug"),
+        _external_unique("pages"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -72,6 +117,13 @@ class Page(Base, TimestampMixin):
     created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
     updated_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
     archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Spec 117 — see EXTERNAL_SOURCE_CHARS above.
+    external_source: Mapped[str] = mapped_column(
+        String(EXTERNAL_SOURCE_CHARS), default="", server_default=""
+    )
+    external_id: Mapped[str] = mapped_column(
+        String(EXTERNAL_ID_CHARS), default="", server_default=""
+    )
 
 
 class PageVersion(Base):

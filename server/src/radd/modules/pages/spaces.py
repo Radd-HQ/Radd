@@ -47,17 +47,41 @@ async def _emit_space(
     )
 
 
+async def find_space_by_external(
+    session: AsyncSession, external_source: str, external_id: str
+) -> PageSpace | None:
+    """The space a previous import made from that foreign space (spec 117) — so
+    re-importing lands in the space it made rather than creating "Space PIP (2)"."""
+    if not external_id:
+        return None
+    return await session.scalar(
+        select(PageSpace).where(
+            PageSpace.external_source == external_source,
+            PageSpace.external_id == external_id,
+        )
+    )
+
+
 async def create_space(
-    session: AsyncSession, data: PageSpaceCreate, actor_id: uuid.UUID
+    session: AsyncSession,
+    data: PageSpaceCreate,
+    actor_id: uuid.UUID,
+    *,
+    permissions: "frozenset" = frozenset(),
 ) -> PageSpace:
     slug = data.slug or core.slugify(data.name)
     if await _slug_clash(session, slug):
         raise ConflictError(PageEntity.SPACE, slug)
+    from .service import _may_import  # deferred: service imports spaces
+
+    importing = _may_import(permissions)
     space = PageSpace(
         name=data.name,
         slug=slug,
         description=data.description,
         position=data.position,
+        external_source=data.external_source if importing else "",
+        external_id=data.external_id if importing else "",
     )
     session.add(space)
     await session.flush()

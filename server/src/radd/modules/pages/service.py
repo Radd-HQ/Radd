@@ -7,12 +7,13 @@ content changes snapshot the PREVIOUS content into page_versions and bump
 
 import re
 import uuid
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd.exceptions import ConflictError, NotFoundError
+from radd.exceptions import ConflictError, ForbiddenError, NotFoundError
 from radd.modules.events import service as events
 
 from . import (
@@ -201,8 +202,45 @@ async def _page_by_id_text(
     return page
 
 
+def _may_import(permissions: "frozenset" = frozenset()) -> bool:
+    """Spec 117. The import overrides (author, timestamps, external identity) are
+    honored only for a caller that already holds `page.manage` in the space.
+
+    Deferred import: `auth` loads before `pages`, and taking the enum at module
+    scope would invert that. Pages have no project, so `PROJECT_MANAGE` — the atom
+    `comments` gates its own overrides on — is not the right one here.
+    """
+    from radd.modules.auth.types import Permission
+
+    return Permission.PAGE_MANAGE in permissions
+
+
+async def find_by_external(
+    session: AsyncSession, external_source: str, external_id: str
+) -> Page | None:
+    """The page a previous import made from that foreign row, if any (spec 117).
+
+    This is what makes re-import an upsert instead of a duplicate, and what lets a
+    link resolve to a page some ENTIRELY OTHER run created — the case the run
+    ledger cannot answer, because it is scoped to one run and its rollback
+    deletes it.
+    """
+    if not external_id:
+        return None
+    return await session.scalar(
+        select(Page).where(
+            Page.external_source == external_source,
+            Page.external_id == external_id,
+        )
+    )
+
+
 async def create_page(
-    session: AsyncSession, data: PageCreate, actor_id: uuid.UUID
+    session: AsyncSession,
+    data: PageCreate,
+    actor_id: uuid.UUID,
+    *,
+    permissions: "frozenset" = frozenset(),
 ) -> Page:
     space = await get_space(session, data.space_id)
     if data.parent_id is not None:
@@ -222,6 +260,12 @@ async def create_page(
         template = await page_templates.by_name(session, data.template)
         author = await _actor_name(session, actor_id)
         body = page_templates.render(template.body, title=data.title, author=author)
+    # Spec 117. An import states the author and the dates; everything else is the
+    # actor and `now`. Gated together because they are one act — a page credited
+    # to its real author but stamped today is not more honest than one stamped
+    # correctly and credited wrongly.
+    importing = _may_import(permissions)
+    author_id = data.author_id if (importing and data.author_id) else actor_id
     page = Page(
         space_id=space.id,
         parent_id=data.parent_id,
@@ -229,9 +273,17 @@ async def create_page(
         slug=await _free_slug(session, space.id, data.slug or page_slugify(data.title)),
         body=body,
         position=position,
-        created_by=actor_id,
-        updated_by=actor_id,
+        created_by=author_id,
+        updated_by=author_id,
+        external_source=data.external_source if importing else "",
+        external_id=data.external_id if importing else "",
     )
+    # Naive UTC, matching the columns' server defaults — the same conversion
+    # `comments.create_authorized_comment` does for its backdated rows.
+    if importing and data.created_at is not None:
+        page.created_at = data.created_at.replace(tzinfo=None)
+    if importing and (data.updated_at or data.created_at) is not None:
+        page.updated_at = (data.updated_at or data.created_at).replace(tzinfo=None)
     session.add(page)
     await session.flush()
     await backlinks.reindex(session, page)  # RADD-713
@@ -244,7 +296,12 @@ async def create_page(
 
 
 async def update_page(
-    session: AsyncSession, page_id: uuid.UUID, data: PageUpdate, actor_id: uuid.UUID
+    session: AsyncSession,
+    page_id: uuid.UUID,
+    data: PageUpdate,
+    actor_id: uuid.UUID,
+    *,
+    permissions: "frozenset" = frozenset(),
 ) -> Page:
     page = await get_page(session, page_id)
     if data.expected_version is not None and data.expected_version != page.version:
@@ -309,7 +366,13 @@ async def update_page(
             page.body = data.body
             changed.append("body")
         page.version += 1
-        page.updated_by = actor_id
+        # Spec 117: a re-import credits the revision's real editor.
+        importing = _may_import(permissions)
+        page.updated_by = (
+            data.author_id if (importing and data.author_id) else actor_id
+        )
+        if importing and data.updated_at is not None:
+            page.updated_at = data.updated_at.replace(tzinfo=None)
 
     await session.flush()
     # RADD-713: only when the body moved. A rename or a reposition cannot change
@@ -432,6 +495,44 @@ async def list_versions(session: AsyncSession, page_id: uuid.UUID) -> list[PageV
         .order_by(PageVersion.version.desc())
     )
     return list(result.scalars())
+
+
+async def write_version(
+    session: AsyncSession,
+    page_id: uuid.UUID,
+    *,
+    version: int,
+    title: str,
+    body: str,
+    author_id: uuid.UUID,
+    created_at: datetime | None = None,
+    permissions: "frozenset" = frozenset(),
+) -> PageVersion:
+    """Insert one historical revision directly (spec 117).
+
+    History normally accretes as a side effect of `update_page`, and for an
+    IMPORT that is the wrong shape: replaying N revisions to reconstruct a history
+    that is by definition already final would fire N `page.updated` events, N
+    watcher fan-outs and 2N reindex passes per page, to arrive at rows this writes
+    in one statement.
+
+    Mind the off-by-one `PageVersion` is built on: a row holds the PREVIOUS
+    content — version N's row is written when N+1 becomes current — so an importer
+    writes revisions 1..N-1 here and revision N as the live `pages` row, with
+    `page.version = N`. Getting it backwards yields a History tab whose newest
+    entry duplicates the current body while revision 1 is silently lost.
+    """
+    if not _may_import(permissions):
+        raise ForbiddenError("page.manage is required to write history directly")
+    await get_page(session, page_id)
+    row = PageVersion(
+        page_id=page_id, version=version, title=title, body=body, author_id=author_id
+    )
+    if created_at is not None:
+        row.created_at = created_at.replace(tzinfo=None)
+    session.add(row)
+    await session.flush()
+    return row
 
 
 async def get_version(
