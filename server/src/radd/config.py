@@ -305,6 +305,22 @@ class Settings(BaseSettings):
     # company domain in `issuemap.py` with this.
     jira_placeholder_email_domain: str = ""
 
+    # Confluence import connector (see radd/modules/confluenceimport, spec 117).
+    # SEED-ONLY, exactly like the jira_* block above: connections live in
+    # `confluence_connections` and are managed in the UI. Empty base URL = nothing
+    # to seed. Server/DC only — the REST base is /rest/api and bodies arrive as
+    # storage format; Cloud is a different client behind the same service seam.
+    confluence_base_url: str = ""  # e.g. https://confluence.example.com
+    confluence_pat: str = ""  # personal access token — Bearer; read scope is enough
+    confluence_user: str = ""  # basic-auth username (used when the PAT is empty)
+    confluence_password: str = ""
+    confluence_verify_ssl: bool = True  # internal CA / self-signed → set false
+    confluence_timeout_seconds: float = 30.0
+    # Same contract as jira_placeholder_email_domain: empty DERIVES it from the
+    # connection's own host, so an imported author can be matched by a later AD
+    # import instead of forking a second account for the same person.
+    confluence_placeholder_email_domain: str = ""
+
     # Google Chat notifier (see radd/modules/googlechat). Empty URL = disabled.
     googlechat_webhook_url: str = ""
     googlechat_event_types: str = "item.created,sla.breached,page.created"
@@ -452,6 +468,7 @@ class Settings(BaseSettings):
         "radd.modules.participants",
         "radd.modules.dashboards",
         "radd.modules.jiraimport",
+        "radd.modules.confluenceimport",
         "radd.modules.monitoring",
         "radd.modules.leave",
     )
