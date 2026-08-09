@@ -100,6 +100,11 @@ _MERGE_REPOINT: tuple[tuple[str, str], ...] = (
     # Spec 100: who downloaded a Jira snapshot. SET NULL, same reasoning — the
     # successor inherits the cached download rather than it becoming anonymous.
     ("jira_snapshots", "actor_id"),
+    # Spec 117: the same two facts for the Confluence importer — who downloaded a
+    # snapshot, and who ran an import. Operational history, so it follows the
+    # person rather than blanking.
+    ("confluence_snapshots", "actor_id"),
+    ("confluence_runs", "actor_id"),
     # Spec 110: federated logins follow the person. Merging the AD account into
     # the Google one (or back) must not cost either account its ability to sign
     # in — CASCADE would have destroyed the source's identities outright. Not in

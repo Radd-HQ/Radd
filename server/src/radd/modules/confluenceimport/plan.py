@@ -1,0 +1,276 @@
+"""The plan: profiling, the macro census, and the six mapping tables (spec 117).
+
+This is the step that turns "Confluence has hundreds of macros" into a handful of
+decisions somebody can actually make. Jira's 337 fields became 14 decisions
+because the profile said which 14 mattered; a decade of Confluence is the same
+problem, and the answer is the same — COUNT first, then decide.
+
+Profiling reads only the snapshot cache. It is therefore free to re-run, which is
+what makes "fix a mapping and try again" a loop rather than a download.
+"""
+
+from __future__ import annotations
+
+import re
+import uuid
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from radd.exceptions import NotFoundError
+
+from .models import ConfluencePlan, ConfluenceSnapshotComment, ConfluenceSnapshotPage
+from .schemas import (
+    GroupMapping,
+    JiraLinkMapping,
+    LabelMapping,
+    MacroMapping,
+    PlanCreate,
+    PlanMappings,
+    PlanOptions,
+    PlanProblem,
+    PlanUpdate,
+    SpaceMapping,
+    UserMapping,
+)
+from .snapshot import service as snapshot_service
+from .storage.macros import BUILTIN_MACROS
+from .types import (
+    ConfluenceEntity,
+    GroupAction,
+    MacroAction,
+    MappingSection,
+    SpaceAction,
+    UnresolvedPrincipal,
+)
+
+#: `<ac:structured-macro … ac:name="foo">` — the census's whole parser. A regex
+#: rather than a tree walk because this runs over every cached body and only ever
+#: needs the name; building a tree per page to read one attribute would make
+#: profiling a large space noticeably slower for no extra information.
+_MACRO_RE = re.compile(r'<ac:structured-macro[^>]*\bac:name="([^"]+)"')
+_USER_RE = re.compile(r'<ri:user\s+ri:(?:username|userkey)="([^"]+)"')
+_JIRA_KEY_RE = re.compile(r'<ac:parameter\s+ac:name="key">([A-Z][A-Z0-9_]+)-\d+</ac:parameter>')
+
+
+async def get_plan(session: AsyncSession, plan_id: uuid.UUID) -> ConfluencePlan:
+    plan = await session.get(ConfluencePlan, plan_id)
+    if plan is None:
+        raise NotFoundError(ConfluenceEntity.PLAN, plan_id)
+    return plan
+
+
+def mappings_of(plan: ConfluencePlan) -> PlanMappings:
+    return PlanMappings.model_validate(plan.mappings or {})
+
+
+def options_of(plan: ConfluencePlan) -> PlanOptions:
+    return PlanOptions.model_validate(plan.options or {})
+
+
+# --- profiling ----------------------------------------------------------------
+
+
+async def profile(session: AsyncSession, snapshot_id: uuid.UUID) -> PlanMappings:
+    """Stream the cache and count everything a decision could hang on."""
+    rows = list(
+        (
+            await session.execute(
+                select(ConfluenceSnapshotPage).where(
+                    ConfluenceSnapshotPage.snapshot_id == snapshot_id
+                )
+            )
+        ).scalars()
+    )
+    comments = list(
+        (
+            await session.execute(
+                select(ConfluenceSnapshotComment).where(
+                    ConfluenceSnapshotComment.snapshot_id == snapshot_id
+                )
+            )
+        ).scalars()
+    )
+
+    macros: dict[str, int] = {}
+    macro_sample: dict[str, str] = {}
+    spaces: dict[str, int] = {}
+    users: dict[str, int] = {}
+    labels: dict[str, int] = {}
+    jira_projects: dict[str, int] = {}
+    principals: dict[str, int] = {}
+
+    for row in rows:
+        spaces[row.space_key] = spaces.get(row.space_key, 0) + 1
+        for label in row.labels or []:
+            labels[label] = labels.get(label, 0) + 1
+        for name in _MACRO_RE.findall(row.body or ""):
+            macros[name] = macros.get(name, 0) + 1
+            macro_sample.setdefault(name, row.title)
+        for username in _USER_RE.findall(row.body or ""):
+            users[username] = users.get(username, 0) + 1
+        for project_key in _JIRA_KEY_RE.findall(row.body or ""):
+            jira_projects[project_key] = jira_projects.get(project_key, 0) + 1
+        for principal in _principals_of(row.restrictions or {}):
+            principals[principal] = principals.get(principal, 0) + 1
+
+    for comment in comments:
+        if comment.author:
+            users[comment.author] = users.get(comment.author, 0) + 1
+
+    return PlanMappings(
+        spaces=[
+            SpaceMapping(key=key, name=key, count=count, action=SpaceAction.CREATE)
+            for key, count in sorted(spaces.items(), key=lambda kv: -kv[1])
+        ],
+        macros=_macro_rows(macros, macro_sample),
+        users=[
+            UserMapping(username=name, count=count)
+            for name, count in sorted(users.items(), key=lambda kv: -kv[1])
+        ],
+        groups=[
+            GroupMapping(name=name, count=count, action=GroupAction.IDENTITY)
+            for name, count in sorted(principals.items(), key=lambda kv: -kv[1])
+        ],
+        labels=[
+            LabelMapping(name=name, count=count)
+            for name, count in sorted(labels.items(), key=lambda kv: -kv[1])
+        ],
+        jira_links=[
+            JiraLinkMapping(project_key=key, count=count)
+            for key, count in sorted(jira_projects.items(), key=lambda kv: -kv[1])
+        ],
+    )
+
+
+def _macro_rows(counts: dict[str, int], sample: dict[str, str]) -> list[MacroMapping]:
+    """The census. Every macro FOUND, ranked by use, plus a count-0 tail for the
+    ones Radd can already render — so the table doubles as the list of what is
+    supported, and an admin can see a mapping exists before needing it."""
+    rows: list[MacroMapping] = []
+    for name, count in sorted(counts.items(), key=lambda kv: -kv[1]):
+        spec = BUILTIN_MACROS.get(name)
+        rows.append(
+            MacroMapping(
+                name=name,
+                count=count,
+                action=spec.action if spec else MacroAction.UNSUPPORTED,
+                extension=spec.extension if spec else "",
+                sample_page=sample.get(name, ""),
+                reason=(spec.note if spec else "no mapping — imported as a card"),
+            )
+        )
+    for name, spec in sorted(BUILTIN_MACROS.items()):
+        if name in counts:
+            continue
+        # Count 0: collapsed and ignored by default, the spec-100 treatment.
+        rows.append(
+            MacroMapping(
+                name=name, count=0, action=MacroAction.IGNORE,
+                extension=spec.extension, reason=spec.note or "not used in this snapshot",
+            )
+        )
+    return rows
+
+
+def _principals_of(restrictions: dict) -> list[str]:
+    """Every user and group named by a page's restrictions.
+
+    Confluence nests these four deep, and the shape differs slightly between
+    versions, so this walks defensively: a shape we do not recognise yields no
+    principals rather than raising, and the run's FAIL default then refuses the
+    page rather than importing it open.
+    """
+    found: list[str] = []
+    for operation in ("read", "update"):
+        block = (restrictions or {}).get(operation) or {}
+        people = ((block.get("restrictions") or {}).get("user") or {}).get("results") or []
+        groups = ((block.get("restrictions") or {}).get("group") or {}).get("results") or []
+        for person in people:
+            name = person.get("username") or person.get("displayName") or ""
+            if name:
+                found.append(f"user:{name}")
+        for group in groups:
+            name = group.get("name") or ""
+            if name:
+                found.append(f"group:{name}")
+    return found
+
+
+# --- CRUD ---------------------------------------------------------------------
+
+
+async def create_plan(
+    session: AsyncSession, data: PlanCreate
+) -> ConfluencePlan:
+    await snapshot_service.require_complete(session, data.snapshot_id)
+    mappings = await profile(session, data.snapshot_id)
+    plan = ConfluencePlan(
+        name=data.name,
+        snapshot_id=data.snapshot_id,
+        mappings=mappings.model_dump(mode="json"),
+        options=PlanOptions().model_dump(mode="json"),
+    )
+    session.add(plan)
+    await session.flush()
+    return plan
+
+
+async def update_plan(
+    session: AsyncSession, plan_id: uuid.UUID, data: PlanUpdate
+) -> ConfluencePlan:
+    plan = await get_plan(session, plan_id)
+    if data.name is not None:
+        plan.name = data.name
+    if data.mappings is not None:
+        plan.mappings = data.mappings.model_dump(mode="json")
+    if data.options is not None:
+        plan.options = data.options.model_dump(mode="json")
+    await session.flush()
+    return plan
+
+
+async def validate_plan(session: AsyncSession, plan_id: uuid.UUID) -> list[PlanProblem]:
+    """Everything that would make a run misbehave, addressed to its own control."""
+    plan = await get_plan(session, plan_id)
+    mappings = mappings_of(plan)
+    options = options_of(plan)
+    problems: list[PlanProblem] = []
+
+    if not [s for s in mappings.spaces if s.action is not SpaceAction.IGNORE]:
+        problems.append(PlanProblem(
+            section=MappingSection.SPACES, subject="",
+            message="every space is ignored — this run would import nothing",
+        ))
+    for space in mappings.spaces:
+        if space.action is SpaceAction.MAP and space.space_id is None:
+            problems.append(PlanProblem(
+                section=MappingSection.SPACES, subject=space.key,
+                message="mapped to an existing space, but no space is chosen",
+            ))
+    for macro in mappings.macros:
+        if macro.action is MacroAction.EXTENSION and not macro.extension:
+            problems.append(PlanProblem(
+                section=MappingSection.MACROS, subject=macro.name,
+                message="set to render as an extension, but no extension is named",
+            ))
+    # The one that is a data leak rather than a nuisance.
+    if options.import_restrictions and options.unresolved_principal is UnresolvedPrincipal.MAP_TO:
+        if options.unresolved_group_id is None and options.unresolved_team_id is None:
+            problems.append(PlanProblem(
+                section=MappingSection.GROUPS, subject="",
+                message="unresolved principals are set to map to a subject, "
+                        "but no group or team is chosen",
+            ))
+    return problems
+
+
+async def list_plans(session: AsyncSession) -> list[ConfluencePlan]:
+    result = await session.execute(select(ConfluencePlan).order_by(ConfluencePlan.name))
+    return list(result.scalars())
+
+
+async def delete_plan(session: AsyncSession, plan_id: uuid.UUID) -> None:
+    plan = await get_plan(session, plan_id)
+    await session.delete(plan)
+    await session.flush()

@@ -9,11 +9,16 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .types import (
     ConfluenceAuthMode,
+    GroupAction,
+    JiraLinkAction,
+    LabelAction,
     MacroAction,
     MappingSection,
     ProblemKind,
     ScopeKind,
+    SpaceAction,
     UnresolvedPrincipal,
+    UserAction,
 )
 
 # --- connections --------------------------------------------------------------
@@ -151,7 +156,7 @@ class SpaceMapping(BaseModel):
     key: str
     name: str = ""
     count: int = 0
-    action: str = "create"  # create | map | ignore
+    action: SpaceAction = SpaceAction.CREATE
     space_id: uuid.UUID | None = None
     target_name: str = ""
 
@@ -173,7 +178,7 @@ class UserMapping(BaseModel):
     display_name: str = ""
     email: str = ""
     count: int = 0
-    action: str = "map"  # map | create | ignore
+    action: UserAction = UserAction.MAP
     user_id: uuid.UUID | None = None
 
 
@@ -187,7 +192,7 @@ class GroupMapping(BaseModel):
 
     name: str
     count: int = 0
-    action: str = "identity"  # identity | map | fail
+    action: GroupAction = GroupAction.IDENTITY
     group_id: uuid.UUID | None = None
     team_id: uuid.UUID | None = None
     resolved_dn: str = ""
@@ -196,7 +201,7 @@ class GroupMapping(BaseModel):
 class LabelMapping(BaseModel):
     name: str
     count: int = 0
-    action: str = "create"  # create | map | ignore
+    action: LabelAction = LabelAction.CREATE
     target: str = ""
 
 
@@ -206,7 +211,7 @@ class JiraLinkMapping(BaseModel):
 
     project_key: str
     count: int = 0
-    action: str = "resolve"  # resolve | external | ignore
+    action: JiraLinkAction = JiraLinkAction.RESOLVE
     radd_project_key: str = ""
 
 

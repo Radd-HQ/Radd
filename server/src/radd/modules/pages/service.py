@@ -350,24 +350,30 @@ async def update_page(
         changed.append("slug")
 
     if core.should_snapshot(page.title, page.body, data.title, data.body):
-        session.add(
-            PageVersion(
-                page_id=page.id,
-                version=page.version,
-                title=page.title,
-                body=page.body,
-                author_id=page.updated_by,
+        importing = _may_import(permissions)
+        # Spec 117: an import writes a page over several passes; those passes are
+        # not edits, and letting them consume version numbers collides with the
+        # page's real imported history.
+        quiet_write = importing and data.suppress_version
+        if not quiet_write:
+            session.add(
+                PageVersion(
+                    page_id=page.id,
+                    version=page.version,
+                    title=page.title,
+                    body=page.body,
+                    author_id=page.updated_by,
+                )
             )
-        )
         if data.title is not None and data.title != page.title:
             page.title = data.title
             changed.append("title")
         if data.body is not None and data.body != page.body:
             page.body = data.body
             changed.append("body")
-        page.version += 1
+        if not quiet_write:
+            page.version += 1
         # Spec 117: a re-import credits the revision's real editor.
-        importing = _may_import(permissions)
         page.updated_by = (
             data.author_id if (importing and data.author_id) else actor_id
         )

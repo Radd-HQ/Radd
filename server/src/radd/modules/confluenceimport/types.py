@@ -128,6 +128,51 @@ class MacroAction(StrEnum):
     IGNORE = "ignore"  # not present in this corpus (count 0)
 
 
+class UpsertAction(StrEnum):
+    """What writing one page turned out to be — reported truthfully by a dry run,
+    which is the point of resolving everything before deciding to write."""
+
+    CREATE = "create"
+    UPDATE = "update"
+    SKIP = "skip"
+
+
+class SpaceAction(StrEnum):
+    CREATE = "create"
+    MAP = "map"  # into an existing Radd space
+    IGNORE = "ignore"
+
+
+class UserAction(StrEnum):
+    MAP = "map"
+    CREATE = "create"  # provision a placeholder account
+    IGNORE = "ignore"
+
+
+class GroupAction(StrEnum):
+    """What to do with a restriction principal.
+
+    `IDENTITY` is the default and the normal case: the same AD group, matched by
+    DN. The other two exist for principals that do not resolve.
+    """
+
+    IDENTITY = "identity"
+    MAP = "map"
+    FAIL = "fail"
+
+
+class LabelAction(StrEnum):
+    CREATE = "create"
+    MAP = "map"
+    IGNORE = "ignore"
+
+
+class JiraLinkAction(StrEnum):
+    RESOLVE = "resolve"  # link to the item spec 100 imported
+    EXTERNAL = "external"  # keep a link to Jira
+    IGNORE = "ignore"
+
+
 class MappingSection(StrEnum):
     """The plan's tables. A `Problem` carries one of these plus the key inside it,
     which is what lets a run report offer "Fix in Macros → drawio" instead of

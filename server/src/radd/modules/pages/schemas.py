@@ -99,6 +99,13 @@ class PageUpdate(BaseModel):
     #: revision's real editor; `updated_at` backdates it.
     author_id: uuid.UUID | None = None
     updated_at: UtcDatetime | None = None
+    #: Do not snapshot the previous content into `page_versions`, and do not bump
+    #: `version` (spec 117). An import CONSTRUCTS a page over several passes — the
+    #: body is written once, then rewritten when its attachments exist — and those
+    #: intermediate states are not edits anybody made. Without this the
+    #: construction passes occupy the version numbers the page's REAL imported
+    #: history needs, and writing that history then collides on (page, version).
+    suppress_version: bool = False
 
 
 class PageBacklink(BaseModel):
