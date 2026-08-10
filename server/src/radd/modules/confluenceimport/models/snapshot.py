@@ -128,8 +128,13 @@ class ConfluenceSnapshotComment(Base):
 
 
 class ConfluenceSnapshotAttachment(Base):
-    """A cached attachment. The BYTES live on a storage host through the spec-102
-    blob API; this row is the manifest entry that points at them."""
+    """A cached attachment. The BYTES live on DISK inside the snapshot's package
+    (see `snapshot/package.py`); this row is the manifest entry pointing at them.
+
+    Not the object store: a download caches bytes that may never be imported, and
+    pushing 49 GB of them through S3 to find that out made the download crawl.
+    They reach the object store when a RUN imports them.
+    """
 
     __tablename__ = "confluence_snapshot_attachments"
     __table_args__ = (
@@ -144,6 +149,7 @@ class ConfluenceSnapshotAttachment(Base):
     filename: Mapped[str] = mapped_column(String(500), default="")
     content_type: Mapped[str] = mapped_column(String(200), default="")
     size_bytes: Mapped[int] = mapped_column(BigInteger, default=0)
-    storage_name: Mapped[str] = mapped_column(String(500), default="")
-    storage_host_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    #: RELATIVE to the package directory, so moving the package — or the whole
+    #: snapshot root — does not invalidate every row in it.
+    file_path: Mapped[str] = mapped_column(String(1000), default="")
     download_path: Mapped[str] = mapped_column(String(1000), default="")

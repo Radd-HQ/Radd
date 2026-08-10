@@ -22,8 +22,6 @@ years later:
 import ast
 from pathlib import Path
 
-from radd.config import settings
-from radd.kernel import registries
 
 MODULES_DIR = Path(__file__).resolve().parents[1] / "src" / "radd" / "modules"
 KERNEL_DIR = MODULES_DIR.parent / "kernel"

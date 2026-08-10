@@ -7,10 +7,18 @@
 2. A string literal compared where a SAME-MODULE StrEnum member exists is a
    bypass of rule 2 — a renamed member silently breaks the comparison. The
    enums exist; this makes them the only way to say it.
+
+3. An UNDEFINED NAME (RADD-1022). Ruff has caught these by default all along;
+   nothing ran it. A stale `buffer.close()` left behind by a refactor sailed
+   through the whole suite and only surfaced after a 118 MB download against a
+   live server — a NameError on a line no test reaches. Static analysis is free
+   and that download was not.
 """
 
 import ast
 from pathlib import Path
+
+import pytest
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "radd"
 
@@ -119,4 +127,36 @@ def test_same_module_enum_values_not_compared_as_literals():
                         )
     assert not offenders, (
         "same-module enum values compared as bare literals:\n  " + "\n  ".join(sorted(offenders))
+    )
+
+
+# --- 3. what ruff already knew ------------------------------------------------
+
+
+def test_no_undefined_names():
+    """`ruff check --select F821` over the source tree — the check a type checker
+    would give us if this project had one.
+
+    F821 ONLY, deliberately. An undefined name is unambiguously a defect: there is
+    no style position to argue with, so the gate cannot become the test everyone
+    learns to skip. Unused imports (F401) are deliberately NOT gated — `radd.sdk`
+    is nothing but re-exports and two module `__init__`s import purely to register
+    bindings, so a repo-wide F401 rule would demand `__all__` on the plugin SDK's
+    public contract. That may be worth doing; it is not worth doing as a side
+    effect of fixing a NameError.
+    """
+    import shutil
+    import subprocess
+
+    root = Path(__file__).resolve().parents[1]
+    ruff = shutil.which("ruff") or str(root / ".venv/bin/ruff")
+    if not Path(ruff).exists():  # pragma: no cover - dev-dependency guard
+        pytest.skip("ruff is not installed")
+
+    result = subprocess.run(
+        [ruff, "check", "--select", "F821", "--quiet", "src", "tests"],
+        cwd=root, capture_output=True, text=True,
+    )
+    assert result.returncode == 0, (
+        "ruff found undefined names:\n" + (result.stdout or result.stderr)
     )

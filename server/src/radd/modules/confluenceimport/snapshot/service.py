@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError, NotFoundError
 
 from .. import connections
-from ..models import ConfluenceSnapshot, ConfluenceSnapshotAttachment
+from ..models import ConfluenceSnapshot
 from ..schemas import SnapshotCreate
 from ..types import (
     ConfluenceEntity,
@@ -96,24 +96,11 @@ async def request_cancel(session: AsyncSession, snapshot_id: uuid.UUID) -> Confl
 
 
 async def delete_snapshot(session: AsyncSession, snapshot_id: uuid.UUID) -> None:
-    """Deleting a cache reclaims its BYTES too — the rows cascade, but blobs live
-    on a storage host and would otherwise be orphaned there forever."""
-    from radd.modules.attachments import service as attachments_service
+    """Deleting a cache reclaims its BYTES too — one rmtree of the package, which
+    cannot half-succeed the way N object-store deletes can."""
+    from . import package
 
     snapshot = await get_snapshot(session, snapshot_id)
-    result = await session.execute(
-        select(ConfluenceSnapshotAttachment).where(
-            ConfluenceSnapshotAttachment.snapshot_id == snapshot_id
-        )
-    )
-    for row in result.scalars():
-        if not row.storage_name:
-            continue
-        try:
-            await attachments_service.remove_blob(
-                session, row.storage_name, host_id=row.storage_host_id
-            )
-        except Exception:  # noqa: BLE001 — a missing blob must not block the delete
-            pass
+    await asyncio.to_thread(package.remove, snapshot_id)
     await session.delete(snapshot)
     await session.flush()

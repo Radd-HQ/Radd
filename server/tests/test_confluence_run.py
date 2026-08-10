@@ -353,3 +353,36 @@ async def test_history_imports_revisions_below_the_live_body(db):
     assert [v.version for v in versions] == [1, 2]
     assert "first" in versions[0].body
     assert "live" in page.body, "the live body is the newest revision, not a version row"
+
+
+# --- the wire constant that had no compiler behind it ---
+
+
+def test_the_attachment_url_matches_a_real_route():
+    """The importer writes attachment URLs into page bodies. They must name a
+    route the app actually serves.
+
+    It emitted `/attachments/{id}/download`, which does not exist. Everything
+    type-checked, the page rendered a `<video>` with controls, and the player
+    reported SRC_NOT_SUPPORTED — because its source was a 404 page. Nothing but
+    asking the running app catches that.
+    """
+    import uuid as _uuid
+
+    from radd.app import create_app
+    from radd.modules.confluenceimport.runs import _attachment_url
+
+    def walk(routes):
+        for route in routes:
+            candidates = getattr(route, "effective_candidates", None)
+            if candidates is not None:
+                yield from walk(candidates())
+            elif getattr(route, "path", None):
+                yield route.path
+
+    emitted = _attachment_url(_uuid.uuid4())
+    # `/api/v1/attachments/<uuid>` -> the template the router registered.
+    template = emitted.rsplit("/", 1)[0] + "/{attachment_id}"
+    assert template in set(walk(create_app().routes)), (
+        f"the importer emits {emitted}, which no route serves"
+    )

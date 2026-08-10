@@ -56,6 +56,20 @@ _DOWNLOAD_SRC_RE = re.compile(r"/download/attachments/\d+/([^?#]+)")
 _AUDIO_EXTENSIONS = frozenset({"mp3", "wav", "ogg", "oga", "m4a", "aac", "flac"})
 
 
+def _find_attachment(node: "Node | None") -> str:
+    """The first `ri:filename` anywhere beneath a node."""
+    if node is None:
+        return ""
+    if node.tag == "ri:attachment":
+        return node.attrs.get("ri:filename", "")
+    for child in node.children:
+        if isinstance(child, Node):
+            found = _find_attachment(child)
+            if found:
+                return found
+    return ""
+
+
 def _escape(text: str) -> str:
     return _ESCAPE_RE.sub(r"\\\1", text)
 
@@ -431,7 +445,7 @@ class _Renderer:
         if spec.action is MacroAction.STRIP:
             return ""
         if spec.action is MacroAction.NATIVE:
-            return self.native_macro(name, params, raw_body, rich, inline=inline)
+            return self.native_macro(name, params, raw_body, rich, node, inline=inline)
         if spec.action is MacroAction.EXTENSION:
             body_text = raw_body
             if rich is not None:
@@ -450,7 +464,7 @@ class _Renderer:
 
     def native_macro(
         self, name: str, params: dict[str, str], raw_body: str, rich: Node | None,
-        *, inline: bool,
+        node: Node | None = None, *, inline: bool,
     ) -> str:
         if name in ("code", "noformat"):
             language = params.get("language", "") if name == "code" else ""
@@ -471,10 +485,13 @@ class _Renderer:
         if name == "jiraissues":
             return self.items_fence(params.get("jqlQuery", "") or params.get("jql", ""))
         if name in ("multimedia", "viewfile", "widget"):
-            return self.media_fence(name, params, rich)
+            return self.media_fence(name, params, rich, node)
         return raw_body.strip()
 
-    def media_fence(self, name: str, params: dict[str, str], rich: Node | None) -> str:
+    def media_fence(
+        self, name: str, params: dict[str, str], rich: Node | None,
+        node: Node | None = None,
+    ) -> str:
         """A playable attachment.
 
         `multimedia` IS the content of the pages that use it — a meeting recording
@@ -483,10 +500,17 @@ class _Renderer:
         points at the imported file rather than at Confluence.
         """
         filename = params.get("name", "") or params.get("file", "")
-        if not filename and rich is not None:
-            attachment = rich.find("ri:attachment")
-            if attachment is not None:
-                filename = attachment.attrs.get("ri:filename", "")
+        # The real markup puts the file in an ELEMENT inside the parameter:
+        #   <ac:parameter ac:name="name"><ri:attachment ri:filename="x.mp4"/></ac:parameter>
+        # so reading parameters as text found an empty string and carded the macro
+        # while the video sat right there. Search the whole macro for the
+        # reference rather than guessing which shape this instance writes.
+        if not filename:
+            for scope in (node, rich):
+                found = _find_attachment(scope)
+                if found:
+                    filename = found
+                    break
         # `widget` embeds an external URL (YouTube and friends) rather than a file.
         external = params.get("url", "")
         if not filename and external:

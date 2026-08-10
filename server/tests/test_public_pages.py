@@ -14,14 +14,12 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings
-from radd.exceptions import ConflictError, NotFoundError
+from radd.exceptions import NotFoundError
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.pages import public as kb, service as docs_service, spaces as docs_spaces
 from radd.modules.pages.models import PageSpace
 from radd.modules.pages.schemas import PageCreate, PageSpaceCreate, PageSpaceUpdate
-from radd.modules.projects import service as projects_service
-from radd.modules.projects.schemas import ProjectCreate
 
 
 @pytest.fixture

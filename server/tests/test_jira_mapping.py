@@ -6,17 +6,13 @@ blank), and the validation is the guard that stops a bad mapping reaching the
 importer — both worth pinning.
 """
 
-import uuid
 
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings
-from radd.exceptions import ConflictError
 from radd.modules.fields.types import FieldType
-from radd.modules.jiraimport import mapping
 from radd.modules.jiraimport.mapping import FieldMapping, slug, suggest_mappings, validate_mappings
-from radd.modules.jiraimport.schemas import FieldMappingEntry
 from radd.modules.jiraimport.types import (
     BuiltinTarget,
     FieldAction,

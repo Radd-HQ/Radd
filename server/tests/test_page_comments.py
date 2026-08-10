@@ -289,7 +289,6 @@ async def test_the_gc_sweeps_a_comment_whose_parent_bypassed_the_delete_path(db,
     """The case the explicit sweep cannot cover: a parent removed by something
     that never called `delete_for_parent`. Simulated by deleting the page row
     directly, which is what any future path that forgets will look like."""
-    from radd.kernel.registry import registries
     from radd.modules.comments.models import Comment
     from radd.modules.events.models import Event
     from radd.modules.events import cascade

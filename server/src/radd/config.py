@@ -117,9 +117,22 @@ class Settings(BaseSettings):
     #
     # Safe to raise because uploads are never held whole in memory: the storage
     # layer buffers through a SpooledTemporaryFile, and spec 117's downloader
-    # streams into one rather than reading the response body into bytes. Disk on
-    # the storage host is the real constraint, not RAM.
-    attachment_max_bytes: int = 512 * 1024 * 1024
+    # writes straight to disk. Disk is the real constraint, not RAM.
+    attachment_max_bytes: int = 5 * 1024 * 1024 * 1024
+
+    # Spec 117 — where a downloaded Confluence snapshot lives ON DISK.
+    #
+    # Snapshot attachments used to go through the spec-102 blob API and out to the
+    # object store. That is the right home for a page's attachments, and the wrong
+    # one for a download: one real section pushed 49 GB through Garage's S3 API to
+    # cache bytes that may never be imported, and the download crawled. A snapshot
+    # is a working file, not durable content — so it is a plain directory that a
+    # delete can remove with one rmtree, and that an operator can inspect, copy
+    # between machines, or hand to a colleague.
+    #
+    # Bytes reach the object store when a RUN imports them, which is the point at
+    # which they become real attachments someone will read.
+    confluence_snapshot_dir: str = "var/confluence-snapshots"
     s3_endpoint: str = "localhost:9000"  # host:port (no scheme; s3_secure picks it)
     s3_access_key: str = ""
     s3_secret_key: str = ""

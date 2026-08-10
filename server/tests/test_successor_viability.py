@@ -29,7 +29,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from radd.config import settings
 from radd.exceptions import ConflictError
 from radd.modules import workflow  # noqa: F401 — registers the default-state hook
-from radd.modules.auth import authz, roles as auth_roles, service as auth_service
+from radd.modules.auth import roles as auth_roles, service as auth_service
 from radd.modules.auth.models import GlobalRoleGrant, Role, User
 from radd.modules.auth.service import _permission_gaps, successor_viability
 from radd.modules.auth.types import BuiltinRoleKey, InstanceRole

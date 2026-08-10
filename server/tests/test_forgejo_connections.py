@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings
 from radd.modules.forgejo import service
-from radd.modules.forgejo.models import ForgejoConnection, ForgejoRepo
+from radd.modules.forgejo.models import ForgejoConnection
 from radd.modules.forgejo.schemas import ConnectionCreate, ConnectionUpdate, RepoCreate, RepoUpdate
 from radd.exceptions import ConflictError
 from radd.modules.projects import service as projects_service

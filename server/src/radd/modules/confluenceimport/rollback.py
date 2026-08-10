@@ -8,7 +8,6 @@ and the reason a partial rollback is still useful.
 from __future__ import annotations
 
 import logging
-import uuid
 
 from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession

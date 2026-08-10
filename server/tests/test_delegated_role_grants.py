@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings as config
 from radd.exceptions import ForbiddenError
-from radd.modules.auth import authz, roles as auth_roles
+from radd.modules.auth import roles as auth_roles
 from radd.modules.auth.models import GlobalRoleGrant, User
 from radd.modules.auth.roles_router import ensure_delegated_role_coverage
 from radd.modules.auth.schemas import RoleCreate

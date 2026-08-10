@@ -13,7 +13,7 @@ import uuid
 import pytest
 
 from radd.exceptions import ConflictError, ForbiddenError
-from radd.modules.auth import authz, authz_core, roles
+from radd.modules.auth import authz_core, roles
 from radd.modules.auth.types import all_permission_keys
 from radd.modules.auth.authz import (
     Permission,

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models import (
@@ -80,14 +80,8 @@ async def attachments(
     return list(result.scalars())
 
 
-async def blob_count_for_host(session: AsyncSession, host_id: uuid.UUID) -> int:
-    """A storage host still holding snapshot bytes must not be deletable out from
-    under them — the same use-check jiraimport registers."""
-    return int(
-        await session.scalar(
-            select(func.count()).select_from(ConfluenceSnapshotAttachment).where(
-                ConfluenceSnapshotAttachment.storage_host_id == host_id
-            )
-        )
-        or 0
-    )
+def attachment_file(snapshot_id: uuid.UUID, row: ConfluenceSnapshotAttachment):
+    """The path this attachment's bytes live at, inside the snapshot package."""
+    from . import package
+
+    return package.resolve(snapshot_id, row.file_path)

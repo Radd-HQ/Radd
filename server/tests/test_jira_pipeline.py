@@ -24,20 +24,18 @@ from radd.db import SessionLocal
 from radd.modules import workflow  # noqa: F401 — registers the default-state hook
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
-from radd.modules.events.models import Event
 from radd.modules.items import service as items_service
 from radd.modules.items.enums import ItemKind, Priority
-from radd.modules.jiraimport import relink, rollback, runs
+from radd.modules.jiraimport import rollback, runs
 from radd.modules.jiraimport.models import (
     JiraConnection,
-    JiraPendingRef,
     JiraPlan,
     JiraRun,
     JiraSnapshot,
     JiraSnapshotIssue,
 )
 from radd.modules.jiraimport.plan import service as plan_service
-from radd.modules.jiraimport.plan.schemas import PlanCreate, PlanMappings
+from radd.modules.jiraimport.plan.schemas import PlanCreate
 from radd.modules.jiraimport.types import (
     JiraAuthMode,
     RunKind,

@@ -10,6 +10,7 @@ head-seeded (the historical backlog must not replay as deletes) and processes
 
 import logging
 import uuid
+from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +18,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.db import SessionLocal
 
 from .models import Attachment
+
+if TYPE_CHECKING:  # deferred at runtime: the kernel loads after this module
+    from radd.kernel import CascadeSpec
 
 logger = logging.getLogger(__name__)
 

@@ -256,7 +256,7 @@ def test_useful_fields_sort_above_noise_and_builtins():
 
 def test_option_sets_replace_sampled_values():
     from radd.modules.jiraimport.service import _apply_option_sets
-    from radd.modules.jiraimport.types import FieldBand, InferredType
+    from radd.modules.jiraimport.types import InferredType
 
     # The sample only saw two Domain values; the field spec has more.
     issues = [_issue(customfield_10001={"value": "CFX"}), _issue(customfield_10001={"value": "FX"})]
@@ -271,7 +271,7 @@ def test_option_sets_replace_sampled_values():
 
 def test_option_sets_promote_a_text_looking_field_to_select():
     from radd.modules.jiraimport.service import _apply_option_sets
-    from radd.modules.jiraimport.types import FieldBand, InferredType
+    from radd.modules.jiraimport.types import InferredType
 
     # A field the sample thought was text, but the spec says it has options.
     issues = [_issue(customfield_10002="Lisbon")]

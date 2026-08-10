@@ -14,19 +14,17 @@ import asyncio
 import json
 import logging
 import re
-import tempfile
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import UploadFile
 from sqlalchemy import cast, select, update
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import SessionLocal
-from radd.modules.attachments import AttachmentTooLarge
 
 from .. import connections
+from . import package
 from ..client import ConfluenceClient, ConfluenceUnavailable
 from ..models import (
     ConfluenceSnapshot,
@@ -51,8 +49,6 @@ logger = logging.getLogger(__name__)
 COMMIT_EVERY = 25
 #: A download reports at most this many problems; past it the count is the story.
 MAX_RECORDED_PROBLEMS = 500
-#: Attachments below this stay in memory; above it they spill to a temp file.
-SPOOL_BYTES = 8 * 1024 * 1024
 
 
 # --- progress bookkeeping -----------------------------------------------------
@@ -199,6 +195,20 @@ async def _pipeline(
     if snapshot.include_attachments:
         await _stage(session, snapshot, SnapshotStage.ATTACHMENTS)
         await _attachments(session, snapshot, client, rows)
+
+    # The package describes itself, so a directory copied to another machine —
+    # or found on disk months later — says what it is without the database.
+    await asyncio.to_thread(package.write_manifest, snapshot.id, {
+        "snapshot_id": str(snapshot.id),
+        "name": snapshot.name,
+        "source": snapshot.external_source,
+        "base_url": snapshot.base_url,
+        "scope": snapshot.scope,
+        "pages": snapshot.page_count,
+        "counts": snapshot.counts,
+        "downloaded_at": datetime.now(UTC).isoformat(),
+    })
+    snapshot.byte_size = await asyncio.to_thread(package.size_bytes, snapshot.id) or snapshot.byte_size
 
     snapshot.stage = SnapshotStage.DONE.value
     snapshot.finished_at = datetime.now(UTC).replace(tzinfo=None)
@@ -457,10 +467,7 @@ async def _attachments(
     session: AsyncSession, snapshot: ConfluenceSnapshot,
     client: ConfluenceClient, rows: list[ConfluenceSnapshotPage],
 ) -> None:
-    """Manifest + bytes. Bytes go to a storage host through the spec-102 blob API,
-    so a snapshot's files ride the same storage everything else does."""
-    from radd.modules.attachments import service as attachments_service
-
+    """Manifest rows + bytes, straight onto disk in the snapshot's package."""
     for index, row in enumerate(rows):
         if index % COMMIT_EVERY == 0:
             await session.commit()
@@ -478,64 +485,40 @@ async def _attachments(
         for raw in found:
             download_path = ((raw.get("_links") or {}).get("download") or "")
             filename = raw.get("title", "")
-            # Spooled: small files stay in memory, a 217 MB meeting recording
-            # lands on disk, and nothing here has to decide which is which.
-            buffer = tempfile.SpooledTemporaryFile(max_size=SPOOL_BYTES)
+            # Straight to disk. No spooling, no object store, and NO SIZE CAP:
+            # a download is a cache, and refusing to cache a file we might import
+            # is a decision for the import to make, not the download.
+            attachment_id = str(raw.get("id", ""))
+            path, handle = package.open_for_write(snapshot.id, attachment_id, filename)
             try:
                 size = await asyncio.to_thread(
-                    client.download_to, download_path, buffer
+                    client.download_to, download_path, handle
                 )
             except ConfluenceUnavailable as exc:
-                buffer.close()
+                handle.close()
+                path.unlink(missing_ok=True)
                 _problem(snapshot, Problem(
                     kind=ProblemKind.ATTACHMENT,
                     message=f"could not download {filename!r}",
                     subject=filename, detail=str(exc),
                 ))
                 continue
-            buffer.seek(0)
+            finally:
+                if not handle.closed:
+                    handle.close()
             media = ((raw.get("extensions") or {}).get("mediaType") or "application/octet-stream")
-            upload = UploadFile(file=buffer, filename=filename)
-            try:
-                blob = await attachments_service.save_blob(
-                    session, upload, content_type=media
-                )
-            except AttachmentTooLarge as exc:
-                # A wiki of any age has a few files over the instance cap, and one
-                # of them must not cost the whole space. Reported by NAME and size
-                # so the choice — raise RADD_ATTACHMENT_MAX_BYTES, or accept that
-                # this file stays behind — is an informed one.
-                _problem(snapshot, Problem(
-                    kind=ProblemKind.ATTACHMENT,
-                    message=f"{filename!r} is too large to store "
-                            f"({size:,} bytes) — skipped",
-                    subject=filename, detail=str(exc),
-                ))
-                _bump(snapshot, "attachments_too_large")
-                buffer.close()
-                continue
-            except Exception as exc:  # noqa: BLE001 — one file, not the space
-                _problem(snapshot, Problem(
-                    kind=ProblemKind.ATTACHMENT,
-                    message=f"could not store {filename!r}",
-                    subject=filename, detail=str(exc),
-                ))
-                buffer.close()
-                continue
             session.add(ConfluenceSnapshotAttachment(
                 snapshot_id=snapshot.id,
-                attachment_id=str(raw.get("id", "")),
+                attachment_id=attachment_id,
                 page_id=row.page_id,
                 filename=filename,
                 content_type=media,
-                size_bytes=blob.size_bytes,
-                storage_name=blob.storage_name,
-                storage_host_id=blob.host_id,
+                size_bytes=size,
+                file_path=package.relative(path, snapshot.id),
                 download_path=download_path,
             ))
             snapshot.byte_size = (snapshot.byte_size or 0) + size
             _bump(snapshot, "attachments")
-            buffer.close()
     await session.commit()
 
 

@@ -323,7 +323,13 @@ class ConfluenceClient:
 
     def attachments(self, page_id: str) -> list[dict]:
         return list(
-            self._paged(f"/content/{page_id}/child/attachment", expand="version,history")
+            # `extensions.mediaType` is what carries `video/mp4`. Without it every
+            # file imported as application/octet-stream, and a browser will not
+            # play a video it is told is an opaque blob.
+            self._paged(
+                f"/content/{page_id}/child/attachment",
+                expand="version,history,extensions.mediaType",
+            )
         )
 
     def download_to(self, download_path: str, sink: BinaryIO) -> int:

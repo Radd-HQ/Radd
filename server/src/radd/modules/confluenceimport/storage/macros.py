@@ -195,3 +195,35 @@ def spec_for(name: str, overrides: dict[str, MacroSpec] | None = None) -> MacroS
     if overrides and name in overrides:
         return overrides[name]
     return BUILTIN_MACROS.get(name, MacroSpec(MacroAction.UNSUPPORTED))
+
+
+def overrides_from(rows) -> dict[str, MacroSpec]:
+    """The plan's macro decisions, as converter overrides.
+
+    Without this the Macros tab was decorative: `ConvertContext.macro_overrides`
+    was read on every macro and populated by nobody, so the built-in table always
+    won and every choice an admin made was silently discarded — the exact failure
+    the census exists to prevent.
+
+    A row that AGREES with the built-in contributes nothing, so the built-in keeps
+    its parameter builder (which knows how to turn `maxLevel` into `depth`); a row
+    that changes the action or the extension overrides it.
+    """
+    out: dict[str, MacroSpec] = {}
+    for row in rows or ():
+        name = getattr(row, "name", "")
+        action = getattr(row, "action", None)
+        if not name or action is None or action is MacroAction.IGNORE:
+            continue
+        builtin = BUILTIN_MACROS.get(name)
+        extension = getattr(row, "extension", "") or ""
+        if builtin and builtin.action is action and builtin.extension == extension:
+            continue
+        out[name] = MacroSpec(
+            action=action,
+            extension=extension,
+            # Keep the builder when the target is unchanged; a redirected macro
+            # has no parameter mapping to inherit.
+            params=builtin.params if builtin and builtin.extension == extension else None,
+        )
+    return out

@@ -10,7 +10,6 @@ Rolled-back transactions on the compose DB.
 """
 
 import uuid
-from datetime import date
 
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -19,7 +18,7 @@ from radd.config import settings as config
 from radd.exceptions import ForbiddenError
 from radd.modules.auth import authz, roles as auth_roles
 from radd.modules.auth.models import GlobalRoleGrant, User
-from radd.modules.auth.types import BuiltinRoleKey, Permission
+from radd.modules.auth.types import BuiltinRoleKey
 
 # Side effect: workflow's project.created hook seeds default states.
 from radd.modules import workflow as _workflow  # noqa: F401

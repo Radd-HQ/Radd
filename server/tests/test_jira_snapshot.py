@@ -16,7 +16,6 @@ verification uses a fresh session.
 """
 
 import uuid
-from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import text
@@ -27,7 +26,6 @@ from radd.db import SessionLocal
 from radd.modules.attachments import service as attachments_service
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
-from radd.modules.jiraimport import connections
 from radd.modules.jiraimport.models import JiraConnection, JiraSnapshot
 from radd.modules.jiraimport.snapshot import download, service as snapshot_service, store
 from radd.modules.jiraimport.types import (

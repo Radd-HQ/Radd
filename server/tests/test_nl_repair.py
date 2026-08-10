@@ -22,7 +22,6 @@ from radd.modules.fields import service as fields_service
 from radd.modules.fields.schemas import FieldDefinitionCreate
 from radd.modules.fields.types import FieldType
 from radd.modules.items import slq
-from radd.modules.labels import service as labels_service
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 

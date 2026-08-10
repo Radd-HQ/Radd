@@ -12,7 +12,6 @@ skip the import while search and history still consume it.
 from __future__ import annotations
 
 import asyncio
-import io
 import logging
 import uuid
 from datetime import UTC, datetime
@@ -22,7 +21,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import SessionLocal
-from radd.modules.attachments import service as attachments_service
+from radd.modules.attachments import AttachmentTooLarge, service as attachments_service
 from radd.modules.auth.models import User
 from radd.modules.comments import service as comments_service
 from radd.modules.comments.schemas import CommentCreate
@@ -34,9 +33,9 @@ from . import apply as apply_page, connections, ledger, plan as plan_service, re
 from .apply import IMPORT_PERMISSIONS
 from .ledger import LedgerEntity
 from .models import ConfluenceRun, ConfluenceSnapshot, ConfluenceSnapshotPage
-from .schemas import GroupMapping
 from .snapshot import service as snapshot_service, store
 from .storage import ConvertContext
+from .storage import macros as macro_table
 from .types import (
     ConfluenceEntity,
     JiraLinkAction,
@@ -123,6 +122,8 @@ async def _pipeline(session: AsyncSession, run: ConfluenceRun) -> None:
     # token -> display name, so an unresolved mention still reads as a person
     # rather than a 32-character key.
     directory = (snapshot.catalogs or {}).get("users") or {}
+    # The admin's macro decisions, which the converter had been ignoring.
+    macro_overrides = macro_table.overrides_from(mappings.macros)
     space_ids = await _spaces(session, run, snapshot, mappings, actor_id, run_id, commit)
     if await _canceled(session, run):
         return
@@ -168,7 +169,7 @@ async def _pipeline(session: AsyncSession, run: ConfluenceRun) -> None:
 
         context = _context(
             snapshot, by_external, by_title, attachments_by_page.get(row.page_id, {}),
-            jira_projects, people, directory,
+            jira_projects, people, directory, macro_overrides,
         )
         parent_id = _nearest_imported(row, by_external)
         outcome = await apply_page.upsert_page(
@@ -230,6 +231,7 @@ async def _pipeline(session: AsyncSession, run: ConfluenceRun) -> None:
         await _reconvert(
             session, run, snapshot, rows, by_external, by_title,
             attachments_by_page, jira_projects, people, actor_id, run_id, commit,
+            macro_overrides,
         )
 
     if options.import_comments:
@@ -263,6 +265,7 @@ def _context(
     jira_projects: set[str],
     people: dict[str, uuid.UUID],
     directory: dict[str, dict] | None = None,
+    macro_overrides: dict | None = None,
 ) -> ConvertContext:
     """The world the converter needs, bound to what exists RIGHT NOW."""
     return ConvertContext(
@@ -282,6 +285,7 @@ def _context(
         item_exists=lambda key: key.rsplit("-", 1)[0] in jira_projects,
         jira_base_url="",
         confluence_base_url=snapshot.base_url,
+        macro_overrides=macro_overrides or {},
     )
 
 
@@ -292,6 +296,18 @@ def _nearest_imported(
     ancestor that DID import keeps the shape; the download already recorded a
     problem naming the gap, so this is not a silent flatten."""
     return by_external.get(row.parent_id) if row.parent_id else None
+
+
+def _attachment_url(attachment_id: uuid.UUID) -> str:
+    """The endpoint that serves an attachment's bytes.
+
+    `/attachments/{id}` — there is NO `/download` suffix, and inventing one
+    produced URLs that 404. A wire constant with no compiler behind it: the fence
+    type-checked, the page rendered a player, and the player showed
+    SRC_NOT_SUPPORTED because the source was a 404 page. `apiAttachmentPath` in
+    the SPA is the same string; these two must agree.
+    """
+    return f"/api/v1/attachments/{attachment_id}"
 
 
 def _author_of(row: ConfluenceSnapshotPage) -> str:
@@ -412,29 +428,68 @@ async def _attachments(
             if not commit:
                 _bump(run, "attachments")
                 continue
-            try:
-                data = await attachments_service.read_blob(
-                    session, row.storage_name, host_id=row.storage_host_id
-                )
-            except Exception as exc:  # noqa: BLE001
+            # A re-import must not duplicate the file. Pages upsert through their
+            # external identity; attachments have none, so the page's existing
+            # files ARE the identity — same name and same size is the same file.
+            # Without this a second run doubled the storage, which on a wiki of
+            # meeting recordings is measured in gigabytes.
+            existing = next(
+                (
+                    a for a in await attachments_service.list_for_entity(
+                        session, "page", page_id
+                    )
+                    if a.filename == row.filename and a.size_bytes == row.size_bytes
+                ),
+                None,
+            )
+            if existing is not None:
+                urls[row.filename] = _attachment_url(existing.id)
+                _bump(run, "attachments_reused")
+                continue
+
+            path = store.attachment_file(snapshot.id, row)
+            if not path.exists():
                 _problem(run, Problem(
                     kind=ProblemKind.ATTACHMENT,
-                    message=f"cached bytes for {row.filename!r} could not be read",
+                    message=f"cached bytes for {row.filename!r} are missing from the "
+                            "snapshot package",
+                    subject=row.filename, detail=str(path),
+                ))
+                continue
+            # Opened, not read: the file may be a 200 MB recording, and handing the
+            # handle to the upload buffer keeps it off the heap. THIS is where the
+            # instance size cap applies — a download caches whatever exists, and
+            # what may be stored is the import's decision.
+            try:
+                with path.open("rb") as handle:
+                    upload = UploadFile(file=handle, filename=row.filename)
+                    attachment = await attachments_service.save_upload(
+                        session,
+                        entity_type="page",
+                        entity_id=page_id,
+                        upload=upload,
+                        actor_id=actor_id,
+                    )
+            except AttachmentTooLarge as exc:
+                _problem(run, Problem(
+                    kind=ProblemKind.ATTACHMENT,
+                    message=f"{row.filename!r} is larger than this instance stores "
+                            f"({row.size_bytes:,} bytes) — skipped",
+                    subject=row.filename, detail=str(exc),
+                ))
+                _bump(run, "attachments_too_large")
+                continue
+            except Exception as exc:  # noqa: BLE001 — one file, not the run
+                _problem(run, Problem(
+                    kind=ProblemKind.ATTACHMENT,
+                    message=f"could not store {row.filename!r}",
                     subject=row.filename, detail=str(exc),
                 ))
                 continue
-            upload = UploadFile(file=io.BytesIO(data), filename=row.filename)
-            attachment = await attachments_service.save_upload(
-                session,
-                entity_type="page",
-                entity_id=page_id,
-                upload=upload,
-                actor_id=actor_id,
-            )
             await ledger.created(
                 session, run_id, LedgerEntity.ATTACHMENT, attachment.id, subject=row.filename
             )
-            urls[row.filename] = f"/api/v1/attachments/{attachment.id}/download"
+            urls[row.filename] = _attachment_url(attachment.id)
             _bump(run, "attachments")
         out[foreign_id] = urls
         await session.commit()
@@ -445,6 +500,7 @@ async def _reconvert(
     session: AsyncSession, run: ConfluenceRun, snapshot: ConfluenceSnapshot,
     rows: list[ConfluenceSnapshotPage], by_external, by_title,
     attachments_by_page, jira_projects, people, actor_id, run_id, commit: bool,
+    macro_overrides: dict | None = None,
 ) -> None:
     if not commit:
         return
@@ -459,6 +515,7 @@ async def _reconvert(
             snapshot, by_external, by_title,
             attachments_by_page.get(row.page_id, {}), jira_projects, people,
             (snapshot.catalogs or {}).get("users") or {},
+            macro_overrides or {},
         )
         from .storage import convert
 

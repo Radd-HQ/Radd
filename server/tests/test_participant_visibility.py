@@ -28,7 +28,6 @@ from radd.config import settings as config
 from radd.exceptions import ForbiddenError, NotFoundError
 from radd.modules import workflow  # noqa: F401 — registers the default-state hook
 from radd.modules.auth import authz, roles as auth_roles
-from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import Role, User
 from radd.modules.auth.types import BuiltinRoleKey, InstanceRole
 from radd.modules.comments import service as comments_service

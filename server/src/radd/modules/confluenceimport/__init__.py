@@ -8,16 +8,14 @@ Server/DC only. Cloud would be a second `client.py` behind the same `service.py`
 """
 
 from radd.kernel import RaddPlugin
-from radd.modules.attachments import hosts as storage_hosts
 
 from . import connections, runs, snapshot
 from .pipeline_router import pipeline_router
 from .router import router
-from .snapshot import store as snapshot_store
 
-# Snapshot blobs live on a storage host through the spec-102 blob API; a host they
-# still reference must not be deletable out from under them.
-storage_hosts.register_use_check(snapshot_store.blob_count_for_host)
+# No storage-host use check: a snapshot's bytes live in its own directory on disk
+# (`snapshot/package.py`), not on a storage host, so no host is held hostage by a
+# download that may never be imported.
 
 plugin = RaddPlugin(
     name="confluenceimport",
