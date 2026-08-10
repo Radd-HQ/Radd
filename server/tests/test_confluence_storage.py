@@ -323,6 +323,70 @@ def test_a_page_row_with_no_version_block_still_parses():
     assert (page.position, page.version, page.space_key) == (0, 1, "PIP")
 
 
+def test_a_mention_by_userkey_reads_as_a_person():
+    """Server/DC writes mentions as an opaque `ri:userkey`, not a username.
+
+    Unresolved, that put raw 32-character hex on the page and produced reports
+    reading "mention of unknown user 8a05808b692118d5016b76858a5f1e1a" — which
+    nobody can map by hand. The key is resolved to a person at download time; the
+    converter asks the resolver and shows a NAME either way.
+    """
+    body = '<p>ask <ac:link><ri:user ri:userkey="8a05808b692118d5016b76858a5f1e1a"/></ac:link></p>'
+    directory = {"8a05808b692118d5016b76858a5f1e1a": ("Hussein Jarrar", "uuid-9")}
+    ctx = ConvertContext(user_ref=lambda token: directory.get(token, (token, "")))
+    assert "@[Hussein Jarrar](uuid-9)" in convert(body, ctx).markdown
+
+
+def test_an_unmatched_userkey_still_shows_a_name_not_hex():
+    body = '<ac:link><ri:user ri:userkey="8a05808b692118d5016b76858a5f1e1a"/></ac:link>'
+    ctx = ConvertContext(user_ref=lambda token: ("Hussein Jarrar", ""))
+    md = convert(body, ctx).markdown
+    assert "@Hussein Jarrar" in md
+    assert "8a05808b" not in md
+
+
+# --- multimedia ---
+
+
+def test_multimedia_becomes_a_player_not_a_card():
+    """The macro IS the content of the pages that use it — a meeting recording
+    carded as "unsupported" is the page missing its point."""
+    body = (
+        '<ac:structured-macro ac:name="multimedia">'
+        '<ac:parameter ac:name="name">2021-08-26 standup.mp4</ac:parameter>'
+        "</ac:structured-macro>"
+    )
+    ctx = ConvertContext(attachment_url=lambda n: f"/api/v1/attachments/{n}/download")
+    result = convert(body, ctx)
+    block = _fences(result.markdown, "media")[0]
+    assert block["kind"] == "video"
+    assert block["src"].endswith("/download")
+    assert "2021-08-26 standup.mp4" in result.attachment_refs
+
+
+def test_an_audio_attachment_gets_the_audio_player():
+    body = (
+        '<ac:structured-macro ac:name="multimedia">'
+        '<ac:parameter ac:name="name">interview.mp3</ac:parameter></ac:structured-macro>'
+    )
+    assert _fences(convert(body).markdown, "media")[0]["kind"] == "audio"
+
+
+def test_multimedia_naming_its_file_in_the_body_still_resolves():
+    body = (
+        '<ac:structured-macro ac:name="multimedia"><ac:rich-text-body>'
+        '<ri:attachment ri:filename="demo.mp4"/></ac:rich-text-body></ac:structured-macro>'
+    )
+    assert "demo.mp4" in convert(body).attachment_refs
+
+
+def test_a_media_macro_naming_nothing_degrades_to_a_card():
+    """No file and no URL is not a player — it is a macro we cannot honour, and
+    the honest fallback still applies."""
+    body = '<ac:structured-macro ac:name="multimedia"/>'
+    assert "unsupported-macro" in convert(body).markdown
+
+
 # --- robustness ---
 
 

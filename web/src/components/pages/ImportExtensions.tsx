@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, queryOptions } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { ChevronRight, OctagonAlert, Puzzle } from "lucide-react";
+import { ChevronRight, OctagonAlert, Play, Puzzle } from "lucide-react";
 import { api } from "../../lib/api";
 import { Entity, entityMeta } from "../../lib/cache";
 import { ApiPath, ITEMS_PAGE_LIMIT, RoutePath } from "../../lib/constants";
@@ -200,7 +200,66 @@ function ItemsTable({ params }: { params: Record<string, unknown> }) {
   );
 }
 
+// --- radd:media ------------------------------------------------------------
+
+/**
+ * A playable video or audio attachment.
+ *
+ * Confluence's `multimedia` macro IS the content of the pages that use it — a
+ * meeting recording carded as "unsupported" is the page missing its point. The
+ * native players are deliberate: no library, no custom controls, and the browser
+ * handles range requests and codecs, which is exactly what a 217 MB MP4 needs.
+ */
+function Media({ params }: { params: Record<string, unknown> }) {
+  const src = typeof params.src === "string" ? params.src : "";
+  const kind = params.kind === "audio" ? "audio" : "video";
+  const title = typeof params.title === "string" ? params.title : "";
+  const poster = typeof params.poster === "string" ? params.poster : undefined;
+
+  if (!src) {
+    return (
+      <ExtensionCard label="Media">
+        <p className="text-[13px] text-fg-faint">This block names no file to play.</p>
+      </ExtensionCard>
+    );
+  }
+
+  return (
+    <figure className="my-3">
+      {kind === "audio" ? (
+        <audio controls preload="metadata" src={src} className="w-full">
+          <a href={src}>Download the audio</a>
+        </audio>
+      ) : (
+        <video
+          controls
+          preload="metadata"
+          src={src}
+          poster={poster}
+          className="max-h-[70vh] w-full rounded-lg border border-subtle bg-black"
+        >
+          <a href={src}>Download the video</a>
+        </video>
+      )}
+      {title && (
+        <figcaption className="mt-1 flex items-center gap-1.5 text-[12px] text-fg-muted">
+          <Play className="size-3.5" aria-hidden />
+          <a href={src} className="truncate hover:underline" download>
+            {title}
+          </a>
+        </figcaption>
+      )}
+    </figure>
+  );
+}
+
 export const IMPORT_EXTENSIONS: PageExtension[] = [
+  {
+    name: "media",
+    label: "Video or audio",
+    description: "Play an attached video or audio file in the page.",
+    render: (params) => <Media params={params} />,
+  },
   {
     name: "unsupported-macro",
     label: "Unsupported macro",

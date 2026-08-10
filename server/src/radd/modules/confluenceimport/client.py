@@ -355,6 +355,26 @@ class ConfluenceClient:
             raise ConfluenceUnavailable(f"could not fetch attachment: {exc}") from exc
         return total
 
+    def user_by_key(self, user_key: str) -> dict:
+        """Resolve an opaque `ri:userkey` to a real person.
+
+        Server/DC writes mentions as `<ri:user ri:userkey="8a05808b6921…"/>` — an
+        internal hex handle, NOT a username. Taking it at face value put raw
+        32-character keys on imported pages and made every mention unmatchable.
+        This turns it into `{username, displayName}`; email is commonly withheld
+        by Server/DC, so the caller matches on the AD username and display name.
+        """
+        return self._get("/user", key=user_key)
+
+    def user_by_username(self, username: str) -> dict:
+        """Resolve a `ri:username` mention to its display name.
+
+        The username alone is enough to MATCH a Radd account, but not to read: a
+        People table listing `sfraeys` and `mcollie` asks someone to recognise
+        sAMAccountNames. One call each turns them into names.
+        """
+        return self._get("/user", username=username)
+
     def restrictions(self, page_id: str) -> dict:
         """View/edit restrictions for one page.
 

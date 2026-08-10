@@ -32,6 +32,7 @@ EXT_LABEL_LIST = "label-list"
 EXT_EXPAND = "expand"
 EXT_ITEMS = "items"
 EXT_UNSUPPORTED = "unsupported-macro"
+EXT_MEDIA = "media"
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,6 +104,18 @@ def _label_list_params(p: dict[str, str], body: str) -> dict:
     return {"label": first[0]} if first else {}
 
 
+def _template_params(p: dict[str, str], body: str) -> dict:
+    """Confluence's create-from-template button → `radd:new-from-template`, which
+    already exists and does the same job."""
+    out: dict = {}
+    template = p.get("templateName") or p.get("template") or ""
+    if template:
+        out["template"] = template
+    if p.get("buttonLabel") or p.get("title"):
+        out["label"] = p.get("buttonLabel") or p.get("title", "")
+    return out
+
+
 def _expand_params(p: dict[str, str], body: str) -> dict:
     return {"title": p.get("title", "") or "Details", "text": body.strip()}
 
@@ -129,9 +142,36 @@ BUILTIN_MACROS: dict[str, MacroSpec] = {
     "status": MacroSpec(MacroAction.NATIVE, note="inline code — the colour is lost"),
     # `details` and `excerpt` are containers: what matters is their body.
     "details": MacroSpec(MacroAction.NATIVE, note="its body, inlined"),
+    # Confluence's `multimedia` embeds an attached video or audio file with a
+    # player. It is the whole point of the macro, so it maps to a real player
+    # rather than a card: a meeting recording that imports as "unsupported" is
+    # the page's content, missing.
+    "multimedia": MacroSpec(
+        MacroAction.NATIVE, EXT_MEDIA, note="a playable video or audio attachment"
+    ),
+    "viewfile": MacroSpec(
+        MacroAction.NATIVE, EXT_MEDIA, note="a playable attachment, or a link"
+    ),
+    "widget": MacroSpec(
+        MacroAction.NATIVE, EXT_MEDIA, note="an embedded external video"
+    ),
     "code": MacroSpec(MacroAction.NATIVE, note="a fenced code block"),
     "noformat": MacroSpec(MacroAction.NATIVE, note="a fenced code block"),
     "anchor": MacroSpec(MacroAction.STRIP, note="markdown headings carry their own anchors"),
+    # Found by running the census over a real space (RADD-1022). Each was landing
+    # as an "unsupported" card while having an obvious home.
+    "nocomments": MacroSpec(
+        MacroAction.STRIP, note="a Confluence display setting, not content"
+    ),
+    "toc-zone": MacroSpec(
+        MacroAction.EXTENSION, EXT_TOC, _toc_params, note="a toc with its body inlined"
+    ),
+    "create-from-template": MacroSpec(
+        MacroAction.EXTENSION, "new-from-template", _template_params
+    ),
+    "recently-updated": MacroSpec(
+        MacroAction.STRIP, note="a live feed with no equivalent — the tree replaces it"
+    ),
     "excerpt": MacroSpec(MacroAction.NATIVE, note="its body, inlined"),
     "section": MacroSpec(MacroAction.NATIVE, note="layout — its body, inlined"),
     "column": MacroSpec(MacroAction.NATIVE, note="layout — its body, inlined"),

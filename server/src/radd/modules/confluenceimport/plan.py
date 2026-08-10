@@ -50,6 +50,8 @@ from .types import (
 #: needs the name; building a tree per page to read one attribute would make
 #: profiling a large space noticeably slower for no extra information.
 _MACRO_RE = re.compile(r'<ac:structured-macro[^>]*\bac:name="([^"]+)"')
+#: Matches BOTH mention forms; the key is resolved to a name via the
+#: snapshot's people catalog, so the mapping row is readable either way.
 _USER_RE = re.compile(r'<ri:user\s+ri:(?:username|userkey)="([^"]+)"')
 _JIRA_KEY_RE = re.compile(r'<ac:parameter\s+ac:name="key">([A-Z][A-Z0-9_]+)-\d+</ac:parameter>')
 
@@ -74,6 +76,10 @@ def options_of(plan: ConfluencePlan) -> PlanOptions:
 
 async def profile(session: AsyncSession, snapshot_id: uuid.UUID) -> PlanMappings:
     """Stream the cache and count everything a decision could hang on."""
+    snapshot = await snapshot_service.get_snapshot(session, snapshot_id)
+    # Resolved at download time — see `_people_catalog`. Without it the People
+    # table listed opaque 32-char user keys, which nobody can map by hand.
+    directory: dict[str, dict] = (snapshot.catalogs or {}).get("users") or {}
     rows = list(
         (
             await session.execute(
@@ -126,7 +132,12 @@ async def profile(session: AsyncSession, snapshot_id: uuid.UUID) -> PlanMappings
         ],
         macros=_macro_rows(macros, macro_sample),
         users=[
-            UserMapping(username=name, count=count)
+            UserMapping(
+                username=name,
+                display_name=(directory.get(name) or {}).get("display_name", ""),
+                email=(directory.get(name) or {}).get("email", ""),
+                count=count,
+            )
             for name, count in sorted(users.items(), key=lambda kv: -kv[1])
         ],
         groups=[

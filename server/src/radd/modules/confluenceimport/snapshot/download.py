@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import tempfile
 import uuid
 from datetime import UTC, datetime
@@ -187,6 +188,11 @@ async def _pipeline(
         await _stage(session, snapshot, SnapshotStage.COMMENTS)
         await _comments(session, snapshot, client, rows)
 
+    # People, resolved ONCE into the snapshot's catalog. Every later step reads it
+    # offline, so the plan can show real names and the converter can emit real
+    # mentions without going near the network.
+    await _people_catalog(session, snapshot, client, rows)
+
     await _stage(session, snapshot, SnapshotStage.RESTRICTIONS)
     await _restrictions(session, snapshot, client, rows)
 
@@ -198,6 +204,78 @@ async def _pipeline(
     snapshot.finished_at = datetime.now(UTC).replace(tzinfo=None)
     await session.commit()
     await asyncio.to_thread(client.close)
+
+
+#: `<ri:user ri:userkey="…"/>` — Server/DC's mention form. The key is an opaque
+#: 32-char hex handle, not a username, so it has to be resolved before anything
+#: downstream can match a person.
+_USERKEY_RE = re.compile(r'<ri:user\s+ri:userkey="([^"]+)"')
+_USERNAME_RE = re.compile(r'<ri:user\s+ri:username="([^"]+)"')
+
+
+async def _people_catalog(
+    session: AsyncSession, snapshot: ConfluenceSnapshot,
+    client: ConfluenceClient, rows: list[ConfluenceSnapshotPage],
+) -> None:
+    """Resolve every person the bodies mention, once, into the snapshot.
+
+    Confluence mentions carry an internal user key rather than a username; left
+    unresolved they surfaced as raw 32-character hex on the page and as
+    "mention of unknown user 8a05808b6921…" in the report — unmatchable, and
+    meaningless to read. One request per DISTINCT key, cached on the snapshot so
+    planning and the run never repeat it.
+    """
+    keys: set[str] = set()
+    for row in rows:
+        keys.update(_USERKEY_RE.findall(row.body or ""))
+    known = dict((snapshot.catalogs or {}).get("users") or {})
+    people: dict[str, dict] = dict(known)
+
+    for key in keys - known.keys():
+        try:
+            raw = await asyncio.to_thread(client.user_by_key, key)
+        except ConfluenceUnavailable as exc:
+            # A departed account 404s here. Recorded, not fatal: the mention
+            # degrades to the key and the People table can still map it by hand.
+            logger.info("could not resolve confluence user %s: %s", key, exc)
+            continue
+        people[key] = {
+            "username": raw.get("username", "") or "",
+            "display_name": raw.get("displayName", "") or "",
+            "email": raw.get("email") or "",
+        }
+    # A username mention needs no lookup to MATCH, but it does to READ: a People
+    # table listing `sfraeys` and `mcollie` asks someone to recognise
+    # sAMAccountNames. Same catalog, so everything downstream has one place to ask.
+    usernames: set[str] = set()
+    for row in rows:
+        usernames.update(_USERNAME_RE.findall(row.body or ""))
+    # Comment AUTHORS are the other half, and the bigger one: bodies mention people
+    # by user key, while a comment carries its author's username. Scanning only
+    # bodies left the People table mixing resolved names with bare
+    # sAMAccountNames, which reads as though half of them had failed.
+    authors = await session.execute(
+        select(ConfluenceSnapshotComment.author).where(
+            ConfluenceSnapshotComment.snapshot_id == snapshot.id,
+            ConfluenceSnapshotComment.author != "",
+        )
+    )
+    usernames.update(name for (name,) in authors if name)
+    for username in usernames - people.keys():
+        try:
+            raw = await asyncio.to_thread(client.user_by_username, username)
+        except ConfluenceUnavailable:
+            people[username] = {"username": username, "display_name": "", "email": ""}
+            continue
+        people[username] = {
+            "username": raw.get("username", "") or username,
+            "display_name": raw.get("displayName", "") or "",
+            "email": raw.get("email") or "",
+        }
+
+    snapshot.catalogs = {**(snapshot.catalogs or {}), "users": people}
+    _bump(snapshot, "people", len(people))
+    await session.commit()
 
 
 def _catalog_spaces(client: ConfluenceClient) -> list[dict]:

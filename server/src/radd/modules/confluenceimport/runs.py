@@ -30,7 +30,7 @@ from radd.modules.events import service as events
 from radd.modules.pages import labels as page_labels, spaces as page_spaces
 from radd.modules.pages.schemas import PageSpaceCreate
 
-from . import apply as apply_page, ledger, plan as plan_service, restrictions
+from . import apply as apply_page, connections, ledger, plan as plan_service, restrictions
 from .apply import IMPORT_PERMISSIONS
 from .ledger import LedgerEntity
 from .models import ConfluenceRun, ConfluenceSnapshot, ConfluenceSnapshotPage
@@ -112,7 +112,17 @@ async def _pipeline(session: AsyncSession, run: ConfluenceRun) -> None:
     actor_id = run.actor_id or (await _any_admin(session))
 
     await _stage(session, run, RunStage.PROVISION)
-    people = await _people(session, mappings)
+    # The domain the AD import synthesises addresses under — derived from the
+    # connection's own host, so username@domain matches what LDAP stored.
+    connection = (
+        await connections.get_connection(session, snapshot.connection_id)
+        if snapshot.connection_id else None
+    )
+    domain = connections.placeholder_email_domain(connection) if connection else ""
+    people = await _people(session, mappings, email_domain=domain)
+    # token -> display name, so an unresolved mention still reads as a person
+    # rather than a 32-character key.
+    directory = (snapshot.catalogs or {}).get("users") or {}
     space_ids = await _spaces(session, run, snapshot, mappings, actor_id, run_id, commit)
     if await _canceled(session, run):
         return
@@ -158,7 +168,7 @@ async def _pipeline(session: AsyncSession, run: ConfluenceRun) -> None:
 
         context = _context(
             snapshot, by_external, by_title, attachments_by_page.get(row.page_id, {}),
-            jira_projects, people,
+            jira_projects, people, directory,
         )
         parent_id = _nearest_imported(row, by_external)
         outcome = await apply_page.upsert_page(
@@ -252,6 +262,7 @@ def _context(
     attachments: dict[str, str],
     jira_projects: set[str],
     people: dict[str, uuid.UUID],
+    directory: dict[str, dict] | None = None,
 ) -> ConvertContext:
     """The world the converter needs, bound to what exists RIGHT NOW."""
     return ConvertContext(
@@ -260,8 +271,13 @@ def _context(
         page_url_by_title=lambda title, space: (
             f"/pages/{by_title[title]}" if title in by_title else ""
         ),
-        user_ref=lambda username: (
-            username, str(people[username]) if username in people else ""
+        # The display name, never the raw token: an unresolved mention should
+        # read "@Hussein Jarrar", not "@8a05808b692118d5016b76858a5f1e1a".
+        user_ref=lambda token: (
+            ((directory or {}).get(token) or {}).get("display_name")
+            or ((directory or {}).get(token) or {}).get("username")
+            or token,
+            str(people[token]) if token in people else "",
         ),
         item_exists=lambda key: key.rsplit("-", 1)[0] in jira_projects,
         jira_base_url="",
@@ -283,22 +299,48 @@ def _author_of(row: ConfluenceSnapshotPage) -> str:
     return by.get("username", "") or by.get("displayName", "")
 
 
-async def _people(session: AsyncSession, mappings) -> dict[str, uuid.UUID]:
-    """Confluence username → Radd user. Explicit mapping wins; otherwise matched
-    by email and then by name, which is what makes a placeholder adoptable by a
-    later AD import (spec 88)."""
+async def _people(
+    session: AsyncSession, mappings, *, email_domain: str = ""
+) -> dict[str, uuid.UUID]:
+    """Confluence person → Radd user, keyed by whatever the body actually wrote.
+
+    Three signals, tried in order, because Server/DC withholds email:
+
+    1. an explicit mapping — a person decided, and that always wins;
+    2. **`username@domain`** — the AD sAMAccountName against the UPN address the
+       `ldap` module synthesises when a directory entry has no `mail`
+       (`directory_user_from_entry`), which is the same shape from both ends;
+    3. the **display name** against `users.name`, since that is what an AD import
+       stores and what Confluence returns beside the username.
+
+    The key is the raw token from the body — a user key or a username — so a
+    mention resolves whichever form the page used.
+    """
+    from sqlalchemy import func
+
     out: dict[str, uuid.UUID] = {}
     for entry in mappings.users:
         if entry.user_id:
             out[entry.username] = entry.user_id
             continue
-        from sqlalchemy import func
-
-        user = await session.scalar(
-            select(User).where(func.lower(User.email) == (entry.email or entry.username).lower())
-        ) or await session.scalar(
-            select(User).where(func.lower(User.name) == entry.username.lower())
-        )
+        candidates = [entry.email] if entry.email else []
+        # `entry.username` is the raw token; `display_name` came from the
+        # snapshot's resolved people catalog.
+        handle = (entry.display_name or "").strip()
+        login = entry.username.strip()
+        if email_domain and login:
+            candidates.append(f"{login}@{email_domain}")
+        user = None
+        for address in candidates:
+            user = await session.scalar(
+                select(User).where(func.lower(User.email) == address.lower())
+            )
+            if user is not None:
+                break
+        if user is None and handle:
+            user = await session.scalar(
+                select(User).where(func.lower(User.name) == handle.lower())
+            )
         if user is not None:
             out[entry.username] = user.id
     return out
@@ -416,6 +458,7 @@ async def _reconvert(
         context = _context(
             snapshot, by_external, by_title,
             attachments_by_page.get(row.page_id, {}), jira_projects, people,
+            (snapshot.catalogs or {}).get("users") or {},
         )
         from .storage import convert
 

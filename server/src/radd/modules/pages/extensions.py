@@ -209,6 +209,30 @@ PAGE_EXTENSIONS: tuple[PageExtensionSpec, ...] = (
         },
     ),
     PageExtensionSpec(
+        name=PageExtensionName.MEDIA,
+        label="Video or audio",
+        description="Play an attached video or audio file in the page.",
+        icon="play",
+        params_schema={
+            "type": "object",
+            "required": ["src"],
+            "properties": {
+                "src": {
+                    "type": "string",
+                    "description": "The attachment's URL, or its filename on this page.",
+                },
+                "kind": {
+                    "type": "string",
+                    "enum": ["video", "audio"],
+                    "default": "video",
+                    "description": "Which player to show.",
+                },
+                "title": {"type": "string", "description": "Caption under the player."},
+                "poster": {"type": "string", "description": "Still image URL for video."},
+            },
+        },
+    ),
+    PageExtensionSpec(
         name=PageExtensionName.NEW_FROM_TEMPLATE,
         label="New page from template",
         description="A button that creates a child page from a template.",

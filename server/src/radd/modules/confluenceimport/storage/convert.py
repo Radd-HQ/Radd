@@ -50,6 +50,11 @@ _INLINE_TAGS = (
 #: on the pages that use the second, which on a real corpus is most of them.
 _DOWNLOAD_SRC_RE = re.compile(r"/download/attachments/\d+/([^?#]+)")
 
+#: Extensions that get an <audio> player rather than a <video> one. Everything
+#: else a `multimedia` macro embeds is video — including the .mp4 meeting
+#: recordings that dominate a real wiki.
+_AUDIO_EXTENSIONS = frozenset({"mp3", "wav", "ogg", "oga", "m4a", "aac", "flac"})
+
 
 def _escape(text: str) -> str:
     return _ESCAPE_RE.sub(r"\\\1", text)
@@ -465,7 +470,43 @@ class _Renderer:
             return self.jira_macro(params, inline=inline)
         if name == "jiraissues":
             return self.items_fence(params.get("jqlQuery", "") or params.get("jql", ""))
+        if name in ("multimedia", "viewfile", "widget"):
+            return self.media_fence(name, params, rich)
         return raw_body.strip()
+
+    def media_fence(self, name: str, params: dict[str, str], rich: Node | None) -> str:
+        """A playable attachment.
+
+        `multimedia` IS the content of the pages that use it — a meeting recording
+        carded as "unsupported" is the page missing its point. The filename is
+        resolved through the same attachment resolver images use, so the player
+        points at the imported file rather than at Confluence.
+        """
+        filename = params.get("name", "") or params.get("file", "")
+        if not filename and rich is not None:
+            attachment = rich.find("ri:attachment")
+            if attachment is not None:
+                filename = attachment.attrs.get("ri:filename", "")
+        # `widget` embeds an external URL (YouTube and friends) rather than a file.
+        external = params.get("url", "")
+        if not filename and external:
+            return self.fence(macro_table.EXT_MEDIA, {"src": external, "kind": "video"})
+        if not filename:
+            return self.unsupported(name, params, "", rich)
+
+        self.result.attachment_refs.add(filename)
+        url = self.ctx.attachment_url(filename)
+        if not url:
+            self._problem(
+                ProblemKind.ATTACHMENT,
+                f"{filename!r} has no imported attachment to play",
+                subject=filename,
+            )
+        kind = "audio" if filename.lower().rsplit(".", 1)[-1] in _AUDIO_EXTENSIONS else "video"
+        return self.fence(
+            macro_table.EXT_MEDIA,
+            {"src": url or filename, "kind": kind, "title": filename},
+        )
 
     def jira_macro(self, params: dict[str, str], *, inline: bool) -> str:
         """The join between the two halves of the migration.

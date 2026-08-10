@@ -59,6 +59,7 @@ class PageExtensionName(StrEnum):
     UNSUPPORTED_MACRO = "unsupported-macro"
     EXPAND = "expand"
     ITEMS = "items"
+    MEDIA = "media"
 
 
 class RestoreKind(StrEnum):
