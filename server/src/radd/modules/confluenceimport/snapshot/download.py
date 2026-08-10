@@ -21,6 +21,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import SessionLocal
+from radd.modules.attachments import AttachmentTooLarge
 
 from .. import connections
 from ..client import ConfluenceClient, ConfluenceUnavailable
@@ -408,7 +409,30 @@ async def _attachments(
             # The blob API takes an UploadFile; wrapping the bytes is the same
             # move jiraimport's downloader makes for exactly this reason.
             upload = UploadFile(file=io.BytesIO(data), filename=filename)
-            blob = await attachments_service.save_blob(session, upload, content_type=media)
+            try:
+                blob = await attachments_service.save_blob(
+                    session, upload, content_type=media
+                )
+            except AttachmentTooLarge as exc:
+                # A wiki of any age has a few files over the instance cap, and one
+                # of them must not cost the whole space. Reported by NAME and size
+                # so the choice — raise RADD_ATTACHMENT_MAX_BYTES, or accept that
+                # this file stays behind — is an informed one.
+                _problem(snapshot, Problem(
+                    kind=ProblemKind.ATTACHMENT,
+                    message=f"{filename!r} is too large to store "
+                            f"({len(data):,} bytes) — skipped",
+                    subject=filename, detail=str(exc),
+                ))
+                _bump(snapshot, "attachments_too_large")
+                continue
+            except Exception as exc:  # noqa: BLE001 — one file, not the space
+                _problem(snapshot, Problem(
+                    kind=ProblemKind.ATTACHMENT,
+                    message=f"could not store {filename!r}",
+                    subject=filename, detail=str(exc),
+                ))
+                continue
             session.add(ConfluenceSnapshotAttachment(
                 snapshot_id=snapshot.id,
                 attachment_id=str(raw.get("id", "")),
