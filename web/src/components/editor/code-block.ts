@@ -91,9 +91,28 @@ function fenceTokenFor(description: LanguageDescription): string {
   return description.alias.find((alias) => !/\s/.test(alias)) ?? "";
 }
 
-/** The `LanguageDescription` a fence's info string names, if any. */
-export const describeLanguage = (name: string): LanguageDescription | null =>
-  name ? LanguageDescription.matchLanguageName(languages, name, true) : null;
+/**
+ * The `LanguageDescription` a fence's info string names, if any.
+ *
+ * Two lookups, because people write fences with FILE EXTENSIONS and
+ * `matchLanguageName` only knows names and aliases. ```` ```py ```` is the
+ * obvious case: `py` is listed under Python's `extensions`, not its `alias`, so
+ * the name lookup returned null and the block rendered with no highlighting at
+ * all — while ```` ```python ```` worked, which makes it look like highlighting
+ * is broken at random. Confluence writes `py` too, so every imported Python
+ * block arrived unhighlighted.
+ *
+ * `matchFilename` is CodeMirror's own answer to that: give it a filename and it
+ * consults the extension lists. A bare token becomes `x.<token>`.
+ */
+export const describeLanguage = (name: string): LanguageDescription | null => {
+  const token = name.trim().toLowerCase();
+  if (!token) return null;
+  return (
+    LanguageDescription.matchLanguageName(languages, token, true) ??
+    LanguageDescription.matchFilename(languages, `x.${token}`)
+  );
+};
 
 export interface CodeMirrorHost {
   view: CmView;

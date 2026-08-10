@@ -117,6 +117,33 @@ def test_code_macro_becomes_a_plain_fence_with_its_language():
     assert "```python\nprint(1)\n```" in md, "CDATA must survive — it is the code"
 
 
+def test_a_code_fence_carries_the_canonical_language():
+    """Confluence writes `py`; a markdown fence should say `python`.
+
+    Radd's own picker resolves both now, but the body is portable markdown that
+    GitHub and every other renderer also reads — and there, `py` highlights
+    nothing. The token that travels should be the one everybody understands.
+    """
+    body = (
+        '<ac:structured-macro ac:name="code">'
+        '<ac:parameter ac:name="language">py</ac:parameter>'
+        "<ac:plain-text-body><![CDATA[x = 1]]></ac:plain-text-body>"
+        "</ac:structured-macro>"
+    )
+    assert "```python\nx = 1\n```" in convert(body).markdown
+
+
+def test_a_plain_text_code_macro_gets_no_language():
+    for token in ("none", "text", "plain"):
+        body = (
+            '<ac:structured-macro ac:name="code">'
+            f'<ac:parameter ac:name="language">{token}</ac:parameter>'
+            "<ac:plain-text-body><![CDATA[hello]]></ac:plain-text-body>"
+            "</ac:structured-macro>"
+        )
+        assert "```\nhello\n```" in convert(body).markdown, token
+
+
 def test_toc_maps_onto_the_extension_that_already_existed():
     body = (
         '<ac:structured-macro ac:name="toc">'

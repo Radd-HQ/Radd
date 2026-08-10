@@ -55,6 +55,32 @@ _DOWNLOAD_SRC_RE = re.compile(r"/download/attachments/\d+/([^?#]+)")
 #: recordings that dominate a real wiki.
 _AUDIO_EXTENSIONS = frozenset({"mp3", "wav", "ogg", "oga", "m4a", "aac", "flac"})
 
+#: Confluence's `language` parameter → the token a markdown fence should carry.
+#:
+#: Confluence writes file extensions and its own spellings (`py`, `js`, `sh`);
+#: markdown renderers key off the language NAME. Radd's own picker resolves both,
+#: but the body is portable markdown that GitHub and every other renderer also
+#: reads, so it should say `python` rather than `py`. Only the tokens that
+#: actually differ are listed — anything else passes through unchanged.
+_FENCE_LANGUAGE = {
+    "py": "python",
+    "js": "javascript",
+    "ts": "typescript",
+    "sh": "bash",
+    "shell": "bash",
+    "yml": "yaml",
+    "rb": "ruby",
+    "cs": "csharp",
+    "c#": "csharp",
+    "c++": "cpp",
+    "actionscript3": "actionscript",
+    "erl": "erlang",
+    "vb": "vbscript",
+    "text": "",
+    "none": "",
+    "plain": "",
+}
+
 
 def _find_attachment(node: "Node | None") -> str:
     """The first `ri:filename` anywhere beneath a node."""
@@ -467,7 +493,8 @@ class _Renderer:
         node: Node | None = None, *, inline: bool,
     ) -> str:
         if name in ("code", "noformat"):
-            language = params.get("language", "") if name == "code" else ""
+            raw_language = params.get("language", "").strip().lower() if name == "code" else ""
+            language = _FENCE_LANGUAGE.get(raw_language, raw_language)
             return f"```{language}\n{raw_body.strip()}\n```"
         if name == "status":
             # Inline by nature: a fence here would terminate the table cell it

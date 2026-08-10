@@ -2,7 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNodeViewContext } from "@prosemirror-adapter/react";
 import { Check, Copy } from "lucide-react";
 import { Select } from "../Select";
-import { languageOptions, mountCodeMirror, type CodeMirrorHost } from "./code-block";
+import {
+  describeLanguage,
+  languageOptions,
+  mountCodeMirror,
+  type CodeMirrorHost,
+} from "./code-block";
 
 /**
  * The code block, ours (RADD-752).
@@ -19,7 +24,27 @@ export function CodeBlockView() {
   const cmRef = useRef<CodeMirrorHost | null>(null);
   const [copied, setCopied] = useState(false);
   const language = String(node.attrs.language ?? "");
-  const options = useMemo(() => [{ value: "", label: "Plain text" }, ...languageOptions()], []);
+  /**
+   * The picker must be able to REPRESENT the value it has.
+   *
+   * The option list is keyed by canonical fence tokens ("python"), but a body can
+   * carry any token a person or an importer wrote — Confluence writes `py`. A
+   * `<Select>` whose value matches no option shows nothing selected, which reads
+   * as "I cannot choose a language here" even though the control works. So an
+   * unlisted-but-RESOLVABLE token joins the list under its real language name,
+   * and an unresolvable one still appears as itself rather than vanishing.
+   */
+  const options = useMemo(() => {
+    const base = [{ value: "", label: "Plain text" }, ...languageOptions()];
+    if (language && !base.some((option) => option.value === language)) {
+      const resolved = describeLanguage(language);
+      base.splice(1, 0, {
+        value: language,
+        label: resolved ? `${resolved.name} (${language})` : language,
+      });
+    }
+    return base;
+  }, [language]);
   const editable = view.editable;
 
   // Create once. The instance outlives every re-render — rebuilding it on each
