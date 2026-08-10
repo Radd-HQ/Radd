@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 import time
 from types import TracebackType
-from typing import Any, Iterator, Self
+from typing import Any, BinaryIO, Iterator, Self
 
 import httpx
 
@@ -54,6 +54,9 @@ EXPAND_VERSIONS = "version,body.storage"
 #: 6099-page download into a completed one.
 RETRY_ATTEMPTS = 3
 RETRY_BACKOFF_SECONDS = 1.5
+
+#: Streaming chunk for attachment downloads.
+DOWNLOAD_CHUNK_BYTES = 1024 * 1024
 
 
 class ConfluenceUnavailable(Exception):
@@ -323,20 +326,34 @@ class ConfluenceClient:
             self._paged(f"/content/{page_id}/child/attachment", expand="version,history")
         )
 
-    def download(self, download_path: str) -> bytes:
-        """Attachment bytes. The `_links.download` value is relative to the site
-        root, NOT to `/rest/api` — using the API client's base would 404."""
+    def download_to(self, download_path: str, sink: BinaryIO) -> int:
+        """STREAM attachment bytes into `sink`, returning the size.
+
+        Streaming rather than returning bytes, because a wiki's attachments are
+        meeting recordings: the largest in one section here is 217 MB, and holding
+        that in memory — then handing it to a buffer that spools to disk anyway —
+        is 217 MB resident for no reason. The caller passes a
+        `SpooledTemporaryFile`, so small files stay in memory and large ones land
+        on disk without anyone deciding which is which.
+
+        The `_links.download` value is relative to the SITE root, not to
+        `/rest/api` — using the API client's base would 404.
+        """
         url = f"{self.base}{download_path}"
+        total = 0
         try:
-            response = self.http.get(url)
+            with self.http.stream("GET", url) as response:
+                if response.status_code >= 400:
+                    raise ConfluenceUnavailable(
+                        f"attachment download returned {response.status_code}",
+                        status=response.status_code,
+                    )
+                for chunk in response.iter_bytes(DOWNLOAD_CHUNK_BYTES):
+                    sink.write(chunk)
+                    total += len(chunk)
         except httpx.HTTPError as exc:
             raise ConfluenceUnavailable(f"could not fetch attachment: {exc}") from exc
-        if response.status_code >= 400:
-            raise ConfluenceUnavailable(
-                f"attachment download returned {response.status_code}",
-                status=response.status_code,
-            )
-        return response.content
+        return total
 
     def restrictions(self, page_id: str) -> dict:
         """View/edit restrictions for one page.

@@ -11,13 +11,15 @@ because a download is one in-process asyncio task with exactly one observer.
 from __future__ import annotations
 
 import asyncio
-import io
+import json
 import logging
+import tempfile
 import uuid
 from datetime import UTC, datetime
 
 from fastapi import UploadFile
-from sqlalchemy import select, update
+from sqlalchemy import cast, select, update
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import SessionLocal
@@ -48,6 +50,8 @@ logger = logging.getLogger(__name__)
 COMMIT_EVERY = 25
 #: A download reports at most this many problems; past it the count is the story.
 MAX_RECORDED_PROBLEMS = 500
+#: Attachments below this stay in memory; above it they spill to a temp file.
+SPOOL_BYTES = 8 * 1024 * 1024
 
 
 # --- progress bookkeeping -----------------------------------------------------
@@ -396,19 +400,24 @@ async def _attachments(
         for raw in found:
             download_path = ((raw.get("_links") or {}).get("download") or "")
             filename = raw.get("title", "")
+            # Spooled: small files stay in memory, a 217 MB meeting recording
+            # lands on disk, and nothing here has to decide which is which.
+            buffer = tempfile.SpooledTemporaryFile(max_size=SPOOL_BYTES)
             try:
-                data = await asyncio.to_thread(client.download, download_path)
+                size = await asyncio.to_thread(
+                    client.download_to, download_path, buffer
+                )
             except ConfluenceUnavailable as exc:
+                buffer.close()
                 _problem(snapshot, Problem(
                     kind=ProblemKind.ATTACHMENT,
                     message=f"could not download {filename!r}",
                     subject=filename, detail=str(exc),
                 ))
                 continue
+            buffer.seek(0)
             media = ((raw.get("extensions") or {}).get("mediaType") or "application/octet-stream")
-            # The blob API takes an UploadFile; wrapping the bytes is the same
-            # move jiraimport's downloader makes for exactly this reason.
-            upload = UploadFile(file=io.BytesIO(data), filename=filename)
+            upload = UploadFile(file=buffer, filename=filename)
             try:
                 blob = await attachments_service.save_blob(
                     session, upload, content_type=media
@@ -421,10 +430,11 @@ async def _attachments(
                 _problem(snapshot, Problem(
                     kind=ProblemKind.ATTACHMENT,
                     message=f"{filename!r} is too large to store "
-                            f"({len(data):,} bytes) — skipped",
+                            f"({size:,} bytes) — skipped",
                     subject=filename, detail=str(exc),
                 ))
                 _bump(snapshot, "attachments_too_large")
+                buffer.close()
                 continue
             except Exception as exc:  # noqa: BLE001 — one file, not the space
                 _problem(snapshot, Problem(
@@ -432,6 +442,7 @@ async def _attachments(
                     message=f"could not store {filename!r}",
                     subject=filename, detail=str(exc),
                 ))
+                buffer.close()
                 continue
             session.add(ConfluenceSnapshotAttachment(
                 snapshot_id=snapshot.id,
@@ -444,8 +455,9 @@ async def _attachments(
                 storage_host_id=blob.host_id,
                 download_path=download_path,
             ))
-            snapshot.byte_size = (snapshot.byte_size or 0) + len(data)
+            snapshot.byte_size = (snapshot.byte_size or 0) + size
             _bump(snapshot, "attachments")
+            buffer.close()
     await session.commit()
 
 
@@ -472,7 +484,18 @@ def start(snapshot_id: uuid.UUID) -> None:
 
 async def mark_interrupted() -> None:
     """A restart abandons in-process tasks, so anything left mid-flight is failed
-    on startup rather than sitting forever claiming to be running."""
+    on startup rather than sitting forever claiming to be running.
+
+    It SAYS SO, too. Marking the row failed and leaving `problems` empty produces
+    exactly the report this module spent a wave learning not to give: the word
+    "failed" and no reason, indistinguishable from a real error — when the honest
+    answer is "the server restarted underneath it, start it again".
+    """
+    note = json.dumps([Problem(
+        kind=ProblemKind.FAILED,
+        message="interrupted by a server restart — nothing was lost, "
+                "start the download again",
+    ).as_dict()])
     async with SessionLocal() as session:
         await session.execute(
             update(ConfluenceSnapshot)
@@ -480,7 +503,10 @@ async def mark_interrupted() -> None:
                 ConfluenceSnapshot.stage.not_in([s.value for s in TERMINAL_SNAPSHOT_STAGES]),
                 ConfluenceSnapshot.finished_at.is_(None),
             )
-            .values(stage=SnapshotStage.FAILED.value)
+            .values(
+                stage=SnapshotStage.FAILED.value,
+                problems=ConfluenceSnapshot.problems.op("||")(cast(note, JSONB)),
+            )
         )
         await session.commit()
 

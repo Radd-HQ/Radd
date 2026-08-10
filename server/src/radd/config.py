@@ -109,7 +109,17 @@ class Settings(BaseSettings):
     # (default; attachments_dir) or "s3" (any S3-compatible store — MinIO, AWS).
     attachment_storage: str = "filesystem"
     attachments_dir: str = "var/attachments"
-    attachment_max_bytes: int = 25 * 1024 * 1024
+    # Raised from 25 MB for spec 117. A wiki's attachments are not screenshots:
+    # in ONE section of a real Confluence space, 23 of 56 files (41%) exceeded
+    # 25 MB, and the largest was a 217 MB meeting recording. A migration that
+    # silently leaves 40% of attachments behind is not a migration — the old
+    # instance could never be switched off.
+    #
+    # Safe to raise because uploads are never held whole in memory: the storage
+    # layer buffers through a SpooledTemporaryFile, and spec 117's downloader
+    # streams into one rather than reading the response body into bytes. Disk on
+    # the storage host is the real constraint, not RAM.
+    attachment_max_bytes: int = 512 * 1024 * 1024
     s3_endpoint: str = "localhost:9000"  # host:port (no scheme; s3_secure picks it)
     s3_access_key: str = ""
     s3_secret_key: str = ""
