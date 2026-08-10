@@ -11,6 +11,7 @@ actually has to parse: a `<time>` element, a wrapped table with a `colgroup`, a
 
 import json
 
+from radd.modules.confluenceimport.client import _int, _page_of
 from radd.modules.confluenceimport.storage import ConvertContext, convert, translate_jql
 from radd.modules.confluenceimport.types import ProblemKind
 
@@ -257,6 +258,69 @@ def test_details_macro_yields_its_body_rather_than_a_card():
     )
     md = convert(body).markdown
     assert "real content" in md and "unsupported-macro" not in md
+
+
+# --- what the live instance taught us ---
+
+
+def test_position_none_is_a_string_and_must_not_crash():
+    """`extensions.position` is an integer for a page whose order was set by hand
+    and the literal STRING "none" for one that inherits it.
+
+    Measured on the real PIP space: 4203 of 6099 pages carry "none" — 69%, not an
+    edge case. A bare int() raised on the first one, which aborted the whole
+    listing, which is what turned it into "download failed" for the entire space
+    and an empty tree browser with no error at all.
+    """
+    page = _page_of(
+        {"id": "3801098", "title": "Install Photoshop extension",
+         "extensions": {"position": "none"}, "version": {"number": 5}},
+        "PIP",
+    )
+    assert page.position == 0
+    assert page.version == 5
+    assert page.title == "Install Photoshop extension"
+
+
+def test_every_remote_number_falls_back_rather_than_raising():
+    """Nothing in another system's JSON is guaranteed to be the type its field
+    name suggests."""
+    assert _int("none") == 0
+    assert _int(None, 1) == 1
+    assert _int("", 7) == 7
+    assert _int({}, 3) == 3
+    assert _int("12") == 12
+    assert _int(4) == 4
+
+
+def test_a_listing_drops_a_repeated_page(monkeypatch):
+    """Offset pagination over a LIVE collection repeats rows.
+
+    Walking a real 6107-page space returned one page in two different windows,
+    and the snapshot's primary key then killed the download 375 bodies in. The
+    listing owns this: a caller asking for "every page in this space" should
+    never have to know it might be told one of them twice.
+    """
+    from radd.modules.confluenceimport.client import ConfluenceClient
+    from radd.modules.confluenceimport.types import ConfluenceAuthMode, ConfluenceCreds
+
+    rows = [
+        {"id": "1", "title": "One", "extensions": {"position": 0}},
+        {"id": "2", "title": "Two", "extensions": {"position": "none"}},
+        {"id": "1", "title": "One again", "extensions": {"position": 0}},
+    ]
+    client = ConfluenceClient(
+        ConfluenceCreds(base_url="https://x", auth_mode=ConfluenceAuthMode.PAT, credential="t")
+    )
+    monkeypatch.setattr(client, "_paged", lambda *a, **k: iter(rows))
+
+    pages = client._pages("/whatever", "PIP")
+    assert [p.id for p in pages] == ["1", "2"]
+
+
+def test_a_page_row_with_no_version_block_still_parses():
+    page = _page_of({"id": "1", "title": "Bare"}, "PIP")
+    assert (page.position, page.version, page.space_key) == (0, 1, "PIP")
 
 
 # --- robustness ---

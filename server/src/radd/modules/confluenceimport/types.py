@@ -238,6 +238,9 @@ class ConfluencePage:
     author: str = ""
     author_email: str = ""
     labels: tuple[str, ...] = ()
+    #: Whether this page has children, so a lazy picker knows what can expand
+    #: WITHOUT a probe request per row.
+    has_children: bool = False
 
 
 @dataclass(frozen=True, slots=True)

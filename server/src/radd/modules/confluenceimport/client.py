@@ -18,6 +18,7 @@ space.
 from __future__ import annotations
 
 import logging
+import time
 from types import TracebackType
 from typing import Any, Iterator, Self
 
@@ -39,8 +40,20 @@ MAX_PAGE_SIZE = 100
 #: `expand` values, named once. These are wire constants with no compiler behind
 #: them — a typo yields a response that is missing a key rather than an error.
 EXPAND_BODY = "body.storage,version,ancestors,space,metadata.labels,history"
+#: The bulk listing a DOWNLOAD walks. No `children.page.size`: only an
+#: interactive picker needs it, and there is no reason to pay for it across the
+#: ~61 requests a real space takes.
 EXPAND_TREE = "ancestors,space,version,extensions.position"
+#: The interactive picker's listing — adds the child count so a row knows whether
+#: it can expand without a probe request of its own.
+EXPAND_BROWSE = EXPAND_TREE + ",children.page.size"
 EXPAND_VERSIONS = "version,body.storage"
+
+#: A long walk against a busy Confluence sees the occasional 500 or dropped
+#: connection. Three attempts with a short linear backoff turned a failed
+#: 6099-page download into a completed one.
+RETRY_ATTEMPTS = 3
+RETRY_BACKOFF_SECONDS = 1.5
 
 
 class ConfluenceUnavailable(Exception):
@@ -112,23 +125,53 @@ class ConfluenceClient:
     # --- transport ---
 
     def _get(self, path: str, **params: Any) -> dict:
-        try:
-            response = self.http.get(path, params={k: v for k, v in params.items() if v is not None})
-        except httpx.HTTPError as exc:  # transport, DNS, TLS, timeout
-            raise ConfluenceUnavailable(f"could not reach Confluence: {exc}") from exc
-        if response.status_code >= 400:
-            raise ConfluenceUnavailable(
-                f"Confluence returned {response.status_code} for {path}: "
-                f"{response.text[:200]}",
-                status=response.status_code,
-            )
-        try:
-            return response.json()
-        except ValueError as exc:
-            # An HTML login page with a 200 is what a wrong base URL looks like.
-            raise ConfluenceUnavailable(
-                f"Confluence returned a non-JSON body for {path} — check the base URL"
-            ) from exc
+        """One GET, retried on a TRANSIENT failure.
+
+        Downloading a real space is ~61 requests, and a busy Confluence returns an
+        occasional 500 or drops a connection somewhere in the middle. Without
+        this, one hiccup 40 pages in threw away the whole walk and reported
+        "download failed" — measured against the live instance, where the same
+        offset succeeded on the very next attempt.
+
+        Only 5xx and transport errors retry. A 401/403/404 is a real answer about
+        credentials or a missing space, and repeating it just delays the report.
+        """
+        last: Exception | None = None
+        for attempt in range(RETRY_ATTEMPTS):
+            if attempt:
+                time.sleep(RETRY_BACKOFF_SECONDS * attempt)
+            try:
+                response = self.http.get(
+                    path, params={k: v for k, v in params.items() if v is not None}
+                )
+            except httpx.HTTPError as exc:  # transport, DNS, TLS, timeout
+                last = ConfluenceUnavailable(f"could not reach Confluence: {exc}")
+                continue
+            if response.status_code >= 500:
+                last = ConfluenceUnavailable(
+                    f"Confluence returned {response.status_code} for {path}: "
+                    f"{response.text[:200]}",
+                    status=response.status_code,
+                )
+                logger.warning(
+                    "confluence %s on %s (attempt %d/%d) — retrying",
+                    response.status_code, path, attempt + 1, RETRY_ATTEMPTS,
+                )
+                continue
+            if response.status_code >= 400:
+                raise ConfluenceUnavailable(
+                    f"Confluence returned {response.status_code} for {path}: "
+                    f"{response.text[:200]}",
+                    status=response.status_code,
+                )
+            try:
+                return response.json()
+            except ValueError as exc:
+                # An HTML login page with a 200 is what a wrong base URL looks like.
+                raise ConfluenceUnavailable(
+                    f"Confluence returned a non-JSON body for {path} — check the base URL"
+                ) from exc
+        raise last or ConfluenceUnavailable(f"could not reach Confluence for {path}")
 
     def _paged(self, path: str, **params: Any) -> Iterator[dict]:
         """Walk `results` across pages. Confluence returns `_links.next` when there
@@ -175,26 +218,67 @@ class ConfluenceClient:
             homepage_id=str((raw.get("homepage") or {}).get("id", "")),
         )
 
+    def _pages(
+        self, path: str, fallback_space: str, *, expand: str = EXPAND_TREE, **params: Any
+    ) -> list[ConfluencePage]:
+        """Parse a listing, SKIPPING any row that cannot be read.
+
+        One unreadable page must not cost the caller the whole space. Before this,
+        a single row with an unexpected shape raised out of the list comprehension
+        and took the entire listing with it — which is what turned one unordered
+        page into "download failed" for a space of hundreds, and into an empty
+        tree browser with no error at all.
+        """
+        out: list[ConfluencePage] = []
+        seen: set[str] = set()
+        for raw in self._paged(path, expand=expand, **params):
+            try:
+                page = _page_of(raw, fallback_space)
+            except Exception:  # noqa: BLE001 — one bad row, not a bad space
+                logger.warning(
+                    "skipping an unreadable page row from %s: id=%s",
+                    path, (raw or {}).get("id"), exc_info=True,
+                )
+                continue
+            # Offset pagination over a live collection REPEATS rows: walking a
+            # 6107-page space returned one page in two different windows, and the
+            # snapshot's primary key then killed the download 375 bodies in. The
+            # listing is the right place to fix it — a caller should never have to
+            # know that "every page in this space" might say one of them twice.
+            if page.id in seen:
+                logger.info("duplicate page %s in %s — already listed", page.id, path)
+                continue
+            seen.add(page.id)
+            out.append(page)
+        return out
+
     def space_pages(self, key: str) -> list[ConfluencePage]:
-        """Every page in a space, as metadata. Bodies come later, per page, so a
-        cancelled download has not paid for content it will never store."""
-        return [
-            _page_of(raw, key)
-            for raw in self._paged(f"/space/{key}/content/page", expand=EXPAND_TREE)
-        ]
+        """EVERY page in a space, as metadata. Bodies come later, per page, so a
+        cancelled download has not paid for content it will never store.
+
+        This is a download-time call, not a browse-time one: a real space took 61
+        requests and over two minutes here. Use `root_pages` + `children` to let a
+        person browse.
+        """
+        return self._pages(f"/space/{key}/content/page", key)
+
+    def root_pages(self, key: str) -> list[ConfluencePage]:
+        """Only the TOP of a space's tree (`depth=root`).
+
+        0.6s against a 6099-page space, versus minutes for the whole thing — which
+        is the difference between a scope picker and a hang.
+        """
+        return self._pages(
+            f"/space/{key}/content/page", key, expand=EXPAND_BROWSE, depth="root"
+        )
 
     def children(self, page_id: str) -> list[ConfluencePage]:
-        return [
-            _page_of(raw, "")
-            for raw in self._paged(f"/content/{page_id}/child/page", expand=EXPAND_TREE)
-        ]
+        """Direct children — the picker's expand, so it uses the browse expand."""
+        return self._pages(f"/content/{page_id}/child/page", "", expand=EXPAND_BROWSE)
 
     def descendants(self, page_id: str) -> list[ConfluencePage]:
         """The whole subtree under a page — the `SUBTREE` scope's resolution."""
-        return [
-            _page_of(raw, "")
-            for raw in self._paged(f"/content/{page_id}/descendant/page", expand=EXPAND_TREE)
-        ]
+        return self._pages(f"/content/{page_id}/descendant/page", "")
 
     def page(self, page_id: str) -> dict:
         """One page with its storage-format body."""
@@ -255,6 +339,24 @@ class ConfluenceClient:
             raise
 
 
+def _int(value: object, default: int = 0) -> int:
+    """A number out of a REMOTE payload, or the default.
+
+    Confluence's `extensions.position` is an integer for a page whose order was
+    set by hand and the literal STRING `"none"` for one that inherits it — so a
+    bare `int()` crashes on the first unordered page in a space. That is one
+    unordered page out of hundreds, which is why it survived every test built
+    from hand-written fixtures and only appeared against a real instance.
+
+    Nothing in a JSON body from another system is guaranteed to be the type its
+    field name suggests, so every numeric read here goes through this.
+    """
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+
+
 def _page_of(raw: dict, fallback_space: str) -> ConfluencePage:
     ancestors = raw.get("ancestors") or []
     history = raw.get("history") or {}
@@ -264,8 +366,8 @@ def _page_of(raw: dict, fallback_space: str) -> ConfluencePage:
         title=raw.get("title", ""),
         space_key=((raw.get("space") or {}).get("key") or fallback_space),
         parent_id=str(ancestors[-1]["id"]) if ancestors else None,
-        position=int(((raw.get("extensions") or {}).get("position") or 0) or 0),
-        version=int(((raw.get("version") or {}).get("number") or 1)),
+        position=_int((raw.get("extensions") or {}).get("position"), 0),
+        version=_int((raw.get("version") or {}).get("number"), 1),
         created_at=history.get("createdDate", "") or "",
         updated_at=((raw.get("version") or {}).get("when") or ""),
         author=created_by.get("username", "") or created_by.get("displayName", ""),
@@ -274,6 +376,13 @@ def _page_of(raw: dict, fallback_space: str) -> ConfluencePage:
             label.get("name", "")
             for label in (((raw.get("metadata") or {}).get("labels") or {}).get("results") or [])
         ),
+        # `children.page.size` when expanded; Confluence also reports it under
+        # extensions on some versions. Either way an absent value means "unknown",
+        # and the picker treats that as expandable rather than as a leaf — showing
+        # a page as childless when it is not hides content from the selection.
+        has_children=_int(
+            ((raw.get("children") or {}).get("page") or {}).get("size"), 1
+        ) > 0,
     )
 
 

@@ -122,8 +122,12 @@ async def space_tree(
     session: Session,
     user: CurrentUser,
     connection_id: uuid.UUID | None = None,
+    parent_id: str = "",
 ) -> list[PageNode]:
-    """The remote tree, flat with `parent_id` — what the scope picker browses to
-    choose a section root or a set of pages."""
+    """ONE level of the remote tree — the space's roots, or one page's children.
+
+    Lazy on purpose: fetching a real 6000-page space up front took 61 requests and
+    over two minutes, which is a hang rather than a picker.
+    """
     _admin(user)
-    return await service.space_tree(session, space_key, connection_id)
+    return await service.space_tree(session, space_key, connection_id, parent_id)

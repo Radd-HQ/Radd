@@ -111,6 +111,8 @@ export interface ConfluencePageNode {
   space_key: string;
   position: number;
   version: number;
+  /** Whether the picker should offer to expand it, without a probe per row. */
+  has_children: boolean;
 }
 
 export interface ConfluenceProblem {

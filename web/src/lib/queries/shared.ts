@@ -183,7 +183,8 @@ export const queryKeys = {
   confluenceStatus: ["confluenceStatus"] as const,
   confluenceSpaces: (connectionId: string | null) =>
     ["confluenceSpaces", { connectionId }] as const,
-  confluenceTree: (spaceKey: string) => ["confluenceTree", { spaceKey }] as const,
+  confluenceTree: (spaceKey: string, parentId: string) =>
+    ["confluenceTree", { spaceKey, parentId }] as const,
   confluenceSnapshots: ["confluenceSnapshots"] as const,
   confluencePlans: ["confluencePlans"] as const,
   confluencePlan: (planId: string) => ["confluencePlan", { planId }] as const,

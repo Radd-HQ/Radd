@@ -210,7 +210,14 @@ async def _bodies(
     selected: set[str],
 ) -> list[ConfluenceSnapshotPage]:
     rows: list[ConfluenceSnapshotPage] = []
+    written: set[str] = set()
     for index, page in enumerate(pages):
+        # The listing already de-duplicates, but a repeat here costs the ENTIRE
+        # download to a primary-key violation rather than one page — cheap enough
+        # to check twice for a failure that expensive.
+        if page.id in written:
+            continue
+        written.add(page.id)
         if index % COMMIT_EVERY == 0:
             await session.commit()
             if await _canceled(session, snapshot):

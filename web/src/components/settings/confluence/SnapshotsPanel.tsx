@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, Trash2, X } from "lucide-react";
+import { ChevronRight, Download, Trash2, X } from "lucide-react";
 import { Button, ButtonVariant } from "../../Button";
 import { Modal } from "../../Modal";
 import { SelectField } from "../../SelectField";
@@ -92,6 +92,26 @@ export function SnapshotsPanel({
                         .join(" · ")}
                     </p>
                   )}
+                  {/* A bare "failed" is not a report. The reason is already on the
+                      row — showing it is the difference between "something broke"
+                      and knowing which page and why. */}
+                  {snapshot.problems.length > 0 && (
+                    <ul className="mt-1 space-y-0.5">
+                      {snapshot.problems.slice(0, 3).map((problem, index) => (
+                        <li key={index} className="text-[12px] text-fg-secondary">
+                          {problem.message}
+                          {problem.detail && (
+                            <span className="text-fg-faint"> — {problem.detail}</span>
+                          )}
+                        </li>
+                      ))}
+                      {snapshot.problems.length > 3 && (
+                        <li className="text-[12px] text-fg-faint">
+                          …and {snapshot.problems.length - 3} more
+                        </li>
+                      )}
+                    </ul>
+                  )}
                 </div>
                 {snapshot.stage === "done" && (
                   <Button size="sm" onClick={() => onPlanFrom(snapshot)}>
@@ -154,7 +174,6 @@ function NewDownloadModal({
   const [historyLimit, setHistoryLimit] = useState("");
 
   const spaces = useQuery(confluenceSpacesQuery(null));
-  const tree = useQuery(confluenceTreeQuery(spaceKey, kind !== ConfluenceScopeKind.space));
 
   const start = useMutation({
     mutationFn: () =>
@@ -211,37 +230,25 @@ function NewDownloadModal({
         )}
 
         {kind !== ConfluenceScopeKind.space && spaceKey && (
-          <div className="max-h-64 overflow-y-auto rounded-lg border border-subtle">
-            {tree.isLoading && <p className="p-3 text-[13px] text-fg-faint">Loading the tree…</p>}
-            {(tree.data ?? []).map((node) => (
-              <label
-                key={node.id}
-                className="flex cursor-pointer items-center gap-2 border-b border-subtle px-3 py-1.5 text-[13px] last:border-0 hover:bg-elevated"
-              >
-                <input
-                  type={kind === ConfluenceScopeKind.subtree ? "radio" : "checkbox"}
-                  name="scope-node"
-                  checked={
-                    kind === ConfluenceScopeKind.subtree
-                      ? rootPageId === node.id
-                      : pageIds.includes(node.id)
-                  }
-                  onChange={(e) => {
-                    if (kind === ConfluenceScopeKind.subtree) {
-                      setRootPageId(node.id);
-                    } else {
-                      setPageIds((current) =>
-                        e.target.checked
-                          ? [...current, node.id]
-                          : current.filter((id) => id !== node.id),
-                      );
-                    }
-                  }}
-                />
-                <span className="truncate text-fg">{node.title}</span>
-              </label>
-            ))}
+          <div className="max-h-72 overflow-y-auto rounded-lg border border-subtle">
+            <PageBranch
+              spaceKey={spaceKey}
+              parentId=""
+              depth={0}
+              kind={kind}
+              rootPageId={rootPageId}
+              pageIds={pageIds}
+              onPick={setRootPageId}
+              onToggle={(id, on) =>
+                setPageIds((current) =>
+                  on ? [...current, id] : current.filter((x) => x !== id),
+                )
+              }
+            />
           </div>
+        )}
+        {kind === ConfluenceScopeKind.pages && pageIds.length > 0 && (
+          <p className="text-[12px] text-fg-muted">{pageIds.length} page(s) selected</p>
         )}
 
         <label className="flex items-center gap-2 text-[13px] text-fg-secondary">
@@ -272,5 +279,113 @@ function NewDownloadModal({
         </div>
       </div>
     </Modal>
+  );
+}
+
+
+/**
+ * One level of the remote tree, fetched when it is opened.
+ *
+ * The picker used to ask for the whole space at once: 61 requests and over two
+ * minutes against a real one, during which it rendered nothing — which reads as
+ * "this space is empty", not "still loading". A branch costs one request.
+ */
+function PageBranch({
+  spaceKey,
+  parentId,
+  depth,
+  kind,
+  rootPageId,
+  pageIds,
+  onPick,
+  onToggle,
+}: {
+  spaceKey: string;
+  parentId: string;
+  depth: number;
+  kind: string;
+  rootPageId: string;
+  pageIds: string[];
+  onPick: (id: string) => void;
+  onToggle: (id: string, on: boolean) => void;
+}) {
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const level = useQuery(confluenceTreeQuery(spaceKey, parentId));
+
+  if (level.isLoading) {
+    return <p className="px-3 py-2 text-[13px] text-fg-faint">Loading…</p>;
+  }
+  if (level.isError) {
+    return (
+      <p className="px-3 py-2 text-[13px] text-fg-secondary">
+        Could not list these pages. The connection works, but the request failed.
+      </p>
+    );
+  }
+  const nodes = level.data ?? [];
+  if (!nodes.length) {
+    return (
+      <p className="px-3 py-2 text-[13px] text-fg-faint">
+        {depth === 0 ? "This space has no pages." : "No pages below this one."}
+      </p>
+    );
+  }
+
+  return (
+    <>
+      {nodes.map((node) => (
+        <div key={node.id}>
+          <div
+            className="flex items-center gap-1.5 border-b border-subtle px-2 py-1.5 text-[13px] last:border-0 hover:bg-elevated"
+            style={{ paddingLeft: `${8 + depth * 16}px` }}
+          >
+            <button
+              type="button"
+              aria-label={open[node.id] ? `Collapse ${node.title}` : `Expand ${node.title}`}
+              aria-expanded={Boolean(open[node.id])}
+              disabled={!node.has_children}
+              onClick={() => setOpen((o) => ({ ...o, [node.id]: !o[node.id] }))}
+              className="shrink-0 disabled:opacity-0"
+            >
+              <ChevronRight
+                className={`size-4 text-fg-muted transition-transform ${
+                  open[node.id] ? "rotate-90" : ""
+                }`}
+                aria-hidden
+              />
+            </button>
+            <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+              <input
+                type={kind === ConfluenceScopeKind.subtree ? "radio" : "checkbox"}
+                name="scope-node"
+                checked={
+                  kind === ConfluenceScopeKind.subtree
+                    ? rootPageId === node.id
+                    : pageIds.includes(node.id)
+                }
+                onChange={(e) =>
+                  kind === ConfluenceScopeKind.subtree
+                    ? onPick(node.id)
+                    : onToggle(node.id, e.target.checked)
+                }
+              />
+              <span className="truncate text-fg">{node.title}</span>
+            </label>
+          </div>
+          {open[node.id] && (
+            <PageBranch
+              spaceKey={spaceKey}
+              parentId={node.id}
+              depth={depth + 1}
+              kind={kind}
+              rootPageId={rootPageId}
+              pageIds={pageIds}
+              onPick={onPick}
+              onToggle={onToggle}
+            />
+          )}
+        </div>
+      ))}
+    </>
   );
 }

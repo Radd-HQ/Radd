@@ -89,6 +89,7 @@ class PageNode(BaseModel):
     space_key: str = ""
     position: int = 0
     version: int = 1
+    has_children: bool = False
 
 
 # --- snapshots ----------------------------------------------------------------

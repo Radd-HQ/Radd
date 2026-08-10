@@ -17,6 +17,7 @@ from radd.modules.pages import service as pages_service
 from radd.modules.pages.schemas import PageCreate, PageUpdate
 
 from . import ledger
+from .client import _int
 from .ledger import LedgerEntity
 from .storage import ConvertContext, convert
 from .types import Problem, UpsertAction
@@ -140,7 +141,7 @@ async def write_history(
         row = await pages_service.write_version(
             session,
             page_id,
-            version=int(revision.get("version", 0)),
+            version=_int(revision.get("version"), 0),
             title=revision.get("title", ""),
             body=body,
             author_id=author_id,

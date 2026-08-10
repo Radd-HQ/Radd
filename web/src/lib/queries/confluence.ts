@@ -60,12 +60,24 @@ export const confluenceSpacesQuery = (connectionId: string | null, enabled = tru
     staleTime: 60_000,
   });
 
-/** The remote tree, flat with `parent_id` — what the scope picker browses. */
-export const confluenceTreeQuery = (spaceKey: string, enabled = true) =>
+/**
+ * ONE level of the remote tree: a space's roots, or one page's children.
+ *
+ * Lazy on purpose. Fetching a real 6000-page space up front took 61 requests and
+ * over two minutes — the picker showed nothing at all for the whole time, which
+ * read as "there are no pages" rather than "still loading".
+ */
+export const confluenceTreeQuery = (
+  spaceKey: string,
+  parentId = "",
+  enabled = true,
+) =>
   queryOptions({
-    queryKey: queryKeys.confluenceTree(spaceKey),
+    queryKey: queryKeys.confluenceTree(spaceKey, parentId),
     queryFn: () =>
-      api.get<ConfluencePageNode[]>(`${ApiPath.confluenceSpaces}/${spaceKey}/tree`),
+      api.get<ConfluencePageNode[]>(`${ApiPath.confluenceSpaces}/${spaceKey}/tree`, {
+        query: { parent_id: parentId || undefined },
+      }),
     enabled: enabled && Boolean(spaceKey),
     retry: false,
     staleTime: 60_000,

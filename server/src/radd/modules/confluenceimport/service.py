@@ -31,18 +31,27 @@ def _whoami(creds: ConfluenceCreds) -> str:
     return raw.get("username") or raw.get("displayName") or ""
 
 
-def _tree(creds: ConfluenceCreds, space_key: str) -> list[PageNode]:
+def _tree(creds: ConfluenceCreds, space_key: str, parent_id: str) -> list[PageNode]:
+    """ONE level of the tree — the roots of a space, or one page's children.
+
+    Deliberately not the whole space: fetching every page of a real one took 61
+    requests and over two minutes, so the picker browses the way a person does.
+    """
     with ConfluenceClient(creds) as client:
+        pages = (
+            client.children(parent_id) if parent_id else client.root_pages(space_key)
+        )
         return [
             PageNode(
                 id=p.id,
                 title=p.title,
-                parent_id=p.parent_id,
+                parent_id=parent_id or p.parent_id,
                 space_key=p.space_key or space_key,
                 position=p.position,
                 version=p.version,
+                has_children=p.has_children,
             )
-            for p in client.space_pages(space_key)
+            for p in pages
         ]
 
 
@@ -75,9 +84,17 @@ async def list_spaces(
 
 
 async def space_tree(
-    session: AsyncSession, space_key: str, connection_id: uuid.UUID | None = None
+    session: AsyncSession,
+    space_key: str,
+    connection_id: uuid.UUID | None = None,
+    parent_id: str = "",
 ) -> list[PageNode]:
-    """The remote tree, for the scope picker — flat, with `parent_id`, the same
-    shape the SPA's own page tree consumes."""
+    """One level of the remote tree, for the scope picker.
+
+    Roots when `parent_id` is empty, that page's children otherwise — so opening
+    the picker on a 6000-page space costs one request, not sixty.
+    """
     connection = await connections.require_connection(session, connection_id)
-    return await asyncio.to_thread(_tree, connections.creds_of(connection), space_key)
+    return await asyncio.to_thread(
+        _tree, connections.creds_of(connection), space_key, parent_id
+    )
