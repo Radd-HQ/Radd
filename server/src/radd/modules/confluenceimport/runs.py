@@ -145,7 +145,7 @@ async def _pipeline(session: AsyncSession, run: ConfluenceRun) -> None:
         # from being created at all — writing it and closing it afterwards leaves a
         # window, and a failure between the two leaves it open forever.
         resolution = None
-        if options.import_restrictions and row.restrictions:
+        if options.import_restrictions and restrictions.is_restricted(row.restrictions):
             resolution = await restrictions.resolve(
                 session, row.restrictions, options=options,
                 overrides=overrides, page_title=row.title,

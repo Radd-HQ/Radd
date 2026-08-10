@@ -253,14 +253,23 @@ class ConfluenceClient:
         return out
 
     def space_pages(self, key: str) -> list[ConfluencePage]:
-        """EVERY page in a space, as metadata. Bodies come later, per page, so a
-        cancelled download has not paid for content it will never store.
+        """EVERY page in a space, as metadata.
 
-        This is a download-time call, not a browse-time one: a real space took 61
-        requests and over two minutes here. Use `root_pages` + `children` to let a
-        person browse.
+        Uses CQL with an explicit **ORDER BY id**, not `/space/{key}/content/page`.
+        That endpoint has no stable sort, and offset pagination over an unstably
+        ordered collection both REPEATS and DROPS rows: measured against a real
+        6097-page space it returned 6107 rows of which only 5787 were distinct —
+        320 repeats, and ~310 pages never returned at all. The repeats were loud
+        (a primary-key violation killed the download); the omissions were silent,
+        which is far worse for an importer whose whole promise is that nothing is
+        lost. The same query ordered by id returns 6097 rows, 6097 distinct.
+
+        A download-time call, not a browse-time one — ~49s for that space. Use
+        `root_pages` + `children` to let a person browse.
         """
-        return self._pages(f"/space/{key}/content/page", key)
+        return self._pages(
+            "/content/search", key, cql=f'space="{key}" AND type=page ORDER BY id'
+        )
 
     def root_pages(self, key: str) -> list[ConfluencePage]:
         """Only the TOP of a space's tree (`depth=root`).
@@ -277,8 +286,16 @@ class ConfluenceClient:
         return self._pages(f"/content/{page_id}/child/page", "", expand=EXPAND_BROWSE)
 
     def descendants(self, page_id: str) -> list[ConfluencePage]:
-        """The whole subtree under a page — the `SUBTREE` scope's resolution."""
-        return self._pages(f"/content/{page_id}/descendant/page", "")
+        """The whole subtree under a page — the `SUBTREE` scope's resolution.
+
+        CQL `ancestor=` with the same explicit ordering, for the same reason
+        `space_pages` uses it: the paged `/descendant/page` endpoint has no stable
+        sort either, and a subtree that quietly loses pages is the same failure in
+        miniature.
+        """
+        return self._pages(
+            "/content/search", "", cql=f"ancestor={page_id} AND type=page ORDER BY id"
+        )
 
     def page(self, page_id: str) -> dict:
         """One page with its storage-format body."""

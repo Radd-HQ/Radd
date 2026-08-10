@@ -362,7 +362,10 @@ async def _restrictions(
                 subject=row.page_id, detail=str(exc),
             ))
             continue
-        if row.restrictions:
+        # The envelope is always present; only a page that NAMES someone counts.
+        from ..restrictions import is_restricted
+
+        if is_restricted(row.restrictions):
             _bump(snapshot, "restricted_pages")
     await session.commit()
 

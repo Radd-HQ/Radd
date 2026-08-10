@@ -48,6 +48,37 @@ PAGE_RESOURCE = "page"
 _OPERATION_ACCESS = {"read": Access.READ.value, "update": Access.WRITE.value}
 
 
+def principals_of(restrictions: dict) -> list[str]:
+    """Every user and group a page's restrictions actually NAME.
+
+    Confluence always returns the envelope — `read` and `update` keys, each with
+    empty `user`/`group` result lists — so the payload is truthy for every page
+    whether or not anything is restricted. Taking that at face value reported
+    "5787 restricted pages" for a space with 34, and made the import resolve
+    principals 5787 times to find none.
+
+    Walks defensively: a shape this does not recognise yields NO principals, and
+    the run's FAIL default then refuses the page rather than importing it open.
+    """
+    found: list[str] = []
+    for operation in _OPERATION_ACCESS:
+        block = (restrictions or {}).get(operation) or {}
+        inner = block.get("restrictions") or {}
+        for raw in ((inner.get("user") or {}).get("results") or []):
+            name = raw.get("username") or raw.get("displayName") or ""
+            if name:
+                found.append(f"user:{name}")
+        for raw in ((inner.get("group") or {}).get("results") or []):
+            if raw.get("name"):
+                found.append(f"group:{raw['name']}")
+    return found
+
+
+def is_restricted(restrictions: dict) -> bool:
+    """Whether a page is restricted AT ALL — see `principals_of`."""
+    return bool(principals_of(restrictions))
+
+
 @dataclass(slots=True)
 class Resolution:
     """What one page's restrictions became."""

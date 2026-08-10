@@ -33,6 +33,7 @@ from .schemas import (
     SpaceMapping,
     UserMapping,
 )
+from .restrictions import principals_of
 from .snapshot import service as snapshot_service
 from .storage.macros import BUILTIN_MACROS
 from .types import (
@@ -111,7 +112,7 @@ async def profile(session: AsyncSession, snapshot_id: uuid.UUID) -> PlanMappings
             users[username] = users.get(username, 0) + 1
         for project_key in _JIRA_KEY_RE.findall(row.body or ""):
             jira_projects[project_key] = jira_projects.get(project_key, 0) + 1
-        for principal in _principals_of(row.restrictions or {}):
+        for principal in principals_of(row.restrictions or {}):
             principals[principal] = principals.get(principal, 0) + 1
 
     for comment in comments:
@@ -171,30 +172,6 @@ def _macro_rows(counts: dict[str, int], sample: dict[str, str]) -> list[MacroMap
             )
         )
     return rows
-
-
-def _principals_of(restrictions: dict) -> list[str]:
-    """Every user and group named by a page's restrictions.
-
-    Confluence nests these four deep, and the shape differs slightly between
-    versions, so this walks defensively: a shape we do not recognise yields no
-    principals rather than raising, and the run's FAIL default then refuses the
-    page rather than importing it open.
-    """
-    found: list[str] = []
-    for operation in ("read", "update"):
-        block = (restrictions or {}).get(operation) or {}
-        people = ((block.get("restrictions") or {}).get("user") or {}).get("results") or []
-        groups = ((block.get("restrictions") or {}).get("group") or {}).get("results") or []
-        for person in people:
-            name = person.get("username") or person.get("displayName") or ""
-            if name:
-                found.append(f"user:{name}")
-        for group in groups:
-            name = group.get("name") or ""
-            if name:
-                found.append(f"group:{name}")
-    return found
 
 
 # --- CRUD ---------------------------------------------------------------------
