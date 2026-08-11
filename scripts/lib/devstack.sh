@@ -35,7 +35,12 @@ start_embeddings() {
         step "embeddings already up"
         return
     fi
-    podman compose -f compose.dev.yaml --profile embeddings-gpu up -d >/dev/null 2>&1 || {
+    # NAME the service. `up -d` with no service starts everything in the file
+    # that is not behind another profile — including compose.dev.yaml's own `app`,
+    # which publishes :8000 and then fights the server this script is about to
+    # start. Two servers on one port is the "old server answering" trap: the port
+    # responds, so it looks like the code under test, not like a stray container.
+    podman compose -f compose.dev.yaml --profile embeddings-gpu up -d embeddings-gpu >/dev/null 2>&1 || {
         printf '     \033[2m(embeddings-gpu did not start — semantic search will be dark)\033[0m\n'
     }
 }
@@ -50,6 +55,17 @@ build_web() {
     }
 }
 
+# compose.dev.yaml carries a containerised `app` on :8000 for the all-in-container
+# workflow. These scripts run the server on the HOST, so the two compete for the
+# port — and the container wins on restart, quietly serving its own build of the
+# code against whichever database IT was configured for. Stop it.
+stop_container_app() {
+    if podman ps --format '{{.Names}}' | grep -q '^radd-dev_app_1$'; then
+        step "stopping the containerised app on :8000 (it competes with this one)"
+        podman stop radd-dev_app_1 >/dev/null 2>&1 || true
+    fi
+}
+
 # Free the port before binding it. A failed bind leaves the OLD server answering,
 # which looks exactly like a bug in the code under test rather than like the new
 # process never having started.
@@ -62,6 +78,7 @@ free_port() {
 serve() {
     url="$1"
     port="$2"
+    stop_container_app
     free_port "$port"
     say "server on :$port"
     printf '  open \033[4mhttp://localhost:%s\033[0m\n\n' "$port"
