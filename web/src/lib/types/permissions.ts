@@ -298,15 +298,6 @@ export interface RoleUpdate {
   permissions?: PermissionValue[];
 }
 
-/** Direct user↔project membership with a data-driven role (spec 06). */
-export interface ProjectMember {
-  project_id: string;
-  user_id: string;
-  role_id: string;
-  /** The role's key, hydrated for display. */
-  role: string;
-}
-
 /** RADD-825: the Baseline pre-flight report — the consequence of storing a
     proposed floor, computed server-side through the real resolvers. */
 export interface BaselinePreflightRow {
