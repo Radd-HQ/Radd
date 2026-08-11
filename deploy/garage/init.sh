@@ -18,7 +18,14 @@
 set -e
 SERVICE="${1:-garage-1}"
 
-g() { podman compose -f compose.dev.yaml --profile storage exec -T "$SERVICE" /garage "$@"; }
+# Which stack's Garage to set up. Defaults to the working one, so the documented
+# one-liner above is unchanged; `scripts/dev-clean.sh` points it at the clean
+# stack, whose containers live in another compose project entirely.
+COMPOSE_FILE="${RADD_COMPOSE_FILE:-compose.dev.yaml}"
+COMPOSE_PROFILE="${RADD_COMPOSE_PROFILE:---profile storage}"
+
+# shellcheck disable=SC2086 - COMPOSE_PROFILE is deliberately word-split (it may be empty).
+g() { podman compose -f "$COMPOSE_FILE" $COMPOSE_PROFILE exec -T "$SERVICE" /garage "$@"; }
 
 ACCESS="GK647261646464657630313233"
 SECRET="6472616464646576736563726574303030303030303030303030303030303030"

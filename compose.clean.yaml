@@ -1,0 +1,65 @@
+# The CLEAN dev stack — an empty world you can switch to and back.
+#
+# Everything here is deliberately parallel to the working stack rather than
+# shared with it: its own database, its own Garage volumes, its own ports, and
+# its own compose project name. That is the whole point — `scripts/dev-clean.sh`
+# wipes this stack on every run, and it must never be able to wipe the data you
+# have been building against.
+#
+#   working stack                    clean stack
+#   -------------                    -----------
+#   db      localhost:5455           db      localhost:5457
+#   garage  localhost:3900 / :3910   garage  localhost:3920 / :3930
+#
+# The embeddings server is NOT duplicated: it is stateless and both stacks talk
+# to the same one on :8081 (compose.dev.yaml, --profile embeddings-gpu).
+#
+# Usage: `sh scripts/dev-clean.sh` — do not run these by hand, the script also
+# migrates, seeds and points the server at the right database.
+
+name: radd-clean
+
+services:
+  db:
+    image: docker.io/pgvector/pgvector:pg16
+    # Parallel maintenance workers allocate dynamic shared memory in /dev/shm;
+    # the 64MB container default aborts them at scale (DiskFull).
+    shm_size: 1g
+    environment:
+      POSTGRES_USER: radd
+      POSTGRES_PASSWORD: radd
+      POSTGRES_DB: radd
+    ports:
+      - "${RADD_CLEAN_DB_PORT:-5457}:5432"
+    volumes:
+      - radd-clean-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U radd -d radd"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # Two S3 hosts, because multi-host storage (spec 102) is only exercised by
+  # having more than one: the routing chain, the per-host delivery mode and the
+  # "which host did this land on" badge all collapse into nothing with a single
+  # host, and a clean instance that cannot exercise them is not a clean instance.
+  garage-1:
+    image: docker.io/dxflrs/garage:v2.1.0
+    volumes:
+      - ./deploy/garage/garage.toml:/etc/garage.toml:ro,z
+      - radd-clean-garage1:/var/lib/garage
+    ports:
+      - "3920:3900"
+
+  garage-2:
+    image: docker.io/dxflrs/garage:v2.1.0
+    volumes:
+      - ./deploy/garage/garage.toml:/etc/garage.toml:ro,z
+      - radd-clean-garage2:/var/lib/garage
+    ports:
+      - "3930:3900"
+
+volumes:
+  radd-clean-pgdata:
+  radd-clean-garage1:
+  radd-clean-garage2:

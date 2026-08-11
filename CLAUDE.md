@@ -158,6 +158,22 @@ Building is not verifying. This session shipped three bugs a clean `tsc` + `vite
 
 ## Running
 
+**Two one-command local stacks (RADD-1025).** They use SEPARATE databases and
+separate Garage volumes, so switching between them costs nothing and neither can
+touch the other's data:
+
+```bash
+sh scripts/dev.sh          # your working data (db :5455, garage :3900/:3910)
+sh scripts/dev-clean.sh    # an EMPTY instance (db :5457, garage :3920/:3930)
+sh scripts/dev-clean.sh --keep   # …and again, without wiping it
+```
+
+Clean means no DATA, not no configuration: it comes up with both storage hosts
+registered and the routing chain in place, the llm-host vLLM holding chat+vision,
+TEI holding embeddings, every AI feature toggle on, and an admin to sign in as —
+all of which are DB rows, so a bare `alembic upgrade head` leaves them dark.
+`server/scripts/seed_dev_stack.py` is that wiring and is idempotent.
+
 ```bash
 # Everything in the container (recommended — brings pg_dump/pg_restore, which the
 # app now REQUIRES at startup; ./server is mounted, so edits live-reload):
