@@ -405,8 +405,11 @@ OUTBOUND_BATCH = 200
 # Acknowledgment sent when intake/public-form submission creates an item with a
 # contact. The bracketed key in the subject is what threads the requester's
 # replies back onto the item (parsing.extract_reply_key) — which is why the
-# SUBJECTS live here as wire constants while the bodies live in
-# `radd.mailrender` with every other rendering decision (RADD-967).
+# SUBJECT stays a fixed wire constant here. The BODY used to live beside it in
+# `radd.mailrender` as a second constant (RADD-967); since RADD-1045 it is the
+# `mail_ack_body` scalar-cascade setting (Settings → Email, default text on
+# `config.Settings.mail_ack_body`) — policy this module owns and resolves in
+# `service.send_ack`, not a rendering decision `mailrender` gets to make.
 ACK_SUBJECT_TEMPLATE = "[{key}] {title}"
 
 # Outbound reply to the contact when an agent leaves a PUBLIC comment.

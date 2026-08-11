@@ -14,6 +14,7 @@ and since RADD-983 there is no mail leaving the INSTANCE by any other route
 either.
 """
 
+import re
 import uuid
 
 from sqlalchemy import select
@@ -21,9 +22,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd import mailrender
 from radd.config import settings
+from radd.db import SessionLocal
 from radd.modules.auth.models import User
 from radd.modules.auth.types import UserSource
 from radd.modules.automations.types import SYSTEM_ACTOR_ID
+from radd.modules.settings import service as settings_service
+from radd.modules.settings.types import SettingKey
 
 from .models import MailContact
 from .transport import (
@@ -177,6 +181,52 @@ async def upsert_contact(
     return contact
 
 
+#: Same `{{token}}` idiom `canned.render.render_canned` and
+#: `automations.templating` each already carry their own copy of (RADD-1045).
+#: A THIRD copy here rather than a new `depends_on` edge onto `canned`: the two
+#: existing renderers don't share this code with EACH OTHER either, and
+#: `canned` brings a whole CRUD/authz/DB-table module along for one 8-line
+#: regex this module has no other use for. Same failure mode as canned's:
+#: an unknown token, or one whose ctx value is missing/empty, stays VERBATIM —
+#: visible and debuggable in the sent mail, never an error.
+_ACK_TOKEN_RE = re.compile(r"\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}")
+
+
+def _render_ack_body(template: str, ctx: dict[str, str]) -> str:
+    """Substitute `{{token}}` occurrences from `ctx` in an ack template;
+    unresolved tokens stay verbatim."""
+
+    def replace(match: re.Match[str]) -> str:
+        value = ctx.get(match.group(1))
+        return match.group(0) if not value else value
+
+    return _ACK_TOKEN_RE.sub(replace, template)
+
+
+async def _resolve_ack_template(session: AsyncSession | None) -> str:
+    """The effective `mail_ack_body` template: the admin override if one is set
+    AND non-blank, else the shipped default (RADD-1045).
+
+    The cascade's own "no row → env/config default" fallback (`settings.
+    resolve`) does not cover an override an admin saved as an EMPTY string —
+    that is a real row, and the resolver returns it verbatim. "An unset or
+    empty setting sends today's default wording" needs both cases treated the
+    same, so blankness is checked here rather than left to the cascade.
+
+    `session` may be None (production acks send post-commit, same as
+    `send_item_mail`'s own caller contract) — this read does not need to join
+    whatever transaction is already open, so it borrows a throwaway session
+    exactly like `transport._session` does for the send itself.
+    """
+    if session is not None:
+        value = await settings_service.resolve(session, SettingKey.MAIL_ACK_BODY)
+    else:
+        async with SessionLocal() as own:
+            value = await settings_service.resolve(own, SettingKey.MAIL_ACK_BODY)
+    text = str(value or "")
+    return text if text.strip() else settings.mail_ack_body
+
+
 async def send_ack(
     session: AsyncSession | None = None,
     *,
@@ -216,11 +266,23 @@ async def send_ack(
 
     `session` is optional and forwarded: production acks post-commit and passes
     nothing, while a caller inside a transaction (a test) hands over its own.
+
+    **The BODY is an admin-editable template since RADD-1045** — the
+    `mail_ack_body` scalar setting (Settings → Email), substituted here with
+    `{{key}}`/`{{title}}`/`{{link}}`/`{{requester_name}}` before it ever reaches
+    `mailrender`, which only wraps whatever plain text it is given.
     """
     if not settings.mail_send_ack:
         return
+    template = await _resolve_ack_template(session)
+    link = mailrender.issue_url(settings.app_base_url, item_key)
+    body = _render_ack_body(
+        template,
+        {"key": item_key, "title": title, "link": link, "requester_name": name},
+    )
     rendered = mailrender.acknowledgement(
-        mailrender.ItemMail(key=item_key, title=title, base_url=settings.app_base_url)
+        mailrender.ItemMail(key=item_key, title=title, base_url=settings.app_base_url),
+        body=body,
     )
     await send_item_mail(
         session,

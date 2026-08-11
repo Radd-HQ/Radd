@@ -209,23 +209,22 @@ def comment_reply(item: ItemMail, *, author: str, body: str, reason: str) -> Ren
     return RenderedMail(text=text, html=_document(content, footer=_esc(reason)))
 
 
-#: The ack's prose. It stays a constant because the bracketed key is LOAD-BEARING
-#: — `parsing.extract_reply_key` threads the requester's replies on it — so the
-#: sentence that asks them to keep it cannot be casually reworded.
-ACK_BODY = (
-    "Your request has been received and is being tracked as {key}.\n"
-    "\n"
-    "We'll follow up by email. You can reply to this message to add details — "
-    "replies are attached to the ticket automatically (keep [{key}] in the subject)."
-)
-
 #: The receipt's link affordance, one label for both parts. Deliberately SECOND
-#: to `ACK_BODY` in both renderings — see `acknowledgement`.
+#: to the body in both renderings — see `acknowledgement`.
 ACK_LINK_LABEL = "View the ticket"
 
 
-def acknowledgement(item: ItemMail, *, reason: str = "") -> RenderedMail:
+def acknowledgement(item: ItemMail, *, body: str, reason: str = "") -> RenderedMail:
     """The receipt an external requester gets when their mail opens a ticket.
+
+    **`body` arrives already rendered** — since RADD-1045 the ack's prose is an
+    admin-editable instance setting (`mail_ack_body`, Settings → Email) with
+    `{{token}}` variables, and substituting those is `mailintake.service.
+    send_ack`'s job, not this module's: this file "reads no settings" by
+    charter (see the module docstring), so the caller resolves the template and
+    hands over plain text. It is wrapped exactly like any other body — escaped
+    like a comment, line breaks preserved, never interpreted as markup — which
+    is what makes an admin-authored template as safe as one nobody can edit.
 
     **It carries the issue URL in both parts (RADD-977).** RADD-967 deliberately
     left it out — "the requester has no account, so the link is a login page" —
@@ -235,11 +234,13 @@ def acknowledgement(item: ItemMail, *, reason: str = "") -> RenderedMail:
     the thing it acknowledges is a dead end for both of them, and a login page is
     a recoverable one.
 
-    Reply-by-email stays the PRIMARY wording: it is the interface that works for
-    every requester, signed in or not, so the prose comes first and the link
-    follows it in both parts. The `[{key}]` subject mechanics are untouched.
+    Reply-by-email stays the PRIMARY wording in the shipped default text: it is
+    the interface that works for every requester, signed in or not. The
+    `[{key}]` SUBJECT mechanics (`ACK_SUBJECT_TEMPLATE`, pinned verbatim by
+    `send_item_mail`) are untouched by any of this — an admin can reword or
+    drop the bracket mention from the body and replies still thread, because the
+    subject line is what `parsing.extract_reply_key` actually reads.
     """
-    body = ACK_BODY.format(key=item.key)
     text = f"{item.label}\n\n{body}\n\n{ACK_LINK_LABEL}: {item.url}\n"
     content = (
         f'<div style="font-size:12px;color:{MUTED};padding-bottom:10px;'

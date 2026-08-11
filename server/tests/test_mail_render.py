@@ -55,6 +55,8 @@ from radd.modules.notify.models import Notification
 from radd.modules.notify.types import NotificationType
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
+from radd.modules.settings import service as settings_service
+from radd.modules.settings.types import SettingKey, SettingScope
 
 BASE_URL = "https://radd.example.com"
 
@@ -725,7 +727,10 @@ def test_the_ack_carries_the_issue_link_in_both_parts():
     because "the link is present" is true of a version that buries the sentence.
     """
     item = mailrender.ItemMail(key="MR-1", title="Printer on fire", base_url=BASE_URL + "/")
-    message = mailrender.acknowledgement(item)
+    # The default template, {{key}} substituted by hand — mailrender no longer
+    # renders the ack's prose itself (RADD-1045), only wraps what it is given.
+    body = settings.mail_ack_body.replace("{{key}}", item.key)
+    message = mailrender.acknowledgement(item, body=body)
     url = f"{BASE_URL}/issues/MR-1"
 
     assert url in message.text
@@ -958,3 +963,110 @@ async def test_the_ack_toggle_still_silences_it(db, world, relay, no_senders, mo
     )
 
     assert relay.sent == [] and relay.dialled == []
+
+
+# --- the ack body is a scalar setting now (RADD-1045) -------------------------
+
+
+async def test_an_unset_ack_setting_sends_todays_default_wording(
+    db, world, relay, no_senders, monkeypatch
+):
+    """No override row at all — the cascade falls back to `config.Settings.
+    mail_ack_body`, so a fresh instance's receipt is byte-identical to before
+    the setting existed."""
+    _agent, project, item = world
+    monkeypatch.setattr(settings, "smtp_host", "")
+    _row_relay(db)
+    key = f"{project.key}-{item.number}"
+
+    await mail_service.send_ack(
+        db, item_id=item.id, email="cass@vip.example.com", name="Cass",
+        item_key=key, title=item.title,
+    )
+
+    # A punctuation-free slice of the default wording: the html part escapes
+    # the apostrophe in "We'll" to `&#x27;` (RADD-967's "nothing survives as
+    # markup" rule applying to the DEFAULT template exactly like a custom one),
+    # so an exact-string check there would be pinning HTML escaping, not the
+    # substitution this test is actually about.
+    expected = f"tracked as {key}"
+    sent = relay.sent[-1]
+    assert expected in sent.get_body(("plain",)).get_content()
+    assert expected in sent.get_body(("html",)).get_content()
+    assert settings.mail_ack_body.replace("{{key}}", key) in sent.get_body(("plain",)).get_content()
+
+
+async def test_an_explicitly_blank_ack_override_also_falls_back(
+    db, world, relay, no_senders, monkeypatch
+):
+    """An admin who saves an empty template is a real row, not a missing one —
+    the cascade's own "no row" fallback would not catch this; `send_ack` checks
+    blankness itself."""
+    _agent, project, item = world
+    monkeypatch.setattr(settings, "smtp_host", "")
+    _row_relay(db)
+    key = f"{project.key}-{item.number}"
+    await settings_service.set_value(
+        db, SettingKey.MAIL_ACK_BODY, SettingScope.INSTANCE, None, "   "
+    )
+    await db.flush()
+
+    await mail_service.send_ack(
+        db, item_id=item.id, email="cass@vip.example.com", name="Cass",
+        item_key=key, title=item.title,
+    )
+
+    expected = settings.mail_ack_body.replace("{{key}}", key)
+    assert expected in relay.sent[-1].get_body(("plain",)).get_content()
+
+
+async def test_a_custom_ack_template_changes_both_parts(
+    db, world, relay, no_senders, monkeypatch
+):
+    """Editing Settings → Email's ack template changes the NEXT ack sent — text
+    and html both, every offered token substituted."""
+    _agent, project, item = world
+    monkeypatch.setattr(settings, "smtp_host", "")
+    _row_relay(db)
+    key = f"{project.key}-{item.number}"
+    await settings_service.set_value(
+        db, SettingKey.MAIL_ACK_BODY, SettingScope.INSTANCE, None,
+        "Hi {{requester_name}}, {{title}} is tracked as {{key}}. Track it: {{link}}",
+    )
+    await db.flush()
+
+    await mail_service.send_ack(
+        db, item_id=item.id, email="cass@vip.example.com", name="Cass Customer",
+        item_key=key, title=item.title,
+    )
+
+    expected = (
+        f"Hi Cass Customer, {item.title} is tracked as {key}. "
+        f"Track it: {BASE_URL}/issues/{key}"
+    )
+    sent = relay.sent[-1]
+    assert expected in sent.get_body(("plain",)).get_content()
+    assert expected in sent.get_body(("html",)).get_content()
+
+
+async def test_an_unknown_ack_token_stays_verbatim(db, world, relay, no_senders, monkeypatch):
+    """Same failure mode as `canned.render.render_canned`: a token nobody
+    registered is not an error, it is left exactly as written so the admin can
+    see and fix the typo."""
+    _agent, project, item = world
+    monkeypatch.setattr(settings, "smtp_host", "")
+    _row_relay(db)
+    key = f"{project.key}-{item.number}"
+    await settings_service.set_value(
+        db, SettingKey.MAIL_ACK_BODY, SettingScope.INSTANCE, None,
+        "Ticket {{key}}, ref {{bogus_token}}.",
+    )
+    await db.flush()
+
+    await mail_service.send_ack(
+        db, item_id=item.id, email="cass@vip.example.com", name="Cass",
+        item_key=key, title=item.title,
+    )
+
+    expected = f"Ticket {key}, ref " + "{{bogus_token}}."
+    assert expected in relay.sent[-1].get_body(("plain",)).get_content()

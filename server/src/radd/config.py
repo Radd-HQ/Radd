@@ -366,6 +366,20 @@ class Settings(BaseSettings):
     # Requester loop (spec 62): acknowledge intake/public-form items that captured
     # a contact (needs smtp_host); the outbound consumer mails public comments back.
     mail_send_ack: bool = True
+    # RADD-1045: the ack's plain-text body is a `mail_ack_body` scalar-cascade
+    # setting (Settings → Email) — this is its env/config default, which is
+    # also what an unset OR explicitly-blank override falls back to
+    # (`mailintake.service._resolve_ack_template`), so a fresh instance sends
+    # exactly this wording. `{{key}}`/`{{title}}`/`{{link}}`/`{{requester_name}}`
+    # substitute via `mailintake.service._render_ack_body` — same idiom as
+    # `canned.render.render_canned`: an unrecognised token is sent VERBATIM.
+    mail_ack_body: str = (
+        "Your request has been received and is being tracked as {{key}}.\n"
+        "\n"
+        "We'll follow up by email. You can reply to this message to add details "
+        "— replies are attached to the ticket automatically (keep [{{key}}] in "
+        "the subject)."
+    )
     mail_outbound_poll_seconds: float = 5.0
     # HTTPS ingest (RADD-953). The shared secret the Cloudflare Email Worker
     # signs each raw message with — `openssl rand -base64 32`. EMPTY REJECTS

@@ -1,5 +1,6 @@
 from radd.kernel import CapabilitySpec, EventTypeSpec, PluginUiManifest
 from radd.kernel import RaddPlugin
+from radd.kernel import SettingSpec
 
 from . import dispatcher, registry, seeding
 from .config_router import router as config_router
@@ -23,7 +24,7 @@ plugin = RaddPlugin(
     # feature-detected call to `service.send_item_mail`.
     depends_on=(
         "projects", "auth", "items", "comments", "automations", "events",
-        "attachments",
+        "attachments", "settings",
     ),
     # RADD-961: the AI routing rule reaches `ai` DEFERRED and feature-detected —
     # the module is optional and disableable, and a missing one must fall through
@@ -31,6 +32,28 @@ plugin = RaddPlugin(
     # `attachments` declares for its own LLM storage rule.
     weak_depends=("ai",),
     routers=(router, config_router, rules_router),
+    # RADD-1045: the ack's plain-text body, instance-only — a service desk's
+    # wording is instance policy, not per-project. Writing it goes through the
+    # generic `/scoped-settings` API, gated on literal instance-admin
+    # (`settings.router._authorize`) rather than `config_router`'s
+    # `global.manage` — the same split every other instance-scope SettingSpec
+    # already lives with (ai/ldap/csat's instance defaults, etc). `section=
+    # "email"` is RADD-930's placement convention — it lands the row on
+    # Settings → Email instead of the General catch-all.
+    settings_keys=(
+        SettingSpec(
+            key="mail_ack_body",
+            type="string",
+            scopes=("instance",),
+            label="Acknowledgement email",
+            description=(
+                "Plain-text body of the receipt sent when an email opens a ticket. "
+                "Tokens: {{key}}, {{title}}, {{link}}, {{requester_name}} — an "
+                "unrecognised token is sent verbatim. Empty sends the default wording."
+            ),
+            section="email",
+        ),
+    ),
     # Seed rows from env BEFORE the poller starts, or the first tick finds
     # no sources on a fresh instance (RADD-958).
     on_startup=(seeding.seed_from_env, dispatcher.start),

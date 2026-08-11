@@ -94,6 +94,8 @@ class SettingKey(StrEnum):
     WORKFLOW_TRANSITION_MODE = "workflow_transition_mode"
     CSAT_ENABLED = "csat_enabled"
     ESTIMATION_POINTS = "estimation_points"
+    # The ack's admin-editable body (spec 47/62, RADD-1045) — Settings → Email.
+    MAIL_ACK_BODY = "mail_ack_body"
     # Directory settings page + automatic user sync (spec 85) — instance-only.
     LDAP_URL = "ldap_url"
     LDAP_USER_DOMAIN = "ldap_user_domain"

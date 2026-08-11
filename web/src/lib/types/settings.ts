@@ -73,7 +73,17 @@ export function withoutSections(
 
 /** Section roots that have their own surface at each scope — everything else
  *  falls back to that scope's General page (see `withoutSections`). */
-export const INSTANCE_HOMED_SECTIONS: readonly string[] = ["directory", "ai", "timelogging"];
+/** RADD-1045: "email" is claimed by Settings → Email's `AckTemplatePanel`,
+ *  which reads its own row directly rather than through `ScopedSettingsEditor`
+ *  — but the section still has to be listed here, or the General page (which
+ *  computes its rows by SUBTRACTION) would render a second, generic editor
+ *  for the same key. */
+export const INSTANCE_HOMED_SECTIONS: readonly string[] = [
+  "directory",
+  "ai",
+  "timelogging",
+  "email",
+];
 export const PROJECT_HOMED_SECTIONS: readonly string[] = [
   "releases",
   "timelogging",
