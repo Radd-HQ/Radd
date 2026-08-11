@@ -44,15 +44,27 @@ from radd.modules.items.schemas import ItemCreate
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 
-from . import loops, quoting, routing, service, threading
+from . import loops, parsing, quoting, routing, service, threading
 from .parsing import EmailPlan, MailAttachment
 from .types import (
+    ATTACHMENTS_DROPPED_NOTE,
+    ATTACHMENTS_MAX_BYTES,
+    AUTH_FAIL_RESULTS,
+    AUTH_PASS_RESULT,
     EMAIL_LABEL,
     EMPTY_BODY_PLACEHOLDER,
+    MAIL_DROPPED_ID_NAMESPACE,
+    MAIL_RAW_RETENTION_DAYS,
+    MAX_ATTACHMENTS,
     NO_SUBJECT_TITLE,
+    RAW_MESSAGE_CONTENT_TYPE,
+    RAW_MESSAGE_FILENAME,
     REPLY_COMMENT_TEMPLATE,
     SENDER_NOTE_TEMPLATE,
     TITLE_MAX_CHARS,
+    UNVERIFIED_REPLY_COMMENT_TEMPLATE,
+    UNVERIFIED_SENDER_LINE,
+    UNVERIFIED_SENDER_NOTE_TEMPLATE,
     MailDirection,
     MailEntity,
     MailEvent,
@@ -124,6 +136,71 @@ class AckPlan:
     title: str
 
 
+@dataclass(frozen=True)
+class SenderAuth:
+    """Whether the source's TRUSTED gateway vouched for this `From:` (RADD-1032).
+
+    `verified` is a tri-state on purpose:
+
+        None   the source trusts no authserv-id — today's behaviour exactly, so
+               `From:` is taken at face value and existing installs are unchanged.
+        True   the trusted authserv-id stamped a pass and no fail.
+        False  it stamped a fail, or said nothing at all (absent when required).
+
+    Only False DEMOTES: the message is recorded as received but attributed to
+    SYSTEM, never to the account whose address it may have forged. `detail` is the
+    human-readable why, shown in the note.
+    """
+
+    verified: bool | None
+    detail: str = ""
+
+    @property
+    def demoted(self) -> bool:
+        return self.verified is False
+
+
+def _check_sender_auth(plan: EmailPlan, trusted_authserv_id: str | None) -> SenderAuth:
+    """Read the trusted gateway's verdict for this message (RADD-1032, pure).
+
+    Radd is not doing crypto here — it is reading the SPF/DKIM/DMARC verdict its
+    own MX already stamped, and trusting that stamp because the admin named the
+    authserv-id it comes from. A message with no such stamp, or one showing a
+    fail, is not trusted: fail-closed, because the entire point is to stop a
+    forged `From:` speaking as a real account.
+    """
+    if not trusted_authserv_id:
+        return SenderAuth(None)
+    verdicts = parsing.parse_auth_results(plan.authentication_results, trusted_authserv_id)
+    if not verdicts:
+        # None (that authserv stamped nothing) or {} (it spoke but named no
+        # method) — either way nothing was proved, and the admin required proof.
+        return SenderAuth(False, f"no verdict from {trusted_authserv_id}")
+    fails = [f"{m}={r}" for m, r in sorted(verdicts.items()) if r in AUTH_FAIL_RESULTS]
+    passed = [m for m, r in verdicts.items() if r == AUTH_PASS_RESULT]
+    if fails or not passed:
+        detail = ", ".join(fails) if fails else f"no pass from {trusted_authserv_id}"
+        return SenderAuth(False, detail)
+    return SenderAuth(True, ", ".join(f"{m}={r}" for m, r in sorted(verdicts.items())))
+
+
+async def _sender_auth(
+    session: AsyncSession, plan: EmailPlan, source_id: uuid.UUID | None
+) -> SenderAuth:
+    """The verdict for this message under its source's trust policy (RADD-1032).
+
+    Loads the source once to read `trusted_authserv_id`; a message with no source
+    (a direct `accept` in a test, or the env-only path) trusts nothing and so
+    behaves exactly as before.
+    """
+    if source_id is None:
+        return SenderAuth(None)
+    from .models import MailSource
+
+    source = await session.get(MailSource, source_id)
+    return _check_sender_auth(plan, source.trusted_authserv_id if source else None)
+
+
 async def accept(
     session: AsyncSession,
     plan: EmailPlan,
@@ -151,12 +228,14 @@ async def accept(
     if verdict.drop:
         logger.info("mailintake: dropped message %s — %s", plan.message_id, verdict.reason)
         # Emitted, not only logged: a silent drop and a bug are indistinguishable
-        # from outside, and a log line is not queryable (RADD-960).
+        # from outside, and a log line is not queryable (RADD-960). The id is
+        # correlatable off the Message-ID (RADD-1035), so a retried loop is one
+        # id, not a fresh uuid4 per delivery.
         await events.emit(
             session,
             event_type=MailEvent.DROPPED,
             entity_type=MailEntity.MAIL,
-            entity_id=uuid.uuid4(),
+            entity_id=dropped_entity_id(plan.message_id),
             payload={**_mail_facts(plan), "reason": verdict.reason},
         )
         return Outcome(Result.IGNORED, reason=verdict.reason)
@@ -164,9 +243,12 @@ async def accept(
     if await threading.is_duplicate(session, plan.message_id):
         return Outcome(Result.DUPLICATE, reason="Message-ID already accepted")
 
+    sender_auth = await _sender_auth(session, plan, source_id)
     target = await _resolve_thread(session, plan)
     if target is not None:
-        return await _append(session, plan, raw=raw, item_id=target, source_id=source_id)
+        return await _append(
+            session, plan, raw=raw, item_id=target, source_id=source_id, sender_auth=sender_auth
+        )
     # Routing runs ONLY here — the first message in a thread. A reply resolved
     # above and never reaches the chain, so the AI classifier can never
     # re-decide the project on message four (RADD-961).
@@ -178,6 +260,23 @@ async def accept(
         own_addresses=own_addresses,
         source_id=source_id,
         default_project_id=default_project_id,
+        sender_auth=sender_auth,
+    )
+
+
+def dropped_entity_id(message_id: str) -> str:
+    """A correlatable `entity_id` for a `mail.dropped` event (RADD-1035).
+
+    A repeated drop of the SAME message — a provider retrying a message the loop
+    guard keeps rejecting — should be ONE id, not a scatter of uuid4s nobody can
+    group. So it is uuid5 over the Message-ID. A message with none has nothing to
+    correlate on and falls back to uuid4. Also keeps the value inside the events
+    table's `entity_id` width, which a verbatim Message-ID can overflow.
+    """
+    return (
+        str(uuid.uuid5(MAIL_DROPPED_ID_NAMESPACE, message_id))
+        if message_id
+        else str(uuid.uuid4())
     )
 
 
@@ -212,21 +311,35 @@ async def _resolve_thread(session: AsyncSession, plan: EmailPlan) -> uuid.UUID |
 
 
 async def _may_thread_by_subject_key(session: AsyncSession, item, plan: EmailPlan) -> bool:
-    """Is this sender entitled to write into the issue their subject line names?
+    """Is this sender CONNECTED to the issue their subject line names? (RADD-1032)
 
-    Three ways to be, in the order they cost a query:
+    A `[PROJ-412]` in a subject is a guessable string in a text field, and keys
+    are sequential — so on its own it is evidence of nothing. It threads only for
+    someone the conversation already belongs to:
 
         an address already on the item's mail thread   they are in the conversation
         the item's reporter                            they raised it
-        any active REAL account                        staff, on any ticket
+        a real account that can WRITE on the project    staff working that desk
 
-    The third is broad on purpose: an agent forwarding a ticket to a colleague,
-    or replying from a phone that mangled the headers, must not be told their
-    mail opened a duplicate. What it excludes is the case that matters — a
-    `UserSource.EMAIL` account, which is what an unknown sender is provisioned
-    as (RADD-828). Otherwise one email to the desk would earn a stranger the
-    right to type into every issue whose key they can guess, and keys are
-    sequential.
+    The last leg is the narrowing. It used to admit ANY active real account
+    instance-wide — so one email to the desk earned a stranger the right to type
+    into every ticket whose key they could guess, and the outbound consumer then
+    mailed their words to that ticket's requester. The UNQUALIFIED `comment.write`
+    on the item's OWN project is the honest test for "staff who work this desk":
+    a project member with the Member/Agent role holds it, while a bare member
+    holds only the relation-qualified `comment.write@own` / `@participant` — which
+    lets them comment on their OWN items, not type into a stranger's — and every
+    `UserSource.EMAIL` account intake provisions for a customer (RADD-828) is
+    excluded outright. The exact-membership test is deliberate: `holds_base` would
+    count `comment.write@own` as the base and re-admit every member (the
+    "holds_base is for gates, not summaries" trap). It is also, by construction,
+    the set an item-watcher leg would admit — a colleague watching a ticket they
+    can act on holds this atom already.
+
+    A refused message is NOT dropped: `_resolve_thread` opens the stranger a new
+    routed issue, because a wrong subject line is still a person asking for help.
+    Header threading stays ungated (see `_resolve_thread`) — an `In-Reply-To`
+    names an id Radd generated and told exactly one person.
     """
     if not plan.sender_email:
         return False
@@ -238,12 +351,23 @@ async def _may_thread_by_subject_key(session: AsyncSession, item, plan: EmailPla
         return False
     if user.id == item.reporter_id:
         return True  # the requester, whatever their account is sourced from
+    from radd.modules.auth import authz
     from radd.modules.auth.types import UserSource
 
-    return user.source != UserSource.EMAIL.value
+    if user.source == UserSource.EMAIL.value:
+        return False  # a provisioned requester earns nothing from a guessed key
+    project = await projects_service.get_project(session, item.project_id)
+    if project is None:
+        return False
+    permissions = await authz.effective_permissions(session, user, project=project)
+    # Exact, not `holds_base`: the relation-qualified `comment.write@own` a bare
+    # member carries must NOT admit them to a ticket they did not raise.
+    return authz.Permission.COMMENT_WRITE in permissions
 
 
-async def _reply_comment(session: AsyncSession, item_id: uuid.UUID, plan: EmailPlan):
+async def _reply_comment(
+    session: AsyncSession, item_id: uuid.UUID, plan: EmailPlan, *, sender_auth: SenderAuth
+):
     """Write the mailed reply as a comment, and say WHO it is from (RADD-981).
 
     Every inbound reply used to be authored by the SYSTEM actor with the sender
@@ -267,11 +391,18 @@ async def _reply_comment(session: AsyncSession, item_id: uuid.UUID, plan: EmailP
     there falls back to SYSTEM: the message still lands, and nothing was granted
     on the strength of a header. Returns `(comment, author)`; the author is what
     the attachments are stored as, so the mail arrives as one person's act.
+
+    **A DEMOTED message never reaches `_reply_author` at all (RADD-1032).** When
+    the source trusts an authserv-id and this message failed or lacked its
+    verdict, `From:` is not merely unauthorised, it is unverified — so the reply
+    is a SYSTEM comment that leads with the unverified-sender warning, and no
+    real account is ever named as its author.
     """
-    # Quoted history is stripped from the COMMENT only; `raw` is retained by the
-    # caller, so an over-eager strip is recoverable.
+    # Quoted history is stripped from the COMMENT only; the RAW message is
+    # retained by the caller per `MAIL_RAW_RETENTION_DAYS` (RADD-1033), so an
+    # over-eager strip is recoverable for the retention window.
     body = quoting.strip_quotes(plan.body) or EMPTY_BODY_PLACEHOLDER
-    author = await _reply_author(session, plan)
+    author = None if sender_auth.demoted else await _reply_author(session, plan)
     if author is not None:
         try:
             comment = await comments.create_comment(
@@ -285,12 +416,14 @@ async def _reply_comment(session: AsyncSession, item_id: uuid.UUID, plan: EmailP
                 item_id,
             )
     system = await auth.get_user(session, SYSTEM_ACTOR_ID)
-    comment = await comments.create_comment(
-        session,
-        item_id,
-        CommentCreate(body=REPLY_COMMENT_TEMPLATE.format(sender=_sender(plan), body=body)),
-        system,
-    )
+    if sender_auth.demoted:
+        note = UNVERIFIED_SENDER_LINE.format(detail=sender_auth.detail)
+        text = UNVERIFIED_REPLY_COMMENT_TEMPLATE.format(
+            note=note, sender=_sender(plan), body=body
+        )
+    else:
+        text = REPLY_COMMENT_TEMPLATE.format(sender=_sender(plan), body=body)
+    comment = await comments.create_comment(session, item_id, CommentCreate(body=text), system)
     return comment, system
 
 
@@ -316,10 +449,12 @@ async def _append(
     raw: bytes,
     item_id: uuid.UUID,
     source_id: uuid.UUID | None = None,
+    sender_auth: SenderAuth,
 ) -> Outcome:
-    comment, actor = await _reply_comment(session, item_id, plan)
+    comment, actor = await _reply_comment(session, item_id, plan, sender_auth=sender_auth)
     await _store_attachments(session, item_id, plan.attachments, actor_id=actor.id)
-    await threading.record(
+    await _note_dropped_attachments(session, item_id, plan)
+    row = await threading.record(
         session,
         message_id=plan.message_id,
         item_id=item_id,
@@ -331,6 +466,7 @@ async def _append(
         # copied in later never takes over the identity replies leave under.
         source_id=source_id,
     )
+    await _retain_raw(session, row, raw)
     await _touch_contact(session, item_id, plan)
     item = await items.require_item(session, item_id)
     await events.emit(
@@ -353,6 +489,7 @@ async def _create(
     own_addresses: set[str] | None = None,
     source_id: uuid.UUID | None = None,
     default_project_id: uuid.UUID | None = None,
+    sender_auth: SenderAuth = SenderAuth(None),
 ) -> Outcome:
     actor = await auth.get_user(session, SYSTEM_ACTOR_ID)
     project = await _target_project(
@@ -360,9 +497,22 @@ async def _create(
     )
     sender = await _sender_user(session, plan)
     body = plan.body or EMPTY_BODY_PLACEHOLDER
-    description = body if sender is not None else SENDER_NOTE_TEMPLATE.format(
-        body=body, sender=_sender(plan)
-    )
+    if sender_auth.demoted:
+        # A trusted gateway said this From is fail-or-absent (RADD-1032). The
+        # reporter is only ever a mailback claim, but pinning it to the account
+        # whose address may be forged still asserts an identity — so a demoted
+        # issue names no reporter, and its description carries the warning.
+        note = UNVERIFIED_SENDER_LINE.format(detail=sender_auth.detail)
+        description = UNVERIFIED_SENDER_NOTE_TEMPLATE.format(
+            body=body, note=note, sender=_sender(plan)
+        )
+        reporter_id = None
+    elif sender is not None:
+        description = body
+        reporter_id = sender.id  # a CLAIM, not an identity (RADD-956) — see below
+    else:
+        description = SENDER_NOTE_TEMPLATE.format(body=body, sender=_sender(plan))
+        reporter_id = None
     created = await items.create_item(
         session,
         ItemCreate(
@@ -373,12 +523,13 @@ async def _create(
             # The reporter is a CLAIM, not an identity (RADD-956). `From:` is
             # trivially forged, so this names who to write back to and grants
             # nothing — `_sender_user` provisions an account that cannot log in.
-            reporter_id=sender.id if sender is not None else None,
+            reporter_id=reporter_id,
         ),
         actor,
     )
     await _store_attachments(session, created.id, plan.attachments, actor_id=actor.id)
-    await threading.record(
+    await _note_dropped_attachments(session, created.id, plan)
+    row = await threading.record(
         session,
         message_id=plan.message_id,
         item_id=created.id,
@@ -388,6 +539,7 @@ async def _create(
         # one by construction, so it is what decides the reply identity.
         source_id=source_id,
     )
+    await _retain_raw(session, row, raw)
 
     await events.emit(
         session,
@@ -460,8 +612,14 @@ async def _capture_contacts(
     is a user, and users are reached by notify through the rows that decide
     their inbox. Mailing them from here as well would be the duplicate fan-out
     RADD-968 deleted.
+
+    The account lookups are ONE `WHERE email IN (...)` (RADD-1042): the sweep
+    used to run a `get_user_by_email` per recipient, a query per CC on the hot
+    path of every first message. Byte-identical to the per-address version — the
+    same predicate, resolved from one dict.
     """
-    if plan.sender_email and not await _is_real_account(session, plan.sender_email):
+    known = await auth.users_by_emails(session, [plan.sender_email, *plan.recipients])
+    if plan.sender_email and not _is_real(known.get(plan.sender_email)):
         await service.upsert_contact(
             session,
             item_id,
@@ -472,7 +630,7 @@ async def _capture_contacts(
     for address in plan.recipients:
         if _is_ours(address, own_addresses) or address == plan.sender_email:
             continue
-        if await _is_real_account(session, address):
+        if _is_real(known.get(address)):
             continue
         await service.upsert_contact(session, item_id, email=address, copied_in=True)
 
@@ -502,8 +660,9 @@ async def _store_attachments(
     """Mail parts become Radd attachments through the spec-102 polymorphic seam.
 
     One failing part is logged and skipped rather than failing the message: a
-    ticket with three of four attachments beats a bounce, and the raw message is
-    retained either way.
+    ticket with three of four attachments beats a bounce, and — when retention is
+    on — the raw message is kept regardless (RADD-1033), so a dropped part is
+    still recoverable from the stored bytes for the retention window.
     """
     for part in parts:
         upload = UploadFile(
@@ -526,6 +685,72 @@ async def _store_attachments(
                 item_id,
                 exc_info=True,
             )
+
+
+async def _note_dropped_attachments(
+    session: AsyncSession, item_id: uuid.UUID, plan: EmailPlan
+) -> None:
+    """Leave a note when a per-message cap swallowed attachments (RADD-1035).
+
+    `parsing` counts them; the note lives HERE because the item — the only place
+    a note can attach to — exists only at this point. A SYSTEM comment, because
+    the loss is Radd's cap talking, not the sender's. Nothing is written when
+    nothing was dropped, so the ordinary message pays neither a comment nor a
+    query. A failure to write the note is logged and swallowed: a receipt about
+    lost attachments must not itself cost the message.
+    """
+    if plan.attachments_dropped <= 0:
+        return
+    system = await auth.get_user(session, SYSTEM_ACTOR_ID)
+    text = ATTACHMENTS_DROPPED_NOTE.format(
+        count=plan.attachments_dropped,
+        max_count=MAX_ATTACHMENTS,
+        max_mb=ATTACHMENTS_MAX_BYTES // (1024 * 1024),
+    )
+    try:
+        await comments.create_comment(session, item_id, CommentCreate(body=text), system)
+    except Exception:  # noqa: BLE001 — the receipt is best-effort, the ticket is not
+        logger.warning(
+            "mailintake: could not note %d dropped attachment(s) on %s",
+            plan.attachments_dropped,
+            item_id,
+            exc_info=True,
+        )
+
+
+async def _retain_raw(session: AsyncSession, message_row, raw: bytes) -> None:
+    """Persist the raw inbound bytes against their `mail_messages` row (RADD-1033).
+
+    Behind `MAIL_RAW_RETENTION_DAYS` and stored as one loose blob through the
+    spec-102 seam, keyed off the message row so a reader reaches it the way it
+    reaches an attachment — through the item's own gate. Every skip is silent and
+    the mail still lands: retention off (0), no row to key off (no Message-ID, or
+    a concurrent-retry duplicate `record` answered None), empty bytes (a test),
+    or no storage host configured. Keeping a copy of the mail must never be the
+    thing that costs the customer their ticket.
+    """
+    if message_row is None or MAIL_RAW_RETENTION_DAYS <= 0 or not raw:
+        return
+    upload = UploadFile(
+        file=io.BytesIO(raw),
+        filename=RAW_MESSAGE_FILENAME,
+        headers={"content-type": RAW_MESSAGE_CONTENT_TYPE},  # type: ignore[arg-type]
+    )
+    try:
+        ref = await attachments_service.save_blob(
+            session, upload, content_type=RAW_MESSAGE_CONTENT_TYPE
+        )
+    except Exception:  # noqa: BLE001 — no default host, unreachable store, etc.
+        logger.warning(
+            "mailintake: raw message for %s could not be retained",
+            message_row.item_id,
+            exc_info=True,
+        )
+        return
+    message_row.raw_storage_name = ref.storage_name
+    message_row.raw_host_id = ref.host_id
+    message_row.raw_size_bytes = ref.size_bytes
+    await session.flush()
 
 
 async def _key(session: AsyncSession, item) -> str:
@@ -560,13 +785,22 @@ async def _sender_user(session: AsyncSession, plan: EmailPlan) -> User | None:
     return user
 
 
-async def _is_real_account(session: AsyncSession, email: str) -> bool:
-    """Does this address belong to a person with a genuine Radd account?
+def _is_real(user: User | None) -> bool:
+    """Is this resolved account a genuine person, not a provisioned requester?
 
     ACTIVE, and NOT one of the `UserSource.EMAIL` accounts intake provisions for
     unknown senders (RADD-828) — those exist precisely so a customer has a
     reporter id, and treating one as staff would delete the contact row that is
-    the only way to write back to them.
+    the only way to write back to them. Pure so a BATCH caller (`_capture_contacts`,
+    RADD-1042) can apply the same predicate to a user it already resolved.
+    """
+    from radd.modules.auth.types import UserSource
+
+    return user is not None and user.active and user.source != UserSource.EMAIL.value
+
+
+async def _is_real_account(session: AsyncSession, email: str) -> bool:
+    """Does this address belong to a person with a genuine Radd account?
 
     **It looks up; it never provisions.** That distinction is the RADD-980 bug
     it replaces: `_touch_contact` asked `_sender_user(...) is None`, and that
@@ -574,10 +808,7 @@ async def _is_real_account(session: AsyncSession, email: str) -> bool:
     guarding could effectively never be true, and a second sender on a thread
     was never recorded.
     """
-    from radd.modules.auth.types import UserSource
-
-    user = await auth.get_user_by_email(session, email)
-    return user is not None and user.active and user.source != UserSource.EMAIL.value
+    return _is_real(await auth.get_user_by_email(session, email))
 
 
 async def _touch_contact(session: AsyncSession, item_id: uuid.UUID, plan: EmailPlan) -> None:

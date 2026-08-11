@@ -46,6 +46,7 @@ export function SourceDialog({
     folder: source?.folder ?? "",
     default_project_id: source?.default_project_id ?? "",
     sender_id: source?.sender_id ?? "",
+    trusted_authserv_id: source?.trusted_authserv_id ?? "",
     secret: "",
   });
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
@@ -81,6 +82,9 @@ export function SourceDialog({
         port: showConnection ? port : 0,
         default_project_id: form.default_project_id || null,
         sender_id: form.sender_id || null,
+        // Blank = trust nothing (the default). Normalised to null so "unset" is
+        // one value, not two (RADD-1032).
+        trusted_authserv_id: form.trusted_authserv_id.trim() || null,
       };
       // Omitted = unchanged, so editing a port never re-types a password.
       if (!form.secret) delete body.secret;
@@ -225,6 +229,13 @@ export function SourceDialog({
             </option>
           ))}
         </SelectField>
+        <TextField
+          label="Trusted Authentication-Results id"
+          value={form.trusted_authserv_id}
+          onChange={(e) => set("trusted_authserv_id", e.target.value)}
+          placeholder="e.g. mx.your-domain.com"
+          hint="Your mail gateway's authserv-id. Set it and a message whose SPF/DKIM/DMARC verdict from that gateway fails — or is missing — is recorded but attributed to nobody, so a forged From cannot speak as a real user. Blank trusts the From header as-is. Only meaningful if your MX stamps and protects this header."
+        />
         <CheckboxField label="Enabled" checked={form.enabled} onChange={(v) => set("enabled", v)} />
 
         {(save.isError || remove.isError) && (

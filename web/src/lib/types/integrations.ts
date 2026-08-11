@@ -184,6 +184,12 @@ export interface MailSource {
   /** "Send replies from" (RADD-979) — the sender that answers for this address.
    *  null = the default sender, which is what every source did before. */
   sender_id: string | null;
+  /** The `Authentication-Results` authserv-id whose SPF/DKIM/DMARC verdict this
+   *  source trusts (RADD-1032). null/blank = trust nothing — the default, so
+   *  `From:` is taken at face value exactly as before. Set it and a message
+   *  failing (or lacking) that verdict is attributed to SYSTEM, not the account
+   *  it may have forged. */
+  trusted_authserv_id: string | null;
   has_secret: boolean;
   rule_count: number;
   /** What the poller will actually use: the row value or the kind's preset

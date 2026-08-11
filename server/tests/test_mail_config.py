@@ -435,6 +435,44 @@ async def test_the_poller_does_nothing_at_all_with_no_polled_sources(
     assert await poller.run_once() == 0
 
 
+async def test_a_poison_message_the_poller_cannot_parse_is_dropped_on_the_stream(
+    db, world, monkeypatch, poll_against_the_test_session
+):
+    """RADD-1035b. A message the poller cannot even parse used to be flagged
+    `\\Seen` and forgotten with only a log line — a silent loss. It now emits
+    `mail.dropped` (reason + source id) BEFORE being flagged, so the loss is on
+    the queryable event stream, and the message is still flagged so the poll does
+    not wedge on it."""
+    from radd.modules.events.models import Event
+    from radd.modules.mailintake.types import MailEvent, POLLER_PARSE_FAILURE_REASON
+
+    _, default, _ = world
+    source = MailSource(
+        name="Poison box", kind=MailSourceKind.IMAP.value, address="help@radd-hq.com",
+        host="imap.test", username="help@radd-hq.com", secret="pw",
+        default_project_id=default.id,
+    )
+    db.add(source)
+    await db.flush()
+
+    flagged: list[list[str]] = []
+    monkeypatch.setattr(poller, "fetch_unseen", lambda row: [("77", b"garbage")])
+    monkeypatch.setattr(poller, "mark_seen", lambda row, uids: flagged.append(list(uids)))
+
+    def boom_parse(_raw):
+        raise ValueError("cannot parse")
+
+    monkeypatch.setattr(poller.parsing, "parse_email", boom_parse)
+
+    assert await poller.run_once() == 1
+    assert flagged == [["77"]], "the poison message is still flagged Seen — no wedge"
+
+    rows = await db.execute(select(Event).where(Event.event_type == MailEvent.DROPPED.value))
+    dropped = [r for r in rows.scalars() if r.payload.get("source_id") == str(source.id)]
+    assert dropped, "the loss is on the queryable event stream, keyed by source"
+    assert dropped[-1].payload["reason"] == POLLER_PARSE_FAILURE_REASON
+
+
 # --- env seeding is once-only -----------------------------------------------------
 
 

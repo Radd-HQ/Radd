@@ -20,12 +20,20 @@ calls too.
 import asyncio
 import imaplib
 import logging
+import uuid
 
 from radd.db import SessionLocal
+from radd.modules.events import service as events
 
 from . import intake, parsing, registry, resolve, service
 from .models import MailSource
-from .types import DEFAULT_IMAP_FOLDER, SEEN_FLAG
+from .types import (
+    DEFAULT_IMAP_FOLDER,
+    POLLER_PARSE_FAILURE_REASON,
+    SEEN_FLAG,
+    MailEntity,
+    MailEvent,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +122,18 @@ async def _drain(source: MailSource, default_project_id, own: set[str]) -> int:
     for uid, raw in messages:
         try:
             plan = parsing.parse_email(raw)
+        except Exception:
+            # A poison message. Before RADD-1035 it was flagged `\\Seen` and
+            # forgotten with only a log line — a silent loss. Now the drop is on
+            # the queryable event stream, THEN the message is flagged so the poll
+            # does not wedge on it. Unlike the webhook, there is nobody to 5xx.
+            logger.warning(
+                "mailintake: unparseable message uid=%s on %s", uid, source.name, exc_info=True
+            )
+            await _emit_dropped(source, reason=POLLER_PARSE_FAILURE_REASON)
+            processed.append(uid)
+            continue
+        try:
             async with SessionLocal() as session:
                 outcome = await intake.accept(
                     session,
@@ -148,3 +168,28 @@ async def _drain(source: MailSource, default_project_id, own: set[str]) -> int:
         processed.append(uid)
     await asyncio.to_thread(mark_seen, source, processed)
     return len(processed)
+
+
+async def _emit_dropped(source: MailSource, *, reason: str) -> None:
+    """Record a poller-side loss on the event stream (RADD-1035).
+
+    A message the poller cannot even parse never reaches `intake`, so it would
+    otherwise be flagged Seen and forgotten with nothing queryable saying so.
+    The `entity_id` is a fresh uuid4 — an unparseable message has no Message-ID
+    to correlate on, which is exactly what makes it unparseable — and the SOURCE
+    is on the payload, so an operator can still see WHICH mailbox is dropping mail
+    and how often. Its own failure is swallowed: this is the error path, and it
+    must not raise back into a poll it is trying to keep honest.
+    """
+    try:
+        async with SessionLocal() as session:
+            await events.emit(
+                session,
+                event_type=MailEvent.DROPPED,
+                entity_type=MailEntity.MAIL,
+                entity_id=str(uuid.uuid4()),
+                payload={"reason": reason, "source_id": str(source.id)},
+            )
+            await session.commit()
+    except Exception:
+        logger.exception("mailintake: could not emit mail.dropped for %s", source.name)

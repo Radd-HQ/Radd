@@ -1,6 +1,7 @@
 """Wire constants for the email-to-issue intake (spec 47) and the requester
 feedback loop — contacts, acks, outbound replies (spec 62)."""
 
+import uuid
 from dataclasses import dataclass
 from datetime import timedelta
 from enum import StrEnum
@@ -276,6 +277,17 @@ MAX_BODY_BYTES = 25 * 1024 * 1024
 MAX_ATTACHMENTS = 20
 ATTACHMENTS_MAX_BYTES = 20 * 1024 * 1024
 
+#: When a cap above drops later parts, `parsing` reports HOW MANY and `intake`
+#: leaves this note on the item (RADD-1035). A silent drop is exactly what the
+#: cap must not be: someone whose fourth screenshot vanished has no way to know
+#: the desk never got it. The note is a SYSTEM comment because the item — the
+#: place a note can live — only exists in `intake`.
+ATTACHMENTS_DROPPED_NOTE = (
+    "{count} attachment(s) on the inbound email were not stored — the message hit "
+    "Radd's per-message attachment cap ({max_count} files / {max_mb} MB). Ask the "
+    "sender to resend the rest as separate, smaller emails if they are needed."
+)
+
 #: How far back a repeated inbound Message-ID still counts as a duplicate.
 #: Every push provider is at-least-once and Cloudflare retries on timeout, so
 #: this is the difference between one ticket and two. Seven days because that is
@@ -304,6 +316,62 @@ SEEN_FLAG = r"(\Seen)"
 
 # Reply comments are authored by the SYSTEM actor; the real sender is noted in the body.
 REPLY_COMMENT_TEMPLATE = "Email reply from {sender}:\n\n{body}"
+
+# --- sender authentication (RADD-1032) ---
+
+#: RFC 8601 result tokens. `pass` is the only value that proves a method
+#: authenticated; everything in FAIL is a positive statement that it did NOT.
+#: `none`/`neutral` (not published / not evaluated) are neither — a message with
+#: only those has proved nothing, which the caller treats as unverified too.
+AUTH_PASS_RESULT = "pass"
+AUTH_FAIL_RESULTS = frozenset({"fail", "softfail", "hardfail", "permerror", "temperror"})
+#: The three methods a trusted authserv-id verdict is read for. Radd is trusting
+#: its MX's stamp, not verifying crypto itself, so this is the whole vocabulary.
+AUTH_METHODS = ("dkim", "spf", "dmarc")
+
+#: When a source trusts an authserv-id and the message FAILS or OMITS that
+#: verdict, attribution is demoted to SYSTEM and the reader is told why. `From:`
+#: is forgeable end to end, so a demoted message is recorded exactly as received
+#: but attributed to nobody — a forged staff `From:` can no longer speak as that
+#: person, stop the SLA clock, or be relayed to the requester.
+UNVERIFIED_SENDER_LINE = (
+    "Unverified sender — this message failed sender authentication ({detail}) at "
+    "the mail gateway, so its From address may be forged. Recorded as received; "
+    "not attributed to any account."
+)
+#: A demoted reply keeps the SYSTEM prefix AND leads with the warning.
+UNVERIFIED_REPLY_COMMENT_TEMPLATE = "{note}\n\nEmail reply from {sender}:\n\n{body}"
+#: A demoted new issue's description: the body, then the warning and the claimed sender.
+UNVERIFIED_SENDER_NOTE_TEMPLATE = "{body}\n\n---\n{note}\nReceived by email from {sender}"
+
+# --- raw-message retention (RADD-1033) ---
+
+#: How long a webhook/poller-ingested message's RAW bytes are kept, so an
+#: over-eager quote strip or a lost attachment is recoverable. `0` = do not
+#: retain (the privacy-conscious choice — some desks must not keep customer mail
+#: at rest). 30 days is longer than any provider's retry window and short enough
+#: that the blob store is not the archive of every message ever received. A
+#: retention SWEEP that deletes bytes past this age is a separate follow-up; this
+#: constant is what it will read.
+MAIL_RAW_RETENTION_DAYS = 30
+
+#: The raw message is stored as one loose blob through the spec-102 seam.
+RAW_MESSAGE_CONTENT_TYPE = "message/rfc822"
+RAW_MESSAGE_FILENAME = "message.eml"
+
+# --- dropped-message correlation (RADD-1035) ---
+
+#: `mail.dropped` events key their `entity_id` off the inbound Message-ID via
+#: uuid5 in this namespace, so two deliveries of the SAME dropped message
+#: correlate to one id instead of scattering across a fresh uuid4 each time. A
+#: message with no id (or an unparseable one) has nothing to correlate on and
+#: falls back to uuid4. Fixed value: the namespace IS the correlation key.
+MAIL_DROPPED_ID_NAMESPACE = uuid.UUID("6d61696c-2d64-726f-7070-65640000002f")
+
+#: The reason string on a `mail.dropped` a poller emits for a message it could
+#: not parse (RADD-1035) — so the loss is on the queryable event stream, not only
+#: in a log line the poller then forgets by flagging the message Seen.
+POLLER_PARSE_FAILURE_REASON = "unparseable message"
 
 #: The window Settings → Monitoring's mail-health card reports over (RADD-1036).
 #: A day, because that is the shape of the question an operator is asking —

@@ -8,13 +8,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.config import settings
 from radd.db import get_session
 from radd.exceptions import NotFoundError
+from radd.modules.attachments import service as attachments_service
 from radd.modules.auth.deps import CurrentUser
 from radd.modules.items import service as items_service
 
 from . import intake, loops, parsing, registry, service
+from .models import MailMessage
 from .schemas import MailContactRead
 from .sources import webhook
-from .types import MAX_BODY_BYTES, MailEntity
+from .types import MAX_BODY_BYTES, RAW_MESSAGE_CONTENT_TYPE, RAW_MESSAGE_FILENAME, MailEntity
 
 logger = logging.getLogger(__name__)
 
@@ -169,3 +171,33 @@ async def item_mail_contact(
     if contact is None:
         raise NotFoundError(MailEntity.CONTACT, item_id)
     return MailContactRead.model_validate(contact)
+
+
+@router.get("/mail/messages/{message_row_id}/raw")
+async def mail_message_raw(
+    message_row_id: uuid.UUID, session: Session, user: CurrentUser
+) -> Response:
+    """Download the retained RAW bytes of one inbound message (RADD-1033).
+
+    Behind the item's own read gate — the same door its attachments use — so the
+    raw mail is reachable by exactly whoever can read the ticket it landed on,
+    and by nobody else. This is what makes retention honest: an over-eager quote
+    strip or a capped attachment is recoverable, without widening who can see the
+    customer's message.
+
+    404 when the id is unknown OR retention kept nothing (off, no Message-ID to
+    key a row off, or no storage host configured at ingest) — the two are
+    deliberately indistinguishable, so a probe learns nothing about which.
+    """
+    row = await session.get(MailMessage, message_row_id)
+    if row is None or not row.raw_storage_name:
+        raise NotFoundError(MailEntity.MESSAGE, message_row_id)
+    await items_service.require_readable_item(session, row.item_id, user)
+    data = await attachments_service.read_blob(
+        session, row.raw_storage_name, host_id=row.raw_host_id
+    )
+    return Response(
+        content=data,
+        media_type=RAW_MESSAGE_CONTENT_TYPE,
+        headers={"Content-Disposition": f'attachment; filename="{RAW_MESSAGE_FILENAME}"'},
+    )

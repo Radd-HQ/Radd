@@ -121,6 +121,19 @@ class MailMessage(Base):
         ForeignKey("mail_sources.id", ondelete="SET NULL"), nullable=True, index=True
     )
     subject: Mapped[str] = mapped_column(String(998), default="")
+    #: The RAW inbound bytes, retained per `MAIL_RAW_RETENTION_DAYS` through the
+    #: spec-102 blob seam (RADD-1033). NULL when retention is off, when the
+    #: message carried no Message-ID to key a row off, or when no storage host is
+    #: configured. Three columns because that is a `BlobRef`: the opaque storage
+    #: name, the host it lives on (NULL = the default host), and the size. Reads
+    #: sit behind the item's own gate, mounted at the download endpoint like any
+    #: attachment. Only INBOUND rows ever carry these — an outbound message is one
+    #: Radd composed and already has in full.
+    raw_storage_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    raw_host_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("storage_hosts.id", ondelete="SET NULL"), nullable=True
+    )
+    raw_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), index=True
     )
@@ -168,6 +181,16 @@ class MailSource(Base, TimestampMixin):
     sender_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("mail_senders.id", ondelete="SET NULL"), nullable=True
     )
+    #: The `Authentication-Results` authserv-id whose SPF/DKIM/DMARC verdict this
+    #: source trusts (RADD-1032) — the MX's own stamp, e.g. `mx.radd-hq.com`.
+    #: NULL/blank = trust nothing, which is the DEFAULT and reproduces today's
+    #: behaviour exactly: `From:` is taken at face value for attribution. Set it,
+    #: and a message whose verdict from THIS authserv is fail-or-absent is
+    #: recorded as received but attributed to SYSTEM, never to the account whose
+    #: address it forged. This is Radd trusting its gateway's verdict, not doing
+    #: crypto — the header is only as trustworthy as the MX that stamps it, which
+    #: is why it is opt-in per source.
+    trusted_authserv_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
 class MailSender(Base, TimestampMixin):

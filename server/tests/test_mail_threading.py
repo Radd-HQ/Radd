@@ -72,6 +72,7 @@ def raw_message(
     attachments=(),
     to="help@radd-hq.com",
     cc=None,
+    auth_results=None,
 ) -> bytes:
     message = EmailMessage()
     message["Subject"] = subject
@@ -87,6 +88,10 @@ def raw_message(
         message["References"] = references
     if auto_submitted:
         message["Auto-Submitted"] = auto_submitted
+    # One or several `Authentication-Results` headers — the MX's own SPF/DKIM/
+    # DMARC stamp (RADD-1032).
+    for value in [auth_results] if isinstance(auth_results, str) else (auth_results or ()):
+        message["Authentication-Results"] = value
     message.set_content(body)
     if html:
         message.add_alternative(html, subtype="html")
@@ -407,6 +412,184 @@ async def test_attribution_is_not_authorisation(db, world):
     [comment] = await _comments_on(db, item.id)
     assert comment.author_id == SYSTEM_ACTOR_ID
     assert "Email reply from" in comment.body
+
+
+# --- sender authentication + the subject-key gate (RADD-1032) --------------------
+
+
+def _source_with_trust(db, project, authserv):
+    row = MailSource(
+        name=f"box-{uuid.uuid4().hex[:6]}", kind=MailSourceKind.IMAP.value,
+        address="help@radd-hq.com", host="imap.test", username="help@radd-hq.com",
+        secret="pw", default_project_id=project.id, trusted_authserv_id=authserv,
+    )
+    db.add(row)
+    return row
+
+
+def test_parse_auth_results_reads_only_the_trusted_block():
+    """Several hosts stamp their own; only the authserv-id the source trusts is
+    read. A malformed/absent verdict is None (absent), a present block naming no
+    method is `{}` (present but empty) — both unverified, but only None is ABSENT."""
+    headers = (
+        "mx.radd-hq.com; dkim=pass header.d=x.com; spf=pass smtp.mailfrom=x.com; dmarc=pass",
+        "other.relay.net; dkim=fail",
+    )
+    assert parsing.parse_auth_results(headers, "mx.radd-hq.com") == {
+        "dkim": "pass", "spf": "pass", "dmarc": "pass"
+    }
+    assert parsing.parse_auth_results(headers, "other.relay.net") == {"dkim": "fail"}
+    # An authserv-id we do not trust is ignored entirely, even though it is present.
+    assert parsing.parse_auth_results(headers, "not-configured") is None
+    # authserv-id may carry a version, and is compared case-insensitively.
+    assert parsing.parse_auth_results(("MX.Radd-HQ.com 1; spf=Fail",), "mx.radd-hq.com") == {
+        "spf": "fail"
+    }
+    assert parsing.parse_auth_results((), "mx.radd-hq.com") is None  # absent
+    assert parsing.parse_auth_results(("mx.radd-hq.com; none",), "mx.radd-hq.com") == {}  # empty
+
+
+@pytest.mark.parametrize(
+    "results, demoted",
+    [
+        ("mx.radd-hq.com; dkim=pass; spf=pass; dmarc=pass", False),
+        ("mx.radd-hq.com; dkim=fail; spf=fail; dmarc=fail", True),   # forged
+        ("mx.radd-hq.com; spf=softfail", True),                       # any fail-like
+        ("mx.radd-hq.com; none", True),                               # present, no pass
+        (None, True),                                                 # absent when required
+    ],
+)
+def test_the_verdict_decides_demotion(results, demoted):
+    plan = parsing.parse_email(raw_message(auth_results=results, message_id="<v@ext>"))
+    assert intake._check_sender_auth(plan, "mx.radd-hq.com").demoted is demoted
+    # No trust configured is ALWAYS the None (undecided) verdict — today's behaviour.
+    assert intake._check_sender_auth(plan, None).verified is None
+
+
+async def test_a_forged_from_failing_auth_is_demoted_to_system_with_a_note(db, world):
+    """RADD-1032 layer 1. A forged staff `From:` that fails the trusted gateway's
+    verdict is recorded as received but attributed to SYSTEM — never to the
+    account it forged — so it cannot speak as that person, stop the SLA clock, or
+    be relayed to the requester. The body survives; a warning leads it."""
+    from radd.modules.automations.types import SYSTEM_ACTOR_ID
+
+    actor, project, item = world
+    source = _source_with_trust(db, project, "mx.radd-hq.com")
+    await db.flush()
+    await threading.record(
+        db, message_id="<sent-auth@radd>", item_id=item.id, direction=MailDirection.OUTBOUND
+    )
+    await _accept(
+        db,
+        raw_message(
+            sender=f"Ada Agent <{actor.email}>", body="Approve the refund.",
+            in_reply_to="<sent-auth@radd>", message_id="<forged@ext>",
+            auth_results="mx.radd-hq.com; dkim=fail; spf=fail; dmarc=fail",
+        ),
+        project.key,
+        source_id=source.id,
+    )
+
+    [comment] = await _comments_on(db, item.id)
+    assert comment.author_id == SYSTEM_ACTOR_ID, "demoted, not attributed to the forged account"
+    assert "Unverified sender" in comment.body
+    assert "Approve the refund." in comment.body
+
+
+async def test_a_passing_auth_verdict_keeps_the_real_author(db, world):
+    """The other half: a genuine staff reply the gateway vouched for is still
+    that person's own comment — the demotion must not tax the legitimate path."""
+    actor, project, item = world
+    source = _source_with_trust(db, project, "mx.radd-hq.com")
+    await db.flush()
+    await threading.record(
+        db, message_id="<sent-ok@radd>", item_id=item.id, direction=MailDirection.OUTBOUND
+    )
+    await _accept(
+        db,
+        raw_message(
+            sender=f"Ada Agent <{actor.email}>", body="Engineer dispatched.",
+            in_reply_to="<sent-ok@radd>", message_id="<genuine@ext>",
+            auth_results="mx.radd-hq.com; dkim=pass; spf=pass; dmarc=pass",
+        ),
+        project.key,
+        source_id=source.id,
+    )
+
+    [comment] = await _comments_on(db, item.id)
+    assert comment.author_id == actor.id
+    assert "Unverified sender" not in comment.body
+
+
+async def test_without_a_trusted_authserv_nothing_is_demoted(db, world):
+    """The no-config pin: existing installs behave EXACTLY as today. Even a header
+    screaming `dkim=fail` is ignored when the source trusts no authserv-id — the
+    admin has not opted in, so `From:` is taken at face value as before."""
+    actor, project, item = world
+    await threading.record(
+        db, message_id="<sent-nc@radd>", item_id=item.id, direction=MailDirection.OUTBOUND
+    )
+    await _accept(
+        db,
+        raw_message(
+            sender=f"Ada Agent <{actor.email}>", body="Genuine reply.",
+            in_reply_to="<sent-nc@radd>", message_id="<nc@ext>",
+            auth_results="mx.radd-hq.com; dkim=fail",  # present, but nobody trusts it
+        ),
+        project.key,  # no source_id → no trusted authserv
+    )
+
+    [comment] = await _comments_on(db, item.id)
+    assert comment.author_id == actor.id, "no trust configured → today's behaviour"
+
+
+async def test_a_demoted_new_issue_names_no_reporter(db, world):
+    """A demoted CREATE: the reporter is only a mailback claim, but pinning it to
+    the account a forged `From:` names still asserts an identity — so a demoted
+    issue names no reporter and its description carries the warning."""
+    actor, project, _ = world
+    source = _source_with_trust(db, project, "mx.radd-hq.com")
+    await db.flush()
+    outcome = await _accept(
+        db,
+        raw_message(
+            sender=f"Ada Agent <{actor.email}>", subject="Wire the money", body="Now.",
+            message_id="<forge-new@ext>", auth_results="mx.radd-hq.com; dkim=fail",
+        ),
+        project.key,
+        source_id=source.id,
+    )
+    item = await items_service.require_item(db, outcome.item_id)
+    assert item.reporter_id is None
+    assert "Unverified sender" in item.description
+
+
+async def test_a_real_member_who_cannot_write_here_is_a_stranger_to_the_thread(db, world):
+    """RADD-1032 layer 2. The subject-key leg used to admit ANY active real
+    account instance-wide — so a member with no grant on THIS project could type
+    into every ticket whose sequential key they guessed. It now needs
+    `comment.write` on the item's own project; a stranger's key opens a NEW issue
+    instead (refused, not dropped)."""
+    from radd.modules.auth.types import InstanceRole, UserSource
+
+    _, project, item = world
+    key = f"{project.key}-{item.number}"
+    member = User(
+        email=f"m-{uuid.uuid4().hex[:8]}@example.com", name="No Grant",
+        instance_role=InstanceRole.MEMBER.value, source=UserSource.LOCAL.value,
+    )
+    db.add(member)
+    await db.flush()
+    outcome = await _accept(
+        db,
+        raw_message(
+            sender=f"NG <{member.email}>",
+            subject=f"Re: [{key}] give me the details", message_id="<memstranger@ext>",
+        ),
+        project.key,
+    )
+    assert outcome.result is intake.Result.CREATED
+    assert outcome.item_id != item.id
 
 
 # --- contacts (RADD-980) ---------------------------------------------------------
@@ -827,3 +1010,160 @@ async def test_attachments_become_item_attachments(db, world, tmp_path):
 
     stored = await attachments_service.list_for_item(db, outcome.item_id)
     assert {row.filename for row in stored} == {"notes.txt", "data.bin"}
+
+
+async def _default_host(db, tmp_path):
+    from radd.modules.attachments import hosts
+    from radd.modules.attachments.schemas import StorageHostCreate
+    from radd.modules.attachments.types import DeliveryMode, StorageHostType
+
+    return await hosts.create_host(
+        db,
+        StorageHostCreate(
+            name=f"mail-{uuid.uuid4().hex[:6]}",
+            host_type=StorageHostType.FILESYSTEM,
+            root_dir=str(tmp_path / "store"),
+            delivery_mode=DeliveryMode.PROXY,
+            is_default=True,
+        ),
+    )
+
+
+# --- raw retention (RADD-1033) ---------------------------------------------------
+
+
+async def test_the_raw_message_is_retained_and_retrievable(db, world, tmp_path):
+    """RADD-1033. `intake` and `quoting` both CLAIMED the raw was kept, and it was
+    dropped on the floor. Now it is stored per-message through the spec-102 blob
+    seam and readable back for the retention window — an over-eager quote strip or
+    a capped attachment is recoverable from these bytes."""
+    from radd.modules.attachments import service as attachments_service
+
+    await _default_host(db, tmp_path)
+    _, project, _ = world
+    raw = raw_message(subject="keep me", message_id="<raw1@ext>", body="the original words")
+    outcome = await _accept(db, raw, project.key)
+    assert outcome.result is intake.Result.CREATED
+
+    row = await db.scalar(select(MailMessage).where(MailMessage.message_id == "<raw1@ext>"))
+    assert row.raw_storage_name and row.raw_size_bytes == len(raw)
+    fetched = await attachments_service.read_blob(
+        db, row.raw_storage_name, host_id=row.raw_host_id
+    )
+    assert fetched == raw
+
+
+async def test_retention_off_keeps_nothing(db, world, tmp_path, monkeypatch):
+    """`MAIL_RAW_RETENTION_DAYS = 0` is the privacy-conscious choice — a desk that
+    must not keep customer mail at rest. Nothing is stored, and the message still
+    lands."""
+    await _default_host(db, tmp_path)
+    monkeypatch.setattr(intake, "MAIL_RAW_RETENTION_DAYS", 0)
+    _, project, _ = world
+    outcome = await _accept(db, raw_message(message_id="<noretain@ext>"), project.key)
+    assert outcome.result is intake.Result.CREATED
+    row = await db.scalar(select(MailMessage).where(MailMessage.message_id == "<noretain@ext>"))
+    assert row.raw_storage_name is None and row.raw_host_id is None
+
+
+async def test_the_raw_download_is_gated_and_serves_the_bytes(db, world, tmp_path):
+    """Reads sit behind the item's read gate — the same door its attachments use.
+    An actor who can read the ticket gets the exact bytes back."""
+    from radd.modules.mailintake.router import mail_message_raw
+
+    await _default_host(db, tmp_path)
+    actor, project, _ = world
+    raw = raw_message(subject="download me", message_id="<dl1@ext>", body="original words")
+    await _accept(db, raw, project.key)
+    row = await db.scalar(select(MailMessage).where(MailMessage.message_id == "<dl1@ext>"))
+    resp = await mail_message_raw(row.id, db, actor)
+    assert resp.body == raw
+    assert resp.media_type == "message/rfc822"
+
+
+async def test_the_raw_download_404s_when_nothing_was_retained(db, world, tmp_path, monkeypatch):
+    """Unknown id and retention-kept-nothing are the same 404 — a probe learns
+    nothing about which."""
+    from radd.exceptions import NotFoundError
+    from radd.modules.mailintake.router import mail_message_raw
+
+    await _default_host(db, tmp_path)
+    monkeypatch.setattr(intake, "MAIL_RAW_RETENTION_DAYS", 0)
+    actor, project, _ = world
+    await _accept(db, raw_message(message_id="<none@ext>"), project.key)
+    row = await db.scalar(select(MailMessage).where(MailMessage.message_id == "<none@ext>"))
+    with pytest.raises(NotFoundError):
+        await mail_message_raw(row.id, db, actor)
+
+
+# --- capped attachments leave a receipt (RADD-1035a) -----------------------------
+
+
+def test_a_cap_reports_how_many_attachments_it_dropped(monkeypatch):
+    """The count is reported by pure parsing; `intake` turns it into a note."""
+    monkeypatch.setattr(parsing, "MAX_ATTACHMENTS", 2)
+    raw = raw_message(
+        subject="lots",
+        message_id="<cap@ext>",
+        attachments=[(f"f{i}.txt", "text/plain", b"x") for i in range(5)],
+    )
+    plan = parsing.parse_email(raw)
+    assert len(plan.attachments) == 2 and plan.attachments_dropped == 3
+
+
+async def test_a_capped_message_leaves_a_note_naming_the_dropped_count(
+    db, world, tmp_path, monkeypatch
+):
+    """A silent drop is exactly what the cap must not be — someone whose screenshot
+    vanished has no way to know. One SYSTEM note on the item names the count."""
+    await _default_host(db, tmp_path)
+    monkeypatch.setattr(parsing, "MAX_ATTACHMENTS", 2)
+    _, project, _ = world
+    raw = raw_message(
+        subject="lots of files",
+        message_id="<capnote@ext>",
+        attachments=[(f"f{i}.txt", "text/plain", b"x") for i in range(5)],
+    )
+    outcome = await _accept(db, raw, project.key)
+    [note] = await _comments_on(db, outcome.item_id)
+    assert "3 attachment(s)" in note.body and "not stored" in note.body
+
+
+# --- account lookups are batched (RADD-1042) -------------------------------------
+
+
+async def test_capturing_contacts_batches_the_account_lookups(db, world, monkeypatch):
+    """The recipient sweep used to run a `get_user_by_email` per CC — a query per
+    recipient on the hot path of every first message. It is now ONE
+    `WHERE email IN (...)`, byte-identical behaviour from one dict."""
+    from radd.modules.auth import service as auth_service
+
+    _, project, _ = world
+    item = await items_service.create_item(
+        db, ItemCreate(project_id=project.id, title="t"), world[0]
+    )
+    plan = parsing.parse_email(
+        raw_message(
+            sender="cass@vip.example.com",
+            cc="bill@vip.example.com, ops@vip.example.com",
+            message_id="<batch@ext>",
+        )
+    )
+    calls = {"batch": 0, "single": 0}
+    real_batch = auth_service.users_by_emails
+    real_single = auth_service.get_user_by_email
+
+    async def spy_batch(session, emails):
+        calls["batch"] += 1
+        return await real_batch(session, emails)
+
+    async def spy_single(session, email):
+        calls["single"] += 1
+        return await real_single(session, email)
+
+    monkeypatch.setattr(auth_service, "users_by_emails", spy_batch)
+    monkeypatch.setattr(auth_service, "get_user_by_email", spy_single)
+    await intake._capture_contacts(db, item.id, plan, own_addresses={"help@radd-hq.com"})
+
+    assert calls["batch"] == 1, "one batched lookup for sender + every recipient"
+    assert calls["single"] == 0, "no per-recipient lookup survives"

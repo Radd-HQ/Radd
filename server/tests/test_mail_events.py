@@ -152,6 +152,28 @@ async def test_a_dropped_message_emits_the_reason(db, world):
     assert "auto-replied" in rows[-1].payload["reason"]
 
 
+def test_dropped_entity_id_is_correlatable_by_message_id():
+    """RADD-1035c. `entity_id=uuid.uuid4()` scattered every drop across a fresh
+    id, so a provider retrying a message the loop guard keeps rejecting looked
+    like N unrelated drops. It is now uuid5 over the Message-ID — same message,
+    one id — falling back to uuid4 only when there is nothing to correlate on."""
+    a = intake.dropped_entity_id("<m@x>")
+    assert a == intake.dropped_entity_id("<m@x>")
+    assert a != intake.dropped_entity_id("<other@x>")
+    assert intake.dropped_entity_id("") != intake.dropped_entity_id("")
+
+
+async def test_a_loop_drop_keys_its_event_off_the_message_id(db, world):
+    """The event a repeated loop drop writes carries the correlatable id, so an
+    operator can group every rejection of the SAME message."""
+    _, project, _ = world
+    await _accept(
+        db, raw(message_id="<loopdrop@ext>", Auto_Submitted="auto-replied"), project.key
+    )
+    rows = await _events(db, MailEvent.DROPPED)
+    assert any(r.entity_id == intake.dropped_entity_id("<loopdrop@ext>") for r in rows)
+
+
 def test_every_mail_event_is_a_registered_automation_trigger():
     """`catalog.TRIGGERS` derives live from the kernel event registry, so this is
     what makes them appear in the rule builder — with no edit to `automations`.
