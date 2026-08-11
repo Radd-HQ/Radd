@@ -7,7 +7,7 @@ Split out of service.py in spec 63 (policy CRUD + first-match stay there).
 import math
 import uuid
 from collections.abc import Iterable, Sequence
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,7 +27,7 @@ from radd.modules.workflow import service as workflow
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 
-from . import service, timers
+from . import calendar, service, timers
 from .models import SlaItemState, SlaPolicy
 from .schemas import BatchTimerRead
 from .types import SlaEvent, SlaKind
@@ -103,6 +103,17 @@ async def evaluate_items(
     # doubled (weekends and merged pauses), plus fixed slack.
     horizon_days = math.ceil(max_target_minutes / window_minutes) * 2 + HORIZON_SLACK_DAYS
 
+    # Holidays (RADD-1031): dates nobody works pause the clock exactly like a
+    # weekend, so they only apply to a policy that counts the WORK WEEK — a 24/7
+    # policy declares that calendar time is what it measures. Resolved ONCE for
+    # the whole batch's span rather than per item: the providers answer for a
+    # date range, and this loop already runs over items sharing one policy.
+    holidays: frozenset[date] = frozenset()
+    if policy.work_week_only and item_map:
+        starts = [item.created_at for item in item_map.values()]
+        span_end = max(now, max(starts)) + timedelta(days=horizon_days)
+        holidays = await calendar.non_working_dates(session, min(starts).date(), span_end.date())
+
     results: dict[uuid.UUID, dict[SlaKind, tuple[int, timers.TimerStatus]]] = {}
     for item_id, item in item_map.items():
         tl = timelines.get(item_id)
@@ -120,7 +131,9 @@ async def evaluate_items(
                 await working_days_for(item.project_id) if policy.work_week_only else ALL_WEEK
             )
             if policy.work_week_only:
-                pauses.extend(timers.non_working_pauses(started, horizon, working_days))
+                pauses.extend(
+                    timers.non_working_pauses(started, horizon, working_days, holidays)
+                )
             if windowed:
                 pauses.extend(
                     timers.business_hours_pauses(

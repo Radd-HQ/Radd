@@ -11,6 +11,7 @@ defined now; a concrete second provider arrives when the first consuming plugin 
 actually built. `StorageBackend` and `TaskBackend` already have real providers.
 """
 
+from datetime import date
 from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
 
@@ -27,6 +28,7 @@ class Socket(StrEnum):
     AI_PROVIDER = "ai_provider"  # openai | anthropic
     VCS_PROVIDER = "vcs_provider"  # gitlab | forgejo
     ATTACHMENT_FILTER = "attachment_filter"  # veto/transform an upload (interceptor)
+    NON_WORKING_DAYS = "non_working_days"  # calendar dates nobody works (RADD-1031)
 
 
 # --- interface definitions (the seam contracts) ---
@@ -71,6 +73,28 @@ class RoutingRule(Protocol):
     config_model: Any
 
     async def evaluate(self, session: Any, ctx: Any, config: Any) -> Any: ...
+
+
+@runtime_checkable
+class NonWorkingDaysProvider(Protocol):
+    """Calendar dates on which the INSTANCE does not work (RADD-1031).
+
+    Mechanism only: the kernel knows there is such a thing as a day nobody
+    works, and nothing about why. `leave` answers with its studio holidays; a
+    plugin holding a regional calendar answers alongside it — every provider on
+    the socket is asked and the answers UNION, because a date is non-working if
+    anyone's calendar says so.
+
+    The subject is the instance, not a person: an SLA clock is attached to an
+    item, so there is no user whose personal absence could pause it. Providers
+    must therefore answer with dates that stop work for everybody, never with
+    one person's leave.
+
+    Answers are advisory and time-boxed to the [start, end] window the consumer
+    asks for, so a provider never has to enumerate a calendar it cannot bound.
+    """
+
+    async def non_working_dates(self, session: Any, start: date, end: date) -> set[date]: ...
 
 
 @runtime_checkable

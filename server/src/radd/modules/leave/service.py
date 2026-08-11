@@ -7,7 +7,7 @@ statement of absence, not a request.
 """
 
 import uuid
-from datetime import date
+from datetime import date, timedelta
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -167,6 +167,40 @@ async def calendar(
     return entries
 
 
+async def holiday_dates(session: AsyncSession, start: date, end: date) -> set[date]:
+    """Every date in [start, end] a HOLIDAY period covers (RADD-1031).
+
+    Holidays only, never personal leave: a holiday is a day the studio is shut,
+    which is a property of the calendar, while one person's absence is a
+    property of that person. The distinction matters because this feeds the SLA
+    clock (through the kernel's non-working-days socket) and an item's timer has
+    no person to be absent.
+
+    Team-scoped rows are read as instance-wide here, unlike `calendar()`, which
+    expands them to members. That is not sloppiness but the same rule applied to
+    a different subject: `calendar()` answers "who is away", so it needs the
+    membership; a clock has no subject to resolve a team against, so any
+    declared shutdown stops it. A regionally-split instance that wants
+    per-desk clocks needs a per-project calendar — a bigger design than a filter
+    here could fake.
+    """
+    dates: set[date] = set()
+    result = await session.execute(
+        select(LeavePeriod).where(
+            LeavePeriod.kind == LeaveKind.HOLIDAY.value,
+            LeavePeriod.start_date <= end,
+            LeavePeriod.end_date >= start,
+        )
+    )
+    for period in result.scalars():
+        day = max(period.start_date, start)
+        last = min(period.end_date, end)
+        while day <= last:
+            dates.add(day)
+            day += timedelta(days=1)
+    return dates
+
+
 async def current(session: AsyncSession, today: date) -> list[CurrentLeave]:
     """Who is away TODAY, with the latest end date per user — the app-wide
     dim + icon indicator renders from exactly this."""
@@ -187,6 +221,7 @@ __all__ = [
     "calendar",
     "create",
     "current",
+    "holiday_dates",
     "list_for_user",
     "list_holidays",
     "may_manage_user",

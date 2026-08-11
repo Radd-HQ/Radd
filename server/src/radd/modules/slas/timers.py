@@ -5,10 +5,16 @@ the policy's pause states, and stops when the target is met. The deadline is
 the moment accumulated ACTIVE (non-paused) time reaches the target — walking
 the pause intervals directly, so pausing before the deadline pushes it out
 exactly, with no fixpoint iteration.
+
+Everything here is a function of its arguments — no database, no registry, no
+clock beyond the `now` it is handed. Non-working days arrive as a work-week set
+and (RADD-1031) a set of calendar DATES; whoever knows which dates those are
+resolves them elsewhere (`slas/calendar.py`).
 """
 
+from collections.abc import Collection
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 
 WEEKDAY_NAMES = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
@@ -27,15 +33,28 @@ def parse_work_week(value: str) -> frozenset[int]:
 
 
 def non_working_pauses(
-    start: datetime, end: datetime, working_days: frozenset[int]
+    start: datetime,
+    end: datetime,
+    working_days: frozenset[int],
+    non_working_dates: Collection[date] = (),
 ) -> list[tuple[datetime, datetime | None]]:
     """Midnight-to-midnight pause intervals for every non-working day between
     start and end (spec 35) — merged into a policy's state pauses so the SLA
-    clock skips weekends. Naive UTC days, matching event timestamps."""
+    clock skips weekends. Naive UTC days, matching event timestamps.
+
+    `non_working_dates` (RADD-1031) are individual CALENDAR DATES that are
+    non-working regardless of weekday — a studio holiday falling on a Tuesday.
+    Passed in as plain dates rather than looked up here on purpose: this module
+    is pure timer math and must stay computable without a database, so who
+    decides a date is a holiday is the caller's business (`slas/calendar.py`
+    resolves them through the kernel socket). An empty set is exactly the
+    pre-RADD-1031 behaviour.
+    """
+    holidays = frozenset(non_working_dates)
     pauses: list[tuple[datetime, datetime | None]] = []
     day = datetime(start.year, start.month, start.day)
     while day <= end:
-        if day.weekday() not in working_days:
+        if day.weekday() not in working_days or day.date() in holidays:
             pauses.append((day, day + timedelta(days=1)))
         day += timedelta(days=1)
     return pauses

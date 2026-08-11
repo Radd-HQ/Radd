@@ -1,5 +1,7 @@
-from radd.kernel import EventTypeSpec, RaddPlugin
+from radd.kernel import EventTypeSpec, IntegrationSpec, RaddPlugin
+from radd.kernel.sockets import Socket
 
+from .holidays import HolidayCalendar
 from .router import router
 from .types import LeaveEvent
 
@@ -17,5 +19,13 @@ plugin = RaddPlugin(
     event_types=(
         EventTypeSpec(LeaveEvent.CREATED, "Leave recorded", "People"),
         EventTypeSpec(LeaveEvent.DELETED, "Leave removed", "People"),
+    ),
+    # RADD-1031: the holidays recorded here are dates nobody works, which is
+    # what an SLA clock needs to skip. Contributed through the socket rather
+    # than called directly, so `slas` never learns this module exists and
+    # disabling leave withdraws the calendar with it (the clock then runs on
+    # weekends-only, exactly as it did before).
+    integrations=(
+        IntegrationSpec(Socket.NON_WORKING_DAYS, "leave_holidays", impl=HolidayCalendar()),
     ),
 )
