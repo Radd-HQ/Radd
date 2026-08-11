@@ -42,6 +42,9 @@ FROM registry.k8s.io/kubectl@sha256:83e1de860f7ee7a2659eb18cc6ea8c133d7fa66c0c60
 # over DOCKER_HOST — this image must never ship a docker daemon of its own.
 FROM docker.io/library/docker@sha256:851f91d241214e7c6db86513b270d58776379aacc5eb9c4a87e5b47115e3065c AS dockercli
 
+# syft 1.51.0 — the per-release CycloneDX SBOMs in publish.yaml (RADD-1026).
+FROM docker.io/anchore/syft@sha256:678bfa565b60f747aac0f8e964fe5588a24445b8d0a480e91f6efd70020dfbb0 AS syft
+
 # BASE IS node:22-bookworm ON PURPOSE. actions/checkout is a JavaScript action:
 # an image carrying kubectl and helm but no node cannot check out a repository,
 # which is why the workflows started from a node image and added tools rather
@@ -61,6 +64,12 @@ RUN set -eux; \
 COPY --from=helm      /usr/bin/helm         /usr/local/bin/helm
 COPY --from=kubectl   /bin/kubectl          /usr/local/bin/kubectl
 COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
+COPY --from=syft      /syft                 /usr/local/bin/syft
+
+# syft checks for its own updates on every scan unless told not to — a CI job
+# has no business phoning home, and this image's whole point is that jobs
+# depend on nothing outside the cluster.
+ENV SYFT_CHECK_FOR_APP_UPDATE=false
 
 # Prove every tool RUNS, and that the versions are the ones claimed above — a
 # COPY from the wrong path in a rebuilt upstream image would otherwise surface
@@ -69,6 +78,7 @@ RUN set -eux; \
     helm version --short              | grep -q '^v3\.16\.3'; \
     kubectl version --client=true -o yaml | grep -q 'gitVersion: v1\.31\.3'; \
     docker --version                  | grep -q '27\.5\.1'; \
+    syft version                      | grep -q 'Version:.*1\.51\.0'; \
     git --version; \
     node --version; \
     python3 --version

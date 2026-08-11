@@ -29,10 +29,11 @@ jobs:
     runs-on: docker
     container:
       # Our own runner image (RADD-807): node for actions/checkout, the docker
-      # CLI for build/push, python3 for release_notes.py — all baked in, so a
-      # release no longer depends on download.docker.com answering. Pinned to an
-      # exact version; bump deploy/ci-runner.version and rebuild to move it.
-      image: git.radd-hq.com/radd/ci-runner:1.0.0
+      # CLI for build/push, python3 for release_notes.py, syft for the SBOMs —
+      # all baked in, so a release no longer depends on download.docker.com
+      # answering. Pinned to an exact version; bump deploy/ci-runner.version
+      # and rebuild to move it.
+      image: git.radd-hq.com/radd/ci-runner:1.1.0
     steps:
       - uses: actions/checkout@v4
 
@@ -93,6 +94,36 @@ jobs:
         run: |
           git fetch --tags --force --unshallow 2>/dev/null || git fetch --tags --force
           python3 scripts/release_notes.py --tag "v${{ steps.meta.outputs.version }}"
+
+      # RADD-1026: every shipped version carries its bill of materials — two
+      # CycloneDX documents attached to the Forgejo release. TWO because the
+      # runtime image only carries the BUILT web bundle: scanning the image
+      # yields Debian + Python (+ the Rust crates syft reads out of binaries
+      # like uv), and nothing in it can see the npm tree, so the frontend is
+      # cataloged from web/package-lock.json (dev dependencies excluded).
+      # release_assets.py find-or-creates the release, so this step does not
+      # depend on the changelog step above having succeeded.
+      #
+      # continue-on-error for the changelog step's reason: the image is already
+      # pushed and deployable, and a failed SBOM must not turn a good release
+      # red. The gap is visible where it matters — on the release page.
+      - name: Generate and attach SBOMs
+        continue-on-error: true
+        env:
+          DOCKER_HOST: tcp://172.17.0.1:2375
+          FORGEJO_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.FORGEJO_TOKEN }}
+          FORGEJO_REPO: ${{ github.repository }}
+          # Package inventory, not a five-thousand-row file listing.
+          SYFT_FILE_METADATA_SELECTION: none
+        run: |
+          set -e
+          V="${{ steps.meta.outputs.version }}"
+          syft "docker:${{ steps.meta.outputs.image }}:$V" \
+            -o cyclonedx-json="radd-$V-image.cdx.json" -q
+          syft file:web/package-lock.json \
+            -o cyclonedx-json="radd-$V-web.cdx.json" -q
+          python3 scripts/release_assets.py --tag "v$V" \
+            "radd-$V-image.cdx.json" "radd-$V-web.cdx.json"
 
       - name: Deploy instructions
         run: |

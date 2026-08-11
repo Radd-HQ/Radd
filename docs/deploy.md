@@ -137,6 +137,14 @@ helm install radd deploy/helm/radd \
   --set ingress.enabled=true --set ingress.host=radd.example.com
 ```
 
+Every release on the canonical repo (`git.radd-hq.com/Radd/Radd`) ships with two
+CycloneDX SBOMs as release assets: `radd-<version>-image.cdx.json` describes the
+container image (Debian packages, the installed Python environment, and what
+syft reads out of embedded binaries), and `radd-<version>-web.cdx.json` the npm
+tree the web bundle was built from — the bundle itself is minified, so the image
+scan alone cannot see the frontend's dependencies. Feed them to whatever
+consumes CycloneDX (grype, Dependency-Track, OSV).
+
 - Migrations run as a pre-install/pre-upgrade hook Job.
 - Secrets (SMTP, OIDC/LDAP, S3, AI keys) go in a Secret referenced by
   `envFromSecret` — never in plain values.
