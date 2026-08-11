@@ -33,6 +33,13 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+# The mail module's vocabulary for "what does this failure mean", declared in
+# notify's `weak_depends`. A wire enum, no runtime coupling: it is the value
+# this module hands BACK to the transport, and inventing a second name for the
+# same three answers is how two files come to disagree about what "silent"
+# means.
+from radd.modules.mailintake.types import MailFailureReport
+
 from .models import Notification
 
 #: How long to wait after the first, second and third consecutive failure. A
@@ -55,20 +62,38 @@ def after_failure(attempts: int, now: datetime) -> datetime | None:
     return now + EMAIL_RETRY_DELAYS[attempts]
 
 
-def reports_failure(attempts: int) -> bool:
-    """Should the failure about to be recorded be EMITTED as `mail.failed`?
+def is_terminal(attempts: int) -> bool:
+    """Would the failure about to be recorded EXHAUST the ladder?
 
-    The first and the terminal one, and nothing in between (RADD-997). A
-    `mail.failed` event is item-scoped and drives automations and the activity
-    feed, so it answers "did this customer hear from us" — a question that is
-    settled by the first failure and by the last, while the retries between them
-    are this module's business and nobody else's. The live incident wrote one
-    per recipient per five seconds into a stream every consumer reads.
+    `attempts` is the row's count BEFORE this failure, the argument
+    `after_failure` takes, so the predicate is exactly "the next rung does not
+    exist".
+    """
+    return attempts >= len(EMAIL_RETRY_DELAYS)
+
+
+def failure_report(attempts: int) -> MailFailureReport:
+    """What the transport should do with the failure about to happen (RADD-997,
+    widened by RADD-1036).
+
+    The first failure and the terminal one are emitted, and nothing in between.
+    A `mail.failed` event drives automations and the activity feed, so it
+    answers "did this person hear from us" — a question settled by the first
+    failure and by the last, while the retries between them are this module's
+    business and nobody else's. The live incident wrote one per recipient per
+    five seconds into a stream every consumer reads.
+
+    The terminal one is now DISTINGUISHED rather than merely emitted: giving up
+    is the outcome an operator has to see (Settings → Monitoring counts it in
+    red), and "a relay blipped once and the retry worked" is not the same news
+    as "four attempts failed and this address will never be written to again".
 
     Asked BEFORE the attempt, because the answer decides what the transport is
     told to do with a failure that has not happened yet.
     """
-    return attempts == 0 or attempts >= len(EMAIL_RETRY_DELAYS)
+    if is_terminal(attempts):
+        return MailFailureReport.TERMINAL
+    return MailFailureReport.REPORT if attempts == 0 else MailFailureReport.SILENT
 
 
 def record_failure(row: Notification, now: datetime) -> bool:

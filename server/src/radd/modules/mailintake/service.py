@@ -4,11 +4,14 @@ Other modules (forms' public submits, the csat sender's recipient resolution
 [spec 65]; automations in spec 66) address external requesters exclusively
 through these functions — the `mail_contacts` table stays private to this module.
 
-`send_item_mail` / `outbound_configured` are re-exported from `transport.py`
-(RADD-968): they are the seam NOTIFY calls to mail a user about an issue, and a
-caller looks for a module's public functions here, not in a file named after the
-implementation. Since RADD-970 the ack goes out through it too, so there is no
-mail leaving this module by any other route.
+`send_item_mail` / `send_plain_mail` / `outbound_configured` / `mail_health` are
+re-exported from `transport.py` (RADD-968, widened by RADD-983/1036): they are
+the seam NOTIFY, CSAT and the automation `send_email` action call to put a
+message on the wire, and a caller looks for a module's public functions here,
+not in a file named after the implementation. Since RADD-970 the ack goes out
+through it too, so there is no mail leaving this module by any other route —
+and since RADD-983 there is no mail leaving the INSTANCE by any other route
+either.
 """
 
 import uuid
@@ -18,19 +21,65 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd import mailrender
 from radd.config import settings
+from radd.modules.auth.models import User
+from radd.modules.auth.types import UserSource
+from radd.modules.automations.types import SYSTEM_ACTOR_ID
 
 from .models import MailContact
-from .transport import outbound_configured, send_item_mail
+from .transport import (
+    MailFailure,
+    MailHealth,
+    mail_health,
+    outbound_configured,
+    send_item_mail,
+    send_plain_mail,
+)
 from .types import ACK_SUBJECT_TEMPLATE
 
 __all__ = [
+    "MailFailure",
+    "MailHealth",
     "contact_for_item",
     "contacts_for_item",
+    "mail_health",
+    "mailable_user",
     "outbound_configured",
     "send_ack",
     "send_item_mail",
+    "send_plain_mail",
     "upsert_contact",
 ]
+
+
+def mailable_user(user: User | None) -> bool:
+    """Is there a PERSON's mailbox behind this account? (RADD-996, RADD-983)
+
+    Four kinds of account are not a person to mail: inactive, address-less, a
+    spec-113 SERVICE account (`radd-agent@service.radd.local` does not receive
+    — the column requires an address, nobody reads it), and the system actor
+    (`automation@radd.system`, the identity mail intake and every engine write
+    carry). The live evidence is that service accounts had been getting
+    notification mail since v0.29.0 and the relay was rate-limited for
+    repeatedly posting to addresses that bounce.
+
+    It lives on the MAIL module because the answer is about mailability, and
+    because CSAT and the `send_email` automation action are the two callers
+    that had no such check at all — both resolve a user-shaped role (the
+    reporter, the assignee) and both mailed whatever came back. Notify carries
+    its own copy of the same rule for one structural reason: notify loads
+    BEFORE mailintake and reaches it only deferred and feature-detected, so it
+    cannot import this at module scope. The predicate is small and stated
+    identically in both places; if a third caller appears it belongs in `auth`.
+
+    A property of the ACCOUNT, not of the attempt — so a caller treats a False
+    the way it treats a permanent refusal (drop it, never retry), where a
+    delivery failure is the retrying case.
+    """
+    if user is None or not user.active or not user.email:
+        return False
+    if user.id == SYSTEM_ACTOR_ID:
+        return False
+    return user.source != UserSource.SERVICE.value
 
 #: Primary first, then oldest, then alphabetical. Used by both reads, so "the
 #: primary" and "the first of all of them" can never disagree — the standing

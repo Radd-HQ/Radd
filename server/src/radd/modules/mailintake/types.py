@@ -32,6 +32,31 @@ class MailEvent(StrEnum):
     FAILED = "mail.failed"
 
 
+class MailFailureReport(StrEnum):
+    """What the transport should do with a delivery failure (RADD-997/1036).
+
+    It replaces the `emit_failure` boolean, which could say "emit" or "don't"
+    and had no way to say the third thing an operator actually needs to know:
+    that a retry ladder RAN OUT and nobody will hear from us. Settings →
+    Monitoring counts those separately from the first blip of a send that
+    recovered a minute later, and a second boolean beside the first would have
+    made "silent AND terminal" expressible, which is nonsense.
+
+    * `REPORT` — emit `mail.failed`. The send is over the moment it fails: a
+      reply, an acknowledgement, a survey, an automation's email. The default,
+      and right for everyone who is not running a ladder.
+    * `SILENT` — a retry is coming, so the question the event answers ("did
+      this person hear from us?") is not settled yet. The live incident wrote
+      one event per recipient per five seconds into a stream every consumer
+      reads.
+    * `TERMINAL` — the last rung. Emitted, and marked given-up in the payload.
+    """
+
+    REPORT = "report"
+    SILENT = "silent"
+    TERMINAL = "terminal"
+
+
 class MailSourceKind(StrEnum):
     """How mail reaches Radd. A kind is a registered implementation resolved by
     ROW, so a Gmail adapter is a class plus a row (RADD-958).
@@ -279,6 +304,24 @@ SEEN_FLAG = r"(\Seen)"
 
 # Reply comments are authored by the SYSTEM actor; the real sender is noted in the body.
 REPLY_COMMENT_TEMPLATE = "Email reply from {sender}:\n\n{body}"
+
+#: The window Settings → Monitoring's mail-health card reports over (RADD-1036).
+#: A day, because that is the shape of the question an operator is asking —
+#: "is mail working right now" — and because notify's own age window is 24h, so
+#: a failure older than this has already been given up on by the loops too.
+MAIL_HEALTH_WINDOW_HOURS = 24
+
+#: How many `mail.failed` rows the health seam reads. A healthy instance has
+#: zero and a broken one only needs to be told it is broken, so the card reports
+#: "500+" rather than making an operator wait on a full-window scan. The count
+#: is capped, never wrong: the seam says when it hit the cap.
+MAIL_HEALTH_SCAN_LIMIT = 500
+
+#: How much of a delivery exception rides the `mail.failed` payload (RADD-1036).
+#: Enough for "Connection refused" or a relay's 5xx line — which is the whole
+#: reason the card exists — and capped because an SMTP server may answer with a
+#: paragraph, and the events table is not a log sink.
+MAIL_ERROR_MAX_CHARS = 400
 
 # Appended to the description when the sender matches no user (spec 47).
 SENDER_NOTE_TEMPLATE = "{body}\n\n---\nReceived by email from {sender}"

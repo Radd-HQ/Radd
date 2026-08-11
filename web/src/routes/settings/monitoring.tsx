@@ -1,9 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
-import { Activity, Database, Sparkles } from "lucide-react";
+import { Activity, Database, Mail, Sparkles } from "lucide-react";
 import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { queryKeys } from "../../lib/queries";
-import type { EmbeddingCoverage, MonitoringOverview, WorkerStatus } from "../../lib/types";
+import type {
+  EmbeddingCoverage,
+  MailHealth,
+  MonitoringOverview,
+  WorkerStatus,
+} from "../../lib/types";
 import { QueryError } from "../../components/QueryError";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { Spinner } from "../../components/Spinner";
@@ -85,6 +90,80 @@ function StatRow({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+function formatAt(iso: string): string {
+  const at = new Date(iso);
+  return Number.isNaN(at.getTime()) ? iso : at.toLocaleString();
+}
+
+/** Outbound mail over the last day (RADD-1036).
+ *
+ * A terminally-failed message used to exist only as two events in a stream
+ * nobody aggregated: the retry ladder gives up, stamps the row, and "the
+ * customer never got it" was knowable only by querying the events table. The
+ * card is deliberately quiet at zero — an operator page that shouts when
+ * nothing is wrong is one nobody reads when something is. */
+function MailCard({ mail }: { mail: MailHealth }) {
+  const healthy = mail.failures === 0;
+  return (
+    <Card icon={Mail} title="Outbound mail">
+      <StatRow
+        label={`Failures (last ${mail.window_hours}h)`}
+        value={
+          <span className="inline-flex items-center gap-1.5">
+            <span
+              className={`size-2 rounded-full ${healthy ? "bg-emerald-400" : "bg-red-400"}`}
+              aria-hidden
+            />
+            {healthy ? "None" : `${mail.failures.toLocaleString()}${mail.capped ? "+" : ""}`}
+          </span>
+        }
+      />
+      {mail.given_up > 0 && (
+        <StatRow
+          label="Given up on (never delivered)"
+          value={<span className="text-red-300">{mail.given_up.toLocaleString()}</span>}
+        />
+      )}
+      {mail.recent.length > 0 && (
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full text-[13px]">
+            <thead>
+              <tr className="text-left text-[11px] uppercase tracking-wide text-fg-faint">
+                <th className="py-1 pr-3 font-medium">When</th>
+                <th className="py-1 pr-3 font-medium">Recipient</th>
+                <th className="py-1 font-medium">Error</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-subtle/60">
+              {mail.recent.map((failure, index) => (
+                <tr key={`${failure.at}-${failure.recipient}-${index}`}>
+                  <td className="whitespace-nowrap py-1.5 pr-3 tabular-nums text-fg-secondary">
+                    {formatAt(failure.at)}
+                  </td>
+                  <td className="py-1.5 pr-3 text-fg" title={failure.subject}>
+                    {failure.recipient || "—"}
+                    {failure.given_up && (
+                      <span className="ml-1.5 rounded-full bg-red-500/15 px-2 py-0.5 text-[11px] font-medium text-red-300 ring-1 ring-red-500/30">
+                        Gave up
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-1.5 text-fg-muted">{failure.error || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {healthy && (
+        <p className="mt-2 text-xs text-fg-muted">
+          Every message sent in the last {mail.window_hours} hours was accepted by the relay.
+        </p>
+      )}
+    </Card>
+  );
+}
+
 /** Operator monitoring (admin-only): DB health, entity counts, embedding
  * coverage, and each background worker's event-stream lag. Polls while open. */
 export function MonitoringSettingsPage() {
@@ -114,7 +193,7 @@ export function MonitoringSettingsPage() {
   return (
     <SettingsPage
       title="Monitoring"
-      description="Live health of this instance: database, background workers, and index coverage. Refreshes every few seconds while open."
+      description="Live health of this instance: database, background workers, outbound mail, and index coverage. Refreshes every few seconds while open."
     >
       <div className="grid gap-4 lg:grid-cols-2">
         <Card icon={Database} title="Database">
@@ -146,6 +225,9 @@ export function MonitoringSettingsPage() {
             ))}
           </div>
         </Card>
+
+        {/* Absent, not green, when the mailintake module is not loaded. */}
+        {data.mail.available && <MailCard mail={data.mail} />}
 
         {coverage.data?.enabled && (
           <Card icon={Sparkles} title="Semantic index">

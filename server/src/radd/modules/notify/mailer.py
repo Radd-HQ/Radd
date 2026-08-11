@@ -55,6 +55,7 @@ from radd.modules.auth.models import User
 from radd.modules.comments import service as comments
 from radd.modules.comments.types import CommentEvent
 from radd.modules.events import service as events
+from radd.modules.mailintake.types import MailFailureReport
 
 from . import lines, retry, service
 from .models import Notification
@@ -82,7 +83,7 @@ async def run_batch(session: AsyncSession) -> int:
     rows = await _wanted(session, await _pending(session))
     if not rows:
         return 0
-    if not await _can_send(session):
+    if not await can_send(session):
         # Nothing to send FROM. Leave the rows unstamped: the digest loop is
         # gated the same way and will stamp them when it can.
         return 0
@@ -104,7 +105,7 @@ async def run_batch(session: AsyncSession) -> int:
             row,
             user,
             actor_names,
-            emit_failure=retry.reports_failure(row.email_attempts),
+            failure=retry.failure_report(row.email_attempts),
         ):
             sent += 1
             stamped.append(row.id)
@@ -186,8 +187,11 @@ def _mail_transport():
     return mailintake
 
 
-async def _can_send(session: AsyncSession) -> bool:
-    """Asked once per tick, not once per row: resolving the sender is a query."""
+async def can_send(session: AsyncSession) -> bool:
+    """Is there anywhere to send FROM? Asked once per tick, not once per row:
+    resolving the sender is a query. Public because the digest loop asks the
+    same question and asking it a second way is how the two channels came to
+    disagree about whether the instance had a relay (RADD-983)."""
     transport = _mail_transport()
     if transport is None:
         return bool(settings.smtp_host)
@@ -200,16 +204,17 @@ async def _send(
     user: User,
     actor_names: dict[uuid.UUID, str],
     *,
-    emit_failure: bool = True,
+    failure: MailFailureReport = MailFailureReport.REPORT,
 ) -> bool:
     """Compose and deliver one notification. True when it went out.
 
-    `emit_failure` is passed straight to the transport and is the whole of
+    `failure` is passed straight to the transport and is the whole of
     RADD-997's event half: the transport reports every send's outcome, which is
-    right for its other two callers (a reply and an ack are sent once), and
-    wrong for a loop that will try the same message again in a minute. The
-    RETRY is what makes a failure uninteresting, and the retry lives here — so
-    the suppression does too, rather than teaching the transport about ladders.
+    right for its other callers (a reply, an ack and a survey are each sent
+    once), and wrong for a loop that will try the same message again in a
+    minute. The RETRY is what makes a failure uninteresting, and the retry lives
+    here — so the suppression does too, rather than teaching the transport about
+    ladders.
     """
     payload = notification.payload or {}
     key = payload.get("item_key") or ""
@@ -245,7 +250,7 @@ async def _send(
     )
     transport = _mail_transport()
     if transport is None or notification.item_id is None:
-        return await _send_direct(user, subject, message)
+        return await _send_direct(user.email, user.name, subject, message)
     return bool(
         await transport.send_item_mail(
             session,
@@ -256,7 +261,7 @@ async def _send(
             text=message.text,
             html=message.html,
             comment_id=await _comment_id(session, notification),
-            emit_failure=emit_failure,
+            failure=failure,
         )
     )
 
@@ -298,7 +303,53 @@ async def _comment_body(session: AsyncSession, notification: Notification) -> st
     return body or (notification.payload or {}).get("excerpt") or ""
 
 
-async def _send_direct(user: User, subject: str, message: mailrender.RenderedMail) -> bool:
+async def send_plain(
+    session: AsyncSession,
+    to_address: str,
+    to_name: str,
+    subject: str,
+    message: mailrender.RenderedMail,
+    *,
+    failure: MailFailureReport = MailFailureReport.REPORT,
+) -> bool:
+    """One message about NO single item, through the transport (RADD-983).
+
+    The digest's send, shared with this file because "which relay, and is the
+    outcome reported" is one answer for both of notify's email channels and was
+    two before: the per-event mailer had ridden `send_item_mail` since
+    RADD-968, while the digest still dialled `radd.smtp` off `settings.*` and
+    therefore sent nothing at all on an instance configured only through
+    Settings → Email.
+
+    Itemless because a digest is about ten items — see `send_plain_mail`. The
+    env-relay fallback below is what a disabled mailintake degrades to, exactly
+    as `_send`'s does.
+
+    The CALLER's session goes through, `_send`'s shape and for its reason: the
+    `mail.sent` event belongs in the same transaction as the `emailed_at` stamp
+    it describes. Letting the transport open its own would commit the event
+    while the stamp was still uncommitted — two truths about one message, in the
+    order that makes a rolled-back tick claim to have sent mail.
+    """
+    transport = _mail_transport()
+    if transport is None:
+        return await _send_direct(to_address, to_name, subject, message)
+    return bool(
+        await transport.send_plain_mail(
+            session,
+            to_address=to_address,
+            to_name=to_name,
+            subject=subject,
+            text=message.text,
+            html=message.html,
+            failure=failure,
+        )
+    )
+
+
+async def _send_direct(
+    to_address: str, to_name: str, subject: str, message: mailrender.RenderedMail
+) -> bool:
     """mailintake absent: the env relay, no threading. The digest's posture —
     a message with no conversation is better than no message."""
     if not settings.smtp_host:
@@ -306,13 +357,13 @@ async def _send_direct(user: User, subject: str, message: mailrender.RenderedMai
     try:
         await asyncio.to_thread(
             smtp.send_message,
-            user.email,
+            to_address,
             subject,
             message.text,
-            to_name=user.name,
+            to_name=to_name,
             html_body=message.html,
         )
     except Exception:
-        logger.exception("notify: mail to %s failed", user.email)
+        logger.exception("notify: mail to %s failed", to_address)
         return False
     return True

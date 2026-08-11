@@ -178,13 +178,36 @@ async def test_send_email_resolves_roles_from_the_item(db, admin, project, smtp_
     assert plan.kind == "skip"
 
 
-async def test_send_email_apply_uses_the_smtp_helper(smtp_on):
+async def test_send_email_apply_rides_the_one_transport(db, smtp_on):
+    """RADD-983: the action no longer dials `radd.smtp` itself.
+
+    It went through the environment relay directly, so an instance configured
+    only through Settings → Email (sender ROWS, no `RADD_SMTP_*`) sent nothing
+    and logged nothing. Delivery is `mailintake.service.send_plain_mail` now —
+    rows first, environment as the fallback, and the outcome emitted as
+    `mail.sent`/`mail.failed`. Every relay ROW is disabled below so the env leg
+    is the one that answers — `default_sender` reads the table, not a fixture,
+    and a row some other module committed would otherwise decide which relay
+    this test dials.
+    """
+    from sqlalchemy import update
+
+    from radd.modules.mailintake.models import MailSender
+
+    await db.execute(update(MailSender).values(enabled=False))
+
     plan = await engine._plan(
         None, _send_action("ext@example.com", subject="hello", body="world"), None, None, None,
         **_plan_kwargs(),
     )
-    await engine._apply_plan(None, plan, None, None, rule_name="r")
-    assert smtp_on == [(("ext@example.com", "hello", "world"), {"to_name": ""})]
+    await engine._apply_plan(db, plan, None, None, rule_name="r")
+
+    (args, kwargs), = smtp_on
+    assert args == ("ext@example.com", "hello", "world")
+    assert kwargs["to_name"] == ""
+    # The transport passes a RESOLVED relay rather than letting the helper read
+    # the environment for itself — that indirection is the whole fix.
+    assert kwargs["config"].host == settings.smtp_host
 
 
 # --- KB deflection (resolved-only filter + docs seam) ---

@@ -20,6 +20,19 @@ of the address a conversation arrived at without knowing sources exist.
 That split is what makes notification mail a conversation rather than a
 broadcast: it threads on the item, carries the sender's Reply-To, and a reply
 lands back on the same issue through intake.
+
+**Two entry points since RADD-983, and they differ only in whether there is an
+item.** `send_item_mail` is above; `send_plain_mail` is the same delivery with
+the conversation removed, for the three messages that genuinely have no single
+issue behind them — a notification DIGEST spanning ten of them, and an
+automation `send_email` addressed to a literal address at set arity. They were
+the last senders still dialling `radd.smtp` off the environment, which meant an
+instance configured entirely through Settings → Email (sender ROWS, no
+`RADD_SMTP_*`) sent them nowhere at all: the guard was `settings.smtp_host`, so
+the loop skipped, the cursor advanced, and nothing was logged. Everything that
+makes a send observable — the sender resolution, `mail.sent`/`mail.failed`, the
+"never raise" contract — is shared, because it lives in `_deliver` and both
+entry points are thin wrappers around it.
 """
 
 from __future__ import annotations
@@ -28,6 +41,7 @@ import logging
 import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,9 +49,20 @@ from radd.config import settings
 from radd.db import SessionLocal
 from radd.modules.events import service as events
 
+from radd.clock import utcnow
+
 from . import registry, senders, threading
 from .providers import OutboundMessage
-from .types import MailDirection, MailEntity, MailEvent, MailSenderKind
+from .types import (
+    MAIL_ERROR_MAX_CHARS,
+    MAIL_HEALTH_SCAN_LIMIT,
+    MAIL_HEALTH_WINDOW_HOURS,
+    MailDirection,
+    MailEntity,
+    MailEvent,
+    MailFailureReport,
+    MailSenderKind,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -204,7 +229,7 @@ async def send_item_mail(
     html: str = "",
     comment_id: uuid.UUID | None = None,
     pin_subject: bool = False,
-    emit_failure: bool = True,
+    failure: MailFailureReport = MailFailureReport.REPORT,
 ) -> str | None:
     """Mail one person about one issue. Returns the Message-ID that went on the
     wire, or None when nothing was sent (no relay, no address, a failure).
@@ -232,23 +257,21 @@ async def send_item_mail(
     never got it" being only a log line is what made it invisible to every
     screen and every rule (RADD-960).
 
-    **`emit_failure=False` suppresses that event for one send** (RADD-997), and
-    exactly one caller passes it: notify's mailer, on the attempts BETWEEN the
-    first failure and the last. The default answers for everyone else, and it is
-    the right default — a reply and an ack are each sent once, so their failure
-    is final the moment it happens and the event is the only record of it. A
-    RETRYING caller is the different case: `mail.failed` is item-scoped and
-    drives automations and the activity feed, i.e. it answers "did this person
-    hear from us", and re-answering it every five seconds while the same message
-    is still being attempted is noise in a stream every consumer reads. The
-    knob is here rather than a rule inside `_emit_outcome` because whether
-    another attempt is coming is the caller's knowledge, not this file's.
+    **`failure` says what a delivery failure MEANS to the caller** (RADD-997,
+    widened to three answers by RADD-1036 — see `MailFailureReport`), and
+    exactly one caller passes it: notify's mailer, which runs a retry ladder.
+    The default answers for everyone else, and it is the right default — a
+    reply and an ack are each sent once, so their failure is final the moment it
+    happens and the event is the only record of it. A RETRYING caller is the
+    different case: `mail.failed` is item-scoped and drives automations and the
+    activity feed, i.e. it answers "did this person hear from us", and
+    re-answering it every five seconds while the same message is still being
+    attempted is noise in a stream every consumer reads. The knob is here rather
+    than a rule inside `_emit_outcome` because whether another attempt is coming
+    is the caller's knowledge, not this file's.
 
-    The recorded id is the one the SENDER REPORTS (`MailSender.send`'s return
-    value), not the one composed: SMTP honours a client-set id and the Gmail API
-    replaces it, and storing an intended value the provider did not use makes
-    every reply arrive unthreaded — days later, at a customer, with nothing
-    raised anywhere.
+    Delivery itself, and what is recorded about it, is `_deliver` — shared with
+    `send_plain_mail`.
     """
     if not to_address:
         return None
@@ -261,62 +284,279 @@ async def send_item_mail(
         headers, subject = await _thread_headers(
             db, item_id, row=row, subject=subject, pin_subject=pin_subject
         )
-        try:
-            sent = await sender.send(
-                OutboundMessage(
-                    to_address=to_address,
-                    to_name=to_name,
-                    subject=subject,
-                    body=text,
-                    html_body=html,
-                    headers=headers,
-                )
-            )
-        except Exception:
-            logger.exception(
-                "mailintake: mail to %s about %s failed (dropped)", to_address, item_id
-            )
-            if emit_failure:
-                await _emit_outcome(db, item_id, MailEvent.FAILED, to_address, subject)
+        return await _deliver(
+            db,
+            sender=sender,
+            item_id=item_id,
+            to_address=to_address,
+            to_name=to_name,
+            subject=subject,
+            text=text,
+            html=html,
+            headers=headers,
+            comment_id=comment_id,
+            failure=failure,
+        )
+
+
+async def send_plain_mail(
+    session: AsyncSession | None = None,
+    *,
+    to_address: str,
+    to_name: str = "",
+    subject: str,
+    text: str,
+    html: str = "",
+    failure: MailFailureReport = MailFailureReport.REPORT,
+) -> str | None:
+    """Mail one person about NO issue in particular (RADD-983). Returns the
+    Message-ID that went on the wire, or None when nothing was sent.
+
+    The sibling of `send_item_mail`, and deliberately not a special case of it:
+    a notification digest is about ten items and an automation's `send_email`
+    at set arity is about none, so there is no item to thread on, no stored
+    thread subject to prefer, and nothing to record in the message store. What
+    it DOES share is everything that made those two senders invisible while
+    they dialled `radd.smtp` themselves — the sender resolution (the default
+    `mail_senders` row, environment relay as the fallback) and the
+    `mail.sent`/`mail.failed` events.
+
+    Those events are emitted with **no item subject**, the shape `mail.dropped`
+    has always had: `mail.dropped` is not item-scoped "because by definition
+    there is no item", and the same is true here. Automations is unaffected —
+    `mail.sent`/`mail.failed` are declared `item_scoped`, so `apply_event`
+    resolves no target and skips before any rule can act on one.
+
+    **No Reply-To.** `send_item_mail` sets one because a reply belongs on the
+    conversation it answers; a digest has no conversation, and pointing its
+    Reply-To at the intake address would turn "reply to me about that comment"
+    into a brand-new ticket in whatever project the source defaults to.
+
+    Never raises, for `send_item_mail`'s reason: a loop mailing a list must not
+    lose the rest of it to one unreachable address.
+    """
+    if not to_address:
+        return None
+    async with _session(session) as db:
+        sender, _row = await _sender(db)
+        if sender is None:
             return None
-        if sent:
-            await threading.record(
-                db,
-                message_id=sent,
-                item_id=item_id,
-                direction=MailDirection.OUTBOUND,
+        return await _deliver(
+            db,
+            sender=sender,
+            item_id=None,
+            to_address=to_address,
+            to_name=to_name,
+            subject=subject,
+            text=text,
+            html=html,
+            headers={},
+            comment_id=None,
+            failure=failure,
+        )
+
+
+async def _deliver(
+    session: AsyncSession,
+    *,
+    sender,
+    item_id: uuid.UUID | None,
+    to_address: str,
+    to_name: str,
+    subject: str,
+    text: str,
+    html: str,
+    headers: dict[str, str],
+    comment_id: uuid.UUID | None,
+    failure: MailFailureReport,
+) -> str | None:
+    """One message onto one relay, and the report of what happened to it.
+
+    The whole of what the two entry points have in common, which is why it is a
+    function rather than a duplicated try/except: "never raises", "the recorded
+    id is the one the SENDER REPORTS", and "the outcome is an event, not only a
+    log line" are properties of the CHANNEL, and a second copy of them is a
+    second copy that drifts.
+
+    The recorded id is the sender's return value, not the one composed: SMTP
+    honours a client-set id and the Gmail API replaces it, and storing an
+    intended value the provider did not use makes every reply arrive
+    unthreaded — days later, at a customer, with nothing raised anywhere.
+    """
+    try:
+        sent = await sender.send(
+            OutboundMessage(
+                to_address=to_address,
+                to_name=to_name,
                 subject=subject,
-                comment_id=comment_id,
+                body=text,
+                html_body=html,
+                headers=headers,
             )
-        await _emit_outcome(db, item_id, MailEvent.SENT, to_address, subject)
-        return sent
+        )
+    except Exception as exc:
+        logger.exception(
+            "mailintake: mail to %s about %s failed (dropped)", to_address, item_id or "—"
+        )
+        if failure is not MailFailureReport.SILENT:
+            await _emit_outcome(
+                session,
+                item_id,
+                MailEvent.FAILED,
+                to_address,
+                subject,
+                error=_error_text(exc),
+                given_up=failure is MailFailureReport.TERMINAL,
+            )
+        return None
+    if sent and item_id is not None:
+        await threading.record(
+            session,
+            message_id=sent,
+            item_id=item_id,
+            direction=MailDirection.OUTBOUND,
+            subject=subject,
+            comment_id=comment_id,
+        )
+    await _emit_outcome(session, item_id, MailEvent.SENT, to_address, subject)
+    return sent
+
+
+def _error_text(exc: BaseException) -> str:
+    """What went wrong, in one line an operator can act on (RADD-1036).
+
+    The class name is kept beside the message because half of these carry no
+    message at all — `smtplib.SMTPServerDisconnected()` stringifies to the empty
+    string, and "delivery failed: " on the monitoring card is the failure this
+    whole card exists to end.
+    """
+    return f"{type(exc).__name__}: {exc}".strip()[:MAIL_ERROR_MAX_CHARS]
 
 
 async def _emit_outcome(
     session: AsyncSession,
-    item_id: uuid.UUID,
+    item_id: uuid.UUID | None,
     event_type: MailEvent,
     address: str,
     subject: str,
+    *,
+    error: str = "",
+    given_up: bool = False,
 ) -> None:
-    """Report what the channel did (RADD-960). Item-scoped, so a rule can flag
-    the ticket — the whole point of emitting rather than logging harder.
+    """Report what the channel did (RADD-960). Item-scoped where there IS an
+    item, so a rule can flag the ticket — the whole point of emitting rather
+    than logging harder.
 
     One event per MESSAGE (it was one per fan-out batch), because a fan-out is
     now several independent sends that can succeed and fail separately. The
     payload keeps its shape — `recipients` is a one-element list — so no rule
     written against `mail.sent` has to change.
+
+    `item_id` is None for the itemless senders (RADD-983); the event then takes
+    a synthetic entity id and names no subject, exactly as `mail.dropped` does.
+
+    `error` and `given_up` ride only failures (RADD-1036). `given_up` is what
+    separates "the relay blipped and the next attempt worked" from "the ladder
+    ran out and this person will never hear from us" — the number Settings →
+    Monitoring shows in red.
     """
+    payload: dict[str, object] = {
+        "recipients": [address],
+        "recipient_count": 1,
+        "subject": subject,
+        # No body, for the reason in intake._mail_facts.
+    }
+    if event_type is MailEvent.FAILED:
+        payload["error"] = error
+        payload["given_up"] = given_up
     await events.emit(
         session,
         event_type=event_type,
         entity_type=MailEntity.MAIL,
-        entity_id=item_id,
-        subjects={"item": item_id},
-        payload={
-            "recipients": [address],
-            "recipient_count": 1,
-            "subject": subject,
-            # No body, for the reason in intake._mail_facts.
-        },
+        # A synthetic id rather than a nullable column: `entity_id` is the
+        # events table's addressing, and an itemless mail event still needs to
+        # be one row you can name.
+        entity_id=item_id or uuid.uuid4(),
+        subjects={"item": item_id} if item_id is not None else None,
+        payload=payload,
+    )
+
+
+# --- mail health (RADD-1036) --------------------------------------------------
+
+
+@dataclass(frozen=True)
+class MailFailure:
+    """One failed message, as an operator reads it."""
+
+    at: datetime
+    recipient: str
+    subject: str
+    error: str
+    #: The retry ladder ran out on this one — nobody is going to hear from us.
+    given_up: bool
+
+
+@dataclass(frozen=True)
+class MailHealth:
+    """What outbound mail did over the last `window_hours` (RADD-1036).
+
+    Terminally-failed mail used to be invisible: notify's ladder stamps the row
+    `emailed_at` when it gives up and exactly two `mail.failed` events exist,
+    and nothing aggregated them — so "the customer never got it" was a fact only
+    a hand-written SELECT over the events table could tell you.
+
+    The aggregation lives HERE, beside `_emit_outcome`, because the payload
+    shape is this file's and a second reader that re-states it is a reader that
+    drifts. Monitoring composes it through the public seam without learning
+    either the event type or the payload keys.
+    """
+
+    window_hours: int
+    failures: int
+    given_up: int
+    #: True when `failures` hit `MAIL_HEALTH_SCAN_LIMIT` — the count is a floor.
+    capped: bool
+    recent: tuple[MailFailure, ...]
+
+
+async def mail_health(
+    session: AsyncSession,
+    *,
+    window_hours: int = MAIL_HEALTH_WINDOW_HOURS,
+    recent: int = 5,
+) -> MailHealth:
+    """Outbound failures in the recent past, newest first.
+
+    Read through `events.query_events` rather than a hand-written select: the
+    events table belongs to the events module, and its filtered read is already
+    the public seam the admin audit view uses.
+    """
+    rows = await events.query_events(
+        session,
+        event_types=[MailEvent.FAILED.value],
+        start=utcnow() - timedelta(hours=window_hours),
+        limit=MAIL_HEALTH_SCAN_LIMIT,
+    )
+    failures = tuple(_failure(row) for row in rows)
+    return MailHealth(
+        window_hours=window_hours,
+        failures=len(failures),
+        given_up=sum(1 for failure in failures if failure.given_up),
+        capped=len(failures) >= MAIL_HEALTH_SCAN_LIMIT,
+        recent=failures[:recent],
+    )
+
+
+def _failure(event) -> MailFailure:
+    payload = event.payload or {}
+    recipients = payload.get("recipients") or []
+    return MailFailure(
+        at=event.created_at,
+        recipient=str(recipients[0]) if recipients else "",
+        subject=str(payload.get("subject") or ""),
+        # A row written before RADD-1036 carries no `error` key, and an empty
+        # string reads better on the card than the word "None".
+        error=str(payload.get("error") or ""),
+        given_up=bool(payload.get("given_up")),
     )

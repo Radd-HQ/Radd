@@ -24,7 +24,6 @@ condition_matches, should_process, ...` (real callers: `router.py`,
 `dispatcher.py`, and several tests) is unaffected.
 """
 
-import asyncio
 import hashlib
 import hmac
 import json
@@ -35,7 +34,6 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd import smtp
 from radd.config import settings
 from radd.db import SessionLocal
 from radd.modules.auth.models import User
@@ -86,6 +84,56 @@ from .types import (
 logger = logging.getLogger(__name__)
 
 
+async def _send_email(
+    session: AsyncSession, to_address: str, to_name: str, subject: str, body: str
+) -> None:
+    """The send_email action's delivery, through the ONE transport (RADD-983).
+
+    It used to dial `radd.smtp` off the environment, which made it the third
+    sender that a rows-only instance — Settings → Email configured, no
+    `RADD_SMTP_*` — silently never sent from. `mailintake.service` resolves the
+    default sender ROW first and falls back to the environment relay, so both
+    shapes work and neither needs a branch here.
+
+    Itemless on purpose. The action's `to` may be a literal address at SET
+    arity, i.e. about no single issue, and the rendered subject and body are
+    already the caller's own — so there is no conversation to thread onto and
+    `send_plain_mail` is the right half of the transport. (A per-item run to a
+    role is still itemless mail: the message is the rule's text, not a reply on
+    the ticket's thread, and threading it would file an unrelated announcement
+    into the customer's conversation.)
+
+    **Loop safety is unchanged and is now load-bearing.** The comment this
+    replaces read "nothing is emitted — inherently loop-safe", and that stopped
+    being true the moment the transport started emitting `mail.sent`/
+    `mail.failed`, which ARE automation triggers. What holds is
+    `executor._one`: `_apply_plan` runs inside `with events.automated()`, so
+    every event this send emits is marked automation-caused and
+    `planning.should_process` rejects it. A rule triggered on "Email sent"
+    therefore cannot be fired by an automation's own email.
+
+    Reached DEFERRED and feature-detected — mailintake is optional and
+    disableable, the shape `email_action.py` uses for the `contact` role. With
+    the module absent the send is skip-logged rather than crashing the branch;
+    it is not silently swallowed, because a rule that stopped emailing with no
+    trace is exactly the failure this issue is about.
+    """
+    from .email_action import mailintake_service
+
+    mail_service = mailintake_service()
+    if mail_service is None:
+        logger.info(
+            "automations: send_email to %s skipped — the mailintake module is not loaded",
+            to_address,
+        )
+        return
+    sent = await mail_service.send_plain_mail(
+        session, to_address=to_address, to_name=to_name, subject=subject, text=body
+    )
+    if sent is None:
+        logger.warning("automations: send_email to %s was not delivered", to_address)
+
+
 def _signed_headers(body_bytes: bytes, secret: str) -> dict[str, str]:
     headers = {"content-type": "application/json"}
     if secret:
@@ -124,9 +172,8 @@ async def _apply_plan(
             )
             response.raise_for_status()
     elif plan.kind is PlanKind.EMAIL and plan.email is not None:
-        # Sync smtplib off the loop; nothing is emitted — inherently loop-safe.
         to_address, to_name, subject, body = plan.email
-        await asyncio.to_thread(smtp.send_message, to_address, subject, body, to_name=to_name)
+        await _send_email(session, to_address, to_name, subject, body)
     elif plan.kind is PlanKind.NOTIFY and plan.notify is not None:
         user_id, message = plan.notify
         await notify_service.create_notification(

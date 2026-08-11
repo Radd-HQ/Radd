@@ -2,11 +2,15 @@
 
 The `to` param is a literal address unless it names an `EmailRecipient` role.
 Roles need the event's target item: reporter/assignee resolve to that user's
-email when the account is ACTIVE (the csat-sender idiom); `contact` goes
-through the spec-62 mailintake seam — a DEFERRED, feature-detected import
-(mailintake loads after automations in RADD_MODULES; module disabled = the
-role never resolves). None = the engine skip-logs, same as item actions on
-itemless events.
+email when the account is one a person reads; `contact` goes through the
+spec-62 mailintake seam — a DEFERRED, feature-detected import (mailintake loads
+after automations in RADD_MODULES; module disabled = the role never resolves).
+None = the engine skip-logs, same as item actions on itemless events.
+
+`mailintake_service` is public because the ENGINE needs the same seam since
+RADD-983: the action's delivery goes through `send_plain_mail` now, and one
+feature-detection is better than two that can disagree about whether the module
+is there.
 """
 
 import uuid
@@ -16,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
 from radd.modules.auth import service as auth_service
+from radd.modules.auth.models import User
 from radd.modules.items.models import WorkItem
 
 from .types import EmailRecipient
@@ -23,12 +28,34 @@ from .types import EmailRecipient
 MAILINTAKE_MODULE = "radd.modules.mailintake"
 
 
-def _mailintake() -> ModuleType | None:
+def mailintake_service() -> ModuleType | None:
+    """mailintake's public seam, or None when the module is not loaded."""
     if MAILINTAKE_MODULE not in settings.modules:
         return None
     from radd.modules.mailintake import service as mail_service
 
     return mail_service
+
+
+def _mailable(user: User | None) -> bool:
+    """Is this account a mailbox a person reads? (RADD-983)
+
+    Asked through the mail module, which states the rule once
+    (`mailintake.service.mailable_user`): inactive, address-less, a spec-113
+    SERVICE account, or the system actor — none of them somebody to email. The
+    check here was `user.active` alone, so an automation addressed to
+    `reporter` cheerfully mailed `automation@radd.system` on every item mail
+    intake had created, and a service account's address on every item a key had
+    filed. Both bounce, and a bouncing relay is what got rate-limited.
+
+    Degrades to the old check when mailintake is absent rather than carrying a
+    second copy of the rule: without that module the engine cannot send at all,
+    so the strictness of a predicate on a path that skip-logs is moot.
+    """
+    mail_service = mailintake_service()
+    if mail_service is not None:
+        return bool(mail_service.mailable_user(user))
+    return user is not None and user.active and bool(user.email)
 
 
 async def _active_user_email(
@@ -37,7 +64,7 @@ async def _active_user_email(
     if user_id is None:
         return None
     user = (await auth_service.users_by_ids(session, [user_id])).get(user_id)
-    if user is None or not user.active:
+    if not _mailable(user):
         return None
     return user.email, user.name
 
@@ -94,7 +121,7 @@ async def resolve_recipient(
         case EmailRecipient.ASSIGNEE:
             return await _active_user_email(session, item.assignee_id)
         case EmailRecipient.CONTACT:
-            mail_service = _mailintake()
+            mail_service = mailintake_service()
             if mail_service is None:
                 return None
             contact = await mail_service.contact_for_item(session, item.id)

@@ -1,7 +1,15 @@
 """Email digests: one email per user batching their unemailed notifications.
 
-Sends through the shared `radd.smtp` helper in a thread — no new dependency; an
-empty RADD_SMTP_HOST (the default) disables the loop entirely.
+**Sends through the ONE transport since RADD-983** (`mailer.send_plain`, i.e.
+`mailintake.service.send_plain_mail`, with the env relay as the fallback when
+that module is not loaded). It used to dial `radd.smtp` itself and gate on
+`settings.smtp_host`, which meant an instance configured entirely through
+Settings → Email — sender ROWS, no `RADD_SMTP_*` — never sent a digest and said
+nothing about it. Now the gate is `outbound_configured` (rows OR env) and every
+failure is a `mail.failed` event as well as a log line.
+
+The digest is deliberately the ITEMLESS half of the transport: it is about ten
+issues, so there is nothing to thread it onto.
 
 **What a line SAYS is `lines.py`; what it LOOKS like is `radd.mailrender`.** The
 vocabulary used to live here (RADD-967 gave all nine types their own sentence,
@@ -17,7 +25,6 @@ query. Everything else lands here — which is what makes "inbox only, digest me
 a real answer rather than silence.
 """
 
-import asyncio
 import logging
 import uuid
 from collections import defaultdict
@@ -26,28 +33,18 @@ from datetime import timedelta
 from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd import mailrender, smtp
+from radd import mailrender
 from radd.config import settings
 from radd.db import SessionLocal
 from radd.modules.auth import service as auth
 
-from . import lines, retry, service
+from . import lines, mailer, retry, service
 from .models import Notification
 from radd.clock import utcnow
 
 logger = logging.getLogger(__name__)
 
 DIGEST_SUBJECT_TEMPLATE = "[Radd] {count} new notification{plural}"
-
-
-def _send_digest(to_address: str, to_name: str, message: mailrender.RenderedMail, count: int) -> None:
-    smtp.send_message(
-        to_address,
-        DIGEST_SUBJECT_TEMPLATE.format(count=count, plural="" if count == 1 else "s"),
-        message.text,
-        to_name=to_name,
-        html_body=message.html,
-    )
 
 
 def compose(notifications: list[Notification], actor_names: dict[uuid.UUID, str]) -> mailrender.RenderedMail:
@@ -77,7 +74,10 @@ async def run_batch(session: AsyncSession) -> int:
     Until RADD-996 this loop had no end-to-end test at all — which is how it went
     on mailing service accounts beside the mailer.
     """
-    if not settings.smtp_host:
+    if not await mailer.can_send(session):
+        # Rows OR env (RADD-983) — `settings.smtp_host` alone silenced every
+        # digest on an instance configured through Settings → Email. Asked once
+        # per tick, like the mailer's, because resolving the sender is a query.
         return 0
     now = utcnow()
     cutoff = now - timedelta(hours=settings.notify_email_max_age_hours)
@@ -118,19 +118,34 @@ async def run_batch(session: AsyncSession) -> int:
         # actor — still get their rows stamped below (the backlog drains).
         if user_id not in digest_off and service.mailable_user(user) and pending:
             message = compose(pending, actor_names)
-            try:
-                await asyncio.to_thread(
-                    _send_digest, user.email, user.name, message, len(pending)
-                )
+            delivered = await mailer.send_plain(
+                session,
+                user.email,
+                user.name,
+                DIGEST_SUBJECT_TEMPLATE.format(
+                    count=len(pending), plural="" if len(pending) == 1 else "s"
+                ),
+                message,
+                # The mailer's report policy, applied to a batch: the FRESHEST
+                # row decides, so the first failure is reported, the retries in
+                # between are silent, and the tick that exhausts every row's
+                # ladder is the one marked given-up.
+                failure=retry.failure_report(min(row.email_attempts for row in pending)),
+            )
+            if delivered:
                 sent += 1
-            except Exception:
-                logger.exception("notify: digest send to %s failed", user.email)
+            else:
+                logger.warning("notify: digest send to %s failed", user.email)
                 # RADD-997: not "retried next interval" any more. This loop is
                 # gentler than the mailer (300s, one message per user rather
                 # than per row) but its retry was equally unbounded, so it takes
                 # the same ladder — and the same terminal stamp, which is the
                 # only thing that stops an undeliverable address being dialled
                 # every five minutes for a day.
+                #
+                # The failure arrives as a False rather than an exception now
+                # (RADD-983): the transport never raises, so one unreachable
+                # address cannot cost the rest of the batch its digests.
                 for row in pending:
                     if retry.record_failure(row, now):
                         row.emailed_at = now
