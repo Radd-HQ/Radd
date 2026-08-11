@@ -80,6 +80,8 @@ function defaultParams(type: ActionTypeValue): Record<string, CustomFieldValue> 
       return { priority: Priority.normal };
     case ActionType.setAssignee:
       return { assignee: "" };
+    case ActionType.assignRoundRobin:
+      return { team: "" };
     case ActionType.setTeam:
       return { team: "" };
     case ActionType.addLabel:
@@ -120,6 +122,8 @@ export function isActionValid(action: RuleAction): boolean {
       return filled(p.priority);
     case ActionType.setAssignee:
       return filled(p.assignee);
+    case ActionType.assignRoundRobin:
+      return filled(p.team);
     case ActionType.setTeam:
       return filled(p.team);
     case ActionType.addLabel:

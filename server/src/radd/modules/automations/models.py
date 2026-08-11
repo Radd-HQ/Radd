@@ -81,6 +81,35 @@ class TriggerBinding(Base):
     schedule: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
 
+class TeamAssignmentCursor(Base):
+    """Round-robin position for the `assign_round_robin` action (RADD-1044).
+
+    ONE row per TEAM, not per rule or per automation: the point of round-robin is
+    fair distribution across the team, so two rules that both assign from the same
+    team must share the rotation — a per-rule cursor would let each restart it and
+    pile work on the first member. Engine state kept apart from user data, the same
+    shape AutomationScheduleState and sla_item_states use.
+
+    `last_assigned_user_id` is the member the last SUCCESSFUL assignment landed on
+    (advanced inside the same SAVEPOINT as the assignment, so a rolled-back apply
+    does not move the rotation). The next pick is the first eligible member ordered
+    after it by user id, wrapping — see `round_robin.pick_next`.
+
+    Nullable + SET NULL on user delete: a departed cursor-holder simply means the
+    next pick starts from the top of the rotation, which is the right answer, not
+    an error. CASCADE on the team: the rotation is meaningless once the team is gone.
+    """
+
+    __tablename__ = "team_assignment_cursors"
+
+    team_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("teams.id", ondelete="CASCADE"), primary_key=True
+    )
+    last_assigned_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+
 class AutomationScheduleState(Base):
     """Scheduler bookkeeping per scheduled TRIGGER (spec 69, re-keyed by spec 116)
     — mirrors the sla_item_states pattern: engine state kept apart from user data.

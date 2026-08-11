@@ -46,7 +46,7 @@ from radd.modules.notify import service as notify_service
 from radd.modules.projects.models import Project
 from radd.modules.notify.types import NotificationType
 
-from . import catalog, conditions, executor, search, service
+from . import catalog, conditions, executor, round_robin, search, service
 from .graph import GraphError, Packet
 from .models import Automation
 from .planning import (
@@ -156,6 +156,12 @@ async def _apply_plan(
     be discarded, so the new issue was unreachable from the rest of the graph."""
     if plan.kind is PlanKind.ITEM_UPDATE and plan.item_update is not None and item is not None:
         await items.update_item(session, item.id, plan.item_update, actor=system_user)
+        # assign_round_robin advances its team's rotation ONLY on a successful
+        # assignment, inside the same SAVEPOINT (`_one`/`_run_contributed_action`
+        # wrap this call) — so a rolled-back apply does not move the cursor, and
+        # the next item in a per-item run sees the advance.
+        if plan.cursor_advance is not None:
+            await round_robin.advance_cursor(session, *plan.cursor_advance)
     elif plan.kind is PlanKind.COMMENT and plan.comment is not None and item is not None:
         await comments.create_comment(session, item.id, plan.comment, actor=system_user)
     elif plan.kind is PlanKind.CREATE_ITEM and plan.item_create is not None:

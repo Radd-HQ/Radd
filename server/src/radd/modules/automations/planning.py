@@ -51,7 +51,7 @@ from radd.modules.releases import service as releases_service
 from radd.modules.teams import service as teams_service
 from radd.modules.workflow import service as workflow
 
-from . import catalog, conditions
+from . import catalog, conditions, round_robin
 from .email_action import is_role, resolve_recipient, resolve_user
 from .templating import render_template
 from .types import (
@@ -180,6 +180,10 @@ class _Plan:
     notify: tuple[uuid.UUID, str] | None = None
     # (to_address, to_name, subject, body) for send_email (spec 66).
     email: tuple[str, str, str, str] | None = None
+    # (team_id, assigned_user_id) for assign_round_robin (RADD-1044): applied
+    # ALONGSIDE the item_update, so the rotation advances in the same SAVEPOINT as
+    # the assignment it describes. Read-only here — the write is `_apply_plan`'s.
+    cursor_advance: tuple[uuid.UUID, uuid.UUID] | None = None
 
 
 def _manual_facts() -> conditions.EventFacts:
@@ -467,6 +471,27 @@ async def _plan(
             if user is None:
                 return _Plan(PlanKind.SKIP, f"set_assignee: no user {email!r}")
             return _Plan(PlanKind.ITEM_UPDATE, f"set_assignee -> {email}", ItemUpdate(assignee_id=user.id))
+        case ActionType.ASSIGN_ROUND_ROBIN:
+            name = params["team"]
+            team = await _team_by_name(session, name)
+            if team is None:
+                return _Plan(PlanKind.SKIP, f"assign_round_robin: no team {name!r}")
+            chosen = await round_robin.pick_next(session, team)
+            if chosen is None:
+                # Every member is inactive or away (or the team is empty): leave the
+                # item unassigned rather than clearing whoever it had, and do NOT
+                # advance the cursor — nothing was assigned to advance past.
+                return _Plan(
+                    PlanKind.SKIP,
+                    f"assign_round_robin: no eligible member in team {name!r} "
+                    "(all inactive or away)",
+                )
+            return _Plan(
+                PlanKind.ITEM_UPDATE,
+                f"assign_round_robin -> {name!r}",
+                ItemUpdate(assignee_id=chosen),
+                cursor_advance=(team.id, chosen),
+            )
         case ActionType.SET_TEAM:
             name = params["team"]
             if _is_clear(name):

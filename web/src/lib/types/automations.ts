@@ -144,6 +144,9 @@ export const ActionType = {
   setState: "set_state",
   setPriority: "set_priority",
   setAssignee: "set_assignee",
+  // Round-robin distribution across a team (RADD-1044). Always per-item — "the
+  // next member" is a property of one issue — so the server fixes its arity.
+  assignRoundRobin: "assign_round_robin",
   setTeam: "set_team",
   addLabel: "add_label",
   removeLabel: "remove_label",

@@ -86,6 +86,24 @@ export function ActionParams({ action, pickers, listId, onParams }: ActionParams
           ))}
         </SelectField>
       );
+    case ActionType.assignRoundRobin:
+      // No clear option and no arity control: this always runs per item (the
+      // server fixes it), and "assign to nobody, round-robin" is not a thing.
+      return (
+        <SelectField
+          label="Round-robin across team"
+          value={str(p.team)}
+          hint="Each item goes to the next member in turn, skipping anyone inactive or away."
+          onChange={(event) => set({ team: event.target.value })}
+        >
+          <option value="">Select…</option>
+          {pickers.teamNames.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </SelectField>
+      );
     case ActionType.addLabel:
     case ActionType.removeLabel:
       return (

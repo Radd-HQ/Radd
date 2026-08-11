@@ -81,6 +81,13 @@ class SetAssigneeParams(BaseModel):
     assignee: str = Field(min_length=1)  # user email, or the literal "none" to clear
 
 
+class AssignRoundRobinParams(BaseModel):
+    # Team NAME whose members the assignment rotates through (RADD-1044). Resolved
+    # at apply time like every other named target, so it keeps working when the
+    # team is recreated; an unresolvable name skip-logs rather than failing.
+    team: str = Field(min_length=1)
+
+
 class SetTeamParams(BaseModel):
     team: str = Field(min_length=1)  # team name, or "none" to clear
 
@@ -208,6 +215,11 @@ class SetAssigneeAction(BaseModel):
     params: SetAssigneeParams
 
 
+class AssignRoundRobinAction(BaseModel):
+    type: Literal[ActionType.ASSIGN_ROUND_ROBIN]
+    params: AssignRoundRobinParams
+
+
 class SetTeamAction(BaseModel):
     type: Literal[ActionType.SET_TEAM]
     params: SetTeamParams
@@ -272,6 +284,7 @@ Action = Annotated[
     SetStateAction
     | SetPriorityAction
     | SetAssigneeAction
+    | AssignRoundRobinAction
     | SetTeamAction
     | AddLabelAction
     | RemoveLabelAction

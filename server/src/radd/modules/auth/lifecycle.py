@@ -112,6 +112,13 @@ _MERGE_REPOINT: tuple[tuple[str, str], ...] = (
     # two identities from one provider is legal and correct — it just means the
     # person had two accounts there, and now both open the same Radd user.
     #
+    # RADD-1044: the round-robin cursor points at whoever got the last ticket.
+    # A merge asserts one person, so the cursor follows them — the next pick then
+    # falls after the survivor, preserving the rotation position. The column is ON
+    # DELETE SET NULL (a delete resets that team's rotation, which is harmless
+    # transient state), but a merge should not blank it. No dedupe: team_id is the
+    # unique key, not the user, so repointing can never collide.
+    ("team_assignment_cursors", "last_assigned_user_id"),
     # MERGE ONLY (RADD-783). `delete_user` shares this list and must NOT repoint
     # identities: a merge says "these two are one person", a delete says "this
     # person is gone, give their work to someone else" — and handing over the

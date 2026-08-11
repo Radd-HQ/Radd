@@ -65,6 +65,11 @@ class ActionType(StrEnum):
     SET_STATE = "set_state"
     SET_PRIORITY = "set_priority"
     SET_ASSIGNEE = "set_assignee"
+    #: Assign the next member of a named team, round-robin, skipping inactive and
+    #: away accounts (RADD-1044). Item-arity like SET_ASSIGNEE — "the next
+    #: member" is a per-item choice, so a set reading would pile a whole batch on
+    #: one person, which is the opposite of distributing it.
+    ASSIGN_ROUND_ROBIN = "assign_round_robin"
     SET_TEAM = "set_team"
     ADD_LABEL = "add_label"
     REMOVE_LABEL = "remove_label"
@@ -148,6 +153,13 @@ ACTION_ARITY_DEFAULT: dict[ActionType, NodeArity] = {
     ActionType.SET_STATE: NodeArity.ITEM,
     ActionType.SET_PRIORITY: NodeArity.ITEM,
     ActionType.SET_ASSIGNEE: NodeArity.ITEM,
+    # Fixed ITEM and NOT in ACTION_ARITY_CONFIGURABLE — there is no legitimate
+    # set reading of a round-robin assign, so `_action_arity` gives it
+    # options=(ITEM,) and `_check_arity` refuses a hand-edited `arity=set` row.
+    # This is the STRONGER of the two per-item forcings: unlike the send_email
+    # role (which is set-capable and only forced to item when a role is chosen),
+    # this can never be talked into a skip-log on a set at all.
+    ActionType.ASSIGN_ROUND_ROBIN: NodeArity.ITEM,
     ActionType.SET_TEAM: NodeArity.ITEM,
     ActionType.ADD_LABEL: NodeArity.ITEM,
     ActionType.REMOVE_LABEL: NodeArity.ITEM,

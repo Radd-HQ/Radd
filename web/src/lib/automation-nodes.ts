@@ -45,6 +45,7 @@ function blankActionParams(actionType: string): Record<string, unknown> {
     case "set_state": return { state: "" };
     case "set_priority": return { priority: "normal" };
     case "set_assignee": return { assignee: "" };
+    case "assign_round_robin": return { team: "" };
     case "set_team": return { team: "" };
     case "add_label":
     case "remove_label": return { label: "" };

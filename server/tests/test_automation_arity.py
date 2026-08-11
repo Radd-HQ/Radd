@@ -55,6 +55,9 @@ def test_the_arity_table_reproduces_the_historical_item_action_split():
         ActionType.SET_STATE,
         ActionType.SET_PRIORITY,
         ActionType.SET_ASSIGNEE,
+        # Fixed ITEM like SET_ASSIGNEE — a round-robin assign names the next
+        # member, which only means anything for one item (RADD-1044).
+        ActionType.ASSIGN_ROUND_ROBIN,
         ActionType.SET_TEAM,
         ActionType.ADD_LABEL,
         ActionType.REMOVE_LABEL,
