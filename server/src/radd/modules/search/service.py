@@ -93,12 +93,101 @@ def _scope(stmt: Select, readable: set[uuid.UUID], relation_clause=None) -> Sele
     return stmt
 
 
-# The relation keys mirrored onto search_index (RADD-841) — the ONE place the
-# search module restates what a relation means, over its own columns, because
-# the registered specs are bound to work_items and a mirror exists precisely so
-# search never joins that table. The chain closure (any ⊃ team ⊃ own) is
-# applied via relation_contains, same as the canonical resolvers.
+# The relation keys the index MIRRORS as columns (RADD-841): a relation whose
+# meaning is one of the item's OWN anchors is answered from search_index itself,
+# because a mirror exists precisely so search never joins work_items. Every
+# other registered item relation is compiled from its spec (RADD-1030) — see
+# `_rebind_to_index`; the mirror set is the fast path, not the whole answer.
 _INDEX_RELATION_COLUMNS = ("own", "assigned", "team")
+
+# The table the registered item relations write their where-forms against, and
+# whose primary key `search_index.item_id` mirrors.
+_RELATION_SOURCE_TABLE = "work_items"
+
+#: (relation key) already warned about — one line per key per process, not per
+#: query. RADD-1040's rule, one module over.
+_unmirrorable_warned: set[str] = set()
+
+
+def _rebind_to_index(clause):
+    """A registered item relation's where-form, re-anchored from `work_items.id`
+    onto `search_index.item_id` — or None when that cannot be done (RADD-1030).
+
+    Relations whose membership lives in ANOTHER table (`@participant`, RADD-844)
+    are expressed as `WorkItem.id IN (SELECT … FROM item_participants …)`. Only
+    the anchor names work_items; the predicate itself is about a different table
+    entirely, so swapping the anchor for the mirror's `item_id` yields exactly
+    the same set of item ids without search learning what the relation MEANS.
+    That is why this compiles the REGISTERED spec rather than restating it: the
+    owning plugin stays the single source of truth (participants' RelationSpec
+    covers team-participant rows live, and a change there reaches search for
+    free), and `search` names no plugin, so an unloaded one simply registers
+    nothing.
+
+    A rebound clause still touching `work_items` is REFUSED, not shipped: the
+    d841 mirror rule ("search never joins work_items") is what keeps FTS one
+    index scan, and a column relation like `@own` is already covered above.
+    """
+    from sqlalchemy.sql import visitors
+
+    item_id = SearchIndexRow.item_id.__clause_element__()
+
+    def _replace(element):
+        table = getattr(element, "table", None)
+        if (
+            getattr(table, "name", None) == _RELATION_SOURCE_TABLE
+            and getattr(element, "name", None) == "id"
+        ):
+            return item_id
+        return None
+
+    rebound = visitors.replacement_traverse(clause, {}, _replace)
+    for element in visitors.iterate(rebound, {}):
+        table = getattr(element, "table", None)
+        if getattr(table, "name", None) == _RELATION_SOURCE_TABLE:
+            return None
+    return rebound
+
+
+def _relation_clauses(relation_actor, held: set[str]) -> dict:
+    """`relation key -> clause over search_index` for every relation the actor
+    holds anywhere. The mirror columns are free; everything else registered on
+    the item resource is compiled from ITS OWN spec (`_rebind_to_index`), so a
+    plugin relation reaches search without search naming the plugin."""
+    from sqlalchemy import false
+
+    from radd.kernel import registries
+    from radd.modules.auth.types import relation_contains
+
+    clauses = {
+        "own": SearchIndexRow.reporter_id == relation_actor.user_id,
+        "assigned": SearchIndexRow.assignee_id == relation_actor.user_id,
+        "team": (
+            SearchIndexRow.team_id.in_(relation_actor.team_ids)
+            if relation_actor.team_ids
+            else false()
+        ),
+    }
+    for key, spec in registries.relations_for("item").items():
+        if key in _INDEX_RELATION_COLUMNS:
+            continue  # mirrored above — and cheaper there
+        if not any(relation_contains(outer, key) for outer in held):
+            continue  # this actor could never be covered by it — don't compile
+        rebound = _rebind_to_index(spec.where(relation_actor))
+        if rebound is None:
+            if key not in _unmirrorable_warned:
+                _unmirrorable_warned.add(key)
+                logger.warning(
+                    "search: item relation @%s cannot be compiled over search_index "
+                    "(its where-form reaches %s beyond the id anchor) — search "
+                    "narrows to the relations the mirror carries, so rows it alone "
+                    "would grant are not findable",
+                    key,
+                    _RELATION_SOURCE_TABLE,
+                )
+            continue
+        clauses[key] = rebound
+    return clauses
 
 
 async def _relation_index_clause(session: AsyncSession, user: User):
@@ -117,22 +206,21 @@ async def _relation_index_clause(session: AsyncSession, user: User):
         constrained[pid] = relations
     if not constrained:
         return None
-    from radd.modules.teams import service as teams_service
-
-    my_teams = frozenset(await teams_service.user_team_ids(session, user.id))
-    column_clauses = {
-        "own": SearchIndexRow.reporter_id == user.id,
-        "assigned": SearchIndexRow.assignee_id == user.id,
-        "team": SearchIndexRow.team_id.in_(my_teams) if my_teams else false(),
-    }
+    # The canonical actor (RADD-830 subject graph, memoised) — the same one the
+    # list path hands to `spec.where`, so search cannot resolve "my teams"
+    # differently from the filter it is supposed to agree with.
+    relation_actor = await authz.relation_actor(session, user)
+    held_anywhere = {relation for relations in constrained.values() for relation in relations}
+    clauses = _relation_clauses(relation_actor, held_anywhere)
     arms = []
     unconstrained = [pid for pid in per_project if pid not in constrained]
     if unconstrained:
         arms.append(SearchIndexRow.project_id.in_(unconstrained))
     for pid, relations in constrained.items():
+        # The chain closure (any ⊃ team ⊃ own), same as the canonical resolvers.
         covered = [
-            column_clauses[key]
-            for key in _INDEX_RELATION_COLUMNS
+            clause
+            for key, clause in clauses.items()
             if any(relation_contains(held, key) for held in relations)
         ]
         arms.append(
