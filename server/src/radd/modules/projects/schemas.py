@@ -51,3 +51,15 @@ class ProjectRead(BaseModel):
     # hydrated by the router via auth.authz. Plain strings: projects loads before
     # auth in the module assembly, so schemas here must not import auth.
     permissions: list[str] = Field(default_factory=list)
+    #: RADD-1041 — presentation-only: WHY this row appears in a `GET /projects`
+    #: listing. "entitled" = item.read held by grant (theirs whether or not
+    #: anything is in it); "related" = item.read held only in qualified form
+    #: (own/participant/team) AND a real relationship, e.g. their own filed
+    #: ticket. `None` on `POST /projects`'s response, which has no
+    #: `visible_projects` lookup behind it. Never a filter: the SET of projects
+    #: returned is still exactly `auth.authz.visible_projects` (RADD-937) — this
+    #: only feeds the sidebar's "related projects" preference (RADD-1041) so it
+    #: can hide the related half without the server hiding anything. Plain
+    #: string, not the auth enum (`ProjectVia`): projects loads before auth, so
+    #: this file cannot import it — same reason `permissions` above is `str`.
+    via: str | None = None

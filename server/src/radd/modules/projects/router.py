@@ -102,10 +102,15 @@ async def login_options(session: Session) -> InstanceConfigRead:
     )
 
 
-def _project_read(project: object, permissions: frozenset) -> ProjectRead:
-    """Hydrate the CURRENT user's effective permissions onto the read model."""
+def _project_read(project: object, permissions: frozenset, via: str | None = None) -> ProjectRead:
+    """Hydrate the CURRENT user's effective permissions onto the read model.
+
+    `via` (RADD-1041) is `auth.authz_batch.ProjectVia.value` — "entitled" or
+    "related" — carried straight from `visible_projects`'s own split, never
+    recomputed here. `create_project` has no `visible_projects` lookup behind
+    its response, so it passes none."""
     read = ProjectRead.model_validate(project)
-    return read.model_copy(update={"permissions": sorted(permissions)})
+    return read.model_copy(update={"permissions": sorted(permissions), "via": via})
 
 
 @project_router.post("", response_model=ProjectRead, status_code=201)
@@ -127,6 +132,15 @@ async def list_projects(session: Session, user: CurrentUser) -> list[ProjectRead
     # instance. Reachability is still the right gate everywhere it is used to
     # SCOPE rows — your own items must keep surfacing wherever they are — it is
     # only wrong as the answer to "which projects are yours".
+    #
+    # RADD-1041: each row also carries WHY (`ProjectVisibility.via`), reusing
+    # visible_projects' own entitled/related split rather than recomputing it —
+    # presentation metadata for the sidebar's "related projects" preference.
+    # The SET of projects returned is unchanged from RADD-937: `per_project`'s
+    # keys are exactly what they were before `via` existed.
     per_project = await authz.visible_projects(session, user)
     projects = [p for p in await service.list_projects(session) if p.id in per_project]
-    return [_project_read(p, per_project[p.id]) for p in projects]
+    return [
+        _project_read(p, per_project[p.id].permissions, via=per_project[p.id].via.value)
+        for p in projects
+    ]

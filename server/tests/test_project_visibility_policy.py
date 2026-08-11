@@ -35,7 +35,7 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings as config
-from radd.modules.auth import authz, roles as auth_roles
+from radd.modules.auth import authz, authz_batch, roles as auth_roles
 from radd.modules.auth.models import GlobalRoleGrant, User
 from radd.modules.auth.types import BuiltinRoleKey, InstanceRole, Permission
 from radd.modules.items import service as items
@@ -179,6 +179,9 @@ async def test_a_relationship_makes_one_project_visible_and_not_the_rest(db):
     assert theirs.id not in visible, (
         "a project they have nothing in must not be — this is the 97-projects bug"
     )
+    # RADD-1041: this is exactly the RELATED half — qualified read + a real
+    # relationship, no grant.
+    assert visible[mine.id].via == authz_batch.ProjectVia.RELATED
 
 
 async def test_no_relationship_and_no_grant_sees_nothing(db):
@@ -202,7 +205,9 @@ async def test_a_grant_shows_the_project_with_nothing_in_it(db):
 
     visible = await authz.visible_projects(db, person)
     assert granted.id in visible
-    assert Permission.ITEM_READ in visible[granted.id]
+    assert Permission.ITEM_READ in visible[granted.id].permissions
+    # RADD-1041: entitlement (a grant), not a relationship — tagged ENTITLED.
+    assert visible[granted.id].via == authz_batch.ProjectVia.ENTITLED
 
 
 async def test_the_baseline_lever_still_works_over_the_relationship(db):
@@ -225,3 +230,87 @@ async def test_the_baseline_lever_still_works_over_the_relationship(db):
     await db.flush()
 
     assert await authz.visible_projects(db, person) == {}
+
+
+# --- RADD-1041: `via` is presentation, never a second decision ----------------
+
+
+async def test_via_tags_entitled_and_related_separately(db):
+    """The exact split `visible_projects` already computes (RADD-937), now named
+    per row: a granted project reads ENTITLED, an unentitled project reached
+    only through the person's own item reads RELATED — both present at once,
+    on the same relationship the RADD-937 tests above already proved correct."""
+    await _baseline(db, ["item.read@own", "item.read@participant"])
+    granted, mine = await _projects(db, 2)
+    person = await _user(db)
+    member = await auth_roles.role_by_key(db, BuiltinRoleKey.MEMBER)
+    db.add(GlobalRoleGrant(role_id=member.id, user_id=person.id, project_id=granted.id))
+    admin = await _user(db, InstanceRole.ADMIN)
+    created = await items.create_item(
+        db, ItemCreate(project_id=mine.id, title="a ticket I filed"), admin
+    )
+    item_row = await db.get(WorkItem, created.id)
+    item_row.reporter_id = person.id
+    await db.flush()
+
+    visible = await authz.visible_projects(db, person)
+    assert visible[granted.id].via == authz_batch.ProjectVia.ENTITLED
+    assert visible[mine.id].via == authz_batch.ProjectVia.RELATED
+
+
+async def test_via_is_additive_and_never_narrows_the_visible_set(db):
+    """RADD-1041's whole safety property: tagging WHY a project is visible must
+    never change WHICH projects are, or what a caller ignoring `.via` sees.
+
+    Stripped of `.via`, the id set here is exactly what RADD-937's
+    `test_a_relationship_makes_one_project_visible_and_not_the_rest` already
+    pins — this test exists so a future change to the tagging logic cannot
+    quietly start FILTERING instead of just labeling, and so a caller that
+    predates `via` (every one of them, today) keeps resolving the identical
+    permission set `require_anywhere` would hand back directly.
+    """
+    await _baseline(db, ["item.read@own", "item.read@participant"])
+    mine, theirs = await _projects(db)
+    person = await _user(db)
+    admin = await _user(db, InstanceRole.ADMIN)
+    created = await items.create_item(
+        db, ItemCreate(project_id=mine.id, title="a ticket I filed"), admin
+    )
+    item_row = await db.get(WorkItem, created.id)
+    item_row.reporter_id = person.id
+    await db.flush()
+
+    visible = await authz.visible_projects(db, person)
+    # The RADD-937 decision, unchanged: exactly the project holding their item.
+    assert set(visible) == {mine.id}
+    assert theirs.id not in visible
+    # A caller that ignores `.via` entirely — every pre-1041 caller — still
+    # gets the identical permission set RADD-937 resolved through `require_anywhere`.
+    reachable = await authz.require_anywhere(db, person, Permission.ITEM_READ)
+    assert visible[mine.id].permissions == reachable[mine.id]
+
+
+async def test_get_projects_endpoint_surfaces_via(db):
+    """Router-level: `GET /projects` (`projects.router.list_projects`) threads
+    the same entitled/related split onto `ProjectRead.via` — proof the wiring
+    from `visible_projects` through the endpoint actually works, not just the
+    service function underneath it."""
+    from radd.modules.projects.router import list_projects as get_projects
+
+    await _baseline(db, ["item.read@own", "item.read@participant"])
+    granted, mine = await _projects(db, 2)
+    person = await _user(db)
+    member = await auth_roles.role_by_key(db, BuiltinRoleKey.MEMBER)
+    db.add(GlobalRoleGrant(role_id=member.id, user_id=person.id, project_id=granted.id))
+    admin = await _user(db, InstanceRole.ADMIN)
+    created = await items.create_item(
+        db, ItemCreate(project_id=mine.id, title="a ticket I filed"), admin
+    )
+    item_row = await db.get(WorkItem, created.id)
+    item_row.reporter_id = person.id
+    await db.flush()
+
+    rows = await get_projects(db, person)
+    by_id = {row.id: row for row in rows}
+    assert by_id[granted.id].via == authz_batch.ProjectVia.ENTITLED.value
+    assert by_id[mine.id].via == authz_batch.ProjectVia.RELATED.value

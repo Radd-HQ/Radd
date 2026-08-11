@@ -10,6 +10,8 @@ nothing else in the split; `authz.py` re-exports it all under its own name.
 
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
+from enum import StrEnum
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -100,10 +102,41 @@ async def permissions_for_projects(
     }
 
 
+class ProjectVia(StrEnum):
+    """How a project earned its spot in a `visible_projects` map (RADD-1041).
+
+    Presentation metadata ONLY — it explains a key that is already there, it
+    never decides whether the key IS there. `GET /projects` threads this onto
+    each row so the sidebar's per-user "related projects" preference can hide
+    the RELATED half without touching security: `visible_projects` computes
+    the exact same set of project ids it always has, tagged is all that's new.
+    """
+
+    #: `item.read` held UNQUALIFIED, i.e. by a grant. Theirs whether or not
+    #: anything is in it yet.
+    ENTITLED = "entitled"
+    #: `item.read` held only in QUALIFIED form (own/participant/team) AND a
+    #: real relationship exists. This is the half a requester's view of their
+    #: own filed ticket depends on — see `visible_projects`.
+    RELATED = "related"
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectVisibility:
+    """One `visible_projects` row: the resolved permission set plus WHY the
+    project is in the map (RADD-1041). `via` is additive over the RADD-937
+    resolution — dropping or hiding it must never change which projects
+    appear, only how a caller chooses to DISPLAY them."""
+
+    permissions: frozenset[Permission]
+    via: ProjectVia
+
+
 async def visible_projects(
     session: AsyncSession, user: User
-) -> dict[uuid.UUID, frozenset[Permission]]:
-    """The projects this actor should be OFFERED (RADD-937).
+) -> dict[uuid.UUID, ProjectVisibility]:
+    """The projects this actor should be OFFERED (RADD-937), each tagged with
+    WHY (RADD-1041).
 
     `require_anywhere(item.read)` answers "where could they read something",
     and `holds_base` counts a qualified atom as its base — correct, because
@@ -111,7 +144,8 @@ async def visible_projects(
     LIST that made every project on the instance appear for an account holding
     nothing but the Baseline, since "your own rows, anywhere" covers everywhere.
 
-    So visibility is the union of two different facts:
+    So visibility is the union of two different facts, each row's `via`
+    (`ProjectVia`) names which one produced it:
 
     * **entitled** — `item.read` held UNQUALIFIED, i.e. by a grant. The project
       is theirs whether or not anything is in it.
@@ -128,6 +162,12 @@ async def visible_projects(
     The relationships come from the kernel registry, so this function names no
     module that produces one — `items` and `participants` contribute, and the
     next one does too without editing this.
+
+    RADD-1041 threaded `via` through so a DISPLAY choice (the rail's "related
+    projects" toggle) could be built without touching the SECURITY decision
+    here: the key set below is identical to what this function returned before
+    `via` existed — only the tag is new, and no caller may use it to filter who
+    can reach a project.
     """
     reachable = await require_anywhere(session, user, Permission.ITEM_READ)
     entitled = {
@@ -140,16 +180,23 @@ async def visible_projects(
         for project_id, permissions in reachable.items()
         if project_id not in entitled
     }
+    visible = {
+        project_id: ProjectVisibility(permissions=permissions, via=ProjectVia.ENTITLED)
+        for project_id, permissions in entitled.items()
+    }
     if not qualified:
-        return entitled
+        return visible
     related: set[uuid.UUID] = set()
     for spec in registries.project_relations.values():
         related |= await spec.resolve(session, user)
-    return entitled | {
-        project_id: permissions
-        for project_id, permissions in qualified.items()
-        if project_id in related
-    }
+    visible.update(
+        {
+            project_id: ProjectVisibility(permissions=permissions, via=ProjectVia.RELATED)
+            for project_id, permissions in qualified.items()
+            if project_id in related
+        }
+    )
+    return visible
 
 
 async def require_anywhere(

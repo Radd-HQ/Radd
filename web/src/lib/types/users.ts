@@ -66,6 +66,12 @@ export interface Project {
   created_at: string;
   /** The CURRENT user's effective permissions in this project (spec 06). */
   permissions: PermissionValue[];
+  /** RADD-1041 — why this row appears in a `GET /projects` listing: "entitled"
+   * (held by grant) or "related" (their own work made it visible, e.g. a
+   * ticket they filed). `null` on `POST /projects`'s response. Presentation
+   * only — never used to decide access, only to decide what the sidebar's
+   * "related projects" preference hides from the rail. */
+  via?: "entitled" | "related" | null;
 }
 
 export interface ProjectCreate {

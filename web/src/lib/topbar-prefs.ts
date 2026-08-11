@@ -140,3 +140,34 @@ export function useNavPins(): {
     },
   };
 }
+
+/**
+ * RADD-1041: whether the sidebar's Projects tree shows RELATED projects — ones
+ * visible only because the person's own work makes a QUALIFIED `item.read`
+ * count (a ticket they filed, e.g.), as opposed to ENTITLED ones held by an
+ * actual grant (`ProjectRead.via` from `GET /projects`, sourced from
+ * `auth.authz_batch.visible_projects`). This is DISPLAY only: `"never"` hides
+ * related rows from the tree, it does not touch access — a hidden project's
+ * items still open by URL, by search, and on My Work exactly as before, and
+ * flipping back to `"always"` (the default — today's behavior) costs nothing.
+ */
+export const RELATED_PROJECTS_PREF_KEY = "sidebar.related_projects";
+export type RelatedProjectsVisibility = "always" | "never";
+
+function readRelatedProjectsVisibility(
+  prefs: Record<string, unknown> | undefined,
+): RelatedProjectsVisibility {
+  return prefs?.[RELATED_PROJECTS_PREF_KEY] === "never" ? "never" : "always";
+}
+
+export function useRelatedProjectsVisibility(): {
+  mode: RelatedProjectsVisibility;
+  setMode: (mode: RelatedProjectsVisibility) => void;
+} {
+  const prefs = useQuery(mePreferencesQuery());
+  const write = usePreferencesWrite();
+  return {
+    mode: readRelatedProjectsVisibility(prefs.data),
+    setMode: (mode) => write.mutate({ [RELATED_PROJECTS_PREF_KEY]: mode }),
+  };
+}

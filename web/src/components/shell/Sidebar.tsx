@@ -9,6 +9,8 @@ import {
   ChevronRight,
   Clock,
   ConciergeBell,
+  Eye,
+  EyeOff,
   House,
   Layers,
   LayoutDashboard,
@@ -22,7 +24,12 @@ import {
 import { RoutePath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
 import { useNavFacts } from "../../lib/nav-facts";
-import { pinKey, useNavPins, type NavPin } from "../../lib/topbar-prefs";
+import {
+  pinKey,
+  useNavPins,
+  useRelatedProjectsVisibility,
+  type NavPin,
+} from "../../lib/topbar-prefs";
 import { ContextMenu } from "../ContextMenu";
 import {
   capabilitiesQuery,
@@ -105,6 +112,22 @@ export function Sidebar() {
   const projectExpanded = (project: Project) =>
     prefs.expandedProjects.includes(project.id) ||
     (project.key === currentProjectKey && !prefs.collapsedProjects.includes(project.id));
+
+  // RADD-1041: the rail's own "related projects" preference — DISPLAY only.
+  // `via: "related"` rows are exactly the ones `visible_projects` (RADD-937)
+  // shows only because the person's own work makes a qualified item.read
+  // count, never because of a grant; hiding them from this tree changes
+  // nothing about whether they can still open one by URL, search, or My Work.
+  const relatedProjectsPref = useRelatedProjectsVisibility();
+  const railProjects = (projects ?? []).filter(
+    (project) => relatedProjectsPref.mode !== "never" || project.via !== "related",
+  );
+  const hiddenRelatedProjectCount = (projects?.length ?? 0) - railProjects.length;
+  // Only offer the toggle when it can do something — nothing to hide, and the
+  // pref already at its default, would make an inert control read as a bug.
+  const showRelatedProjectsToggle =
+    relatedProjectsPref.mode === "never" ||
+    (projects ?? []).some((project) => project.via === "related");
 
   // Queue views (spec 64) get their own badged section below — the generic
   // view lists skip them so a queue never renders twice.
@@ -431,8 +454,38 @@ export function Sidebar() {
               label="Projects"
               collapsed={sectionCollapsed("projects")}
               onToggle={() => toggleSection("projects")}
+              actions={
+                showRelatedProjectsToggle && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      relatedProjectsPref.setMode(
+                        relatedProjectsPref.mode === "never" ? "always" : "never",
+                      )
+                    }
+                    aria-pressed={relatedProjectsPref.mode === "never"}
+                    aria-label={
+                      relatedProjectsPref.mode === "never"
+                        ? "Show related projects"
+                        : "Hide related projects"
+                    }
+                    title={
+                      relatedProjectsPref.mode === "never"
+                        ? "Show projects you can only see through your own work"
+                        : "Hide projects you can only see through your own work (open, search, and My Work still reach them)"
+                    }
+                    className="ml-auto rounded p-0.5 text-fg-faint opacity-0 transition-opacity hover:bg-overlay hover:text-fg focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-focus group-hover/section:opacity-100 cursor-pointer"
+                  >
+                    {relatedProjectsPref.mode === "never" ? (
+                      <EyeOff size={12} />
+                    ) : (
+                      <Eye size={12} />
+                    )}
+                  </button>
+                )
+              }
             />
-            {!sectionCollapsed("projects") && projects.length > 10 && (
+            {!sectionCollapsed("projects") && railProjects.length > 10 && (
               <input
                 type="search"
                 value={projectFilter}
@@ -445,14 +498,14 @@ export function Sidebar() {
             {!sectionCollapsed("projects") && (
             <ul>
               {(projectFilter.trim()
-                ? projects.filter((project) => {
+                ? railProjects.filter((project) => {
                     const needle = projectFilter.trim().toLowerCase();
                     return (
                       project.name.toLowerCase().includes(needle) ||
                       project.key.toLowerCase().includes(needle)
                     );
                   })
-                : projects
+                : railProjects
               ).map((project) => (
                 <li key={project.id}>
                   <div className="group/project relative flex items-center">
@@ -555,6 +608,21 @@ export function Sidebar() {
                 </li>
               ))}
             </ul>
+            )}
+            {/* RADD-1041: a project you can read but don't SEE reads as a bug
+                without this — say what's hidden and offer the one click back. */}
+            {!sectionCollapsed("projects") && hiddenRelatedProjectCount > 0 && (
+              <p className="px-2 pb-1 text-[11px] text-fg-faint">
+                {hiddenRelatedProjectCount} related project
+                {hiddenRelatedProjectCount === 1 ? "" : "s"} hidden —{" "}
+                <button
+                  type="button"
+                  onClick={() => relatedProjectsPref.setMode("always")}
+                  className="text-accent-text hover:text-accent-text-strong hover:underline cursor-pointer"
+                >
+                  Show
+                </button>
+              </p>
             )}
           </div>
         )}
