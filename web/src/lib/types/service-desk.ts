@@ -39,6 +39,8 @@ export interface SlaPolicy {
   work_week_only: boolean;
   /** Spec 63: priorities the policy applies to; [] = every priority. */
   priorities: PriorityValue[];
+  /** RADD-1043: issue type ids the policy applies to; [] = every type. */
+  issue_type_ids: string[];
   /** Spec 63: first-match resolution order (position, then created_at). */
   position: number;
   /** Spec 63: daily business-hours window, minutes from midnight (both or neither). */

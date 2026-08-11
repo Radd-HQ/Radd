@@ -1,8 +1,9 @@
 """SLA policy CRUD + first-match resolution (specs 30/63/67).
 
 Spec 63 retired spec 30's "every enabled policy applies": policies are ordered
-by (position, created_at) and ONE policy — the first whose priority filter
-matches — governs an item. Spec 67 made policies project-level: an item is only
+by (position, created_at) and ONE policy — the first whose filters match —
+governs an item. The filters are priority (spec 63) and issue type (RADD-1043).
+Spec 67 made policies project-level: an item is only
 ever matched against its own project's policies (no workspace-wide policies).
 Timer evaluation lives in `evaluation.py`.
 """
@@ -63,6 +64,7 @@ async def create_policy(
         pause_state_names=data.pause_state_names,
         work_week_only=data.work_week_only,
         priorities=[priority.value for priority in data.priorities],
+        issue_type_ids=[str(type_id) for type_id in data.issue_type_ids],
         position=data.position,
         business_start_minute=data.business_start_minute,
         business_end_minute=data.business_end_minute,
@@ -110,6 +112,8 @@ async def update_policy(
         policy.work_week_only = data.work_week_only
     if data.priorities is not None:
         policy.priorities = [priority.value for priority in data.priorities]
+    if data.issue_type_ids is not None:
+        policy.issue_type_ids = [str(type_id) for type_id in data.issue_type_ids]
     if data.position is not None:
         policy.position = data.position
     if "business_start_minute" in fields_set:
@@ -140,14 +144,26 @@ async def delete_policy(
 
 def first_match(policies: Sequence[SlaPolicy], item: WorkItem) -> SlaPolicy | None:
     """The FIRST policy (pre-ordered by position, created_at) that is enabled,
-    belongs to the item's project, and whose priority filter ([] = all) matches
-    the item's priority. Pure — unit-tested without a database."""
+    belongs to the item's project, and whose filters match the item. Pure —
+    unit-tested without a database.
+
+    Two filters, ANDed, each empty-means-any: priority (spec 63) and issue type
+    (RADD-1043). An item with no type matches only a policy with no type filter
+    — a filter names the types it covers, and "untyped" is not one of them.
+    Ordering is untouched: the filters decide whether a policy is a candidate,
+    position decides which candidate wins.
+    """
     for policy in policies:
         if not policy.enabled:
             continue
         if policy.project_id != item.project_id:
             continue
         if policy.priorities and item.priority not in {str(p) for p in policy.priorities}:
+            continue
+        if policy.issue_type_ids and (
+            item.type_id is None
+            or str(item.type_id) not in {str(t) for t in policy.issue_type_ids}
+        ):
             continue
         return policy
     return None

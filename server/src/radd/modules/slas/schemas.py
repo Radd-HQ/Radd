@@ -25,6 +25,8 @@ class PolicyCreate(BaseModel):
     work_week_only: bool = False
     # Spec 63: priority filter ([] = all) + first-match order + business hours.
     priorities: list[Priority] = Field(default_factory=list)
+    # RADD-1043: issue-type filter ([] = all), same first-match semantics.
+    issue_type_ids: list[uuid.UUID] = Field(default_factory=list)
     position: int = Field(default=0, ge=0)
     business_start_minute: int | None = Field(default=None, ge=0, le=BUSINESS_MINUTE_MAX)
     business_end_minute: int | None = Field(default=None, ge=0, le=BUSINESS_MINUTE_MAX)
@@ -47,6 +49,8 @@ class PolicyUpdate(BaseModel):
     pause_state_names: list[str] | None = None
     work_week_only: bool | None = None
     priorities: list[Priority] | None = None
+    # Omitted = unchanged; `[]` clears the filter back to "every type".
+    issue_type_ids: list[uuid.UUID] | None = None
     position: int | None = Field(default=None, ge=0)
     # Explicit null clears the window (model_fields_set idiom, like the targets).
     business_start_minute: int | None = Field(default=None, ge=0, le=BUSINESS_MINUTE_MAX)
@@ -67,6 +71,7 @@ class PolicyRead(BaseModel):
     pause_state_names: list[str]
     work_week_only: bool
     priorities: list[Priority]
+    issue_type_ids: list[uuid.UUID]
     position: int
     business_start_minute: int | None
     business_end_minute: int | None

@@ -5,7 +5,7 @@ import { apiSlaPolicyPath } from "../../lib/constants";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { usePermissions } from "../../lib/hooks";
 import { PRIORITY_META } from "../../lib/meta";
-import { slaPoliciesQuery } from "../../lib/queries";
+import { issueTypesQuery, slaPoliciesQuery } from "../../lib/queries";
 import { Permission, SettingScope, type SlaPolicy } from "../../lib/types";
 import { EmptyState } from "../../components/EmptyState";
 import { TableSkeleton } from "../../components/TableSkeleton";
@@ -25,6 +25,11 @@ export function ProjectSlaSettingsPage({ projectId }: { projectId?: string }) {
     ...slaPoliciesQuery(projectId ?? ""),
     enabled: Boolean(projectId),
   });
+  const issueTypes = useQuery({
+    ...issueTypesQuery(projectId ?? ""),
+    enabled: Boolean(projectId),
+  });
+  const typeName = new Map((issueTypes.data ?? []).map((t) => [t.id, t.name]));
   const queryClient = useQueryClient();
   const invalidate = () => invalidateEntities(queryClient, Entity.slaPolicy);
 
@@ -60,6 +65,9 @@ export function ProjectSlaSettingsPage({ projectId }: { projectId?: string }) {
       policy.priorities.length > 0
         ? policy.priorities.map((priority) => PRIORITY_META[priority].label).join("/")
         : "any priority",
+      policy.issue_type_ids.length > 0
+        ? policy.issue_type_ids.map((id) => typeName.get(id) ?? "?").join("/")
+        : "any type",
       `response ${minutesLabel(policy.response_minutes)}`,
       `resolution ${minutesLabel(policy.resolution_minutes)}`,
       policy.warning_minutes !== null

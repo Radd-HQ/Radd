@@ -1,13 +1,15 @@
-import { useState, type FormEvent } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState, type FormEvent } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { PRIORITY_META, PRIORITY_ORDER } from "../../lib/meta";
+import { issueTypesQuery } from "../../lib/queries";
 import type { PriorityValue, SlaPolicy } from "../../lib/types";
 import { Button } from "../Button";
 import { TextField } from "../TextField";
+import { TokenMultiSelect } from "../TokenMultiSelect";
 
 export function minutesLabel(minutes: number | null): string {
   if (minutes === null) return "—";
@@ -36,8 +38,11 @@ const timeInputClasses =
   "focus:outline-2 focus:outline-offset-1 focus:outline-focus [color-scheme:dark]";
 
 /** Create form for an SLA policy (specs 30/63): targets + pause states +
- * priority tier chips + daily business-hours window. The policy's project comes
- * from the page URL (spec 67: policies are project-level — no scope picker). */
+ * priority tier chips + issue-type filter (RADD-1043) + daily business-hours
+ * window. The policy's project comes from the page URL (spec 67: policies are
+ * project-level — no scope picker), which is also what scopes the issue types
+ * offered: a type belongs to one project, so the filter can only name this
+ * project's own. */
 export function NewSlaPolicyForm({
   projectId,
   nextPosition,
@@ -54,6 +59,7 @@ export function NewSlaPolicyForm({
   const [pauseStates, setPauseStates] = useState("");
   const [workWeekOnly, setWorkWeekOnly] = useState(false);
   const [priorities, setPriorities] = useState<PriorityValue[]>([]);
+  const [issueTypeIds, setIssueTypeIds] = useState<string[]>([]);
   const [windowStart, setWindowStart] = useState("");
   const [windowEnd, setWindowEnd] = useState("");
 
@@ -63,6 +69,15 @@ export function NewSlaPolicyForm({
         ? current.filter((entry) => entry !== priority)
         : [...current, priority],
     );
+
+  // The same issue-type query every other project surface uses (one cache
+  // entry, one staleTime) — a filter over types must not disagree with the
+  // pickers that assign them.
+  const issueTypes = useQuery(issueTypesQuery(projectId));
+  const typeOptions = useMemo(
+    () => (issueTypes.data ?? []).map((type) => ({ value: type.id, label: type.name })),
+    [issueTypes.data],
+  );
 
   const create = useMutation({
     mutationFn: () =>
@@ -78,6 +93,7 @@ export function NewSlaPolicyForm({
           .filter(Boolean),
         work_week_only: workWeekOnly,
         priorities,
+        issue_type_ids: issueTypeIds,
         position: nextPosition,
         business_start_minute: timeToMinutes(windowStart),
         business_end_minute: timeToMinutes(windowEnd),
@@ -86,6 +102,7 @@ export function NewSlaPolicyForm({
       setName("");
       setPauseStates("");
       setPriorities([]);
+      setIssueTypeIds([]);
       setWindowStart("");
       setWindowEnd("");
       setWarningMinutes("");
@@ -162,6 +179,19 @@ export function NewSlaPolicyForm({
             );
           })}
         </div>
+      </div>
+      <div className="col-span-2 flex flex-col gap-1.5">
+        <span className="text-xs font-medium text-fg-secondary">
+          Applies to issue types (none selected = all)
+        </span>
+        <TokenMultiSelect
+          value={issueTypeIds}
+          onChange={setIssueTypeIds}
+          options={typeOptions}
+          placeholder={typeOptions.length === 0 ? "No issue types in this project" : "Add a type…"}
+          disabled={typeOptions.length === 0}
+          ariaLabel="Applies to issue types"
+        />
       </div>
       <div className="col-span-2 flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1.5 text-xs font-medium text-fg-secondary">

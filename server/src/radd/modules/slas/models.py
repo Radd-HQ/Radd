@@ -32,6 +32,13 @@ class SlaPolicy(Base, TimestampMixin):
     )
     # Spec 63: Priority values this policy applies to; [] = every priority.
     priorities: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")
+    # RADD-1043: issue type ids (as strings) this policy applies to; [] = every
+    # type. Same shape and same first-match semantics as `priorities` — a desk
+    # answers a Bug and a Change Request on different promises. Ids rather than
+    # names because a type is a per-project row that can be renamed; not a real
+    # FK because JSONB cannot carry one, so a departed type simply stops
+    # matching (the policy narrows, it never errors).
+    issue_type_ids: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")
     # Spec 63: first-match resolution order — policies are tried by
     # (position, created_at); the first scope+priority match wins.
     position: Mapped[int] = mapped_column(Integer, default=0, server_default="0")

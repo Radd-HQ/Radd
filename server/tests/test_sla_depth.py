@@ -55,11 +55,22 @@ async def _project(db, run: str, key: str):
     )
 
 
-async def _item(db, admin, project_id, priority=Priority.NORMAL):
+async def _item(db, admin, project_id, priority=Priority.NORMAL, type_id=None):
     read = await items_service.create_item(
-        db, ItemCreate(project_id=project_id, title=f"sla {priority}", priority=priority), admin
+        db,
+        ItemCreate(
+            project_id=project_id, title=f"sla {priority}", priority=priority, type_id=type_id
+        ),
+        admin,
     )
     return (await items_service.items_by_ids(db, [read.id]))[read.id]
+
+
+async def _types(db, project_id) -> dict[str, uuid.UUID]:
+    """{name: id} of the project's seeded issue types (Task/Bug/Story/…)."""
+    from radd.modules.itemtypes import service as itemtypes
+
+    return {t.name: t.id for t in await itemtypes.list_types(db, project_id)}
 
 
 async def test_matched_policy_first_match_in_db(db, admin):
@@ -94,6 +105,88 @@ async def test_matched_policy_first_match_in_db(db, admin):
     # filter and, with the catch-all off, end up governed by nothing.
     await slas.update_policy(db, standard.id, PolicyUpdate(enabled=False), actor_id=admin.id)
     assert (await slas.matched_policy(db, normal)) is None
+
+
+async def test_policies_match_by_issue_type(db, admin):
+    """RADD-1043: a desk answers a Bug and a Story on different promises.
+
+    Priority could not express that — a normal-priority outage and a
+    normal-priority request are the same tier — so the filter is the type, with
+    the priority filter's semantics exactly: empty means every type.
+    """
+    project = await _project(db, uuid.uuid4().hex[:6], "SLT")
+    types = await _types(db, project.id)
+    bugs = await slas.create_policy(
+        db,
+        PolicyCreate(
+            project_id=project.id,
+            name="Bugs fast",
+            response_minutes=30,
+            issue_type_ids=[types["Bug"]],
+            position=0,
+        ),
+        actor_id=admin.id,
+    )
+    everything = await slas.create_policy(
+        db,
+        PolicyCreate(
+            project_id=project.id, name="Everything else", response_minutes=480, position=1
+        ),
+        actor_id=admin.id,
+    )
+
+    bug = await _item(db, admin, project.id, type_id=types["Bug"])
+    story = await _item(db, admin, project.id, type_id=types["Story"])
+    assert (await slas.matched_policy(db, bug)).id == bugs.id
+    assert (await slas.matched_policy(db, story)).id == everything.id
+
+    # A type filter narrows only itself: with the catch-all gone, a Story is
+    # governed by nothing rather than falling into the Bug policy.
+    await slas.update_policy(db, everything.id, PolicyUpdate(enabled=False), actor_id=admin.id)
+    assert (await slas.matched_policy(db, story)) is None
+    # Clearing the filter (explicit []) restores "every type" — the round trip
+    # the form performs.
+    await slas.update_policy(db, bugs.id, PolicyUpdate(issue_type_ids=[]), actor_id=admin.id)
+    assert bugs.issue_type_ids == []
+    assert (await slas.matched_policy(db, story)).id == bugs.id
+
+
+async def test_issue_type_filter_reaches_the_batch_engine(db, admin):
+    """The same first-match walk the list/board chips and the engine loop run:
+    two policies, one project, different types → different targets per item."""
+    project = await _project(db, uuid.uuid4().hex[:6], "SLE")
+    types = await _types(db, project.id)
+    await slas.create_policy(
+        db,
+        PolicyCreate(
+            project_id=project.id,
+            name="Bugs fast",
+            response_minutes=30,
+            issue_type_ids=[types["Bug"]],
+            position=0,
+        ),
+        actor_id=admin.id,
+    )
+    await slas.create_policy(
+        db,
+        PolicyCreate(
+            project_id=project.id,
+            name="Features later",
+            response_minutes=480,
+            issue_type_ids=[types["Feature"]],
+            position=1,
+        ),
+        actor_id=admin.id,
+    )
+    bug = await _item(db, admin, project.id, type_id=types["Bug"])
+    feature = await _item(db, admin, project.id, type_id=types["Feature"])
+    task = await _item(db, admin, project.id, type_id=types["Task"])
+
+    result = await evaluation.batch_sla(db, admin, [bug.id, feature.id, task.id])
+    assert {t.policy_name for t in result[bug.id]} == {"Bugs fast"}
+    assert {t.policy_name for t in result[feature.id]} == {"Features later"}
+    # No policy covers a Task, so it gets no chips at all (not the first policy).
+    assert result.get(task.id, []) == []
 
 
 async def test_business_window_validation(db, admin):
