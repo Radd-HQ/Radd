@@ -1,5 +1,7 @@
 # BUILD-LOG — kernel + plugin platform migration
 
+*Closed historical record — current state is the git tags + `docs/modules.md`, not this file. The kernel+plugin migration it logs finished (specs 93–114 merged to `main`); kept as the record of how it got there.*
+
 Running record of decisions, deviations, and unmet parity (with reasons) while migrating Radd
 onto the kernel+plugin architecture of `docs/plugin-platform.md`. Newest entries at the bottom of
 each section. The parity checklist (definition of done) is `docs/specs/93-kernel-plugin-platform.md`.

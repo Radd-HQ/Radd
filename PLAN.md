@@ -1,5 +1,7 @@
 # Project Plan — **Radd**
 
+*Closed historical record — current state is the git tags + `docs/modules.md`, not this file. Kept as the original plan/build log (see the mid-file "historical snapshot" notes for section-level detail).*
+
 A self-hosted, AI-native work tracking + docs platform. Issue tracker and wiki as equal citizens, built to replace Jira + Confluence at a VFX studio — and designed from day one to be an AGPL open-source product anyone can run without hitting a paywall.
 
 *Plan date:. Supporting research in `research/` (jira-usage, landscape, architecture, auth).*

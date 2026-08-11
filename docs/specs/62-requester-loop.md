@@ -1,5 +1,13 @@
 # Spec 62 — Requester feedback loop: contacts, outbound mail, public forms
 
+> **Superseded in part — RADD-828.** The tokened, no-login `/public/forms/{token}`
+> path this spec builds (§6, "Public forms") was DELETED: `allow_public` now
+> means portal visibility for a signed-in user (spec 73) only, `public_token` is
+> gone, and forms has zero `mailintake` imports. External requesters reach the
+> tracker exclusively through mailintake's email intake, which provisions a
+> `UserSource.EMAIL` account as reporter. See `docs/specs/115-access-control-audit.md`
+> D9 and the `forms`/`mailintake`/`auth` addendum in `docs/modules.md`.
+
 Service-desk wave, part 2. Spec 30/47 made intake work (reporter field, IMAP
 poll, reply threading) but the loop is one-way: a requester who files a ticket
 never hears back. This spec closes it: reporters auto-watch, external senders

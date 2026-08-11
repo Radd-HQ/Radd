@@ -955,3 +955,32 @@ Steps 1–4 remove most of the reported pain. Steps 5–8 are the structural wor
   mismatched** (filed as RADD-810).
 - Plugin contribution surface read from `kernel/registry.py` (15 registries) and
   `kernel/specs.py` (`PermissionSpec`, `CrudResourceSpec`).
+
+## Addendum — as-built deviations from this audit (RADD-1038)
+
+Recorded after the build, because "we chose not to" and "we forgot" read
+identically from the outside otherwise.
+
+**A1 — §5.4a's relations stayed the items family; pages/views/dashboards were
+never registered.** The section above proposes `pages` contributing `own` (+
+`team` via the space) and `views`/`dashboards` renaming their existing
+`owner_id` into the same mechanism. Neither shipped a `RelationSpec`: RADD-823's
+registry has five registrants — `items`, `comments`, `attachments`,
+`timelogging`, `participants` — every one of them item or item-child content.
+Pages, views and dashboards kept the spec-92 grant framework + their
+`owner_id`/`global_access` columns instead, which is what D9/D11 and the
+pre-existing view-sharing model already gave them: a grant row for a
+deliberately-shared page or view, ownership for "mine". Nothing about the
+mechanism forecloses adding a registrant later — revisit if a per-row "my own
+page" qualifier is ever asked for specifically.
+
+**A2 — D10 (relation-qualified field grants) was not built.** `write Priority
+@assigned` stays inexpressible: `access_grants` (the resource the field-grant
+framework rides, spec 92) has no relation column, and adding one would put a
+relation check on the field-grants resolver's hot path — the same path
+`_check_builtin_field_rules`/`_filter_read` walk per field per item. RADD-817/823
+shipped relations for the coarser `item.read`/`item.update`/`comment.write`
+atoms only, which is what the service-desk shape in the scenario matrix (§3)
+actually needed — own/assigned/team on the ITEM, not on individual fields. D10
+stays the target if a real "assignee may set Priority, nobody else" requirement
+shows up; until then the extra resolver cost has no consumer to justify it.
