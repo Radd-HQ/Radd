@@ -120,14 +120,49 @@ await session.navigate(`${baseUrl}/settings/teams`, 3000);
 // Dispatched rather than hit-tested on purpose: this dev instance carries 2296
 // teams, so where the first row lands is a fact about the scroll container, not
 // about the panel under test.
-const expandedTeam = await session.eval(
-  `(()=>{const b=document.querySelector('ul.rounded-lg > li > button[aria-expanded]');
-    if(!b) return null; b.click(); return b.textContent.trim().slice(0,40);})()`,
+//
+// RADD-1046: zero teams (a freshly-seeded/clean instance) renders `EmptyState`
+// instead of the `<ul class="rounded-lg">` list at all — see
+// web/src/routes/settings/teams.tsx's `all.length === 0` branch — so this
+// selector legitimately matches nothing there. That is a missing FIXTURE, not
+// a regression, and the three checks below that read `expandedTeam`/`teamPanel`
+// cannot mean anything without a row to expand: skip them by name rather than
+// letting them fail (or, worse, pass vacuously — `teamPanel` is `[]` either
+// way, so the "dropped its Projects section" check below would silently pass
+// with no team ever having rendered at all).
+const teamRowCount = await session.eval(
+  `document.querySelectorAll('ul.rounded-lg > li > button[aria-expanded]').length`,
 );
-await sleep(1500);
-const teamPanel = await session.eval(
-  `[...document.querySelectorAll('section[aria-label]')].map(s=>s.getAttribute('aria-label'))`,
-);
+const hasTeamFixture = teamRowCount > 0;
+
+let expandedTeam = null;
+let teamPanel = [];
+if (hasTeamFixture) {
+  expandedTeam = await session.eval(
+    `(()=>{const b=document.querySelector('ul.rounded-lg > li > button[aria-expanded]');
+      if(!b) return null; b.click(); return b.textContent.trim().slice(0,40);})()`,
+  );
+  await sleep(1500);
+  teamPanel = await session.eval(
+    `[...document.querySelectorAll('section[aria-label]')].map(s=>s.getAttribute('aria-label'))`,
+  );
+}
+
+const TEAM_ROW_LABELS = [
+  "a team row actually expanded",
+  "Teams panel dropped its Projects section",
+  "…and kept the Roles section that replaces it",
+];
+if (!hasTeamFixture) {
+  console.log(
+    "no team fixture on this instance (zero rows in the Teams panel) — " +
+      "skipping the team-row checks rather than failing or vacuously passing them:\n",
+  );
+  for (const label of TEAM_ROW_LABELS) {
+    console.log(`skip ${label} (no team fixture — run against a seeded instance)`);
+  }
+  console.log("");
+}
 
 const failed = report(
   {
@@ -184,13 +219,18 @@ const failed = report(
     "the project-teams endpoint is gone": legacyTeams.status === 404,
     "grants are readable by project": grantsByProject.status === 200,
 
-    // Without this the two checks below pass VACUOUSLY when the panel never
-    // renders — which is exactly what an unscoped `button[aria-expanded]`
-    // selector did on the first run of this proof.
-    "a team row actually expanded": Boolean(expandedTeam),
-    "Teams panel dropped its Projects section":
-      !teamPanel.some((label) => label && label.endsWith(" projects")),
-    "…and kept the Roles section that replaces it": teamPanel.includes("Role grants"),
+    // Fixture-dependent: these three mean nothing without a team row to
+    // expand (RADD-1046) — omitted rather than failed or, worse, left to pass
+    // VACUOUSLY, which is exactly what an unscoped `button[aria-expanded]`
+    // selector did on the first run of this proof. The skip lines printed
+    // above name them; `report`'s tally below never sees them when absent.
+    ...(hasTeamFixture
+      ? {
+          [TEAM_ROW_LABELS[0]]: Boolean(expandedTeam),
+          [TEAM_ROW_LABELS[1]]: !teamPanel.some((label) => label && label.endsWith(" projects")),
+          [TEAM_ROW_LABELS[2]]: teamPanel.includes("Role grants"),
+        }
+      : {}),
 
     "no console errors": session.consoleErrors.length === 0,
   },
@@ -204,6 +244,8 @@ const failed = report(
     projectReleases,
     projectTimelogging,
     access,
+    hasTeamFixture,
+    teamRowCount,
     expandedTeam,
     teamPanel,
     consoleErrors: session.consoleErrors.slice(0, 5),
