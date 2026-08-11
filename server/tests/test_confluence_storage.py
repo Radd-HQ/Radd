@@ -144,6 +144,18 @@ def test_a_plain_text_code_macro_gets_no_language():
         assert "```\nhello\n```" in convert(body).markdown, token
 
 
+def test_a_mermaid_macro_becomes_a_mermaid_fence():
+    """The wiki renders ```mermaid natively, so the diagram survives as SOURCE
+    rather than as a picture of one — still editable, and still a diagram if the
+    page is ever pasted into GitHub."""
+    body = (
+        '<ac:structured-macro ac:name="mermaid-cloud">'
+        "<ac:plain-text-body><![CDATA[graph TD\n  A-->B]]></ac:plain-text-body>"
+        "</ac:structured-macro>"
+    )
+    assert "```mermaid\ngraph TD\n  A-->B\n```" in convert(body).markdown
+
+
 def test_toc_maps_onto_the_extension_that_already_existed():
     body = (
         '<ac:structured-macro ac:name="toc">'

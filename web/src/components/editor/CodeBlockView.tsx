@@ -8,6 +8,8 @@ import {
   mountCodeMirror,
   type CodeMirrorHost,
 } from "./code-block";
+import { MermaidDiagram } from "./MermaidDiagram";
+import { isMermaid } from "./mermaid";
 
 /**
  * The code block, ours (RADD-752).
@@ -24,6 +26,10 @@ export function CodeBlockView() {
   const cmRef = useRef<CodeMirrorHost | null>(null);
   const [copied, setCopied] = useState(false);
   const language = String(node.attrs.language ?? "");
+  // The diagram follows what is being TYPED, not the last committed node — a
+  // preview that only updates on blur is a preview of the previous diagram.
+  const [source, setSource] = useState(node.textContent);
+  const mermaid = isMermaid(language);
   /**
    * The picker must be able to REPRESENT the value it has.
    *
@@ -35,7 +41,13 @@ export function CodeBlockView() {
    * and an unresolvable one still appears as itself rather than vanishing.
    */
   const options = useMemo(() => {
-    const base = [{ value: "", label: "Plain text" }, ...languageOptions()];
+    const base = [
+      { value: "", label: "Plain text" },
+      // Not one of CodeMirror's languages — it is a DIAGRAM — but it is chosen
+      // the same way, so it belongs in the same list.
+      { value: "mermaid", label: "Mermaid (diagram)" },
+      ...languageOptions(),
+    ];
     if (language && !base.some((option) => option.value === language)) {
       const resolved = describeLanguage(language);
       base.splice(1, 0, {
@@ -60,6 +72,7 @@ export function CodeBlockView() {
       outerView: view,
       getPos,
       editable,
+      onText: setSource,
     });
     cmRef.current = host;
     return () => {
@@ -72,6 +85,7 @@ export function CodeBlockView() {
   // Text arriving from outside (undo, an AI diff accept, a reseed).
   useEffect(() => {
     cmRef.current?.syncFromNode(node);
+    setSource(node.textContent);
   }, [node]);
 
   useEffect(() => {
@@ -126,8 +140,10 @@ export function CodeBlockView() {
           {copied ? "Copied" : "Copy"}
         </button>
       </div>
-      {/* CodeMirror mounts here. */}
-      <div ref={hostRef} />
+      {/* CodeMirror mounts here. Hidden for a mermaid block in READ mode: a
+          reader wants the picture, not the script that draws it. */}
+      <div ref={hostRef} className={mermaid && !editable ? "hidden" : undefined} />
+      {mermaid && <MermaidDiagram source={source} />}
       {/* ProseMirror needs somewhere to put the node's content, and it must not
           be where CodeMirror lives — the two would fight over the same DOM. It
           is hidden, not absent: without it ProseMirror treats the node as a leaf

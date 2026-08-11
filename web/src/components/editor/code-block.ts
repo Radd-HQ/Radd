@@ -136,6 +136,8 @@ export function mountCodeMirror(options: {
   outerView: PmView;
   getPos: () => number | undefined;
   editable: boolean;
+  /** Live text on every keystroke — what a mermaid preview follows. */
+  onText?: (text: string) => void;
 }): CodeMirrorHost {
   const { parent, node, outerView, getPos } = options;
   const language = new Compartment();
@@ -160,7 +162,11 @@ export function mountCodeMirror(options: {
         ]),
         CmView.updateListener.of((update) => {
           if (updating || !update.docChanged) return;
-          pushToProseMirror(update.state.doc.toString());
+          const text = update.state.doc.toString();
+          // Told BEFORE the ProseMirror round trip: a preview that waits for the
+          // document to come back is always one keystroke behind.
+          options.onText?.(text);
+          pushToProseMirror(text);
         }),
       ],
     }),

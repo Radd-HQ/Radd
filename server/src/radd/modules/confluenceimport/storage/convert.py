@@ -511,6 +511,12 @@ class _Renderer:
             return self.jira_macro(params, inline=inline)
         if name == "jiraissues":
             return self.items_fence(params.get("jqlQuery", "") or params.get("jql", ""))
+        if name in ("mermaid", "mermaid-cloud", "mermaid-diagram"):
+            # The wiki renders ```mermaid natively, so the diagram survives as
+            # SOURCE rather than as a picture of one — still editable, and still
+            # a diagram on GitHub if the page is ever pasted there.
+            diagram = raw_body.strip() or (self.blocks(rich).strip() if rich else "")
+            return f"```mermaid\n{diagram}\n```" if diagram else ""
         if name in ("multimedia", "viewfile", "widget"):
             return self.media_fence(name, params, rich, node)
         return raw_body.strip()

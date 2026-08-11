@@ -155,6 +155,13 @@ BUILTIN_MACROS: dict[str, MacroSpec] = {
     "widget": MacroSpec(
         MacroAction.NATIVE, EXT_MEDIA, note="an embedded external video"
     ),
+    # The Confluence mermaid apps, all of which carry the diagram source as their
+    # body. None appear in the corpus this was built against, but they cost three
+    # lines and the wiki renders ```mermaid natively now, so an instance that has
+    # them loses nothing.
+    "mermaid": MacroSpec(MacroAction.NATIVE, note="a rendered mermaid diagram"),
+    "mermaid-cloud": MacroSpec(MacroAction.NATIVE, note="a rendered mermaid diagram"),
+    "mermaid-diagram": MacroSpec(MacroAction.NATIVE, note="a rendered mermaid diagram"),
     "code": MacroSpec(MacroAction.NATIVE, note="a fenced code block"),
     "noformat": MacroSpec(MacroAction.NATIVE, note="a fenced code block"),
     "anchor": MacroSpec(MacroAction.STRIP, note="markdown headings carry their own anchors"),

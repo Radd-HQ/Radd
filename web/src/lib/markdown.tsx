@@ -4,6 +4,8 @@ import remarkGfm from "remark-gfm";
 import { visit } from "unist-util-visit";
 import { jiraToMarkdown } from "./jira-markup";
 import { headingAnchorId } from "./markdown-outline";
+import { MermaidDiagram } from "../components/editor/MermaidDiagram";
+import { isMermaid } from "../components/editor/mermaid";
 import { useOpenIssueRef } from "./hooks";
 import {
   ExtensionError,
@@ -154,6 +156,10 @@ const components = {
   pre: ({ children }: { children?: ReactNode }) => {
     const block = extensionBlockOf(children);
     if (block) return <ExtensionBlock name={block.name} body={block.body} />;
+    // A ```mermaid fence is a DIAGRAM here too, not just in the wiki editor: a
+    // comment or an issue description that draws one should draw it.
+    const diagram = mermaidSourceOf(children);
+    if (diagram !== null) return <MermaidDiagram source={diagram} />;
     return (
       <pre className="my-2 overflow-x-auto rounded-md border border-subtle bg-surface p-2.5 font-mono text-xs text-fg">
         {children}
@@ -230,6 +236,21 @@ function extensionBlockOf(
   if (!name) return null;
   return { name, body: textOf(props.children) };
 }
+
+/**
+ * The source of a ```` ```mermaid ```` fence, or null for ordinary code.
+ *
+ * react-markdown puts the info string on the inner `<code>` as
+ * `language-mermaid`, so the check reads the same class the highlighter would.
+ */
+function mermaidSourceOf(children: ReactNode): string | null {
+  const only = Array.isArray(children) ? children[0] : children;
+  const props = (only as { props?: { className?: string; children?: ReactNode } })?.props;
+  if (!props) return null;
+  const language = /language-([\w-]+)/.exec(props.className ?? "")?.[1] ?? "";
+  return isMermaid(language) ? textOf(props.children) : null;
+}
+
 
 function ExtensionBlock({ name, body }: { name: string; body: string }) {
   const extension = lookupPageExtension(name);
