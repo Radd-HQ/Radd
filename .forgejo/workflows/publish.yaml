@@ -29,11 +29,11 @@ jobs:
     runs-on: docker
     container:
       # Our own runner image (RADD-807): node for actions/checkout, the docker
-      # CLI for build/push, python3 for release_notes.py, syft for the SBOMs —
-      # all baked in, so a release no longer depends on download.docker.com
-      # answering. Pinned to an exact version; bump deploy/ci-runner.version
-      # and rebuild to move it.
-      image: git.radd-hq.com/radd/ci-runner:1.1.0
+      # CLI for build/push, python3 for release_notes.py, syft for the SBOMs,
+      # trivy for the vulnerability reports — all baked in, so a release no
+      # longer depends on download.docker.com answering. Pinned to an exact
+      # version; bump deploy/ci-runner.version and rebuild to move it.
+      image: git.radd-hq.com/radd/ci-runner:1.2.0
     steps:
       - uses: actions/checkout@v4
 
@@ -124,6 +124,37 @@ jobs:
             -o cyclonedx-json="radd-$V-web.cdx.json" -q
           python3 scripts/release_assets.py --tag "v$V" \
             "radd-$V-image.cdx.json" "radd-$V-web.cdx.json"
+
+      # RADD-1028: the inventory above, read for known vulnerabilities — the
+      # same two-target split for the same reason (no image scan can see the
+      # npm tree; trivy fs excludes npm devDependencies by default, matching
+      # the SBOMs). Report-only BY DESIGN: most base-image CVEs carry no fix,
+      # and the remedy for a fixable one is the workflow_dispatch rebuild
+      # above, not a blocked tag. The JSON attaches to the release; the log
+      # gets a CRITICAL/HIGH table via `trivy convert`, which re-reads the
+      # JSON instead of scanning twice. The DB fetch at scan time is the one
+      # runtime download in either pipeline — it rides the OCI registry
+      # protocol (ghcr.io), the single network path RADD-807 kept, because a
+      # DB baked into the runner would be stale by the first scan.
+      - name: Vulnerability scan
+        continue-on-error: true
+        env:
+          DOCKER_HOST: tcp://172.17.0.1:2375
+          FORGEJO_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.FORGEJO_TOKEN }}
+          FORGEJO_REPO: ${{ github.repository }}
+        run: |
+          set -e
+          V="${{ steps.meta.outputs.version }}"
+          trivy image --scanners vuln -q \
+            -f json -o "radd-$V-image-vulns.json" \
+            "${{ steps.meta.outputs.image }}:$V"
+          trivy fs --scanners vuln -q \
+            -f json -o "radd-$V-web-vulns.json" web
+          python3 scripts/release_assets.py --tag "v$V" \
+            "radd-$V-image-vulns.json" "radd-$V-web-vulns.json"
+          echo "CRITICAL/HIGH summary (full detail in the release assets):"
+          trivy convert -f table --severity CRITICAL,HIGH "radd-$V-image-vulns.json"
+          trivy convert -f table --severity CRITICAL,HIGH "radd-$V-web-vulns.json"
 
       - name: Deploy instructions
         run: |

@@ -45,6 +45,13 @@ FROM docker.io/library/docker@sha256:851f91d241214e7c6db86513b270d58776379aacc5e
 # syft 1.51.0 — the per-release CycloneDX SBOMs in publish.yaml (RADD-1026).
 FROM docker.io/anchore/syft@sha256:678bfa565b60f747aac0f8e964fe5588a24445b8d0a480e91f6efd70020dfbb0 AS syft
 
+# trivy 0.73.0 — the per-release vulnerability reports (RADD-1028). Statically
+# linked, so the musl->glibc hop is safe. NOTE: trivy still fetches its
+# vulnerability DB at scan time — from ghcr.io over the OCI registry protocol,
+# the one network path this image's whole design keeps — because a DB baked in
+# here would be stale by the first scan, and stale CVE data defeats the point.
+FROM docker.io/aquasec/trivy@sha256:7cced7cae583819fc7806d4cbc0dbbc7cad18b99f7d3e235192e6da8c091045c AS trivy
+
 # BASE IS node:22-bookworm ON PURPOSE. actions/checkout is a JavaScript action:
 # an image carrying kubectl and helm but no node cannot check out a repository,
 # which is why the workflows started from a node image and added tools rather
@@ -65,6 +72,7 @@ COPY --from=helm      /usr/bin/helm         /usr/local/bin/helm
 COPY --from=kubectl   /bin/kubectl          /usr/local/bin/kubectl
 COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=syft      /syft                 /usr/local/bin/syft
+COPY --from=trivy     /usr/local/bin/trivy  /usr/local/bin/trivy
 
 # syft checks for its own updates on every scan unless told not to — a CI job
 # has no business phoning home, and this image's whole point is that jobs
@@ -79,6 +87,7 @@ RUN set -eux; \
     kubectl version --client=true -o yaml | grep -q 'gitVersion: v1\.31\.3'; \
     docker --version                  | grep -q '27\.5\.1'; \
     syft version                      | grep -q 'Version:.*1\.51\.0'; \
+    trivy --version                   | grep -q '^Version: 0\.73\.0'; \
     git --version; \
     node --version; \
     python3 --version
