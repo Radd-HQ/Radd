@@ -43,6 +43,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       postgresql-client-17 \
  && rm -rf /var/lib/apt/lists/*
 
+# The base image's pip is vestigial — uv installs everything — but it is still
+# an installed package that scanners read; keep it current rather than shipping
+# its known CVEs (RADD-1029).
+RUN python3 -m pip install --no-cache-dir --quiet --upgrade pip
+
 # Use the image's interpreter — a uv-managed Python would land under /root,
 # unreadable by the runtime user.
 #
