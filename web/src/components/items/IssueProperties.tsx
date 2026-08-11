@@ -549,9 +549,23 @@ function PointsField({ item, onPatch }: PickerProps) {
 function peopleOptions(users: UserSummary[]) {
   const active = users.filter((user) => user.active);
   const asked = active.some((user) => user.has_access !== undefined && user.has_access !== null);
+  // RADD-1034: `external` only ever comes back true when the caller fetched
+  // with `include_requesters: true` (the reporter picker) — a `UserSource.EMAIL`
+  // account, annotated rather than filtered, same as `has_access` above. The
+  // `label` attribute carries the suffix too, since that's what Select's
+  // typeahead search matches (RADD-881), not the rendered children.
   const option = (user: UserSummary) => (
-    <option key={user.id} value={user.id} label={user.name}>
+    <option
+      key={user.id}
+      value={user.id}
+      label={user.external ? `${user.name} (external)` : user.name}
+    >
       <PersonName user={user} />
+      {user.external && (
+        <span className="ml-1.5 shrink-0 rounded bg-elevated px-1 py-px text-[10px] font-medium leading-3 text-fg-muted">
+          external
+        </span>
+      )}
     </option>
   );
   if (!asked) return <>{active.map(option)}</>;
@@ -582,9 +596,13 @@ function AssigneePicker({ item, onPatch }: PickerProps) {
   );
 }
 
-/** Reporter/requester picker (spec 30) — who raised the issue; defaults to creator. */
+/** Reporter/requester picker (spec 30) — who raised the issue; defaults to
+ * creator. RADD-1034: fetched with `includeRequesters` — unlike the assignee
+ * picker, a mail-born ticket's actual reporter IS a `UserSource.EMAIL`
+ * account, and it has to stay pickable here (`peopleOptions` marks it
+ * "external" rather than letting it pass for a colleague). */
 function ReporterPicker({ item, onPatch }: PickerProps) {
-  const users = useQuery(projectDirectoryQuery(item.project_id));
+  const users = useQuery(projectDirectoryQuery(item.project_id, { includeRequesters: true }));
   return (
     <SelectField
       label="Reporter"

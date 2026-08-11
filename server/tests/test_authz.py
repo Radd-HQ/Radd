@@ -523,6 +523,12 @@ def test_user_directory_entry_exposes_no_administrative_fields():
     see that project themselves; otherwise it stays None. Ungated it would have
     turned an open "who exists" directory into "who is on what", enumerable for
     projects the caller cannot see.
+
+    REVISED AGAIN (RADD-1034): `external` joined it — narrower than exposing
+    `source` a second time, it answers one boolean ("is this row a stranger who
+    emailed the desk") instead of handing the SPA the `email` sentinel to
+    hardcode. It defaults False and is only ever True on rows the caller opted
+    into via `include_requesters=true` (see `test_user_directory.py`).
     """
     from radd.modules.auth.schemas import UserDirectoryEntry, UserRead
 
@@ -535,6 +541,7 @@ def test_user_directory_entry_exposes_no_administrative_fields():
         "avatar_color",
         "avatar_emoji",
         "has_access",
+        "external",
     }
     administrative = {"email", "instance_role", "last_login_at", "timezone"}
     assert exposed & administrative == set()

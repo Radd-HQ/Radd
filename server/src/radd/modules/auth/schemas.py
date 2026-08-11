@@ -110,6 +110,18 @@ class UserDirectoryEntry(BaseModel):
     #: item.read on THAT project through a grant? `None` means the question was
     #: not asked, which is different from "no" and must not render as a warning.
     has_access: bool | None = None
+    #: RADD-1034 — true when this row is an email-provisioned account
+    #: (`UserSource.EMAIL`), returned only when the caller asked for them via
+    #: `include_requesters=true`. This is narrower than exposing `source`
+    #: itself (already present, RADD-869, so pickers can badge `service` rows):
+    #: `source` names WHICH backend authenticated someone, a fact this class's
+    #: own docstring argues is not a picker's business beyond "service or not".
+    #: `external` answers a DIFFERENT, narrower question — "is this a stranger
+    #: who emailed the desk, not a colleague" — without handing the SPA the
+    #: `email` sentinel to hardcode; today that question happens to reduce to
+    #: `source == "email"`, but the field keeps that mapping server-side so a
+    #: second requester-like source wouldn't need an SPA change.
+    external: bool = False
 
 
 class PermissionSourceRead(BaseModel):

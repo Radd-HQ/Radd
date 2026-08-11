@@ -109,6 +109,7 @@ def _user_filters(
     q: str | None,
     source: UserSource | None,
     active: bool | None,
+    sources_excluded: Iterable[UserSource] | None = None,
 ):
     """THE directory filter (RADD-936). One builder, two callers.
 
@@ -118,6 +119,13 @@ def _user_filters(
     exactly and only what Settings → Users sends. Neither `?active=true` nor
     `?limit=25` alone touches the broken line, so nothing else on the instance
     ever hit it.
+
+    `sources_excluded` (RADD-1034) is a SEPARATE knob from `source`: the latter
+    is an admin exact-match filter (Settings → Users' dropdown), the former is
+    a caller-side exclusion set (`/users/directory`'s default hiding of
+    `UserSource.EMAIL`). Keeping them distinct means the directory's default
+    exclusion never has to fight an admin's explicit `?source=email` request —
+    only `/users/directory` ever passes `sources_excluded`.
     """
     if q:
         pattern = ilike_term(q)
@@ -126,6 +134,8 @@ def _user_filters(
         query = query.where(User.source == source.value)
     if active is not None:
         query = query.where(User.active == active)
+    if sources_excluded:
+        query = query.where(User.source.notin_([s.value for s in sources_excluded]))
     return query
 
 
@@ -136,12 +146,21 @@ async def list_users(
     active: bool | None = None,
     limit: int | None = None,
     offset: int = 0,
+    sources_excluded: Iterable[UserSource] | None = None,
 ) -> list[User]:
     """User directory, optionally filtered (spec 84): q matches email OR name
     (case-insensitive substring, wildcards escaped), source/active match
-    exactly; limit/offset page (RADD-883)."""
+    exactly; limit/offset page (RADD-883). `sources_excluded` (RADD-1034) is an
+    additional exclusion set on top of `source`/`active`, used by the member
+    directory to hide requester accounts by default — every OTHER caller
+    (Settings → Users, the MCP `list_users` tool, the Jira importer's email
+    lookup) leaves it unset and is unaffected."""
     query = _user_filters(
-        select(User).order_by(User.created_at), q=q, source=source, active=active
+        select(User).order_by(User.created_at),
+        q=q,
+        source=source,
+        active=active,
+        sources_excluded=sources_excluded,
     )
     if limit is not None:
         query = query.offset(offset).limit(limit)
@@ -153,13 +172,19 @@ async def count_users(
     q: str | None = None,
     source: UserSource | None = None,
     active: bool | None = None,
+    sources_excluded: Iterable[UserSource] | None = None,
 ) -> int:
     """Pre-pagination count for the directory/admin lists (RADD-883). Shares
     `_user_filters` with `list_users` — the count and the page must answer the
     same question, and they stopped doing so once the predicate was written
-    twice."""
+    twice. `sources_excluded` must match whatever `list_users` was called with
+    (RADD-1034), same reasoning as `source`/`active` above."""
     query = _user_filters(
-        select(func.count()).select_from(User), q=q, source=source, active=active
+        select(func.count()).select_from(User),
+        q=q,
+        source=source,
+        active=active,
+        sources_excluded=sources_excluded,
     )
     return (await session.execute(query)).scalar_one()
 

@@ -120,6 +120,11 @@ export interface UserSummary {
    *  person hold item.read on THAT project through a grant? `undefined`/`null`
    *  means the question was not asked, which must not render as a warning. */
   has_access?: boolean | null;
+  /** RADD-1034 — true when this row is a `UserSource.EMAIL` account (a mail-in
+   *  requester), returned only from a directory fetch with
+   *  `include_requesters: "true"`. Absent/false everywhere else, since the
+   *  directory excludes those accounts by default. */
+  external?: boolean;
 }
 
 /** PATCH /users/{id} (spec 84, instance admin) — omitted keys unchanged.

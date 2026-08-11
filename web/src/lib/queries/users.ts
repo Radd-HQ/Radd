@@ -63,15 +63,39 @@ export const usersQuery = queryOptions({
  * Annotation, not filtering. The server marks; the UI groups. Adding a
  * no-access person as a participant is precisely what makes the project visible
  * to them (RADD-937), so the pick has to stay possible.
+ *
+ * `includeRequesters` (RADD-1034): the directory excludes `UserSource.EMAIL`
+ * accounts by default — mailintake provisions one, active, for every
+ * unrecognized sender, and without the exclusion a forged message made
+ * "Stranger <...@evil.example>" pickable by everyone. Pass `true` only for a
+ * surface that genuinely means to offer them (the reporter picker on a
+ * mail-born ticket); those rows come back with `external: true`. Folded into
+ * the query key so the assignee picker's (filtered) cache and the reporter
+ * picker's (opted-in) cache never collide on the same project.
  */
-export const projectDirectoryQuery = (projectId: string | undefined) =>
-  queryOptions({
-    queryKey: [...queryKeys.users, "project", projectId ?? ""] as const,
+export const projectDirectoryQuery = (
+  projectId: string | undefined,
+  options?: { includeRequesters?: boolean },
+) => {
+  const includeRequesters = options?.includeRequesters ?? false;
+  return queryOptions({
+    queryKey: [
+      ...queryKeys.users,
+      "project",
+      projectId ?? "",
+      includeRequesters ? "with-requesters" : "",
+    ] as const,
     queryFn: () =>
-      api.get<UserSummary[]>(ApiPath.userDirectory, { query: { project_id: projectId! } }),
+      api.get<UserSummary[]>(ApiPath.userDirectory, {
+        query: {
+          project_id: projectId!,
+          ...(includeRequesters ? { include_requesters: "true" } : {}),
+        },
+      }),
     enabled: Boolean(projectId),
     staleTime: 60_000,
   });
+};
 
 /** What a user owns (spec 89) — fetched when the delete dialog opens, never cached
  * long: it decides whether a successor is required. */

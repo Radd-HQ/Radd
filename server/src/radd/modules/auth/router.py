@@ -435,6 +435,15 @@ async def list_user_directory(
     actor: CurrentUser,
     q: str | None = None,
     project_id: uuid.UUID | None = None,
+    include_requesters: Annotated[
+        bool,
+        Query(
+            description=(
+                "Include UserSource.EMAIL accounts (mail-provisioned requesters), "
+                "excluded by default (RADD-1034)."
+            )
+        ),
+    ] = False,
     limit: Annotated[int | None, Query(ge=1, le=500)] = None,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[UserDirectoryEntry]:
@@ -447,8 +456,23 @@ async def list_user_directory(
     every builtin role so that it always held, which is a gate in name only.
 
     What makes that safe is the SHAPE, not a permission: `UserDirectoryEntry`
-    carries no email, no instance role, no source, no sign-in history. The
-    administrative directory keeps all of that behind `user.manage` below.
+    carries no email, no instance role, no sign-in history. The administrative
+    directory keeps all of that behind `user.manage` below.
+
+    **`UserSource.EMAIL` accounts are excluded by default (RADD-1034).**
+    `mailintake._sender_user` provisions one of these, active, for every
+    unrecognized sender — so with no filter, one forged message made
+    "Stranger <stranger@evil.example>" pickable by every authenticated user,
+    forever (the shape guard above never covered this: it protects what a row
+    exposes, not which rows are IN the list). Pass `include_requesters=true`
+    for the surfaces that mean to offer them — the reporter picker on a
+    mail-born ticket is the one today — and those rows carry `external=True`
+    so the SPA can label them rather than hardcoding the `email` sentinel.
+    Precedent for the same exclusion pair: `preflight.py`'s Baseline report,
+    which also drops `UserSource.SERVICE`. Service accounts are NOT excluded
+    here — unlike a stranger's email, they're deliberately created by an admin
+    (spec 113), and `UserDirectoryEntry`'s own docstring is explicit that
+    omitting them would leave page/comment bylines unresolvable.
 
     **Declared above `/users/{user_id}` on purpose (RADD-761):** Starlette
     matches in declaration order, so a literal segment written after a `{uuid}`
@@ -456,10 +480,17 @@ async def list_user_directory(
     as a UUID while appearing, correctly, in the schema and at /docs.
     `tests/test_route_shadowing.py` asserts it for the whole app.
     """
-    rows = await service.list_users(session, q=q, limit=limit, offset=offset)
+    sources_excluded = None if include_requesters else [UserSource.EMAIL]
+    rows = await service.list_users(
+        session, q=q, limit=limit, offset=offset, sources_excluded=sources_excluded
+    )
     if limit is not None:
-        response.headers[TOTAL_COUNT_HEADER] = str(await service.count_users(session, q=q))
+        response.headers[TOTAL_COUNT_HEADER] = str(
+            await service.count_users(session, q=q, sources_excluded=sources_excluded)
+        )
     entries = [UserDirectoryEntry.model_validate(u) for u in rows]
+    for entry in entries:
+        entry.external = entry.source == UserSource.EMAIL.value
 
     # RADD-938: `project_id` annotates each row with whether that person can
     # actually reach the project, for the controls that attach someone TO work
