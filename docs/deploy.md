@@ -137,6 +137,13 @@ helm install radd deploy/helm/radd \
   --set ingress.enabled=true --set ingress.host=radd.example.com
 ```
 
+A tag only reaches the registry after `.forgejo/workflows/publish.yaml`'s
+`test` job goes green — `uv run pytest` against a throwaway Postgres, `tsc -b`,
+`vite build` — which the `image` job `needs:` (RADD-1037; before this, a tag
+shipped whatever the commit contained, untested). Both jobs run in the pinned
+`ci-runner` image (`deploy/ci-runner.Containerfile`), so the gate needs no
+network access beyond the registries CI already reaches.
+
 Every release on the canonical repo (`git.radd-hq.com/Radd/Radd`) ships with two
 CycloneDX SBOMs as release assets: `radd-<version>-image.cdx.json` describes the
 container image (Debian packages, the installed Python environment, and what

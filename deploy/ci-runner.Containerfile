@@ -52,10 +52,18 @@ FROM docker.io/anchore/syft@sha256:678bfa565b60f747aac0f8e964fe5588a24445b8d0a48
 # here would be stale by the first scan, and stale CVE data defeats the point.
 FROM docker.io/aquasec/trivy@sha256:7cced7cae583819fc7806d4cbc0dbbc7cad18b99f7d3e235192e6da8c091045c AS trivy
 
+# uv 0.12.3 — `uv sync` / `uv run pytest` for the test job publish.yaml now runs
+# ahead of the image build (RADD-1037). Copied out of astral-sh's own image by
+# digest, same as every other tool above, rather than the `curl astral.sh/uv/
+# install.sh | sh` one-liner astral documents — that is exactly the kind of
+# runtime download RADD-807 exists to delete.
+FROM ghcr.io/astral-sh/uv@sha256:dfd1e6972e100ca2fbf1f391effc3dd4aa57f319bf03c3e321e0a3f3341ed5af AS uv
+
 # BASE IS node:22-bookworm ON PURPOSE. actions/checkout is a JavaScript action:
 # an image carrying kubectl and helm but no node cannot check out a repository,
 # which is why the workflows started from a node image and added tools rather
-# than starting from something like alpine/k8s.
+# than starting from something like alpine/k8s. It also means npm is already
+# here for the test job's `npm ci` (RADD-1037) — one fewer thing to add.
 FROM docker.io/library/node:22-bookworm
 
 # git is used by actions/checkout; python3 by publish.yaml's release_notes.py.
@@ -73,6 +81,7 @@ COPY --from=kubectl   /bin/kubectl          /usr/local/bin/kubectl
 COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=syft      /syft                 /usr/local/bin/syft
 COPY --from=trivy     /usr/local/bin/trivy  /usr/local/bin/trivy
+COPY --from=uv        /uv                   /usr/local/bin/uv
 
 # syft checks for its own updates on every scan unless told not to — a CI job
 # has no business phoning home, and this image's whole point is that jobs
@@ -88,6 +97,8 @@ RUN set -eux; \
     docker --version                  | grep -q '27\.5\.1'; \
     syft version                      | grep -q 'Version:.*1\.51\.0'; \
     trivy --version                   | grep -q '^Version: 0\.73\.0'; \
+    uv --version                      | grep -q '^uv 0\.12\.3'; \
     git --version; \
     node --version; \
+    npm --version; \
     python3 --version
