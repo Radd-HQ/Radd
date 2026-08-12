@@ -15,6 +15,44 @@ from radd.schedule import ScheduleKind
 class AutomationTrigger(StrEnum):
     MANUAL = "manual"
     SCHEDULE = "schedule"
+    # Spec 119. Fires SYNCHRONOUSLY at intake, against a savepoint-created draft,
+    # and its walk applies nothing — it collects FINDINGS. A sentinel like the
+    # other two, and for the same reason: no event in the catalog names it, so
+    # the engine's outbox consumer can never start a run from it. What it binds
+    # to (a form, an issue type, a project) lives in `automation_validations`,
+    # indexed off the trigger node's params exactly as a schedule's clock is.
+    VALIDATE = "validate"
+
+
+class ValidationTargetKind(StrEnum):
+    """What a validate trigger governs. A LIST of these rides on the node, never
+    three parallel scalar params: "this graph checks the Bug type in two projects
+    and the incident form" is a set of scoped rows, and a single value could only
+    ever hold the last one written."""
+
+    FORM = "form"
+    ISSUE_TYPE = "issue_type"
+    PROJECT = "project"
+
+
+class ValidationMode(StrEnum):
+    """How hard a governing graph's findings bite.
+
+    ADVISORY shows them and lets the person create anyway; REQUIRED refuses the
+    creation for EVERY non-automated caller, REST and MCP included. When several
+    graphs govern one draft the strictest mode wins — a required check cannot be
+    softened by an advisory one that happens to be listed beside it."""
+
+    ADVISORY = "advisory"
+    REQUIRED = "required"
+
+
+#: Ranked, so "strictest wins" is a max() rather than an if-chain that has to be
+#: repeated wherever two verdicts meet.
+VALIDATION_MODE_RANK: dict[ValidationMode, int] = {
+    ValidationMode.ADVISORY: 0,
+    ValidationMode.REQUIRED: 1,
+}
 
 
 #: The shape of a scheduled rule's `schedule` JSONB (spec 69). Promoted to the
@@ -274,6 +312,20 @@ TYPE_FILTER_SLQ = "filter.slq"
 TYPE_SEARCH_SLQ = "search.slq"
 ACTION_TYPE_PREFIX = "action."
 
+#: Spec 119: reaching this node records a FINDING against the draft being
+#: validated, and passes the packet on unchanged so several checks can chain off
+#: one branch.
+#:
+#: An ACTION kind rather than a sixth `AutomationNodeKind`, deliberately. Its
+#: port behaviour is byte-identical to every other action's — one `out` that
+#: carries its input through — so a new kind would buy a `PORTS_BY_KIND` row, a
+#: `BUILTIN_ARITY` row, a SPA `NodeKind` member and a canvas visual, all to
+#: express a difference that lives entirely in what the node DOES. That is what
+#: `type` is for. On an ordinary event walk it is a no-op that passes through:
+#: nothing is collecting findings there, which is the honest answer rather than
+#: an error about a node someone wired in the wrong graph.
+TYPE_VALIDATION_FAIL = "validation.fail"
+
 
 #: Ports a built-in node TYPE emits, when they are not just its kind's. Only
 #: `create_item` needs an entry today; the table exists because `ports_of` has
@@ -294,6 +346,13 @@ def _action_arity(action: ActionType) -> ArityRule:
 #: produces the set rather than reading it, so it runs once.
 BUILTIN_ARITY: dict[str, ArityRule] = {
     TYPE_FILTER_SLQ: ArityRule(NodeArity.ITEM, (NodeArity.ITEM,)),
+    # Fixed SET: one check, one finding. A validation walk carries exactly one
+    # draft, so ITEM would say the same thing with a loop around it — and would
+    # invite a per-item reading of a node whose subject is the submission. It
+    # still refuses to fire on an EMPTY packet (see `executor._run_action`),
+    # which is what makes `filter → matched → check` mean "only when this
+    # applies" rather than "always".
+    TYPE_VALIDATION_FAIL: ArityRule(NodeArity.SET, (NodeArity.SET,)),
     TYPE_SEARCH_SLQ: ArityRule(NodeArity.SET, (NodeArity.SET,)),
     TYPE_GATE_EVENT: ArityRule(NodeArity.SET, (NodeArity.SET,)),
     "gate.field_changed": ArityRule(NodeArity.SET, (NodeArity.SET,)),
@@ -332,6 +391,14 @@ MAX_GRAPH_EDGES = 120
 # schedule" is one automation, not two copies of the same actions. Capped so a
 # single graph cannot subscribe to the entire event catalog by accident.
 MAX_GRAPH_TRIGGERS = 12
+#: Targets one validate trigger may name (spec 119). A graph governing forty
+#: forms is a graph nobody can reason about, and the index row count is the
+#: product of this and the trigger cap.
+MAX_VALIDATION_TARGETS = 25
+#: Findings ONE intake verdict may carry, across every governing graph. A person
+#: reading a rejected submission can act on a handful; past that it is a wall,
+#: and the collection is truncated with the count said out loud.
+MAX_INTAKE_FINDINGS = 20
 
 
 class AutomationEntity(StrEnum):

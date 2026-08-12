@@ -48,6 +48,7 @@ from .types import (  # noqa: F401 — re-exported for callers importing them he
     TYPE_FILTER_SLQ,
     TYPE_GATE_EVENT,
     TYPE_SEARCH_SLQ,
+    TYPE_VALIDATION_FAIL,
     AutomationNodeKind,
     NodeArity,
     NodePort,
@@ -100,6 +101,23 @@ def new_budget() -> RunBudget:
     )
 
 
+@dataclass(frozen=True)
+class Finding:
+    """One thing wrong with the draft a validation walk is inspecting (spec 119).
+
+    `field` names the control the person should go and fix — a builtin field name
+    (`title`, `description`, `assignee`) or `cf.<key>` — and is empty for a
+    finding about the submission as a whole. It is validated LOOSELY and against
+    nothing here: a graph written when a custom field existed keeps producing
+    readable advice after it is deleted, it just stops highlighting a control.
+    `node_id` is kept so the run report can say which check spoke.
+    """
+
+    node_id: str
+    message: str
+    field: str = ""
+
+
 @dataclass
 class PlannedAction:
     """One action a node resolved, before it was (or was not) applied."""
@@ -136,6 +154,14 @@ class RunReport:
     port_items: dict[str, dict[str, tuple[uuid.UUID, ...]]] = field(default_factory=dict)
     #: node id -> what ARRIVED, capped the same way.
     incoming_items: dict[str, tuple[uuid.UUID, ...]] = field(default_factory=dict)
+    #: What the walk found wrong (spec 119), in the order the checks ran.
+    #:
+    #: Collected on EVERY walk rather than behind a mode flag, because a flag
+    #: would be a second thing the executor has to be told and a second way for
+    #: the two callers to diverge. An ordinary event run simply has no
+    #: `validation.fail` nodes in it and ends with an empty list; the intake path
+    #: is the only caller that reads this.
+    findings: list[Finding] = field(default_factory=list)
 
     def record(self, node: Node, packet: Packet, outgoing: dict[str, Packet]) -> None:
         self.per_node[node.id] = {
@@ -156,6 +182,10 @@ class RunReport:
 #: through, small enough that a 200-item scheduled run does not build a report
 #: bigger than the work it describes — the count beside it is always exact.
 SAMPLE_ITEMS = 10
+
+#: What a `validation.fail` node with no message says. Only reachable from a
+#: hand-edited row — the write path requires one.
+UNSPOKEN_FINDING = "This submission did not pass a check (the check has no message set)."
 
 
 async def walk(
@@ -254,7 +284,7 @@ async def _run_node(
         return {NodePort.OUT.value: await _run_source(session, node, packet, automation_name)}
 
     if node.kind in (AutomationNodeKind.GATE, AutomationNodeKind.FILTER):
-        return await _run_router(session, node, packet, system_user)
+        return await _run_router(session, node, packet, system_user, report)
 
     created = await _run_action(
         session,
@@ -313,7 +343,7 @@ async def _run_source(
 
 
 async def _run_router(
-    session: AsyncSession, node: Node, packet: Packet, actor: User
+    session: AsyncSession, node: Node, packet: Packet, actor: User, report: RunReport
 ) -> dict[str, Packet]:
     """Send the packet down one port, or split it across all of them.
 
@@ -326,7 +356,7 @@ async def _run_router(
     """
     ports = ports_of(node)
     if arity_of(node) is NodeArity.SET:
-        chosen = await _route(session, node, packet, actor)
+        chosen = await _route(session, node, packet, actor, report)
         if chosen not in ports:
             logger.error(
                 "automations: node %s (%s) chose port %r, which it does not emit", node.id, node.type, chosen
@@ -334,18 +364,20 @@ async def _run_router(
             return {}
         return {chosen: packet}
 
-    assigned = await _partition(session, node, packet, actor)
+    assigned = await _partition(session, node, packet, actor, report)
     return {
         port: packet.with_items([i for i in packet.item_ids if assigned.get(i) == port])
         for port in ports
     }
 
 
-async def _route(session: AsyncSession, node: Node, packet: Packet, actor: User) -> str:
+async def _route(
+    session: AsyncSession, node: Node, packet: Packet, actor: User, report: RunReport
+) -> str:
     """The single port a SET-arity router sends its packet down."""
     spec = spec_for(node)
     if spec is not None and spec.plan is not None:
-        return await _run_registered_gate(session, node, packet, actor)
+        return await _run_registered_gate(session, node, packet, actor, report)
 
     evaluator = GATE_EVALUATORS.get(node.type)
     if evaluator is not None:
@@ -359,7 +391,7 @@ async def _route(session: AsyncSession, node: Node, packet: Packet, actor: User)
 
 
 async def _partition(
-    session: AsyncSession, node: Node, packet: Packet, actor: User
+    session: AsyncSession, node: Node, packet: Packet, actor: User, report: RunReport
 ) -> dict[uuid.UUID, str]:
     """item id -> the port it leaves by, for an ITEM-arity router."""
     if packet.is_empty:
@@ -367,7 +399,7 @@ async def _partition(
 
     spec = spec_for(node)
     if spec is not None:
-        return await _partition_registered(session, node, packet, actor, spec)
+        return await _partition_registered(session, node, packet, actor, spec, report)
     if node.type == TYPE_FILTER_SLQ:
         return await _partition_slq(session, node, packet)
     logger.error("automations: node %s (%s) cannot run per item", node.id, node.type)
@@ -401,7 +433,7 @@ async def _partition_slq(
 
 
 async def _partition_registered(
-    session: AsyncSession, node: Node, packet: Packet, actor: User, spec
+    session: AsyncSession, node: Node, packet: Packet, actor: User, spec, report: RunReport
 ) -> dict[uuid.UUID, str]:
     """Ask a CONTRIBUTED router for each item's port.
 
@@ -419,7 +451,10 @@ async def _partition_registered(
     if spec.plan_items is not None:
         try:
             answers = await spec.plan_items(
-                _NodeContext(session=session, node=node, packet=packet, actor=actor)
+                _NodeContext(
+                    session=session, node=node, packet=packet, actor=actor,
+                    findings=report.findings,
+                )
             )
         except Exception:
             logger.exception(
@@ -435,7 +470,9 @@ async def _partition_registered(
     if spec.plan is None:
         return {item_id: fallback for item_id in packet.item_ids}
     return {
-        item_id: await _run_registered_gate(session, node, packet.with_items((item_id,)), actor)
+        item_id: await _run_registered_gate(
+            session, node, packet.with_items((item_id,)), actor, report
+        )
         for item_id in packet.item_ids
     }
 
@@ -459,7 +496,7 @@ async def _load(
 
 
 async def _run_registered_gate(
-    session: AsyncSession, node: Node, packet: Packet, actor: User
+    session: AsyncSession, node: Node, packet: Packet, actor: User, report: RunReport
 ) -> str:
     """Ask a contributed gate which port the packet leaves by.
 
@@ -478,7 +515,10 @@ async def _run_registered_gate(
         return ports[-1]
     try:
         chosen = await spec.plan(
-            _NodeContext(session=session, node=node, packet=packet, actor=actor)
+            _NodeContext(
+                session=session, node=node, packet=packet, actor=actor,
+                findings=report.findings,
+            )
         )
     except Exception:
         logger.exception("automations: node %s (%s) failed; taking its fallback port", node.id, node.type)
@@ -502,6 +542,23 @@ class _NodeContext:
     #: one id per call at item arity, the whole set at set arity. A node acting
     #: on milestones gets milestone ids and never sees the item machinery.
     subject_ids: tuple[uuid.UUID, ...] = ()
+    #: Where `add_finding` writes — the walk's report list (spec 119).
+    findings: list[Finding] | None = None
+
+    def add_finding(self, message: str, field: str = "") -> None:
+        """A contributed node's seam for saying what is wrong with the draft.
+
+        A METHOD rather than a mutable list a node appends dicts to, because the
+        `Finding` type belongs to `automations` and the nodes contributing
+        findings live in other modules (`ai.validate` is the first). A node calls
+        this; it never constructs the vocabulary. Blank messages are dropped —
+        an empty finding fails a submission while explaining nothing, which is
+        the worst possible refusal.
+        """
+        text = str(message or "").strip()
+        if self.findings is None or not text:
+            return
+        self.findings.append(Finding(node_id=self.node.id, message=text, field=str(field or "")))
 
 
 async def _actor_for(session: AsyncSession, node: Node, default: User) -> User:
@@ -560,6 +617,33 @@ async def _run_action(
             budget=budget,
             apply=apply,
             report=report,
+        )
+        return []
+
+    # `validation.fail` (spec 119): reaching it IS the check failing. It writes
+    # nothing and takes no budget beyond the node it already spent, so it runs
+    # identically on a dry run and a live one — there is no applying half to
+    # switch off, which is the whole reason a finding is not an action.
+    if node.type == TYPE_VALIDATION_FAIL:
+        if packet.is_empty:
+            # THE APPLICABILITY RULE, and it is not obvious. A universal action
+            # at SET arity fires on an empty packet on purpose ("nothing matched
+            # — tell me"), and inheriting that here made `trigger → filter →
+            # matched → check` report its finding about a draft the filter had
+            # just EXCLUDED. Conditional checks are the whole reason the trigger
+            # takes no condition params, so an empty packet means this branch
+            # does not apply to this draft, and the check stays quiet.
+            return []
+        message = str(node.params.get("message") or "").strip()
+        report.findings.append(
+            Finding(
+                node_id=node.id,
+                # The message is required on write. A row edited around the API
+                # still has to say SOMETHING: a refusal that explains nothing is
+                # worse than one that admits the check is misconfigured.
+                message=message or UNSPOKEN_FINDING,
+                field=str(node.params.get("field") or ""),
+            )
         )
         return []
 
@@ -662,7 +746,8 @@ async def _run_contributed_action(
         try:
             async with session.begin_nested():
                 ctx = _NodeContext(
-                    session=session, node=node, packet=packet, actor=actor, subject_ids=batch
+                    session=session, node=node, packet=packet, actor=actor,
+                    subject_ids=batch, findings=report.findings,
                 )
                 plan = await spec.plan(ctx)
                 resolves = bool(getattr(plan, "resolves", plan is not None))

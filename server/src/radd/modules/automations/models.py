@@ -81,6 +81,42 @@ class TriggerBinding(Base):
     schedule: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
 
+class ValidationBinding(Base):
+    """What one VALIDATE trigger node governs, projected into queryable rows
+    (spec 119) — the same shape `TriggerBinding` is, for the same reason.
+
+    Intake has to answer "does anything validate a draft in project P, of type T,
+    submitted through form F" on the request path, before the person's Submit
+    click has returned. Parsing every stored graph to find out is the version
+    that gets slower with every automation anyone writes, so the graph stays the
+    source of truth and this is its index, rebuilt wholesale on every write by
+    `service._sync_validations`.
+
+    One row per (trigger node, target). A graph may govern the incident form AND
+    the Bug type in two projects — that is a LIST of scoped targets, so it is a
+    list of rows; three nullable columns would have made "which of these did the
+    author actually mean" a question the reader has to answer.
+
+    `target_id` carries no foreign key, and cannot: the target is polymorphic
+    across three owners' tables. A deleted form simply stops matching anything,
+    which is the same degradation a card layout's departed field gets — the
+    binding is stale, not corrupt.
+    """
+
+    __tablename__ = "automation_validations"
+
+    automation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("automations.id", ondelete="CASCADE"), primary_key=True
+    )
+    node_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    #: A `ValidationTargetKind` value — form | issue_type | project.
+    target_kind: Mapped[str] = mapped_column(String(16), primary_key=True, index=True)
+    target_id: Mapped[uuid.UUID] = mapped_column(primary_key=True, index=True)
+    #: A `ValidationMode` value. Per BINDING rather than per automation: the same
+    #: checks may be advice on one project's intake and law on another's.
+    mode: Mapped[str] = mapped_column(String(16))
+
+
 class TeamAssignmentCursor(Base):
     """Round-robin position for the `assign_round_robin` action (RADD-1044).
 

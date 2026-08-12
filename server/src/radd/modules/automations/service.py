@@ -12,13 +12,14 @@ from radd.modules.auth import authz
 from radd.modules.auth.models import User
 from radd.modules.auth.types import Permission
 from radd.modules.fields.models import FieldDefinition
+from radd.modules.fields.types import BuiltinItemField
 from radd.modules.items import slq
 
 from radd import schedule as schedule_math
 from radd.clock import utcnow
 from . import graph
 from . import nodes as nodes_registry
-from .models import Automation, AutomationScheduleState, TriggerBinding
+from .models import Automation, AutomationScheduleState, TriggerBinding, ValidationBinding
 from .executor import ACTION_TYPE_PREFIX
 from .schemas import (
     ActionAdapter,
@@ -31,14 +32,23 @@ from .schemas import (
 from .email_action import is_role
 from .types import (
     ARITY_PARAM,
+    MAX_VALIDATION_TARGETS,
     SYSTEM_ACTOR_ID,
+    TYPE_VALIDATION_FAIL,
     ActionType,
     AutomationNodeKind,
     AutomationEntity,
     AutomationEvent,
     AutomationTrigger,
     NodeArity,
+    ValidationMode,
+    ValidationTargetKind,
 )
+
+#: How a custom field is named in a finding's `field` — the `cf.<key>` form the
+#: card-layout attribute catalogue and the SPA column ids already use, so one
+#: vocabulary answers "which control does this point at" everywhere.
+CUSTOM_FIELD_PREFIX = "cf."
 
 
 logger = logging.getLogger(__name__)
@@ -120,6 +130,11 @@ async def _validate_graph(
             # finds nothing at 3am, and the form is where that is fixable.
             await _validate_condition(session, str(node.params.get("slq") or ""))
         elif node.kind is AutomationNodeKind.ACTION:
+            if node.type == TYPE_VALIDATION_FAIL:
+                # Not in the action union and never will be: it applies nothing,
+                # so it has no target service and no params the union describes.
+                _check_validation_fail(node)
+                continue
             spec = nodes_registry.spec_for(node)
             if spec is not None:
                 # A CONTRIBUTED action (RADD-923) is not in the built-in union and
@@ -240,11 +255,104 @@ def _check_recipient_arity(node: graph.Node) -> None:
         )
 
 
+def _check_validate_trigger(trigger: graph.Node) -> None:
+    """Spec 119 invariants for a VALIDATE trigger — strict where the reader is
+    lenient (`validation.parse_targets`), because this is the only place someone
+    can be told what they got wrong while they are still looking at the form.
+
+    A trigger with no targets is refused rather than stored: it governs nothing,
+    so it would sit in the list looking configured and never once run — the same
+    silent-nothing failure the send_email role check exists to prevent.
+    """
+    raw_targets = trigger.params.get("targets")
+    if not isinstance(raw_targets, list) or not raw_targets:
+        raise ConflictError(
+            AutomationEntity.RULE,
+            reason=(
+                f"trigger {trigger.id!r}: a validation trigger needs at least one "
+                f"target — a form, an issue type or a project"
+            ),
+        )
+    if len(raw_targets) > MAX_VALIDATION_TARGETS:
+        raise ConflictError(
+            AutomationEntity.RULE,
+            reason=(
+                f"trigger {trigger.id!r}: at most {MAX_VALIDATION_TARGETS} targets "
+                f"({len(raw_targets)} given)"
+            ),
+        )
+    for entry in raw_targets:
+        if not isinstance(entry, dict):
+            raise ConflictError(
+                AutomationEntity.RULE,
+                reason=f"trigger {trigger.id!r}: each target must be {{kind, id}}",
+            )
+        try:
+            ValidationTargetKind(str(entry.get("kind")))
+        except ValueError as exc:
+            raise ConflictError(
+                AutomationEntity.RULE,
+                reason=(
+                    f"trigger {trigger.id!r}: unknown target kind {entry.get('kind')!r} — "
+                    f"one of {', '.join(k.value for k in ValidationTargetKind)}"
+                ),
+            ) from exc
+        try:
+            uuid.UUID(str(entry.get("id")))
+        except (ValueError, TypeError) as exc:
+            raise ConflictError(
+                AutomationEntity.RULE,
+                reason=f"trigger {trigger.id!r}: target {entry.get('kind')} has no valid id",
+            ) from exc
+    mode = str(trigger.params.get("mode") or ValidationMode.ADVISORY.value)
+    if mode not in set(ValidationMode):
+        raise ConflictError(
+            AutomationEntity.RULE,
+            reason=(
+                f"trigger {trigger.id!r}: mode must be "
+                f"{' or '.join(m.value for m in ValidationMode)}"
+            ),
+        )
+
+
+def _check_validation_fail(node: graph.Node) -> None:
+    """A `validation.fail` node's own params (spec 119).
+
+    `field` is checked loosely and only against SHAPE — a builtin name or
+    `cf.<key>` — never against the live registry. A graph written when a custom
+    field existed must keep producing readable advice after someone deletes it;
+    it simply stops highlighting a control. Same philosophy as a card layout's
+    departed attribute.
+    """
+    if not str(node.params.get("message") or "").strip():
+        raise ConflictError(
+            AutomationEntity.RULE,
+            reason=(
+                f"node {node.id!r}: a validation check needs a message — it is what the "
+                f"person submitting reads"
+            ),
+        )
+    target = str(node.params.get("field") or "").strip()
+    if target and not (
+        target.startswith(CUSTOM_FIELD_PREFIX) or target in set(BuiltinItemField)
+    ):
+        raise ConflictError(
+            AutomationEntity.RULE,
+            reason=(
+                f"node {node.id!r}: {target!r} is not a field — use a builtin name "
+                f"({', '.join(sorted(f.value for f in BuiltinItemField))}) or "
+                f"{CUSTOM_FIELD_PREFIX}<key>"
+            ),
+        )
+
+
 def _check_trigger(trigger: graph.Node, nodes: list[graph.Node]) -> None:
     """Spec 69 invariants, per TRIGGER node. Raised as 409 per the form-error idiom."""
     event = str(trigger.params.get("event") or AutomationTrigger.MANUAL)
     schedule = trigger.params.get("schedule")
     scheduled = event == AutomationTrigger.SCHEDULE
+    if event == AutomationTrigger.VALIDATE:
+        _check_validate_trigger(trigger)
     if scheduled and not isinstance(schedule, dict):
         raise ConflictError(
             AutomationEntity.RULE,
@@ -355,6 +463,38 @@ async def _sync_triggers(
     await session.flush()
 
 
+async def _sync_validations(
+    session: AsyncSession, rule: Automation, triggers: list[graph.Node]
+) -> None:
+    """Rebuild the automation's validation bindings (spec 119).
+
+    Wholesale, exactly like `_sync_triggers` and for the same reason: a diff is
+    where a stale row survives a target being removed and keeps a form governed
+    by a check nobody can see on the canvas. There is no per-row state to
+    preserve here (a validate trigger has no clock), so the rebuild is total.
+    """
+    from .validation import parse_mode, parse_targets
+
+    await session.execute(
+        delete(ValidationBinding).where(ValidationBinding.automation_id == rule.id)
+    )
+    for trigger in triggers:
+        if str(trigger.params.get("event") or "") != AutomationTrigger.VALIDATE:
+            continue
+        mode = parse_mode(trigger.params)
+        for target in parse_targets(trigger.params):
+            session.add(
+                ValidationBinding(
+                    automation_id=rule.id,
+                    node_id=trigger.id,
+                    target_kind=target.kind.value,
+                    target_id=target.id,
+                    mode=mode.value,
+                )
+            )
+    await session.flush()
+
+
 def _dump(models) -> list[dict]:
     return [m.model_dump(mode="json") for m in models or []]
 
@@ -376,6 +516,7 @@ async def create_rule(
     session.add(rule)
     await session.flush()
     await _sync_triggers(session, rule, triggers)
+    await _sync_validations(session, rule, triggers)
     await _emit(session, AutomationEvent.CREATED, rule, actor_id)
     return rule
 
@@ -408,6 +549,7 @@ async def update_rule(
 
     await session.flush()
     await _sync_triggers(session, rule, triggers)
+    await _sync_validations(session, rule, triggers)
     await _emit(session, AutomationEvent.UPDATED, rule, actor_id)
     return rule
 
