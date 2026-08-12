@@ -124,6 +124,18 @@ async def _validate_graph(
 
     for node in parsed_nodes:
         _check_arity(node)
+        # A CONTRIBUTED node of ANY kind is checked against its own schema and
+        # its own atom (RADD-923, widened by spec 119). It used to be actions
+        # only, which left every contributed GATE — `ai.classify` since spec 116,
+        # `ai.validate` now — storable with its required params blank: a node
+        # that saves cleanly, sits on the canvas looking configured, and takes
+        # its fallback port forever. Same rule as `act_as`: a check that only
+        # bites at 3am is not a check.
+        spec = nodes_registry.spec_for(node)
+        if spec is not None:
+            _check_node_schema(node, spec)
+            await _require_node_permission(session, spec, actor_id)
+            continue
         if node.kind in (AutomationNodeKind.FILTER, AutomationNodeKind.SOURCE):
             # A source's query is compiled on write for the same reason a
             # filter's is: a query that does not compile is an automation that
@@ -134,16 +146,6 @@ async def _validate_graph(
                 # Not in the action union and never will be: it applies nothing,
                 # so it has no target service and no params the union describes.
                 _check_validation_fail(node)
-                continue
-            spec = nodes_registry.spec_for(node)
-            if spec is not None:
-                # A CONTRIBUTED action (RADD-923) is not in the built-in union and
-                # never will be — that is the point of it. Its own params_schema
-                # is the check, and its declared atom is enforced HERE, where the
-                # automation is written, for the same reason `act_as` is: a
-                # permission that only bites at 3am is not a permission.
-                _check_node_schema(node, spec)
-                await _require_node_permission(session, spec, actor_id)
                 continue
             # Params are an untyped envelope on the wire; the action union is
             # what type-checks them, exactly as it did when they were a rule

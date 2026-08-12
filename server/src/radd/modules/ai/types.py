@@ -42,6 +42,7 @@ class AiFeature(StrEnum):
     SUMMARIZE = "summarize"  # spec 46
     NL_SLQ = "nl_slq"  # spec 46
     SIMILAR_RERANK = "similar_rerank"  # spec 46
+    VALIDATION = "validation"  # spec 119: the ai.validate intake-check node
 
 
 # Wire-shape default endpoints, used when a provider's base_url is empty.

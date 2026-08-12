@@ -686,6 +686,114 @@ async def test_an_issue_type_target_governs_only_that_type(db, admin, project):
     assert await validation.governing_graphs(db, untyped) == []
 
 
+# --- the contributed-node seam, end to end (RADD-1059) ------------------------
+
+
+async def test_the_ai_node_contributes_findings_through_the_real_walk(
+    db, admin, project, monkeypatch
+):
+    """`ctx.add_finding` is the seam a node in ANOTHER module reaches the
+    collection through, and this is the only test that exercises it with the
+    real `_NodeContext` rather than a stand-in. The provider is mocked; the
+    field vocabulary is resolved against the live registry on purpose, so the
+    unknown-key degradation is proven against real data.
+    """
+    from radd.modules.ai import automation_node_validate as ai_validate
+
+    async def _enabled(_session, _feature):
+        return True
+
+    async def _ask(_ctx, _params):
+        return {
+            "passed": False,
+            "findings": [
+                {"message": "Say what you expected to happen.", "field": "description"},
+                {"message": "Which module is this in?", "field": "cf.module_that_left"},
+            ],
+        }
+
+    monkeypatch.setattr("radd.modules.ai.features.feature_enabled", _enabled)
+    monkeypatch.setattr(ai_validate, "_ask", _ask)
+
+    await _graph(
+        db,
+        admin,
+        targets=[{"kind": "project", "id": str(project.id)}],
+        nodes=[
+            {
+                "id": "ai",
+                "kind": "gate",
+                "type": "ai.validate",
+                "params": {"prompt": "A report must say what was expected."},
+            }
+        ],
+        edges=[{"source": "trg", "port": "out", "target": "ai"}],
+    )
+    draft = await _draft(db, project, admin, title="thin")
+    scope = validation.DraftScope(project_id=project.id)
+    verdict = await validation.run_graphs(
+        db, draft.id, scope, await validation.governing_graphs(db, scope)
+    )
+    assert verdict.passed is False
+    assert [(f.field, f.message) for f in verdict.findings] == [
+        ("description", "Say what you expected to happen."),
+        # The custom field does not exist in this project, so the advice keeps
+        # its words and loses its control.
+        ("", "Which module is this in?"),
+    ]
+    # Every finding still names the node that produced it.
+    assert {f.node_id for f in verdict.findings} == {"ai"}
+
+
+async def test_an_ai_outage_does_not_block_intake(db, admin, project, monkeypatch):
+    """The whole feature's worst failure mode, wired end to end: a provider that
+    is down must not turn a REQUIRED intake into a refused one."""
+    from radd.modules.ai import automation_node_validate as ai_validate
+
+    async def _boom(_ctx, _params):
+        raise RuntimeError("connection refused")
+
+    async def _enabled(_session, _feature):
+        return True
+
+    monkeypatch.setattr("radd.modules.ai.features.feature_enabled", _enabled)
+    monkeypatch.setattr(ai_validate, "_ask", _boom)
+
+    await _graph(
+        db,
+        admin,
+        targets=[{"kind": "project", "id": str(project.id)}],
+        mode=ValidationMode.REQUIRED.value,
+        nodes=[
+            {
+                "id": "ai",
+                "kind": "gate",
+                "type": "ai.validate",
+                "params": {"prompt": "A report must say what was expected."},
+            }
+        ],
+        edges=[{"source": "trg", "port": "out", "target": "ai"}],
+    )
+    outcome = await intake.validate_and_create(
+        db, ItemCreate(project_id=project.id, title="thin"), admin
+    )
+    assert outcome.created is not None
+    assert outcome.verdict.passed is True
+
+
+async def test_an_ai_node_with_no_prompt_is_refused_on_write(db, admin, project):
+    """Its `params_schema` marks `prompt` required, and `_check_node_schema`
+    enforces a contributed node's own schema where the automation is WRITTEN."""
+    with pytest.raises(ConflictError, match="'prompt' is required"):
+        await _graph(
+            db,
+            admin,
+            targets=[{"kind": "project", "id": str(project.id)}],
+            nodes=[{"id": "ai", "kind": "gate", "type": "ai.validate", "params": {"prompt": ""}}],
+            edges=[{"source": "trg", "port": "out", "target": "ai"}],
+        )
+
+
 # --- the endpoints, over the assembled app (RADD-761's lesson) ----------------
 #
 # A route that registers, appears in the OpenAPI schema and is never CALLED is

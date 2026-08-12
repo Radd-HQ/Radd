@@ -74,6 +74,7 @@ async def _invalid_query_handler(request: Request, exc: AiInvalidQueryError) -> 
 
 
 from . import automation_node as ai_automation_node  # noqa: E402
+from . import automation_node_validate as ai_automation_node_validate  # noqa: E402
 
 plugin = RaddPlugin(
     name="ai",
@@ -92,7 +93,12 @@ plugin = RaddPlugin(
     # breath. No dependency edge is needed either way: the node ships a spec and
     # a planner, and imports nothing from `automations` — the kernel is the only
     # thing both sides touch, which is what makes the seam a seam.
-    automation_nodes=(ai_automation_node.SPEC,),
+    # Spec 119 adds the second: `ai.validate`. Kept a separate module rather
+    # than a mode on the classifier — one ROUTES (enumerated answers, cannot
+    # invent a branch, says nothing in its own words) and one WRITES (prose
+    # findings a person acts on), and a node that does both has to decide which
+    # it is doing on every call.
+    automation_nodes=(ai_automation_node.SPEC, ai_automation_node_validate.SPEC),
     # RADD-891: the feature toggles (Settings → AI) — moved off `settings.types`'s
     # old hardcoded dict. Every `AiFeature` member needs a row here AND both dicts
     # in `features.py`; `test_ai_features.py` asserts all three agree, because a
@@ -175,6 +181,20 @@ plugin = RaddPlugin(
                 "each looks related. Off by default — it costs a chat-model round "
                 "trip per similar-issues open; similar issues keep working without "
                 "it (FTS/vector candidates only)."
+            ),
+        ),
+        SettingSpec(
+            key="ai_validation",
+            section="ai",
+            type="bool",
+            scopes=("instance",),
+            label="AI intake checks",
+            description=(
+                "Lets the `AI check` automation node review a submission against "
+                "a quality bar and report what falls short (spec 119). Needs the "
+                "chat role assigned. Nothing runs until an admin puts the node in "
+                "a validation graph, so this is the kill switch rather than the "
+                "opt-in; off, the node takes its `unavailable` port."
             ),
         ),
         SettingSpec(

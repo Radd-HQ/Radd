@@ -277,6 +277,11 @@ class Settings(BaseSettings):
     # OFF by default: the rerank buys reasons + rescoring at the
     # price of a chat-model round trip on every similar-issues open.
     ai_similar_rerank: bool = False
+    # Spec 119: the `ai.validate` node — an AI check on an intake draft that
+    # writes its own findings. ON by default like the other workflow features:
+    # nothing runs until an admin puts the node in a graph and binds that graph
+    # to a form or a project, so the toggle is the kill switch, not the opt-in.
+    ai_validation: bool = True
     # Deliver summaries / similar-reasons progressively (SSE) instead of
     # complete-then-show.
     ai_stream_responses: bool = True
