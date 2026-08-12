@@ -111,6 +111,10 @@ async def test_provider_cannot_flip_to_anthropic_while_holding_embeddings(db):
 
 async def test_local_provider_embeds_only(db):
     """LOCAL holds the embeddings role and nothing else; endpoint/key refused."""
+    from radd.modules.ai import localembed
+
+    if not localembed.available():
+        pytest.skip("localembed extra not installed")
     provider = await registry.create_provider(
         db, _create(wire_shape=AiWireShape.LOCAL, base_url="", api_key="", default_model="")
     )
@@ -136,6 +140,8 @@ async def test_local_embed_dispatch(db, monkeypatch):
     """client.embed routes LOCAL rows to the built-in backend, not HTTP."""
     from radd.modules.ai import client, localembed
 
+    if not localembed.available():
+        pytest.skip("localembed extra not installed")
     provider = await registry.create_provider(
         db, _create(wire_shape=AiWireShape.LOCAL, base_url="", api_key="", default_model="")
     )
