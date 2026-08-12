@@ -16,12 +16,18 @@ The claims under test are the ones the rest of the feature stands on:
 import uuid
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings as app_settings
 from radd.exceptions import ConflictError
-from radd.modules.automations import intake, service as automations_service, validation
+from radd.modules.automations import (
+    engine,
+    executor,
+    intake,
+    service as automations_service,
+    validation,
+)
 from radd.modules.automations.models import ValidationBinding
 from radd.modules.automations.schemas import RuleCreate, RuleUpdate
 from radd.modules.automations.types import (
@@ -284,6 +290,80 @@ async def test_builtin_and_custom_field_shapes_are_accepted(db, admin, project):
     assert len(await _bindings(db, rule.id)) == 1
 
 
+async def test_an_event_gate_under_a_validate_trigger_is_refused(db, admin, project):
+    """There is no event. `gate.field_changed` reads a diff a submission does not
+    have, so it answers a constant — and the branch behind the port it never
+    takes is a check that looks configured and can never run. The same reasoning
+    that refuses a gate under a SCHEDULE trigger, which is where the precedent
+    is; it was simply never extended to this third sentinel.
+    """
+    with pytest.raises(ConflictError, match="has no event"):
+        await _graph(
+            db,
+            admin,
+            targets=[{"kind": "project", "id": str(project.id)}],
+            nodes=[
+                {"id": "g", "kind": "gate", "type": "gate.field_changed",
+                 "params": {"field": "priority"}},
+                _fail_node("chk", "Say more."),
+            ],
+            edges=[
+                {"source": "trg", "port": "out", "target": "g"},
+                {"source": "g", "port": "true", "target": "chk"},
+            ],
+        )
+
+
+async def test_a_gate_about_the_DRAFT_is_still_allowed_under_a_validate_trigger(
+    db, admin, project
+):
+    """`gate.state_category` asks about the item, not about the event, so it has
+    a real answer for a draft. The refusal is scoped to the three that read the
+    triggering event — not to gates as a kind, which would take `ai.classify`
+    and `ai.validate` with it."""
+    rule = await _graph(
+        db,
+        admin,
+        targets=[{"kind": "project", "id": str(project.id)}],
+        nodes=[
+            {"id": "g", "kind": "gate", "type": "gate.state_category",
+             "params": {"category": "todo"}},
+            _fail_node("chk", "Say more."),
+        ],
+        edges=[
+            {"source": "trg", "port": "out", "target": "g"},
+            {"source": "g", "port": "true", "target": "chk"},
+        ],
+    )
+    assert len(await _bindings(db, rule.id)) == 1
+
+
+async def test_an_event_gate_on_a_SIBLING_trigger_s_branch_is_untouched(db, admin, project):
+    """One graph, two entry points: a validate trigger and an item.created
+    trigger. The gate is refused only where it cannot work, which is why the
+    check walks what THIS trigger reaches rather than the whole graph."""
+    rule = await automations_service.create_rule(
+        db,
+        RuleCreate(
+            name=f"two-entry-points-{uuid.uuid4().hex[:6]}",
+            nodes=[
+                _validate_trigger([{"kind": "project", "id": str(project.id)}]),
+                {"id": "ev", "kind": "trigger", "type": "trigger.event",
+                 "params": {"event": "item.created"}},
+                {"id": "g", "kind": "gate", "type": "gate.changed_by",
+                 "params": {"mode": "any"}},
+                _fail_node("chk", "Say more."),
+            ],
+            edges=[
+                {"source": "trg", "port": "out", "target": "chk"},
+                {"source": "ev", "port": "out", "target": "g"},
+            ],
+        ),
+        actor_id=admin.id,
+    )
+    assert len(await _bindings(db, rule.id)) == 1
+
+
 # --- resolution ---------------------------------------------------------------
 
 
@@ -458,6 +538,150 @@ async def test_findings_from_several_graphs_concatenate_and_the_strictest_mode_w
     ]
     assert verdict.mode is ValidationMode.REQUIRED
     assert verdict.blocks is True
+    assert all(f.mode for f in verdict.findings)  # every finding names its graph
+
+
+async def test_an_advisory_finding_does_not_block_under_a_co_governing_required_graph(
+    db, admin, project
+):
+    """The bug this test exists for: `mode` is aggregated over EVERY governing
+    graph, so "there are findings and the mode is required" refused a draft that
+    satisfied the required graph and only tripped the advisory one — while
+    `POST /items`, which runs the required bindings alone, accepted the same
+    draft. The button and the API disagreed about the same rules.
+
+    The required graph passes here because its check sits behind a filter the
+    draft does not match, which is exactly how a conditional check is written.
+    """
+    await _graph(
+        db,
+        admin,
+        targets=[{"kind": "project", "id": str(project.id)}],
+        mode=ValidationMode.REQUIRED.value,
+        nodes=[
+            {"id": "f", "kind": "filter", "type": "filter.slq",
+             "params": {"slq": 'title ~ "outage"'}},
+            _fail_node("chk", "An outage report needs a severity."),
+        ],
+        edges=[
+            {"source": "trg", "port": "out", "target": "f"},
+            {"source": "f", "port": "matched", "target": "chk"},
+        ],
+    )
+    await _advisory_graph(db, admin, project)
+    # The id, not the row: a savepoint rollback EXPIRES what it touched, and
+    # reading `project.id` afterwards from a `select(...)` builder is IO outside
+    # the greenlet — see `_count_items`.
+    project_id = project.id
+
+    outcome = await intake.validate_and_create(
+        db, ItemCreate(project_id=project_id, title="a tidy request"), admin
+    )
+    assert [f.message for f in outcome.verdict.findings] == ["Consider adding a screenshot."]
+    # Strictest still, for display: something required IS watching this draft.
+    assert outcome.verdict.mode is ValidationMode.REQUIRED
+    # …but nothing required OBJECTED, so this is advice, not a refusal.
+    assert outcome.verdict.blocks is False
+
+    # And the two paths agree: create-anyway is allowed, and the plain API
+    # create — which only ever runs the required bindings — accepts it too.
+    kept = await intake.validate_and_create(
+        db,
+        ItemCreate(project_id=project_id, title="a tidy request"),
+        admin,
+        commit=intake.IntakeCommit.ALWAYS,
+    )
+    assert kept.created is not None
+    plain = await items_service.create_item(
+        db, ItemCreate(project_id=project_id, title="straight in"), actor=admin
+    )
+    assert plain.title == "straight in"
+
+
+# --- findings are the VALIDATE trigger's output, and nothing else's -----------
+
+
+async def test_an_ordinary_walk_collects_no_findings(db, admin, project):
+    """A `validation.fail` under a MANUAL trigger records nothing.
+
+    The spec claimed this from the start ("on an ordinary event walk nothing is
+    collecting") and the executor did the opposite: it handed every walk the
+    report's list, so a check wired into an event graph accumulated findings
+    nobody would ever read, and `preview`'s `matched` went true for a graph that
+    would apply nothing. Now the walk reads its collecting-ness off the TRIGGER
+    it started from.
+    """
+    rule = await automations_service.create_rule(
+        db,
+        RuleCreate(
+            name=f"manual-with-a-check-{uuid.uuid4().hex[:6]}",
+            nodes=[
+                {"id": "trg", "kind": "trigger", "type": "trigger.event",
+                 "params": {"event": AutomationTrigger.MANUAL.value}},
+                _fail_node("chk", "This would be a finding."),
+            ],
+            edges=[{"source": "trg", "port": "out", "target": "chk"}],
+        ),
+        actor_id=admin.id,
+    )
+    draft = await _draft(db, project, admin)
+    result = await engine.preview(db, rule, item_id=draft.id)
+    assert result.findings == []
+    # `matched` is previews-only again: nothing would apply, so a dry run of
+    # this graph must not report that something would.
+    assert result.matched is False
+
+
+async def test_a_validate_graph_still_reports_its_findings_on_a_dry_run(db, admin, project):
+    """The other half of the same rule. The rule test panel is the only place an
+    admin can see what a validation graph would say, so a validate-trigger graph
+    collects on every walk — manual, preview, or the intake path."""
+    rule = await _graph(
+        db,
+        admin,
+        targets=[{"kind": "project", "id": str(project.id)}],
+        nodes=[_fail_node("chk", "A severity is required.")],
+        edges=[{"source": "trg", "port": "out", "target": "chk"}],
+    )
+    draft = await _draft(db, project, admin)
+    result = await engine.preview(db, rule, item_id=draft.id)
+    assert [f.message for f in result.findings] == ["A severity is required."]
+
+
+# --- a broken walk is not a failed draft --------------------------------------
+
+
+async def test_a_walk_that_aborts_the_transaction_is_a_503_not_a_500(
+    db, admin, project, monkeypatch
+):
+    """A DBAPI error inside the walk is SWALLOWED by design — a contributed node
+    that raises takes its fallback port so one unreachable provider cannot stop
+    a graph with other branches. In Postgres that leaves the transaction
+    aborted: every later statement fails, the intake savepoint's RELEASE fails,
+    and the person submitting gets a 500 from a create that was fine.
+
+    So the walk runs inside its own savepoint, and a broken one is a clean
+    `ValidationUnavailable` with a usable session behind it.
+    """
+    await _advisory_graph(db, admin, project)
+    project_id = project.id
+    before = await _count_items(db, project_id)
+
+    async def _poison(session, rule, initial, system_user, **kwargs):
+        try:
+            await session.execute(text("SELECT 1 / 0"))
+        except Exception:
+            pass  # exactly what the executor does with a node that raises
+        return executor.RunReport()
+
+    monkeypatch.setattr(engine, "run_graph", _poison)
+    with pytest.raises(validation.ValidationUnavailable):
+        await intake.validate_and_create(
+            db, ItemCreate(project_id=project_id, title="a draft"), admin
+        )
+    # The session survived: this is the query that used to fail with "current
+    # transaction is aborted".
+    assert await _count_items(db, project_id) == before
 
 
 # --- the savepoint flow (RADD-1058) -------------------------------------------

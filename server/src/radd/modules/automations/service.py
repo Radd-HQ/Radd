@@ -32,6 +32,7 @@ from .schemas import (
 from .email_action import is_role
 from .types import (
     ARITY_PARAM,
+    EVENT_GATE_TYPES,
     MAX_VALIDATION_TARGETS,
     SYSTEM_ACTOR_ID,
     TYPE_VALIDATION_FAIL,
@@ -103,7 +104,7 @@ async def _validate_graph(
             known_trigger(str(trigger.params.get("event") or AutomationTrigger.MANUAL))
         except ValueError as exc:
             raise ConflictError(AutomationEntity.RULE, reason=str(exc)) from exc
-        _check_trigger(trigger, parsed_nodes)
+        _check_trigger(trigger, parsed_nodes, parsed_edges)
 
     # `act_as` is a privilege, checked where it is WRITTEN. Checking it at run
     # time instead would mean an automation that saves cleanly and then quietly
@@ -348,13 +349,45 @@ def _check_validation_fail(node: graph.Node) -> None:
         )
 
 
-def _check_trigger(trigger: graph.Node, nodes: list[graph.Node]) -> None:
+def _check_validate_gates(
+    trigger: graph.Node, nodes: list[graph.Node], edges: list[graph.Edge]
+) -> None:
+    """No EVENT gate downstream of a validate trigger (spec 119).
+
+    There is no event: `validation.validate_facts` builds a synthetic packet
+    with the system actor, no diff and no changed fields, so `gate.event`,
+    `gate.field_changed` and `gate.changed_by` each answer a constant — and the
+    branch behind the port they never take is a check that looks configured and
+    can never run. The same reasoning as the schedule rule above, which is where
+    the precedent comes from.
+
+    Scoped to what this trigger can REACH rather than to the whole graph,
+    because a graph may hold a validate trigger and an event trigger side by
+    side — and on the event trigger's branch those gates are exactly right.
+    """
+    reachable = graph.is_reachable([trigger.id], nodes, edges)
+    for node in nodes:
+        if node.id in reachable and node.type in EVENT_GATE_TYPES:
+            raise ConflictError(
+                AutomationEntity.RULE,
+                reason=(
+                    f"node {node.id!r} ({node.type}) asks about the event that triggered "
+                    f"the run, and a validation run has no event — it is a draft being "
+                    f"submitted. Use a filter on the draft's own fields instead."
+                ),
+            )
+
+
+def _check_trigger(
+    trigger: graph.Node, nodes: list[graph.Node], edges: list[graph.Edge] | None = None
+) -> None:
     """Spec 69 invariants, per TRIGGER node. Raised as 409 per the form-error idiom."""
     event = str(trigger.params.get("event") or AutomationTrigger.MANUAL)
     schedule = trigger.params.get("schedule")
     scheduled = event == AutomationTrigger.SCHEDULE
     if event == AutomationTrigger.VALIDATE:
         _check_validate_trigger(trigger)
+        _check_validate_gates(trigger, nodes, edges or [])
     if scheduled and not isinstance(schedule, dict):
         raise ConflictError(
             AutomationEntity.RULE,

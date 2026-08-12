@@ -26,11 +26,14 @@ from __future__ import annotations
 
 import logging
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from time import monotonic
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.config import settings
+from radd.exceptions import RaddError
 from radd.modules.auth.models import User
 from radd.modules.items.models import WorkItem
 
@@ -51,6 +54,23 @@ from .types import (
 )
 
 logger = logging.getLogger(__name__)
+
+#: The cheapest statement there is, used only to ask whether the connection can
+#: still take one — see `_walk_one`.
+_ALIVE = text("SELECT 1")
+
+
+class ValidationUnavailable(RaddError):
+    """The checks could not be run to completion (-> 503).
+
+    Distinct from a draft that FAILED them, and the distinction is the whole
+    point: a failed check is something the person submitting can act on, and an
+    unavailable one is not their problem at all. It is raised only when the walk
+    itself broke — a query that aborted the transaction, a graph that could not
+    be read — because carrying on after that would either invent a verdict
+    nobody computed or 500 on the release of a savepoint in an aborted
+    transaction, which is what this replaces.
+    """
 
 
 @dataclass(frozen=True)
@@ -83,8 +103,17 @@ class IntakeVerdict:
 
     @property
     def blocks(self) -> bool:
-        """Whether these findings must refuse the creation."""
-        return bool(self.findings) and self.mode is ValidationMode.REQUIRED
+        """Whether these findings must refuse the creation.
+
+        Read off the FINDINGS, not off the aggregated mode. A draft is routinely
+        governed by more than one graph, and `mode` is the strictest of them all
+        — so "there are findings and something required is watching" refused a
+        submission that satisfied every required graph and only tripped an
+        advisory one. `POST /items` accepted that same draft (its enforcement
+        path runs the required bindings alone), which meant the button and the
+        API disagreed about the same rules.
+        """
+        return any(finding.mode == ValidationMode.REQUIRED.value for finding in self.findings)
 
 
 # --- parsing a validate trigger's params -------------------------------------
@@ -257,15 +286,78 @@ async def run_graphs(
     if not graphs:
         return IntakeVerdict(governed=False)
 
+    system_user = await session.get(User, SYSTEM_ACTOR_ID)
+    initial = Packet.of(validate_facts(item_id, scope), item=(item_id,))
+    collected = _Collected()
+    # ONE budget for the whole verdict, not one per graph. The walk runs
+    # synchronously inside the create's transaction, which is holding the
+    # project's number lock — so its cost is a queue every other creation in
+    # that project waits in, and "each graph gets 30 seconds" is a budget that
+    # grows with how many rules an admin wrote.
+    deadline = monotonic() + settings.intake_validation_budget_seconds
+    for governing in graphs:
+        collected.modes.append(governing.mode)
+        report = await _walk_one(session, governing, initial, system_user, deadline)
+        if report is None:
+            logger.warning(
+                "automations: validation graph %s would not load; treating it as silent",
+                governing.automation.name,
+            )
+            continue
+        # The producing graph's mode rides on each finding, so `blocks` can
+        # answer "did a REQUIRED graph object" rather than "did anything object
+        # while something required happened to be watching".
+        collected.findings.extend(
+            replace(finding, mode=governing.mode.value) for finding in report.findings
+        )
+
+    if len(collected.findings) > MAX_INTAKE_FINDINGS:
+        dropped = collected.findings[MAX_INTAKE_FINDINGS:]
+        collected.findings = collected.findings[:MAX_INTAKE_FINDINGS]
+        collected.findings.append(
+            Finding(
+                node_id="",
+                message=f"…and {len(dropped)} more problem(s) not shown.",
+                # The overflow line inherits the strictest mode among what it
+                # stands for, so truncation can never turn a blocking verdict
+                # into a passing one.
+                mode=strictest(
+                    [ValidationMode(f.mode) for f in dropped if f.mode in set(ValidationMode)]
+                ).value,
+            )
+        )
+    return IntakeVerdict(
+        mode=strictest(collected.modes),
+        findings=tuple(collected.findings),
+        governed=True,
+    )
+
+
+async def _walk_one(
+    session: AsyncSession,
+    governing: GoverningGraph,
+    initial: Packet,
+    system_user: User | None,
+    deadline: float,
+):
+    """One governing graph, walked inside its OWN savepoint.
+
+    The savepoint is not about undoing writes — the walk applies nothing. It is
+    the recovery point for a walk that BROKE the transaction. The executor
+    swallows a contributed node's exception by design (one unreachable provider
+    must not stop a graph with other branches), and a DBAPI error swallowed that
+    way leaves Postgres in an aborted transaction: every later statement fails,
+    the intake savepoint's RELEASE fails, and what the person submitting sees is
+    a 500 from a create that was fine. Rolling back to a point taken before the
+    walk puts the session back in a usable state, and the caller gets a 503 that
+    says the checks could not run.
+    """
     # Deferred: `engine` imports this module's siblings, and validation is
     # reached from the request path rather than from the consumer loop.
     from . import engine
 
-    system_user = await session.get(User, SYSTEM_ACTOR_ID)
-    initial = Packet.of(validate_facts(item_id, scope), item=(item_id,))
-    collected = _Collected()
-    for governing in graphs:
-        collected.modes.append(governing.mode)
+    nested = await session.begin_nested()
+    try:
         report = await engine.run_graph(
             session,
             governing.automation,
@@ -277,26 +369,26 @@ async def run_graphs(
             # do" the same code with one thing turned off.
             apply=False,
             start_node_id=governing.node_id,
+            deadline=deadline,
         )
-        if report is None:
-            logger.warning(
-                "automations: validation graph %s would not load; treating it as silent",
-                governing.automation.name,
-            )
-            continue
-        collected.findings.extend(report.findings)
-
-    if len(collected.findings) > MAX_INTAKE_FINDINGS:
-        dropped = len(collected.findings) - MAX_INTAKE_FINDINGS
-        collected.findings = collected.findings[:MAX_INTAKE_FINDINGS]
-        collected.findings.append(
-            Finding(node_id="", message=f"…and {dropped} more problem(s) not shown.")
+        # Is the transaction still usable? Asked BEFORE releasing the savepoint,
+        # and that order is the whole trick: `ROLLBACK TO SAVEPOINT` is legal in
+        # an aborted transaction and `RELEASE SAVEPOINT` is not, so discovering
+        # the abort by failing to release leaves the connection in a state only
+        # a full rollback can clear — which would take the caller's entire
+        # transaction with it. One cheap round trip per graph buys the ability
+        # to recover to exactly here.
+        await session.execute(_ALIVE)
+    except Exception as exc:
+        logger.exception(
+            "automations: validation graph %s could not be run", governing.automation.name
         )
-    return IntakeVerdict(
-        mode=strictest(collected.modes),
-        findings=tuple(collected.findings),
-        governed=True,
-    )
+        await nested.rollback()
+        raise ValidationUnavailable(
+            "intake validation could not be completed — please try again"
+        ) from exc
+    await nested.commit()
+    return report
 
 
 async def scope_of(session: AsyncSession, item: WorkItem, form_id: uuid.UUID | None) -> DraftScope:

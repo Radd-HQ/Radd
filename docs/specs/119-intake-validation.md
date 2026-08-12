@@ -52,6 +52,18 @@ Condition-based applicability needs no params beyond those. The GRAPH expresses
 it: `trigger → filter.slq → matched → checks`, and an unmatched packet reaches
 no check.
 
+What it may NOT hold is an event gate. `gate.event`, `gate.field_changed` and
+`gate.changed_by` read the event that started the run — its diff, its actor —
+and a validation run has none: the facts are synthetic, so each of those answers
+a constant and the branch behind the port it never takes is a check that looks
+configured and can never fire. They are refused on write, exactly as a gate
+under a SCHEDULE trigger already was, and the refusal is scoped to what THIS
+trigger can reach so a graph holding both a validate trigger and an event
+trigger keeps the gates on the event branch. `gate.state_category` is not in
+that set — a draft has a state, and asking about it is a real question — and
+neither are the contributed gate-KIND nodes, `ai.classify` and `ai.validate`,
+which is the whole point of the kind.
+
 **`automation_validations`** (migration `d119valbind`) is that list indexed —
 PK `(automation_id, node_id, target_kind, target_id)` plus `mode`, rebuilt
 wholesale by `service._sync_validations` on every write, exactly like
@@ -96,6 +108,16 @@ vocabulary, and the nodes producing findings live elsewhere. On an ordinary
 event walk nothing is collecting, `add_finding` is a no-op, and `ai.validate` is
 a pure `pass`/`fail` router — the same node in both graphs with no mode switch.
 
+**Collecting is read off the TRIGGER, not passed in.** `executor.walk` decides
+it from the trigger node it starts at (`event == "validate"`), which means a
+validate-trigger graph collects on every walk — the intake path, a manual run,
+the rule test panel's dry run — and no other graph collects on any. Deriving it
+was a correction: the first build handed the report's list to every walk, so a
+`validation.fail` wired into an event graph accumulated findings nobody would
+read and `preview`'s `matched` went true for a graph that would apply nothing.
+The claim in this document was always the design; the executor is now what it
+says.
+
 **An AI outage must not silently block intake.** A provider being down is not
 evidence that a submission is bad. A provider failure, a dormant feature, an
 unresolvable feature gate and a node with no prompt all take the `unavailable`
@@ -123,9 +145,44 @@ everything else. Nothing outside the transaction can observe a draft that did
 not survive.
 
 `commit` is three values, not a boolean: `pass` (keep it if it passes), `always`
-(the advisory create-anyway — **409** where any governing binding is required,
+(the advisory create-anyway — **409** where a required graph produced a finding,
 because a mode the admin chose is not something a request parameter overrules),
 and `never` (a pure pre-flight).
+
+**A finding carries the mode of the graph that produced it**, and `blocks` means
+"a REQUIRED graph objected". The first build aggregated `mode` over every
+governing graph and asked "are there findings and is the mode required" — which
+refused a draft that satisfied every required graph and only tripped an advisory
+one, while `POST /items` (whose enforcement path runs the required bindings
+alone) accepted that same draft. The button and the API disagreed about the same
+rules. The verdict's `mode` is still the strictest, because that is what the
+client shows before anything has been submitted; what refuses a creation is read
+off the findings themselves. Truncation inherits the strictest mode of what it
+dropped, so a wall of advice can never demote a required refusal.
+
+**Two things bound the walk, because it runs inside the create's transaction.**
+That transaction holds the project's number lock (`_resolve_number`), so for as
+long as the checks run, every other creation in that project waits — an AI check
+is up to `ai_timeout_seconds` (30s) of that, per governing graph.
+
+- **A wall-clock budget for the whole verdict** (`intake_validation_budget_seconds`,
+  25s — deliberately under the AI timeout so it bites first). Past it, a check
+  that costs a model round trip resolves per its own `on_unavailable`, which
+  defaults to letting the draft through: an overloaded provider must not become
+  a closed intake. Cheap deterministic checks are unaffected — they cost
+  microseconds, and stopping them would make the findings depend on the clock.
+- **Each graph walks inside its own savepoint**, with a `SELECT 1` before the
+  release. The executor swallows a contributed node's exception by design, and a
+  DBAPI error swallowed that way leaves Postgres in an aborted transaction:
+  `ROLLBACK TO SAVEPOINT` is legal there and `RELEASE SAVEPOINT` is not, so
+  discovering the abort by failing to release leaves a connection only a full
+  rollback can clear. The probe buys a recovery point, and the caller gets
+  **`ValidationUnavailable` → 503** — deliberately not the 422, which would tell
+  someone their submission was wrong when nothing about it was.
+
+Restructuring so the lock is not held across a model call is real work and is
+filed as **RADD-1062**; the budget is the honest bound in the meantime, and this
+paragraph is here so nobody discovers the serialization from a graph.
 
 ### Enforcement everywhere else
 
@@ -159,6 +216,11 @@ error names a value the API could not accept, a finding names something a person
 should go and fix, and the client renders them differently — one against a
 control, one in a panel. `ValidationBlocked` subclasses `RaddError`, so the MCP
 dispatcher already relays it as a readable `isError` refusal.
+
+Its sibling is `ValidationUnavailable` → **503 `{detail}`**, with no `findings`
+key at all: the checks broke, which is not the submitter's problem and not
+something they can fix, and a client must not be able to mistake an outage for a
+clean verdict.
 
 ### The surfaces
 
@@ -210,7 +272,7 @@ dispatcher already relays it as a readable `isError` refusal.
 
 ## Invariants tested
 
-`server/tests/test_intake_validation.py` (39) and
+`server/tests/test_intake_validation.py` (46) and
 `server/tests/test_ai_validate_node.py` (16):
 
 - a validate trigger is indexed per target; dropping a target drops its
@@ -221,6 +283,15 @@ dispatcher already relays it as a readable `isError` refusal.
   for a draft matching it on two axes;
 - the walk collects findings and APPLIES NOTHING — an `add_label` node
   downstream of the check did not run;
+- findings are the VALIDATE trigger's output and nothing else's: the same check
+  under a manual trigger records nothing and a dry run of it reports no match,
+  while a validate-trigger graph still reports its findings on a dry run;
+- an advisory finding does NOT refuse a draft that satisfied the required graph
+  governing it beside — and the plain `POST /items` path agrees;
+- an event gate is refused on write under a validate trigger, on that trigger's
+  branch only;
+- a walk that aborts the transaction is a 503 with a usable session behind it,
+  not a 500 from releasing a savepoint;
 - a failing draft leaves nothing behind; a clean one is kept in the same round
   trip; `commit: always` is refused with 409 under a required binding;
 - a required check refuses a plain `POST /items`, and does NOT refuse an

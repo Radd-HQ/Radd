@@ -287,6 +287,7 @@ async def run_graph(
     *,
     apply: bool = True,
     start_node_id: str | None = None,
+    deadline: float | None = None,
 ) -> executor.RunReport | None:
     """Execute one automation's graph over an initial packet.
 
@@ -294,6 +295,11 @@ async def run_graph(
     branching semantics are defined once. Returns None when the stored graph will
     not load, which is a data problem to log rather than an exception to escape
     into the consumer loop and stall the cursor.
+
+    `deadline` is a wall-clock budget the intake path sets (spec 119): its walk
+    runs inside a request that is holding the project's number lock, so a node
+    waiting on a model has to be told when to stop waiting. The consumer and the
+    scheduler pass none — nothing is blocked on them.
     """
     try:
         nodes, edges, triggers = await executor.load_graph(rule)
@@ -331,6 +337,7 @@ async def run_graph(
         automation_name=rule.name,
         budget=executor.new_budget(),
         apply=apply,
+        deadline=deadline,
     )
 
 

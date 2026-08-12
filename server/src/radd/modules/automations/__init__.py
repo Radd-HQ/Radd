@@ -10,6 +10,7 @@ from .intake import ValidationBlocked
 from .intake_router import router as intake_router
 from .intake_schemas import finding_read
 from .router import router
+from .validation import ValidationUnavailable
 
 
 async def _validation_blocked_handler(
@@ -33,6 +34,19 @@ async def _validation_blocked_handler(
             "mode": exc.verdict.mode.value,
         },
     )
+
+
+async def _validation_unavailable_handler(
+    request: Request, exc: ValidationUnavailable
+) -> JSONResponse:
+    """The checks BROKE — which is not the submitter's problem (spec 119).
+
+    503 rather than the 422: a 422 says "this draft is wrong, here is what to
+    fix", and there is nothing here to fix. It also carries no `findings` key,
+    so a client cannot mistake an outage for a clean verdict and quietly create
+    what nobody checked.
+    """
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
 
 
 plugin = RaddPlugin(
@@ -61,7 +75,10 @@ plugin = RaddPlugin(
     depends_on=("projects", "auth", "workflow", "labels", "cycles", "releases", "items", "comments", "teams", "events", "fields", "itemtypes",),
     weak_depends=("mailintake", "notify", "leave"),
     routers=(router, intake_router),
-    exception_handlers=((ValidationBlocked, _validation_blocked_handler),),
+    exception_handlers=(
+        (ValidationBlocked, _validation_blocked_handler),
+        (ValidationUnavailable, _validation_unavailable_handler),
+    ),
     on_startup=(dispatcher.start, scheduler.start),
     on_shutdown=(dispatcher.stop, scheduler.stop),
 )

@@ -308,9 +308,24 @@ PORTS_BY_KIND: dict[AutomationNodeKind, tuple[NodePort, ...]] = {
 
 TYPE_TRIGGER_EVENT = "trigger.event"
 TYPE_GATE_EVENT = "gate.event"  # pre-revision; still executed, no longer offered
+TYPE_GATE_FIELD_CHANGED = "gate.field_changed"
+TYPE_GATE_CHANGED_BY = "gate.changed_by"
+TYPE_GATE_STATE_CATEGORY = "gate.state_category"
 TYPE_FILTER_SLQ = "filter.slq"
 TYPE_SEARCH_SLQ = "search.slq"
 ACTION_TYPE_PREFIX = "action."
+
+#: Gates that read the triggering EVENT — its diff, its actor, its condition
+#: tree. A validation run has no event: `validate_facts` builds a synthetic
+#: packet with a system actor and no changes, so each of these evaluates against
+#: something that never happened and answers with a constant. Refused on write
+#: under a validate trigger for the reason the schedule check exists: a gate
+#: that can only ever be false is a branch nobody's graph will take, and it
+#: looks configured. `gate.state_category` is NOT here — the draft has a state,
+#: and asking about it is a real question.
+EVENT_GATE_TYPES: frozenset[str] = frozenset(
+    {TYPE_GATE_EVENT, TYPE_GATE_FIELD_CHANGED, TYPE_GATE_CHANGED_BY}
+)
 
 #: Spec 119: reaching this node records a FINDING against the draft being
 #: validated, and passes the packet on unchanged so several checks can chain off
@@ -355,9 +370,9 @@ BUILTIN_ARITY: dict[str, ArityRule] = {
     TYPE_VALIDATION_FAIL: ArityRule(NodeArity.SET, (NodeArity.SET,)),
     TYPE_SEARCH_SLQ: ArityRule(NodeArity.SET, (NodeArity.SET,)),
     TYPE_GATE_EVENT: ArityRule(NodeArity.SET, (NodeArity.SET,)),
-    "gate.field_changed": ArityRule(NodeArity.SET, (NodeArity.SET,)),
-    "gate.changed_by": ArityRule(NodeArity.SET, (NodeArity.SET,)),
-    "gate.state_category": ArityRule(NodeArity.SET, (NodeArity.SET,)),
+    TYPE_GATE_FIELD_CHANGED: ArityRule(NodeArity.SET, (NodeArity.SET,)),
+    TYPE_GATE_CHANGED_BY: ArityRule(NodeArity.SET, (NodeArity.SET,)),
+    TYPE_GATE_STATE_CATEGORY: ArityRule(NodeArity.SET, (NodeArity.SET,)),
     **{f"{ACTION_TYPE_PREFIX}{action.value}": _action_arity(action) for action in ActionType},
 }
 

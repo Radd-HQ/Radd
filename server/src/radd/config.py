@@ -58,6 +58,15 @@ class Settings(BaseSettings):
     # quietly did less is indistinguishable from a run that had less to do.
     automation_graph_max_node_runs: int = 200
     automation_graph_max_item_actions: int = 2000
+    # Intake validation (spec 119): the wall clock ONE verdict may spend, across
+    # every graph governing the draft. The walk runs synchronously inside the
+    # create's transaction — which holds the project's number lock — so this is
+    # not the engine's kind of budget: it is how long every other creation in
+    # that project can be made to queue. Past it, a check that costs a model
+    # round trip resolves per its own `on_unavailable` (default: let it
+    # through), because an overloaded provider must not become a closed intake.
+    # Deliberately under the 30s AI timeout, so the budget bites first.
+    intake_validation_budget_seconds: float = 25.0
 
     # Event-cascade consumer (see radd/modules/events/cascade.py) — events read
     # per iteration when draining kernel-registered cascades.

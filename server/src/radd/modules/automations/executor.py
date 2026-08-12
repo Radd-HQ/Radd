@@ -25,6 +25,7 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass, field
+from time import monotonic
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,6 +51,7 @@ from .types import (  # noqa: F401 — re-exported for callers importing them he
     TYPE_SEARCH_SLQ,
     TYPE_VALIDATION_FAIL,
     AutomationNodeKind,
+    AutomationTrigger,
     NodeArity,
     NodePort,
     PlanKind,
@@ -111,11 +113,19 @@ class Finding:
     nothing here: a graph written when a custom field existed keeps producing
     readable advice after it is deleted, it just stops highlighting a control.
     `node_id` is kept so the run report can say which check spoke.
+
+    `mode` is the VALIDATION MODE of the graph that produced it, stamped by
+    `validation.run_graphs` and empty on every other walk. It rides on the
+    finding rather than on the verdict because a draft is routinely governed by
+    several graphs at once: aggregating the mode and then asking "are there
+    findings" refuses a submission that satisfied every REQUIRED graph and only
+    tripped an advisory one — which `POST /items` would have accepted.
     """
 
     node_id: str
     message: str
     field: str = ""
+    mode: str = ""
 
 
 @dataclass
@@ -154,14 +164,26 @@ class RunReport:
     port_items: dict[str, dict[str, tuple[uuid.UUID, ...]]] = field(default_factory=dict)
     #: node id -> what ARRIVED, capped the same way.
     incoming_items: dict[str, tuple[uuid.UUID, ...]] = field(default_factory=dict)
-    #: What the walk found wrong (spec 119), in the order the checks ran.
-    #:
-    #: Collected on EVERY walk rather than behind a mode flag, because a flag
-    #: would be a second thing the executor has to be told and a second way for
-    #: the two callers to diverge. An ordinary event run simply has no
-    #: `validation.fail` nodes in it and ends with an empty list; the intake path
-    #: is the only caller that reads this.
+    #: What the walk found wrong (spec 119), in the order the checks ran. Only
+    #: ever filled when `collecting` is true — see below.
     findings: list[Finding] = field(default_factory=list)
+    #: THE WALK'S OWN SETTINGS, carried on the report because every node handler
+    #: already receives it and threading a second object through nine signatures
+    #: would buy nothing.
+    #:
+    #: `collecting` is true exactly when the graph was entered through a
+    #: `validate` trigger. Findings are that trigger's whole output; anywhere
+    #: else there is nobody to show them to, so `add_finding` is a no-op and
+    #: `validation.fail` stays quiet — which is what makes `ai.validate` a pure
+    #: pass/fail router on an ordinary event walk, as the spec has always
+    #: claimed and the code did not do. A validate-trigger graph run MANUALLY or
+    #: previewed still collects: same trigger, same question, and the rule test
+    #: panel exists to show the answer.
+    collecting: bool = False
+    #: `time.monotonic()` past which a check that costs real time (a model round
+    #: trip) should give up and take its unavailable path. Set only by the
+    #: intake path, where the walk runs inside a request holding a row lock.
+    deadline: float | None = None
 
     def record(self, node: Node, packet: Packet, outgoing: dict[str, Packet]) -> None:
         self.per_node[node.id] = {
@@ -199,10 +221,20 @@ async def walk(
     automation_name: str,
     budget: RunBudget,
     apply: bool = True,
+    deadline: float | None = None,
 ) -> RunReport:
     """Execute the graph. `apply=False` plans without applying — the dry-run path,
-    which is only free because a node plans before it applies."""
-    report = RunReport()
+    which is only free because a node plans before it applies.
+
+    Whether the walk COLLECTS findings is read off the trigger it starts from
+    rather than passed in: a walk entered through a `validate` trigger is asking
+    a question, and every other walk is doing a job. Deriving it here is what
+    keeps the two callers from disagreeing about it.
+    """
+    report = RunReport(
+        collecting=str(trigger.params.get("event") or "") == AutomationTrigger.VALIDATE.value,
+        deadline=deadline,
+    )
     order = graph.topological_order(nodes, edges)
     inbound = graph.inbound(edges)
 
@@ -451,10 +483,7 @@ async def _partition_registered(
     if spec.plan_items is not None:
         try:
             answers = await spec.plan_items(
-                _NodeContext(
-                    session=session, node=node, packet=packet, actor=actor,
-                    findings=report.findings,
-                )
+                _context(report, session=session, node=node, packet=packet, actor=actor)
             )
         except Exception:
             logger.exception(
@@ -515,10 +544,7 @@ async def _run_registered_gate(
         return ports[-1]
     try:
         chosen = await spec.plan(
-            _NodeContext(
-                session=session, node=node, packet=packet, actor=actor,
-                findings=report.findings,
-            )
+            _context(report, session=session, node=node, packet=packet, actor=actor)
         )
     except Exception:
         logger.exception("automations: node %s (%s) failed; taking its fallback port", node.id, node.type)
@@ -542,8 +568,23 @@ class _NodeContext:
     #: one id per call at item arity, the whole set at set arity. A node acting
     #: on milestones gets milestone ids and never sees the item machinery.
     subject_ids: tuple[uuid.UUID, ...] = ()
-    #: Where `add_finding` writes — the walk's report list (spec 119).
+    #: Where `add_finding` writes — the walk's report list (spec 119). None on
+    #: any walk that is not collecting, which is what makes the seam a no-op
+    #: rather than a second thing every contributed node has to check.
     findings: list[Finding] | None = None
+    #: `time.monotonic()` past which an expensive check should stop asking.
+    deadline: float | None = None
+
+    def out_of_time(self) -> bool:
+        """Whether the walk's wall-clock budget is spent.
+
+        A node that costs a network round trip asks this before spending one.
+        The executor cannot decide on its behalf, because what a node does when
+        it runs out of time is the node's own policy — `ai.validate` takes its
+        `on_unavailable` path, which an admin configured precisely for "the
+        check could not run".
+        """
+        return self.deadline is not None and monotonic() >= self.deadline
 
     def add_finding(self, message: str, field: str = "") -> None:
         """A contributed node's seam for saying what is wrong with the draft.
@@ -559,6 +600,32 @@ class _NodeContext:
         if self.findings is None or not text:
             return
         self.findings.append(Finding(node_id=self.node.id, message=text, field=str(field or "")))
+
+
+def _context(
+    report: RunReport,
+    *,
+    session: AsyncSession,
+    node: Node,
+    packet: Packet,
+    actor: User,
+    subject_ids: tuple[uuid.UUID, ...] = (),
+) -> _NodeContext:
+    """The one place a contributed node's context is built.
+
+    A factory rather than four call sites repeating the same arguments: the
+    findings gate and the deadline are properties of the WALK, and a site that
+    forgot either would give one node a different contract from its neighbours.
+    """
+    return _NodeContext(
+        session=session,
+        node=node,
+        packet=packet,
+        actor=actor,
+        subject_ids=subject_ids,
+        findings=report.findings if report.collecting else None,
+        deadline=report.deadline,
+    )
 
 
 async def _actor_for(session: AsyncSession, node: Node, default: User) -> User:
@@ -625,6 +692,12 @@ async def _run_action(
     # identically on a dry run and a live one — there is no applying half to
     # switch off, which is the whole reason a finding is not an action.
     if node.type == TYPE_VALIDATION_FAIL:
+        if not report.collecting:
+            # Not a validation walk: nobody is asking, so nothing is recorded.
+            # The node still passes its packet through (below), because a graph
+            # that also fires on an event must not lose its downstream branch
+            # just because one node in it has nothing to say here.
+            return []
         if packet.is_empty:
             # THE APPLICABILITY RULE, and it is not obvious. A universal action
             # at SET arity fires on an empty packet on purpose ("nothing matched
@@ -745,9 +818,9 @@ async def _run_contributed_action(
     for batch in batches:
         try:
             async with session.begin_nested():
-                ctx = _NodeContext(
-                    session=session, node=node, packet=packet, actor=actor,
-                    subject_ids=batch, findings=report.findings,
+                ctx = _context(
+                    report, session=session, node=node, packet=packet, actor=actor,
+                    subject_ids=batch,
                 )
                 plan = await spec.plan(ctx)
                 resolves = bool(getattr(plan, "resolves", plan is not None))

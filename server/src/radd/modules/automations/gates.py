@@ -23,6 +23,11 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from .conditions import EventFacts
+from .types import (
+    TYPE_GATE_CHANGED_BY,
+    TYPE_GATE_FIELD_CHANGED,
+    TYPE_GATE_STATE_CATEGORY,
+)
 
 #: `from`/`to` accept either "any value" or an explicit set. Kept as an explicit
 #: mode rather than "empty list means any", because an empty list is also what a
@@ -109,7 +114,7 @@ def state_category_is(facts: EventFacts, params: Mapping[str, Any]) -> bool:
 #: node type -> evaluator. The executor dispatches through this rather than an
 #: `if node.type == …` ladder, so a new gate is one entry plus its spec.
 GATE_EVALUATORS = {
-    "gate.field_changed": field_changed,
-    "gate.changed_by": changed_by,
-    "gate.state_category": state_category_is,
+    TYPE_GATE_FIELD_CHANGED: field_changed,
+    TYPE_GATE_CHANGED_BY: changed_by,
+    TYPE_GATE_STATE_CATEGORY: state_category_is,
 }
