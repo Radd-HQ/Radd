@@ -10,7 +10,7 @@ from radd.modules.auth.deps import CurrentUser
 from radd.modules.items import service as items_service
 from radd.modules.projects.models import Project
 
-from . import prefs as prefs_read, service
+from . import prefs as prefs_read, service, targets
 from .models import Notification
 from .schemas import (
     MarkReadRequest,
@@ -74,13 +74,23 @@ async def get_preferences(session: Session, user: CurrentUser) -> NotificationPr
     default matrix, which the response carries as `defaults` so the settings
     page can show every inherited cell and where it came from.
     """
-    return await prefs_read.read(session, user.id)
+    return await prefs_read.read(session, user)
 
 
 @router.put("/notifications/preferences", response_model=NotificationPrefsRead)
 async def put_preferences(
     data: NotificationPrefsUpdate, session: Session, user: CurrentUser
 ) -> NotificationPrefsRead:
+    # A subscription names a target the CLIENT chose, so the target is checked
+    # here against what this actor may read (`targets.py` has the reasoning and
+    # the per-family seams). Dropped rather than 4xx'd, `set_rules`' own posture
+    # for a row it will not store: this is a FULL REPLACE, so refusing the
+    # request over one stale subscription would refuse the matrix edit the person
+    # actually made — and the response is read back off the rows, so the row that
+    # did not survive is visibly gone rather than silently ignored.
+    readable = await targets.readable_targets(
+        session, user, targets.targets_by_scope((r.scope, r.scope_id) for r in data.rules)
+    )
     # Read back from the rows, not the request: `set_rules` drops scopes whose
     # target is missing (or present when it should not be) and channel values
     # this version does not know, and the client must see what was stored.
@@ -88,10 +98,11 @@ async def put_preferences(
         session,
         user.id,
         [(rule.scope, rule.scope_id, {k.value: c.value for k, c in rule.channels.items()})
-         for rule in data.rules],
+         for rule in data.rules
+         if targets.permitted(readable, rule.scope, rule.scope_id)],
     )
     await service.set_digest(session, user.id, email_digest=data.email_digest)
-    return await prefs_read.read(session, user.id)
+    return await prefs_read.read(session, user)
 
 
 @router.post("/notifications/read", status_code=204)

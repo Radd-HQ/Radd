@@ -19,6 +19,7 @@ until someone actually holds one.
 
 import importlib.util
 import uuid
+from enum import StrEnum
 from pathlib import Path
 
 import pytest
@@ -28,20 +29,24 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from radd.config import settings as config
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
-from radd.modules.notify import rules as policy, service as notify_service
+from radd.modules.notify import prefs as prefs_read, rules as policy, service as notify_service
 from radd.modules.notify.kinds import (
     NOTIFICATION_KINDS,
     PERSONAL_KINDS,
     SUBSCRIPTION_ONLY_KINDS,
     every_kind,
 )
+from radd.modules.notify.router import put_preferences
 from radd.modules.notify.rules import Relation, RuleRow, RuleSet, Subject
+from radd.modules.notify.schemas import NotificationPrefsUpdate, NotificationRuleWrite
 from radd.modules.notify.types import (
     DEFAULT_EMAIL_TYPES,
     Channel,
     NotificationType,
     RuleScope,
 )
+from radd.modules.projects import service as projects_service
+from radd.modules.projects.schemas import ProjectCreate
 
 PROJECT = uuid.uuid4()
 SPACE = uuid.uuid4()
@@ -58,6 +63,47 @@ def _rules(*rows: tuple[RuleScope, uuid.UUID | None, dict[NotificationType, Chan
             for scope, scope_id, channels in rows
         ]
     )
+
+
+# --- the vocabulary is total ---------------------------------------------------
+
+
+def test_the_kind_vocabulary_covers_the_enum_exactly():
+    """`NOTIFICATION_KINDS` is not a list of the kinds someone remembered.
+
+    `DEFAULT_MATRIX` is BUILT from it, so a `NotificationType` with no row here
+    has no default anywhere — and the lookup that wants one runs inside
+    `create_notification`, i.e. inside the consumer's per-event SAVEPOINT, which
+    logs the failure and skips the event. The notification would never arrive and
+    nothing would say so: exactly the shape of RADD-978 and RADD-1056, both of
+    which survived for months behind a log line nobody reads.
+
+    Asserted as SET EQUALITY in both directions on purpose. `>=` would let a
+    stale row for a deleted member sit in the settings page forever, and `<=`
+    would let a new member ship with no row at all — the two failures are
+    different and only one of them is loud.
+    """
+    assert {spec.kind for spec in NOTIFICATION_KINDS} == set(NotificationType)
+    assert len(NOTIFICATION_KINDS) == len(set(every_kind()))  # and each listed once
+
+
+def test_a_kind_the_vocabulary_does_not_know_degrades_instead_of_raising():
+    """The version where somebody adds an enum member and forgets the row.
+
+    `kinds.is_personal` documents the conservative answer — an unknown kind is
+    treated as own-directed, so it still reaches the person the producer
+    addressed — and until this test that promise ended in a KeyError two lines
+    later, swallowed by the SAVEPOINT. A stand-in enum is the only way to reach
+    it: the test above guarantees no real member can.
+    """
+
+    class _FutureKind(StrEnum):
+        TELEPATHY = "telepathy"
+
+    verdict = policy.resolve(_FutureKind.TELEPATHY, policy.EMPTY, MINE)
+
+    assert verdict.scope is RuleScope.OWN
+    assert verdict.inbox is True and verdict.inherited is True
 
 
 # --- the defaults reproduce RADD-686 exactly ----------------------------------
@@ -247,15 +293,23 @@ async def db():
     await engine.dispose()
 
 
-async def _user(db, name: str) -> User:
+async def _user(db, name: str, *, admin: bool = False) -> User:
     user = User(
         email=f"rules-{uuid.uuid4().hex[:8]}@example.com",
         name=name,
-        instance_role=InstanceRole.MEMBER.value,
+        instance_role=(InstanceRole.ADMIN if admin else InstanceRole.MEMBER).value,
     )
     db.add(user)
     await db.flush()
     return user
+
+
+async def _project(db, name: str):
+    project = await projects_service.create_project(
+        db, ProjectCreate(key=f"NR{uuid.uuid4().hex[:4].upper()}", name=name)
+    )
+    await db.flush()
+    return project
 
 
 def _load_migration(name: str):
@@ -306,6 +360,74 @@ async def test_saving_an_empty_matrix_leaves_no_rows_and_therefore_the_defaults(
     assert await notify_service.list_rules(db, user.id) == []
     resolved = await notify_service.rules_by_user(db, [user.id])
     assert policy.resolve(NotificationType.COMMENTED, resolved[user.id], WATCHING).inbox
+
+
+async def test_a_subscription_names_only_a_target_the_actor_may_read(db):
+    """A `scope_id` is a uuid the CLIENT picks, so the API checks it.
+
+    Delivery was never the exposure — every notification still passes
+    `consumer._allowed`, so a rule pointing at a project you cannot read delivers
+    nothing. The READ is: it resolves each target's name for display, so storing
+    an arbitrary uuid and reading it back was a lookup service for the key and
+    name of every project on the instance.
+
+    Dropped rather than 4xx'd, because a PUT is a full replace: refusing the
+    request over one bad subscription would refuse the matrix edit the person
+    actually made. The response is read back off the rows, so what did not
+    survive is visibly gone.
+    """
+    member = await _user(db, "Member")
+    admin = await _user(db, "Admin", admin=True)
+    project = await _project(db, "Closed")
+    body = NotificationPrefsUpdate(
+        rules=[
+            NotificationRuleWrite(
+                scope=RuleScope.PROJECT,
+                scope_id=project.id,
+                channels={NotificationType.CREATED: Channel.INBOX},
+            ),
+            NotificationRuleWrite(
+                scope=RuleScope.OWN,
+                scope_id=None,
+                channels={NotificationType.COMMENTED: Channel.OFF},
+            ),
+        ],
+        email_digest=True,
+    )
+
+    stored = await put_preferences(body, db, member)
+
+    # The matrix row survives; the subscription to a project they cannot see does not.
+    assert [(rule.scope, rule.scope_id) for rule in stored.rules] == [(RuleScope.OWN, None)]
+    # The control, and the important half: the SAME request from someone who can
+    # read that project keeps it, so the assertion above is the gate rather than
+    # a save that stores nothing.
+    kept = await put_preferences(body, db, admin)
+    assert (RuleScope.PROJECT, project.id) in [(rule.scope, rule.scope_id) for rule in kept.rules]
+
+
+async def test_the_preferences_read_will_not_NAME_a_target_you_cannot_read(db):
+    """The same gate from the other side, and why it is applied twice.
+
+    A stored row outlives the access that created it: someone removed from a
+    project keeps the subscription row until their next save. Until then the read
+    must not narrate it — so it comes back label-less and the page shows the row
+    as unavailable, which is also the honest rendering for a target that has been
+    deleted. From here the two are the same fact.
+    """
+    member = await _user(db, "Member")
+    admin = await _user(db, "Admin", admin=True)
+    project = await _project(db, "Closed")
+    for user in (member, admin):
+        await notify_service.set_rules(
+            db, user.id, [(RuleScope.PROJECT, project.id, {"created": "inbox"})]
+        )
+
+    (theirs,) = [rule for rule in (await prefs_read.read(db, member)).rules if rule.scope_id]
+    (visible,) = [rule for rule in (await prefs_read.read(db, admin)).rules if rule.scope_id]
+
+    assert theirs.scope_id == project.id and theirs.scope_label is None
+    assert visible.scope_label is not None and project.key in visible.scope_label
 
 
 async def test_subscriber_lookup_finds_every_target_family_in_one_query(db):

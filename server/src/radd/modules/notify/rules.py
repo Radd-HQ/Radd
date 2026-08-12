@@ -20,18 +20,45 @@ If nobody has an opinion, the FIRST APPLICABLE scope's default answers — not t
 last, and not a global default. That is what makes "I subscribed to a project"
 mean "and everything else about my own issues is unchanged".
 
-## The defaults reproduce RADD-686 exactly
+## The defaults reproduce RADD-686's CHANNELS exactly. The AUDIENCE is wider.
 
-`DEFAULT_MATRIX` is the acceptance bar of this whole spec: a user with ZERO rule
-rows must behave precisely as they did before it — every kind in the inbox, the
+Two claims live here, and only one of them is "nothing changed". Stating them
+together as one is how a parity promise becomes false without anybody editing it.
+
+**Channels — exact, for the audience that was already reachable.**
+`DEFAULT_MATRIX` is the acceptance bar of this whole spec: for anyone the old
+fan-out already reached, a user with ZERO rule rows resolves to precisely what
+RADD-686 gave them — every pre-existing kind in the inbox, the
 personally-directed five also mailed as they happen, the rest left to the digest.
-That is asserted directly rather than described, because "we did not change
-anything for people who did not ask" is the promise a preferences rewrite is
-most likely to break and least likely to be caught breaking.
+That is asserted kind by kind rather than described, because "we did not change
+anything for people who did not ask" is the promise a preferences rewrite is most
+likely to break and least likely to be caught breaking.
+
+**Audience — deliberately widened, by the `own` scope.** Before spec 118 the
+ambient recipient set was watchers ∪ participant-team members and nothing else,
+so an assignee or a reporter who was not watching heard nothing ambient at all.
+`planner.Audience.own` now holds them unconditionally, because "my own items" is
+the scope that was asked for and a column claiming to name them has to contain
+them. Two consequences, stated because each reads as a bug when it is met
+undocumented:
+
+* **Unwatch no longer silences an assignee.** It removes the PARTICIPATING
+  relation only. `own` still applies, and the control for it is the `own` column
+  — set its cells `off` and they are silent again. The old model had one answer
+  per type for the whole instance, so Unwatch was the only lever there was; that
+  is the thing this spec replaced.
+* **On an instance built by IMPORT this is genuinely new mail.** A bulk import
+  emits `silent` events, which the consumer skips, so imported items carry no
+  auto-watch rows: their assignees and reporters were reachable by nothing
+  ambient, and `commented` defaults to `both` in `own`. They now get the comment
+  mail an assignee on a natively-created item has always got.
+
+`tests/test_notify_scoped_fanout.py` pins all three of those deliberately, so the
+widening cannot be walked back or widened further by accident.
 
 The three kinds spec 118 ADDED (`created`, `updated`, `page_created`) are `off`
 in every relationship scope, and every subscription scope defaults to `off`
-outright. So the only way to receive something new is to have asked for it.
+outright. So the only way to receive a new KIND is to have asked for it.
 """
 
 from __future__ import annotations
@@ -168,6 +195,35 @@ DEFAULT_MATRIX: dict[RuleScope, dict[NotificationType, Channel]] = {
 }
 
 
+def _default_for(scope: RuleScope, kind: NotificationType) -> Channel:
+    """This scope's default for this kind, degrading for a kind nobody declared.
+
+    `DEFAULT_MATRIX` is built from the vocabulary, so a `NotificationType` with
+    no `NOTIFICATION_KINDS` entry is not in it — and a bare `[kind]` here raised
+    KeyError inside `create_notification`, which the consumer runs inside a
+    per-event SAVEPOINT that logs and skips. The notification would simply never
+    arrive, with nothing but a log line to say why: RADD-978 and RADD-1056 are
+    both that failure, and both survived for months.
+
+    `kinds.is_personal` already promises the conservative answer for an unknown
+    kind — treat it as own-directed, so it still reaches the person the producer
+    addressed. This is the other half of that promise; without it the promise was
+    a comment above a crash. `test_notify_rules` asserts the vocabulary covers
+    the enum exactly, so this path is unreachable in a correct build — it exists
+    for the version where somebody adds a member and forgets the row.
+
+    A relationship scope answers as it would for a pre-existing kind; a
+    subscription scope stays silent, since every one of them defaults to `off`
+    and an unasked-for kind is exactly what a subscriber did not ask for. (In
+    practice only `own` is reachable: `is_personal` routed the unknown kind
+    there before the order was built.)
+    """
+    known = DEFAULT_MATRIX[scope]
+    if kind in known:
+        return known[kind]
+    return _relationship_default(kind) if scope in RELATIONSHIP_SCOPES else Channel.OFF
+
+
 @dataclass(frozen=True)
 class RuleSet:
     """One person's rules, indexed for lookup. Built once per recipient set."""
@@ -249,7 +305,7 @@ def resolve(
     if not order:
         return SILENT
     scope = order[0][0]
-    return Verdict(DEFAULT_MATRIX[scope][kind], scope, inherited=True)
+    return Verdict(_default_for(scope, kind), scope, inherited=True)
 
 
 def default_channels(scope: RuleScope) -> dict[str, str]:

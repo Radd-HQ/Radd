@@ -21,6 +21,17 @@ REQUIRED inbox back then (a muted type never became a row, and the mailer mailed
 rows), so `email` with no inbox is unreachable from the old data and only
 appears once someone chooses it.
 
+**What this migration preserves is the CHANNELS, not the audience.** Every person
+the old fan-out reached keeps receiving exactly what they received; nothing here
+touches WHO an event reaches, and spec 118 deliberately widens that separately —
+`own` (assignee or reporter) joins the ambient audience whether or not they
+watch, so an assignee who had unwatched, and every assignee/reporter on an
+IMPORTED item (a silent import writes no auto-watch rows), starts receiving
+ambient notifications and the `commented` mail that goes with them. That is the
+requested behaviour of the `own` column, and the column is its off switch; it is
+recorded here because a data migration is where someone will later come looking
+for the reason their mail volume changed.
+
 The kind list below is a FROZEN SNAPSHOT of `notify.kinds.NOTIFICATION_KINDS` as
 of this revision, not an import of it — the same rule `d686emailtypes` recorded.
 A migration must keep meaning what it meant the day it ran, and importing the

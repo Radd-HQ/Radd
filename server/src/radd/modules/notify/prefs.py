@@ -10,6 +10,13 @@ settings page that renders "Subscribed to 3f2a-…" is a page nobody can audit.
 The label is resolved at READ, not stored at write, for the reason every other
 display value in this module is: a project renamed after the subscription was
 saved should read as its new name, not as the one it had that afternoon.
+
+**And only for a target this actor may read.** That name resolution is the one
+place a rule row's uuid becomes prose, which makes it the whole of the exposure
+the write gate closes from the other side — see `targets.py`. A row whose target
+is not readable comes back label-less and the page shows it as unavailable, which
+is also the honest rendering for a target that has been deleted: from here the
+two are the same fact.
 """
 
 from __future__ import annotations
@@ -19,10 +26,11 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.modules.auth.models import User
 from radd.modules.projects.models import Project
 from radd.modules.teams import service as teams
 
-from . import rules as rules_policy, service
+from . import rules as rules_policy, service, targets
 from .kinds import NOTIFICATION_KINDS
 from .models import NotificationRule
 from .schemas import (
@@ -82,6 +90,9 @@ async def _space_names(session: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.
     it loads AFTER notify and is disableable, so a space subscription on an
     instance with the wiki turned off degrades to an unlabelled row rather than
     an ImportError in a settings page.
+
+    `ids` is already narrowed to what the actor may read — the caller does that
+    (`targets.readable_targets`), so listing every space here names none of them.
     """
     if not ids:
         return {}
@@ -93,17 +104,33 @@ async def _space_names(session: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.
     return {space.id: space.name for space in spaces if space.id in ids}
 
 
+def _scope_of(row: NotificationRule) -> RuleScope | None:
+    try:
+        return RuleScope(row.scope)
+    except ValueError:
+        return None
+
+
 async def _labels(
-    session: AsyncSession, rows: list[NotificationRule]
+    session: AsyncSession, user: User, rows: list[NotificationRule]
 ) -> dict[uuid.UUID, str]:
-    by_scope: dict[str, set[uuid.UUID]] = {}
-    for row in rows:
-        if row.scope_id is not None:
-            by_scope.setdefault(row.scope, set()).add(row.scope_id)
+    """Target names, for the targets this actor may read and no others.
+
+    The narrowing happens BEFORE the name queries rather than after, so an
+    unreadable target is never fetched — which is the difference between a filter
+    and a gate when the thing being filtered is the answer itself.
+    """
+    readable = await targets.readable_targets(
+        session,
+        user,
+        targets.targets_by_scope(
+            (scope, row.scope_id) for row in rows if (scope := _scope_of(row)) is not None
+        ),
+    )
     labels: dict[uuid.UUID, str] = {}
-    labels |= await _project_names(session, by_scope.get(RuleScope.PROJECT.value, set()))
-    labels |= await _team_names(session, by_scope.get(RuleScope.TEAM.value, set()))
-    labels |= await _space_names(session, by_scope.get(RuleScope.SPACE.value, set()))
+    labels |= await _project_names(session, readable.get(RuleScope.PROJECT, set()))
+    labels |= await _team_names(session, readable.get(RuleScope.TEAM, set()))
+    labels |= await _space_names(session, readable.get(RuleScope.SPACE, set()))
     return labels
 
 
@@ -126,10 +153,10 @@ def _rule_read(row: NotificationRule, labels: dict[uuid.UUID, str]) -> Notificat
     )
 
 
-async def read(session: AsyncSession, user_id: uuid.UUID) -> NotificationPrefsRead:
-    rows = await service.list_rules(session, user_id)
-    labels = await _labels(session, rows)
-    prefs = await service.get_prefs(session, user_id)
+async def read(session: AsyncSession, user: User) -> NotificationPrefsRead:
+    rows = await service.list_rules(session, user.id)
+    labels = await _labels(session, user, rows)
+    prefs = await service.get_prefs(session, user.id)
     reads = [read for read in (_rule_read(row, labels) for row in rows) if read is not None]
     return NotificationPrefsRead(
         kinds=_kind_reads(),

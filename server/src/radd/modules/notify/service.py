@@ -310,10 +310,13 @@ async def set_digest(
 def _clean_channels(channels: dict[str, str]) -> dict[str, str]:
     """Keep only (kind, channel) pairs both enums recognise.
 
-    Normalising rather than 422ing, on `set_prefs`'s old reasoning: an unknown
-    kind is a client that is ahead of or behind this server, and storing it
-    would leave a key the resolver silently ignores forever. Dropping it is the
-    same answer, said where the caller can see it in the response.
+    Not the API's validator — `NotificationRuleWrite.channels` is typed
+    `dict[NotificationType, Channel]`, so an unknown key or value is a 422 long
+    before this runs, and every HTTP caller sees the loud answer. This is the
+    guard for the OTHER callers: `set_rules` is a service function, and a
+    migration, a script or a future importer handing it a kind this version has
+    dropped should lose that key rather than store one the resolver will ignore
+    forever.
     """
     from .types import Channel  # local: the enum, not the policy
 

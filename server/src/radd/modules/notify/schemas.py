@@ -103,7 +103,13 @@ class NotificationPrefsUpdate(BaseModel):
     resetting the matrix, and failing loudly beats wiping preferences. Removing
     a subscription IS leaving its row out, which is only expressible when the
     whole set is sent.
+
+    The bound is three relationship rows plus room for far more subscriptions
+    than a person could read: a full replace with no ceiling is one request that
+    writes as many rows as the caller cares to name, and "the client would never
+    send that" is not a limit. Nobody legitimately hits 200 — the picker offers
+    each target once — so a request that does is not a preferences save.
     """
 
-    rules: list[NotificationRuleWrite]
+    rules: list[NotificationRuleWrite] = Field(max_length=200)
     email_digest: bool
