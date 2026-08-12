@@ -456,6 +456,16 @@ async def hard_delete_page(
         raise ConflictError(
             PageEntity.PAGE, reason=f"page has {live_children} non-archived child page(s)"
         )
+    # BEFORE the row goes, not after. `_emit_page` names the page as a SUBJECT
+    # and the kernel resolves a subject by READING the row (RADD-923), so
+    # emitting after the delete + flush resolved it to NULL — the one event about
+    # a page nobody can look up afterwards was the one that carried no page. The
+    # order is invisible outside this function: the outbox row and the deletion
+    # commit together or not at all.
+    await _emit_page(
+        session, PageEvent.PAGE_DELETED, page, actor_id,
+        {"title": page.title, "hard": True},
+    )
     # RADD-717: page comments are polymorphic and carry no FK, so they do not
     # cascade — remove them with the page rather than orphaning them.
     from radd.modules.comments import service as comments_service
@@ -464,10 +474,6 @@ async def hard_delete_page(
     await comments_service.delete_for_parent(session, CommentParentType.PAGE.value, page.id)
     await session.delete(page)  # versions/links/archived subtree go via FK CASCADE
     await session.flush()
-    await _emit_page(
-        session, PageEvent.PAGE_DELETED, page, actor_id,
-        {"title": page.title, "hard": True},
-    )
 
 
 async def page_read(session: AsyncSession, page: Page) -> PageRead:

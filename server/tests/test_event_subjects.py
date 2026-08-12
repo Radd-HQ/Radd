@@ -164,6 +164,57 @@ async def test_a_none_subject_is_recorded_as_none_not_omitted(db):
     assert payload == {"x": 1, "item": None}
 
 
+async def test_a_hard_deleted_page_still_names_itself(db, world):
+    """A subject ref is resolved by READING the row, so the emit has to happen
+    while there is one.
+
+    `page.deleted` declares `page` and `page_space` as subjects (spec 118 — a
+    space subscription is matched on that id, and a notification links by slug).
+    The hard-delete path deleted the row, flushed, and emitted afterwards, so the
+    kernel's `session.get` missed and the payload carried `"page": null` — on the
+    ONE event about a page nobody can look up afterwards, which is exactly when a
+    consumer cannot recover the ref for itself. A declaration a code path does not
+    keep is worse than no declaration: the loader checks that the ref EXISTS, not
+    that it resolved.
+
+    Ordering inside the transaction is invisible — the outbox row and the
+    deletion commit together or not at all — so the fix is to emit first.
+    """
+    from sqlalchemy import select
+
+    from radd.modules.events.models import Event
+    from radd.modules.pages import service as pages_service, spaces
+    from radd.modules.pages.schemas import PageCreate, PageSpaceCreate
+
+    slug = f"subj-{uuid.uuid4().hex[:8]}"
+    space = await spaces.create_space(
+        db, PageSpaceCreate(name=slug, slug=slug), world["admin"].id
+    )
+    page = await pages_service.create_page(
+        db,
+        PageCreate(space_id=space.id, title="Doomed", slug="doomed", body="v1"),
+        world["admin"].id,
+    )
+    await db.flush()
+
+    await pages_service.hard_delete_page(db, page.id, world["admin"].id)
+    await db.flush()
+
+    row = (
+        await db.execute(
+            select(Event)
+            .where(Event.event_type == "page.deleted", Event.entity_id == str(page.id))
+            .order_by(Event.id.desc())
+            .limit(1)
+        )
+    ).scalar_one()
+
+    assert row.payload["hard"] is True
+    assert row.payload["page"] is not None, "the declared `page` subject resolved to null"
+    assert row.payload["page"]["slug"] == "doomed"
+    assert row.payload["page_space"]["slug"] == slug
+
+
 async def test_a_key_collision_fails_loudly(db, world):
     """A plugin's own `payload["item"]` versus the subject ref of the same name.
     Somebody is about to read the wrong thing, so it fails where it can still be

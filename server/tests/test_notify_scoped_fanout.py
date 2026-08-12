@@ -44,6 +44,7 @@ from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.teams import service as teams_service
 from radd.modules.teams.schemas import TeamCreate
+from radd.modules.workflow import service as workflow_service
 
 
 @pytest.fixture
@@ -221,6 +222,161 @@ async def test_the_my_teams_column_follows_the_items_team(db):
     # The control: same rule, not in the team. The column is about the item's
     # team field, not about being on some team somewhere.
     assert await _rows(db, outsider) == []
+
+
+# --- the `own` audience: the one widening this spec makes ---------------------
+#
+# Spec 118 puts the assignee and the reporter into the AMBIENT audience
+# unconditionally. Before it, the ambient set was watchers ∪ participant-team
+# members and nothing else — an assignee heard about their own issue because
+# being assigned auto-WATCHES, not because they were the assignee, and the two
+# are only the same thing while nobody unwatches and every item was created here.
+#
+# That is a deliberate change and the `own` column is its control surface, which
+# is exactly why it is pinned rather than left to be rediscovered as a bug
+# report: "I unwatched this and it kept mailing me" and "we imported from Jira
+# and everyone's mail volume went up" are the two ways it will be met.
+
+
+async def _assigned_item(db, actor: User, assignee: User, name: str):
+    """An item assigned to someone, whose CREATE event is never drained.
+
+    That is not a shortcut — it is the shape a silent import leaves behind. A
+    bulk import's events carry `silent`, the consumer skips them, and the
+    auto-watch graph therefore never grows from them: an imported item has an
+    assignee and a reporter and NO watcher rows at all.
+    """
+    project = await projects_service.create_project(
+        db, ProjectCreate(key=f"OW{uuid.uuid4().hex[:4].upper()}", name=name)
+    )
+    item = await items_service.create_item(
+        db,
+        ItemCreate(project_id=project.id, title="Printer on fire", assignee_id=assignee.id),
+        actor,
+    )
+    await db.flush()
+    return project, item
+
+
+async def test_an_assignee_who_watches_nothing_hears_about_their_own_item(db):
+    """The widening, stated. This person is not a watcher and not a participant;
+    the only thing connecting them to the issue is the assignee field.
+
+    The channel matters as much as the row: `commented` defaults to `both` in
+    `own`, so this is the immediate mailer's queue, not the digest's. On an
+    imported instance that is a real increase in mail on the first comment after
+    the upgrade — which is the fact the spec doc and the migration now carry."""
+    actor = await _user(db, "Ada Agent")
+    assignee = await _user(db, "Assignee")
+    stranger = await _user(db, "Stranger")
+    _project, item = await _assigned_item(db, actor, assignee, "Own scope")
+
+    head = await _at_head(db)
+    await comments_service.create_comment(
+        db, item.id, CommentCreate(body="Any update on this?"), actor
+    )
+    await db.flush()
+    await _drain(db, head)
+
+    assert await notify_service.is_watching(db, item.id, assignee.id) is False
+    (row,) = await _rows(db, assignee)
+    assert row.type == NotificationType.COMMENTED.value
+    assert row.inbox is True and row.email is True
+    # The control: an identical account with no relation to the item hears
+    # nothing, so the row above is the `own` set and not a fan-out to everybody.
+    assert await _rows(db, stranger) == []
+
+
+async def test_a_state_change_reaches_them_the_same_way(db):
+    """The other ambient kind an assignee cares about, through the same set —
+    inbox-only by default, which is the RADD-686 channel for it."""
+    actor = await _user(db, "Ada Agent")
+    assignee = await _user(db, "Assignee")
+    project, item = await _assigned_item(db, actor, assignee, "State scope")
+    states = await workflow_service.list_states(db, project.id)
+    target = next(state for state in states if state.id != item.state.id)
+
+    head = await _at_head(db)
+    await items_service.update_item(db, item.id, ItemUpdate(state_id=target.id), actor)
+    await db.flush()
+    await _drain(db, head)
+
+    (row,) = await _rows(db, assignee)
+    assert row.type == NotificationType.STATE_CHANGED.value
+    assert row.inbox is True and row.email is False
+
+
+async def test_the_own_column_is_the_off_switch_for_all_of_it(db):
+    """The half that makes the widening a feature rather than a regression.
+
+    Under RADD-686 there was one answer per type for the whole instance, so
+    Unwatch was the only lever an assignee had. Spec 118 replaces the lever: the
+    `own` column says it, and it says it whether or not they ever watched."""
+    actor = await _user(db, "Ada Agent")
+    assignee = await _user(db, "Assignee")
+    _project, item = await _assigned_item(db, actor, assignee, "Silenced")
+    await notify_service.set_rules(
+        db,
+        assignee.id,
+        [(RuleScope.OWN, None, {NotificationType.COMMENTED.value: Channel.OFF.value})],
+    )
+
+    head = await _at_head(db)
+    await comments_service.create_comment(
+        db, item.id, CommentCreate(body="Any update on this?"), actor
+    )
+    await db.flush()
+    await _drain(db, head)
+
+    assert await _rows(db, assignee) == []
+
+
+async def test_unwatching_no_longer_silences_an_assignee_and_own_off_still_does(db):
+    """The report this will arrive as. The item is created and drained first, so
+    the assignee IS auto-watched exactly as before; then they unwatch.
+
+    Unwatch removes the PARTICIPATING relation and nothing else — `own` still
+    applies, so they keep hearing about it. Both halves are asserted in one test
+    because the first on its own reads like a bug and the second is the answer to
+    it: the same person, the same unwatched item, one rule row apart.
+    """
+    actor = await _user(db, "Ada Agent")
+    assignee = await _user(db, "Assignee")
+    project = await projects_service.create_project(
+        db, ProjectCreate(key=f"UW{uuid.uuid4().hex[:4].upper()}", name="Unwatched")
+    )
+    head = await _at_head(db)
+    item = await items_service.create_item(
+        db,
+        ItemCreate(project_id=project.id, title="Printer on fire", assignee_id=assignee.id),
+        actor,
+    )
+    await db.flush()
+    await _drain(db, head)
+    assert await notify_service.is_watching(db, item.id, assignee.id) is True
+    await notify_service.unwatch(db, item.id, assignee.id)
+
+    head = await _at_head(db)
+    await comments_service.create_comment(db, item.id, CommentCreate(body="Still?"), actor)
+    await db.flush()
+    await _drain(db, head)
+
+    assert NotificationType.COMMENTED.value in await _kinds(db, assignee)
+
+    # …and with the `own` column off as well, silence. Same person, same
+    # unwatched item, one rule row apart.
+    await notify_service.set_rules(
+        db,
+        assignee.id,
+        [(RuleScope.OWN, None, {NotificationType.COMMENTED.value: Channel.OFF.value})],
+    )
+    before = len(await _rows(db, assignee))
+    head = await _at_head(db)
+    await comments_service.create_comment(db, item.id, CommentCreate(body="And now?"), actor)
+    await db.flush()
+    await _drain(db, head)
+
+    assert len(await _rows(db, assignee)) == before
 
 
 # --- pages (RADD-1056 + the space subscription) -------------------------------

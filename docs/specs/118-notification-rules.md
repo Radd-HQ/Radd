@@ -96,20 +96,53 @@ Getting this wrong is not cosmetic. `approval` goes to eligible approvers, who a
 frequently neither the assignee nor a watcher — resolving it through a relationship scope
 would have handed them `off` and ended approvals in silence.
 
-### The defaults reproduce RADD-686 exactly
+### The defaults reproduce RADD-686's CHANNELS exactly
 
 `DEFAULT_MATRIX` is the acceptance bar of the whole spec, and
 `tests/test_notify_rules.py` pins it kind by kind against `DEFAULT_EMAIL_TYPES` rather
-than a copied list: **a user with zero rule rows behaves precisely as they did before.**
-Every pre-existing kind is inbox-on in `own` and `participating`, the personally-directed
-five are also mailed as they happen, and everything else is left to the digest.
+than a copied list: **for anyone the old fan-out already reached, a user with zero rule
+rows resolves to precisely what they resolved to before.** Every pre-existing kind is
+inbox-on in `own` and `participating`, the personally-directed five are also mailed as
+they happen, and everything else is left to the digest.
+
+That is a claim about CHANNELS. The AUDIENCE deliberately widened — see below — and
+stating the two as one sentence is how a parity promise stops being true without anyone
+editing it.
 
 `own` and `participating` are identical, and that is not laziness — RADD-686 had no notion
 of relation, so any difference introduced here would be a behaviour change for someone who
 never asked for one. The columns exist so they CAN be told apart from now on.
 
-`teams` starts `off` outright. It is the one genuinely new reach, and defaulting it on
-would subscribe every member of a team to their whole team's traffic on deploy day.
+`teams` starts `off` outright. It is the one genuinely new reach among the COLUMNS, and
+defaulting it on would subscribe every member of a team to their whole team's traffic on
+deploy day.
+
+### The `own` scope widens the audience, on purpose
+
+Before this spec the ambient recipient set was watchers ∪ participant-team members, full
+stop. An assignee or reporter who was not watching heard nothing ambient at all — the only
+reason they usually did is that creating, being assigned or being named auto-watches, and
+`item_watchers` is what carried them. `planner.Audience.own` now holds the assignee and
+the reporter unconditionally, because "my own items" is the scope that was asked for and a
+column claiming to name them has to contain them.
+
+Two consequences, stated here because each reads as a bug when it is met undocumented:
+
+- **Unwatch no longer silences an assignee.** It removes the PARTICIPATING relation only;
+  `own` still applies. The control for it is the `own` column — set its cells `off` and
+  they are silent again. Under the old model there was one answer per type for the whole
+  instance, so Unwatch was the only lever there was; replacing that lever is the spec.
+- **On an instance built by IMPORT this is genuinely new mail.** A bulk import emits
+  `silent` events and the consumer skips them, so imported items carry no auto-watch rows:
+  their assignees and reporters were reachable by nothing ambient before. `commented`
+  defaults to `both` in `own`, so on the first comment after upgrading they get the mail an
+  assignee on a natively-created item has always got. Nothing is retroactive — only events
+  from here on — but the volume change on a Jira-imported instance is real and is worth
+  knowing about before it arrives.
+
+`test_notify_scoped_fanout.py` pins all three facts (an assignee who never watched hears
+about a comment; turning the `own` cells off silences them; unwatch plus `own` off is
+silence) so the widening cannot be walked back, or widened further, by accident.
 
 ### The kind vocabulary
 
@@ -147,6 +180,33 @@ an answer almost always empty.
 spec multiplied the recipient set by everyone subscribed to the project; an `off` verdict
 should cost a dictionary lookup.
 
+### What the consumer loop costs, and where it stops being flat
+
+Worth stating because none of it shows up until somebody uses the feature, and then it
+shows up as consumer lag rather than as anything about notifications:
+
+- **Per surviving recipient, per event: roughly one permission resolution.** `_allowed`
+  resolves `permissions_for_projects` and, for a relation-scoped reader, an async row
+  check; the page path pays `page_access` per recipient instead. The channel filter runs
+  first, so this is per SURVIVOR and not per candidate — which is what keeps a project with
+  four hundred subscribers who all left `commented` at `off` costing four hundred dict
+  lookups. It is also why the cheap thing to widen is the audience and the expensive thing
+  is anyone whose rules say yes.
+- **`readable_page_ids_for_users` is linear in users**, one `page_access` walk each — a
+  space role plus every restriction on the ancestor path. Batched per PAGE (one edit, one
+  call), so a busy wiki costs watchers + space subscribers per edit and nothing else.
+- **`my_teams_members` expands the item's team per item event, once any `teams` rule
+  exists anywhere on the instance.** `team_scope_user_ids` is a single indexed read that
+  answers empty on an instance where nobody uses the column, and the expansion behind it
+  never runs; the first person to switch that column on turns it into a `list_team_members`
+  per item event that carries a team.
+- **The subscriber lookup is one indexed read per event** regardless of how many people
+  subscribe, because a row's channels are deliberately not consulted in SQL.
+
+Nothing here is paginated or budgeted, and it does not need to be at this size — the
+bounded thing to watch is a very large team plus a widely-used my-teams column, which is
+where a per-event member expansion would want a cache.
+
 ## The wiki joins the outbox
 
 RADD-719 delivered page notifications synchronously from inside the save request, arguing
@@ -172,6 +232,13 @@ slugs a notification links with and the space id a subscription matches on — w
 notify importing `pages`, which it may not (load order) and whose models it may not reach
 (the spine rule). Declaring the subjects on the `EventTypeSpec` means the loader refuses to
 boot if either ref goes missing.
+
+What the loader checks is that the ref EXISTS, not that it resolved — and a subject is
+resolved by reading the row. `hard_delete_page` deleted, flushed, and emitted afterwards,
+so `page.deleted` carried `"page": null` on the one event about a page nobody can look up
+afterwards. It emits first now; inside one transaction the order is invisible, because the
+outbox row and the deletion commit together or not at all
+(`tests/test_event_subjects.py`).
 
 ### RADD-1056: page comments notified nobody, ever
 
