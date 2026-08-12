@@ -17,12 +17,20 @@ where four had been serving nine) and moved out when RADD-968 gave notify a
 second email channel — the per-event `mailer.py`. Two channels rendering the
 same types from two files is how the four-sentence bug happens again.
 
-**This loop is now the SLOWER half of a pair.** Rows whose type the recipient
-put in their `email_types` (RADD-686) are mailed individually within seconds by
-`mailer` and stamped `emailed_at`; the selection below already skips stamped
-rows, so the dedup between the two channels costs no new column and no new
-query. Everything else lands here — which is what makes "inbox only, digest me"
+**This loop is now the SLOWER half of a pair.** A row whose stored verdict says
+`email` (spec 118 — the resolver decided it at the write, from the relation that
+produced the row) is mailed individually within seconds by `mailer` and stamped
+`emailed_at`; the selection below already skips stamped rows, so the dedup
+between the two channels costs no new column and no new query. Everything the
+verdict left inbox-only lands here — which is what makes "inbox only, digest me"
 a real answer rather than silence.
+
+**This loop digests the INBOX**, hence the `inbox IS TRUE` below: an email-only
+row is the mailer's to send and it will stamp it either way (delivered, or
+terminal after the retry ladder), so batching it here as well would mail the same
+notification twice on the one tick where the two loops raced. The cost of that
+choice is that this loop is not a safety net for an email-only row — see the
+known issue in `docs/specs/118-notification-rules.md`.
 """
 
 import logging

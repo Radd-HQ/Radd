@@ -273,6 +273,27 @@ email-only row can never be opened because it is not in the list — so "mark al
 would have silently cancelled a send the person explicitly asked for. Both mark-read paths
 are scoped to inbox rows.
 
+### Known issue: an email-only row has no second chance
+
+An email-only row is the immediate mailer's alone, and the immediate mailer only looks at
+rows younger than `notify_email_max_age_hours` (24h). So if there is nowhere to send FROM
+for longer than that — `can_send` false, i.e. no sender row and no `RADD_SMTP_*` — the row
+is never sent, never stamped, and never picked up by anything else. It is not in the inbox
+either, because that is what email-only means. It is simply gone, silently.
+
+This is **not** the retry ladder's case. `retry.py` covers a send that was ATTEMPTED and
+failed: 1m/5m/30m, then a terminal stamp, all inside the age window. This is the case where
+no attempt is ever made, which the ladder never sees, and it is created by the same choice
+that fixes the double-send: the digest is a digest of the inbox (`inbox IS TRUE`), so it
+cannot be the safety net for a row that was never in one.
+
+Bounded, and left as it is for now: it needs an instance with an email-only cell saved AND
+a relay down for a day, and the alternative — letting the digest sweep email-only rows —
+reintroduces the double-send on every tick where the two loops race, which is a bug that
+fires in normal operation rather than in an outage. The honest fix is a terminal state on
+the row that says "aged out, never attempted" and a place to see it; the monitoring page
+(spec 105) is where that belongs, and it is not built.
+
 ## Settings UI
 
 `/settings/notifications` — its own tab under Account, not a Profile section: it is a
