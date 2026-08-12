@@ -28,6 +28,7 @@ from radd.modules.automations import (
     service as automations_service,
     validation,
 )
+from radd.modules.automations.intake_schemas import verdict_read
 from radd.modules.automations.models import ValidationBinding
 from radd.modules.automations.schemas import RuleCreate, RuleUpdate
 from radd.modules.automations.types import (
@@ -582,6 +583,16 @@ async def test_an_advisory_finding_does_not_block_under_a_co_governing_required_
     assert outcome.verdict.mode is ValidationMode.REQUIRED
     # …but nothing required OBJECTED, so this is advice, not a refusal.
     assert outcome.verdict.blocks is False
+
+    # THE CLIENT-VISIBLE CONTRACT, which is the half that decides what a person
+    # is offered: `blocking` is on the wire because no client can compute it.
+    # From `mode` alone this reads as a refusal and the surface hides a "create
+    # anyway" the server would have honoured; from `passed` alone it offers one
+    # the server refuses. One fact, computed where it is enforced.
+    read = verdict_read(outcome.verdict)
+    assert read.mode is ValidationMode.REQUIRED
+    assert read.blocking is False
+    assert read.passed is False
 
     # And the two paths agree: create-anyway is allowed, and the plain API
     # create — which only ever runs the required bindings — accepts it too.
@@ -1331,6 +1342,9 @@ async def test_the_validate_endpoint_is_reachable_and_answers_with_a_verdict(
     assert body["created"] is None
     assert body["verdict"]["governed"] is True
     assert body["verdict"]["mode"] == "required"
+    # What the client gates "create anyway" on — the server's own `blocks`,
+    # never `mode == required` recomputed at the other end of the wire.
+    assert body["verdict"]["blocking"] is True
     assert body["verdict"]["findings"] == [
         {"message": "Describe what you expected.", "field": "description", "node_id": "chk"}
     ]
@@ -1363,6 +1377,9 @@ async def test_a_plain_post_items_gets_the_third_422_vocabulary(intake_client, h
     body = response.json()
     assert body["detail"] == "item validation failed"
     assert body["mode"] == "required"
+    # The same fact the 200 verdict carries and the 409 is decided by, so a
+    # client reads one flag whichever way the answer arrives.
+    assert body["blocking"] is True
     assert [f["field"] for f in body["findings"]] == ["description"]
 
 

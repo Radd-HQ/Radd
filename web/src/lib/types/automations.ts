@@ -423,8 +423,16 @@ export interface IntakeVerdict {
   /** Whether anything governs this draft at all — NOT the same as `passed`,
    * which an ungoverned draft also satisfies. */
   governed: boolean;
+  /** The STRICTEST mode among the graphs governing this draft — what kind of
+   * thing is watching, for display. NOT what happened: see `blocking`. */
   mode: ValidationModeValue;
   passed: boolean;
+  /** Whether these findings REFUSE the creation. The server's `verdict.blocks`,
+   * and the same property `commit: "always"` is answered 409 by — so a client
+   * gates "create anyway" on this and never on `mode === "required"`, which is
+   * a different question and answers it wrongly whenever a required graph and
+   * an advisory one govern the same draft and only the advisory one trips. */
+  blocking: boolean;
   findings: Finding[];
 }
 

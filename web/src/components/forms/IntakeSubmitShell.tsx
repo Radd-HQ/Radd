@@ -6,11 +6,11 @@ import {
   customFieldErrors,
   errorMessage,
   findingsByField,
+  validationBlocking,
   validationFindings,
-  validationMode,
 } from "../../lib/api";
 import { RoutePath } from "../../lib/constants";
-import { IntakeCommit, ValidationMode } from "../../lib/types";
+import { IntakeCommit } from "../../lib/types";
 import type {
   CustomFieldValue,
   CustomFields,
@@ -116,21 +116,21 @@ export function IntakeSubmitShell({
   const [description, setDescription] = useState("");
   const [values, setValues] = useState<CustomFields>({});
   const [created, setCreated] = useState<IntakeSubmitResult | null>(null);
-  // WHAT THE CHECKS SAID last time (spec 119) — findings and the mode they were
-  // decided under, in one piece of state.
+  // WHAT THE CHECKS SAID last time (spec 119) — the findings and whether they
+  // REFUSE the submission, in one piece of state, both off the same answer.
   //
-  // A submit path answers with an item OR with the spec-119 422, and that body
-  // carries the mode as well as the findings. Reading the mode off the render
-  // payload while reading the list off the response renders one answer's
-  // findings under another answer's rules — and the payload was fetched before
-  // anything was submitted, so a binding added since is not in it.
-  const [verdict, setVerdict] = useState<{
-    findings: Finding[];
-    mode: ValidationModeValue | null;
-  }>({ findings: [], mode: null });
+  // `blocking` is the server's own `verdict.blocks`: the property it answers a
+  // `commit: always` 409 by, so the button and the answer to pressing it cannot
+  // disagree. Deriving it from the render payload's `mode` was wrong twice —
+  // the payload predates the submission, and a required graph merely watching a
+  // draft that tripped only an advisory one is advice, not a refusal.
+  const [verdict, setVerdict] = useState<{ findings: Finding[]; blocking: boolean }>({
+    findings: [],
+    blocking: false,
+  });
   const findings = verdict.findings;
+  const blocking = verdict.blocking;
   const governed = validation?.governed ?? false;
-  const mode = verdict.mode ?? validation?.mode ?? ValidationMode.advisory;
 
   const mutation = useMutation({
     mutationFn: (commit: IntakeCommitValue) =>
@@ -141,7 +141,7 @@ export function IntakeSubmitShell({
         commit,
       }),
     onSuccess: (result) => {
-      setVerdict({ findings: [], mode: null });
+      setVerdict({ findings: [], blocking: false });
       setCreated(result);
     },
     // Only an answer ABOUT the draft touches the list. A 409 refusing "submit
@@ -151,11 +151,11 @@ export function IntakeSubmitShell({
     // 422 about one value.
     onError: (error) => {
       const refused = validationFindings(error);
-      const answered = validationMode(error);
-      if (refused.length > 0 || answered) {
+      const answered = validationBlocking(error);
+      if (refused.length > 0 || answered !== null) {
         setVerdict((previous) => ({
           findings: refused.length > 0 ? refused : previous.findings,
-          mode: answered ?? previous.mode,
+          blocking: answered ?? previous.blocking,
         }));
       }
     },
@@ -203,7 +203,7 @@ export function IntakeSubmitShell({
     setDescription("");
     setValues({});
     setCreated(null);
-    setVerdict({ findings: [], mode: null });
+    setVerdict({ findings: [], blocking: false });
     mutation.reset();
     onReset?.();
   };
@@ -274,15 +274,15 @@ export function IntakeSubmitShell({
 
               {/* Every finding, including ones already against a control: one
                   may be attached to a field further up the page. */}
-              <FindingsPanel findings={findings} mode={mode} labelFor={labelForField} />
+              <FindingsPanel findings={findings} blocking={blocking} labelFor={labelForField} />
 
               {generalError && <ErrorText size="sm" error={generalError} />}
 
               <div className="flex justify-end gap-2">
-                {/* Advisory only — the server answers 409 to a `commit: always`
-                    under a required binding, and an affordance that is refused
-                    on press is worse than one that is absent. */}
-                {findings.length > 0 && mode === ValidationMode.advisory && (
+                {/* Offered exactly when the server would honour it: `blocking`
+                    IS the condition the 409 is decided by, read off the answer
+                    rather than recomputed from the mode. */}
+                {findings.length > 0 && !blocking && (
                   <Button
                     variant={ButtonVariant.secondary}
                     onClick={() => mutation.mutate(IntakeCommit.always)}

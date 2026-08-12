@@ -13,17 +13,26 @@
  */
 import { useEffect, useRef } from "react";
 import { AlertTriangle, Info } from "lucide-react";
-import { ValidationMode, type Finding, type ValidationModeValue } from "../../lib/types";
+import { type Finding } from "../../lib/types";
 
 interface FindingsPanelProps {
   findings: Finding[];
-  /** Decides the voice: advice you may proceed past, or a refusal you cannot. */
-  mode: ValidationModeValue;
+  /**
+   * Decides the voice: a refusal you cannot proceed past, or advice you may.
+   *
+   * The SERVER's `verdict.blocking`, never `mode === "required"` computed here.
+   * The two differ exactly when a draft is governed by a required graph and an
+   * advisory one and trips only the advisory: the mode is still "required"
+   * because something required is watching, and the creation is not refused.
+   * Deciding it locally made the panel say "fix this before it can be created"
+   * about advice, next to a bypass the caller then hid.
+   */
+  blocking: boolean;
   /** Human label for a field key — the form knows its own controls' names. */
   labelFor?: (field: string) => string | undefined;
 }
 
-export function FindingsPanel({ findings, mode, labelFor }: FindingsPanelProps) {
+export function FindingsPanel({ findings, blocking, labelFor }: FindingsPanelProps) {
   const ref = useRef<HTMLDivElement>(null);
   // Scroll itself into view when it appears.
   //
@@ -42,8 +51,7 @@ export function FindingsPanel({ findings, mode, labelFor }: FindingsPanelProps) 
   }, [findings]);
 
   if (findings.length === 0) return null;
-  const required = mode === ValidationMode.required;
-  const Icon = required ? AlertTriangle : Info;
+  const Icon = blocking ? AlertTriangle : Info;
 
   return (
     <div
@@ -53,20 +61,20 @@ export function FindingsPanel({ findings, mode, labelFor }: FindingsPanelProps) 
       role="status"
       aria-live="polite"
       data-findings-panel
-      data-mode={mode}
+      data-blocking={String(blocking)}
       className={
-        required
+        blocking
           ? "flex flex-col gap-2 rounded-[8px] border border-status-danger/30 bg-status-danger/5 p-3"
           : "flex flex-col gap-2 rounded-[8px] border border-status-warning/30 bg-status-warning/5 p-3"
       }
     >
       <p
         className={`flex items-center gap-2 text-[13px] font-medium ${
-          required ? "text-status-danger-ink" : "text-status-warning-ink"
+          blocking ? "text-status-danger-ink" : "text-status-warning-ink"
         }`}
       >
         <Icon size={14} aria-hidden />
-        {required
+        {blocking
           ? findings.length === 1
             ? "One thing to fix before this can be created"
             : `${findings.length} things to fix before this can be created`
@@ -94,7 +102,7 @@ export function FindingsPanel({ findings, mode, labelFor }: FindingsPanelProps) 
           );
         })}
       </ul>
-      {!required && (
+      {!blocking && (
         <p className="text-xs text-fg-secondary">
           These are suggestions — you can create it anyway.
         </p>

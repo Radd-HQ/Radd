@@ -1,7 +1,6 @@
 import { API_BASE, On401, RoutePath, type On401Value } from "./constants";
 import { FORBIDDEN_FALLBACK_MESSAGE, pushToast } from "./toast";
-import { ValidationMode } from "./types/automations";
-import type { Finding, ValidationModeValue } from "./types/automations";
+import type { Finding } from "./types/automations";
 
 /**
  * Thin typed fetch wrapper for the Radd API.
@@ -198,21 +197,23 @@ export function validationFindings(error: unknown): Finding[] {
 }
 
 /**
- * The MODE a spec-119 error was decided under (`{…, mode: "advisory" |
- * "required"}`), or null for any other error shape.
+ * Whether a spec-119 error's findings REFUSE the creation (`{…, blocking:
+ * true}`), or null when the error is not one of those at all.
  *
- * Read from the same payload as the findings, and never from the cached context
- * query: the mode decides whether the panel says "fix this" or "consider this"
- * and whether a bypass is offered, so taking it from a different answer than the
- * one being displayed is how a surface ends up rendering one verdict's list
- * under another verdict's rules.
+ * The server's own `verdict.blocks` — the same property that decides the 409 on
+ * `commit: always` — read from the same payload as the findings, and never
+ * derived here. `mode === "required"` is NOT this: a draft governed by a
+ * required graph and an advisory one, tripping only the advisory, is advised and
+ * not refused, and a client computing the affordance itself would hide a button
+ * the server would have honoured. One fact, computed once, on the side that
+ * enforces it.
  */
-export function validationMode(error: unknown): ValidationModeValue | null {
+export function validationBlocking(error: unknown): boolean | null {
   if (!(error instanceof ApiError) || !error.detail || typeof error.detail !== "object") {
     return null;
   }
-  const { mode } = error.detail as { mode?: unknown };
-  return mode === ValidationMode.advisory || mode === ValidationMode.required ? mode : null;
+  const { blocking } = error.detail as { blocking?: unknown };
+  return typeof blocking === "boolean" ? blocking : null;
 }
 
 /** Findings keyed by the control they name — the shape every form's per-field

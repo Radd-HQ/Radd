@@ -246,9 +246,9 @@ an explicit disable turns it off.
 
 ### The error vocabulary
 
-`{detail: "item validation failed", findings: [{message, field}], mode}` — the
-**third** 422 alongside the field registry's `{detail, errors}` and the workflow
-guards' `{detail, errors, from_state, to_state}`. `findings`, not `errors`: an
+`{detail: "item validation failed", findings: [{message, field}], mode,
+blocking}` — the **third** 422 alongside the field registry's `{detail, errors}`
+and the workflow guards' `{detail, errors, from_state, to_state}`. `findings`, not `errors`: an
 error names a value the API could not accept, a finding names something a person
 should go and fix, and the client renders them differently — one against a
 control, one in a panel. `ValidationBlocked` subclasses `RaddError`, so the MCP
@@ -258,6 +258,16 @@ Its sibling is `ValidationUnavailable` → **503 `{detail}`**, with no `findings
 key at all: the checks broke, which is not the submitter's problem and not
 something they can fix, and a client must not be able to mistake an outage for a
 clean verdict.
+
+**`blocking` is on the wire because no client can compute it.** It is
+`verdict.blocks` — the same property the `commit: always` 409 is decided by —
+and it rides on the 200 verdict and the 422 alike, so one flag answers "may I
+offer create-anyway" however the answer arrived. `mode` is a different question:
+it says what kind of thing is WATCHING (strictest, for display), and under mixed
+governance the two differ. A client deriving the affordance from `mode` hides a
+button the server would honour; one deriving it from `passed` offers a button the
+server refuses. Exposing the fact is what makes "the button and the API agree"
+structural rather than a rule two codebases have to keep remembering.
 
 ### The surfaces
 
@@ -287,14 +297,17 @@ clean verdict.
   control, since one may be attached to an input the person has not scrolled to.
   "Create anyway" appears under advisory only.
 
-  **The findings and the mode are ONE piece of state, sourced from the answer.**
-  Both the 200 verdict and the 422 carry `mode`; the context read is a
+  **The findings and `blocking` are ONE piece of state, sourced from the answer.**
+  Both the 200 verdict and the 422 carry both; the context read is a
   minute-cached lookup that decided the button's wording before anything was
-  submitted. Reading the list from one and the mode from the other rendered an
-  advisory panel — and a bypass the server answers 409 to — under a required
-  verdict, which the browser proof now reproduces by flipping the binding while
-  the modal is open. And an error that says nothing ABOUT the draft (the 409
-  itself, a 503, a field-registry 422) leaves the list alone rather than
+  submitted. Reading the list from one and the verdict's severity from the other
+  rendered an advisory panel — and a bypass the server answers 409 to — under a
+  required verdict, which the browser proof reproduces by flipping the binding
+  while the modal is open. The panel's voice and the create-anyway affordance
+  both follow `blocking`, so under mixed governance (required watching, advisory
+  tripping) the button is offered exactly where the server would honour it —
+  also proven in the browser. And an error that says nothing ABOUT the draft (the
+  409 itself, a 503, a field-registry 422) leaves the list alone rather than
   clearing it: the panel used to vanish at the moment it was being argued with.
 
   Every builtin control the modal actually has takes its finding — title,
@@ -357,7 +370,9 @@ clean verdict.
   under a manual trigger records nothing and a dry run of it reports no match,
   while a validate-trigger graph still reports its findings on a dry run;
 - an advisory finding does NOT refuse a draft that satisfied the required graph
-  governing it beside — and the plain `POST /items` path agrees;
+  governing it beside — the plain `POST /items` path agrees, and the wire says so
+  (`blocking: false` under `mode: "required"`), which is what the client gates
+  its bypass on;
 - an event gate is refused on write under a validate trigger, on that trigger's
   branch only;
 - a walk that aborts the transaction is a 503 with a usable session behind it,

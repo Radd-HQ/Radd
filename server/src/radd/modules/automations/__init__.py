@@ -32,6 +32,13 @@ async def _validation_blocked_handler(
                 finding_read(finding).model_dump() for finding in exc.verdict.findings
             ],
             "mode": exc.verdict.mode.value,
+            # DERIVED, not asserted — `blocks` is the same property that decides
+            # the 409 on `commit: always` and the `blocking` flag on a 200
+            # verdict, so every answer about this draft carries the same fact
+            # computed the same way. True by construction here (this error is
+            # only raised when it is), and written as the derivation anyway:
+            # the day that stops being true, the client should hear about it.
+            "blocking": exc.verdict.blocks,
         },
     )
 

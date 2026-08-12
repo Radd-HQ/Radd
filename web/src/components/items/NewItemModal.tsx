@@ -4,8 +4,8 @@ import { X } from "lucide-react";
 import {
   customFieldErrors,
   findingsByField,
+  validationBlocking,
   validationFindings,
-  validationMode,
 } from "../../lib/api";
 import type { BucketCreatePreset } from "../../lib/axis-dnd";
 import { PARENT_SEARCH_LIMIT } from "../../lib/constants";
@@ -27,7 +27,6 @@ import {
   IntakeCommit,
   ItemKind,
   Priority,
-  ValidationMode,
   type CustomFieldValue,
   type CustomFields,
   type ItemCreate,
@@ -37,7 +36,6 @@ import {
   type IntakeCommitValue,
   type PriorityValue,
   type Project,
-  type ValidationModeValue,
 } from "../../lib/types";
 import { Button, ButtonVariant } from "../Button";
 import { Modal } from "../Modal";
@@ -182,24 +180,23 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
   // someone switched to it would misdescribe what pressing it does.
   const validation = useQuery(validationContextQuery(project.id, typeId || defaultTypeId));
   const governed = validation.data?.governed ?? false;
-  // THE LAST VERDICT this modal saw — findings and the mode that produced them,
-  // held together in one piece of state.
+  // THE LAST VERDICT this modal saw — the findings and whether they REFUSE the
+  // creation, held together in one piece of state.
   //
-  // They have to travel together. The mode decides the panel's voice and whether
-  // "Create anyway" is offered, and reading it off the CONTEXT query while
-  // reading the findings off the response meant rendering one answer's list
-  // under another answer's rules: the context read is cached for a minute, it
-  // aggregates every governing graph, and a binding added since it ran is not in
-  // it at all. Both the 200 verdict and the 422 body carry `mode`, so the
-  // authoritative pair is always available; the context read is only the
-  // fallback for what the button should SAY before anything is submitted.
-  const [verdict, setVerdict] = useState<{
-    findings: Finding[];
-    mode: ValidationModeValue | null;
-  }>({ findings: [], mode: null });
+  // They have to travel together, and `blocking` has to come from the server.
+  // It decides the panel's voice and whether "Create anyway" is offered, and it
+  // is the same property the server answers a `commit: always` 409 by — so
+  // computing it here from the cached context read (`mode === "required"`) got
+  // it wrong twice over: the read is a minute old, and a required graph merely
+  // WATCHING a draft that only tripped an advisory one is not a refusal. Both
+  // the 200 verdict and the 422 body carry it. The context read survives only
+  // as what the button should SAY before anything has been submitted.
+  const [verdict, setVerdict] = useState<{ findings: Finding[]; blocking: boolean }>({
+    findings: [],
+    blocking: false,
+  });
   const findings = verdict.findings;
-  // Null until something has actually been checked, and then the answer's own.
-  const mode = verdict.mode ?? validation.data?.mode ?? ValidationMode.advisory;
+  const blocking = verdict.blocking;
 
   const fieldErrors = createItem.isError ? customFieldErrors(createItem.error) : {};
   // Findings addressed at a control merge into the same per-field error map the
@@ -258,7 +255,10 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
       { body, commit },
       {
         onSuccess: (result) => {
-          setVerdict({ findings: result.verdict.findings, mode: result.verdict.mode });
+          setVerdict({
+            findings: result.verdict.findings,
+            blocking: result.verdict.blocking,
+          });
           // `created` is null exactly when the draft did not survive — the
           // checks refused it. Keeping the modal open is the point: the person
           // is about to fix what it says.
@@ -277,11 +277,11 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
         // vanished at the exact moment it was being argued with.
         onError: (error) => {
           const refused = validationFindings(error);
-          const answered = validationMode(error);
-          if (refused.length > 0 || answered) {
+          const answered = validationBlocking(error);
+          if (refused.length > 0 || answered !== null) {
             setVerdict((previous) => ({
               findings: refused.length > 0 ? refused : previous.findings,
-              mode: answered ?? previous.mode,
+              blocking: answered ?? previous.blocking,
             }));
           }
         },
@@ -584,7 +584,7 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
 
         {/* Every finding, including ones already against a control: one may be
             attached to an input the person has not scrolled to. */}
-        <FindingsPanel findings={findings} mode={mode} labelFor={labelForField} />
+        <FindingsPanel findings={findings} blocking={blocking} labelFor={labelForField} />
 
         {/* Judged on THIS error's shape rather than on whether findings are on
             screen: "Create anyway" refused with a 409, or a 503 while the checks
@@ -600,11 +600,12 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          {/* Advisory only. A required binding is the admin's decision and the
-              server answers 409 to a `commit: always` under one, so offering
-              the button there would be an affordance refused on press — worse
-              than one that is absent. */}
-          {findings.length > 0 && mode === ValidationMode.advisory && (
+          {/* Offered exactly when the server would honour it. `blocking` IS the
+              condition `commit: always` is refused by (409), read off the answer
+              rather than recomputed here — a button that is refused on press is
+              worse than one that is absent, and a button that is absent where
+              the server would have accepted it is a rule nobody wrote. */}
+          {findings.length > 0 && !blocking && (
             <Button
               variant={ButtonVariant.secondary}
               onClick={() => submit(IntakeCommit.always)}

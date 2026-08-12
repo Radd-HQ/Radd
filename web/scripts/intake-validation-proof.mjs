@@ -163,7 +163,7 @@ const MEASURE = `(() => {
     present: true,
     anyway,
     dialogOpen: Boolean(dialog),
-    mode: panel.getAttribute("data-mode"),
+    blocking: panel.getAttribute("data-blocking"),
     text: (panel.textContent || "").trim(),
     rect: { x: rect.x, y: rect.y, w: rect.width, h: rect.height },
     // WITHIN THE VIEWPORT, not merely "has positive coordinates". The first
@@ -311,6 +311,55 @@ const required = await run({
   shot: "/tmp/radd-s119-findings-required.png",
 });
 
+/**
+ * MIXED GOVERNANCE — the case a client cannot compute for itself.
+ *
+ * Two graphs govern the same draft: one REQUIRED whose check sits behind a
+ * filter this draft does not match, one ADVISORY that trips. The strictest mode
+ * is "required" — something required IS watching — and nothing required
+ * objected, so the server would honour `commit: always`. A client gating the
+ * affordance on `mode === "required"` hides a button the server accepts; one
+ * gating it on `blocking` matches exactly. `POST /items` accepts this draft too,
+ * which is the disagreement the flag closes.
+ */
+await session.eval(api("PATCH", `/automations/${advisory.id}`, graphFor("advisory")));
+await session.eval(
+  api("POST", "/automations", {
+    name: `unmatched required ${suffix}`,
+    nodes: [
+      {
+        id: "trg",
+        kind: "trigger",
+        type: "trigger.event",
+        params: {
+          event: "validate",
+          targets: [{ kind: "project", id: governed.id }],
+          mode: "required",
+        },
+      },
+      // A condition no draft in this proof meets, so this graph governs
+      // everything and refuses nothing.
+      { id: "f", kind: "filter", type: "filter.slq", params: { slq: 'title ~ "zzzznever"' } },
+      {
+        id: "chk",
+        kind: "action",
+        type: "validation.fail",
+        params: { message: "An outage report needs a severity." },
+      },
+    ],
+    edges: [
+      { source: "trg", port: "out", target: "f" },
+      { source: "f", port: "matched", target: "chk" },
+    ],
+  }),
+);
+const mixed = await run({
+  projectKey: governed.key,
+  title: "it crashes on open",
+  light: false,
+  shot: "/tmp/radd-s119-findings-mixed.png",
+});
+
 const itemsAfter = parsed(
   await session.eval(api("GET", `/items?project_id=${governed.id}`)),
 );
@@ -350,15 +399,24 @@ const failed = report(
 
     "advisory: Create anyway is offered": advisoryDark.measured.anyway === true,
     "required: Create anyway is NOT offered": required.measured.anyway === false,
-    "required: the panel says so": required.measured.mode === "required",
+    "required: the panel says so": required.measured.blocking === "true",
 
     // The verdict beats the cached context read: the binding became required
     // while this modal was open, and the panel follows the ANSWER, not the
     // minute-old lookup that decided the button's wording.
-    "stale context: the panel switches to required": staleContext.mode === "required",
+    "stale context: the panel switches to a refusal": staleContext.blocking === "true",
     "stale context: Create anyway is withdrawn": staleContext.anyway === false,
     "stale context: the findings are still listed":
       (staleContext.text || "").includes(CHECK_MESSAGE),
+
+    // Mixed governance: required watching, advisory tripping. The affordance
+    // follows the server's `blocking`, not the aggregated mode — which is
+    // "required" here, and would have hidden a button the server honours.
+    "mixed: the panel renders": mixed.measured.present === true,
+    "mixed: an advisory finding under a required graph does NOT refuse":
+      mixed.measured.blocking === "false",
+    "mixed: Create anyway is offered, as the server would honour it":
+      mixed.measured.anyway === true,
 
     "pass state: no findings panel": passing.measured.present === false,
     "pass state: the modal closed": passing.measured.dialogOpen === false,
@@ -387,8 +445,9 @@ const failed = report(
       backdrop: advisoryLight.measured.backdrop,
       wash: advisoryLight.measured.wash,
     },
-    required: { anyway: required.measured.anyway, mode: required.measured.mode },
-    staleContext: { mode: staleContext.mode, anyway: staleContext.anyway },
+    required: { anyway: required.measured.anyway, blocking: required.measured.blocking },
+    staleContext: { blocking: staleContext.blocking, anyway: staleContext.anyway },
+    mixed: { blocking: mixed.measured.blocking, anyway: mixed.measured.anyway },
     passing: { present: passing.measured.present, dialogOpen: passing.measured.dialogOpen },
     contrast: { dark: Number(panelContrast.toFixed(2)), light: Number(panelContrastLight.toFixed(2)) },
     consoleErrors: session.consoleErrors
