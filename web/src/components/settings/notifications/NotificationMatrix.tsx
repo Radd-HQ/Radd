@@ -31,7 +31,20 @@ export function NotificationMatrix({
   ) => void;
 }) {
   return (
-    <div
+    <>
+      {/* The column hints used to live only in `title=` tooltips — invisible on
+          touch, undiscoverable everywhere else, and the one thing a first-time
+          visitor actually needs. A three-line legend costs almost nothing. */}
+      <div className="mb-3 flex flex-col gap-1" data-matrix-legend>
+        {prefs.scopes.map((scope) => (
+          <p key={scope} className="text-[12px] leading-snug text-fg-muted">
+            <span className="font-medium text-fg-secondary">{SCOPE_LABELS[scope]}</span>
+            {" — "}
+            {SCOPE_HINTS[scope]}
+          </p>
+        ))}
+      </div>
+      <div
       // `inline-grid` and a BOUNDED label column, not `1fr`. Stretched across a
       // 48rem settings column, the labels sat 700px from their own cells and the
       // row stopped being a row — you were reading a name on the left and
@@ -55,8 +68,9 @@ export function NotificationMatrix({
       ))}
       {prefs.kinds.map((kind) => (
         <Fragment key={kind.kind}>
-          <span className="min-w-0 truncate text-[13px] text-fg" title={kind.description}>
-            {kind.label}
+          <span className="flex min-w-0 flex-col py-0.5">
+            <span className="text-[13px] text-fg">{kind.label}</span>
+            <span className="text-[11px] leading-snug text-fg-muted">{kind.description}</span>
           </span>
           {prefs.scopes.map((scope) => {
             const personalElsewhere = kind.personal && scope !== RuleScope.own;
@@ -77,6 +91,7 @@ export function NotificationMatrix({
           })}
         </Fragment>
       ))}
-    </div>
+      </div>
+    </>
   );
 }

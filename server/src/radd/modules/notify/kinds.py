@@ -114,7 +114,7 @@ NOTIFICATION_KINDS: tuple[NotificationKind, ...] = (
     NotificationKind(
         NotificationType.PAGE_UPDATED,
         "Page edits",
-        "A page changed.",
+        "A wiki page's content was edited.",
         personal=False,
     ),
 )

@@ -88,6 +88,9 @@ export function SubscriptionList({
               <span className="ml-2 rounded border border-subtle px-1.5 py-0.5 text-[11px] uppercase tracking-wide text-fg-muted">
                 {SCOPE_LABELS[rule.scope]}
               </span>
+              <p className="mt-0.5 text-[12px] leading-snug text-fg-muted">
+                {SCOPE_HINTS[rule.scope]}
+              </p>
             </div>
             <Button
               variant={ButtonVariant.ghost}
@@ -198,6 +201,7 @@ function AddSubscription({
         <Plus size={14} aria-hidden />
         Add
       </Button>
+      <p className="basis-full text-[12px] leading-snug text-fg-muted">{SCOPE_HINTS[scope]}</p>
     </div>
   );
 }

@@ -29,7 +29,7 @@ export const SCOPE_LABELS: Record<RuleScopeValue, string> = {
 };
 
 export const SCOPE_HINTS: Record<RuleScopeValue, string> = {
-  [RuleScope.own]: "Issues assigned to you or that you reported.",
+  [RuleScope.own]: "Issues assigned to you or that you reported — even ones you stopped watching.",
   [RuleScope.participating]:
     "Anything you watch, were shared into, or were named in — issues and pages.",
   [RuleScope.teams]: "Issues filed against a team you belong to.",
