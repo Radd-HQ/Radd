@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
-import { customFieldErrors, findingsByField, validationFindings } from "../../lib/api";
+import {
+  customFieldErrors,
+  findingsByField,
+  validationFindings,
+  validationMode,
+} from "../../lib/api";
 import type { BucketCreatePreset } from "../../lib/axis-dnd";
 import { PARENT_SEARCH_LIMIT } from "../../lib/constants";
 import { useDebounced, useItemWritability, usePointsEnabled } from "../../lib/hooks";
@@ -32,6 +37,7 @@ import {
   type IntakeCommitValue,
   type PriorityValue,
   type Project,
+  type ValidationModeValue,
 } from "../../lib/types";
 import { Button, ButtonVariant } from "../Button";
 import { Modal } from "../Modal";
@@ -176,12 +182,24 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
   // someone switched to it would misdescribe what pressing it does.
   const validation = useQuery(validationContextQuery(project.id, typeId || defaultTypeId));
   const governed = validation.data?.governed ?? false;
-  const mode = validation.data?.mode ?? ValidationMode.advisory;
-  // The last verdict this modal saw. Held in state rather than read off the
-  // mutation result, because findings can arrive two ways — in the 200 verdict
-  // this endpoint answers with, or in the enforcement path's 422 — and the panel
-  // must not care which.
-  const [findings, setFindings] = useState<Finding[]>([]);
+  // THE LAST VERDICT this modal saw — findings and the mode that produced them,
+  // held together in one piece of state.
+  //
+  // They have to travel together. The mode decides the panel's voice and whether
+  // "Create anyway" is offered, and reading it off the CONTEXT query while
+  // reading the findings off the response meant rendering one answer's list
+  // under another answer's rules: the context read is cached for a minute, it
+  // aggregates every governing graph, and a binding added since it ran is not in
+  // it at all. Both the 200 verdict and the 422 body carry `mode`, so the
+  // authoritative pair is always available; the context read is only the
+  // fallback for what the button should SAY before anything is submitted.
+  const [verdict, setVerdict] = useState<{
+    findings: Finding[];
+    mode: ValidationModeValue | null;
+  }>({ findings: [], mode: null });
+  const findings = verdict.findings;
+  // Null until something has actually been checked, and then the answer's own.
+  const mode = verdict.mode ?? validation.data?.mode ?? ValidationMode.advisory;
 
   const fieldErrors = createItem.isError ? customFieldErrors(createItem.error) : {};
   // Findings addressed at a control merge into the same per-field error map the
@@ -240,7 +258,7 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
       { body, commit },
       {
         onSuccess: (result) => {
-          setFindings(result.verdict.findings);
+          setVerdict({ findings: result.verdict.findings, mode: result.verdict.mode });
           // `created` is null exactly when the draft did not survive — the
           // checks refused it. Keeping the modal open is the point: the person
           // is about to fix what it says.
@@ -251,7 +269,22 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
         // the enforcement path's spec-119 422 (a graph bound after this modal
         // read its context), and a surface that showed "request failed" for
         // that would hide the very list it exists to show.
-        onError: (error) => setFindings(validationFindings(error)),
+        //
+        // An error that carries NO findings — a 409 from "create anyway" under
+        // a required binding, a 503 while the checks are down, a field-registry
+        // 422 — leaves the list alone. Blanking it was the bug: the 409 is a
+        // refusal to bypass the very findings it then erased, so the panel
+        // vanished at the exact moment it was being argued with.
+        onError: (error) => {
+          const refused = validationFindings(error);
+          const answered = validationMode(error);
+          if (refused.length > 0 || answered) {
+            setVerdict((previous) => ({
+              findings: refused.length > 0 ? refused : previous.findings,
+              mode: answered ?? previous.mode,
+            }));
+          }
+        },
       },
     );
   };
@@ -329,6 +362,7 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
             label="State"
             value={stateId || defaultStateId}
             {...lock("state")}
+            error={errorFor("state")}
             onChange={(event) => setStateId(event.target.value)}
           >
             {(states.data ?? []).map((state) => (
@@ -342,6 +376,7 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
             label="Priority"
             value={priority}
             {...lock("priority")}
+            error={errorFor("priority")}
             onChange={(event) => setPriority(event.target.value as PriorityValue)}
           >
             {PRIORITY_ORDER.map((value) => (
@@ -421,6 +456,7 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
             label="Assignee"
             value={assigneeId}
             {...lock("assignee")}
+            error={errorFor("assignee")}
             onChange={(event) => setAssigneeId(event.target.value)}
           >
             <option value="">Unassigned</option>
@@ -437,6 +473,7 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
             label="Team"
             value={teamId}
             {...lock("team")}
+            error={errorFor("team")}
             onChange={(event) => setTeamId(event.target.value)}
             hint={(teams.data ?? []).length === 0 ? "No teams yet" : undefined}
           >
@@ -452,6 +489,7 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
             label="Cycle"
             value={cycleId}
             {...lock("cycle")}
+            error={errorFor("cycle")}
             onChange={(event) => setCycleId(event.target.value)}
             hint={(cycles.data ?? []).length === 0 ? "No cycles yet" : undefined}
           >
@@ -467,6 +505,7 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
             label="Release"
             value={releaseId}
             {...lock("release")}
+            error={errorFor("release")}
             onChange={(event) => setReleaseId(event.target.value)}
             hint={(releases.data ?? []).length === 0 ? "No releases yet" : undefined}
           >
@@ -483,6 +522,7 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
             type="date"
             value={startDate}
             {...lock("start_date")}
+            error={errorFor("start_date")}
             onChange={(event) => setStartDate(event.target.value)}
             className="[color-scheme:dark]"
           />
@@ -492,6 +532,7 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
             type="date"
             value={targetDate}
             {...lock("target_date")}
+            error={errorFor("target_date")}
             onChange={(event) => setTargetDate(event.target.value)}
             className="[color-scheme:dark]"
           />
@@ -501,6 +542,7 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
               label="Points"
               type="number"
               value={points}
+              error={errorFor("estimate_points")}
               onChange={(event) => setPoints(event.target.value)}
               placeholder="Story points"
               min={0}
@@ -510,12 +552,20 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
           )}
         </div>
 
-        <LabelsEditor
-          value={labels}
-          onChange={setLabels}
-          disabled={writ.restricted("labels")}
-          lockedReason={writ.reasonFor("labels")}
-        />
+        <div className="flex flex-col gap-1.5" data-field="labels">
+          <LabelsEditor
+            value={labels}
+            onChange={setLabels}
+            disabled={writ.restricted("labels")}
+            lockedReason={writ.reasonFor("labels")}
+          />
+          {/* The token editor is not a `TextField` and has no error slot, so a
+              finding about the labels sits beneath it — the same shape the
+              description uses, and the same place the eye already goes. */}
+          {errorFor("labels") && (
+            <p className="text-xs text-status-danger-ink">{errorFor("labels")}</p>
+          )}
+        </div>
 
         {(fields.data ?? []).length > 0 && (
           <fieldset className="flex flex-col gap-3 rounded-md border border-subtle p-3">
@@ -536,9 +586,15 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
             attached to an input the person has not scrolled to. */}
         <FindingsPanel findings={findings} mode={mode} labelFor={labelForField} />
 
+        {/* Judged on THIS error's shape rather than on whether findings are on
+            screen: "Create anyway" refused with a 409, or a 503 while the checks
+            are down, arrives with the panel full — and testing the list meant
+            the presses that fail for a reason of their own said nothing. */}
         {createItem.isError &&
           Object.keys(fieldErrors).length === 0 &&
-          findings.length === 0 && <ErrorText error={createItem.error} />}
+          validationFindings(createItem.error).length === 0 && (
+            <ErrorText error={createItem.error} />
+          )}
 
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>

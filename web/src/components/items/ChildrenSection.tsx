@@ -288,8 +288,14 @@ function QuickAdd({
         aria-label={childKind === ItemKind.subtask ? "Add a subtask" : "Add a child item"}
         className="h-7 flex-1 rounded-md border border-subtle bg-base px-2 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
       />
+      {/* `errorMessage` speaks spec-119 findings, so a child refused by a
+          required check reads as the check's own sentence rather than the bare
+          "item validation failed" headline, which names no problem and suggests
+          no fix. (The quick-add posts straight to `POST /items` deliberately —
+          one input and Enter is the whole feature, and the enforcement path is
+          what makes a required rule apply to it at all.) */}
       {create.isError && (
-        <span className="text-[11px] text-red-400">{errorMessage(create.error)}</span>
+        <span className="text-[11px] text-status-danger-ink">{errorMessage(create.error)}</span>
       )}
     </form>
   );

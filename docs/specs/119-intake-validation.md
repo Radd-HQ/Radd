@@ -270,14 +270,47 @@ clean verdict.
   `create_item` it always was), passing `form_id` so a form-targeted binding
   matches. `staging.claim` already ran after `submit_form`, so a rejected draft
   never takes ownership of its files.
-- **The portal** gets `{governed, mode}` on the form's OWN render payload rather
-  than the items endpoint: a visitor's right to be there is the SHARE, and an
-  `item.create` gate would 403 exactly the people the form exists for.
+- **BOTH form pages** get `{governed, mode}` on the form's OWN render payload —
+  the portal because a visitor's right to be there is the SHARE and an
+  `item.create` gate would 403 exactly the people the form exists for, and the
+  authed page because only the server can resolve the TYPE the submission will
+  carry. The submitter never picks one: `submit_form` resolves the form's
+  `type_name` default and `create_item` falls back to the project's default, so
+  a client passing `type_id=null` to the items context endpoint could not see a
+  type-targeted binding at all — the button said "Submit", nothing promised a
+  check, and the rules announced themselves for the first time in the 422.
+  `forms.service.effective_type_id` is that resolution, and it runs on the
+  submit render only, so the settings LIST does not pay for it per row.
 - **The New Item modal and both form pages** turn Submit into Validate where a
   graph governs, highlight the control each finding names, and show every
   finding in a shared `FindingsPanel` — including the ones already against a
   control, since one may be attached to an input the person has not scrolled to.
   "Create anyway" appears under advisory only.
+
+  **The findings and the mode are ONE piece of state, sourced from the answer.**
+  Both the 200 verdict and the 422 carry `mode`; the context read is a
+  minute-cached lookup that decided the button's wording before anything was
+  submitted. Reading the list from one and the mode from the other rendered an
+  advisory panel — and a bypass the server answers 409 to — under a required
+  verdict, which the browser proof now reproduces by flipping the binding while
+  the modal is open. And an error that says nothing ABOUT the draft (the 409
+  itself, a 503, a field-registry 422) leaves the list alone rather than
+  clearing it: the panel used to vanish at the moment it was being argued with.
+
+  Every builtin control the modal actually has takes its finding — title,
+  description, state, priority, assignee, team, cycle, release, both dates,
+  points and labels — with the panel as the fallback for anything else. A
+  finding aimed at a control nobody highlights is advice about a field the
+  person then has to go and find.
+
+- **Surfaces that are not the Validate flow** still create through `POST /items`
+  and meet the enforcement path's 422 — the child quick-add is one input and an
+  Enter key, and giving it a findings panel would be building a second modal.
+  `lib/api.ts::errorMessage` speaks findings, so it reads as the check's own
+  sentence instead of the bare "item validation failed" headline, which names no
+  problem and suggests no fix. (`useCreateItem` is gone: the modal was its only
+  caller, and a second create hook that skips the checks by construction is a
+  thing someone would reach for.)
 - **The builder** gains a target row-builder + mode picker for the validate
   trigger, a message + field picker for the check, and `POST
   /automations/{id}/test` now returns `findings` — without which a dry run of a
@@ -309,7 +342,7 @@ clean verdict.
 
 ## Invariants tested
 
-`server/tests/test_intake_validation.py` (51) and
+`server/tests/test_intake_validation.py` (53) and
 `server/tests/test_ai_validate_node.py` (20):
 
 - a validate trigger is indexed per target; dropping a target drops its
@@ -344,6 +377,8 @@ clean verdict.
   REAL `_NodeContext`, built by the executor's own factory, because the version
   that used a stand-in with an invented `collecting` flag was testing an
   if-statement in the test file;
+- a form surface resolves the TYPE its submissions will carry — the form's
+  default, and the project's when it names none;
 - both endpoints are REACHABLE over the assembled app (RADD-761's lesson:
   `POST /items/validate` reaches its handler past `GET /items/{item_id}` only
   because a method-mismatched path is a PARTIAL match, and the context read is
@@ -352,8 +387,10 @@ clean verdict.
 `web/scripts/intake-validation-proof.mjs` measures the flow in a browser, in
 both themes, with a deterministic graph and no model: the button's wording, the
 findings panel's presence, position and contrast, the control-level highlight,
-"Create anyway" under advisory and its absence under required, and the pass
-state closing the modal.
+"Create anyway" under advisory and its absence under required, the pass state
+closing the modal — and the VERDICT beating the cached context read, by flipping
+the binding to required while the modal is open and pressing again, which is the
+one case where the two answers disagree.
 
 ## Notes worth keeping
 

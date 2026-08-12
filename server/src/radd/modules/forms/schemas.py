@@ -156,6 +156,22 @@ class FormShareRead(BaseModel):
     created_at: UtcDatetime
 
 
+class FormValidationContext(BaseModel):
+    """Whether intake validation governs submissions through this form (spec 119).
+
+    Rides on the form's own render payload rather than sending the portal to
+    `GET /items/validate/context`, because a portal visitor's right to be here is
+    the SHARE — they may hold no `item.create` anywhere, and an endpoint gated on
+    that atom would 403 exactly the people this form exists for.
+    """
+
+    governed: bool = False
+    #: `"advisory"` | `"required"`, or null when nothing governs. A plain string:
+    #: `forms` does not import an optional module's enum to describe a fact that
+    #: module computed.
+    mode: str | None = None
+
+
 class FormRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -175,6 +191,12 @@ class FormRead(BaseModel):
     # Portal shares (spec 73) — populated on the form.manage surfaces (list/
     # update/sharing) for the builder; empty on the plain submit render.
     shares: list[FormShareRead] = Field(default_factory=list)
+    #: Spec 119 — whether intake validation governs submissions through this
+    #: form, populated on the SUBMIT render (`render_form`) and left null on the
+    #: list, which would otherwise pay a resolution per row for nobody. Null and
+    #: `{governed: false}` mean the same to a submit page and different things
+    #: to a reader: "not asked" versus "asked, nothing governs it".
+    validation: FormValidationContext | None = None
     created_at: UtcDatetime
     updated_at: UtcDatetime
 
@@ -332,22 +354,6 @@ class PortalTeamOption(BaseModel):
 
     id: uuid.UUID
     name: str
-
-
-class FormValidationContext(BaseModel):
-    """Whether intake validation governs submissions through this form (spec 119).
-
-    Rides on the form's own render payload rather than sending the portal to
-    `GET /items/validate/context`, because a portal visitor's right to be here is
-    the SHARE — they may hold no `item.create` anywhere, and an endpoint gated on
-    that atom would 403 exactly the people this form exists for.
-    """
-
-    governed: bool = False
-    #: `"advisory"` | `"required"`, or null when nothing governs. A plain string:
-    #: `forms` does not import an optional module's enum to describe a fact that
-    #: module computed.
-    mode: str | None = None
 
 
 class PortalFormRead(PublicFormRead):

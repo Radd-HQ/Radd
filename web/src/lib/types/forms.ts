@@ -54,6 +54,12 @@ export interface Form {
   allow_public: boolean;
   /** Portal share grants (spec 73) — populated on the form.manage surfaces. */
   shares: FormShare[];
+  /** Whether intake validation governs submissions through this form (spec 119).
+   *  Populated on the SUBMIT render (`GET /forms/{id}`) and null on the settings
+   *  list, which would otherwise resolve it per row for nobody. It rides here
+   *  rather than being fetched from the items context endpoint because only the
+   *  server knows the TYPE this form submits — the submitter never picks one. */
+  validation: { governed: boolean; mode: ValidationModeValue | null } | null;
   created_at: string;
   updated_at: string;
 }

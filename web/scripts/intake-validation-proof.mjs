@@ -262,6 +262,25 @@ const advisoryDark = await run({
   shot: "/tmp/radd-s119-findings-dark.png",
 });
 
+/**
+ * THE VERDICT WINS OVER THE CACHED CONTEXT (RADD-1060).
+ *
+ * The modal asks `GET /items/validate/context` once and caches it for a minute.
+ * Flipping the binding to REQUIRED while the modal is open and pressing again
+ * is the case where the two answers disagree: the cached context still says
+ * advisory, the response says required. Rendering the mode from the context
+ * read put an advisory panel — and a "Create anyway" button the server would
+ * refuse with a 409 — under a required verdict.
+ *
+ * Done here, in the page left open by the run above, and put back afterwards so
+ * the rest of the sequence sees the fixture it expects.
+ */
+await session.eval(api("PATCH", `/automations/${advisory.id}`, graphFor("required")));
+await session.eval(PRESS_SUBMIT);
+await sleep(1400);
+const staleContext = await session.eval(MEASURE);
+await session.eval(api("PATCH", `/automations/${advisory.id}`, graphFor("advisory")));
+
 const advisoryLight = await run({
   projectKey: governed.key,
   title: "it crashes on export",
@@ -333,6 +352,14 @@ const failed = report(
     "required: Create anyway is NOT offered": required.measured.anyway === false,
     "required: the panel says so": required.measured.mode === "required",
 
+    // The verdict beats the cached context read: the binding became required
+    // while this modal was open, and the panel follows the ANSWER, not the
+    // minute-old lookup that decided the button's wording.
+    "stale context: the panel switches to required": staleContext.mode === "required",
+    "stale context: Create anyway is withdrawn": staleContext.anyway === false,
+    "stale context: the findings are still listed":
+      (staleContext.text || "").includes(CHECK_MESSAGE),
+
     "pass state: no findings panel": passing.measured.present === false,
     "pass state: the modal closed": passing.measured.dialogOpen === false,
     "pass state: the item exists": (itemsAfter || []).some(
@@ -361,6 +388,7 @@ const failed = report(
       wash: advisoryLight.measured.wash,
     },
     required: { anyway: required.measured.anyway, mode: required.measured.mode },
+    staleContext: { mode: staleContext.mode, anyway: staleContext.anyway },
     passing: { present: passing.measured.present, dialogOpen: passing.measured.dialogOpen },
     contrast: { dark: Number(panelContrast.toFixed(2)), light: Number(panelContrastLight.toFixed(2)) },
     consoleErrors: session.consoleErrors

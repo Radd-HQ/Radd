@@ -32,6 +32,7 @@ from .schemas import (
     FormSharingUpdate,
     FormSubmit,
     FormUpdate,
+    FormValidationContext,
 )
 from .types import FormEntity, FormEvent
 from .validation import FormValidationError, missing_required_keys
@@ -148,11 +149,21 @@ async def list_forms(
 
 
 async def render_form(session: AsyncSession, form_id: uuid.UUID, actor: User) -> FormRead:
-    """Fetch a form for a submitter to render — open to ITEM_CREATE on its project."""
+    """Fetch a form for a submitter to render — open to ITEM_CREATE on its project.
+
+    The spec-119 validation context rides on this payload, exactly as it does on
+    the portal's, rather than being fetched separately from the items endpoint.
+    One resolution serves both pages, and it is the only one that can know the
+    form's effective TYPE — which the client cannot, because the submitter never
+    picks one. Computed here and not in `_read`, so the settings LIST does not
+    pay for a resolution nobody on that page reads.
+    """
     form = await get_form(session, form_id)
     project = await projects_service.get_project(session, form.project_id)
     await authz.require(session, actor, Permission.ITEM_CREATE, project=project)
-    return _read(form)
+    read = _read(form)
+    read.validation = await validation_context(session, form)
+    return read
 
 
 async def update_form(
@@ -273,6 +284,56 @@ async def _resolve_type_id(
         if issue_type.name.lower() == name.lower():
             return issue_type.id
     return None
+
+
+async def effective_type_id(session: AsyncSession, form: Form) -> uuid.UUID | None:
+    """The issue TYPE a submission through this form will actually carry.
+
+    Two resolutions, in the order `submit_form` and `create_item` do them: the
+    form's `type_name` default, and — when it names nothing or names something
+    that no longer exists — the PROJECT's default type, which is what
+    `create_item` falls back to.
+
+    It exists because the submitter never picks a type, so nothing on the client
+    can know it. Without this a type-targeted binding was invisible to every
+    form surface: the button said "Submit", the panel promised nothing, and the
+    checks announced themselves for the first time in a 422 (spec 119).
+    """
+    from radd.modules.itemtypes import service as itemtypes_service
+
+    project = await projects_service.get_project(session, form.project_id)
+    named = await _resolve_type_id(session, project, (form.defaults or {}).get("type_name"))
+    if named is not None:
+        return named
+    default = await itemtypes_service.default_type(session, project.id)
+    return default.id if default else None
+
+
+async def validation_context(session: AsyncSession, form: Form) -> FormValidationContext:
+    """Whether anything validates submissions through this form (spec 119).
+
+    Deferred + feature-detected: `automations` is optional and loads after
+    `forms`, so with it absent every form is simply ungoverned — which is the
+    truth, not a degradation.
+
+    The scope carries the form AND its effective type, because a submission
+    through it carries both and a binding may name either.
+    """
+    try:
+        from radd.modules.automations import intake as automations_intake
+        from radd.modules.automations.validation import DraftScope
+    except ImportError:
+        return FormValidationContext()
+
+    governed, mode = await automations_intake.context_for(
+        session,
+        DraftScope(
+            project_id=form.project_id,
+            type_id=await effective_type_id(session, form),
+            form_id=form.id,
+        ),
+    )
+    return FormValidationContext(governed=governed, mode=mode.value if mode else None)
 
 
 async def _resolve_state_id(

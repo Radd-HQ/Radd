@@ -7,6 +7,7 @@ import {
   errorMessage,
   findingsByField,
   validationFindings,
+  validationMode,
 } from "../../lib/api";
 import { RoutePath } from "../../lib/constants";
 import { IntakeCommit, ValidationMode } from "../../lib/types";
@@ -115,13 +116,21 @@ export function IntakeSubmitShell({
   const [description, setDescription] = useState("");
   const [values, setValues] = useState<CustomFields>({});
   const [created, setCreated] = useState<IntakeSubmitResult | null>(null);
-  // What the checks said last time (spec 119). A submit path answers with an
-  // item OR with the spec-119 422, so the findings live in the error — held in
-  // state so a later unrelated error cannot silently blank the list someone is
-  // working through.
-  const [findings, setFindings] = useState<Finding[]>([]);
+  // WHAT THE CHECKS SAID last time (spec 119) — findings and the mode they were
+  // decided under, in one piece of state.
+  //
+  // A submit path answers with an item OR with the spec-119 422, and that body
+  // carries the mode as well as the findings. Reading the mode off the render
+  // payload while reading the list off the response renders one answer's
+  // findings under another answer's rules — and the payload was fetched before
+  // anything was submitted, so a binding added since is not in it.
+  const [verdict, setVerdict] = useState<{
+    findings: Finding[];
+    mode: ValidationModeValue | null;
+  }>({ findings: [], mode: null });
+  const findings = verdict.findings;
   const governed = validation?.governed ?? false;
-  const mode = validation?.mode ?? ValidationMode.advisory;
+  const mode = verdict.mode ?? validation?.mode ?? ValidationMode.advisory;
 
   const mutation = useMutation({
     mutationFn: (commit: IntakeCommitValue) =>
@@ -132,10 +141,24 @@ export function IntakeSubmitShell({
         commit,
       }),
     onSuccess: (result) => {
-      setFindings([]);
+      setVerdict({ findings: [], mode: null });
       setCreated(result);
     },
-    onError: (error) => setFindings(validationFindings(error)),
+    // Only an answer ABOUT the draft touches the list. A 409 refusing "submit
+    // anyway" under a required binding carries no findings of its own, and
+    // blanking on it made the panel disappear at the moment it was being argued
+    // with — the same for a 503 while the checks are down, or a field-registry
+    // 422 about one value.
+    onError: (error) => {
+      const refused = validationFindings(error);
+      const answered = validationMode(error);
+      if (refused.length > 0 || answered) {
+        setVerdict((previous) => ({
+          findings: refused.length > 0 ? refused : previous.findings,
+          mode: answered ?? previous.mode,
+        }));
+      }
+    },
   });
 
   const fieldErrors = mutation.isError ? customFieldErrors(mutation.error) : {};
@@ -150,10 +173,17 @@ export function IntakeSubmitShell({
       : key;
     controlErrors[bare] ??= message;
   }
-  // Non-field-scoped failures (disabled form 409, generic 422) surface at the
-  // top — but never a validation refusal, which the panel below says better.
+  // Non-field-scoped failures (disabled form 409, "submit anyway" refused under
+  // a required binding, the checks unavailable) surface at the top — but never a
+  // findings 422, which the panel below says better.
+  //
+  // Judged on THIS error's shape, not on whether findings are on screen: a 409
+  // arrives while the panel is full, and testing the list meant the one press
+  // that could be refused for a reason of its own said nothing at all.
   const generalError =
-    mutation.isError && Object.keys(fieldErrors).length === 0 && findings.length === 0
+    mutation.isError &&
+    Object.keys(fieldErrors).length === 0 &&
+    validationFindings(mutation.error).length === 0
       ? errorMessage(mutation.error)
       : null;
 
@@ -173,7 +203,7 @@ export function IntakeSubmitShell({
     setDescription("");
     setValues({});
     setCreated(null);
-    setFindings([]);
+    setVerdict({ findings: [], mode: null });
     mutation.reset();
     onReset?.();
   };

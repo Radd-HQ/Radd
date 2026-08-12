@@ -308,26 +308,17 @@ export function useRemoveItemLink(_projectId: string) {
   });
 }
 
-/** POST /items; refreshes every item list on success. */
-export function useCreateItem(_projectId: string) {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (body: ItemCreate) => api.post<Item>(ApiPath.items, body),
-    onSuccess: (created) => cacheItem(queryClient, created),
-    onSettled: () => invalidateItemCaches(queryClient),
-  });
-}
-
 /**
  * Create through intake validation (spec 119) — one round trip that both checks
  * and creates.
  *
- * A separate hook rather than a flag on `useCreateItem`, because the RESULT
- * shape differs: this one can answer "nothing was created, and here is why",
- * which a caller has to handle, and hiding that behind an option is how a
+ * It REPLACED `useCreateItem` rather than taking a flag on it, because the
+ * result shape differs: this one can answer "nothing was created, and here is
+ * why", which a caller has to handle, and hiding that behind an option is how a
  * surface ends up silently discarding a verdict. `created` is null exactly when
- * the draft did not survive.
+ * the draft did not survive. (`useCreateItem` had exactly one caller, the New
+ * Item modal, and kept compiling with none — deleted here rather than left as a
+ * second way to create an item that skips the checks by construction.)
  */
 export function useValidateItem() {
   const queryClient = useQueryClient();

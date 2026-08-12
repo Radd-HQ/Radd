@@ -1,6 +1,7 @@
 import { API_BASE, On401, RoutePath, type On401Value } from "./constants";
 import { FORBIDDEN_FALLBACK_MESSAGE, pushToast } from "./toast";
-import type { Finding } from "./types/automations";
+import { ValidationMode } from "./types/automations";
+import type { Finding, ValidationModeValue } from "./types/automations";
 
 /**
  * Thin typed fetch wrapper for the Radd API.
@@ -129,6 +130,12 @@ export function errorMessage(error: unknown): string {
         const errors = payload.errors.filter((entry) => typeof entry === "string");
         if (errors.length > 0) return errors.join("; ");
       }
+      // …and the same for spec-119 findings, for every surface that creates an
+      // item without the Validate flow — the child quick-add is one. Without
+      // this they read the bare headline, "item validation failed", which names
+      // no problem and suggests no fix; the findings ARE the message.
+      const findings = validationFindings(error);
+      if (findings.length > 0) return findings.map((finding) => finding.message).join("; ");
       if (typeof payload.detail === "string") return payload.detail;
     }
     return error.message;
@@ -188,6 +195,24 @@ export function validationFindings(error: unknown): Finding[] {
       },
     ];
   });
+}
+
+/**
+ * The MODE a spec-119 error was decided under (`{…, mode: "advisory" |
+ * "required"}`), or null for any other error shape.
+ *
+ * Read from the same payload as the findings, and never from the cached context
+ * query: the mode decides whether the panel says "fix this" or "consider this"
+ * and whether a bypass is offered, so taking it from a different answer than the
+ * one being displayed is how a surface ends up rendering one verdict's list
+ * under another verdict's rules.
+ */
+export function validationMode(error: unknown): ValidationModeValue | null {
+  if (!(error instanceof ApiError) || !error.detail || typeof error.detail !== "object") {
+    return null;
+  }
+  const { mode } = error.detail as { mode?: unknown };
+  return mode === ValidationMode.advisory || mode === ValidationMode.required ? mode : null;
 }
 
 /** Findings keyed by the control they name — the shape every form's per-field

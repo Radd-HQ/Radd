@@ -1020,6 +1020,77 @@ async def test_an_issue_type_target_governs_only_that_type(db, admin, project):
     assert await validation.governing_graphs(db, untyped) == []
 
 
+# --- the form surfaces know what type they will submit (RADD-1060) ------------
+
+
+async def _form(db, admin, project, *, type_name=None):
+    from radd.modules.forms import service as forms_service
+    from radd.modules.forms.schemas import FormCreate, FormDefaults
+
+    read = await forms_service.create_form(
+        db,
+        FormCreate(
+            project_id=project.id,
+            name=f"Intake {uuid.uuid4().hex[:6]}",
+            defaults=FormDefaults(type_name=type_name),
+        ),
+        actor=admin,
+    )
+    return read.id
+
+
+async def test_a_form_resolves_the_type_its_submissions_will_carry(db, admin, project):
+    """A form's submitter never picks a type — `submit_form` resolves the form's
+    `type_name` default and `create_item` falls back to the project's default —
+    so a TYPE-targeted binding was invisible to both form pages: the button said
+    "Submit", nothing promised a check, and the rules announced themselves for
+    the first time in a 422. The resolution is server-side, on the payload each
+    page already fetches.
+    """
+    from radd.modules.forms import service as forms_service
+
+    bug = await itemtypes_service.create_type(
+        db,
+        IssueTypeCreate(
+            project_id=project.id, name=f"Defect {uuid.uuid4().hex[:6]}", color="#ff0000"
+        ),
+        actor_id=admin.id,
+    )
+    form_id = await _form(db, admin, project, type_name=bug.name)
+    await _graph(
+        db,
+        admin,
+        targets=[{"kind": "issue_type", "id": str(bug.id)}],
+        mode=ValidationMode.REQUIRED.value,
+        nodes=[_fail_node("chk", "Bugs need repro steps.", field="description")],
+        edges=[{"source": "trg", "port": "out", "target": "chk"}],
+    )
+    read = await forms_service.render_form(db, form_id, actor=admin)
+    assert read.validation is not None
+    assert read.validation.governed is True
+    assert read.validation.mode == ValidationMode.REQUIRED.value
+
+
+async def test_a_form_with_no_type_default_falls_back_to_the_projects(db, admin, project):
+    """`create_item` falls back to the project's default type, so the form
+    surface has to resolve the same way — otherwise the two disagree about what
+    is being submitted."""
+    from radd.modules.forms import service as forms_service
+
+    default_type = await itemtypes_service.default_type(db, project.id)
+    assert default_type is not None  # a project seeds one
+    form_id = await _form(db, admin, project)
+    await _graph(
+        db,
+        admin,
+        targets=[{"kind": "issue_type", "id": str(default_type.id)}],
+        nodes=[_fail_node("chk", "Say more.")],
+        edges=[{"source": "trg", "port": "out", "target": "chk"}],
+    )
+    read = await forms_service.render_form(db, form_id, actor=admin)
+    assert read.validation is not None and read.validation.governed is True
+
+
 # --- the contributed-node seam, end to end (RADD-1059) ------------------------
 
 
