@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, ORJSONResponse
 
 from radd import __version__
 from radd.backup import postgres as backup_postgres
@@ -79,7 +79,17 @@ def create_app() -> FastAPI:
             for hook in plugin.on_shutdown:
                 await hook()
 
-    app = FastAPI(title=settings.api_title, version=__version__, lifespan=lifespan)
+    # orjson for every route response (RADD-1067): serialization is the slowest
+    # pure-Python step left on the hot read paths, and the encoder in front of it
+    # (jsonable_encoder) has already reduced everything to primitives, so the
+    # swap changes speed, not shape. Exception handlers keep constructing plain
+    # JSONResponse deliberately — tiny cold-path bodies, not worth the churn.
+    app = FastAPI(
+        title=settings.api_title,
+        version=__version__,
+        lifespan=lifespan,
+        default_response_class=ORJSONResponse,
+    )
 
     @app.get("/health", include_in_schema=False)
     async def health() -> dict[str, str]:
