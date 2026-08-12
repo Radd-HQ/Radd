@@ -129,6 +129,16 @@ then ticks "fine" has told us about the problems — and an unknown `field`
 degrades to a general finding rather than being dropped or passed to a client
 that would hunt for a control by that name.
 
+**The include toggles bound the input, not the output**, and the node's help
+text now says so. "Reads run as the automation's identity, so the prompt can
+only contain what it could already see" is true and is only half the boundary:
+that identity is usually WIDER than the submitter's, an upstream `search.slq`
+reads as the automation's author, and a finding is rendered to whoever submitted
+— a portal visitor included. Anything put in front of the model can come back
+quoted in a sentence someone outside the team reads. What you include is
+readable by the person submitting; that is the rule, and it is one an admin has
+to be told rather than left to infer from a sentence about reads.
+
 ### The savepoint flow
 
 `POST /items/validate` (body = `ItemCreate` + `commit`):
@@ -299,8 +309,8 @@ clean verdict.
 
 ## Invariants tested
 
-`server/tests/test_intake_validation.py` (50) and
-`server/tests/test_ai_validate_node.py` (16):
+`server/tests/test_intake_validation.py` (51) and
+`server/tests/test_ai_validate_node.py` (20):
 
 - a validate trigger is indexed per target; dropping a target drops its
   governance (wholesale rebuild, never a diff);
@@ -329,7 +339,11 @@ clean verdict.
 - disabling the plugin disables the enforcement, and re-enabling restores it;
 - the savepoint flow does not validate twice;
 - `ai.validate` records findings through the seam, degrades an unknown field,
-  caps the count, and blocks nothing when the provider is unreachable;
+  caps the count, and blocks nothing when the provider is unreachable or when
+  the walk's budget is spent — the two-graph property is asserted against the
+  REAL `_NodeContext`, built by the executor's own factory, because the version
+  that used a stand-in with an invented `collecting` flag was testing an
+  if-statement in the test file;
 - both endpoints are REACHABLE over the assembled app (RADD-761's lesson:
   `POST /items/validate` reaches its handler past `GET /items/{item_id}` only
   because a method-mismatched path is a PARTIAL match, and the context read is

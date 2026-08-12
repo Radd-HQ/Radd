@@ -42,19 +42,27 @@ class _Ctx:
     written against. Deliberately a stand-in rather than the real class: `ai`
     contributes this node through the KERNEL and must keep working without
     importing anything from `automations`, and a test that imported it would
-    stop noticing if that ever changed."""
+    stop noticing if that ever changed.
+
+    Its `add_finding` is unconditional, and that is the point: everything about
+    WHETHER a finding is collected belongs to the executor, and the tests that
+    pin that use the real context (see the two-graph section at the bottom).
+    """
 
     node: _Node = field(default_factory=_Node)
     packet: _Packet = field(default_factory=lambda: _Packet((uuid.uuid4(),)))
     session: Any = None
     actor: Any = None
     collected: list[tuple[str, str]] = field(default_factory=list)
-    #: None models an ORDINARY event walk, where nothing collects findings.
-    collecting: bool = True
+    #: Whether the walk's wall-clock budget is spent (spec 119). A method rather
+    #: than a field because that is the shape the node calls it with.
+    spent: bool = False
+
+    def out_of_time(self) -> bool:
+        return self.spent
 
     def add_finding(self, message: str, field_key: str = "") -> None:
-        if self.collecting:
-            self.collected.append((message, field_key))
+        self.collected.append((message, field_key))
 
 
 BAR = {"prompt": "A bug report must name the version and the steps to reproduce."}
@@ -255,6 +263,37 @@ async def test_an_unresolvable_feature_gate_is_an_outage_not_a_crash(monkeypatch
 # --- the two-graph property ----------------------------------------------------
 
 
+def _walk_context(*, collecting: bool):
+    """A report and the context the EXECUTOR would build for it.
+
+    Through `executor._context`, the factory every call site in `walk` uses —
+    not by hand. The version this replaces asserted the two-graph property
+    against the stub above, using a `collecting` flag the stub itself invented,
+    so it proved that an if-statement in the test file worked. What decides is
+    the executor, and at the time it handed a node the report's findings list on
+    EVERY walk — the opposite of what the test claimed to show.
+    """
+    from radd.modules.automations.conditions import EventFacts
+    from radd.modules.automations.executor import RunReport, _context
+    from radd.modules.automations.graph import Node, Packet
+    from radd.modules.automations.types import AutomationNodeKind
+
+    report = RunReport(collecting=collecting)
+    ctx = _context(
+        report,
+        session=None,
+        node=Node(
+            id="chk", kind=AutomationNodeKind.GATE, type=node.NODE_KEY, params=dict(BAR)
+        ),
+        packet=Packet.of(
+            EventFacts(event_type="validate", actor_id="", actor_email="", actor_name=""),
+            item=(uuid.uuid4(),),
+        ),
+        actor=None,
+    )
+    return report, ctx
+
+
 async def test_on_an_ordinary_walk_it_is_a_pure_router(wired, monkeypatch):
     """Nothing is collecting findings outside a validation walk, so `add_finding`
     is a no-op and the node is exactly a pass/fail gate. Same node, both graphs,
@@ -262,9 +301,70 @@ async def test_on_an_ordinary_walk_it_is_a_pure_router(wired, monkeypatch):
     _answers(
         monkeypatch, {"passed": False, "findings": [{"message": "thin", "field": "description"}]}
     )
-    ctx = _Ctx(node=_Node(params=dict(BAR)), collecting=False)
+    report, ctx = _walk_context(collecting=False)
     assert await node.plan(ctx) == node.FAIL_PORT
+    assert report.findings == []
+
+
+async def test_on_a_validation_walk_the_same_call_lands_in_the_collection(wired, monkeypatch):
+    """The other half, so neither assertion can pass for the wrong reason: the
+    node behaves identically in both, and only what the walk does with the call
+    is different."""
+    _answers(
+        monkeypatch, {"passed": False, "findings": [{"message": "thin", "field": "description"}]}
+    )
+    report, ctx = _walk_context(collecting=True)
+    assert await node.plan(ctx) == node.FAIL_PORT
+    assert [(f.message, f.field) for f in report.findings] == [("thin", "description")]
+
+
+# --- the wall-clock budget -----------------------------------------------------
+
+
+async def test_a_spent_budget_stops_it_before_the_model_round_trip(wired, monkeypatch):
+    """The walk holds the project's number lock while it runs (spec 119), so a
+    verdict has a wall clock. Past it this node must not start a request that
+    can take another 30 seconds — and it must not silently pass either: the
+    check did not run, which is what `unavailable` means."""
+
+    async def _never(_ctx, _params):  # pragma: no cover - must not be called
+        raise AssertionError("the provider must not be asked after the budget is spent")
+
+    monkeypatch.setattr(node, "_ask", _never)
+    ctx = _Ctx(node=_Node(params=dict(BAR)), spent=True)
+    assert await node.plan(ctx) == node.FALLBACK_PORT
     assert ctx.collected == []
+
+
+async def test_a_spent_budget_still_honours_on_unavailable_fail(wired, monkeypatch):
+    """An admin who would rather refuse than accept anything unchecked chose
+    that for "the check could not run", and being out of time is exactly that."""
+
+    async def _never(_ctx, _params):  # pragma: no cover - must not be called
+        raise AssertionError("the provider must not be asked after the budget is spent")
+
+    monkeypatch.setattr(node, "_ask", _never)
+    ctx = _Ctx(node=_Node(params={**BAR, "on_unavailable": "fail"}), spent=True)
+    assert await node.plan(ctx) == node.FALLBACK_PORT
+    assert ctx.collected == [(node.UNAVAILABLE_MESSAGE, "")]
+
+
+async def test_a_context_with_no_budget_at_all_is_not_out_of_time(wired, monkeypatch):
+    """The node reads the budget off the context by duck typing, so a host that
+    never had one — an older executor, a plugin runner — has all the time in the
+    world rather than crashing or refusing everything."""
+
+    class _NoBudget:
+        node = _Node(params=dict(BAR))
+        packet = _Packet((uuid.uuid4(),))
+        session = None
+        actor = None
+
+        def add_finding(self, message, field_key=""):  # pragma: no cover - unused
+            pass
+
+    _answers(monkeypatch, {"passed": True, "findings": []})
+    assert await node.plan(_NoBudget()) == node.PASS_PORT
 
 
 # --- registration --------------------------------------------------------------

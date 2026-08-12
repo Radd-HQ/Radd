@@ -563,6 +563,12 @@ class _NodeContext:
     #: Who the automation runs as. A contributed node reads THROUGH this, so its
     #: prompt can only contain what that identity could already see, and an
     #: action applies with exactly that identity's rights.
+    #:
+    #: That bounds the INPUT and says nothing about the output, which matters
+    #: since spec 119: this actor is the automation's, usually wider than the
+    #: submitter's, and a finding is shown to whoever submitted — a portal
+    #: visitor included. A node that reads widely and then writes what it read
+    #: into a finding has crossed a boundary the identity alone does not close.
     actor: User
     #: The ids of the node's DECLARED subject this invocation is for (RADD-923):
     #: one id per call at item arity, the whole set at set arity. A node acting

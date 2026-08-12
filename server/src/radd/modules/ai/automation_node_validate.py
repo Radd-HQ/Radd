@@ -127,8 +127,11 @@ PARAMS_SCHEMA: dict[str, Any] = {
             "title": "What the model sees",
             "description": (
                 "Which parts of the draft are sent. Reads run as the "
-                "automation's identity, so the prompt can only contain what it "
-                "could already see."
+                "automation's identity, which is usually wider than the "
+                "submitter's — and the findings are shown to whoever submitted, "
+                "including a portal visitor. Anything an upstream node puts in "
+                "front of the model can end up quoted back in a finding, so "
+                "treat what you include as readable by the person submitting."
             ),
             "properties": {
                 "fields": {
@@ -210,6 +213,16 @@ async def plan(ctx: Any) -> str:
         logger.info("ai.validate: node %s has no prompt; routing to %s", ctx.node.id, FALLBACK_PORT)
         return FALLBACK_PORT
 
+    if _out_of_time(ctx):
+        # The walk's wall-clock budget is spent (spec 119). Asked BEFORE the
+        # feature gate, because being out of time is a reason not to do any of
+        # the remaining work — and a model round trip is the only work here that
+        # can be measured in seconds. It resolves as an outage rather than as a
+        # pass, so an admin who set `on_unavailable: fail` still gets what they
+        # asked for: the check did not run.
+        logger.info("ai.validate: node %s ran out of time; taking %s", ctx.node.id, FALLBACK_PORT)
+        return _unavailable(ctx, params)
+
     try:
         live = await feature_enabled(ctx.session, AiFeature.VALIDATION)
     except Exception:
@@ -234,6 +247,19 @@ async def plan(ctx: Any) -> str:
         # attach itself to. Same rule a card layout's departed attribute follows.
         ctx.add_finding(message, field if field in vocabulary else "")
     return FAIL_PORT
+
+
+def _out_of_time(ctx: Any) -> bool:
+    """Whether the walk says to stop spending time.
+
+    Read through `getattr` because this module is written against the executor's
+    node context as a DUCK TYPE — `ai` contributes this node through the kernel
+    and imports nothing from `automations`, so a context that predates the
+    budget (or a plugin host that never had one) simply has all the time in the
+    world rather than crashing.
+    """
+    ask = getattr(ctx, "out_of_time", None)
+    return bool(ask()) if callable(ask) else False
 
 
 def _unavailable(ctx: Any, params: Mapping[str, Any]) -> str:

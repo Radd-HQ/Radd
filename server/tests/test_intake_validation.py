@@ -1115,6 +1115,52 @@ async def test_an_ai_outage_does_not_block_intake(db, admin, project, monkeypatc
     assert outcome.verdict.passed is True
 
 
+async def test_a_spent_budget_reaches_the_ai_node_and_does_not_block_intake(
+    db, admin, project, monkeypatch
+):
+    """The wall-clock budget, end to end (spec 119).
+
+    The walk holds the project's number lock, so a verdict cannot be allowed to
+    take as long as the provider feels like taking. `run_graphs` sets one
+    deadline for every governing graph, `walk` carries it, and the node asks
+    before it spends a round trip — with the budget at zero the provider is
+    never called at all, and the draft is created, because an overloaded model
+    server must not become a closed intake.
+    """
+    from radd.modules.ai import automation_node_validate as ai_validate
+
+    async def _never(_ctx, _params):  # pragma: no cover - must not be called
+        raise AssertionError("the provider must not be asked after the budget is spent")
+
+    async def _enabled(_session, _feature):  # pragma: no cover - must not be reached
+        raise AssertionError("the feature gate should not even be consulted")
+
+    monkeypatch.setattr("radd.modules.ai.features.feature_enabled", _enabled)
+    monkeypatch.setattr(ai_validate, "_ask", _never)
+    monkeypatch.setattr(app_settings, "intake_validation_budget_seconds", 0.0)
+
+    await _graph(
+        db,
+        admin,
+        targets=[{"kind": "project", "id": str(project.id)}],
+        mode=ValidationMode.REQUIRED.value,
+        nodes=[
+            {
+                "id": "ai",
+                "kind": "gate",
+                "type": "ai.validate",
+                "params": {"prompt": "A report must say what was expected."},
+            }
+        ],
+        edges=[{"source": "trg", "port": "out", "target": "ai"}],
+    )
+    outcome = await intake.validate_and_create(
+        db, ItemCreate(project_id=project.id, title="thin"), admin
+    )
+    assert outcome.created is not None
+    assert outcome.verdict.passed is True
+
+
 async def test_an_ai_node_with_no_prompt_is_refused_on_write(db, admin, project):
     """Its `params_schema` marks `prompt` required, and `_check_node_schema`
     enforces a contributed node's own schema where the automation is WRITTEN."""
