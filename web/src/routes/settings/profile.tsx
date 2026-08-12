@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { Slot, SlotId } from "@radd/plugin-sdk";
-import { Save } from "lucide-react";
+import { Bell, Save } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
-import { ApiPath } from "../../lib/constants";
+import { ApiPath, RoutePath } from "../../lib/constants";
 import { AuthStatus } from "../../lib/auth";
 import { useAuthState } from "../../lib/hooks";
 import { mePreferencesQuery, queryKeys } from "../../lib/queries";
@@ -24,7 +25,6 @@ import { Button } from "../../components/Button";
 import { Select } from "../../components/Select";
 import { TextField } from "../../components/TextField";
 import { MyLeaveSection } from "../../components/settings/LeaveSections";
-import { NotificationPrefsPanel } from "../../components/settings/NotificationPrefsPanel";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { TokensPanel } from "../../components/settings/TokensPanel";
 import { TotpPanel } from "../../components/settings/TotpPanel";
@@ -65,12 +65,18 @@ export function ProfileSettingsPage() {
 
       <section className="mt-8 border-t border-subtle pt-6">
         <h2 className="mb-1 text-sm font-semibold text-fg">Notifications</h2>
-        <p className="mb-4 text-xs text-fg-muted">
-          Which events reach your inbox, and which of those also email you as they happen.
-          Email needs the inbox on — anything muted is never raised at all. Whatever you
-          are not emailed about individually can still arrive in the digest below.
+        <p className="mb-3 text-xs text-fg-muted">
+          Which events reach your inbox and which also email you — per kind, and per how you
+          are connected to the work: your own issues, things you follow, your teams, or a
+          whole project, space or team you subscribe to.
         </p>
-        <NotificationPrefsPanel />
+        <Link
+          to={RoutePath.settingsNotifications}
+          className="inline-flex items-center gap-1.5 text-[13px] text-accent-text hover:text-accent-text-strong"
+        >
+          <Bell size={14} aria-hidden />
+          Notification settings
+        </Link>
       </section>
 
       <section className="mt-8 border-t border-subtle pt-6">

@@ -58,6 +58,11 @@ export const SettingsSection = {
   monitoring: "monitoring",
   // Per-team public holidays (People group) — admin-managed.
   holidays: "holidays",
+  // The per-user notification matrix + subscriptions (spec 118). Its own page
+  // rather than a Profile section: a kind × scope grid plus a subscription
+  // list is not a panel, and burying it under six other sections is how the
+  // preference nobody could find stayed the preference nobody changed.
+  notifications: "notifications",
 } as const;
 export type SettingsSectionValue = (typeof SettingsSection)[keyof typeof SettingsSection];
 
@@ -159,6 +164,8 @@ export const RoutePath = {
   settingsConfluenceImport: `${SETTINGS_SEGMENT}/${SettingsSection.confluenceImport}`,
   settingsRoles: `${SETTINGS_SEGMENT}/${SettingsSection.roles}`,
   settingsTokens: `${SETTINGS_SEGMENT}/${SettingsSection.tokens}`,
+  /** Per-user notification rules: the kind × scope matrix + subscriptions (spec 118). */
+  settingsNotifications: `${SETTINGS_SEGMENT}/${SettingsSection.notifications}`,
   /** Automation rules admin (spec 20, global, `automation.manage`). */
   settingsAutomations: `${SETTINGS_SEGMENT}/${SettingsSection.automations}`,
   /** Work-categories admin (spec 22/50, global manage) — the shared category list. */

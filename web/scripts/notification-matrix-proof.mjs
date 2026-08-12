@@ -1,21 +1,30 @@
 /**
- * Render proof for the notification channel matrix (RADD-686).
+ * Render proof for the scoped notification matrix (spec 118, RADD-1055).
  *
  * `tsc` and `vite build` cannot see any of what matters here:
  *
- *  - that the grid actually LAYS OUT as a matrix — two labelled columns over
- *    one row of two checkboxes per notification type. A wrong `grid-cols`
- *    template type-checks and ships a single column of stray boxes;
- *  - that Email is DISABLED and reads unchecked while Inbox is off. That is the
- *    whole "email requires inbox" rule at the surface, and it is a runtime
- *    property of a `disabled` attribute driven by fetched state — a broken
- *    query, a renamed wire field or an inverted set test all compile;
- *  - that a click ROUND-TRIPS: the PUT lands, the response is written into the
- *    cache, and the row re-renders from it. The panel was previously an inline
- *    query with a hand-written key, so nothing here is proved by the old one.
+ *  - that the grid LAYS OUT as a matrix — one row per kind from the SERVER's
+ *    vocabulary, one cell per relationship column, the columns holding their x
+ *    across every row. A wrong `gridTemplateColumns` type-checks and ships a
+ *    single column of stray buttons, and a failed preferences fetch renders
+ *    zero rows, which looks the same as "the page is fine, there is nothing to
+ *    configure";
+ *  - that a PERSONAL kind's other columns are DISABLED. That is the whole
+ *    "addressed at you, so it follows the Mine column" rule at the surface, and
+ *    it is a runtime property of state that arrived over the wire — a broken
+ *    query, a renamed field or an inverted test all compile;
+ *  - that INHERITANCE is visible. Every unset cell resolves to something, and a
+ *    control that renders inherited as "off" lies about the two cases a
+ *    preference exists to distinguish;
+ *  - that a cell edit ROUND-TRIPS: the menu opens on a real click (through
+ *    hit-testing, so an overlay bug is caught), the PUT lands, the response is
+ *    written into the cache, and the cell re-renders from it;
+ *  - both THEMES, because the cell's lit/unlit channel marks are the only thing
+ *    carrying the value and a token that resolves in one theme and not the
+ *    other is invisible to every other gate.
  *
- * The account's real preferences are read first and PUT back verbatim at the
- * end, so a proof run against a live dev instance leaves no residue.
+ * The account's real rules are read first and PUT back verbatim at the end, so
+ * a run against a live instance leaves no residue.
  *
  * Usage: node scripts/notification-matrix-proof.mjs <baseUrl> <email> <password>
  */
@@ -27,40 +36,57 @@ const [baseUrl, email, password] = process.argv.slice(2);
 const PORT = 9457;
 const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-notification-matrix-proof");
 const PREFS = "/api/v1/notifications/preferences";
-const SHOT = resolve(process.env.TMPDIR || "/tmp", "notification-matrix.png");
-/** `NotificationType` members — bump with the enum (13 since spec 118 added
- *  `created`/`updated`/`page_created`). A literal, because the proof runs in a
- *  browser against a built bundle and has no import of the TS enum; a check that
- *  silently accepts "some rows" would not notice a type losing its row, which is
- *  what this one exists to catch.
- *
- *  Since spec 118 the ROWS come from the server's vocabulary rather than a
- *  hardcoded label map in the panel, so this number is now checking that the
- *  vocabulary actually arrived — a failed preferences fetch renders zero rows,
- *  which is exactly the shape of failure a "some rows" check would miss. */
-const NOTIFY_TYPE_COUNT = 13;
+const OUT = (name) => resolve(process.env.TMPDIR || "/tmp", name);
+/** `NOTIFICATION_KINDS` members — 13 since spec 118 added created / updated /
+ *  page_created. A literal, because the proof runs in a browser against a built
+ *  bundle and has no import of the vocabulary; a check that accepted "some rows"
+ *  would not notice the vocabulary failing to arrive, which is what this exists
+ *  to catch. */
+const KIND_COUNT = 13;
+/** own / participating / teams. */
+const SCOPE_COUNT = 3;
 
-/** The panel's own state, measured rather than assumed. */
+/** The matrix's own state, measured rather than assumed. */
 const READ_MATRIX = `(() => {
-  const boxes = [...document.querySelectorAll('input[type="checkbox"][aria-label]')]
-    .filter((b) => /— (in my inbox|by email)/.test(b.getAttribute("aria-label")));
-  const rows = new Map();
-  for (const box of boxes) {
-    const [label, channel] = box.getAttribute("aria-label").split(" — ");
-    const row = rows.get(label) || { label };
-    row[/inbox/.test(channel) ? "inbox" : "email"] = {
-      checked: box.checked,
-      disabled: box.disabled,
-      x: Math.round(box.getBoundingClientRect().left),
-      y: Math.round(box.getBoundingClientRect().top),
+  const grid = document.querySelector("[data-notification-matrix]");
+  if (!grid) return { rows: [], headers: [] };
+  const cells = [...grid.querySelectorAll("[data-channel]")].map((el) => {
+    const r = el.getBoundingClientRect();
+    return {
+      label: el.getAttribute("aria-label") || "",
+      channel: el.getAttribute("data-channel"),
+      inherited: el.getAttribute("data-inherited"),
+      disabled: el.getAttribute("data-channel") === "disabled",
+      x: Math.round(r.left),
+      y: Math.round(r.top),
+      w: Math.round(r.width),
+      h: Math.round(r.height),
     };
-    rows.set(label, row);
+  });
+  const rows = new Map();
+  for (const cell of cells) {
+    const [kind, scope] = cell.label.split(" — ");
+    const row = rows.get(kind) || { kind, cells: [] };
+    row.cells.push({ ...cell, scope });
+    rows.set(kind, row);
   }
-  const headers = [...document.querySelectorAll("span")]
+  const headers = [...grid.querySelectorAll("span")]
     .map((s) => (s.textContent || "").trim())
-    .filter((t) => t === "Inbox" || t === "Email");
-  return { rows: [...rows.values()], headers };
+    .filter((t) => ["Mine", "Following", "My teams"].includes(t));
+  return { rows: [...rows.values()], headers, gridWidth: Math.round(grid.getBoundingClientRect().width) };
 })()`;
+
+const SET_THEME = (theme) => `(() => {
+  document.documentElement.classList.toggle("light", ${JSON.stringify(theme)} === "light");
+  return document.documentElement.className;
+})()`;
+
+const SHOT = async (session, name, context) => {
+  const shot = await session.send("Page.captureScreenshot", { format: "png" });
+  const path = OUT(name);
+  writeFileSync(path, Buffer.from(shot.data, "base64"));
+  context.screenshots = [...(context.screenshots || []), path];
+};
 
 async function main() {
   const { session, close } = await openBrowser({ port: PORT, profile: PROFILE });
@@ -71,15 +97,19 @@ async function main() {
   await session.login(baseUrl, email, password);
   checks["headless chrome reports a real pointer"] = await session.hoverCapable();
 
-  // The account's real prefs, restored at the end.
   const original = await session.eval(
     `(async()=>{const r=await fetch("${PREFS}",{credentials:"include"});return r.json();})()`,
   );
-  context.originalPrefs = original;
-  checks["GET /notifications/preferences carries email_types"] =
-    Array.isArray(original.email_types);
+  context.kindsFromServer = (original.kinds || []).length;
+  context.scopesFromServer = original.scopes;
+  checks["the preferences read carries the kind VOCABULARY"] =
+    Array.isArray(original.kinds) && original.kinds.length === KIND_COUNT;
+  checks["…and the relationship scopes"] =
+    Array.isArray(original.scopes) && original.scopes.length === SCOPE_COUNT;
+  checks["…and the defaults an unset cell inherits"] =
+    Boolean(original.defaults && original.defaults.own);
 
-  await session.navigate(`${baseUrl}/settings/profile`, 3000);
+  await session.navigate(`${baseUrl}/settings/notifications`, 3000);
   let matrix = { rows: [] };
   for (let i = 0; i < 20; i++) {
     await sleep(400);
@@ -87,68 +117,173 @@ async function main() {
     if (matrix.rows.length) break;
   }
   context.rows = matrix.rows.length;
-  checks["every notification type has a row"] = matrix.rows.length === NOTIFY_TYPE_COUNT;
-  checks["…under an Inbox and an Email column header"] =
-    matrix.headers.includes("Inbox") && matrix.headers.includes("Email");
-  // A matrix, not a list: the two boxes of a row share a baseline, and the two
-  // columns hold their x across every row.
-  const inboxXs = new Set(matrix.rows.map((r) => r.inbox.x));
-  const emailXs = new Set(matrix.rows.map((r) => r.email.x));
-  checks["…in two straight columns"] = inboxXs.size === 1 && emailXs.size === 1;
-  checks["…with the two boxes of a row on one line"] = matrix.rows.every(
-    (r) => Math.abs(r.inbox.y - r.email.y) <= 1,
-  );
-  checks["…and Email to the right of Inbox"] = [...emailXs][0] > [...inboxXs][0];
+  checks["every kind has a row"] = matrix.rows.length === KIND_COUNT;
+  checks["…with a cell per relationship column"] =
+    matrix.rows.every((r) => r.cells.length === SCOPE_COUNT);
+  checks["…under the three column headers"] = matrix.headers.length === SCOPE_COUNT;
 
-  // --- email requires inbox ---
-  const target = matrix.rows.find((r) => r.inbox.checked);
-  context.target = target ? target.label : null;
-  checks["a row is available to toggle"] = Boolean(target);
-  checks["…whose Email box is live while its Inbox box is on"] =
-    target && target.email.disabled === false;
-
-  await session.click(
-    `input[aria-label="${target.label} — in my inbox"]`,
+  // A matrix, not a list: each column holds ONE x across every row, and a row's
+  // cells share a baseline.
+  const columnXs = [0, 1, 2].map((i) => new Set(matrix.rows.map((r) => r.cells[i].x)));
+  context.columnXs = columnXs.map((s) => [...s]);
+  checks["…in three straight columns"] = columnXs.every((set) => set.size === 1);
+  checks["…each row on one line"] = matrix.rows.every(
+    (r) => Math.max(...r.cells.map((c) => c.y)) - Math.min(...r.cells.map((c) => c.y)) <= 1,
   );
-  let toggled = null;
+  checks["…left to right"] =
+    [...columnXs[0]][0] < [...columnXs[1]][0] && [...columnXs[1]][0] < [...columnXs[2]][0];
+  // A cell people have to hit: 24px is the floor an affordance has to clear.
+  const smallest = Math.min(...matrix.rows.flatMap((r) => r.cells.map((c) => Math.min(c.w, c.h))));
+  context.smallestCell = smallest;
+  checks["…and every cell is a real target (>= 20px)"] = smallest >= 20;
+
+  // --- personal kinds resolve through `own` alone ---
+  const personalLabels = original.kinds.filter((k) => k.personal).map((k) => k.label);
+  const ambientLabels = original.kinds.filter((k) => !k.personal).map((k) => k.label);
+  context.personal = personalLabels.length;
+  const personalRows = matrix.rows.filter((r) => personalLabels.includes(r.kind));
+  checks["every personal kind is on the page"] = personalRows.length === personalLabels.length;
+  checks["…with its Mine cell live"] = personalRows.every((r) => !r.cells[0].disabled);
+  checks["…and the other two columns disabled"] = personalRows.every(
+    (r) => r.cells[1].disabled && r.cells[2].disabled,
+  );
+  const ambientRows = matrix.rows.filter((r) => ambientLabels.includes(r.kind));
+  checks["an ambient kind has three live cells"] = ambientRows.every((r) =>
+    r.cells.every((c) => !c.disabled),
+  );
+
+  // --- inheritance is shown, not hidden ---
+  const untouched = matrix.rows.flatMap((r) => r.cells).filter((c) => !c.disabled);
+  checks["an unset cell reports itself INHERITED"] = untouched.some(
+    (c) => c.inherited === "true",
+  );
+  // …and it resolves to the documented default rather than to `off`.
+  const assignedRow = matrix.rows.find((r) => r.kind === "Assigned to me");
+  context.assignedOwn = assignedRow && assignedRow.cells[0];
+  checks["…resolving to the default, not to off"] =
+    Boolean(assignedRow) && assignedRow.cells[0].channel === "both";
+
+  // --- a cell edit round-trips ---
+  const target = ambientRows.find((r) => r.cells[0].channel !== "email");
+  context.target = target && target.kind;
+  checks["a cell is available to change"] = Boolean(target);
+  const hit = await session.click(`[aria-label="${target.cells[0].label}"]`);
+  context.menuTriggerHit = hit.hitIsInsideTarget;
+  checks["…and the trigger is not covered by anything"] = hit.hitIsInsideTarget === true;
+  await sleep(300);
+  const opened = await session.eval(
+    `document.querySelectorAll('[role="menuitem"]').length`,
+  );
+  context.menuItems = opened;
+  checks["…its menu opens with five choices"] = opened === 5;
+
+  await session.click('[role="menuitem"]', (text) => text.trim() === "Email only");
+  let changed = null;
   for (let i = 0; i < 20; i++) {
     await sleep(400);
     const now = await session.eval(READ_MATRIX);
-    toggled = now.rows.find((r) => r.label === target.label);
-    if (toggled && toggled.inbox.checked === false) break;
+    changed = now.rows.find((r) => r.kind === target.kind);
+    if (changed && changed.cells[0].channel === "email") break;
   }
-  context.afterMute = toggled;
-  checks["muting a type round-trips through the API"] =
-    Boolean(toggled) && toggled.inbox.checked === false;
-  checks["…and disables its Email box"] = Boolean(toggled) && toggled.email.disabled === true;
-  checks["…which reads unchecked, not merely dimmed"] =
-    Boolean(toggled) && toggled.email.checked === false;
+  context.afterEdit = changed && changed.cells[0];
+  checks["…the choice round-trips through the API"] =
+    Boolean(changed) && changed.cells[0].channel === "email";
+  checks["…and the cell stops reading as inherited"] =
+    Boolean(changed) && changed.cells[0].inherited === "false";
   const stored = await session.eval(
     `(async()=>{const r=await fetch("${PREFS}",{credentials:"include"});return r.json();})()`,
   );
-  context.storedAfterMute = stored;
+  const ownRule = (stored.rules || []).find((r) => r.scope === "own");
+  context.storedOwnRule = ownRule;
+  checks["…and the SERVER stored an `own` rule for it"] = Boolean(
+    ownRule && Object.values(ownRule.channels).includes("email"),
+  );
 
-  // Scrolled into view before the shot: an image that stops at the section
-  // heading proves the page loaded, not that the matrix looks like one.
-  await session.eval(`(() => {
-    const boxes = [...document.querySelectorAll('input[type="checkbox"][aria-label]')]
-      .filter((b) => /— by email/.test(b.getAttribute("aria-label")));
-    if (boxes.length) boxes[boxes.length - 1].scrollIntoView({ block: "center" });
-    return boxes.length;
+  // --- a subscription is added, edited and removed ---
+  //
+  // The reach the whole spec exists for, so it gets the same treatment as the
+  // matrix: a real click through hit-testing, a real PUT, and the row read back
+  // off the re-rendered page rather than off what was clicked.
+  // Counted as a DELTA, never against zero: this proof promises to leave the
+  // account as it found it, which means it must also START from whatever the
+  // account already has. An absolute assertion passed on a clean instance and
+  // failed the moment a run left one behind — which is the same bug the promise
+  // is about, caught from the other side.
+  const before = await session.eval(`document.querySelectorAll("[data-subscription]").length`);
+  const targets = await session.eval(`(() => {
+    const select = document.querySelector('[aria-label="Subscription target"]');
+    return select ? (select.textContent || "").trim() : null;
   })()`);
-  await sleep(600);
-  const shot = await session.send("Page.captureScreenshot", { format: "png" });
-  writeFileSync(SHOT, Buffer.from(shot.data, "base64"));
-  context.screenshot = SHOT;
+  context.subscriptionsBefore = before;
+  context.subscriptionPicker = targets;
+  const hasTargets = Boolean(targets) && !/Nothing left/.test(targets);
+  checks["the subscription picker offers something to subscribe to"] = hasTargets;
+  if (hasTargets) {
+    await session.click('[aria-label="Subscription target"]');
+    await sleep(300);
+    // `[role="option"]` ALONE. A comma group here matched an unrelated `li
+    // button` earlier in the document — `querySelectorAll` returns document
+    // order, not selector order — so the proof clicked a nav item, navigated
+    // away, and reported "adding a subscription renders nothing".
+    await session.click('[role="option"]');
+    await sleep(300);
+    await session.click("button", (text) => text.trim() === "Add");
+    let added = before;
+    for (let i = 0; i < 20; i++) {
+      await sleep(400);
+      added = await session.eval(
+        `document.querySelectorAll("[data-subscription]").length`,
+      );
+      if (added > before) break;
+    }
+    context.subscriptionsAfter = added;
+    checks["…adding one renders one more subscription card"] = added === before + 1;
+    const seeded = await session.eval(
+      `(async()=>{const r=await fetch("${PREFS}",{credentials:"include"});const p=await r.json();` +
+        `return (p.rules||[]).filter((x)=>x.scope_id).map((x)=>({scope:x.scope,label:x.scope_label,kinds:Object.keys(x.channels).length}));})()`,
+    );
+    context.storedSubscriptions = seeded;
+    const ambientCount = original.kinds.filter((k) => !k.personal).length;
+    checks["…the server stored it with a resolved NAME"] =
+      seeded.length === added && seeded.every((row) => Boolean(row.label));
+    // A personal kind resolves through `own` alone whatever scope you look at,
+    // so a subscription carrying one would be storing a preference that can
+    // never apply — the spec-96 failure, in a preference rather than a field.
+    checks["…seeded with the ambient kinds only"] =
+      seeded.length === added && seeded.every((row) => row.kinds === ambientCount);
+  }
+
+  // --- both themes ---
+  for (const theme of ["dark", "light"]) {
+    await session.eval(SET_THEME(theme));
+    await sleep(400);
+    const themed = await session.eval(READ_MATRIX);
+    checks[`the matrix still measures as a matrix in ${theme}`] =
+      themed.rows.length === KIND_COUNT &&
+      themed.rows.every((r) => r.cells.length === SCOPE_COUNT);
+    await SHOT(session, `notification-matrix-${theme}.png`, context);
+  }
+  await session.eval(SET_THEME("dark"));
 
   // --- leave nothing behind ---
+  const restore = { rules: (original.rules || []).map((r) => ({ scope: r.scope, scope_id: r.scope_id, channels: r.channels })), email_digest: original.email_digest };
   const restored = await session.eval(
     `(async()=>{const r=await fetch("${PREFS}",{method:"PUT",credentials:"include",` +
       `headers:{"Content-Type":"application/json"},` +
-      `body:JSON.stringify(${JSON.stringify(original)})});return r.json();})()`,
+      `body:JSON.stringify(${JSON.stringify(restore)})});return r.json();})()`,
   );
-  checks["the account's own preferences are put back"] =
-    JSON.stringify(restored) === JSON.stringify(original);
+  checks["the account's own rules are put back"] =
+    JSON.stringify(restored.rules) === JSON.stringify(original.rules);
+
+  // Plugin REMOTES are built into the image by `build-all.mjs`, so a bundle
+  // built with a bare `vite build` 404s every one and quarantines it loudly.
+  // That is a property of how the proof's server was started, not of this page,
+  // and folding it into the check would either fail every local run or teach
+  // everyone to ignore the line — which is how a real error gets through.
+  const ours = session.consoleErrors.filter((line) => !line.includes("[radd] plugin UI"));
+  context.consoleErrors = ours.slice(0, 5);
+  context.quarantinedPluginRemotes = session.consoleErrors.length - ours.length;
+  checks["the page logged no console errors of its own"] = ours.length === 0;
 
   const failed = report(checks, context);
   close();

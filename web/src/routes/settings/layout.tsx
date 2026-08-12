@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useDisabledNavPaths } from "@radd/plugin-sdk";
 import {
   Activity,
+  Bell,
   Blocks,
   BookOpen,
   Bot,
@@ -78,6 +79,15 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
     label: "Account",
     items: [
       { to: RoutePath.settingsProfile, label: "Profile", icon: CircleUserRound, show: () => true },
+      {
+        // Spec 118 — the kind × scope matrix and its subscriptions. Its own tab
+        // rather than a Profile section: it is a grid plus a list, and a
+        // preference nobody can find is a preference nobody changes.
+        to: RoutePath.settingsNotifications,
+        label: "Notifications",
+        icon: Bell,
+        show: () => true,
+      },
       { to: RoutePath.settingsTokens, label: "API tokens", icon: KeyRound, show: () => true },
     ],
   },

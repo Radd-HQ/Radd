@@ -66,6 +66,7 @@ import { StorageSettingsPage } from "./routes/settings/storage";
 import { EmailSettingsPage } from "./routes/settings/email";
 import { SignInSettingsPage } from "./routes/settings/sign-in";
 import { MonitoringSettingsPage } from "./routes/settings/monitoring";
+import { NotificationSettingsPage } from "./routes/settings/notifications";
 import { ProfileSettingsPage } from "./routes/settings/profile";
 import { InstanceSettingsPage } from "./routes/settings/instance";
 import { PagesSettingsPage } from "./routes/settings/pages";
@@ -465,6 +466,13 @@ const settingsTokensRoute = createRoute({
   component: TokensSettingsPage,
 });
 
+/** Per-user notification rules (spec 118) — every signed-in account. */
+const settingsNotificationsRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: SettingsSection.notifications,
+  component: NotificationSettingsPage,
+});
+
 const settingsAutomationsRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: SettingsSection.automations,
@@ -705,6 +713,7 @@ const routeTree = rootRoute.addChildren([
       settingsConfluenceImportRoute,
       settingsRolesRoute,
       settingsTokensRoute,
+      settingsNotificationsRoute,
       settingsAutomationsRoute,
       settingsTimeloggingRoute,
       settingsAuditRoute,

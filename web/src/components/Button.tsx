@@ -9,7 +9,7 @@ export const ButtonVariant = {
 } as const;
 type ButtonVariantValue = (typeof ButtonVariant)[keyof typeof ButtonVariant];
 
-const ButtonSize = {
+export const ButtonSize = {
   sm: "sm",
   md: "md",
 } as const;
