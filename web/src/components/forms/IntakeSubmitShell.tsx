@@ -2,14 +2,30 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import { CheckCircle2 } from "lucide-react";
-import { customFieldErrors, errorMessage } from "../../lib/api";
+import {
+  customFieldErrors,
+  errorMessage,
+  findingsByField,
+  validationFindings,
+} from "../../lib/api";
 import { RoutePath } from "../../lib/constants";
-import type { CustomFieldValue, CustomFields } from "../../lib/types";
-import { Button } from "../Button";
+import { IntakeCommit, ValidationMode } from "../../lib/types";
+import type {
+  CustomFieldValue,
+  CustomFields,
+  Finding,
+  IntakeCommitValue,
+  ValidationModeValue,
+} from "../../lib/types";
+import { Button, ButtonVariant } from "../Button";
 import { ErrorText } from "../ErrorText";
 import { TextField } from "../TextField";
+import { FindingsPanel } from "../items/FindingsPanel";
 import { FormAssistPanel } from "./FormAssistPanel";
 import { FormDescriptionArea, collectValues } from "./PublicFormFields";
+
+/** How a finding names a custom field (spec 119) — mirrors the server. */
+const CUSTOM_FIELD_PREFIX = "cf.";
 
 /** The subset of a form both submit pages share (Form and PortalForm each carry it). */
 export interface IntakeFormShape {
@@ -49,12 +65,26 @@ interface IntakeSubmitShellProps {
   /** Pre-item image staging for the description editor (portal only). */
   onUploadImage?: (file: File) => Promise<string>;
   /** Build the request from the shared payload — the caller adds its own extras
-   * (team, staged attachment ids) and names the endpoint. */
+   * (team, staged attachment ids) and names the endpoint.
+   *
+   * `commit` rides along rather than being a second submit function: the two
+   * presses ("submit" and "submit anyway") are the same request with one field
+   * different, and two callbacks would let a page implement one of them and not
+   * the other. */
   submit: (payload: {
     title: string;
     description: string;
     values: CustomFields;
+    commit: IntakeCommitValue;
   }) => Promise<IntakeSubmitResult>;
+  /** Whether intake validation governs this form (spec 119), and how hard. Both
+   * pages read it off what they already fetched — the project page from the
+   * items context endpoint, the portal from the form's own render payload,
+   * which is authorized by the SHARE rather than by an item atom. */
+  validation?: { governed: boolean; mode: ValidationModeValue | null };
+  /** A finding's field key as a person would name it (the page knows its own
+   * controls). Optional — an unlabelled finding still reads fine. */
+  labelForField?: (field: string) => string | undefined;
   /** Clear caller-held extras when "Submit another" resets the shared state. */
   onReset?: () => void;
 }
@@ -77,27 +107,53 @@ export function IntakeSubmitShell({
   extraControls,
   onUploadImage,
   submit,
+  validation,
+  labelForField,
   onReset,
 }: IntakeSubmitShellProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [values, setValues] = useState<CustomFields>({});
   const [created, setCreated] = useState<IntakeSubmitResult | null>(null);
+  // What the checks said last time (spec 119). A submit path answers with an
+  // item OR with the spec-119 422, so the findings live in the error — held in
+  // state so a later unrelated error cannot silently blank the list someone is
+  // working through.
+  const [findings, setFindings] = useState<Finding[]>([]);
+  const governed = validation?.governed ?? false;
+  const mode = validation?.mode ?? ValidationMode.advisory;
 
   const mutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (commit: IntakeCommitValue) =>
       submit({
         title: title.trim(),
         description: form.description_enabled ? description : "",
         values: collectValues(values),
+        commit,
       }),
-    onSuccess: (result) => setCreated(result),
+    onSuccess: (result) => {
+      setFindings([]);
+      setCreated(result);
+    },
+    onError: (error) => setFindings(validationFindings(error)),
   });
 
   const fieldErrors = mutation.isError ? customFieldErrors(mutation.error) : {};
-  // Non-field-scoped failures (disabled form 409, generic 422) surface at the top.
+  const findingErrors = findingsByField(findings);
+  // Findings addressed at a control join the registry's per-field errors — the
+  // field renderers already take a `Record<key, message>` and need no second
+  // concept. `cf.<key>` is stripped, because a form keys by the bare key.
+  const controlErrors: Record<string, string | undefined> = { ...fieldErrors };
+  for (const [key, message] of Object.entries(findingErrors)) {
+    const bare = key.startsWith(CUSTOM_FIELD_PREFIX)
+      ? key.slice(CUSTOM_FIELD_PREFIX.length)
+      : key;
+    controlErrors[bare] ??= message;
+  }
+  // Non-field-scoped failures (disabled form 409, generic 422) surface at the
+  // top — but never a validation refusal, which the panel below says better.
   const generalError =
-    mutation.isError && Object.keys(fieldErrors).length === 0
+    mutation.isError && Object.keys(fieldErrors).length === 0 && findings.length === 0
       ? errorMessage(mutation.error)
       : null;
 
@@ -109,7 +165,7 @@ export function IntakeSubmitShell({
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
-    if (title.trim() && !descriptionMissing) mutation.mutate();
+    if (title.trim() && !descriptionMissing) mutation.mutate(IntakeCommit.pass);
   };
 
   const reset = () => {
@@ -117,6 +173,7 @@ export function IntakeSubmitShell({
     setDescription("");
     setValues({});
     setCreated(null);
+    setFindings([]);
     mutation.reset();
     onReset?.();
   };
@@ -156,7 +213,7 @@ export function IntakeSubmitShell({
                 placeholder="Short summary"
                 maxLength={500}
                 required
-                error={fieldErrors.title}
+                error={controlErrors.title}
               />
 
               {/* Submit-time assist (specs 66/106) — inline on narrow
@@ -177,19 +234,39 @@ export function IntakeSubmitShell({
                   prompt={form.description_prompt}
                   required={form.description_required}
                   value={description}
-                  error={fieldErrors.description}
+                  error={controlErrors.description}
                   placeholder="Describe the issue — steps, context, what you expected"
                   onChange={setDescription}
                 />
               )}
 
-              {renderFields(values, fieldErrors, setValue)}
+              {renderFields(values, controlErrors, setValue)}
+
+              {/* Every finding, including ones already against a control: one
+                  may be attached to a field further up the page. */}
+              <FindingsPanel findings={findings} mode={mode} labelFor={labelForField} />
 
               {generalError && <ErrorText size="sm" error={generalError} />}
 
-              <div className="flex justify-end">
+              <div className="flex justify-end gap-2">
+                {/* Advisory only — the server answers 409 to a `commit: always`
+                    under a required binding, and an affordance that is refused
+                    on press is worse than one that is absent. */}
+                {findings.length > 0 && mode === ValidationMode.advisory && (
+                  <Button
+                    variant={ButtonVariant.secondary}
+                    onClick={() => mutation.mutate(IntakeCommit.always)}
+                    disabled={!title.trim() || descriptionMissing || mutation.isPending}
+                  >
+                    Submit anyway
+                  </Button>
+                )}
                 <Button type="submit" disabled={!title.trim() || descriptionMissing || mutation.isPending}>
-                  {mutation.isPending ? "Submitting…" : submitLabel}
+                  {mutation.isPending
+                    ? governed
+                      ? "Checking…"
+                      : "Submitting…"
+                    : submitLabel}
                 </Button>
               </div>
             </form>

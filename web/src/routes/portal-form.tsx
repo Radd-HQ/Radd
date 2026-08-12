@@ -138,6 +138,15 @@ function PortalSubmitForm({ form }: { form: PortalForm }) {
         };
         return api.post<PublicSubmitResult>(apiPortalFormSubmitPath(form.id), body);
       }}
+      // Spec 119 — off the form's OWN render payload, not the items context
+      // endpoint: a portal visitor's right to be here is the share, and they
+      // may hold `item.create` nowhere at all.
+      validation={form.validation}
+      labelForField={(key) =>
+        key.startsWith("cf.")
+          ? form.fields.find((field) => field.field_key === key.slice(3))?.label ?? key.slice(3)
+          : undefined
+      }
       onReset={() => {
         setTeamId("");
         setAttachmentIds([]);

@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
-import { customFieldErrors } from "../../lib/api";
+import { customFieldErrors, findingsByField, validationFindings } from "../../lib/api";
 import type { BucketCreatePreset } from "../../lib/axis-dnd";
 import { PARENT_SEARCH_LIMIT } from "../../lib/constants";
 import { useDebounced, useItemWritability, usePointsEnabled } from "../../lib/hooks";
-import { useCreateItem } from "../../lib/item-mutations";
+import { useValidateItem } from "../../lib/item-mutations";
 import { KIND_META, KIND_ORDER, PRIORITY_META, PRIORITY_ORDER } from "../../lib/meta";
 import {
   cyclesQuery,
@@ -16,25 +16,31 @@ import {
   statesQuery,
   teamsQuery,
   usersQuery,
+  validationContextQuery,
 } from "../../lib/queries";
 import {
+  IntakeCommit,
   ItemKind,
   Priority,
+  ValidationMode,
   type CustomFieldValue,
   type CustomFields,
   type ItemCreate,
   type ItemKindValue,
   type ItemLinkSearchResult,
+  type Finding,
+  type IntakeCommitValue,
   type PriorityValue,
   type Project,
 } from "../../lib/types";
-import { Button } from "../Button";
+import { Button, ButtonVariant } from "../Button";
 import { Modal } from "../Modal";
 import { SelectField } from "../SelectField";
 import { PersonName } from "../PersonName";
 import { TextField } from "../TextField";
 import { CustomFieldsForm } from "./CustomFieldsForm";
 import { DeflectionPanel } from "./DeflectionPanel";
+import { FindingsPanel } from "./FindingsPanel";
 import { LabelsEditor } from "./LabelsEditor";
 import { LazyRichEditor as RichEditor } from "../editor/LazyRichEditor";
 import { IconButton } from "../IconButton";
@@ -47,6 +53,32 @@ interface NewItemModalProps {
   initial?: BucketCreatePreset;
   onClose: () => void;
 }
+
+/** How a finding names a custom field (spec 119) — the same `cf.<key>` form the
+ * card-layout attribute catalogue uses. */
+const CUSTOM_FIELD_PREFIX = "cf.";
+
+/** Builtin field keys as a person would name them, for the findings panel.
+ * Mirrors the server's `BuiltinItemField`; anything not listed simply shows the
+ * message with no prefix, which is the right degradation for a field this build
+ * has not heard of. */
+const BUILTIN_FIELD_LABELS: Record<string, string> = {
+  title: "Title",
+  description: "Description",
+  state: "State",
+  priority: "Priority",
+  assignee: "Assignee",
+  reporter: "Reporter",
+  team: "Team",
+  labels: "Labels",
+  parent: "Parent",
+  start_date: "Start date",
+  target_date: "Target date",
+  cycle: "Cycle",
+  release: "Release",
+  flagged: "Flag",
+  estimate_points: "Points",
+};
 
 /** The kind a parent must have (spec-02 ladder): issue → epic, subtask → issue. */
 function requiredParentKind(kind: ItemKindValue): ItemKindValue | null {
@@ -63,7 +95,7 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
   const cycles = useQuery(cyclesQuery());
   const releases = useQuery(releasesQuery(project.id));
   const types = useQuery(issueTypesQuery(project.id));
-  const createItem = useCreateItem(project.id);
+  const createItem = useValidateItem();
   // Story points (spec 70): the input exists only where the project opted in.
   const pointsEnabled = usePointsEnabled(project.id);
   // Per-field write grants apply on create too (spec 92): item.create already gates this whole
@@ -139,14 +171,45 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
       (parentSearchResults.data ?? []).filter((candidate) => candidate.kind === parentKind),
     [parentSearchResults.data, parentKind],
   );
+  // Intake validation (spec 119). Re-queried on TYPE change: a project may
+  // validate only its Bug type, and a button that kept saying "Create" after
+  // someone switched to it would misdescribe what pressing it does.
+  const validation = useQuery(validationContextQuery(project.id, typeId || defaultTypeId));
+  const governed = validation.data?.governed ?? false;
+  const mode = validation.data?.mode ?? ValidationMode.advisory;
+  // The last verdict this modal saw. Held in state rather than read off the
+  // mutation result, because findings can arrive two ways — in the 200 verdict
+  // this endpoint answers with, or in the enforcement path's 422 — and the panel
+  // must not care which.
+  const [findings, setFindings] = useState<Finding[]>([]);
+
   const fieldErrors = createItem.isError ? customFieldErrors(createItem.error) : {};
+  // Findings addressed at a control merge into the same per-field error map the
+  // registry's 422 already fills — the inputs need no second concept.
+  const findingErrors = findingsByField(findings);
+  const errorFor = (key: string) => fieldErrors[key] ?? findingErrors[key];
+  // `cf.<key>` → the bare key the custom-field form is keyed by.
+  const customFieldFindings = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const [key, message] of Object.entries(findingErrors)) {
+      if (key.startsWith(CUSTOM_FIELD_PREFIX)) out[key.slice(CUSTOM_FIELD_PREFIX.length)] = message;
+    }
+    return out;
+  }, [findingErrors]);
+  /** A finding's field key as a person would name it, for the panel. */
+  const labelForField = (key: string): string | undefined => {
+    if (key.startsWith(CUSTOM_FIELD_PREFIX)) {
+      const bare = key.slice(CUSTOM_FIELD_PREFIX.length);
+      return (fields.data ?? []).find((definition) => definition.key === bare)?.name ?? bare;
+    }
+    return BUILTIN_FIELD_LABELS[key];
+  };
 
   const setCustomField = (key: string, value: CustomFieldValue) => {
     setCustomFields((previous) => ({ ...previous, [key]: value }));
   };
 
-  const onSubmit = (event: FormEvent) => {
-    event.preventDefault();
+  const submit = (commit: IntakeCommitValue) => {
     // Only send values the user set — the registry 422s on missing required keys.
     const setValues: CustomFields = {};
     for (const [key, value] of Object.entries(customFields)) {
@@ -173,7 +236,29 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
     if (startDate) body.start_date = startDate;
     if (targetDate) body.target_date = targetDate;
     if (pointsEnabled && points.trim() !== "") body.estimate_points = Number(points);
-    createItem.mutate(body, { onSuccess: onClose });
+    createItem.mutate(
+      { body, commit },
+      {
+        onSuccess: (result) => {
+          setFindings(result.verdict.findings);
+          // `created` is null exactly when the draft did not survive — the
+          // checks refused it. Keeping the modal open is the point: the person
+          // is about to fix what it says.
+          if (result.created) onClose();
+        },
+        // This endpoint answers with a VERDICT, so findings normally arrive
+        // above. Parsed here too because the same draft can also be refused by
+        // the enforcement path's spec-119 422 (a graph bound after this modal
+        // read its context), and a surface that showed "request failed" for
+        // that would hide the very list it exists to show.
+        onError: (error) => setFindings(validationFindings(error)),
+      },
+    );
+  };
+
+  const onSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    submit(IntakeCommit.pass);
   };
 
   return (
@@ -186,12 +271,13 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
           placeholder="Short, imperative summary"
           maxLength={500}
           required
+          error={errorFor("title")}
         />
 
         {/* KB deflection (spec 66): maybe an article or a resolved issue already answers it. */}
         <DeflectionPanel query={title} projectId={project.id} />
 
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5" data-field="description">
           <label className="text-xs font-medium text-fg-secondary">Description</label>
           {/* No item id yet, so image upload is off until the issue exists.
               Keyed so a template swap (spec 76) reseeds the uncontrolled editor. */}
@@ -202,6 +288,12 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
             placeholder="Context, repro steps, links…"
             className="[&_.ProseMirror]:min-h-[8rem]"
           />
+          {/* The rich editor is not a `TextField` and has no error slot, so a
+              finding about the description sits beneath it — same colour, same
+              size, in the place the eye already goes for an input's error. */}
+          {errorFor("description") && (
+            <p className="text-xs text-status-danger-ink">{errorFor("description")}</p>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -431,23 +523,48 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
             <CustomFieldsForm
               fields={fields.data ?? []}
               values={customFields}
-              errors={fieldErrors}
+              // `cf.<key>` is how a finding names a custom field; the form keys
+              // by the bare key, and that is the only translation between them.
+              errors={{ ...fieldErrors, ...customFieldFindings }}
               onChange={setCustomField}
               lockFor={(key) => ({ locked: writ.restricted(key), reason: writ.reasonFor(key) })}
             />
           </fieldset>
         )}
 
-        {createItem.isError && Object.keys(fieldErrors).length === 0 && (
-          <ErrorText error={createItem.error} />
-        )}
+        {/* Every finding, including ones already against a control: one may be
+            attached to an input the person has not scrolled to. */}
+        <FindingsPanel findings={findings} mode={mode} labelFor={labelForField} />
+
+        {createItem.isError &&
+          Object.keys(fieldErrors).length === 0 &&
+          findings.length === 0 && <ErrorText error={createItem.error} />}
 
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
+          {/* Advisory only. A required binding is the admin's decision and the
+              server answers 409 to a `commit: always` under one, so offering
+              the button there would be an affordance refused on press — worse
+              than one that is absent. */}
+          {findings.length > 0 && mode === ValidationMode.advisory && (
+            <Button
+              variant={ButtonVariant.secondary}
+              onClick={() => submit(IntakeCommit.always)}
+              disabled={createItem.isPending || title.trim() === ""}
+            >
+              Create anyway
+            </Button>
+          )}
           <Button type="submit" disabled={createItem.isPending || title.trim() === ""}>
-            {createItem.isPending ? "Creating…" : "Create item"}
+            {createItem.isPending
+              ? governed
+                ? "Checking…"
+                : "Creating…"
+              : governed
+                ? "Validate & create"
+                : "Create item"}
           </Button>
         </div>
       </form>

@@ -132,6 +132,11 @@ export const ApiPath = {
   itemsIds: "/items/ids",
   // The visible-match count alone (spec 75) — powers dashboard slq_count widgets.
   itemsCount: "/items/count",
+  // Intake validation (spec 119). Contributed by `automations` under an
+  // `/items` prefix; the context read is three segments deliberately, because
+  // two would sit behind `GET /items/{item_id}`.
+  itemsValidate: "/items/validate",
+  itemsValidateContext: "/items/validate/context",
   // Composable dashboards (spec 75).
   dashboards: "/dashboards",
   // Batched view membership counts for the sidebar queue badges (spec 64).

@@ -1,5 +1,6 @@
 import { API_BASE, On401, RoutePath, type On401Value } from "./constants";
 import { FORBIDDEN_FALLBACK_MESSAGE, pushToast } from "./toast";
+import type { Finding } from "./types/automations";
 
 /**
  * Thin typed fetch wrapper for the Radd API.
@@ -102,6 +103,10 @@ async function errorDetail(response: Response): Promise<unknown> {
     // SLQ parse errors 422 as {detail: "...", position: <offset>} (spec 10) —
     // keep the payload so lib/slq.ts can point at the offending spot.
     if (typeof payload.position === "number") return payload;
+    // Intake validation 422s as {detail, findings: [{message, field}], mode}
+    // (spec 119) — the third vocabulary. Kept whole so `validationFindings`
+    // can split the field-addressed ones from the general ones.
+    if (Array.isArray((payload as { findings?: unknown }).findings)) return payload;
     return payload.detail ?? payload;
   } catch {
     return response.statusText;
@@ -150,6 +155,51 @@ export function customFieldErrors(error: unknown): Record<string, string> {
     if (separator > 0) {
       result[entry.slice(0, separator)] = entry.slice(separator + 2);
     }
+  }
+  return result;
+}
+
+/**
+ * Intake-validation findings from a spec-119 422
+ * (`{detail: "item validation failed", findings: [{message, field}], mode}`).
+ * Empty for any other error shape.
+ *
+ * Separate from `customFieldErrors` even though both end up highlighting a
+ * control, because the payloads are different contracts and conflating them is
+ * how a client starts guessing: `errors` is a list of `"key: message"` strings
+ * about values the API could not accept, and `findings` are objects about things
+ * a person should go and fix, addressed at builtin fields as well as custom ones.
+ */
+export function validationFindings(error: unknown): Finding[] {
+  if (!(error instanceof ApiError) || !error.detail || typeof error.detail !== "object") {
+    return [];
+  }
+  const { findings } = error.detail as { findings?: unknown };
+  if (!Array.isArray(findings)) return [];
+  return findings.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const row = entry as { message?: unknown; field?: unknown; node_id?: unknown };
+    if (typeof row.message !== "string" || !row.message) return [];
+    return [
+      {
+        message: row.message,
+        field: typeof row.field === "string" ? row.field : "",
+        node_id: typeof row.node_id === "string" ? row.node_id : "",
+      },
+    ];
+  });
+}
+
+/** Findings keyed by the control they name — the shape every form's per-field
+ * error prop already takes. Findings with no field are not in here; they belong
+ * in the panel, and silently dropping them would lose real advice. */
+export function findingsByField(findings: Finding[]): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const finding of findings) {
+    if (!finding.field) continue;
+    // First one wins: two checks naming the same control both matter, and the
+    // panel shows every finding regardless — the control just cannot hold two.
+    if (!(finding.field in result)) result[finding.field] = finding.message;
   }
   return result;
 }

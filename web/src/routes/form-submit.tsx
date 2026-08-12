@@ -13,6 +13,7 @@ import {
   type Item,
   type FormSubmit as FormSubmitBody,
 } from "../lib/types";
+import { validationContextQuery } from "../lib/queries";
 import { CustomFieldControl } from "../components/items/CustomFieldsForm";
 import { IntakeSubmitShell } from "../components/forms/IntakeSubmitShell";
 import { Spinner } from "../components/Spinner";
@@ -65,6 +66,9 @@ interface SubmitFormProps {
 }
 
 function SubmitForm({ form, projectKey, projectId, registry }: SubmitFormProps) {
+  // The form's own id scopes the lookup, so a graph bound to THIS form (rather
+  // than to the whole project) is what decides the button's wording.
+  const validation = useQuery(validationContextQuery(projectId, null, form.id));
   return (
     <IntakeSubmitShell
       form={form}
@@ -104,6 +108,15 @@ function SubmitForm({ form, projectKey, projectId, registry }: SubmitFormProps) 
       }
       submit={(payload) =>
         api.post<Item>(apiFormSubmitPath(form.id), payload satisfies FormSubmitBody)
+      }
+      // Spec 119. This page already requires `item.create` on the project to
+      // render at all, so the items context endpoint is exactly as available to
+      // its visitors as the form is.
+      validation={validation.data}
+      labelForField={(key) =>
+        key.startsWith("cf.")
+          ? fieldFor(registry, projectId, key.slice(3))?.name ?? key.slice(3)
+          : undefined
       }
     />
   );

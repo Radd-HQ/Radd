@@ -15,6 +15,8 @@ import {
   NodeArity,
   NodeKind,
   SCHEDULE_TRIGGER,
+  VALIDATE_TRIGGER,
+  VALIDATION_FAIL_TYPE,
   type AutomationCatalog,
   type AutomationNode,
   type NodeArityInfo,
@@ -117,6 +119,18 @@ export function nodeTemplates(catalog: AutomationCatalog | undefined): NodeTempl
     params: { event: SCHEDULE_TRIGGER, schedule: { kind: "interval", minutes: 30 }, query: "" },
   });
   templates.push({
+    key: `trigger:${VALIDATE_TRIGGER}`,
+    kind: NodeKind.trigger,
+    type: "trigger.event",
+    label: "When someone submits (validate it)",
+    group: `${TRIGGER_GROUP} · Intake`,
+    keywords: "validate validation intake check quality submit form required advisory gate",
+    // No targets and advisory by default: a trigger that governed something the
+    // moment it was dropped could refuse a real submission before its author
+    // had finished writing the graph.
+    params: { event: VALIDATE_TRIGGER, targets: [], mode: "advisory" },
+  });
+  templates.push({
     key: `trigger:${MANUAL_TRIGGER}`,
     kind: NodeKind.trigger,
     type: "trigger.event",
@@ -201,6 +215,19 @@ export function nodeTemplates(catalog: AutomationCatalog | undefined): NodeTempl
       params: defaultsFromSchema(node.params_schema),
     });
   }
+
+  // The spec-119 check. An ACTION kind on the server (its ports are an action's
+  // single `out`), so it belongs here rather than among the gates — it does not
+  // route, it says something and passes the packet on.
+  templates.push({
+    key: VALIDATION_FAIL_TYPE,
+    kind: NodeKind.action,
+    type: VALIDATION_FAIL_TYPE,
+    label: "Report a problem",
+    group: "Actions",
+    keywords: "validation fail finding reject refuse check problem intake quality require",
+    params: { message: "", field: "" },
+  });
 
   for (const actionType of ACTION_TYPE_ORDER) {
     templates.push({

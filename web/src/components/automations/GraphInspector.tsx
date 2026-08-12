@@ -16,6 +16,8 @@ import {
   NodeArity,
   NodeKind,
   SCHEDULE_TRIGGER,
+  VALIDATE_TRIGGER,
+  VALIDATION_FAIL_TYPE,
   type ActionTypeValue,
   type AutomationCatalog,
   type AutomationNode,
@@ -37,6 +39,7 @@ import { CreateItemFields } from "./CreateItemFields";
 import { SchemaFields } from "./SchemaFields";
 import { EventSamples } from "./EventSamples";
 import { SearchFields } from "./SearchFields";
+import { ValidateTriggerFields, ValidationFailFields } from "./ValidationFields";
 import { TokenReference } from "./TokenReference";
 import {
   AiClassifyFields,
@@ -163,6 +166,12 @@ export function GraphInspector({
                 params.schedule = node.params.schedule ?? defaultSchedule("interval");
                 params.query = node.params.query ?? "";
               }
+              // The validate sentinel carries its BINDING, and the server
+              // refuses a schedule on it — corrected here rather than 422ing.
+              if (next === VALIDATE_TRIGGER) {
+                params.targets = node.params.targets ?? [];
+                params.mode = node.params.mode ?? "advisory";
+              }
               onChange({ ...node, params });
             }}
             hint={
@@ -183,6 +192,9 @@ export function GraphInspector({
             <optgroup label="Scheduled">
               <option value={SCHEDULE_TRIGGER}>On a schedule</option>
             </optgroup>
+            <optgroup label="Intake">
+              <option value={VALIDATE_TRIGGER}>When someone submits (validate it)</option>
+            </optgroup>
             <optgroup label="On demand">
               <option value={MANUAL_TRIGGER}>Manual (editor / menu)</option>
             </optgroup>
@@ -190,8 +202,15 @@ export function GraphInspector({
 
           {/* What this event actually carries. Sampled from real events, so it
               is the only thing on this page that cannot be wrong about the
-              payload someone is about to write a condition against. */}
-          <EventSamples eventType={String(node.params.event ?? "")} />
+              payload someone is about to write a condition against. A validate
+              trigger has no event, so there is nothing to sample. */}
+          {node.params.event !== VALIDATE_TRIGGER && (
+            <EventSamples eventType={String(node.params.event ?? "")} />
+          )}
+
+          {node.params.event === VALIDATE_TRIGGER && (
+            <ValidateTriggerFields params={node.params} onChange={setParams} />
+          )}
 
           {node.params.event === SCHEDULE_TRIGGER && (
             <>
@@ -275,7 +294,11 @@ export function GraphInspector({
         </div>
       )}
 
-      {node.kind === NodeKind.action && !contributed && (
+      {node.type === VALIDATION_FAIL_TYPE && (
+        <ValidationFailFields params={node.params} fields={pickers.fields} onChange={setParams} />
+      )}
+
+      {node.kind === NodeKind.action && !contributed && node.type !== VALIDATION_FAIL_TYPE && (
         <div className="flex flex-col gap-2">
           {/* Act as (spec 116). Rendered ONLY when the caller holds
               automation.act_as — a field that is refused on save is worse than

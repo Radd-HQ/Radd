@@ -15,6 +15,37 @@ export const MANUAL_TRIGGER = "manual";
  * instead of an event, driven by its `schedule` config. */
 export const SCHEDULE_TRIGGER = "schedule";
 
+/** Spec 119: the validation sentinel. The graph runs SYNCHRONOUSLY at intake,
+ * against a savepoint-created draft, and applies nothing — it produces findings.
+ * Like the other two it is not in the event catalog, so nothing can fire it from
+ * the event stream. */
+export const VALIDATE_TRIGGER = "validate";
+
+/** What a validate trigger governs. A LIST of these rides on the node — one
+ * graph may check a form, an issue type and a project at once. */
+export const ValidationTargetKind = {
+  form: "form",
+  issueType: "issue_type",
+  project: "project",
+} as const;
+export type ValidationTargetKindValue =
+  (typeof ValidationTargetKind)[keyof typeof ValidationTargetKind];
+
+export interface ValidationTarget {
+  kind: ValidationTargetKindValue;
+  id: string;
+}
+
+/** How hard a governing graph's findings bite. `advisory` shows them and allows
+ * "create anyway"; `required` refuses, for every caller including the API. */
+export const ValidationMode = { advisory: "advisory", required: "required" } as const;
+export type ValidationModeValue = (typeof ValidationMode)[keyof typeof ValidationMode];
+
+/** The node type that RECORDS a finding and passes its packet through, so
+ * several checks can chain off one branch. An ACTION kind on the server (its
+ * ports are an action's `out`), which is why it appears under Actions. */
+export const VALIDATION_FAIL_TYPE = "validation.fail";
+
 /** Shape of a scheduled rule's `schedule` (spec 69, mirror of ScheduleKind). */
 export const ScheduleKind = {
   interval: "interval",
@@ -367,6 +398,53 @@ export interface RuleTestResult {
   nodes: NodeResult[];
   /** Budget truncation, surfaced rather than buried in a log. */
   dropped: string[];
+  /** What a VALIDATION graph would tell the submitter (spec 119). Empty for
+   * every other kind of graph — which is the honest answer, not a missing one. */
+  findings: Finding[];
+}
+
+// ---------------------------------------------------------------------------
+// Intake validation (spec 119) — the surfaces a submitter sees.
+// ---------------------------------------------------------------------------
+
+/** One thing wrong with a draft. `field` is a builtin name (`title`,
+ * `description`, `assignee`, …) or `cf.<key>`, and empty when the finding is
+ * about the submission as a whole — the two render differently: one against the
+ * control it names, one in the panel. */
+export interface Finding {
+  message: string;
+  field: string;
+  /** Which check said it. Not shown; it is what makes a message traceable back
+   * to the node that produced it. */
+  node_id: string;
+}
+
+export interface IntakeVerdict {
+  /** Whether anything governs this draft at all — NOT the same as `passed`,
+   * which an ungoverned draft also satisfies. */
+  governed: boolean;
+  mode: ValidationModeValue;
+  passed: boolean;
+  findings: Finding[];
+}
+
+/** What to do with the draft once the checks have spoken. */
+export const IntakeCommit = {
+  /** Create it when it passes, take it back when it does not. The default. */
+  pass: "pass",
+  /** Create it regardless — the advisory "create anyway". 409 where required. */
+  always: "always",
+  /** Create nothing; a pure pre-flight. */
+  never: "never",
+} as const;
+export type IntakeCommitValue = (typeof IntakeCommit)[keyof typeof IntakeCommit];
+
+/** GET /items/validate/context — whether the button should say Validate, and
+ * whether "create anyway" is on offer. `mode` is null exactly when nothing
+ * governs, so "advisory" cannot be mistaken for "ungoverned". */
+export interface ValidationContext {
+  governed: boolean;
+  mode: ValidationModeValue | null;
 }
 
 /** One addressable path into an event payload, with values really seen at it.

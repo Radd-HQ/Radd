@@ -68,7 +68,7 @@ from .planning import (
     should_process as should_process,
 )
 from .nodes import ports_of
-from .schemas import ActionPreview, NodeResult, PortResult, RuleTestResult
+from .schemas import ActionPreview, NodeResult, PortResult, RuleTestResult, TestFinding
 from .types import (
     CONSUMER_NAME,
     AutomationTrigger,
@@ -548,11 +548,17 @@ async def preview(
     return RuleTestResult(
         rule_id=rule.id,
         item_id=item_id,
-        matched=bool(previews),
+        matched=bool(previews) or bool(report.findings),
         would_apply=previews,
         trigger_node_id=trigger.id if trigger is not None else "",
         nodes=_node_results(nodes, report, keys),
         dropped=list(report.dropped),
+        # A validation graph's whole output (spec 119). Without this a dry run
+        # of one reports port counts and no actions — accurate, and useless.
+        findings=[
+            TestFinding(node_id=f.node_id, message=f.message, field=f.field)
+            for f in report.findings
+        ],
     )
 
 

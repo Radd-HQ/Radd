@@ -153,6 +153,24 @@ export function RuleTestPanel({ ruleId, triggers = [], nodes = [], onResult }: R
             </ul>
           )}
 
+          {result.findings.length > 0 && (
+            // A VALIDATION graph's whole output (spec 119). Without this a dry
+            // run of one shows port counts and no actions — accurate, and
+            // useless, since findings are the only thing it produces.
+            <ul
+              data-test-findings
+              className="flex flex-col gap-0.5 rounded border border-status-danger/30 bg-status-danger/5 px-2 py-1.5"
+            >
+              {result.findings.map((finding, index) => (
+                <li key={index} className="text-[11px] text-fg">
+                  <span className="font-mono text-fg-muted">{finding.node_id}</span>
+                  {finding.field && <span className="text-fg-muted"> · {finding.field}</span>}{" "}
+                  {finding.message}
+                </li>
+              ))}
+            </ul>
+          )}
+
           <ul className="flex flex-col gap-1">
             {result.nodes.map((node) => (
               <NodeRow key={node.node_id} node={node} type={byId.get(node.node_id)?.type} />

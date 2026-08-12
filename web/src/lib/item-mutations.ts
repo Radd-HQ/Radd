@@ -17,7 +17,16 @@ import {
   apiItemStarPath,
 } from "./constants";
 import { queryKeys } from "./queries";
-import type { Item, ItemCreate, ItemLinkCreate, ItemUpdate, View } from "./types";
+import { IntakeCommit } from "./types";
+import type {
+  IntakeCommitValue,
+  IntakeVerdict,
+  Item,
+  ItemCreate,
+  ItemLinkCreate,
+  ItemUpdate,
+  View,
+} from "./types";
 
 /** Shared TanStack Query mutations for items (board, detail panel, modal). */
 
@@ -307,6 +316,36 @@ export function useCreateItem(_projectId: string) {
     mutationFn: (body: ItemCreate) => api.post<Item>(ApiPath.items, body),
     onSuccess: (created) => cacheItem(queryClient, created),
     onSettled: () => invalidateItemCaches(queryClient),
+  });
+}
+
+/**
+ * Create through intake validation (spec 119) — one round trip that both checks
+ * and creates.
+ *
+ * A separate hook rather than a flag on `useCreateItem`, because the RESULT
+ * shape differs: this one can answer "nothing was created, and here is why",
+ * which a caller has to handle, and hiding that behind an option is how a
+ * surface ends up silently discarding a verdict. `created` is null exactly when
+ * the draft did not survive.
+ */
+export function useValidateItem() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ body, commit }: { body: ItemCreate; commit?: IntakeCommitValue }) =>
+      api.post<{ verdict: IntakeVerdict; created: Item | null }>(ApiPath.itemsValidate, {
+        ...body,
+        commit: commit ?? IntakeCommit.pass,
+      }),
+    onSuccess: (result) => {
+      if (result.created) cacheItem(queryClient, result.created);
+    },
+    onSettled: (result) => {
+      // Only when something was actually written: a rejected draft rolled back,
+      // so invalidating every item cache would be a refetch storm buying nothing.
+      if (result?.created) invalidateItemCaches(queryClient);
+    },
   });
 }
 

@@ -663,6 +663,17 @@ class RuleTestResult(BaseModel):
     #: Budget truncation, surfaced rather than buried in a log — a run that did
     #: less and a run that had less to do look identical without it.
     dropped: list[str] = Field(default_factory=list)
+    #: What a VALIDATION graph would tell the submitter (spec 119). A dry run of
+    #: a validate-triggered graph otherwise reports port counts and an empty
+    #: `would_apply` — technically accurate and useless, since the only thing
+    #: such a graph produces is these.
+    findings: list["TestFinding"] = Field(default_factory=list)
+
+
+class TestFinding(BaseModel):
+    node_id: str
+    message: str
+    field: str = ""
 
 
 class RunnableRuleRead(BaseModel):

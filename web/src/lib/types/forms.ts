@@ -1,6 +1,7 @@
 /** Intake forms, public submit path, requester portal, and mail contacts (specs 20/62/73). */
 import type { FieldDisplayValue, FieldTypeValue } from "./fields";
 import type { CustomFieldValue, CustomFields, ItemKindValue, PriorityValue } from "./items";
+import type { IntakeCommitValue, ValidationModeValue } from "./automations";
 // ---------------------------------------------------------------------------
 // Intake forms (spec 20 — /forms). Per-project public-shaped submission forms
 // that create a work item from a title + exposed registry-field values.
@@ -116,6 +117,10 @@ export interface FormSubmit {
   team_id?: string | null;
   /** RADD-800 — staged attachments this submission is claiming. */
   attachment_ids?: string[];
+  /** Spec 119 — what to do when intake validation has something to say.
+   *  `"pass"` (the default) submits only a clean draft; `"always"` is the
+   *  advisory submit-anyway, refused with a 409 where the checks are required. */
+  commit?: IntakeCommitValue;
 }
 
 // ---------------------------------------------------------------------------
@@ -195,6 +200,11 @@ export interface PortalForm extends PublicForm {
   /** The teams THIS submitter may share with (RADD-798). Empty when the form
    *  has no picker or the person belongs to no team — either way, no control. */
   teams: PortalTeamOption[];
+  /** Whether intake validation governs submissions through this form (spec 119).
+   *  Delivered ON the render payload rather than fetched from the items context
+   *  endpoint: a portal visitor's right to be here is the SHARE, and that
+   *  endpoint is gated on `item.create` — which they may hold nowhere. */
+  validation: { governed: boolean; mode: ValidationModeValue | null };
 }
 
 /**
