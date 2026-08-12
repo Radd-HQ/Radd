@@ -54,12 +54,22 @@ def _kind_reads() -> list[NotificationKindRead]:
 
 
 def _defaults() -> dict[RuleScope, dict[NotificationType, Channel]]:
+    """What an unset cell resolves to, for EVERY scope — not just the columns.
+
+    A subscription's unset cell needs one too, and it is not the `own` column's
+    value: a subscriber with no other relation to the project has exactly one
+    applicable scope, so the resolver falls to `DEFAULT_MATRIX[project]`, which is
+    `off`. The SPA showed the `own` value there and named "Mine" as the source,
+    which described a delivery that does not happen — the one thing a settings
+    page must not do. Serving every scope's defaults is what keeps the fix from
+    becoming a hardcoded `off` on the client, one more copy of this table to
+    drift.
+
+    `scopes` stays the three relationship columns: this is the inheritance
+    lookup, not the list of columns to render.
+    """
     return {
-        scope: {
-            kind: channel
-            for kind, channel in rules_policy.DEFAULT_MATRIX[scope].items()
-        }
-        for scope in RELATIONSHIP_SCOPES
+        scope: dict(rules_policy.DEFAULT_MATRIX[scope]) for scope in RuleScope
     }
 
 

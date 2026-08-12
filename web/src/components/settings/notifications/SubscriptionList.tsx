@@ -11,6 +11,7 @@ import {
 } from "../../../lib/queries";
 import {
   Channel,
+  NotificationType,
   RuleScope,
   type ChannelValue,
   type NotificationPrefs,
@@ -26,10 +27,14 @@ import { SCOPE_HINTS, SCOPE_LABELS, SUBSCRIPTION_SCOPES, resolveSubscriptionCell
  *
  * The reach the whole spec exists for, and it needs no new machinery — a
  * subscription is a rule row with a target, and its per-kind cells are the same
- * control as the matrix above. What differs is the FALLBACK: an unset cell on a
- * subscription inherits from the person's own columns rather than from a
- * default, because that is what the resolver does, and a page that showed `off`
- * there would be telling them their own preferences had stopped applying.
+ * control as the matrix above.
+ *
+ * **An unset cell here reads `off`, not your "Mine" value.** Your own columns
+ * still outrank a subscription — for items you have a relationship WITH. A
+ * subscription is for the ones you do not, and for those it is the only
+ * applicable scope, so the resolver falls to the subscription scope's default,
+ * which is `off`. Showing the "Mine" value would describe a notification that
+ * never arrives.
  *
  * Only ambient kinds get a cell. A personal kind resolves through `own` alone
  * whatever scope you are looking at, so offering it here would be offering a
@@ -74,8 +79,11 @@ export function SubscriptionList({
         >
           <div className="mb-2 flex items-center justify-between gap-3">
             <div className="min-w-0">
+              {/* No label means the target is gone OR is no longer readable by
+                  this account — the server refuses to name one it may not show
+                  (notify/targets.py), and from here the two are the same fact. */}
               <span className="text-[13px] font-medium text-heading">
-                {rule.scope_label ?? "(deleted)"}
+                {rule.scope_label ?? "(unavailable)"}
               </span>
               <span className="ml-2 rounded border border-subtle px-1.5 py-0.5 text-[11px] uppercase tracking-wide text-fg-muted">
                 {SCOPE_LABELS[rule.scope]}
@@ -194,15 +202,30 @@ function AddSubscription({
   );
 }
 
-/** A brand-new subscription starts with the ambient kinds it is FOR, in the
- *  inbox. An empty one would be a row the server drops on save, and a page that
- *  silently discards what you just added is worse than one that guesses. */
+/**
+ * A brand-new subscription starts with ONE kind switched on: the arrival of a
+ * new thing in the place you just subscribed to.
+ *
+ * It has to start with something — an empty channel map is the same statement as
+ * having no row, the server drops it on save, and a page that silently discards
+ * what you just added is worse than one that guesses. But the guess was every
+ * ambient kind, which is eight rows per click: subscribe to a busy project to
+ * hear about new issues and you also asked for every comment, every state
+ * change, every field edit, both SLA timers and the whole wiki. That is the
+ * shape of a notification system people turn off.
+ *
+ * So: the kind a subscription is FOR, and the rest left at their `off` default,
+ * one click each away. `page_created` for a space, `created` for a project or a
+ * team — because they are different kinds and only one of them can ever fire for
+ * a given scope. A space subscription seeded with `created` would be a row that
+ * looks configured and delivers nothing (`created` is planned from item events,
+ * which carry no space), which is the same class of lie the greyed personal
+ * cells exist to avoid.
+ */
 export function seedChannels(
-  prefs: NotificationPrefs,
+  scope: RuleScopeValue,
 ): Partial<Record<NotificationTypeValue, ChannelValue>> {
-  const channels: Partial<Record<NotificationTypeValue, ChannelValue>> = {};
-  for (const kind of prefs.kinds) {
-    if (!kind.personal) channels[kind.kind] = Channel.inbox;
-  }
-  return channels;
+  const arrival =
+    scope === RuleScope.space ? NotificationType.pageCreated : NotificationType.created;
+  return { [arrival]: Channel.inbox };
 }

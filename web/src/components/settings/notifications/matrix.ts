@@ -65,13 +65,21 @@ export function resolveCell(
 }
 
 /**
- * A subscription cell. Unset falls through to the RELATIONSHIP column that would
- * otherwise answer — which is what the resolver does, and what makes "I
- * subscribed to a project" mean "and everything else is unchanged".
+ * A subscription cell. Unset resolves to the SUBSCRIPTION scope's own default,
+ * which is `off`.
  *
- * Shown as `own` rather than a per-event answer because a settings page has no
- * event: the honest label is "whatever your own columns say", and naming the
- * source is what keeps that from reading as a value the subscription set.
+ * It is tempting to show the "Mine" value here, on the reasoning that a
+ * relationship outranks a subscription so your own columns still apply. They do
+ * — to items you have a relationship WITH. A subscription exists for the ones
+ * you do not: for those, the subscription is the only applicable scope, so the
+ * resolver falls to `DEFAULT_MATRIX[project|space|team]` and delivers nothing.
+ * Showing "both, inherited from Mine" on a cell that delivers nothing is a
+ * settings page describing a notification that never arrives, which is worse
+ * than showing `off` — the person turns the feature off looking for the noise.
+ *
+ * The default comes from the server (`prefs.defaults` carries every scope, not
+ * just the three columns), so this stays a lookup rather than a second copy of
+ * the table.
  */
 export function resolveSubscriptionCell(
   prefs: NotificationPrefs,
@@ -80,10 +88,9 @@ export function resolveSubscriptionCell(
 ): ResolvedCell {
   const saved = rule.channels[kind];
   if (saved) return { channel: saved, inheritedFrom: null };
-  const fallback = resolveCell(prefs, RuleScope.own, kind);
   return {
-    channel: fallback.channel,
-    inheritedFrom: `“${SCOPE_LABELS[RuleScope.own]}”`,
+    channel: prefs.defaults[rule.scope]?.[kind] ?? Channel.off,
+    inheritedFrom: "the default",
   };
 }
 

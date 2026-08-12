@@ -15,7 +15,6 @@ from radd.config import settings
 from radd.db import SessionLocal
 from radd.modules.auth import authz, service as auth
 from radd.modules.auth.authz import Permission
-from radd.modules.comments import service as comments
 from radd.modules.comments.types import CommentEvent, CommentParentType, CommentVisibility
 from radd.modules.comments.visibility import internal_comment_visible
 from radd.modules.teams import service as teams

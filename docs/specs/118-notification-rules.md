@@ -308,12 +308,37 @@ renders inheritance as "unchecked" lies about the two cases a preference exists 
 distinguish — "I turned this off" and "I never said". The trigger shows what the cell
 RESOLVES to, dimmed when inherited, naming the source on hover.
 
-A subscription's unset cell falls back to the person's own column rather than to a
-default, because that is what the resolver does; showing `off` there would tell them their
-own preferences had stopped applying. Only ambient kinds get a cell — a personal kind
-resolves through `own` alone whatever scope you are looking at, so offering the control
-would be offering one that cannot do anything (the spec-96 failure, in a preference rather
-than a field).
+**A subscription's unset cell reads `off`, and that is the resolver's answer, not a
+simplification of it.** The tempting display is the person's own column, on the reasoning
+that a relationship outranks a subscription so their own preferences still apply. They do —
+to items they have a relationship WITH. A subscription exists for the ones they do not, and
+for those it is the only applicable scope, so resolution falls to
+`DEFAULT_MATRIX[project|space|team]`, which is `off`. Showing "both, inherited from Mine"
+would have been a settings page describing a notification that never arrives, and the
+reaction to unexplained silence is to turn the feature off looking for it. The subscription
+scopes' defaults ride down in `defaults` alongside the three columns, so the fix is a
+lookup rather than a hardcoded `off` on the client.
+
+**A new subscription is seeded with exactly one kind on**: `created` for a project or a
+team, `page_created` for a space. It must be seeded with something — an empty channel map
+is the same statement as no row and the server drops it on save — but seeding every ambient
+kind meant eight switched on per click, so subscribing to a project to hear about new
+issues also asked for every comment, state change, field edit, SLA timer and wiki event on
+it. The two arrival kinds are separate because only one of them can ever fire for a given
+scope: `created` is planned from item events, which carry no space, so seeding it on a
+space subscription would be a row that looks configured and delivers nothing.
+
+Only ambient kinds get a cell — a personal kind resolves through `own` alone whatever scope
+you are looking at, so offering the control would be offering one that cannot do anything
+(the spec-96 failure, in a preference rather than a field).
+
+**A subscription is shown by name, and only a name this actor may read.** `notify/prefs.py`
+resolves each target's label at read time, which is the one place a stored uuid becomes
+prose — so it is also the whole exposure if the uuid was never checked. `notify/targets.py`
+gates both sides on the same seam each family's PICKER uses (`visible_projects`,
+`team.read`, pages' `readable_spaces`): the write drops a target the actor may not name,
+the read refuses to label one, and a row whose target has become unreadable — or has been
+deleted — renders as `(unavailable)`.
 
 ## Migrations
 
@@ -346,12 +371,13 @@ error.
 | Resolver (pure) | `notify/rules.py` |
 | Storage + seams | `notify/models.py`, `notify/service.py` |
 | Preferences payload | `notify/prefs.py`, `notify/schemas.py`, `notify/router.py` |
-| Fan-out | `notify/planner.py` (`Audience`), `notify/consumer.py` |
+| Subscription-target gate | `notify/targets.py` |
+| Fan-out | `notify/planner.py` (`Audience`), `notify/audience.py`, `notify/consumer.py` |
 | Wiki fan-out | `notify/pageevents.py`, `pages/refs.py` |
 | Delivery | `notify/mailer.py`, `notify/emailer.py` |
 | UI | `web/src/routes/settings/notifications.tsx`, `web/src/components/settings/notifications/` |
-| Proof | `web/scripts/notification-matrix-proof.mjs` (30 checks, both themes) |
-| Tests | `test_notify_rules.py`, `test_notify_scoped_fanout.py`, `test_notify.py`, `test_notify_mailer.py` |
+| Proof | `web/scripts/notification-matrix-proof.mjs` (34 checks, both themes) |
+| Tests | `test_notify_rules.py`, `test_notify_scoped_fanout.py`, `test_notify.py`, `test_notify_mailer.py`, `test_event_subjects.py` |
 
 ## Deliberately not built
 

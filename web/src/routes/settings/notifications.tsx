@@ -106,7 +106,9 @@ function Editor({
         <h3 className="mb-1 text-sm font-semibold text-fg">Subscriptions</h3>
         <p className="mb-4 text-xs text-fg-muted">
           Follow a whole project, wiki space or team — including work nobody has assigned to
-          you or shared with you. Cells you leave alone fall back to your own defaults above.
+          you or shared with you. A new subscription starts by telling you what arrives;
+          anything you leave alone stays off here, while your defaults above keep applying
+          to work you are actually part of.
         </p>
         <SubscriptionList
           prefs={prefs}
@@ -122,7 +124,7 @@ function Editor({
                   scope,
                   scope_id: scopeId,
                   scope_label: label,
-                  channels: seedChannels(prefs),
+                  channels: seedChannels(scope),
                 },
               ],
               prefs.email_digest,

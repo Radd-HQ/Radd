@@ -13,9 +13,11 @@
  *    "addressed at you, so it follows the Mine column" rule at the surface, and
  *    it is a runtime property of state that arrived over the wire — a broken
  *    query, a renamed field or an inverted test all compile;
- *  - that INHERITANCE is visible. Every unset cell resolves to something, and a
- *    control that renders inherited as "off" lies about the two cases a
- *    preference exists to distinguish;
+ *  - that INHERITANCE is visible AND correct. Every unset cell resolves to
+ *    something, and a control that renders inherited as "off" lies about the two
+ *    cases a preference exists to distinguish — but so does one that renders it
+ *    as a value the server would not deliver, which is what a subscription cell
+ *    did while it borrowed the "Mine" column's answer;
  *  - that a cell edit ROUND-TRIPS: the menu opens on a real click (through
  *    hit-testing, so an overlay bug is caught), the PUT lands, the response is
  *    written into the cache, and the cell re-renders from it;
@@ -209,6 +211,10 @@ async function main() {
   // account already has. An absolute assertion passed on a clean instance and
   // failed the moment a run left one behind — which is the same bug the promise
   // is about, caught from the other side.
+  const subscriptionKey = (rule) => `${rule.scope}:${rule.scope_id}`;
+  const beforeKeys = new Set(
+    (original.rules || []).filter((r) => r.scope_id).map(subscriptionKey),
+  );
   const before = await session.eval(`document.querySelectorAll("[data-subscription]").length`);
   const targets = await session.eval(`(() => {
     const select = document.querySelector('[aria-label="Subscription target"]');
@@ -240,17 +246,50 @@ async function main() {
     checks["…adding one renders one more subscription card"] = added === before + 1;
     const seeded = await session.eval(
       `(async()=>{const r=await fetch("${PREFS}",{credentials:"include"});const p=await r.json();` +
-        `return (p.rules||[]).filter((x)=>x.scope_id).map((x)=>({scope:x.scope,label:x.scope_label,kinds:Object.keys(x.channels).length}));})()`,
+        `return (p.rules||[]).filter((x)=>x.scope_id).map((x)=>({scope:x.scope,scope_id:x.scope_id,label:x.scope_label,kinds:Object.keys(x.channels)}));})()`,
     );
     context.storedSubscriptions = seeded;
-    const ambientCount = original.kinds.filter((k) => !k.personal).length;
     checks["…the server stored it with a resolved NAME"] =
       seeded.length === added && seeded.every((row) => Boolean(row.label));
-    // A personal kind resolves through `own` alone whatever scope you look at,
-    // so a subscription carrying one would be storing a preference that can
-    // never apply — the spec-96 failure, in a preference rather than a field.
-    checks["…seeded with the ambient kinds only"] =
-      seeded.length === added && seeded.every((row) => row.kinds === ambientCount);
+
+    // Exactly ONE kind, and the right one. Seeding every ambient kind meant
+    // eight switched on per click — "hear about new issues" also asked for every
+    // comment, state change, field edit, SLA timer and wiki event. And the
+    // arrival kind is per scope: `created` is planned from ITEM events, which
+    // carry no space, so a space subscription seeded with it would look
+    // configured and deliver nothing.
+    const fresh = seeded.find((row) => !beforeKeys.has(subscriptionKey(row)));
+    context.newSubscription = fresh;
+    const expectedSeed = fresh && fresh.scope === "space" ? "page_created" : "created";
+    checks["…seeded with exactly the ONE kind that scope is for"] =
+      Boolean(fresh) && fresh.kinds.length === 1 && fresh.kinds[0] === expectedSeed;
+
+    // …and every other kind on that card reads OFF, inherited. The resolver
+    // gives a subscription's unset cell the SUBSCRIPTION scope's default: this
+    // person has no other relation to that project, so the subscription is the
+    // only applicable scope and `off` is what would actually be delivered. The
+    // page used to show the "Mine" column's value here, which described a
+    // notification that never arrives.
+    const cells = fresh
+      ? await session.eval(`(() => {
+          const card = document.querySelector('[data-subscription="${fresh.scope_id}"]');
+          if (!card) return null;
+          return [...card.querySelectorAll("[data-channel]")].map((el) => ({
+            label: el.getAttribute("aria-label") || "",
+            channel: el.getAttribute("data-channel"),
+            inherited: el.getAttribute("data-inherited"),
+          }));
+        })()`)
+      : null;
+    context.newSubscriptionCells = cells;
+    checks["…and its card renders a cell per ambient kind"] =
+      Array.isArray(cells) && cells.length === original.kinds.filter((k) => !k.personal).length;
+    const set = (cells || []).filter((c) => c.inherited === "false");
+    const unset = (cells || []).filter((c) => c.inherited === "true");
+    checks["…exactly one cell reads as SET, and it is on"] =
+      set.length === 1 && set[0].channel === "inbox";
+    checks["…every unset cell resolves to off, not to the Mine column"] =
+      unset.length > 0 && unset.every((c) => c.channel === "off");
   }
 
   // --- both themes ---

@@ -308,12 +308,6 @@ def resolve(
     return Verdict(_default_for(scope, kind), scope, inherited=True)
 
 
-def default_channels(scope: RuleScope) -> dict[str, str]:
-    """The scope's defaults as the wire map — what the settings page shows
-    under an unset cell, so the SPA never carries a second copy of this table."""
-    return {kind.value: channel.value for kind, channel in DEFAULT_MATRIX[scope].items()}
-
-
-def relationship_defaults() -> dict[str, dict[str, str]]:
-    """Every column's defaults, for the preferences read."""
-    return {scope.value: default_channels(scope) for scope in RELATIONSHIP_SCOPES}
+# `default_channels`/`relationship_defaults` were a second, narrower wire
+# projection of DEFAULT_MATRIX that nothing called — `prefs._defaults` serves it,
+# for every scope, because a SUBSCRIPTION's unset cell needs a default too.

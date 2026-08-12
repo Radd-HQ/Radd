@@ -51,9 +51,15 @@ export const notificationsBadgeQuery = queryOptions({
 });
 
 /**
- * The caller's per-type channel matrix (RADD-686): inbox = NOT in `muted_types`,
- * email = in `email_types`. Read here rather than inline in the settings panel
- * so the key and the path are the ones every other read uses.
+ * The caller's whole notification policy (spec 118): the kind VOCABULARY and the
+ * relationship columns to render, what an unset cell inherits per scope, the
+ * scoped rules they saved, and the digest flag. Everything the settings page
+ * needs to draw an inheritance-aware matrix without a table of its own — the
+ * panel this replaced kept its own label map in TypeScript, so a kind added on
+ * the server had no row in the UI and nothing failed.
+ *
+ * (It was `muted_types` + `email_types`, two per-type lists, until spec 118
+ * dropped both columns for `notification_rules`.)
  */
 export const notificationPrefsQuery = () =>
   queryOptions({
