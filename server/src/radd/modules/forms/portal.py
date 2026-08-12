@@ -25,6 +25,7 @@ from . import service
 from .models import Form, FormShare
 from .schemas import (
     FormSubmit,
+    FormValidationContext,
     PortalFormCard,
     PublicFormField,
     PublicFormRead,
@@ -149,8 +150,31 @@ async def render_portal_form(
         id=form.id,
         project=PortalProjectRef(id=project.id, key=project.key, name=project.name),
         teams=await _my_team_options(session, form, actor),
+        validation=await validation_context(session, form),
         **base.model_dump(),
     )
+
+
+async def validation_context(session: AsyncSession, form: Form) -> FormValidationContext:
+    """Whether anything validates submissions through this form (spec 119).
+
+    Deferred + feature-detected: `automations` is optional and loads after
+    `forms`, so with it absent every form is simply ungoverned — which is the
+    truth, not a degradation.
+    """
+    try:
+        from radd.modules.automations import intake as automations_intake
+        from radd.modules.automations.validation import DraftScope
+    except ImportError:
+        return FormValidationContext()
+
+    # The form's DEFAULT type, because that is what a submission through it will
+    # carry — the submitter never picks one. A form with no type default is
+    # governed by its project and form bindings alone.
+    governed, mode = await automations_intake.context_for(
+        session, DraftScope(project_id=form.project_id, form_id=form.id)
+    )
+    return FormValidationContext(governed=governed, mode=mode.value if mode else None)
 
 
 async def _my_team_options(

@@ -20,7 +20,10 @@ from radd.modules.workflow import service as workflow
 from radd.modules.workflow.models import State
 from radd.modules.workflow.types import StateCategory
 
+from radd.hooks import hooks
+
 from ..enums import ItemEntity, ItemEvent, ItemKind
+from ..hooks import ItemCreating, ItemHook
 from ..models import ItemStar, WorkItem
 from ..schemas import ItemCreate, ItemRankUpdate, ItemRead, ItemUpdate
 from .links import sync_mention_links
@@ -135,6 +138,14 @@ async def create_item(session: AsyncSession, data: ItemCreate, actor: User) -> I
         )
     await _set_labels(session, item, data.labels, actor.id)
     await sync_mention_links(session, item)  # derive #[…] backlinks from title/description
+    # Spec 119: the last moment at which this creation can still be refused. The
+    # row is flushed with its labels and custom fields, so a handler sees the
+    # whole draft; nothing has been emitted, so a handler that raises leaves no
+    # trace behind. `items` knows nothing about who listens — the dispatch is a
+    # no-op with no subscriber registered.
+    await hooks.dispatch(
+        session, ItemHook.CREATING, ItemCreating(item=item, project=project, actor=actor)
+    )
     return await _finish(
         session, item, project, ItemEvent.CREATED, actor, ctx, definitions, permissions,
         occurred_at=occurred_at, event_actor_id=event_actor_id,

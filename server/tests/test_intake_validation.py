@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings as app_settings
 from radd.exceptions import ConflictError
-from radd.modules.automations import service as automations_service, validation
+from radd.modules.automations import intake, service as automations_service, validation
 from radd.modules.automations.models import ValidationBinding
 from radd.modules.automations.schemas import RuleCreate, RuleUpdate
 from radd.modules.automations.types import (
@@ -32,7 +32,9 @@ from radd.modules.automations.types import (
 )
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
+from radd.modules.events import service as events
 from radd.modules.items import service as items_service
+from radd.modules.items.models import WorkItem
 from radd.modules.items.schemas import ItemCreate
 from radd.modules.itemtypes import service as itemtypes_service
 from radd.modules.itemtypes.schemas import IssueTypeCreate
@@ -429,6 +431,11 @@ async def test_no_governing_graph_is_not_the_same_as_a_clean_pass(db, admin, pro
 async def test_findings_from_several_graphs_concatenate_and_the_strictest_mode_wins(
     db, admin, project
 ):
+    # The draft is created BEFORE the required graph exists — otherwise the
+    # spec-119 hook would (correctly) refuse this very create. That the plain
+    # helper cannot make an item once a required check governs the project is
+    # the enforcement working, and it has its own test below.
+    draft = await _draft(db, project, admin)
     for mode, message in (
         (ValidationMode.ADVISORY.value, "Consider adding a screenshot."),
         (ValidationMode.REQUIRED.value, "A severity is required."),
@@ -441,7 +448,6 @@ async def test_findings_from_several_graphs_concatenate_and_the_strictest_mode_w
             nodes=[_fail_node("chk", message)],
             edges=[{"source": "trg", "port": "out", "target": "chk"}],
         )
-    draft = await _draft(db, project, admin)
     scope = validation.DraftScope(project_id=project.id)
     verdict = await validation.run_graphs(
         db, draft.id, scope, await validation.governing_graphs(db, scope)
@@ -452,6 +458,211 @@ async def test_findings_from_several_graphs_concatenate_and_the_strictest_mode_w
     ]
     assert verdict.mode is ValidationMode.REQUIRED
     assert verdict.blocks is True
+
+
+# --- the savepoint flow (RADD-1058) -------------------------------------------
+
+
+async def _required_graph(db, admin, project, message="A severity is required.", field=""):
+    return await _graph(
+        db,
+        admin,
+        targets=[{"kind": "project", "id": str(project.id)}],
+        mode=ValidationMode.REQUIRED.value,
+        nodes=[_fail_node("chk", message, field)],
+        edges=[{"source": "trg", "port": "out", "target": "chk"}],
+    )
+
+
+async def _advisory_graph(db, admin, project, message="Consider adding a screenshot."):
+    return await _graph(
+        db,
+        admin,
+        targets=[{"kind": "project", "id": str(project.id)}],
+        mode=ValidationMode.ADVISORY.value,
+        nodes=[_fail_node("chk", message)],
+        edges=[{"source": "trg", "port": "out", "target": "chk"}],
+    )
+
+
+async def _count_items(db, project_id: uuid.UUID) -> int:
+    """Takes the ID, not the ORM row, and that is not fussiness.
+
+    Rolling back a SAVEPOINT expires the states it touched, and reading an
+    expired attribute from SYNCHRONOUS code — which is what `project.id` inside
+    a `select(...)` builder is — attempts IO outside the greenlet context and
+    raises `MissingGreenlet`. Every call site in the app reads only the verdict
+    after a rollback, so nothing is exposed to this; a test that holds the row
+    across the flow is, and would report it as a product bug."""
+    rows = await db.execute(select(WorkItem.id).where(WorkItem.project_id == project_id))
+    return len(list(rows.scalars()))
+
+
+async def test_a_failing_draft_leaves_nothing_behind(db, admin, project):
+    """The savepoint is the whole design: the row that was validated is a REAL
+    row, and a failed one is taken back with its `item.created` event."""
+    await _advisory_graph(db, admin, project)
+    project_id = project.id
+    before = await _count_items(db, project_id)
+    outcome = await intake.validate_and_create(
+        db, ItemCreate(project_id=project_id, title="thin"), admin
+    )
+    assert outcome.created is None
+    assert outcome.verdict.passed is False
+    assert await _count_items(db, project_id) == before
+
+
+async def test_a_clean_draft_is_kept_in_the_same_round_trip(db, admin, project):
+    await _graph(
+        db,
+        admin,
+        targets=[{"kind": "project", "id": str(project.id)}],
+        nodes=[
+            {"id": "f", "kind": "filter", "type": "filter.slq",
+             "params": {"slq": "priority = blocker"}},
+            _fail_node("chk", "Blockers need an assignee.", field="assignee"),
+        ],
+        edges=[
+            {"source": "trg", "port": "out", "target": "f"},
+            {"source": "f", "port": "matched", "target": "chk"},
+        ],
+    )
+    outcome = await intake.validate_and_create(
+        db, ItemCreate(project_id=project.id, title="ordinary"), admin
+    )
+    assert outcome.created is not None
+    assert outcome.verdict.passed is True
+    assert (await items_service.get_item(db, outcome.created.id, admin)).title == "ordinary"
+
+
+async def test_create_anyway_keeps_an_advisory_draft_with_its_findings(db, admin, project):
+    await _advisory_graph(db, admin, project)
+    outcome = await intake.validate_and_create(
+        db,
+        ItemCreate(project_id=project.id, title="thin"),
+        admin,
+        commit=intake.IntakeCommit.ALWAYS,
+    )
+    assert outcome.created is not None
+    # The findings still come back — the person chose to proceed past them, and
+    # a caller that shows them anyway is showing the truth.
+    assert [f.message for f in outcome.verdict.findings] == ["Consider adding a screenshot."]
+
+
+async def test_create_anyway_is_refused_where_the_checks_are_required(db, admin, project):
+    """A mode the admin chose is not something a request parameter overrules."""
+    await _required_graph(db, admin, project)
+    project_id = project.id
+    before = await _count_items(db, project_id)
+    with pytest.raises(ConflictError, match="required mode"):
+        await intake.validate_and_create(
+            db,
+            ItemCreate(project_id=project_id, title="thin"),
+            admin,
+            commit=intake.IntakeCommit.ALWAYS,
+        )
+    assert await _count_items(db, project_id) == before
+
+
+async def test_never_creates_nothing_even_on_a_clean_draft(db, admin, project):
+    await _advisory_graph(db, admin, project)
+    project_id = project.id
+    before = await _count_items(db, project_id)
+    outcome = await intake.validate_and_create(
+        db,
+        ItemCreate(project_id=project_id, title="thin"),
+        admin,
+        commit=intake.IntakeCommit.NEVER,
+    )
+    assert outcome.created is None
+    assert await _count_items(db, project_id) == before
+
+
+async def test_an_ordinary_create_failure_leaves_the_transaction_usable(db, admin, project):
+    """A savepoint that is not rolled back on the way out poisons every later
+    statement in the request — so an authz/validation refusal has to unwind it."""
+    project_id = project.id
+    with pytest.raises(Exception):
+        await intake.validate_and_create(
+            db, ItemCreate(project_id=uuid.uuid4(), title="nowhere"), admin
+        )
+    # The session still works.
+    assert await _count_items(db, project_id) >= 0
+
+
+# --- enforcement for every other caller ---------------------------------------
+
+
+async def test_a_required_check_refuses_a_plain_create(db, admin, project):
+    """`POST /items`, MCP, an extension, a script — the hook is what makes a
+    required rule a rule rather than a suggestion with a nice interface."""
+    await _required_graph(db, admin, project)
+    with pytest.raises(intake.ValidationBlocked) as raised:
+        await items_service.create_item(
+            db, ItemCreate(project_id=project.id, title="straight in"), actor=admin
+        )
+    assert [f.message for f in raised.value.findings] == ["A severity is required."]
+
+
+async def test_an_advisory_check_never_taxes_the_api_path(db, admin, project):
+    """Advisory findings have nowhere to go on this path — no one to show them
+    to and nothing they would change — so the plain create is untouched."""
+    await _advisory_graph(db, admin, project)
+    created = await items_service.create_item(
+        db, ItemCreate(project_id=project.id, title="straight in"), actor=admin
+    )
+    assert created.title == "straight in"
+
+
+async def test_the_engine_s_own_creations_are_not_intake(db, admin, project):
+    """An automation's output is not somebody submitting a request, and a
+    required check that refused it would break the automation."""
+    await _required_graph(db, admin, project)
+    with events.automated():
+        created = await items_service.create_item(
+            db, ItemCreate(project_id=project.id, title="made by a rule"), actor=admin
+        )
+    assert created.title == "made by a rule"
+
+
+async def test_an_import_is_not_intake(db, admin, project):
+    """Validating historical rows would refuse to import exactly the
+    badly-filled-in issues the checks exist to stop being created today."""
+    await _required_graph(db, admin, project)
+    with events.quiet():
+        created = await items_service.create_item(
+            db, ItemCreate(project_id=project.id, title="from Jira"), actor=admin
+        )
+    assert created.title == "from Jira"
+
+
+async def test_the_savepoint_flow_does_not_validate_twice(db, admin, project):
+    """Its inner create goes through the same `create_item` the hook watches;
+    without the suppress scope every finding would arrive in duplicate."""
+    await _required_graph(db, admin, project)
+    outcome = await intake.validate_and_create(
+        db, ItemCreate(project_id=project.id, title="thin"), admin
+    )
+    assert outcome.created is None
+    assert [f.message for f in outcome.verdict.findings] == ["A severity is required."]
+    assert intake.is_suppressed() is False  # the scope closed
+
+
+async def test_the_context_read_is_resolution_only(db, admin, project):
+    assert await intake.context_for(db, validation.DraftScope(project_id=project.id)) == (
+        False,
+        None,
+    )
+    await _advisory_graph(db, admin, project)
+    assert await intake.context_for(db, validation.DraftScope(project_id=project.id)) == (
+        True,
+        ValidationMode.ADVISORY,
+    )
+    await _required_graph(db, admin, project)
+    assert await intake.context_for(db, validation.DraftScope(project_id=project.id)) == (
+        True,
+        ValidationMode.REQUIRED,
+    )
 
 
 async def test_an_issue_type_target_governs_only_that_type(db, admin, project):
@@ -473,3 +684,142 @@ async def test_an_issue_type_target_governs_only_that_type(db, admin, project):
     untyped = validation.DraftScope(project_id=project.id, type_id=uuid.uuid4())
     assert len(await validation.governing_graphs(db, typed)) == 1
     assert await validation.governing_graphs(db, untyped) == []
+
+
+# --- the endpoints, over the assembled app (RADD-761's lesson) ----------------
+#
+# A route that registers, appears in the OpenAPI schema and is never CALLED is
+# how `/pages/search` spent a release answering a 422 about parsing "search" as a
+# UUID. These two live in `automations` under an `/items` prefix, mounted AFTER
+# the items router — the only thing that makes them reachable is that a
+# method-mismatched path is a PARTIAL match Starlette replaces with a later FULL
+# one. That is a property of the framework, not of this code, so it is probed
+# rather than reasoned about.
+
+
+@pytest.fixture(scope="module")
+async def http_world():
+    """COMMITTED: the app under test opens its own sessions."""
+    from radd.modules.auth import service as auth_service
+
+    engine = create_async_engine(app_settings.database_url)
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+    async with maker() as session:
+        admin = User(
+            email=f"ivh-{uuid.uuid4().hex[:8]}@example.com",
+            name="Intake HTTP",
+            instance_role=InstanceRole.ADMIN.value,
+        )
+        session.add(admin)
+        await session.flush()
+        cookie = await auth_service.create_session(session, admin)
+        project = await projects_service.create_project(
+            session,
+            ProjectCreate(key=f"IH{uuid.uuid4().hex[:4].upper()}", name="Intake HTTP"),
+            actor_id=admin.id,
+        )
+        await automations_service.create_rule(
+            session,
+            RuleCreate(
+                name=f"http-checks-{uuid.uuid4().hex[:6]}",
+                nodes=[
+                    _validate_trigger(
+                        [{"kind": "project", "id": str(project.id)}],
+                        ValidationMode.REQUIRED.value,
+                    ),
+                    _fail_node("chk", "Describe what you expected.", field="description"),
+                ],
+                edges=[{"source": "trg", "port": "out", "target": "chk"}],
+            ),
+            actor_id=admin.id,
+        )
+        payload = {"cookie": cookie, "project_id": str(project.id)}
+        await session.commit()
+        yield payload
+    await engine.dispose()
+
+
+@pytest.fixture(scope="module")
+def intake_app():
+    from radd.app import create_app
+
+    return create_app()
+
+
+@pytest.fixture
+async def intake_client(intake_app):
+    import httpx
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=intake_app), base_url="http://test"
+    ) as client:
+        yield client
+
+
+async def test_the_validate_endpoint_is_reachable_and_answers_with_a_verdict(
+    intake_client, http_world
+):
+    from radd.modules.auth.types import SESSION_COOKIE_NAME
+
+    cookies = {SESSION_COOKIE_NAME: http_world["cookie"]}
+    response = await intake_client.post(
+        "/api/v1/items/validate",
+        json={"project_id": http_world["project_id"], "title": "no detail"},
+        cookies=cookies,
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["created"] is None
+    assert body["verdict"]["governed"] is True
+    assert body["verdict"]["mode"] == "required"
+    assert body["verdict"]["findings"] == [
+        {"message": "Describe what you expected.", "field": "description", "node_id": "chk"}
+    ]
+
+
+async def test_the_context_read_is_reachable_behind_the_item_id_route(intake_client, http_world):
+    """Three segments on purpose: `GET /items/validation-context` would have sat
+    behind `GET /items/{item_id}` and 422'd about parsing a word as a UUID."""
+    from radd.modules.auth.types import SESSION_COOKIE_NAME
+
+    response = await intake_client.get(
+        "/api/v1/items/validate/context",
+        params={"project_id": http_world["project_id"]},
+        cookies={SESSION_COOKIE_NAME: http_world["cookie"]},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json() == {"governed": True, "mode": "required"}
+
+
+async def test_a_plain_post_items_gets_the_third_422_vocabulary(intake_client, http_world):
+    """`{detail, findings}` — not `errors`, which already means two other things."""
+    from radd.modules.auth.types import SESSION_COOKIE_NAME
+
+    response = await intake_client.post(
+        "/api/v1/items",
+        json={"project_id": http_world["project_id"], "title": "straight in"},
+        cookies={SESSION_COOKIE_NAME: http_world["cookie"]},
+    )
+    assert response.status_code == 422, response.text
+    body = response.json()
+    assert body["detail"] == "item validation failed"
+    assert body["mode"] == "required"
+    assert [f["field"] for f in body["findings"]] == ["description"]
+
+
+async def test_the_mcp_create_item_tool_relays_a_readable_refusal(db, admin, project):
+    """Verified, not rebuilt: the MCP dispatcher already turns any `RaddError`
+    into an `isError` result carrying `str(exc)`, so what matters is that
+    `ValidationBlocked` IS one and that stringifying it says something a person
+    (or an agent) can act on — not "ValidationBlocked()"."""
+    from radd.exceptions import RaddError
+    from radd.modules.mcp.router import _TOOL_ERROR_TYPES
+
+    await _required_graph(db, admin, project, "A severity is required.")
+    with pytest.raises(intake.ValidationBlocked) as raised:
+        await items_service.create_item(
+            db, ItemCreate(project_id=project.id, title="via mcp"), actor=admin
+        )
+    assert isinstance(raised.value, RaddError)
+    assert isinstance(raised.value, _TOOL_ERROR_TYPES)
+    assert str(raised.value) == "A severity is required."

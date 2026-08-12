@@ -192,6 +192,13 @@ class FormSubmit(BaseModel):
     #: than swept wholesale, so a second tab's uploads are not dragged in; each
     #: is verified to sit on the caller's own staging area before it moves.
     attachment_ids: list[uuid.UUID] = Field(default_factory=list)
+    #: Spec 119 — what to do when intake validation has something to say.
+    #: `"pass"` (the default) creates only a clean submission; `"always"` is the
+    #: advisory "submit anyway" and is refused with a 409 where the checks are
+    #: required. A plain string rather than the automations enum: forms must not
+    #: import an optional module's vocabulary to describe its own request body,
+    #: and the value is handed straight back to that module to interpret.
+    commit: str = "pass"
 
 
 # --- public, unauthenticated path (spec 62) ---
@@ -327,6 +334,22 @@ class PortalTeamOption(BaseModel):
     name: str
 
 
+class FormValidationContext(BaseModel):
+    """Whether intake validation governs submissions through this form (spec 119).
+
+    Rides on the form's own render payload rather than sending the portal to
+    `GET /items/validate/context`, because a portal visitor's right to be here is
+    the SHARE — they may hold no `item.create` anywhere, and an endpoint gated on
+    that atom would 403 exactly the people this form exists for.
+    """
+
+    governed: bool = False
+    #: `"advisory"` | `"required"`, or null when nothing governs. A plain string:
+    #: `forms` does not import an optional module's enum to describe a fact that
+    #: module computed.
+    mode: str | None = None
+
+
 class PortalFormRead(PublicFormRead):
     """GET /portal/forms/{id} — the spec-62 public trimming plus the ids an
     AUTHED page needs: the form id and the project ref (header chip + the KB
@@ -338,3 +361,6 @@ class PortalFormRead(PublicFormRead):
     #: has no picker, or when the person belongs to no team; either way the
     #: client renders nothing, and the server re-checks whatever comes back.
     teams: list[PortalTeamOption] = Field(default_factory=list)
+    #: Spec 119 — what the submit button should say and whether "submit anyway"
+    #: is on offer.
+    validation: FormValidationContext = Field(default_factory=FormValidationContext)

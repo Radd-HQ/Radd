@@ -385,7 +385,40 @@ async def submit_form(
         custom_fields=dict(data.values),
         **reporter_override,
     )
-    return await items_service.create_item(session, item, actor=actor)
+    return await _create_validated(session, form, item, actor, data.commit)
+
+
+async def _create_validated(
+    session: AsyncSession, form: Form, item: ItemCreate, actor: User, commit: str
+) -> ItemRead:
+    """Create the item through intake validation (spec 119) when it is available.
+
+    Deferred and feature-detected, the `email_action.py` shape: `automations` is
+    optional and loads AFTER forms, so this module cannot name it at import
+    time. With it absent the submit is exactly what it always was — one
+    `create_item` — rather than a form that stops working because an optional
+    module is not installed.
+
+    The `form_id` is what makes a FORM-targeted binding match; without it a
+    graph bound to this form would silently only ever fire on its project.
+
+    Note the ORDER this sits in relative to `staging.claim` (in `portal.py`):
+    validation raises before the caller reaches the claim, so a rejected draft
+    never takes ownership of the files that were staged for it — they stay
+    unclaimed and are swept later, and a resubmission can claim them again.
+    """
+    try:
+        from radd.modules.automations import intake as automations_intake
+    except ImportError:
+        return await items_service.create_item(session, item, actor=actor)
+
+    try:
+        wanted = automations_intake.IntakeCommit(commit)
+    except ValueError:
+        wanted = automations_intake.IntakeCommit.PASS
+    return await automations_intake.create_or_refuse(
+        session, item, actor, form_id=form.id, commit=wanted
+    )
 
 
 # --- events ---
