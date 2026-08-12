@@ -76,9 +76,27 @@ def headline(type_: NotificationType, actor: str, payload: dict) -> str:
         # The page's title is the line's SUBJECT (and its link), so naming it
         # here too would print it twice — `entry` (RADD-719).
         return f"{actor} edited the page"
+    if type_ is NotificationType.PAGE_CREATED:
+        return f"{actor} created the page"
+    # Spec 118's ambient pair. These reach SUBSCRIBERS — someone who asked about
+    # a project, a space or a team rather than about this row — so the sentence
+    # says what happened and lets the subject line say what it happened to.
+    if type_ is NotificationType.CREATED:
+        return f"{actor} filed"
+    if type_ is NotificationType.UPDATED:
+        fields = payload.get("fields") or []
+        named = ", ".join(str(field) for field in fields[:3])
+        return f"{actor} updated {named}" if named else f"{actor} updated the issue"
     # A type added without a line lands here NAMED, rather than silently reading
     # as whichever branch happened to be last.
     return f"{actor}: {type_.value.replace('_', ' ')}"
+
+
+#: Notification kinds whose subject is a PAGE, not an issue — they carry the
+#: wiki payload (`space_slug`/`page_slug`/`title`) and link into `/pages/`.
+_PAGE_KINDS = frozenset(
+    {NotificationType.PAGE_UPDATED, NotificationType.PAGE_CREATED}
+)
 
 
 def actor_name(notification: Notification, actor_names: dict[uuid.UUID, str]) -> str:
@@ -98,7 +116,7 @@ def entry(notification: Notification, actor_names: dict[uuid.UUID, str]) -> mail
     type_ = NotificationType(notification.type)
     line = headline(type_, actor_name(notification, actor_names), payload)
     base = settings.app_base_url
-    if type_ is NotificationType.PAGE_UPDATED:
+    if type_ in _PAGE_KINDS:
         space, page = payload.get("space_slug"), payload.get("page_slug")
         return mailrender.DigestEntry(
             headline=line,

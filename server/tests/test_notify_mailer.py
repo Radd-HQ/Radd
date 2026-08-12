@@ -61,10 +61,13 @@ from radd.modules.mailintake.types import (
     MailSourceKind,
 )
 from radd.modules.notify import consumer, emailer, mailer, retry, service as notify_service
+from radd.modules.notify.kinds import every_kind
 from radd.modules.notify.models import Notification
 from radd.modules.notify.types import (
     CONSUMER_NAME,
     DEFAULT_EMAIL_TYPES,
+    RELATIONSHIP_SCOPES,
+    Channel,
     NotificationType,
 )
 from radd.modules.participants import service as participants
@@ -254,14 +257,32 @@ async def _channels(
     email_types: list[NotificationType],
     muted_types: list[NotificationType] | None = None,
 ) -> None:
-    """One user's channel matrix (RADD-686). Absence of a call means no row —
-    which is itself a case worth testing, so it is never done implicitly."""
-    await notify_service.set_prefs(
-        db,
-        user.id,
-        muted_types=muted_types or [],
-        email_types=email_types,
-        email_digest=True,
+    """One user's channel matrix, in RADD-686's vocabulary over spec 118's rows.
+
+    The tests below are about the MAILER, not about scoped resolution, so they
+    keep asking the question the old model asked — "which types does this person
+    want mailed" — and this helper answers it by writing the same channel map
+    into all three relationship columns. Muted becomes `off`, emailed becomes
+    `both`, everything else `inbox`, which is exactly what the migration does to
+    a stored preference.
+
+    Absence of a call means no rule rows at all — itself a case worth testing,
+    so it is never done implicitly.
+    """
+    muted = set(muted_types or [])
+    emailed = set(email_types)
+    channels = {
+        kind.value: (
+            Channel.OFF.value
+            if kind in muted
+            else Channel.BOTH.value
+            if kind in emailed
+            else Channel.INBOX.value
+        )
+        for kind in every_kind()
+    }
+    await notify_service.set_rules(
+        db, user.id, [(scope, None, channels) for scope in RELATIONSHIP_SCOPES]
     )
 
 
@@ -390,15 +411,15 @@ async def test_a_muted_type_never_becomes_a_row_and_so_never_becomes_mail(
     for user in (muted, heard):
         await notify_service.add_watchers(db, item.id, [user.id])
         await _grant(db, user, BuiltinRoleKey.MEMBER, project.id)
-    # The stronger form since RADD-686: they ALSO asked for comment email. The
-    # mute wins by construction — `set_prefs` normalises it out of email_types,
-    # and there would be no row to mail either way.
-    await notify_service.set_prefs(
+    # The stronger form since RADD-686: they ALSO asked for comment email. `off`
+    # wins because it is the SAME cell — spec 118 made the two channels
+    # independent, but the third state is still one answer per (scope, kind), so
+    # there is no contradiction left to normalise away.
+    await _channels(
         db,
-        muted.id,
+        muted,
         muted_types=[NotificationType.COMMENTED],
         email_types=[NotificationType.COMMENTED],
-        email_digest=True,
     )
     await _comment(db, item, agent, "Any update?")
     await consumer._consume(db, watch_only=False)

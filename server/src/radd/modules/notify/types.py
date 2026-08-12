@@ -28,6 +28,86 @@ class NotificationType(StrEnum):
     # issue existed. A team add plans nothing personal: team rows resolve live
     # at fan-out and are ambient by design.
     PARTICIPANT_ADDED = "participant_added"
+    # --- spec 118: the AMBIENT kinds a SUBSCRIPTION exists to deliver ---
+    #
+    # Everything above answers "something happened to work that names me". A
+    # subscriber asked a different question — "what is happening in this
+    # project / space / team" — and there was no kind that could answer it: an
+    # issue being FILED reached only its assignee, and an edit that changed
+    # neither state nor description reached nobody at all.
+    #
+    # They resolve to `off` in every relationship scope by default, so an
+    # instance that has never opened the settings page cannot notice they exist.
+    CREATED = "created"
+    UPDATED = "updated"
+    PAGE_CREATED = "page_created"
+
+
+class RuleScope(StrEnum):
+    """How a person is connected to the thing an event is about (spec 118).
+
+    The first three are RELATIONSHIPS — they hold or they do not, and there is
+    nothing to point them at, so their rule rows carry `scope_id = NULL`. The
+    last three are SUBSCRIPTIONS: a row exists because someone named one
+    project, space or team, and `scope_id` is which one.
+
+    `TEAMS` is the my-teams column and `TEAM` is a subscription to one team.
+    They are two scopes rather than one because they answer different questions:
+    "issues filed against any team I belong to" is a standing relationship that
+    follows me as I join and leave teams, while "this team" is a choice about a
+    team I may not even be in.
+    """
+
+    OWN = "own"
+    PARTICIPATING = "participating"
+    TEAMS = "teams"
+    PROJECT = "project"
+    SPACE = "space"
+    TEAM = "team"
+
+
+#: The scopes that point at a row — `scope_id` is REQUIRED for these and
+#: forbidden for the rest, which is the whole validity rule for a rule row.
+SUBSCRIPTION_SCOPES: frozenset[RuleScope] = frozenset(
+    {RuleScope.PROJECT, RuleScope.SPACE, RuleScope.TEAM}
+)
+
+#: The matrix's columns, in display order. A relationship scope always applies
+#: when it holds, so these are the ones with a default worth stating.
+RELATIONSHIP_SCOPES: tuple[RuleScope, ...] = (
+    RuleScope.OWN,
+    RuleScope.PARTICIPATING,
+    RuleScope.TEAMS,
+)
+
+
+class Channel(StrEnum):
+    """What one cell of the matrix says (spec 118).
+
+    The two channels are INDEPENDENT — `EMAIL` with no inbox row is a real
+    answer, and it is the one thing the RADD-686 matrix could not express: a
+    muted type never became a row, and the mailer mailed rows, so "email me, do
+    not clutter my inbox" was structurally unsayable. Spec 118 moves the mute
+    out of the row's existence and onto the row's columns, which is what makes
+    the fourth state reachable.
+    """
+
+    OFF = "off"
+    INBOX = "inbox"
+    EMAIL = "email"
+    BOTH = "both"
+
+    @property
+    def inbox(self) -> bool:
+        return self in (Channel.INBOX, Channel.BOTH)
+
+    @property
+    def email(self) -> bool:
+        return self in (Channel.EMAIL, Channel.BOTH)
+
+    @property
+    def silent(self) -> bool:
+        return self is Channel.OFF
 
 
 #: The types a user gets an EMAIL about the moment they happen, when they have
@@ -85,6 +165,19 @@ SLA_DUE_SOON_EVENT = "sla.due_soon"
 APPROVAL_REQUESTED_EVENT = "approval.requested"
 APPROVAL_APPROVED_EVENT = "approval.approved"
 APPROVAL_DECLINED_EVENT = "approval.declined"
+
+# Wire strings for the pages module's page events (spec 43; spec 118) — the same
+# idiom once more: pages loads AFTER notify and is a disableable plugin, so the
+# consumer knows these by name and reads their payload, never the module. Keep in
+# sync with `pages.types.PageEvent`.
+PAGE_CREATED_EVENT = "page.created"
+PAGE_UPDATED_EVENT = "page.updated"
+
+#: The subject keys the kernel writes onto a page event's payload from
+#: `emit(subjects=…)` (RADD-923) — the ref shapes notify reads instead of
+#: importing `pages.models`, which the spine rule forbids anyway.
+PAGE_SUBJECT = "page"
+PAGE_SPACE_SUBJECT = "page_space"
 
 # Wire string for the participants module's add event (spec 72; RADD-978) — the
 # same idiom again, participants loads AFTER notify (and is disableable); keep in

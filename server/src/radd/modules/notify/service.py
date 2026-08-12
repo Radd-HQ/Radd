@@ -1,8 +1,8 @@
 import uuid
-from collections.abc import Collection, Iterable, Sequence
+from collections.abc import Iterable, Sequence
 from typing import TypeGuard
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,13 +10,16 @@ from radd.modules.auth.models import User
 from radd.modules.auth.types import UserSource
 from radd.modules.events import service as events
 
-from .models import ItemWatcher, Notification, NotificationPref
+from . import rules as rules_policy
+from .models import ItemWatcher, Notification, NotificationPref, NotificationRule
+from .rules import Relation, RuleRow, RuleSet, Subject, Verdict
 from .types import (
+    SUBSCRIPTION_SCOPES,
     SYSTEM_ACTOR_ID,
     NotificationType,
     NotifyEntity,
     NotifyEvent,
-    default_email_type_values,
+    RuleScope,
 )
 from radd.clock import utcnow
 
@@ -132,21 +135,30 @@ async def create_notification(
     item_id: uuid.UUID | None,
     actor_id: uuid.UUID | None,
     payload: dict,
-    muted_types: Collection[str] | None = None,
+    rules: RuleSet | None = None,
+    relation: Relation = rules_policy.OWN,
+    subject: Subject = Subject(),
 ) -> Notification | None:
-    """Write one notification for one recipient — unless they MUTED this type.
+    """Write one notification for one recipient — unless their rules say `off`.
 
-    The mute check lives here because this is the one function every producer
-    calls (RADD-971). It used to live in the outbox consumer alone, so the two
-    types created by a direct call — `automation` (automations/engine.py) and
-    `page_updated` (pages/watchers.py) — never saw a preference at all: their
-    checkboxes on Settings → Profile changed nothing. Enforcing at the write
-    means a new producer inherits the preference instead of re-implementing it.
+    The channel decision lives here because this is the one function every
+    producer calls (RADD-971). It used to be a mute list checked in the outbox
+    consumer alone, so the two types created by a direct call — `automation`
+    (automations/engine.py) and `page_updated` (pages/watchers.py) — never saw a
+    preference at all. Deciding at the WRITE means a new producer inherits the
+    policy instead of re-implementing it.
 
-    `muted_types` is an optional PREFETCH for callers that fan out to a known
-    recipient set (`muted_types_by_user` resolves the whole set in one query, so
-    the loop costs nothing per row). `None` means "look it up" — a caller that
-    forgets it is slower, never wrong. Returns None when the type was muted.
+    Spec 118 widened what is decided here from "is this type muted" to "which
+    channels does this person receive this kind through, given how they are
+    connected to it". A caller that knows the connection passes `relation` +
+    `subject`; one that has simply picked a recipient (an automation rule's
+    `notify_user`) passes neither and gets own-scope semantics, which is what
+    directly addressing someone means.
+
+    `rules` is an optional PREFETCH for callers fanning out to a known recipient
+    set (`rules_by_user` resolves the whole set in one query, so the loop costs
+    nothing per row). `None` means "look it up" — a caller that forgets it is
+    slower, never wrong. Returns None when the verdict was `off`.
     """
     # RADD-996: nobody reads the system actor's inbox, so it is not told things.
     #
@@ -161,10 +173,10 @@ async def create_notification(
     # written again the next time something auto-watched a robot.
     if user_id == SYSTEM_ACTOR_ID:
         return None
-    if muted_types is None:
-        prefs = await get_prefs(session, user_id)
-        muted_types = prefs.muted_types if prefs is not None else ()
-    if type_.value in muted_types:
+    if rules is None:
+        rules = (await rules_by_user(session, [user_id])).get(user_id, rules_policy.EMPTY)
+    verdict = rules_policy.resolve(type_, rules, relation, subject)
+    if verdict.silent:
         return None
     notification = Notification(
         user_id=user_id,
@@ -238,74 +250,192 @@ async def mark_all_read(session: AsyncSession, user_id: uuid.UUID) -> None:
     )
 
 
-# --- per-user preferences (no row = all defaults) ---
+# --- per-user rules (no rows = the DEFAULT_MATRIX, i.e. RADD-686's behaviour) ---
 
 
 async def get_prefs(session: AsyncSession, user_id: uuid.UUID) -> NotificationPref | None:
     return await session.get(NotificationPref, user_id)
 
 
-async def set_prefs(
-    session: AsyncSession,
-    user_id: uuid.UUID,
-    *,
-    muted_types: list[NotificationType],
-    email_types: list[NotificationType],
-    email_digest: bool,
+async def set_digest(
+    session: AsyncSession, user_id: uuid.UUID, *, email_digest: bool
 ) -> NotificationPref:
-    """Full replace of one user's channel matrix. Returns the NORMALISED row.
-
-    A muted type is dropped from `email_types` here rather than 422'd: muting
-    already silences both channels by construction (no row, nothing to mail), so
-    "email me about X, but never notify me about X" is not a conflict to resolve
-    — it is a statement with one meaning. The UI cannot produce it; a raw API
-    caller gets that meaning stored instead of a contradiction, and reads it
-    back in the response.
-    """
     prefs = await session.get(NotificationPref, user_id)
     if prefs is None:
         prefs = NotificationPref(user_id=user_id)
         session.add(prefs)
-    muted = {type_.value for type_ in muted_types}
-    prefs.muted_types = [type_.value for type_ in muted_types]
-    prefs.email_types = [type_.value for type_ in email_types if type_.value not in muted]
     prefs.email_digest = email_digest
     await session.flush()
     return prefs
 
 
-async def muted_types_by_user(
-    session: AsyncSession, user_ids: Iterable[uuid.UUID]
-) -> dict[uuid.UUID, set[str]]:
-    """Consumer seam: which types each recipient has muted (absent row = none)."""
-    ids = set(user_ids)
-    if not ids:
-        return {}
-    result = await session.execute(
-        select(NotificationPref).where(NotificationPref.user_id.in_(ids))
+def _clean_channels(channels: dict[str, str]) -> dict[str, str]:
+    """Keep only (kind, channel) pairs both enums recognise.
+
+    Normalising rather than 422ing, on `set_prefs`'s old reasoning: an unknown
+    kind is a client that is ahead of or behind this server, and storing it
+    would leave a key the resolver silently ignores forever. Dropping it is the
+    same answer, said where the caller can see it in the response.
+    """
+    from .types import Channel  # local: the enum, not the policy
+
+    cleaned: dict[str, str] = {}
+    for kind, channel in channels.items():
+        try:
+            cleaned[NotificationType(kind).value] = Channel(channel).value
+        except ValueError:
+            continue
+    return cleaned
+
+
+async def set_rules(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    rows: Sequence[tuple[RuleScope, uuid.UUID | None, dict[str, str]]],
+) -> list[NotificationRule]:
+    """Full replace of one person's rule set. Returns the NORMALISED rows.
+
+    Full replace rather than per-row PATCH because the matrix is edited as a
+    whole and a partial update has no way to express "I removed a subscription".
+    The normalisation is where the model's one invariant is enforced: a
+    subscription scope MUST name a target and a relationship scope must not, so
+    a row that gets it wrong is dropped rather than stored as something the
+    resolver could never match.
+
+    An EMPTY `channels` map means "no opinion anywhere", which is the same thing
+    as having no row — so those are dropped too, and a user who resets every
+    cell ends up back at zero rows and therefore at the documented defaults.
+    """
+    await session.execute(
+        delete(NotificationRule).where(NotificationRule.user_id == user_id)
     )
-    return {prefs.user_id: set(prefs.muted_types) for prefs in result.scalars()}
+    stored: list[NotificationRule] = []
+    seen: set[tuple[str, uuid.UUID | None]] = set()
+    for scope, scope_id, channels in rows:
+        wants_target = scope in SUBSCRIPTION_SCOPES
+        if wants_target != (scope_id is not None):
+            continue
+        key = (scope.value, scope_id)
+        if key in seen:
+            continue
+        cleaned = _clean_channels(channels)
+        if not cleaned:
+            continue
+        seen.add(key)
+        row = NotificationRule(
+            user_id=user_id, scope=scope.value, scope_id=scope_id, channels=cleaned
+        )
+        session.add(row)
+        stored.append(row)
+    await session.flush()
+    return stored
 
 
-async def email_types_by_user(
+async def list_rules(session: AsyncSession, user_id: uuid.UUID) -> list[NotificationRule]:
+    result = await session.execute(
+        select(NotificationRule)
+        .where(NotificationRule.user_id == user_id)
+        .order_by(NotificationRule.scope, NotificationRule.scope_id)
+    )
+    return list(result.scalars())
+
+
+def _rule_row(row: NotificationRule) -> RuleRow | None:
+    try:
+        scope = RuleScope(row.scope)
+    except ValueError:
+        return None  # a scope this version does not know: not a scope that reaches anyone
+    return RuleRow(scope=scope, scope_id=row.scope_id, channels=row.channels or {})
+
+
+async def rules_by_user(
     session: AsyncSession, user_ids: Iterable[uuid.UUID]
-) -> dict[uuid.UUID, frozenset[str]]:
-    """Mailer seam: which types each recipient wants EMAILED as they happen.
+) -> dict[uuid.UUID, RuleSet]:
+    """THE prefetch seam: every recipient's rules in one query.
 
-    Lives beside `muted_types_by_user` because it answers the same kind of
-    question, but it returns an entry for EVERY id asked for — absent row means
-    `DEFAULT_EMAIL_TYPES`, and a partial dict read with `.get(id, ())` would
-    silently mean "email nothing", the exact opposite of the documented default.
+    Returns an entry for EVERY id asked about — an absent entry would read as
+    `.get(id, ...)` at the call site and the fallback there is easy to get
+    backwards (RADD-686 learned this the hard way with `email_types_by_user`).
+    An empty `RuleSet` is the honest value for someone who has never saved
+    anything, and `resolve` turns it into the documented defaults.
     """
     ids = set(user_ids)
     if not ids:
         return {}
     result = await session.execute(
-        select(NotificationPref).where(NotificationPref.user_id.in_(ids))
+        select(NotificationRule).where(NotificationRule.user_id.in_(ids))
     )
-    stored = {prefs.user_id: frozenset(prefs.email_types) for prefs in result.scalars()}
-    fallback = frozenset(default_email_type_values())
-    return {user_id: stored.get(user_id, fallback) for user_id in ids}
+    collected: dict[uuid.UUID, list[RuleRow]] = {user_id: [] for user_id in ids}
+    for row in result.scalars():
+        parsed = _rule_row(row)
+        if parsed is not None:
+            collected[row.user_id].append(parsed)
+    return {user_id: RuleSet.of(rows) for user_id, rows in collected.items()}
+
+
+async def subscriber_ids(
+    session: AsyncSession,
+    *,
+    project_id: uuid.UUID | None = None,
+    space_id: uuid.UUID | None = None,
+    team_id: uuid.UUID | None = None,
+) -> set[uuid.UUID]:
+    """Who SUBSCRIBED to any of these targets (spec 118's fan-out widening).
+
+    One indexed query per event over `ix_notification_rules_target`, not one per
+    scope: an item event can match a project subscription and a team
+    subscription at once, and three round trips per event would be three times
+    the cost for the same answer.
+
+    A row's channels are NOT consulted here. Narrowing by "…and the row turns
+    something on" would be a second copy of the resolver written in SQL, and the
+    two would drift the first time precedence changed. The planner adds these
+    people, `resolve` drops the ones whose rules say `off`, and that decision
+    stays in one place.
+    """
+    targets = [
+        (RuleScope.PROJECT, project_id),
+        (RuleScope.SPACE, space_id),
+        (RuleScope.TEAM, team_id),
+    ]
+    clauses = [
+        (NotificationRule.scope == scope.value) & (NotificationRule.scope_id == target)
+        for scope, target in targets
+        if target is not None
+    ]
+    if not clauses:
+        return set()
+    result = await session.execute(
+        select(NotificationRule.user_id).where(or_(*clauses)).distinct()
+    )
+    return set(result.scalars())
+
+
+async def team_scope_user_ids(session: AsyncSession) -> set[uuid.UUID]:
+    """Everyone with a `teams` (my-teams) rule at all.
+
+    The my-teams column cannot be looked up by target — its rows carry no
+    `scope_id`, because "my teams" is whatever they are today. So fan-out
+    intersects this set with the item team's CURRENT members instead, which is
+    both the correct live semantics and far cheaper than the other direction
+    (every team of every candidate recipient).
+    """
+    result = await session.execute(
+        select(NotificationRule.user_id)
+        .where(NotificationRule.scope == RuleScope.TEAMS.value)
+        .distinct()
+    )
+    return set(result.scalars())
+
+
+def channels_for(
+    kind: NotificationType,
+    rules: RuleSet,
+    relation: Relation = rules_policy.OWN,
+    subject: Subject = Subject(),
+) -> Verdict:
+    """The resolver, re-exported so callers outside this module have one door."""
+    return rules_policy.resolve(kind, rules, relation, subject)
 
 
 async def digest_disabled_users(

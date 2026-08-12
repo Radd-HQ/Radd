@@ -14,7 +14,12 @@ plugin = RaddPlugin(
     # mailintake: the mail TRANSPORT (RADD-968) — `service.send_item_mail`,
     # reached deferred + feature-detected so a disabled/absent mail plugin
     # degrades to the env relay rather than silencing notification email.
-    weak_depends=("participants", "mailintake"),
+    # pages: spec 118 — space subscriptions need a space's NAME to display and a
+    # page's read gate to enforce. Same shape as the two above: pages loads
+    # AFTER notify and is a disableable plugin, so both reaches are deferred and
+    # feature-detected, and an instance with the wiki off degrades rather than
+    # failing to import.
+    weak_depends=("participants", "mailintake", "pages"),
     routers=(router,),
     on_startup=(dispatcher.start,),
     on_shutdown=(dispatcher.stop,),

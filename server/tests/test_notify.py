@@ -20,13 +20,10 @@ visible to a pure planner test or to a hand-built event, so those tests drive th
 real `participants.add_participant` and the real consumer.
 """
 
-import importlib.util
-import json
 import uuid
-from pathlib import Path
 
 import pytest
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings as config
@@ -49,16 +46,12 @@ from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.teams import service as teams_service
 from radd.modules.teams.schemas import TeamCreate
-# The endpoint itself, not the module: `notify.router` is the APIRouter object
-# the package re-exports, which shadows the module of that name.
-from radd.modules.notify.router import put_preferences
-from radd.modules.notify.schemas import NotificationPrefsUpdate
 from radd.modules.notify.types import (
     CONSUMER_NAME,
-    DEFAULT_EMAIL_TYPES,
+    RELATIONSHIP_SCOPES,
+    Channel,
     NotificationType,
-    default_email_type_values,
-    default_email_types,
+    RuleScope,
 )
 
 ACTOR = uuid.uuid4()
@@ -312,24 +305,21 @@ async def _user(db, name: str) -> User:
 
 
 async def _mute(db, user: User, type_: NotificationType) -> None:
-    await notify_service.set_prefs(
+    """Turn one kind OFF for this person, in every scope that could reach them.
+
+    Spec 118 replaced the single mute list with per-scope rules, so "muted"
+    is now a statement about how you are connected to the thing. These tests are
+    about the choke point rather than about precedence, so they silence the
+    relationship columns outright — the equivalent of the old flat mute.
+    """
+    await notify_service.set_rules(
         db,
         user.id,
-        muted_types=[type_],
-        email_types=default_email_types(),  # the defaults, untouched by the mute
-        email_digest=True,
+        [
+            (scope, None, {type_.value: Channel.OFF.value})
+            for scope in RELATIONSHIP_SCOPES
+        ],
     )
-
-
-def _load_migration(name: str):
-    """Import one revision file by name — `migrations/` is a script directory,
-    not a package, so there is nothing to import normally."""
-    path = Path(__file__).resolve().parents[1] / "migrations" / "versions" / f"{name}.py"
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 async def _count(db, user: User, type_: NotificationType) -> int:
@@ -437,16 +427,26 @@ async def test_page_update_fan_out_obeys_the_mute(db):
     assert await _count(db, heard, NotificationType.PAGE_UPDATED) == 1
 
 
-async def test_prefetched_preferences_are_authoritative(db):
-    """The consumer's shape: it batch-reads the whole recipient set's preferences
-    in one query and hands each row's answer down, so the choke point costs no
+async def test_prefetched_rules_are_authoritative(db):
+    """The consumer's shape: it batch-reads the whole recipient set's rules in
+    one query and hands each row's answer down, so the choke point costs no
     query per notification. A caller that passes nothing gets the lookup — slower,
-    never wrong — which is what the two callers above rely on."""
+    never wrong — which is what the two callers above rely on.
+
+    The prefetch answers for EVERY id asked about, empty included. A partial dict
+    read with `.get(id, …)` at the call site is where RADD-686's mailer seam
+    nearly stored "email nothing" as the default; an explicit empty `RuleSet` is
+    a value the resolver turns into the documented defaults.
+    """
     muted, heard = await _user(db, "Muted"), await _user(db, "Hearing")
     await _mute(db, muted, NotificationType.COMMENTED)
 
-    prefetched = await notify_service.muted_types_by_user(db, [muted.id, heard.id])
-    assert prefetched == {muted.id: {NotificationType.COMMENTED.value}}
+    prefetched = await notify_service.rules_by_user(db, [muted.id, heard.id])
+    assert set(prefetched) == {muted.id, heard.id}
+    assert prefetched[heard.id].rows == ()
+    assert prefetched[muted.id].get(RuleScope.PARTICIPATING).channels == {
+        NotificationType.COMMENTED.value: Channel.OFF.value
+    }
 
     for user in (muted, heard):
         await notify_service.create_notification(
@@ -457,7 +457,7 @@ async def test_prefetched_preferences_are_authoritative(db):
             item_id=None,
             actor_id=None,
             payload={},
-            muted_types=prefetched.get(user.id, ()),
+            rules=prefetched.get(user.id),
         )
 
     assert await _count(db, muted, NotificationType.COMMENTED) == 0
@@ -582,114 +582,3 @@ async def test_muting_participant_added_silences_it(db):
 
     assert await _rows(db, muted) == []
     assert await _count(db, heard, NotificationType.PARTICIPANT_ADDED) == 1
-
-
-# --- the channel matrix (RADD-686) --------------------------------------------
-
-
-async def test_muting_a_type_drops_it_from_the_email_column_on_save(db):
-    """Email requires inbox, and the SERVER says so rather than trusting the UI.
-
-    "Email me about comments, but never raise a comment notification" is not a
-    conflict needing a 422 — a muted type never becomes a row and rows are what
-    get mailed, so the request has exactly one coherent meaning and `set_prefs`
-    stores it. The PUT response is read back off the row for the same reason: a
-    raw API caller has to be able to see what was kept.
-    """
-    user = await _user(db, "Contradictory")
-
-    result = await put_preferences(
-        NotificationPrefsUpdate(
-            muted_types=[NotificationType.COMMENTED],
-            email_types=[NotificationType.COMMENTED, NotificationType.MENTIONED],
-            email_digest=True,
-        ),
-        db,
-        user,
-    )
-
-    assert result.muted_types == [NotificationType.COMMENTED]
-    assert result.email_types == [NotificationType.MENTIONED]
-    # The stored row, not just the reply — the mailer reads the column.
-    prefs = await notify_service.get_prefs(db, user.id)
-    assert prefs.email_types == [NotificationType.MENTIONED.value]
-
-
-async def test_a_user_with_no_prefs_row_resolves_to_the_default_email_set(db):
-    """The mailer's seam returns an answer for EVERY id it is asked about,
-    because absent means `DEFAULT_EMAIL_TYPES` — not the empty set that a
-    `.get(id, ())` over a partial dict (the shape `muted_types_by_user` uses,
-    where absent really does mean none) would have silently produced."""
-    saved, never = await _user(db, "Saved"), await _user(db, "Never saved")
-    await notify_service.set_prefs(
-        db, saved.id, muted_types=[], email_types=[NotificationType.APPROVAL], email_digest=True
-    )
-
-    resolved = await notify_service.email_types_by_user(db, [saved.id, never.id])
-
-    assert resolved[saved.id] == frozenset({NotificationType.APPROVAL.value})
-    assert resolved[never.id] == frozenset(type_.value for type_ in DEFAULT_EMAIL_TYPES)
-
-
-async def test_the_migration_backfills_existing_rows_with_its_frozen_default_set(db):
-    """A preferences row saved before RADD-686 must come out of the migration
-    with the DEFAULT set, not an empty one: everyone who had ever saved a
-    preference already got comment mail, and `[]` would silence a channel they
-    never turned off.
-
-    What it is compared against is the migration's OWN frozen literal, not
-    `default_email_type_values()`. This assertion used to read the live constant,
-    and RADD-978 is what showed why it cannot: adding `participant_added` to
-    `DEFAULT_EMAIL_TYPES` failed a test about a backfill that ran months earlier.
-    A migration keeps meaning what it meant the day it ran; the accepted
-    consequence (stated in `notify.types`) is that the two drift apart by exactly
-    the types added since, which is asserted below rather than hidden.
-
-    The suite's database is created at head, so there are no legacy rows to
-    observe — the only honest way to test the backfill is to run it. The column
-    is dropped, a pre-RADD-686 row is written, and the migration's own
-    `upgrade()` is replayed through alembic's operations proxy. All of it inside
-    the test transaction, which rolls the DDL back too (Postgres DDL is
-    transactional), so no other test sees a table mid-migration.
-    """
-    from alembic.migration import MigrationContext
-    from alembic.operations import Operations
-
-    migration = _load_migration("d686emailtypes_notification_email_channel_per_type")
-    user_id = uuid.uuid4()
-    await db.execute(text("ALTER TABLE notification_prefs DROP COLUMN email_types"))
-    await db.execute(
-        text(
-            "INSERT INTO notification_prefs (user_id, muted_types, email_digest) "
-            "VALUES (:user_id, '[]'::jsonb, true)"
-        ),
-        {"user_id": user_id},
-    )
-
-    def _upgrade(connection) -> None:
-        with Operations.context(MigrationContext.configure(connection)):
-            migration.upgrade()
-
-    await db.run_sync(lambda session: _upgrade(session.connection()))
-
-    stored = await db.execute(
-        text("SELECT email_types FROM notification_prefs WHERE user_id = :user_id"),
-        {"user_id": user_id},
-    )
-    frozen = json.loads(migration._DEFAULT_EMAIL_TYPES)
-    assert stored.scalar_one() == frozen
-    # And the drift is a strict subset, in one direction only: every type the
-    # backfill wrote is still a default, and `participant_added` (RADD-978, no
-    # migration by decision) is the one a pre-existing row does not carry.
-    assert set(frozen) < {type_.value for type_ in DEFAULT_EMAIL_TYPES}
-    assert NotificationType.PARTICIPANT_ADDED.value not in frozen
-    assert NotificationType.PARTICIPANT_ADDED.value in default_email_type_values()
-    # The default is dropped afterwards on purpose: the policy lives in
-    # `notify.types`, and a copy left in the schema is a second source of truth.
-    remaining = await db.execute(
-        text(
-            "SELECT column_default FROM information_schema.columns "
-            "WHERE table_name = 'notification_prefs' AND column_name = 'email_types'"
-        )
-    )
-    assert remaining.scalar_one() is None

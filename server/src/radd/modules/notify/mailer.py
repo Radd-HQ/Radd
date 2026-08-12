@@ -57,7 +57,7 @@ from radd.modules.comments.types import CommentEvent
 from radd.modules.events import service as events
 from radd.modules.mailintake.types import MailFailureReport
 
-from . import lines, retry, service
+from . import lines, retry, rules as notify_rules, service
 from .models import Notification
 from .types import NotificationType
 
@@ -157,14 +157,28 @@ async def _pending(session: AsyncSession) -> list[Notification]:
 async def _wanted(session: AsyncSession, rows: list[Notification]) -> list[Notification]:
     """The candidates their own recipient asked to be emailed about (RADD-686).
 
-    One query for the whole batch, then a membership test per row. What is
-    dropped here stays unstamped on purpose: the digest is the other half of the
-    channel choice, not a fallback.
+    One query for the whole batch, then a resolver call per row. What is dropped
+    here stays unstamped on purpose: the digest is the other half of the channel
+    choice, not a fallback.
+
+    Spec 118 swapped the membership test for `rules.resolve` at OWN scope. The
+    row does not yet remember which relation produced it, so this cannot ask the
+    question the fan-out already answered — which is exactly the gap the
+    `email` column closes, and why this function does not survive RADD-1054.
     """
     if not rows:
         return []
-    wanted = await service.email_types_by_user(session, {row.user_id for row in rows})
-    return [row for row in rows if row.type in wanted.get(row.user_id, frozenset())]
+    rule_sets = await service.rules_by_user(session, {row.user_id for row in rows})
+    kept = []
+    for row in rows:
+        try:
+            kind = NotificationType(row.type)
+        except ValueError:
+            continue  # a type this version no longer knows: leave it to the digest
+        rules = rule_sets.get(row.user_id, notify_rules.EMPTY)
+        if service.channels_for(kind, rules).email:
+            kept.append(row)
+    return kept
 
 
 async def _actor_names(

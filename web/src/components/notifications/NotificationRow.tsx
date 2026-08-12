@@ -2,16 +2,23 @@ import {
   AlarmClock,
   AtSign,
   CircleDot,
+  FilePlus,
   FileText,
   MessageSquare,
+  PencilLine,
   ShieldCheck,
   Timer,
   UserRoundPlus,
   Users,
   Zap,
+  type LucideIcon,
 } from "lucide-react";
 import { shortDate } from "../../lib/dates";
-import { NotificationType, type Notification } from "../../lib/types";
+import {
+  NotificationType,
+  type Notification,
+  type NotificationTypeValue,
+} from "../../lib/types";
 
 /** One-line, human sentence for a notification row (actor + verb). */
 export function notificationSummary(notification: Notification): string {
@@ -48,12 +55,21 @@ export function notificationSummary(notification: Notification): string {
     // someone commented — the bug RADD-967 fixed on the server side.
     case NotificationType.participantAdded:
       return `${actor} added you as a participant`;
+    // Spec 118's ambient trio, reaching subscribers rather than participants.
+    case NotificationType.created:
+      return `${actor} filed`;
+    case NotificationType.updated: {
+      const fields = notification.detail.fields ?? [];
+      return fields.length ? `${actor} updated ${fields.slice(0, 3).join(", ")}` : `${actor} updated`;
+    }
+    case NotificationType.pageCreated:
+      return `${actor} created ${notification.detail.title ?? "a page"}`;
     default:
       return `${actor} commented`;
   }
 }
 
-const TYPE_ICONS = {
+const TYPE_ICONS: Partial<Record<NotificationTypeValue, LucideIcon>> = {
   [NotificationType.assigned]: UserRoundPlus,
   [NotificationType.mentioned]: AtSign,
   [NotificationType.stateChanged]: CircleDot,
@@ -64,7 +80,10 @@ const TYPE_ICONS = {
   [NotificationType.approval]: ShieldCheck,
   [NotificationType.pageUpdated]: FileText,
   [NotificationType.participantAdded]: Users,
-} as const;
+  [NotificationType.created]: FilePlus,
+  [NotificationType.updated]: PencilLine,
+  [NotificationType.pageCreated]: FileText,
+};
 
 /** One notification row (shared by the Inbox page and the top-bar peek). */
 export function NotificationRow({

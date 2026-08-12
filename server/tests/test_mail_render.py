@@ -476,13 +476,27 @@ DIGEST_PAYLOADS = {
     # RADD-978: the issue IS the subject line, so the detail is empty like
     # `assigned` — the headline names the actor and the verb, nothing else.
     NotificationType.PARTICIPANT_ADDED: {},
+    # Spec 118's ambient trio — what a SUBSCRIBER to a project, space or team
+    # hears about. `created` says only that it was filed (the subject line
+    # carries what); `updated` names up to three changed fields, because "Ada
+    # updated the issue" in a digest of eleven is a line with no information.
+    NotificationType.CREATED: {},
+    NotificationType.UPDATED: {"fields": ["priority", "labels"]},
+    NotificationType.PAGE_CREATED: {
+        "title": "Colour pipeline",
+        "space_slug": "ops",
+        "page_slug": "colour-pipeline",
+    },
 }
+
+#: Kinds whose subject is a PAGE — no item key/title in the payload.
+_PAGE_TYPES = {NotificationType.PAGE_UPDATED, NotificationType.PAGE_CREATED}
 
 
 def _notification(type_: NotificationType, payload: dict) -> Notification:
     item_fields = (
         {}
-        if type_ is NotificationType.PAGE_UPDATED
+        if type_ in _PAGE_TYPES
         else {"item_key": "MR-1", "item_title": "Printer on fire"}
     )
     return Notification(

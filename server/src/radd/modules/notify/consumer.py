@@ -408,11 +408,11 @@ async def _apply(
     if event.actor_id is not None:
         actor = (await auth.users_by_ids(session, {event.actor_id})).get(event.actor_id)
         actor_name = actor.name if actor else None
-    # RADD-971: the per-user mute is enforced INSIDE create_notification, so the
-    # types produced outside this consumer obey it too. All this batch does now
-    # is prefetch the preference for the whole recipient set — one query instead
+    # RADD-971: the channel decision is enforced INSIDE create_notification, so
+    # the types produced outside this consumer obey it too. All this batch does
+    # now is prefetch the rules for the whole recipient set — one query instead
     # of one per planned row — which is what keeps the choke point off the N+1.
-    muted = await service.muted_types_by_user(
+    rules = await service.rules_by_user(
         session, {planned.user_id for planned in plan.notifications}
     )
     for planned in plan.notifications:
@@ -431,5 +431,5 @@ async def _apply(
                 "actor_name": actor_name,
                 **planned.detail,
             },
-            muted_types=muted.get(planned.user_id, ()),
+            rules=rules.get(planned.user_id),
         )

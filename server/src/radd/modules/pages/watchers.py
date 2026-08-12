@@ -23,6 +23,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.modules.notify import service as notify
+from radd.modules.notify.rules import Relation, Subject
 from radd.modules.notify.types import NotificationType
 
 from .models import Page, PageWatcher
@@ -70,14 +71,17 @@ async def notify_watchers(
     slugs, the version — resolved now rather than joined later, the same way item
     notifications do it, so the entry stays accurate after a rename.
 
-    Whoever muted `page_updated` is dropped by `create_notification` itself
-    (RADD-971) — this fan-out only PREFETCHES the preference for the recipient
-    set, because it runs inside the request that saved the page and a lookup per
+    Whoever turned `page_updated` off is dropped by `create_notification` itself
+    (RADD-971) — this fan-out only PREFETCHES the rules for the recipient set,
+    because it runs inside the request that saved the page and a lookup per
     watcher would put that cost on the editor. Returns how many were actually
-    written, so a muted watcher is not counted as told.
+    written, so a silenced watcher is not counted as told.
+
+    A watcher is `participating` by definition (spec 118): they follow the page,
+    which is the wiki's version of being in the conversation.
     """
     recipients = [uid for uid in await watcher_ids(session, page.id) if uid != actor_id]
-    muted = await notify.muted_types_by_user(session, recipients)
+    rules = await notify.rules_by_user(session, recipients)
     sent = 0
     for user_id in recipients:
         notification = await notify.create_notification(
@@ -94,7 +98,9 @@ async def notify_watchers(
                 "title": page.title,
                 "version": version,
             },
-            muted_types=muted.get(user_id, ()),
+            rules=rules.get(user_id),
+            relation=Relation(is_participating=True),
+            subject=Subject(space_id=page.space_id),
         )
         if notification is not None:
             sent += 1

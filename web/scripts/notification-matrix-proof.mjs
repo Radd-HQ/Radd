@@ -28,12 +28,17 @@ const PORT = 9457;
 const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-notification-matrix-proof");
 const PREFS = "/api/v1/notifications/preferences";
 const SHOT = resolve(process.env.TMPDIR || "/tmp", "notification-matrix.png");
-/** `NotificationType` members — bump with the enum (10 since RADD-978's
- *  `participant_added`). A literal, because the proof runs in a browser against
- *  a built bundle and has no import of the TS enum; a check that silently
- *  accepts "some rows" would not notice a type losing its row, which is what
- *  this one exists to catch. */
-const NOTIFY_TYPE_COUNT = 10;
+/** `NotificationType` members — bump with the enum (13 since spec 118 added
+ *  `created`/`updated`/`page_created`). A literal, because the proof runs in a
+ *  browser against a built bundle and has no import of the TS enum; a check that
+ *  silently accepts "some rows" would not notice a type losing its row, which is
+ *  what this one exists to catch.
+ *
+ *  Since spec 118 the ROWS come from the server's vocabulary rather than a
+ *  hardcoded label map in the panel, so this number is now checking that the
+ *  vocabulary actually arrived — a failed preferences fetch renders zero rows,
+ *  which is exactly the shape of failure a "some rows" check would miss. */
+const NOTIFY_TYPE_COUNT = 13;
 
 /** The panel's own state, measured rather than assumed. */
 const READ_MATRIX = `(() => {

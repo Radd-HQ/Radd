@@ -2,13 +2,11 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, ForeignKey, Index, String, func
+from sqlalchemy import BigInteger, ForeignKey, Index, String, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from radd.db import Base
-
-from .types import default_email_type_values
 
 
 class ItemWatcher(Base):
@@ -60,26 +58,73 @@ class Notification(Base):
 
 
 class NotificationPref(Base):
-    """Per-user notification preferences — a per-type CHANNEL matrix (RADD-686).
+    """Per-user notification settings that are not per-kind (spec 118).
 
-    No row = all defaults: every type reaches the inbox, `DEFAULT_EMAIL_TYPES`
-    are also mailed as they happen, digest on. Both list columns hold
-    NotificationType wire strings.
+    One column left. `muted_types` and `email_types` — RADD-686's two per-type
+    lists — moved into `notification_rules`, where the same answer can be given
+    per RELATIONSHIP and per subscription instead of once for the whole
+    instance; the migration (`d118notifrules`) carried every stored row across.
+    Whether to send a DIGEST is the one preference with no scope to it: it is
+    about the shape of the mail, not about which events reach you.
 
-    **Email requires inbox.** `muted_types` silences BOTH channels, because a
-    muted type never becomes a notification row and rows are what get mailed
-    (`mailer`). `email_types` is therefore always stored disjoint from
-    `muted_types` — `service.set_prefs` normalises rather than rejecting, so a
-    raw API caller cannot store a contradiction the mailer would have to
-    interpret.
+    No row = digest on.
     """
 
     __tablename__ = "notification_prefs"
 
     user_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
-    muted_types: Mapped[list[str]] = mapped_column(JSONB, default=list)
-    # A row written without naming the column means the documented defaults —
-    # the same answer an absent row gives. `[]` would mean "email nothing".
-    email_types: Mapped[list[str]] = mapped_column(JSONB, default=default_email_type_values)
     email_digest: Mapped[bool] = mapped_column(default=True)
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+
+class NotificationRule(Base):
+    """One cell-set of one person's notification matrix (spec 118).
+
+    A row is (user, scope, scope_id) → a SPARSE map of kind → channel. Sparse is
+    the point: a rule states what it has an opinion about and stays silent about
+    the rest, so subscribing to a project's new issues cannot quietly overwrite
+    what you said about comments on your own work. `rules.resolve` walks the
+    scopes most-specific-first and takes the first opinion it finds.
+
+    **Two partial unique indexes, not one constraint.** The relationship scopes
+    (`own`/`participating`/`teams`) carry `scope_id = NULL`, and Postgres counts
+    NULLs as distinct in a unique index — so a single UNIQUE (user_id, scope,
+    scope_id) would happily store a person's `own` rule twice, and the resolver
+    would then answer with whichever row the planner happened to index last.
+    Splitting on `scope_id IS NULL` gives both halves a real uniqueness
+    guarantee without a sentinel uuid standing in for "no target".
+    """
+
+    __tablename__ = "notification_rules"
+    __table_args__ = (
+        Index(
+            "uq_notification_rules_subscription",
+            "user_id",
+            "scope",
+            "scope_id",
+            unique=True,
+            postgresql_where=text("scope_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_notification_rules_relationship",
+            "user_id",
+            "scope",
+            unique=True,
+            postgresql_where=text("scope_id IS NULL"),
+        ),
+        # Fan-out's question, asked once per event: who subscribed to THIS
+        # project / space / team? Without it, widening the recipient set means a
+        # sequential scan of every rule row on every item event.
+        Index("ix_notification_rules_target", "scope", "scope_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    # Plain UUID (no FK), like every other id in this module — notify stays
+    # auth-schema-agnostic.
+    user_id: Mapped[uuid.UUID] = mapped_column(index=True)
+    scope: Mapped[str] = mapped_column(String(20))  # RuleScope
+    #: The project/space/team this subscribes to; NULL for a relationship scope.
+    scope_id: Mapped[uuid.UUID | None]
+    #: {NotificationType wire string: Channel wire string} — sparse.
+    channels: Mapped[dict[str, str]] = mapped_column(JSONB, default=dict)
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())

@@ -23,21 +23,84 @@ export const NotificationType = {
    *  participant). No detail — the item key/title carry the whole line. A TEAM
    *  add produces nothing: team rows resolve live at fan-out and are ambient. */
   participantAdded: "participant_added",
+  /** Spec 118: the ambient kinds a SUBSCRIPTION exists to deliver — an issue
+   *  filed, an edit that changed neither state nor description, a page created.
+   *  Off in every relationship scope by default. */
+  created: "created",
+  updated: "updated",
+  pageCreated: "page_created",
 } as const;
 export type NotificationTypeValue = (typeof NotificationType)[keyof typeof NotificationType];
 
 /**
- * GET/PUT /notifications/preferences — the caller's per-type channel matrix
- * (RADD-686). Inbox = NOT in `muted_types`; email = in `email_types`.
+ * How a person is connected to the thing an event is about (spec 118).
  *
- * Email requires inbox: a muted type never becomes a notification row, and rows
- * are what get mailed, so the server drops muted entries from `email_types` on
- * save and the PUT response is always the normalised pair. PUT is a full
- * replace — every field is required.
+ * The first three are the matrix's COLUMNS — relationships, which hold or do
+ * not and have nothing to point at (`scope_id` is null). The last three are
+ * SUBSCRIPTIONS: a row exists because someone named one project, space or team.
+ */
+export const RuleScope = {
+  own: "own",
+  participating: "participating",
+  teams: "teams",
+  project: "project",
+  space: "space",
+  team: "team",
+} as const;
+export type RuleScopeValue = (typeof RuleScope)[keyof typeof RuleScope];
+
+/** What one cell of the matrix says. The two channels are independent — `email`
+ *  with no inbox row is a real answer, and the one RADD-686 could not express. */
+export const Channel = {
+  off: "off",
+  inbox: "inbox",
+  email: "email",
+  both: "both",
+} as const;
+export type ChannelValue = (typeof Channel)[keyof typeof Channel];
+
+/** One row of the matrix, served from the SERVER's vocabulary (spec 118) — the
+ *  SPA no longer carries its own label map, which could disagree with the enum
+ *  it was describing with nothing to catch it. */
+export interface NotificationKind {
+  kind: NotificationTypeValue;
+  label: string;
+  description: string;
+  /** Addressed at you by the event itself: resolves through `own` alone, so the
+   *  other columns are greyed. */
+  personal: boolean;
+}
+
+/** One saved rule: a scope, an optional target, and a SPARSE channel map. */
+export interface NotificationRule {
+  scope: RuleScopeValue;
+  scope_id: string | null;
+  /** Resolved name of the project/space/team; null for a relationship scope (or
+   *  when the target has been deleted). Display only. */
+  scope_label: string | null;
+  channels: Partial<Record<NotificationTypeValue, ChannelValue>>;
+}
+
+/**
+ * GET/PUT /notifications/preferences — the caller's whole notification policy
+ * (spec 118): the kind vocabulary, the relationship columns, what an unset cell
+ * inherits, and the rules they actually saved.
+ *
+ * PUT is a full replace of `rules`: removing a subscription IS leaving its row
+ * out, which is only expressible when the whole set is sent.
  */
 export interface NotificationPrefs {
-  muted_types: NotificationTypeValue[];
-  email_types: NotificationTypeValue[];
+  kinds: NotificationKind[];
+  scopes: RuleScopeValue[];
+  /** {scope: {kind: channel}} for the relationship columns — the inherited value. */
+  defaults: Partial<Record<RuleScopeValue, Partial<Record<NotificationTypeValue, ChannelValue>>>>;
+  rules: NotificationRule[];
+  email_digest: boolean;
+}
+
+/** PUT body — `scope_label` is a read-only display value and is not sent back. */
+export interface NotificationPrefsUpdate {
+  rules: { scope: RuleScopeValue; scope_id: string | null; channels: Partial<Record<NotificationTypeValue, ChannelValue>> }[];
   email_digest: boolean;
 }
 
@@ -68,14 +131,17 @@ export interface Notification {
     to_state?: string;
     required?: number;
     approved_count?: number;
-  /** RADD-719 (page_updated): everything the row needs to render and link
-   *  without a join — resolved at write time, so a later rename cannot make the
-   *  entry lie about what it told you at the time. */
+  /** RADD-719 (page_updated / spec 118 page_created): everything the row needs
+   *  to render and link without a join — resolved at write time, so a later
+   *  rename cannot make the entry lie about what it told you at the time. */
   page_id?: string;
   page_slug?: string;
   space_slug?: string;
   title?: string;
   version?: number;
+  /** Spec 118 (`updated`): which fields moved — a generic edit notification
+   *  with no field names is a line carrying no information. */
+  fields?: string[];
   };
   read: boolean;
   created_at: string;
