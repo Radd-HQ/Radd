@@ -192,15 +192,24 @@ jobs:
       # release_assets.py find-or-creates the release, so this step does not
       # depend on the changelog step above having succeeded.
       #
+      # RADD-1065: the same two documents are then rendered as ONE readable page
+      # in the wiki — `SBOM <version>`, a child of that version's release-notes
+      # page — because a 1.4 MB `.cdx.json` answers "do we still ship that
+      # crate?" only to whoever will write the jq. sbom_page.py REQUIRES the
+      # version page (the changelog step above publishes it) and exits non-zero
+      # when it is missing, rather than filing the page somewhere nobody looks.
+      #
       # continue-on-error for the changelog step's reason: the image is already
       # pushed and deployable, and a failed SBOM must not turn a good release
-      # red. The gap is visible where it matters — on the release page.
-      - name: Generate and attach SBOMs
+      # red. The gap is visible where it matters — on the release page, and as a
+      # red step here.
+      - name: Generate, attach and publish the SBOMs
         continue-on-error: true
         env:
           DOCKER_HOST: tcp://172.17.0.1:2375
           FORGEJO_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.FORGEJO_TOKEN }}
           FORGEJO_REPO: ${{ github.repository }}
+          RADD_API_TOKEN: ${{ secrets.RADD_API_TOKEN }}
           # Package inventory, not a five-thousand-row file listing.
           SYFT_FILE_METADATA_SELECTION: none
         run: |
@@ -211,6 +220,8 @@ jobs:
           syft file:web/package-lock.json \
             -o cyclonedx-json="radd-$V-web.cdx.json" -q
           python3 scripts/release_assets.py --tag "v$V" \
+            "radd-$V-image.cdx.json" "radd-$V-web.cdx.json"
+          python3 scripts/sbom_page.py --tag "v$V" \
             "radd-$V-image.cdx.json" "radd-$V-web.cdx.json"
 
       # RADD-1028: the inventory above, read for known vulnerabilities — the

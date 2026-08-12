@@ -150,7 +150,11 @@ container image (Debian packages, the installed Python environment, and what
 syft reads out of embedded binaries), and `radd-<version>-web.cdx.json` the npm
 tree the web bundle was built from — the bundle itself is minified, so the image
 scan alone cannot see the frontend's dependencies. Feed them to whatever
-consumes CycloneDX (grype, Dependency-Track, OSV). Next to them sit the trivy
+consumes CycloneDX (grype, Dependency-Track, OSV) — or read them: the same two
+documents are rendered as one wiki page per version (`SBOM <version>`, a child
+of that version's release-notes page, `scripts/sbom_page.py`), so "do we still
+ship that crate?" is a browser find rather than a jq expression (RADD-1065).
+Next to them sit the trivy
 vulnerability reports for the same two targets (`radd-<version>-image-vulns.json`,
 `radd-<version>-web-vulns.json`), generated at tag time — report-only, since most
 base-image CVEs have no fixed package to move to; a rebuilt image on the same
