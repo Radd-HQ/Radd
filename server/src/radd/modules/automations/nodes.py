@@ -32,7 +32,7 @@ def ports_of(node: graph.Node) -> tuple[str, ...]:
     """
     spec = registries.automation_nodes.get(node.type)
     if spec is not None:
-        return tuple(spec.ports_for(node.params))
+        return spec.ports_at(node.params)
     builtin = BUILTIN_PORTS.get(node.type)
     if builtin is not None:
         return tuple(port.value for port in builtin)

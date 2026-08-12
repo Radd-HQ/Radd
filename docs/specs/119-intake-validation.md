@@ -118,6 +118,17 @@ read and `preview`'s `matched` went true for a graph that would apply nothing.
 The claim in this document was always the design; the executor is now what it
 says.
 
+**Its ports are DECLARED, not inferred** (RADD-1064). `AutomationNodeSpec` gained
+a static `ports` tuple, this node sets it to `("pass", "fail", "unavailable")`,
+and the catalog serves it — because the canvas draws a node's handles before the
+server has ever seen the graph. With nothing to read it fell back to the KIND's
+table and drew this gate with TRUE/FALSE, so the first person to wire it produced
+edges naming ports the engine never emits: a branch that carries nothing, and a
+graph `graph.validate` refuses on save. `ai.classify` declares none on purpose —
+its ports are the answers being typed, and an empty list says exactly that.
+Resolution is `spec.ports_at(params)` (static first, then `ports_for`), mirrored
+on the client by `portsOfNode(node, contributedPorts)`.
+
 **An AI outage must not silently block intake.** A provider being down is not
 evidence that a submission is bad. A provider failure, a dormant feature, an
 unresolvable feature gate and a node with no prompt all take the `unavailable`
@@ -355,8 +366,8 @@ structural rather than a rule two codebases have to keep remembering.
 
 ## Invariants tested
 
-`server/tests/test_intake_validation.py` (53) and
-`server/tests/test_ai_validate_node.py` (20):
+`server/tests/test_intake_validation.py` (55) and
+`server/tests/test_ai_validate_node.py` (21):
 
 - a validate trigger is indexed per target; dropping a target drops its
   governance (wholesale rebuild, never a diff);
@@ -392,6 +403,10 @@ structural rather than a rule two codebases have to keep remembering.
   REAL `_NodeContext`, built by the executor's own factory, because the version
   that used a stand-in with an invented `collecting` flag was testing an
   if-statement in the test file;
+- the node's ports are DECLARED and served (RADD-1064): the catalog carries
+  `pass`/`fail`/`unavailable` for `ai.validate` and an empty list for
+  `ai.classify`, edges from all three of its own ports save, and an edge from a
+  gate's `true` — what the canvas used to draw — is refused;
 - a form surface resolves the TYPE its submissions will carry — the form's
   default, and the project's when it names none;
 - both endpoints are REACHABLE over the assembled app (RADD-761's lesson:
@@ -406,6 +421,16 @@ findings panel's presence, position and contrast, the control-level highlight,
 closing the modal — and the VERDICT beating the cached context read, by flipping
 the binding to required while the modal is open and pressing again, which is the
 one case where the two answers disagree.
+
+`web/scripts/ai-validate-node-proof.mjs` measures the node's own BUILDER surface
+(RADD-1064), which nothing else looks at: the handles a freshly dropped node
+draws — as labels AND as the ids an edge would carry; `include` as four
+checkboxes with the schema's own defaults and no text input standing where the
+object belongs; a toggled box that round-trips as an OBJECT through a save and a
+reload; and a node holding the string casualty rendering the defaults instead of
+it. Nothing here runs the node — it only configures it, so no provider is
+involved. Reverting the client half fails 14 of its 23 checks, which is how it
+was confirmed not to pass vacuously.
 
 ## Notes worth keeping
 
@@ -425,6 +450,17 @@ one case where the two answers disagree.
   could be stored with its required params blank: a node that saves cleanly,
   looks configured on the canvas, and takes its fallback port forever. Widened
   to every kind.
+- **A generated form is part of the node's contract** (RADD-1064). `include` is
+  an object of booleans and `SchemaFields` had no case for one, so it rendered a
+  free-text input — and the first person to configure the node typed `{{title}}`
+  into it. Nothing refused that: the write path's contributed-param check is
+  required-keys-and-enums by design (a stricter one would 422 the very save that
+  repairs the node), and the run then reads `"…".get(…)`, raises inside `_ask`,
+  and takes `unavailable` — an AI check that checks nothing and blames the
+  provider. Now: a checkbox group for any all-boolean object property, nested
+  schema defaults so a dropped node carries its `include`, and a non-mapping
+  value read as the defaults on BOTH sides, so an existing casualty heals on the
+  next edit instead of being refused.
 - **`getBoundingClientRect` said the findings panel was present, sized and at a
   positive y** while it sat several hundred pixels below the fold of a long
   modal. Every numeric check passed; the SCREENSHOT caught it. The panel now

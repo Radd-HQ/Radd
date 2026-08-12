@@ -103,7 +103,8 @@ async def get_catalog(session: Session, user: CurrentUser) -> CatalogRead:
                 description=spec.description,
                 group=spec.group,
                 params_schema=spec.params_schema,
-                default_ports=list(spec.ports_for({})),
+                ports=list(spec.ports),
+                default_ports=list(spec.ports_at({})),
                 needs_items=spec.needs_items,
                 permission=spec.permission,
             )

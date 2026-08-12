@@ -1102,6 +1102,74 @@ async def test_a_form_with_no_type_default_falls_back_to_the_projects(db, admin,
     assert read.validation is not None and read.validation.governed is True
 
 
+# --- the node as the BUILDER sees it (RADD-1064) -------------------------------
+
+
+async def test_the_catalog_serves_the_checks_own_ports(db, admin):
+    """The canvas draws a node's handles before the server has ever seen the
+    graph, so what it draws is whatever the catalog told it.
+
+    `ai.validate` is a GATE, and a gate's kind-level ports are true/false — so a
+    client with nothing better to go on drew TRUE/FALSE on a node that emits
+    pass/fail/unavailable, and every edge dragged off those handles was refused
+    by `graph.validate` on save. The fix is that a node with FIXED ports says so,
+    and the catalog carries the declaration.
+
+    `ai.classify` proves the other half: its ports are the answers being typed,
+    so it declares none and the editor computes them locally. An empty list here
+    is a positive statement, not a gap.
+    """
+    from radd.modules.automations.router import get_catalog
+
+    catalog = await get_catalog(db, admin)
+    by_key = {node.key: node for node in catalog.contributed_nodes}
+
+    assert by_key["ai.validate"].ports == ["pass", "fail", "unavailable"]
+    assert by_key["ai.classify"].ports == []
+    # `default_ports` still answers for the params-dependent node, and is still
+    # not a port set: an unconfigured classifier has only its fallback.
+    assert by_key["ai.classify"].default_ports == ["unavailable"]
+
+
+async def test_the_checks_ports_are_wireable_and_a_gates_are_not(db, admin, project):
+    """The same fact from the WRITE side, which is where the mis-drawn handle
+    turned into a refused save."""
+    check = {
+        "id": "ai",
+        "kind": "gate",
+        "type": "ai.validate",
+        "params": {"prompt": "A report must say what was expected."},
+    }
+    targets = [{"kind": "project", "id": str(project.id)}]
+
+    for port in ("pass", "fail", "unavailable"):
+        rule = await _graph(
+            db,
+            admin,
+            targets=targets,
+            nodes=[check, _fail_node("say", f"took {port}")],
+            edges=[
+                {"source": "trg", "port": "out", "target": "ai"},
+                {"source": "ai", "port": port, "target": "say"},
+            ],
+        )
+        assert rule.id is not None
+
+    with pytest.raises(ConflictError) as refused:
+        await _graph(
+            db,
+            admin,
+            targets=targets,
+            nodes=[check, _fail_node("say", "took true")],
+            edges=[
+                {"source": "trg", "port": "out", "target": "ai"},
+                # What the canvas drew before RADD-1064.
+                {"source": "ai", "port": "true", "target": "say"},
+            ],
+        )
+    assert "no 'true' port" in str(refused.value)
+
+
 # --- the contributed-node seam, end to end (RADD-1059) ------------------------
 
 

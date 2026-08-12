@@ -303,8 +303,19 @@ class AutomationNodeSpec:
       each names its own outputs.
     * `ports_for(params)` lets a node's outputs depend on its CONFIGURATION — an
       AI classifier with four user-defined answers has four outputs. A fixed
-      `ports` tuple could not express that, and the graph validator has to know
-      the real set or it cannot reject an edge naming a port that will not exist.
+      tuple ALONE could not express that, and the graph validator has to know the
+      real set or it cannot reject an edge naming a port that will not exist.
+
+    **Static ports are DECLARED, not inferred (RADD-1064).** Most contributed
+    nodes' outputs do not depend on their params at all, and `ports_for({})` is
+    not a way to find that out: for a dynamic node it answers about a node that
+    has not been configured yet. So a node whose ports are fixed says so in
+    `ports`, and everything that has to draw a node BEFORE it can ask the server
+    about a particular params dict — the canvas, above all — has an answer it can
+    trust. `ai.validate` drew TRUE/FALSE handles for a whole release because the
+    SPA had nowhere to read `("pass", "fail", "unavailable")` from and fell back
+    to the KIND's table; every edge wired from those handles named a port the
+    engine never emits. Resolution is `ports_at(params)`, in one place.
 
     `plan(ctx) -> NodeOutcome` decides what the node does; it never applies. That
     split is what gives dry-run for free and is enforced by the executor calling
@@ -321,7 +332,12 @@ class AutomationNodeSpec:
     description: str = ""
     group: str = "Other"  # palette section
     params_schema: dict[str, Any] = field(default_factory=dict)
-    #: Outputs for a given params dict. Static nodes ignore the argument.
+    #: FIXED outputs, for a node whose ports do not depend on its params. Set
+    #: this OR `ports_for`, never both — declaring it is what lets a client draw
+    #: the node's handles from the served catalog instead of guessing by kind.
+    ports: tuple[str, ...] = ()
+    #: Outputs for a given params dict, when they genuinely vary (an AI
+    #: classifier's answers ARE its branches). Ignored when `ports` is set.
     ports_for: Callable[[Mapping[str, Any]], tuple[str, ...]] = lambda _params: ("out",)
     #: False = runs even when nothing reached it (webhook, chat, "nothing matched").
     needs_items: bool = True
@@ -363,6 +379,16 @@ class AutomationNodeSpec:
     #: whether its calls can be batched or run concurrently, so that decision
     #: does not belong in the executor.
     plan_items: Callable[..., Any] | None = None
+
+    def ports_at(self, params: Mapping[str, Any]) -> tuple[str, ...]:
+        """This node's outputs for these params — the ONE place the two
+        declarations are ranked.
+
+        A second copy of "static wins over dynamic" anywhere would eventually
+        disagree with this one, and the graph validator cannot survive that: it
+        rejects edges against a port set it has to believe.
+        """
+        return self.ports or tuple(self.ports_for(params))
 
 
 # --- MCP tools (RADD-640: the spec-114 catalog becomes plugin-registerable) ---

@@ -98,8 +98,27 @@ def test_the_ports_are_fixed_and_the_fallback_is_last():
     its branches. Here the answers are prose; what varies is what the model says,
     not how many ways the packet can go. The fallback stays LAST because the
     executor treats a contributed router's final port as its fallback."""
-    assert node.ports_for({}) == ("pass", "fail", "unavailable")
-    assert node.ports_for({"prompt": "x"})[-1] == node.FALLBACK_PORT
+    assert node.SPEC.ports == ("pass", "fail", "unavailable")
+    assert node.SPEC.ports_at({"prompt": "x"}) == node.PORTS
+    assert node.SPEC.ports_at({})[-1] == node.FALLBACK_PORT
+
+
+def test_the_ports_are_DECLARED_so_a_client_can_draw_them():
+    """RADD-1064: static ports are a declaration, not something inferred from
+    `ports_for({})`.
+
+    The distinction is what the canvas reads. Asking a DYNAMIC node for its
+    default ports answers about a node nobody has configured yet, so a client
+    that treated that as the port set would be wrong for `ai.classify` and had
+    no way to be right for this one — it fell back to the KIND's table and drew
+    a gate's TRUE/FALSE handles, which the graph validator then refused on save.
+    """
+    from radd.modules.ai import automation_node as classifier
+
+    assert node.SPEC.ports == node.PORTS  # fixed: declared
+    assert classifier.SPEC.ports == ()  # dynamic: deliberately undeclared
+    # …and the dynamic one still answers, from its params.
+    assert classifier.SPEC.ports_at({"answers": ["bug", "feature"]})[:2] == ("bug", "feature")
 
 
 # --- the happy paths -----------------------------------------------------------

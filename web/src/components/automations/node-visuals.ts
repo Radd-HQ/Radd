@@ -41,6 +41,13 @@ export const PORT_TONE: Record<string, string> = {
   // What was made, not what came in — its own colour so the two outputs of a
   // create-item node are not mistaken for each other.
   created: "var(--chart-progress-ink)",
+  // A check's verdict (`ai.validate`). Same green/grey pairing as matched /
+  // unmatched: `fail` is a route, not an error — the packet went the other way.
+  pass: "var(--chart-progress-ink)",
+  fail: "var(--chart-backlog-ink)",
+  // The provider could not answer. Amber because it is neither branch: nobody
+  // decided anything, and a graph that wires it is saying what to do about that.
+  unavailable: "var(--chart-triage-ink)",
 };
 
 export const INLET_TONE = "var(--color-emphasis)";
@@ -64,11 +71,25 @@ const PORTS_BY_TYPE: Record<string, string[]> = {
 /**
  * A node's OUTPUT PORTS — from its type when the type decides, else its kind.
  *
- * The AI classifier's ports are the answers someone typed, so this cannot be a
- * per-kind table: the canvas has to redraw the node as the form changes, and the
- * server validates edges against exactly this set.
+ * Four sources, ranked the way the SERVER ranks them (`AutomationNodeSpec.
+ * ports_at` — static first, then dynamic, then the built-in table, then the
+ * kind). Mirroring the order is the point: the server validates every edge
+ * against the set it computes, so a handle drawn from a different precedence is
+ * an affordance that 409s on save.
+ *
+ * `contributedPorts` carries the STATIC ports the catalog serves, keyed by node
+ * type. Optional so a read-only preview renders before the catalog resolves —
+ * and because a stored node whose plugin has been uninstalled has no entry at
+ * all. The AI classifier's ports are the answers someone typed, which is why the
+ * dynamic branch stays: the canvas has to redraw that node as its form changes,
+ * and its spec deliberately declares no static set (RADD-1064).
  */
-export function portsOfNode(node: { kind: NodeKindValue; type: string; params: Record<string, unknown> }): string[] {
+export function portsOfNode(
+  node: { kind: NodeKindValue; type: string; params: Record<string, unknown> },
+  contributedPorts?: Record<string, string[]>,
+): string[] {
+  const declared = contributedPorts?.[node.type];
+  if (declared?.length) return declared;
   if (node.type === "ai.classify") {
     const answers = ((node.params.answers as string[]) ?? [])
       .map((a) => String(a).trim())

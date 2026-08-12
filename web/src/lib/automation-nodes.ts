@@ -66,15 +66,24 @@ function blankActionParams(actionType: string): Record<string, unknown> {
 
 const TRIGGER_GROUP = "Triggers";
 
+interface SchemaProperty {
+  type?: string;
+  default?: unknown;
+  enum?: unknown[];
+  properties?: Record<string, SchemaProperty>;
+  required?: string[];
+}
+
 /** Starting params for a contributed node, from its JSON Schema.
  * Only the shapes the schema can express — an object of typed properties —
  * because anything cleverer would be a second validator disagreeing with the
- * server's. */
-function defaultsFromSchema(schema: Record<string, unknown>): Record<string, unknown> {
-  const properties = (schema.properties ?? {}) as Record<
-    string,
-    { type?: string; default?: unknown; enum?: unknown[] }
-  >;
+ * server's.
+ *
+ * Exported since RADD-1064: it is what a stored value is REPAIRED against when
+ * the value's shape does not match the schema's, and the generated form needs
+ * the same answer this does. */
+export function defaultsFromSchema(schema: Record<string, unknown>): Record<string, unknown> {
+  const properties = (schema.properties ?? {}) as Record<string, SchemaProperty>;
   const required = new Set((schema.required as string[]) ?? []);
   const out: Record<string, unknown> = {};
   for (const [key, property] of Object.entries(properties)) {
@@ -84,11 +93,31 @@ function defaultsFromSchema(schema: Record<string, unknown>): Record<string, unk
     // plugin being broken rather than as a field waiting to be filled.
     else if (property.enum?.length && required.has(key)) out[key] = property.enum[0];
     else if (property.type === "array") out[key] = [];
+    // An OBJECT property recurses (RADD-1064). `ai.validate`'s `include` has no
+    // default of its own — the defaults live one level down, on each boolean —
+    // so a freshly dropped node used to carry no `include` at all, and the
+    // sub-defaults existed only in the server's `ContextOptions.from_params`.
+    // Two copies of "description is on, comments are off", agreeing by luck.
+    else if (property.type === "object") out[key] = defaultsFromSchema(property as Record<string, unknown>);
     else if (property.type === "string") out[key] = "";
     else if (property.type === "number" || property.type === "integer") out[key] = 0;
     else if (property.type === "boolean") out[key] = false;
   }
   return out;
+}
+
+/** Static ports by node type, from the served catalog (RADD-1064).
+ *
+ * Only the types that DECLARE a fixed set appear: an empty `ports` means the
+ * node's outputs depend on its params, and the canvas computes those itself. */
+export function contributedPorts(
+  catalog: AutomationCatalog | undefined,
+): Record<string, string[]> {
+  const map: Record<string, string[]> = {};
+  for (const node of catalog?.contributed_nodes ?? []) {
+    if (node.ports?.length) map[node.key] = node.ports;
+  }
+  return map;
 }
 
 export function nodeTemplates(catalog: AutomationCatalog | undefined): NodeTemplate[] {

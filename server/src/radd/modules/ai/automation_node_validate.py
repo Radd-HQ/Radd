@@ -40,11 +40,17 @@ NODE_KEY = "ai.validate"
 PASS_PORT = "pass"
 #: The port a draft with findings leaves by.
 FAIL_PORT = "fail"
-#: The port an unreachable/dormant provider takes. LAST in `ports_for` because
-#: the executor treats a contributed router's final port as its fallback — so a
+#: The port an unreachable/dormant provider takes. LAST in `PORTS` because the
+#: executor treats a contributed router's final port as its fallback — so a
 #: failure the node does not catch itself still lands somewhere sensible.
 FALLBACK_PORT = "unavailable"
 
+#: FIXED, unlike `ai.classify`'s. The answers here are prose, not branches — what
+#: varies is what the model SAYS, not how many ways the packet can go. Declared
+#: as the spec's static `ports` rather than computed by a `ports_for` that
+#: ignores its argument (RADD-1064): a client drawing this node's handles has to
+#: know the set before it has any params to ask about, and one that could only
+#: guess drew a gate's TRUE/FALSE instead.
 PORTS: tuple[str, ...] = (PASS_PORT, FAIL_PORT, FALLBACK_PORT)
 
 #: What `on_unavailable` may say. Not booleans on the wire: "pass" and "fail"
@@ -74,12 +80,6 @@ SYSTEM_PROMPT = (
     "all. Never invent facts about the issue, never restate the bar back, and "
     "never ask for information the submission already contains."
 )
-
-
-def ports_for(_params: Mapping[str, Any]) -> tuple[str, ...]:
-    """Fixed, unlike `ai.classify`'s. The answers here are prose, not branches —
-    what varies is what the model SAYS, not how many ways the packet can go."""
-    return PORTS
 
 
 PARAMS_SCHEMA: dict[str, Any] = {
@@ -356,7 +356,7 @@ SPEC = AutomationNodeSpec(
     ),
     group="Gates",
     params_schema=PARAMS_SCHEMA,
-    ports_for=ports_for,
+    ports=PORTS,
     #: A check about nothing has nothing to say — and an empty packet in a
     #: validation walk means an upstream filter excluded this draft.
     needs_items=True,

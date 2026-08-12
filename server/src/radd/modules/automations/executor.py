@@ -475,7 +475,7 @@ async def _partition_registered(
     behalf. Otherwise `plan` once per single-item packet, which is correct for
     any node and is the whole feature for a cheap one.
     """
-    ports = tuple(spec.ports_for(node.params))
+    ports = spec.ports_at(node.params)
     if not ports:
         return {}
     fallback = ports[-1]
@@ -534,7 +534,7 @@ async def _run_registered_gate(
     unreachable provider cannot stop a graph that has other branches.
     """
     spec = spec_for(node)
-    ports = tuple(spec.ports_for(node.params)) if spec else ()
+    ports = spec.ports_at(node.params) if spec else ()
     if not spec or not spec.plan or not ports:
         return ""
     if packet.is_empty and needs_items(node):

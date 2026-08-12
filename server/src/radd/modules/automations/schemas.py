@@ -510,6 +510,13 @@ class ContributedNodeInfo(BaseModel):
     description: str = ""
     group: str = "Other"
     params_schema: dict[str, Any] = Field(default_factory=dict)
+    #: The node's FIXED ports, when its outputs do not depend on its params
+    #: (RADD-1064). Empty means they DO — the editor computes those itself as the
+    #: form is edited, because an AI classifier's ports are the answers someone
+    #: is still typing. The distinction is the whole value of the field: without
+    #: it a client cannot tell a real port set from one node's starting shape,
+    #: and `ai.validate` drew a gate's TRUE/FALSE handles instead of its own.
+    ports: list[str] = Field(default_factory=list)
     #: Ports for the node's DEFAULT params. The editor recomputes them locally as
     #: the form is edited (an AI classifier's ports are its answers), so this is
     #: the starting shape, not the final word.

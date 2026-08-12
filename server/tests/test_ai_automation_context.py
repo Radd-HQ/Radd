@@ -149,3 +149,26 @@ async def test_sections_are_omitted_when_not_requested(stub):
 async def test_no_items_says_so_rather_than_sending_an_empty_prompt(stub):
     stub({})
     assert "No items matched" in await build_context(None, (), None, ContextOptions())
+
+
+# --- what a stored param actually holds (RADD-1064) ---------------------------
+
+
+def test_a_choice_that_is_not_a_mapping_falls_back_to_the_defaults():
+    """`include` is an OBJECT of booleans, and the generated form rendered it as
+    a free-text input until RADD-1064 — so instances hold nodes whose `include`
+    is a string somebody typed. `"…".get(…)` is an AttributeError raised inside
+    `_ask`, which `ai.validate` catches as "the provider is unavailable": a check
+    that runs forever, checks nothing, and blames the model server.
+
+    The write path does not refuse it either — `_check_node_schema` is
+    deliberately shallow (required keys and enums), and tightening it would 422
+    the very save that repairs the node. So the reading is what forgives it.
+    """
+    assert ContextOptions.from_params({"include": "{{title}}"}) == ContextOptions()
+    assert ContextOptions.from_params({"include": ["fields"]}) == ContextOptions()
+    assert ContextOptions.from_params({}) == ContextOptions()
+    # A real mapping is still honoured, including the falsy half.
+    assert ContextOptions.from_params({"include": {"description": False, "comments": True}}) == (
+        ContextOptions(fields=True, description=False, comments=True, worklogs=False)
+    )

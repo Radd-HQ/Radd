@@ -40,7 +40,7 @@ import {
   type NodeResult,
   type RuleTestResult,
 } from "../../lib/types";
-import { arityOf, effectiveArity } from "../../lib/automation-nodes";
+import { arityOf, contributedPorts, effectiveArity } from "../../lib/automation-nodes";
 import {
   GRID_TONE,
   INLET_TONE,
@@ -59,6 +59,10 @@ interface NodeData extends Record<string, unknown> {
    * a graph is visible without opening every node. Empty when the type offers no
    * choice: a badge on `set_state` would say only what everyone assumes. */
   arity: string;
+  /** The handles to draw, resolved ONCE where the catalog is in scope
+   * (RADD-1064) — a node deep inside React Flow's own tree cannot ask the
+   * server what a contributed type emits. */
+  ports: string[];
   /** This node's last dry run, when there has been one. */
   run?: NodeResult;
 }
@@ -67,13 +71,12 @@ interface NodeData extends Record<string, unknown> {
  * what it is configured to do — the canvas answers "what is the shape of this
  * automation", and the detail panel answers "what exactly does this node do". */
 function GraphNode({ data, selected }: NodeProps) {
-  const { node, subtitle, orientation, arity, run } = data as NodeData;
+  const { node, subtitle, orientation, arity, ports, run } = data as NodeData;
   // Flow enters the top and leaves the bottom when vertical; left/right when
   // horizontal. Getting this wrong draws every edge as a sideways loop.
   const inletSide = orientation === "vertical" ? Position.Top : Position.Left;
   const outletSide = orientation === "vertical" ? Position.Bottom : Position.Right;
   const Icon = NODE_KIND_ICON[node.kind];
-  const ports = portsOfNode(node);
 
   return (
     <div
@@ -227,11 +230,23 @@ function summarise(node: AutomationNode): string {
     return ((params.categories as string[]) ?? []).join(", ") || "any category";
   }
   if (node.type === "ai.classify") return String(params.prompt ?? "") || "ask a question…";
-  if (node.kind === NodeKind.gate) return "event conditions";
-  // The first param that says what the action DOES. `arity` and `act_as`
+  // The ABSTRACT gate, and only it. This read `node.kind === gate` until
+  // RADD-1064, so every contributed gate — `ai.validate` included — described
+  // itself on the canvas as testing "event conditions", which is not a vague
+  // summary but a wrong one: it tests nothing of the kind.
+  if (node.type === "gate.event") return "event conditions";
+  // The first param that says what the node DOES. `arity` and `act_as`
   // configure how it runs, not what it does, and either could sort first in a
   // stored params object — a card reading "arity: item" would be useless.
-  const first = Object.entries(params).find(([key]) => !NODE_CHROME_PARAMS.has(key));
+  // Blank and non-scalar values are skipped for the same reason: "prompt:" and
+  // "include: [object Object]" are each a line that costs a row and says
+  // nothing.
+  const first = Object.entries(params).find(
+    ([key, value]) =>
+      !NODE_CHROME_PARAMS.has(key) &&
+      (value === null || typeof value !== "object") &&
+      String(value ?? "").trim() !== "",
+  );
   return first ? `${first[0]}: ${String(first[1])}` : "";
 }
 
@@ -290,6 +305,11 @@ export default function GraphCanvas({
    * and invisible. Holding React Flow's state and re-seeding it only when the
    * GRAPH actually changes is what lets a measurement survive.
    */
+  //: What each contributed TYPE emits, from the catalog — the answer the canvas
+  //: cannot derive for itself. Empty until the catalog resolves, which the
+  //: signature below accounts for.
+  const declaredPorts = useMemo(() => contributedPorts(catalog), [catalog]);
+
   const build = useCallback(
     (): FlowNode[] =>
       layout(nodes, edges, orientation).map((placed) => ({
@@ -307,11 +327,12 @@ export default function GraphCanvas({
             arityOf(catalog, placed.node.type).options.length > 1
               ? effectiveArity(catalog, placed.node)
               : "",
+          ports: portsOfNode(placed.node, declaredPorts),
           run: run?.nodes.find((entry) => entry.node_id === placed.node.id),
         } satisfies NodeData,
         draggable: !readOnly,
       })),
-    [nodes, edges, readOnly, orientation, catalog, run],
+    [nodes, edges, readOnly, orientation, catalog, declaredPorts, run],
   );
 
   const [flowNodes, setFlowNodes, onFlowNodesChange] = useNodesState<FlowNode>(build());
@@ -327,6 +348,11 @@ export default function GraphCanvas({
         // something else happened to change the graph. Same for a dry run,
         // which lands long after the graph is drawn.
         catalog?.node_arity?.length ?? 0,
+        // …and so are a contributed node's HANDLES (RADD-1064). Counted
+        // separately from the arity table because they answer different
+        // questions, and a node drawn with the kind's fallback ports until
+        // something else nudged the graph is exactly the bug being fixed.
+        catalog?.contributed_nodes?.length ?? 0,
         run?.nodes.map((n) => [n.node_id, n.ran, n.incoming, n.ports]) ?? null,
         nodes.map((n) => [n.id, n.type, n.params, n.x, n.y]),
       ]),

@@ -145,6 +145,12 @@ export interface ContributedNodeInfo {
   description: string;
   group: string;
   params_schema: Record<string, unknown>;
+  /** The node's FIXED ports (RADD-1064). Empty means its outputs depend on its
+   * params — an AI classifier's ports are the answers being typed — and the
+   * editor computes those locally instead. Without this the canvas could only
+   * fall back to the KIND's table, which drew `ai.validate` (a gate) with
+   * TRUE/FALSE handles and let people wire edges the engine never emits. */
+  ports: string[];
   default_ports: string[];
   needs_items: boolean;
   permission: string;

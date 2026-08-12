@@ -55,7 +55,15 @@ class ContextOptions:
 
     @classmethod
     def from_params(cls, params: dict[str, Any]) -> "ContextOptions":
-        include = params.get("include") or {}
+        # A stored `include` that is not a mapping falls back to the defaults
+        # rather than raising (RADD-1064). The generated form used to render this
+        # object property as a free-text input, so instances hold nodes whose
+        # `include` is a STRING someone typed — and `"…".get` is an
+        # AttributeError inside `_ask`, which the node catches as "the provider
+        # is unavailable". A misdrawn form would have become a permanently
+        # dormant AI check with an outage's error message.
+        raw = params.get("include")
+        include: dict[str, Any] = raw if isinstance(raw, dict) else {}
         return cls(
             fields=bool(include.get("fields", True)),
             description=bool(include.get("description", True)),
