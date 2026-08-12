@@ -17,6 +17,10 @@ plugin = RaddPlugin(
     "connections — list projects, run JQL, infer an inbound schema, map fields to "
     "local custom fields, and run staged background imports.",
     depends_on=("auth", "projects", "fields", "items", "workflow", "comments", "cycles", "attachments", "events", "itemtypes", "linktypes", "notify", "releases", "timelogging", "weblinks"),
+    # Deferred + feature-detected: `apply.py` suppresses spec-119 intake
+    # validation around each item it writes, because an import is history rather
+    # than somebody submitting a request.
+    weak_depends=("automations",),
     on_startup=(
         # Carry a spec-90 environment configuration into a real connection row so
         # an existing deploy keeps working after the move to DB-managed connections.

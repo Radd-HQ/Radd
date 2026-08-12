@@ -18,6 +18,7 @@ import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.hooks import hooks
+from radd.kernel.registry import registries
 from radd.modules.events import service as events
 from radd.modules.items.hooks import ItemCreating, ItemHook
 
@@ -27,11 +28,33 @@ from .validation import DraftScope
 logger = logging.getLogger(__name__)
 
 
+#: This module's id in the kernel registry — the same string the plugin declares.
+_PLUGIN_ID = "automations"
+
+
+def is_enabled() -> bool:
+    """Whether this module is still MOUNTED.
+
+    `HookRegistry.on()` appends and nothing takes it back, so a hot-disabled
+    automations plugin would go on refusing creations from a handler nobody can
+    reach to unregister: rules still biting after the module that owns them was
+    turned off, which is the one thing disabling a plugin has to mean.
+
+    Asked of the kernel registry rather than kept as a flag of our own —
+    `pluginmgr.runtime.unmount_plugin` pops it there, and `ai.features.
+    plugin_loaded` is the same question asked the same way. A private flag would
+    be a second copy of that fact, and a lifecycle hook is the wrong place to
+    keep it: it is per-PROCESS, so an app teardown anywhere would leave the next
+    caller unenforced.
+    """
+    return _PLUGIN_ID in registries.plugins
+
+
 @hooks.on(ItemHook.CREATING)
 async def enforce_required_validation(session: AsyncSession, subject: ItemCreating) -> None:
     """Refuse a creation that fails a REQUIRED check.
 
-    Three skips, and each is a different way of not being intake:
+    Four skips, and each is a different way of not being intake:
 
     * **the savepoint flow's own inner create** — it validates the draft itself,
       one level up, with the advisory bindings included; running again here
@@ -41,12 +64,23 @@ async def enforce_required_validation(session: AsyncSession, subject: ItemCreati
       refused it would break the automation rather than teach anyone anything;
     * **`events.quiet()`** — an import. Historical rows are not intake, and
       validating them would refuse to import exactly the badly-filled-in issues
-      the checks exist to stop being created TODAY.
+      the checks exist to stop being created TODAY. (The importer also asks for
+      `intake.suppressed()` in its own right, because quiet is a plan option and
+      "this is history" is not.)
+    * **machine intake** — the mail poller and the Alertmanager receiver, each
+      of which asks for `intake.suppressed()` around its create. Neither has a
+      channel to answer through: the poller marks the message Seen, so a refusal
+      would drop a customer's request with no issue and no bounce, and the
+      receiver would answer Alertmanager with a 5xx it will retry forever. A
+      check written for a person filling in a form cannot be answered by a
+      monitoring system, and refusing it silently is the worst of the options.
 
     Only REQUIRED bindings run here. Advisory findings have nowhere to go on
     this path — there is no one to show them to and nothing they would change —
     so charging every API create for them would be a cost with no product.
     """
+    if not is_enabled():
+        return
     if intake.is_suppressed() or events.is_automated() or events.is_quiet():
         return
 

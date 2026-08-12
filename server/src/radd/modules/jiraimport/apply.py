@@ -11,6 +11,7 @@ Every write is ledgered, so rollback can undo it.
 from __future__ import annotations
 
 import uuid
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
@@ -28,6 +29,20 @@ from radd.modules.timelogging.schemas import WorklogCreate
 from . import ledger
 from .transform import ItemDraft
 from .types import LedgerEntity, Problem, ProblemKind
+
+def _not_intake():
+    """`automations.intake.suppressed()` when that module is loaded, else nothing.
+
+    Deferred and feature-detected, the shape `forms._create_validated` uses:
+    `automations` is optional and this module must not stop importing because
+    somebody turned it off.
+    """
+    try:
+        from radd.modules.automations import intake as automations_intake
+    except ImportError:
+        return nullcontext()
+    return automations_intake.suppressed()
+
 
 # Columns a re-import refreshes on an existing item — the before-image rollback
 # restores. Deliberately narrow: an import must not be able to undo a change
@@ -121,7 +136,16 @@ async def apply_item(
             await items_service.update_item(session, existing.id, _update_of(draft), actor)
             outcome.item_id = existing.id
         else:
-            created = await items_service.create_item(session, _create_of(draft, project_id), actor)
+            # An import is HISTORY, not intake (spec 119). Validating a
+            # five-year-old ticket would refuse exactly the badly-filled-in
+            # issues the checks exist to stop being created TODAY, and would
+            # skip them one by one with a "problem" nobody can act on.
+            # `events.quiet` already says this — but only when the plan asked
+            # for quiet, so the skip has to be said in its own right.
+            with _not_intake():
+                created = await items_service.create_item(
+                    session, _create_of(draft, project_id), actor
+                )
             outcome.item_id = created.id
             if run_id:
                 ledger.created(

@@ -860,6 +860,116 @@ async def test_an_import_is_not_intake(db, admin, project):
     assert created.title == "from Jira"
 
 
+async def test_a_refused_create_leaves_the_session_clean_for_a_caller_that_carries_on(
+    db, admin, project
+):
+    """The importer's shape: `except Exception`, record a skip, keep going, and
+    commit the batch at the end.
+
+    Before this, `create_item` had already flushed the row, its labels and its
+    mentions when the hook refused it — only the caller's own rollback took them
+    back. A caller that swallowed the error committed a half-created orphan: an
+    item with no `item.created` event, invisible to search and to every consumer
+    that reads the outbox. The refusal now rolls back to a savepoint taken
+    before the insert, so the promise holds whatever the caller does with the
+    exception.
+    """
+    await _required_graph(db, admin, project)
+    project_id = project.id
+    before = await _count_items(db, project_id)
+    try:
+        await items_service.create_item(
+            db, ItemCreate(project_id=project_id, title="thin"), actor=admin
+        )
+    except intake.ValidationBlocked:
+        pass  # …and carry on, exactly as the Jira importer does
+    assert await _count_items(db, project_id) == before
+    # The session is usable: the next issue in the batch still imports.
+    with events.quiet():
+        survivor = await items_service.create_item(
+            db, ItemCreate(project_id=project_id, title="the next one"), actor=admin
+        )
+    assert survivor.title == "the next one"
+
+
+async def test_the_suppress_scope_is_the_seam_a_machine_channel_uses(db, admin, project):
+    """`intake.suppressed()` is public for a reason (spec 119): the mail poller,
+    the Alertmanager receiver and the importer all create items, and none of them
+    is a person filling in a form. Each wraps its own create in this."""
+    await _required_graph(db, admin, project)
+    project_id = project.id
+    with intake.suppressed():
+        created = await items_service.create_item(
+            db, ItemCreate(project_id=project_id, title="ALERT: disk full"), actor=admin
+        )
+    assert created.title == "ALERT: disk full"
+    assert intake.is_suppressed() is False  # the scope closed
+
+
+async def test_a_monitoring_webhook_is_not_asked_for_repro_steps(
+    db, admin, project, monkeypatch
+):
+    """The Alertmanager receiver at its real call site.
+
+    A required check refusing here raises out of the webhook handler, which
+    answers Alertmanager with a 5xx it retries forever — and the alert nobody
+    can see is the one that matters. The mail poller is the same failure with a
+    quieter shape (it marks the message Seen and the request is simply gone),
+    and it takes the same seam; there is no cheap fixture for a live IMAP
+    round trip, so this is the one that stands for both.
+    """
+    from radd.modules.alertmanager import service as alertmanager_service
+
+    await _required_graph(db, admin, project)
+    project_id = project.id
+    monkeypatch.setattr(app_settings, "alertmanager_project_key", project.key)
+    counts = await alertmanager_service.process(
+        db,
+        {
+            "alerts": [
+                {
+                    "fingerprint": uuid.uuid4().hex,
+                    "status": "firing",
+                    "labels": {"alertname": "DiskFull", "severity": "critical"},
+                    "annotations": {"description": "/ is at 98%"},
+                }
+            ]
+        },
+    )
+    assert counts["created"] == 1
+    assert await _count_items(db, project_id) == 1
+
+
+async def test_disabling_the_plugin_disables_the_enforcement(db, admin, project):
+    """`HookRegistry.on()` appends and nothing takes it back, so the handler
+    survives the unmount that removes this module's routes and atoms — and went
+    on refusing creations from a plugin that was turned off.
+
+    The kernel registry is the fact it now consults, which is the same seam
+    `ai.features.plugin_loaded` uses for every sideways call into a disableable
+    module. Driven here through the REAL unmount (`registries.unregister_plugin`)
+    rather than a flag of the module's own, because a flag would be a second
+    copy of the answer.
+    """
+    from radd.kernel.registry import registries
+    from radd.modules.automations import plugin as automations_plugin
+
+    await _required_graph(db, admin, project)
+    project_id = project.id
+    registries.unregister_plugin(automations_plugin)
+    try:
+        created = await items_service.create_item(
+            db, ItemCreate(project_id=project_id, title="no checks now"), actor=admin
+        )
+        assert created.title == "no checks now"
+    finally:
+        registries.register_plugin(automations_plugin)
+    with pytest.raises(intake.ValidationBlocked):
+        await items_service.create_item(
+            db, ItemCreate(project_id=project_id, title="checked again"), actor=admin
+        )
+
+
 async def test_the_savepoint_flow_does_not_validate_twice(db, admin, project):
     """Its inner create goes through the same `create_item` the hook watches;
     without the suppress scope every finding would arrive in duplicate."""

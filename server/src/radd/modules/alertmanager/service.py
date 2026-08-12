@@ -12,6 +12,7 @@ from radd.config import settings
 from radd.exceptions import ConflictError
 from radd.modules.auth import service as auth
 from radd.modules.auth.models import User
+from radd.modules.automations.intake import suppressed as intake_suppressed
 from radd.modules.automations.types import SYSTEM_ACTOR_ID
 from radd.modules.comments import service as comments
 from radd.modules.comments.schemas import CommentCreate
@@ -43,16 +44,21 @@ async def process(session: AsyncSession, payload: dict) -> dict[str, int]:
     created = commented = transitioned = 0
     for plan in plans:
         if plan.action is AlertAction.CREATE:
-            item = await items.create_item(
-                session,
-                ItemCreate(
-                    project_id=project.id,
-                    title=plan.title,
-                    description=plan.description,
-                    labels=[ALERT_LABEL],
-                ),
-                actor,
-            )
+            # Machine intake is not human intake (spec 119). A monitoring system
+            # firing an alert cannot be asked for repro steps: enforcing a
+            # required check here answers Alertmanager with a 5xx, which it
+            # retries, and the alert that nobody can see is the one that matters.
+            with intake_suppressed():
+                item = await items.create_item(
+                    session,
+                    ItemCreate(
+                        project_id=project.id,
+                        title=plan.title,
+                        description=plan.description,
+                        labels=[ALERT_LABEL],
+                    ),
+                    actor,
+                )
             session.add(AlertItem(fingerprint=plan.fingerprint, item_id=item.id))
             await session.flush()
             created += 1

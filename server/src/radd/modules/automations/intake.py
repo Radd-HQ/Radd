@@ -103,14 +103,25 @@ def is_suppressed() -> bool:
 
 @contextmanager
 def suppressed() -> Iterator[None]:
-    """Turn the `item.creating` hook off for the duration.
+    """Turn the `item.creating` hook off for the duration — THE PUBLIC SEAM for
+    a caller whose writes are not intake.
 
-    The savepoint flow creates through the SAME `items.create_item` every other
-    caller uses — that is the whole point of it — so without this the hook would
-    fire inside the flow and run the required checks a second time, on the same
-    draft, in the same transaction. A ContextVar rather than a parameter for the
-    reason `events.quiet` is one: the dispatch happens deep inside a service that
-    must stay ignorant of who is calling it.
+    Two kinds of caller need it, and they are the same need:
+
+    * **the savepoint flow's own inner create**, which goes through the SAME
+      `items.create_item` every other caller uses — that is the whole point of
+      it — so without this the hook would run the required checks a second time
+      on the same draft in the same transaction;
+    * **machines and history** — an importer replaying old issues, the mail
+      poller, the Alertmanager receiver. Each of them creates an item, and none
+      of them is a person submitting a request through a form. `events.quiet()`
+      covers the importer only when the plan asked for quiet, and it is the
+      wrong lever for the other two: they WANT their notifications.
+
+    A ContextVar rather than a parameter for the reason `events.quiet` is one:
+    the dispatch happens deep inside a service that must stay ignorant of who is
+    calling it. Reached by other modules deferred and feature-detected, so an
+    instance without `automations` behaves identically.
     """
     token = _suppressed.set(True)
     try:

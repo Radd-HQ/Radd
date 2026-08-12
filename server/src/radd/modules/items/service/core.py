@@ -128,24 +128,38 @@ async def create_item(session: AsyncSession, data: ItemCreate, actor: User) -> I
             data.updated_at.replace(tzinfo=None) if data.updated_at is not None else occurred_at
         )
         event_actor_id = item.reporter_id
-    session.add(item)
-    await session.flush()
-    if item.cycle_id is not None:
-        # Open the first cycle stint (spec 56) — import stamps original time.
-        await cycles_service.record_cycle_change(
-            session, item_id=item.id, old_cycle_id=None, new_cycle_id=item.cycle_id,
-            at=occurred_at,
+    # Spec 119: the row, its stint, its labels, its mentions and the hook that
+    # may REFUSE all of it, in one savepoint.
+    #
+    # The hook is the last moment a creation can be turned down, and a handler
+    # that raises has to leave nothing behind. Without the savepoint that was
+    # only true for callers who let the exception reach a transaction boundary:
+    # a caller that catches and carries on — the Jira importer's per-issue
+    # `except Exception` is exactly that shape — kept the flushed row and
+    # committed it with the batch, so a refused draft became a half-created
+    # orphan with no event and no labels-of-record. Rolling back to here makes
+    # the promise true for every caller, whatever it does with the error.
+    guard = await session.begin_nested()
+    try:
+        session.add(item)
+        await session.flush()
+        if item.cycle_id is not None:
+            # Open the first cycle stint (spec 56) — import stamps original time.
+            await cycles_service.record_cycle_change(
+                session, item_id=item.id, old_cycle_id=None, new_cycle_id=item.cycle_id,
+                at=occurred_at,
+            )
+        await _set_labels(session, item, data.labels, actor.id)
+        await sync_mention_links(session, item)  # derive #[…] backlinks from title/description
+        # `items` knows nothing about who listens — the dispatch is a no-op with
+        # no subscriber registered.
+        await hooks.dispatch(
+            session, ItemHook.CREATING, ItemCreating(item=item, project=project, actor=actor)
         )
-    await _set_labels(session, item, data.labels, actor.id)
-    await sync_mention_links(session, item)  # derive #[…] backlinks from title/description
-    # Spec 119: the last moment at which this creation can still be refused. The
-    # row is flushed with its labels and custom fields, so a handler sees the
-    # whole draft; nothing has been emitted, so a handler that raises leaves no
-    # trace behind. `items` knows nothing about who listens — the dispatch is a
-    # no-op with no subscriber registered.
-    await hooks.dispatch(
-        session, ItemHook.CREATING, ItemCreating(item=item, project=project, actor=actor)
-    )
+    except BaseException:
+        await guard.rollback()
+        raise
+    await guard.commit()
     return await _finish(
         session, item, project, ItemEvent.CREATED, actor, ctx, definitions, permissions,
         occurred_at=occurred_at, event_actor_id=event_actor_id,

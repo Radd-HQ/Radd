@@ -188,24 +188,51 @@ paragraph is here so nobody discovers the serialization from a graph.
 
 `items.create_item` dispatches a new in-transaction hook, **`ItemHook.CREATING`**
 (`items/hooks.py`), after the row is flushed with its labels and mentions and
-before `_finish` emits `item.created` — the last moment a creation can still be
-refused with no trace left behind. `automations/subscribers.py` registers the
+before `_finish` emits `item.created`. `automations/subscribers.py` registers the
 handler; `items` never learns who listens, because the dependency has exactly
 one legal direction and `test_module_contracts.py` refuses the cycle.
 
+**The insert through the dispatch runs in its own savepoint**, and a handler
+that raises rolls back to before the insert. The first build relied on the
+caller's transaction being abandoned, which is true of an HTTP request and false
+of anything that catches and carries on — the Jira importer's per-issue
+`except Exception` records a skip and commits the batch, so a refused draft
+became a half-created orphan: a row with labels, no `item.created` event, and
+therefore invisible to search and every other consumer. "Nothing is left behind"
+is now a property of `create_item` rather than of who calls it.
+
 That handler is what makes a required rule a rule rather than a suggestion with
 a nice interface: `POST /items`, the MCP `create_item` tool, an extension and a
-script all go through it. Three skips, each a different way of not being intake:
+script all go through it. Four skips, each a different way of not being intake:
 
 - **the savepoint flow's own inner create** (a ContextVar, since the dispatch is
   deep inside a service that must stay ignorant of its callers);
 - **`events.automated()`** — an automation's output is not somebody submitting a
   request, and a required check that refused it would break the automation;
 - **`events.quiet()`** — imports. Validating history would refuse exactly the
-  badly-filled-in issues the checks exist to stop being created today.
+  badly-filled-in issues the checks exist to stop being created today. The Jira
+  importer also asks for the suppress scope in its own right, because quiet is a
+  per-plan option and "this is history" is not;
+- **machine intake** — the mail poller and the Alertmanager receiver, each
+  wrapping its create in `intake.suppressed()`, which is public for exactly this.
+  Neither has a channel to answer through. The poller marks the message Seen, so
+  a refusal drops a customer's request with no issue, no bounce and nothing but
+  a log line; the receiver answers Alertmanager with a 5xx it retries forever.
+  Machine intake is not human intake: a check written for a person filling in a
+  form cannot be answered by a monitoring system. **Bouncing the findings back
+  by mail is a real feature and an explicit non-goal here** — it needs a reply
+  template, a loop guard and a story for what happens when the sender fixes
+  nothing, and shipping the refusal without it would be the worse half.
 
 Only REQUIRED bindings run there: advisory findings have no one to show
 themselves to on that path.
+
+**The handler has its own lifecycle.** `HookRegistry.on()` appends and nothing
+takes it back, so hot-disabling the automations plugin left required validation
+enforced by a handler nobody could reach to unregister. `subscribers.enable` /
+`disable` ride on the plugin's `on_startup`/`on_shutdown`; the flag defaults to
+ON so a caller that never runs the lifecycle behaves as it always did, and only
+an explicit disable turns it off.
 
 ### The error vocabulary
 
@@ -272,7 +299,7 @@ clean verdict.
 
 ## Invariants tested
 
-`server/tests/test_intake_validation.py` (46) and
+`server/tests/test_intake_validation.py` (50) and
 `server/tests/test_ai_validate_node.py` (16):
 
 - a validate trigger is indexed per target; dropping a target drops its
@@ -295,7 +322,11 @@ clean verdict.
 - a failing draft leaves nothing behind; a clean one is kept in the same round
   trip; `commit: always` is refused with 409 under a required binding;
 - a required check refuses a plain `POST /items`, and does NOT refuse an
-  engine-created or an imported item;
+  engine-created or an imported item, or an Alertmanager webhook's issue at its
+  real call site;
+- a refusal leaves the session clean for a caller that CATCHES it and carries on
+  — the importer's shape, and where the orphan came from;
+- disabling the plugin disables the enforcement, and re-enabling restores it;
 - the savepoint flow does not validate twice;
 - `ai.validate` records findings through the seam, degrades an unknown field,
   caps the count, and blocks nothing when the provider is unreachable;

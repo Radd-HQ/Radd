@@ -35,6 +35,7 @@ from radd.modules.attachments import service as attachments_service
 from radd.modules.attachments.types import AttachmentParentType
 from radd.modules.auth import service as auth
 from radd.modules.auth.models import User
+from radd.modules.automations.intake import suppressed as intake_suppressed
 from radd.modules.automations.types import SYSTEM_ACTOR_ID
 from radd.modules.comments import service as comments
 from radd.modules.events import service as events
@@ -513,20 +514,27 @@ async def _create(
     else:
         description = SENDER_NOTE_TEMPLATE.format(body=body, sender=_sender(plan))
         reporter_id = None
-    created = await items.create_item(
-        session,
-        ItemCreate(
-            project_id=project.id,
-            title=(plan.subject or NO_SUBJECT_TITLE)[:TITLE_MAX_CHARS],
-            description=description,
-            labels=[EMAIL_LABEL],
-            # The reporter is a CLAIM, not an identity (RADD-956). `From:` is
-            # trivially forged, so this names who to write back to and grants
-            # nothing — `_sender_user` provisions an account that cannot log in.
-            reporter_id=reporter_id,
-        ),
-        actor,
-    )
+    # Machine intake is not human intake (spec 119). There is no feedback
+    # channel here: the poller marks the message Seen, so a required check that
+    # refused this would drop the customer's request on the floor — no issue, no
+    # bounce, no trace but a log line. Bouncing the findings back by mail is a
+    # real feature and a different one; until it exists, refusing silently is
+    # the worse of the two failures.
+    with intake_suppressed():
+        created = await items.create_item(
+            session,
+            ItemCreate(
+                project_id=project.id,
+                title=(plan.subject or NO_SUBJECT_TITLE)[:TITLE_MAX_CHARS],
+                description=description,
+                labels=[EMAIL_LABEL],
+                # The reporter is a CLAIM, not an identity (RADD-956). `From:` is
+                # trivially forged, so this names who to write back to and grants
+                # nothing — `_sender_user` provisions an account that cannot log in.
+                reporter_id=reporter_id,
+            ),
+            actor,
+        )
     await _store_attachments(session, created.id, plan.attachments, actor_id=actor.id)
     await _note_dropped_attachments(session, created.id, plan)
     row = await threading.record(
