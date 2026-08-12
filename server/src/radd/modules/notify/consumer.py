@@ -16,7 +16,7 @@ from radd.db import SessionLocal
 from radd.modules.auth import authz, service as auth
 from radd.modules.auth.authz import Permission
 from radd.modules.comments import service as comments
-from radd.modules.comments.types import CommentEvent, CommentVisibility
+from radd.modules.comments.types import CommentEvent, CommentParentType, CommentVisibility
 from radd.modules.comments.visibility import internal_comment_visible
 from radd.modules.teams import service as teams
 from radd.modules.events import service as events
@@ -27,13 +27,16 @@ from radd.modules.items.models import WorkItem
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 
-from . import planner, service
-from .planner import Plan, PlannedNotification
+from . import pageevents, planner, rules as notify_rules, service
+from .planner import Audience, Plan, PlannedNotification
+from .rules import Subject
 from .types import (
     APPROVAL_APPROVED_EVENT,
     APPROVAL_DECLINED_EVENT,
     APPROVAL_REQUESTED_EVENT,
     CONSUMER_NAME,
+    PAGE_CREATED_EVENT,
+    PAGE_UPDATED_EVENT,
     PARTICIPANT_ADDED_EVENT,
     SLA_BREACHED_EVENT,
     SLA_DUE_SOON_EVENT,
@@ -58,6 +61,19 @@ _HANDLED = {
     APPROVAL_APPROVED_EVENT,
     APPROVAL_DECLINED_EVENT,
     PARTICIPANT_ADDED_EVENT,
+    # Spec 118. The wiki's fan-out moved off the save request and onto the
+    # stream; adding them here is what makes the bootstrap consider them, and
+    # the bootstrap is WATCH-ONLY, so a fresh instance replaying years of page
+    # edits writes nothing — `pageevents` contributes no watcher rows either,
+    # because `pages.update_page` already writes them on the write path.
+    PAGE_CREATED_EVENT,
+    PAGE_UPDATED_EVENT,
+}
+
+# Page events fan out identically; only the notification kind differs.
+_PAGE_EVENT_TYPES = {
+    PAGE_CREATED_EVENT: NotificationType.PAGE_CREATED,
+    PAGE_UPDATED_EVENT: NotificationType.PAGE_UPDATED,
 }
 
 # SLA timer events fan out identically; only the notification type differs.
@@ -122,6 +138,13 @@ async def _handle(session: AsyncSession, event: Event, *, watch_only: bool) -> N
         # handler has nothing to contribute to a watch-only bootstrap pass.
         if not watch_only:
             await _handle_participant_added(session, event)
+    elif event.event_type in _PAGE_EVENT_TYPES:
+        # Same shape, same reason: `pages.update_page` auto-watches the editor
+        # itself (RADD-719), so the wiki contributes nothing to the bootstrap.
+        if not watch_only:
+            await pageevents.handle_page_event(
+                session, event, _PAGE_EVENT_TYPES[event.event_type]
+            )
     else:
         await _handle_item_event(session, event, watch_only=watch_only)
 
@@ -146,12 +169,16 @@ async def _resolve_mentions(session: AsyncSession, text: str) -> frozenset[uuid.
 
 
 async def recipient_ids(session: AsyncSession, item_id: uuid.UUID) -> frozenset[uuid.UUID]:
-    """The ambient recipient set: watchers ∪ CURRENT members of the item's
+    """The PARTICIPATING set: watchers ∪ CURRENT members of the item's
     participant teams (spec 72 — resolved at fan-out time, so team joins/leaves
     take effect without cleanup rows). Deferred feature-detected import: the
     participants module loads AFTER notify and may be disabled. Every recipient
     still passes `_allowed` (item.read + internal-comment filters) — team
-    participation never widens what someone may see."""
+    participation never widens what someone may see.
+
+    This used to be the WHOLE ambient recipient set. Since spec 118 it is one of
+    four (see `item_audience`): flattening them lost which set someone came out
+    of, and that is the only thing the channel matrix's columns are about."""
     recipients = set(await service.watcher_ids(session, item_id))
     try:
         from radd.modules.participants import service as participants
@@ -159,6 +186,106 @@ async def recipient_ids(session: AsyncSession, item_id: uuid.UUID) -> frozenset[
         return frozenset(recipients)
     recipients |= await participants.team_recipient_ids(session, item_id)
     return frozenset(recipients)
+
+
+async def _my_teams_members(
+    session: AsyncSession, team_id: uuid.UUID | None
+) -> frozenset[uuid.UUID]:
+    """Members of the item's team who have a my-teams rule at all (spec 118).
+
+    Narrowed from the RULES side first, not the team side. A `teams` rule row
+    carries no `scope_id` — "my teams" is whatever they are today — so it cannot
+    be looked up by target; the alternative direction is resolving every team of
+    every team member, which is a query per person for an answer almost always
+    empty. One small indexed read, and on an instance where nobody uses the
+    column it costs exactly that and stops.
+    """
+    if team_id is None:
+        return frozenset()
+    opted_in = await service.team_scope_user_ids(session)
+    if not opted_in:
+        return frozenset()
+    members = await teams.list_team_members(session, team_id)
+    return frozenset(user.id for user in members if user.id in opted_in)
+
+
+async def item_audience(
+    session: AsyncSession,
+    item_id: uuid.UUID,
+    subject: Subject,
+    *,
+    own: frozenset[uuid.UUID] = frozenset(),
+) -> Audience:
+    """Everyone an ambient item notification could reach, split by RELATION.
+
+    Four sets, three queries beyond what the old flat version cost: the
+    subscriber lookup (one indexed read over `ix_notification_rules_target`),
+    the my-teams narrowing (skipped entirely when nobody uses the column), and
+    the team member expansion behind it.
+
+    Order of operations matters for cost, not correctness: everyone here still
+    goes through `_allowed`, which is per-recipient expensive, so `_apply`
+    resolves each person's CHANNEL first and drops the `off` ones before asking
+    the permission question about them.
+    """
+    participating = await recipient_ids(session, item_id)
+    subscribers = await service.subscriber_ids(
+        session, project_id=subject.project_id, team_id=subject.team_id
+    )
+    return Audience(
+        own=own,
+        participating=participating,
+        in_my_teams=await _my_teams_members(session, subject.team_id),
+        subscribers=frozenset(subscribers),
+    )
+
+
+def _uuid_or_none(value) -> uuid.UUID | None:
+    try:
+        return uuid.UUID(value) if value else None
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
+def _subject_of(payload: dict, item: "WorkItem | None") -> Subject:
+    """What a subscription could name about this item: its project and its team.
+
+    The ROW first, the payload second. Both are available on most paths, and the
+    row is the one that is current — a subscription is matched against where the
+    item is now, not where it was when the event was written. The payload is the
+    fallback for an item that has since been deleted, which is exactly when
+    there is no row to read.
+    """
+    if item is not None:
+        return Subject(project_id=item.project_id, team_id=item.team_id)
+    ref = _ref(payload)
+    return Subject(
+        project_id=_uuid_or_none((ref.get("project") or {}).get("id")),
+        team_id=_uuid_or_none((ref.get("team") or {}).get("id")),
+    )
+
+
+def _own_of(item: "WorkItem | None", payload: dict) -> frozenset[uuid.UUID]:
+    """Whose work this is: the assignee and the reporter (spec 118).
+
+    Not "who created it" — the creator's connection to an issue is that they
+    watch it, which `participating` already says. Assignee and reporter are the
+    two roles that make the work THEIRS, and they are the two the `own` column
+    is read as naming.
+    """
+    if item is not None:
+        return frozenset(
+            uid for uid in (item.assignee_id, item.reporter_id) if uid is not None
+        )
+    ref = _ref(payload)
+    return frozenset(
+        uid
+        for uid in (
+            _uuid_or_none((ref.get("assignee") or {}).get("id")),
+            _uuid_or_none((ref.get("reporter") or {}).get("id")),
+        )
+        if uid is not None
+    )
 
 
 
@@ -184,11 +311,20 @@ async def _handle_item_event(session: AsyncSession, event: Event, *, watch_only:
         # notified nobody.
         mention_ids = await _resolve_mentions(session, _ref(payload).get("description") or "")
 
+    # RADD-817: the row itself, for per-recipient relation gating in _allowed —
+    # and, since spec 118, for the item's CURRENT project and team, which is
+    # what a subscription is matched against. A deleted item falls back to the
+    # payload; the notification then describes something already gone.
+    item = await session.get(WorkItem, item_id)
+    subject = _subject_of(payload, item)
+    audience = await item_audience(
+        session, item_id, subject, own=_own_of(item, payload)
+    )
+
     if created:
-        plan = planner.plan_item_created(payload, event.actor_id, mention_ids)
+        plan = planner.plan_item_created(payload, event.actor_id, mention_ids, audience)
     else:
-        watchers = await recipient_ids(session, item_id)
-        plan = planner.plan_item_updated(payload, event.actor_id, watchers, mention_ids)
+        plan = planner.plan_item_updated(payload, event.actor_id, audience, mention_ids)
 
     # RADD-978: RADD-922 nested the item payload under `item` and promoted the
     # project to an `{id, key, name}` ref; this line kept reading a TOP-LEVEL
@@ -202,10 +338,6 @@ async def _handle_item_event(session: AsyncSession, event: Event, *, watch_only:
     project = await projects_service.get_project(
         session, uuid.UUID(_ref(payload)["project"]["id"])
     )
-    # RADD-817: the row itself, for per-recipient relation gating in _allowed
-    # (this handler used to never load it; a deleted item means no gate needed
-    # — the notification describes something already gone).
-    item = await session.get(WorkItem, item_id)
     await _apply(
         session,
         plan,
@@ -216,23 +348,49 @@ async def _handle_item_event(session: AsyncSession, event: Event, *, watch_only:
         item_title=_ref(payload).get("title", ""),
         watch_only=watch_only,
         item=item,
+        subject=subject,
     )
+
+
+async def _comment_mentions(
+    session: AsyncSession, event: Event, payload: dict
+) -> frozenset[uuid.UUID]:
+    # The event excerpt is capped — mention-scan the full body via the comments seam.
+    body = await comments.comment_body(session, uuid.UUID(event.entity_id))
+    return await _resolve_mentions(session, body or payload.get("excerpt", ""))
 
 
 async def _handle_comment_created(
     session: AsyncSession, event: Event, *, watch_only: bool
 ) -> None:
+    """A comment on an ISSUE — or, since RADD-1056, on a PAGE.
+
+    **The bug this branch closes.** `comments` has been polymorphic since
+    RADD-717: a comment's parent is an item OR a page, and the event says which
+    in `entity_type`. This handler did not look. It read `payload["item"]["id"]`
+    unconditionally, and a page comment's `item` subject is NULL by
+    construction (the emitter resolves it only for item parents), so every wiki
+    comment raised KeyError inside the per-event SAVEPOINT, was logged, and was
+    skipped. Page comments produced ZERO notifications for the whole life of the
+    feature — including a comment that @-named someone directly. Nothing failed
+    loudly, which is how it survived: the wiki fan-out that DID work
+    (`page_updated`) made the subsystem look alive.
+    """
     payload = event.payload or {}
+    if payload.get("entity_type") == CommentParentType.PAGE.value:
+        await pageevents.handle_page_comment(session, event, watch_only=watch_only)
+        return
     item_id = uuid.UUID(_ref(payload)["id"])
     item = await items.require_item(session, item_id)
     project = await projects_service.get_project(session, item.project_id)
     mention_ids: frozenset[uuid.UUID] = frozenset()
     if not watch_only:
-        # The event excerpt is capped — mention-scan the full body via the comments seam.
-        body = await comments.comment_body(session, uuid.UUID(event.entity_id))
-        mention_ids = await _resolve_mentions(session, body or payload.get("excerpt", ""))
-    watchers = await recipient_ids(session, item_id)
-    plan = planner.plan_comment_created(payload, event.actor_id, watchers, mention_ids)
+        mention_ids = await _comment_mentions(session, event, payload)
+    subject = _subject_of(payload, item)
+    audience = await item_audience(
+        session, item_id, subject, own=_own_of(item, payload)
+    )
+    plan = planner.plan_comment_created(payload, event.actor_id, audience, mention_ids)
     await _apply(
         session,
         plan,
@@ -243,6 +401,7 @@ async def _handle_comment_created(
         item_title=_ref(payload).get("title", ""),
         watch_only=watch_only,
         item=item,
+        subject=subject,
     )
 
 
@@ -254,7 +413,10 @@ async def _handle_sla_event(
     item_id = uuid.UUID(_ref(payload)["id"])
     item = await items.require_item(session, item_id)
     project = await projects_service.get_project(session, item.project_id)
-    watchers = await recipient_ids(session, item_id)
+    subject = _subject_of(payload, item)
+    audience = await item_audience(
+        session, item_id, subject, own=_own_of(item, payload)
+    )
     detail = {
         "policy": payload.get("policy_name", ""),
         "kind": payload.get("kind", ""),
@@ -262,7 +424,7 @@ async def _handle_sla_event(
     }
     if type_ is NotificationType.SLA_DUE_SOON:
         detail["remaining_seconds"] = payload.get("remaining_seconds")
-    plan = planner.plan_sla_breached(item.assignee_id, watchers, detail, type_)
+    plan = planner.plan_sla_breached(item.assignee_id, audience, detail, type_)
     await _apply(
         session,
         plan,
@@ -272,6 +434,7 @@ async def _handle_sla_event(
         item_key=_ref(payload).get("key", ""),
         item_title=_ref(payload).get("title", ""),
         item=item,
+        subject=subject,
     )
 
 
@@ -389,6 +552,13 @@ async def _allowed(
     return True
 
 
+async def actor_name_of(session: AsyncSession, event: Event) -> str | None:
+    if event.actor_id is None:
+        return None
+    actor = (await auth.users_by_ids(session, {event.actor_id})).get(event.actor_id)
+    return actor.name if actor else None
+
+
 async def _apply(
     session: AsyncSession,
     plan: Plan,
@@ -400,14 +570,12 @@ async def _apply(
     item_title: str,
     watch_only: bool = False,
     item: "WorkItem | None" = None,
+    subject: Subject = Subject(),
 ) -> None:
     await service.add_watchers(session, item_id, plan.watch)
     if watch_only or not plan.notifications:
         return
-    actor_name = None
-    if event.actor_id is not None:
-        actor = (await auth.users_by_ids(session, {event.actor_id})).get(event.actor_id)
-        actor_name = actor.name if actor else None
+    actor_name = await actor_name_of(session, event)
     # RADD-971: the channel decision is enforced INSIDE create_notification, so
     # the types produced outside this consumer obey it too. All this batch does
     # now is prefetch the rules for the whole recipient set — one query instead
@@ -416,6 +584,15 @@ async def _apply(
         session, {planned.user_id for planned in plan.notifications}
     )
     for planned in plan.notifications:
+        # The CHANNEL first, the permission second. Both filters drop the same
+        # rows whichever order they run in, but `_allowed` costs a permission
+        # resolution plus a relation row check PER RECIPIENT, and spec 118
+        # multiplied the recipient set by everyone who subscribed to the
+        # project. Resolving first means an `off` verdict — which is what a
+        # subscriber gets for most kinds — costs a dictionary lookup instead.
+        user_rules = rules.get(planned.user_id, notify_rules.EMPTY)
+        if service.channels_for(planned.type, user_rules, planned.relation, subject).silent:
+            continue
         if not await _allowed(session, planned, project, item):
             continue
         await service.create_notification(
@@ -431,5 +608,7 @@ async def _apply(
                 "actor_name": actor_name,
                 **planned.detail,
             },
-            rules=rules.get(planned.user_id),
+            rules=user_rules,
+            relation=planned.relation,
+            subject=subject,
         )

@@ -14,6 +14,7 @@ Invariants encoded here:
 import uuid
 from dataclasses import dataclass, field
 
+from .rules import OWN, Relation
 from .types import (
     MENTION_EMAIL_RE,
     MENTION_TOKEN_RE,
@@ -27,6 +28,11 @@ class PlannedNotification:
     user_id: uuid.UUID
     type: NotificationType
     detail: dict  # merged into the stored payload (excerpt, from/to, source…)
+    #: How this person is connected to the subject (spec 118) — planned here
+    #: because THIS is where the recipient sets are distinguished. The consumer
+    #: knows the ids; only the planner knows which set someone came out of, and
+    #: recovering that afterwards would mean re-deriving what was just decided.
+    relation: Relation = OWN
 
 
 @dataclass
@@ -34,10 +40,16 @@ class Plan:
     watch: set[uuid.UUID] = field(default_factory=set)
     notifications: list[PlannedNotification] = field(default_factory=list)
 
-    def _add(self, user_id: uuid.UUID, type_: NotificationType, detail: dict) -> None:
+    def _add(
+        self,
+        user_id: uuid.UUID,
+        type_: NotificationType,
+        detail: dict,
+        relation: Relation = OWN,
+    ) -> None:
         if any(planned.user_id == user_id for planned in self.notifications):
             return  # precedence: first plan wins (personal types are added first)
-        self.notifications.append(PlannedNotification(user_id, type_, detail))
+        self.notifications.append(PlannedNotification(user_id, type_, detail, relation))
 
     def follow(self, user_id: uuid.UUID | None) -> None:
         """Auto-watch someone — unless they are not a someone (RADD-996).
@@ -66,6 +78,47 @@ class Plan:
         self.watch.add(user_id)
 
 
+@dataclass(frozen=True)
+class Audience:
+    """Everyone an AMBIENT notification could reach, split by how they got here.
+
+    Three sets, because the three answer differently in the matrix and the only
+    place that still knows which set someone came out of is the fan-out that
+    built them. Flattening this to one recipient list — which is what
+    `recipient_ids` was before spec 118 — is precisely what makes "stop telling
+    me about issues I merely watch, but keep telling me about mine" unsayable.
+
+    A person may be in several: an assignee who also watches is `own` AND
+    `participating`, and the resolver's ordering is what settles which of their
+    answers applies.
+    """
+
+    #: Assignee or reporter — the work is theirs.
+    own: frozenset[uuid.UUID] = frozenset()
+    #: Watcher, direct participant, or a member of a participant team.
+    participating: frozenset[uuid.UUID] = frozenset()
+    #: A member of the team the item is filed against (the my-teams column).
+    in_my_teams: frozenset[uuid.UUID] = frozenset()
+    #: Holds a project/space/team subscription naming this item's scope.
+    subscribers: frozenset[uuid.UUID] = frozenset()
+
+    def relation_of(self, user_id: uuid.UUID) -> Relation:
+        return Relation(
+            is_own=user_id in self.own,
+            is_participating=user_id in self.participating,
+            in_my_teams=user_id in self.in_my_teams,
+        )
+
+    def everyone(self) -> list[uuid.UUID]:
+        """All of them, in a STABLE order.
+
+        Sorted rather than set-ordered: `Plan._add` is first-wins, so iteration
+        order decides which type a person in two sets ends up with, and a plan
+        that depends on set iteration is a plan that differs between processes.
+        """
+        return sorted(self.own | self.participating | self.in_my_teams | self.subscribers)
+
+
 def parse_mention_candidates(text: str) -> tuple[set[str], set[str]]:
     """Raw mention candidates in a text: (uuid strings, lowercased emails).
     Candidates are unvalidated — the consumer resolves them against real users."""
@@ -88,6 +141,7 @@ def plan_item_created(
     payload: dict,
     actor_id: uuid.UUID | None,
     mention_ids: frozenset[uuid.UUID],
+    audience: Audience = Audience(),
 ) -> Plan:
     plan = Plan()
     plan.follow(actor_id)
@@ -102,13 +156,21 @@ def plan_item_created(
     for user_id in mention_ids:
         if user_id != actor_id:
             plan._add(user_id, NotificationType.MENTIONED, {"source": "description"})
+    # Spec 118: an issue being FILED reached only its assignee, so "tell me what
+    # is arriving in this project" was inexpressible. Planned LAST so the
+    # assignee still hears "assigned to you" rather than "filed".
+    for user_id in audience.everyone():
+        if user_id != actor_id:
+            plan._add(
+                user_id, NotificationType.CREATED, {}, audience.relation_of(user_id)
+            )
     return plan
 
 
 def plan_item_updated(
     payload: dict,
     actor_id: uuid.UUID | None,
-    watcher_ids: frozenset[uuid.UUID],
+    audience: Audience,
     mention_ids: frozenset[uuid.UUID],
 ) -> Plan:
     plan = Plan()
@@ -129,26 +191,71 @@ def plan_item_updated(
     if "state" in changes:
         change = changes["state"]
         detail = {"from": change.get("from"), "to": change.get("to")}
-        for user_id in watcher_ids:
+        for user_id in audience.everyone():
             if user_id != actor_id:
-                plan._add(user_id, NotificationType.STATE_CHANGED, detail)
+                plan._add(
+                    user_id,
+                    NotificationType.STATE_CHANGED,
+                    detail,
+                    audience.relation_of(user_id),
+                )
+    # Spec 118's catch-all: everything else that moved. An edit that changed
+    # neither state nor description reached NOBODY before — a reprioritised,
+    # relabelled, re-estimated issue was silent to everyone watching it.
+    #
+    # Planned last, so `Plan._add`'s first-wins gives the specific type to anyone
+    # a specific type already named. That is also why turning "Any other edit" on
+    # while leaving "State changes" off does not resurrect state changes: one
+    # notification per person per event is the invariant, and the more specific
+    # description of the event is the one that gets it.
+    fields = sorted(name for name in changes if name)
+    if fields:
+        for user_id in audience.everyone():
+            if user_id != actor_id:
+                plan._add(
+                    user_id,
+                    NotificationType.UPDATED,
+                    {"fields": fields},
+                    audience.relation_of(user_id),
+                )
     return plan
 
 
 def plan_sla_breached(
     assignee_id: uuid.UUID | None,
-    watcher_ids: frozenset[uuid.UUID],
+    audience: Audience,
     detail: dict,
     type_: NotificationType = NotificationType.SLA_BREACH,
 ) -> Plan:
     """A breach — or a spec-69 due-soon warning (`type_=SLA_DUE_SOON`) — alerts
-    the assignee first, then every watcher (no actor — the SLA engine is a
-    clock, nobody 'did' this)."""
+    the assignee first, then everyone else the item reaches (no actor — the SLA
+    engine is a clock, nobody 'did' this)."""
     plan = Plan()
     if assignee_id is not None:
-        plan._add(assignee_id, type_, detail)
-    for user_id in watcher_ids:
-        plan._add(user_id, type_, detail)
+        plan._add(assignee_id, type_, detail, audience.relation_of(assignee_id))
+    for user_id in audience.everyone():
+        plan._add(user_id, type_, detail, audience.relation_of(user_id))
+    return plan
+
+
+def plan_page_event(
+    type_: NotificationType,
+    actor_id: uuid.UUID | None,
+    audience: Audience,
+    detail: dict | None = None,
+) -> Plan:
+    """A page was created or edited (spec 118).
+
+    Wiki events have no personal half — nobody is "assigned" a page — so this is
+    one loop, and the whole of the decision is which scope each recipient stands
+    in. It plans no watch: `pages.update_page` auto-watches the editor on the
+    write path (RADD-719), and a second mechanism agreeing by luck is how the two
+    fan-outs this spec deleted came to disagree.
+    """
+    plan = Plan()
+    for user_id in audience.everyone():
+        if user_id != actor_id:
+            plan._add(user_id, type_, dict(detail or {}), audience.relation_of(user_id))
     return plan
 
 
@@ -219,11 +326,22 @@ def plan_participant_added(payload: dict, actor_id: uuid.UUID | None) -> Plan:
 def plan_comment_created(
     payload: dict,
     actor_id: uuid.UUID | None,
-    watcher_ids: frozenset[uuid.UUID],
+    audience: Audience,
     mention_ids: frozenset[uuid.UUID],
+    *,
+    follow_actor: bool = True,
 ) -> Plan:
+    """A comment on an issue — or, since spec 118, on a PAGE.
+
+    `follow_actor` is off for a page comment: `item_watchers` is keyed by item
+    and a page has none, so auto-watching through this plan would try to write a
+    watcher row against an id that is not an item. Commenting on a page does not
+    subscribe you to it, which is a smaller promise than the issue path makes and
+    the only one this table can keep.
+    """
     plan = Plan()
-    plan.follow(actor_id)
+    if follow_actor:
+        plan.follow(actor_id)
     excerpt = payload.get("excerpt", "")
     visibility = payload.get("visibility", "public")
     for user_id in mention_ids:
@@ -233,11 +351,12 @@ def plan_comment_created(
                 NotificationType.MENTIONED,
                 {"source": "comment", "excerpt": excerpt, "visibility": visibility},
             )
-    for user_id in watcher_ids:
+    for user_id in audience.everyone():
         if user_id != actor_id:
             plan._add(
                 user_id,
                 NotificationType.COMMENTED,
                 {"excerpt": excerpt, "visibility": visibility},
+                audience.relation_of(user_id),
             )
     return plan

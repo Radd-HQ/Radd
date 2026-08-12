@@ -52,6 +52,14 @@ async def _emit_page(
     actor_id: uuid.UUID,
     payload: dict,
 ) -> None:
+    """Every page event names its PAGE and its SPACE as subjects (spec 118).
+
+    The kernel writes both refs from the ids (RADD-923), so a consumer gets the
+    slugs it needs to link and the space id a subscription is matched on without
+    this module handing anyone a shape it built itself. The remaining payload
+    keys are page-event DATA — what changed, and whether a delete was hard —
+    which is the split the subject seam draws.
+    """
     await events.emit(
         session,
         event_type=event_type,
@@ -59,6 +67,7 @@ async def _emit_page(
         entity_id=page.id,
         actor_id=actor_id,
         payload=payload,
+        subjects={"page": page.id, "page_space": page.space_id},
     )
 
 
@@ -288,10 +297,10 @@ async def create_page(
     await session.flush()
     await backlinks.reindex(session, page)  # RADD-713
     await page_mentions.reindex(session, page)  # RADD-943
-    await _emit_page(
-        session, PageEvent.PAGE_CREATED, page, actor_id,
-        {"title": page.title, "space_id": str(space.id)},
-    )
+    # `space_id` is gone from the payload: the `page_space` SUBJECT carries it,
+    # as a ref with a name and a slug rather than a bare uuid string nobody
+    # could render (spec 118).
+    await _emit_page(session, PageEvent.PAGE_CREATED, page, actor_id, {"title": page.title})
     return page
 
 
@@ -395,10 +404,16 @@ async def update_page(
         # RADD-719. Auto-watch on edit, like items: touching something is the
         # strongest signal you care what happens to it next, and a watch feature
         # nobody opts into has no watchers.
-        space = await get_space(session, page.space_id)
-        await page_watchers.notify_watchers(
-            session, page, actor_id, space.slug, page.version
-        )
+        #
+        # Spec 118 removed the fan-out that used to sit beside this line. It was
+        # synchronous "because page edits are rare and a consumer would mean a
+        # second delivery path to keep correct" — and by the time a space could
+        # be SUBSCRIBED to, that second path was exactly what it had become: it
+        # knew about watchers and nothing about subscribers, and it ran before
+        # the permission gate every item notification passes. The watchers table
+        # and its service stay; who hears about the edit is now decided in the
+        # one place that decides it for issues (`notify.consumer`), off this
+        # event.
         await page_watchers.watch(session, page.id, actor_id)
     return page
 

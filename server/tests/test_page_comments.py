@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings
 from radd.modules.auth.models import User
+from radd.modules.auth.types import InstanceRole
 from radd.modules.comments import service as comments
 from radd.modules.comments.models import Comment
 from radd.modules.comments.parents import binding_for
@@ -201,18 +202,36 @@ async def test_an_ordinary_thread_comment_has_no_anchor(db, admin, page):
 async def test_editing_a_page_notifies_its_watchers_but_not_the_editor(db, admin, page):
     """The point of the feature: a silently changed runbook is the failure mode
     for a wiki that documents operations. And nobody wants an inbox entry telling
-    them about their own edit."""
+    them about their own edit.
+
+    Spec 118 moved the fan-out off the save request and onto the outbox, so the
+    edit is followed by a consumer pass — and the watcher is an ADMIN, because
+    the notification now passes `page_access` per recipient like every other
+    notification passes `item.read`. A bare account would be refused, and this
+    test would pass by being refused rather than by the rule it is about.
+    """
+    from radd.modules.events import service as events_service
+    from radd.modules.notify import consumer
     from radd.modules.notify.models import Notification
     from radd.modules.pages import watchers
     from radd.modules.pages.schemas import PageUpdate
 
-    watcher = User(email=f"w-{uuid.uuid4().hex[:8]}@example.com", name="Watcher")
+    watcher = User(
+        email=f"w-{uuid.uuid4().hex[:8]}@example.com",
+        name="Watcher",
+        instance_role=InstanceRole.ADMIN.value,
+    )
     db.add(watcher)
     await db.flush()
     await watchers.watch(db, page.id, watcher.id)
     await watchers.watch(db, page.id, admin.id)
 
+    head = await events_service.latest_event_id(db)
     await pages_service.update_page(db, page.id, PageUpdate(body="rewritten"), admin.id)
+    await db.flush()
+    for event in await events_service.read_after(db, head, 100):
+        if event.event_type in consumer._HANDLED:
+            await consumer._handle(db, event, watch_only=False)
 
     rows = await db.execute(
         select(Notification).where(Notification.user_id == watcher.id)

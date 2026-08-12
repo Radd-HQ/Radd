@@ -65,6 +65,14 @@ def _types_by_user(plan: planner.Plan) -> dict[uuid.UUID, NotificationType]:
     return {p.user_id: p.type for p in plan.notifications}
 
 
+def _watching(*user_ids: uuid.UUID) -> planner.Audience:
+    """An audience of plain WATCHERS — the only kind that existed before spec
+    118, and the one every planner test below is about. Spelling it out keeps
+    the ambient-vs-personal precedence tests readable while the other three sets
+    are exercised where they are built (`consumer.item_audience`)."""
+    return planner.Audience(participating=frozenset(user_ids))
+
+
 # --- mention grammar ---
 
 
@@ -114,7 +122,7 @@ def test_update_state_change_notifies_watchers_not_actor():
         "assignee": None,
         "changes": [{"field": "state", "from": "Todo", "to": "Done"}],
     }
-    plan = planner.plan_item_updated(payload, ACTOR, frozenset({WATCHER, ACTOR}), frozenset())
+    plan = planner.plan_item_updated(payload, ACTOR, _watching(WATCHER, ACTOR), frozenset())
     assert _types_by_user(plan) == {WATCHER: NotificationType.STATE_CHANGED}
     assert plan.notifications[0].detail == {"from": "Todo", "to": "Done"}
 
@@ -128,17 +136,31 @@ def test_update_assignment_beats_state_change():
             {"field": "state", "from": "Todo", "to": "Doing"},
         ],
     }
-    plan = planner.plan_item_updated(payload, ACTOR, frozenset({ASSIGNEE, WATCHER}), frozenset())
+    plan = planner.plan_item_updated(payload, ACTOR, _watching(ASSIGNEE, WATCHER), frozenset())
     assert _types_by_user(plan) == {
         ASSIGNEE: NotificationType.ASSIGNED,
         WATCHER: NotificationType.STATE_CHANGED,
     }
 
 
-def test_update_without_relevant_changes_plans_nothing():
+def test_an_edit_with_no_semantic_type_plans_the_generic_one():
+    """A title change used to plan NOTHING — and before spec 118 that was the
+    whole story, because there was no kind that could describe "something else
+    moved". A reprioritised, relabelled, re-estimated issue was silent to
+    everyone watching it.
+
+    It is planned now, as `updated`, carrying which fields moved. Whether anyone
+    HEARS it is the resolver's business, and its default for this kind is `off`
+    in every relationship scope — so the observable behaviour for a watcher who
+    has changed nothing is still silence, and the test for that lives in
+    `test_notify_rules.py` rather than being smuggled in here as an empty list.
+    """
     payload = {"item": {"assignee": None}, "changes": [{"field": "title", "from": "a", "to": "b"}]}
-    plan = planner.plan_item_updated(payload, ACTOR, frozenset({WATCHER}), frozenset())
-    assert plan.notifications == [] and plan.watch == set()
+    plan = planner.plan_item_updated(payload, ACTOR, _watching(WATCHER), frozenset())
+    assert _types_by_user(plan) == {WATCHER: NotificationType.UPDATED}
+    assert plan.notifications[0].detail == {"fields": ["title"]}
+    assert plan.notifications[0].relation.is_participating is True
+    assert plan.watch == set()
 
 
 # --- reporter auto-watch (spec 62) ---
@@ -161,7 +183,7 @@ def test_update_reporter_change_watches_the_new_reporter():
         "item": {"assignee": None, "reporter": {"id": str(REPORTER), "name": "R"}},
         "changes": [{"field": "reporter", "from": None, "to": "R"}],
     }
-    plan = planner.plan_item_updated(payload, ACTOR, frozenset(), frozenset())
+    plan = planner.plan_item_updated(payload, ACTOR, planner.Audience(), frozenset())
     assert plan.watch == {REPORTER}
     assert plan.notifications == []
 
@@ -173,7 +195,7 @@ def test_update_untouched_reporter_is_not_rewatched():
         "item": {"assignee": None, "reporter": {"id": str(REPORTER), "name": "R"}},
         "changes": [{"field": "title", "from": "a", "to": "b"}],
     }
-    plan = planner.plan_item_updated(payload, ACTOR, frozenset(), frozenset())
+    plan = planner.plan_item_updated(payload, ACTOR, planner.Audience(), frozenset())
     assert plan.watch == set()
 
 
@@ -214,7 +236,7 @@ def test_a_comment_posted_by_the_system_actor_watches_nobody():
     plan = planner.plan_comment_created(
         {"excerpt": "the customer replied", "visibility": "public"},
         SYSTEM_ACTOR_ID,
-        frozenset(),
+        planner.Audience(),
         frozenset(),
     )
     assert plan.watch == set()
@@ -235,7 +257,7 @@ def test_a_real_person_is_still_watched_when_the_system_actor_is_around():
 def test_comment_notifies_watchers_and_mentions_win():
     payload = {"excerpt": "hey", "visibility": "public"}
     plan = planner.plan_comment_created(
-        payload, ACTOR, frozenset({WATCHER, MENTIONED, ACTOR}), frozenset({MENTIONED})
+        payload, ACTOR, _watching(WATCHER, MENTIONED, ACTOR), frozenset({MENTIONED})
     )
     assert plan.watch == {ACTOR}  # author auto-watches
     assert _types_by_user(plan) == {
@@ -248,7 +270,7 @@ def test_comment_carries_visibility_for_internal_filtering():
     # The consumer drops internal-comment recipients without comment.read_internal;
     # the planner must thread visibility through for that check.
     payload = {"excerpt": "secret", "visibility": "internal"}
-    plan = planner.plan_comment_created(payload, ACTOR, frozenset({WATCHER}), frozenset())
+    plan = planner.plan_comment_created(payload, ACTOR, _watching(WATCHER), frozenset())
     assert plan.notifications[0].detail["visibility"] == "internal"
 
 
@@ -402,14 +424,25 @@ async def test_automation_notify_action_obeys_the_mute(db):
     assert await _count(db, heard, NotificationType.AUTOMATION) == 1
 
 
-async def test_page_update_fan_out_obeys_the_mute(db):
-    """`page_updated` is the other direct caller — a synchronous in-request
-    fan-out over the page's watchers, again bypassing the consumer."""
+async def test_page_update_fan_out_obeys_the_channel_rules(db):
+    """The wiki path, now off the outbox like everything else (spec 118).
+
+    RADD-719 fanned this out SYNCHRONOUSLY inside the save request, so it knew
+    about watchers and nothing else and applied no read gate. This drives the
+    real edit and then the real consumer — which is the only way to see that the
+    event is handled at all, since a page edit that reaches nobody looks
+    identical to one whose recipients were all silenced.
+
+    Both watchers are instance ADMINS here, because the fan-out now checks
+    `page_access` per recipient: a person with no standing in the space is
+    correctly told nothing, and a test that used bare accounts would pass for
+    the wrong reason.
+    """
     from radd.modules.pages import service as pages, spaces, watchers as page_watchers
     from radd.modules.pages.schemas import PageCreate, PageSpaceCreate, PageUpdate
 
-    author = await _user(db, "Author")
-    muted, heard = await _user(db, "Muted"), await _user(db, "Hearing")
+    author = await _admin(db, "Author")
+    muted, heard = await _admin(db, "Muted"), await _admin(db, "Hearing")
     await _mute(db, muted, NotificationType.PAGE_UPDATED)
 
     slug = f"mute-{uuid.uuid4().hex[:8]}"
@@ -420,11 +453,29 @@ async def test_page_update_fan_out_obeys_the_mute(db):
     for user in (muted, heard):
         await page_watchers.watch(db, page.id, user.id)
 
-    # The real edit path: update_page fans out to the watchers itself.
+    head = await events_service.latest_event_id(db)
     await pages.update_page(db, page.id, PageUpdate(body="v2 — restart order changed"), author.id)
+    await db.flush()
+    # `_handle`, not `_consume`: the latter COMMITS, and a space committed out of
+    # this test made `test_space_scope`'s "an unscoped grant covers every space"
+    # assert against a row from another file. Routing is still proved — the
+    # filter below is the consumer's own `_HANDLED`, so a page event missing
+    # from it would be skipped here exactly as it would be in production.
+    for event in await events_service.read_after(db, head, 100):
+        if event.event_type in consumer._HANDLED:
+            await consumer._handle(db, event, watch_only=False)
 
     assert await _count(db, muted, NotificationType.PAGE_UPDATED) == 0
-    assert await _count(db, heard, NotificationType.PAGE_UPDATED) == 1
+    (row,) = await _rows(db, heard)
+    assert row.type == NotificationType.PAGE_UPDATED.value
+    # Page context resolved at WRITE time, so the inbox row links without a join
+    # — and the space slug is there because the EVENT carries a `page_space`
+    # subject now, not because this file went and looked it up.
+    assert row.item_id is None
+    assert row.payload["space_slug"] == slug
+    assert row.payload["page_slug"] == "runbook"
+    assert row.payload["title"] == "Runbook"
+    assert row.payload["actor_name"] == "Author"
 
 
 async def test_prefetched_rules_are_authoritative(db):

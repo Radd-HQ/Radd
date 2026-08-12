@@ -6,9 +6,12 @@ stale (the PLAN §9 fallback — CRDT co-editing can land later behind the same
 PATCH contract).
 """
 
+from radd.kernel import EntityRefSpec
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
 from radd.kernel import PermissionSpec
+
+from . import refs
 
 from . import attachments_binding  # registers the page parent (spec 102)
 from . import comments_binding  # registers the page comment parent (RADD-717)
@@ -51,15 +54,37 @@ plugin = RaddPlugin(
     depends_on=("events", "projects", "auth", "workflow", "items", "attachments", "labels", "comments", "notify", "access", "groups", "search", "teams"),
     weak_depends=("ai",),
     routers=(router, public_router),
+    # RADD-923: a page and a space are subjects other modules name. Spec 118 is
+    # what forced them — `notify` scopes a wiki subscription to a SPACE id and
+    # links a notification by slug, and it may reach neither through this
+    # module's models (the spine rule) nor by importing it (it loads first).
+    entity_refs=(
+        EntityRefSpec("page", refs.page_ref, label="Page"),
+        EntityRefSpec("page_space", refs.space_ref, label="Page space"),
+    ),
     event_types=(
         EventTypeSpec(PageEvent.SPACE_CREATED, "Page space created", "Pages"),
         EventTypeSpec(PageEvent.SPACE_UPDATED, "Page space updated", "Pages"),
         EventTypeSpec(PageEvent.SPACE_DELETED, "Page space deleted", "Pages"),
-        EventTypeSpec(PageEvent.PAGE_CREATED, "Page created", "Pages"),
-        EventTypeSpec(PageEvent.PAGE_UPDATED, "Page updated", "Pages"),
-        EventTypeSpec(PageEvent.PAGE_DELETED, "Page deleted", "Pages"),
-        EventTypeSpec(PageEvent.PAGE_MOVED, "Page moved", "Pages"),
-        EventTypeSpec(PageEvent.PAGE_RESTORED, "Page restored", "Pages"),
+        # Every page event carries both refs. Declaring the subject is what makes
+        # the promise checkable: the loader refuses to boot a plugin whose events
+        # name a subject nothing can resolve, so the payload cannot silently lose
+        # the space that a subscription is matched on.
+        EventTypeSpec(
+            PageEvent.PAGE_CREATED, "Page created", "Pages", subjects=("page", "page_space")
+        ),
+        EventTypeSpec(
+            PageEvent.PAGE_UPDATED, "Page updated", "Pages", subjects=("page", "page_space")
+        ),
+        EventTypeSpec(
+            PageEvent.PAGE_DELETED, "Page deleted", "Pages", subjects=("page", "page_space")
+        ),
+        EventTypeSpec(
+            PageEvent.PAGE_MOVED, "Page moved", "Pages", subjects=("page", "page_space")
+        ),
+        EventTypeSpec(
+            PageEvent.PAGE_RESTORED, "Page restored", "Pages", subjects=("page", "page_space")
+        ),
         EventTypeSpec(PageEvent.LINK_CREATED, "Page↔issue link added", "Pages", item_scoped=True),
         EventTypeSpec(PageEvent.LINK_DELETED, "Page↔issue link removed", "Pages", item_scoped=True),
     ),

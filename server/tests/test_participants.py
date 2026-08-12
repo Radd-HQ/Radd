@@ -170,7 +170,10 @@ async def test_team_fan_out_is_live_and_direct_users_auto_watch(db, actor):
     recipients = await notify_consumer.recipient_ids(db, item.id)
     assert {stayer.id, leaver.id, direct.id} <= recipients
     plan = planner.plan_comment_created(
-        {"excerpt": "hi", "visibility": "public"}, actor.id, recipients, frozenset()
+        {"excerpt": "hi", "visibility": "public"},
+        actor.id,
+        planner.Audience(participating=recipients),
+        frozenset(),
     )
     types = {planned.user_id: planned.type for planned in plan.notifications}
     assert types[stayer.id] is NotificationType.COMMENTED
@@ -181,7 +184,10 @@ async def test_team_fan_out_is_live_and_direct_users_auto_watch(db, actor):
     recipients = await notify_consumer.recipient_ids(db, item.id)
     assert leaver.id not in recipients and stayer.id in recipients
     plan = planner.plan_comment_created(
-        {"excerpt": "again", "visibility": "public"}, actor.id, recipients, frozenset()
+        {"excerpt": "again", "visibility": "public"},
+        actor.id,
+        planner.Audience(participating=recipients),
+        frozenset(),
     )
     assert leaver.id not in {planned.user_id for planned in plan.notifications}
 

@@ -7,12 +7,19 @@ mode — the only way to know it moved was to reread it.
 strongest available signal that you care what happens to it next, and asking
 people to opt in individually is how a watch feature ends up with no watchers.
 
-**Fan-out is synchronous**, unlike the item path which goes through an outbox
-consumer. Page edits are orders of magnitude rarer than item events, the
-recipient list is a handful of people, and a consumer would mean a second
-delivery path to keep correct for a volume that does not need one. If page edits
-ever look like item events, this moves behind the consumer — the notification
-call is already the shared one.
+**Fan-out is NOT here any more** (spec 118). RADD-719 shipped it synchronously,
+inside the request that saved the page, on the argument that page edits are rare
+and "a consumer would mean a second delivery path to keep correct for a volume
+that does not need one". The volume was never the problem: it WAS a second
+delivery path, and it drifted exactly where a second path drifts. It knew about
+watchers and nothing about the space subscribers spec 118 introduced, and it
+wrote notifications without the read gate every item notification passes — so an
+edit told whoever had once clicked Watch, whatever the space said about them
+since.
+
+What is left is the TABLE and its four accessors. Who hears about an edit is
+decided in the one place that decides it for issues, off the `page.updated`
+event, by `notify.consumer`.
 """
 
 from __future__ import annotations
@@ -22,11 +29,7 @@ import uuid
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd.modules.notify import service as notify
-from radd.modules.notify.rules import Relation, Subject
-from radd.modules.notify.types import NotificationType
-
-from .models import Page, PageWatcher
+from .models import PageWatcher
 
 
 async def watch(session: AsyncSession, page_id: uuid.UUID, user_id: uuid.UUID) -> None:
@@ -60,48 +63,3 @@ async def watcher_ids(session: AsyncSession, page_id: uuid.UUID) -> list[uuid.UU
         select(PageWatcher.user_id).where(PageWatcher.page_id == page_id)
     )
     return list(rows.scalars())
-
-
-async def notify_watchers(
-    session: AsyncSession, page: Page, actor_id: uuid.UUID, space_slug: str, version: int
-) -> int:
-    """Tell everyone watching, except whoever made the change.
-
-    The payload carries what the inbox row needs to render and to link — title,
-    slugs, the version — resolved now rather than joined later, the same way item
-    notifications do it, so the entry stays accurate after a rename.
-
-    Whoever turned `page_updated` off is dropped by `create_notification` itself
-    (RADD-971) — this fan-out only PREFETCHES the rules for the recipient set,
-    because it runs inside the request that saved the page and a lookup per
-    watcher would put that cost on the editor. Returns how many were actually
-    written, so a silenced watcher is not counted as told.
-
-    A watcher is `participating` by definition (spec 118): they follow the page,
-    which is the wiki's version of being in the conversation.
-    """
-    recipients = [uid for uid in await watcher_ids(session, page.id) if uid != actor_id]
-    rules = await notify.rules_by_user(session, recipients)
-    sent = 0
-    for user_id in recipients:
-        notification = await notify.create_notification(
-            session,
-            user_id=user_id,
-            type_=NotificationType.PAGE_UPDATED,
-            event_id=None,
-            item_id=None,
-            actor_id=actor_id,
-            payload={
-                "page_id": str(page.id),
-                "page_slug": page.slug,
-                "space_slug": space_slug,
-                "title": page.title,
-                "version": version,
-            },
-            rules=rules.get(user_id),
-            relation=Relation(is_participating=True),
-            subject=Subject(space_id=page.space_id),
-        )
-        if notification is not None:
-            sent += 1
-    return sent

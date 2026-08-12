@@ -426,7 +426,10 @@ async def test_an_agents_mailed_reply_is_relayed_and_excludes_them_from_notify(d
     assert "Engineer dispatched." in planned.body
 
     plan = planner.plan_comment_created(
-        event.payload, event.actor_id, frozenset({agent.id, colleague.id}), frozenset()
+        event.payload,
+        event.actor_id,
+        planner.Audience(participating=frozenset({agent.id, colleague.id})),
+        frozenset(),
     )
     notified = {n.user_id for n in plan.notifications}
     assert colleague.id in notified and agent.id not in notified
