@@ -38,7 +38,8 @@ from radd.modules.comments.visibility import internal_comment_visible
 from radd.modules.events.service import Event
 from radd.modules.teams import service as teams
 
-from . import planner, rules as notify_rules, service
+from . import mentions, planner, rules as notify_rules, service
+from .audience import actor_name_of
 from .planner import Audience, Plan, PlannedNotification
 from .rules import Subject
 from .types import PAGE_SPACE_SUBJECT, PAGE_SUBJECT, NotificationType
@@ -169,8 +170,6 @@ async def _apply_page(
     readable = await pages.readable_page_ids_for_users(
         session, page_id, [planned.user_id for planned in wanted]
     )
-    from .consumer import actor_name_of
-
     actor_name = await actor_name_of(session, event)
     for planned in wanted:
         if planned.user_id not in readable:
@@ -242,9 +241,7 @@ async def handle_page_comment(
     page = await pages.page_ref(session, page_id) or {}
     space = await pages.space_of_page_ref(session, page_id) or {}
     space_id = _uuid(space.get("id"))
-    from .consumer import _comment_mentions
-
-    mention_ids = await _comment_mentions(session, event, payload)
+    mention_ids = await mentions.comment_mentions(session, event, payload)
     audience = await _page_audience(session, page_id, space_id)
     plan = planner.plan_comment_created(
         payload, event.actor_id, audience, mention_ids, follow_actor=False
