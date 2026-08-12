@@ -17,13 +17,20 @@ second copy of that policy, which is what drifted the first time. So this loop
 reads notifications, not events — and every permission question is answered by
 the row's existence.
 
-**What gets mailed is now the RECIPIENT's answer** (RADD-686). Each row is kept
-or dropped by its own user's `email_types` — `DEFAULT_EMAIL_TYPES` when they
-have never saved a preference. That is why the filter is in Python rather than
-in `_pending`'s WHERE: the predicate is per-user, so a SQL type filter could
-only be the union of everybody's, which is every type as soon as two people
-disagree. Dropped rows are left unstamped and the digest takes them, which is
-what makes "inbox only" a channel choice rather than a mute.
+**What gets mailed is the ROW's own verdict** (spec 118). RADD-686 filtered each
+candidate in Python against its recipient's `email_types`, arguing the predicate
+was per-user and so could not be SQL. It could not — while the only thing a row
+remembered was its TYPE. That is also why the mailer could never honour a scoped
+preference: it had no way to know whether a row reached its recipient because
+they were assigned the issue or because they had subscribed to the project, so
+"email me about my own work, digest the rest" was unanswerable here. The
+decision is made once, at the write, by the code that still knows which relation
+produced the row; this loop reads `notifications.email` and the whole per-user
+pass is gone.
+
+Rows whose verdict is inbox-only are never selected and stay unstamped, so the
+digest takes them — that is what makes "inbox only" a channel choice rather than
+a mute.
 
 Rows are stamped `emailed_at` on send, so the digest — whose selection is
 already `emailed_at IS NULL` — never repeats what went out here. The two
@@ -57,7 +64,7 @@ from radd.modules.comments.types import CommentEvent
 from radd.modules.events import service as events
 from radd.modules.mailintake.types import MailFailureReport
 
-from . import lines, retry, rules as notify_rules, service
+from . import lines, retry, service
 from .models import Notification
 from .types import NotificationType
 
@@ -80,7 +87,7 @@ async def run_batch(session: AsyncSession) -> int:
     committed, rather than re-implementing the loop's body in the test and
     proving only that the copy works.
     """
-    rows = await _wanted(session, await _pending(session))
+    rows = await _pending(session)
     if not rows:
         return 0
     if not await can_send(session):
@@ -123,7 +130,7 @@ async def run_batch(session: AsyncSession) -> int:
 
 
 async def _pending(session: AsyncSession) -> list[Notification]:
-    """Unemailed, unread, recent rows — the candidates, before preferences.
+    """Rows whose own verdict says EMAIL, unemailed, unread and recent.
 
     UNREAD because a notification you have already opened is not worth an email;
     RECENT (the digest's own `notify_email_max_age_hours`) because a worker that
@@ -134,12 +141,22 @@ async def _pending(session: AsyncSession) -> list[Notification]:
     `email_next_try`. In SQL rather than in the loop deliberately — a Python
     skip would let a handful of failing rows fill `notify_mail_batch` and starve
     the healthy ones behind them, which is the shape the incident had.
+
+    **`email IS TRUE` replaces a per-recipient Python filter** (spec 118).
+    RADD-686 argued the predicate could not be SQL because it was per-user, so a
+    type filter "could only be the union of everybody's". That was true while the
+    only thing a row remembered was its TYPE — and it is why the mailer could
+    never honour a scoped preference: it had no way to know whether this row
+    reached its recipient because they were assigned it or because they had
+    subscribed to the project. The decision is made once, at the write, by the
+    code that still knows; here it is a column.
     """
     now = utcnow()
     cutoff = now - timedelta(hours=settings.notify_email_max_age_hours)
     result = await session.execute(
         select(Notification)
         .where(
+            Notification.email.is_(True),
             Notification.emailed_at.is_(None),
             Notification.read_at.is_(None),
             Notification.created_at >= cutoff,
@@ -152,33 +169,6 @@ async def _pending(session: AsyncSession) -> list[Notification]:
         .limit(settings.notify_mail_batch)
     )
     return list(result.scalars())
-
-
-async def _wanted(session: AsyncSession, rows: list[Notification]) -> list[Notification]:
-    """The candidates their own recipient asked to be emailed about (RADD-686).
-
-    One query for the whole batch, then a resolver call per row. What is dropped
-    here stays unstamped on purpose: the digest is the other half of the channel
-    choice, not a fallback.
-
-    Spec 118 swapped the membership test for `rules.resolve` at OWN scope. The
-    row does not yet remember which relation produced it, so this cannot ask the
-    question the fan-out already answered — which is exactly the gap the
-    `email` column closes, and why this function does not survive RADD-1054.
-    """
-    if not rows:
-        return []
-    rule_sets = await service.rules_by_user(session, {row.user_id for row in rows})
-    kept = []
-    for row in rows:
-        try:
-            kind = NotificationType(row.type)
-        except ValueError:
-            continue  # a type this version no longer knows: leave it to the digest
-        rules = rule_sets.get(row.user_id, notify_rules.EMPTY)
-        if service.channels_for(kind, rules).email:
-            kept.append(row)
-    return kept
 
 
 async def _actor_names(

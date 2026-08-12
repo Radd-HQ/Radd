@@ -32,8 +32,11 @@ class Notification(Base):
 
     __tablename__ = "notifications"
     __table_args__ = (
-        # The unread badge: count by recipient where read_at IS NULL.
-        Index("ix_notifications_user_read", "user_id", "read_at"),
+        # The unread badge: count by recipient where read_at IS NULL — and, since
+        # spec 118, where the row is an INBOX row at all. `inbox` joins the index
+        # rather than being filtered after it, because every badge poll in every
+        # open tab runs this count.
+        Index("ix_notifications_user_read", "user_id", "read_at", "inbox"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -43,6 +46,15 @@ class Notification(Base):
     item_id: Mapped[uuid.UUID | None] = mapped_column(index=True)
     actor_id: Mapped[uuid.UUID | None]
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    # Spec 118: the CHANNEL verdict, stamped at the write. Before this, "in the
+    # inbox" was the row existing and "by email" was re-derived per tick from the
+    # recipient's preferences — which meant the mailer could only ask a
+    # relation-free question (`is this TYPE emailed`), because the row had
+    # forgotten how its recipient was connected to the subject by the time it got
+    # there. Two booleans, and both loops read the decision instead of retaking
+    # it. `off` writes no row at all, so neither is ever false together.
+    inbox: Mapped[bool] = mapped_column(default=True, server_default="true")
+    email: Mapped[bool] = mapped_column(default=False, server_default="false")
     read_at: Mapped[datetime | None]
     emailed_at: Mapped[datetime | None]
     # RADD-997: per-row send backoff, shared by the mailer and the digest and

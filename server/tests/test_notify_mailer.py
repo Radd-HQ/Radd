@@ -1193,3 +1193,81 @@ async def test_notification_mail_leaves_from_the_source_the_ticket_arrived_at(
     # The default relay exists, is enabled and is marked — it simply is not the
     # one that answers for this conversation.
     assert house.is_default is True
+
+
+# --- the channels are independent (spec 118) ----------------------------------
+
+
+async def _cell(db, user: User, kind: NotificationType, channel: Channel) -> None:
+    """One cell, in every relationship column — the rest left to the defaults."""
+    await notify_service.set_rules(
+        db,
+        user.id,
+        [(scope, None, {kind.value: channel.value}) for scope in RELATIONSHIP_SCOPES],
+    )
+
+
+async def test_email_without_inbox_mails_and_leaves_no_inbox_row(
+    db, world, relay, sender_row, quiet_backlog
+):
+    """The state RADD-686 could not express, end to end.
+
+    "Email me when something is assigned to me, do not clutter my inbox" was
+    structurally unsayable: a muted type never became a row, and the mailer
+    mailed rows. Spec 118 moves the decision onto the row's COLUMNS, so the row
+    exists to be mailed and the inbox never shows it.
+    """
+    _agent, _project, item = world
+    mail_only = await _user(db, name="Mo", email=f"m-{uuid.uuid4().hex[:8]}@example.com")
+    await _cell(db, mail_only, NotificationType.COMMENTED, Channel.EMAIL)
+    await _notify(db, mail_only, NotificationType.COMMENTED, item, excerpt="Any update?")
+
+    assert await mailer.run_batch(db) == 1
+    assert len(_addressed(relay, mail_only.email)) == 1
+    # The row is there — it had to be, to be mailed — and the inbox does not
+    # show it, nor does the badge count it.
+    (row,) = await _rows(db, mail_only.id)
+    assert (row.inbox, row.email) == (False, True)
+    assert await notify_service.list_notifications(db, mail_only.id) == []
+    assert await notify_service.unread_count(db, mail_only.id) == 0
+
+
+async def test_marking_everything_read_does_not_cancel_a_pending_email_only_send(
+    db, world, relay, sender_row, quiet_backlog
+):
+    """A trap the two-boolean model opens, closed at the seam.
+
+    `mailer._pending` skips rows that have been READ — an email about something
+    you have already opened is noise. An email-only row can never be opened,
+    because it is not in the list; so "mark all read" sweeping it would silently
+    cancel a send the person explicitly asked for, and nothing would say so.
+    `mark_all_read` is scoped to inbox rows for exactly that reason.
+    """
+    _agent, _project, item = world
+    mail_only = await _user(db, name="Mo", email=f"m-{uuid.uuid4().hex[:8]}@example.com")
+    await _cell(db, mail_only, NotificationType.COMMENTED, Channel.EMAIL)
+    await _notify(db, mail_only, NotificationType.COMMENTED, item, excerpt="Any update?")
+
+    await notify_service.mark_all_read(db, mail_only.id)
+
+    (row,) = await _rows(db, mail_only.id)
+    assert row.read_at is None, "an inbox sweep must not touch a row the inbox never showed"
+    assert await mailer.run_batch(db) == 1
+
+
+async def test_an_inbox_only_row_is_never_selected_by_the_mailer(
+    db, world, relay, sender_row, quiet_backlog
+):
+    """The other half of the partition, now decided in SQL rather than by a
+    per-recipient pass in Python. What the mailer skips stays UNSTAMPED, so the
+    digest — whose selection is `emailed_at IS NULL` — still carries it."""
+    _agent, _project, item = world
+    quiet = await _user(db, name="Cyd", email=f"c-{uuid.uuid4().hex[:8]}@example.com")
+    await _cell(db, quiet, NotificationType.COMMENTED, Channel.INBOX)
+    await _notify(db, quiet, NotificationType.COMMENTED, item, excerpt="Any update?")
+
+    assert await mailer.run_batch(db) == 0
+    assert _addressed(relay, quiet.email) == []
+    (row,) = await _rows(db, quiet.id)
+    assert (row.inbox, row.email) == (True, False)
+    assert row.emailed_at is None, "the digest can no longer see it"

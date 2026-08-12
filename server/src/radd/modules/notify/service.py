@@ -185,17 +185,32 @@ async def create_notification(
         item_id=item_id,
         actor_id=actor_id,
         payload=payload,
+        # Spec 118: the verdict is STAMPED, not re-derived. The mailer used to
+        # ask each row's recipient "do you email this type" on every tick, which
+        # is the only question a row could answer once it had forgotten which
+        # relation produced it — so a project subscriber and an assignee got the
+        # same answer about the same kind, whatever their matrix said.
+        inbox=verdict.inbox,
+        email=verdict.email,
     )
     session.add(notification)
     await session.flush()
-    # The realtime module (spec 27) pushes this so bells update live.
+    # The realtime module (spec 27) pushes this so bells update live. `inbox`
+    # rides along so a consumer can tell an email-only row from one that changes
+    # a badge — the badge count itself filters on the column, so an extra
+    # refetch would be harmless, but a receiver should not have to guess.
     await events.emit(
         session,
         event_type=NotifyEvent.NOTIFICATION_CREATED,
         entity_type=NotifyEntity.NOTIFICATION,
         entity_id=notification.id,
         actor_id=actor_id,
-        payload={"user_id": str(user_id), "type": type_.value, "item_id": str(item_id) if item_id else None},
+        payload={
+            "user_id": str(user_id),
+            "type": type_.value,
+            "item_id": str(item_id) if item_id else None,
+            "inbox": verdict.inbox,
+        },
     )
     return notification
 
@@ -208,7 +223,12 @@ async def list_notifications(
     limit: int = 50,
     offset: int = 0,
 ) -> list[Notification]:
-    stmt = select(Notification).where(Notification.user_id == user_id)
+    """The INBOX — `inbox IS TRUE`, since spec 118 made the two channels
+    independent. An email-only row is a real row with a real recipient; it just
+    is not something they asked to see in a list."""
+    stmt = select(Notification).where(
+        Notification.user_id == user_id, Notification.inbox.is_(True)
+    )
     if unread_only:
         stmt = stmt.where(Notification.read_at.is_(None))
     result = await session.execute(
@@ -218,12 +238,29 @@ async def list_notifications(
 
 
 async def unread_count(session: AsyncSession, user_id: uuid.UUID) -> int:
+    """The badge. Same filter as the list it labels — a count that included
+    email-only rows would show a number the inbox cannot account for, which is
+    the one thing a badge must never do."""
     result = await session.execute(
         select(func.count())
         .select_from(Notification)
-        .where(Notification.user_id == user_id, Notification.read_at.is_(None))
+        .where(
+            Notification.user_id == user_id,
+            Notification.read_at.is_(None),
+            Notification.inbox.is_(True),
+        )
     )
     return int(result.scalar_one())
+
+
+#: Marking read is an INBOX act, and the filter is load-bearing (spec 118).
+#:
+#: `mailer._pending` selects unread rows — an email is not worth sending about
+#: something you have already opened. An email-ONLY row can never be opened,
+#: because it is not in the list; without this, "mark all read" would silently
+#: cancel every pending email-only send, which is the exact opposite of what the
+#: person clicking it asked for.
+_INBOX_ROW = Notification.inbox.is_(True)
 
 
 async def mark_read(
@@ -237,6 +274,7 @@ async def mark_read(
             Notification.user_id == user_id,
             Notification.id.in_(list(ids)),
             Notification.read_at.is_(None),
+            _INBOX_ROW,
         )
         .values(read_at=utcnow())
     )
@@ -245,7 +283,7 @@ async def mark_read(
 async def mark_all_read(session: AsyncSession, user_id: uuid.UUID) -> None:
     await session.execute(
         update(Notification)
-        .where(Notification.user_id == user_id, Notification.read_at.is_(None))
+        .where(Notification.user_id == user_id, Notification.read_at.is_(None), _INBOX_ROW)
         .values(read_at=utcnow())
     )
 

@@ -85,6 +85,12 @@ async def run_batch(session: AsyncSession) -> int:
     result = await session.execute(
         select(Notification)
         .where(
+            # Spec 118: a digest is a digest of your INBOX. An email-only row is
+            # the per-event mailer's to send, and it will stamp it either way
+            # (delivered, or terminal after the retry ladder) — batching it in
+            # here as well would mail the same notification twice on the one
+            # tick where the two loops raced.
+            Notification.inbox.is_(True),
             Notification.emailed_at.is_(None),
             # RADD-997: a row this loop failed on waits out its backoff here too.
             or_(
