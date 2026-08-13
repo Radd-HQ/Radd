@@ -291,6 +291,11 @@ class Settings(BaseSettings):
     # nothing runs until an admin puts the node in a graph and binds that graph
     # to a form or a project, so the toggle is the kill switch, not the opt-in.
     ai_validation: bool = True
+    # Spec 120: the `ai.generate` node — works out named values about an item
+    # that downstream actions read as {{tokens}}. ON for the same reason:
+    # nothing runs until an admin puts the node in a graph, so this is the
+    # kill switch rather than the opt-in.
+    ai_generation: bool = True
     # Deliver summaries / similar-reasons progressively (SSE) instead of
     # complete-then-show.
     ai_stream_responses: bool = True

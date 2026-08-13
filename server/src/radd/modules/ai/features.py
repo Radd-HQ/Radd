@@ -32,6 +32,7 @@ FEATURE_ROLE: dict[AiFeature, AiRole] = {
     AiFeature.NL_SLQ: AiRole.CHAT,
     AiFeature.SIMILAR_RERANK: AiRole.CHAT,
     AiFeature.VALIDATION: AiRole.CHAT,  # reads a draft and writes prose about it
+    AiFeature.GENERATION: AiRole.CHAT,  # fills in named values about an item
 }
 
 FEATURE_SETTING: dict[AiFeature, SettingKey] = {
@@ -43,6 +44,7 @@ FEATURE_SETTING: dict[AiFeature, SettingKey] = {
     AiFeature.NL_SLQ: SettingKey.AI_NL_SLQ,
     AiFeature.SIMILAR_RERANK: SettingKey.AI_SIMILAR_RERANK,
     AiFeature.VALIDATION: SettingKey.AI_VALIDATION,
+    AiFeature.GENERATION: SettingKey.AI_GENERATION,
 }
 
 

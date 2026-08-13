@@ -405,7 +405,14 @@ def plan_of(module):
     return module.plan
 
 
-def test_the_ai_plugin_registers_both_automation_nodes():
+def test_the_ai_plugin_registers_its_automation_nodes():
+    """Three since spec 120, and they stay three separate nodes on purpose: one
+    ROUTES on an enumerated answer, one WRITES PROSE at a person, one FILLS IN
+    named values the rest of the graph reads."""
     from radd.modules.ai import plugin as ai_plugin
 
-    assert {spec.key for spec in ai_plugin.automation_nodes} == {"ai.classify", "ai.validate"}
+    assert {spec.key for spec in ai_plugin.automation_nodes} == {
+        "ai.classify",
+        "ai.validate",
+        "ai.generate",
+    }

@@ -751,3 +751,207 @@ async def test_a_workflow_guard_refusal_becomes_a_recorded_skip(monkeypatch):
     assert report.plans[0].resolves is False
     assert "refused by the workflow: the estimate is required" in report.plans[0].detail
     assert "from Todo to Done" in report.plans[0].detail
+
+
+# --- ai.generate (RADD-1072) --------------------------------------------------
+
+
+def test_generate_declares_text_plus_every_field_it_was_asked_for():
+    from radd.modules.ai import automation_node_generate as generate
+
+    fields = generate.outputs_for(
+        {
+            "fields": [
+                {"name": "priority", "kind": "enum", "choices": ["low", "high"]},
+                {"name": "advice", "kind": "text"},
+            ]
+        }
+    )
+    assert [f.name for f in fields] == ["text", "priority", "advice"]
+    assert fields[1].kind == OutputKind.ENUM.value and fields[1].choices == ("low", "high")
+    assert fields[2].kind == OutputKind.TEXT.value
+
+
+def test_a_field_whose_name_could_never_be_a_token_is_dropped():
+    """Not stored-and-broken. The node declares only outputs it can produce, so
+    the write path refuses `{{gen.Team Name}}` by naming what it DOES produce."""
+    from radd.modules.ai import automation_node_generate as generate
+
+    fields = generate.fields_of(
+        {
+            "fields": [
+                {"name": "Team Name"},
+                {"name": "team"},
+                {"name": "team"},  # duplicate
+                {"name": "text"},  # collides with the always-present output
+            ]
+        }
+    )
+    assert [f["name"] for f in fields] == ["team"]
+
+
+def test_an_enum_field_with_no_choices_degrades_to_text():
+    """"Choose one of nothing" produces free text under a name that promised a
+    vocabulary, which is worse than admitting it is free text."""
+    from radd.modules.ai import automation_node_generate as generate
+
+    assert generate.fields_of({"fields": [{"name": "team", "kind": "enum"}]})[0]["kind"] == (
+        OutputKind.TEXT.value
+    )
+
+
+def test_the_answer_schema_constrains_an_enum_field_by_decoding():
+    """The property the classifier has, applied per field: the model literally
+    cannot emit a value outside the list."""
+    from radd.modules.ai import automation_node_generate as generate
+
+    schema = generate.answer_schema(
+        {"fields": [{"name": "priority", "kind": "enum", "choices": ["low", "high"]}]}
+    )
+    assert schema["properties"]["priority"]["enum"] == ["low", "high"]
+    assert schema["additionalProperties"] is False
+    assert set(schema["required"]) == {"text", "priority"}
+
+
+async def test_generate_publishes_what_it_was_asked_for_and_nothing_else():
+    from radd.modules.ai import automation_node_generate as generate
+
+    ctx = executor._NodeContext(
+        session=None, node=TRIGGER, packet=Packet.of(FACTS), actor=object()
+    )
+    landed = generate._publish(
+        ctx,
+        {"text": "because", "priority": "high", "smuggled": "value"},
+        {"fields": [{"name": "priority"}]},
+    )
+    assert landed is True
+    assert ctx.outputs == {"text": "because", "priority": "high"}
+
+
+async def test_generate_takes_its_unavailable_port_and_publishes_nothing_when_the_model_fails(
+    monkeypatch,
+):
+    """An outage must be safe downstream: no values, so every token that would
+    have read one misses and its action records a skip."""
+    from radd.modules.ai import automation_node_generate as generate
+
+    async def enabled(*_args, **_kwargs):
+        return True
+
+    async def boom(*_args, **_kwargs):
+        raise RuntimeError("provider down")
+
+    monkeypatch.setattr("radd.modules.ai.features.feature_enabled", enabled)
+    monkeypatch.setattr(generate, "_ask", boom)
+
+    ctx = executor._NodeContext(
+        session=None,
+        node=Node(
+            id="g",
+            kind=AutomationNodeKind.GATE,
+            type="ai.generate",
+            params={"prompt": "triage it"},
+            name="triage",
+        ),
+        packet=Packet.of(FACTS, item=(uuid.uuid4(),)),
+        actor=object(),
+    )
+    assert await generate.plan(ctx) == generate.FALLBACK_PORT
+    assert ctx.outputs == {}
+
+
+async def test_generate_is_dormant_while_its_toggle_is_off(monkeypatch):
+    from radd.modules.ai import automation_node_generate as generate
+
+    async def disabled(*_args, **_kwargs):
+        return False
+
+    monkeypatch.setattr("radd.modules.ai.features.feature_enabled", disabled)
+    ctx = executor._NodeContext(
+        session=None,
+        node=Node(
+            id="g", kind=AutomationNodeKind.GATE, type="ai.generate",
+            params={"prompt": "triage it"},
+        ),
+        packet=Packet.of(FACTS, item=(uuid.uuid4(),)),
+        actor=object(),
+    )
+    assert await generate.plan(ctx) == generate.FALLBACK_PORT
+
+
+async def test_the_unavailable_port_is_last_so_the_executor_falls_back_to_it():
+    """The executor takes a contributed router's FINAL port when a planner
+    raises, so the order of `PORTS` is load-bearing, not cosmetic."""
+    from radd.modules.ai import automation_node_generate as generate
+
+    assert generate.SPEC.ports_at({})[-1] == generate.FALLBACK_PORT
+
+
+async def test_the_full_triage_chain_resolves_end_to_end(db, admin, registered, monkeypatch):
+    """The product claim, with a deterministic model: one generate node feeds
+    four downstream actions by name, and every one of them resolves."""
+    from radd.modules.ai import automation_node_generate as generate
+    from radd.modules.automations.planning import _plan
+    from radd.modules.automations.types import PlanKind
+    from radd.modules.workflow import service as workflow
+
+    project = await _fixture_project(db, admin)
+    item = await _fixture_item(db, admin, project)
+    states = await workflow.list_states(db, project.id)
+
+    async def enabled(*_args, **_kwargs):
+        return True
+
+    async def answer(_ctx, _params):
+        return {
+            "text": "Looks like a service outage.",
+            "priority": "high",
+            "state": states[-1].name,
+        }
+
+    monkeypatch.setattr("radd.modules.ai.features.feature_enabled", enabled)
+    monkeypatch.setattr(generate, "_ask", answer)
+
+    node = Node(
+        id="g",
+        kind=AutomationNodeKind.GATE,
+        type="ai.generate",
+        params={
+            "prompt": "triage it",
+            "fields": [
+                {"name": "priority", "kind": "enum", "choices": ["low", "high"]},
+                {"name": "state", "kind": "enum", "choices": [s.name for s in states]},
+            ],
+        },
+        name="triage",
+    )
+    ctx = executor._NodeContext(
+        session=db, node=node, packet=Packet.of(FACTS, item=(item.id,)), actor=admin
+    )
+    assert await generate.plan(ctx) == generate.OUT_PORT
+
+    variables = {"triage": dict(ctx.outputs)}
+    for action, params, expected in (
+        ("set_priority", {"priority": "{{triage.priority}}"}, PlanKind.ITEM_UPDATE),
+        ("set_state", {"state": "{{triage.state}}"}, PlanKind.ITEM_UPDATE),
+        (
+            "add_comment",
+            {"body": "Triage says: {{triage.text}}", "visibility": "public"},
+            PlanKind.COMMENT,
+        ),
+    ):
+        plan = await _plan(
+            db, {"type": action, "params": params}, item, project, admin,
+            facts=FACTS, rule_name="triage", variables=variables,
+        )
+        assert plan.kind is expected, f"{action}: {plan.detail}"
+
+    # …and a field the node was never asked for still refuses, loudly.
+    missing = await _plan(
+        db,
+        {"type": "set_team", "params": {"team": "{{triage.team}}"}},
+        item, project, admin,
+        facts=FACTS, rule_name="triage", variables=variables,
+    )
+    assert missing.kind is PlanKind.SKIP
+    assert "not 'team'" in missing.detail

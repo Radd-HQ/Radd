@@ -117,6 +117,7 @@ class SettingKey(StrEnum):
     AI_NL_SLQ = "ai_nl_slq"
     AI_SIMILAR_RERANK = "ai_similar_rerank"
     AI_VALIDATION = "ai_validation"  # spec 119 — the ai.validate automation node
+    AI_GENERATION = "ai_generation"  # spec 120 — the ai.generate automation node
     AI_STREAM_RESPONSES = "ai_stream_responses"
     # Spec 112 — the release pipeline. Both empty = the pipeline is off for
     # the project, and neither the merge transition nor the sweep does anything.

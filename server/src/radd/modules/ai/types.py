@@ -43,6 +43,7 @@ class AiFeature(StrEnum):
     NL_SLQ = "nl_slq"  # spec 46
     SIMILAR_RERANK = "similar_rerank"  # spec 46
     VALIDATION = "validation"  # spec 119: the ai.validate intake-check node
+    GENERATION = "generation"  # spec 120: the ai.generate automation node
 
 
 # Wire-shape default endpoints, used when a provider's base_url is empty.

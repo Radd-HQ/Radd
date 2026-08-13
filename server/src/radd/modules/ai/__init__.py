@@ -75,6 +75,7 @@ async def _invalid_query_handler(request: Request, exc: AiInvalidQueryError) -> 
 
 from . import automation_node as ai_automation_node  # noqa: E402
 from . import automation_node_validate as ai_automation_node_validate  # noqa: E402
+from . import automation_node_generate as ai_automation_node_generate  # noqa: E402
 
 plugin = RaddPlugin(
     name="ai",
@@ -98,7 +99,16 @@ plugin = RaddPlugin(
     # invent a branch, says nothing in its own words) and one WRITES (prose
     # findings a person acts on), and a node that does both has to decide which
     # it is doing on every call.
-    automation_nodes=(ai_automation_node.SPEC, ai_automation_node_validate.SPEC),
+    # Spec 120 adds the third: `ai.generate`. Kept separate from both for the
+    # same reason they are separate from each other — one ROUTES on an
+    # enumerated answer, one WRITES PROSE at a person, and this one FILLS IN
+    # named values the rest of the graph reads. A node that did two of those
+    # would have to decide which it was doing on every call.
+    automation_nodes=(
+        ai_automation_node.SPEC,
+        ai_automation_node_validate.SPEC,
+        ai_automation_node_generate.SPEC,
+    ),
     # RADD-891: the feature toggles (Settings → AI) — moved off `settings.types`'s
     # old hardcoded dict. Every `AiFeature` member needs a row here AND both dicts
     # in `features.py`; `test_ai_features.py` asserts all three agree, because a
@@ -195,6 +205,22 @@ plugin = RaddPlugin(
                 "chat role assigned. Nothing runs until an admin puts the node in "
                 "a validation graph, so this is the kill switch rather than the "
                 "opt-in; off, the node takes its `unavailable` port."
+            ),
+        ),
+        SettingSpec(
+            key="ai_generation",
+            section="ai",
+            type="bool",
+            scopes=("instance",),
+            label="AI value generation",
+            description=(
+                "Lets the `Generate with AI` automation node work out named "
+                "values about an item — a priority, a team, a sentence of "
+                "advice — which downstream actions read as {{tokens}} (spec "
+                "120). Needs the chat role assigned. Nothing runs until an "
+                "admin puts the node in a graph, so this is the kill switch "
+                "rather than the opt-in; off, the node takes its `unavailable` "
+                "port and every token that would have read it skips its action."
             ),
         ),
         SettingSpec(
