@@ -484,11 +484,19 @@ await session.eval(
       // one is a 422 and the whole PATCH would silently do nothing. The UI
       // replaces it with the token below.
       { id: "st", kind: "action", type: "action.set_state", params: { state: stateNames[0] ?? "Todo" } },
+      // Wired to the producer's UNAVAILABLE port: the branch taken exactly when
+      // the model did not answer, so nothing was published and no token from it
+      // can ever resolve here.
+      { id: "sorry", kind: "action", type: "action.set_priority", params: { priority: "low" } },
+      // A SECOND tokenizable action, for the mode-leak check below.
+      { id: "prio2", kind: "action", type: "action.set_priority", params: { priority: "low" } },
     ],
     edges: [
       { source: "trg", port: "out", target: generateNode?.id },
       { source: generateNode?.id, port: "out", target: "prio" },
+      { source: generateNode?.id, port: "unavailable", target: "sorry" },
       { source: "prio", port: "out", target: "st" },
+      { source: "st", port: "out", target: "prio2" },
     ],
   }),
 );
@@ -509,12 +517,89 @@ await sleep(400);
 const priorityValue = await session.eval(TOKEN_FIELD_VALUE("Priority"));
 
 // The producer itself can read NOTHING from downstream — the picker walks the
-// edges backwards, so a node above the producer sees no variables at all.
+// edges backwards, so a node above the producer sees no variables at all. And
+// its own panel is REFERENCE-ONLY: only an action's params go through the
+// renderer, so a token in this node's prompt would reach the model as literal
+// braces.
 await selectNode("ai.generate");
 await sleep(700);
 await session.eval(OPEN_TOKENS);
 await sleep(300);
 const offeredAtProducer = await session.eval(TOKENS_OFFERED);
+const referenceOnly = await session.eval(
+  `Boolean(document.querySelector("[data-token-reference-only]"))`,
+);
+
+// The node on the UNAVAILABLE branch is downstream of the producer and must
+// still be offered nothing: that port is taken exactly when nothing was
+// published, so every token from it would resolve to a skip.
+await session.click(
+  "[data-node-id]",
+  new Function("text", "return text.includes('action.set_priority')"),
+);
+await sleep(300);
+const offeredOnFallback = await session.eval(`(() => {
+  const cards = [...document.querySelectorAll("[data-node-id]")];
+  const card = cards.find((c) => c.getAttribute("data-node-id") === "sorry");
+  if (!card) return { found: false };
+  return { found: true };
+})()`);
+await session.eval(`(() => {
+  const card = [...document.querySelectorAll("[data-node-id]")]
+    .find((c) => c.getAttribute("data-node-id") === "sorry");
+  if (card) card.dispatchEvent(new MouseEvent("click", { bubbles: true, view: window }));
+  return Boolean(card);
+})()`);
+await sleep(700);
+await session.eval(OPEN_TOKENS);
+await sleep(300);
+const fallbackTokens = await session.eval(TOKENS_OFFERED);
+
+// TOKEN MODE is component state; without a key it survived a change of node, so
+// a node you never touched opened as a text box. Toggle it here, leave, come
+// back to a DIFFERENT one, and the picker must still be a picker.
+await session.eval(TOKEN_MODE("Priority"));
+await sleep(300);
+const modeLeak = await session.eval(`(() => {
+  const cards = [...document.querySelectorAll("[data-node-id]")];
+  const other = cards.find((c) => c.getAttribute("data-node-id") === "prio2");
+  if (other) other.dispatchEvent(new MouseEvent("click", { bubbles: true, view: window }));
+  return Boolean(other);
+})()`);
+await sleep(800);
+const CONTROL_STATE = `(() => {
+  const wrap = document.querySelector('[data-tokenizable="Priority"]');
+  if (!wrap) return { found: false };
+  return {
+    found: true,
+    pressed: wrap.querySelector("button[aria-pressed]")?.getAttribute("aria-pressed"),
+    isSelect: Boolean(wrap.querySelector('button[aria-haspopup="listbox"]')),
+    shown: wrap.querySelector('button[aria-haspopup="listbox"]')?.textContent?.trim() ?? "",
+  };
+})()`;
+const secondNodeControl = await session.eval(CONTROL_STATE);
+
+// …and leaving token mode hands the picker something it can RENDER. A select
+// with no blank option shows nothing at all for a token and then saves a 422
+// until someone notices, which is why the exit restores a real value. (It also
+// has to happen here, or this node would be saved with an empty priority.)
+await session.eval(`(() => {
+  const card = [...document.querySelectorAll("[data-node-id]")]
+    .find((c) => c.getAttribute("data-node-id") === "sorry");
+  if (card) card.dispatchEvent(new MouseEvent("click", { bubbles: true, view: window }));
+  return Boolean(card);
+})()`);
+await sleep(800);
+await session.eval(TOKEN_MODE("Priority"));
+await sleep(300);
+const exitedTokenMode = await session.eval(`(() => {
+  const wrap = document.querySelector('[data-tokenizable="Priority"]');
+  const toggle = wrap && wrap.querySelector("button[aria-pressed]");
+  if (toggle && toggle.getAttribute("aria-pressed") === "true") toggle.click();
+  return null;
+})()` + `; null`);
+await sleep(400);
+const restored = await session.eval(CONTROL_STATE);
 
 // The state action reads the field the model will answer with a value this
 // project does not have.
@@ -612,6 +697,18 @@ const failed = report(
       offeredAtProducer.variables,
       [],
     ),
+    "the producer's own panel is reference-only (its params are not rendered)":
+      referenceOnly === true,
+    "a node on the UNAVAILABLE branch is offered no variables either":
+      offeredOnFallback.found === true && same(fallbackTokens.variables, []),
+    "…while still listing the event roots": (fallbackTokens.all ?? []).includes("{{item.key}}"),
+    "token mode does not leak to the next node selected":
+      modeLeak === true &&
+      secondNodeControl.found === true &&
+      secondNodeControl.pressed === "false" &&
+      secondNodeControl.isSelect === true,
+    "leaving token mode restores a value the picker can render":
+      restored.isSelect === true && restored.shown.length > 0,
     "clicking a token inserts it into the focused field":
       inserted === true && priorityValue === `{{${NODE_NAME}.priority}}`,
     "the chain saves": savedChain.saved === true && savedChain.rejected === null,
@@ -653,7 +750,15 @@ const failed = report(
     autoName,
     forms: { fresh: freshForm, after: formAfter, rowError },
     names: { bad: badName, good: goodName },
-    tokens: { offered, atProducer: offeredAtProducer, priorityValue },
+    tokens: {
+      offered,
+      atProducer: offeredAtProducer,
+      referenceOnly,
+      onFallbackBranch: fallbackTokens,
+      priorityValue,
+      secondNodeControl,
+      restored,
+    },
     model: { calls: modelCalls, schema: lastRequest?.response_format ?? lastRequest?.tools ?? null },
     run: result,
     saves: { generate: savedGenerate, chain: savedChain },

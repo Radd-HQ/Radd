@@ -154,14 +154,20 @@ export function GraphInspector({
       when a failed check should also do something else.
     </p>
   );
-  const tokens = (
+  //: Two panels, and the difference is load-bearing. `planning._plan` is the
+  //: ONLY place tokens are rendered, and it renders an ACTION's params — so a
+  //: token inserted into a contributed node's own prompt reaches the model as
+  //: literal braces, and one inserted into a filter's SLQ compiles to nothing.
+  //: The list is still worth SHOWING there (it is what the node above produces);
+  //: offering to insert into it is not.
+  const tokenPanel = (insertable: boolean) => (
     <TokenReference
       catalog={catalog}
       hasItem={hasItem}
       node={node}
       nodes={nodes}
       edges={edges}
-      onInsert={tokenTarget.insert}
+      onInsert={insertable ? tokenTarget.insert : undefined}
     />
   );
 
@@ -369,7 +375,7 @@ export function GraphInspector({
               onChange={setParams}
             />
           )}
-          {tokens}
+          {tokenPanel(false)}
         </div>
       )}
 
@@ -417,7 +423,7 @@ export function GraphInspector({
             forced={forcedReason ? { value: NodeArity.item, reason: forcedReason } : undefined}
             onChange={(arity) => setParams({ ...node.params, arity })}
           />
-          {tokens}
+          {tokenPanel(true)}
         </div>
       )}
     </div>

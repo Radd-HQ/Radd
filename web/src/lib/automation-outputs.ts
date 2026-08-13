@@ -14,11 +14,14 @@
  * reached from, and those resolve to nothing at run time. Walking the edges
  * BACKWARDS is what makes the picker's list the same list the run will have.
  */
-import type {
-  AutomationCatalog,
-  AutomationEdge,
-  AutomationNode,
-  OutputFieldInfo,
+import {
+  NodeArity,
+  type AutomationCatalog,
+  type AutomationEdge,
+  type AutomationNode,
+  type NodeArityInfo,
+  type NodeArityValue,
+  type OutputFieldInfo,
 } from "./types/automations";
 
 /** Mirrors the kernel's `OUTPUT_NAME_RE`. Both halves of `{{node.field}}` are
@@ -92,6 +95,40 @@ export function generateFields(params: Record<string, unknown>): GenerateField[]
     }));
 }
 
+/** How a node type may read its packet, from the served table.
+ *
+ * Defaults to "fixed at set" for an unknown type rather than guessing: an
+ * automation holding a node from a plugin that has been uninstalled must still
+ * open, and offering a control that the server would reject is worse than
+ * offering none. */
+export function arityOf(
+  catalog: AutomationCatalog | undefined,
+  nodeType: string,
+): NodeArityInfo {
+  return (
+    catalog?.node_arity?.find((entry) => entry.type === nodeType) ?? {
+      type: nodeType,
+      default: NodeArity.set,
+      options: [NodeArity.set],
+    }
+  );
+}
+
+/** The arity a node will actually run at: its stored choice when the type
+ * offers one, else the type's default. Mirrors `nodes.arity_of` on the server —
+ * the badge on the card has to say what the engine will do. */
+export function effectiveArity(
+  catalog: AutomationCatalog | undefined,
+  node: { type: string; params: Record<string, unknown> },
+): NodeArityValue {
+  const rule = arityOf(catalog, node.type);
+  if (rule.options.length < 2) return rule.default;
+  const chosen = String(node.params.arity ?? "");
+  return (rule.options as string[]).includes(chosen)
+    ? (chosen as NodeArityValue)
+    : rule.default;
+}
+
 /** Whether a node type can be given a name at all — i.e. whether naming it would
  * make anything addressable. Asked of the TYPE plus its current params, because
  * `ai.generate` with no fields still produces `text`. */
@@ -102,36 +139,110 @@ export function isProducer(
   return outputsOfNode(node, catalog).length > 0;
 }
 
-/** Producers this node can actually be reached FROM, nearest first.
+/**
+ * Whether values a node produced can travel out by this PORT.
  *
- * A breadth-first walk backwards along the edges. Offering every named node in
- * the graph instead would offer values from branches that never run with this
- * one — tokens that compile, save, and resolve to nothing. */
+ * Mirrors the executor. A contributed router's LAST port is its fallback — the
+ * one taken when the node could not answer — and a node that could not answer
+ * published nothing, so no output ever travels it. `ai.generate`'s
+ * `unavailable` and `ai.classify`'s are exactly that port, and a token picker
+ * that ignored the distinction would offer `{{gen.text}}` to a node wired to
+ * the branch where `gen` produced nothing by construction.
+ *
+ * Built-in producers have no fallback: `create_item` stamps both `out` and
+ * `created`, so both carry.
+ */
+export function portCarriesOutputs(
+  node: Pick<AutomationNode, "type" | "params">,
+  port: string,
+  catalog: AutomationCatalog | undefined,
+): boolean {
+  const contributed = catalog?.contributed_nodes?.find((entry) => entry.key === node.type);
+  if (!contributed) return true;
+  const ports = contributed.ports?.length
+    ? contributed.ports
+    : // Dynamic ports: the client computes them the same way the canvas does.
+      (node.type === "ai.classify"
+        ? [
+            ...new Set(
+              ((node.params.answers as string[]) ?? []).map((a) => String(a).trim()).filter(Boolean),
+            ),
+          ].slice(0, 8).concat("unavailable")
+        : []);
+  return ports.length === 0 ? true : port !== ports[ports.length - 1];
+}
+
+/**
+ * Whether this node PUBLISHES what it produces at all.
+ *
+ * A per-item invocation makes one answer per item and the packet's bag has one
+ * slot per node, so the executor drops them — a node set to "per item" produces
+ * values that nothing can ever read, and offering its tokens would be offering
+ * misses.
+ */
+export function publishesOutputs(
+  node: Pick<AutomationNode, "type" | "params">,
+  catalog: AutomationCatalog | undefined,
+): boolean {
+  return effectiveArity(catalog, node) !== NodeArity.item;
+}
+
+/** Producers whose values can actually REACH this node, nearest first.
+ *
+ * A breadth-first walk backwards along the edges, carrying the PORT each
+ * producer would leave by. Three things disqualify a producer, and each is a
+ * token that would compile, save, and resolve to nothing:
+ *
+ *   - it is not upstream at all (a different branch entirely);
+ *   - it is upstream only through a port that carries no outputs — its
+ *     fallback, taken exactly when it produced nothing;
+ *   - it runs per ITEM, so the executor publishes nothing for it.
+ *
+ * Only the FIRST edge out of the producer matters. Once its values are in the
+ * packet they ride every port of every node they pass through, so a gate two
+ * hops down taking its `false` port carries them just the same. */
 export function upstreamProducers(
   nodeId: string,
   nodes: AutomationNode[],
   edges: AutomationEdge[],
   catalog: AutomationCatalog | undefined,
 ): { node: AutomationNode; outputs: OutputFieldInfo[] }[] {
-  const incoming = new Map<string, string[]>();
+  const incoming = new Map<string, { source: string; port: string }[]>();
   for (const edge of edges) {
-    incoming.set(edge.target, [...(incoming.get(edge.target) ?? []), edge.source]);
+    incoming.set(edge.target, [
+      ...(incoming.get(edge.target) ?? []),
+      { source: edge.source, port: edge.port },
+    ]);
   }
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const seen = new Set([nodeId]);
-  const queue = [...(incoming.get(nodeId) ?? [])];
-  const found: { node: AutomationNode; outputs: OutputFieldInfo[] }[] = [];
+  const queue = [nodeId];
+  //: producer id -> the ports through which it reaches the edited node.
+  const reachesBy = new Map<string, Set<string>>();
+  const order: string[] = [];
   while (queue.length) {
     const id = queue.shift() as string;
-    if (seen.has(id)) continue;
-    seen.add(id);
+    for (const { source, port } of incoming.get(id) ?? []) {
+      reachesBy.set(source, (reachesBy.get(source) ?? new Set()).add(port));
+      if (seen.has(source)) continue;
+      seen.add(source);
+      order.push(source);
+      queue.push(source);
+    }
+  }
+
+  const found: { node: AutomationNode; outputs: OutputFieldInfo[] }[] = [];
+  for (const id of order) {
     const node = byId.get(id);
     if (!node) continue;
     const outputs = outputsOfNode(node, catalog);
     // A producer with no NAME is skipped: it produces, but nothing can address
     // it, and offering `{{.field}}` would be offering a token that cannot work.
-    if (node.name && outputs.length > 0) found.push({ node, outputs });
-    queue.push(...(incoming.get(id) ?? []));
+    if (!node.name || outputs.length === 0) continue;
+    if (!publishesOutputs(node, catalog)) continue;
+    const ports = [...(reachesBy.get(id) ?? [])];
+    if (!ports.some((port) => portCarriesOutputs(node, port, catalog))) continue;
+    found.push({ node, outputs });
   }
   return found;
 }

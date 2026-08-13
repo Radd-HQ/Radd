@@ -43,6 +43,7 @@ const hasToken = (value: unknown) => /\{\{\s*[a-zA-Z0-9_.]+\s*\}\}/.test(String(
 function TokenizableField({
   label,
   value,
+  fallback = "",
   hint,
   placeholder,
   onChange,
@@ -50,6 +51,11 @@ function TokenizableField({
 }: {
   label: string;
   value: string;
+  /** What the PICKER shows when token mode is left behind and the stored value
+   * is a token it cannot represent. Empty where the control has a blank option;
+   * a real value where it does not — a select with no "" option renders blank
+   * and saves a 422 until someone re-picks. */
+  fallback?: string;
   hint?: string;
   placeholder?: string;
   onChange: (value: string) => void;
@@ -80,13 +86,23 @@ function TokenizableField({
           aria-label={`Use a token for ${label}`}
           title={tokenMode ? `Pick a ${label.toLowerCase()} instead` : "Use a token instead"}
           onClick={() => {
-            // The switch CLEARS whichever value the other mode cannot hold, in
-            // both directions. Leaving token mode with a token stored would show
-            // a select displaying its first option while holding
-            // `{{triage.priority}}`; ENTERING it with a picked value stored
-            // leaves "normal" sitting in the box for the token to be typed after
-            // — which is exactly what a click on the picker below then produces.
-            onChange("");
+            // The switch replaces whichever value the other mode cannot HOLD,
+            // in both directions. Entering token mode with a picked value stored
+            // leaves "normal" sitting in the box for a token to be appended to —
+            // which is exactly what a click on the picker below then produced.
+            // LEAVING it hands the picker something it can render: the stored
+            // value when that is already a plain one, else the fallback, because
+            // a select with no blank option shows nothing at all for a token and
+            // then saves a 422 until someone notices.
+            // Leaving hands the picker something it can RENDER: the stored
+            // value when that is already plain and non-empty, else the
+            // fallback. Empty counts as unrenderable for the same reason a
+            // token does — a select with no blank option shows nothing for
+            // either, and then saves a 422 until someone notices. (Entering
+            // clears, so "empty" is the state you are in if you switch on and
+            // straight back off.)
+            const plain = !hasToken(value) && value !== "";
+            onChange(tokenMode ? (plain ? value : fallback) : "");
             setWanted(!tokenMode);
           }}
           className={
@@ -126,8 +142,15 @@ export function ActionParams({ action, pickers, listId, onParams }: ActionParams
     case ActionType.setPriority:
       return (
         <TokenizableField
+          // Keyed by the node/row this belongs to: the mode is component STATE,
+          // and without a key React reuses the instance when the inspector
+          // switches node, so node B opened in the token mode chosen on node A.
+          key={`${listId}-priority`}
           label="Priority"
           value={str(p.priority)}
+          // The one control here with no blank option, so leaving token mode
+          // has to land on a real priority rather than on nothing.
+          fallback="normal"
           onChange={(priority) => set({ priority })}
         >
           <SelectField
@@ -146,6 +169,7 @@ export function ActionParams({ action, pickers, listId, onParams }: ActionParams
     case ActionType.setAssignee:
       return (
         <TokenizableField
+          key={`${listId}-assignee`}
           label="Assignee"
           value={str(p.assignee)}
           placeholder="{{triage.owner}}"
@@ -169,6 +193,7 @@ export function ActionParams({ action, pickers, listId, onParams }: ActionParams
     case ActionType.setTeam:
       return (
         <TokenizableField
+          key={`${listId}-team`}
           label="Team"
           value={str(p.team)}
           placeholder="{{triage.team}}"
@@ -221,6 +246,7 @@ export function ActionParams({ action, pickers, listId, onParams }: ActionParams
     case ActionType.setCycle:
       return (
         <TokenizableField
+          key={`${listId}-cycle`}
           label="Cycle"
           value={str(p.cycle)}
           placeholder="{{triage.cycle}}"

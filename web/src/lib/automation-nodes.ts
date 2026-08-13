@@ -19,8 +19,6 @@ import {
   VALIDATION_FAIL_TYPE,
   type AutomationCatalog,
   type AutomationNode,
-  type NodeArityInfo,
-  type NodeArityValue,
   type NodeKindValue,
 } from "./types/automations";
 import { ACTION_TYPE_LABELS, ACTION_TYPE_ORDER } from "./meta";
@@ -302,39 +300,11 @@ export function searchTemplates(templates: NodeTemplate[], query: string): NodeT
   });
 }
 
-/** How a node type may read its packet, from the served table.
- *
- * Defaults to "fixed at set" for an unknown type rather than guessing: an
- * automation holding a node from a plugin that has been uninstalled must still
- * open, and offering a control that the server would reject is worse than
- * offering none. */
-export function arityOf(
-  catalog: AutomationCatalog | undefined,
-  nodeType: string,
-): NodeArityInfo {
-  return (
-    catalog?.node_arity?.find((entry) => entry.type === nodeType) ?? {
-      type: nodeType,
-      default: NodeArity.set,
-      options: [NodeArity.set],
-    }
-  );
-}
-
-/** The arity a node will actually run at: its stored choice when the type
- * offers one, else the type's default. Mirrors `nodes.arity_of` on the server —
- * the badge on the card has to say what the engine will do. */
-export function effectiveArity(
-  catalog: AutomationCatalog | undefined,
-  node: { type: string; params: Record<string, unknown> },
-): NodeArityValue {
-  const rule = arityOf(catalog, node.type);
-  if (rule.options.length < 2) return rule.default;
-  const chosen = String(node.params.arity ?? "");
-  return (rule.options as string[]).includes(chosen)
-    ? (chosen as NodeArityValue)
-    : rule.default;
-}
+// `arityOf` / `effectiveArity` live in `automation-outputs.ts` since RADD-1073's
+// review: the PUBLISH rules there need to know a producer's arity (an item-arity
+// node publishes nothing), and this module already depends on that one. Moving
+// them down keeps the dependency one-way; re-exported so no call site moved.
+export { arityOf, effectiveArity } from "./automation-outputs";
 
 /** Recipient values that name a ROLE rather than an address. Mirrors the
  * server's `EmailRecipient`; `notify_user` has no `contact` because a mail

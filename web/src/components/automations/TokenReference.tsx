@@ -38,6 +38,17 @@ interface TokenReferenceProps {
   onInsert?: (token: string) => void;
 }
 
+/** Where tokens are RENDERED, said out loud on the surfaces where they are not.
+ *
+ * Only an ACTION's params go through the planner's `Renderer` — that is its
+ * single call site. A contributed node's own params (an `ai.generate` prompt, a
+ * filter's SLQ) are handed to the node verbatim, so a token typed there is
+ * literal text: it reaches the model as `{{cls.answer}}`, or it compiles into a
+ * query that matches nothing. Showing the list there as a REFERENCE is useful;
+ * offering to insert into it is an invitation to a silent failure. */
+const REFERENCE_ONLY_NOTE =
+  "Reference only — these are substituted in action parameters. This node's own fields are used exactly as written.";
+
 export function TokenReference({
   catalog,
   hasItem,
@@ -66,6 +77,11 @@ export function TokenReference({
       </button>
       {open && (
         <div className="flex flex-col gap-1.5 border-t border-subtle p-1.5">
+          {!onInsert && (
+            <p data-token-reference-only className="px-1.5 text-[11px] text-fg-muted">
+              {REFERENCE_ONLY_NOTE}
+            </p>
+          )}
           {producers.length > 0 && (
             <div className="flex flex-col gap-0.5" data-token-variables>
               <p className="px-1.5 text-[10px] uppercase tracking-wide text-fg-faint">
