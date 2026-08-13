@@ -256,6 +256,12 @@ def _check_token_references(nodes: list[graph.Node]) -> None:
             if not dot or root in reserved:
                 continue
             if root not in declared:
+                # The message NAMES both vocabularies. A `{{reporter.name}}`
+                # written in the canned-response style is the likeliest way to
+                # meet this refusal, and "no node is named 'reporter'" alone
+                # does not tell someone that `reporter` was never a template
+                # word here — the built-in roots are the other half of the
+                # answer, and there are only six of them.
                 raise ConflictError(
                     AutomationEntity.RULE,
                     reason=(
@@ -266,6 +272,7 @@ def _check_token_references(nodes: list[graph.Node]) -> None:
                             if declared
                             else " (no node has been given a name yet)"
                         )
+                        + f"; the built-in roots are {', '.join(sorted(reserved))}"
                     ),
                 )
             outputs = declared[root]

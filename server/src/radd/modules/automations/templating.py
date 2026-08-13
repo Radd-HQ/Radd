@@ -197,6 +197,22 @@ class Renderer:
 
         return _TOKEN_RE.sub(replace, str(value))
 
+    def line(self, value: Any) -> str:
+        """Render, then collapse every run of whitespace to one space.
+
+        For a param that names a THING or becomes a HEADER, never for a body.
+        The failure this exists for is silent and total: `EmailMessage` under the
+        default policy REFUSES a header containing a newline, so a rendered
+        `send_email` subject carrying one raises inside the transport — the dry
+        run says "Would apply", the real run logs a crash, and no mail is ever
+        sent. Model output is exactly where a stray newline comes from.
+
+        Collapsing is also the right answer for the by-name lookups: a value that
+        came back as "In\nProgress" should match the state called "In Progress",
+        and a literal someone typed has no whitespace runs to lose.
+        """
+        return " ".join(self(value).split())
+
     def _from_bag(self, token: str) -> str | None:
         root, dot, name = token.partition(".")
         if not dot or root in reserved_roots():

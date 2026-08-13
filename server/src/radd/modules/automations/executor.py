@@ -36,6 +36,7 @@ from radd.modules.auth.models import User
 from radd.modules.items.models import WorkItem
 from radd.modules.events import service as events
 from radd.modules.projects.models import Project
+from radd.modules.fields.validation import FieldValidationError
 from radd.modules.workflow.guards import TransitionError
 
 from radd.kernel.specs import valid_output_name
@@ -1005,27 +1006,47 @@ async def _one(
                 return _Outcome()
             if not apply:
                 return _Outcome()
-            try:
-                # THE LOOP GUARD. Every event this mutation emits is marked
-                # automation-caused, whoever it ran as — which is the whole
-                # reason `act as` is safe: identity moved, causation did not.
-                with events.automated():
-                    made = await _apply_plan(session, plan, item, actor, rule_name=automation_name)
-            except TransitionError as refusal:
-                # A WORKFLOW GUARD said no (spec 120). It is not an engine
-                # failure and it is not a bug: the project's transition rules
-                # apply to automations too, deliberately. What was wrong is that
-                # it landed in the generic `except Exception` below — logged as
-                # a crash, and reported as "would apply" in the dry run of an
-                # action that could never apply. Rewritten into the skip it
-                # always was, carrying the guard's own sentences.
-                _record_refusal(report, refusal)
-                logger.info(
-                    "automations: %s node %s refused by the workflow: %s",
-                    automation_name, node.id, refusal,
-                )
-                return _Outcome()
+            # THE LOOP GUARD. Every event this mutation emits is marked
+            # automation-caused, whoever it ran as — which is the whole
+            # reason `act as` is safe: identity moved, causation did not.
+            with events.automated():
+                made = await _apply_plan(session, plan, item, actor, rule_name=automation_name)
             return _created_outcome(made)
+    # EVERY refusal is caught OUTSIDE the savepoint, and that placement is the
+    # whole correctness of it. `items.update_item` mutates the row and THEN asks
+    # `workflow.check_transition`; catching the refusal inside the `begin_nested`
+    # block lets its `__aexit__` COMMIT, which flushes the state change the guard
+    # had just refused — and because the check raises before `_finish`, no
+    # `item.updated` event is emitted either, so the move lands with no history,
+    # no notification and no reindex while the run report calls it a skip. Out
+    # here the savepoint has already rolled back; `report.plans` is a plain
+    # Python list and survives, so the entry can be rewritten in place.
+    except TransitionError as refusal:
+        # A WORKFLOW GUARD said no. Not an engine failure and not a bug: the
+        # project's transition rules apply to automations too, deliberately.
+        # What was wrong is that this landed in the generic handler below —
+        # logged as a crash, and reported by the dry run as an action that
+        # "would apply" and never could.
+        _record_refusal(
+            report,
+            f"refused by the workflow: {'; '.join(refusal.errors) or refusal} "
+            f"(from {refusal.from_state} to {refusal.to_state})",
+        )
+        logger.info(
+            "automations: %s node %s refused by the workflow: %s",
+            automation_name, node.id, refusal,
+        )
+    except FieldValidationError as invalid:
+        # The FIELD REGISTRY said no — most often a rendered value that is not
+        # one of a select's options, which is exactly what a tokenized custom
+        # field invites. Same treatment as a guard refusal: the validator's own
+        # sentences, recorded against the action that would have written them,
+        # rather than a stack trace and a report that still says "would apply".
+        _record_refusal(report, f"refused: {'; '.join(invalid.errors) or invalid}")
+        logger.info(
+            "automations: %s node %s refused by field validation: %s",
+            automation_name, node.id, invalid,
+        )
     except Exception:
         logger.exception(
             "automations: node %s of %s failed (item %s)",
@@ -1034,25 +1055,19 @@ async def _one(
     return _Outcome()
 
 
-def _record_refusal(report: RunReport, refusal: "TransitionError") -> None:
-    """Turn the plan just recorded into the skip the guard made it.
+def _record_refusal(report: RunReport, reason: str) -> None:
+    """Turn the plan just recorded into the skip a validator made it.
 
     The plan is appended BEFORE the apply — that is what makes a dry run free —
-    so by the time a guard refuses, the report already says the action would
+    so by the time anything refuses, the report already says the action would
     apply. Rewriting the last entry keeps one record per invocation instead of
     two that contradict each other.
     """
     if not report.plans:  # pragma: no cover — an apply always follows a plan
         return
     planned = report.plans[-1]
-    reasons = "; ".join(refusal.errors) or str(refusal)
     report.plans[-1] = replace(
-        planned,
-        resolves=False,
-        detail=(
-            f"{planned.detail} — refused by the workflow: {reasons} "
-            f"(from {refusal.from_state} to {refusal.to_state})"
-        ),
+        planned, resolves=False, detail=f"{planned.detail} — {reason}"
     )
 
 

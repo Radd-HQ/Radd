@@ -23,6 +23,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
+from pydantic import ValidationError
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -216,16 +218,16 @@ async def _plan_create_item(
     """
     priority = Priority.NORMAL
     if params.get("priority"):
-        priority = _priority_or_none(text(params["priority"]))
+        priority = _priority_or_none(text.line(params["priority"]))
         if priority is None:
             return _Plan(
                 PlanKind.SKIP,
-                f"create_item: {text(params['priority'])!r} is not a priority "
+                f"create_item: {text.line(params['priority'])!r} is not a priority "
                 f"({_vocabulary(p.value for p in Priority)})",
             )
     create_kwargs: dict[str, Any] = {
         "project_id": target.id,
-        "title": text(params["title"]),
+        "title": text.line(params["title"]),
         "description": text(params.get("description", "")),
         "priority": priority,
         "flagged": bool(params.get("flagged")),
@@ -238,14 +240,14 @@ async def _plan_create_item(
     if name := params.get("type"):
         found = next(
             (t for t in await itemtypes_service.list_types(session, target.id)
-             if t.name == text(name)),
+             if t.name == text.line(name)),
             None,
         )
         if found is None:
             return _Plan(PlanKind.SKIP, f"create_item: no issue type {name!r} in {target.key}")
         create_kwargs["type_id"] = found.id
     if name := params.get("state"):
-        found = await _state_by_name(session, target.id, text(name))
+        found = await _state_by_name(session, target.id, text.line(name))
         if found is None:
             return _Plan(PlanKind.SKIP, f"create_item: no state {name!r} in {target.key}")
         create_kwargs["state_id"] = found.id
@@ -253,38 +255,38 @@ async def _plan_create_item(
         if value := params.get(key):
             if _is_clear(str(value)):
                 continue
-            found = await auth.get_user_by_email(session, text(value))
+            found = await auth.get_user_by_email(session, text.line(value))
             if found is None:
                 return _Plan(PlanKind.SKIP, f"create_item: no user {value!r} for {key}")
             create_kwargs[f"{key}_id"] = found.id
     if name := params.get("team"):
-        found = await _team_by_name(session, text(name))
+        found = await _team_by_name(session, text.line(name))
         if found is None:
             return _Plan(PlanKind.SKIP, f"create_item: no team {name!r}")
         create_kwargs["team_id"] = found.id
     if name := params.get("cycle"):
-        found = await _cycle_by_name(session, text(name))
+        found = await _cycle_by_name(session, text.line(name))
         if found is None:
             return _Plan(PlanKind.SKIP, f"create_item: no cycle {name!r}")
         create_kwargs["cycle_id"] = found.id
     if version := params.get("release"):
-        found = await releases_service.resolve_release(session, target.id, text(version))
+        found = await releases_service.resolve_release(session, target.id, text.line(version))
         if found is None:
             return _Plan(PlanKind.SKIP, f"create_item: no release {version!r} in {target.key}")
         create_kwargs["release_id"] = found.id
     if key := params.get("parent"):
-        found = await items_queries.find_item_by_key(session, text(key))
+        found = await items_queries.find_item_by_key(session, text.line(key))
         if found is None:
             return _Plan(PlanKind.SKIP, f"create_item: no item {key!r} to parent under")
         create_kwargs["parent_id"] = found.id
     for field in ("start_date", "target_date"):
         if value := params.get(field):
-            resolved = _resolve_date(text(value))
+            resolved = _resolve_date(text.line(value))
             if resolved is None:
                 return _Plan(PlanKind.SKIP, f"create_item: {field} {value!r} is not a date")
             create_kwargs[field] = resolved
 
-    labels = [text(label) for label in (params.get("labels") or []) if str(label).strip()]
+    labels = [text.line(label) for label in (params.get("labels") or []) if str(label).strip()]
     custom = {
         key: text(value) if isinstance(value, str) else value
         for key, value in (params.get("custom_fields") or {}).items()
@@ -297,7 +299,15 @@ async def _plan_create_item(
         # validator here that could disagree with it.
         create_kwargs["custom_fields"] = custom
 
-    create = ItemCreate(**create_kwargs)
+    try:
+        create = ItemCreate(**create_kwargs)
+    except ValidationError as invalid:
+        # A RENDERED value the item schema will not take — a title past 500
+        # characters is the one a model produces without trying. Skipped with
+        # the validator's own words, because the alternative is this raising
+        # through `_one`'s generic handler: a dry run that says "Would apply"
+        # and a live run that logs a crash and records nothing.
+        return _Plan(PlanKind.SKIP, f"create_item: {_validation_reason(invalid)}")
     return _Plan(
         PlanKind.CREATE_ITEM,
         f"create_item in {target.key}: {create.title!r}",
@@ -322,6 +332,14 @@ def _vocabulary(names, limit: int = _VOCABULARY_LIMIT) -> str:
     seen = [str(name) for name in names]
     shown = ", ".join(seen[:limit])
     return f"{shown}, …" if len(seen) > limit else shown
+
+
+def _validation_reason(invalid: ValidationError) -> str:
+    """A pydantic failure in the words of the field that failed."""
+    return "; ".join(
+        f"{'.'.join(str(part) for part in error['loc']) or 'value'}: {error['msg']}"
+        for error in invalid.errors()
+    )
 
 
 def _priority_or_none(value: str) -> Priority | None:
@@ -469,7 +487,7 @@ async def _plan_action(
     ictx = text.item_ctx
     match action_type:
         case ActionType.CREATE_ITEM:
-            target = await _project_by_key(session, text(params["project"]))
+            target = await _project_by_key(session, text.line(params["project"]))
             if target is None:
                 return _Plan(PlanKind.SKIP, f"create_item: no project {params['project']!r}")
             return await _plan_create_item(session, params, target, system_user, text)
@@ -516,7 +534,7 @@ async def _plan_action(
                     f"notify_user ({target_user})",
                     notify=(user_id, text(params["message"])),
                 )
-            user = await auth.get_user_by_email(session, text(target_user))
+            user = await auth.get_user_by_email(session, text.line(target_user))
             if user is None:
                 return _Plan(PlanKind.SKIP, f"notify_user: no user {target_user!r}")
             return _Plan(
@@ -527,14 +545,14 @@ async def _plan_action(
         case ActionType.SEND_EMAIL:
             if not settings.smtp_host:
                 return _Plan(PlanKind.SKIP, "send_email: smtp not configured (smtp_host empty)")
-            recipient = await resolve_recipient(session, text(params["to"]), item)
+            recipient = await resolve_recipient(session, text.line(params["to"]), item)
             if recipient is None:
                 return _Plan(PlanKind.SKIP, f"send_email: no recipient resolves for {params['to']!r}")
             address, name = recipient
             return _Plan(
                 PlanKind.EMAIL,
                 f"send_email -> {address}",
-                email=(address, name, text(params["subject"]), text(params["body"])),
+                email=(address, name, text.line(params["subject"]), text(params["body"])),
             )
         case ActionType.SET_STATE:
             # Every named target below renders as a TEMPLATE first (spec 120), so
@@ -543,7 +561,7 @@ async def _plan_action(
             # by-NAME seam that was already here, which is what keeps an
             # automation written against a project's vocabulary working when the
             # rows behind it are recreated.
-            name = text(params["state"])
+            name = text.line(params["state"])
             states = await workflow.list_states(session, project.id)
             state = _named(states, name)
             if state is None:
@@ -554,7 +572,7 @@ async def _plan_action(
                 )
             return _Plan(PlanKind.ITEM_UPDATE, f"set_state -> {name!r}", ItemUpdate(state_id=state.id))
         case ActionType.SET_PRIORITY:
-            rendered = text(params["priority"])
+            rendered = text.line(params["priority"])
             priority = _priority_or_none(rendered)
             if priority is None:
                 return _Plan(
@@ -566,7 +584,7 @@ async def _plan_action(
                 PlanKind.ITEM_UPDATE, f"set_priority -> {priority.value}", ItemUpdate(priority=priority)
             )
         case ActionType.SET_ASSIGNEE:
-            email = text(params["assignee"])
+            email = text.line(params["assignee"])
             if _is_clear(email):
                 return _Plan(PlanKind.ITEM_UPDATE, "set_assignee -> none", ItemUpdate(assignee_id=None))
             user = await auth.get_user_by_email(session, email)
@@ -576,7 +594,7 @@ async def _plan_action(
                 return _Plan(PlanKind.SKIP, f"set_assignee: no user {email!r}")
             return _Plan(PlanKind.ITEM_UPDATE, f"set_assignee -> {email}", ItemUpdate(assignee_id=user.id))
         case ActionType.ASSIGN_ROUND_ROBIN:
-            name = text(params["team"])
+            name = text.line(params["team"])
             teams = await teams_service.list_teams(session)
             team = _named(teams, name)
             if team is None:
@@ -602,7 +620,7 @@ async def _plan_action(
                 cursor_advance=(team.id, chosen),
             )
         case ActionType.SET_TEAM:
-            name = text(params["team"])
+            name = text.line(params["team"])
             if _is_clear(name):
                 return _Plan(PlanKind.ITEM_UPDATE, "set_team -> none", ItemUpdate(team_id=None))
             teams = await teams_service.list_teams(session)
@@ -614,13 +632,13 @@ async def _plan_action(
                 )
             return _Plan(PlanKind.ITEM_UPDATE, f"set_team -> {name!r}", ItemUpdate(team_id=team.id))
         case ActionType.ADD_LABEL:
-            label = text(params["label"])
+            label = text.line(params["label"])
             current = await _current_labels(session, item, system_user)
             new = current if label in current else [*current, label]
             note = " (already present)" if label in current else ""
             return _Plan(PlanKind.ITEM_UPDATE, f"add_label {label!r}{note}", ItemUpdate(labels=new))
         case ActionType.REMOVE_LABEL:
-            label = text(params["label"])
+            label = text.line(params["label"])
             current = await _current_labels(session, item, system_user)
             if label not in current:
                 return _Plan(
@@ -630,7 +648,7 @@ async def _plan_action(
             new = [name for name in current if name != label]
             return _Plan(PlanKind.ITEM_UPDATE, f"remove_label {label!r}", ItemUpdate(labels=new))
         case ActionType.SET_CYCLE:
-            name = text(params["cycle"])
+            name = text.line(params["cycle"])
             if _is_clear(name):
                 return _Plan(PlanKind.ITEM_UPDATE, "set_cycle -> none", ItemUpdate(cycle_id=None))
             cycles = await cycles_service.list_cycles(session)
@@ -642,7 +660,7 @@ async def _plan_action(
                 )
             return _Plan(PlanKind.ITEM_UPDATE, f"set_cycle -> {name!r}", ItemUpdate(cycle_id=cycle.id))
         case ActionType.SET_RELEASE:
-            version = text(params["release"])
+            version = text.line(params["release"])
             if _is_clear(version):
                 return _Plan(PlanKind.ITEM_UPDATE, "set_release -> none", ItemUpdate(release_id=None))
             release = await releases_service.resolve_release(session, project.id, version)

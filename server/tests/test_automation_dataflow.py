@@ -19,8 +19,10 @@ happy path:
 """
 
 import uuid
+from typing import NamedTuple
 
 import pytest
+from sqlalchemy import select
 
 from radd.kernel.registry import registries
 from radd.kernel.specs import AutomationNodeSpec, OutputField, OutputKind, valid_output_name
@@ -40,20 +42,6 @@ TRIGGER = Node(id="t", kind=AutomationNodeKind.TRIGGER, type="trigger.event", pa
 class _Item:
     def __init__(self, item_id: uuid.UUID):
         self.id = item_id
-
-
-class _Savepoints:
-    """Just enough session for `_one`, which wraps every invocation in one."""
-
-    def begin_nested(self):
-        class _Scope:
-            async def __aenter__(self_inner):
-                return self_inner
-
-            async def __aexit__(self_inner, *_exc):
-                return False
-
-        return _Scope()
 
 
 # --- the bag itself -----------------------------------------------------------
@@ -578,14 +566,14 @@ async def _fixture_project(db, admin, key_prefix="DF"):
     )
 
 
-async def _fixture_item(db, admin, project):
+async def _fixture_item(db, admin, project, **extra):
     """The item ROW (not the read model) — what the planner is handed."""
     from radd.modules.items import service as items_service
     from radd.modules.items.models import WorkItem
     from radd.modules.items.schemas import ItemCreate
 
     read = await items_service.create_item(
-        db, ItemCreate(project_id=project.id, title="A thing"), actor=admin
+        db, ItemCreate(project_id=project.id, title="A thing", **extra), actor=admin
     )
     await db.flush()
     return await db.get(WorkItem, read.id)
@@ -720,37 +708,136 @@ async def test_an_unknown_payload_token_still_degrades_verbatim(db, admin):
     assert plan.comment.body == "was {{payload.nope}}"
 
 
-async def test_a_workflow_guard_refusal_becomes_a_recorded_skip(monkeypatch):
-    """It is not an engine failure and it is not a bug: the project's transition
-    rules apply to automations too, deliberately. What was wrong is that it landed
-    in the generic `except Exception` — logged as a crash, and reported by the dry
-    run as an action that "would apply" and never could."""
-    from radd.modules.automations import engine, planning
-    from radd.modules.automations.planning import _Plan
-    from radd.modules.automations.types import PlanKind
-    from radd.modules.workflow.guards import TransitionError
+class _State(NamedTuple):
+    id: uuid.UUID
+    name: str
 
-    async def refuse(*_args, **_kwargs):
-        raise TransitionError(["the estimate is required"], "Todo", "Done")
 
-    async def planned(*_args, **_kwargs):
-        return _Plan(PlanKind.ITEM_UPDATE, "set_state -> 'Done'")
+async def _guarded_project(db, admin):
+    """A project whose first edge is guarded by "the assignee must be set", in
+    `guards` mode — the cheapest real refusal there is."""
+    from radd.modules.settings import service as settings_service
+    from radd.modules.settings.types import SettingKey, SettingScope
+    from radd.modules.workflow import service as workflow
+    from radd.modules.workflow import transitions as workflow_transitions
+    from radd.modules.workflow.schemas import TransitionCreate, TransitionRule
 
-    monkeypatch.setattr(engine, "_apply_plan", refuse)
-    monkeypatch.setattr(planning, "_plan", planned)
+    project = await _fixture_project(db, admin, key_prefix="GR")
+    states = await workflow.list_states(db, project.id)
+    # Ids and names read out NOW, as plain values: the settings write below
+    # flushes and expires these rows, and touching an expired attribute inside a
+    # test body is IO in a place SQLAlchemy's async layer refuses.
+    start = _State(states[0].id, states[0].name)
+    target = _State(states[1].id, states[1].name)
+    await workflow_transitions.create_transition(
+        db,
+        TransitionCreate(
+            project_id=project.id,
+            from_state_id=start.id,
+            to_state_id=target.id,
+            rules=[
+                TransitionRule(
+                    check="require_field",
+                    params={"kind": "builtin", "key": "assignee", "op": "set"},
+                )
+            ],
+        ),
+        actor_id=admin.id,
+    )
+    await settings_service.set_value(
+        db, SettingKey.WORKFLOW_TRANSITION_MODE, SettingScope.PROJECT, project.id, "guards"
+    )
+    await db.flush()
+    return project, start, target
+
+
+async def test_a_workflow_guard_refusal_leaves_the_item_where_it_was(db, admin):
+    """THE placement bug, and the reason this test drives a real session.
+
+    `items.update_item` mutates the row and THEN asks `check_transition`. The
+    first version of this caught the refusal INSIDE the invocation's savepoint,
+    so `__aexit__` committed it — the item landed in the state the guard had just
+    refused, with no `item.updated` event (the check raises before `_finish`), so
+    no history, no notification, no reindex — while the run report said "skipped".
+
+    A fake session with a no-op `__aexit__` cannot see any of that, which is
+    exactly how the first version of this test passed against the broken code.
+    """
+    from radd.modules.items.models import WorkItem
+
+    project, start, target = await _guarded_project(db, admin)
+    item = await _fixture_item(db, admin, project, state_id=start.id)
+    # Read out BEFORE the run: a savepoint rollback expires the row, and an
+    # expired attribute read outside the session's own IO is a MissingGreenlet.
+    # (That the id needs capturing at all is the rollback doing its job.)
+    item_id = item.id
 
     report = executor.RunReport()
     node = Node(id="a", kind=AutomationNodeKind.ACTION, type="action.set_state", params={})
     outcome = await executor._one(
-        _Savepoints(), node, {"type": "set_state", "params": {}}, _Item(uuid.uuid4()), object(),
-        object(), Packet.of(FACTS), [], "guarded", True, report,
+        db,
+        node,
+        {"type": "set_state", "params": {"state": target.name}},
+        item,
+        project,
+        admin,
+        Packet.of(FACTS, item=(item_id,)),
+        [(item, project)],
+        "guarded",
+        True,
+        report,
     )
 
     assert outcome.created_id is None
     assert len(report.plans) == 1, "one record per invocation, not two that contradict"
     assert report.plans[0].resolves is False
-    assert "refused by the workflow: the estimate is required" in report.plans[0].detail
-    assert "from Todo to Done" in report.plans[0].detail
+    assert "refused by the workflow: an assignee is required" in report.plans[0].detail
+    assert f"from {start.name} to {target.name}" in report.plans[0].detail
+
+    await db.flush()
+    stored = await db.scalar(select(WorkItem.state_id).where(WorkItem.id == item_id))
+    assert stored == start.id, "the guard refused, so the item must not have moved"
+
+
+async def test_a_refused_transition_does_not_take_the_branch_down(db, admin):
+    """The refusal is a SKIP, not a halt: the actions after it still run. That is
+    the same best-effort contract every other action failure has had since before
+    graphs, and it is why this is caught rather than allowed to escape."""
+    from radd.modules.items.models import WorkItem
+
+    project, start, target = await _guarded_project(db, admin)
+    item = await _fixture_item(db, admin, project, state_id=start.id)
+    item_id = item.id
+
+    report = executor.RunReport()
+
+    async def run(action, params):
+        # Re-fetched per invocation, exactly as `executor._load` does per node —
+        # the refused action's savepoint rollback expires the row it touched.
+        fresh = await db.get(WorkItem, item_id)
+        return await executor._one(
+            db,
+            Node(id=action, kind=AutomationNodeKind.ACTION, type=f"action.{action}", params={}),
+            {"type": action, "params": params},
+            fresh,
+            project,
+            admin,
+            Packet.of(FACTS, item=(item_id,)),
+            [(fresh, project)],
+            "guarded",
+            True,
+            report,
+        )
+
+    await run("set_state", {"state": target.name})
+    await run("set_priority", {"priority": "high"})
+    await db.flush()
+
+    assert [plan.resolves for plan in report.plans] == [False, True]
+    row = await db.get(WorkItem, item_id)
+    await db.refresh(row)
+    assert row.state_id == start.id, "the refused move stayed refused"
+    assert row.priority == "high", "and the action after it still ran"
 
 
 # --- ai.generate (RADD-1072) --------------------------------------------------
@@ -955,3 +1042,172 @@ async def test_the_full_triage_chain_resolves_end_to_end(db, admin, registered, 
     )
     assert missing.kind is PlanKind.SKIP
     assert "not 'team'" in missing.detail
+
+
+# --- what a refusal does, and what it must NOT do (spec 120 review) -----------
+
+
+async def test_a_rendered_custom_field_value_the_registry_refuses_is_a_skip(db, admin):
+    """The miss-skip promise has to cover the field REGISTRY too.
+
+    A tokenized custom field is exactly where a model answers with something
+    outside a select's options; before this it raised out of `_apply_plan` into
+    the executor's generic handler — a dry run saying "Would apply", a live run
+    logging a crash, and nothing recorded against the action."""
+    from radd.modules.automations.planning import _plan
+    from radd.modules.fields import service as fields_service
+    from radd.modules.fields.schemas import FieldDefinitionCreate
+
+    project = await _fixture_project(db, admin)
+    definition = await fields_service.create_field(
+        db,
+        FieldDefinitionCreate(
+            key=f"sev{uuid.uuid4().hex[:4]}",
+            name="Severity",
+            type="select",
+            options=["minor", "major"],
+        ),
+        actor_id=admin.id,
+    )
+    item = await _fixture_item(db, admin, project)
+    item_id = item.id
+
+    report = executor.RunReport()
+    node = Node(id="cf", kind=AutomationNodeKind.ACTION, type="action.set_custom_field", params={})
+    await executor._one(
+        db,
+        node,
+        {"type": "set_custom_field", "params": {"key": definition.key, "value": "{{triage.sev}}"}},
+        item,
+        project,
+        admin,
+        Packet.of(FACTS, item=(item_id,)).with_vars("triage", {"sev": "catastrophic"}),
+        [(item, project)],
+        "cf",
+        True,
+        report,
+    )
+
+    assert len(report.plans) == 1
+    assert report.plans[0].resolves is False
+    assert "refused:" in report.plans[0].detail
+    # The validator's OWN words, which name the vocabulary rather than the bad
+    # value; what the token rendered to is on the plan's `resolved` map, where
+    # the dry run shows it.
+    assert "must be one of" in report.plans[0].detail
+    assert report.plans[0].resolved == {"{{triage.sev}}": "catastrophic"}
+
+    # And the value did NOT land.
+    from radd.modules.items.models import WorkItem
+
+    await db.flush()
+    stored = await db.scalar(select(WorkItem.custom_fields).where(WorkItem.id == item_id))
+    assert (stored or {}).get(definition.key) != "catastrophic"
+
+    # A value the registry DOES take still applies, so this is a refusal and not
+    # a blanket disabling of tokenized custom fields.
+    ok_report = executor.RunReport()
+    fresh = await db.get(WorkItem, item_id)
+    await executor._one(
+        db,
+        node,
+        {"type": "set_custom_field", "params": {"key": definition.key, "value": "{{triage.sev}}"}},
+        fresh,
+        project,
+        admin,
+        Packet.of(FACTS, item=(item_id,)).with_vars("triage", {"sev": "major"}),
+        [(fresh, project)],
+        "cf",
+        True,
+        ok_report,
+    )
+    assert ok_report.plans[0].resolves is True
+
+
+async def test_a_rendered_create_item_field_the_schema_refuses_is_a_skip(db, admin):
+    """Plan-time rather than apply-time, because `ItemCreate` is where it is
+    caught — but the same promise: a rendered value that will not fit records a
+    skip in the validator's words rather than raising through the walk."""
+    from radd.modules.automations.planning import _plan
+    from radd.modules.automations.types import PlanKind
+
+    project = await _fixture_project(db, admin)
+    plan = await _plan(
+        db,
+        {"type": "create_item", "params": {"project": project.key, "title": "{{triage.text}}"}},
+        None,
+        project,
+        admin,
+        facts=FACTS,
+        rule_name="t",
+        variables={"triage": {"text": "x" * 900}},
+    )
+    assert plan.kind is PlanKind.SKIP
+    assert "title" in plan.detail and "500" in plan.detail
+
+
+async def test_a_newline_in_a_rendered_header_is_collapsed(db, admin):
+    """`EmailMessage` under the default policy REFUSES a header with a newline,
+    so a subject rendered from model output could raise inside the transport —
+    a dry run saying "Would apply" and a live run that never sent anything."""
+    from radd.modules.automations.planning import _plan
+    from radd.modules.automations.types import PlanKind
+    from radd.config import settings as config_settings
+
+    project = await _fixture_project(db, admin)
+    item = await _fixture_item(db, admin, project)
+    original = config_settings.smtp_host
+    config_settings.smtp_host = "smtp.example.com"
+    try:
+        plan = await _plan(
+            db,
+            {
+                "type": "send_email",
+                "params": {
+                    "to": "someone@example.com",
+                    "subject": "[{{triage.tag}}] a report",
+                    "body": "line one\n{{triage.tag}}\nline three",
+                },
+            },
+            item,
+            project,
+            admin,
+            facts=FACTS,
+            rule_name="t",
+            variables={"triage": {"tag": "urgent\nX-Injected: yes"}},
+        )
+    finally:
+        config_settings.smtp_host = original
+
+    assert plan.kind is PlanKind.EMAIL
+    _address, _name, subject, body = plan.email
+    assert "\n" not in subject and subject == "[urgent X-Injected: yes] a report"
+    # The BODY keeps every newline — its own two, plus the one inside the token.
+    # Collapsing there would ruin every multi-line message, and a body is not a
+    # header: `set_content` takes arbitrary text.
+    assert body.count("\n") == 3
+
+
+async def test_a_named_target_with_a_stray_newline_still_matches(db, admin):
+    """The other half of collapsing: "In\nProgress" from a model is the state
+    called "In Progress", and a literal has no whitespace runs to lose."""
+    from radd.modules.automations.planning import _plan
+    from radd.modules.automations.types import PlanKind
+    from radd.modules.workflow import service as workflow
+
+    project = await _fixture_project(db, admin)
+    item = await _fixture_item(db, admin, project)
+    states = await workflow.list_states(db, project.id)
+    wanted = next(s.name for s in states if " " in s.name)
+
+    plan = await _plan(
+        db,
+        {"type": "set_state", "params": {"state": "{{triage.state}}"}},
+        item,
+        project,
+        admin,
+        facts=FACTS,
+        rule_name="t",
+        variables={"triage": {"state": wanted.replace(" ", "\n")}},
+    )
+    assert plan.kind is PlanKind.ITEM_UPDATE, plan.detail
