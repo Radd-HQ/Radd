@@ -224,10 +224,15 @@ PARAMS_SCHEMA: dict[str, Any] = {
 def answer_schema(params: Mapping[str, Any]) -> dict[str, Any]:
     """The JSON Schema the model is decoded against.
 
-    `additionalProperties: False` and every field REQUIRED, because a partially
-    answered object would publish some tokens and not others — and the actions
-    reading the missing ones would skip with a message about a node that ran
-    perfectly well. All or nothing is the honest shape.
+    `additionalProperties: False` and every field REQUIRED — asking for all of
+    them is the only way to get all of them, and an unasked-for key is a question
+    nobody put.
+
+    What comes BACK is not all-or-nothing, and `_publish` is honest about that: a
+    field the model left blank simply is not published, the rest are, and the
+    actions reading the missing one record a skip naming it. That is the right
+    degradation — three good values and one refused write beats discarding the
+    call — and it is why "required" here is a request rather than a guarantee.
     """
     properties: dict[str, Any] = {
         TEXT_OUTPUT: {"type": "string", "description": "A short explanation of the answers."}
@@ -346,6 +351,54 @@ async def _ask(ctx: Any, params: Mapping[str, Any]) -> Mapping[str, Any]:
     )
 
 
+def check(params: Mapping[str, Any]) -> None:
+    """This node's own write-time refusals (spec 120), raised as `ValueError`.
+
+    Everything here is invisible to the generic checker, which reads the schema
+    at top level only — and every one of them is otherwise a silent truncation:
+    a 20-field node stored fine, ran with 8, and then refused the tokens for the
+    other twelve with a message saying this node "does not produce" them.
+
+    `fields_of` stays LENIENT for the same reason node names do: a stored row
+    that predates this, or one edited around the API, degrades to the fields it
+    can use rather than making the automation unloadable. Strict on write,
+    lenient on read.
+    """
+    raw = params.get("fields") or []
+    if not isinstance(raw, list):
+        raise ValueError("'fields' must be a list of values to produce")
+    if len(raw) > MAX_FIELDS:
+        raise ValueError(f"at most {MAX_FIELDS} values may be produced ({len(raw)} given)")
+    seen: set[str] = set()
+    for index, entry in enumerate(raw, start=1):
+        if not isinstance(entry, dict):
+            raise ValueError(f"value {index} must be an object with a name")
+        name = str(entry.get("name") or "").strip()
+        if not name:
+            # A row someone has not finished naming is not an error — it produces
+            # nothing and nothing references it. Refusing it would make the form
+            # unsaveable the moment you click "Add a value".
+            continue
+        if not valid_output_name(name):
+            raise ValueError(
+                f"{name!r} cannot be a token — use lowercase letters, digits and "
+                f"underscores, starting with a letter (up to 30 characters)"
+            )
+        if name == TEXT_OUTPUT:
+            raise ValueError(f"this node always produces {{{{…}}}}.{TEXT_OUTPUT}, so a value cannot be called that")
+        if name in seen:
+            raise ValueError(f"two values are called {name!r} — a token could only mean one")
+        seen.add(name)
+        choices = entry.get("choices") or []
+        if not isinstance(choices, list):
+            raise ValueError(f"{name!r}: 'choices' must be a list")
+        if len(choices) > MAX_CHOICES:
+            raise ValueError(
+                f"{name!r} offers {len(choices)} allowed values, and at most "
+                f"{MAX_CHOICES} are allowed"
+            )
+
+
 SPEC = AutomationNodeSpec(
     key=NODE_KEY,
     kind="gate",  # routes on availability; see the module docstring
@@ -368,5 +421,6 @@ SPEC = AutomationNodeSpec(
     # whose every downstream token misses. When a per-item bag exists this can
     # gain the option; until then the honest arity is the one that works.
     arity="set",
+    check=check,
     plan=plan,
 )

@@ -431,6 +431,19 @@ class AutomationNodeSpec:
     #: scope. A contributed action therefore cannot spin the engine, cannot
     #: escape the budget, and cannot take a branch down when it raises.
     apply: Callable[..., Any] | None = None
+    #: `check(params) -> None`, raising `ValueError` — the node's own write-time
+    #: validation, for what its JSON Schema cannot say and the generic checker
+    #: must not guess (spec 120).
+    #:
+    #: The generic checker is deliberately shallow (required keys, top-level
+    #: enums, and the scalar bounds a generated form already respects), because
+    #: a full JSON Schema validator there would be a second, stricter opinion
+    #: than the form that offered the value. Anything DEEPER belongs to the node:
+    #: `ai.generate` caps its field list, refuses a field name that could never
+    #: appear in a token, and caps each field's choices — none of which a
+    #: shallow reader can see, and all of which are silently truncated at run
+    #: time if nobody says so on write.
+    check: Callable[[Mapping[str, Any]], None] | None = None
     #: `plan_items(ctx) -> {item_id: port name}`, used at ITEM arity, where the
     #: node PARTITIONS its input across its ports. Optional: without it the
     #: executor falls back to calling `plan` once per single-item packet, which

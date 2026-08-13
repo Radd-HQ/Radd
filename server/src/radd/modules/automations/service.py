@@ -306,10 +306,18 @@ def _tokens_in(value, seen: set[int] | None = None) -> list[tuple[str, str]]:
 def _check_node_schema(node: graph.Node, spec) -> None:
     """A contributed node's params against its own JSON Schema (RADD-923).
 
-    Deliberately shallow — required keys and enum membership. A full JSON Schema
-    validator here would be a second, stricter opinion than the SPA's generated
-    form, and the two disagreeing is worse than either being loose: it produces a
-    form that saves a value it just offered.
+    Deliberately shallow — required keys, enum membership, and the two SCALAR
+    BOUNDS the schema states at top level (`maxLength` on a string, `maxItems` on
+    an array). A full JSON Schema validator here would be a second, stricter
+    opinion than the SPA's generated form, and the two disagreeing is worse than
+    either being loose: it produces a form that saves a value it just offered.
+    Those two are safe because the generated form already respects them.
+
+    Anything deeper is the NODE's own business, through `spec.check` — a
+    constraint that lives inside an array's items cannot be read honestly from
+    here, and leaving it unchecked is how a 20-field `ai.generate` stored fine,
+    truncated to 8 at run time, and then refused the tokens for the other twelve
+    with a message about outputs it "does not produce" (spec 120).
     """
     schema = spec.params_schema or {}
     properties = schema.get("properties") or {}
@@ -320,8 +328,8 @@ def _check_node_schema(node: graph.Node, spec) -> None:
                 reason=f"node {node.id!r} ({spec.key}): {key!r} is required",
             )
     for key, rule in properties.items():
-        allowed = rule.get("enum")
         value = node.params.get(key)
+        allowed = rule.get("enum")
         if allowed and value is not None and value not in allowed:
             raise ConflictError(
                 AutomationEntity.RULE,
@@ -330,6 +338,35 @@ def _check_node_schema(node: graph.Node, spec) -> None:
                     f"{', '.join(map(str, allowed))}"
                 ),
             )
+        limit = rule.get("maxLength")
+        if limit and isinstance(value, str) and len(value) > int(limit):
+            raise ConflictError(
+                AutomationEntity.RULE,
+                reason=(
+                    f"node {node.id!r} ({spec.key}): {key!r} is {len(value)} characters, "
+                    f"and at most {limit} are allowed"
+                ),
+            )
+        cap = rule.get("maxItems")
+        if cap and isinstance(value, list) and len(value) > int(cap):
+            raise ConflictError(
+                AutomationEntity.RULE,
+                reason=(
+                    f"node {node.id!r} ({spec.key}): {key!r} holds {len(value)} entries, "
+                    f"and at most {cap} are allowed"
+                ),
+            )
+
+    if spec.check is None:
+        return
+    try:
+        spec.check(node.params)
+    except ValueError as exc:
+        # A plugin's own refusal, in its own words, as a 409 on the form — the
+        # same shape every other write-time check here takes.
+        raise ConflictError(
+            AutomationEntity.RULE, reason=f"node {node.id!r} ({spec.key}): {exc}"
+        ) from exc
 
 
 async def _require_node_permission(session: AsyncSession, spec, actor_id) -> None:

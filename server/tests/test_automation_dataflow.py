@@ -1211,3 +1211,66 @@ async def test_a_named_target_with_a_stray_newline_still_matches(db, admin):
         variables={"triage": {"state": wanted.replace(" ", "\n")}},
     )
     assert plan.kind is PlanKind.ITEM_UPDATE, plan.detail
+
+
+async def test_ai_generate_refuses_on_write_what_it_would_truncate_at_run_time(db, admin):
+    """The write path is where someone is looking at the form. Without this a
+    20-field node stored fine, ran with 8, and then refused the tokens for the
+    other twelve with a message saying the node "does not produce" them."""
+    from radd.exceptions import ConflictError
+    from radd.modules.ai import automation_node_generate as generate
+    from radd.modules.automations import service as automations
+
+    def rule(params):
+        return _rule(
+            f"gen {uuid.uuid4().hex[:6]}",
+            [_trigger_dict(), {"id": "g", "kind": "gate", "type": "ai.generate", "params": params}],
+        )
+
+    async def refused(params) -> str:
+        with pytest.raises(ConflictError) as caught:
+            await automations.create_rule(db, rule(params), actor_id=admin.id)
+        return str(caught.value)
+
+    base = {"prompt": "triage it"}
+    assert "at most 8" in await refused(
+        {**base, "fields": [{"name": f"f{n}"} for n in range(9)]}
+    )
+    assert "cannot be a token" in await refused({**base, "fields": [{"name": "Team Name"}]})
+    assert "could only mean one" in await refused(
+        {**base, "fields": [{"name": "team"}, {"name": "team"}]}
+    )
+    assert "always produces" in await refused({**base, "fields": [{"name": "text"}]})
+    assert "at most" in await refused(
+        {
+            **base,
+            "fields": [
+                {
+                    "name": "team",
+                    "kind": "enum",
+                    "choices": [f"c{n}" for n in range(generate.MAX_CHOICES + 1)],
+                }
+            ],
+        }
+    )
+    # The generic checker's own two bounds, from the schema.
+    assert "at most 2000" in await refused({"prompt": "x" * 2001})
+
+    # An UNFINISHED row is not an error: it produces nothing and nothing
+    # references it, and refusing it would make the form unsaveable the moment
+    # someone clicks "Add a value".
+    saved = await automations.create_rule(
+        db, rule({**base, "fields": [{"name": ""}, {"name": "team"}]}), actor_id=admin.id
+    )
+    assert saved.id is not None
+
+
+def test_a_stored_generate_node_stays_lenient_on_read():
+    """Strict on write, lenient on read — the same rule node names follow. A row
+    that predates the write check must degrade to the fields it can use."""
+    from radd.modules.ai import automation_node_generate as generate
+
+    fields = generate.fields_of(
+        {"fields": [{"name": "Team Name"}, {"name": "team"}, {"name": "team"}]}
+    )
+    assert [f["name"] for f in fields] == ["team"]
