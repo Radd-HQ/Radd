@@ -200,13 +200,34 @@ export function GraphEditor({
 
   const triggers = useMemo(() => nodes.filter((n) => n.kind === NodeKind.trigger), [nodes]);
 
-  /** Does any trigger here run at INTAKE (RADD-1074)? The validate sentinel is
-   * not in the served trigger catalogue, so this is read off the graph — and it
-   * is what decides whether a check's `fail` port is a branch or a delivery. */
-  const isValidationGraph = useMemo(
-    () => triggers.some((t) => String(t.params.event ?? "") === VALIDATE_TRIGGER),
-    [triggers],
-  );
+  /** Nodes a VALIDATE trigger can reach (RADD-1074).
+   *
+   * Reachability, not a graph-wide boolean. A graph may hold a validate trigger
+   * and an event trigger side by side, and on the event trigger's branch an
+   * `ai.validate` really is a plain pass/fail router whose findings nobody
+   * collects — badging it "feedback to submitter" there would be a promise
+   * nothing keeps. Spec 119's `_check_validate_gates` scopes the same way and
+   * for the same reason. The validate sentinel is not in the served trigger
+   * catalogue, so this is read off the graph. */
+  const validationReach = useMemo(() => {
+    const reached = new Set(
+      triggers
+        .filter((t) => String(t.params.event ?? "") === VALIDATE_TRIGGER)
+        .map((t) => t.id),
+    );
+    if (reached.size === 0) return reached;
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const edge of edges) {
+        if (reached.has(edge.source) && !reached.has(edge.target)) {
+          reached.add(edge.target);
+          grew = true;
+        }
+      }
+    }
+    return reached;
+  }, [triggers, edges]);
 
   /** Does ANY trigger resolve a target item? Item tokens are blank without one,
    * and the reference says so rather than letting someone build a title around
@@ -293,7 +314,7 @@ export function GraphEditor({
             onCanvasContextMenu={setMenuAt}
             catalog={catalog.data}
             run={run}
-            validation={isValidationGraph}
+            validationReach={validationReach}
           />
         </div>
         <div className="w-[380px] shrink-0">
@@ -308,7 +329,7 @@ export function GraphEditor({
             valueSuggestions={valueSuggestions}
             canActAs={catalog.data?.can_act_as ?? false}
             hasItem={triggersResolveAnItem}
-            validation={isValidationGraph}
+            validation={selected ? validationReach.has(selected.id) : false}
             onChange={updateNode}
             onDelete={deleteNode}
           />

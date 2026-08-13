@@ -37,7 +37,9 @@
  *   - the finding-producing ports carry a "feedback to submitter" note;
  *   - an UNWIRED one is drawn as a deliberate cap, a wired one is not;
  *   - none of it appears on a graph that is not validate-triggered, where the
- *     same node really is a plain pass/fail router;
+ *     same node really is a plain pass/fail router — and in a graph holding
+ *     BOTH kinds of trigger, only the check the validate trigger can REACH is
+ *     badged, because on the event branch nobody collects the findings;
  *   - and it reads in both themes.
  *
  * Usage: node scripts/ai-validate-node-proof.mjs [--base http://127.0.0.1:8124]
@@ -313,10 +315,26 @@ const validationRule = parsed(
           type: "validation.fail",
           params: { message: "Please name the version you saw this on.", field: "description" },
         },
+        // A SECOND trigger and a second check, on their own branch. This graph
+        // fires at intake AND on an ordinary event, and the event branch's
+        // check is a plain pass/fail router whose findings nobody collects.
+        {
+          id: "ev",
+          kind: "trigger",
+          type: "trigger.event",
+          params: { event: "item.updated" },
+        },
+        {
+          id: "router",
+          kind: "gate",
+          type: NODE_TYPE,
+          params: { prompt: BAR },
+        },
       ],
       edges: [
         { source: "trg", port: "out", target: "check" },
         { source: "check", port: "fail", target: "say" },
+        { source: "ev", port: "out", target: "router" },
       ],
     }),
   ),
@@ -347,7 +365,7 @@ const FEEDBACK = `(() => {
         .map((el) => el.getBoundingClientRect().width),
     };
   };
-  return { check: read(of("check")), say: read(of("say")) };
+  return { check: read(of("check")), say: read(of("say")), router: read(of("router")) };
 })()`;
 
 /** Raw text, normalised in NODE rather than in the page: a regex literal inside
@@ -492,6 +510,9 @@ const failed = report(
     "feedback: the theme really changed the ink":
       feedbackThemes.dark.check?.color !== feedbackThemes.light.check?.color,
     "feedback: none of it on a graph that is not validate-triggered": manualFeedback === 0,
+    "feedback: and none on a check the validate trigger cannot REACH":
+      feedbackThemes.dark.router?.note === null &&
+      same(feedbackThemes.dark.router?.caps, []),
 
     // Plugin UI remotes are built into the image by `build-all.mjs`; a bare
     // `vite build` leaves them absent and the loader quarantines each one. That

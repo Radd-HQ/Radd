@@ -173,12 +173,30 @@ Three ways an action now declines, each with the reason:
    round trip to phrase it better is how a nightly run over 200 items gets
    slower every time something is misconfigured — so assignee and release get no
    hint, because there is no list there to print.
-3. **a workflow guard refused the transition.** It always applied to automations
-   by design (specs 61/107 are explicit that predictability beats convenience),
-   but the `TransitionError` landed in the executor's generic `except Exception`
-   — logged as a crash, and reported by the dry run as an action that "would
-   apply" and never could. It now rewrites the plan just recorded, so there is
-   one record per invocation carrying the guard's own sentences.
+3. **a validator refused the write.** A workflow guard always applied to
+   automations by design (specs 61/107 are explicit that predictability beats
+   convenience), but the `TransitionError` landed in the executor's generic
+   `except Exception` — logged as a crash, and reported by the dry run as an
+   action that "would apply" and never could. The field registry's
+   `FieldValidationError` is the same story and is where a tokenized custom
+   field lands when the model answers outside a select's options. Both now
+   rewrite the plan just recorded, so there is one record per invocation
+   carrying the validator's own sentences.
+
+   **Where they are caught is the correctness of it.** `items.update_item`
+   mutates the row and THEN asks `check_transition`, so catching the refusal
+   INSIDE the invocation's savepoint lets its `__aexit__` commit the change the
+   guard had just refused — and because the check raises before `_finish`, with
+   no `item.updated` event: no history, no notification, no reindex, and a run
+   report calling it a skip. The handlers sit outside the `begin_nested` block,
+   where the rollback has already happened and `report.plans` (a plain list)
+   survives. A test with a fake session cannot see any of this, which is exactly
+   how the first version of that test passed against the broken code.
+
+   `add_label` is deliberately NOT gated this way: creating a label on demand is
+   that action's documented behaviour and labels have no fixed vocabulary, so a
+   tokenized label creates like any other. An ENUM output field is the tool for
+   a closed set.
 
 ### Write-time refusal of a dangling reference
 
@@ -250,17 +268,25 @@ cleanly and does nothing.
 - **The canvas shows the name.** Reading a graph means knowing which node
   `triage` is.
 - **The token picker is TOPOLOGY-AWARE** — it walks the edges BACKWARDS and
-  lists only producers that can reach the node being edited, only named ones,
-  only their declared outputs, above the unchanged event roots. Listing every
-  named node would offer values from branches that never run with this one:
-  tokens that compile, save, and resolve to nothing.
-- **Clicking a token inserts it** into whichever field was focused last. One
-  `onFocusCapture` on the inspector rather than an `onInsert` threaded through
-  four param editors including the generated one.
-- **Value params have a TOKEN MODE**, opt-in per param. Degrading every dropdown
-  into a text field would cost everyone the affordance to buy a minority the
-  flexibility — and would lose the vocabulary, which is what stops a typo
-  becoming a 3am skip.
+  lists only producers whose values can actually REACH the node being edited:
+  named ones, publishing ones, and only through a port that carries outputs. A
+  contributed router's LAST port is its fallback, taken exactly when the node
+  produced nothing, so a consumer wired to `unavailable` is offered no variables
+  at all; an item-arity producer publishes nothing and is offered none either.
+  Only the first edge out of a producer matters — once its values are in the
+  packet they ride every port they pass through.
+- **Clicking a token inserts it** into whichever field was focused last, and
+  ONLY where the renderer runs. `planning._plan` renders an ACTION's params and
+  nothing else, so a contributed node's own prompt and a filter's SLQ get the
+  list as a REFERENCE with a line saying so — a token inserted there would reach
+  the model as literal braces, or compile into a query that matches nothing.
+- **Value params have a TOKEN MODE**, opt-in per param and keyed by the node so
+  it cannot follow the selection. Degrading every dropdown into a text field
+  would cost everyone the affordance to buy a minority the flexibility — and
+  would lose the vocabulary, which is what stops a typo becoming a 3am skip.
+  Switching modes hands each side a value it can hold: entering clears, leaving
+  restores the stored value when it is plain and non-empty, else a fallback,
+  because a select with no blank option renders nothing for a token or for "".
 - **`ai.generate` gets a bespoke form.** Its central param is an array of
   objects whose shape varies per row, which is the case `SchemaFields`' own
   docstring names as "ship your own component". The generic form still renders
@@ -279,8 +305,11 @@ that looks unfinished.
 In a graph whose trigger is `validate`, a finding is not a branch — it IS the
 intake verdict, delivered to whoever submitted. The empty handle under
 `ai.validate`'s `fail` port therefore read as an unwired branch, and people went
-looking for the action that sends the feedback. So on a validate-triggered graph
-only:
+looking for the action that sends the feedback. So on the nodes a validate
+trigger can REACH — reachability, not a graph-wide flag, because a graph may
+hold a validate trigger and an event trigger side by side and on the event
+branch nobody collects the findings; spec 119's `_check_validate_gates` scopes
+the same way:
 
 - the finding-producing ports (`ai.validate` `fail`, `validation.fail` `out`)
   carry a "→ feedback to submitter" note on the card;
@@ -290,9 +319,42 @@ only:
 - the inspector says the sentence: findings are delivered automatically, and
   wiring anything after the port is optional.
 
-None of it appears on a graph that is not validate-triggered, where the same
-node really is a plain pass/fail router and the badge would be a promise nobody
-keeps.
+None of it appears on a graph that is not validate-triggered, nor on a branch a
+validate trigger cannot reach, where the same node really is a plain pass/fail
+router and the badge would be a promise nobody keeps.
+
+## Behaviour changes to existing automations
+
+Three, and the first is the one to check before deploying.
+
+**A dotted token with an unknown root used to render verbatim. It now
+miss-skips at run time and is REFUSED on save.** `{{reporter.name}}` in an
+`add_comment` body — the shape canned responses are written in — used to post
+the literal braces. Under spec 120 `reporter` is read as a node name, finds
+nothing, and the whole action skips; and because the write path refuses a
+dangling reference, the automation can no longer be re-saved until the token is
+removed. That is a real break for a stored rule written in that style, and it is
+ACCEPTED under the no-backcompat-until-V1 rule: the alternative is a
+resolution rule with an exception carved into it, which is how a variable that
+was supposed to resolve ends up rendering as braces in somebody's issue and
+nobody notices. The refusal names both vocabularies — the graph's named nodes
+AND the six built-in roots — so the author can see that `reporter` was never a
+template word here. **Scan the stored rules of a live instance for
+`{{<word>.<word>}}` whose first word is not one of `item`, `items`, `actor`,
+`event_type`, `payload`, `matched_count` before deploying.** Anything else
+(a dotless `{{foo}}`, an unknown `{{payload.x}}`) is untouched and still renders
+verbatim.
+
+**A workflow-guard refusal no longer half-applies.** It always raised after
+`items.update_item` had mutated the row; the refusal used to escape into the
+engine's generic handler, which rolled the savepoint back, so the OUTCOME is
+unchanged — what changes is that it is now a recorded skip with the guard's
+sentences instead of an exception in the log.
+
+**A rendered value that names a thing is collapsed to one line.** Only
+whitespace RUNS, and only in params that name a target or become a header; a
+literal has none to lose. It means "In\nProgress" from a model now matches the
+state called "In Progress", where before it matched nothing.
 
 ## Where
 
@@ -305,6 +367,7 @@ keeps.
 | `automations/executor.py` | `set_output`, `_stamp`, topo-ordered fan-in, `_Outcome`, the guard-refusal record |
 | `automations/templating.py` | `Renderer`, `reserved_roots`, the public `TOKEN_RE` |
 | `automations/planning.py` | tokenized values, vocabulary hints, the miss-overrides-skip rule |
+| `automations/executor.py` | refusals caught OUTSIDE the savepoint — see below |
 | `automations/service.py` | `_check_names`, `_check_token_references` |
 | `ai/automation_node_generate.py` | the node |
 | `web/src/lib/automation-outputs.ts` | outputs, the backwards walk, name rules |
@@ -330,6 +393,9 @@ keeps.
   than publishing one item's answer for all of them.
 - **A contributed ACTION that names its outgoing port.** The reason
   `ai.generate` is a gate.
+- **Rendering in a node's OWN params.** Only action params go through the
+  `Renderer`; a contributed node's prompt and a filter's SLQ take their text
+  verbatim. The picker says so rather than pretending otherwise.
 - **Any use of the produced values outside `{{…}}`** — no arithmetic, no
   conditions on them. A gate that tests `{{triage.priority}}` is expressible
   today only by an action that reads it; testing values is the obvious next

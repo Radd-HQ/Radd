@@ -319,10 +319,12 @@ interface GraphCanvasProps {
   /** No editing affordances — used for a branching automation until the full
    * editor lands, so it can at least be SEEN rather than refused outright. */
   readOnly?: boolean;
-  /** Whether any trigger in this graph is the `validate` sentinel (RADD-1074).
-   * Passed rather than inferred: the validate sentinel is not in the served
-   * trigger catalogue, and the finding badges are only true here. */
-  validation?: boolean;
+  /** Node ids a VALIDATE trigger can reach (RADD-1074). Reachability rather
+   * than a graph-wide flag: a graph may hold a validate trigger and an event
+   * trigger side by side, and on the event branch the same check is a plain
+   * router whose findings nobody collects. Passed rather than inferred — the
+   * validate sentinel is not in the served trigger catalogue. */
+  validationReach?: ReadonlySet<string>;
 }
 
 export default function GraphCanvas({
@@ -338,7 +340,7 @@ export default function GraphCanvas({
   catalog,
   run,
   readOnly = false,
-  validation = false,
+  validationReach,
 }: GraphCanvasProps) {
   /**
    * React Flow's own node state, seeded from the graph.
@@ -381,13 +383,16 @@ export default function GraphCanvas({
               ? effectiveArity(catalog, placed.node)
               : "",
           ports: portsOfNode(placed.node, declaredPorts),
-          feedback: feedbackPortsOf(placed.node.type, validation),
+          feedback: feedbackPortsOf(
+            placed.node.type,
+            validationReach?.has(placed.node.id) ?? false,
+          ),
           wired: wiredPorts.get(placed.node.id) ?? [],
           run: run?.nodes.find((entry) => entry.node_id === placed.node.id),
         } satisfies NodeData,
         draggable: !readOnly,
       })),
-    [nodes, edges, readOnly, orientation, catalog, declaredPorts, run, validation, wiredPorts],
+    [nodes, edges, readOnly, orientation, catalog, declaredPorts, run, validationReach, wiredPorts],
   );
 
   const [flowNodes, setFlowNodes, onFlowNodesChange] = useNodesState<FlowNode>(build());
@@ -409,13 +414,14 @@ export default function GraphCanvas({
         // something else nudged the graph is exactly the bug being fixed.
         catalog?.contributed_nodes?.length ?? 0,
         run?.nodes.map((n) => [n.node_id, n.ran, n.incoming, n.ports]) ?? null,
-        // The feedback badges are a function of the TRIGGER and of which ports
-        // are wired, neither of which is in the node list (RADD-1074).
-        validation,
+        // The feedback badges are a function of which nodes a validate trigger
+        // REACHES and of which ports are wired, neither of which is in the node
+        // list (RADD-1074).
+        [...(validationReach ?? [])].sort(),
         edges.map((e) => [e.source, e.port, e.target]),
         nodes.map((n) => [n.id, n.type, n.name, n.params, n.x, n.y]),
       ]),
-    [nodes, edges, orientation, catalog, run, validation],
+    [nodes, edges, orientation, catalog, run, validationReach],
   );
   useEffect(() => {
     setFlowNodes(build());
