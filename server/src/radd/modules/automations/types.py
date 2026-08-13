@@ -2,6 +2,7 @@ import uuid
 from dataclasses import dataclass
 from enum import StrEnum
 
+from radd.kernel.specs import OutputField
 from radd.schedule import ScheduleKind
 
 # A rule's trigger is an EVENT TYPE string from the workspace event stream
@@ -347,6 +348,28 @@ TYPE_VALIDATION_FAIL = "validation.fail"
 #: to consult one place whether the type is built-in or contributed.
 BUILTIN_PORTS: dict[str, tuple[NodePort, ...]] = {
     f"{ACTION_TYPE_PREFIX}{ActionType.CREATE_ITEM.value}": (NodePort.OUT, NodePort.CREATED),
+}
+
+
+#: Named values a built-in node TYPE produces (spec 120), mirroring
+#: `BUILTIN_PORTS` — one table `nodes.outputs_of` consults whether the type is
+#: built-in or contributed.
+#:
+#: `create_item` is the only built-in producer, and it is the one that makes
+#: "file a follow-up, then say so on the original" expressible: before this the
+#: new issue's key existed only inside the engine, so a comment on the item that
+#: caused it could not name what had just been filed.
+#:
+#: The TRIGGER deliberately produces nothing. The event it carries is already
+#: the `{{event_type}}`/`{{actor.*}}`/`{{payload.*}}` root vocabulary, and
+#: giving it a bag entry too would be a second way to say the same thing — with
+#: the second one silently unavailable on the manual and schedule triggers.
+BUILTIN_OUTPUTS: dict[str, tuple[OutputField, ...]] = {
+    f"{ACTION_TYPE_PREFIX}{ActionType.CREATE_ITEM.value}": (
+        OutputField(name="key", label="Key", description="The new issue's key, e.g. TD-42."),
+        OutputField(name="id", label="Id", description="Its uuid."),
+        OutputField(name="url", label="URL", description="A link to it."),
+    ),
 }
 
 

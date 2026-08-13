@@ -197,7 +197,15 @@ def spy(monkeypatch):
                 "scope": [i.id for i, _ in scope],
             }
         )
-        return uuid.uuid4() if stored["type"] == ActionType.CREATE_ITEM.value else None
+        # `_one` returns an `_Outcome` since spec 120 — the id of anything it
+        # created AND the values it made addressable, because the id alone
+        # cannot say `TD-42`.
+        if stored["type"] != ActionType.CREATE_ITEM.value:
+            return executor._Outcome()
+        made = uuid.uuid4()
+        return executor._Outcome(
+            created_id=made, produced={"id": str(made), "key": "TD-9", "url": ""}
+        )
 
     monkeypatch.setattr(executor, "_load", fake_load)
     monkeypatch.setattr(executor, "_one", fake_one)

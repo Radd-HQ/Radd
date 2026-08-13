@@ -16,12 +16,16 @@ Pure module — tested in tests/test_automation_conditions.py.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
-from typing import Any
+from dataclasses import dataclass, field
+from typing import Any, Mapping
 
 from .conditions import EventFacts, _payload_path
 
-_TOKEN_RE = re.compile(r"\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}")
+#: The token grammar. PUBLIC since spec 120 — the write path scans a whole
+#: graph for tokens, and a second regex there would eventually admit something
+#: this one does not.
+TOKEN_RE = re.compile(r"\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}")
+_TOKEN_RE = TOKEN_RE
 
 
 @dataclass(frozen=True)
@@ -76,6 +80,21 @@ TOKENS: tuple[TokenInfo, ...] = (
 MATCHED_COUNT_TOKEN = "matched_count"
 
 
+def reserved_roots() -> frozenset[str]:
+    """The first segment of every documented token — the words a node may NOT be
+    named (spec 120).
+
+    DERIVED from `TOKENS` rather than listed beside it. A hand-kept list would be
+    the third copy of this vocabulary (the catalogue, the resolver, the reserved
+    set) and the one nobody notices going stale: a root that stopped being
+    reserved would let someone name a node `item` and shadow `{{item.key}}` in
+    every action of the graph.
+    """
+    return frozenset(
+        token.token.strip("{} ").split(".", 1)[0] for token in TOKENS
+    ) | {MATCHED_COUNT_TOKEN}
+
+
 def _resolve(
     token: str,
     facts: EventFacts,
@@ -125,16 +144,83 @@ def _resolve_items(field: str, items: list[dict[str, Any]] | None) -> str | None
     return None
 
 
+@dataclass
+class Renderer:
+    """One action invocation's template resolver (spec 120).
+
+    An OBJECT rather than a function because rendering now has to report on
+    itself. The engine needs three answers, and a `str -> str` call can only give
+    the first:
+
+    * the text, with tokens substituted;
+    * what each token BECAME, so a dry run can show `{{triage.priority}} → high`
+      rather than making someone infer it from the result;
+    * which VARIABLE tokens found nothing, so the containing action can skip
+      with a reason instead of writing a literal `{{triage.priority}}` into
+      somebody's issue.
+
+    The last one is scoped deliberately. Every OTHER unresolvable token still
+    degrades verbatim, exactly as it has since spec 58b: `{{payload.foo}}` on an
+    event that does not carry `foo` is a normal, harmless miss on a shape that
+    varies per event, and turning it into a skip would silently disable working
+    automations. A variable token is different — it names a node the author
+    wired, and if that node did not run, acting anyway is the wrong write.
+    """
+
+    facts: EventFacts
+    item_ctx: dict[str, Any] | None = None
+    items: list[dict[str, Any]] | None = None
+    #: The packet's variable bag: node name -> what it produced.
+    variables: Mapping[str, Mapping[str, str]] = field(default_factory=dict)
+    #: `{{token}}` -> what it rendered to, for the dry run.
+    resolved: dict[str, str] = field(default_factory=dict)
+    #: One sentence per variable token that found nothing, in the order met.
+    misses: list[str] = field(default_factory=list)
+
+    def __call__(self, value: Any) -> str:
+        def replace(match: re.Match[str]) -> str:
+            token = match.group(1)
+            found = _resolve(token, self.facts, self.item_ctx, self.items)
+            if found is None:
+                found = self._from_bag(token)
+            if found is None:
+                self._record_miss(token, match.group(0))
+                return match.group(0)
+            self.resolved[match.group(0)] = found
+            return found
+
+        return _TOKEN_RE.sub(replace, str(value))
+
+    def _from_bag(self, token: str) -> str | None:
+        root, dot, name = token.partition(".")
+        if not dot or root in reserved_roots():
+            return None
+        values = self.variables.get(root)
+        return None if values is None else values.get(name)
+
+    def _record_miss(self, token: str, literal: str) -> None:
+        root, dot, name = token.partition(".")
+        if not dot or root in reserved_roots():
+            return  # a documented token that had nothing to say — verbatim, as always
+        values = self.variables.get(root)
+        if values is None:
+            self.misses.append(
+                f"{literal} — no node named {root!r} produced anything on this branch"
+            )
+            return
+        made = ", ".join(sorted(values)) or "nothing"
+        self.misses.append(f"{literal} — {root!r} produced {made}, not {name!r}")
+
+
 def render_template(
     text: str,
     facts: EventFacts,
     item_ctx: dict[str, Any] | None = None,
     items: list[dict[str, Any]] | None = None,
+    variables: Mapping[str, Mapping[str, str]] | None = None,
 ) -> str:
-    """Substitute `{{token}}` occurrences; unresolvable tokens stay verbatim."""
+    """Substitute `{{token}}` occurrences; unresolvable tokens stay verbatim.
 
-    def replace(match: re.Match[str]) -> str:
-        resolved = _resolve(match.group(1), facts, item_ctx, items)
-        return match.group(0) if resolved is None else resolved
-
-    return _TOKEN_RE.sub(replace, text)
+    The one-shot form, kept because most callers want only the text. Anything
+    that has to REPORT on the rendering builds a `Renderer` and keeps it."""
+    return Renderer(facts, item_ctx, items, variables or {})(text)

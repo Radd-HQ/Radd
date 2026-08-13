@@ -9,8 +9,10 @@ kernel never depends on a plugin. Specs carry data + light callables only.
 """
 
 from collections.abc import Awaitable, Callable, Mapping
+import re
 import uuid
 from dataclasses import dataclass, field
+from enum import StrEnum
 from typing import Any
 
 
@@ -288,6 +290,55 @@ class ConsumerSpec:
     description: str = ""
 
 
+# --- automation dataflow (spec 120: a node's outputs are addressable) --------
+#: What a node's OUTPUT may be called, and equally what may NAME a node — the two
+#: halves of `{{<node>.<output>}}` are read as one identifier, so one rule covers
+#: both rather than two regexes that eventually disagree about an underscore.
+#: Lowercase and dot-free: the dot is the separator, and a name carrying one
+#: could not be told from a node-plus-field pair.
+OUTPUT_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,29}$")
+
+
+def valid_output_name(name: Any) -> bool:
+    return bool(OUTPUT_NAME_RE.match(str(name or "")))
+
+
+class OutputKind(StrEnum):
+    """What a declared output carries.
+
+    The kernel's OWN vocabulary rather than a module's — `OutputField` lives
+    here, so what its `kind` may say lives here too. That is the difference from
+    `AutomationNodeSpec.arity`, which is a plain string precisely because
+    `NodeArity` belongs to `automations`.
+
+    ENUM is not decoration: a producer that declares its choices lets the graph
+    editor offer them and lets the write path refuse a token naming a value the
+    producer can never emit. TEXT is anything else, stringified.
+    """
+
+    TEXT = "text"
+    ENUM = "enum"
+
+
+@dataclass(frozen=True)
+class OutputField:
+    """One named value a node PRODUCES, addressable downstream as
+    `{{<node name>.<name>}}` (spec 120).
+
+    Declared, not inferred, for the reason `ports` is declared (RADD-1064): the
+    graph editor has to list what a downstream token may say BEFORE anything has
+    run, and a value discovered only at run time can only be offered after it is
+    too late to reference it.
+    """
+
+    name: str
+    label: str = ""
+    kind: str = OutputKind.TEXT.value
+    #: The values an ENUM output may take. Empty for TEXT.
+    choices: tuple[str, ...] = ()
+    description: str = ""
+
+
 # --- automation nodes (spec 116 phase 2: the canvas palette is contributed) ---
 @dataclass(frozen=True)
 class AutomationNodeSpec:
@@ -339,6 +390,15 @@ class AutomationNodeSpec:
     #: Outputs for a given params dict, when they genuinely vary (an AI
     #: classifier's answers ARE its branches). Ignored when `ports` is set.
     ports_for: Callable[[Mapping[str, Any]], tuple[str, ...]] = lambda _params: ("out",)
+    #: FIXED named values this node produces (spec 120), stamped into the
+    #: packet's variable bag under the node's name. Same static-or-dynamic pair
+    #: as ports, ranked the same way in `outputs_at` — and for the same reason:
+    #: a client listing the tokens a downstream node may use has to know the set
+    #: before anything has run.
+    outputs: tuple[OutputField, ...] = ()
+    #: Outputs for a given params dict, when they vary. `ai.generate`'s outputs
+    #: ARE its params — the fields someone typed — which no static tuple can say.
+    outputs_for: Callable[[Mapping[str, Any]], tuple[OutputField, ...]] = lambda _params: ()
     #: False = runs even when nothing reached it (webhook, chat, "nothing matched").
     needs_items: bool = True
     #: How the node reads its packet — a `NodeArity` value, "set" or "item"
@@ -389,6 +449,12 @@ class AutomationNodeSpec:
         rejects edges against a port set it has to believe.
         """
         return self.ports or tuple(self.ports_for(params))
+
+    def outputs_at(self, params: Mapping[str, Any]) -> tuple[OutputField, ...]:
+        """The named values this node produces for these params — ranked exactly
+        as `ports_at` ranks ports, because the two answer the same shape of
+        question and a second precedence would drift from this one."""
+        return self.outputs or tuple(self.outputs_for(params))
 
 
 # --- MCP tools (RADD-640: the spec-114 catalog becomes plugin-registerable) ---

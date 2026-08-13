@@ -16,13 +16,15 @@ from radd.modules.items import service as items_service
 from radd.modules.projects import service as projects_service
 
 from . import catalog, engine, samples, service
-from .types import AutomationEntity, AutomationTrigger
+from .types import BUILTIN_OUTPUTS, AutomationEntity, AutomationTrigger
 from radd.kernel.registry import registries
 
 from . import templating
 
 from .schemas import (
     ContributedNodeInfo,
+    NodeOutputsInfo,
+    OutputFieldInfo,
     EventSampleRead,
     NodeArityInfo,
     PayloadPathInfo,
@@ -55,6 +57,17 @@ _MANAGE = authz.Permission.AUTOMATION_MANAGE
 #: Occurrences returned by the schedule preview — enough to show a PATTERN
 #: (that a weekly rule really is weekly) without turning into a calendar.
 _PREVIEW_RUNS = 5
+
+
+def _output_info(field) -> OutputFieldInfo:
+    """One `OutputField` on the wire (spec 120)."""
+    return OutputFieldInfo(
+        name=field.name,
+        label=field.label,
+        kind=field.kind,
+        choices=list(field.choices),
+        description=field.description,
+    )
 
 
 @router.get("/catalog", response_model=CatalogRead)
@@ -105,6 +118,7 @@ async def get_catalog(session: Session, user: CurrentUser) -> CatalogRead:
                 params_schema=spec.params_schema,
                 ports=list(spec.ports),
                 default_ports=list(spec.ports_at({})),
+                outputs=[_output_info(field) for field in spec.outputs],
                 needs_items=spec.needs_items,
                 permission=spec.permission,
             )
@@ -113,6 +127,10 @@ async def get_catalog(session: Session, user: CurrentUser) -> CatalogRead:
         node_arity=[
             NodeArityInfo(type=node_type, default=rule.default, options=list(rule.options))
             for node_type, rule in catalog.node_arities().items()
+        ],
+        node_outputs=[
+            NodeOutputsInfo(type=node_type, outputs=[_output_info(f) for f in fields])
+            for node_type, fields in BUILTIN_OUTPUTS.items()
         ],
         can_act_as=await authz.holds(session, user, authz.Permission.AUTOMATION_ACT_AS),
         tokens=[

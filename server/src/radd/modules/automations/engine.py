@@ -42,6 +42,7 @@ from radd.modules.events import service as events
 from radd.modules.events.service import Event
 from radd.modules.items import service as items
 from radd.modules.items.models import WorkItem
+from radd.modules.items.schemas import ItemRead
 from radd.modules.notify import service as notify_service
 from radd.modules.projects.models import Project
 from radd.modules.notify.types import NotificationType
@@ -150,10 +151,15 @@ async def _apply_plan(
     system_user: User,
     *,
     rule_name: str,
-) -> uuid.UUID | None:
-    """Execute one resolved plan. Returns the id of anything it CREATED, which is
-    what the create_item node's `created` port emits — the return value used to
-    be discarded, so the new issue was unreachable from the rest of the graph."""
+) -> "ItemRead | None":
+    """Execute one resolved plan. Returns whatever it CREATED, which is what the
+    create_item node's `created` port emits — the return value used to be
+    discarded, so the new issue was unreachable from the rest of the graph.
+
+    The ITEM rather than its id (spec 120): the id alone cannot say `TD-42`, and
+    the key is what a downstream `{{followup.key}}` is for. Everything the caller
+    needs is already on the read model the service returned, so this costs
+    nothing beyond not throwing it away."""
     if plan.kind is PlanKind.ITEM_UPDATE and plan.item_update is not None and item is not None:
         await items.update_item(session, item.id, plan.item_update, actor=system_user)
         # assign_round_robin advances its team's rotation ONLY on a successful
@@ -167,8 +173,7 @@ async def _apply_plan(
     elif plan.kind is PlanKind.CREATE_ITEM and plan.item_create is not None:
         # Emitted item.created is marked automation-caused — the loop guard skips
         # it, so a create_item node cannot retrigger its own graph.
-        made = await items.create_item(session, plan.item_create, actor=system_user)
-        return getattr(made, "id", None)
+        return await items.create_item(session, plan.item_create, actor=system_user)
     elif plan.kind is PlanKind.HTTP and plan.http is not None:
         url, body, secret = plan.http
         body_bytes = json.dumps(body, separators=(",", ":"), sort_keys=True).encode()

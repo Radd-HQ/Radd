@@ -14,11 +14,13 @@ from radd.modules.auth.types import Permission
 from radd.modules.fields.models import FieldDefinition
 from radd.modules.fields.types import BuiltinItemField
 from radd.modules.items import slq
+from radd.kernel.specs import valid_output_name
 
 from radd import schedule as schedule_math
 from radd.clock import utcnow
 from . import graph
 from . import nodes as nodes_registry
+from . import templating
 from .models import Automation, AutomationScheduleState, TriggerBinding, ValidationBinding
 from .executor import ACTION_TYPE_PREFIX
 from .schemas import (
@@ -156,6 +158,9 @@ async def _validate_graph(
             )
             _check_recipient_arity(node)
 
+    _check_names(parsed_nodes)
+    _check_token_references(parsed_nodes)
+
     detached = {n.id for n in parsed_nodes} - graph.is_reachable(
         [t.id for t in triggers], parsed_nodes, parsed_edges
     )
@@ -168,6 +173,127 @@ async def _validate_graph(
             ", ".join(sorted(detached)),
         )
     return triggers
+
+
+def _check_names(nodes: list[graph.Node]) -> None:
+    """A node's NAME is what downstream tokens address it by (spec 120), so it is
+    strict on write and lenient on read.
+
+    Three refusals, each because the alternative is silent:
+
+    * **Shape.** `Triage Result` cannot appear in `{{…}}` — the token grammar
+      does not admit a space and would render the braces verbatim into somebody's
+      issue. Refusing here is the only place anyone is looking at the field.
+    * **Uniqueness.** Two nodes called `triage` make `{{triage.priority}}` mean
+      whichever ran later, which is a graph whose behaviour depends on an
+      ordering nobody wrote down.
+    * **Reserved roots.** A node called `item` would shadow `{{item.key}}` in
+      every action of the graph — and the shadowing would be invisible, because
+      the token would keep resolving, just to something else.
+    """
+    seen: dict[str, str] = {}
+    reserved = templating.reserved_roots()
+    for node in nodes:
+        name = str(node.name or "").strip()
+        if not name:
+            continue
+        if not valid_output_name(name):
+            raise ConflictError(
+                AutomationEntity.RULE,
+                reason=(
+                    f"node {node.id!r}: {name!r} is not a usable name — lowercase "
+                    f"letters, digits and underscores, starting with a letter "
+                    f"(up to 30 characters)"
+                ),
+            )
+        if name in reserved:
+            raise ConflictError(
+                AutomationEntity.RULE,
+                reason=(
+                    f"node {node.id!r}: {name!r} is already a template word "
+                    f"(one of {', '.join(sorted(reserved))}) — a node with that "
+                    f"name would shadow it everywhere in this graph"
+                ),
+            )
+        if name in seen:
+            raise ConflictError(
+                AutomationEntity.RULE,
+                reason=(
+                    f"node {node.id!r}: {name!r} is already the name of node "
+                    f"{seen[name]!r} — a token could only mean one of them"
+                ),
+            )
+        seen[name] = node.id
+
+
+def _check_token_references(nodes: list[graph.Node]) -> None:
+    """Every `{{name.field}}` in the graph names a node that exists and an output
+    it declares (spec 120).
+
+    Caught on WRITE because the alternative is the failure this whole spec is
+    about: a token that resolves to nothing is an action that does not happen at
+    3am, and the commonest way to get one is renaming the producer and leaving
+    the consumer behind. The message names the token AND the node holding it, so
+    the fix is a click rather than a search.
+
+    Two deliberate limits. UPSTREAM-ness is not checked — a graph mid-build has
+    every right to a producer that is not wired yet, and the editor's picker
+    offers only reachable producers anyway; a token whose producer never ran is a
+    recorded skip at run time. And a producer that declares NO outputs (a
+    contributed node that never said what it makes) accepts any field: refusing
+    there would punish the plugin's user for the plugin's silence.
+    """
+    reserved = templating.reserved_roots()
+    declared: dict[str, set[str]] = {}
+    for node in nodes:
+        name = nodes_registry.output_name(node)
+        if name:
+            declared[name] = {field.name for field in nodes_registry.outputs_of(node)}
+
+    for node in nodes:
+        for literal, token in _tokens_in(node.params):
+            root, dot, field_name = token.partition(".")
+            if not dot or root in reserved:
+                continue
+            if root not in declared:
+                raise ConflictError(
+                    AutomationEntity.RULE,
+                    reason=(
+                        f"node {node.id!r} uses {literal}, but no node in this "
+                        f"automation is named {root!r}"
+                        + (
+                            f" — named nodes are {', '.join(sorted(declared))}"
+                            if declared
+                            else " (no node has been given a name yet)"
+                        )
+                    ),
+                )
+            outputs = declared[root]
+            if outputs and field_name not in outputs:
+                raise ConflictError(
+                    AutomationEntity.RULE,
+                    reason=(
+                        f"node {node.id!r} uses {literal}, but {root!r} produces "
+                        f"{', '.join(sorted(outputs))}"
+                    ),
+                )
+
+
+def _tokens_in(value, seen: set[int] | None = None) -> list[tuple[str, str]]:
+    """`("{{a.b}}", "a.b")` for every token anywhere in a params structure.
+
+    Walked rather than read off a list of "the template params", because which
+    params template is a per-action-type fact and a list of them here would be a
+    second copy of the planner's own behaviour — one that goes stale the first
+    time a param becomes tokenizable.
+    """
+    if isinstance(value, str):
+        return [(match.group(0), match.group(1)) for match in templating.TOKEN_RE.finditer(value)]
+    if isinstance(value, dict):
+        return [token for entry in value.values() for token in _tokens_in(entry)]
+    if isinstance(value, (list, tuple)):
+        return [token for entry in value for token in _tokens_in(entry)]
+    return []
 
 
 def _check_node_schema(node: graph.Node, spec) -> None:

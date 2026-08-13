@@ -20,7 +20,7 @@ typed under.
 """
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from sqlalchemy import select
@@ -53,7 +53,7 @@ from radd.modules.workflow import service as workflow
 
 from . import catalog, conditions, round_robin
 from .email_action import is_role, resolve_recipient, resolve_user
-from .templating import render_template
+from .templating import Renderer
 from .types import (
     CLEAR_VALUE,
     SYSTEM_ACTOR_ID,
@@ -184,6 +184,12 @@ class _Plan:
     # ALONGSIDE the item_update, so the rotation advances in the same SAVEPOINT as
     # the assignment it describes. Read-only here — the write is `_apply_plan`'s.
     cursor_advance: tuple[uuid.UUID, uuid.UUID] | None = None
+    #: `{{token}}` -> what it rendered to on this invocation (spec 120). LAST in
+    #: the field order because every other field is passed positionally by some
+    #: branch below, and stamped by `_plan` after the planner returns — twenty
+    #: return sites each remembering to carry it is exactly how one of them
+    #: would not.
+    resolved: dict[str, str] = field(default_factory=dict)
 
 
 def _manual_facts() -> conditions.EventFacts:
@@ -198,9 +204,7 @@ async def _plan_create_item(
     params: dict,
     target: Project,
     system_user: User,
-    facts: conditions.EventFacts,
-    ictx: dict[str, Any] | None,
-    items: list[dict[str, Any]] | None = None,
+    text: Renderer,
 ) -> "_Plan":
     """Resolve every named target into the ItemCreate the items service wants.
 
@@ -210,8 +214,6 @@ async def _plan_create_item(
     SKIPS with the name in the message, because a create that silently drops the
     assignee is worse than one that does not happen.
     """
-    text = lambda value: render_template(str(value), facts, ictx, items)  # noqa: E731
-
     create_kwargs: dict[str, Any] = {
         "project_id": target.id,
         "title": text(params["title"]),
@@ -369,6 +371,7 @@ async def _plan(
     facts: conditions.EventFacts,
     rule_name: str,
     items: list[dict[str, Any]] | None = None,
+    variables: Any = None,
 ) -> _Plan:
     """Resolve one stored action — read-only. Returns the work to perform, or a
     'skip' plan when a named target no longer resolves (logged, not fatal).
@@ -376,19 +379,51 @@ async def _plan(
     `item` is the ONE item this invocation targets (per-item arity, or a set of
     exactly one); `items` is everything it speaks for, which is what the
     set-shaped tokens and the webhook body render from. Both are supplied by the
-    executor, so the planner never asks which arity it is in."""
+    executor, so the planner never asks which arity it is in.
+
+    `variables` is the packet's bag (spec 120) — what upstream nodes produced,
+    readable as `{{<node>.<field>}}` anywhere a token already worked. A THIN
+    WRAPPER around `_plan_action` so the renderer is built once and its record of
+    what it substituted is stamped onto whatever plan comes back: twenty return
+    sites each remembering to carry it is exactly how one of them would not.
+    """
+    render = Renderer(
+        facts=facts,
+        item_ctx=_item_ctx(item, project),
+        items=items,
+        variables=variables or {},
+    )
+    plan = await _plan_action(
+        session, action, item, project, system_user,
+        facts=facts, rule_name=rule_name, items=items, text=render,
+    )
+    plan.resolved = dict(render.resolved)
+    return plan
+
+
+async def _plan_action(
+    session: AsyncSession,
+    action: dict,
+    item: WorkItem | None,
+    project: Project | None,
+    system_user: User,
+    *,
+    facts: conditions.EventFacts,
+    rule_name: str,
+    items: list[dict[str, Any]] | None,
+    text: Renderer,
+) -> _Plan:
+    """The per-action-type resolution. Split from `_plan` so the renderer can be
+    owned by the caller and interrogated after every branch."""
     action_type = ActionType(action["type"])
     params = action["params"]
-    ictx = _item_ctx(item, project)
-    text = lambda value: render_template(str(value), facts, ictx, items)  # noqa: E731
+    ictx = text.item_ctx
     match action_type:
         case ActionType.CREATE_ITEM:
             target = await _project_by_key(session, text(params["project"]))
             if target is None:
                 return _Plan(PlanKind.SKIP, f"create_item: no project {params['project']!r}")
-            return await _plan_create_item(
-                session, params, target, system_user, facts, ictx, items
-            )
+            return await _plan_create_item(session, params, target, system_user, text)
         case ActionType.SEND_WEBHOOK:
             body = {
                 "rule": rule_name,

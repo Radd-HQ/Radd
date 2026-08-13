@@ -26,6 +26,7 @@ import logging
 import uuid
 from dataclasses import dataclass, field
 from time import monotonic
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,9 +37,11 @@ from radd.modules.items.models import WorkItem
 from radd.modules.events import service as events
 from radd.modules.projects.models import Project
 
+from radd.kernel.specs import valid_output_name
+
 from . import conditions, graph
 from .gates import GATE_EVALUATORS
-from .nodes import arity_of, needs_items, ports_of, spec_for
+from .nodes import arity_of, needs_items, output_name, ports_of, spec_for
 from .graph import Edge, Node, Packet
 # Node-type keys live in `types.py` — the schemas and the arity table name them
 # too, and a type spelled differently in two places is a wire constant with no
@@ -138,6 +141,10 @@ class PlannedAction:
     item_id: uuid.UUID | None
     resolves: bool  # False = the planner returned SKIP (a named target has gone)
     detail: str
+    #: `{{token}}` -> what it rendered to on this invocation (spec 120). Only the
+    #: params that actually CARRIED a token appear, so the dry run can show
+    #: `{{triage.priority}} → high` without repeating every literal beside it.
+    resolved: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -167,6 +174,11 @@ class RunReport:
     #: What the walk found wrong (spec 119), in the order the checks ran. Only
     #: ever filled when `collecting` is true — see below.
     findings: list[Finding] = field(default_factory=list)
+    #: node id -> the values that node PRODUCED (spec 120). Recorded whether or
+    #: not the node was NAMED: an unnamed producer is exactly the mistake a dry
+    #: run should show, and hiding its output would leave "why does my token not
+    #: resolve" unanswerable from the report.
+    produced: dict[str, dict[str, str]] = field(default_factory=dict)
     #: THE WALK'S OWN SETTINGS, carried on the report because every node handler
     #: already receives it and threading a second object through nine signatures
     #: would buy nothing.
@@ -237,6 +249,11 @@ async def walk(
     )
     order = graph.topological_order(nodes, edges)
     inbound = graph.inbound(edges)
+    #: Where each node sits in the run. Fan-in merges its feeders in THIS order
+    #: (spec 120) rather than in the order the edges happen to be stored, so
+    #: "the later producer's variables win" means the one that actually ran
+    #: second — and so two saves of the same graph cannot merge differently.
+    rank = {node.id: index for index, node in enumerate(order)}
 
     #: (node id, port) -> what that port emitted. One key space, so a node id can
     #: never be confused with a port of the same name.
@@ -254,11 +271,15 @@ async def walk(
         if node.id == trigger.id:
             packet = initial
         else:
-            arriving = [
-                emitted[(edge.source, edge.port)]
-                for edge in inbound.get(node.id, [])
-                if (edge.source, edge.port) in emitted
-            ]
+            feeding = sorted(
+                (
+                    edge
+                    for edge in inbound.get(node.id, [])
+                    if (edge.source, edge.port) in emitted
+                ),
+                key=lambda edge: (rank.get(edge.source, 0), edge.port),
+            )
+            arriving = [emitted[(edge.source, edge.port)] for edge in feeding]
             if not arriving:
                 continue  # detached from the trigger, or every feeder ran out of budget
             packet = arriving[0]
@@ -318,7 +339,7 @@ async def _run_node(
     if node.kind in (AutomationNodeKind.GATE, AutomationNodeKind.FILTER):
         return await _run_router(session, node, packet, system_user, report)
 
-    created = await _run_action(
+    created, produced = await _run_action(
         session,
         node=node,
         packet=packet,
@@ -332,10 +353,31 @@ async def _run_node(
     # work: filter -> label -> comment all act on the same set. What it MADE
     # leaves by a separate port, so "create a follow-up, then assign it" is a
     # wire rather than a special case.
-    outputs = {NodePort.OUT.value: packet}
+    passthrough = _stamp(node, packet, produced, report)
+    outputs = {NodePort.OUT.value: passthrough}
     if NodePort.CREATED.value in ports_of(node):
-        outputs[NodePort.CREATED.value] = packet.with_items(created)
+        outputs[NodePort.CREATED.value] = passthrough.with_items(created)
     return outputs
+
+
+def _stamp(
+    node: Node, packet: Packet, produced: dict[str, str], report: RunReport
+) -> Packet:
+    """The packet a producing node emits: its input, plus what it produced under
+    the node's NAME (spec 120).
+
+    On EVERY port it emits, not only on one. `create_item`'s `out` carries the
+    items that caused the new issue and `created` carries the new issue itself —
+    both are places someone legitimately wants `{{followup.key}}`, and a rule
+    that put the values on one of them would make which one a thing to remember.
+
+    Recorded in the report either way; stamped only when the node has a usable
+    name, because a bag keyed by node id would be a token nobody wrote.
+    """
+    if not produced:
+        return packet
+    report.produced[node.id] = dict(produced)
+    return packet.with_vars(output_name(node), produced)
 
 
 # --- sources: the only nodes that PRODUCE items ------------------------------
@@ -388,13 +430,13 @@ async def _run_router(
     """
     ports = ports_of(node)
     if arity_of(node) is NodeArity.SET:
-        chosen = await _route(session, node, packet, actor, report)
+        chosen, produced = await _route(session, node, packet, actor, report)
         if chosen not in ports:
             logger.error(
                 "automations: node %s (%s) chose port %r, which it does not emit", node.id, node.type, chosen
             )
             return {}
-        return {chosen: packet}
+        return {chosen: _stamp(node, packet, produced, report)}
 
     assigned = await _partition(session, node, packet, actor, report)
     return {
@@ -405,8 +447,15 @@ async def _run_router(
 
 async def _route(
     session: AsyncSession, node: Node, packet: Packet, actor: User, report: RunReport
-) -> str:
-    """The single port a SET-arity router sends its packet down."""
+) -> tuple[str, dict[str, str]]:
+    """The single port a SET-arity router sends its packet down, and whatever it
+    produced on the way (spec 120).
+
+    A pair rather than a port, because a routing node is exactly where values are
+    produced: `ai.classify` names the answer it chose, `ai.generate` names every
+    field it filled in. A built-in gate produces nothing and says so with an
+    empty mapping.
+    """
     spec = spec_for(node)
     if spec is not None and spec.plan is not None:
         return await _run_registered_gate(session, node, packet, actor, report)
@@ -419,7 +468,7 @@ async def _route(
         # stored graphs keep working; no longer offered in the palette, because
         # a node called "event conditions" taught nobody what it tested.
         passed = conditions.matches(packet.facts, node.params.get("conditions"))
-    return (NodePort.TRUE if passed else NodePort.FALSE).value
+    return (NodePort.TRUE if passed else NodePort.FALSE).value, {}
 
 
 async def _partition(
@@ -498,10 +547,17 @@ async def _partition_registered(
 
     if spec.plan is None:
         return {item_id: fallback for item_id in packet.item_ids}
+    # The produced values are DROPPED at item arity, deliberately (spec 120).
+    # Each item has its own answer, and the bag has one slot per node name — so
+    # `{{classify.answer}}` could only ever name one of them, silently. A token
+    # that misses is recorded and skips the action; a token that resolves to
+    # some other item's answer is a wrong write nobody would notice.
     return {
-        item_id: await _run_registered_gate(
-            session, node, packet.with_items((item_id,)), actor, report
-        )
+        item_id: (
+            await _run_registered_gate(
+                session, node, packet.with_items((item_id,)), actor, report
+            )
+        )[0]
         for item_id in packet.item_ids
     }
 
@@ -526,30 +582,35 @@ async def _load(
 
 async def _run_registered_gate(
     session: AsyncSession, node: Node, packet: Packet, actor: User, report: RunReport
-) -> str:
-    """Ask a contributed gate which port the packet leaves by.
+) -> tuple[str, dict[str, str]]:
+    """Ask a contributed gate which port the packet leaves by, and collect
+    whatever it produced (spec 120).
 
     Failures return the spec's LAST port — every contributed gate declares a
     fallback as its final port for exactly this — rather than raising, so one
-    unreachable provider cannot stop a graph that has other branches.
+    unreachable provider cannot stop a graph that has other branches. A failure
+    also produces NOTHING, which is what makes an outage safe downstream: the
+    tokens that would have read its values miss and their actions skip, rather
+    than resolving to whatever the previous run left behind.
     """
     spec = spec_for(node)
     ports = spec.ports_at(node.params) if spec else ()
     if not spec or not spec.plan or not ports:
-        return ""
+        return "", {}
     if packet.is_empty and needs_items(node):
         # The node said it has nothing to say about no items. Its fallback port
         # rather than a guess, and rather than an unanswerable question sent to
         # whatever service it wraps.
-        return ports[-1]
+        return ports[-1], {}
+    ctx = _context(report, session=session, node=node, packet=packet, actor=actor)
     try:
-        chosen = await spec.plan(
-            _context(report, session=session, node=node, packet=packet, actor=actor)
-        )
+        chosen = await spec.plan(ctx)
     except Exception:
         logger.exception("automations: node %s (%s) failed; taking its fallback port", node.id, node.type)
-        return ports[-1]
-    return str(chosen) if str(chosen) in ports else ports[-1]
+        return ports[-1], {}
+    if str(chosen) not in ports:
+        return ports[-1], {}
+    return str(chosen), dict(ctx.outputs)
 
 
 @dataclass
@@ -580,6 +641,33 @@ class _NodeContext:
     findings: list[Finding] | None = None
     #: `time.monotonic()` past which an expensive check should stop asking.
     deadline: float | None = None
+    #: Where `set_output` writes (spec 120). A plain dict on the context rather
+    #: than a return value, because a node that ROUTES already returns its port
+    #: — asking it to return a pair as well would make every existing planner a
+    #: signature break, and `add_finding` had already established the seam shape.
+    outputs: dict[str, str] = field(default_factory=dict)
+
+    def set_output(self, name: str, value: Any) -> None:
+        """A contributed node's seam for saying what it PRODUCED (spec 120).
+
+        The executor files these under the node's name, so a downstream action
+        can write `{{triage.priority}}`. A METHOD, like `add_finding`, so a node
+        never constructs the vocabulary: it says what it produced and the
+        executor decides whether the invocation is one that can be addressed at
+        all (a per-item run is not — see `_partition_registered`).
+
+        Names outside the identifier rule are DROPPED rather than stored: a
+        value nothing could ever reference is not a value, and storing it would
+        put an unreachable row in the dry-run report.
+        """
+        key = str(name or "").strip()
+        if not valid_output_name(key):
+            logger.warning(
+                "automations: node %s tried to produce %r, which is not a usable output name",
+                self.node.id, name,
+            )
+            return
+        self.outputs[key] = "" if value is None else str(value)
 
     def out_of_time(self) -> bool:
         """Whether the walk's wall-clock budget is spent.
@@ -668,9 +756,14 @@ async def _run_action(
     budget: RunBudget,
     apply: bool,
     report: RunReport,
-) -> list[uuid.UUID]:
-    """Fire the action once, or once per item, per its arity. Returns the ids of
-    anything it CREATED, for the `created` port."""
+) -> tuple[list[uuid.UUID], dict[str, str]]:
+    """Fire the action once, or once per item, per its arity.
+
+    Returns the ids of anything it CREATED (for the `created` port) and the
+    named values it PRODUCED (spec 120, for the variable bag). Producing is a
+    SET-arity property: a per-item run makes one value per item, and the bag has
+    one slot per node, so those are deliberately not collected — see `_stamp`.
+    """
     from .types import ActionType
 
     # A CONTRIBUTED action first (RADD-923). Until now a plugin could declare an
@@ -680,7 +773,7 @@ async def _run_action(
     # it's risky", but never "…then do my thing".
     spec = spec_for(node)
     if spec is not None and spec.plan is not None:
-        await _run_contributed_action(
+        produced = await _run_contributed_action(
             session,
             node=node,
             spec=spec,
@@ -691,7 +784,7 @@ async def _run_action(
             apply=apply,
             report=report,
         )
-        return []
+        return [], produced
 
     # `validation.fail` (spec 119): reaching it IS the check failing. It writes
     # nothing and takes no budget beyond the node it already spent, so it runs
@@ -703,7 +796,7 @@ async def _run_action(
             # The node still passes its packet through (below), because a graph
             # that also fires on an event must not lose its downstream branch
             # just because one node in it has nothing to say here.
-            return []
+            return [], {}
         if packet.is_empty:
             # THE APPLICABILITY RULE, and it is not obvious. A universal action
             # at SET arity fires on an empty packet on purpose ("nothing matched
@@ -712,7 +805,7 @@ async def _run_action(
             # just EXCLUDED. Conditional checks are the whole reason the trigger
             # takes no condition params, so an empty packet means this branch
             # does not apply to this draft, and the check stays quiet.
-            return []
+            return [], {}
         message = str(node.params.get("message") or "").strip()
         report.findings.append(
             Finding(
@@ -724,7 +817,7 @@ async def _run_action(
                 field=str(node.params.get("field") or ""),
             )
         )
-        return []
+        return [], {}
 
     action_name = node.type.removeprefix(ACTION_TYPE_PREFIX)
     try:
@@ -734,7 +827,7 @@ async def _run_action(
         # in silence — most often a plugin that has been uninstalled.
         logger.error("automations: %s: unknown action node type %r", automation_name, node.type)
         budget.dropped.append(f"node {node.id!r} — unknown action type {node.type!r}")
-        return []
+        return [], {}
 
     stored = {"type": action_name, "params": node.params}
     actor = await _actor_for(session, node, system_user)
@@ -750,18 +843,19 @@ async def _run_action(
         # several there is no single item the run is "about" and the item tokens
         # are blank by construction — `{{items.keys}}` is the set-shaped answer.
         item, project = loaded[0] if len(loaded) == 1 else (None, None)
-        created = await _one(
+        outcome = await _one(
             session, node, stored, item, project, actor, packet, loaded,
             automation_name, apply, report,
         )
-        return [created] if created is not None else []
+        made = [outcome.created_id] if outcome.created_id is not None else []
+        return made, outcome.produced
 
     if packet.is_empty:
         logger.info(
             "automations: %s: per-item action %s skipped — nothing reached node %s",
             automation_name, action_name, node.id,
         )
-        return []
+        return [], {}
 
     # Metered whatever the action is. Before RADD-918 only the ten item-mutating
     # actions consumed budget, because they were the only ones that could fan
@@ -770,13 +864,14 @@ async def _run_action(
     allowed = budget.take_item_actions(node, len(loaded))
     created: list[uuid.UUID] = []
     for item, project in loaded[:allowed]:
-        made = await _one(
+        outcome = await _one(
             session, node, stored, item, project, actor, packet, [(item, project)],
             automation_name, apply, report,
         )
-        if made is not None:
-            created.append(made)
-    return created
+        if outcome.created_id is not None:
+            created.append(outcome.created_id)
+    # No variables: N invocations produced N answers and the bag has one slot.
+    return created, {}
 
 
 async def _run_contributed_action(
@@ -790,7 +885,7 @@ async def _run_contributed_action(
     budget: RunBudget,
     apply: bool,
     report: RunReport,
-) -> None:
+) -> dict[str, str]:
     """Run a plugin's action node (RADD-923).
 
     Contained by construction, and every clause here is one of the containments:
@@ -814,13 +909,14 @@ async def _run_contributed_action(
             "automations: %s: %s skipped — no %s reached node %s",
             automation_name, node.type, spec.subject, node.id,
         )
-        return
+        return {}
 
     batches: list[tuple[uuid.UUID, ...]] = (
         [(one,) for one in ids[: budget.take_item_actions(node, len(ids))]]
         if per_item
         else [tuple(ids)]
     )
+    produced: dict[str, str] = {}
     for batch in batches:
         try:
             async with session.begin_nested():
@@ -845,10 +941,15 @@ async def _run_contributed_action(
                     # it covers a built-in action.
                     with events.automated():
                         await spec.apply(ctx, plan)
+                # Only a SET-arity run makes an addressable value — one batch,
+                # one answer. Per item there are N, and the bag has one slot.
+                if not per_item:
+                    produced = dict(ctx.outputs)
         except Exception:
             logger.exception(
                 "automations: contributed action %s of %s failed", node.id, automation_name
             )
+    return produced
 
 
 async def _one(
@@ -863,7 +964,7 @@ async def _one(
     automation_name: str,
     apply: bool,
     report: RunReport,
-) -> uuid.UUID | None:
+) -> "_Outcome":
     """Plan one action, then apply it — inside a SAVEPOINT so a failure rolls back
     only itself. The plan is recorded either way, which is what lets a dry run
     report exactly what a real run would have done.
@@ -873,7 +974,8 @@ async def _one(
     the webhook's `items[]` render from, so a per-item webhook describes its own
     item and a digest describes all of them, with no branch in the planner.
 
-    Returns the id of anything created, for the `created` port.
+    Returns what the invocation made: the id of anything created (for the
+    `created` port) and the named values it produced (spec 120).
     """
     from .engine import _apply_plan
     from .planning import _plan, items_ctx
@@ -884,6 +986,7 @@ async def _one(
                 session, stored, item, project, actor,
                 facts=packet.facts, rule_name=automation_name,
                 items=items_ctx(scope),
+                variables=packet.vars,
             )
             report.plans.append(
                 PlannedAction(
@@ -893,24 +996,58 @@ async def _one(
                     item_id=item.id if item is not None else None,
                     resolves=plan.kind is not PlanKind.SKIP,
                     detail=plan.detail,
+                    resolved=dict(plan.resolved),
                 )
             )
             if plan.kind is PlanKind.SKIP:
                 logger.info("automations: %s %s", automation_name, plan.detail)
-                return None
+                return _Outcome()
             if not apply:
-                return None
+                return _Outcome()
             # THE LOOP GUARD. Every event this mutation emits is marked
             # automation-caused, whoever it ran as — which is the whole
             # reason `act as` is safe: identity moved, causation did not.
             with events.automated():
-                return await _apply_plan(session, plan, item, actor, rule_name=automation_name)
+                made = await _apply_plan(session, plan, item, actor, rule_name=automation_name)
+            return _created_outcome(made)
     except Exception:
         logger.exception(
             "automations: node %s of %s failed (item %s)",
             node.id, automation_name, item.id if item is not None else "—",
         )
-    return None
+    return _Outcome()
+
+
+@dataclass(frozen=True)
+class _Outcome:
+    """What one action invocation left behind: the id of anything it CREATED and
+    the values it made addressable (spec 120)."""
+
+    created_id: uuid.UUID | None = None
+    produced: dict[str, str] = field(default_factory=dict)
+
+
+def _created_outcome(made: Any) -> _Outcome:
+    """The `create_item` outcome, read off the item the applier returned.
+
+    Key and URL rather than the id alone, because "file a follow-up and then say
+    which one" is the whole reason this is addressable — and nobody recognises a
+    uuid in a comment. The URL is built from `app_base_url` the same way every
+    notification builds one, so a link in an automation's comment goes where a
+    link in its email goes.
+    """
+    item_id = getattr(made, "id", None)
+    if item_id is None:
+        return _Outcome()
+    key = str(getattr(made, "key", "") or "")
+    return _Outcome(
+        created_id=item_id,
+        produced={
+            "id": str(item_id),
+            "key": key,
+            "url": f"{settings.app_base_url.rstrip('/')}/issues/{key}" if key else "",
+        },
+    )
 
 
 async def load_graph(automation) -> tuple[list[Node], list[Edge], list[Node]]:

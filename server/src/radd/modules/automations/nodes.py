@@ -17,9 +17,17 @@ from __future__ import annotations
 from typing import Any
 
 from radd.kernel.registry import registries
+from radd.kernel.specs import OutputField, valid_output_name
 
 from . import graph
-from .types import BUILTIN_ARITY, BUILTIN_PORTS, ARITY_PARAM, ArityRule, NodeArity
+from .types import (
+    ARITY_PARAM,
+    BUILTIN_ARITY,
+    BUILTIN_OUTPUTS,
+    BUILTIN_PORTS,
+    ArityRule,
+    NodeArity,
+)
 
 
 def ports_of(node: graph.Node) -> tuple[str, ...]:
@@ -37,6 +45,34 @@ def ports_of(node: graph.Node) -> tuple[str, ...]:
     if builtin is not None:
         return tuple(port.value for port in builtin)
     return graph.default_ports(node)
+
+
+def outputs_of(node: graph.Node) -> tuple[OutputField, ...]:
+    """The named values a node produces (spec 120) — its TYPE's answer when one
+    is registered or tabled, else nothing.
+
+    Ranked exactly like `ports_of`, and for the same reason: the write path
+    refuses a token naming an output its producer cannot emit, so it has to ask
+    one place. "Nothing" is the honest default — most node types produce no
+    values at all, and a fallback that invented some would put tokens in the
+    editor's picker that never resolve.
+    """
+    spec = registries.automation_nodes.get(node.type)
+    if spec is not None:
+        return tuple(spec.outputs_at(node.params))
+    return BUILTIN_OUTPUTS.get(node.type, ())
+
+
+def output_name(node: graph.Node) -> str:
+    """The name this node can be ADDRESSED by, or "" when it cannot.
+
+    Lenient by design: a stored name that is not a legal identifier makes the
+    node unaddressable rather than making the automation unloadable. The write
+    path is where someone is told; a row edited around the API degrades to a
+    producer nobody can reference, which is visible in the dry run rather than
+    fatal at 3am.
+    """
+    return node.name if valid_output_name(node.name) else ""
 
 
 def spec_for(node: graph.Node):

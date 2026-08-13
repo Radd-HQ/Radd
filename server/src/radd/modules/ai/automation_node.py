@@ -41,7 +41,7 @@ import uuid
 from typing import Any, Mapping
 
 from radd.config import settings
-from radd.kernel import AutomationNodeSpec
+from radd.kernel import AutomationNodeSpec, OutputField, OutputKind
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +75,31 @@ def ports_for(params: Mapping[str, Any]) -> tuple[str, ...]:
     its kind: the set is a function of what someone typed into the form.
     """
     return (*answers_of(params), FALLBACK_PORT)
+
+
+#: The chosen answer, addressable downstream (spec 120). The classifier already
+#: routes by it; naming it as an OUTPUT is what lets an action WRITE it —
+#: "…and put the answer in the Category field" used to need a branch per answer
+#: with a hardcoded action on each.
+ANSWER_OUTPUT = "answer"
+
+
+def outputs_for(params: Mapping[str, Any]) -> tuple[OutputField, ...]:
+    """One ENUM output whose choices are the configured answers.
+
+    Dynamic for the same reason the ports are: the vocabulary is what someone
+    typed. Declaring the choices (rather than calling it free text) is what lets
+    the write path refuse `{{triage.answer}}` compared against a value this
+    classifier can never produce."""
+    return (
+        OutputField(
+            name=ANSWER_OUTPUT,
+            label="Answer",
+            kind=OutputKind.ENUM.value,
+            choices=tuple(answers_of(params)),
+            description="The answer the model chose — one of the configured answers.",
+        ),
+    )
 
 
 PARAMS_SCHEMA: dict[str, Any] = {
@@ -129,7 +154,26 @@ async def plan(ctx: Any) -> str:
     if len(answers) < 2:
         return FALLBACK_PORT
     context = await _context_for(ctx, ctx.packet.item_ids)
-    return await _ask(ctx, context, answers)
+    chosen = await _ask(ctx, context, answers)
+    if chosen != FALLBACK_PORT:
+        # Only a REAL answer is published (spec 120). The fallback means nobody
+        # decided anything, and publishing "unavailable" as the answer would let
+        # a downstream `set_custom_field {{triage.answer}}` write the word
+        # "unavailable" into someone's field as though the model had said it.
+        _publish(ctx, chosen)
+    return chosen
+
+
+def _publish(ctx: Any, answer: str) -> None:
+    """Make the answer addressable, where the executor offers the seam.
+
+    `getattr` because this module is written against the node context as a DUCK
+    TYPE — `ai` contributes through the kernel and imports nothing from
+    `automations` — so a host that predates the variable bag simply publishes
+    nothing rather than crashing a classification."""
+    publish = getattr(ctx, "set_output", None)
+    if callable(publish):
+        publish(ANSWER_OUTPUT, answer)
 
 
 async def plan_items(ctx: Any) -> dict[uuid.UUID, str]:
@@ -214,6 +258,10 @@ SPEC = AutomationNodeSpec(
     group="Gates",
     params_schema=PARAMS_SCHEMA,
     ports_for=ports_for,
+    # Published at SET arity only: per item there is one answer per issue and the
+    # packet's bag has one slot per node, so the executor drops them rather than
+    # letting one node name silently mean whichever item came last.
+    outputs_for=outputs_for,
     needs_items=False,  # "nothing matched — is that a problem?" is a fair question
     # Default SET: it is the cheap mode, and defaulting to one model call per
     # item would make dropping this node on a scheduled run over a broad query

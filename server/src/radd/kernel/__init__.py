@@ -23,6 +23,7 @@ from .registry import (
 )
 from .hosts import EntityHost, entity_host, set_entity_host
 from .specs import (
+    OUTPUT_NAME_RE,
     AutomationNodeSpec,
     CapabilitySpec,
     CascadeSpec,
@@ -38,6 +39,8 @@ from .specs import (
     McpToolSpec,
     NavFactSpec,
     NavItemSpec,
+    OutputField,
+    OutputKind,
     PageExtensionSpec,
     PermissionSpec,
     PluginUiManifest,
@@ -47,6 +50,7 @@ from .specs import (
     SlqFieldContext,
     SlqFieldSpec,
     TaskSpec,
+    valid_output_name,
     ViewTypeSpec,
     WidgetTypeSpec,
 )
@@ -80,6 +84,10 @@ __all__ = [
     "ConsumerSpec",
     "IntegrationSpec",
     "AutomationNodeSpec",
+    "OutputField",
+    "OutputKind",
+    "OUTPUT_NAME_RE",
+    "valid_output_name",
     "McpToolSpec",
     "PageExtensionSpec",
     "NavItemSpec",

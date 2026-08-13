@@ -62,6 +62,20 @@ class Node:
     kind: AutomationNodeKind
     type: str  # the node-type key: "filter.slq", "action.create_item", …
     params: dict[str, Any] = field(default_factory=dict)
+    #: What downstream nodes CALL this one (spec 120) — the left half of
+    #: `{{triage.priority}}`. Optional: a node with no name still runs, it just
+    #: cannot be addressed, which is the right answer for the fourteen node types
+    #: that produce nothing.
+    #:
+    #: Separate from `id` on purpose. The id is machinery — `act3`, `gate1` — and
+    #: is what edges are wired to, so renaming it would break every edge; a name
+    #: is prose someone chose and can change freely. Conflating them would make
+    #: "call this triage" a graph-wide rewire.
+    #:
+    #: Held VERBATIM. Whether it is a legal name is `nodes.output_name` /
+    #: the write path's question: a stored name that is not legal degrades to
+    #: unaddressable rather than making the automation unloadable.
+    name: str = ""
 
     @property
     def ports(self) -> tuple[NodePort, ...]:
@@ -111,6 +125,19 @@ class Packet:
 
     facts: Any  # conditions.EventFacts — typed there, kept opaque to stay pure
     subjects: Mapping[str, tuple[uuid.UUID, ...]] = field(default_factory=dict)
+    #: The VARIABLE BAG (spec 120): node name -> what that node produced, as
+    #: strings. It rides on the packet rather than on the run because branching
+    #: is what makes it interesting — a value produced on one branch must not be
+    #: readable on a branch that never ran, which a run-wide dict could not
+    #: express.
+    #:
+    #: **Aliasing.** The outer dict is rebuilt on every write (`with_vars`) and
+    #: the inner dicts are only ever REPLACED, never mutated in place — so a
+    #: packet handed to three downstream nodes shares its inner mappings safely
+    #: and copying them would buy nothing. Values are strings because that is
+    #: what a `{{token}}` renders to; a producer stringifies at the seam rather
+    #: than every consumer guessing.
+    vars: Mapping[str, Mapping[str, str]] = field(default_factory=dict)
 
     @classmethod
     def of(cls, facts: Any, **subjects: Iterable[uuid.UUID]) -> Packet:
@@ -143,16 +170,38 @@ class Packet:
         event is about without forgetting which release it was about."""
         return replace(self, subjects={**self.subjects, subject: _dedupe(ids)})
 
+    def with_vars(self, name: str, values: Mapping[str, str]) -> Packet:
+        """What a node PRODUCED, filed under the name it is addressed by.
+
+        An unnamed producer returns the packet unchanged: it ran, it just has no
+        handle, and inventing one from the node id would make `{{act3.key}}` a
+        token nobody wrote and nothing offered.
+        """
+        if not name or not values:
+            return self
+        return replace(
+            self,
+            vars={**self.vars, name: {key: str(value) for key, value in values.items()}},
+        )
+
     def merge(self, other: Packet) -> Packet:
         """Fan-in, per subject. Safe to keep `self.facts`: both packets come from
         the same run, so their facts are identical by construction — there is no
         reconciling to do, and asserting equality here would be checking the
-        engine, not the graph."""
+        engine, not the graph.
+
+        Variables union with the LATER writer winning, and `walk` feeds the
+        arriving packets in topological order so "later" means "the producer that
+        ran second". Two branches that both name a node `triage` is a graph the
+        write path refuses, so in practice this only unions disjoint bags — the
+        rule exists so the one case that can still collide (the same producer
+        reached twice by different routes) resolves the same way on every run.
+        """
         merged = {
             key: _dedupe(self.subjects.get(key, ()) + other.subjects.get(key, ()))
             for key in {*self.subjects, *other.subjects}
         }
-        return replace(self, subjects=merged)
+        return replace(self, subjects=merged, vars={**self.vars, **other.vars})
 
 
 def _dedupe(item_ids: Iterable[uuid.UUID]) -> tuple[uuid.UUID, ...]:
@@ -182,7 +231,17 @@ def parse(nodes: Iterable[Mapping[str, Any]], edges: Iterable[Mapping[str, Any]]
         params = raw.get("params") or {}
         if not isinstance(params, dict):
             raise GraphError(f"node {node_id!r}: params must be an object")
-        parsed_nodes.append(Node(id=node_id, kind=kind, type=node_type, params=dict(params)))
+        parsed_nodes.append(
+            Node(
+                id=node_id,
+                kind=kind,
+                type=node_type,
+                params=dict(params),
+                # Read leniently — a stored name that is not a legal identifier
+                # makes the node unaddressable, never unloadable (spec 120).
+                name=str(raw.get("name") or ""),
+            )
+        )
 
     parsed_edges: list[Edge] = []
     for raw in edges:

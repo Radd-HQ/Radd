@@ -387,6 +387,12 @@ class NodeIn(BaseModel):
     kind: AutomationNodeKind
     type: str = Field(min_length=1, max_length=100)
     params: dict[str, Any] = Field(default_factory=dict)
+    #: What downstream tokens call this node (spec 120) — the left half of
+    #: `{{triage.priority}}`. Typed loosely HERE and checked by the service,
+    #: because the interesting rules (unique in this graph, not a reserved
+    #: template word) are graph-wide facts a per-field validator cannot see, and
+    #: splitting them across two places is how the two disagree.
+    name: str = Field(default="", max_length=30)
     # Canvas coordinates. Optional and ignored by the engine — `graph.parse`
     # never reads them, so a graph laid out by hand and one laid out
     # automatically execute identically. Absent means "no one has placed this
@@ -521,8 +527,37 @@ class ContributedNodeInfo(BaseModel):
     #: the form is edited (an AI classifier's ports are its answers), so this is
     #: the starting shape, not the final word.
     default_ports: list[str] = Field(default_factory=list)
+    #: The node's FIXED named outputs (spec 120), on exactly the terms `ports`
+    #: is fixed: empty means they depend on the params — `ai.generate`'s outputs
+    #: ARE the fields someone is still typing — and the editor computes those
+    #: locally as the form changes.
+    outputs: list["OutputFieldInfo"] = Field(default_factory=list)
     needs_items: bool = True
     permission: str = ""
+
+
+class OutputFieldInfo(BaseModel):
+    """One value a node produces, addressable as `{{<node name>.<name>}}`."""
+
+    name: str
+    label: str = ""
+    kind: str = "text"
+    #: The values an ENUM output may take — what the editor offers, and what the
+    #: write path measures a comparison against.
+    choices: list[str] = Field(default_factory=list)
+    description: str = ""
+
+
+class NodeOutputsInfo(BaseModel):
+    """What one BUILT-IN node type produces (spec 120).
+
+    A table beside `node_arity` rather than a field on the node, for the same
+    reason that one exists: the editor must answer "what tokens may I offer for
+    this node" for built-in and contributed types alike, and a second copy of
+    `action.create_item → key, id, url` in TypeScript is a copy that drifts."""
+
+    type: str
+    outputs: list[OutputFieldInfo] = Field(default_factory=list)
 
 
 class NodeArityInfo(BaseModel):
@@ -594,6 +629,10 @@ class CatalogRead(BaseModel):
     #: How each node type reads its packet, built-in and contributed alike —
     #: one table so the editor's default cannot disagree with the engine's.
     node_arity: list[NodeArityInfo] = []
+    #: What each BUILT-IN node type produces (spec 120). Contributed types carry
+    #: theirs on `contributed_nodes[].outputs`, static-or-dynamic exactly as
+    #: their ports are.
+    node_outputs: list[NodeOutputsInfo] = []
     #: Whether the CALLER may make an action run as someone else. The editor
     #: hides the field entirely when false — an affordance that is refused on
     #: save is worse than one that is absent.
