@@ -20,6 +20,7 @@ import {
   VALIDATION_FAIL_TYPE,
   type ActionTypeValue,
   type AutomationCatalog,
+  type AutomationEdge,
   type AutomationNode,
   type ConditionGroup,
   type RuleAction,
@@ -33,10 +34,13 @@ import {
   effectiveArity,
   normalizeActionParams,
 } from "../../lib/automation-nodes";
+import { isProducer, nodeNameError, outputsOfNode } from "../../lib/automation-outputs";
 import { ActionParams } from "./ActionParams";
 import { ArityField } from "./ArityField";
 import { CreateItemFields } from "./CreateItemFields";
 import { SchemaFields } from "./SchemaFields";
+import { GenerateFields } from "./GenerateFields";
+import { useTokenTarget } from "./useTokenTarget";
 import { EventSamples } from "./EventSamples";
 import { SearchFields } from "./SearchFields";
 import { ValidateTriggerFields, ValidationFailFields } from "./ValidationFields";
@@ -57,6 +61,10 @@ import { ScheduleEditor, defaultSchedule } from "../ScheduleEditor";
 
 interface GraphInspectorProps {
   node: AutomationNode | null;
+  /** The whole graph, so the token picker can list only the producers this node
+   * can be reached FROM and the name field can refuse a duplicate (spec 120). */
+  nodes?: AutomationNode[];
+  edges?: AutomationEdge[];
   pickers: PickerData;
   /** For the trigger picker and the gate's condition subjects/operators. */
   catalog?: AutomationCatalog;
@@ -78,6 +86,8 @@ interface GraphInspectorProps {
 
 export function GraphInspector({
   node,
+  nodes = [],
+  edges = [],
   pickers,
   catalog,
   trigger,
@@ -101,6 +111,9 @@ export function GraphInspector({
   // conditionally, which React forbids. Keyed by event type, so selecting a
   // different node in the same graph reuses the cached answer.
   const upstreamSample = useQuery(eventSampleQuery(trigger?.event_type ?? ""));
+  // Where a clicked token lands. ABOVE the early return, like the query above:
+  // a hook after one runs conditionally, which React forbids.
+  const tokenTarget = useTokenTarget();
 
   if (!node) {
     return (
@@ -120,9 +133,27 @@ export function GraphInspector({
   //: built-in palette. Its params are its own business — never the action union.
   const contributed = catalog?.contributed_nodes?.find((entry) => entry.key === node.type);
   const forcedReason = arityForcedReason(node);
+  //: Whether naming this node would make anything addressable (spec 120). Asked
+  //: of the type AND its params, because `ai.generate` produces `text` before a
+  //: single field has been added.
+  const produces = isProducer(node, catalog);
+  const nameError = nodeNameError(String(node.name ?? ""), node, nodes, catalog);
+  const tokens = (
+    <TokenReference
+      catalog={catalog}
+      hasItem={hasItem}
+      node={node}
+      nodes={nodes}
+      edges={edges}
+      onInsert={tokenTarget.insert}
+    />
+  );
 
   return (
-    <div className="flex flex-col gap-3 rounded-[8px] border border-subtle bg-surface p-3">
+    <div
+      className="flex flex-col gap-3 rounded-[8px] border border-subtle bg-surface p-3"
+      onFocusCapture={tokenTarget.onFocusCapture}
+    >
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <div className="text-[11px] uppercase tracking-wide text-fg-muted">{node.kind}</div>
@@ -136,6 +167,27 @@ export function GraphInspector({
           </Button>
         )}
       </div>
+
+      {/* A PRODUCER is named so downstream nodes can read it (spec 120). Only
+          shown where naming buys something: on the fourteen node types that
+          produce nothing, a name field would be a control with no effect. */}
+      {produces && (
+        <TextField
+          label="Name (for tokens)"
+          value={String(node.name ?? "")}
+          placeholder="triage"
+          error={nameError || undefined}
+          hint={
+            nameError
+              ? undefined
+              : `Read downstream as ${outputsOfNode(node, catalog)
+                  .slice(0, 2)
+                  .map((output) => `{{${node.name || "name"}.${output.name}}}`)
+                  .join(", ")}`
+          }
+          onChange={(event) => onChange({ ...node, name: event.target.value })}
+        />
+      )}
 
       {node.kind === NodeKind.filter && (
         <TextField
@@ -285,12 +337,23 @@ export function GraphInspector({
       {contributed && node.type !== "ai.classify" && (
         <div className="flex flex-col gap-2">
           <p className="text-xs text-fg-secondary">{contributed.description}</p>
-          <SchemaFields
-            schema={contributed.params_schema}
-            params={node.params}
-            onChange={setParams}
-          />
-          <TokenReference catalog={catalog} hasItem={hasItem} onInsert={undefined} />
+          {/* `ai.generate` earns a bespoke form: its central param is an array
+              of objects whose shape varies per row, which is exactly the case
+              SchemaFields' docstring names as "ship your own component". */}
+          {node.type === "ai.generate" ? (
+            <GenerateFields
+              schema={contributed.params_schema}
+              params={node.params}
+              onChange={setParams}
+            />
+          ) : (
+            <SchemaFields
+              schema={contributed.params_schema}
+              params={node.params}
+              onChange={setParams}
+            />
+          )}
+          {tokens}
         </div>
       )}
 
@@ -336,7 +399,7 @@ export function GraphInspector({
             forced={forcedReason ? { value: NodeArity.item, reason: forcedReason } : undefined}
             onChange={(arity) => setParams({ ...node.params, arity })}
           />
-          <TokenReference catalog={catalog} hasItem={hasItem} onInsert={undefined} />
+          {tokens}
         </div>
       )}
     </div>

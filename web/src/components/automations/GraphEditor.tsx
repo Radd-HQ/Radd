@@ -289,6 +289,8 @@ export function GraphEditor({
         <div className="w-[380px] shrink-0">
           <GraphInspector
             node={selected}
+            nodes={nodes}
+            edges={edges}
             pickers={pickers}
             catalog={catalog.data}
             trigger={upstreamTrigger}

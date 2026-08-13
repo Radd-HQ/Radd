@@ -152,8 +152,31 @@ export interface ContributedNodeInfo {
    * TRUE/FALSE handles and let people wire edges the engine never emits. */
   ports: string[];
   default_ports: string[];
+  /** The node's FIXED named outputs (spec 120), on exactly the terms `ports` is
+   * fixed: empty means they depend on the params — `ai.generate`'s outputs ARE
+   * the fields someone is still typing — and the editor computes those locally
+   * as the form changes. */
+  outputs: OutputFieldInfo[];
   needs_items: boolean;
   permission: string;
+}
+
+/** One value a node produces, addressable downstream as `{{<node>.<name>}}`. */
+export interface OutputFieldInfo {
+  name: string;
+  label: string;
+  /** "text" | "enum" — an enum's `choices` are what the model may answer. */
+  kind: string;
+  choices: string[];
+  description: string;
+}
+
+/** What one BUILT-IN node type produces. Served beside `node_arity` and for the
+ * same reason: a second copy of `action.create_item -> key, id, url` in
+ * TypeScript is a copy that drifts. */
+export interface NodeOutputsInfo {
+  type: string;
+  outputs: OutputFieldInfo[];
 }
 
 /** GET /automations/catalog — everything the rule builder renders from. */
@@ -168,6 +191,9 @@ export interface AutomationCatalog {
   contributed_nodes: ContributedNodeInfo[];
   /** How each node type reads its packet, built-in and contributed alike. */
   node_arity: NodeArityInfo[];
+  /** What each BUILT-IN node type produces (spec 120). Contributed types carry
+   * theirs on `contributed_nodes[].outputs`. */
+  node_outputs: NodeOutputsInfo[];
   /** `{{token}}` substitutions available in action text fields. Served so the
    * editor can SHOW what is supported instead of leaving people guessing. */
   tokens: { token: string; description: string; needs_item: boolean }[];
@@ -293,6 +319,11 @@ export interface AutomationNode {
   /** The node-type key: "trigger.event", "filter.slq", "action.add_label", … */
   type: string;
   params: Record<string, unknown>;
+  /** What downstream tokens call this node (spec 120) — the left half of
+   * `{{triage.priority}}`. Separate from `id`, which edges are wired to: naming
+   * would otherwise be a graph-wide rewire. Absent/empty = unaddressable, which
+   * is right for the node types that produce nothing. */
+  name?: string;
   /** Canvas coordinates. Optional and ignored by the engine — absent means
    * "nobody has placed this node", and the editor lays it out from the topology
    * instead. That is what lets every automation migrated by d116graphs open on
@@ -367,6 +398,18 @@ export interface ActionPreview {
    * type from several nodes, and once per item at per-item arity. */
   node_id: string;
   item_key: string;
+  /** `{{token}}` -> what it rendered to. Only params that CARRIED a token
+   * appear; when `resolves` is false, this is what `detail` is about. */
+  resolved: Record<string, string>;
+}
+
+/** One value a node produced on a dry run, with the token that reads it. The
+ * token rather than the bare field name, because that is the thing someone
+ * copies into the action below. */
+export interface ProducedVar {
+  token: string;
+  name: string;
+  value: string;
 }
 
 /** What left one port of one node on a dry run. */
@@ -386,6 +429,11 @@ export interface NodeResult {
   node_id: string;
   kind: NodeKindValue;
   type: string;
+  /** What downstream tokens call this node, "" when unnamed. */
+  name: string;
+  /** What it produced. Present even when unnamed — that is the mistake it
+   * exists to show. */
+  produced: ProducedVar[];
   /** False = never reached: detached from the trigger, or out of budget. */
   ran: boolean;
   incoming: number;

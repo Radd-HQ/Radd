@@ -230,6 +230,25 @@ function NodeRow({ node, type }: { node: NodeResult; type?: string }) {
               {port.taken && port.sample.length > 0 && ` · ${port.sample.slice(0, 4).join(", ")}`}
             </span>
           ))}
+          {node.produced.length > 0 && (
+            // What this node made addressable (spec 120). Shown even when the
+            // node has no NAME, with the token blank — an unnamed producer is
+            // exactly the mistake this makes visible, and hiding its values
+            // leaves "why does my token not resolve" unanswerable from here.
+            <ul
+              data-node-produced={node.node_id}
+              className="flex w-full flex-col gap-0.5 pt-0.5"
+            >
+              {node.produced.map((entry) => (
+                <li key={entry.name} className="flex items-baseline gap-1.5 text-[11px]">
+                  <code className={entry.token ? "text-accent-text-strong" : "text-fg-faint"}>
+                    {entry.token || `${entry.name} (name this node to use it)`}
+                  </code>
+                  <span className="min-w-0 truncate text-fg-secondary">{entry.value}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </>
       )}
     </li>
@@ -237,24 +256,52 @@ function NodeRow({ node, type }: { node: NodeResult; type?: string }) {
 }
 
 function ActionPreviewRow({ preview }: { preview: ActionPreview }) {
+  const resolved = Object.entries(preview.resolved ?? {});
   return (
-    <li className="flex items-center gap-2 rounded border border-subtle/80 bg-base/40 px-2.5 py-1.5 text-xs">
-      <span
-        className={
-          "rounded px-1.5 py-px text-[10px] uppercase tracking-wide " +
-          (preview.resolves
-            ? "bg-emerald-500/15 text-emerald-300"
-            : "bg-amber-500/15 text-amber-300")
-        }
-      >
-        {preview.resolves ? "Would apply" : "Skipped"}
+    <li
+      data-action-preview={preview.node_id}
+      data-action-resolves={preview.resolves}
+      className="flex flex-col gap-1 rounded border border-subtle/80 bg-base/40 px-2.5 py-1.5 text-xs"
+    >
+      <div className="flex items-center gap-2">
+        <span
+          className={
+            "shrink-0 rounded px-1.5 py-px text-[10px] uppercase tracking-wide " +
+            (preview.resolves
+              ? "bg-emerald-500/15 text-emerald-300"
+              : "bg-amber-500/15 text-amber-300")
+          }
+        >
+          {preview.resolves ? "Would apply" : "Skipped"}
+        </span>
+        <span className="shrink-0 font-medium text-fg">{ACTION_TYPE_LABELS[preview.type]}</span>
+        {/* Which node, against which item — a graph runs the same action type
+            from several nodes and, per item, once each. */}
+        {preview.node_id && <span className="text-[11px] text-fg-faint">{preview.node_id}</span>}
+        {preview.item_key && (
+          <span className="text-[11px] text-fg-secondary">{preview.item_key}</span>
+        )}
+      </div>
+      {/* The reason, in full rather than truncated: when this row says Skipped,
+          `detail` is the only thing on the page that says WHY, and half of it is
+          not an answer. */}
+      <span data-action-detail className="text-fg-muted">
+        {preview.detail}
       </span>
-      <span className="font-medium text-fg">{ACTION_TYPE_LABELS[preview.type]}</span>
-      {/* Which node, against which item — a graph runs the same action type from
-          several nodes and, per item, once each. */}
-      {preview.node_id && <span className="text-[11px] text-fg-faint">{preview.node_id}</span>}
-      {preview.item_key && <span className="text-[11px] text-fg-secondary">{preview.item_key}</span>}
-      <span className="truncate text-fg-muted">{preview.detail}</span>
+      {resolved.length > 0 && (
+        // What each token became on this run (spec 120) — only the params that
+        // carried one, because repeating every literal beside them would bury
+        // the line someone is looking for.
+        <ul data-action-resolved className="flex flex-col gap-0.5">
+          {resolved.map(([token, value]) => (
+            <li key={token} className="flex items-baseline gap-1.5 text-[11px]">
+              <code className="shrink-0 text-accent-text-strong">{token}</code>
+              <span className="text-fg-faint">&rarr;</span>
+              <span className="min-w-0 truncate text-fg-secondary">{value}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </li>
   );
 }

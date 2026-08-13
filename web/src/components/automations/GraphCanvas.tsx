@@ -107,7 +107,19 @@ function GraphNode({ data, selected }: NodeProps) {
           </span>
         )}
       </div>
-      <div className="mt-0.5 truncate text-[13px] font-medium text-heading">{node.type}</div>
+      <div className="mt-0.5 flex items-baseline gap-1.5">
+        <span className="min-w-0 truncate text-[13px] font-medium text-heading">{node.type}</span>
+        {/* A producer's NAME, because it is what every downstream token says
+            (spec 120) — reading a graph means knowing which node `triage` is. */}
+        {node.name && (
+          <code
+            data-node-name={node.name}
+            className="shrink-0 rounded-[4px] bg-elevated px-1 py-px text-[10px] text-accent-text"
+          >
+            {node.name}
+          </code>
+        )}
+      </div>
       {subtitle && <div className="mt-0.5 truncate text-[11px] text-fg-secondary">{subtitle}</div>}
       {run && (
         <div
@@ -354,7 +366,7 @@ export default function GraphCanvas({
         // something else nudged the graph is exactly the bug being fixed.
         catalog?.contributed_nodes?.length ?? 0,
         run?.nodes.map((n) => [n.node_id, n.ran, n.incoming, n.ports]) ?? null,
-        nodes.map((n) => [n.id, n.type, n.params, n.x, n.y]),
+        nodes.map((n) => [n.id, n.type, n.name, n.params, n.x, n.y]),
       ]),
     [nodes, orientation, catalog, run],
   );

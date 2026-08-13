@@ -1,4 +1,5 @@
-import { useId } from "react";
+import { useId, useState, type ReactNode } from "react";
+import { Braces } from "lucide-react";
 import { AUTOMATION_CLEAR_VALUE } from "../../lib/constants";
 import { COMMENT_VISIBILITY_LABELS, PRIORITY_META, PRIORITY_ORDER } from "../../lib/meta";
 import {
@@ -23,6 +24,85 @@ interface ActionParamsProps {
 /** Clearable pickers (assignee/team/cycle) share this option. */
 const CLEAR_OPTION = <option value={AUTOMATION_CLEAR_VALUE}>— Clear (unset) —</option>;
 
+/** Does this stored value carry a `{{token}}`? Mirrors the server's grammar. */
+const hasToken = (value: unknown) => /\{\{\s*[a-zA-Z0-9_.]+\s*\}\}/.test(String(value ?? ""));
+
+/**
+ * A value param in two modes: PICKED, or a `{{token}}` (spec 120).
+ *
+ * The picker stays the default and stays a picker. Degrading every dropdown into
+ * a text field so that a token could be typed into it would cost everyone the
+ * affordance to buy a minority the flexibility — and would lose the vocabulary,
+ * which is the part that stops a typo becoming a skip at 3am. So the token mode
+ * is opt-in, per param, and the control announces which mode it is in.
+ *
+ * A stored value that already contains a token opens in token mode without being
+ * asked, because the alternative is a select showing blank beside a value it
+ * cannot represent.
+ */
+function TokenizableField({
+  label,
+  value,
+  hint,
+  placeholder,
+  onChange,
+  children,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  placeholder?: string;
+  onChange: (value: string) => void;
+  /** The picked-value control, rendered when not in token mode. */
+  children: ReactNode;
+}) {
+  const [wanted, setWanted] = useState(false);
+  const tokenMode = wanted || hasToken(value);
+  return (
+    <div className="flex flex-col gap-1" data-tokenizable={label}>
+      <div className="flex items-start gap-1.5">
+        <div className="min-w-0 flex-1">
+          {tokenMode ? (
+            <TextField
+              label={label}
+              value={value}
+              placeholder={placeholder ?? "{{triage.answer}}"}
+              hint={hint ?? "A token from a node above this one, resolved when the automation runs."}
+              onChange={(event) => onChange(event.target.value)}
+            />
+          ) : (
+            children
+          )}
+        </div>
+        <button
+          type="button"
+          aria-pressed={tokenMode}
+          aria-label={`Use a token for ${label}`}
+          title={tokenMode ? `Pick a ${label.toLowerCase()} instead` : "Use a token instead"}
+          onClick={() => {
+            // The switch CLEARS whichever value the other mode cannot hold, in
+            // both directions. Leaving token mode with a token stored would show
+            // a select displaying its first option while holding
+            // `{{triage.priority}}`; ENTERING it with a picked value stored
+            // leaves "normal" sitting in the box for the token to be typed after
+            // — which is exactly what a click on the picker below then produces.
+            onChange("");
+            setWanted(!tokenMode);
+          }}
+          className={
+            "mt-[22px] inline-flex size-7 shrink-0 items-center justify-center rounded-[6px] border cursor-pointer " +
+            (tokenMode
+              ? "border-emphasis bg-accent/15 text-accent-text-strong"
+              : "border-subtle text-fg-muted hover:text-heading")
+          }
+        >
+          <Braces size={13} aria-hidden />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** Type-specific param inputs for one action row (spec 20). */
 export function ActionParams({ action, pickers, listId, onParams }: ActionParamsProps) {
   const p = action.params;
@@ -37,54 +117,77 @@ export function ActionParams({ action, pickers, listId, onParams }: ActionParams
           value={str(p.state)}
           list={`${listId}-states`}
           placeholder="In Progress"
+          // Already a free-text field, so a token needs no mode switch — the
+          // hint is the whole affordance (spec 120).
+          hint="A state name, or a {{token}} from a node above this one."
           onChange={(event) => set({ state: event.target.value })}
         />
       );
     case ActionType.setPriority:
       return (
-        <SelectField
+        <TokenizableField
           label="Priority"
           value={str(p.priority)}
-          onChange={(event) => set({ priority: event.target.value })}
+          onChange={(priority) => set({ priority })}
         >
-          {PRIORITY_ORDER.map((value) => (
-            <option key={value} value={value}>
-              {PRIORITY_META[value].label}
-            </option>
-          ))}
-        </SelectField>
+          <SelectField
+            label="Priority"
+            value={str(p.priority)}
+            onChange={(event) => set({ priority: event.target.value })}
+          >
+            {PRIORITY_ORDER.map((value) => (
+              <option key={value} value={value}>
+                {PRIORITY_META[value].label}
+              </option>
+            ))}
+          </SelectField>
+        </TokenizableField>
       );
     case ActionType.setAssignee:
       return (
-        <SelectField
+        <TokenizableField
           label="Assignee"
           value={str(p.assignee)}
-          onChange={(event) => set({ assignee: event.target.value })}
+          placeholder="{{triage.owner}}"
+          onChange={(assignee) => set({ assignee })}
         >
-          <option value="">Select…</option>
-          {CLEAR_OPTION}
-          {pickers.userEmails.map((user) => (
-            <option key={user.email} value={user.email}>
-              {user.name} ({user.email})
-            </option>
-          ))}
-        </SelectField>
+          <SelectField
+            label="Assignee"
+            value={str(p.assignee)}
+            onChange={(event) => set({ assignee: event.target.value })}
+          >
+            <option value="">Select…</option>
+            {CLEAR_OPTION}
+            {pickers.userEmails.map((user) => (
+              <option key={user.email} value={user.email}>
+                {user.name} ({user.email})
+              </option>
+            ))}
+          </SelectField>
+        </TokenizableField>
       );
     case ActionType.setTeam:
       return (
-        <SelectField
+        <TokenizableField
           label="Team"
           value={str(p.team)}
-          onChange={(event) => set({ team: event.target.value })}
+          placeholder="{{triage.team}}"
+          onChange={(team) => set({ team })}
         >
-          <option value="">Select…</option>
-          {CLEAR_OPTION}
-          {pickers.teamNames.map((name) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
-          ))}
-        </SelectField>
+          <SelectField
+            label="Team"
+            value={str(p.team)}
+            onChange={(event) => set({ team: event.target.value })}
+          >
+            <option value="">Select…</option>
+            {CLEAR_OPTION}
+            {pickers.teamNames.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </SelectField>
+        </TokenizableField>
       );
     case ActionType.assignRoundRobin:
       // No clear option and no arity control: this always runs per item (the
@@ -117,19 +220,26 @@ export function ActionParams({ action, pickers, listId, onParams }: ActionParams
       );
     case ActionType.setCycle:
       return (
-        <SelectField
+        <TokenizableField
           label="Cycle"
           value={str(p.cycle)}
-          onChange={(event) => set({ cycle: event.target.value })}
+          placeholder="{{triage.cycle}}"
+          onChange={(cycle) => set({ cycle })}
         >
-          <option value="">Select…</option>
-          {CLEAR_OPTION}
-          {pickers.cycleNames.map((name) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
-          ))}
-        </SelectField>
+          <SelectField
+            label="Cycle"
+            value={str(p.cycle)}
+            onChange={(event) => set({ cycle: event.target.value })}
+          >
+            <option value="">Select…</option>
+            {CLEAR_OPTION}
+            {pickers.cycleNames.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </SelectField>
+        </TokenizableField>
       );
     case ActionType.setRelease:
       return (

@@ -24,6 +24,7 @@ import {
   type NodeKindValue,
 } from "./types/automations";
 import { ACTION_TYPE_LABELS, ACTION_TYPE_ORDER } from "./meta";
+import { isProducer, suggestNodeName } from "./automation-outputs";
 
 export interface NodeTemplate {
   /** Stable key, used as the search value and the React key. */
@@ -37,6 +38,10 @@ export interface NodeTemplate {
   /** Extra words the search should match (event type, synonyms). */
   keywords: string;
   params: Record<string, unknown>;
+  /** Whether a node of this type produces named values (spec 120), so a fresh
+   * one should arrive with a suggested NAME. Computed where the catalog is in
+   * scope; `instantiate` only has the template. */
+  produces?: boolean;
 }
 
 /** Params a fresh node needs to be valid enough to save. The action union
@@ -234,6 +239,7 @@ export function nodeTemplates(catalog: AutomationCatalog | undefined): NodeTempl
   // plugin adds. Their default params come from the schema's own defaults so a
   // freshly dropped node is valid enough to save.
   for (const node of catalog?.contributed_nodes ?? []) {
+    const params = defaultsFromSchema(node.params_schema);
     templates.push({
       key: node.key,
       kind: node.kind,
@@ -241,7 +247,8 @@ export function nodeTemplates(catalog: AutomationCatalog | undefined): NodeTempl
       label: node.label,
       group: node.group,
       keywords: `${node.key} ${node.description}`,
-      params: defaultsFromSchema(node.params_schema),
+      params,
+      produces: isProducer({ type: node.key, params }, catalog),
     });
   }
 
@@ -259,6 +266,7 @@ export function nodeTemplates(catalog: AutomationCatalog | undefined): NodeTempl
   });
 
   for (const actionType of ACTION_TYPE_ORDER) {
+    const params = blankActionParams(actionType);
     templates.push({
       key: `action.${actionType}`,
       kind: NodeKind.action,
@@ -266,7 +274,8 @@ export function nodeTemplates(catalog: AutomationCatalog | undefined): NodeTempl
       label: ACTION_TYPE_LABELS[actionType],
       group: "Actions",
       keywords: `${actionType} do apply`,
-      params: blankActionParams(actionType),
+      params,
+      produces: isProducer({ type: `action.${actionType}`, params }, catalog),
     });
   }
 
@@ -389,6 +398,11 @@ export function instantiate(
     id: nextNodeId(existing, template.kind),
     kind: template.kind,
     type: template.type,
+    // A PRODUCER arrives named (spec 120). Its whole point is that something
+    // downstream can read it, and an unnamed one is a node whose output is
+    // unreachable until someone notices the field — so the editor suggests
+    // `generate_1` and the person renames it if they care.
+    name: template.produces ? suggestNodeName(template.type, existing) : undefined,
     // Cloned, not shared: two nodes from one template must not end up editing
     // the same params object. Normalised too — `send_email`'s blank params name
     // the `reporter` ROLE, which implies per-item, so a freshly dropped node
