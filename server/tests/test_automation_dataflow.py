@@ -42,6 +42,20 @@ class _Item:
         self.id = item_id
 
 
+class _Savepoints:
+    """Just enough session for `_one`, which wraps every invocation in one."""
+
+    def begin_nested(self):
+        class _Scope:
+            async def __aenter__(self_inner):
+                return self_inner
+
+            async def __aexit__(self_inner, *_exc):
+                return False
+
+        return _Scope()
+
+
 # --- the bag itself -----------------------------------------------------------
 
 
@@ -549,3 +563,191 @@ async def test_a_well_formed_reference_saves_and_round_trips(db, admin):
     )
     stored = {node["id"]: node for node in rule.nodes}
     assert stored["c"]["name"] == "followup", "the name is stored, not dropped by the envelope"
+
+
+# --- resolution: what a token becomes, and what happens when it becomes nothing ---
+
+
+async def _fixture_project(db, admin, key_prefix="DF"):
+    from radd.modules.projects import service as projects_service
+    from radd.modules.projects.schemas import ProjectCreate
+
+    key = f"{key_prefix}{uuid.uuid4().hex[:4].upper()}"
+    return await projects_service.create_project(
+        db, ProjectCreate(key=key, name="Dataflow"), actor_id=admin.id
+    )
+
+
+async def _fixture_item(db, admin, project):
+    """The item ROW (not the read model) — what the planner is handed."""
+    from radd.modules.items import service as items_service
+    from radd.modules.items.models import WorkItem
+    from radd.modules.items.schemas import ItemCreate
+
+    read = await items_service.create_item(
+        db, ItemCreate(project_id=project.id, title="A thing"), actor=admin
+    )
+    await db.flush()
+    return await db.get(WorkItem, read.id)
+
+
+async def test_a_tokenized_priority_resolves_through_the_existing_by_name_seam(db, admin):
+    """The flagship: the model said "high", the action sets high. Nothing about
+    the RESOLUTION changed — the value is rendered first, then goes through the
+    same enum coercion a literal always did."""
+    from radd.modules.automations.planning import _plan
+    from radd.modules.automations.types import PlanKind
+    from radd.modules.items.enums import Priority
+
+    project = await _fixture_project(db, admin)
+    item = await _fixture_item(db, admin, project)
+
+    plan = await _plan(
+        db,
+        {"type": "set_priority", "params": {"priority": "{{triage.priority}}"}},
+        item,
+        project,
+        admin,
+        facts=FACTS,
+        rule_name="t",
+        variables={"triage": {"priority": "high"}},
+    )
+    assert plan.kind is PlanKind.ITEM_UPDATE
+    assert plan.item_update.priority is Priority.HIGH
+    assert plan.resolved == {"{{triage.priority}}": "high"}
+
+
+async def test_a_token_that_found_nothing_skips_the_action_with_the_reason(db, admin):
+    """The `unavailable` branch of an AI node: the values were never produced, so
+    the actions that needed them must not happen — and must say why."""
+    from radd.modules.automations.planning import _plan
+    from radd.modules.automations.types import PlanKind
+
+    project = await _fixture_project(db, admin)
+    plan = await _plan(
+        db,
+        {"type": "set_priority", "params": {"priority": "{{triage.priority}}"}},
+        None,
+        project,
+        admin,
+        facts=FACTS,
+        rule_name="t",
+        variables={},
+    )
+    assert plan.kind is PlanKind.SKIP
+    assert "{{triage.priority}}" in plan.detail
+    assert "no node named 'triage'" in plan.detail
+
+
+async def test_a_token_naming_a_field_the_producer_did_not_make_names_what_it_did(db, admin):
+    from radd.modules.automations.planning import _plan
+    from radd.modules.automations.types import PlanKind
+
+    project = await _fixture_project(db, admin)
+    plan = await _plan(
+        db,
+        {"type": "set_priority", "params": {"priority": "{{triage.urgency}}"}},
+        None,
+        project,
+        admin,
+        facts=FACTS,
+        rule_name="t",
+        variables={"triage": {"priority": "high", "team": "Support"}},
+    )
+    assert plan.kind is PlanKind.SKIP
+    assert "produced priority, team, not 'urgency'" in plan.detail
+
+
+async def test_a_rendered_value_outside_the_vocabulary_skips_and_lists_it(db, admin):
+    """The model answered something real and wrong. The skip names what WOULD
+    have worked, from the list the planner already had — never a second query."""
+    from radd.modules.automations.planning import _plan
+    from radd.modules.automations.types import PlanKind
+
+    project = await _fixture_project(db, admin)
+    item = await _fixture_item(db, admin, project)
+
+    priority = await _plan(
+        db,
+        {"type": "set_priority", "params": {"priority": "{{triage.priority}}"}},
+        item,
+        project,
+        admin,
+        facts=FACTS,
+        rule_name="t",
+        variables={"triage": {"priority": "urgent"}},
+    )
+    assert priority.kind is PlanKind.SKIP
+    assert "'urgent' is not a priority" in priority.detail
+    assert "blocker" in priority.detail, "the vocabulary is spelled out"
+
+    state = await _plan(
+        db,
+        {"type": "set_state", "params": {"state": "{{triage.state}}"}},
+        item,
+        project,
+        admin,
+        facts=FACTS,
+        rule_name="t",
+        variables={"triage": {"state": "Blocked"}},
+    )
+    assert state.kind is PlanKind.SKIP
+    assert "no state 'Blocked'" in state.detail
+    assert "states: " in state.detail, "and it comes from the list already fetched"
+
+
+async def test_an_unknown_payload_token_still_degrades_verbatim(db, admin):
+    """The pre-existing contract, deliberately untouched. A payload path an event
+    does not carry is a normal miss on a shape that varies per event, and turning
+    it into a skip would silently disable working automations."""
+    from radd.modules.automations.planning import _plan
+    from radd.modules.automations.types import PlanKind
+
+    project = await _fixture_project(db, admin)
+    item = await _fixture_item(db, admin, project)
+
+    plan = await _plan(
+        db,
+        {"type": "add_comment", "params": {"body": "was {{payload.nope}}", "visibility": "public"}},
+        item,
+        project,
+        admin,
+        facts=FACTS,
+        rule_name="t",
+        variables={},
+    )
+    assert plan.kind is PlanKind.COMMENT
+    assert plan.comment.body == "was {{payload.nope}}"
+
+
+async def test_a_workflow_guard_refusal_becomes_a_recorded_skip(monkeypatch):
+    """It is not an engine failure and it is not a bug: the project's transition
+    rules apply to automations too, deliberately. What was wrong is that it landed
+    in the generic `except Exception` — logged as a crash, and reported by the dry
+    run as an action that "would apply" and never could."""
+    from radd.modules.automations import engine, planning
+    from radd.modules.automations.planning import _Plan
+    from radd.modules.automations.types import PlanKind
+    from radd.modules.workflow.guards import TransitionError
+
+    async def refuse(*_args, **_kwargs):
+        raise TransitionError(["the estimate is required"], "Todo", "Done")
+
+    async def planned(*_args, **_kwargs):
+        return _Plan(PlanKind.ITEM_UPDATE, "set_state -> 'Done'")
+
+    monkeypatch.setattr(engine, "_apply_plan", refuse)
+    monkeypatch.setattr(planning, "_plan", planned)
+
+    report = executor.RunReport()
+    node = Node(id="a", kind=AutomationNodeKind.ACTION, type="action.set_state", params={})
+    outcome = await executor._one(
+        _Savepoints(), node, {"type": "set_state", "params": {}}, _Item(uuid.uuid4()), object(),
+        object(), Packet.of(FACTS), [], "guarded", True, report,
+    )
+
+    assert outcome.created_id is None
+    assert len(report.plans) == 1, "one record per invocation, not two that contradict"
+    assert report.plans[0].resolves is False
+    assert "refused by the workflow: the estimate is required" in report.plans[0].detail
+    assert "from Todo to Done" in report.plans[0].detail

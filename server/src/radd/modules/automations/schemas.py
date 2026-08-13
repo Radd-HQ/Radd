@@ -9,6 +9,7 @@ from radd.modules.items.enums import ItemKind, Priority
 from radd import schedule as schedule_math
 
 from . import catalog, conditions
+from .templating import TOKEN_RE
 from .types import (
     MAX_GRAPH_EDGES,
     MAX_GRAPH_NODES,
@@ -73,8 +74,32 @@ class SetStateParams(BaseModel):
     state: str = Field(min_length=1)  # state name within the item's project
 
 
+#: Value params that may carry a `{{token}}` instead of a literal (spec 120).
+#: Typed as strings with this check rather than as the enum, because the whole
+#: point is that the value can be produced at RUN time — `Priority` on the wire
+#: would refuse `{{triage.priority}}` before it ever had a chance to render.
+#: What the token renders to is still measured against the enum, in the planner,
+#: where the failure is a recorded skip naming the vocabulary.
+def templated_enum(value: str, allowed: set[str], label: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        raise ValueError(f"{label} is required")
+    if TOKEN_RE.search(text) or text in allowed:
+        return text
+    raise ValueError(
+        f"{text!r} is not a {label} — one of {', '.join(sorted(allowed))}, "
+        f"or a {{{{token}}}} that produces one"
+    )
+
+
 class SetPriorityParams(BaseModel):
-    priority: Priority
+    #: A `Priority` value, or a template that renders to one.
+    priority: str = Field(min_length=1, max_length=200)
+
+    @model_validator(mode="after")
+    def _check_priority(self) -> "SetPriorityParams":
+        self.priority = templated_enum(self.priority, set(Priority), "priority")
+        return self
 
 
 class SetAssigneeParams(BaseModel):
@@ -139,7 +164,8 @@ class CreateItemParams(BaseModel):
     project: str = Field(min_length=1)  # project KEY
     title: str = Field(min_length=1, max_length=500)  # template
     description: str = Field(default="", max_length=10_000)  # template
-    priority: Priority | None = None
+    #: A `Priority` value, or a template that renders to one (spec 120).
+    priority: str | None = Field(default=None, max_length=200)
     #: Issue type NAME (spec 51); None = the project's default.
     type: str | None = Field(default=None, max_length=100)
     #: epic | issue | subtask. A subtask needs `parent`; an epic forbids one.
@@ -169,6 +195,12 @@ class CreateItemParams(BaseModel):
     #: definitions at apply time by the items service, exactly as a human create
     #: would be — this does not get its own second validator.
     custom_fields: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _check_priority(self) -> "CreateItemParams":
+        if self.priority is not None:
+            self.priority = templated_enum(self.priority, set(Priority), "priority")
+        return self
 
 
 class SendWebhookParams(BaseModel):
@@ -668,12 +700,31 @@ class PortResult(BaseModel):
     taken: bool = True
 
 
+class ProducedVar(BaseModel):
+    """One value a node produced on a dry run, with the token that reads it.
+
+    The TOKEN rather than just the field name, because that is the thing someone
+    copies: `{{triage.priority}} = high` answers "what do I write downstream" in
+    one line, and a bare `priority = high` answers it only for someone who
+    already knows the addressing rule."""
+
+    token: str
+    name: str
+    value: str
+
+
 class NodeResult(BaseModel):
     """One node's dry run: what arrived, and what left by each port."""
 
     node_id: str
     kind: str
     type: str
+    #: What downstream tokens call this node (spec 120), "" when unnamed.
+    name: str = ""
+    #: What it PRODUCED. Present even when the node has no name — an unnamed
+    #: producer is exactly the mistake this makes visible, and hiding its output
+    #: would leave "why does my token not resolve" unanswerable from the report.
+    produced: list[ProducedVar] = Field(default_factory=list)
     #: False = never reached — detached from the trigger, or the budget ran out
     #: before the walk got here.
     ran: bool = True
@@ -692,6 +743,11 @@ class ActionPreview(BaseModel):
     #: flat list of "would apply" could not say which was which.
     node_id: str = ""
     item_key: str = ""
+    #: `{{token}}` -> what it rendered to on this invocation (spec 120). Only
+    #: params that CARRIED a token appear: repeating every literal beside them
+    #: would bury the one line someone is looking for. When `resolves` is false
+    #: this is what the skip in `detail` is about.
+    resolved: dict[str, str] = Field(default_factory=dict)
 
 
 class RuleTestResult(BaseModel):

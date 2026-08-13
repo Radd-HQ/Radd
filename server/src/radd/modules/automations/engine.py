@@ -68,8 +68,15 @@ from .planning import (
     is_automation_caused as is_automation_caused,
     should_process as should_process,
 )
-from .nodes import ports_of
-from .schemas import ActionPreview, NodeResult, PortResult, RuleTestResult, TestFinding
+from .nodes import output_name, ports_of
+from .schemas import (
+    ActionPreview,
+    NodeResult,
+    PortResult,
+    ProducedVar,
+    RuleTestResult,
+    TestFinding,
+)
 from .types import (
     CONSUMER_NAME,
     AutomationTrigger,
@@ -554,6 +561,7 @@ async def preview(
                 detail=planned.detail,
                 node_id=planned.node_id,
                 item_key=keys.get(planned.item_id, "") if planned.item_id else "",
+                resolved=dict(planned.resolved),
             )
         )
 
@@ -600,6 +608,23 @@ async def _keys_for(
     return {item_id: f"{key}-{number}" for item_id, key, number in rows}
 
 
+def _produced(node, report: executor.RunReport) -> list[ProducedVar]:
+    """What this node made addressable, with the token that reads it (spec 120).
+
+    An UNNAMED producer still reports its values, with an empty token: the point
+    of showing them is that someone can see the node produced something and that
+    nothing can read it yet."""
+    name = output_name(node)
+    return [
+        ProducedVar(
+            token=f"{{{{{name}.{field}}}}}" if name else "",
+            name=field,
+            value=value,
+        )
+        for field, value in (report.produced.get(node.id) or {}).items()
+    ]
+
+
 def _node_results(
     nodes: list, report: executor.RunReport, keys: dict[uuid.UUID, str]
 ) -> list[NodeResult]:
@@ -619,6 +644,8 @@ def _node_results(
                 node_id=node.id,
                 kind=node.kind.value,
                 type=node.type,
+                name=output_name(node),
+                produced=_produced(node, report),
                 ran=counts is not None,
                 incoming=(counts or {}).get("in", 0),
                 incoming_sample=sample(report.incoming_items.get(node.id, ())),

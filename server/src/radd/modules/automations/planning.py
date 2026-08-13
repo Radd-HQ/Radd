@@ -214,11 +214,20 @@ async def _plan_create_item(
     SKIPS with the name in the message, because a create that silently drops the
     assignee is worse than one that does not happen.
     """
+    priority = Priority.NORMAL
+    if params.get("priority"):
+        priority = _priority_or_none(text(params["priority"]))
+        if priority is None:
+            return _Plan(
+                PlanKind.SKIP,
+                f"create_item: {text(params['priority'])!r} is not a priority "
+                f"({_vocabulary(p.value for p in Priority)})",
+            )
     create_kwargs: dict[str, Any] = {
         "project_id": target.id,
         "title": text(params["title"]),
         "description": text(params.get("description", "")),
-        "priority": Priority(params["priority"]) if params.get("priority") else Priority.NORMAL,
+        "priority": priority,
         "flagged": bool(params.get("flagged")),
     }
     if params.get("kind"):
@@ -296,6 +305,32 @@ async def _plan_create_item(
     )
 
 
+#: How many names a "did you mean" hint lists before it becomes a wall.
+_VOCABULARY_LIMIT = 12
+
+
+def _vocabulary(names, limit: int = _VOCABULARY_LIMIT) -> str:
+    """A hint naming what WOULD have resolved (spec 120).
+
+    Only ever built from a collection the planner ALREADY HAS — the states it
+    just listed, the enum it just failed to coerce. Never a second query for the
+    sake of a message: a skip is already the unhappy path, and paying a round
+    trip to phrase it better is how a nightly run over 200 items gets slower
+    every time something is misconfigured. Capped, because forty team names in
+    an error is not a hint.
+    """
+    seen = [str(name) for name in names]
+    shown = ", ".join(seen[:limit])
+    return f"{shown}, …" if len(seen) > limit else shown
+
+
+def _priority_or_none(value: str) -> Priority | None:
+    try:
+        return Priority(value)
+    except ValueError:
+        return None
+
+
 def _resolve_date(value: str) -> date | None:
     """An ISO date, or a relative literal the SLQ vocabulary already knows."""
     relative = relative_date(Value(value), date.today())
@@ -328,25 +363,23 @@ def _is_clear(value: str) -> bool:
     return value.strip().lower() == CLEAR_VALUE
 
 
+def _named(rows, name: str):
+    """The row with this name, or None. Split out so a branch that wants the
+    VOCABULARY for its skip message can hold the list it already fetched instead
+    of asking again (spec 120)."""
+    return next((row for row in rows if row.name == name), None)
+
+
 async def _state_by_name(session: AsyncSession, project_id: uuid.UUID, name: str):
-    for state in await workflow.list_states(session, project_id):
-        if state.name == name:
-            return state
-    return None
+    return _named(await workflow.list_states(session, project_id), name)
 
 
 async def _team_by_name(session: AsyncSession, name: str):
-    for team in await teams_service.list_teams(session):
-        if team.name == name:
-            return team
-    return None
+    return _named(await teams_service.list_teams(session), name)
 
 
 async def _cycle_by_name(session: AsyncSession, name: str):
-    for cycle in await cycles_service.list_cycles(session):
-        if cycle.name == name:
-            return cycle
-    return None
+    return _named(await cycles_service.list_cycles(session), name)
 
 
 async def _current_labels(session: AsyncSession, item: WorkItem, system_user: User) -> list[str]:
@@ -397,6 +430,22 @@ async def _plan(
         session, action, item, project, system_user,
         facts=facts, rule_name=rule_name, items=items, text=render,
     )
+    if render.misses:
+        # A VARIABLE token that found nothing OVERRIDES whatever the planner
+        # concluded, including a skip of its own. `set_state {{triage.state}}`
+        # with no `triage` on this branch would otherwise report "no state
+        # '{{triage.state}}' in TD" — technically true, and it sends the reader
+        # to the workflow settings for a problem that is in the wiring.
+        #
+        # It is a SKIP rather than an error because the branch is allowed to be
+        # conditional: an `unavailable` port that nobody wired means the model
+        # did not answer, and the actions that needed its answer should not
+        # happen — quietly is the bug, refusing the whole run is worse.
+        return _Plan(
+            PlanKind.SKIP,
+            f"{action['type']}: {'; '.join(render.misses)}",
+            resolved=dict(render.resolved),
+        )
     plan.resolved = dict(render.resolved)
     return plan
 
@@ -488,29 +537,54 @@ async def _plan_action(
                 email=(address, name, text(params["subject"]), text(params["body"])),
             )
         case ActionType.SET_STATE:
-            name = params["state"]
-            state = await _state_by_name(session, project.id, name)
+            # Every named target below renders as a TEMPLATE first (spec 120), so
+            # `{{triage.state}}` is a state name the same way a literal is. The
+            # rendering is the only change: resolution still goes through the
+            # by-NAME seam that was already here, which is what keeps an
+            # automation written against a project's vocabulary working when the
+            # rows behind it are recreated.
+            name = text(params["state"])
+            states = await workflow.list_states(session, project.id)
+            state = _named(states, name)
             if state is None:
-                return _Plan(PlanKind.SKIP, f"set_state: no state {name!r} in {project.key}")
+                return _Plan(
+                    PlanKind.SKIP,
+                    f"set_state: no state {name!r} in {project.key} "
+                    f"(states: {_vocabulary(s.name for s in states)})",
+                )
             return _Plan(PlanKind.ITEM_UPDATE, f"set_state -> {name!r}", ItemUpdate(state_id=state.id))
         case ActionType.SET_PRIORITY:
-            priority = Priority(params["priority"])
+            rendered = text(params["priority"])
+            priority = _priority_or_none(rendered)
+            if priority is None:
+                return _Plan(
+                    PlanKind.SKIP,
+                    f"set_priority: {rendered!r} is not a priority "
+                    f"({_vocabulary(p.value for p in Priority)})",
+                )
             return _Plan(
                 PlanKind.ITEM_UPDATE, f"set_priority -> {priority.value}", ItemUpdate(priority=priority)
             )
         case ActionType.SET_ASSIGNEE:
-            email = params["assignee"]
+            email = text(params["assignee"])
             if _is_clear(email):
                 return _Plan(PlanKind.ITEM_UPDATE, "set_assignee -> none", ItemUpdate(assignee_id=None))
             user = await auth.get_user_by_email(session, email)
             if user is None:
+                # No vocabulary hint: every address on the instance is neither a
+                # list this planner has in hand nor something to print.
                 return _Plan(PlanKind.SKIP, f"set_assignee: no user {email!r}")
             return _Plan(PlanKind.ITEM_UPDATE, f"set_assignee -> {email}", ItemUpdate(assignee_id=user.id))
         case ActionType.ASSIGN_ROUND_ROBIN:
-            name = params["team"]
-            team = await _team_by_name(session, name)
+            name = text(params["team"])
+            teams = await teams_service.list_teams(session)
+            team = _named(teams, name)
             if team is None:
-                return _Plan(PlanKind.SKIP, f"assign_round_robin: no team {name!r}")
+                return _Plan(
+                    PlanKind.SKIP,
+                    f"assign_round_robin: no team {name!r} "
+                    f"(teams: {_vocabulary(t.name for t in teams)})",
+                )
             chosen = await round_robin.pick_next(session, team)
             if chosen is None:
                 # Every member is inactive or away (or the team is empty): leave the
@@ -528,48 +602,68 @@ async def _plan_action(
                 cursor_advance=(team.id, chosen),
             )
         case ActionType.SET_TEAM:
-            name = params["team"]
+            name = text(params["team"])
             if _is_clear(name):
                 return _Plan(PlanKind.ITEM_UPDATE, "set_team -> none", ItemUpdate(team_id=None))
-            team = await _team_by_name(session, name)
+            teams = await teams_service.list_teams(session)
+            team = _named(teams, name)
             if team is None:
-                return _Plan(PlanKind.SKIP, f"set_team: no team {name!r}")
+                return _Plan(
+                    PlanKind.SKIP,
+                    f"set_team: no team {name!r} (teams: {_vocabulary(t.name for t in teams)})",
+                )
             return _Plan(PlanKind.ITEM_UPDATE, f"set_team -> {name!r}", ItemUpdate(team_id=team.id))
         case ActionType.ADD_LABEL:
-            label = params["label"]
+            label = text(params["label"])
             current = await _current_labels(session, item, system_user)
             new = current if label in current else [*current, label]
             note = " (already present)" if label in current else ""
             return _Plan(PlanKind.ITEM_UPDATE, f"add_label {label!r}{note}", ItemUpdate(labels=new))
         case ActionType.REMOVE_LABEL:
-            label = params["label"]
+            label = text(params["label"])
             current = await _current_labels(session, item, system_user)
             if label not in current:
-                return _Plan(PlanKind.SKIP, f"remove_label: {label!r} not on item")
+                return _Plan(
+                    PlanKind.SKIP,
+                    f"remove_label: {label!r} not on item (it has: {_vocabulary(current) or 'no labels'})",
+                )
             new = [name for name in current if name != label]
             return _Plan(PlanKind.ITEM_UPDATE, f"remove_label {label!r}", ItemUpdate(labels=new))
         case ActionType.SET_CYCLE:
-            name = params["cycle"]
+            name = text(params["cycle"])
             if _is_clear(name):
                 return _Plan(PlanKind.ITEM_UPDATE, "set_cycle -> none", ItemUpdate(cycle_id=None))
-            cycle = await _cycle_by_name(session, name)
+            cycles = await cycles_service.list_cycles(session)
+            cycle = _named(cycles, name)
             if cycle is None:
-                return _Plan(PlanKind.SKIP, f"set_cycle: no cycle {name!r}")
+                return _Plan(
+                    PlanKind.SKIP,
+                    f"set_cycle: no cycle {name!r} (cycles: {_vocabulary(c.name for c in cycles)})",
+                )
             return _Plan(PlanKind.ITEM_UPDATE, f"set_cycle -> {name!r}", ItemUpdate(cycle_id=cycle.id))
         case ActionType.SET_RELEASE:
-            version = params["release"]
+            version = text(params["release"])
             if _is_clear(version):
                 return _Plan(PlanKind.ITEM_UPDATE, "set_release -> none", ItemUpdate(release_id=None))
             release = await releases_service.resolve_release(session, project.id, version)
             if release is None:
+                # `resolve_release` answers about ONE version; listing every
+                # release of the project would be the second query this
+                # deliberately does not make.
                 return _Plan(PlanKind.SKIP, f"set_release: no release {version!r} in {project.key}")
             return _Plan(
                 PlanKind.ITEM_UPDATE, f"set_release -> {version!r}", ItemUpdate(release_id=release.id)
             )
         case ActionType.SET_CUSTOM_FIELD:
             key, value = params["key"], params["value"]
+            # Strings only: a select's option and a text field's content are
+            # exactly where a token belongs, and rendering a number or a boolean
+            # would turn it into one.
+            resolved_value = text(value) if isinstance(value, str) else value
             return _Plan(
-                PlanKind.ITEM_UPDATE, f"set_custom_field {key!r}", ItemUpdate(custom_fields={key: value})
+                PlanKind.ITEM_UPDATE,
+                f"set_custom_field {key!r}",
+                ItemUpdate(custom_fields={key: resolved_value}),
             )
         case ActionType.ADD_COMMENT:
             visibility = CommentVisibility(params.get("visibility", CommentVisibility.PUBLIC.value))
