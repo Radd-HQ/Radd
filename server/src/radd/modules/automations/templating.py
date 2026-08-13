@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Any, Mapping
 
 from .conditions import EventFacts, _payload_path
@@ -80,6 +81,7 @@ TOKENS: tuple[TokenInfo, ...] = (
 MATCHED_COUNT_TOKEN = "matched_count"
 
 
+@lru_cache(maxsize=1)
 def reserved_roots() -> frozenset[str]:
     """The first segment of every documented token — the words a node may NOT be
     named (spec 120).
@@ -89,6 +91,10 @@ def reserved_roots() -> frozenset[str]:
     set) and the one nobody notices going stale: a root that stopped being
     reserved would let someone name a node `item` and shadow `{{item.key}}` in
     every action of the graph.
+
+    Memoised because `Renderer` asks per TOKEN, and `TOKENS` is a module
+    constant — recomputing a twelve-element frozenset inside a render loop over
+    200 items is work with no answer attached to it.
     """
     return frozenset(
         token.token.strip("{} ").split(".", 1)[0] for token in TOKENS

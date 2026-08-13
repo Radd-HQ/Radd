@@ -19,6 +19,7 @@ import { instantiate, nodeTemplates, type NodeTemplate } from "../../lib/automat
 import { layout, NODE_HEIGHT, NODE_WIDTH } from "../../lib/automation-layout";
 import {
   NodeKind,
+  VALIDATE_TRIGGER,
   type AutomationEdge,
   type AutomationNode,
   type RuleTestResult,
@@ -199,6 +200,14 @@ export function GraphEditor({
 
   const triggers = useMemo(() => nodes.filter((n) => n.kind === NodeKind.trigger), [nodes]);
 
+  /** Does any trigger here run at INTAKE (RADD-1074)? The validate sentinel is
+   * not in the served trigger catalogue, so this is read off the graph — and it
+   * is what decides whether a check's `fail` port is a branch or a delivery. */
+  const isValidationGraph = useMemo(
+    () => triggers.some((t) => String(t.params.event ?? "") === VALIDATE_TRIGGER),
+    [triggers],
+  );
+
   /** Does ANY trigger resolve a target item? Item tokens are blank without one,
    * and the reference says so rather than letting someone build a title around
    * a value their trigger never supplies. */
@@ -284,6 +293,7 @@ export function GraphEditor({
             onCanvasContextMenu={setMenuAt}
             catalog={catalog.data}
             run={run}
+            validation={isValidationGraph}
           />
         </div>
         <div className="w-[380px] shrink-0">
@@ -298,6 +308,7 @@ export function GraphEditor({
             valueSuggestions={valueSuggestions}
             canActAs={catalog.data?.can_act_as ?? false}
             hasItem={triggersResolveAnItem}
+            validation={isValidationGraph}
             onChange={updateNode}
             onDelete={deleteNode}
           />

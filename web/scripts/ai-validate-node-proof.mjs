@@ -29,6 +29,17 @@
  *   - a toggled checkbox saves as an OBJECT and survives a reload;
  *   - a node holding the string casualty renders the defaults instead of it.
  *
+ * RADD-1074 extends it with what the canvas says about a FINDING. In a graph
+ * whose trigger is `validate`, a finding is not a branch — it is the intake
+ * verdict, delivered to whoever submitted. The empty handle under `fail`
+ * therefore reads as an unfinished graph when it is a finished one, and people
+ * went looking for the action that sends the feedback. So:
+ *   - the finding-producing ports carry a "feedback to submitter" note;
+ *   - an UNWIRED one is drawn as a deliberate cap, a wired one is not;
+ *   - none of it appears on a graph that is not validate-triggered, where the
+ *     same node really is a plain pass/fail router;
+ *   - and it reads in both themes.
+ *
  * Usage: node scripts/ai-validate-node-proof.mjs [--base http://127.0.0.1:8124]
  */
 import { writeFileSync } from "node:fs";
@@ -262,8 +273,128 @@ await selectNode();
 await sleep(800);
 const healedInclude = await session.eval(INCLUDE_FORM);
 
+// --- 5. what a VALIDATION graph says about its findings (RADD-1074) -----------
+
+const project = parsed(
+  await session.eval(
+    api("POST", "/projects", { key: `VF${suffix}`, name: `Validate ${suffix}` }),
+  ),
+);
+
+/** Two checks: one whose fail port is WIRED onward, one whose is not — the
+ * difference is the whole assertion about the cap. */
+const validationRuleName = `validation feedback ${suffix}`;
+const validationRule = parsed(
+  await session.eval(
+    api("POST", "/automations", {
+      name: validationRuleName,
+      enabled: false,
+      orientation: "vertical",
+      nodes: [
+        {
+          id: "trg",
+          kind: "trigger",
+          type: "trigger.event",
+          params: {
+            event: "validate",
+            mode: "advisory",
+            targets: [{ kind: "project", id: project?.id }],
+          },
+        },
+        {
+          id: "check",
+          kind: "gate",
+          type: NODE_TYPE,
+          params: { prompt: BAR },
+        },
+        {
+          id: "say",
+          kind: "action",
+          type: "validation.fail",
+          params: { message: "Please name the version you saw this on.", field: "description" },
+        },
+      ],
+      edges: [
+        { source: "trg", port: "out", target: "check" },
+        { source: "check", port: "fail", target: "say" },
+      ],
+    }),
+  ),
+);
+
+/** The badge, the caps, and the inspector line, read off the real canvas. */
+const FEEDBACK = `(() => {
+  const cards = [...document.querySelectorAll("[data-node-id]")];
+  const of = (id) => cards.find((card) => card.getAttribute("data-node-id") === id);
+  const read = (card) => {
+    if (!card) return null;
+    const note = card.querySelector("[data-feedback-note]");
+    const caps = [...card.querySelectorAll("[data-port-cap]")].map((el) =>
+      el.getAttribute("data-port-cap"),
+    );
+    const rect = note ? note.getBoundingClientRect() : null;
+    return {
+      note: note ? note.getAttribute("data-feedback-note") : null,
+      text: note ? note.textContent.trim() : "",
+      color: note ? getComputedStyle(note).color : null,
+      readable: Boolean(rect && rect.width > 40 && rect.height > 5),
+      caps,
+      capSize: [...card.querySelectorAll("[data-port-cap]")].map(
+        (el) => el.getBoundingClientRect().width,
+      ),
+      plainPortSize: [...card.querySelectorAll(".react-flow__handle-bottom")]
+        .filter((el) => !el.hasAttribute("data-port-cap"))
+        .map((el) => el.getBoundingClientRect().width),
+    };
+  };
+  return { check: read(of("check")), say: read(of("say")) };
+})()`;
+
+/** Raw text, normalised in NODE rather than in the page: a regex literal inside
+ * a page-eval template string loses its backslashes, so `/\s+/g` arrives as
+ * `/s+/g` and quietly deletes every "s" in the answer. */
+const INSPECTOR_NOTE = `(() => {
+  const note = document.querySelector("p[data-feedback-note]");
+  return note ? note.textContent : null;
+})()`;
+
+async function openValidationEditor() {
+  await session.navigate(`${baseUrl}/settings/automations`, 2200);
+  await session.eval(`(() => {
+    const button = document.querySelector('[aria-label="Edit ${validationRuleName}"]');
+    if (button) button.click();
+    return Boolean(button);
+  })()`);
+  await sleep(2600);
+}
+
+await openValidationEditor();
+const feedbackThemes = {};
+for (const theme of ["dark", "light"]) {
+  await session.eval(
+    `document.documentElement.classList.toggle("light", ${JSON.stringify(theme)} === "light"); "ok"`,
+  );
+  await sleep(400);
+  feedbackThemes[theme] = await session.eval(FEEDBACK);
+  const shot = await session.send("Page.captureScreenshot", { format: "png" });
+  writeFileSync(`/tmp/radd-1074-feedback-${theme}.png`, Buffer.from(shot.data, "base64"));
+}
+await session.eval(`document.documentElement.classList.remove("light"); "ok"`);
+await session.click("[data-node-id]", new Function("text", "return text.includes('ai.validate')"));
+await sleep(900);
+const inspectorNote = (await session.eval(INSPECTOR_NOTE))?.replace(/\s+/g, " ").trim() ?? null;
+
+// …and NONE of it on the manual-triggered rule from the first half, where the
+// same node really is a plain pass/fail router.
+await openEditor();
+await sleep(600);
+const manualFeedback = await session.eval(
+  `[...document.querySelectorAll("[data-feedback-note], [data-port-cap]")].length`,
+);
+
 // --- teardown -----------------------------------------------------------------
 
+if (validationRule) await session.eval(api("DELETE", `/automations/${validationRule.id}`));
 if (rule) await session.eval(api("DELETE", `/automations/${rule.id}`));
 
 /** Order MATTERS: port order decides which handle is which, and the last port is
@@ -341,6 +472,27 @@ const failed = report(
       worklogs: false,
     }),
 
+    "validation fixture created": Boolean(validationRule?.id && project?.id),
+    "feedback: the check names its finding port": feedbackThemes.dark.check?.note === "fail",
+    "feedback: …and says where it goes": /feedback to submitter/i.test(
+      feedbackThemes.dark.check?.text ?? "",
+    ),
+    "feedback: the fail node says it too": feedbackThemes.dark.say?.note === "out",
+    "feedback: a WIRED finding port gets no cap": same(feedbackThemes.dark.check?.caps, []),
+    "feedback: an UNWIRED one is capped": same(feedbackThemes.dark.say?.caps, ["out"]),
+    "feedback: the cap is visibly bigger than a plain port": Boolean(
+      (feedbackThemes.dark.say?.capSize?.[0] ?? 0) >
+        Math.max(0, ...(feedbackThemes.dark.check?.plainPortSize ?? [0])),
+    ),
+    "feedback: the inspector says findings are delivered": /shown to whoever submitted/i.test(
+      inspectorNote ?? "",
+    ),
+    "feedback: it reads in dark": feedbackThemes.dark.check?.readable === true,
+    "feedback: it reads in light": feedbackThemes.light.check?.readable === true,
+    "feedback: the theme really changed the ink":
+      feedbackThemes.dark.check?.color !== feedbackThemes.light.check?.color,
+    "feedback: none of it on a graph that is not validate-triggered": manualFeedback === 0,
+
     // Plugin UI remotes are built into the image by `build-all.mjs`; a bare
     // `vite build` leaves them absent and the loader quarantines each one. That
     // is this harness, not the page under test.
@@ -359,8 +511,13 @@ const failed = report(
     stored: storedInclude,
     reloaded: { ports: reloadedPorts.labels, include: reloadedInclude.checked },
     healed: healedInclude,
+    feedback: { themes: feedbackThemes, inspectorNote, manualFeedback },
     saveState,
-    screenshot: "/tmp/radd-1064-builder.png",
+    screenshots: [
+      "/tmp/radd-1064-builder.png",
+      "/tmp/radd-1074-feedback-dark.png",
+      "/tmp/radd-1074-feedback-light.png",
+    ],
     consoleErrors: session.consoleErrors
       .filter((line) => !/plugin UI .* failed to load \(quarantined\)/.test(line))
       .slice(0, 5),

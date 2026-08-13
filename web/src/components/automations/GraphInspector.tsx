@@ -35,6 +35,7 @@ import {
   normalizeActionParams,
 } from "../../lib/automation-nodes";
 import { isProducer, nodeNameError, outputsOfNode } from "../../lib/automation-outputs";
+import { feedbackPortsOf } from "./node-visuals";
 import { ActionParams } from "./ActionParams";
 import { ArityField } from "./ArityField";
 import { CreateItemFields } from "./CreateItemFields";
@@ -80,6 +81,9 @@ interface GraphInspectorProps {
   /** Whether this graph's triggers resolve a target item — decides whether the
    * token reference marks the item tokens as blank. */
   hasItem?: boolean;
+  /** Whether any trigger runs at INTAKE (RADD-1074) — decides whether a check's
+   * findings are delivered to a submitter or are merely a routing decision. */
+  validation?: boolean;
   onChange: (node: AutomationNode) => void;
   onDelete: (nodeId: string) => void;
 }
@@ -95,6 +99,7 @@ export function GraphInspector({
   valueSuggestions = [],
   canActAs = false,
   hasItem = true,
+  validation = false,
   onChange,
   onDelete,
 }: GraphInspectorProps) {
@@ -138,6 +143,17 @@ export function GraphInspector({
   //: single field has been added.
   const produces = isProducer(node, catalog);
   const nameError = nodeNameError(String(node.name ?? ""), node, nodes, catalog);
+  //: The one line this node's own form cannot say for itself (RADD-1074): a
+  //: finding is DELIVERED, so the empty port under it is a choice, not a gap.
+  const feedbackPorts = feedbackPortsOf(node.type, validation);
+  const feedbackNote = feedbackPorts.length > 0 && (
+    <p data-feedback-note className="text-xs text-fg-secondary">
+      Findings from this check are shown to whoever submitted the draft
+      automatically — they are the intake verdict. Wiring anything after{" "}
+      <code className="text-accent-text">{feedbackPorts.join(" / ")}</code> is optional, for
+      when a failed check should also do something else.
+    </p>
+  );
   const tokens = (
     <TokenReference
       catalog={catalog}
@@ -360,6 +376,8 @@ export function GraphInspector({
       {node.type === VALIDATION_FAIL_TYPE && (
         <ValidationFailFields params={node.params} fields={pickers.fields} onChange={setParams} />
       )}
+
+      {feedbackNote}
 
       {node.kind === NodeKind.action && !contributed && node.type !== VALIDATION_FAIL_TYPE && (
         <div className="flex flex-col gap-2">

@@ -50,6 +50,29 @@ export const PORT_TONE: Record<string, string> = {
   unavailable: "var(--chart-triage-ink)",
 };
 
+/**
+ * Ports whose output is a FINDING — advice delivered to whoever submitted the
+ * draft (RADD-1074).
+ *
+ * Only meaningful in a graph whose trigger is `validate`, which is why the
+ * canvas takes that as a separate flag rather than inferring it here: the same
+ * two node types are an ordinary pass/fail router and an inert pass-through on
+ * an event-triggered graph, and badging them there would be a promise nobody
+ * keeps.
+ *
+ * `validation.fail` is listed by its `out` port because REACHING the node is
+ * the finding — the port carries the packet onward so several checks can chain,
+ * and it is the node, not the branch, that spoke.
+ */
+export const FEEDBACK_PORTS: Record<string, string[]> = {
+  "ai.validate": ["fail"],
+  "validation.fail": ["out"],
+};
+
+export function feedbackPortsOf(type: string, isValidationGraph: boolean): string[] {
+  return isValidationGraph ? (FEEDBACK_PORTS[type] ?? []) : [];
+}
+
 export const INLET_TONE = "var(--color-emphasis)";
 export const GRID_TONE = "var(--color-zinc-800)";
 
