@@ -11,6 +11,14 @@ from radd.modules.auth.deps import CurrentUser
 from . import service
 from .schemas import DeliveryRead, EndpointCreate, EndpointRead, EndpointUpdate
 
+
+def _read(endpoint) -> EndpointRead:
+    # The stored secret is ciphertext (RADD-1086); the admin surface shows the
+    # signing value the receiver must be configured with.
+    return EndpointRead.model_validate(endpoint).model_copy(
+        update={"secret": service.reveal_secret(endpoint)}
+    )
+
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
 Session = Annotated[AsyncSession, Depends(get_session)]
@@ -22,16 +30,13 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 async def create_endpoint(data: EndpointCreate, session: Session, user: CurrentUser) -> EndpointRead:
     await authz.require(session, user, authz.Permission.WEBHOOK_CREATE)
     endpoint = await service.create_endpoint(session, data, actor_id=user.id)
-    return EndpointRead.model_validate(endpoint)
+    return _read(endpoint)
 
 
 @router.get("", response_model=list[EndpointRead])
 async def list_endpoints(session: Session, user: CurrentUser) -> list[EndpointRead]:
     await authz.require(session, user, authz.Permission.WEBHOOK_MANAGE)
-    return [
-        EndpointRead.model_validate(e)
-        for e in await service.list_endpoints(session)
-    ]
+    return [_read(e) for e in await service.list_endpoints(session)]
 
 
 @router.patch("/{endpoint_id}", response_model=EndpointRead)
@@ -43,7 +48,7 @@ async def update_endpoint(
         session, user, authz.Permission.WEBHOOK_UPDATE
     )
     endpoint = await service.update_endpoint(session, endpoint_id, data, actor_id=user.id)
-    return EndpointRead.model_validate(endpoint)
+    return _read(endpoint)
 
 
 @router.delete("/{endpoint_id}", status_code=204)

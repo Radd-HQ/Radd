@@ -18,6 +18,6 @@ plugin = RaddPlugin(
     description="Standard-Webhooks dispatcher: signed deliveries with retries, fed by the outbox.",
     depends_on=("projects", "events", "auth", "fields", "items"),
     routers=(router,),
-    on_startup=(dispatcher.start,),
+    on_startup=(dispatcher.reencrypt_secrets, dispatcher.start),
     on_shutdown=(dispatcher.stop,),
 )

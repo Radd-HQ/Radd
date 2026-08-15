@@ -11,6 +11,7 @@ import httpx
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd import secretbox
 from radd.config import settings
 from radd.modules.fields import service as fields_service
 from radd.modules.items.redaction import redact_item_payload
@@ -43,12 +44,36 @@ def sign(secret: str, msg_id: str, timestamp: int, body: str) -> str:
     return f"{SIGNATURE_VERSION},{base64.b64encode(digest).decode()}"
 
 
+async def encrypt_plaintext_secrets(session: AsyncSession) -> int:
+    """Lazy adoption (RADD-1086): re-encrypt any legacy plaintext secret. Runs
+    at startup; a missing secretbox key (host-run dev without a backup key)
+    logs and skips rather than blocking boot — rows adopt on the next start."""
+    result = await session.execute(select(WebhookEndpoint))
+    endpoints = list(result.scalars())
+    changed = 0
+    for endpoint in endpoints:
+        if secretbox.is_encrypted(endpoint.secret):
+            continue
+        endpoint.secret = secretbox.encrypt(endpoint.secret)
+        changed += 1
+    if changed:
+        await session.flush()
+    return changed
+
+
+def reveal_secret(endpoint: WebhookEndpoint) -> str:
+    """The plaintext signing secret, for the admin read surface — the receiver
+    has to be configured with it, so hiding it here would only push admins to
+    the database. At-rest encryption defends the dump, not the admin API."""
+    return secretbox.decrypt(endpoint.secret)
+
+
 async def create_endpoint(
     session: AsyncSession, data: EndpointCreate, actor_id: uuid.UUID | None = None
 ) -> WebhookEndpoint:
     endpoint = WebhookEndpoint(
         url=data.url,
-        secret=generate_secret(),
+        secret=secretbox.encrypt(generate_secret()),
         description=data.description,
         event_types=data.event_types,
     )
@@ -205,7 +230,7 @@ async def _attempt(
         "content-type": "application/json",
         "webhook-id": msg_id,
         "webhook-timestamp": str(timestamp),
-        "webhook-signature": sign(endpoint.secret, msg_id, timestamp, body),
+        "webhook-signature": sign(secretbox.decrypt(endpoint.secret), msg_id, timestamp, body),
     }
     try:
         response = await client.post(endpoint.url, content=body, headers=headers)

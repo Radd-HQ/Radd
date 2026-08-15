@@ -2,11 +2,16 @@
 
 import httpx
 
+import logging
+
 from radd.config import settings
 from radd.db import SessionLocal
+from radd.secretbox import SecretBoxError
 from radd.worker import PeriodicLoop
 
 from . import service
+
+logger = logging.getLogger(__name__)
 
 # One client for the loop's lifetime (connection reuse); created lazily on the
 # first tick, closed by stop() so a stop→start cycle gets a fresh one.
@@ -23,6 +28,20 @@ async def _run_once() -> None:
     async with SessionLocal() as session:
         await service.attempt_due(session, _client)
         await session.commit()
+
+
+async def reencrypt_secrets() -> None:
+    """RADD-1086 lazy adoption: encrypt legacy plaintext secrets once the
+    secretbox key exists. Never blocks boot — a dev box without a backup key
+    just stays on plaintext until it has one."""
+    try:
+        async with SessionLocal() as session:
+            changed = await service.encrypt_plaintext_secrets(session)
+            await session.commit()
+        if changed:
+            logger.info("encrypted %d legacy webhook secret(s) at rest", changed)
+    except SecretBoxError as exc:
+        logger.warning("webhook secrets stay plaintext this boot: %s", exc)
 
 
 _loop = PeriodicLoop(

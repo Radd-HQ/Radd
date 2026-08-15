@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, ForeignKey, Integer, String
+from sqlalchemy import BigInteger, Boolean, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -13,8 +13,9 @@ class WebhookEndpoint(Base, TimestampMixin):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     url: Mapped[str] = mapped_column(String(1000))
-    # Needed for signing, so stored as-is; encrypt at rest when the secrets layer lands.
-    secret: Mapped[str] = mapped_column(String(100))
+    # AES-GCM ciphertext under the secretbox key (RADD-1086); legacy plaintext
+    # rows pass through decrypt() until the startup hook re-encrypts them.
+    secret: Mapped[str] = mapped_column(Text)
     description: Mapped[str] = mapped_column(String(500), default="")
     # None = all events; otherwise exact event-type strings.
     event_types: Mapped[list[str] | None] = mapped_column(JSONB)
