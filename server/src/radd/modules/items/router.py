@@ -22,6 +22,7 @@ from .schemas import (
     ItemHistory,
     ItemIds,
     ItemClone,
+    ItemConvert,
     ItemLinkCreate,
     ItemLinkSearchResult,
     ItemRankUpdate,
@@ -286,6 +287,18 @@ async def clone_item(
     return await service.clone_item(
         session, item_id, user, title=data.title, include_subtasks=data.include_subtasks
     )
+
+
+@router.post("/{item_id}/convert", response_model=ItemRead)
+async def convert_item(
+    item_id: uuid.UUID, data: ItemConvert, session: Session, user: CurrentUser
+) -> ItemRead:
+    """Convert kind (RADD-1089): epic <-> issue <-> subtask, refusing with the
+    blocker's name when the hierarchy would break."""
+    kwargs = {}
+    if "parent_id" in data.model_fields_set:
+        kwargs["parent_id"] = data.parent_id
+    return await service.convert_item_kind(session, item_id, user, kind=data.kind, **kwargs)
 
 
 @router.post("/{item_id}/links", response_model=ItemRead, status_code=201)

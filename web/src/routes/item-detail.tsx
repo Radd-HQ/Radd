@@ -5,7 +5,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { customFieldErrors, deniedCustomFieldKeys, errorMessage } from "../lib/api";
 import { RoutePath } from "../lib/constants";
-import { useArchiveItem, useCloneItem, useDeleteItem, useToggleStarOnItem, useUpdateItem } from "../lib/item-mutations";
+import { useArchiveItem, useCloneItem, useConvertItem, useDeleteItem, useToggleStarOnItem, useUpdateItem } from "../lib/item-mutations";
 import { useItemWritability, usePermissions, usePointsEnabled } from "../lib/hooks";
 import { useCan } from "../lib/can";
 import {
@@ -31,6 +31,7 @@ import { Button } from "../components/Button";
 import { useIssueQuickActions } from "../components/items/quick-actions";
 import { recordRecentItem, removeRecentItem } from "../lib/recent";
 import { ChildCount, KindBadge, ParentTag } from "../components/items/ItemBadges";
+import { DropdownMenu } from "../components/DropdownMenu";
 import { WatchButton } from "../components/items/WatchButton";
 import { AttachmentsSection } from "../components/items/AttachmentsSection";
 import { LazyRichEditor as RichEditor } from "../components/editor/LazyRichEditor";
@@ -99,6 +100,7 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
   const canEditDescription = writ.fieldWritable("description");
   const archiveItem = useArchiveItem();
   const cloneItem = useCloneItem();
+  const convertItem = useConvertItem();
   const deleteItem = useDeleteItem();
   // Pasted/inserted description images go through the storage-choice seam
   // (spec 102); a dismissed prompt rejects, so the editor insert aborts.
@@ -190,7 +192,37 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
   return (
     <AiResultsContext.Provider value={openAiResults}>
       <header className="flex items-center gap-2 border-b border-subtle px-5 py-3">
-        <KindBadge kind={item.kind} withLabel />
+        {item.kind === ItemKind.subtask ? (
+          <KindBadge kind={item.kind} withLabel />
+        ) : (
+          <DropdownMenu
+            label="Convert kind"
+            widthClass="w-56"
+            items={[
+              {
+                kind: "action",
+                label: item.kind === ItemKind.epic ? "Convert to issue" : "Convert to epic",
+                onSelect: () =>
+                  convertItem.mutate({
+                    itemId: item.id,
+                    kind: item.kind === ItemKind.epic ? ItemKind.issue : ItemKind.epic,
+                  }),
+              },
+            ]}
+            trigger={({ ref, open, toggle }) => (
+              <button
+                type="button"
+                ref={ref}
+                onClick={toggle}
+                aria-expanded={open}
+                title="Convert kind — a refusal names what blocks it"
+                className="cursor-pointer rounded-md outline-focus hover:opacity-80"
+              >
+                <KindBadge kind={item.kind} withLabel />
+              </button>
+            )}
+          />
+        )}
         <span className="font-mono text-xs text-fg-muted">{item.key}</span>
         {item.kind === ItemKind.epic && <ChildCount count={item.child_count ?? 0} />}
         {item.parent && (

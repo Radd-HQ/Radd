@@ -490,10 +490,50 @@ MOVE_ITEM = McpToolSpec(
     kernel_enforced=False,
 )
 
+async def _convert_item(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
+    source = await items_service.get_item_by_key(session, str(args["key"]), actor=actor)
+    kwargs: dict[str, Any] = {}
+    if "parent" in args:
+        parent = args["parent"]
+        kwargs["parent_id"] = (
+            (await items_service.get_item_by_key(session, str(parent), actor=actor)).id
+            if parent
+            else None
+        )
+    read = await items_service.convert_item_kind(
+        session, source.id, actor, kind=ItemKind(str(args["kind"])), **kwargs
+    )
+    return receipt(read)
+
+
+CONVERT_ITEM = McpToolSpec(
+    name="convert_item",
+    description="Convert a work item's kind (epic <-> issue <-> subtask). Refuses with "
+    "the blocker's name when the hierarchy would break (children to re-parent, a "
+    "missing parent issue). parent: item KEY for the new parent; null detaches; "
+    "omitted keeps a compatible parent and detaches an incompatible one (recorded "
+    "in history).",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "key": {"type": "string", "description": "Item key, e.g. TD-42."},
+            "kind": {"type": "string", "enum": ["epic", "issue", "subtask"]},
+            "parent": {"type": ["string", "null"], "description": "New parent's key; null = detach."},
+        },
+        "required": ["key", "kind"],
+        "additionalProperties": False,
+    },
+    handler=_convert_item,
+    permission=Permission.ITEM_UPDATE,
+    project_scoped=True,
+    kernel_enforced=False,
+)
+
 MCP_TOOLS = (
     SEARCH_ITEMS,
     MOVE_ITEM,
     CLONE_ITEM,
+    CONVERT_ITEM,
     LINK_ITEMS,
     UNLINK_ITEMS,
     GET_ITEM,

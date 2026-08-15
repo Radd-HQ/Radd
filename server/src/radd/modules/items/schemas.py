@@ -65,6 +65,15 @@ class ItemLinks(BaseModel):
     incoming: list[ItemLinkRead] = Field(default_factory=list)
 
 
+class ItemConvert(BaseModel):
+    """POST /items/{id}/convert (RADD-1089). parent_id: omitted = keep when
+    compatible / detach otherwise; explicit value (or null) is validated
+    against the target kind's hierarchy rule."""
+
+    kind: ItemKind
+    parent_id: uuid.UUID | None = None
+
+
 class ItemClone(BaseModel):
     """POST /items/{id}/clone (RADD-1088). Omitted title -> "Copy of <source>"."""
 

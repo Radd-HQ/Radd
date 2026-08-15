@@ -23,6 +23,7 @@ import type {
   IntakeVerdict,
   Item,
   ItemCreate,
+  ItemKindValue,
   ItemLinkCreate,
   ItemUpdate,
   View,
@@ -342,6 +343,21 @@ export function useValidateItem() {
 
 
 /** Soft archive/unarchive (spec 38) — hidden from lists by default. */
+/** Convert kind (RADD-1089): epic <-> issue; refusals name the blocker. */
+export function useConvertItem() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, kind }: { itemId: string; kind: ItemKindValue }) =>
+      api.post<Item>(`${ApiPath.items}/${itemId}/convert`, { kind }),
+    onSuccess: (updated) => {
+      cacheItem(queryClient, updated);
+      pushToast(`Now ${updated.kind === "epic" ? "an" : "a"} ${updated.kind}`);
+    },
+    onError: (error) => pushToast(errorMessage(error)),
+    onSettled: () => invalidateItemCaches(queryClient),
+  });
+}
+
 /** Clone (RADD-1088): shape copied, trail not — server drops what the actor
  * cannot write and links the clone `relates` to the original. */
 export function useCloneItem() {

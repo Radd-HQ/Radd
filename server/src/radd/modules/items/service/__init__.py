@@ -50,6 +50,7 @@ from .queries import (
     require_readable_item,
 )
 from .clone import clone_item
+from .convert import convert_item_kind
 from .read import get_item, get_item_by_key
 from .refs import item_ref, ref_from
 from .visibility import (
