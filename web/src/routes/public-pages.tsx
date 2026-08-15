@@ -1,5 +1,6 @@
 import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { BookOpen, ChevronRight, LogIn } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import {
@@ -13,6 +14,8 @@ import { Markdown } from "../lib/markdown";
 import { EmptyState } from "../components/EmptyState";
 import { PageTree } from "../components/pages/PageTree";
 import { RaddTile } from "../components/RaddMark";
+import { renderSnippet } from "../components/CommandPalette";
+import { useDebounced } from "../lib/hooks";
 import { Spinner } from "../components/Spinner";
 
 /**
@@ -45,19 +48,91 @@ function PublicPagesHeader({ children }: { children?: React.ReactNode }) {
   );
 }
 
-/** `/kb` — the public space cards. */
+interface PublicSearchResult {
+  page_id: string;
+  space_id: string;
+  title: string;
+  snippet: string | null;
+}
+
+/** `/kb` — the public space cards, searchable (RADD-1099: the route existed
+ * since spec 74; the box didn't, so public deflection worked only by
+ * browsing). */
 export function PublicPagesIndexPage() {
   const spaces = useQuery({
     queryKey: ["public-kb", "spaces"],
     queryFn: () => api.get<PublicPageSpace[]>(ApiPath.publicKbSpaces),
     retry: false,
   });
+  const [query, setQuery] = useState("");
+  const debounced = useDebounced(query.trim(), 250);
+  const searching = debounced.length >= 2;
+  const results = useQuery({
+    queryKey: ["public-kb", "search", debounced],
+    queryFn: () =>
+      api.get<{ results: PublicSearchResult[] }>(
+        `${ApiPath.publicKbSearch}?q=${encodeURIComponent(debounced)}`,
+      ),
+    enabled: searching,
+    retry: false,
+  });
+  const spaceById = new Map((spaces.data ?? []).map((s) => [s.id, s]));
 
   return (
     <main className="flex min-h-screen flex-col bg-base">
       <PublicPagesHeader />
       <div className="flex-1 overflow-y-auto p-6">
-        {spaces.isPending ? (
+        <div className="mx-auto mb-6 w-full max-w-xl">
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search the knowledge base…"
+            aria-label="Search the knowledge base"
+            className="w-full rounded-lg border border-strong bg-surface px-3.5 py-2 text-sm text-fg outline-focus placeholder:text-fg-faint focus:border-emphasis"
+          />
+        </div>
+        {searching ? (
+          results.isPending ? (
+            <Spinner label="Searching…" />
+          ) : results.isError ? (
+            <p className="text-sm text-fg-secondary">
+              Search isn't available: {errorMessage(results.error)}
+            </p>
+          ) : (results.data?.results.length ?? 0) === 0 ? (
+            <EmptyState icon={BookOpen} message={`Nothing matches “${debounced}”.`} />
+          ) : (
+            <ul className="mx-auto flex w-full max-w-xl flex-col gap-2">
+              {(results.data?.results ?? []).map((result) => {
+                const space = spaceById.get(result.space_id);
+                return (
+                  <li key={result.page_id}>
+                    <Link
+                      to={RoutePath.publicPage}
+                      params={{
+                        spaceSlug: space?.slug ?? result.space_id,
+                        pageSlug: result.page_id,
+                      }}
+                      className="flex flex-col gap-0.5 rounded-lg border border-subtle bg-surface/50 px-4 py-2.5 hover:border-strong hover:bg-surface"
+                    >
+                      <span className="text-sm font-medium text-heading">{result.title}</span>
+                      {space && (
+                        <span className="text-[11px] uppercase tracking-wide text-fg-faint">
+                          {space.name}
+                        </span>
+                      )}
+                      {result.snippet && (
+                        <span className="text-xs leading-relaxed text-fg-muted">
+                          {renderSnippet(result.snippet)}
+                        </span>
+                      )}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )
+        ) : spaces.isPending ? (
           <Spinner label="Loading pages…" />
         ) : spaces.isError ? (
           <p className="text-sm text-fg-secondary">
