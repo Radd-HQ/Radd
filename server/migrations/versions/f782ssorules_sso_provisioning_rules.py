@@ -4,7 +4,7 @@ Revision ID: f782ssorules
 Revises: e780ssotmpl
 Create Date: 2026-08-03
 
-One provider serves several populations — `@example.com` and `@radd-hq.com`
+One provider serves several populations — `@acme.example` and `@partner.example`
 arrive through the same Google button and should not land with the same access.
 This puts a RULE between the provider and its grants, and repoints the grant and
 team rows onto it.

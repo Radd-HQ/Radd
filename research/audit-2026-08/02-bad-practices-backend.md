@@ -1,5 +1,5 @@
 # Radd backend bad-practices audit
-`<repo>/server/src/radd` — read-only audit against the project's own non-negotiable rules (CLAUDE.md), 2026-08-05.
+`server/src/radd` — read-only audit against the project's own non-negotiable rules (CLAUDE.md), 2026-08-05.
 
 ## Executive summary
 

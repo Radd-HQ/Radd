@@ -129,7 +129,7 @@ function useSchedulePreview(schedule: RuleSchedule): SchedulePreview | null {
  * same config and validate it through the same rules on the server. Backups
  * previously hardcoded "daily", so monthly and cron were reachable through the
  * API and invisible in the product — which is the same shape of gap that had
- * the studio file a request for scheduling that already half-existed. */
+ * a studio file a request for scheduling that already half-existed. */
 export function ScheduleEditor({
   value,
   onChange,

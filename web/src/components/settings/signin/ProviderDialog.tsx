@@ -249,7 +249,7 @@ export function ProviderDialog({
                 options={[]}
                 allowCreate
                 disabled={!autoProvision}
-                placeholder="radd-hq.com"
+                placeholder="example.com"
                 createLabel={(term) => `Allow ${term.replace(/^@/, "")}`}
                 ariaLabel="Allowed sign-up domains"
               />

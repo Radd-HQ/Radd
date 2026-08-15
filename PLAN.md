@@ -220,7 +220,7 @@ The original M0–M5 milestone plan was overtaken by fast iteration: the **track
 - Local auth (argon2id), server-side sessions, personal access tokens, service accounts.
 - **Roles-as-data**: builtin admin/member/viewer + custom roles with permission sets; **full action RBAC** enforced on every endpoint through one `authz` seam; direct project membership + team-granted project roles.
 - **Field-level read/write permissions** granted to roles *or* teams *(originally a non-goal — now built)*; public/internal **comment visibility** gated by permission.
-- **Issue types (spec 51)**: a first-class per-project **Type** axis (Bug/Task/Story/Feature/Epic, configurable, colored chips) — the classification the tracker was missing, kept orthogonal to the epic/issue/subtask hierarchy. `itemtypes` module + `type_id` on items + SLQ `type` filter; rendered as OtherTracker-style chips on boards/lists/the issue rail; managed under project settings. Plus a **OtherTracker-style settings pass**: value-chips for Type/Priority/State, dismissible info banners on the config editors, and up/down reordering.
+- **Issue types (spec 51)**: a first-class per-project **Type** axis (Bug/Task/Story/Feature/Epic, configurable, colored chips) — the classification the tracker was missing, kept orthogonal to the epic/issue/subtask hierarchy. `itemtypes` module + `type_id` on items + SLQ `type` filter; rendered as compact value-chips on boards/lists/the issue rail; managed under project settings. Plus a **settings design pass**: value-chips for Type/Priority/State, dismissible info banners on the config editors, and up/down reordering.
 - **Settings scope + RBAC CRUD (spec 50)**: full-CRUD permission model (77 atoms, `create/update/delete` on every resource incl. the missing `item/comment/worklog/doc.delete`; `*.manage` umbrellas expand transitively — backward-compatible); settings split into **instance / project** surfaces (spec 67 later retired the workspace layer) with **scope-gated nav** and per-project settings nested under `/p/$key/settings/*`; a **scalar-settings cascade** (`scoped_settings` — project → instance → env, first key `work_week_days`); **builtin-field READ grants** (blanked out of item representations); **per-team internal comments** (teams narrow the `comment.read_internal` audience, enforced on list/notify/history/MCP).
 
 **Work tracking**
@@ -648,7 +648,7 @@ form-submit page stay intentionally narrow-centered (focused forms).
 2. **Comprehensive settings-UI pass** — shipped: dismissible info banners + value-chips
    (Type/Priority/State) + up/down reorder on the config editors, **+ inline default-value editing
    (done, item 1)**. Still to do: the slide-in "Create new / Use existing" add panel, and sweeping the
-   *remaining* settings pages into the same OtherTracker-style design language.
+   *remaining* settings pages into the same settings design language.
 3. **Spec 50/51/52 follow-ups** — ✅ `timelog_hours_per_day` into the scalar cascade (now resolved
    per item project like `work_week_days`); ✅ issue-mention backlinks (`ItemLinkType.mentions`
    auto-derived from `#[…]`, read-only Mentions section on the item view). Still open: builtin-field
@@ -672,8 +672,8 @@ with synthetic, trademark/security pass.
   `@milkdown/crepe` + react-markdown got in — the old "no package manager" blocker is gone.) For plain
   builds still use `web/node_modules/.bin/{tsc -b, vite build}` directly. dnd-kit is NOT installed.
 - **Rich text = Milkdown/Crepe for BOTH read and edit (spec 54 + unification):** the
-  user's directive: ONE consistent engine, "good clean feature-rich viewing + editing like Jira/
-  OtherTracker" — no variant splits, no separate read renderer for rich surfaces. **Edit:**
+  user's directive: ONE consistent engine, "good clean feature-rich viewing + editing like the big
+  commercial trackers" — no variant splits, no separate read renderer for rich surfaces. **Edit:**
   `editor/RichEditor.tsx` — every editor (description, comments, wiki) gets the SAME fixed TopBar
   (heading selector trimmed to P/H1–H3), `/` BlockEdit menu (h4–h6 nulled) + block drag handle,
   table widget; floating selection Toolbar off; ImageBlock gated on `onUploadImage` (feature-flag
@@ -928,7 +928,7 @@ but **1012 of those matches are `source=local`**, created by the Jira importer. 
 is structurally inert for ~98% of the roster. A toast reading `0 · 0 · 0` gives no hint why.
 
 **Live-instance shape:** 1293 Radd accounts vs 1029 AD users under
-`OU=Sites,DC=ad,DC=studio,DC=com` — 1029 exact-email matches, 27 name-only duplicates
+`OU=Sites,DC=ad,DC=studio,DC=internal` — 1029 exact-email matches, 27 name-only duplicates
 (25 `@example.com` Jira placeholders + 3 `adm-*` aliases; 26 own no work), and 237 with no
 AD counterpart (188 own work — leavers/sister studios, never delete; 49 empty, incl. service
 accounts `automation@example.system` and `puppetuser@`).
@@ -939,33 +939,33 @@ ENFORCE / MERGE / KEEP using the same planner as the interactive import, dry-run
 `--enforce-only` / `--merge-only` / `--exclude EMAIL` for control. KEEP is never touched.
 
 **Hazard found while diagnosing — do NOT enable `ldap_user_sync_deactivate_missing` yet:**
-49 active `adm-*@ad.example.com` accounts are outside the enumeration (privileged accounts
+49 active `adm-*@<AD UPN domain>` accounts are outside the enumeration (privileged accounts
 outside `OU=Sites` and/or lacking `mail`, provisioned by LDAP *login* via the synthesized
 UPN), so the departure sweep would read all 49 as gone and deactivate them. Confirmed the
-same humans appear in the enumeration under their real mail (`adm-a-user@ad.example.com`
-vs `a-user@example.com`), so email-keyed matching cannot see they are present.
+same humans appear in the enumeration under their real mail (`adm-jdoe@<AD UPN domain>`
+vs `jdoe@<mail domain>`), so email-keyed matching cannot see they are present.
 
-**RECONCILE APPLIED** (`--apply --exclude-prefix adm- --exclude alias-user@example.com`;
-DB snapshot first at `server/var/backups/radd-pre-reconcile-20260724.dump`, audit at
-`server/scripts/reconcile_ad_users_20260723T213102Z.json`): **1011 enforced, 24 merged.**
+**RECONCILE APPLIED** (`--apply --exclude-prefix adm- --exclude <one alias-named account>`;
+DB snapshot first at `server/var/backups/radd-pre-reconcile-20260724.dump`, audit JSON
+kept untracked under `var/`): **1011 enforced, 24 merged.**
 Result: `source` mix went 1226 local / 66 ldap → **215 local / 1077 ldap**; **zero active
 `@example.com` placeholders remain**; the sync now governs **1028 of 1029** matched accounts
 (was 17), so "Sync users" is finally a live operation rather than a structural no-op.
-a departed user's 6 items repointed to `a-user@example.com` (both rows inactive — user
-accepted merging into a deactivated survivor). `hjarrar@example.com` intact: admin, active,
+One duplicated person's 6 items repointed to their AD-keyed account (both rows inactive —
+user accepted merging into a deactivated survivor). The owner's directory account intact: admin, active,
 now ldap. Two deliberate hold-backs: the 27 `adm-*` accounts (user: "I don't need those in
 the system" — still present, own no work, never logged in, none are admins → retire when
-ready) and `alias-user@example.com`, whose AD `displayName` is literally `adm-alias` and would
+ready) and one account whose AD `displayName` is literally its `adm-` alias and would
 have degraded a real name.
 
-**Departure-sweep blast radius after the reconcile: still 49** (32 `@ad.example.com` incl.
-the adm-* set, 15 `@example.com`, 2 `@sister-studio.com`) — unchanged by the reconcile
+**Departure-sweep blast radius after the reconcile: still 49** (32 on the AD UPN domain incl.
+the adm-* set, 15 on the mail domain, 2 at a sister studio) — unchanged by the reconcile
 because those accounts were already ldap-source. `ldap_user_sync_deactivate_missing` stays
 OFF until they are retired or the search base widens.
 
 **Unrelated test fix in the same pass:** `test_user_sync_base_cascade_override_beats_env`
 asserted that NO instance-scope `ldap_user_sync_base` existed, so it started failing the moment
-the Directory page saved a real one (`OU=Sites,DC=ad,DC=studio,DC=com` 21:03).
+the Directory page saved a real one (`OU=Sites,DC=ad,DC=studio,DC=internal` 21:03).
 It now clears that key inside its own rolled-back transaction — configuring the product must
 never fail its own tests. The live setting was verified intact afterwards.
 
@@ -1008,7 +1008,7 @@ instance had `ldap_user_sync_enabled` AND `ldap_user_sync_deactivate_missing` tu
 21:35 on. The last sync ran 31s BEFORE the sweep toggle was saved, so it has not
 fired yet — but `RADD_RUN_WORKERS=True`, so it will on next server start. Blast radius
 re-measured: **49 accounts, ALL dormant** (own nothing, never logged in, and only
-`hjarrar@example.com` holds an API token) — 27 `adm-*` plus 22 leavers/service accounts. The
+the owner's directory account holds an API token) — 27 `adm-*` plus 22 leavers/service accounts. The
 earlier "do NOT enable this" warning is therefore **withdrawn**: enabling it is safe here and
 retires the `adm-*` cruft. A third test made the same live-DB assumption
 (`test_user_sync_provisions_and_updates_toggle_off` asserted `deactivated == 0`) and now
@@ -1050,7 +1050,7 @@ alembic head `359b250bda3a` (`5b7a489f873a` plans → `359b250bda3a` runs); **88
 (39 new: inference/mapping/issuemap/discovery/runner); `web/dist` rebuilt (tsc clean). **Server
 restarted** on :8000 with the new module + `.env` Jira creds — `/jira/*` routes live, verified over
 HTTP (status connects as `hjarrar` via basic auth, 42 projects). Live-verified earlier: a
-14,540-issue DEV preview + a bounded run importing real issues with 0 errors. `hjarrar@example.com`
+14,540-issue DEV preview + a bounded run importing real issues with 0 errors. The owner's directory account
 (AD login) promoted to admin for testing; 8 leaked `jr-*@example.com` test accounts removed.
 
 
@@ -1067,7 +1067,7 @@ carry the full designs).
   streaming. Six feature toggles + per-user editor opt-out; Settings → AI.
   The `local` wire shape SHIPS CPU embeddings in-process (fastembed/ONNX,
   `radd[localembed]`, in the image) — semantic search needs no external model
-  server. Live: llm-host vLLM (`gemma-4-31b-it`) holds chat+vision; built-in
+  server. Live: a vLLM (`gemma-4-31b-it`) holds chat+vision; built-in
   embeddings hold the embeddings role; whole dev corpus embedded ~2min on CPU.
 - **Spec 102 — storage rebuilt.** `storage_hosts` rows (proxy|presigned
   delivery; presigned = the network decides who reads a zoned host), the

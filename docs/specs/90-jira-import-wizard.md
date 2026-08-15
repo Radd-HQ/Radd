@@ -137,7 +137,7 @@ assignees/reporters/comment authors resolve to real accounts.
   imported, parents resolved, a native link + a web-link fallback, and
   `mark_interrupted` failing a stale run.
 
-Verified live against `jira.example.com` (basic auth): 42 projects, a
+Verified live against a production Jira DC (basic auth): 42 projects, a
 14,540-issue DEV preview, and a bounded run importing real issues with 0 errors —
 preserved IDs/timestamps, custom fields, comments, worklogs, cycles, parents.
 

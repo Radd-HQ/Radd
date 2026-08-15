@@ -4,7 +4,7 @@
 Feature/Epic…) — the *classification* axis that Radd was missing. Radd already had
 the *hierarchy* axis (`ItemKind` = epic/issue/subtask); Type is **orthogonal** to
 it (decision: "Type alongside hierarchy", not Jira-style merge). Rendered as a
-compact colored chip (the OtherTracker `T`/`E`/`B` treatment).
+compact colored chip (a small rounded initial-letter box).
 
 ## Backend (`itemtypes` module — mirrors `workflow`)
 - `issue_types` table: per-project (project_id FK CASCADE), `name` (unique per

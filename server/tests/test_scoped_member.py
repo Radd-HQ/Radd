@@ -31,7 +31,7 @@ from radd.modules.auth.types import BuiltinRoleKey, InstanceRole, Permission
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 
-#: What "Studio Members" holds on the live instance — a read/comment/create role.
+#: What the live instance's member role holds — a read/comment/create role.
 SCOPED_ROLE_ATOMS = [
     Permission.ITEM_READ,
     Permission.ITEM_CREATE,

@@ -1,7 +1,7 @@
 # Spec 110 — Sign in with Google: the SSO provider registry
 
 User ask: enable Sign in with Google, but with **signups disabled except for
-named domains** (`hjarrar.com`, `radd-hq.com`, `example.com`, editable), and a
+named domains** (`hjarrar.com`, `radd-hq.com`, `acme.example`, editable), and a
 first-time Google login must **join the existing AD account** for that person
 rather than creating a duplicate.
 
@@ -68,7 +68,7 @@ signups**, the strict reading of the ask, so a provider added without a list
 can't quietly let the internet in. The list gates **creation only** — an
 existing account signs in from any domain, so a contractor already on the
 instance is never locked out. Domains are normalized on write (`@Radd-HQ.com`,
-`hussein@HJarrar.com` and ` example.com ` all store as bare lowercase): a list
+`hussein@HJarrar.com` and ` acme.example ` all store as bare lowercase): a list
 that silently doesn't match is a support ticket.
 
 ## API

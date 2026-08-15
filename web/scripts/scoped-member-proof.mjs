@@ -33,7 +33,7 @@ const ACCOUNT = {
   password: "scoped-member-1",
 };
 
-/** What "Studio Members" holds on the live instance. */
+/** What the live instance's member role holds. */
 const ROLE_ATOMS = ["item.read", "item.create", "comment.write", "page.read", "view.create"];
 
 const RECORDER = `(() => {

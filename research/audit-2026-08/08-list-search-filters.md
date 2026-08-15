@@ -2,7 +2,7 @@
 
 Dataset used for scale (from `server/scripts/perfseed.py` targets + CLAUDE.md): **82 projects, ~3,088 users (1,031 active / 2,057 disabled AD), 2,293 teams, 2,016 labels, 319 custom-field defs, 107 status names, 61 issue-type names, ~250 views, 503k items, 1.8M comments; Jira import inbound: 337 fields / 83 statuses / 59 types.**
 
-All paths below live under `<repo>/`.
+All paths below live under ``.
 
 ## Executive summary
 

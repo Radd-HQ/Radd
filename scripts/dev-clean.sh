@@ -8,7 +8,7 @@
 #   - an empty database on :5457 and empty Garage volumes on :3920/:3930
 #   - both storage hosts registered ("Content" default, "General" selectable)
 #     and the routing chain in place — one host cannot exercise spec 102
-#   - the llm-host vLLM holding the chat + vision roles, TEI holding embeddings
+#   - an optional RADD_SEED_LLM_BASE_URL provider holding the chat + vision roles, TEI holding embeddings
 #   - every AI feature toggle on
 #   - an admin account to sign in with
 #

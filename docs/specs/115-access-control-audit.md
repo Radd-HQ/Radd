@@ -888,7 +888,7 @@ cheapest to build alongside the thing it explains.
 visible, audited). This is the single highest-value tool for permission work:
 the inspector says what someone *holds*, and "View as" shows what they *see*,
 which is the question actually being asked. It would have answered the
-`hjarrar@example.com` report in ten seconds instead of an hour. Guard it
+`hjarrar@acme.example` report in ten seconds instead of an hour. Guard it
 carefully — it is impersonation, so it is read-only, never available to a
 non-admin, and every entry is an event.
 

@@ -33,7 +33,7 @@ def placeholder_email_domain(connection: JiraConnection) -> str:
     """The domain for synthesizing an address when Jira exposes none (spec 100).
 
     An explicit setting wins; otherwise it is DERIVED from the connection's own
-    host — `jira.example.com` → `example.com` — because a Jira instance
+    host — `jira.internal.example.com` → `example.com` — because a Jira instance
     almost always lives under the organisation's own domain, which is the domain
     the directory uses. That is what lets a later AD import match on email and
     adopt the placeholder's work (spec 88).

@@ -9,7 +9,7 @@
 Proposed features to take Radd from "technically excellent" to "I'd rather use this
 than Jira." Written to be **self-contained** so a fresh session can pick any item and
 start building. Grounded in the state at commit `271f036` (audit/history + weblinks/vcs
-+ issue-view redesign). Context: solo dev (Hussein) + AI agents; dogfooded at a VFX studio
++ issue-view redesign). Context: solo dev (Hussein) + AI agents; dogfooded in production at a studio
 (VFX) for **TD** = artist support (~122 issues/wk, a de-facto service desk) and **DEV** =
 pipeline dev backlog; GitLab shop; AGPL, AI-native goal.
 

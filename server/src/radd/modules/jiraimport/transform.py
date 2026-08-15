@@ -10,7 +10,7 @@ the plan:
     CATEGORY_MAP + a test for "cancelled"→   the status table's category
     LINK_TYPE_MAP (three names)          →   the link-type table
     `fields["customfield_10002"]`        →   ids resolved from `gh-sprint`
-    `<user>@example.com`                →   the users table's decision
+    `<user>@acme.example`                →   the users table's decision
 
 Nothing here reads the database or the network, so the dry run and the real
 import share one code path and cannot disagree about what would happen.

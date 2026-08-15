@@ -21,7 +21,7 @@ Bring across, from a Confluence **Server/DC** instance:
 
 ## The target is Server/DC
 
-`confluence.example.com` serves `/pages/viewpage.action?pageId=…`, which
+a Confluence DC host serves `/pages/viewpage.action?pageId=…`, which
 is Server/DC, not Cloud. That decides three things:
 
 - auth is PAT or basic, matching `JiraConnection.auth_mode` exactly;
@@ -300,7 +300,7 @@ external_source: Mapped[str] = mapped_column(String(200), default="")
 external_id:     Mapped[str] = mapped_column(String(200), default="")
 ```
 
-- `external_source` is the *instance*, not the product — `confluence:confluence.example.com`
+- `external_source` is the *instance*, not the product — `confluence:confluence.internal.example.com`
   — because two Confluence servers both have a page `12345`. The importer owns the
   string; `pages` only stores it.
 - `external_id` is the Confluence page id as text.

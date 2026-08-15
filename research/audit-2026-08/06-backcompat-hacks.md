@@ -1,4 +1,4 @@
-# Backwards-Compatibility Audit — Radd (`<repo>`), 2026-08-05
+# Backwards-Compatibility Audit — Radd (``), 2026-08-05
 
 **Scope:** `server/src`, `server/migrations` (runtime leakage only), `web/src`, `web/packages`. Read-only. Baseline rule: **no backcompat until V1** — every compat mechanism is a finding; the report states what deleting it costs.
 

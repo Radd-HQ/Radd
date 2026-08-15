@@ -21,7 +21,7 @@ from .markup import jira_to_markdown
 from .schemas import FieldMappingEntry
 from .types import BuiltinTarget, FieldAction
 
-# Spec 100 DELETED `FALLBACK_EMAIL_DOMAIN = "example.com"` — one company's domain,
+# Spec 100 DELETED the hardcoded `FALLBACK_EMAIL_DOMAIN` — one company's domain,
 # in source, written into real `users` rows on every instance that ran this. The
 # domain is now passed in by the caller (derived from the Jira host, or set
 # explicitly per import), and an absent domain synthesizes NOTHING: a person Jira

@@ -8,7 +8,7 @@ guessed silently, nothing is downloaded twice, and nothing is unrecoverable.
 Spec 90 worked, but it was written *against one Jira instance while importing from
 it*, and every shortcut that implies became a permanent property:
 
-- **Hardcoded to one Jira.** `FALLBACK_EMAIL_DOMAIN = "example.com"` was written
+- **Hardcoded to one Jira.** `FALLBACK_EMAIL_DOMAIN = "<the studio's domain>"` was written
   into real `users` rows. The sprint field was read as the literal
   `customfield_10002` unconditionally. `NOISE_JIRA_FIELDS` hid six literal
   `customfield_*` ids. Issue type → epic/issue/subtask was `"epic" in name`.
@@ -46,7 +46,7 @@ run, a re-import and relinking fast, deterministic and repeatable.
 **1. Jira's own stable type keys.** `/field` exposes `schema.custom` — a plugin
 type key identical on every instance. Spec 90 discarded it. `schemakeys.py` maps
 it, and `client.field_catalog` now captures it. Verified live against
-`jira.example.com` on:
+the studio's Jira DC on:
 
 | spec 90 hardcoded | discovered via |
 |---|---|

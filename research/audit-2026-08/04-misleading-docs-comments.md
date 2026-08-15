@@ -1,4 +1,4 @@
-# Documentation audit — Radd (`<repo>`), 2026-08-05
+# Documentation audit — Radd (``), 2026-08-05
 
 ## Executive summary
 

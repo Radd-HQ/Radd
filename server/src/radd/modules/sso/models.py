@@ -89,7 +89,7 @@ class SsoProvider(Base, TimestampMixin):
 class SsoProvisioningRule(Base, TimestampMixin):
     """Who gets what when this provider creates an account (RADD-782).
 
-    One provider serves several populations — `@example.com` and
+    One provider serves several populations — `@acme.example` and
     `@radd-hq.com` sign in through the same Google button and should not land
     with the same access. RADD-780/781 gave a provider ONE template; this puts a
     rule between them, and the grants and teams hang off the rule.
@@ -97,7 +97,7 @@ class SsoProvisioningRule(Base, TimestampMixin):
     **Every matching rule applies.** Not first-match-wins: grants are additive
     rows, so a union is the only composition that cannot surprise — adding a
     rule can widen access but never silently remove another's. It is also what
-    makes a catch-all useful ("everyone gets Viewer, the studio additionally gets
+    makes a catch-all useful ("everyone gets Viewer, Acme additionally gets
     Member") instead of forcing every rule to restate the common part. The
     spec-102 storage chain picks ONE host because a file lands in one place;
     access is a union, and borrowing that ordering would let a catch-all at the
@@ -117,7 +117,7 @@ class SsoProvisioningRule(Base, TimestampMixin):
     #: Admin-facing label. "" is fine — the domains say what it does.
     name: Mapped[str] = mapped_column(String(200), default="")
     position: Mapped[int] = mapped_column(Integer, default=0)
-    #: Lowercased bare domains ("example.com"). EMPTY = matches everyone.
+    #: Lowercased bare domains ("acme.example"). EMPTY = matches everyone.
     #:
     #: Exact match on the address's domain, the same normalization
     #: `allowed_signup_domains` uses. Deliberately not a regex and not a

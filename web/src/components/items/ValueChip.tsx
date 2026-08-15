@@ -15,7 +15,7 @@ function textOn(hex: string): string {
 }
 
 /**
- * A compact colored chip (OtherTracker style): a small rounded box in the value's
+ * A compact colored chip: a small rounded box in the value's
  * color showing a lucide icon or the first letter of the name. Used for issue
  * types on cards, list rows, and the issue rail.
  */

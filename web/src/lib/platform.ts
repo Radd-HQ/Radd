@@ -5,7 +5,7 @@
  * event.ctrlKey` — so the shortcuts have always worked everywhere. Only the
  * LABELS were wrong: ten places rendered a literal `⌘`, so a Windows or Linux
  * user was told to press a key their keyboard does not have, for a shortcut that
- * would have worked if they had guessed Ctrl. Reported from the dogfooding instance, where the
+ * would have worked if they had guessed Ctrl. Reported from studio dogfooding, where the
  * artists are on Linux and the leads are on Macs.
  *
  * Resolved ONCE at module load. The platform cannot change mid-session, and a

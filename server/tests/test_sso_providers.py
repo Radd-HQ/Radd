@@ -137,10 +137,10 @@ async def test_domains_are_normalized_on_write(db):
     """People paste '@Radd-HQ.com' and whole addresses; a list that silently
     doesn't match is a support ticket."""
     provider = await _provider(
-        db, allowed_signup_domains=["@Radd-HQ.com", "hussein@HJarrar.com", " example.com "]
+        db, allowed_signup_domains=["@Radd-HQ.com", "hussein@HJarrar.com", " acme.example "]
     )
 
-    assert provider.allowed_signup_domains == ["radd-hq.com", "hjarrar.com", "example.com"]
+    assert provider.allowed_signup_domains == ["radd-hq.com", "hjarrar.com", "acme.example"]
 
 
 # --- linking to an existing AD account ----------------------------------------
@@ -148,7 +148,7 @@ async def test_domains_are_normalized_on_write(db):
 
 async def test_google_login_joins_the_existing_ad_account(db):
     provider = await _provider(db)
-    email = f"hjarrar-{uuid.uuid4().hex[:6]}@example.com"
+    email = f"hjarrar-{uuid.uuid4().hex[:6]}@acme.example"
     ad_user = await _user(db, email, source=UserSource.LDAP)
 
     user = await service.provision(db, provider, _claims(email, sub="sub-ad-link"))
@@ -165,7 +165,7 @@ async def test_linking_does_not_demote_an_ad_admin(db):
     """The spec-40 bug: instance_role was written unconditionally, so a Google
     login — which ships no group claim at all — demoted the admin it linked to."""
     provider = await _provider(db, admin_groups="")  # no role opinion
-    email = f"admin-{uuid.uuid4().hex[:6]}@example.com"
+    email = f"admin-{uuid.uuid4().hex[:6]}@acme.example"
     await _user(db, email, source=UserSource.LDAP, role=InstanceRole.ADMIN)
 
     user = await service.provision(db, provider, _claims(email, sub="sub-admin"))
@@ -242,7 +242,7 @@ async def test_unverified_email_is_refused(db):
 async def test_unverified_email_cannot_hijack_an_existing_account(db):
     """The account-takeover vector that linking-by-email opens if unguarded."""
     provider = await _provider(db)
-    email = f"target-{uuid.uuid4().hex[:6]}@example.com"
+    email = f"target-{uuid.uuid4().hex[:6]}@acme.example"
     await _user(db, email, source=UserSource.LDAP, role=InstanceRole.ADMIN)
 
     with pytest.raises(ForbiddenError, match="verified"):
@@ -486,28 +486,28 @@ async def test_a_stale_template_never_breaks_a_sign_in(db):
 async def test_rules_route_by_email_domain(db):
     """The point of RADD-782: one provider, different populations.
 
-    `@example.com` and `@radd-hq.com` arrive through the same button and must
+    `@acme.example` and `@radd-hq.com` arrive through the same button and must
     not land with the same access.
     """
     member = await _member_role(db)
     viewer = await _builtin_role(db, "viewer")
     provider = await _provider(
         db,
-        allowed_signup_domains=["example.com", "radd-hq.com"],
+        allowed_signup_domains=["acme.example", "radd-hq.com"],
         provisioning_rules=[
-            {"name": "the studio", "domains": ["example.com"], "grants": [{"role_id": member.id}]},
+            {"name": "Acme", "domains": ["acme.example"], "grants": [{"role_id": member.id}]},
             {"name": "Radd HQ", "domains": ["radd-hq.com"], "grants": [{"role_id": viewer.id}]},
         ],
     )
 
-    studio = await service.provision(
-        db, provider, _claims(f"a-{uuid.uuid4().hex[:6]}@example.com", sub="s-cs")
+    acme = await service.provision(
+        db, provider, _claims(f"a-{uuid.uuid4().hex[:6]}@acme.example", sub="s-cs")
     )
     raddhq = await service.provision(
         db, provider, _claims(f"b-{uuid.uuid4().hex[:6]}@radd-hq.com", sub="s-rh")
     )
 
-    assert {g.role_id for g in await _grants_for(db, studio.id)} == {member.id}
+    assert {g.role_id for g in await _grants_for(db, acme.id)} == {member.id}
     assert {g.role_id for g in await _grants_for(db, raddhq.id)} == {viewer.id}
 
 

@@ -6,7 +6,7 @@ interface SettingsPageProps {
   description?: string;
   /** Right-aligned header affordances (hidden by callers when role-gated). */
   actions?: ReactNode;
-  /** A dismissible explanatory callout under the header (OtherTracker-style). */
+  /** A dismissible explanatory callout under the header. */
   info?: ReactNode;
   children: ReactNode;
 }
@@ -28,7 +28,7 @@ export function SettingsPage({ title, description, actions, info, children }: Se
   );
 }
 
-/** Dismissible info callout (OtherTracker-style) — explains what a settings section does. */
+/** Dismissible info callout — explains what a settings section does. */
 export function InfoBanner({ children }: { children: ReactNode }) {
   const [dismissed, setDismissed] = useState(false);
   if (dismissed) return null;

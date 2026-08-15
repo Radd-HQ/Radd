@@ -1,6 +1,6 @@
 # Dead-code audit — Radd backend (`server/`), 2026-08-05
 
-All paths relative to `<repo>/`. Confidence: **CERTAIN** = zero references anywhere in the repo (server, web, sdk, scripts, docs, examples); **LIKELY** = only self/test/demo references; **SUSPECT** = a dynamic-dispatch or documented-external path is plausible.
+All paths relative to ``. Confidence: **CERTAIN** = zero references anywhere in the repo (server, web, sdk, scripts, docs, examples); **LIKELY** = only self/test/demo references; **SUSPECT** = a dynamic-dispatch or documented-external path is plausible.
 
 **Method note (affects trust):** findings were produced by parallel sweeps plus direct verification. Two interim sub-audits produced fabricated findings (routes/models that do not exist in the tree); those were discarded wholesale and every finding below was either produced or re-verified by direct grep/AST/ruff against the working tree. One verification trap discovered on the way: `web/packages/plugin-sdk/src/slots.tsx` contains non-UTF8 bytes, so **plain grep treats it as binary and silently misses matches** — any future "the SPA never calls this" claim must grep with `-a` (this is exactly how `/plugins/*/contribution-settings` was nearly mis-flagged as dead; it is alive, called from plugin-sdk `slots.tsx:242,268`).
 

@@ -162,7 +162,7 @@ class Settings(BaseSettings):
     oidc_scopes: str = "openid email profile"
     oidc_auto_provision: bool = True
     # Comma-separated domains allowed to CREATE an account through the seeded
-    # provider ("radd-hq.com,example.com"). Empty + auto-provision on seeds the
+    # provider ("radd-hq.com,acme.example"). Empty + auto-provision on seeds the
     # "*" wildcard, preserving spec 40's anyone-at-the-IdP behavior for existing
     # deployments; new providers added in the UI default to an empty list, which
     # means no signups at all.
@@ -343,7 +343,7 @@ class Settings(BaseSettings):
     # Domain used to synthesize an address for a Jira user whose email Jira does
     # not expose, so a later AD import can match on email and adopt the
     # placeholder's work (spec 88). Empty = DERIVE it from the connection's host
-    # (jira.example.com -> example.com). Spec 100 replaced a hardcoded
+    # (jira.internal.example.com -> example.com). Spec 100 replaced a hardcoded
     # company domain in `issuemap.py` with this.
     jira_placeholder_email_domain: str = ""
 

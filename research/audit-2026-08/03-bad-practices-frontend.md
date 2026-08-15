@@ -1,4 +1,4 @@
-# Radd frontend bad-practices audit — `<repo>/web/src`
+# Radd frontend bad-practices audit — `web/src`
 
 Read-only audit against CLAUDE.md "Frontend conventions" + "Verifying UI work". ~78k lines of TS/TSX across 4 CSS files and ~340 components/routes. 2026-08-05.
 

@@ -51,12 +51,12 @@ GARAGE_REGION = "garage"
 CONTENT_ENDPOINT = os.environ.get("RADD_SEED_CONTENT_ENDPOINT", "localhost:3920")
 GENERAL_ENDPOINT = os.environ.get("RADD_SEED_GENERAL_ENDPOINT", "localhost:3930")
 
-#: The studio's vLLM. No API key — it is on the internal network.
-LLM_BASE_URL = os.environ.get(
-    "RADD_SEED_LLM_BASE_URL", "http://llm-host.example.com:8000/v1"
-)
+#: An OpenAI-compatible chat/vision endpoint (vLLM, Ollama, …). No default:
+#: point RADD_SEED_LLM_BASE_URL at yours (put it in .env — it is machine-local),
+#: or the seed skips chat/vision wiring and says so.
+LLM_BASE_URL = os.environ.get("RADD_SEED_LLM_BASE_URL", "")
 LLM_MODEL = os.environ.get("RADD_SEED_LLM_MODEL", "gemma-4-31b-it")
-LLM_NAME = "llm-host vLLM"
+LLM_NAME = os.environ.get("RADD_SEED_LLM_NAME", "Dev LLM")
 
 #: Text-embeddings-inference, the GPU profile in compose.dev.yaml. Serving the
 #: same model the built-in CPU backend used keeps already-embedded vectors valid.
@@ -153,16 +153,16 @@ async def _ai(session) -> None:
     provider (`ai/features.py`), so seeding one without the other leaves the UI
     claiming a capability that quietly does nothing.
     """
-    llm = await _provider(session, name=LLM_NAME, base_url=LLM_BASE_URL, model=LLM_MODEL)
     embed = await _provider(session, name=EMBED_NAME, base_url=EMBED_BASE_URL, model=EMBED_MODEL)
-
-    # chat + vision on the vLLM (it is vision-capable); embeddings on TEI, which
-    # is the only one of the two that serves them.
-    for role, provider, model in (
-        (AiRole.CHAT, llm, LLM_MODEL),
-        (AiRole.VISION, llm, LLM_MODEL),
-        (AiRole.EMBEDDINGS, embed, EMBED_MODEL),
-    ):
+    roles: list[tuple[AiRole, object, str]] = [(AiRole.EMBEDDINGS, embed, EMBED_MODEL)]
+    if LLM_BASE_URL:
+        # chat + vision on the LLM (assumed vision-capable); embeddings stay on
+        # TEI, which is the only one of the two that serves them.
+        llm = await _provider(session, name=LLM_NAME, base_url=LLM_BASE_URL, model=LLM_MODEL)
+        roles = [(AiRole.CHAT, llm, LLM_MODEL), (AiRole.VISION, llm, LLM_MODEL), *roles]
+    else:
+        print("  RADD_SEED_LLM_BASE_URL unset — skipping chat/vision provider wiring")
+    for role, provider, model in roles:
         existing = await session.get(AiModelRole, role.value)
         if existing is not None:
             print(f"  role {role.value} already assigned")

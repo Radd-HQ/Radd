@@ -19,7 +19,7 @@ import { IconButton } from "../../IconButton";
 /**
  * What a NEW account gets from this provider, per rule (RADD-782).
  *
- * One provider serves several populations: `@example.com` and `@radd-hq.com`
+ * One provider serves several populations: `@acme.example` and `@partner.example`
  * arrive through the same Google button and should not land with the same
  * access. So the starting access is a list of RULES, each matching on the email
  * domain and carrying its own roles and teams.
@@ -133,7 +133,7 @@ function RuleCard({
           onChange={(domains) => onChange({ domains })}
           options={[]}
           allowCreate
-          placeholder="example.com — leave empty to match everyone"
+          placeholder="acme.example — leave empty to match everyone"
           createLabel={(term) => `Match ${term.replace(/^@/, "")}`}
           ariaLabel="Rule email domains"
         />

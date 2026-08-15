@@ -35,7 +35,7 @@ const VALUE_LABELS: Record<MailRuleTypeValue, string> = {
 };
 
 const VALUE_PLACEHOLDERS: Record<MailRuleTypeValue, string> = {
-  [MailRuleType.recipient]: "pipeline@radd-hq.com — type and press Enter",
+  [MailRuleType.recipient]: "pipeline@example.com — type and press Enter",
   [MailRuleType.sender]: "@vip-customer.com — type and press Enter",
   [MailRuleType.subject]: "[URGENT] — type and press Enter",
   [MailRuleType.llm]: "",

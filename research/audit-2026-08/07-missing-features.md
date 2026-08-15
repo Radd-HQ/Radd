@@ -1,6 +1,6 @@
 # Radd gap analysis — critical missing features vs modern issue trackers
 
-Audit date: 2026-08-05. Read-only audit of `<repo>` (server `src/radd/modules/`, `web/src/`, CLAUDE.md, docs/modules.md). Every claimed gap was verified by grep/read of the named files; several presumed gaps turned out to exist and are listed in the inventory instead.
+Audit date: 2026-08-05. Read-only audit of `` (server `src/radd/modules/`, `web/src/`, CLAUDE.md, docs/modules.md). Every claimed gap was verified by grep/read of the named files; several presumed gaps turned out to exist and are listed in the inventory instead.
 
 ## Executive summary
 

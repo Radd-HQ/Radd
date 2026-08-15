@@ -35,7 +35,7 @@ space when a field has many options. Fields now carry a `display` hint.
 
 ## Known follow-ups (from the same request, not yet built)
 - **Field default values** — a `default_value` on field defs, applied on item
-  create + editable inline in the fields table (the OtherTracker "Default value"
+  create + editable inline in the fields table (a "Default value"
   column). Needs a column + apply-on-create; the `PATCH /fields/{id}` seam is
   already in place to edit it.
 - **Comprehensive settings pass** — info banners + reorder shipped on the config

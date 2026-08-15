@@ -1,6 +1,6 @@
 # Radd frontend dead-code audit — `web/`, 2026-08-05
 
-All paths relative to `<repo>/`. Scope grepped for every claim: `web/src`, `web/packages`, `web/scripts`, `server/src/radd/modules/*/ui`, `examples/acme-notes`. `web/packages/plugin-sdk`'s public API was exempted as instructed (it came out clean anyway — every SDK export is index-re-exported).
+All paths relative to ``. Scope grepped for every claim: `web/src`, `web/packages`, `web/scripts`, `server/src/radd/modules/*/ui`, `examples/acme-notes`. `web/packages/plugin-sdk`'s public API was exempted as instructed (it came out clean anyway — every SDK export is index-re-exported).
 
 ## Executive summary
 
