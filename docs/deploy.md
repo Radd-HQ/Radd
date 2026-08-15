@@ -50,6 +50,86 @@ and every one of them fails **silently** if skipped:
    CLI — use a throwaway shell history (`fish -P`, `HISTCONTROL=ignorespace`)
    or change it in Profile → Security immediately after first login.
 
+## TLS in front (compose)
+
+Radd itself speaks plain HTTP on :8000; TLS is the reverse proxy's job. The
+smallest production-shaped front is Caddy on the same host — automatic
+certificates, streaming pass-through, no body-size cap to tune:
+
+```
+# /etc/caddy/Caddyfile
+radd.example.com {
+    reverse_proxy localhost:8000
+}
+```
+
+Then, in the `.env` beside `compose.yaml`:
+
+```
+RADD_SESSION_COOKIE_SECURE=true
+RADD_TRUSTED_PROXIES=127.0.0.1        # where proxied requests arrive from
+```
+
+nginx works the same way — the two things it must do that Caddy does by
+default: pass `X-Forwarded-For`/`X-Forwarded-Proto`, and raise
+`client_max_body_size` (nginx caps request bodies at 1 MB out of the box,
+which breaks attachment uploads; Caddy ships no cap). WebSockets
+(`/api/v1/ws`) need the usual `Upgrade`/`Connection` header pass-through on
+nginx; Caddy handles them automatically. Kubernetes deployments already
+terminate TLS at their ingress — see `deploy/k3s/Caddyfile.chain.example`
+for fronting an existing edge proxy.
+
+## Upgrading (compose)
+
+Migrations are **forward-only** and run automatically: the app container's
+entrypoint is `alembic upgrade head && uvicorn …`, so an upgrade is:
+
+```bash
+podman compose exec app python -m radd.backup create   # or: verify last night's exists
+git pull                                        # or edit the image tag you pin
+podman compose build app                        # when building from source
+podman compose up -d                            # recreates app; db keeps running
+```
+
+Three rules that keep this boring:
+
+- **Backup before, every time.** `helm rollback`/re-running an old image does
+  NOT reverse a migration — downgrade is *restore from backup*, never a
+  schema rollback (same rule as the Kubernetes path below).
+- **Don't skip more than a few releases at once** without reading their notes:
+  migrations chain and are tested pairwise-adjacent, and release notes call
+  out anything that needs an operator's hand.
+- **Watch the migration finish** on big instances: `podman compose logs -f
+  app` until uvicorn starts serving. The app refuses traffic until the
+  schema converges, which is the correct failure mode.
+
+## Sizing
+
+Radd is one Python process plus Postgres; the database is what you feed.
+
+| Instance | App | Postgres | Disk |
+|---|---|---|---|
+| Trial / small team (≤25 people, ≤50k items) | 1 vCPU, 512 MB | 1 vCPU, 1 GB, `shm_size: 1g` | 10 GB + attachments |
+| Team (≤150 people, ≤250k items) | 2 vCPU, 1 GB | 2 vCPU, 4 GB | 50 GB + attachments |
+| Heavy (500k+ items, semantic search on) | 2-4 vCPU, 2 GB | 4 vCPU, 8 GB | 100 GB+ + attachments |
+
+Notes that matter more than the table: **attachments dominate disk** (budget
+them separately; S3-mode moves them off-box); **semantic search** adds
+pgvector index memory and — with the built-in CPU embedder — slow bulk
+indexing (~20 texts/s: fine incrementally, hours for a 500k-item backfill;
+use a GPU TEI for bulk); backups need headroom for one full artifact beside
+the data.
+
+## One replica, on purpose
+
+Run **one app replica** (plus at most the optional worker split below).
+Webhooks, automations, notifications and realtime fan-out all run in-process
+today; a second replica would double-fire timers and split the WebSocket
+audience. The Helm chart's `workers.replicas: 1` guidance is the same rule.
+This is a stated v1 boundary, not an accident — the multi-replica path
+(queue-backed consumers, a shared realtime bus) is tracked upstream and a
+single node comfortably serves hundreds of users in the meantime.
+
 ## Multi-host storage (spec 102)
 
 The env storage settings above SEED one host row on first boot; afterwards
