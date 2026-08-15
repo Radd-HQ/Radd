@@ -18,7 +18,6 @@ from .specs import (
     EntityRefSpec,
     AutomationNodeSpec,
     CapabilitySpec,
-    ConsumerSpec,
     CrudResourceSpec,
     EntitySpec,
     EventTypeSpec,
@@ -32,7 +31,6 @@ from .specs import (
     PermissionSpec,
     PluginUiManifest,
     ProjectPurgeSpec,
-    SettingSectionSpec,
     SettingSpec,
     RelationSpec,
     SlqFieldSpec,
@@ -72,13 +70,6 @@ class RaddPlugin:
     #: every `radd.modules.X` import to appear in depends_on OR here — the
     #: "# deferred: X loads after Y" comment, promoted to a declaration.
     weak_depends: tuple[str, ...] = ()
-    # Per-plugin dependencies (§14): the Python distributions + npm packages this
-    # plugin needs. Builtins map to optional-dependency extras (radd[ldap,ai,…]); the
-    # install step resolves them. Declarative here so the manifest is the single
-    # source of truth for what a plugin pulls in.
-    python_deps: tuple[str, ...] = ()
-    js_deps: tuple[str, ...] = ()
-
     # --- contributions (each → a kernel registry) ---
     routers: tuple[APIRouter, ...] = ()
     entities: tuple[EntitySpec, ...] = ()
@@ -87,12 +78,8 @@ class RaddPlugin:
     #: (RADD-923). Declared once; the kernel uses it whenever ANY module names
     #: this entity as an event subject, so nobody hand-builds the shape.
     entity_refs: tuple[EntityRefSpec, ...] = ()
-    consumers: tuple[ConsumerSpec, ...] = ()
-    automation_actions: tuple[Any, ...] = ()
-    automation_conditions: tuple[Any, ...] = ()
     tasks: tuple[TaskSpec, ...] = ()
     settings_keys: tuple[SettingSpec, ...] = ()  # scalar cascade settings this plugin owns (RADD-891)
-    settings_sections: tuple[SettingSectionSpec, ...] = ()
     permissions: tuple[PermissionSpec, ...] = ()
     crud_resources: tuple[CrudResourceSpec, ...] = ()
     relations: tuple[RelationSpec, ...] = ()  # @own/@team qualifiers for this plugin's rows (RADD-823)

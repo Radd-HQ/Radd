@@ -17,12 +17,12 @@ import { PROJECT_HOMED_SECTIONS, Permission, SettingScope, type Project } from "
 import { ScopedSettingsEditor } from "../../components/settings/ScopedSettingsEditor";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { Spinner } from "../../components/Spinner";
-import { IssueTypesSettingsPage } from "../settings/issue-types";
-import { ScreensSettingsPage } from "../settings/screens";
-import { ProjectsSettingsPage } from "../settings/projects";
-import { StatesSettingsPage } from "../settings/states";
-import { ReleasesSettingsPage } from "../settings/releases";
-import { FormsSettingsPage } from "../settings/forms";
+import { IssueTypesSettingsPage } from "./issue-types";
+import { ScreensSettingsPage } from "./screens";
+import { ProjectAccessSettingsPage } from "./projects";
+import { StatesSettingsPage } from "./states";
+import { ReleasesSettingsPage } from "./releases";
+import { FormsSettingsPage } from "./forms";
 import { ProjectTimeloggingSettingsPage } from "./timelogging";
 import { ProjectSlaSettingsPage } from "./sla";
 
@@ -192,7 +192,7 @@ export function ProjectGeneralSettings() {
 
 export function ProjectAccessSettings() {
   const { project } = useUrlProject();
-  return <ProjectsSettingsPage projectId={project?.id} />;
+  return <ProjectAccessSettingsPage projectId={project?.id} />;
 }
 
 export function ProjectWorkflowSettings() {

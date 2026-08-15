@@ -23,11 +23,6 @@ class Socket(StrEnum):
     STORAGE_BACKEND = "storage_backend"  # filesystem | s3 (attachments)
     STORAGE_ROUTING_RULE = "storage_routing_rule"  # user_choice | cidr | llm (spec 102)
     TASK_BACKEND = "task_backend"  # localloop (default) | celery
-    NOTIFIER = "notifier"  # google_chat | email | slack
-    CONNECTOR = "connector"  # inbound webhook parsers (gitlab/forgejo/alertmanager)
-    AI_PROVIDER = "ai_provider"  # openai | anthropic
-    VCS_PROVIDER = "vcs_provider"  # gitlab | forgejo
-    ATTACHMENT_FILTER = "attachment_filter"  # veto/transform an upload (interceptor)
     NON_WORKING_DAYS = "non_working_days"  # calendar dates nobody works (RADD-1031)
 
 
@@ -118,6 +113,3 @@ def provider(socket: Socket | str, name: str) -> Any:
     return ig.impl if ig else None
 
 
-def active_provider(socket: Socket | str, name: str) -> Any:
-    """The provider selected by name (usually a settings value) — the active one."""
-    return provider(socket, name)

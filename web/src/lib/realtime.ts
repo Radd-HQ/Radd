@@ -28,7 +28,6 @@ const SERVER_ENTITY_TAGS: Record<string, EntityTag[]> = {
   field: [Entity.field],
   team: [Entity.team],
   team_member: [Entity.team],
-  project_team: [Entity.team, Entity.project],
   role: [Entity.role],
   user: [Entity.member],
   project: [Entity.project],

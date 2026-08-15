@@ -9,7 +9,6 @@ import {
   fieldsQuery,
   issueTypesQuery,
   projectsQuery,
-  queryKeys,
 } from "../../lib/queries";
 import {
   Permission,
@@ -152,7 +151,6 @@ function ScreenEditor({
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["screen-effective"] });
-      queryClient.invalidateQueries({ queryKey: queryKeys.screenConfig(projectId, issueTypeId) });
     },
   });
 
@@ -162,7 +160,6 @@ function ScreenEditor({
     onSuccess: () => {
       setDraft(null);
       queryClient.invalidateQueries({ queryKey: ["screen-effective"] });
-      queryClient.invalidateQueries({ queryKey: queryKeys.screenConfig(projectId, issueTypeId) });
     },
   });
 

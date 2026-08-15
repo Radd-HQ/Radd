@@ -51,7 +51,7 @@ import { projectsQuery } from "../../lib/queries";
  * access to THIS project"; folding in everyone with a global role would make
  * revoking look possible here where it is not.
  */
-export function ProjectsSettingsPage({ projectId }: { projectId?: string }) {
+export function ProjectAccessSettingsPage({ projectId }: { projectId?: string }) {
   const projects = useQuery(projectsQuery());
   const roles = useQuery(rolesQuery());
   const project = (projects.data ?? []).find((entry) => entry.id === projectId);

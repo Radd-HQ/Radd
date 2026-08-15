@@ -254,14 +254,6 @@ class UserAccessRead(BaseModel):
     memberships: list[MembershipRead] = []
 
 
-class TeamAccessRead(BaseModel):
-    """What membership of a team confers: atoms via attachments/grants, plus
-    the resource grants naming the team."""
-
-    atoms: list[PermissionSourceRead]
-    resources: list[ResourceTypeAccessRead]
-
-
 class UserAdminUpdate(BaseModel):
     """PATCH /users/{id} (specs 84/86, instance admin): rename, activate/
     deactivate, and set instance_role (admin|member — the only role ladder

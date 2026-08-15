@@ -97,11 +97,7 @@ def test_real_config_loads_bootstrap_plugins():
     assert set(registries.plugins) == {p.id for p in plugins}
 
 
-def test_plugins_declare_their_own_dependencies():
-    # §14: each plugin declares its Python/JS deps in its manifest. A couple of
-    # builtins carry real ones (mapping to optional-dependency extras).
-    load_plugins(settings.modules)
-    assert "ldap3" in registries.plugins["ldap"].python_deps
-    assert "minio" in registries.plugins["attachments"].python_deps
-    # a plugin with no extra deps declares none
-    assert RaddPlugin(name="bare").python_deps == ()
+# test_plugins_declare_their_own_dependencies died with the mechanism it
+# asserted (RADD-1097): python_deps/js_deps were manifest fields whose promised
+# install step never existed — write-only surface, deleted under the
+# no-speculative-frameworks rule.

@@ -137,7 +137,6 @@ class ProblemKind(StrEnum):
     """
 
     JIRA_UNREACHABLE = "jira_unreachable"
-    ISSUE_FETCH = "issue_fetch"
     COMMENTS_FETCH = "comments_fetch"
     WORKLOGS_FETCH = "worklogs_fetch"
     HISTORY_FETCH = "history_fetch"
@@ -148,13 +147,9 @@ class ProblemKind(StrEnum):
     # groups by cause and lists exactly which tickets are affected.
     PROVISION_FAILED = "provision_failed"
     ITEM_FAILED = "item_failed"
-    PARENT_UNRESOLVED = "parent_unresolved"
     PARENT_INCOMPATIBLE = "parent_incompatible"
     LINK_UNRESOLVED = "link_unresolved"
-    LINK_FAILED = "link_failed"
-    COMMENT_FAILED = "comment_failed"
     WORKLOG_FAILED = "worklog_failed"
-    ATTACHMENT_FAILED = "attachment_failed"
     USER_UNRESOLVED = "user_unresolved"
     VALUE_DROPPED = "value_dropped"
     PERMISSION = "permission"

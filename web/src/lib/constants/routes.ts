@@ -64,7 +64,6 @@ export const SettingsSection = {
   // preference nobody could find stayed the preference nobody changed.
   notifications: "notifications",
 } as const;
-export type SettingsSectionValue = (typeof SettingsSection)[keyof typeof SettingsSection];
 
 /**
  * Project-settings sections — relative child segments under
@@ -83,8 +82,6 @@ export const ProjectSettingsSection = {
   // SLA policies are project-level since spec 67.
   sla: "sla",
 } as const;
-export type ProjectSettingsSectionValue =
-  (typeof ProjectSettingsSection)[keyof typeof ProjectSettingsSection];
 
 /** Route paths — the single source of truth for navigation targets. */
 export const RoutePath = {
@@ -153,7 +150,6 @@ export const RoutePath = {
   settingsLinkTypes: `${SETTINGS_SEGMENT}/${SettingsSection.linkTypes}`,
   settingsLabels: `${SETTINGS_SEGMENT}/${SettingsSection.labels}`,
   settingsCycles: `${SETTINGS_SEGMENT}/${SettingsSection.cycles}`,
-  settingsGroups: `${SETTINGS_SEGMENT}/${SettingsSection.groups}`,
   settingsTeams: `${SETTINGS_SEGMENT}/${SettingsSection.teams}`,
   /** THE people page (spec 84): accounts + the instance_role ladder (spec 86),
    * dedupe/merge. */
@@ -182,7 +178,6 @@ export const RoutePath = {
   /** SSO providers + per-provider signup domain allowlists (spec 110, admin). */
   settingsSignIn: `${SETTINGS_SEGMENT}/${SettingsSection.signIn}`,
   settingsMonitoring: `${SETTINGS_SEGMENT}/${SettingsSection.monitoring}`,
-  settingsHolidays: `${SETTINGS_SEGMENT}/${SettingsSection.holidays}`,
   /** Plugin manager (spec 93 / A4, admin): install/enable/disable plugins. */
   settingsPlugins: `${SETTINGS_SEGMENT}/${SettingsSection.plugins}`,
   /** Canned responses admin (spec 30, global manage). */
@@ -212,4 +207,3 @@ export const RoutePath = {
   /** A composable dashboard's widget grid (spec 75). */
   dashboard: "/dashboards/$dashboardId",
 } as const;
-export type RoutePathValue = (typeof RoutePath)[keyof typeof RoutePath];

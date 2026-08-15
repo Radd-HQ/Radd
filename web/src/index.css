@@ -184,7 +184,6 @@
   --color-chart-todo-ink: var(--chart-todo-ink);
   --color-chart-progress-ink: var(--chart-progress-ink);
   --color-chart-done-ink: var(--chart-done-ink);
-  --color-chart-canceled-ink: var(--chart-canceled-ink);
 
   /* Status tier (RADD-900). Danger/warning/success as SEMANTIC tokens, so the
      kit's error rings, the danger button, chart series and one-off pills stop
@@ -285,7 +284,6 @@ html {
   --chart-todo-ink: #5896d7;
   --chart-progress-ink: #569c72;
   --chart-done-ink: #89909b;
-  --chart-canceled-ink: #89909b;
 
   /* Priority chip fills (dark) — RADD-875: the rail chips carried a second,
      drifted copy of these as hardcoded hexes. One scale per theme, like
@@ -391,7 +389,6 @@ html.light {
   --chart-todo-ink: #2e6db1;
   --chart-progress-ink: #1f7a45;
   --chart-done-ink: #5f6773;
-  --chart-canceled-ink: #5f6773;
 
   /* Priority chip fills (light) — deepened for white like the chart scale. */
   --priority-blocker: #dc2626;

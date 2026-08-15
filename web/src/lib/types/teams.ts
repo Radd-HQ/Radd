@@ -205,12 +205,3 @@ export interface DirectorySyncStatus {
   group_sync: DirectorySyncState | null;
 }
 
-/** project↔team attachment; role is data-driven since spec 06. */
-export interface ProjectTeam {
-  project_id: string;
-  team_id: string;
-  role_id: string;
-  /** The role's key, hydrated for display. */
-  role: string;
-}
-

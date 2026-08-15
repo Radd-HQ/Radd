@@ -19,7 +19,6 @@ plugin = RaddPlugin(
     "the directory_sync_state status rows.",
     depends_on=("events", "projects", "auth", "settings", "groups", "teams"),
     # Per-plugin deps (§14): AD/LDAP bind needs ldap3. Maps to the `radd[ldap]` extra.
-    python_deps=("ldap3",),
     # RADD-891: the connection + sync tunables (RADD-846/848: env is seed-only,
     # each key matches its `config.Settings` attribute so an existing deploy
     # keeps working) — moved off `settings.types`'s old hardcoded dict.

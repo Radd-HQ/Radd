@@ -122,7 +122,7 @@ class Settings(BaseSettings):
     search_batch: int = 200
 
     # Attachments (see radd/modules/attachments). Storage backend: "filesystem"
-    # (default; attachments_dir) or "s3" (any S3-compatible store — MinIO, AWS).
+    # (default; attachments_dir) or "s3" (any S3-compatible store — Garage, AWS).
     attachment_storage: str = "filesystem"
     attachments_dir: str = "var/attachments"
     # Raised from 25 MB for spec 117. A wiki's attachments are not screenshots:
@@ -451,7 +451,7 @@ class Settings(BaseSettings):
     work_week_days: str = "mon,tue,wed,thu,fri"
 
     # Workflow transition enforcement (spec 61) — a TransitionMode value
-    # (off | guards | strict), overridable per workspace/project via the
+    # (off | guards | strict), overridable per project via the
     # scalar-settings cascade. "off" keeps the feature fully optional.
     workflow_transition_mode: str = "off"
 

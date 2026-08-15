@@ -49,7 +49,6 @@ class SsoEvent(StrEnum):
 class SsoEntity(StrEnum):
     SSO = "sso"
     PROVIDER = "sso_provider"
-    IDENTITY = "user_identity"
 
 
 # Explicit opt-out of the signup allowlist, for an instance whose IdP is already

@@ -36,7 +36,6 @@ class JiraSchemaKey(StrEnum):
     # Jira Software (Greenhopper) — agile.
     SPRINT = "com.pyxis.greenhopper.jira:gh-sprint"
     EPIC_LINK = "com.pyxis.greenhopper.jira:gh-epic-link"
-    EPIC_NAME = "com.pyxis.greenhopper.jira:gh-epic-label"
     EPIC_STATUS = "com.pyxis.greenhopper.jira:gh-epic-status"
     EPIC_COLOUR = "com.pyxis.greenhopper.jira:gh-epic-color"
     LEXO_RANK = "com.pyxis.greenhopper.jira:gh-lexo-rank"
@@ -50,7 +49,6 @@ class JiraSchemaKey(StrEnum):
         "com.atlassian.jira.plugins.jira-development-integration-plugin:devsummary"
     )
     # Jira Service Management request metadata.
-    REQUEST_TYPE = "com.atlassian.servicedesk:vp-origin"
     REQUEST_PARTICIPANTS = "com.atlassian.servicedesk:sd-request-participants"
 
 

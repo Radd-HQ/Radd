@@ -86,20 +86,7 @@ export function layout(
   return placed;
 }
 
-/** Where an edge leaves its source: the right edge, stacked by port order. */
-export function portAnchor(
-  place: Placed,
-  portIndex: number,
-  portCount: number,
-): { x: number; y: number } {
-  const span = NODE_HEIGHT / (portCount + 1);
-  return { x: place.x + NODE_WIDTH, y: place.y + span * (portIndex + 1) };
-}
 
-/** Where an edge arrives: the left edge, centred. */
-export function inletAnchor(place: Placed): { x: number; y: number } {
-  return { x: place.x, y: place.y + NODE_HEIGHT / 2 };
-}
 
 /** A cubic bezier between two anchors — horizontal control points, so edges
  * leave and arrive flat and the eye follows the flow left to right. */

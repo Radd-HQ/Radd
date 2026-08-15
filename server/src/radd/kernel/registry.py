@@ -19,7 +19,6 @@ from .specs import (
     RelationSpec,
     CapabilitySpec,
     CascadeSpec,
-    ConsumerSpec,
     CrudResourceSpec,
     EntitySpec,
     EntityRefSpec,
@@ -113,7 +112,6 @@ class KernelRegistries:
     #: A LIST, not a dict: several modules cascade off the same parent event.
     cascades: list[CascadeSpec] = field(default_factory=list)  # RADD-745
     tasks: dict[str, TaskSpec] = field(default_factory=dict)
-    consumers: dict[str, ConsumerSpec] = field(default_factory=dict)
     integrations: dict[tuple[str, str], IntegrationSpec] = field(default_factory=dict)
     nav: list[NavItemSpec] = field(default_factory=list)
     entity_routers: list = field(default_factory=list)  # auto-generated CRUD routers
@@ -127,7 +125,7 @@ class KernelRegistries:
             self.plugins, self.entities, self.event_types, self.entity_refs, self.permissions,
             self.settings, self.relations, self.relation_domains, self.access_resources,
             self.crud_resources, self.nav_facts, self.grant_scopes, self.project_purges,
-            self.capabilities, self.tasks, self.consumers,
+            self.capabilities, self.tasks,
             self.integrations, self.plugin_ui_dirs, self.slq_fields,
             self.view_types, self.widget_types, self.mcp_tools, self.page_extensions,
             self.automation_nodes,
@@ -188,8 +186,6 @@ class KernelRegistries:
                     self.cascades.append(cascade)
         for t in plugin.tasks:
             self.tasks[t.name] = t
-        for con in plugin.consumers:
-            self.consumers[con.name] = con
         for ig in plugin.integrations:
             self.integrations[(ig.socket, ig.name)] = ig
         if plugin.ui is not None:
@@ -246,8 +242,6 @@ class KernelRegistries:
             for cascade in plugin.cascades():
                 if cascade in self.cascades:
                     self.cascades.remove(cascade)
-        for con in plugin.consumers:
-            self.consumers.pop(con.name, None)
         for ig in plugin.integrations:
             self.integrations.pop((ig.socket, ig.name), None)
         if plugin.ui is not None:
@@ -344,19 +338,6 @@ def register_crud_resource(spec: CrudResourceSpec) -> CrudResourceSpec:
 
 def register_capability(spec: CapabilitySpec) -> CapabilitySpec:
     registries.capabilities[spec.key] = spec
-    return spec
-
-
-def register_cascade(spec: CascadeSpec) -> CascadeSpec:
-    """Register cleanup for rows that die with a parent (RADD-745).
-
-    Module-level rather than manifest-only because the natural caller is a
-    binding registration, which happens at import time — and tying the two
-    together is what makes cleanup impossible to forget: you cannot register a
-    parent without registering how its children die.
-    """
-    if spec not in registries.cascades:
-        registries.cascades.append(spec)
     return spec
 
 

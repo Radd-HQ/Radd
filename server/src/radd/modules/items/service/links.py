@@ -42,9 +42,9 @@ async def link_search(
     limit: int = 8,
     exclude_id: uuid.UUID | None = None,
 ) -> list[ItemLinkSearchResult]:
-    """Typeahead candidates for a dependency link or parent pick: items across the
-    anchor project's WORKSPACE (spec 80 — restricted to projects the actor can
-    read) matching `q` by title substring or number/key. Same-project matches
+    """Typeahead candidates for a dependency link or parent pick: items across
+    every project the actor can read (spec 80/86 — no boundary above that)
+    matching `q` by title substring or number/key. Same-project matches
     rank first, newest-numbered within each tier. `exclude_id` drops the item
     being linked from (no self-link)."""
     project = await projects_service.get_project(session, project_id)

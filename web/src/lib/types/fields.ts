@@ -55,12 +55,6 @@ export interface ScreenFieldRow {
   placement: ScreenPlacementValue;
 }
 
-export interface ScreenConfig {
-  project_id: string;
-  issue_type_id: string | null;
-  fields: ScreenFieldRow[];
-}
-
 export interface FieldDef {
   id: string;
   /** Empty = global (every project); otherwise the projects this field is scoped to. */

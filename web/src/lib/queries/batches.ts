@@ -26,23 +26,10 @@ export const rollupBatchQuery = (itemIds: readonly string[]) => {
   });
 };
 
-/** Batched estimate/logged seconds for the roadmap's auto-schedule durations
- * (spec 78) — fetched lazily when the roadmap mounts with timelogging enabled;
- * failures fall back to all-default durations, so callers never toast on it. */
-export const timelogBatchQuery = (itemIds: readonly string[]) => {
-  const ids = [...itemIds].sort().slice(0, TIMELOG_BATCH_MAX_ITEMS);
-  return queryOptions({
-    queryKey: queryKeys.timelogBatch(ids),
-    queryFn: () => api.post<TimelogBatchResponse>(ApiPath.itemsTimelogBatch, { item_ids: ids }),
-    meta: entityMeta(Entity.worklog, Entity.item),
-    retry: false,
-  });
-};
-
-/** Chunked timelog batch for surfaces whose id set may exceed one POST's cap
- * (the roadmap progress tints): one queryFn fans out sequential
- * ≤TIMELOG_BATCH_MAX_ITEMS requests and merges the maps. Same quiet-degrade
- * contract as `timelogBatchQuery` — retry: false, callers never toast on it. */
+/** Batched estimate/logged seconds (spec 78): one queryFn fans out sequential
+ * ≤TIMELOG_BATCH_MAX_ITEMS requests and merges the maps. Quiet-degrade
+ * contract — retry: false, failures fall back to defaults, callers never
+ * toast on it. */
 export const timelogBatchChunkedQuery = (itemIds: readonly string[]) => {
   const ids = [...itemIds].sort();
   return queryOptions({

@@ -281,15 +281,6 @@ class TaskSpec:
     gate: Callable[[], bool] | None = None  # e.g. run_workers
 
 
-@dataclass(frozen=True)
-class ConsumerSpec:
-    """An offset-tracked event-stream consumer (kept lightweight; today's consumers
-    stay hand-rolled loops — this records them for the manifest/capabilities view)."""
-
-    name: str
-    description: str = ""
-
-
 # --- automation dataflow (spec 120: a node's outputs are addressable) --------
 #: What a node's OUTPUT may be called, and equally what may NAME a node — the two
 #: halves of `{{<node>.<output>}}` are read as one identifier, so one rule covers
@@ -745,13 +736,6 @@ class SettingSpec:
         from radd.config import settings as _config
 
         return getattr(_config, self.config_attr or self.key)
-
-
-@dataclass(frozen=True)
-class SettingSectionSpec:
-    key: str
-    label: str
-    scope: str = "instance"  # instance | project
 
 
 # --- frontend (§8: UI manifest) ---

@@ -90,7 +90,6 @@ plugin = RaddPlugin(
     weak_depends=("ai",),
     # Per-plugin deps (§14): the S3 backend needs the MinIO SDK. Maps to the
     # `radd[s3]` extra; the default filesystem backend needs nothing extra.
-    python_deps=("minio",),
     routers=(router, admin_router),
     exception_handlers=(
         (AttachmentTooLarge, too_large_handler),

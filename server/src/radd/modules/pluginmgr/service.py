@@ -115,12 +115,6 @@ def _ensure_no_dependents(plugin) -> None:
         )
 
 
-# Back-compat alias.
-def _require_installable(plugin_id: str):
-    plugin, path, _kind = _resolve_toggleable(plugin_id)
-    return plugin, path
-
-
 async def _emit(session: AsyncSession, event: PluginEvent, plugin_id: str, actor_id) -> None:
     await events.emit(session, event_type=event, entity_type=PluginEntity.PLUGIN,
                       entity_id=plugin_id, actor_id=actor_id, payload={"id": plugin_id})

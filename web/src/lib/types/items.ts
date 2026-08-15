@@ -14,16 +14,6 @@ export interface ParticipantRow {
   created_at: string;
 }
 
-/** GET /items/{id}/participants — the issue rail's Participants section source. */
-export interface ItemParticipants {
-  users: UserRef[];
-  teams: TeamRef[];
-  rows: ParticipantRow[];
-  /** Server-computed per ACTOR: item.update OR the item's reporter (identity —
-   * a requester shares their own ticket). Self-leave is always allowed. */
-  can_manage: boolean;
-}
-
 /** Issue type (spec 51): the per-project classification axis (Bug/Task/Story/…). */
 export interface IssueType {
   id: string;

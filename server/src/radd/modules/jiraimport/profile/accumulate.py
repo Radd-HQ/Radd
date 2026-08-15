@@ -24,7 +24,6 @@ ROLE_REPORTER = "reporter"
 ROLE_CREATOR = "creator"
 ROLE_COMMENT = "comment author"
 ROLE_WORKLOG = "worklog author"
-ROLE_WATCHER = "watcher"
 ROLE_ATTACHMENT = "attachment author"
 ROLE_HISTORY = "history actor"
 

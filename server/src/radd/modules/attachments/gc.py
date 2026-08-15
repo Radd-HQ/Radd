@@ -24,7 +24,6 @@ if TYPE_CHECKING:  # deferred at runtime: the kernel loads after this module
 
 logger = logging.getLogger(__name__)
 
-CONSUMER_NAME = "attachments.gc"
 
 def cascades() -> tuple["CascadeSpec", ...]:
     """One per registered parent — derived, so a plugin gets byte-collection

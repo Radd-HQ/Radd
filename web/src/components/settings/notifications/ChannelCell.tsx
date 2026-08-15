@@ -52,9 +52,6 @@ const CHANNEL_LABELS: Record<ChannelValue, string> = {
   [Channel.both]: "Inbox and email",
 };
 
-export function channelSummary(channel: ChannelValue): string {
-  return CHANNEL_LABELS[channel];
-}
 
 export function ChannelCell({
   resolved,

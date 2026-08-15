@@ -307,7 +307,6 @@ PORTS_BY_KIND: dict[AutomationNodeKind, tuple[NodePort, ...]] = {
 # and the SPA's catalogue all name these, and a node type spelled differently in
 # two of those places is a wire constant with no compiler behind it.
 
-TYPE_TRIGGER_EVENT = "trigger.event"
 TYPE_GATE_EVENT = "gate.event"  # pre-revision; still executed, no longer offered
 TYPE_GATE_FIELD_CHANGED = "gate.field_changed"
 TYPE_GATE_CHANGED_BY = "gate.changed_by"

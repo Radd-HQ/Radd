@@ -16,8 +16,6 @@ export const queryKeys = {
     ["validation-context", { projectId, typeId, formId }] as const,
   effectiveScreen: (projectId: string, issueTypeId: string | null) =>
     ["screen-effective", { projectId, issueTypeId }] as const,
-  screenConfig: (projectId: string, issueTypeId: string | null) =>
-    ["screen-config", { projectId, issueTypeId }] as const,
   items: (projectId: string, archived = false) => ["items", { projectId, archived }] as const,
   itemsInfinite: (projectId: string, archived = false) =>
     ["itemsInfinite", { projectId, archived }] as const,

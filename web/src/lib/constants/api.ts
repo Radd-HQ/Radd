@@ -163,7 +163,6 @@ export const ApiPath = {
   pageSpaces: "/page-spaces",
   pageExtensions: "/pages/extensions",
   pageTemplates: "/page-templates",
-  pageReindexLinks: "/pages/reindex-links",
   pages: "/pages",
   docsSearch: "/pages/search",
   // PUBLIC pages (spec 74) — no login; a space's `public` flag gates.

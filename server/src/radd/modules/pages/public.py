@@ -4,9 +4,8 @@ The `public` flag on a PageSpace IS the credential: everything here 404s unless
 the page's space is public, and archived pages (or pages under an archived
 ancestor) never leak. Bodies only — versions/history/links stay authenticated.
 
-This module is also the seam the forms public deflection imports (deferred,
-feature-detected — see forms/public.py), so it exposes plain service functions
-rather than router-only logic.
+Exposes plain service functions rather than router-only logic, so authed
+surfaces (KB deflection in search) can reuse the public-visibility rules.
 """
 
 import uuid

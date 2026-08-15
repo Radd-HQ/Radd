@@ -747,16 +747,12 @@ class AuthEntity(StrEnum):
     SESSION = "session"
     API_TOKEN = "api_token"
     ROLE = "role"
-    PROJECT_MEMBER = "project_member"
     GLOBAL_GRANT = "global_role_grant"  # spec 87 — instance-wide role assignment
 
 
 class UserChange(StrEnum):
     """`action` values in user.updated event payloads."""
 
-    PROJECT_MEMBER_ADDED = "project_member_added"
-    PROJECT_MEMBER_ROLE_CHANGED = "project_member_role_changed"
-    PROJECT_MEMBER_REMOVED = "project_member_removed"
     PROFILE_UPDATED = "profile_updated"  # self-service name/avatar/timezone (spec 34)
     ADMIN_UPDATED = "admin_updated"  # PATCH /users/{id}: active/name by an instance admin (spec 84)
     DIRECTORY_DEACTIVATED = "directory_deactivated"  # spec 85 user sync: gone from the directory

@@ -10,7 +10,6 @@ class TeamEvent(StrEnum):
 class TeamEntity(StrEnum):
     TEAM = "team"
     MEMBER = "team_member"
-    PROJECT_TEAM = "project_team"
     MANAGER = "team_manager"  # spec 87 — delegated per-team management
 
 
@@ -28,9 +27,6 @@ class TeamChange(StrEnum):
     # RADD-829: a GROUP joined/left the team's membership.
     GROUP_ADDED = "group_added"
     GROUP_REMOVED = "group_removed"
-    PROJECT_ATTACHED = "project_attached"
-    PROJECT_ROLE_CHANGED = "project_role_changed"
-    PROJECT_DETACHED = "project_detached"
     RENAMED = "renamed"
     # Spec 87: delegated management.
     MANAGERS_REPLACED = "managers_replaced"
