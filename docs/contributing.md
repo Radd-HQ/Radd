@@ -1,21 +1,39 @@
 # Contributing
 
 Radd is developed on a self-hosted Forgejo at **https://git.radd-hq.com/Radd/Radd**.
-Anyone can sign in with Google, fork, and open a pull request.
+Anyone can sign in with Google, fork, and open a pull request. Be kind — the
+[code of conduct](../CODE_OF_CONDUCT.md) applies everywhere the project talks.
+Security problems go to [SECURITY.md](../SECURITY.md)'s private channel, never
+a public issue.
+
+## Licensing of contributions
+
+Radd is AGPL-3.0-only (the SDKs are Apache-2.0 — see the README's License
+section). By opening a pull request you certify the
+[Developer Certificate of Origin](https://developercertificate.org/): the work
+is yours to contribute, and you license it under the file's governing license.
+Add a `Signed-off-by:` line (`git commit -s`) to say so explicitly. No CLA, no
+copyright assignment — you keep your copyright.
 
 ## Getting set up
+
+You need: **Python 3.12+** and **[uv](https://docs.astral.sh/uv/)**, **Node 22+**
+with npm, and **podman** (or docker) for Postgres. The suite needs a
+**Postgres 16+**; pgvector is optional (without it, search is plain FTS and the
+pgvector tests self-skip).
 
 ```bash
 git clone https://git.radd-hq.com/Radd/Radd.git
 cd Radd
 
-# Backend — Postgres 16+ with pgvector (optional; without it search is plain FTS)
-podman compose -f compose.dev.yaml up      # db + API on :8000
+# Backend — db + live-reloading API on :8000
+podman compose -f compose.dev.yaml up
 cd server && uv sync && uv run alembic upgrade head
 uv run python -m radd.seed --email you@example.com --password … --name "You"
 
 # Frontend
-cd web && npm run build      # or `npm run dev` on :5173
+cd web && npm install
+npm run build      # refreshes the bundle served at :8000; `npm run dev` for :5173
 ```
 
 `docs/deploy.md` covers running it properly; `CLAUDE.md` is the map of how the
@@ -51,7 +69,10 @@ keeps the module boundaries real:
   on, not a unit test per endpoint.
 - **The change exists on the tracker first.** Work is filed in the **RADD**
   project at <https://project.radd-hq.com> — a bug as a `Bug`, a feature as a
-  `Feature`, a spec as an epic with its children.
+  `Feature`, a spec as an epic with its children. If you'd rather not create a
+  tracker account, describe the issue fully in the PR instead and a maintainer
+  files it and links your PR — the record must exist, not necessarily by your
+  hand.
 
 ## Working in the tracker
 
@@ -90,8 +111,15 @@ Open a PR from your fork and it will be reviewed.
 
 **CI does not run on pull requests.** Forgejo executes the workflows from the
 target branch rather than the PR's, so a workflow added in a PR has no effect —
-and no workflow here triggers on `pull_request` anyway. Run the tests locally;
-the results are what the review goes on.
+and no workflow here triggers on `pull_request` anyway. Run the tests locally
+and say so in the PR; the results are what the review goes on.
+
+**How a maintainer validates a fork PR** (until PR CI exists): fetch the PR
+head locally (`git fetch origin refs/pull/<n>/head && git checkout FETCH_HEAD`),
+then run the same three gates — `uv run pytest -q` in `server/`, `tsc -b` and
+`vite build` in `web/` — plus a render-proof when the change touches UI. Never
+merge on the contributor's word alone; the gates are cheap and the tag build
+runs them again anyway (the publish workflow's `test` job is the backstop).
 
 ## Releases
 
