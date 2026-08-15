@@ -15,6 +15,7 @@ class WebhookEvent(StrEnum):
 
 class WebhookEntity(StrEnum):
     ENDPOINT = "webhook_endpoint"
+    DELIVERY = "webhook_delivery"  # RADD-1096: named in replay's refusals
 
 
 # Standard Webhooks (https://www.standardwebhooks.com/): whsec_ + base64 key,

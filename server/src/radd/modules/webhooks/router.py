@@ -58,6 +58,20 @@ async def delete_endpoint(endpoint_id: uuid.UUID, session: Session, user: Curren
     await service.delete_endpoint(session, endpoint_id, actor_id=user.id)
 
 
+@router.post(
+    "/{endpoint_id}/deliveries/{delivery_id}/replay", response_model=DeliveryRead
+)
+async def replay_delivery(
+    endpoint_id: uuid.UUID, delivery_id: uuid.UUID, session: Session, user: CurrentUser
+) -> DeliveryRead:
+    """Put a DEAD delivery back on the queue with a fresh retry schedule
+    (RADD-1096) — the manual replay the dead state always promised."""
+    await authz.require(session, user, authz.Permission.WEBHOOK_MANAGE)
+    return DeliveryRead.model_validate(
+        await service.replay_delivery(session, endpoint_id, delivery_id)
+    )
+
+
 @router.get("/{endpoint_id}/deliveries", response_model=list[DeliveryRead])
 async def list_deliveries(
     endpoint_id: uuid.UUID,

@@ -30,6 +30,7 @@ import {
   UsersRound,
   Zap,
   type LucideIcon,
+  Webhook,
 } from "lucide-react";
 import { RoutePath } from "../../lib/constants";
 import { useCurrentUser, usePermissions } from "../../lib/hooks";
@@ -256,6 +257,13 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         to: RoutePath.settingsBackups,
         label: "Backups",
         icon: DatabaseBackup,
+        show: (g) => g.instanceAdmin,
+      },
+      {
+        // Outbound webhooks (RADD-1096): endpoints, secrets, the delivery log.
+        to: RoutePath.settingsWebhooks,
+        label: "Webhooks",
+        icon: Webhook,
         show: (g) => g.instanceAdmin,
       },
       {

@@ -56,6 +56,8 @@ export const SettingsSection = {
   signIn: "sign-in",
   // Operator monitoring: DB health, counts, worker lag — admin only.
   monitoring: "monitoring",
+  // Outbound webhooks: endpoints, secrets, the delivery log (RADD-1096).
+  webhooks: "webhooks",
   // Per-team public holidays (People group) — admin-managed.
   holidays: "holidays",
   // The per-user notification matrix + subscriptions (spec 118). Its own page
@@ -178,6 +180,7 @@ export const RoutePath = {
   /** SSO providers + per-provider signup domain allowlists (spec 110, admin). */
   settingsSignIn: `${SETTINGS_SEGMENT}/${SettingsSection.signIn}`,
   settingsMonitoring: `${SETTINGS_SEGMENT}/${SettingsSection.monitoring}`,
+  settingsWebhooks: `${SETTINGS_SEGMENT}/${SettingsSection.webhooks}`,
   /** Plugin manager (spec 93 / A4, admin): install/enable/disable plugins. */
   settingsPlugins: `${SETTINGS_SEGMENT}/${SettingsSection.plugins}`,
   /** Canned responses admin (spec 30, global manage). */

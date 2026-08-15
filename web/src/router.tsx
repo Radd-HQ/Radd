@@ -66,6 +66,7 @@ import { StorageSettingsPage } from "./routes/settings/storage";
 import { EmailSettingsPage } from "./routes/settings/email";
 import { SignInSettingsPage } from "./routes/settings/sign-in";
 import { MonitoringSettingsPage } from "./routes/settings/monitoring";
+import { WebhooksSettingsPage } from "./routes/settings/webhooks";
 import { NotificationSettingsPage } from "./routes/settings/notifications";
 import { ProfileSettingsPage } from "./routes/settings/profile";
 import { InstanceSettingsPage } from "./routes/settings/instance";
@@ -566,6 +567,13 @@ const settingsMonitoringRoute = createRoute({
   component: MonitoringSettingsPage,
 });
 
+/** Outbound webhooks (RADD-1096): endpoint CRUD + the delivery log. */
+const settingsWebhooksRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: SettingsSection.webhooks,
+  component: WebhooksSettingsPage,
+});
+
 /** RADD-932: holidays merged into Settings → Time logging, beside the working
  *  week they interrupt. The path stays registered so a bookmark lands on the
  *  section rather than a not-found. */
@@ -728,6 +736,7 @@ const routeTree = rootRoute.addChildren([
   settingsEmailRoute,
       settingsSignInRoute,
       settingsMonitoringRoute,
+    settingsWebhooksRoute,
       settingsHolidaysRoute,
       // Splat LAST under settings so explicit settings pages win; plugin settings.page slots
       // render here (inside the Settings chrome). Spec 94.

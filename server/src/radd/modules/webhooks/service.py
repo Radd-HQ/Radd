@@ -15,7 +15,7 @@ from radd import secretbox
 from radd.config import settings
 from radd.modules.fields import service as fields_service
 from radd.modules.items.redaction import redact_item_payload
-from radd.exceptions import NotFoundError
+from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.events import service as events
 from radd.modules.events.service import Event
 from radd.clock import utcnow
@@ -147,6 +147,28 @@ async def list_endpoints(session: AsyncSession) -> list[WebhookEndpoint]:
         select(WebhookEndpoint).order_by(WebhookEndpoint.created_at)
     )
     return list(result.scalars())
+
+
+async def replay_delivery(
+    session: AsyncSession, endpoint_id: uuid.UUID, delivery_id: uuid.UUID
+) -> WebhookDelivery:
+    """RADD-1096: a DEAD delivery back onto the queue — the manual replay the
+    DeliveryStatus.DEAD comment promised since spec 25. Attempts reset so the
+    replay gets the full retry schedule, not one last gasp."""
+    delivery = await session.get(WebhookDelivery, delivery_id)
+    if delivery is None or delivery.endpoint_id != endpoint_id:
+        raise NotFoundError(WebhookEntity.DELIVERY, delivery_id)
+    if delivery.status != DeliveryStatus.DEAD.value:
+        raise ConflictError(
+            WebhookEntity.DELIVERY,
+            reason=f"only dead deliveries replay — this one is {delivery.status}",
+        )
+    delivery.status = DeliveryStatus.PENDING.value
+    delivery.attempts = 0
+    delivery.next_attempt_at = utcnow()
+    delivery.last_error = None
+    await session.flush()
+    return delivery
 
 
 async def list_deliveries(
