@@ -33,7 +33,9 @@ check() { # check <label> <grep-args...>
 # (No generic RFC1918 check: the tree legitimately shows 10.x placeholders in
 # deploy examples, CIDR test fixtures and UI hints. The denylist carries the
 # operator's REAL ranges, which is the check that means something.)
-check "machine-absolute paths" -e '/Volumes/''Work/' -e '<home>'
+# Patterns are split so this file never contains its own contraband — the
+# first gate run flagged itself.
+check "machine-absolute paths" -e '/Volumes/''Work/' -e '/home/''hjarrar'
 
 bad_files=$(tracked | grep -E '(^|/)\.env$|\.(pem|p12|pfx|key)$|reconcile_.*\.json$' || true)
 if [ -n "$bad_files" ]; then
