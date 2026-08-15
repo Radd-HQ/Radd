@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd.db import get_session
+from radd.db import commit_before_streaming, get_session
 from radd.modules.auth.deps import CurrentUser
 
 from . import editor, features
@@ -36,6 +36,10 @@ async def stream(data: EditorStreamRequest, session: Session, user: CurrentUser)
     """
     await features.require_feature(session, AiFeature.EDITOR_ACTIONS)
     instruction = await editor.resolve_instruction(session, data)
+    # RADD-845: end the request tx before the stream; the generator's own
+    # provider-config read autobegins a short one, bounded by the engine's
+    # idle-in-transaction timeout.
+    await commit_before_streaming(session)
     return StreamingResponse(
         editor.stream_frames(session, data, instruction),
         media_type="text/event-stream",

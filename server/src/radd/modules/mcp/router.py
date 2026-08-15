@@ -29,7 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd import __version__
 from radd.config import settings
-from radd.db import SessionLocal, get_session
+from radd.db import SessionLocal, commit_before_streaming, get_session
 from radd.exceptions import ForbiddenError, RaddError, UnauthorizedError
 from radd.modules.auth.deps import OptionalUser
 from radd.modules.auth.models import User
@@ -109,7 +109,7 @@ async def _catalog_change_stream(user: User) -> AsyncIterator[str]:
 
 
 @router.get("")
-async def mcp_stream(user: OptionalUser) -> Response:
+async def mcp_stream(user: OptionalUser, session: Session) -> Response:
     """The server->client half of Streamable HTTP (RADD-740).
 
     The transport was POST-only, so there was nowhere to push a notification —
@@ -123,6 +123,9 @@ async def mcp_stream(user: OptionalUser) -> Response:
         raise UnauthorizedError(
             "MCP requires a personal access token: Authorization: Bearer radd_pat_…"
         )
+    # The auth read opened a transaction on the request session, and teardown
+    # won't commit it until the stream ENDS — hours later (RADD-845).
+    await commit_before_streaming(session)
     return StreamingResponse(
         _catalog_change_stream(user), media_type="text/event-stream", headers=SSE_HEADERS
     )

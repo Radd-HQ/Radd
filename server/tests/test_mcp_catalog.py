@@ -440,7 +440,7 @@ async def test_the_change_stream_actually_serves(db):
     from radd.modules.mcp.router import mcp_stream
 
     admin = await _user(db, InstanceRole.ADMIN)
-    response = await mcp_stream(admin)
+    response = await mcp_stream(admin, db)
     assert response.media_type == "text/event-stream"
     assert response.headers["cache-control"].startswith("no-cache")
     first = await asyncio.wait_for(response.body_iterator.__anext__(), timeout=5)

@@ -12,6 +12,13 @@ class Settings(BaseSettings):
     db_pool_size: int = 5
     db_max_overflow: int = 10
     db_pool_pre_ping: bool = True
+    # Self-healing backstop for leaked transactions (RADD-845): Postgres kills
+    # any app session idle in transaction longer than this. Two PAT-auth
+    # sessions idling 4-5h once blocked a deploy's migration; with this set, a
+    # future leak costs one broken connection instead of a wedged deploy. 0
+    # disables. Applies to the app engine only — alembic and pg_dump/pg_restore
+    # connect on their own.
+    db_idle_tx_timeout_seconds: int = 600
     api_title: str = "Radd"
     api_prefix: str = "/api/v1"
     # Built SPA to serve at / (empty or missing dir = API-only). Default: the repo's web/dist.

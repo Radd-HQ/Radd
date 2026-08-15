@@ -36,11 +36,21 @@ def ilike_term(q: str) -> str:
     return f"%{escaped}%"
 
 
+def _connect_args() -> dict[str, str]:
+    """Engine-level idle-in-transaction backstop (RADD-845). Server-side, so it
+    catches every leak shape — including ones this codebase hasn't written yet."""
+    if not settings.db_idle_tx_timeout_seconds:
+        return {}
+    ms = settings.db_idle_tx_timeout_seconds * 1000
+    return {"options": f"-c idle_in_transaction_session_timeout={ms}"}
+
+
 engine = create_async_engine(
     settings.database_url,
     pool_size=settings.db_pool_size,
     max_overflow=settings.db_max_overflow,
     pool_pre_ping=settings.db_pool_pre_ping,
+    connect_args=_connect_args(),
 )
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
@@ -54,3 +64,19 @@ async def get_session() -> AsyncIterator[AsyncSession]:
         except BaseException:
             await session.rollback()
             raise
+
+
+async def commit_before_streaming(session: AsyncSession) -> None:
+    """End the request transaction NOW — the last session touch before
+    returning a flush-through response (SSE, file delivery).
+
+    `get_session` commits in dependency TEARDOWN, which runs only after the
+    response body finishes. Buffered responses never notice; a flush-through
+    response (see `CommitBeforeSendMiddleware`) holds the session checked out
+    — idle in transaction, still holding the auth read's ACCESS SHARE locks —
+    for the connection's whole life. Two PAT streams idling 4-5h blocked a
+    production migration behind exactly that (RADD-845). A stream body that
+    touches the DB afterwards autobegins its own short transaction; the
+    engine's idle_in_transaction_session_timeout is the backstop for those.
+    """
+    await session.commit()

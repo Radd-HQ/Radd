@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, Form, Query, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd.db import get_session
+from radd.db import commit_before_streaming, get_session
 from radd.modules.auth import authz
 from radd.modules.auth.deps import CurrentUser
 
@@ -111,7 +111,11 @@ async def download_attachment(
     attachment = await service.get_attachment(session, attachment_id)
     if not await acl.attachment_readable(session, user, attachment):
         raise ForbiddenError("you do not have access to this attachment")
-    return await service.download_response(session, attachment, width=w)
+    response = await service.download_response(session, attachment, width=w)
+    # RADD-845: a large proxy-delivery stream must not idle the request tx
+    # under it for the transfer's whole duration.
+    await commit_before_streaming(session)
+    return response
 
 
 @router.delete("/attachments/{attachment_id}", status_code=204)

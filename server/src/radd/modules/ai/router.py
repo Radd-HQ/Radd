@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd.db import get_session
+from radd.db import commit_before_streaming, get_session
 from radd.modules.auth.deps import CurrentUser
 
 from . import service
@@ -55,6 +55,7 @@ async def summarize_item_stream(
     setting). Gates + the digest build run before the stream starts, so a
     dormant feature or unreadable item fails as ordinary JSON."""
     user_prompt = await service.summarize_prompt(session, item_id, user)
+    await commit_before_streaming(session)  # RADD-845: no idle tx behind the SSE
     return StreamingResponse(
         service.summarize_stream_frames(session, user_prompt),
         media_type="text/event-stream",
@@ -76,6 +77,7 @@ async def similar_reasons(
         if user_prompt is not None
         else service.done_only_frames()
     )
+    await commit_before_streaming(session)  # RADD-845: no idle tx behind the SSE
     return StreamingResponse(frames, media_type="text/event-stream", headers=SSE_HEADERS)
 
 

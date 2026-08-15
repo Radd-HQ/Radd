@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd import backup as core
 from radd.backup import artifact as art, store
 from radd.config import settings
-from radd.db import get_session
+from radd.db import commit_before_streaming, get_session
 from radd.exceptions import ConflictError, ForbiddenError, NotFoundError
 from radd.modules.auth.deps import CurrentUser
 from radd.modules.auth.models import User
@@ -173,9 +173,12 @@ async def delete_schedule(schedule_id: uuid.UUID, session: Session, user: Curren
 
 
 @router.get("/{name}/download")
-async def download_backup(name: str, user: CurrentUser) -> FileResponse:
+async def download_backup(name: str, session: Session, user: CurrentUser) -> FileResponse:
     _require_instance_admin(user)
     stored = _resolve(name)
+    # A multi-GB artifact streams for as long as the link is slow; the auth
+    # read's transaction must not idle underneath it (RADD-845).
+    await commit_before_streaming(session)
     return FileResponse(
         stored.path, media_type="application/octet-stream", filename=stored.name
     )
