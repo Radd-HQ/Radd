@@ -1,11 +1,13 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { FileSearch, Sparkles } from "lucide-react";
+import { FileSearch, GitMerge, Sparkles } from "lucide-react";
 import { RoutePath } from "../../lib/constants";
 import { useOpenIssueRef } from "../../lib/hooks";
 import { aiStatusQuery } from "../../lib/queries";
 import type { Item, SimilarCandidate } from "../../lib/types";
 import { Button } from "../Button";
+import { useConfirm } from "../ConfirmDialog";
+import { useMergeItem } from "../../lib/item-mutations";
 import { useOpenAiResults } from "./ai-results";
 import { SimilarHoverCard, useIssuePreview } from "./SimilarHoverCard";
 
@@ -61,14 +63,23 @@ export function AiSection({ item }: { item: Item }) {
 export function SimilarCandidatesList({
   candidates,
   onOpen,
+  mergeSourceId,
 }: {
   candidates: SimilarCandidate[];
   onOpen?: () => void;
+  /** When set, each row offers "merge into this" for the item whose panel we
+   * are in — the RADD-1090 action on the finding (the seed is the DUPLICATE). */
+  mergeSourceId?: string;
 }) {
   return (
     <ul className="flex flex-col gap-1.5">
       {candidates.map((candidate) => (
-        <SimilarRow key={candidate.item_key} candidate={candidate} onOpen={onOpen} />
+        <SimilarRow
+          key={candidate.item_key}
+          candidate={candidate}
+          onOpen={onOpen}
+          mergeSourceId={mergeSourceId}
+        />
       ))}
     </ul>
   );
@@ -79,12 +90,17 @@ export function SimilarCandidatesList({
 function SimilarRow({
   candidate,
   onOpen,
+  mergeSourceId,
 }: {
   candidate: SimilarCandidate;
   onOpen?: () => void;
+  mergeSourceId?: string;
 }) {
   const openRef = useOpenIssueRef();
   const preview = useIssuePreview();
+  const navigate = useNavigate();
+  const mergeItem = useMergeItem();
+  const [confirmNode, confirm] = useConfirm();
 
   return (
     <li
@@ -109,7 +125,42 @@ function SimilarRow({
         <span className="shrink-0 rounded-full bg-accent/15 px-1.5 py-0.5 text-[11px] font-medium text-accent-text">
           {Math.round(candidate.score * 100)}%
         </span>
+        {mergeSourceId && (
+          <button
+            type="button"
+            title="Merge this issue into that one — comments, time and links move; this one closes as a duplicate"
+            className="shrink-0 cursor-pointer rounded-md border border-strong p-1 text-fg-muted outline-focus hover:border-emphasis hover:text-fg"
+            onClick={() => {
+              void (async () => {
+                const ok = await confirm({
+                  title: `Merge into ${candidate.item_key}?`,
+                  message:
+                    "Comments, attachments, links, watchers and logged time move to " +
+                    `${candidate.item_key}; this issue closes as its duplicate. ` +
+                    "Worklogs keep their authors.",
+                  confirmLabel: "Merge",
+                });
+                if (!ok) return;
+                mergeItem.mutate(
+                  { sourceId: mergeSourceId, targetKey: candidate.item_key },
+                  {
+                    onSuccess: (survivor) => {
+                      onOpen?.();
+                      void navigate({
+                        to: RoutePath.issue,
+                        params: { itemKey: survivor.key },
+                      });
+                    },
+                  },
+                );
+              })();
+            }}
+          >
+            <GitMerge size={13} aria-hidden />
+          </button>
+        )}
       </div>
+      {confirmNode}
       {candidate.reason && <p className="mt-0.5 text-[11px] text-fg-faint">{candidate.reason}</p>}
     </li>
   );

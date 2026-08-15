@@ -343,6 +343,22 @@ export function useValidateItem() {
 
 
 /** Soft archive/unarchive (spec 38) — hidden from lists by default. */
+/** Merge a duplicate into its survivor (RADD-1090): everything repoints,
+ * the source closes canceled with a `duplicates` link. Returns the SURVIVOR. */
+export function useMergeItem() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sourceId, targetKey }: { sourceId: string; targetKey: string }) =>
+      api.post<Item>(`${ApiPath.items}/${sourceId}/merge`, { target_key: targetKey }),
+    onSuccess: (survivor) => {
+      cacheItem(queryClient, survivor);
+      pushToast(`Merged into ${survivor.key} — comments, time and links moved`);
+    },
+    onError: (error) => pushToast(errorMessage(error)),
+    onSettled: () => invalidateItemCaches(queryClient),
+  });
+}
+
 /** Convert kind (RADD-1089): epic <-> issue; refusals name the blocker. */
 export function useConvertItem() {
   const queryClient = useQueryClient();

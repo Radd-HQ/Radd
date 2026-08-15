@@ -74,6 +74,15 @@ class ItemConvert(BaseModel):
     parent_id: uuid.UUID | None = None
 
 
+class ItemMerge(BaseModel):
+    """POST /items/{id}/merge (RADD-1090): this item is the DUPLICATE; it
+    closes into its project's canceled state pointing at the survivor —
+    addressed by id or by key (the similar-issues panel only knows keys)."""
+
+    target_id: uuid.UUID | None = None
+    target_key: str | None = None
+
+
 class ItemClone(BaseModel):
     """POST /items/{id}/clone (RADD-1088). Omitted title -> "Copy of <source>"."""
 

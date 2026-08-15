@@ -183,6 +183,7 @@ export function AiResultsPanel({ request, runId, onClose, className = "" }: AiRe
           ) : (
             <>
               <SimilarCandidatesList
+                mergeSourceId={itemSeed?.itemId}
                 // Reasons/scores hydrate IN PLACE — rows must never reshuffle
                 // under the pointer, so the fused pool order stands.
                 candidates={(similarResult.data?.candidates ?? []).map((candidate) => {

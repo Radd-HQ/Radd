@@ -5,11 +5,12 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
+from radd.exceptions import ConflictError
 from radd.modules.auth.deps import CurrentUser
 from radd.modules.workflow.types import StateCategory
 
 from . import bulk, rollup, service
-from .enums import ItemKind, Priority
+from .enums import ItemEntity, ItemKind, Priority
 from .filters import NONE_LITERAL, ItemListFilters
 from .history import item_history
 from .schemas import (
@@ -23,6 +24,7 @@ from .schemas import (
     ItemIds,
     ItemClone,
     ItemConvert,
+    ItemMerge,
     ItemLinkCreate,
     ItemLinkSearchResult,
     ItemRankUpdate,
@@ -299,6 +301,22 @@ async def convert_item(
     if "parent_id" in data.model_fields_set:
         kwargs["parent_id"] = data.parent_id
     return await service.convert_item_kind(session, item_id, user, kind=data.kind, **kwargs)
+
+
+@router.post("/{item_id}/merge", response_model=ItemRead)
+async def merge_item(
+    item_id: uuid.UUID, data: ItemMerge, session: Session, user: CurrentUser
+) -> ItemRead:
+    """Merge this duplicate into the survivor (RADD-1090): comments, links,
+    watchers, worklogs and the service-desk thread repoint; this item closes
+    canceled with a `duplicates` link. Returns the SURVIVOR."""
+    if (data.target_id is None) == (data.target_key is None):
+        raise ConflictError(ItemEntity.ITEM, reason="pass exactly one of target_id or target_key")
+    target_id = data.target_id
+    if target_id is None:
+        target = await service.get_item_by_key(session, str(data.target_key), actor=user)
+        target_id = target.id
+    return await service.merge_items(session, item_id, target_id, actor=user)
 
 
 @router.post("/{item_id}/links", response_model=ItemRead, status_code=201)

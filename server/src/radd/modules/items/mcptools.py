@@ -529,11 +529,40 @@ CONVERT_ITEM = McpToolSpec(
     kernel_enforced=False,
 )
 
+async def _merge_item(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
+    source = await items_service.get_item_by_key(session, str(args["source_key"]), actor=actor)
+    target = await items_service.get_item_by_key(session, str(args["target_key"]), actor=actor)
+    read = await items_service.merge_items(session, source.id, target.id, actor=actor)
+    return receipt(read)
+
+
+MERGE_ITEM = McpToolSpec(
+    name="merge_item",
+    description="Merge a duplicate into its survivor (both addressed by key). "
+    "Comments, attachments, links, watchers, worklogs (authors preserved), labels "
+    "(union) and the mail thread repoint to the target; the source closes into its "
+    "project's canceled state with a 'duplicates' link. Kinds must match.",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "source_key": {"type": "string", "description": "The duplicate being closed."},
+            "target_key": {"type": "string", "description": "The survivor."},
+        },
+        "required": ["source_key", "target_key"],
+        "additionalProperties": False,
+    },
+    handler=_merge_item,
+    permission=Permission.ITEM_UPDATE,
+    project_scoped=True,
+    kernel_enforced=False,
+)
+
 MCP_TOOLS = (
     SEARCH_ITEMS,
     MOVE_ITEM,
     CLONE_ITEM,
     CONVERT_ITEM,
+    MERGE_ITEM,
     LINK_ITEMS,
     UNLINK_ITEMS,
     GET_ITEM,
