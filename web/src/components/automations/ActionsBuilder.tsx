@@ -112,6 +112,24 @@ function defaultParams(type: ActionTypeValue): Record<string, CustomFieldValue> 
 const filled = (value: CustomFieldValue): boolean =>
   typeof value === "string" && value.trim() !== "";
 
+/** RADD-1104: the graph's action nodes carry the same params under an
+ * "action."-prefixed type — the validity contract is one function, applied to
+ * both shapes, so the editor refuses up front what the server would 422. */
+export function incompleteActionNodeIds(
+  nodes: readonly { id: string; type: string; params: Record<string, unknown> }[],
+): string[] {
+  return nodes
+    .filter(
+      (node) =>
+        node.type.startsWith("action.") &&
+        !isActionValid({
+          type: node.type.slice("action.".length),
+          params: node.params,
+        } as RuleAction),
+    )
+    .map((node) => node.id);
+}
+
 /** True when an action's params are complete enough to save (spec 20 contract). */
 export function isActionValid(action: RuleAction): boolean {
   const p = action.params;

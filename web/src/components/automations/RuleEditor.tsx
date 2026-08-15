@@ -28,6 +28,7 @@ import {
 import { Button } from "../Button";
 import { ErrorText } from "../ErrorText";
 import { TextField } from "../TextField";
+import { incompleteActionNodeIds } from "./ActionsBuilder";
 import { GraphEditor, type Orientation } from "./GraphEditor";
 import { RuleTestPanel } from "./RuleTestPanel";
 
@@ -56,8 +57,12 @@ export function RuleEditor({ rule, onDone }: RuleEditorProps) {
   });
 
   // A graph with no nodes is not worth saving; one with no TRIGGER is, because
-  // it is work in progress and the canvas already says it cannot run.
-  const canSave = name.trim() !== "" && graph.nodes.length > 0;
+  // it is work in progress and the canvas already says it cannot run. A graph
+  // with a HALF-CONFIGURED action is not (RADD-1104): saving it would only
+  // bounce off the server's 422, and never-edit-then-error is the house rule.
+  const incompleteActions = incompleteActionNodeIds(graph.nodes);
+  const canSave =
+    name.trim() !== "" && graph.nodes.length > 0 && incompleteActions.length === 0;
 
   const save = useMutation({
     mutationFn: () => {

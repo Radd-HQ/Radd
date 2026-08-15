@@ -25,6 +25,7 @@ import {
   type RuleTestResult,
 } from "../../lib/types";
 import { Callout, CalloutKind } from "../Callout";
+import { incompleteActionNodeIds } from "./ActionsBuilder";
 import { usePickerData } from "./ActionsBuilder";
 import { GraphInspector } from "./GraphInspector";
 import { LazyGraphCanvas } from "./LazyGraphCanvas";
@@ -241,6 +242,10 @@ export function GraphEditor({
 
   /** Nodes no trigger can reach. They are stored and valid, they simply never
    * run — the quietest way for an automation to do nothing, so it is said. */
+  /** RADD-1104: action nodes with missing required params — Save is gated on
+   * this upstream in RuleEditor; here it gets said ON the canvas. */
+  const incompleteActions = useMemo(() => incompleteActionNodeIds(nodes), [nodes]);
+
   const unreachable = useMemo(() => {
     const reached = new Set(triggers.map((t) => t.id));
     let grew = true;
@@ -296,6 +301,13 @@ export function GraphEditor({
         <Callout kind={CalloutKind.warning}>
           No trigger reaches <strong className="font-medium">{unreachable.join(", ")}</strong>, so{" "}
           {unreachable.length === 1 ? "it" : "they"} will never run. Drag from a port to connect.
+        </Callout>
+      )}
+      {incompleteActions.length > 0 && (
+        <Callout kind={CalloutKind.warning}>
+          <strong className="font-medium">{incompleteActions.join(", ")}</strong>{" "}
+          {incompleteActions.length === 1 ? "is" : "are"} missing required fields — Save is
+          disabled until {incompleteActions.length === 1 ? "it is" : "they are"} configured.
         </Callout>
       )}
 
