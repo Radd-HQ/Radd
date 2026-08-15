@@ -219,8 +219,9 @@ async def _emit(
     occurred_at: datetime | None = None,
     visible_to_teams: set[uuid.UUID] | None = None,
 ) -> None:
-    # The excerpt is included even for internal comments — the event stream/webhooks are
-    # trusted consumers (docs/modules.md); only the REST reads filter by visibility.
+    # The excerpt is included even for internal comments — in-process consumers
+    # are trusted; REST reads filter by visibility, and the webhook egress
+    # withholds internal excerpts (RADD-1085: an endpoint sits in no team).
     # `visible_to_teams` (spec 50) lets notify narrow internal fan-out to team members.
     await events.emit(
         session,

@@ -12,6 +12,8 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
+from radd.modules.fields import service as fields_service
+from radd.modules.items.redaction import redact_item_payload
 from radd.exceptions import NotFoundError
 from radd.modules.events import service as events
 from radd.modules.events.service import Event
@@ -165,6 +167,10 @@ async def fanout_events(session: AsyncSession) -> int:
 
 async def attempt_due(session: AsyncSession, client: httpx.AsyncClient) -> int:
     now = utcnow()
+    # RADD-1085: resolved once per batch — an endpoint can hold no grant and
+    # sit in no team, so anything read-restricted for anybody is restricted
+    # for every delivery in this batch.
+    restricted = await fields_service.outbound_restricted_keys(session)
     result = await session.execute(
         select(WebhookDelivery)
         .where(
@@ -176,12 +182,15 @@ async def attempt_due(session: AsyncSession, client: httpx.AsyncClient) -> int:
     )
     deliveries = list(result.scalars())
     for delivery in deliveries:
-        await _attempt(session, client, delivery)
+        await _attempt(session, client, delivery, restricted)
     return len(deliveries)
 
 
 async def _attempt(
-    session: AsyncSession, client: httpx.AsyncClient, delivery: WebhookDelivery
+    session: AsyncSession,
+    client: httpx.AsyncClient,
+    delivery: WebhookDelivery,
+    restricted: tuple[frozenset[str], frozenset[str]],
 ) -> None:
     endpoint = await session.get(WebhookEndpoint, delivery.endpoint_id)
     event = await events.get_event(session, delivery.event_id)
@@ -191,7 +200,7 @@ async def _attempt(
         return
     msg_id = f"msg_{delivery.id}"
     timestamp = int(time.time())
-    body = _payload_body(msg_id, event)
+    body = _payload_body(msg_id, event, restricted)
     headers = {
         "content-type": "application/json",
         "webhook-id": msg_id,
@@ -211,16 +220,34 @@ async def _attempt(
         _schedule_retry(delivery, error=str(exc)[:500])
 
 
-def _payload_body(msg_id: str, event: Event) -> str:
+def _payload_body(
+    msg_id: str, event: Event, restricted: tuple[frozenset[str], frozenset[str]]
+) -> str:
     return json.dumps(
         {
             "id": msg_id,
             "type": event.event_type,
             "timestamp": event.created_at.isoformat(),
-            "data": event.payload,
+            "data": _outbound_payload(event.payload, restricted),
         },
         separators=(",", ":"),
     )
+
+
+def _outbound_payload(
+    payload: dict | None, restricted: tuple[frozenset[str], frozenset[str]]
+) -> dict:
+    """What actually leaves the building (RADD-1085): restricted custom fields
+    and builtins redacted from item payloads, and internal-comment excerpts
+    withheld — an endpoint is not on any team, so team-gated text is not its
+    to read. Copy-on-write throughout: `payload` is the events row's JSONB."""
+    custom_keys, builtin_names = restricted
+    data = redact_item_payload(payload, custom_keys, builtin_names)
+    if data.get("visibility") == "internal" and data.get("excerpt"):
+        if data is payload:
+            data = dict(payload)
+        data["excerpt"] = None
+    return data
 
 
 def _schedule_retry(delivery: WebhookDelivery, error: str) -> None:

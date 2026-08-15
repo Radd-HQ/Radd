@@ -10,6 +10,8 @@ from radd.config import settings
 from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
+from radd.modules.auth.types import InstanceRole
+from radd.modules.fields import service as fields_service
 from radd.modules.projects import service as projects_service
 
 from . import fusion
@@ -247,6 +249,17 @@ async def search(
         return []
     relation_clause = await _relation_index_clause(session, user)
 
+    # RADD-1085: ts_headline reads the INDEX row's description + public comment
+    # text, bypassing the spec-50 builtin blanking the item read applies. When
+    # ANY read grant restricts `description` anywhere, non-admin hits degrade
+    # to title-only rather than leak — the denied_slq_fields stance: restriction
+    # is rare, a per-hit authz pass is not worth it, and a leak is worse than a
+    # missing preview.
+    snippets_allowed = user.instance_role == InstanceRole.ADMIN.value
+    if not snippets_allowed:
+        _, restricted_builtins = await fields_service.outbound_restricted_keys(session)
+        snippets_allowed = "description" not in restricted_builtins
+
     hits: list[SearchHit] = []
     seen: set[uuid.UUID] = set()
 
@@ -295,7 +308,7 @@ async def search(
         for row, headline in fts_rows:
             if row.item_id in seen or len(hits) >= limit:
                 continue
-            hits.append(_hit(row, snippet=headline))
+            hits.append(_hit(row, snippet=headline if snippets_allowed else None))
         return hits
 
     rows_by_id = {row.item_id: (row, headline) for row, headline in fts_rows}
@@ -312,14 +325,17 @@ async def search(
         for row in extra.scalars():
             # Semantic-only hits carry a description excerpt instead of a
             # ts_headline (there may be zero keyword overlap to highlight).
-            rows_by_id[row.item_id] = (row, row.description[:_SIMILAR_SNIPPET_CHARS] or None)
+            rows_by_id[row.item_id] = (
+                row,
+                (row.description[:_SIMILAR_SNIPPET_CHARS] or None) if snippets_allowed else None,
+            )
     for item_id, _score in fused:
         if item_id in seen or len(hits) >= limit:
             continue
         pair = rows_by_id.get(item_id)
         if pair is None:
             continue
-        hits.append(_hit(pair[0], snippet=pair[1]))
+        hits.append(_hit(pair[0], snippet=pair[1] if snippets_allowed else None))
         seen.add(item_id)
     return hits
 

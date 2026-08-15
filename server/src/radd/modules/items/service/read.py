@@ -78,8 +78,10 @@ async def _finish(
     event_actor_id: uuid.UUID | None = None,
 ) -> ItemRead:
     read = await _hydrate_one(session, item, project, actor, permissions)
-    # Event payloads keep the FULL custom_fields — stream consumers are trusted
-    # (docs/modules.md); only API responses are filtered per-actor.
+    # Event payloads keep the FULL custom_fields — in-process consumers are
+    # trusted and enforce their own authz; API responses filter per-actor, and
+    # the WEBHOOK egress redacts what a grant restricts (items/redaction.py,
+    # RADD-1085) — an endpoint can hold no grant, so it gets the blanked form.
     #
     # Nested under `item` (RADD-922), like every other item-scoped event, so one
     # rule — `payload.item.<field>` — addresses the item whatever produced the

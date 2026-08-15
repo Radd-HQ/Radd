@@ -405,6 +405,34 @@ async def restricted_field_ids(session: AsyncSession) -> set[str]:
     return await access_service.resource_ids_with_grants(session, FIELD_RESOURCE)
 
 
+async def outbound_restricted_keys(
+    session: AsyncSession,
+) -> tuple[frozenset[str], frozenset[str]]:
+    """(custom-field keys, builtin names) carrying ANY read-restricting grant,
+    instance-wide — the fail-closed set for consumers that can hold no grant
+    and no subject (RADD-1085): a webhook endpoint, a cross-project surface
+    with no per-project subject resolution. Restriction is rare; a leak is not
+    (the denied_slq_fields precedent)."""
+    definitions = await list_fields(session)
+    field_grants = await access_service.grants_for_resources(
+        session, FIELD_RESOURCE, [str(d.id) for d in definitions]
+    )
+    custom = frozenset(
+        d.key
+        for d in definitions
+        if any(g.access == Access.READ.value for g in field_grants.get(str(d.id), ()))
+    )
+    builtin_grants = await access_service.grants_for_resources(
+        session, BUILTIN_RESOURCE, sorted(_READ_RESTRICTABLE_NAMES)
+    )
+    builtins = frozenset(
+        name
+        for name, grants in builtin_grants.items()
+        if any(g.access == Access.READ.value for g in grants)
+    )
+    return custom, builtins
+
+
 # --- field-level visibility (now the generic access framework, spec 92) -------
 
 
