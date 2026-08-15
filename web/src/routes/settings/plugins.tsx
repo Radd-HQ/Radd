@@ -8,6 +8,7 @@ import { ApiPath } from "../../lib/constants";
 import { pluginsQuery, queryKeys } from "../../lib/queries";
 import { type Plugin } from "../../lib/types";
 import { Button } from "../../components/Button";
+import { useConfirm } from "../../components/ConfirmDialog";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { Spinner } from "../../components/Spinner";
 import { QueryError } from "../../components/QueryError";
@@ -32,12 +33,23 @@ function StateBadge({ state }: { state: string }) {
 
 function PluginRow({ plugin }: { plugin: Plugin }) {
   const queryClient = useQueryClient();
+  const [confirmDialog, confirm] = useConfirm();
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.plugins });
     // The nav/capabilities manifest reflects enabled plugins — refresh it so the
     // sidebar plugin nav appears/disappears immediately.
     queryClient.invalidateQueries({ queryKey: ["capabilities"] });
   };
+  // RADD-1101: install/uninstall always existed as endpoints; the page offered
+  // only enable/disable, leaving the lifecycle's ends to curl.
+  const install = useMutation({
+    mutationFn: () => api.post<Plugin[]>(`${ApiPath.plugins}/${plugin.id}/install`),
+    onSuccess: invalidate,
+  });
+  const uninstall = useMutation({
+    mutationFn: () => api.post<Plugin[]>(`${ApiPath.plugins}/${plugin.id}/uninstall`),
+    onSuccess: invalidate,
+  });
   const enable = useMutation({
     mutationFn: () => api.post<Plugin[]>(`${ApiPath.plugins}/${plugin.id}/enable`),
     onSuccess: invalidate,
@@ -121,16 +133,42 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
           <span className="flex items-center gap-1 text-[12px] text-fg-muted">
             <Lock size={12} aria-hidden /> Core
           </span>
+        ) : plugin.state === "discovered" ? (
+          <Button size="sm" disabled={install.isPending} onClick={() => install.mutate()}>
+            {install.isPending ? "Installing…" : "Install"}
+          </Button>
         ) : enabled ? (
           <Button size="sm" variant="secondary" disabled={busy} onClick={() => disable.mutate()}>
             Disable
           </Button>
         ) : (
-          <Button size="sm" disabled={busy} onClick={() => enable.mutate()}>
-            Enable
-          </Button>
+          <>
+            <Button size="sm" disabled={busy} onClick={() => enable.mutate()}>
+              Enable
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="border border-strong hover:border-red-500/50 hover:text-red-300"
+              disabled={uninstall.isPending}
+              onClick={() => {
+                void confirm({
+                  title: `Uninstall ${plugin.id}?`,
+                  message:
+                    "Uninstalling runs the plugin's migrations DOWN — its tables and their data are removed. Disable keeps the data; this does not.",
+                  confirmLabel: "Uninstall",
+                  danger: true,
+                }).then((ok) => {
+                  if (ok) uninstall.mutate();
+                });
+              }}
+            >
+              {uninstall.isPending ? "Uninstalling…" : "Uninstall…"}
+            </Button>
+          </>
         )}
       </div>
+      {confirmDialog}
       {open && hasSection && (
         <div className="border-t border-subtle/40 bg-base/30 px-4 py-3 pl-11">
           <p className="mb-2 text-[11px] text-fg-muted">

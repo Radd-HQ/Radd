@@ -14,6 +14,7 @@ import {
   type PageSpaceUpdate,
 } from "../../lib/types";
 import { Button } from "../../components/Button";
+import { pushToast } from "../../lib/toast";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { EmptyState } from "../../components/EmptyState";
 import { PublicBadge } from "../../components/pages/PublicBadge";
@@ -63,6 +64,17 @@ export function PagesSettingsPage() {
     onSettled: () => invalidateEntities(queryClient, Entity.docSpace, Entity.page),
   });
 
+  // RADD-1101: POST /pages/reindex existed since RADD-943, reachable only by
+  // curl — the fix for imported/pre-feature pages whose backlink and issue-link
+  // indexes were never derived.
+  const reindex = useMutation({
+    mutationFn: () =>
+      api.post<{ backlinks: number; item_links: number }>(ApiPath.pagesReindex),
+    onSuccess: (counts) =>
+      pushToast(`Link index rebuilt: ${counts.backlinks} backlinks, ${counts.item_links} issue links`),
+    onError: (error) => pushToast(errorMessage(error)),
+  });
+
   const list = spaces.data ?? [];
 
   return (
@@ -70,6 +82,18 @@ export function PagesSettingsPage() {
       title="Page spaces"
       description="Wiki spaces, each holding a page tree. A space is a grant SCOPE: who reads, writes and comments in it is a role granted there. Managing a space needs page.manage in it."
     >
+      {canManage && (
+        <div className="mb-3 flex justify-end">
+          <Button
+            variant="ghost"
+            onClick={() => reindex.mutate()}
+            disabled={reindex.isPending}
+            title="Re-derive page backlinks and page-to-issue links from every live page — for content that predates those indexes or arrived via an importer. Safe to run twice."
+          >
+            {reindex.isPending ? "Rebuilding…" : "Rebuild link index"}
+          </Button>
+        </div>
+      )}
       {spaces.isPending ? (
         <TableSkeleton rows={3} />
       ) : spaces.isError ? (

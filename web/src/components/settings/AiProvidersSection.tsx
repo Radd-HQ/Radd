@@ -241,6 +241,15 @@ function ProviderModal({
   const [wireShape, setWireShape] = useState<AiWireShapeValue>(
     existing?.wire_shape ?? AiWireShape.openai,
   );
+  const localEmbed = useQuery({
+    queryKey: ["ai", "local-embed"],
+    queryFn: () =>
+      api.get<{ available: boolean; default_model: string; models: string[] }>(
+        ApiPath.aiLocalEmbed,
+      ),
+    enabled: wireShape === AiWireShape.local,
+    staleTime: 60_000,
+  });
   const [baseUrl, setBaseUrl] = useState(existing?.base_url ?? "");
   const [apiKey, setApiKey] = useState("");
   const [defaultModel, setDefaultModel] = useState(existing?.default_model ?? "");
@@ -321,16 +330,29 @@ function ProviderModal({
           onChange={(event) => setDefaultModel(event.target.value)}
           placeholder={
             wireShape === AiWireShape.local
-              ? "BAAI/bge-small-en-v1.5"
+              ? (localEmbed.data?.default_model ?? "BAAI/bge-small-en-v1.5")
               : "e.g. gpt-4o-mini or qwen3:14b"
           }
           maxLength={200}
+          list={wireShape === AiWireShape.local ? "local-embed-models" : undefined}
           hint={
             wireShape === AiWireShape.local
-              ? "Leave empty for the default. Weights download on first use; Test runs one embedding."
+              ? localEmbed.data?.available === false
+                ? "The built-in backend isn't installed on this server (pip install 'radd[localembed]')."
+                : "Leave empty for the default. Weights download on first use; Test runs one embedding."
               : "Used by roles that don't pin their own model, and by Test."
           }
         />
+        {/* RADD-1101: the catalog GET /ai/local-embed always served, surfaced at
+            last — the browser's datalist keeps the field free-typed while
+            offering exactly the supported weights. */}
+        {wireShape === AiWireShape.local && (
+          <datalist id="local-embed-models">
+            {(localEmbed.data?.models ?? []).map((model) => (
+              <option key={model} value={model} />
+            ))}
+          </datalist>
+        )}
         <div className="mt-1 flex items-center justify-end gap-2">
           {save.isError && (
             <span className="mr-auto text-xs text-red-400">{errorMessage(save.error)}</span>

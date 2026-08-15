@@ -169,7 +169,9 @@ export const ApiPath = {
   publicKbSpaces: "/public/pages/spaces",
   publicKbSearch: "/public/pages/search",
   // AI layer (spec 46) — the status gate + natural-language → SLQ.
+  pagesReindex: "/pages/reindex",
   aiStatus: "/ai/status",
+  aiLocalEmbed: "/ai/local-embed",
   // Similar issues for a TEXT seed (read-mode AI menu on comments).
   aiSimilar: "/ai/similar",
   // Editor AI (spec 103) — the curated action menu + the SSE writing stream.

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, CircleAlert, Database, Loader2, Trash2, X } from "lucide-react";
-import { api } from "../../../lib/api";
+import { api, errorMessage } from "../../../lib/api";
 import { ApiPath } from "../../../lib/constants";
 import { relativeTime } from "../../../lib/dates";
 import {
@@ -306,6 +306,19 @@ function NewDownloadModal({
     form.connection_id ?? connections.data?.find((c) => c.is_default)?.id ?? null;
   const projects = useQuery(jiraProjectsQuery(connectionId, Boolean(connectionId)));
 
+  // RADD-1101: POST /jira/preview — spec-90's schema-inference endpoint,
+  // repurposed as the wizard's JQL sanity check (a bad query answers 422 with
+  // Jira's reason; a good one answers the true match count BEFORE a download).
+  const testJql = useMutation({
+    mutationFn: () =>
+      api.post<{ total: number; sampled: number }>(ApiPath.jiraPreview, {
+        jql: form.jql,
+        sample_size: 1,
+        connection_id: connectionId,
+        project_key: form.jira_project_key || null,
+      }),
+  });
+
   const start = useMutation({
     mutationFn: () =>
       api.post<JiraSnapshot>(ApiPath.jiraSnapshots, { ...form, connection_id: connectionId }),
@@ -373,9 +386,28 @@ function NewDownloadModal({
             placeholder='project = DEV AND created >= "2025-01-01"'
             className="rounded-md border border-strong bg-surface px-2.5 py-2 font-mono text-[12px] text-heading outline-none focus-visible:outline-2 focus-visible:outline-focus"
           />
-          <p className="text-xs text-fg-faint">
-            Narrow it to download less. Ordering is added automatically so paging stays stable.
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="flex-1 text-xs text-fg-faint">
+              Narrow it to download less. Ordering is added automatically so paging stays stable.
+            </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => testJql.mutate()}
+              disabled={testJql.isPending || form.jql.trim() === ""}
+            >
+              {testJql.isPending ? "Testing…" : "Test JQL"}
+            </Button>
+          </div>
+          {testJql.isSuccess && (
+            <p className="text-xs text-emerald-400">
+              Valid — {testJql.data.total.toLocaleString()} issue
+              {testJql.data.total === 1 ? "" : "s"} match.
+            </p>
+          )}
+          {testJql.isError && (
+            <p className="text-xs text-red-400">{errorMessage(testJql.error)}</p>
+          )}
         </div>
 
         <TextField
