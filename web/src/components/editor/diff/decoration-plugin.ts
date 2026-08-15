@@ -1,3 +1,9 @@
+/*
+ * Portions Copyright (c) Milkdown contributors (Mirone and others).
+ * Ported/adapted from @milkdown/components (MIT). Full license text:
+ * THIRD-PARTY-NOTICES.md at the repository root.
+ * SPDX-License-Identifier: AGPL-3.0-only AND MIT
+ */
 /**
  * Per-block AI diff review — a fork of Crepe's diff decoration plugin
  * (`@milkdown/components/src/diff/diff-decoration-plugin.ts`), swapped in by

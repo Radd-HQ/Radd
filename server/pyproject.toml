@@ -2,6 +2,7 @@
 name = "radd-server"
 version = "0.1.0"
 description = "Radd — self-hosted, AI-native work tracking. Server."
+license = "AGPL-3.0-only"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",

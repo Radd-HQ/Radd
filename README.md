@@ -4,6 +4,19 @@
 
 - **Status & roadmap:** [PLAN.md §8](PLAN.md) · **Module map:** [docs/modules.md](docs/modules.md) · **Dev rules:** [CLAUDE.md](CLAUDE.md)
 
+## License
+
+The application is **[AGPL-3.0-only](LICENSE)**. The extension surfaces are
+deliberately more permissive so you can build on Radd without licensing your
+own code under the AGPL: the Python SDK (`sdk/`) and the frontend plugin SDK
+(`web/packages/plugin-sdk/`) are both **Apache-2.0**. Out-of-process
+extensions talk to Radd over its HTTP API/SDK and are entirely your own;
+in-process Python plugins import the AGPL kernel, so distribute those under an
+AGPL-compatible license (or keep them private — the AGPL's obligations attach
+to distribution and network service, not to writing a plugin for your own
+instance). Attribution for code and fonts copied into this repository:
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
 ## Status
 
 **Every pillar is built and runnable** (specs 01–48):

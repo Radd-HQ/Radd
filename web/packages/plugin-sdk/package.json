@@ -2,6 +2,7 @@
   "name": "@radd/plugin-sdk",
   "version": "1.0.0",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "description": "Public frontend SDK for Radd plugins — slot registry, shared primitives, theme tokens, hooks, and the ui_api_version gate. The ONLY frontend surface a plugin imports (docs/plugin-platform.md §9).",
   "types": "./src/index.ts",

@@ -1,3 +1,9 @@
+/*
+ * Portions Copyright (c) Milkdown contributors (Mirone and others).
+ * Ported/adapted from @milkdown/components (MIT). Full license text:
+ * THIRD-PARTY-NOTICES.md at the repository root.
+ * SPDX-License-Identifier: AGPL-3.0-only AND MIT
+ */
 /**
  * Custom-block merging + cross-boundary splitting for the diff decoration
  * fork — ported from `@milkdown/components/src/diff/merge-changes.ts` (not
