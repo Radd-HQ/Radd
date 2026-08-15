@@ -1,9 +1,10 @@
 {
   "name": "@acme/notes-ui",
   "version": "1.0.0",
+  "license": "Apache-2.0",
   "private": true,
   "type": "module",
-  "description": "The acme-notes plugin UI — an independent module-federation remote for Radd.",
+  "description": "The acme-notes plugin UI \u2014 an independent module-federation remote for Radd.",
   "scripts": {
     "build": "vite build"
   },

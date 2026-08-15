@@ -7,7 +7,7 @@ project.radd-hq.com is public, and Radd instances self-host authentication,
 directory credentials and webhook secrets — a vulnerability posted there is a
 vulnerability published.
 
-Report privately to **security@radd-hq.com**. Include what you can of: the
+Report privately to **info@radd-hq.com**. Include what you can of: the
 affected version (`/health` reports it), reproduction steps, and the impact you
 believe it has. You will get an acknowledgement within **72 hours** and a
 status update at least weekly until the report is resolved. If a report is
