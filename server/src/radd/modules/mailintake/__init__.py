@@ -6,10 +6,11 @@ from . import dispatcher, registry, seeding
 from .config_router import router as config_router
 from .router import router
 from .rules_router import router as rules_router
-from .types import MailEvent
+from .types import MailEvent, OUTBOUND_CONSUMER_NAME
 
 plugin = RaddPlugin(
     name="mailintake",
+    consumer_names=(OUTBOUND_CONSUMER_NAME,),
     core=False,  # optional plugin — disableable via the plugin manager
     description="Email-to-issue intake (spec 47) + the requester loop (spec 62): an "
     "IMAP poller turning unseen messages into items (or reply comments on a keyed "

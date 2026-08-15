@@ -1,4 +1,5 @@
 from radd.config import settings
+from .types import CONSUMER_NAME
 from radd.kernel import CapabilitySpec
 from radd.kernel import RaddPlugin
 
@@ -6,6 +7,7 @@ from . import dispatcher
 
 plugin = RaddPlugin(
     name="googlechat",
+    consumer_names=(CONSUMER_NAME,),
     core=False,  # optional plugin — disableable via the plugin manager
     description="Google Chat notifier (spec 47): an outbox consumer posting compact "
     "messages for selected events to an incoming webhook URL. Fire-and-forget.",

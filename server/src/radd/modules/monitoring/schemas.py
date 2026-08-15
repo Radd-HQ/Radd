@@ -24,6 +24,9 @@ class WorkerStatus(BaseModel):
     stream_head: int
     lag: int
     seconds_since_update: int
+    #: False = no running code claims this cursor (RADD-1093): rename residue
+    #: or a disabled plugin — retired chip, never "Stalled".
+    registered: bool = True
 
 
 class MailFailureEntry(BaseModel):

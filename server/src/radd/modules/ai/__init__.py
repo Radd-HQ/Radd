@@ -79,6 +79,7 @@ from . import automation_node_generate as ai_automation_node_generate  # noqa: E
 
 plugin = RaddPlugin(
     name="ai",
+    consumer_names=("ai.embedder",),
     core=False,  # optional plugin — disableable via the plugin manager
     description=(
         "Optional provider-agnostic AI: item summarize, similar-item duplicate "

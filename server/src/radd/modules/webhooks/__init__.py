@@ -1,3 +1,4 @@
+from .types import CONSUMER_NAME
 from radd.kernel import RaddPlugin
 from radd.kernel import CrudResourceSpec, PermissionSpec
 
@@ -6,6 +7,7 @@ from .router import router
 
 plugin = RaddPlugin(
     name="webhooks",
+    consumer_names=(CONSUMER_NAME,),
     permissions=(
         PermissionSpec(
             "webhook.manage",

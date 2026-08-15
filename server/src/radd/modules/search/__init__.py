@@ -1,3 +1,4 @@
+from .types import CONSUMER_NAME
 from radd.kernel import RaddPlugin
 
 from . import dispatcher
@@ -8,6 +9,7 @@ from . import mcptools
 
 plugin = RaddPlugin(
     name="search",
+    consumer_names=(CONSUMER_NAME,),
     description="Postgres full-text search over items (key/title/description/public "
     "comments), maintained by an outbox indexer; GET /search for the palette + "
     "GET /search/deflect for KB deflection (spec 66 — docs is a deferred, "

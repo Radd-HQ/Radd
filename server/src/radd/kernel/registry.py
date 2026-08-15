@@ -112,6 +112,7 @@ class KernelRegistries:
     #: A LIST, not a dict: several modules cascade off the same parent event.
     cascades: list[CascadeSpec] = field(default_factory=list)  # RADD-745
     tasks: dict[str, TaskSpec] = field(default_factory=dict)
+    consumer_names: set[str] = field(default_factory=set)  # RADD-1093
     integrations: dict[tuple[str, str], IntegrationSpec] = field(default_factory=dict)
     nav: list[NavItemSpec] = field(default_factory=list)
     entity_routers: list = field(default_factory=list)  # auto-generated CRUD routers
@@ -125,7 +126,7 @@ class KernelRegistries:
             self.plugins, self.entities, self.event_types, self.entity_refs, self.permissions,
             self.settings, self.relations, self.relation_domains, self.access_resources,
             self.crud_resources, self.nav_facts, self.grant_scopes, self.project_purges,
-            self.capabilities, self.tasks,
+            self.capabilities, self.tasks, self.consumer_names,
             self.integrations, self.plugin_ui_dirs, self.slq_fields,
             self.view_types, self.widget_types, self.mcp_tools, self.page_extensions,
             self.automation_nodes,
@@ -143,6 +144,8 @@ class KernelRegistries:
             self.entities[e.key] = e
         for et in plugin.event_types:
             self.event_types[et.event_type] = et
+        for consumer_name in plugin.consumer_names:
+            self.consumer_names.add(consumer_name)
         for er in plugin.entity_refs:
             self.entity_refs[er.entity_type] = er
         for p in plugin.permissions:

@@ -43,11 +43,14 @@ function formatAgo(seconds: number): string {
   return `${Math.floor(seconds / 86400)}d ago`;
 }
 
-type WorkerState = "ok" | "catching_up" | "stalled";
+type WorkerState = "ok" | "catching_up" | "stalled" | "retired";
 
 /** Zero lag = fine no matter how old the cursor is (idle stream). Backlog is
  * fine while the cursor keeps moving; backlog + a frozen cursor = stalled. */
 function workerState(worker: WorkerStatus): WorkerState {
+  // RADD-1093: a cursor no running code claims is residue (a rename, or a
+  // disabled plugin) — its backlog will grow forever and means nothing.
+  if (!worker.registered) return "retired";
   if (worker.lag === 0) return "ok";
   return worker.seconds_since_update > STALL_AFTER_SECONDS ? "stalled" : "catching_up";
 }
@@ -59,6 +62,7 @@ const WORKER_STATE_STYLES: Record<WorkerState, { label: string; className: strin
     className: "bg-sky-500/15 text-sky-300 ring-sky-500/30",
   },
   stalled: { label: "Stalled", className: "bg-red-500/15 text-red-300 ring-red-500/30" },
+  retired: { label: "Retired", className: "bg-surface text-fg-muted ring-strong" },
 };
 
 function Card({

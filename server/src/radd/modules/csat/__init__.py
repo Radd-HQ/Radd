@@ -5,10 +5,11 @@ from radd.kernel import SettingSpec
 from . import dispatcher
 from .public_router import router as public_router
 from .router import router
-from .types import CsatEvent
+from .types import CsatEvent, CONSUMER_NAME
 
 plugin = RaddPlugin(
     name="csat",
+    consumer_names=(CONSUMER_NAME,),
     core=False,  # optional plugin — disableable via the plugin manager
     description="CSAT satisfaction surveys (spec 65): an outbox consumer emails the "
     "requester (mail contact, else the reporter) a one-click rating survey when an "

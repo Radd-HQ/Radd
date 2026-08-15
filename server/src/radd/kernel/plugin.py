@@ -71,6 +71,13 @@ class RaddPlugin:
     #: "# deferred: X loads after Y" comment, promoted to a declaration.
     weak_depends: tuple[str, ...] = ()
     # --- contributions (each → a kernel registry) ---
+    #: Offset-tracked event-consumer names this plugin runs (RADD-1093). THE
+    #: roster consumer_status trusts: a consumer_offsets row matching no
+    #: registered name renders as RETIRED, not stalled — rename residue must
+    #: not be able to impersonate a dead worker. Declared even by consumers
+    #: that only run in the worker process, so a web-only replica still knows
+    #: the full set and never mistakes off-duty for retired.
+    consumer_names: tuple[str, ...] = ()
     routers: tuple[APIRouter, ...] = ()
     entities: tuple[EntitySpec, ...] = ()
     event_types: tuple[EventTypeSpec, ...] = ()

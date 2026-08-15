@@ -226,7 +226,18 @@ async def set_offset(session: AsyncSession, consumer: str, event_id: int) -> Non
 async def consumer_status(session: AsyncSession) -> list[dict[str, Any]]:
     """Every consumer's cursor vs the stream head, for monitoring: name, lag,
     and seconds since the cursor last moved (computed server-side against the
-    same clock that wrote `updated_at`, so timezones can't skew it)."""
+    same clock that wrote `updated_at`, so timezones can't skew it).
+
+    `registered` is the RADD-1093 honesty bit: the roster comes from the
+    kernel's `consumer_names` registry (what the CODE runs), not from table
+    rows — a cursor left behind by a rename renders as retired residue
+    instead of impersonating a permanently stalled worker for 12 days, which
+    is how attachments.gc read after RADD-745 folded it into events.cascade.
+    Rows are flagged, never auto-deleted: a DISABLED plugin's consumer is
+    absent from the registry too, and deleting its cursor would replay or
+    skip history on re-enable."""
+    from radd.kernel.registry import registries
+
     head = await latest_event_id(session)
     result = await session.execute(
         select(
@@ -242,6 +253,7 @@ async def consumer_status(session: AsyncSession) -> list[dict[str, Any]]:
             "stream_head": head,
             "lag": max(0, head - last_event_id),
             "seconds_since_update": max(0, int(seconds or 0)),
+            "registered": name in registries.consumer_names,
         }
         for name, last_event_id, seconds in result.all()
     ]

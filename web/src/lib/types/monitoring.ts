@@ -15,6 +15,9 @@ export interface EntityCount {
 }
 
 export interface WorkerStatus {
+  /** False = no running code claims this cursor (RADD-1093): rename residue
+   * or a disabled plugin — shown as Retired, never Stalled. */
+  registered: boolean;
   name: string;
   last_event_id: number;
   stream_head: number;

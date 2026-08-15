@@ -3,10 +3,11 @@ from radd.kernel import RaddPlugin
 
 from . import dispatcher
 from .router import router
-from .types import NotifyEvent
+from .types import NotifyEvent, CONSUMER_NAME
 
 plugin = RaddPlugin(
     name="notify",
+    consumer_names=(CONSUMER_NAME,),
     description="Notifications + watchers: an outbox consumer fanning item/comment "
     "events into per-user in-app notifications, a per-event mailer, and email digests.",
     depends_on=("events", "projects", "auth", "items", "comments", "teams"),

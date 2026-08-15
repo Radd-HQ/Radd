@@ -1,6 +1,7 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
+from .types import CONSUMER_NAME
 from radd.kernel import RaddPlugin
 from radd.kernel import CrudResourceSpec, PermissionSpec
 
@@ -58,6 +59,7 @@ async def _validation_unavailable_handler(
 
 plugin = RaddPlugin(
     name="automations",
+    consumer_names=(CONSUMER_NAME,),
     permissions=(
         PermissionSpec(
             "automation.manage", "global", "Create and manage automation rules (global)."
