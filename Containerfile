@@ -97,6 +97,11 @@ CMD ["sh", "-c", "alembic upgrade head && uvicorn --factory radd.app:create_app 
 
 # --- production: the built SPA + plugin UI remotes, running unprivileged ---
 FROM base AS runtime
+# The version the git tag says this image is (RADD-1066): CI passes
+# --build-arg RADD_VERSION=<tag>; /health and the MCP handshake report it.
+# A hand-built image without the arg says "dev", which is the truth.
+ARG RADD_VERSION=dev
+ENV RADD_VERSION=$RADD_VERSION
 COPY --from=web /build/web/dist /app/web/dist
 # The built remotes land back where the loader looks for them: the module's own
 # ui/dist (registries.plugin_ui_dirs). The .py sources this overwrites are

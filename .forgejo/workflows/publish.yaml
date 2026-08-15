@@ -154,6 +154,7 @@ jobs:
         run: |
           set -e
           docker build -f Containerfile \
+            --build-arg RADD_VERSION="${{ steps.meta.outputs.version }}" \
             -t "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}" .
           docker images "${{ steps.meta.outputs.image }}" --format '  {{.Repository}}:{{.Tag}}  {{.Size}}'
 
