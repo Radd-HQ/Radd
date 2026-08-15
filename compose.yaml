@@ -4,7 +4,13 @@ services:
       context: .
       dockerfile: Containerfile
     environment:
-      RADD_DATABASE_URL: postgresql+psycopg://radd:radd@db:5432/radd
+      # Set RADD_DB_PASSWORD in a .env beside this file (or the environment)
+      # for anything beyond a local trial — the dev fallback is public knowledge.
+      RADD_DATABASE_URL: postgresql+psycopg://radd:${RADD_DB_PASSWORD:-radd}@db:5432/radd
+      # Behind a TLS-terminating reverse proxy set both of these — see
+      # docs/deploy.md "First-run hardening".
+      RADD_SESSION_COOKIE_SECURE: ${RADD_SESSION_COOKIE_SECURE:-false}
+      RADD_TRUSTED_PROXIES: ${RADD_TRUSTED_PROXIES:-}
     ports:
       - "8000:8000"
     volumes:
@@ -24,7 +30,7 @@ services:
     shm_size: 1g
     environment:
       POSTGRES_USER: radd
-      POSTGRES_PASSWORD: radd
+      POSTGRES_PASSWORD: ${RADD_DB_PASSWORD:-radd}
       POSTGRES_DB: radd
     ports:
       - "5455:5432"

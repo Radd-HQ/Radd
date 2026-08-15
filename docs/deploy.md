@@ -24,6 +24,32 @@ request appears to come from the proxy's address — which breaks storage CIDR
 routing rules (spec 102) and any future IP-based feature. Never list ranges
 end-users can occupy: a trusted peer's XFF is believed.
 
+## First-run hardening
+
+The compose defaults are tuned for a five-minute local trial. Before real
+people sign in, walk this list — each item is one env var or one proxy block,
+and every one of them fails **silently** if skipped:
+
+1. **Change the database password.** The stack reads `RADD_DB_PASSWORD` (put it
+   in a `.env` beside `compose.yaml`); the fallback `radd`/`radd` is public
+   knowledge. Postgres's port 5455 is published to the host for dev
+   convenience — firewall it or drop the `ports:` mapping from the `db`
+   service in production.
+2. **Terminate TLS in front and say so.** Run a reverse proxy (Caddy/nginx —
+   worked example below) and set `RADD_SESSION_COOKIE_SECURE=true` so the
+   session cookie refuses plaintext transport, plus `RADD_TRUSTED_PROXIES`
+   as above so client IPs resolve through the proxy.
+3. **Know that the MCP endpoint is ON by default.** `POST /api/v1/mcp` serves
+   AI agents authenticating with the same PATs and RBAC as the REST API.
+   That is a feature, not a hole — but if no agent will ever talk to this
+   instance, `RADD_MCP_ENABLED=false` removes the surface.
+4. **Set the backup key and move it off-box.** First boot generates
+   `radd-backup.key` beside the data dir; an encrypted backup and its key on
+   the same disk is one failure, not a backup (see "Backup & restore").
+5. **Seed the admin with a real password.** The seed command takes it on the
+   CLI — use a throwaway shell history (`fish -P`, `HISTCONTROL=ignorespace`)
+   or change it in Profile → Security immediately after first login.
+
 ## Multi-host storage (spec 102)
 
 The env storage settings above SEED one host row on first boot; afterwards
