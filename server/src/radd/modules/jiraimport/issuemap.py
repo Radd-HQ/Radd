@@ -2,10 +2,10 @@
 translation is unit-tested without a live Jira or a DB.
 
 The field shapes are Jira REST v2's, and the decoding rules (obfuscated emails,
-status categories, priority names, sprint beans, custom-field value shapes) are
-ported from the offline `jira_export_build.py` so the wizard and the CLI agree on
-what a Jira issue means. The runner takes a draft and calls the item/comment
-services; nothing here touches the network or the session.
+status categories, priority names, sprint beans, custom-field value shapes) live
+here as the one definition of what a Jira issue means. The runner takes a draft
+and calls the item/comment services; nothing here touches the network or the
+session.
 """
 
 from __future__ import annotations

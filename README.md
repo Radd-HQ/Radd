@@ -35,7 +35,7 @@ throwaway `radd_test` database — re-created and migrated to head on every run 
 `RADD_TEST_DATABASE_URL`); the dev database is never touched. The
 `server/scripts/demo*.sh` feature walkthroughs assume a **fresh** database (see [CLAUDE.md](CLAUDE.md)).
 
-Import the Jira sample data — issues keep their **real Jira IDs 1:1** (internal-only files, see `server/scripts/sample_data/README.md`):
+Import the synthetic sample data — a fictional 26-issue project whose issues keep their **Jira keys 1:1** (see `server/scripts/sample_data/README.md`):
 
 ```bash
 uv run python scripts/import_jira.py --file scripts/sample_data/jira_sample.json \

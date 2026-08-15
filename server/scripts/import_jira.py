@@ -38,13 +38,13 @@ HTTP_NOT_FOUND = 404
 RETRY_ATTEMPTS = 4
 RETRY_DELAY_SECONDS = 0.2
 
-# Imported items keep their original Jira number 1:1 (Jira TD-48728 -> Radd TD-48728),
+# Imported items keep their original Jira number 1:1 (Jira SKY-1004 -> Radd SKY-1004),
 # so the native key IS the Jira key — no separate bookkeeping field. Original author +
 # timestamp are set natively (project.manage import overrides), not as a text prefix.
 
 
 def jira_number(jira_key: str) -> int:
-    """'TD-48728' -> 48728 — the number becomes the Radd item number."""
+    """'SKY-1004' -> 1004 — the number becomes the Radd item number."""
     return int(jira_key.rpartition("-")[2])
 
 
@@ -179,7 +179,7 @@ class Context:
     item_ids: dict[str, str] = field(default_factory=dict)  # jira_key -> item id
     cycles_by_name: dict[str, str] = field(default_factory=dict)  # cycle name -> cycle id
     timelogging: bool = False  # project has time logging enabled (worklogs/estimates import)
-    # --attachments-dir: <dir>/<JIRA-KEY>/<filename> files (see jira_fetch_attachments.py).
+    # --attachments-dir: <dir>/<JIRA-KEY>/<filename> files, pre-downloaded by the caller.
     # Uploaded per item; `!filename!` embeds in descriptions/comments rewrite to the
     # uploaded URL so old screenshots actually render.
     attachments_dir: str | None = None
@@ -547,8 +547,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--attachments-dir",
         default=None,
-        help="directory of pre-downloaded Jira attachments (<dir>/<JIRA-KEY>/<file>, "
-        "see jira_fetch_attachments.py) — uploaded per item, `!file!` embeds rewritten",
+        help="directory of pre-downloaded Jira attachments (<dir>/<JIRA-KEY>/<file>) "
+        "— uploaded per item, `!file!` embeds rewritten",
     )
     return parser.parse_args(argv)
 
@@ -594,11 +594,15 @@ def run(args: argparse.Namespace) -> int:
         return 0
     print(f"importing {args.file} -> project '{project_key}'")
     import_users(ctx, export["users"])
-    import_fields(ctx, export["fields"])
+    # Project BEFORE fields: GET /fields answers [] to an actor with no readable
+    # project (the RADD-788 member floor), and on a virgin instance no project
+    # exists yet — so fields created here would be invisible to the very next
+    # listing and every value would be dropped as "unknown field".
     if exists:
         resolve_existing_project(ctx, project_key)
     else:
         create_project(ctx, project_key, export["project"]["name"])
+    import_fields(ctx, export["fields"])
     map_states(ctx)
     if export.get("timelogging"):
         enable_timelogging(ctx)

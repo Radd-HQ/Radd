@@ -1,0 +1,228 @@
+{
+  "project": {
+    "key": "NIM",
+    "name": "Nimbus"
+  },
+  "fields": [
+    {
+      "key": "area",
+      "name": "Area",
+      "type": "select",
+      "options": [
+        "CLI",
+        "Daemon",
+        "Docs"
+      ],
+      "required": false
+    },
+    {
+      "key": "environment",
+      "name": "Environment",
+      "type": "select",
+      "options": [
+        "Production",
+        "Staging",
+        "Development"
+      ],
+      "required": false
+    },
+    {
+      "key": "platforms",
+      "name": "Platforms",
+      "type": "multi_select",
+      "options": [
+        "Linux",
+        "macOS",
+        "Windows",
+        "iOS",
+        "Android"
+      ],
+      "required": false
+    }
+  ],
+  "users": [
+    {
+      "email": "maya.lindqvist@example.com",
+      "name": "Maya Lindqvist"
+    },
+    {
+      "email": "jonas.keller@example.com",
+      "name": "Jonas Keller"
+    },
+    {
+      "email": "amara.diallo@example.com",
+      "name": "Amara Diallo"
+    },
+    {
+      "email": "pavel.horak@example.com",
+      "name": "Pavel Horák"
+    }
+  ],
+  "issues": [
+    {
+      "jira_key": "NIM-201",
+      "title": "CLI: `nimbus sync` exits 0 when the daemon is unreachable",
+      "description": "A cron job calling `nimbus sync` reports success while syncing nothing. Connection failure must exit non-zero and say which socket it tried.",
+      "kind": "issue",
+      "parent_jira_key": null,
+      "status_category": "done",
+      "priority": "high",
+      "labels": [
+        "cli",
+        "regression"
+      ],
+      "assignee_email": "jonas.keller@example.com",
+      "custom_fields": {
+        "platforms": [
+          "Linux",
+          "macOS"
+        ],
+        "area": "CLI"
+      },
+      "comments": [
+        {
+          "author_email": "jonas.keller@example.com",
+          "body": "Exit code 7 + the socket path in the error. Also added `--wait` for boot-order races under systemd.",
+          "created": "2026-06-03T11:14:27"
+        }
+      ]
+    },
+    {
+      "jira_key": "NIM-202",
+      "title": "Daemon leaks one file descriptor per reconnect",
+      "description": "Soak test: 10k reconnects, 10k fds. The old watch handle is dropped without close() when the config reload path re-creates the watcher.",
+      "kind": "issue",
+      "parent_jira_key": null,
+      "status_category": "in_progress",
+      "priority": "blocker",
+      "labels": [
+        "daemon"
+      ],
+      "assignee_email": "amara.diallo@example.com",
+      "custom_fields": {
+        "environment": "Production",
+        "area": "Daemon"
+      },
+      "comments": []
+    },
+    {
+      "jira_key": "NIM-203",
+      "title": "Config reload drops in-flight transfers",
+      "description": "SIGHUP tears down the transfer pool before draining it. Reload should be graceful: stop accepting, drain with a deadline, then swap config.",
+      "kind": "issue",
+      "parent_jira_key": null,
+      "status_category": "todo",
+      "priority": "high",
+      "labels": [
+        "daemon"
+      ],
+      "assignee_email": null,
+      "custom_fields": {
+        "area": "Daemon"
+      },
+      "comments": []
+    },
+    {
+      "jira_key": "NIM-204",
+      "title": "Man page and shell completions out of date for the new flags",
+      "description": "`--wait`, `--json` and `--profile` exist in `--help` but not in the man page or completions. Generate all three from the same flag table so this can't drift again.",
+      "kind": "issue",
+      "parent_jira_key": null,
+      "status_category": "todo",
+      "priority": "low",
+      "labels": [
+        "docs"
+      ],
+      "assignee_email": "pavel.horak@example.com",
+      "custom_fields": {
+        "area": "Docs"
+      },
+      "comments": []
+    },
+    {
+      "jira_key": "NIM-205",
+      "title": "Windows service wrapper: clean shutdown loses the journal tail",
+      "description": "Service stop gives the daemon 5 s; a busy journal flush needs up to 20. Ask for the extended stop window and fsync the tail before ack'ing stop.",
+      "kind": "issue",
+      "parent_jira_key": null,
+      "status_category": "triage",
+      "priority": "normal",
+      "labels": [
+        "daemon"
+      ],
+      "assignee_email": null,
+      "custom_fields": {
+        "platforms": [
+          "Windows"
+        ],
+        "area": "Daemon"
+      },
+      "comments": []
+    },
+    {
+      "jira_key": "NIM-206",
+      "title": "`nimbus status --json` emits duration as localized string",
+      "description": "\"1,5 s\" on a German locale breaks every parser. JSON output must be locale-independent: seconds as a number.",
+      "kind": "issue",
+      "parent_jira_key": null,
+      "status_category": "done",
+      "priority": "normal",
+      "labels": [
+        "cli",
+        "papercut"
+      ],
+      "assignee_email": "maya.lindqvist@example.com",
+      "custom_fields": {
+        "area": "CLI"
+      },
+      "comments": [
+        {
+          "author_email": "maya.lindqvist@example.com",
+          "body": "Numbers everywhere in --json now; human formatting only in the table view. Contract test pins the schema.",
+          "created": "2026-07-09T15:32:56"
+        }
+      ]
+    },
+    {
+      "jira_key": "NIM-207",
+      "title": "Retry storm when the remote rejects the protocol version",
+      "description": "A permanent error (unsupported protocol) is retried like a transient one — every 2 s, forever, logging 40 GB/week across the fleet. Classify permanent errors and stop.",
+      "kind": "issue",
+      "parent_jira_key": null,
+      "status_category": "in_progress",
+      "priority": "high",
+      "labels": [
+        "daemon",
+        "incident"
+      ],
+      "assignee_email": "amara.diallo@example.com",
+      "custom_fields": {
+        "environment": "Production",
+        "area": "Daemon"
+      },
+      "comments": []
+    },
+    {
+      "jira_key": "NIM-208",
+      "title": "First-run wizard writes config with 0644 despite containing the token",
+      "description": "The auth token lands world-readable. Write 0600 from the start and warn-and-fix on load when permissions are looser.",
+      "kind": "issue",
+      "parent_jira_key": null,
+      "status_category": "done",
+      "priority": "high",
+      "labels": [
+        "cli",
+        "security"
+      ],
+      "assignee_email": "maya.lindqvist@example.com",
+      "custom_fields": {
+        "platforms": [
+          "Linux",
+          "macOS"
+        ],
+        "area": "CLI"
+      },
+      "comments": []
+    }
+  ]
+}

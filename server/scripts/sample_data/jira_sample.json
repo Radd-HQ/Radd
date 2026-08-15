@@ -1,0 +1,477 @@
+{
+  "project": { "key": "SKY", "name": "Skyline" },
+  "fields": [
+    {
+      "key": "component",
+      "name": "Component",
+      "type": "select",
+      "options": ["API", "Web app", "Ingest", "Search", "Transcode", "Infrastructure"],
+      "required": false
+    },
+    {
+      "key": "environment",
+      "name": "Environment",
+      "type": "select",
+      "options": ["Production", "Staging", "Development"],
+      "required": false
+    },
+    {
+      "key": "platforms",
+      "name": "Platforms",
+      "type": "multi_select",
+      "options": ["Linux", "macOS", "Windows", "iOS", "Android"],
+      "required": false
+    },
+    {
+      "key": "reported_build",
+      "name": "Reported build",
+      "type": "text",
+      "required": false
+    },
+    {
+      "key": "affected_accounts",
+      "name": "Affected accounts",
+      "type": "number",
+      "required": false
+    }
+  ],
+  "users": [
+    { "email": "maya.lindqvist@example.com", "name": "Maya Lindqvist" },
+    { "email": "dario.fontana@example.com", "name": "Dario Fontana" },
+    { "email": "priya.raman@example.com", "name": "Priya Raman" },
+    { "email": "jonas.keller@example.com", "name": "Jonas Keller" },
+    { "email": "amara.diallo@example.com", "name": "Amara Diallo" },
+    { "email": "tom.whitfield@example.com", "name": "Tom Whitfield" },
+    { "email": "ines.moreau@example.com", "name": "Inès Moreau" },
+    { "email": "felix.brandt@example.com", "name": "Felix Brandt" },
+    { "email": "hana.sato@example.com", "name": "Hana Sato" },
+    { "email": "lucas.oliveira@example.com", "name": "Lucas Oliveira" },
+    { "email": "greta.novak@example.com", "name": "Greta Novak" },
+    { "email": "sam.okafor@example.com", "name": "Sam Okafor" },
+    { "email": "nora.eriksen@example.com", "name": "Nora Eriksen" },
+    { "email": "pavel.horak@example.com", "name": "Pavel Horák" },
+    { "email": "lea.brunner@example.com", "name": "Léa Brunner" },
+    { "email": "owen.mcgrath@example.com", "name": "Owen McGrath" }
+  ],
+  "issues": [
+    {
+      "jira_key": "SKY-1001",
+      "title": "Chunked upload resume",
+      "description": "Uploads above 2 GB restart from zero whenever the connection drops. The ingest API already stores completed chunks; the client just never asks what it can skip.\n\nEpic scope: resumable uploads end to end — chunk manifest endpoint, client resume logic, and a progress UI that survives a page reload.",
+      "kind": "epic",
+      "parent_jira_key": null,
+      "status_category": "in_progress",
+      "priority": "high",
+      "labels": ["ingest", "customer-report"],
+      "assignee_email": "maya.lindqvist@example.com",
+      "custom_fields": { "component": "Ingest", "environment": "Production" },
+      "comments": []
+    },
+    {
+      "jira_key": "SKY-1002",
+      "title": "Ingest API: expose the chunk manifest for an in-flight upload",
+      "description": "`GET /uploads/{id}/chunks` should list the chunk indexes already persisted so a client can resume.\n\nDone when: endpoint returns the persisted chunk set, is covered by an integration test, and is documented in the OpenAPI schema.",
+      "kind": "issue",
+      "parent_jira_key": "SKY-1001",
+      "status_category": "done",
+      "priority": "high",
+      "labels": ["ingest"],
+      "assignee_email": "dario.fontana@example.com",
+      "custom_fields": { "component": "API", "environment": "Staging", "reported_build": "2026.28.1" },
+      "comments": [
+        {
+          "author_email": "maya.lindqvist@example.com",
+          "body": "Landed behind the `resumable_uploads` flag. Chunk set is returned as ranges, not a raw index list — a 40 GB upload has ~20k chunks and the list form was 300 KB of JSON.",
+          "created": "2026-06-18T14:22:10"
+        }
+      ]
+    },
+    {
+      "jira_key": "SKY-1003",
+      "title": "Web uploader: resume from the chunk manifest instead of restarting",
+      "description": "On reconnect the uploader should fetch the manifest and skip persisted chunks. Progress bar must reflect skipped chunks immediately rather than racing to 99% and stalling.",
+      "kind": "issue",
+      "parent_jira_key": "SKY-1001",
+      "status_category": "in_progress",
+      "priority": "high",
+      "labels": ["ingest"],
+      "assignee_email": "priya.raman@example.com",
+      "custom_fields": { "component": "Web app", "platforms": ["Linux", "macOS", "Windows"] },
+      "comments": [
+        {
+          "author_email": "priya.raman@example.com",
+          "body": "Resume works; the stall at 99% turned out to be the checksum pass on the final chunk running on the main thread. Moving it to a worker.",
+          "created": "2026-07-02T09:41:33"
+        },
+        {
+          "author_email": "tom.whitfield@example.com",
+          "body": "Can we surface \"verifying…\" as its own state? Users read a frozen bar as a failed upload and hit cancel, which is what actually loses the upload.",
+          "created": "2026-07-02T11:05:47"
+        }
+      ]
+    },
+    {
+      "jira_key": "SKY-1004",
+      "title": "Search returns deleted assets for saved filters",
+      "description": "Steps: delete an asset, open any saved filter that matched it. The asset still appears until the nightly reindex.\n\nExpected: delete should enqueue an index removal, same as create/update already do. The saved-filter cache also needs invalidating — it holds result ids for 15 minutes.",
+      "kind": "issue",
+      "parent_jira_key": null,
+      "status_category": "in_progress",
+      "priority": "blocker",
+      "labels": ["search", "regression", "customer-report"],
+      "assignee_email": "jonas.keller@example.com",
+      "custom_fields": { "component": "Search", "environment": "Production", "affected_accounts": 34 },
+      "comments": [
+        {
+          "author_email": "jonas.keller@example.com",
+          "body": "Regression from the 2026.30 indexer refactor: the delete consumer was renamed and the queue binding kept the old name, so deletes have been dead-lettering for two weeks. Draining the DLQ reindexes ~40k documents.",
+          "created": "2026-07-28T16:12:04"
+        },
+        {
+          "author_email": "amara.diallo@example.com",
+          "body": "DLQ drained on staging, counts match. Adding an alert on dead-letter depth so a silent binding break can't run for two weeks again.",
+          "created": "2026-07-29T10:30:00"
+        }
+      ]
+    },
+    {
+      "jira_key": "SKY-1005",
+      "title": "Transcode farm: H.265 jobs time out on 4K sources over 90 minutes",
+      "description": "Long 4K sources hit the 90-minute per-job ceiling and get requeued forever — the third retry lands on the same ceiling. Split long sources into segment jobs and stitch, or raise the ceiling per-preset.\n\nDecision needed: segmenting changes output GOP alignment; stitching must be frame-accurate.",
+      "kind": "issue",
+      "parent_jira_key": null,
+      "status_category": "todo",
+      "priority": "high",
+      "labels": ["transcode", "performance"],
+      "assignee_email": "felix.brandt@example.com",
+      "custom_fields": { "component": "Transcode", "environment": "Production" },
+      "comments": [
+        {
+          "author_email": "felix.brandt@example.com",
+          "body": "Went with per-preset ceilings as the stopgap (H.265/4K gets 4h) while the segmented pipeline is designed properly. Segmenting is the right end state but not a hotfix.",
+          "created": "2026-07-15T13:55:21"
+        }
+      ]
+    },
+    {
+      "jira_key": "SKY-1006",
+      "title": "Mobile app logs out every user when the token refresh races",
+      "description": "Two parallel API calls both notice the access token expired and both redeem the refresh token; the second redemption fails and the app treats it as a revoked session.\n\nFix: single-flight the refresh in the API client. Server side is already idempotent within a 10 s grace window — the client just doesn't use it.",
+      "kind": "issue",
+      "parent_jira_key": null,
+      "status_category": "done",
+      "priority": "high",
+      "labels": ["auth", "customer-report"],
+      "assignee_email": "hana.sato@example.com",
+      "custom_fields": { "component": "API", "platforms": ["iOS", "Android"], "reported_build": "mobile-3.14.0" },
+      "comments": [
+        {
+          "author_email": "hana.sato@example.com",
+          "body": "Single-flight mutex shipped in mobile-3.14.2. Logout reports dropped from ~120/day to zero over the weekend.",
+          "created": "2026-06-30T08:17:45"
+        }
+      ]
+    },
+    {
+      "jira_key": "SKY-1007",
+      "title": "Bulk tagging",
+      "description": "Selecting 500 assets and adding a tag issues 500 sequential PATCH calls — three minutes of spinner. Epic: one bulk endpoint, optimistic UI, and audit entries that record the batch as one action rather than 500.",
+      "kind": "epic",
+      "parent_jira_key": null,
+      "status_category": "todo",
+      "priority": "normal",
+      "labels": ["performance"],
+      "assignee_email": "ines.moreau@example.com",
+      "custom_fields": { "component": "Web app" },
+      "comments": []
+    },
+    {
+      "jira_key": "SKY-1008",
+      "title": "API: POST /assets/bulk with per-item results",
+      "description": "Accept up to 1000 asset ids + a patch document. Response is per-item status so a partial failure doesn't hide which items missed. Rate-limit as ONE call.",
+      "kind": "issue",
+      "parent_jira_key": "SKY-1007",
+      "status_category": "todo",
+      "priority": "normal",
+      "labels": ["performance"],
+      "assignee_email": null,
+      "custom_fields": { "component": "API" },
+      "comments": []
+    },
+    {
+      "jira_key": "SKY-1009",
+      "title": "Audit log: batch entries collapse into one row with an expandable detail",
+      "description": "A 500-asset bulk tag today would write 500 audit rows and make the log unreadable. Batch writes should produce one row (\"tagged 500 assets: +archive\") expandable to the item list.",
+      "kind": "issue",
+      "parent_jira_key": "SKY-1007",
+      "status_category": "todo",
+      "priority": "low",
+      "labels": [],
+      "assignee_email": null,
+      "custom_fields": { "component": "Web app" },
+      "comments": []
+    },
+    {
+      "jira_key": "SKY-1010",
+      "title": "Thumbnails render magenta for ProRes 4444 sources with alpha",
+      "description": "The thumbnailer maps the alpha channel onto the second chroma plane for 4444 sources — output is uniformly magenta. Repro: any ProRes 4444 file with alpha, 100% of the time.\n\nSuspect the pixel-format negotiation in the extract step; 4444 without alpha is fine.",
+      "kind": "issue",
+      "parent_jira_key": null,
+      "status_category": "in_progress",
+      "priority": "normal",
+      "labels": ["transcode", "regression"],
+      "assignee_email": "lucas.oliveira@example.com",
+      "custom_fields": { "component": "Transcode", "environment": "Production", "reported_build": "2026.31.0" },
+      "comments": [
+        {
+          "author_email": "lucas.oliveira@example.com",
+          "body": "Confirmed: the extractor requests yuv444p for anything reporting 4:4:4 and silently drops the alpha-aware variant. One-line format map fix plus a golden-image test with an alpha source.",
+          "created": "2026-08-04T15:44:12"
+        }
+      ]
+    },
+    {
+      "jira_key": "SKY-1011",
+      "title": "Share links: expiry picker offers dates in the past",
+      "description": "The date picker allows selecting yesterday; the API correctly 422s, so the user gets a form error after the fact. Disable past dates client-side and default to +7 days.",
+      "kind": "issue",
+      "parent_jira_key": null,
+      "status_category": "done",
+      "priority": "low",
+      "labels": ["papercut"],
+      "assignee_email": "greta.novak@example.com",
+      "custom_fields": { "component": "Web app" },
+      "comments": []
+    },
+    {
+      "jira_key": "SKY-1012",
+      "title": "Ingest rejects files with uppercase extensions",
+      "description": "`.MOV` and `.WAV` are refused with \"unsupported container\" while `.mov`/`.wav` work. The allowlist compare is case-sensitive. Two-line fix; add a test with a mixed-case fixture name.",
+      "kind": "issue",
+      "parent_jira_key": null,
+      "status_category": "done",
+      "priority": "normal",
+      "labels": ["ingest", "papercut"],
+      "assignee_email": "dario.fontana@example.com",
+      "custom_fields": { "component": "Ingest", "environment": "Production" },
+      "comments": [
+        {
+          "author_email": "sam.okafor@example.com",
+          "body": "This also fixed the camera-card imports from the field kits — those always come in uppercase. Support had three open tickets pointing at the same cause.",
+          "created": "2026-05-27T17:03:29"
+        }
+      ]
+    },
+    {
+      "jira_key": "SKY-1013",
+      "title": "Search: prefix queries under three characters return nothing instead of a hint",
+      "description": "Typing \"ab\" shows an empty result panel — looks like there are no matches, actually the server refuses sub-3-char prefixes. Show \"keep typing…\" instead of an empty state.",
+      "kind": "issue",
+      "parent_jira_key": null,
+      "status_category": "todo",
+      "priority": "low",
+      "labels": ["search", "papercut"],
+      "assignee_email": null,
+      "custom_fields": { "component": "Search" },
+      "comments": []
+    },
+    {
+      "jira_key": "SKY-1014",
+      "title": "Nightly backup verification job has been silently skipped since the runner image bump",
+      "description": "The verification stage needs `pg_restore` in the runner image; the slim image bump dropped it. The job \"passes\" because the stage is `allow_failure: true` — so we have unverified backups for 11 days.\n\nRestore the tool, make the stage blocking, and alert on skip.",
+      "kind": "issue",
+      "parent_jira_key": null,
+      "status_category": "done",
+      "priority": "blocker",
+      "labels": ["infra", "incident"],
+      "assignee_email": "nora.eriksen@example.com",
+      "custom_fields": { "component": "Infrastructure", "environment": "Production" },
+      "comments": [
+        {
+          "author_email": "nora.eriksen@example.com",
+          "body": "Verified the last 11 nightly artifacts by hand after the fix — all restore clean. The allow_failure flag is gone; a missing tool now fails the pipeline loudly.",
+          "created": "2026-06-09T19:26:51"
+        },
+        {
+          "author_email": "owen.mcgrath@example.com",
+          "body": "Wrote up the lesson in the runbook: a verification that can be skipped is not a verification. Same pattern audit found two more allow_failure stages worth revisiting.",
+          "created": "2026-06-10T09:12:38"
+        }
+      ]
+    },
+    {
+      "jira_key": "SKY-1015",
+      "title": "Slow asset grid: virtualize rows past 1,000 results",
+      "description": "The grid renders every result row; at 5k results, scroll jank makes the page unusable (~4 s long tasks on a mid-range laptop). Virtualize with a fixed row height and keep selection state outside the DOM.",
+      "kind": "issue",
+      "parent_jira_key": null,
+      "status_category": "in_progress",
+      "priority": "normal",
+      "labels": ["performance"],
+      "assignee_email": "priya.raman@example.com",
+      "custom_fields": { "component": "Web app", "platforms": ["Linux", "macOS", "Windows"] },
+      "comments": []
+    },
+    {
+      "jira_key": "SKY-1016",
+      "title": "Webhook deliveries: retry with backoff and a dead-letter view",
+      "description": "A consumer that 500s three times currently loses the delivery. Add exponential backoff (max 6 attempts over ~2 h) and a per-endpoint dead-letter list with manual replay.",
+      "kind": "issue",
+      "parent_jira_key": null,
+      "status_category": "todo",
+      "priority": "normal",
+      "labels": ["integrations"],
+      "assignee_email": null,
+      "custom_fields": { "component": "API" },
+      "comments": []
+    },
+    {
+      "jira_key": "SKY-1017",
+      "title": "Proxy playback stutters on Windows + hybrid GPUs",
+      "description": "Reports cluster on laptops with integrated+discrete GPUs: the player negotiates hardware decode on the iGPU while the browser composites on the dGPU, and every frame crosses adapters. Force software decode as a user-visible fallback toggle until the heuristic is right.",
+      "kind": "issue",
+      "parent_jira_key": null,
+      "status_category": "triage",
+      "priority": "normal",
+      "labels": ["playback", "customer-report"],
+      "assignee_email": null,
+      "custom_fields": { "component": "Web app", "platforms": ["Windows"], "affected_accounts": 12 },
+      "comments": []
+    },
+    {
+      "jira_key": "SKY-1018",
+      "title": "SSO group sync drops users whose directory group list exceeds one page",
+      "description": "The group-claim fetch reads only the first page of the directory response; a user in 200+ groups loses membership-mapped roles on next login. Page through the overage endpoint like the spec says.",
+      "kind": "issue",
+      "parent_jira_key": null,
+      "status_category": "in_progress",
+      "priority": "high",
+      "labels": ["auth", "regression"],
+      "assignee_email": "hana.sato@example.com",
+      "custom_fields": { "component": "API", "environment": "Production" },
+      "comments": [
+        {
+          "author_email": "hana.sato@example.com",
+          "body": "Repro'd with a synthetic directory user in 250 groups. Fix pages the overage endpoint and caches the resolved set for the session; adds a regression test at the page boundary (199/200/201).",
+          "created": "2026-08-07T12:20:15"
+        }
+      ]
+    },
+    {
+      "jira_key": "SKY-1019",
+      "title": "Storage usage report",
+      "description": "Finance asks monthly for per-team storage. Epic: nightly rollup per team/project, a report page with a trend chart, and CSV export. No live scanning — the rollup is the read model.",
+      "kind": "epic",
+      "parent_jira_key": null,
+      "status_category": "todo",
+      "priority": "normal",
+      "labels": ["reporting"],
+      "assignee_email": "sam.okafor@example.com",
+      "custom_fields": { "component": "Infrastructure" },
+      "comments": []
+    },
+    {
+      "jira_key": "SKY-1020",
+      "title": "Nightly per-team storage rollup job",
+      "description": "Sum object sizes per team/project into a `storage_rollups` table keyed by day. Backfill 12 months from bucket inventory on first run.",
+      "kind": "issue",
+      "parent_jira_key": "SKY-1019",
+      "status_category": "todo",
+      "priority": "normal",
+      "labels": ["reporting", "infra"],
+      "assignee_email": null,
+      "custom_fields": { "component": "Infrastructure" },
+      "comments": []
+    },
+    {
+      "jira_key": "SKY-1021",
+      "title": "Report page: storage trend per team with CSV export",
+      "description": "Line chart over the rollup table, team picker, month range, one-click CSV of the visible series.",
+      "kind": "issue",
+      "parent_jira_key": "SKY-1019",
+      "status_category": "todo",
+      "priority": "low",
+      "labels": ["reporting"],
+      "assignee_email": null,
+      "custom_fields": { "component": "Web app" },
+      "comments": []
+    },
+    {
+      "jira_key": "SKY-1022",
+      "title": "Comment mentions fire an email even when the mentioned user is the author",
+      "description": "Writing \"as @maya said…\" in your own comment emails you about your own comment. Suppress self-mentions at the notification fan-out, not in the editor.",
+      "kind": "issue",
+      "parent_jira_key": null,
+      "status_category": "done",
+      "priority": "low",
+      "labels": ["papercut", "notifications"],
+      "assignee_email": "maya.lindqvist@example.com",
+      "custom_fields": { "component": "API" },
+      "comments": []
+    },
+    {
+      "jira_key": "SKY-1023",
+      "title": "Ingest watchdog restarts healthy workers under sustained load",
+      "description": "The liveness probe times out when a worker is mid-checksum on a large file — the worker is healthy, just busy. Probe should check the heartbeat file, not make an HTTP call the busy loop can't answer.\n\nEvidence: 61 restarts across the fleet on Monday's 8 TB delivery, zero failed jobs — every restart was a false positive that re-queued work.",
+      "kind": "issue",
+      "parent_jira_key": null,
+      "status_category": "in_progress",
+      "priority": "high",
+      "labels": ["infra", "ingest"],
+      "assignee_email": "nora.eriksen@example.com",
+      "custom_fields": { "component": "Infrastructure", "environment": "Production" },
+      "comments": [
+        {
+          "author_email": "nora.eriksen@example.com",
+          "body": "Heartbeat-file probe on staging since Tuesday: zero false restarts through two synthetic 10 TB deliveries. Rolling to production behind the next release.",
+          "created": "2026-08-11T10:48:02"
+        }
+      ]
+    },
+    {
+      "jira_key": "SKY-1024",
+      "title": "Trash: assets restore into the wrong folder when the original was moved after deletion",
+      "description": "Restore uses the folder id captured at delete time; if the folder was since moved, the asset reappears in the folder's OLD location as rendered by the stale breadcrumb cache. Data is fine, presentation is wrong — refresh fixes it. Invalidate the breadcrumb cache on restore.",
+      "kind": "issue",
+      "parent_jira_key": null,
+      "status_category": "triage",
+      "priority": "low",
+      "labels": ["papercut"],
+      "assignee_email": null,
+      "custom_fields": { "component": "Web app" },
+      "comments": []
+    },
+    {
+      "jira_key": "SKY-1025",
+      "title": "API rate limit responses missing Retry-After",
+      "description": "429s carry no Retry-After header, so well-behaved clients guess. The limiter already knows the window reset; put it on the wire and document it.",
+      "kind": "issue",
+      "parent_jira_key": null,
+      "status_category": "done",
+      "priority": "normal",
+      "labels": ["integrations", "papercut"],
+      "assignee_email": "dario.fontana@example.com",
+      "custom_fields": { "component": "API" },
+      "comments": []
+    },
+    {
+      "jira_key": "SKY-1026",
+      "title": "Weekly digest email renders raw markdown in Outlook",
+      "description": "The digest template ships markdown bullets straight into the HTML body; every client that doesn't auto-render markdown (Outlook desktop, mostly) shows literal asterisks. Render server-side like the notification mails already do.",
+      "kind": "issue",
+      "parent_jira_key": null,
+      "status_category": "todo",
+      "priority": "low",
+      "labels": ["notifications", "papercut"],
+      "assignee_email": "lea.brunner@example.com",
+      "custom_fields": { "component": "API", "platforms": ["Windows"] },
+      "comments": [
+        {
+          "author_email": "lea.brunner@example.com",
+          "body": "Same renderer the notification mailer uses is importable as-is; the digest predates it and was never migrated. One template swap plus a snapshot test.",
+          "created": "2026-07-21T08:59:40"
+        }
+      ]
+    }
+  ]
+}
