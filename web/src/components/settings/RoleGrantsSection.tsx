@@ -13,6 +13,7 @@ import {
 import type { RoleGrantCreate } from "../../lib/types";
 import { Button } from "../Button";
 import { Modal } from "../Modal";
+import { Select } from "../Select";
 import { SelectField } from "../SelectField";
 import { TokenMultiSelect } from "../TokenMultiSelect";
 import { ScopePicker } from "./ScopePicker";
@@ -51,6 +52,13 @@ export function RoleGrantsSection({
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: queryKeys.roleGrants });
 
+  // RADD-1103: one intent, one call — swapping the role no longer means
+  // revoke + regrant (two atoms, two history events).
+  const changeRole = useMutation({
+    mutationFn: ({ grantId, roleId }: { grantId: string; roleId: string }) =>
+      api.patch(`${ApiPath.roleGrants}/${grantId}`, { role_id: roleId }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.roleGrants }),
+  });
   const revoke = useMutation({
     mutationFn: (grantId: string) => api.delete(`${ApiPath.roleGrants}/${grantId}`),
     onSuccess: invalidate,
@@ -77,7 +85,19 @@ export function RoleGrantsSection({
           {list.map((grant) => (
             <li key={grant.id} className="flex items-center gap-2 text-[13px]">
               <ShieldCheck size={12} className="text-fg-faint" aria-hidden />
-              <span className="text-fg">{roleName.get(grant.role_id) ?? "role"}</span>
+              {canManage ? (
+                <Select
+                  value={grant.role_id}
+                  onChange={(roleId) => changeRole.mutate({ grantId: grant.id, roleId })}
+                  options={(roles.data ?? []).map((role) => ({
+                    value: role.id,
+                    label: role.name,
+                  }))}
+                  disabled={changeRole.isPending}
+                />
+              ) : (
+                <span className="text-fg">{roleName.get(grant.role_id) ?? "role"}</span>
+              )}
               {/* Three scopes, three chips (RADD-791). A space grant used to fall
                   through the project branch and render "Global", which claimed
                   the opposite of what the row actually granted. */}
@@ -111,6 +131,7 @@ export function RoleGrantsSection({
         </ul>
       )}
       {revoke.isError && <ErrorText className="mt-1" error={revoke.error} />}
+      {changeRole.isError && <ErrorText className="mt-1" error={changeRole.error} />}
 
       {granting && (
         <GrantRoleDialog

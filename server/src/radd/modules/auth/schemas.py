@@ -541,6 +541,13 @@ class GlobalGrantRead(BaseModel):
     space_id: uuid.UUID | None = None
 
 
+class RoleGrantRoleUpdate(BaseModel):
+    """PATCH /role-grants/{id} (RADD-1103): swap WHICH role the grant confers;
+    scope stays. member.update's first enforcement site."""
+
+    role_id: uuid.UUID
+
+
 class RoleGrantCreate(BaseModel):
     """POST /role-grants — the unified Grant Role dialog (spec 91 → RADD-791).
 

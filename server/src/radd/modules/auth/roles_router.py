@@ -28,6 +28,7 @@ from .schemas import (
     RelationOptionRead,
     RoleCreate,
     RoleGrantCreate,
+    RoleGrantRoleUpdate,
     RoleRead,
     RoleUpdate,
 )
@@ -299,6 +300,29 @@ async def create_role_grant(
         for project_id, space_id in scopes
     ]
     return [GlobalGrantRead.model_validate(g) for g in rows]
+
+
+@role_grant_router.patch("/{grant_id}", response_model=GlobalGrantRead)
+async def update_role_grant(
+    grant_id: uuid.UUID, data: RoleGrantRoleUpdate, session: Session, user: CurrentUser
+) -> GlobalGrantRead:
+    """Change a grant's role in place (RADD-1103) — the operation member.update
+    always advertised. Global-scope grants still need role.update; a
+    project-scoped grant needs member.update THERE, and a delegate can only
+    hand out roles their own coverage allows (the RADD-826 containment rule,
+    same as create)."""
+    if not await authz.holds(session, user, Permission.ROLE_UPDATE):
+        from .models import GlobalRoleGrant
+
+        grant = await session.get(GlobalRoleGrant, grant_id)
+        if grant is None or grant.project_id is None:
+            raise ForbiddenError("changing a grant beyond a project's scope requires role.update")
+        project = await projects_service.get_project(session, grant.project_id)
+        await authz.require(session, user, Permission.MEMBER_UPDATE, project=project)
+        role = await roles.get_role(session, data.role_id)
+        await ensure_delegated_role_coverage(session, user, role, project)
+    updated = await grants.update_grant_role(session, grant_id, data.role_id, actor_id=user.id)
+    return GlobalGrantRead.model_validate(updated)
 
 
 @role_grant_router.delete("/{grant_id}", status_code=204)

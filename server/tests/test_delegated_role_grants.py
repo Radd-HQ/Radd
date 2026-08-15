@@ -134,3 +134,61 @@ async def test_relation_qualified_roles_compare_by_the_lattice(db, rig):
     )
     with pytest.raises(ForbiddenError):
         await ensure_delegated_role_coverage(db, holder, any_role, project)
+
+
+async def test_member_update_changes_a_grant_role_in_place(db, rig):
+    """RADD-1103: member.update's first enforcement site. A project delegate
+    holding it swaps WHICH role a project-scoped grant confers — one row, one
+    event — but only into roles their own coverage allows, and never on a
+    global grant."""
+    from radd.modules.auth.roles_router import update_role_grant
+    from radd.modules.auth.schemas import RoleGrantRoleUpdate
+
+    delegate, project = rig
+    reader = await auth_roles.create_role(
+        db,
+        RoleCreate(
+            key=f"dg{uuid.uuid4().hex[:6]}", name="Reader",
+            permissions=[Permission.ITEM_READ],
+        ),
+    )
+    editor = await auth_roles.create_role(
+        db,
+        RoleCreate(
+            key=f"dg{uuid.uuid4().hex[:6]}", name="Editor2",
+            permissions=[Permission.ITEM_READ, Permission.ITEM_UPDATE],
+        ),
+    )
+    subject = User(
+        email=f"su-{uuid.uuid4().hex[:8]}@example.com", name="Subject", instance_role="member"
+    )
+    db.add(subject)
+    await db.flush()
+    grant = GlobalRoleGrant(project_id=project.id, user_id=subject.id, role_id=reader.id)
+    db.add(grant)
+    await db.flush()
+
+    updated = await update_role_grant(
+        grant.id, RoleGrantRoleUpdate(role_id=editor.id), db, delegate
+    )
+    assert updated.role_id == editor.id
+
+    # coverage wall: a role carrying atoms the delegate lacks refuses
+    admin_role = await auth_roles.create_role(
+        db,
+        RoleCreate(
+            key=f"dg{uuid.uuid4().hex[:6]}", name="Wider",
+            permissions=[Permission.ITEM_READ, Permission.ROLE_UPDATE],
+        ),
+    )
+    with pytest.raises(ForbiddenError):
+        await update_role_grant(grant.id, RoleGrantRoleUpdate(role_id=admin_role.id), db, delegate)
+
+    # a GLOBAL grant is beyond member.update — needs role.update
+    global_grant = GlobalRoleGrant(project_id=None, user_id=subject.id, role_id=reader.id)
+    db.add(global_grant)
+    await db.flush()
+    with pytest.raises(ForbiddenError):
+        await update_role_grant(
+            global_grant.id, RoleGrantRoleUpdate(role_id=editor.id), db, delegate
+        )

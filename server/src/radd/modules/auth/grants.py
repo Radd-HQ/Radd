@@ -359,6 +359,25 @@ async def create_grant(
     return grant
 
 
+async def update_grant_role(
+    session: AsyncSession, grant_id: uuid.UUID, role_id: uuid.UUID, actor_id: uuid.UUID | None
+) -> GlobalRoleGrant:
+    """Change WHICH role an existing grant confers, scope untouched (RADD-1103)
+    — one intent, one row, one event, where delete+create needed two atoms and
+    wrote two history entries for a role change."""
+    from . import roles as roles_service
+
+    grant = await session.get(GlobalRoleGrant, grant_id)
+    if grant is None:
+        raise NotFoundError(AuthEntity.GLOBAL_GRANT, grant_id)
+    old_role = await roles_service.get_role(session, grant.role_id)
+    new_role = await roles_service.get_role(session, role_id)
+    grant.role_id = new_role.id
+    await session.flush()
+    await _emit(session, f"{old_role.key} -> {new_role.key}", grant, "role changed", actor_id)
+    return grant
+
+
 async def delete_grant(
     session: AsyncSession, grant_id: uuid.UUID, actor_id: uuid.UUID | None = None
 ) -> None:
