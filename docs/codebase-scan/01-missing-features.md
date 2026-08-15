@@ -19,22 +19,19 @@ Adjacent and also absent: **create issue from an existing one as a template**.
 Intake forms (`modules/forms/`) cover the external path; an internal user has no
 equivalent.
 
-### 2. An issue cannot move between projects — **measured absent**, high value
+### 2. An issue cannot move between projects — **CORRECTED (RADD-1087): this was wrong**
 
-`update_item` (`modules/items/service/core.py:143-210`) writes title, state,
-priority, type, parent, assignee, reporter, team, cycle, release, flag,
-estimate — and never `project_id`. There is no `move_item`.
-
-```python
-# core.py:143 — the full field list; project_id is not among them
-async def update_item(session, item_id, data: ItemUpdate, actor) -> ItemRead:
-```
-
-Filing in the wrong project is the single most common triage mistake, and the
-only remedy today is close-and-refile, which loses the comment thread, the
-history and the key. **The key is the hard part** — keys are
-`PROJECT-N` and instance-unique, so a move either re-keys (breaking every link
-and commit reference) or keeps a key whose prefix no longer matches its project.
+This section measured the wrong seam. `update_item` indeed never writes
+`project_id` — deliberately — but the move operation exists as spec 68's
+**bulk move** (`modules/items/bulk.py: bulk_move_items`, `POST
+/items/bulk/move`, the BulkActionBar's cross-project flow): the item keeps
+its identity, gets the target's next number, and the OLD KEY KEEPS RESOLVING
+via `ItemKeyAlias` (the re-key concern below was solved with a redirect, not
+avoided). State maps by name then category, type by name, the release
+clears, dropped custom fields are write-checked in BOTH projects (RADD-834),
+and arriving runs the target's transition guards. RADD-1087 added the
+`move_item` MCP tool over the same machinery. Left deliberately as-is:
+children stay unless selected (hierarchy spans projects, spec 80).
 Worth designing before building; the absence is not an oversight.
 
 ### 3. No kind conversion (epic ↔ issue ↔ subtask) — **measured absent**

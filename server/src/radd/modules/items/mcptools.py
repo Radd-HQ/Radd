@@ -407,8 +407,56 @@ TRANSITION_ITEM = McpToolSpec(
     kernel_enforced=False,
 )
 
+async def _move_item(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
+    """Cross-project move (RADD-1087): the spec-68 bulk machinery for one key —
+    state maps by name/category, type by name, release clears, dropped custom
+    fields are write-checked in BOTH projects, the old key keeps redirecting
+    via its alias. Children stay put by design: hierarchy spans projects
+    (spec 80)."""
+    from . import bulk
+    from .schemas import ItemBulkMove
+
+    item = await items_service.get_item_by_key(session, str(args["key"]), actor=actor)
+    target = await projects_service.get_by_key(session, str(args["target_project_key"]))
+    result = await bulk.bulk_move_items(
+        session, ItemBulkMove(item_ids=[item.id], target_project_id=target.id), actor=actor
+    )
+    if result.skipped:
+        return {"moved": False, "reason": result.skipped[0].reason}
+    moved = result.moved[0]
+    return {
+        "moved": True,
+        "old_key": moved.old_key,
+        "new_key": moved.new_key,
+        "dropped_fields": moved.dropped_fields,
+    }
+
+
+MOVE_ITEM = McpToolSpec(
+    name="move_item",
+    description="Move a work item to another project (addressed by keys). The item "
+    "keeps its identity — comments, links, worklogs, history — gets the target's "
+    "next number, and its old key keeps resolving via an alias. State maps by "
+    "name then category, type by name, the release clears (project-scoped), and "
+    "custom fields the target lacks are dropped (reported back).",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "key": {"type": "string", "description": "Item key, e.g. TD-42."},
+            "target_project_key": {"type": "string", "description": "Destination project key."},
+        },
+        "required": ["key", "target_project_key"],
+        "additionalProperties": False,
+    },
+    handler=_move_item,
+    permission=Permission.ITEM_UPDATE,
+    project_scoped=True,
+    kernel_enforced=False,
+)
+
 MCP_TOOLS = (
     SEARCH_ITEMS,
+    MOVE_ITEM,
     LINK_ITEMS,
     UNLINK_ITEMS,
     GET_ITEM,
