@@ -4,7 +4,7 @@ import { Check, Copy, ShieldCheck, ShieldOff } from "lucide-react";
 import { ApiError, api, errorMessage } from "../../lib/api";
 import { ApiPath, On401 } from "../../lib/constants";
 import { queryKeys, totpStatusQuery } from "../../lib/queries";
-import type { TotpSetup } from "../../lib/types";
+import type { TotpRecoveryCodes, TotpSetup, TotpStatus } from "../../lib/types";
 import { Button } from "../Button";
 import { TextField } from "../TextField";
 import { ErrorText } from "../ErrorText";
@@ -37,7 +37,11 @@ export function TotpPanel() {
       </p>
     );
   }
-  return status.data.enabled ? <EnabledPanel /> : <SetupPanel pending={status.data.pending} />;
+  return status.data.enabled ? (
+    <EnabledPanel status={status.data} />
+  ) : (
+    <SetupPanel pending={status.data.pending} />
+  );
 }
 
 /** Disabled (or setup-pending) state: start setup, show the secret, confirm. */
@@ -45,6 +49,7 @@ function SetupPanel({ pending }: { pending: boolean }) {
   const queryClient = useQueryClient();
   const [setup, setSetup] = useState<TotpSetup | null>(null);
   const [confirmCode, setConfirmCode] = useState("");
+  const [minted, setMinted] = useState<string[] | null>(null);
 
   const start = useMutation({
     mutationFn: () => api.post<TotpSetup>(ApiPath.totpSetup),
@@ -54,13 +59,19 @@ function SetupPanel({ pending }: { pending: boolean }) {
   const confirm = useMutation({
     // A wrong code 401s — surface it inline, don't bounce to /login.
     mutationFn: (code: string) =>
-      api.post<void>(ApiPath.totpConfirm, { code }, { on401: On401.throw }),
-    onSuccess: () => {
+      api.post<TotpRecoveryCodes>(ApiPath.totpConfirm, { code }, { on401: On401.throw }),
+    onSuccess: (result) => {
       setSetup(null);
       setConfirmCode("");
+      setMinted(result.recovery_codes);
       void queryClient.invalidateQueries({ queryKey: queryKeys.totp });
     },
   });
+
+  // Enrollment just finished: the one moment the codes exist in plaintext.
+  if (minted) {
+    return <RecoveryCodesOnce codes={minted} onDone={() => setMinted(null)} />;
+  }
 
   if (!setup) {
     return (
@@ -117,10 +128,28 @@ function SetupPanel({ pending }: { pending: boolean }) {
 }
 
 /** Enabled state: green badge + a two-step disable that requires a current code. */
-function EnabledPanel() {
+function EnabledPanel({ status }: { status: TotpStatus }) {
   const queryClient = useQueryClient();
   const [disabling, setDisabling] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  const [regenCode, setRegenCode] = useState("");
+  const [minted, setMinted] = useState<string[] | null>(null);
   const [code, setCode] = useState("");
+
+  const regenerate = useMutation({
+    mutationFn: (currentCode: string) =>
+      api.post<TotpRecoveryCodes>(
+        ApiPath.totpRecoveryCodes,
+        { code: currentCode },
+        { on401: On401.throw },
+      ),
+    onSuccess: (result) => {
+      setRegenerating(false);
+      setRegenCode("");
+      setMinted(result.recovery_codes);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.totp });
+    },
+  });
 
   const disable = useMutation({
     // A wrong code 401s — surface it inline, don't bounce to /login.
@@ -138,6 +167,15 @@ function EnabledPanel() {
     if (code.trim()) disable.mutate(code.trim());
   };
 
+  const onRegenerate = (event: FormEvent) => {
+    event.preventDefault();
+    if (regenCode.trim()) regenerate.mutate(regenCode.trim());
+  };
+
+  if (minted) {
+    return <RecoveryCodesOnce codes={minted} onDone={() => setMinted(null)} />;
+  }
+
   return (
     <div className="flex flex-col items-start gap-3">
       <p className="flex items-center gap-2 text-[13px] text-fg-secondary">
@@ -147,17 +185,57 @@ function EnabledPanel() {
         </span>
         Sign-in asks for a code from your authenticator app.
       </p>
+      <p className="text-xs text-fg-muted">
+        {status.recovery_codes_remaining > 0
+          ? `${status.recovery_codes_remaining} unused recovery code${
+              status.recovery_codes_remaining === 1 ? "" : "s"
+            } — each signs you in once if the app is gone.`
+          : "No recovery codes left — generate a fresh batch before you need one."}
+      </p>
+      {regenerating ? (
+        <form onSubmit={onRegenerate} className="flex items-end gap-3">
+          <TextField
+            label="Current code"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={6}
+            value={regenCode}
+            onChange={(event) => setRegenCode(event.target.value)}
+            placeholder="123456"
+            hint="New codes replace every old one, used or not."
+            error={codeError(regenerate.error) ?? undefined}
+            autoFocus
+          />
+          <Button type="submit" disabled={regenerate.isPending || !regenCode.trim()}>
+            {regenerate.isPending ? "Generating…" : "Generate new codes"}
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setRegenerating(false);
+              setRegenCode("");
+              regenerate.reset();
+            }}
+          >
+            Cancel
+          </Button>
+        </form>
+      ) : (
+        <Button variant="ghost" className="border border-strong" onClick={() => setRegenerating(true)}>
+          New recovery codes…
+        </Button>
+      )}
       {disabling ? (
         <form onSubmit={onDisable} className="flex items-end gap-3">
           <TextField
             label="Current code"
             inputMode="numeric"
             autoComplete="one-time-code"
-            maxLength={6}
+            maxLength={12}
             value={code}
             onChange={(event) => setCode(event.target.value)}
             placeholder="123456"
-            hint="Disabling requires a current code from your app."
+            hint="Disabling requires a current code from your app — a recovery code works too."
             error={codeError(disable.error) ?? undefined}
             autoFocus
           />
@@ -187,6 +265,61 @@ function EnabledPanel() {
         </Button>
       )}
     </div>
+  );
+}
+
+/** The freshly-minted recovery codes — plaintext exists only in this render
+ * (only hashes are stored), so the panel holds the user here until they say
+ * they've saved them. */
+function RecoveryCodesOnce({ codes, onDone }: { codes: string[]; onDone: () => void }) {
+  return (
+    <div className="flex max-w-xl flex-col gap-3 rounded-lg border border-subtle bg-surface/40 p-4">
+      <p className="flex items-center gap-2 text-[13px] font-medium text-heading">
+        <ShieldCheck size={15} className="shrink-0 text-emerald-400" aria-hidden />
+        Save your recovery codes
+      </p>
+      <p className="text-xs text-fg-secondary">
+        Each code signs you in once if your authenticator is gone. They are shown{" "}
+        <strong>only now</strong> — store them with your passwords or print them.
+      </p>
+      <div className="grid grid-cols-2 gap-x-6 gap-y-1 rounded-md border border-strong bg-base px-4 py-3 font-mono text-[13px] text-heading">
+        {codes.map((recoveryCode) => (
+          <span key={recoveryCode}>{recoveryCode}</span>
+        ))}
+      </div>
+      <div className="flex items-center gap-2">
+        <CopyAllButton value={codes.join("\n")} />
+        <Button onClick={onDone}>I saved them</Button>
+      </div>
+    </div>
+  );
+}
+
+function CopyAllButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard unavailable — the codes stay selectable above.
+    }
+  };
+  return (
+    <Button variant="ghost" className="border border-strong" onClick={() => void copy()}>
+      {copied ? (
+        <>
+          <Check size={14} className="text-emerald-400" aria-hidden />
+          Copied
+        </>
+      ) : (
+        <>
+          <Copy size={14} aria-hidden />
+          Copy all
+        </>
+      )}
+    </Button>
   );
 }
 

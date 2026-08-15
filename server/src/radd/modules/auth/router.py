@@ -29,6 +29,7 @@ from .schemas import (
     TokenCreated,
     TokenRead,
     TotpCodeRequest,
+    TotpRecoveryCodesRead,
     TotpLoginRequest,
     TotpSetupRead,
     TotpStatusRead,
@@ -98,6 +99,7 @@ async def totp_status(user: CurrentUser, session: Session) -> TotpStatusRead:
     return TotpStatusRead(
         enabled=row is not None and row.confirmed_at is not None,
         pending=row is not None and row.confirmed_at is None,
+        recovery_codes_remaining=await service.recovery_codes_remaining(session, user.id),
     )
 
 
@@ -110,9 +112,25 @@ async def totp_setup(user: CurrentUser, session: Session) -> TotpSetupRead:
     )
 
 
-@auth_router.post("/totp/confirm", status_code=204)
-async def totp_confirm(data: TotpCodeRequest, user: CurrentUser, session: Session) -> None:
-    await service.totp_confirm(session, user, data.code)
+@auth_router.post("/totp/confirm", response_model=TotpRecoveryCodesRead)
+async def totp_confirm(
+    data: TotpCodeRequest, user: CurrentUser, session: Session
+) -> TotpRecoveryCodesRead:
+    """Confirms enrollment and returns the recovery codes — shown once, never
+    retrievable again (RADD-677)."""
+    return TotpRecoveryCodesRead(
+        recovery_codes=await service.totp_confirm(session, user, data.code)
+    )
+
+
+@auth_router.post("/totp/recovery-codes", response_model=TotpRecoveryCodesRead)
+async def totp_regenerate_recovery_codes(
+    data: TotpCodeRequest, user: CurrentUser, session: Session
+) -> TotpRecoveryCodesRead:
+    """A fresh batch (invalidates every old code), gated on a live TOTP code."""
+    return TotpRecoveryCodesRead(
+        recovery_codes=await service.regenerate_recovery_codes(session, user, data.code)
+    )
 
 
 @auth_router.delete("/totp", status_code=204)

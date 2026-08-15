@@ -43,7 +43,7 @@ from .lifecycle import (
     successor_viability as successor_viability,
     user_content_summary as user_content_summary,
 )
-from .models import User, UserSession, UserTotp
+from .models import TotpRecoveryCode, User, UserSession, UserTotp
 from .schemas import ProfileUpdate, UserAdminUpdate, UserCreate
 from .service_sessions import (
     create_session as create_session,
@@ -368,7 +368,11 @@ async def totp_setup(session: AsyncSession, user: User) -> UserTotp:
     return row
 
 
-async def totp_confirm(session: AsyncSession, user: User, code: str) -> None:
+async def totp_confirm(session: AsyncSession, user: User, code: str) -> list[str]:
+    """Confirm enrollment and mint the recovery codes in the same breath
+    (RADD-677): the one moment the user is provably holding their
+    authenticator is the one moment the fallback must be handed over —
+    a later "generate codes" step is the step nobody does."""
     row = await totp_row(session, user.id)
     if row is None:
         raise NotFoundError(AuthEntity.USER, "no pending TOTP setup")
@@ -376,17 +380,80 @@ async def totp_confirm(session: AsyncSession, user: User, code: str) -> None:
         raise UnauthorizedError("invalid TOTP code")
     row.confirmed_at = security.utcnow()
     await session.flush()
+    return await _mint_recovery_codes(session, user.id)
 
 
-async def totp_disable(session: AsyncSession, user: User, code: str) -> None:
-    """Code required — a hijacked session must not silently strip MFA."""
+async def _mint_recovery_codes(session: AsyncSession, user_id: uuid.UUID) -> list[str]:
+    """Replace-all: old codes (used and unused) die with the new batch, so a
+    leaked printout is invalidated by regenerating."""
+    await session.execute(
+        delete(TotpRecoveryCode).where(TotpRecoveryCode.user_id == user_id)
+    )
+    codes = totp.generate_recovery_codes()
+    for code in codes:
+        session.add(
+            TotpRecoveryCode(user_id=user_id, code_hash=totp.hash_recovery_code(code))
+        )
+    await session.flush()
+    return codes
+
+
+async def regenerate_recovery_codes(session: AsyncSession, user: User, code: str) -> list[str]:
+    """A fresh batch, gated on a live TOTP code — a hijacked session must not
+    mint itself a quiet back door (the totp_disable precedent)."""
     row = await totp_row(session, user.id)
-    if row is None:
+    if row is None or row.confirmed_at is None:
         raise NotFoundError(AuthEntity.USER, "TOTP is not enabled")
     if not totp.verify_code(row.secret, code, int(time.time())):
         raise UnauthorizedError("invalid TOTP code")
+    return await _mint_recovery_codes(session, user.id)
+
+
+async def recovery_codes_remaining(session: AsyncSession, user_id: uuid.UUID) -> int:
+    return (
+        await session.scalar(
+            select(func.count())
+            .select_from(TotpRecoveryCode)
+            .where(TotpRecoveryCode.user_id == user_id, TotpRecoveryCode.used_at.is_(None))
+        )
+    ) or 0
+
+
+async def totp_disable(session: AsyncSession, user: User, code: str) -> None:
+    """Code required — a hijacked session must not silently strip MFA. A
+    recovery code is accepted too: losing the phone is exactly when disabling
+    MFA to re-enroll is the legitimate move."""
+    row = await totp_row(session, user.id)
+    if row is None:
+        raise NotFoundError(AuthEntity.USER, "TOTP is not enabled")
+    if not totp.verify_code(row.secret, code, int(time.time())) and not (
+        await _consume_recovery_code(session, user.id, code)
+    ):
+        raise UnauthorizedError("invalid TOTP code")
+    await session.execute(
+        delete(TotpRecoveryCode).where(TotpRecoveryCode.user_id == user.id)
+    )
     await session.delete(row)
     await session.flush()
+
+
+async def _consume_recovery_code(session: AsyncSession, user_id: uuid.UUID, code: str) -> bool:
+    """Burn a matching unused code. Single-use is enforced by used_at, kept
+    (not deleted) so "3 of 10 left" and "when was one used" stay answerable."""
+    if not totp.looks_like_recovery_code(code):
+        return False
+    row = await session.scalar(
+        select(TotpRecoveryCode).where(
+            TotpRecoveryCode.user_id == user_id,
+            TotpRecoveryCode.code_hash == totp.hash_recovery_code(code),
+            TotpRecoveryCode.used_at.is_(None),
+        )
+    )
+    if row is None:
+        return False
+    row.used_at = security.utcnow()
+    await session.flush()
+    return True
 
 
 async def authenticate_with_totp(
@@ -395,13 +462,15 @@ async def authenticate_with_totp(
     """Stateless second step: password re-verified WITH the code; uniform 401."""
     user = await authenticate(session, email, password)
     row = await totp_row(session, user.id)
-    if (
-        row is None
-        or row.confirmed_at is None
-        or not totp.verify_code(row.secret, code, int(time.time()))
-    ):
+    if row is None or row.confirmed_at is None:
         raise UnauthorizedError(BAD_CREDENTIALS)
-    return user
+    if totp.verify_code(row.secret, code, int(time.time())):
+        return user
+    # RADD-677: a recovery code works wherever the TOTP code does — single-use,
+    # burned before the session is minted. Same uniform 401 otherwise.
+    if await _consume_recovery_code(session, user.id, code):
+        return user
+    raise UnauthorizedError(BAD_CREDENTIALS)
 
 
 async def update_profile(session: AsyncSession, user: User, data: ProfileUpdate) -> User:

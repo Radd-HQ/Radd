@@ -159,13 +159,12 @@ export function LoginPage() {
           {totpRequired && !directory && (
             <TextField
               label="Authentication code"
-              inputMode="numeric"
               autoComplete="one-time-code"
-              maxLength={6}
+              maxLength={12}
               value={code}
               onChange={(event) => setCode(event.target.value)}
               placeholder="123456"
-              hint="This account has two-factor enabled — enter the 6-digit code from your authenticator app."
+              hint="Enter the 6-digit code from your authenticator app — or one of your recovery codes if the app is gone."
               required
               autoFocus
             />

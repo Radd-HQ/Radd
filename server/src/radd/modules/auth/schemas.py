@@ -39,6 +39,13 @@ class TotpCodeRequest(BaseModel):
 class TotpStatusRead(BaseModel):
     enabled: bool
     pending: bool  # setup created, not yet confirmed
+    recovery_codes_remaining: int  # unused single-use fallbacks (RADD-677)
+
+
+class TotpRecoveryCodesRead(BaseModel):
+    """Shown ONCE — only hashes are stored."""
+
+    recovery_codes: list[str]
 
 
 class UserMergeRequest(BaseModel):

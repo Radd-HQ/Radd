@@ -159,7 +159,9 @@ _MERGE_DEDUPE: tuple[tuple[str, tuple[str, ...], str], ...] = (
     # generically for EVERY resource type. Same reason view_shares isn't here.
 )
 # Credentials/preferences are identity-private — the target keeps its own.
-_MERGE_PURGE: tuple[str, ...] = ("sessions", "api_tokens", "user_totp", "notification_prefs")
+_MERGE_PURGE: tuple[str, ...] = (
+    "sessions", "api_tokens", "user_totp", "totp_recovery_codes", "notification_prefs"
+)
 
 # RADD-784: what dies with the account on a HARD DELETE, successor or not.
 # `_MERGE_DEDUPE` transfers these (a merge asserts one person, so access

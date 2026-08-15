@@ -429,5 +429,9 @@ Local-password accounts can enroll TOTP from their profile
 (`POST /auth/totp/setup` → secret + `otpauth://` URI → confirm with a code).
 Once enabled, `POST /auth/login` answers `401 {"detail":"totp_required"}`
 and the client completes via `POST /auth/login/totp`. SSO/LDAP sign-ins are
-untouched — the IdP owns MFA there. Recovery: an admin clears the user's
-`user_totp` row (recovery codes are a listed follow-up).
+untouched — the IdP owns MFA there. **Recovery is self-service (RADD-677):**
+confirming enrollment hands the user ten single-use recovery codes (shown
+once, stored hashed); any of them works wherever the 6-digit code does —
+sign-in, disable, regenerate — and burns on use. The admin fallback (clearing
+the user's `user_totp` row) remains for the person who lost the phone AND the
+printout.

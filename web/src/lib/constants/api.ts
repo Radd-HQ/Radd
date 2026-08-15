@@ -15,6 +15,7 @@ export const ApiPath = {
   totp: "/auth/totp",
   totpSetup: "/auth/totp/setup",
   totpConfirm: "/auth/totp/confirm",
+  totpRecoveryCodes: "/auth/totp/recovery-codes",
   users: "/users",
   /** The member-floor people list (RADD-769) — `/users` is the ADMIN directory
    *  and stays behind `user.manage`. Everything that merely needs to name

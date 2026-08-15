@@ -66,6 +66,22 @@ class UserTotp(Base, TimestampMixin):
     confirmed_at: Mapped[datetime | None] = mapped_column()
 
 
+class TotpRecoveryCode(Base, TimestampMixin):
+    """Single-use MFA fallback (RADD-677). Stored as a SHA-256 of the
+    normalized code — the codes are 50-bit random, so a fast hash is sound
+    where a password would need argon2. used_at is kept (not deleted) so
+    "you have 3 of 10 left" is answerable and a used code is auditable."""
+
+    __tablename__ = "totp_recovery_codes"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    code_hash: Mapped[str] = mapped_column(String(64), index=True)
+    used_at: Mapped[datetime | None] = mapped_column()
+
+
 class UserSession(Base):
     """Browser session. The cookie carries the raw token; only its sha256 is stored."""
 

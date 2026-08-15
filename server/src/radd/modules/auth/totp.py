@@ -49,3 +49,39 @@ def provisioning_uri(secret: str, account: str, issuer: str = "Radd") -> str:
          "digits": TOTP_DIGITS, "period": TOTP_STEP_SECONDS}
     )
     return f"otpauth://totp/{label}?{query}"
+
+
+# --- recovery codes (RADD-677) -------------------------------------------------
+
+RECOVERY_CODE_COUNT = 10
+_RECOVERY_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"  # no 0/o/1/l/i lookalikes
+_RECOVERY_GROUP = 5
+
+
+def generate_recovery_codes(count: int = RECOVERY_CODE_COUNT) -> list[str]:
+    """`xxxxx-xxxxx` over a 31-char alphabet — ~49.6 bits each, unguessable
+    online and cheap to type from a printout."""
+    return [
+        "-".join(
+            "".join(secrets.choice(_RECOVERY_ALPHABET) for _ in range(_RECOVERY_GROUP))
+            for _ in range(2)
+        )
+        for _ in range(count)
+    ]
+
+
+def normalize_recovery_code(code: str) -> str:
+    return code.strip().lower().replace(" ", "").replace("-", "")
+
+
+def hash_recovery_code(code: str) -> str:
+    """SHA-256 of the normalized form. High-entropy input is what makes a fast
+    hash correct here; a low-entropy secret would need argon2 instead."""
+    return hashlib.sha256(normalize_recovery_code(code).encode()).hexdigest()
+
+
+def looks_like_recovery_code(code: str) -> bool:
+    """A 6-digit string is a TOTP code; anything longer with letters is a
+    recovery attempt — used to keep the login error paths uniform."""
+    normalized = normalize_recovery_code(code)
+    return len(normalized) == 2 * _RECOVERY_GROUP and not normalized.isdigit()

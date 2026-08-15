@@ -51,6 +51,13 @@ export interface TotpStatus {
   enabled: boolean;
   /** Setup created but not yet confirmed with a code. */
   pending: boolean;
+  /** Unused single-use recovery codes left (RADD-677). */
+  recovery_codes_remaining: number;
+}
+
+/** POST /auth/totp/confirm and /auth/totp/recovery-codes — shown ONCE. */
+export interface TotpRecoveryCodes {
+  recovery_codes: string[];
 }
 
 /** POST /auth/totp/setup (spec 48) — paste into an authenticator app. */
