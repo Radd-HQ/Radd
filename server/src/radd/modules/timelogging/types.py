@@ -5,6 +5,10 @@ class WorklogEvent(StrEnum):
     CREATED = "worklog.created"
     UPDATED = "worklog.updated"
     DELETED = "worklog.deleted"
+    # RADD-1102: estimate set/cleared — what makes another client's board
+    # refresh; the SPA's `item_estimate` realtime mapping existed for a year
+    # with no event that could reach it.
+    ESTIMATE_CHANGED = "worklog.estimate_changed"
 
 
 class TimelogEntity(StrEnum):

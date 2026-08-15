@@ -84,7 +84,7 @@ async def set_estimate(
     _, project = await _item_project(session, item_id, user)
     await authz.require(session, user, authz.Permission.ITEM_UPDATE, project=project)
     await enablement.require_enabled(session, project.id)
-    await service.set_estimate(session, item_id, data)
+    await service.set_estimate(session, item_id, data, actor_id=user.id)
     return await service.item_summary(session, item_id, project)
 
 
@@ -94,7 +94,7 @@ async def clear_estimate(
 ) -> ItemTimeSummary:
     _, project = await _item_project(session, item_id, user)
     await authz.require(session, user, authz.Permission.ITEM_UPDATE, project=project)
-    await service.clear_estimate(session, item_id)
+    await service.clear_estimate(session, item_id, actor_id=user.id)
     return await service.item_summary(session, item_id, project)
 
 

@@ -412,7 +412,7 @@ async def delete_worklog(
 
 
 async def set_estimate(
-    session: AsyncSession, item_id: uuid.UUID, data: EstimateSet
+    session: AsyncSession, item_id: uuid.UUID, data: EstimateSet, actor_id: uuid.UUID
 ) -> None:
     _, project = await _project_for_item(session, item_id)
     seconds = _parse(data.estimate, await _hours_per_day(session))
@@ -422,11 +422,32 @@ async def set_estimate(
     else:
         estimate.original_estimate_seconds = seconds
     await session.flush()
+    await _emit_estimate(session, item_id, actor_id, seconds)
 
 
-async def clear_estimate(session: AsyncSession, item_id: uuid.UUID) -> None:
+async def clear_estimate(
+    session: AsyncSession, item_id: uuid.UUID, actor_id: uuid.UUID
+) -> None:
     await session.execute(delete(ItemEstimate).where(ItemEstimate.item_id == item_id))
     await session.flush()
+    await _emit_estimate(session, item_id, actor_id, None)
+
+
+async def _emit_estimate(
+    session: AsyncSession, item_id: uuid.UUID, actor_id: uuid.UUID, seconds: int | None
+) -> None:
+    """RADD-1102: the event that makes another client's board react to an
+    estimate edit — entity_type is ITEM_ESTIMATE, which the SPA's realtime map
+    resolves to the item + worklog caches."""
+    await events.emit(
+        session,
+        event_type=WorklogEvent.ESTIMATE_CHANGED,
+        entity_type=TimelogEntity.ITEM_ESTIMATE,
+        entity_id=item_id,
+        actor_id=actor_id,
+        subjects={"item": item_id},
+        payload={"original_estimate_seconds": seconds},
+    )
 
 
 async def has_estimate(session: AsyncSession, item_id: uuid.UUID) -> bool:

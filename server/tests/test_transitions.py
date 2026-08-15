@@ -286,7 +286,7 @@ async def test_guards_block_until_satisfied(db, actor):
 
     # Satisfy the guards: estimate via the timelogging seam, assignee in the SAME
     # PATCH as the state change (order matters — patched values count).
-    await timelog.set_estimate(db, item.id, EstimateSet(estimate="4h"))
+    await timelog.set_estimate(db, item.id, EstimateSet(estimate="4h"), actor_id=actor.id)
     read = await items.update_item(
         db,
         item.id,

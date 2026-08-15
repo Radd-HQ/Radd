@@ -196,7 +196,7 @@ async def test_timelog_hours_per_day_is_instance_only(db, admin, project):
     await settings_service.set_value(
         db, SettingKey.TIMELOG_HOURS_PER_DAY, SettingScope.INSTANCE, None, 6
     )
-    await timelog_service.set_estimate(db, item.id, EstimateSet(estimate="1d"))
+    await timelog_service.set_estimate(db, item.id, EstimateSet(estimate="1d"), actor_id=admin.id)
     summary = await timelog_service.item_summary(db, item.id, project)
     assert summary.original_estimate_seconds == 6 * 3600
     # And it formats back through the same factor.
