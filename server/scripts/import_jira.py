@@ -145,10 +145,15 @@ class Api:
             data = response.text
         return response.status_code, data
 
-    def upload(self, path: str, filename: str, content: bytes) -> tuple[int, Any]:
-        """Multipart file upload (attachments)."""
+    def upload(
+        self, path: str, filename: str, content: bytes, *, form: dict[str, str] | None = None
+    ) -> tuple[int, Any]:
+        """Multipart file upload (attachments) — `form` carries the polymorphic
+        parent fields the spec-102 endpoint requires (RADD-1094)."""
         mime = mimetypes.guess_type(filename)[0] or "application/octet-stream"
-        response = self.client.post(path, files={"file": (filename, content, mime)})
+        response = self.client.post(
+            path, files={"file": (filename, content, mime)}, data=form or {}
+        )
         try:
             data = response.json()
         except ValueError:
@@ -383,7 +388,13 @@ def upload_attachments(ctx: Context, item_id: str, jira_key: str) -> dict[str, s
         if not os.path.isfile(path):
             continue
         with open(path, "rb") as handle:
-            status, data = ctx.api.upload(f"/items/{item_id}/attachments", filename, handle.read())
+            # POST /attachments with the polymorphic parent (RADD-1094): the old
+            # /items/{id}/attachments alias died with RADD-895, so this uploaded
+            # into a 404 for every --attachments-dir run since.
+            status, data = ctx.api.upload(
+                "/attachments", filename, handle.read(),
+                form={"entity_type": "item", "entity_id": str(item_id)},
+            )
         if status in (200, 201):
             urls[filename] = f"/attachments/{data['id']}"
             ctx.report.tallies[Entity.ATTACHMENTS].created += 1
