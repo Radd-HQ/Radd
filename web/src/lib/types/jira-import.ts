@@ -413,6 +413,15 @@ export interface JiraRun {
   counts: Record<string, number>;
   problems: JiraProblem[];
   report: { rows?: DryRunRow[]; truncated?: boolean; would_provision?: Record<string, number> };
+  /** The exact plan this run executed (RADD-1105) — provenance that survives
+   * the plan being edited for a redo. */
+  plan_snapshot: {
+    name?: string;
+    radd_project_key?: string;
+    radd_project_name?: string;
+    mappings?: Record<string, Record<string, { action?: string; target?: string; create_name?: string }>>;
+    options?: Record<string, unknown>;
+  };
   started_at: string | null;
   finished_at: string | null;
   created_at: string;

@@ -20,6 +20,7 @@ import { EmptyState } from "../../EmptyState";
 import { QueryError } from "../../QueryError";
 import { Table, TBody, Td, THead, Th } from "../../Table";
 import { TableSkeleton } from "../../TableSkeleton";
+import { CollapsibleCard } from "../../CollapsibleCard";
 import { ProblemList } from "./ProblemList";
 import { ErrorText } from "../../ErrorText";
 
@@ -304,6 +305,7 @@ function RunRow({
                     : undefined
                 }
               />
+              <PlanSnapshot run={run} />
             </div>
           </Td>
         </tr>
@@ -394,3 +396,42 @@ function DryRunPreview({ run }: { run: JiraRun }) {
     </div>
   );
 }
+
+/** The mapping tables this run actually executed (RADD-1105) — read-only and
+ * collapsed by default, so an old run answers "what mapping produced this?"
+ * even after the plan was edited for a redo. */
+function PlanSnapshot({ run }: { run: JiraRun }) {
+  const mappings = run.plan_snapshot?.mappings ?? {};
+  const sections = Object.entries(mappings).filter(
+    ([, table]) => Object.keys(table ?? {}).length > 0,
+  );
+  if (sections.length === 0) return null;
+  const total = sections.reduce((n, [, table]) => n + Object.keys(table).length, 0);
+  return (
+    <CollapsibleCard title="Plan as executed" count={total}>
+      <div className="flex flex-col gap-3">
+        {sections.map(([section, table]) => (
+          <div key={section}>
+            <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+              {section}
+            </p>
+            <ul className="flex flex-col gap-0.5 text-xs text-fg-secondary">
+              {Object.entries(table).map(([key, entry]) => (
+                <li key={key} className="flex flex-wrap items-baseline gap-1.5">
+                  <span className="font-mono text-[11px] text-fg">{key}</span>
+                  <span className="text-fg-faint">→</span>
+                  <span>
+                    {entry?.action ?? "map"}
+                    {entry?.target ? `: ${entry.target}` : ""}
+                    {entry?.create_name ? ` (create "${entry.create_name}")` : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </CollapsibleCard>
+  );
+}
+

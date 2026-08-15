@@ -31,6 +31,9 @@ class RunRead(BaseModel):
     counts: dict[str, int]
     problems: list[ProblemRead]
     report: dict[str, Any]
+    #: RADD-1105: the exact plan this run executed — a finished run carries its
+    #: own provenance even after the plan is edited for a redo.
+    plan_snapshot: dict[str, Any]
     started_at: UtcDatetime | None
     finished_at: UtcDatetime | None
     created_at: UtcDatetime
