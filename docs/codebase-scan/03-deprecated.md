@@ -8,51 +8,38 @@ only for data or callers predating a spec.
 
 ---
 
-## 1. "Legacy owner-less views" — the largest shim, 8 sites
+## 1. "Legacy owner-less views" — **CORRECTED (RADD-895): permanent policy, not an ageing shim**
 
-`modules/views/service.py` carries a second authorisation path throughout for
-views created before spec 57 gave views an owner:
+The scan framed the second authorisation path in `modules/views/service.py` as
+"a permanent branch serving a finite, ageing set of rows" and recommended a
+count-then-backfill retirement. That framing was wrong, and RADD-895 renamed
+the vocabulary to say so: the docstrings now read **"SEEDED owner-less
+views"** (service.py:67, :117, :193, :536, :562) — every new project seeds
+plain Board/List/Planning views (specs 61-67), those rows are deliberately
+owner-less, and the `view.*` RBAC-atom fallback is their intended authz path.
+The set can never reach zero, so the retire-by-backfill recommendation is
+moot. Kept as recorded history: the original observation that every view
+write asks two questions (owner/editor grant, else — `owner_id IS NULL` — an
+RBAC atom) is accurate; it is design, not backcompat residue.
 
-```python
-# views/service.py:518
-async def _require_manage(session, view_id, actor, *, legacy_atom: Permission):
-    """… Legacy owner-less views fall back to the view.* RBAC atom (`legacy_atom`)."""
-# :115  "…or — legacy owner-less views — a view.update holder in scope."
-# :172, :495, :682, and router.py:114, :141
-```
+## 2. `FieldDefinitionCreate.project_id` — **CORRECTED (RADD-895): retired**
 
-Every view write therefore asks *two* questions: the owner/editor grant, and —
-if `owner_id IS NULL` — an RBAC atom. That is a permanent branch serving a
-finite, ageing set of rows.
+At scan time `fields/schemas.py` carried `_fold_legacy_scope`, folding the
+legacy single-scope `project_id` alias into `project_ids` (spec 91 gave custom
+fields multi-project scope). The scan said "retire when a major version lets
+the API break"; RADD-895 ("the backcompat mechanisms are gone", commit
+00182d7) took the no-backcompat-until-V1 route instead — the validator is
+deleted and `FieldDefinitionCreate` takes `project_ids` only
+(`grep -rn _fold_legacy_scope server/src` → 0).
 
-**Worth measuring before deciding:** `SELECT count(*) FROM views WHERE owner_id
-IS NULL`. If it is zero on the live instance, the whole path can go. If it is
-small, a backfill (assign the creator, or an admin) retires it. This is the
-kind of shim that is cheap to keep and cheaper to remove once, and it interacts
-directly with spec 115's access work — RADD-816 touches these atoms.
+## 3. `teams/types.py` fixed role ladder — **CORRECTED (RADD-893): deleted**
 
-## 2. `FieldDefinitionCreate.project_id` — single-scope alias
-
-```python
-# modules/fields/schemas.py:13
-# `project_id` is a legacy single-scope alias folded into project_ids
-# :30
-def _fold_legacy_scope(self) -> "FieldDefinitionCreate":
-```
-
-Spec 91 gave custom fields multi-project scope; the singular form is folded into
-the list on the way in. Harmless and small. Retire when a major version lets the
-API break, or keep — it costs one validator.
-
-## 3. `teams/types.py` — a fixed role ladder that predates data roles
-
-```python
-# modules/teams/types.py:5
-"""Legacy fixed role ladder. Since spec 06 project roles are DATA (auth `roles`…"""
-```
-
-An enum kept for readability of old code paths. Check whether anything still
-reads it; if not, this is a straight delete.
+The scan quoted the "Legacy fixed role ladder" docstring and asked "check
+whether anything still reads it; if not, this is a straight delete". Nothing
+did, and the RADD-893 dead-code sweep took it: `teams/types.py` today holds
+`TeamEvent`/`TeamEntity`/`TeamChange` plus the RADD-829 retirement note, and
+`grep -rn ProjectRole` across `server/src`, `web/src` and `sdk` returns only
+two migration docstrings.
 
 ## 4. `automations/types.py:19` — a sentinel predating its enum
 
@@ -70,10 +57,10 @@ Deliberate and documented. Listed for completeness; no action recommended.
 
 Correct decision (user-visible copy should not churn silently). No action.
 
-## 6. Spec-86 workspace residue — see `05-comments.md`
+## 6. Spec-86 workspace residue — see `05-comments.md` — **FIXED (RADD-1097)**
 
-The workspace entity is gone; two comments still describe it as live scope.
-Those are non-factual comments rather than dead code, so they are in `05`.
+The workspace entity is gone; two comments described it as live scope. The
+RADD-1097 rename-residue sweep deleted both — details in `05`.
 
 ---
 

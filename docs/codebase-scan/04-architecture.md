@@ -43,11 +43,23 @@ plugin-platform framing implies it can. Worth one paragraph in
 
 ---
 
-## A2 — The spine is bigger than CLAUDE.md says
+## A2 — The spine is bigger than CLAUDE.md says — **CORRECTED (RADD-885): resolved, and enforced**
 
-CLAUDE.md documents two spine tables and says *"of the ~130 cross-module model
-imports that exist, 82 are these two."* Measured today, excluding
-`auth.models.User` and `projects.models.Project`:
+RADD-885 implemented what this section recommended and went further than
+either option below: CLAUDE.md dev rule 1 now names the measured six-module
+de-facto spine (`auth` User, `projects`, `items` WorkItem, `workflow` State,
+`teams`, `fields` FieldDefinition) as importable for READS — writes still go
+through the owner's service — and `server/tests/test_module_contracts.py`
+enforces it: every other module's `models.py` is off-limits (the audit's
+residue, e.g. the `events.models.Event` readers, is frozen in the test's
+burn-down allowlist), and every cross-module import must be DECLARED
+(`depends_on` / `weak_depends`), with undeclared edges refused. The rule is
+no longer narrated; it fails a test. The measurement that motivated the
+change stays below as history.
+
+CLAUDE.md documented two spine tables at scan time and said *"of the ~130
+cross-module model imports that exist, 82 are these two."* Measured then,
+excluding `auth.models.User` and `projects.models.Project`:
 
 **69 cross-module model imports remain.** They are not evenly spread — two
 tables account for most:
@@ -86,8 +98,8 @@ for `Event` (an append-only log is a legitimate shared read) and questionable
 for `WorkItem` (a table 14 modules can join against is a table nobody can
 change).
 
-**Severity: medium** — nothing is broken; the constraint is simply not doing the
-work its documentation claims.
+**Severity: medium at scan time; resolved by RADD-885** — the constraint now
+does the work its documentation claims, mechanically.
 
 ---
 

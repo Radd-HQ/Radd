@@ -7,37 +7,40 @@ Two different problems, and only the second is urgent. A long comment that is
 
 ## Non-factual — comments describing things that no longer exist
 
-These are the ones worth fixing. Each names a concept the codebase removed.
+These were the ones worth fixing — each named a concept the codebase removed,
+and all three were deleted by the RADD-1097 rename-residue sweep (2026-08-15).
 
-### 1. `config.py:289` — workspace scope, removed by spec 86
-
-```python
-# (off | guards | strict), overridable per workspace/project via the
-```
-
-There is no workspace. Spec 86 stage 3 removed the entity and migrated
-`workspace.manage` → `global.manage`. A reader looking for per-workspace
-override configuration will not find it and cannot tell whether it is missing or
-they are.
-
-### 2. `items/service/links.py:45` — workspace as a live scope
+### 1. `config.py` — workspace scope, removed by spec 86 — **FIXED (RADD-1097)**
 
 ```python
-anchor project's WORKSPACE (spec 80 — restricted to projects the actor can
+# (off | guards | strict), overridable per workspace/project via the   # <- was config.py:289
 ```
 
-Same. Reads as though link scoping is workspace-bounded; it is
-project/permission-bounded.
+There is no workspace: spec 86 stage 3 removed the entity and migrated
+`workspace.manage` → `global.manage`, and this comment said otherwise. The
+RADD-1097 rename-residue sweep (2026-08-15) deleted it —
+`grep -in workspace server/src/radd/config.py` → 0 today.
 
-### 3. `config.py:65` — MinIO named as the S3 example
+### 2. `items/service/links.py` — workspace as a live scope — **FIXED (RADD-1097)**
 
 ```python
-# (default; attachments_dir) or "s3" (any S3-compatible store — MinIO, AWS).
+anchor project's WORKSPACE (spec 80 — restricted to projects the actor can   # <- was links.py:45
 ```
 
-Mildly stale rather than false: MinIO CE is archived and **Garage is the blessed
-S3 server** (spec 102). Still S3-compatible, so the sentence is not wrong — but
-it points a new operator at the wrong thing.
+Read as though link scoping were workspace-bounded (it is
+project/permission-bounded). Also deleted by the RADD-1097 sweep —
+`grep -in workspace …/items/service/links.py` → 0 today.
+
+### 3. `config.py` — MinIO named as the S3 example — **FIXED (RADD-1097)**
+
+```python
+# (default; attachments_dir) or "s3" (any S3-compatible store — MinIO, AWS).   # <- was config.py:65
+```
+
+Was mildly stale rather than false: MinIO CE is archived and **Garage is the
+blessed S3 server** (spec 102), so the example pointed a new operator at the
+wrong thing. Deleted by the RADD-1097 sweep — the only MinIO mentions left in
+`server/src` are the attachments module's legitimate SDK references.
 
 **Correctly historical, do not "fix":** the ~13 other `workspace` mentions
 (`seed.py:2`, `auth/subscribers.py:8`, `auth/schemas.py:167`, `auth/router.py:114`,
