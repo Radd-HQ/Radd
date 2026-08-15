@@ -61,7 +61,7 @@ export function TokensPanel() {
   );
 }
 
-/** The API-tokens settings route body (kept as its own page too). */
+/** The API-tokens settings route body — the ONE home for personal tokens (RADD-1095). */
 export function TokensSettingsBody() {
   return (
     <SettingsPage

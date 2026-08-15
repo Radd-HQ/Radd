@@ -26,7 +26,6 @@ import { Select } from "../../components/Select";
 import { TextField } from "../../components/TextField";
 import { MyLeaveSection } from "../../components/settings/LeaveSections";
 import { SettingsPage } from "../../components/settings/SettingsPage";
-import { TokensPanel } from "../../components/settings/TokensPanel";
 import { TotpPanel } from "../../components/settings/TotpPanel";
 import { ErrorText } from "../../components/ErrorText";
 
@@ -36,7 +35,8 @@ const AVATAR_COLORS = [
   "#10b981", "#14b8a6", "#0ea5e9", "#64748b",
 ] as const;
 
-/** Personal profile (spec 34): avatar, timezone, name + API tokens. */
+/** Personal profile (spec 34): avatar, timezone, name. Tokens live on their
+ * own Settings page — one home per surface (RADD-1095). */
 export function ProfileSettingsPage() {
   const authState = useAuthState();
   const user = authState?.status === AuthStatus.authenticated ? authState.user : null;
@@ -44,7 +44,7 @@ export function ProfileSettingsPage() {
   return (
     <SettingsPage
       title="Profile"
-      description="How you appear across Radd, your timezone, and your personal API tokens."
+      description="How you appear across Radd and your timezone."
     >
       {user ? (
         <ProfileForm user={user} />
@@ -95,15 +95,6 @@ export function ProfileSettingsPage() {
           email/password sign-in only — SSO and directory accounts keep their provider's MFA.
         </p>
         <TotpPanel />
-      </section>
-
-      <section className="mt-8 border-t border-subtle pt-6">
-        <h2 className="mb-1 text-sm font-semibold text-fg">API tokens</h2>
-        <p className="mb-4 text-xs text-fg-muted">
-          Personal access tokens for scripts and integrations — they act with your
-          permissions. Sent as <code className="font-mono">Authorization: Bearer radd_pat_…</code>
-        </p>
-        <TokensPanel />
       </section>
 
       {/* Plugin-contributed per-user preferences (spec 94): a plugin adds a Profile section by
