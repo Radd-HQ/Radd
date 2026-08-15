@@ -45,8 +45,7 @@ uv run uvicorn --factory radd.app:create_app --host 0.0.0.0 --port 8000
 Open **http://localhost:8000** — the built web UI is served from the API server (log in with the
 seeded credentials). API docs at `/docs`. `uv run pytest` runs the core-invariant suite against a
 throwaway `radd_test` database — re-created and migrated to head on every run (override with
-`RADD_TEST_DATABASE_URL`); the dev database is never touched. The
-`server/scripts/demo*.sh` feature walkthroughs assume a **fresh** database (see [CLAUDE.md](CLAUDE.md)).
+`RADD_TEST_DATABASE_URL`); the dev database is never touched. For a feel of the product with data in it, import the synthetic sample below.
 
 Import the synthetic sample data — a fictional 26-issue project whose issues keep their **Jira keys 1:1** (see `server/scripts/sample_data/README.md`):
 
