@@ -21,6 +21,7 @@ from .schemas import (
     ItemCreate,
     ItemHistory,
     ItemIds,
+    ItemClone,
     ItemLinkCreate,
     ItemLinkSearchResult,
     ItemRankUpdate,
@@ -274,6 +275,17 @@ async def update_item(
     item_id: uuid.UUID, data: ItemUpdate, session: Session, user: CurrentUser
 ) -> ItemRead:
     return await service.update_item(session, item_id, data, actor=user)
+
+
+@router.post("/{item_id}/clone", response_model=ItemRead, status_code=201)
+async def clone_item(
+    item_id: uuid.UUID, data: ItemClone, session: Session, user: CurrentUser
+) -> ItemRead:
+    """Clone this item (RADD-1088): copies content and shape, never trail —
+    lands in the initial state, linked `relates` to the original."""
+    return await service.clone_item(
+        session, item_id, user, title=data.title, include_subtasks=data.include_subtasks
+    )
 
 
 @router.post("/{item_id}/links", response_model=ItemRead, status_code=201)

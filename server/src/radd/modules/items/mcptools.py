@@ -432,6 +432,42 @@ async def _move_item(session: AsyncSession, actor: User, args: Mapping[str, Any]
     }
 
 
+
+
+async def _clone_item(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
+    source = await items_service.get_item_by_key(session, str(args["key"]), actor=actor)
+    read = await items_service.clone_item(
+        session,
+        source.id,
+        actor,
+        title=str(args["title"]) if args.get("title") else None,
+        include_subtasks=bool(args.get("include_subtasks", False)),
+    )
+    return receipt(read)
+
+
+CLONE_ITEM = McpToolSpec(
+    name="clone_item",
+    description="Clone a work item (addressed by key): copies title/description/type/"
+    "priority/labels/dates/estimate/custom fields — never comments, worklogs, history "
+    "or assignee. The clone lands in the initial state, linked 'relates' to the "
+    "original; include_subtasks copies the subtask checklist.",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "key": {"type": "string", "description": "Item key, e.g. TD-42."},
+            "title": {"type": "string", "description": "Clone's title; omitted = 'Copy of <source>'."},
+            "include_subtasks": {"type": "boolean", "default": False},
+        },
+        "required": ["key"],
+        "additionalProperties": False,
+    },
+    handler=_clone_item,
+    permission=Permission.ITEM_CREATE,
+    project_scoped=True,
+    kernel_enforced=False,
+)
+
 MOVE_ITEM = McpToolSpec(
     name="move_item",
     description="Move a work item to another project (addressed by keys). The item "
@@ -457,6 +493,7 @@ MOVE_ITEM = McpToolSpec(
 MCP_TOOLS = (
     SEARCH_ITEMS,
     MOVE_ITEM,
+    CLONE_ITEM,
     LINK_ITEMS,
     UNLINK_ITEMS,
     GET_ITEM,

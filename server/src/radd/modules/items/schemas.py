@@ -65,6 +65,13 @@ class ItemLinks(BaseModel):
     incoming: list[ItemLinkRead] = Field(default_factory=list)
 
 
+class ItemClone(BaseModel):
+    """POST /items/{id}/clone (RADD-1088). Omitted title -> "Copy of <source>"."""
+
+    title: str | None = Field(default=None, min_length=1, max_length=500)
+    include_subtasks: bool = False
+
+
 class ItemLinkCreate(BaseModel):
     """Create a link to another item — address it by id OR by per-project number.
     `link_type` is a link-type KEY (spec 91), validated against the catalog in the

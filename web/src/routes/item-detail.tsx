@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Slot, SlotId } from "@radd/plugin-sdk";
-import { Archive, ArchiveRestore, Flag, Pencil, Star, Trash2, SlidersHorizontal } from "lucide-react";
+import { Archive, ArchiveRestore, CopyPlus, Flag, Pencil, Star, Trash2, SlidersHorizontal } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { customFieldErrors, deniedCustomFieldKeys, errorMessage } from "../lib/api";
 import { RoutePath } from "../lib/constants";
-import { useArchiveItem, useDeleteItem, useToggleStarOnItem, useUpdateItem } from "../lib/item-mutations";
+import { useArchiveItem, useCloneItem, useDeleteItem, useToggleStarOnItem, useUpdateItem } from "../lib/item-mutations";
 import { useItemWritability, usePermissions, usePointsEnabled } from "../lib/hooks";
 import { useCan } from "../lib/can";
 import {
@@ -98,6 +98,7 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
   const canEditTitle = writ.fieldWritable("title");
   const canEditDescription = writ.fieldWritable("description");
   const archiveItem = useArchiveItem();
+  const cloneItem = useCloneItem();
   const deleteItem = useDeleteItem();
   // Pasted/inserted description images go through the storage-choice seam
   // (spec 102); a dismissed prompt rejects, so the editor insert aborts.
@@ -235,6 +236,27 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
           {archived ? <ArchiveRestore size={13} aria-hidden /> : <Archive size={13} aria-hidden />}
           {archived ? "Unarchive" : "Archive"}
         </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={cloneItem.isPending}
+          onClick={() =>
+            cloneItem.mutate(
+              { itemId: item.id },
+              {
+                onSuccess: (created) =>
+                  void navigate({ to: RoutePath.issue, params: { itemKey: created.key } }),
+              },
+            )
+          }
+          title="Clone — copies content and fields into a new issue; comments and history stay here"
+        >
+          <CopyPlus size={13} aria-hidden />
+          {cloneItem.isPending ? "Cloning…" : "Clone"}
+        </Button>
+        {cloneItem.isError && (
+          <span className="text-xs text-red-400">{errorMessage(cloneItem.error)}</span>
+        )}
         {(deleteItem.isError || archiveItem.isError) && (
           <span className="text-xs text-red-400">
             {errorMessage(deleteItem.isError ? deleteItem.error : archiveItem.error)}

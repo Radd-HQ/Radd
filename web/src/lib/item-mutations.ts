@@ -342,6 +342,23 @@ export function useValidateItem() {
 
 
 /** Soft archive/unarchive (spec 38) — hidden from lists by default. */
+/** Clone (RADD-1088): shape copied, trail not — server drops what the actor
+ * cannot write and links the clone `relates` to the original. */
+export function useCloneItem() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, includeSubtasks }: { itemId: string; includeSubtasks?: boolean }) =>
+      api.post<Item>(`${ApiPath.items}/${itemId}/clone`, {
+        include_subtasks: includeSubtasks ?? false,
+      }),
+    onSuccess: (created) => {
+      cacheItem(queryClient, created);
+      pushToast(`Cloned as ${created.key}`);
+    },
+    onSettled: () => invalidateItemCaches(queryClient),
+  });
+}
+
 export function useArchiveItem() {
   const queryClient = useQueryClient();
   return useMutation({
