@@ -175,7 +175,10 @@ async def main(
 
         await session.commit()
         stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-        path = os.path.join(os.path.dirname(__file__), f"reconcile_ad_users_{stamp}.json")
+        # The audit names real people — it belongs in gitignored var/, never in the tree.
+        audit_dir = os.path.join(os.path.dirname(__file__), "..", "..", "var")
+        os.makedirs(audit_dir, exist_ok=True)
+        path = os.path.abspath(os.path.join(audit_dir, f"reconcile_ad_users_{stamp}.json"))
         with open(path, "w") as handle:
             json.dump(audit, handle, indent=2)
         print(
