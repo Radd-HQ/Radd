@@ -128,6 +128,8 @@ export interface PageCreate {
   parent_id?: string | null;
   title: string;
   body?: string;
+  /** Template NAME to render the initial body from (RADD-712); body wins if both given. */
+  template?: string;
 }
 
 /** Omitted = unchanged; parent_id null moves to root; a stale expected_version 409s. */

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, FileText, Plus } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronDown, ChevronRight, FilePlus, FileText, Plus } from "lucide-react";
 import { api } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { ApiPath, RoutePath, pageTreeExpandStorageKey } from "../../lib/constants";
-import type { Page, PageCreate } from "../../lib/types";
+import type { Page, PageCreate, PageTemplate } from "../../lib/types";
+import { DropdownMenu } from "../DropdownMenu";
 import { ListSearchInput } from "../ListSearchInput";
 
 /** Below this many pages the tree needs no filter chrome (RADD-882). */
@@ -300,7 +301,9 @@ function TreeRow({
   );
 }
 
-/** Creates an untitled page (at root or under a node) and navigates to it. */
+/** Creates an untitled page (at root or under a node) and navigates to it.
+ * The root button offers the space's templates (RADD-1100) — blank stays one
+ * click; a template renders `{{title}}/{{date}}/{{author}}` server-side. */
 function NewPageButton({
   spaceId,
   spaceSlug,
@@ -316,12 +319,20 @@ function NewPageButton({
 }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const templates = useQuery({
+    queryKey: ["page-templates", spaceId],
+    queryFn: () =>
+      api.get<PageTemplate[]>(ApiPath.pageTemplates, { query: { space_id: spaceId } }),
+    enabled: !iconOnly,
+    staleTime: 60_000,
+  });
   const create = useMutation({
-    mutationFn: () =>
+    mutationFn: (template?: string) =>
       api.post<Page>(ApiPath.pages, {
         space_id: spaceId,
         parent_id: parentId,
         title: "Untitled",
+        template,
       } satisfies PageCreate),
     onSuccess: (page) =>
       void navigate({ to: RoutePath.page, params: { spaceSlug, pageSlug: page.slug } }),
@@ -332,7 +343,7 @@ function NewPageButton({
     return (
       <button
         type="button"
-        onClick={() => create.mutate()}
+        onClick={() => create.mutate(undefined)}
         disabled={create.isPending}
         aria-label="New page inside"
         title="New page inside"
@@ -342,16 +353,57 @@ function NewPageButton({
       </button>
     );
   }
+
+  const triggerClass =
+    "mt-1 flex items-center gap-1.5 rounded-md py-1 text-xs text-fg-faint hover:text-fg cursor-pointer disabled:opacity-50";
+  const available = templates.data ?? [];
+  if (available.length === 0) {
+    return (
+      <button
+        type="button"
+        onClick={() => create.mutate(undefined)}
+        disabled={create.isPending}
+        className={triggerClass}
+        style={{ paddingLeft: `${depth * 14 + 6}px` }}
+      >
+        <Plus size={12} aria-hidden />
+        New page
+      </button>
+    );
+  }
   return (
-    <button
-      type="button"
-      onClick={() => create.mutate()}
-      disabled={create.isPending}
-      className="mt-1 flex items-center gap-1.5 rounded-md py-1 text-xs text-fg-faint hover:text-fg cursor-pointer disabled:opacity-50"
-      style={{ paddingLeft: `${depth * 14 + 6}px` }}
-    >
-      <Plus size={12} aria-hidden />
-      New page
-    </button>
+    <DropdownMenu
+      label="New page"
+      widthClass="w-56"
+      items={[
+        {
+          kind: "action",
+          label: "Blank page",
+          icon: FileText,
+          onSelect: () => create.mutate(undefined),
+        },
+        { kind: "separator" },
+        ...available.map((template) => ({
+          kind: "action" as const,
+          label: template.icon ? `${template.icon} ${template.name}` : template.name,
+          icon: FilePlus,
+          onSelect: () => create.mutate(template.name),
+        })),
+      ]}
+      trigger={({ ref, toggle }) => (
+        <button
+          ref={ref}
+          type="button"
+          onClick={toggle}
+          disabled={create.isPending}
+          className={triggerClass}
+          style={{ paddingLeft: `${depth * 14 + 6}px` }}
+        >
+          <Plus size={12} aria-hidden />
+          New page
+          <ChevronDown size={11} aria-hidden />
+        </button>
+      )}
+    />
   );
 }

@@ -20,6 +20,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { PublicBadge } from "../../components/pages/PublicBadge";
 import { TableSkeleton } from "../../components/TableSkeleton";
 import { TextField } from "../../components/TextField";
+import { PageTemplatesSection } from "../../components/settings/PageTemplatesSection";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { SpaceAccessPanel } from "../../components/settings/SpaceAccessPanel";
 import { QueryError } from "../../components/QueryError";
@@ -173,6 +174,7 @@ export function PagesSettingsPage() {
             </ul>
           )}
           {canManage && <SpaceForm />}
+          {canManage && <PageTemplatesSection />}
         </>
       )}
       {confirmDialog}
