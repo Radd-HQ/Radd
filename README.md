@@ -68,6 +68,10 @@ podman compose exec app python scripts/import_jira.py \
   --file scripts/sample_data/jira_sample.json --email you@example.com --password change-me
 ```
 
+A prebuilt image for every release is on the project registry —
+`git.radd-hq.com/radd/radd:<version>`, anonymous pulls, no `latest` tag —
+see [docs/deploy.md](docs/deploy.md).
+
 Before real people sign in, walk the **first-run hardening** list in
 [docs/deploy.md](docs/deploy.md) — TLS, cookies, database password, and the
 one default nobody guesses (the MCP endpoint is on). The same doc covers
@@ -80,17 +84,24 @@ actual tracker, bugs and all.
 ## Development
 
 ```bash
-podman compose -f compose.dev.yaml up        # db + live-reloading API on :8000
-cd server && uv sync && uv run alembic upgrade head
-uv run python -m radd.seed --email you@example.com --password change-me --name "You"
-uv run pytest                                # ~2,300 tests, throwaway radd_test DB
+podman compose -f compose.dev.yaml up        # dev db (:5456) + live-reloading API on :8000
+                                             # (the container runs migrations itself)
+podman compose -f compose.dev.yaml exec app \
+  python -m radd.seed --email you@example.com --password change-me --name "You"
+cd server && uv sync                         # host-side tooling
+env RADD_DATABASE_URL=postgresql+psycopg://radd:radd@localhost:5456/radd \
+  uv run pytest                              # ~2,300 tests, throwaway radd_test DB
 cd ../web && npm install && npm run dev      # SPA on :5173, proxies /api to :8000
 ```
 
+The dev stack's Postgres publishes on **5456** (the production-flavor compose
+uses 5455), so host-run tools need `RADD_DATABASE_URL` pointed at it, as above.
+
 [docs/contributing.md](docs/contributing.md) has the conventions, the
-pre-PR gates, and the DCO note; [CLAUDE.md](CLAUDE.md) is the map of how the
-codebase is put together; [docs/modules.md](docs/modules.md) tracks every
-module and event.
+pre-PR gates, and the DCO note; [docs/modules.md](docs/modules.md) is the map
+— every module, event type and cross-module edge; [CLAUDE.md](CLAUDE.md) is
+the working agreement the maintainer's agent sessions follow (kept honest, and
+public because this project is also a demonstration of AI-native development).
 
 ## Extending
 

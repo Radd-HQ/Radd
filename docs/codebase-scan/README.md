@@ -1,5 +1,8 @@
 # Codebase scan — findings for later review
 
+> **Historical snapshot** (2026-07). Preserved as the input that shaped later
+> fix waves; individual findings may already be fixed — check the tracker.
+
 A read-only sweep. **No code was changed.** Every entry carries a file, a line
 number and a snippet so it can be checked rather than trusted.
 

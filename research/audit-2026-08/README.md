@@ -1,5 +1,10 @@
 # Radd deep-scan audit — 2026-08-05
 
+> **Historical snapshot.** This audit describes the tree as of 2026-08-05;
+> it is preserved because publishing self-criticism keeps it honest, and many
+> findings drove the RADD-8xx/10xx fix waves. Check the tracker before trusting
+> any individual claim — a good number of them have since been fixed.
+
 Nine parallel full-codebase audits (~76k lines Python / ~78k lines TypeScript), each saved as a
 category report in this directory. Every finding carries `file:line`, evidence, and a concrete fix;
 each report ends with the systemic (whole-class) remedies.

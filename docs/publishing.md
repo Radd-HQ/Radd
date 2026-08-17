@@ -20,7 +20,8 @@ git remote add public <public-repo-url>
 git push public public-main:main
 ```
 
-Then on the public host: make `main` the default branch, protect it, and tag
+Then repoint the clone URLs in README.md and docs/contributing.md at the
+public host, and on the public host: make `main` the default branch, protect it, and tag
 `v<version>` there so the publish workflow builds the image from the public
 repo going forward. **After launch the public repository is THE repository** —
 development continues there.

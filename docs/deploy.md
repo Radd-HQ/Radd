@@ -3,6 +3,21 @@
 One image runs everything: the API, the built web UI, and the background
 workers. PostgreSQL 16+ is the only required service.
 
+## The published image
+
+Every release publishes an immutable image — pin a version, there is
+deliberately no `latest` tag:
+
+```bash
+podman pull git.radd-hq.com/radd/radd:0.33.0     # anonymous pulls work
+```
+
+`compose.yaml` builds from source by default; to run the published image
+instead, replace its `build:` block with `image: git.radd-hq.com/radd/radd:0.33.0`
+(or `--set image.repository=git.radd-hq.com/radd/radd` under Helm). Each
+release's SBOM and vulnerability report are attached to it on the releases
+page.
+
 ## Compose (single node)
 
 ```bash
@@ -234,10 +249,10 @@ published ports if both stacks run at once. Artifacts and the backup key land in
 > `deploy/k3s/` (CloudNativePG, pgvector, backup storage class, proxy chain).
 
 ```bash
-podman build -t registry.example.com/radd:0.1.0 -f Containerfile .
-podman push registry.example.com/radd:0.1.0
+podman build -t registry.example.com/radd:0.33.0 -f Containerfile .
+podman push registry.example.com/radd:0.33.0
 helm install radd deploy/helm/radd \
-  --set image.repository=registry.example.com/radd --set image.tag=0.1.0 \
+  --set image.repository=registry.example.com/radd --set image.tag=0.33.0 \
   --set env.RADD_DATABASE_URL=postgresql+psycopg://radd:…@pg:5432/radd \
   --set env.RADD_APP_BASE_URL=https://radd.example.com \
   --set ingress.enabled=true --set ingress.host=radd.example.com

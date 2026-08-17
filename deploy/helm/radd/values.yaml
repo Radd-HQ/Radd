@@ -3,7 +3,7 @@
 
 image:
   repository: radd # push the Containerfile image to your registry
-  tag: latest
+  tag: "0.33.0" # pin a published version — there is deliberately no `latest` tag
   pullPolicy: IfNotPresent
 
 # Names of existing docker-registry Secrets, for a private registry (e.g. a

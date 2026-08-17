@@ -26,10 +26,15 @@ pgvector tests self-skip).
 git clone https://git.radd-hq.com/Radd/Radd.git
 cd Radd
 
-# Backend — db + live-reloading API on :8000
+# Backend — dev db (:5456) + live-reloading API on :8000.
+# The container runs `alembic upgrade head` itself; seed inside it:
 podman compose -f compose.dev.yaml up
-cd server && uv sync && uv run alembic upgrade head
-uv run python -m radd.seed --email you@example.com --password … --name "You"
+podman compose -f compose.dev.yaml exec app \
+  python -m radd.seed --email you@example.com --password … --name "You"
+
+# Host-side tools (pytest, alembic) need the dev db's port:
+cd server && uv sync
+export RADD_DATABASE_URL=postgresql+psycopg://radd:radd@localhost:5456/radd
 
 # Frontend
 cd web && npm install
@@ -67,12 +72,13 @@ keeps the module boundaries real:
   `zinc-*` or `indigo-*` class in `web/src` is a review finding.
 - **Tests where they earn their keep** — core invariants many modules depend
   on, not a unit test per endpoint.
-- **The change exists on the tracker first.** Work is filed in the **RADD**
-  project at <https://project.radd-hq.com> — a bug as a `Bug`, a feature as a
-  `Feature`, a spec as an epic with its children. If you'd rather not create a
-  tracker account, describe the issue fully in the PR instead and a maintainer
-  files it and links your PR — the record must exist, not necessarily by your
-  hand.
+- **The change exists on the tracker first.** Maintainer work is filed in the
+  **RADD** project at <https://project.radd-hq.com> (the public demo of Radd
+  tracking itself). As an outside contributor you don't need an account there:
+  file bugs and feature requests on **this repository's issue tracker**
+  (templates ship in `.github/`), or describe the issue fully in your PR, or
+  email <info@radd-hq.com> — a maintainer mirrors it into RADD and links your
+  PR. The record must exist, not necessarily by your hand.
 
 ## Working in the tracker
 
@@ -126,7 +132,7 @@ runs them again anyway (the publish workflow's `test` job is the backstop).
 Maintainers tag a version and CI publishes the container image:
 
 ```bash
-git tag -a v0.2.0 -m "Radd 0.2.0" && git push origin v0.2.0
+git tag -a v0.34.0 -m "Radd 0.34.0" && git push origin v0.34.0
 ```
 
 No `latest` tag is published — deployments pin an immutable version, so a
