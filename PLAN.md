@@ -4,7 +4,7 @@
 
 A self-hosted, AI-native work tracking + docs platform. Issue tracker and wiki as equal citizens, built to replace Jira + Confluence at a VFX studio — and designed from day one to be an AGPL open-source product anyone can run without hitting a paywall.
 
-*Plan date:. Supporting research in `research/` (jira-usage, landscape, architecture, auth).*
+*Supporting research in `research/` (landscape, architecture, auth).*
 
 ---
 
@@ -283,7 +283,7 @@ while still listed as open):
 |---|---|
 | ~~Scope: pillars still ahead, solo~~ RETIRED — every pillar (wiki, extensions+MCP, AI, connectors, packaging, MFA) has a shipped first implementation | The spec-and-fan-out waves did it; what's left is depth (§8 list), not pillars |
 | Yjs/collab complexity in M3 | pycrdt is Jupyter-proven; fallback = single-editor + presence, CRDT stays on client contract |
-| Postgres-only event bus ceiling | Fine to studio scale (TD ≈ 122 issues/wk is trivial); consumer interface is the seam for NATS later |
+| Postgres-only event bus ceiling | Fine to studio scale (a triple-digit weekly intake is trivial); consumer interface is the seam for NATS later |
 | JSONB field query performance | `indexed` flag → expression indexes; category-constrained states keep hot queries relational |
 | AGPL scaring studio contributions | Extension SDK is Apache-2.0; private connectors are unambiguously fine |
 | Open-core temptation later | Public "never open-core" pledge in README from first public commit |
@@ -922,16 +922,15 @@ a legacy `@old-domain.example` account reporting a real issue was classified `co
 and after applying it the same row carried the AD address with the issue still theirs.
 
 **Why "Sync users" looked broken (diagnosed):** it wasn't. The pass returns
-0/0/0 because (a) all 1029 AD users already have accounts, matched by email, so there is
+0/0/0 because (a) every enumerated AD user already has an account, matched by email, so there is
 nothing to provision, and (b) the name-refresh step only touches `source=ldap` accounts —
-but **1012 of those matches are `source=local`**, created by the Jira importer. So the sync
+but **~98% of those matches are `source=local`**, created by the Jira importer. So the sync
 is structurally inert for ~98% of the roster. A toast reading `0 · 0 · 0` gives no hint why.
 
-**Live-instance shape:** 1293 Radd accounts vs 1029 AD users under
-`OU=Sites,DC=ad,DC=studio,DC=internal` — 1029 exact-email matches, 27 name-only duplicates
-(25 `@example.com` Jira placeholders + 3 `adm-*` aliases; 26 own no work), and 237 with no
-AD counterpart (188 own work — leavers/sister studios, never delete; 49 empty, incl. service
-accounts `automation@example.system` and `puppetuser@`).
+**Live-instance shape:** ~1.3k Radd accounts vs ~1k enumerated AD users — nearly all
+exact-email matches, a couple dozen name-only duplicates (mostly `@example.com` Jira
+placeholders; almost none own work), and a couple hundred with no AD counterpart (mostly
+leavers who own work — never delete; the rest empty, incl. two directory service accounts).
 
 **`scripts/reconcile_ad_users.py`** (spec 88) is the one-off cleanup: buckets every account
 ENFORCE / MERGE / KEEP using the same planner as the interactive import, dry-run by default,
@@ -939,33 +938,33 @@ ENFORCE / MERGE / KEEP using the same planner as the interactive import, dry-run
 `--enforce-only` / `--merge-only` / `--exclude EMAIL` for control. KEEP is never touched.
 
 **Hazard found while diagnosing — do NOT enable `ldap_user_sync_deactivate_missing` yet:**
-49 active `adm-*@<AD UPN domain>` accounts are outside the enumeration (privileged accounts
-outside `OU=Sites` and/or lacking `mail`, provisioned by LDAP *login* via the synthesized
-UPN), so the departure sweep would read all 49 as gone and deactivate them. Confirmed the
-same humans appear in the enumeration under their real mail (`adm-jdoe@<AD UPN domain>`
-vs `jdoe@<mail domain>`), so email-keyed matching cannot see they are present.
+several dozen active privileged-alias accounts are outside the enumeration (privileged
+accounts outside the search base and/or lacking `mail`, provisioned by LDAP *login* via the
+synthesized UPN), so the departure sweep would read them all as gone and deactivate them.
+Confirmed the same humans appear in the enumeration under their real mailbox address (alias
+and mailbox differ), so email-keyed matching cannot see they are present.
 
-**RECONCILE APPLIED** (`--apply --exclude-prefix adm- --exclude <one alias-named account>`;
+**RECONCILE APPLIED** (`--apply` with the privileged-alias prefix and one alias-named account excluded;
 DB snapshot first at `server/var/backups/radd-pre-reconcile-20260724.dump`, audit JSON
-kept untracked under `var/`): **1011 enforced, 24 merged.**
-Result: `source` mix went 1226 local / 66 ldap → **215 local / 1077 ldap**; **zero active
-`@example.com` placeholders remain**; the sync now governs **1028 of 1029** matched accounts
-(was 17), so "Sync users" is finally a live operation rather than a structural no-op.
+kept untracked under `var/`): **~1k enforced, two dozen merged.**
+Result: the `source` mix flipped from overwhelmingly local to overwhelmingly ldap; **zero active
+`@example.com` placeholders remain**; the sync now governs **all but one** matched account
+(was a handful), so "Sync users" is finally a live operation rather than a structural no-op.
 One duplicated person's 6 items repointed to their AD-keyed account (both rows inactive —
 user accepted merging into a deactivated survivor). The owner's directory account intact: admin, active,
-now ldap. Two deliberate hold-backs: the 27 `adm-*` accounts (user: "I don't need those in
+now ldap. Two deliberate hold-backs: the privileged-alias accounts (user: "I don't need those in
 the system" — still present, own no work, never logged in, none are admins → retire when
-ready) and one account whose AD `displayName` is literally its `adm-` alias and would
+ready) and one account whose AD `displayName` is literally its alias and would
 have degraded a real name.
 
-**Departure-sweep blast radius after the reconcile: still 49** (32 on the AD UPN domain incl.
-the adm-* set, 15 on the mail domain, 2 at a sister studio) — unchanged by the reconcile
+**Departure-sweep blast radius after the reconcile: unchanged** (the alias set plus a
+handful of others) — unchanged by the reconcile
 because those accounts were already ldap-source. `ldap_user_sync_deactivate_missing` stays
 OFF until they are retired or the search base widens.
 
 **Unrelated test fix in the same pass:** `test_user_sync_base_cascade_override_beats_env`
 asserted that NO instance-scope `ldap_user_sync_base` existed, so it started failing the moment
-the Directory page saved a real one (`OU=Sites,DC=ad,DC=studio,DC=internal` 21:03).
+the Directory page saved a real one.
 It now clears that key inside its own rolled-back transaction — configuring the product must
 never fail its own tests. The live setting was verified intact afterwards.
 
@@ -1007,10 +1006,10 @@ owning account 409s without one and, with one, hands its issue over and disappea
 instance had `ldap_user_sync_enabled` AND `ldap_user_sync_deactivate_missing` turned ON at
 21:35 on. The last sync ran 31s BEFORE the sweep toggle was saved, so it has not
 fired yet — but `RADD_RUN_WORKERS=True`, so it will on next server start. Blast radius
-re-measured: **49 accounts, ALL dormant** (own nothing, never logged in, and only
-the owner's directory account holds an API token) — 27 `adm-*` plus 22 leavers/service accounts. The
-earlier "do NOT enable this" warning is therefore **withdrawn**: enabling it is safe here and
-retires the `adm-*` cruft. A third test made the same live-DB assumption
+re-measured: **all dormant** (own nothing, never logged in, and only the owner's
+directory account holds an API token) — the privileged aliases plus leavers/service
+accounts. The earlier "do NOT enable this" warning is therefore **withdrawn**: enabling it
+is safe here and retires the alias cruft. A third test made the same live-DB assumption
 (`test_user_sync_provisions_and_updates_toggle_off` asserted `deactivated == 0`) and now
 clears the instance override inside its own transaction — turning a feature ON in the product
 must never fail its own tests, least of all the assertion guarding mass deactivation.
@@ -1049,8 +1048,8 @@ The spec-89 user-delete guard earned its keep again: it caught that `jira_import
 alembic head `359b250bda3a` (`5b7a489f873a` plans → `359b250bda3a` runs); **881** core tests green
 (39 new: inference/mapping/issuemap/discovery/runner); `web/dist` rebuilt (tsc clean). **Server
 restarted** on :8000 with the new module + `.env` Jira creds — `/jira/*` routes live, verified over
-HTTP (status connects as `hjarrar` via basic auth, 42 projects). Live-verified earlier: a
-14,540-issue DEV preview + a bounded run importing real issues with 0 errors. The owner's directory account
+HTTP (status connects via basic auth). Live-verified earlier: a five-figure-issue
+preview + a bounded run importing real issues with 0 errors. The owner's directory account
 (AD login) promoted to admin for testing; 8 leaked `jr-*@example.com` test accounts removed.
 
 

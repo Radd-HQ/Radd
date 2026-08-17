@@ -34,8 +34,8 @@ Allowed paths: `web/` + frontend row in `docs/modules.md`. Two phases (separate 
   `comment.read_internal`), internal comments rendered with an amber Internal badge and distinct
   background. Comment counts already reflect visibility server-side.
 
-Environment: npm bootstrap PATH `<scratchpad>/bin`;
-backend on http://localhost:8000 (seeded admin hussein@hjarrar.com / change-me); Playwright in
+Environment: npm bootstrap PATH the session scratchpad;
+backend on http://localhost:8000 (seeded admin <local dev credentials>); Playwright in
 scratchpad. `npm run build` zero TS errors + live Playwright verification of each deliverable
 (screenshots). After build, run `npm run build` so the :8000 bundle refreshes. Vite on 5173 killed
 by exact PID; never touch port 8000. Commit `-- web docs/modules.md` pathspecs only.

@@ -35,7 +35,8 @@ check() { # check <label> <grep-args...>
 # operator's REAL ranges, which is the check that means something.)
 # Patterns are split so this file never contains its own contraband — the
 # first gate run flagged itself.
-check "machine-absolute paths" -e '/Volumes/''Work/' -e '/home/''hjarrar'
+check "machine-absolute paths" -e '/Volumes/''Work/' -e '/home/''hjarrar' \
+  -e '[-]Volumes[-]''Work' -e '/tmp/''claude-'
 
 bad_files=$(tracked | grep -E '(^|/)\.env$|\.(pem|p12|pfx|key)$|reconcile_.*\.json$' || true)
 if [ -n "$bad_files" ]; then

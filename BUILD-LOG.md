@@ -47,7 +47,7 @@ This is exactly §11's "additive manifest fields / zero behavior change on day o
   `RADD_DATABASE_URL=postgresql+psycopg://radd:radd@localhost:5455/radd_test`.
 - **Frontend build (JS toolchain):** `npm` is NOT on PATH. Two stable ways in:
   - **npm (for installs / new plugin projects):** a working npm is copied into THIS session's
-    persistent scratchpad — run `node <scratchpad>/npm/bin/npm-cli.js <args>` (e.g. `... install`, `... run build`). `web/node_modules` is present.
+    persistent scratchpad — run the scratchpad copy of `npm-cli.js` (e.g. `... install`, `... run build`). `web/node_modules` is present.
   - **no-npm fallback (host build):** the existing web app builds with **no npm** —
     `cd web && node node_modules/.bin/tsc -b && node node_modules/.bin/vite build`.
   - If both paths ever go missing, rediscover: `find / -name npm-cli.js 2>/dev/null | grep -v /jobs/ | head -1`.

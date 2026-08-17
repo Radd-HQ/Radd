@@ -178,8 +178,8 @@ their history is kept".
 Directory → User sync), composed onto `ldap_user_filter` rather than baked into
 it, and skipped if the deploy already hand-wrote the clause. ON by default: the
 shipped filter had no account-status check at all, and on a live directory that
-is 2057 disabled accounts against 1031 active. Verified end to end against a real
-AD — 1028 → 3072 → 1028 as the toggle flips, with no restart.
+is roughly two disabled accounts for every active one. Verified end to end against a
+real AD — the visible roster tripled and returned as the toggle flipped, with no restart.
 
 ## Not done
 

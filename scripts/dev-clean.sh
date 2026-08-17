@@ -20,9 +20,9 @@ cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
 PORT="${RADD_DEV_PORT:-8000}"
 DB_PORT="${RADD_CLEAN_DB_PORT:-5457}"
-EMAIL="${RADD_SEED_EMAIL:-hussein@hjarrar.com}"
+EMAIL="${RADD_SEED_EMAIL:-admin@example.com}"
 PASSWORD="${RADD_SEED_PASSWORD:-change-me}"
-NAME="${RADD_SEED_NAME:-Hussein Jarrar}"
+NAME="${RADD_SEED_NAME:-Dev Admin}"
 
 . "$ROOT/scripts/lib/devstack.sh"
 

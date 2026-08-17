@@ -26,9 +26,8 @@ project!) → accept a quoted multi-word state → type ` AND lab` → accept �
 query entirely via autocomplete, watch match count go live, save the view, then DELETE it (SPEC13
 prefix on anything you create). Also verify Ctrl+Space reopen and Esc. Screenshots.
 
-Environment: npm PATH bootstrap `<scratchpad>/bin`;
-Playwright at scratchpad/pw-browsers; backend live on :8000 (seeded admin hussein@hjarrar.com /
-change-me, real data); if the suggest endpoint 404s, the backend agent hasn't landed — poll
+Environment: npm PATH bootstrap the session scratchpad;
+Playwright at scratchpad/pw-browsers; backend live on :8000 (seeded admin <local dev credentials>, real data); if the suggest endpoint 404s, the backend agent hasn't landed — poll
 /openapi.json for `/items/slq/suggest`, meanwhile build + verify with Playwright route mocks.
 Never touch port 8000's process; vite 5173 killed by exact PID; final `npm run build` refreshes
 the :8000 bundle. Commit `-- web docs/modules.md` only. `npm run build` zero TS errors.

@@ -34,8 +34,8 @@ ItemUpdate accepts `start_date`, `target_date`, `cycle_id`, `release_id` (null c
    (cyclesQuery, releasesQuery, item-links), `lib/constants.ts` (routes + api paths), sidebar,
    and the New-item modal (optional cycle/release/dates).
 
-Environment: npm PATH `<scratchpad>/bin`;
-Playwright at scratchpad/pw-browsers; seeded admin hussein@hjarrar.com / change-me (is instance
+Environment: npm PATH the session scratchpad;
+Playwright at scratchpad/pw-browsers; seeded admin <local dev credentials> (is instance
 admin → holds cycle.manage). Create test entities prefixed SPEC18 and delete cycles/releases you
 create (both have DELETE). Never touch port 8000's process; vite 5173 killed by exact PID; final
 `npm run build` refreshes the :8000 bundle. Commit `-- web docs/modules.md` pathspecs only, message

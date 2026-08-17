@@ -36,10 +36,10 @@ contract (read it first): views carry `query` (SLQ text), `group_by`/`swimlane_b
   compact) that filters the list via `q=` — this gives ad-hoc querying outside saved views.
 - Update the frontend row in docs/modules.md.
 
-Environment: npm PATH bootstrap `<scratchpad>/bin`;
+Environment: npm PATH bootstrap the session scratchpad;
 Playwright at scratchpad/pw-browsers (harness patterns in scratchpad/e2e). Backend may still be
 landing spec 10 when you start — build to the contract, verify live once `q=` responds (poll
-/openapi.json for the `q` param). Seeded admin hussein@hjarrar.com / change-me; real data —
+/openapi.json for the `q` param). Seeded admin <local dev credentials>; real data —
 test entities prefixed SPEC11, and DELETE the views you create when done (views have a DELETE
 API). Never touch port 8000's process; vite 5173 killed by exact PID; final `npm run build`
 refreshes the :8000 bundle (desired). Commit `-- web docs/modules.md` only.

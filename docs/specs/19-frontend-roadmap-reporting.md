@@ -31,8 +31,8 @@ ItemRead (start_date/target_date/links) drive the roadmap.
 Keep any charting primitives in a small `components/charts/` (reusable SVG bar/line/stacked — each
 tiny). No new heavy dependencies; if you must add one, justify it (prefer none).
 
-Environment: npm PATH `<scratchpad>/bin`;
-Playwright at scratchpad/pw-browsers; seeded admin hussein@hjarrar.com / change-me. The TD project
+Environment: npm PATH the session scratchpad;
+Playwright at scratchpad/pw-browsers; seeded admin <local dev credentials>. The TD project
 has 25 imported items (some with states) — good report fodder; set a couple of start/target dates
 via API to populate the roadmap for your screenshot. Never touch port 8000's process; vite 5173
 killed by exact PID; final `npm run build` refreshes the :8000 bundle. Commit `-- web docs/modules.md`

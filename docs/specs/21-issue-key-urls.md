@@ -47,9 +47,9 @@ do NOT keep the client-side number→id list-scan hack for the new route.
 - `useCurrentWorkspace`/scope: the by-key endpoint resolves without a workspace in the URL, so no
   workspace needs to appear in issue URLs.
 
-Environment: npm PATH `<scratchpad>/bin`;
+Environment: npm PATH the session scratchpad;
 Playwright at scratchpad/pw-browsers; backend live :8000 (the by-key endpoint will be live before the
-frontend agent runs); seeded admin hussein@hjarrar.com / change-me. Never touch port 8000's
+frontend agent runs); seeded admin <local dev credentials>. Never touch port 8000's
 process; vite 5173 killed by exact PID; final `npm run build` refreshes the bundle. Commit
 `-- web docs/modules.md` only.
 

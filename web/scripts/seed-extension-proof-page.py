@@ -2,6 +2,7 @@
 """Create (or refresh) a dev page that exercises every extension, for the CDP proof."""
 
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -31,7 +32,7 @@ def api(method, path, body=None):
         raise
 
 
-api("POST", "/auth/login", {"email": "hussein@hjarrar.com", "password": "change-me"})
+api("POST", "/auth/login", {"email": os.environ.get("RADD_PROOF_EMAIL", "admin@example.com"), "password": os.environ.get("RADD_PROOF_PASSWORD", "change-me")})
 
 SPACE_SLUG = "ext-proof"
 spaces = api("GET", "/page-spaces")

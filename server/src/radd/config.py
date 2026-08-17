@@ -228,7 +228,7 @@ class Settings(BaseSettings):
     ldap_user_sync_seconds: float = 3600.0  # ldap-usersync loop interval
     # Exclude directory accounts with the AD ACCOUNTDISABLE bit from imports and
     # sync. ON by default because most of a real directory is leavers — a live
-    # instance showed 2057 disabled against 1031 active — and importing them fills
+    # instance held roughly two disabled accounts per active one — and importing them fills
     # the tracker with dead users. Overridable per instance in Settings → Directory.
     ldap_exclude_disabled: bool = True
 

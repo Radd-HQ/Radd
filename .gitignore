@@ -25,3 +25,6 @@ var/
 # absolute paths and deployment specifics for one machine, which do not
 # belong in a public repository.
 .claude/
+
+# maintainer-personal agent config (points at the owner instance)
+.mcp.json

@@ -35,8 +35,8 @@ submit needs `item.create`.
    sidebar or project header.
 3. Types/queries/constants/routes/sidebar for both.
 
-Environment: npm PATH `<scratchpad>/bin`;
-Playwright at scratchpad/pw-browsers; seeded admin hussein@hjarrar.com / change-me (holds
+Environment: npm PATH the session scratchpad;
+Playwright at scratchpad/pw-browsers; seeded admin <local dev credentials> (holds
 automation.manage + form.manage as instance admin). Create test entities prefixed SPEC20 and clean
 up rules/forms you make (both have DELETE). Never touch port 8000's process; vite 5173 killed by
 exact PID; final `npm run build` refreshes the :8000 bundle. Commit `-- web docs/modules.md` only,

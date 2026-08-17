@@ -1,6 +1,6 @@
 # Spec 28 — Search + Cmd-K command palette
 
-Tier-1 item 3 from `docs/roadmap-ideas.md`: at ~122 issues/week you need instant
+Tier-1 item 3 from `docs/roadmap-ideas.md`: at a triple-digit weekly intake you need instant
 jump-to-key, full-text search, and fast navigation. Backend = Postgres FTS maintained
 by an outbox consumer; frontend = a Cmd-K palette that quick-opens issues, navigates,
 and (later) runs actions. pgvector/semantic search arrives with the `ai` module.

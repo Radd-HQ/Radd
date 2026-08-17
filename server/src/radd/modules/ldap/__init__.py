@@ -142,8 +142,8 @@ plugin = RaddPlugin(
             description=(
                 "Exclude accounts disabled in the directory (the AD ACCOUNTDISABLE bit) "
                 "from imports and sync. ON by default: on a real directory most entries "
-                "are leavers — one live instance had 2057 disabled accounts against 1031 "
-                "active ones — and importing them fills Radd with dead users. Turning it "
+                "are leavers — one live instance held roughly two disabled accounts per active "
+                "one — and importing them fills Radd with dead users. Turning it "
                 "OFF does NOT lose the history of people who have left: their existing "
                 "issues, comments and worklogs keep their attribution either way."
             ),

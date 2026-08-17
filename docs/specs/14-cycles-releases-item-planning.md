@@ -10,7 +10,7 @@ Allowed paths: `server/src/radd/modules/cycles/` (new), `server/src/radd/modules
 `docs/modules.md`. Do NOT touch web/, auth/, or other modules' internals — call their services.
 
 Single alembic head currently `6afdeaf4f62d`; keep ONE head. Never touch port 8000 (verify on
-8001/8002, kill exact PIDs). Seeded admin hussein@hjarrar.com / change-me; live TD/DEV data must
+8001/8002, kill exact PIDs). Seeded admin <local dev credentials>; live TD/DEV data must
 survive (all new columns nullable, all new tables additive). Commit with explicit pathspecs.
 
 ## cycles module (workspace-level iterations — spans projects, like the studio's PIPE sprints)

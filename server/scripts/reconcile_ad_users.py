@@ -201,7 +201,7 @@ if __name__ == "__main__":
         action="append",
         default=[],
         metavar="EMAIL",
-        help="hold this account back from the run (repeatable) — e.g. an adm-* alias you keep",
+        help="hold this account back from the run (repeatable) — e.g. a privileged alias you keep",
     )
     parser.add_argument(
         "--exclude-prefix",

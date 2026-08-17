@@ -20,7 +20,7 @@
 import { openBrowser, report, sleep } from "./lib/cdp.mjs";
 const args = process.argv.slice(2);
 const baseUrl = args.includes("--base") ? args[args.indexOf("--base") + 1] : "http://localhost:8000";
-const email = process.env.RADD_PROOF_EMAIL ?? "hussein@hjarrar.com";
+const email = process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
 const password = process.env.RADD_PROOF_PASSWORD ?? "change-me";
 const { session, close } = await openBrowser({ port: 9387, profile: "/tmp/radd-people-picker", width: 1500, height: 1250, scale: 1 });
 await session.navigate(baseUrl, 1500);
