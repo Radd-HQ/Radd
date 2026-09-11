@@ -55,9 +55,15 @@ RUN python3 -m pip install --no-cache-dir --quiet --upgrade pip
 # ./server over /app/server, which would otherwise shadow .venv and leave the
 # container with no dependencies. uv installs the project itself as editable, so
 # the mounted source is what actually runs.
+#
+# UV_NO_CACHE: uv's download/build cache (wheels, sdist builds, hatchling and
+# friends) lands under /root/.cache/uv and is inherited by every later stage —
+# 261 MB, about half of the published image, and every scanner downstream reads
+# those build-time packages as if they shipped (RADD-1131).
 ENV UV_PYTHON=/usr/local/bin/python3 \
     UV_PYTHON_DOWNLOADS=never \
-    UV_PROJECT_ENVIRONMENT=/opt/venv
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    UV_NO_CACHE=1
 WORKDIR /app/server
 COPY server/pyproject.toml server/uv.lock ./
 RUN uv sync --locked --no-dev --no-install-project --extra localembed
