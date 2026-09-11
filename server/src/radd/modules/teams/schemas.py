@@ -76,3 +76,29 @@ class TeamGroupRead(BaseModel):
     directory_missing_since: UtcDatetime | None = None
 
 
+
+
+class TeamPersonChoice(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
+class TeamStewardPerson(TeamPersonChoice):
+    active: bool
+
+
+class TeamStewardshipRead(BaseModel):
+    owner: TeamStewardPerson | None
+    managers: list[TeamStewardPerson]
+    total: int
+
+
+class TeamGroupChoice(TeamGroupRead):
+    direct_member_count: int
+    transitive_member_count: int
+
+
+class TeamReferenceRead(BaseModel):
+    id: uuid.UUID
+    name: str
+    member_count: int | None = None

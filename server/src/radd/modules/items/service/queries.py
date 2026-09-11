@@ -192,10 +192,29 @@ async def estimate_points_by_ids(
     return {item_id: float(points) for item_id, points in rows.all()}
 
 
+async def cycle_item_ids_query(
+    session: AsyncSession, cycle_id: uuid.UUID, *, actor,
+    assignee_id: uuid.UUID | None = None, team_id: uuid.UUID | None = None,
+    project_id: uuid.UUID | None = None, q: str | None = None,
+):
+    """Unexecuted visible-item IDs for a cycle; shared by its stats consumers."""
+    from ..filters import ItemListFilters
+    from .scope import visible_ids_query
+
+    query, _ = await visible_ids_query(session, actor=actor, filters=ItemListFilters(
+        project_id=project_id, cycle_ids=(str(cycle_id),),
+        assignee_ids=(str(assignee_id),) if assignee_id else (),
+        team_ids=(str(team_id),) if team_id else (),
+    ), q=q)
+    return query.order_by(None)
+
+
 async def cycle_points_totals(
     session: AsyncSession,
     cycle_id: uuid.UUID,
     *,
+    actor,
+    q: str | None = None,
     assignee_id: uuid.UUID | None = None,
     team_id: uuid.UUID | None = None,
     project_id: uuid.UUID | None = None,
@@ -216,12 +235,10 @@ async def cycle_points_totals(
         .join(State, WorkItem.state_id == State.id)
         .where(WorkItem.cycle_id == cycle_id, WorkItem.archived_at.is_(None))
     )
-    if assignee_id is not None:
-        stmt = stmt.where(WorkItem.assignee_id == assignee_id)
-    if team_id is not None:
-        stmt = stmt.where(WorkItem.team_id == team_id)
-    if project_id is not None:
-        stmt = stmt.where(WorkItem.project_id == project_id)
+    stmt = stmt.where(WorkItem.id.in_(await cycle_item_ids_query(
+        session, cycle_id, actor=actor, assignee_id=assignee_id, team_id=team_id,
+        project_id=project_id, q=q,
+    )))
     total, done = (await session.execute(stmt)).one()
     return round(float(total), 1), round(float(done), 1)
 
@@ -249,6 +266,8 @@ async def cycle_state_category_counts(
     session: AsyncSession,
     cycle_id: uuid.UUID,
     *,
+    actor,
+    q: str | None = None,
     assignee_id: uuid.UUID | None = None,
     team_id: uuid.UUID | None = None,
     project_id: uuid.UUID | None = None,
@@ -262,12 +281,10 @@ async def cycle_state_category_counts(
         .join(WorkItem, WorkItem.state_id == State.id)
         .where(WorkItem.cycle_id == cycle_id, WorkItem.archived_at.is_(None))
     )
-    if assignee_id is not None:
-        stmt = stmt.where(WorkItem.assignee_id == assignee_id)
-    if team_id is not None:
-        stmt = stmt.where(WorkItem.team_id == team_id)
-    if project_id is not None:
-        stmt = stmt.where(WorkItem.project_id == project_id)
+    stmt = stmt.where(WorkItem.id.in_(await cycle_item_ids_query(
+        session, cycle_id, actor=actor, assignee_id=assignee_id, team_id=team_id,
+        project_id=project_id, q=q,
+    )))
     stmt = stmt.group_by(State.category)
     return {category: count for category, count in (await session.execute(stmt)).all()}
 

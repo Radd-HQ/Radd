@@ -137,8 +137,6 @@ export function TokenMultiSelect({
       setHighlight((h) => (navCount ? (h - 1 + navCount) % navCount : 0));
     } else if (e.key === "Backspace" && term === "" && value.length > 0) {
       removeValue(value[value.length - 1]);
-    } else if (e.key === "Escape") {
-      setOpen(false);
     }
   };
 
@@ -146,7 +144,17 @@ export function TokenMultiSelect({
   let lastGroup: string | undefined;
 
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef} className="relative" onKeyDown={event => {
+      // Handle both the search input and keyboard-focused option buttons.
+      // Dismiss this popup before a surrounding modal can discard its draft.
+      if (event.key === "Escape" && open) {
+        event.preventDefault();
+        event.stopPropagation();
+        inputRef.current?.focus();
+        // Focusing from an option invokes the input's onFocus opener first.
+        setOpen(false);
+      }
+    }}>
       <div
         onMouseDown={(e) => {
           if (e.target === e.currentTarget && !disabled) inputRef.current?.focus();

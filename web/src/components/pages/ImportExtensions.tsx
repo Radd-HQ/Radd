@@ -110,8 +110,9 @@ const slqItemsQuery = (q: string) =>
     queryKey: ["page-extension-items", q],
     meta: entityMeta(Entity.item),
     enabled: Boolean(q),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<Item[]>(ApiPath.items, {
+        signal,
         query: { q, limit: String(Math.min(50, ITEMS_PAGE_LIMIT)) },
       }),
   });

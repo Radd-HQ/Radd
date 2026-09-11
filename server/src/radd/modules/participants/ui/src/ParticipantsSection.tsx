@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, Avatar, Select, tokens, type Item } from "@radd/plugin-sdk";
+import { api, Avatar, tokens, type Item } from "@radd/plugin-sdk";
+import { ParticipantChoices } from "./ParticipantChoices";
 import { Users, X } from "lucide-react";
 
 /**
@@ -26,50 +27,18 @@ interface ParticipantsData {
   rows: ParticipantRow[];
   can_manage: boolean;
 }
-interface UserLite extends Ref {
-  active: boolean;
-  /** RADD-938 — set when the directory is fetched for a project: can this
-   *  person actually reach it? Undefined means the question was not asked. */
-  has_access?: boolean | null;
-}
-interface TeamLite {
-  id: string;
-  name: string;
-}
-
 const participantsKey = (itemId: string) => ["radd-remote", "participants", itemId] as const;
 
 export function ParticipantsSection({ item }: { item: Item }) {
   const queryClient = useQueryClient();
   const { data } = useQuery({
     queryKey: participantsKey(item.id),
-    queryFn: () => api.get<ParticipantsData>(`/items/${item.id}/participants`),
+    queryFn: ({ signal }) => api.get<ParticipantsData>(`/items/${item.id}/participants`, { signal }),
   });
   const canManage = Boolean(data?.can_manage);
-  const users = useQuery({
-    queryKey: ["radd-remote", "participants-users", item.project_id],
-    // The member-floor directory (RADD-769), not `/users` — that one is gated on
-    // `user.manage`, which nobody needs in order to add a participant. This was
-    // gated correctly on `can_manage` and still 403'd, because the gate that
-    // mattered was on the endpoint rather than on the affordance. A plugin
-    // remote reaches the API the same way the host does, so it inherits the
-    // same rule.
-    // RADD-938: scoped to THIS project, so each row says whether that person
-    // can reach it. This picker is where it matters most — sharing an item with
-    // someone is the deliberate act of involving them, and doing it blind means
-    // the person may never be able to open what you shared.
-    queryFn: () =>
-      api.get<UserLite[]>(`/users/directory?project_id=${item.project_id}`),
-    enabled: canManage,
-  });
-  const teams = useQuery({
-    queryKey: ["radd-remote", "participants-teams"],
-    queryFn: () => api.get<TeamLite[]>("/teams"),
-    enabled: canManage,
-  });
   const leave = useQuery({
     queryKey: ["radd-remote", "leave-current"],
-    queryFn: () => api.get<{ user_id: string }[]>("/leave/current"),
+    queryFn: ({ signal }) => api.get<{ user_id: string }[]>("/leave/current", { signal }),
     staleTime: 5 * 60_000,
   });
   const onLeaveIds = new Set((leave.data ?? []).map((entry) => entry.user_id));
@@ -186,58 +155,8 @@ export function ParticipantsSection({ item }: { item: Item }) {
         )}
       </div>
       {canManage && adding && (
-        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-          <Select
-            label="Add user"
-            value=""
-            onChange={(e) => e.target.value && add.mutate({ user_id: e.target.value })}
-          >
-            <option value="">Choose a user…</option>
-            {(() => {
-              // Everyone is still offered — under RADD-937 adding a no-access
-              // person as a participant is exactly what makes the project
-              // visible to them, so hiding them would remove the fix. They are
-              // separated and labelled instead.
-              const candidates = (users.data ?? []).filter(
-                (u) => u.active && !participantUserIds.has(u.id),
-              );
-              const label = (u: UserLite) =>
-                `${u.name}${onLeaveIds.has(u.id) ? " (away)" : ""}`;
-              const asked = candidates.some((u) => u.has_access != null);
-              const row = (u: UserLite) => (
-                <option key={u.id} value={u.id}>
-                  {label(u)}
-                </option>
-              );
-              if (!asked) return candidates.map(row);
-              const without = candidates.filter((u) => !u.has_access);
-              return (
-                <>
-                  {candidates.filter((u) => u.has_access).map(row)}
-                  {without.length > 0 && (
-                    <optgroup label="No access to this project — adding them grants it">
-                      {without.map(row)}
-                    </optgroup>
-                  )}
-                </>
-              );
-            })()}
-          </Select>
-          <Select
-            label="Add team"
-            value=""
-            onChange={(e) => e.target.value && add.mutate({ team_id: e.target.value })}
-          >
-            <option value="">Choose a team…</option>
-            {(teams.data ?? [])
-              .filter((t) => !participantTeamIds.has(t.id))
-              .map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-          </Select>
-        </div>
+        <ParticipantChoices projectId={item.project_id} userIds={participantUserIds} teamIds={participantTeamIds}
+          onLeaveIds={onLeaveIds} busy={busy} onAdd={subject => { setError(null); add.mutate(subject); }} />
       )}
       {error && <p style={{ marginTop: 6, fontSize: 11, color: tokens.danger }}>{error}</p>}
       <p style={{ marginTop: 4, fontSize: 11, color: tokens.textFaint }}>

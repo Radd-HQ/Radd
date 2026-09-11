@@ -296,3 +296,261 @@ A saved view carries SLQ (`query`) and its `ViewRead.query_string` is the ready-
 - Cycle view axis + staging cycles (spec 23): the `cycle` **header set is resolved client-side** from `cyclesQuery` (workspace cycles) — a cycle-grouped view buckets the loaded PAGE (200/page behind the Pager, true total shown — the pagination wave replaced the old silent cap; `GET /items` has since grown a repeatable `cycle_id` scope param); items whose cycle is filtered out by `cycle_filter` (or references a cycle absent from the list) are **dropped from display**, so the group counts can sum to fewer than the SLQ total (only when a filter hides cycles). `cycle_filter` is a display regex (compile-validated server-side since spec 56) but still not applied as an SLQ item filter (empty staging cycles have no items to match). `ViewBoard` **columns are not collapsible** (only `ViewList` sections are), and `ViewSwimlanes` lane headers don't render the cycle `detail`/progress (only name+count) — the summary shows for `group_by=cycle` list sections / board columns. Completed cycles still show by default (ordered last, collapsible — no auto-hide). A cycle with exactly one date is accepted by the backend (→ DRAFT) though the settings modal steers to both-or-neither; `active_cycles`/velocity are unaffected (NULL dates never match the active predicate / the COMPLETED filter), and `burnup` **409s** on a draft cycle. Draft `CycleStatus` is derived (undated), so a *scheduled* cycle you don't want active yet can't be forced to draft without clearing its dates.
 - View interaction (spec 24): cross-bucket drag / context menu / bulk / rank / star all live on **saved views** (the ad-hoc project list & board routes are since DELETED — every board/list/planning surface is a saved view, specs 61–67). Bulk actions fan out N PATCHes (N settle-invalidations) — fine at studio scale; a `POST /items/bulk` is a later optimization. `kind` isn't draggable (conversion is its own guarded endpoint since RADD-1089, not a drag axis) and workspace-spanning `state` buckets are name-keyed so state DnD needs project scope. Manual **rank is a single global order** over all items (not per-view/per-bucket) — within any bucket items sort by that shared rank; within-section drag-to-reorder is **list-view only and enabled whenever the list is rank-ordered** (the default when a view has no explicit non-rank `ORDER BY`; board/swimlane reorder deferred; boards keep rank on cross-bucket moves so items land at their rank position). The default `GET /items` order is now `rank ASC` (was `created DESC`) — rank is backfilled/assigned newest-first so lists look the same but are draggable; a view sorted by an explicit field (`ORDER BY priority`) disables reorder. Rank reorder holds no lock (last write wins) and the rebalance respaces ALL items in one pass (fine at studio scale). Personal **star** is per-user; because hydration is shared, the acting user's `starred` (like `comment_count`) rides along in `item.updated`/`item.created` event payloads — harmless for the trusted stream, not a cross-user leak in the API (reads are per-actor). `flagged`/`starred`/`rank` are the first builtin boolean/EXISTS/sort-only SLQ fields; `rank` is excluded from filter-field autocomplete (sort-only).
 - Reporting (spec 16): every report **recomputes from the event log on each request** — no projection/materialized table (acceptable at prototype scale; fold `item_state_timeline` into a read model when report latency bites). It reads the `events` table directly (`events.models.Event` + items' `ItemEvent`/`ItemEntity` event-type enums) because the outbox has no query-by-entity service seam yet — a tolerated inward read of a dependency, like the events↔auth edge. Transition times come from `Event.created_at`, so history is anchored to when events actually fired: a report window only sees events that occurred inside it (a demo that mutates "now" surfaces its data at "now", not in a backdated cycle window — so burnup/velocity demos use an active/completed cycle whose window brackets today). Time-in-state counts only *completed* stays (open final segments excluded), so a category every item is still sitting in reports no row; velocity/burnup treat an item as the cycle's if it was assigned at the moment it entered done (multiple done re-entries are deduped per item for velocity).
+
+
+## September 2026 audit remediation seams
+
+- `auth.principals` centralizes credential-aware admin bypasses; the public `auth.authz.is_instance_admin` facade is used by other modules. Personal token/security management requires a browser session. API principals carry `api_token_id` and a parsed scope. Restricted keys cannot use instance-role shortcuts. `auth.scopes` rejects malformed scope containers with a validation error.
+- Password-bearing sign-in routes use the shared `auth.service.check_login_attempt` admission gate. Local Argon2 work runs off the event loop with bounded concurrency. Trusted client IP comes from `ClientIpMiddleware`.
+- Item merge checks source and target relation-qualified update permissions and field grants, stays in one project, and uses a savepoint so a late workflow refusal cannot leave partially moved rows in a caller's transaction.
+- Identity changes use `web/src/lib/account-session.ts`: stop sockets, abort requests, cancel and clear queries, then navigate with a full reload to discard component drafts. Content-bearing recent history is account-scoped. Auth-module errors no longer grant anonymous development permissions.
+- Query factories declare their cached entities. `projectEntityMeta` additionally declares an explicit server-side project filter; it is not inferred from the rows of a partially loaded global list. Active query subscriptions are sent over realtime; project scopes are checked against ordinary readable-project authorization. Frames echo only the subscriber's own query identifiers. Notifications stay recipient-private; unscoped queries and legacy clients retain payload-free coarse signals. Event bursts coalesce by entity/project/recipient, and slow sends are bounded. Session identity/expiry is periodically rechecked, including view-as targets.
+- `useDialogFocus` provides topmost-only focus trapping and restoration for Modal, IssuePanel and mobile navigation. Modal and IssuePanel portal into the body to escape filtered/transformed ancestors; their common layer preserves dialog opening order in both directions. Page routes are lazy-loaded; shared editor and plugin boundaries remain intact.
+- `npm run check` in `web/` runs JavaScript regressions, host and all plugin remote builds, then the standalone Chromium smoke test. Backend source lint and pytest are separate CI gates. See contributing.md for Forgejo bootstrap and isolated-runner requirements.
+
+
+### Full research completion: discussion paging (RADD-1113)
+
+`comments/reading.py` owns SQL visibility-filtered chronological reads. Both the legacy list and bounded `/comments/feed` routes call the parent binding's read guard before loading rows. The page binding additionally applies the page/ancestor restriction through `page_access`; item reads reuse `require_readable_item`. The `comments.service` facade re-exports both reads. Timestamp/id cursors survive boundary-row deletion and concurrent newer inserts; the parent/order index is migration `h1113commentpage`.
+
+The frontend shares `queries/comment-feed.ts` and `CommentHistory` for issue discussions, page discussions and inline annotations. Independent discussion/inline cache keys prevent one collection hiding the other; older pages prepend with scroll restoration. Mutation invalidation retains the parent key prefix and realtime comment metadata. Existing full-list APIs remain compatible for SDK consumers while interactive threads use bounded pages.
+
+
+### Query cancellation (RADD-1115)
+
+Every host and shipped plugin `queryFn` forwards the TanStack observer signal into its API request, including paged and read-only POST batches. The plugin SDK now accepts the same optional `AbortSignal` as the host client. The host retains its account-lifecycle cancellation controller; observer cancellation is combined with it. The standalone `useSlqAutocomplete` hook owns its debounce timer, request controller and sequence guard; new input, close, scope/dialect changes and unmount cancel obsolete suggestions immediately. `hooks.ts` keeps the public re-export so consumers retain the existing interface.
+
+`query-cancellation.test.mjs` executes the actual API/query factories with real QueryObservers; it verifies switching queries, last-reader departure, shared-reader preservation, infinite-page and plugin cancellation. Browser checks exercise real HTTP cancellation from the built palette and from the actual React SLQ hook. Network cancellation does not promise rollback of server work already accepted; mutation requests are not converted into cancellable reads.
+
+### Project directory paging (RADD-1115)
+
+`projects.directory` applies the existing `authz.visible_projects` decision before search, count and pagination. `/projects/summary` returns the visible-project permission union and related/total counts, independent of a page; direct ID/key reads enforce that same policy. `authz_batch` resolves authority from `projects.service.list_project_ids`, avoiding hydration of every project body. The authority map itself still scales with project count.
+
+The frontend `useProjectDirectory` owns server search and one 50-row window; the projects index, sidebar project tree and `ProjectPicker` share it. `DirectoryPager` keeps rendering bounded after visiting later pages. `usePermissions`/`useNavFacts` use the summary; route/issue resolution and pinned project labels use direct queries. Legacy unpaged clients remain pending in the P2 ledger, as do view/cycle/user/page-space directories; these changes do not certify all directory work complete.
+
+### Cycle directory and aggregate reads (RADD-1115)
+
+`cycles.directory` applies team visibility and the derived status in SQL before count/pagination. Status expression parity with `cycle_status` includes explicitly completed drafts and partial legacy dates. `visible_cycles` delegates to it; `/cycles/summary` uses the same visibility query. The sidebar, cycle settings and completion destination search use `useCycleDirectory` windows. Completion requires an explicit destination, preserves that selection while searching and excludes completed/current cycles. Source and target visibility are checked before cycle mutations.
+
+`items.service.scope.visible_ids_query` is the shared authorized ID-select builder extracted from bulk selection/counts. The public `items.service.cycle_item_ids_query` composes cycle, project, assignee/team and SLQ filtering over it; cycle category/points and timelogging totals require the caller and aggregate only these IDs. `timelogging.timesheet.cycle_time_totals` keeps aggregation in SQL, including overrun and unestimated-item semantics. The public API never returns private-issue aggregates merely because a public cycle is readable. Velocity ordering supports explicitly completed undated drafts. Release pipeline imports that depend on item schemas/automations are deferred until invocation so focused service tests do not depend on test collection order.
+
+The cycle item page fetches one 50-item window with person/team/committed SLQ filters applied server-side; its totals come from the same filtered aggregate scope, never the current page. This replaces both the ten-page cutoff and client-side match-set intersection. `PeopleDirectorySelect` searches existing user/team directory endpoints in 50-row windows. Changing or clearing a filter resets page state, including when returning to a previous query. Cycle-grouped/planning view axes and recurring-series readers remain pending.
+
+`CycleSelect`/`CycleChoices` use the same directory in issue creation/detail, bulk and context actions, form defaults, automations, workflow conditions and reports/widgets. Closed selectors resolve only their selected ID; name-based form/automation values and the automation clear sentinel retain their wire formats. `CycleConditionValues` keeps selected IDs/display names separate from the search window. Dated-only filtering and active-first/recent ordering run before count/limit; `defaultBurnupCycleQuery` selects one default cycle, while fixed widgets bypass it. Ordinary views no longer fetch all cycles solely to populate context menus.
+
+Cycle-based reports enforce cycle catalog and team visibility as well as item visibility. `cycles.service.recent_completed_cycles` selects the last N visible completed cycles in SQL, including undated drafts closed explicitly; hidden cycles cannot consume the report window. Burnup checks visibility before validating dates or reading timeline data.
+
+### Shared view/dashboard authorization (RADD-1115)
+
+View and dashboard share loaders use `access.service.grants_for_resources` with its live-grant default. Expiry is checked at each read, independently of the sweeper. Their former duplicated grant-level loops are replaced by the public `access.service.shared_resource_level` facade over the existing hierarchical resolver. Direct users, teams and transitive groups share exact-level deny precedence; public access is a fallback subject to the same denies. Intrinsic ownership remains an explicit owning-module decision.
+
+The legacy `shares` arrays and `shared` indicators describe live allow grants only. Deny rows remain in the generic `/grants` policy API, preventing legacy invitation reconciliation from deleting a denial or presenting it as co-ownership. Lists, direct dashboard reads, view counts, edit/delete/sharing/transfer and grant-management hooks use the same authorization path. Directory pagination must apply this complete policy before count/limit; list truncation before grant resolution is not a valid replacement.
+
+### View/dashboard directory windows (RADD-1115)
+
+`access.shared.visible_clause`, exposed through `access.service.shared_resource_visible_clause`, composes correlated grant predicates for globally scoped hierarchical resources. It mirrors the pure resolver's live allow/deny policy and intrinsic ownership; modules retain their own admission gate. PostgreSQL/HTTP tests compare directory results against the existing resolver across owned, public, direct, team, nested-group, expired, denied and mixed-level cases.
+
+`views.directory` and `dashboards.directory` apply that predicate before search, count, stable position/name/id ordering and pagination. The public service facades hydrate only the selected window. Legacy unpaged API/service reads remain compatible. Views expose a direct ID read, scope/type filters and an aggregate summary; dashboards expose an aggregate summary so navigation affordances do not depend on a loaded page.
+
+`queries/shared-directories.ts` and `useSharedDirectory` own bounded 50-row reads with distinct query keys and cancellation. Sidebar global/project views, queues and dashboards use them; closed project branches do not mount a view reader. Current off-page project views retain a context link. Project-home and legacy roadmap redirects request one matching visible view. Pins, view routes and view-count widgets resolve their view directly; widgets also resolve only the relevant project. `ViewSelect` searches all authorized views in a nested bounded picker. The obsolete frontend `viewsQuery`/`dashboardsQuery` full-catalog factories were removed. Scope/search changes reset paging; once directory search is useful, its input stays mounted during clear/debounce to preserve focus.
+
+Remaining P2 readers include cycle axes/series, legacy project/user/team selectors and page-space trees/directories. Shared directory payloads still contain complete definitions within each bounded window; lean navigation projections and grant-change cache coordination remain potential follow-ups under the payload/cache budgets. This does not claim sustained load or full accessibility acceptance.
+
+### Recurring-series directory (RADD-1115)
+
+`cycles.directory.series_page` searches labels, counts matches and applies stable label/id windows; the router preserves global `cycle.read` admission and legacy unpaged API behavior. `cycleSeriesPageQuery` and the extracted `useDirectory` share debounced, cancelable paging with view/dashboard directories. `SeriesSection` now owns recurring configuration presentation independently of the cycle settings route, with visible loading/errors, retry, empty-search recovery and last-page deletion recovery. Its writes invalidate cycle-series and cycle entities; `cycle_series` events map to the new cache tag so live refresh reaches these queries. Saved configuration adopts the returned next-number value after automatic provisioning. This bounds directory reads/rendering; the existing provisioning/name-matching scans remain a separate performance follow-up.
+
+### Project-context consumers and selection (RADD-1115)
+
+Per-project workflow/type/screen/access/release/form/time-logging settings resolve their supplied project ID through `projectByIdQuery`, including loading/error/missing states, instead of fetching the catalog. Settings navigation delegates its anywhere checks to `usePermissions().anyProject`, which already reads the complete permission summary.
+
+`ProjectSelect` resolves its current ID directly and opens the existing `ProjectPicker` for bounded server search. Optional selections retain an explicit clear sentinel; required selections omit the clear action. The picker shows the current choice and retry on request failure. Dashboard widget project configuration and bulk-move destinations use this component; bulk choices pass `item.create` to the server before pagination, and the chosen project object supplies the success label. The cached project summary preserves the existing requirement for more than one visible project before offering a move. The server remains authoritative for every source/target item move guard. Existing API and stored widget project-ID formats are unchanged. Other legacy project selectors and multi-project scopes remain in the P2 ledger.
+
+### Lean project-owned options (RADD-1115)
+
+Workflow, releases, itemtypes and forms expose owner-controlled `/options` endpoints via public `service.list_options` facades. Their queries project only value/label/hint, use `authz.readable_projects` before filtering, and retain `form.manage` for form choices. State names and release versions deduplicate in SQL before paging; type/form IDs retain project keys for disambiguation. `radd.choices` supplies only generic SQL search/count/windows over an already-authorized projection and imports no modules. Exact-value reads resolve selected IDs without full definitions or invitation payloads.
+
+Frontend `queries/options` and `DirectoryChoices` load one 50-row search window on demand, with explicit failures/retry and direct selected-ID resolution. Name fields remain freely editable, preserving templates, clear values and future vocabulary; field-change multi-values also browse the complete name catalog. Automation action/validation builders no longer issue state/release/type/form requests for every project. Project controls share `ProjectSelect` with explicit key or ID formats; the dry-run context requests one default project, then searches all project choices on demand. Global label/field registries and other people/team readers remain a separate scaling follow-up; automation people/team vocabulary is described below.
+
+Automation picker data checks `user.manage` before requesting the email-bearing admin directory; authors without it retain the action editor without a permission-error request. Other global registry paging remains outstanding.
+
+### Email and team vocabulary (RADD-1115)
+
+Auth and teams expose public `service.list_options` facades backed by owner-local queries and the generic authorized projection pager. `/users/options` requires global `user.manage` and returns active-account email/name choices without security/account-management fields; the authenticated `/users/directory` privacy/source policy is unchanged. `/teams/options` honors `team.read` and projects team names without manager lists, stewardship or project-permission hydration. Both search before count/limit and support one exact saved value.
+
+Automation picker data no longer downloads user/team catalogs. Shared `DirectoryChoices` supports small static presets (clear values and notification roles), optional permission-gated browsing and typed recipient role suggestions. Assignee/team token toggles stay explicit, round-robin stays non-clearable, email recipients remain free text, and changed-by conditions preserve old multi-values. Global label/field registries and non-automation people/team readers remain in the scaling ledger.
+
+### Team directory and direct detail (RADD-1115)
+
+Teams settings uses `teamsPageQuery` / `useDirectory` for server-side 50-row search and count windows. It resolves a selected/new team with `GET /teams/{id}` so editing is independent of catalog filtering and paging; name changes and deletion retain explicit errors and recovery. Team management stays in the existing `TeamPanel`, reached through a shared modal with focus restoration. Directory deletion recovers the last nonempty page. Creation remains available under unmatched search; the returned ID opens directly.
+
+The teams service batches `managers_by_team_ids` for the requested window. Router `_team_reads` combines that one batch with global effective permissions, matching `_require_manage` and delete/ownership guards rather than unioning project grants. The direct endpoint enforces `team.read`; catalog refusal includes a zero count. Owner/manager powers remain per-team, and relation-qualified global atoms follow the same `holds_base` rule as mutations. Delete-only and create-only global administrators can reach the settings navigation; delete does not require the transfer/managers UI. Role-grant detail is mounted only when its readable-project gate can succeed. Other team-member/ownership/group selectors and role-scope directories remain scaling follow-ups.
+
+`TokenMultiSelect` consumes Escape at its root so both input and option-button focus close the suggestion popup first. It restores input focus before setting the closed state (the input's focus handler opens suggestions); this preserves a containing team/issue/modal draft. The initial team browser verified popup dismissal and subsequent modal dismissal at three widths; the team stewardship UI now uses the shared paginated person dialog, while the TokenMultiSelect fix remains for other consumers.
+
+### Effective team roster and candidate windows (RADD-1115)
+
+`groups.service.member_projection` exposes a composable root/user SQL relation owned by groups. Its recursive UNION deduplicates each root/node/depth frontier and honors the existing nesting depth limit, including cycles and shared descendants. Teams owns direct/inherited union and provenance reduction in `teams/reading.py`; a direct row wins, otherwise carrier names have stable database ordering. Internal complete-member readers reuse this relation without importing group tables across the module boundary.
+
+The team roster endpoint applies name/email search, count and stable name/ID ordering before limit/offset and selects only public roster fields. Omitted limit preserves the existing complete API read. `teamMembersPageQuery` and `useDirectory` bound the settings roster to 50 rows with retry and last-page recovery. `member-candidates` applies the team's existing management guard, then excludes the full effective roster and inactive/mail-provisioned accounts before search/count/limit; its wire shape is ID/name only. `PeopleDirectorySelect` can use this team scope and retains shared nested-modal focus and explicit retry. Group-sync cache coverage and ownership/group/role-scope selectors remain in the active ledger.
+
+### Team ownership and manager choices (RADD-1115)
+
+`teams.service.stewardship_page` returns a lean owner plus an ordered manager window/count. Saved inactive managers are named independently of eligible choice filtering. `steward_candidates` filters active public-directory vocabulary before paging; manager candidates exclude existing managers/owner, while ownership candidates include existing managers. Both are guarded by intrinsic ownership or global team-update authority, not delegated management or user.manage.
+
+Individual manager POST/DELETE routes preserve unseen rows; full-set PUT remains a compatibility contract. Appointments enforce the 50-manager ceiling under the team row lock. Replacement and transfer use the same lock, and ownership routes refresh/acquire it before authorization. Transfer retains the previous owner and removes the new owner's redundant manager entry. Legacy expanded sets can be paged and individually reduced.
+
+`teamStewardshipQuery` identifies the team/page; the shared person query includes candidate purpose. TeamStewardship uses paged names, individual mutations and explicit retry, with inactive and away markers. Transfer cancels its old protected read, updates direct team detail and avoids refetching stewardship when the actor becomes only a delegate. Other team/group/role scopes and the legacy complete manager-ID payload remain in the scaling/compatibility ledger.
+
+### Team attached groups and candidates (RADD-1115)
+
+`teams.service.group_page` owns membership-filtered public group projections. Attached reads retain an unpaged compatibility mode; the settings UI uses 50-row windows. Candidate reads apply the existing team-management guard and exclude held groups before count/search/limit. `groups.service.transitive_member_counts` aggregates the public recursive root/member projection once per requested window, without per-group Python walks or user hydration. General group catalog reads also use that batch and fetch names for neighboring groups outside the current page. Their readable-project authorization floor stays unchanged.
+
+TeamGroupsSection uses shared directory search/paging and a nested candidate modal with DN disambiguation, direct/transitive counts and directory-missing warnings. Attachment changes invalidate team and effective-member queries without duplicate group-prefix refetches. Failed additions remain visible after dialog dismissal. Global directory reconciliation uses its existing stricter team-update gate; a one-row presence query keeps its action independent of the visible search, with explicit retry. Internal `team_groups` remains complete for reconciliation. Role scopes, other directory consumers and global group-sync realtime coverage remain in the ledger.
+
+### Wiki batch policy and template scope (RADD-1115)
+
+`authz.permissions_for_spaces` is the public space-policy batch: active/admin handling, requester-specific floor, live global/space grants and credential intersection match direct `effective_permissions(space_id=...)`. Space checks intersect the key's global allowance; project-only scopes confer no space permissions. `pages.access.permissions_by_space` delegates to this seam, removing its duplicate resolver.
+
+The pages router supplies readable space IDs to `templates.list_templates`, filtering template bodies in SQL before hydration. Explicit-space listing retains its direct read guard. `service.create_page` passes its destination space to `templates.by_name`, allowing local/global templates and rejecting another space's template before insertion. Complete internal reads retain compatibility. Space catalog and role/scope selector pagination remain outstanding.
+
+### Subject grant windows and role/wiki choices (RADD-1115)
+
+Auth owns `/role-grants/directory` in `grant_directory.py`: one subject, count and stable created-at/ID windows, including expired grants. Names hydrate only for the current window. Role labels retain role.read; project labels use visible_projects (including real qualified relationships); space labels call the existing GrantScopeSpec registry after auth space-read filtering. No new reverse module dependency is needed. Nullable labels preserve unreadable scope IDs without leaking catalog names or calling them Global. Complete legacy grant reads are unchanged.
+
+`auth/role_options.py` and `pages/options.py` expose lean ID/name/key-or-slug choices via the common authorized SQL projection pager. Role choices support exact ID or key for saved/builtin selection; space choices filter by the shared readable-space map before search/count/limit. Existing authority-map work remains open.
+
+RoleGrantsSection uses subject/page query identities, explicit loading/error/retry and last-page recovery. GrantRoleDialog owns draft selections and shared lazy Choices/ProjectPicker dialogs; mixed project/space IDs persist, and empty sets mean global. Individual role PATCH/revoke preserve unseen rows. The wire RoleGrant type now includes existing expiry/author fields. Queries identify role/project/docSpace cache dependencies. Shell/usePermissions space catalogs, full role administration and cache convention consolidation remain outstanding.
+
+
+### Wiki summary, directory and direct identity (RADD-1115)
+
+`pages/directory.py` separates summary, window and direct-space reads. `/page-spaces/summary` returns total readable spaces and their permission union, without catalog text or page counts. `/page-spaces` accepts bounded literal name/slug search with stable position/name/ID ordering and X-Total-Count. It uses the existing public authorization batch before paging; `spaces.read_spaces` restricts count aggregation to the returned IDs. `/page-spaces/by-identity/{identifier}` uses one-space policy and exact-slug-before-UUID resolution; unreadable and missing identities return the same 404. Existing service URL resolution delegates to `spaces.by_slug_or_id`; legacy complete callers remain supported.
+
+`usePermissions` and navigation facts use the summary. SidebarSpaces and the page index use shared 50-row directory queries with last-page recovery; direct current-space reads preserve old URLs and off-page selections. Query metadata includes role/docSpace dependencies, including role catalog/grant readers, and all query functions pass cancellation signals. Page-tree navigation becomes a shared modal below 1024 px, closes on links and programmatic creation, and retains unfinished page edits when dismissed. Page edit actions are visible without hover and metadata/actions wrap on narrow screens.
+
+[Verification](../research/audit-2026-09-09/wiki-directory/README.md) records the policy/count/query/browser checks. Complete settings/template/inspector/notification space readers remain next. Page trees and authorization maps remain complete; page_count keeps its existing live-nonarchived-space count contract. This does not certify worker delivery, sustained load or full accessibility.
+
+
+### Space settings and template projection (RADD-1115)
+
+Settings/index/sidebar navigation uses any-space management authority. Space actions use per-row permissions; creation, template CRUD and full link reindex retain global page.manage, while space-grant mutations retain role.update. The space branch of legacy role-grant reads checks page.read at that space; the subject/project branches retain their existing member floor. SpaceAccessPanel reports loading/errors, gates protected name catalogs and preserves visible revoke failures. Its complete grant/subject catalog work is superseded by the bounded space-access seam below.
+
+`pages/template_directory.py` owns lean authorized template windows and one-body lookup. The new directory endpoint returns stable name/ID pages with permitted space labels, never markdown; the direct endpoint returns 404 for missing/unreadable templates. Both reuse the existing readable-space map and include global templates only for actors with a readable space. Legacy complete template readers and global mutation guards remain unchanged. Frontend template identities include role/docSpace metadata and mutations invalidate the template prefix; no new realtime delivery is implied. Template forms use the shared lazy space picker and preserve global/specific scope values and placeholders. SpaceForm and template editors live in shared modals independently of their directory windows. [Evidence and limits](../research/audit-2026-09-09/space-settings/README.md).
+
+
+### Space access windows and public name choices (RADD-1115)
+
+Auth owns `/role-grants/by-space/{space_id}` in the shared `scoped_grants.py`: direct space-read authorization, authorized name search before count/paging and window-only name hydration. Role/team labels require their global catalog read permissions; group labels retain the existing issue-member floor. Nullable names preserve protected identities, and expired rows remain visible. `name_options.py` exposes UUID-valued public person names via `/users/directory/options`, excluding email requesters and private emails while retaining inactive/service hints. Teams exposes separate UUID-valued `/teams/directory/options`; its existing automation name-valued `/teams/options` is unchanged. Groups owns lean `/groups/options` using its public model seam and existing member gate.
+
+SpaceAccessPanel delegates directory/revoke rendering to ScopedAccessPanel; GrantScopedRoleDialog owns lazy subject/role drafts and the exact requested scope. Queries include role/member/team/group/project/docSpace metadata, and mutations invalidate role dependencies. The dedicated client group entity maps existing server group frames for these new readers. Older group-query metadata and group-name event emission remain follow-ups; this is not a full sync-delivery guarantee. [Evidence and limits](../research/audit-2026-09-09/space-access/README.md).
+
+
+### Permission and notification scope directories (RADD-1115)
+
+EffectivePermissions now owns explicit scope-kind/target state and reuses ProjectSelect/OptionSelect; no full catalogs load at mount. Changing kind waits for a target and instance-wide clears both IDs. The existing user.manage inspector API remains authoritative, and permission queries carry name/authority cache metadata.
+
+Notify owns `/notifications/subscription-options` in `options.py`. It reads the caller's held target IDs, then delegates to public team/wiki reference choices or the spine project projection with the existing target visibility policy. Common `choices.page` accepts internal exclusions before search/count/limit. Rows remain UUID/name/hint only; no subscription policy changes are inferred from selection. Saved wiki labels now call `pages.service.space_names` with the authorized saved IDs, replacing a stale complete-reader call and avoiding content/page-count hydration. Public wiki/team choice facades preserve existing endpoint defaults and value contracts.
+
+SubscriptionTargetPicker owns the bounded search window; AddSubscription retains failed selections. Successful full-policy saves replace the returned preferences cache and invalidate candidate windows; removals restore candidacy. Preferences/candidates/permission readers identify role/project/space/team/group/user dependencies. Complete 200-rule preferences and other full resource/authority readers remain compatible; broader concurrency, cache and event-emission work is still open. [Evidence and limits](../research/audit-2026-09-09/scope-selectors/README.md).
+
+
+### Project grant scopes and explicit key authority (RADD-1115)
+
+`auth/scoped_grants.py` supplies project/wiki grant windows with shared stable search/name hydration and separate scope guards. `/role-grants/by-project/{project_id}` matches public project visibility; the legacy project-filtered read now uses the same guard. Group/team/role catalog gates still apply before names/search, and credential scopes intersect the project authority map. Delegated mutation coverage remains in the existing role router. The public SpaceGrantDirectoryRead shape is reused without changing its fields or the space endpoint.
+
+ScopedAccessPanel and GrantScopedRoleDialog unify project/wiki rendering and lazy drafts. Project create/delete buttons use member.create/member.delete or global role.update, while wiki controls keep their existing role.update gate. Revoke-only users can navigate to Access; the project settings index selects its first allowed section. Shared query factories preserve the old space cache identities and add distinct project identities.
+
+The service-key form uses ProjectSelect and explicit restricted/full modes. Restricted submission requires nonempty atoms and preserves selected project/global scope; null scope requires choosing full authority. The backend scope contract and session-only key issuance remain unchanged. [Verification and remaining limits](../research/audit-2026-09-09/project-access/README.md).
+
+
+### Sign-in starting-access windows and transaction isolation (RADD-1115)
+
+SSO owns `/sso/provisioning-references` in `references.py`, a read-only POST with the existing credential-aware instance-admin gate. It accepts bounded role/project/team ID sets and projects only ID/name columns from permitted spine models. Auth owns `/roles/assignable/options`; it reuses role option authorization and excludes Baseline before search/count/paging. No cross-module writes bypass owner services.
+
+`registry.provisioning_rules` batches all rule children into two reads after the rule query, retaining its complete policy contract. `service._apply_provisioning_template` owns a savepoint for each public role-grant/team-membership operation: a recoverable SQL failure is logged without poisoning account/identity creation or later rule applications. Teams support direct users alongside directory groups. Provisioning still runs only for newly created accounts and applies every matching domain rule.
+
+The StartingAccess draft editor mounts ten rules with 50-grant/team subwindows. StartingRoleDialog composes shared lazy Choices and ProjectPicker; existing selections, scope clearing and off-page policy survive provider saves. `provisioningReferencesQuery` normalizes ID sets, forwards cancellation and declares role/project/team name dependencies. API provider reads/saves retain complete policies; paging applies to rendered drafts and reference hydration. [Evidence and limits](../research/audit-2026-09-09/starting-access/README.md).
+
+
+### Generic resource-grant management windows (RADD-1115, verified locally)
+
+Access owns `/grants/directory` and `directory.py`. The registry's existing can_manage hook authorizes each resource before stable created-at/ID search/count/windows are read. Management includes expired rows so administrators can revoke and replace them; `service.list_for_resource` and authorization batches retain their live-only contracts. Names are narrow current-window projections. Role/team names retain catalog permission gates, groups retain the issue-member gate, public person names exclude mail requesters, and project labels use actual visible-project policy. Search/count cannot reveal protected names.
+
+AccessGrantsEditor composes a bounded management reader and AddResourceGrantDialog. The registered model controls accesses, subject kinds and project scope; lazy choices retain allow/deny, expiry, global scope and multiple-project scope. Errors are explicit and never render an unrestricted-policy claim. Resource/search identities are separate; only page changes within the same identity retain placeholder rows. The access_grant client entity maps server events to resource-grant and affected field/attachment/page/view/dashboard queries. Full event delivery/load remains a separate ledger requirement.
+
+The attachment grant-management hook now checks parent readership before ownership. A scoped credential must also pass the parent attachment-write binding; uploaders cannot use read-only keys or lost parent access to edit the audience. Browser credentials retain uploader rights within a readable parent. Attachment management controls are visible without hover. Field/page/attachment grant explanations distinguish allow rules from denies. Global field managers can list field definitions without unrelated issue readership; scoped-only admission remains a follow-up. Full backend: 2,466 passed / 4 skipped; frontend/plugin, dedicated 126-entry browser and populated probes pass. [Evidence and remaining parent-catalog limits](../research/audit-2026-09-09/resource-grants/README.md).
+
+
+### Field scope-transition authority (RADD-1115)
+
+The fields router checks current and requested scopes independently before calling the owner update service. Empty scope means global field.update, so it must never be merged away by a union of project IDs. Omitted/null replacements preserve scope; explicit empty lists require global authority. HTTP/database evidence includes narrowly scoped admin keys, no partial writes after refusal and valid cross-project edits: [field-scope security](../research/audit-2026-09-09/field-scope-security/README.md). Field settings directory/capability and selector work remains open.
+
+
+### Field settings directory and capabilities (RADD-1115, verified locally)
+
+Fields owns `settings_router.py` and `directory.py`: 50-row summary reads omit options/default bodies, direct definition reads carry update/delete/grant capabilities, and the settings summary admits scoped-only field administrators without unrelated item readership. Every multi-project capability requires authority over the complete scope; global definitions retain global permission checks. Legacy issue-member registry reads remain complete for item/form consumers.
+
+Field scope choices project only ID/key/name from projects authorized for the requested create/update atom. Selected-reference POSTs accept at most 50 IDs and name only projects visible through issue or field authority. Access's public `resource_ids_with_grants` accepts an optional ID filter so only current field-window restriction flags are read. Full authority maps remain a separate scaling outcome.
+
+The settings rail, FieldEditor, FieldOptionsSection and FieldProjectScope separate directory, mutation and scope-selection responsibilities. Selected editors persist across paging/search; complete scope drafts page their labels. Global transitions are offered only with global authority, and usage-count failure prevents blind option removal. Settings navigation uses the field summary; query metadata/cancellation cover definitions, summaries, scopes and references. Full backend: 2,474 passed / 4 skipped; frontend/plugin and dedicated 126-field/project browser checks pass. Populated reads cover 319 fields. Deletion refresh excludes the removed definition, and selected scope windows use stable ID order. Scoped builtin-grant readers/editor context and complete selected option bodies remain follow-ups. [Evidence](../research/audit-2026-09-09/field-directory/README.md).
+
+
+### Builtin-field project grant contexts (RADD-1115, verified locally)
+
+Access management readers accept an explicit project or global-only filter. The resource registry authorizes that project before SQL count/paging; requests combining both filters are invalid. No-parameter readers retain their full legacy contract, and authorization reads remain live-only. The management directory continues to include expired rows. Fixed-project grant reads exclude global and unrelated rows; their UI explains that global grants may still apply.
+
+Field settings summarizes both global and project builtin-management authority, and `/fields/scope-projects/options` accepts field.manage for bounded project choices without issue readership. BuiltinFieldsSection selects all/global/project context; AccessGrantsEditor includes context in query identity and AddResourceGrantDialog fixes new grants to the selected scope. All-scope creation uses field-authorized project choices. Name catalogs retain independent read gates. Full backend 2,477/4, frontend/plugin, actual 126-project/grant and populated scope/browser checks pass. [Evidence and remaining contract work](../research/audit-2026-09-09/builtin-grants/README.md).
+
+### Field option settings windows (September audit follow-up)
+
+`fields/directory.option_page` expands one authorized JSONB catalog in PostgreSQL, applies literal search and replacement exclusion before count/paging, and returns strings in stored option order. `GET /fields/definitions/{id}/options` uses the same definition-read policy as field settings. Direct definition reads accept `include_options=false`, returning an SQL-computed `option_count` without hydrating the option array. Existing complete definition/registry reads remain compatible. Field PATCH and option add/remove support the same optional lean response; mutation authority, value validation and transactional item/default migration remain owned by the existing fields service.
+
+`fieldOptionsQuery` includes field, search, page and exclusion in its cancellable cache identity. Field settings, default selection and replacement dialogs mount 50 values at a time; complete multi-value drafts remain intact. Required removal always asks for a replacement, usage-read failure blocks submission, and clean default editors adopt a migrated default while dirty drafts survive refresh. These seams do not yet replace complete option registries used by issue/form/workflow consumers or the internal project authority map.
+
+### Service-account directory windows (September audit follow-up)
+
+`auth/account_directory.py` owns lean account/key projections behind the existing global-management router/MCP read gate. Account search filters name/email before SQL count/windows, then uses one `service_accounts.token_counts` aggregation for the returned IDs. Direct account lookup keeps off-page dialogs reachable. The optional REST account limit preserves complete legacy reads; the MCP tool uses the standard limit/offset contract. Key directory rows contain prefix/name/timestamps and SQL scope counts, omitting hashes and complete scope documents; legacy key reads remain complete. Inactive accounts and expired keys remain visible. Mint/revoke checks and browser-session-only credential issuance are unchanged.
+
+Service-account settings uses `useDirectory` and direct account queries; `ServiceAccountKeysModal` owns key windows, retained mint state, explicit restricted/full authority, read retries and last-page revoke recovery. Account/key query metadata includes member/user and role/team/group authority changes alongside local service-account mutation invalidation. This does not itself implement key-mutation event emission or full worker delivery.
+
+The permission vocabulary additionally admits global role-create/role-update/service-account-update authority, evaluated through credential-aware `authz.holds`. This lets administrators configure roles and restricted keys before issue projects exist. It does not broaden account/key data reads or minting; ordinary vocabulary readers retain the existing issue-member floor, and empty-scope admin keys remain refused.
+
+
+### Issue team and audience directory reads (September audit)
+
+Issue creation, properties and bulk assignment share `web/src/components/teams/TeamSelect.tsx`. `TeamAudience.tsx` keeps complete draft IDs while rendering 50 selected names/counts and stages additions across search pages. Comment headers batch only their three-name previews; the audience dialog reaches every saved team. The GET `/teams/references` endpoint accepts at most 50 IDs, checks global credential-aware `team.read`, and returns only names plus optional effective member counts. `teams.reading.member_counts` deduplicates direct and inherited `(team,user)` pairs through the groups-owned recursive projection once per window. Comment audience writes call the public `teams.existing_ids` facade and validate before replacing restrictions.
+
+The Participants remote owns `ParticipantChoices.tsx`: mounted-on-demand user/team search, 50 visible candidates plus one lookahead, cancellation, retries and recovery after a disappearing final page. It uses the existing project-annotated public user directory and ID-valued team options; people without project access remain addable and labelled, inactive/already-added choices remain disabled, and saved participant chips retain their legacy complete contract. Query metadata does not prove end-to-end worker delivery; project authority-map scans and the complete participant list remain in the research ledger.
+
+### Portal form share windows and individual writes (September audit)
+
+`forms/sharing.py` owns management authorization, nullable authorized subject names, 50-row share/candidate windows and individual add/remove operations. User candidates retain the public directory's active/non-requester rules; team choices/names require credential-aware global `team.read`. Existing recipients are excluded before search/count/paging; inactive saved recipients remain visible/removable. Every share writer, including the legacy full-set PUT, takes the same form-row lock. Mutations emit the existing form.updated event with the resulting count. New mutations return only one share or no body; they never load all saved recipients. GET list/PATCH form keep their complete-share default contract and support `include_shares=false` for callers that do not use that data.
+
+`FormSharing.tsx` uses paged shares, server candidate choices and individual immediate mutations. Add errors retain the chosen recipient; nested picker cancellation and list refresh preserve the outer form draft. Form settings, editor saves/toggles and sidebar definitions opt out of full share hydration. `queries/forms.ts` declares form/authority metadata and distinct list/kind/search/page identities. The default assignee uses the existing optional email field and lazy user.manage-gated email choices; form-only managers can enter known addresses without downloading an administrative directory. Complete form-definition catalogs and remaining fields/defaults readers remain separate P2 work. View/dashboard multi-request sharing reconciliation also remains to be replaced with a policy-preserving transaction; the portal form changes do not address it.
+
+### Transactional view/dashboard sharing (September audit follow-up)
+
+`views/sharing.py` and `dashboards/sharing.py`, exposed through each module's
+`service.save_view` / `service.save_dashboard`, own the savepoint for
+`POST /views/{id}/save` and `POST /dashboards/{id}/save`. Definition edits,
+public access, explicit grant deltas and ownership transfer succeed together.
+The initial owner/public-level snapshot and each edited grant's access/effect/
+expiry snapshot reject stale policy edits. Unmentioned grants are preserved;
+level edits retain the grant's identity, subject, effect and expiry.
+
+`access.ResourceSpec.lock_resource` is an optional owner-supplied row-lock hook.
+Generic grant writers lock before authorization; the view/dashboard legacy
+sharing, transfer and definition writers use the same resource lock. The owning
+module applies its management and broadcast gates before changing grants;
+`access.service.apply_shared_grant_edits` validates and applies the explicit
+policy deltas. An actor may revoke their own co-owner grant within an already
+authorized save. Transfer keeps the previous owner's established editor fallback.
+
+`access.service.shared_resource_state_expressions` shares the exact SQL level
+predicates used by visibility filtering. View/dashboard `include_shares=false`
+reads use the scalar level and sharing flag instead of materializing all grants
+or their subject names. Legacy complete reads remain available. The SPA uses
+these lean reads, the generic grant directory, lazy authorized subject choices,
+and `SharingGrantsEditor`'s paged saved/pending drafts. Ownership choices use
+public person IDs; no administrative email catalog is needed.

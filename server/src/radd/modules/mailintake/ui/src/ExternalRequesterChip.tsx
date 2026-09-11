@@ -29,7 +29,7 @@ export function ExternalRequesterChip({ itemId }: { itemId: string }) {
   // GET /items/{id}/mail-contacts — a collection, so "none" is [] and needs no error branch.
   const { data: contacts } = useQuery({
     queryKey: mailContactsKey(itemId),
-    queryFn: () => api.get<MailContact[]>(`/items/${itemId}/mail-contacts`),
+    queryFn: ({ signal }) => api.get<MailContact[]>(`/items/${itemId}/mail-contacts`, { signal }),
     retry: false,
   });
   if (!contacts?.length) return null; // most items have none

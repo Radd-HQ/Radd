@@ -7,10 +7,10 @@ import { isoDaysAgo } from "../../lib/dates";
 import { usePeek, usePointsEnabled } from "../../lib/hooks";
 import {
   itemsCountQuery,
-  projectsQuery,
+  projectByIdQuery,
   slqListItemsQuery,
   viewCountsQuery,
-  viewsQuery,
+  viewQuery,
 } from "../../lib/queries";
 import {
   ReportInterval,
@@ -281,22 +281,20 @@ function ViewCountCard({
 }) {
   const viewId = widget.config.view_id ?? "";
   const counts = useQuery(viewCountsQuery(viewId ? [viewId] : [], filterQuery));
-  const views = useQuery(viewsQuery());
-  const projects = useQuery(projectsQuery());
-  const view = views.data?.find((entry) => entry.id === viewId);
+  const views = useQuery(viewQuery(viewId));
+  const view = views.data;
+  const project = useQuery(projectByIdQuery(view?.project_id ?? ""));
   if (
     !viewId ||
     counts.isError ||
     (counts.data && counts.data[viewId] === undefined) ||
-    (views.data && !view)
+    views.isError
   ) {
     return <UnavailableCard title={widget.title} />;
   }
   const count = counts.data?.[viewId];
   const label = widget.title || view?.name || "View";
-  const projectKey = view?.project_id
-    ? projects.data?.find((project) => project.id === view.project_id)?.key
-    : undefined;
+  const projectKey = project.data?.key;
   const body = (
     <>
       <p className="truncate text-[11px] uppercase tracking-wide text-fg-muted">{label}</p>

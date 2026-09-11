@@ -9,6 +9,7 @@ from radd.modules.events import service as events
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 
+from .options import list_options as list_options
 from .models import IssueType
 from .schemas import IssueTypeCreate, IssueTypeUpdate
 from .types import DEFAULT_TYPES, TypeEntity, TypeEvent
@@ -105,7 +106,7 @@ async def delete_type(
         raise ConflictError(
             TypeEntity.ISSUE_TYPE, reason="cannot delete the default type; set another default first"
         )
-    project = await projects_service.get_project(session, issue_type.project_id)
+    await projects_service.get_project(session, issue_type.project_id)
     await _emit(session, TypeEvent.DELETED, issue_type, actor_id)
     await session.delete(issue_type)  # items' type_id nulls via FK ondelete SET NULL
     await session.flush()

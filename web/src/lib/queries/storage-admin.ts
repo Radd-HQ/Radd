@@ -10,7 +10,7 @@ import type { MoveJobRead, StorageHostRead, StorageRuleRead, UploadContext } fro
 export const storageHostsQuery = () =>
   queryOptions({
     queryKey: queryKeys.storageHosts,
-    queryFn: () => api.get<StorageHostRead[]>(ApiPath.storageHosts),
+    queryFn: ({ signal }) => api.get<StorageHostRead[]>(ApiPath.storageHosts, { signal }),
     staleTime: 30_000,
   });
 
@@ -18,7 +18,7 @@ export const storageHostsQuery = () =>
 export const storageRulesQuery = () =>
   queryOptions({
     queryKey: queryKeys.storageRules,
-    queryFn: () => api.get<StorageRuleRead[]>(ApiPath.storageRules),
+    queryFn: ({ signal }) => api.get<StorageRuleRead[]>(ApiPath.storageRules, { signal }),
     staleTime: 30_000,
   });
 
@@ -26,7 +26,7 @@ export const storageRulesQuery = () =>
 export const storageMoveJobsQuery = () =>
   queryOptions({
     queryKey: queryKeys.storageMoveJobs,
-    queryFn: () => api.get<MoveJobRead[]>(ApiPath.storageMoveJobs),
+    queryFn: ({ signal }) => api.get<MoveJobRead[]>(ApiPath.storageMoveJobs, { signal }),
     staleTime: 10_000,
   });
 
@@ -34,7 +34,7 @@ export const storageMoveJobsQuery = () =>
 export const storageMoveJobQuery = (jobId: string) =>
   queryOptions({
     queryKey: queryKeys.storageMoveJob(jobId),
-    queryFn: () => api.get<MoveJobRead>(apiStorageMoveJobPath(jobId)),
+    queryFn: ({ signal }) => api.get<MoveJobRead>(apiStorageMoveJobPath(jobId), { signal }),
   });
 
 /** Pre-upload context — the one NON-admin read here: any authenticated user
@@ -46,8 +46,8 @@ export const uploadContextQuery = (contentTypes: string[] = []) => {
   const qs = types.map((t) => `content_type=${encodeURIComponent(t)}`).join("&");
   return queryOptions({
     queryKey: [...queryKeys.storageUploadContext, types],
-    queryFn: () =>
-      api.get<UploadContext>(qs ? `${ApiPath.storageUploadContext}?${qs}` : ApiPath.storageUploadContext),
+    queryFn: ({ signal }) =>
+      api.get<UploadContext>(qs ? `${ApiPath.storageUploadContext}?${qs}` : ApiPath.storageUploadContext, { signal }),
     staleTime: 30_000,
   });
 };

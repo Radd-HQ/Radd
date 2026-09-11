@@ -11,14 +11,14 @@ from datetime import date, datetime, time, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd.exceptions import ConflictError
+from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.auth import authz
 from radd.modules.auth.models import User
 # Submodule with model-only imports (the slas/report.py idiom) — csat loads
 # AFTER reporting in RADD_MODULES, so this must never touch its service layer.
 from radd.modules.csat import report as csat_responses
 from radd.modules.cycles import service as cycles_service
-from radd.modules.cycles.types import CycleEntity, CycleStatus
+from radd.modules.cycles.types import CycleEntity
 from radd.modules.items import bulk as items_bulk
 from radd.modules.items import service as items_service
 from radd.modules.items.enums import ItemKind
@@ -254,14 +254,20 @@ async def velocity(
 
     Cycles span projects, so the figure is cross-project and carries the scope it
     was computed over (RADD-789)."""
+    if actor is not None and not await authz.holds(session, actor, authz.Permission.CYCLE_READ):
+        # Like the cycle directory, return an empty collection when the
+        # catalog atom is absent. Project-only readers still receive their
+        # report scope without disclosure of cycle names or timeline data.
+        return VelocityReport(rows=[], scope=await _scope_of(session, actor))
     matches = await _matching_ids(session, actor, q)
-    today = date.today()
-    completed = await cycles_service.list_cycles(
-        session, status=CycleStatus.COMPLETED, today=today
-    )
-    recent = sorted(completed, key=lambda cycle: cycle.end_date, reverse=True)[:last]
+    recent = await cycles_service.recent_completed_cycles(session, actor=actor, limit=last, today=date.today())
+    # A draft can be explicitly completed without planned dates. Use its actual
+    # completion day for ordering, then creation as the final legacy fallback.
+    def finished_on(cycle):
+        return cycle.completed_at.date() if cycle.completed_at else cycle.end_date or cycle.created_at.date()
+
     rows: list[VelocityRow] = []
-    for cycle in sorted(recent, key=lambda cycle: cycle.start_date):
+    for cycle in sorted(recent, key=lambda cycle: (cycle.start_date or finished_on(cycle), cycle.id)):
         item_ids = _keep(await timeline.item_ids_for_cycle(session, cycle.id), matches)
         timelines = await timeline.build_item_timelines(session, item_ids)
         points = await _points_measure(session, measure, item_ids)
@@ -290,6 +296,10 @@ async def burnup(
     """Daily scope (items in the cycle) vs completed, over the cycle's window —
     item counts, or story-point sums over the same sets (spec 70)."""
     cycle = await cycles_service.get_cycle(session, cycle_id)
+    if actor is not None:
+        await authz.require(session, actor, authz.Permission.CYCLE_READ)
+        if not await cycles_service.cycle_visible_to(session, cycle, actor):
+            raise NotFoundError(CycleEntity.CYCLE, cycle_id)
     if cycle.start_date is None or cycle.end_date is None:
         # A DRAFT (staging) cycle has no window to plot — schedule it first.
         raise ConflictError(

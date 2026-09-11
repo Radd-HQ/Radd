@@ -30,12 +30,10 @@ from radd.modules.workflow.guards import TransitionError
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 
-from . import slq
 from .changes import diff_item_reads, field_name_map
 from .enums import BulkSkipReason, ItemEntity, ItemEvent
 from .filters import ItemListFilters
 from .hydration import hydrate, label_names
-from .listing import apply_filters, cf_definitions
 from .models import ItemKeyAlias, WorkItem
 from .schemas import (
     BulkMovedItem,
@@ -49,6 +47,7 @@ from .schemas import (
     ItemUpdate,
 )
 from .service import set_archived, update_item
+from .service.scope import visible_ids_query
 
 # Package-private helpers — reached through their concern module, not the service
 # barrel, which exports only the items module's public surface.
@@ -57,7 +56,6 @@ from .service.visibility import (
     _check_builtin_field_rules,
     _field_ctx,
     _internal_visible,
-    denied_slq_fields,
 )
 from radd.modules.events import service as events
 
@@ -380,50 +378,6 @@ async def bulk_move_items(
 # --- id listing (select all matching) ---
 
 
-async def _visible_ids_query(
-    session: AsyncSession,
-    *,
-    actor: User,
-    filters: ItemListFilters,
-    q: str | None,
-):
-    """The shared SELECT WorkItem.id builder behind /items/ids and /items/count:
-    same filter surface + visibility as list_items. Returns (query, slq_order)."""
-    scoped_project: Project | None = None
-    if filters.project_id:
-        scoped_project = await projects_service.get_project(session, filters.project_id)
-        scoped_perms = await authz.require(
-            session, actor, Permission.ITEM_READ, project=scoped_project
-        )
-        readable = {scoped_project.id: scoped_perms}
-    else:
-        readable = await authz.require_anywhere(session, actor, Permission.ITEM_READ)
-
-    query = select(WorkItem.id)
-    if scoped_project is None:
-        # Cross-project: constrain to projects the actor can read UP FRONT so
-        # both the count and the ids honor visibility (RADD-672: item.read
-        # anywhere, not the global atom a scoped key never holds).
-        query = query.where(WorkItem.project_id.in_(readable.keys()))
-    # RADD-817: ids/count share the same relation row filter as the list.
-    relation_clause = await relation_read_clause(session, actor, readable)
-    if relation_clause is not None:
-        query = query.where(relation_clause)
-    query = await apply_filters(session, query, filters, scoped_project)
-    order: tuple = ()
-    if q and q.strip():
-        compiled = await slq.compile_query(
-            session,
-            slq.parse(q),
-            definitions_by_key=await cf_definitions(session, scoped_project),
-            current_user_id=actor.id,
-            project_id=filters.project_id,
-            denied_fields=await denied_slq_fields(session, actor, scoped_project),
-        )
-        if compiled.where is not None:
-            query = query.where(compiled.where)
-        order = compiled.order
-    return query, order
 
 
 async def list_item_ids(
@@ -436,7 +390,7 @@ async def list_item_ids(
     """Same filter surface + visibility as list_items, but ids only: the
     'select all N matching' seam. ids capped at bulk_max_items; total is the
     true visible count."""
-    query, order = await _visible_ids_query(session, actor=actor, filters=filters, q=q)
+    query, order = await visible_ids_query(session, actor=actor, filters=filters, q=q)
     total = await session.scalar(
         select(func.count()).select_from(query.order_by(None).subquery())
     )
@@ -463,7 +417,7 @@ async def visible_matching_ids(
     Raises SlqError for a query that doesn't compile — same 422 as GET /items.
     """
     filters = ItemListFilters(project_id=project_id)
-    query, _ = await _visible_ids_query(session, actor=actor, filters=filters, q=q)
+    query, _ = await visible_ids_query(session, actor=actor, filters=filters, q=q)
     return set((await session.execute(query.order_by(None))).scalars())
 
 
@@ -476,7 +430,7 @@ async def count_items(
 ) -> int:
     """The visible-match count alone (spec 75 — GET /items/count, the slq_count
     widget's fetch): exactly list_item_ids' total without materializing ids."""
-    query, _ = await _visible_ids_query(session, actor=actor, filters=filters, q=q)
+    query, _ = await visible_ids_query(session, actor=actor, filters=filters, q=q)
     total = await session.scalar(
         select(func.count()).select_from(query.order_by(None).subquery())
     )

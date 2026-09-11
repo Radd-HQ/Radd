@@ -75,7 +75,7 @@ export function FormEditor({ project, form, onDone }: FormEditorProps) {
         team_picker_enabled: teamPicker,
       };
       return persistedId
-        ? api.patch<Form>(apiFormPath(persistedId), payload satisfies FormUpdate)
+        ? api.patch<Form>(apiFormPath(persistedId), payload satisfies FormUpdate, { query: { include_shares: "false" } })
         : api.post<Form>(ApiPath.forms, {
             ...payload,
             project_id: project.id,
@@ -219,7 +219,6 @@ export function FormEditor({ project, form, onDone }: FormEditorProps) {
         <FormSharing
           formId={persistedId}
           projectId={project.id}
-          shares={form?.shares ?? []}
         />
       )}
 

@@ -1,9 +1,10 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.choices import ChoiceRead
 from radd.db import get_session
 from radd.kernel.registry import registries
 from radd.modules.auth import authz
@@ -12,6 +13,8 @@ from radd.modules.items import service as items_service
 
 from . import (
     access,
+    directory,
+    options as space_options,
     page_access,
     backlinks,
     export as page_export,
@@ -22,6 +25,7 @@ from . import (
     service,
     spaces,
     templates as page_templates,
+    template_directory,
     watchers as page_watchers,
 )
 from radd.exceptions import NotFoundError
@@ -38,6 +42,7 @@ from .schemas import (
     PageLabelsUpdate,
     PageTemplateCreate,
     PageTemplateRead,
+    PageTemplateSummaryRead,
     PageTemplateUpdate,
     PageExtensionRead,
     PageRead,
@@ -47,6 +52,7 @@ from .schemas import (
     PageSearchResponse,
     PageSpaceCreate,
     PageSpaceRead,
+    PageSpaceSummaryRead,
     PageSpaceUpdate,
     PageVersionMeta,
     PageVersionRead,
@@ -81,23 +87,41 @@ async def _page_guard(
 
 
 @router.get("/page-spaces", response_model=list[PageSpaceRead])
-async def list_spaces(session: Session, user: CurrentUser) -> list[PageSpaceRead]:
-    """The spaces this actor may read (RADD-791) — an empty list, never a 403.
+async def list_spaces(
+    session: Session, user: CurrentUser, response: Response,
+    q: Annotated[str, Query(max_length=200)] = "",
+    limit: Annotated[int | None, Query(ge=1, le=200)] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[PageSpaceRead]:
+    """Readable spaces, with optional bounded search windows for interactive readers."""
+    rows, total = await directory.page(session, user, q=q, limit=limit, offset=offset)
+    response.headers["X-Total-Count"] = str(total)
+    return rows
 
-    Same rule as `readable_projects`: being entitled to no space is not doing
-    anything wrong, so the wiki nav renders empty instead of greeting a new
-    account with a permission toast.
-    """
-    readable = await access.readable_spaces(session, user)
-    out = []
-    for space in await spaces.list_spaces(session):
-        if space.id not in readable:
-            continue
-        # RADD-814: each row carries the caller's per-space union, so the SPA's
-        # `can()` resolves space-scoped atoms against THE space (RADD-810 class).
-        space.permissions = sorted(str(p) for p in readable[space.id])
-        out.append(space)
-    return out
+
+@router.get("/page-spaces/summary", response_model=PageSpaceSummaryRead)
+async def space_summary(session: Session, user: CurrentUser) -> PageSpaceSummaryRead:
+    return await directory.summary(session, user)
+
+
+@router.get("/page-spaces/by-identity/{identifier}", response_model=PageSpaceRead)
+async def space_by_identity(identifier: str, session: Session, user: CurrentUser) -> PageSpaceRead:
+    return await directory.by_identity(session, user, identifier)
+
+
+@router.get("/page-spaces/options", response_model=list[ChoiceRead])
+async def space_choices(
+    session: Session, user: CurrentUser, response: Response,
+    q: Annotated[str, Query(max_length=200)] = "",
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    value: Annotated[str | None, Query(max_length=200)] = None,
+) -> list[ChoiceRead]:
+    rows, total = await space_options.list_options(
+        session, user, q=q, limit=limit, offset=offset, value=value
+    )
+    response.headers["X-Total-Count"] = str(total)
+    return rows
 
 
 @router.post("/page-spaces", response_model=PageSpaceRead, status_code=201)
@@ -159,14 +183,34 @@ async def list_templates(
     session: Session, user: CurrentUser, space_id: uuid.UUID | None = None
 ) -> list[PageTemplateRead]:
     """Templates usable here: the space's own, plus the global ones (RADD-712)."""
+    readable = None
     if space_id is not None:
         await authz.require(session, user, authz.Permission.PAGE_READ, space_id=space_id)
-    elif not await access.readable_spaces(session, user):
-        return []
+    else:
+        readable = await access.readable_spaces(session, user)
+        if not readable:
+            return []
     return [
         PageTemplateRead.model_validate(t)
-        for t in await page_templates.list_templates(session, space_id)
+        for t in await page_templates.list_templates(session, space_id, readable_space_ids=readable)
     ]
+
+
+@router.get("/page-templates/directory", response_model=list[PageTemplateSummaryRead])
+async def template_page(
+    session: Session, user: CurrentUser, response: Response,
+    q: Annotated[str, Query(max_length=200)] = "",
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[PageTemplateSummaryRead]:
+    rows, total = await template_directory.page(session, user, q=q, limit=limit, offset=offset)
+    response.headers["X-Total-Count"] = str(total)
+    return rows
+
+
+@router.get("/page-templates/{template_id}", response_model=PageTemplateRead)
+async def template_detail(template_id: uuid.UUID, session: Session, user: CurrentUser) -> PageTemplateRead:
+    return await template_directory.by_id(session, user, template_id)
 
 
 @router.post("/page-templates", response_model=PageTemplateRead, status_code=201)

@@ -38,7 +38,7 @@ export function useIssueQuickActions(item: Item, projectId: string): QuickAction
   const states = useQuery(statesQuery(projectId));
   const labels = useQuery(labelsQuery());
   const automations = useQuery(runnableAutomationsQuery());
-  const updateItem = useUpdateItem(projectId);
+  const updateItem = useUpdateItem();
   const queryClient = useQueryClient();
 
   const { mutate } = updateItem;

@@ -243,9 +243,9 @@ function ProviderModal({
   );
   const localEmbed = useQuery({
     queryKey: ["ai", "local-embed"],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<{ available: boolean; default_model: string; models: string[] }>(
-        ApiPath.aiLocalEmbed,
+        ApiPath.aiLocalEmbed, { signal },
       ),
     enabled: wireShape === AiWireShape.local,
     staleTime: 60_000,

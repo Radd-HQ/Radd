@@ -156,6 +156,11 @@ class FormShareRead(BaseModel):
     created_at: UtcDatetime
 
 
+class FormShareDirectoryRead(FormShareRead):
+    subject_name: str | None = None
+    active: bool | None = None
+
+
 class FormValidationContext(BaseModel):
     """Whether intake validation governs submissions through this form (spec 119).
 

@@ -136,53 +136,36 @@ async def cycle_time_totals(
     session: AsyncSession,
     cycle_id: uuid.UUID,
     *,
+    actor: User,
     assignee_id: uuid.UUID | None = None,
     team_id: uuid.UUID | None = None,
     project_id: uuid.UUID | None = None,
+    q: str | None = None,
 ) -> tuple[int, int, int]:
-    """(estimate, logged, remaining) seconds across a cycle's unarchived items — the
-    cycle-page stats seam (same read-only WorkItem join this module already does for
-    the timesheet). Remaining = Σ (estimate − logged) over estimated items — negative
-    once the cycle is over-logged (the UI shows the overrun in red), matching the
-    per-item remaining semantics. Worklogs on unestimated items don't subtract."""
-    items_stmt = select(WorkItem.id).where(
-        WorkItem.cycle_id == cycle_id, WorkItem.archived_at.is_(None)
+    """Visible cycle time totals, aggregated in SQL without collecting item IDs.
+
+    Remaining subtracts logged time only for estimated items, including overruns.
+    The item module owns project, relation, archived and SLQ read filtering.
+    """
+    visible = (await items_service.cycle_item_ids_query(
+        session, cycle_id, actor=actor, assignee_id=assignee_id, team_id=team_id,
+        project_id=project_id, q=q,
+    )).cte("cycle_visible_items")
+    logged = (
+        select(Worklog.item_id, func.sum(Worklog.time_spent_seconds).label("seconds"))
+        .where(Worklog.item_id.in_(select(visible.c.id)))
+        .group_by(Worklog.item_id).subquery()
     )
-    if assignee_id is not None:
-        items_stmt = items_stmt.where(WorkItem.assignee_id == assignee_id)
-    if team_id is not None:
-        items_stmt = items_stmt.where(WorkItem.team_id == team_id)
-    if project_id is not None:
-        items_stmt = items_stmt.where(WorkItem.project_id == project_id)
-    item_ids = set((await session.execute(items_stmt)).scalars())
-    if not item_ids:
-        return 0, 0, 0
-    estimates = {
-        item_id: seconds
-        for item_id, seconds in (
-            await session.execute(
-                select(ItemEstimate.item_id, ItemEstimate.original_estimate_seconds).where(
-                    ItemEstimate.item_id.in_(item_ids)
-                )
-            )
-        ).all()
-    }
-    logged_by_item: dict[uuid.UUID, int] = {
-        item_id: seconds
-        for item_id, seconds in (
-            await session.execute(
-                select(Worklog.item_id, func.sum(Worklog.time_spent_seconds))
-                .where(Worklog.item_id.in_(item_ids))
-                .group_by(Worklog.item_id)
-            )
-        ).all()
-    }
-    estimate = sum(estimates.values())
-    logged = sum(logged_by_item.values())
-    remaining = sum(
-        seconds - logged_by_item.get(item_id, 0) for item_id, seconds in estimates.items()
+    query = (
+        select(
+            func.coalesce(func.sum(ItemEstimate.original_estimate_seconds), 0),
+            func.coalesce(func.sum(logged.c.seconds), 0),
+            func.coalesce(func.sum(ItemEstimate.original_estimate_seconds - func.coalesce(logged.c.seconds, 0)), 0),
+        ).select_from(visible)
+        .outerjoin(ItemEstimate, ItemEstimate.item_id == visible.c.id)
+        .outerjoin(logged, logged.c.item_id == visible.c.id)
     )
-    return estimate, logged, remaining
+    return tuple(int(value) for value in (await session.execute(query)).one())
 
 
 def _epic_ref(epic: items_service.EpicRef | None) -> ItemRef | None:

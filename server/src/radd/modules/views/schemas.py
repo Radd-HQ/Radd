@@ -1,3 +1,5 @@
+from radd.modules.access.schemas import SharedGrantEdits
+
 import uuid
 from typing import Annotated, Literal
 
@@ -274,3 +276,14 @@ class ViewRead(BaseModel):
     query_string: str
     created_at: UtcDatetime
     updated_at: UtcDatetime
+
+
+class ViewSave(BaseModel):
+    """One definition/sharing/ownership transaction; omitted sections stay intact."""
+
+    definition: ViewUpdate | None = None
+    sharing: ViewSharingUpdate | None = None
+    grants: SharedGrantEdits | None = None
+    transfer_to: uuid.UUID | None = None
+    expected_owner_id: uuid.UUID | None
+    expected_global_access: ShareLevel | None

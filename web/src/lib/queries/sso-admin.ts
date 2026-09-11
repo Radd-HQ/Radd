@@ -10,7 +10,7 @@ import type { SsoKindInfo, SsoProviderRead } from "../types";
 export const ssoProvidersQuery = () =>
   queryOptions({
     queryKey: queryKeys.ssoProviders,
-    queryFn: () => api.get<SsoProviderRead[]>(ApiPath.ssoProviders),
+    queryFn: ({ signal }) => api.get<SsoProviderRead[]>(ApiPath.ssoProviders, { signal }),
     staleTime: 30_000,
   });
 
@@ -18,6 +18,6 @@ export const ssoProvidersQuery = () =>
 export const ssoKindsQuery = () =>
   queryOptions({
     queryKey: queryKeys.ssoKinds,
-    queryFn: () => api.get<SsoKindInfo[]>(ApiPath.ssoKinds),
+    queryFn: ({ signal }) => api.get<SsoKindInfo[]>(ApiPath.ssoKinds, { signal }),
     staleTime: Infinity, // a static server-side catalog
   });

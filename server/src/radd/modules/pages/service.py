@@ -38,10 +38,11 @@ from .schemas import (
     PageSpaceRead,
 )
 from .spaces import get_space
+from .options import list_options as space_options
 from .types import PageEntity, PageEvent, RestoreKind
 from radd.clock import utcnow
 
-__all__ = ["get_space"]  # re-exported: the space half of the module's seam
+__all__ = ["get_space", "space_options"]  # re-exported: the space half of the module's seam
 
 
 
@@ -185,15 +186,9 @@ async def resolve_page_by_slug(session: AsyncSession, space_slug: str, page_slug
 
 
 async def _space_by_slug_or_id(session: AsyncSession, value: str) -> PageSpace:
-    space = (
-        await session.execute(select(PageSpace).where(PageSpace.slug == value))
-    ).scalar_one_or_none()
-    if space is not None:
-        return space
-    try:
-        return await get_space(session, uuid.UUID(value))
-    except (ValueError, AttributeError):
-        raise NotFoundError(PageEntity.SPACE, value) from None
+    from .spaces import by_slug_or_id
+
+    return await by_slug_or_id(session, value)
 
 
 async def _page_by_id_text(
@@ -266,7 +261,7 @@ async def create_page(
         # RADD-712. An explicit body wins — naming a template AND supplying a
         # body means the caller has decided, and silently overwriting it would be
         # the surprising behaviour.
-        template = await page_templates.by_name(session, data.template)
+        template = await page_templates.by_name(session, data.template, space_id=space.id)
         author = await _actor_name(session, actor_id)
         body = page_templates.render(template.body, title=data.title, author=author)
     # Spec 117. An import states the author and the dates; everything else is the
@@ -658,3 +653,10 @@ async def drop_restricted_labelled(session: AsyncSession, actor: "User", rows: l
     )
     readable = await page_access.readable_page_ids(session, actor, pages)
     return [row for row in rows if row.page_id in readable]
+
+
+async def space_names(session: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
+    """Names for a caller-authorized ID set, without space bodies or page counts."""
+    if not ids:
+        return {}
+    return dict((await session.execute(select(PageSpace.id, PageSpace.name).where(PageSpace.id.in_(ids)))).all())

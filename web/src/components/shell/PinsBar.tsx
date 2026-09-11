@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import {
   BarChart3,
   BookOpen,
@@ -26,12 +26,13 @@ import {
 import { ContextMenu } from "../ContextMenu";
 import { RoutePath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
-import { projectsQuery, viewsQuery } from "../../lib/queries";
+import { projectByIdQuery, projectByKeyQuery, viewQuery } from "../../lib/queries";
 import { useNavFacts } from "../../lib/nav-facts";
 import { pinKey, useNavPins, type NavPin } from "../../lib/topbar-prefs";
 import { Permission, type Project, type View } from "../../lib/types";
 import { NewItemModal } from "../items/NewItemModal";
-import { DropdownMenu } from "../DropdownMenu";
+import { ProjectPicker } from "../projects/ProjectPicker";
+import { Button } from "../Button";
 import { RenamePinDialog } from "./RenamePinDialog";
 
 const tabBase =
@@ -79,8 +80,11 @@ function tabIcon({ pin, view }: PinnedEntry): LucideIcon {
  */
 export function PinsBar() {
   const { pins, toggle, rename } = useNavPins();
-  const views = useQuery(viewsQuery());
-  const projects = useQuery(projectsQuery());
+  const pinnedViewIds = pins.filter(pin => pin.kind === "view").map(pin => pin.id);
+  const viewReads = useQueries({ queries: pinnedViewIds.map(viewQuery) });
+  const views = viewReads.flatMap(query => query.data ? [query.data] : []);
+  const projectIds = [...new Set(views.flatMap(view => view.project_id ? [view.project_id] : []))];
+  const projects = useQueries({ queries: projectIds.map(projectByIdQuery) });
   const [menu, setMenu] = useState<{ x: number; y: number; entry: PinnedEntry } | null>(null);
   const [renaming, setRenaming] = useState<PinnedEntry | null>(null);
 
@@ -93,12 +97,12 @@ export function PinsBar() {
       // RADD-843: a link pin to an area the actor cannot use is dropped from
       // RENDER but kept in prefs — access can return (the view-pin rule).
       if (pin.kind === "link") return navFacts.forPath(pin.path) ? { pin } : null;
-      const view = (views.data ?? []).find((entry) => entry.id === pin.id);
+      const view = views.find((entry) => entry.id === pin.id);
       return view ? { pin, view } : null;
     })
     .filter((entry): entry is PinnedEntry => entry !== null);
   const projectKey = (projectId: string | null) =>
-    (projects.data ?? []).find((project) => project.id === projectId)?.key;
+    projects.find(query => query.data?.id === projectId)?.data?.key;
 
   // Tab text: the user's custom label wins; otherwise the view name / link
   // title — with the project key prefixed when several view pins share a name
@@ -191,7 +195,7 @@ export function PinsBar() {
           );
         })}
       </nav>
-      <NewItemButton projects={projects.data ?? []} />
+      <NewItemButton />
       {menu && (
         <ContextMenu
           x={menu.x}
@@ -227,65 +231,23 @@ export function PinsBar() {
   );
 }
 
-const newItemButtonClasses =
-  "inline-flex h-7 shrink-0 cursor-pointer select-none items-center gap-1.5 rounded-md " +
-  "bg-accent px-2.5 text-xs font-medium text-white transition-colors hover:bg-accent-hover " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
-
-/**
- * The always-visible create button (every surface, not just item views).
- * Context-aware: inside a project it creates there in one click; anywhere
- * else it offers the projects the user can create in. Hidden only when the
- * user can create nowhere.
- */
-function NewItemButton({ projects }: { projects: Project[] }) {
+/** The route project creates in one click; other scopes open server search. */
+function NewItemButton() {
   const perms = usePermissions();
   const { projectKey } = useParams({ strict: false });
+  const routeProject = useQuery(projectByKeyQuery(projectKey ?? ""));
   const [creating, setCreating] = useState<Project | null>(null);
-  const creatable = projects.filter((project) =>
-    perms.project(project, Permission.itemCreate),
-  );
-  if (creatable.length === 0) return null;
-  const routeProject = creatable.find((project) => project.key === projectKey);
-  const direct = routeProject ?? (creatable.length === 1 ? creatable[0] : null);
-  return (
-    <>
-      {direct ? (
-        <button
-          type="button"
-          onClick={() => setCreating(direct)}
-          title={`New item in ${direct.key}`}
-          className={newItemButtonClasses}
-        >
-          <Plus size={13} aria-hidden />
-          New item
-        </button>
-      ) : (
-        <DropdownMenu
-          label="New item"
-          align="end"
-          widthClass="w-56"
-          items={creatable.map((project) => ({
-            kind: "action" as const,
-            label: `${project.key} — ${project.name}`,
-            onSelect: () => setCreating(project),
-          }))}
-          trigger={({ ref, open, toggle }) => (
-            <button
-              ref={ref}
-              type="button"
-              onClick={toggle}
-              aria-haspopup="menu"
-              aria-expanded={open}
-              className={newItemButtonClasses}
-            >
-              <Plus size={13} aria-hidden />
-              New item
-            </button>
-          )}
-        />
-      )}
-      {creating && <NewItemModal project={creating} onClose={() => setCreating(null)} />}
-    </>
-  );
+  const [choosing, setChoosing] = useState(false);
+  if (!perms.anyProject(Permission.itemCreate)) return null;
+  const direct = routeProject.data && perms.project(routeProject.data, Permission.itemCreate)
+    ? routeProject.data : null;
+  return <>
+    <Button size="sm" onClick={() => direct ? setCreating(direct) : setChoosing(true)}
+      title={direct ? `New item in ${direct.key}` : "Choose a project for a new item"}>
+      <Plus size={13} aria-hidden />New item
+    </Button>
+    {choosing && <ProjectPicker title="New item — choose a project" permission={Permission.itemCreate}
+      onClose={() => setChoosing(false)} onSelect={project => { setChoosing(false); setCreating(project); }} />}
+    {creating && <NewItemModal project={creating} onClose={() => setCreating(null)} />}
+  </>;
 }

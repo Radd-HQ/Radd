@@ -21,7 +21,7 @@ export const rollupBatchQuery = (itemIds: readonly string[]) => {
   const ids = [...itemIds].sort().slice(0, ROLLUP_MAX_ITEMS);
   return queryOptions({
     queryKey: queryKeys.rollupBatch(ids),
-    queryFn: () => api.post<RollupResponse>(ApiPath.itemsRollup, { item_ids: ids }),
+    queryFn: ({ signal }) => api.post<RollupResponse>(ApiPath.itemsRollup, { item_ids: ids }, { signal }),
     meta: entityMeta(Entity.item),
   });
 };
@@ -34,13 +34,13 @@ export const timelogBatchChunkedQuery = (itemIds: readonly string[]) => {
   const ids = [...itemIds].sort();
   return queryOptions({
     queryKey: queryKeys.timelogBatch(ids),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const merged: TimelogBatchResponse = {};
       for (let start = 0; start < ids.length; start += TIMELOG_BATCH_MAX_ITEMS) {
         const chunk = ids.slice(start, start + TIMELOG_BATCH_MAX_ITEMS);
         Object.assign(
           merged,
-          await api.post<TimelogBatchResponse>(ApiPath.itemsTimelogBatch, { item_ids: chunk }),
+          await api.post<TimelogBatchResponse>(ApiPath.itemsTimelogBatch, { item_ids: chunk }, { signal }),
         );
       }
       return merged;

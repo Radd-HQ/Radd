@@ -1,3 +1,4 @@
+import { CycleChoices } from "../components/cycles/CycleSelect";
 import {
   useCallback,
   useEffect,
@@ -42,13 +43,13 @@ import {
   itemIdsQuery,
   itemsCountQuery,
   pagedViewItemsQuery,
-  projectsQuery,
+  projectByIdQuery,
   queryKeys,
   roadmapMembersQuery,
   statesQuery,
   timelogBatchChunkedQuery,
   usersQuery,
-  viewsQuery,
+  viewQuery as viewDefinitionQuery,
   allStatesQuery,
 stateCategoriesQuery } from "../lib/queries";
 import { pushToast } from "../lib/toast";
@@ -136,9 +137,8 @@ export function ViewPage() {
   const perms = usePermissions();
   const currentUser = useCurrentUser();
 
-  const projects = useQuery(projectsQuery());
-  const views = useQuery(viewsQuery());
-  const view = views.data?.find((entry) => entry.id === viewId);
+  const views = useQuery(viewDefinitionQuery(viewId));
+  const view = views.data;
   // A plugin-contributed view type (spec 94): rendered by the plugin's `view.type` slot instead of
   // the builtin board/list surface. The header/query bar still apply — only the surface changes.
   const { data: capsManifest } = useQuery(capabilitiesQuery);
@@ -152,9 +152,8 @@ export function ViewPage() {
   const disabledViewTypes = useDisabledMatches(SlotId.viewType);
   const isDisabledPluginView =
     view != null && isPluginView && disabledViewTypes.has(view.view_type);
-  const project = view?.project_id
-    ? (projects.data ?? []).find((entry) => entry.id === view.project_id) ?? null
-    : null;
+  const projectLookup = useQuery(projectByIdQuery(view?.project_id ?? ""));
+  const project = projectLookup.data ?? null;
 
   // Quick filters (Jira-style chips): active ones AND into the query, and the
   // whole machinery (fetch, optimistic drag/star/reorder caches) targets the
@@ -512,7 +511,9 @@ export function ViewPage() {
     ...allStatesQuery(),
     enabled: Boolean(view) && !view?.project_id,
   });
-  const cycles = useQuery(cyclesQuery());
+  const cycles = useQuery({ ...cyclesQuery(), enabled: Boolean(view) && (
+    view?.view_type === ViewType.planning || view?.group_by === ViewAxis.cycle || view?.swimlane_by === ViewAxis.cycle
+  ) });
   // Story points (spec 70): resolved per project (all-projects views fall
   // back to the instance default) — drives the board columns' Σ pts header.
   const pointsEnabled = usePointsEnabled(view?.project_id ?? undefined);
@@ -537,6 +538,7 @@ export function ViewPage() {
       if (canCreate) openCreate();
     }, [canCreate, openCreate]),
   );
+  const [cycleTarget, setCycleTarget] = useState<Item | null>(null);
   const [menu, setMenu] = useState<{ item: Item; x: number; y: number } | null>(null);
   const openContextMenu = (item: Item, event: ReactMouseEvent) =>
     setMenu({ item, x: event.clientX, y: event.clientY });
@@ -753,7 +755,7 @@ export function ViewPage() {
       }
     : undefined;
 
-  if (views.isPending) {
+  if (views.isPending || (Boolean(view?.project_id) && projectLookup.isPending)) {
     return <Spinner label="Loading view…" />;
   }
   if (views.isError) {
@@ -1234,7 +1236,7 @@ export function ViewPage() {
           y={menu.y}
           onClose={() => setMenu(null)}
           canUpdate={canUpdate}
-          cycles={cycles.data}
+          onChooseCycle={() => setCycleTarget(menu.item)}
           states={states.data}
           currentUser={currentUser}
           onAct={(patch, optimistic) =>
@@ -1243,6 +1245,13 @@ export function ViewPage() {
           onStar={onStar}
         />
       )}
+
+      {cycleTarget && <CycleChoices value={cycleTarget.cycle?.id ?? ""} includeCompleted={false}
+        emptyLabel="Backlog" onClose={() => setCycleTarget(null)} onSelect={cycle => {
+          move.mutate({ itemId: cycleTarget.id, patch: { cycle_id: cycle?.id ?? null },
+            optimistic: { cycle: cycle ? { id: cycle.id, name: cycle.name, status: cycle.status } : null } });
+          setCycleTarget(null);
+        }} />}
 
       {editing && (
         <ViewModal project={project} view={view} onClose={() => setEditing(false)} />

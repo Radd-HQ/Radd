@@ -31,7 +31,7 @@ const pollWhileRunning = <T extends { stage: string }>(rows: T[] | undefined) =>
 export const confluenceConnectionsQuery = () =>
   queryOptions({
     queryKey: queryKeys.confluenceConnections,
-    queryFn: () => api.get<ConfluenceConnection[]>(ApiPath.confluenceConnections),
+    queryFn: ({ signal }) => api.get<ConfluenceConnection[]>(ApiPath.confluenceConnections, { signal }),
     staleTime: 30_000,
   });
 
@@ -43,7 +43,7 @@ export const confluenceConnectionsQuery = () =>
 export const confluenceStatusQuery = (enabled = true) =>
   queryOptions({
     queryKey: queryKeys.confluenceStatus,
-    queryFn: () => api.get<ConfluenceStatus>(ApiPath.confluenceStatus),
+    queryFn: ({ signal }) => api.get<ConfluenceStatus>(ApiPath.confluenceStatus, { signal }),
     enabled,
     retry: false,
   });
@@ -51,8 +51,9 @@ export const confluenceStatusQuery = (enabled = true) =>
 export const confluenceSpacesQuery = (connectionId: string | null, enabled = true) =>
   queryOptions({
     queryKey: queryKeys.confluenceSpaces(connectionId),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<ConfluenceSpace[]>(ApiPath.confluenceSpaces, {
+        signal,
         query: { connection_id: connectionId || undefined },
       }),
     enabled,
@@ -74,8 +75,9 @@ export const confluenceTreeQuery = (
 ) =>
   queryOptions({
     queryKey: queryKeys.confluenceTree(spaceKey, parentId),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<ConfluencePageNode[]>(`${ApiPath.confluenceSpaces}/${spaceKey}/tree`, {
+        signal,
         query: { parent_id: parentId || undefined },
       }),
     enabled: enabled && Boolean(spaceKey),
@@ -86,26 +88,26 @@ export const confluenceTreeQuery = (
 export const confluenceSnapshotsQuery = () =>
   queryOptions({
     queryKey: queryKeys.confluenceSnapshots,
-    queryFn: () => api.get<ConfluenceSnapshot[]>(ApiPath.confluenceSnapshots),
+    queryFn: ({ signal }) => api.get<ConfluenceSnapshot[]>(ApiPath.confluenceSnapshots, { signal }),
     refetchInterval: (query) => pollWhileRunning(query.state.data),
   });
 
 export const confluencePlansQuery = () =>
   queryOptions({
     queryKey: queryKeys.confluencePlans,
-    queryFn: () => api.get<ConfluencePlan[]>(ApiPath.confluencePlans),
+    queryFn: ({ signal }) => api.get<ConfluencePlan[]>(ApiPath.confluencePlans, { signal }),
   });
 
 export const confluencePlanQuery = (planId: string) =>
   queryOptions({
     queryKey: queryKeys.confluencePlan(planId),
-    queryFn: () => api.get<ConfluencePlan>(`${ApiPath.confluencePlans}/${planId}`),
+    queryFn: ({ signal }) => api.get<ConfluencePlan>(`${ApiPath.confluencePlans}/${planId}`, { signal }),
     enabled: Boolean(planId),
   });
 
 export const confluenceRunsQuery = () =>
   queryOptions({
     queryKey: queryKeys.confluenceRuns,
-    queryFn: () => api.get<ConfluenceRun[]>(ApiPath.confluenceRuns),
+    queryFn: ({ signal }) => api.get<ConfluenceRun[]>(ApiPath.confluenceRuns, { signal }),
     refetchInterval: (query) => pollWhileRunning(query.state.data),
   });

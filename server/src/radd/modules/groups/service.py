@@ -28,6 +28,7 @@ from radd.modules.events import service as events
 # `groups.models` outside this module.
 from .models import Group, GroupMember, GroupParent
 from .types import GroupEntity, GroupEvent
+from .reading import member_projection as member_projection
 from radd.clock import utcnow
 
 __all__ = ["Group"]  # re-exported public seam (see above)
@@ -45,9 +46,9 @@ async def list_groups(
     limit: int | None = None,
     offset: int = 0,
 ) -> list[Group]:
-    stmt = select(Group).order_by(Group.name)
-    if q:
-        stmt = stmt.where(Group.name.ilike(ilike_term(q)) | Group.dn.ilike(ilike_term(q)))
+    stmt = select(Group).order_by(Group.name, Group.id)
+    if q and q.strip():
+        stmt = stmt.where(Group.name.ilike(ilike_term(q.strip())) | Group.dn.ilike(ilike_term(q.strip())))
     if limit is not None:
         stmt = stmt.offset(offset).limit(limit)
     return list((await session.execute(stmt)).scalars())
@@ -55,8 +56,8 @@ async def list_groups(
 
 async def count_groups(session: AsyncSession, *, q: str | None = None) -> int:
     stmt = select(func.count()).select_from(Group)
-    if q:
-        stmt = stmt.where(Group.name.ilike(ilike_term(q)) | Group.dn.ilike(ilike_term(q)))
+    if q and q.strip():
+        stmt = stmt.where(Group.name.ilike(ilike_term(q.strip())) | Group.dn.ilike(ilike_term(q.strip())))
     return (await session.execute(stmt)).scalar_one()
 
 
@@ -108,6 +109,16 @@ async def direct_member_counts(
         .where(GroupMember.group_id.in_(set(group_ids)))
         .group_by(GroupMember.group_id)
     )
+    return dict(rows.all())
+
+
+async def transitive_member_counts(session: AsyncSession, group_ids: Iterable[uuid.UUID]) -> dict[uuid.UUID, int]:
+    """One SQL aggregation for a window of group roots, without user hydration."""
+    ids = set(group_ids)
+    if not ids:
+        return {}
+    members = member_projection(select(Group.id).where(Group.id.in_(ids))).subquery()
+    rows = await session.execute(select(members.c.root_id, func.count()).group_by(members.c.root_id))
     return dict(rows.all())
 
 

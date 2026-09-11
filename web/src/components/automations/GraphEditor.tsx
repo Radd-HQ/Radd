@@ -71,8 +71,8 @@ export function GraphEditor({
     [pickers.fields],
   );
   const valueSuggestions = useMemo(
-    () => [...(pickers.stateNames ?? []), ...(pickers.labelNames ?? []), "low", "normal", "high", "blocker"],
-    [pickers.stateNames, pickers.labelNames],
+    () => [...(pickers.labelNames ?? []), "low", "normal", "high", "blocker"],
+    [pickers.labelNames],
   );
   const selected = useMemo(() => nodes.find((n) => n.id === selectedId) ?? null, [nodes, selectedId]);
 

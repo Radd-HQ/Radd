@@ -1,3 +1,4 @@
+import { CycleSelect } from "../cycles/CycleSelect";
 import { useQuery } from "@tanstack/react-query";
 import {
   KIND_META,
@@ -6,13 +7,12 @@ import {
   PRIORITY_ORDER,
 } from "../../lib/meta";
 import {
-  cyclesQuery,
   issueTypesQuery,
   releasesQuery,
   statesQuery,
-  usersAdminQuery,
 } from "../../lib/queries";
 import {
+  Permission,
   type FormDefaults,
   type ItemKindValue,
   type PriorityValue,
@@ -20,7 +20,9 @@ import {
 import { LabelsEditor } from "../items/LabelsEditor";
 import { SelectField } from "../SelectField";
 import { TextField } from "../TextField";
-import { PersonName } from "../PersonName";
+import { OptionTextField } from "../DirectoryChoices";
+import { OptionResource } from "../../lib/queries/options";
+import { usePermissions } from "../../lib/hooks";
 
 interface FormDefaultsEditorProps {
   projectId: string;
@@ -46,12 +48,8 @@ export function FormDefaultsEditor({
 }: FormDefaultsEditorProps) {
   const states = useQuery(statesQuery(projectId));
   const issueTypes = useQuery(issueTypesQuery(projectId));
-  const cycles = useQuery(cyclesQuery());
   const releases = useQuery(releasesQuery(projectId));
-  // The ADMIN directory (RADD-769): a form default stores `assignee_email`,
-  // so the address is the option's VALUE and cannot come from the member-floor
-  // list. Form building is already a `form.manage` surface.
-  const users = useQuery(usersAdminQuery({}));
+  const permissions = usePermissions();
   const set = (patch: Partial<FormDefaults>) => onChange({ ...value, ...patch });
 
   return (
@@ -114,34 +112,11 @@ export function FormDefaultsEditor({
           ))}
         </SelectField>
 
-        <SelectField
-          label="Assignee"
-          value={value.assignee_email ?? ""}
-          onChange={(event) => set({ assignee_email: event.target.value || null })}
-        >
-          <option value="">Unassigned</option>
-          {(users.data ?? [])
-            .filter((user) => user.active)
-            .map((user) => (
-              <option key={user.id} value={user.email}>
-                <PersonName user={user} /> ({user.email})
-              </option>
-            ))}
-        </SelectField>
+        <OptionTextField label="Assignee" resource={OptionResource.user} value={value.assignee_email ?? ""}
+          onChange={email => set({ assignee_email: email || null })} canBrowse={permissions.global(Permission.userManage)}
+          placeholder="Unassigned" hint="Enter a known email address; leave empty for unassigned." />
 
-        <SelectField
-          label="Cycle"
-          value={value.cycle_name ?? ""}
-          onChange={(event) => set({ cycle_name: event.target.value || null })}
-          hint={(cycles.data ?? []).length === 0 ? "No cycles yet" : undefined}
-        >
-          <option value="">No cycle</option>
-          {(cycles.data ?? []).map((cycle) => (
-            <option key={cycle.id} value={cycle.name}>
-              {cycle.name}
-            </option>
-          ))}
-        </SelectField>
+        <CycleSelect label="Cycle" valueBy="name" value={value.cycle_name ?? ""} onChange={cycle => set({ cycle_name: cycle || null })} />
 
         <SelectField
           label="Release"

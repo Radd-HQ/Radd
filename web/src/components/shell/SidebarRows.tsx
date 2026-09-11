@@ -17,7 +17,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { RoutePath } from "../../lib/constants";
-import { formsQuery, notificationsBadgeQuery, viewCountsQuery } from "../../lib/queries";
+import { projectByIdQuery, formsQuery, notificationsBadgeQuery, viewCountsQuery } from "../../lib/queries";
 import { CycleStatus, ViewType, type Cycle, type Project, type View } from "../../lib/types";
 
 export const navLinkClasses =
@@ -96,7 +96,7 @@ export function InboxLink() {
  * needs form.manage), so the query is always permitted.
  */
 export function ProjectFormLinks({ project }: { project: Project }) {
-  const { data: forms } = useQuery(formsQuery(project.id));
+  const { data: forms } = useQuery(formsQuery(project.id, false));
   const enabled = (forms ?? []).filter((form) => form.enabled);
   if (enabled.length === 0) return null;
   return (
@@ -121,50 +121,28 @@ export function ProjectFormLinks({ project }: { project: Project }) {
  * for the whole section (viewCountsQuery, 60s re-poll) — never per-view calls.
  * Project-scoped queues link with their project context when it's resolved.
  */
-export function QueueLinks({ views, projects }: { views: View[]; projects: Project[] }) {
+export function QueueLinks({ views }: { views: View[] }) {
   const { data: counts } = useQuery(viewCountsQuery(views.map((view) => view.id)));
   return (
     <ul>
-      {views.map((view) => {
-        const projectKey = view.project_id
-          ? projects.find((project) => project.id === view.project_id)?.key
-          : undefined;
-        const count = counts?.[view.id];
-        const body = (
-          <>
-            <ListOrdered size={14} aria-hidden />
-            <span className="truncate">{view.name}</span>
-            {count !== undefined && (
-              <span className="ml-auto shrink-0 rounded-full bg-elevated px-1.5 py-px text-[10px] font-medium text-fg-secondary">
-                {count > 999 ? "999+" : count}
-              </span>
-            )}
-          </>
-        );
-        return (
-          <li key={view.id}>
-            {projectKey ? (
-              <Link
-                to={RoutePath.projectView}
-                params={{ projectKey, viewId: view.id }}
-                className={navLinkClasses}
-              >
-                {body}
-              </Link>
-            ) : (
-              <Link
-                to={RoutePath.allProjectsView}
-                params={{ viewId: view.id }}
-                className={navLinkClasses}
-              >
-                {body}
-              </Link>
-            )}
-          </li>
-        );
-      })}
+      {views.map(view => <QueueLink key={view.id} view={view} count={counts?.[view.id]} />)}
     </ul>
   );
+}
+
+function QueueLink({ view, count }: { view: View; count?: number }) {
+  const project = useQuery(projectByIdQuery(view.project_id ?? ""));
+  const projectKey = project.data?.key;
+  const body = <>
+    <ListOrdered size={14} aria-hidden />
+    <span className="truncate">{view.name}</span>
+    {count !== undefined && <span className="ml-auto shrink-0 rounded-full bg-elevated px-1.5 py-px text-[10px] font-medium text-fg-secondary">
+      {count > 999 ? "999+" : count}
+    </span>}
+  </>;
+  return <li>{projectKey ? <Link to={RoutePath.projectView} params={{ projectKey, viewId: view.id }} className={navLinkClasses}>
+    {body}
+  </Link> : <Link to={RoutePath.allProjectsView} params={{ viewId: view.id }} className={navLinkClasses}>{body}</Link>}</li>;
 }
 /** View row body: type icon, name, and a "personal" marker on unshared views. */
 export function ViewRowContent({ view, small = false }: { view: View; small?: boolean }) {

@@ -8,6 +8,7 @@ from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.events import service as events
 from radd.modules.projects import service as projects_service
 
+from .options import list_options as list_options
 from .models import Release
 from .schemas import ReleaseCreate, ReleaseUpdate
 from .types import ReleaseEntity, ReleaseEvent, ReleaseStatus
@@ -111,7 +112,7 @@ async def list_releases(session: AsyncSession, project_id: uuid.UUID) -> list[Re
 async def _emit(
     session: AsyncSession, event_type: ReleaseEvent, release: Release, actor_id: uuid.UUID | None
 ) -> None:
-    project = await projects_service.get_project(session, release.project_id)
+    await projects_service.get_project(session, release.project_id)
     await events.emit(
         session,
         event_type=event_type,

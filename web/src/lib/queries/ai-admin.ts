@@ -10,7 +10,7 @@ import type { AiPreset, AiProviderRead, AiRoleRead } from "../types";
 export const aiProvidersQuery = () =>
   queryOptions({
     queryKey: queryKeys.aiProviders,
-    queryFn: () => api.get<AiProviderRead[]>(ApiPath.aiProviders),
+    queryFn: ({ signal }) => api.get<AiProviderRead[]>(ApiPath.aiProviders, { signal }),
     staleTime: 30_000,
   });
 
@@ -18,7 +18,7 @@ export const aiProvidersQuery = () =>
 export const aiRolesQuery = () =>
   queryOptions({
     queryKey: queryKeys.aiRoles,
-    queryFn: () => api.get<AiRoleRead[]>(ApiPath.aiRoles),
+    queryFn: ({ signal }) => api.get<AiRoleRead[]>(ApiPath.aiRoles, { signal }),
     staleTime: 30_000,
   });
 
@@ -26,7 +26,7 @@ export const aiRolesQuery = () =>
 export const aiPresetsQuery = () =>
   queryOptions({
     queryKey: queryKeys.aiPresets,
-    queryFn: () => api.get<AiPreset[]>(ApiPath.aiPresets),
+    queryFn: ({ signal }) => api.get<AiPreset[]>(ApiPath.aiPresets, { signal }),
     staleTime: 30_000,
   });
 
@@ -34,6 +34,6 @@ export const aiPresetsQuery = () =>
 export const mePreferencesQuery = () =>
   queryOptions({
     queryKey: queryKeys.mePreferences,
-    queryFn: () => api.get<Record<string, unknown>>(ApiPath.mePreferences),
+    queryFn: ({ signal }) => api.get<Record<string, unknown>>(ApiPath.mePreferences, { signal }),
     staleTime: 60_000,
   });

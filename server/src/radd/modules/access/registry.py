@@ -30,6 +30,7 @@ CanManage = Callable[[AsyncSession, User, str, "uuid.UUID | None"], Awaitable[bo
 # (session, resource_ids) -> {resource_id: display label} for the inspector
 # (RADD-809). Only the owning module can turn a view id or field id into a name.
 LabelFor = Callable[[AsyncSession, Sequence[str]], Awaitable[dict[str, str]]]
+LockResource = Callable[[AsyncSession, str], Awaitable[None]]
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,9 @@ class ResourceSpec:
     # Optional inspector hook (RADD-809): resolve resource ids to display names.
     # Absent = rows show the raw resource_id.
     label_for: LabelFor | None = None
+    # Serialize ACL writes with the owner's sharing/transfer transaction. Reads
+    # never acquire this lock; callers lock before checking mutable authority.
+    lock_resource: LockResource | None = None
 
 
 # RADD-818: the store is the KERNEL registry, not a private dict — the

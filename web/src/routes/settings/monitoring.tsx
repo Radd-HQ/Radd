@@ -173,14 +173,14 @@ function MailCard({ mail }: { mail: MailHealth }) {
 export function MonitoringSettingsPage() {
   const overview = useQuery({
     queryKey: queryKeys.monitoringOverview,
-    queryFn: () => api.get<MonitoringOverview>(ApiPath.monitoringOverview),
+    queryFn: ({ signal }) => api.get<MonitoringOverview>(ApiPath.monitoringOverview, { signal }),
     refetchInterval: OVERVIEW_POLL_MS,
   });
   // Semantic-index coverage comes from the ai module — composed here so
   // monitoring works with the ai plugin disabled (this query just 404s away).
   const coverage = useQuery({
     queryKey: queryKeys.aiEmbeddingCoverage,
-    queryFn: () => api.get<EmbeddingCoverage>(ApiPath.aiEmbeddingCoverage),
+    queryFn: ({ signal }) => api.get<EmbeddingCoverage>(ApiPath.aiEmbeddingCoverage, { signal }),
     refetchInterval: OVERVIEW_POLL_MS,
     retry: false,
   });

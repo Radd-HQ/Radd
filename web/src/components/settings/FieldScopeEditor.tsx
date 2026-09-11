@@ -2,38 +2,39 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { queryKeys } from "../../lib/queries";
-import type { FieldDef, Project } from "../../lib/types";
-import { ScopePicker } from "./ScopePicker";
+import type { FieldDef } from "../../lib/types";
+import { FieldProjectScope } from "./FieldProjectScope";
 import { ErrorText } from "../ErrorText";
 
 /**
  * Edit a field's SCOPE (spec 90 follow-up): global (every project) or scoped to a
- * set of projects, via the shared ScopePicker. Each add/remove PATCHes `project_ids`
+ * set of projects, via bounded permission-filtered choices. Each add/remove PATCHes `project_ids`
  * immediately — scope can be widened later (add a project) or promoted to global
  * (clear the selection).
  */
 export function FieldScopeEditor({
   field,
-  projects,
+  allowGlobal,
   canManage,
 }: {
   field: FieldDef;
-  projects: Project[];
+  allowGlobal: boolean;
   canManage: boolean;
 }) {
   const queryClient = useQueryClient();
   const save = useMutation({
     mutationFn: (project_ids: string[]) =>
-      api.patch(`${ApiPath.fields}/${field.id}`, { project_ids }),
+      api.patch(`${ApiPath.fields}/${field.id}?include_options=false`, { project_ids }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.fields }),
   });
 
   return (
     <div>
-      <ScopePicker
-        value={field.project_ids}
+      <FieldProjectScope
+        value={[...field.project_ids].sort()}
         onChange={(ids) => save.mutate(ids)}
-        projects={projects}
+        permission="field.update"
+        allowGlobal={allowGlobal}
         disabled={!canManage || save.isPending}
       />
       <p className="mt-1.5 text-[11px] text-fg-faint">

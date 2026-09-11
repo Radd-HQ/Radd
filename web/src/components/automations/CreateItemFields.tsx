@@ -1,3 +1,6 @@
+import { OptionTextField } from "../DirectoryChoices";
+import { OptionResource } from "../../lib/queries/options";
+import { ProjectSelect } from "../projects/ProjectSelect";
 /**
  * The full create-item form (spec 116).
  *
@@ -34,19 +37,8 @@ export function CreateItemFields({ params, pickers, onChange }: CreateItemFields
 
   return (
     <div className="flex flex-col gap-2">
-      <SelectField
-        label="Project"
-        value={text("project")}
-        onChange={(event) => set({ project: event.target.value })}
-        hint="Where the new issue is filed."
-      >
-        <option value="">Choose a project…</option>
-        {pickers.projectKeys.map((key) => (
-          <option key={key} value={key}>
-            {key}
-          </option>
-        ))}
-      </SelectField>
+      <ProjectSelect label="Project" valueBy="key" value={text("project")}
+        onChange={project => set({ project })} hint="Where the new issue is filed." />
       <TextField
         label="Title"
         value={text("title")}
@@ -83,19 +75,8 @@ export function CreateItemFields({ params, pickers, onChange }: CreateItemFields
             placeholder="Bug"
             hint="Name, resolved in the target project. Empty = its default type."
           />
-          <SelectField
-            label="State"
-            value={text("state")}
-            onChange={(event) => set({ state: event.target.value || null })}
-            hint="Empty = the project's first state."
-          >
-            <option value="">Default</option>
-            {pickers.stateNames.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </SelectField>
+          <OptionTextField resource={OptionResource.state} label="State" value={text("state")}
+            onChange={state => set({ state: state || null })} hint="Empty = the project's first state. Names resolve in the target project." />
           <SelectField
             label="Priority"
             value={text("priority")}

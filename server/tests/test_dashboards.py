@@ -54,6 +54,11 @@ async def db():
     engine = create_async_engine(settings.database_url)
     maker = async_sessionmaker(engine, expire_on_commit=False)
     async with maker() as session:
+        # The cross-project member gate needs a real scope even when this file
+        # runs by itself on a newly created test database.
+        await projects_service.create_project(
+            session, ProjectCreate(key="DS"+uuid.uuid4().hex[:6], name="Sharing scope")
+        )
         yield session
         await session.rollback()
     await engine.dispose()

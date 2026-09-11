@@ -42,6 +42,11 @@ async def db():
     engine = create_async_engine(settings.database_url)
     maker = async_sessionmaker(engine, expire_on_commit=False)
     async with maker() as session:
+        # Cross-project view access requires one readable project. Do not rely
+        # on another test module having committed a project earlier in the run.
+        await projects_service.create_project(
+            session, ProjectCreate(key="VS"+uuid.uuid4().hex[:6], name="Sharing scope")
+        )
         yield session
         await session.rollback()
     await engine.dispose()

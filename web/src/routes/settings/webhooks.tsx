@@ -31,7 +31,7 @@ export function WebhooksSettingsPage() {
   const queryClient = useQueryClient();
   const endpoints = useQuery({
     queryKey: endpointsKey,
-    queryFn: () => api.get<WebhookEndpoint[]>(ApiPath.webhooks),
+    queryFn: ({ signal }) => api.get<WebhookEndpoint[]>(ApiPath.webhooks, { signal }),
   });
   const [creating, setCreating] = useState(false);
 
@@ -226,8 +226,8 @@ function DeliveryLog({ endpointId }: { endpointId: string }) {
   const queryClient = useQueryClient();
   const deliveries = useQuery({
     queryKey: ["webhooks", "deliveries", endpointId],
-    queryFn: () =>
-      api.get<WebhookDelivery[]>(`${ApiPath.webhooks}/${endpointId}/deliveries`),
+    queryFn: ({ signal }) =>
+      api.get<WebhookDelivery[]>(`${ApiPath.webhooks}/${endpointId}/deliveries`, { signal }),
   });
   const replay = useMutation({
     mutationFn: (deliveryId: string) =>

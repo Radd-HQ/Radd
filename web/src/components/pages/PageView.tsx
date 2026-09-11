@@ -188,15 +188,15 @@ export function PageView({
         className="w-full rounded-md border border-transparent bg-transparent px-1.5 py-1 text-xl font-semibold text-heading hover:border-subtle focus:border-strong focus:outline-2 focus:outline-offset-1 focus:outline-focus read-only:hover:border-transparent"
       />
 
-      <div className="mt-1 flex items-center gap-2 px-1.5 text-xs text-fg-muted">
-        <span>
+      <div className="mt-1 flex flex-wrap items-center gap-2 px-1.5 text-xs text-fg-muted">
+        <span className="min-w-0 break-words">
           Updated by {author?.name ?? "someone"}{" "}
           <span title={page.updated_at}>{relativeTime(page.updated_at)}</span>
         </span>
-        <span className="rounded bg-elevated px-1.5 py-px font-mono text-[10px] text-fg-secondary">
+        <span className="shrink-0 rounded bg-elevated px-1.5 py-px font-mono text-[10px] text-fg-secondary">
           v{page.version}
         </span>
-        <span className="ml-auto flex items-center gap-1">
+        <span className="ml-auto flex flex-wrap items-center gap-1">
           <TabButton
             active={tab === Tab.content}
             onClick={() => setTab(Tab.content)}
@@ -318,7 +318,7 @@ export function PageView({
       {tab === Tab.history ? (
         <PageHistory page={page} canWrite={canWrite} />
       ) : editing ? (
-        <div className="mt-3 flex flex-col gap-2">
+        <div aria-label="Edit page content" className="mt-3 flex flex-col gap-2">
           {conflict && (
             <Callout kind="warning">
               <div className="flex items-center gap-2">
@@ -386,10 +386,9 @@ export function PageView({
           {page.body ? (
             <div
               ref={bodyRef}
-              className="group/body relative mt-3 rounded-md border border-transparent px-1.5 py-1 hover:border-subtle"
+              className="mt-3 rounded-md px-1.5 py-1"
             >
-              <PageBody text={page.body} onReady={() => setBodyVersion((v) => v + 1)} />
-              <span className="absolute right-1 top-1 hidden items-center gap-1 group-hover/body:flex">
+              <div className="mb-2 flex flex-wrap items-center justify-end gap-1">
                 {/* Read-mode AI (spec 103 follow-up): find-similar/summarize for
                     every reader; transforms only for writers. */}
                 <AiReadMenu
@@ -408,8 +407,9 @@ export function PageView({
                   label="AI actions for this page"
                 />
                 {canWrite && (
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => {
                       setDraft(page.body);
                       setEditVersion(page.version);
@@ -418,12 +418,13 @@ export function PageView({
                     }}
                     aria-label="Edit page"
                     title="Edit page"
-                    className="rounded p-1 text-fg-muted hover:bg-elevated hover:text-fg cursor-pointer"
                   >
                     <Pencil size={12} aria-hidden />
-                  </button>
+                    Edit page
+                  </Button>
                 )}
-              </span>
+              </div>
+              <PageBody text={page.body} onReady={() => setBodyVersion((v) => v + 1)} />
             </div>
           ) : canWrite ? (
             <button
@@ -500,12 +501,11 @@ export function PageView({
             resourceId={page.id}
             description={
               <>
-                Unrestricted, this page is visible to everyone with access to its space.
-                Naming anyone below closes it to everyone else — <strong>and its
-                subpages with it</strong>: a restriction applies to the whole subtree
-                beneath this page. A grant here can only ever narrow — it never gives
-                access to a space someone was not already given, and a subpage's own
-                restriction cannot re-open what this one closes.
+                Allow grants limit the selected access to their subjects; deny grants
+                exclude their subjects without restricting everyone else. Restrictions
+                also apply to <strong>subpages</strong>. Space permissions and every
+                ancestor restriction still apply: a page grant cannot reopen access
+                denied above it.
               </>
             }
           />

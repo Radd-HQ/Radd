@@ -1,7 +1,8 @@
+import { CycleSelect } from "../cycles/CycleSelect";
 import { useId } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CYCLE_STATUS_META, RELEASE_STATUS_META } from "../../lib/meta";
-import { cyclesQuery, releasesQuery } from "../../lib/queries";
+import { RELEASE_STATUS_META } from "../../lib/meta";
+import { releasesQuery } from "../../lib/queries";
 import type { Item, ItemUpdate } from "../../lib/types";
 import { Select } from "../Select";
 
@@ -47,32 +48,11 @@ export function CyclePicker({
   item: Item;
   onPatch: (patch: ItemUpdate) => void;
 }) {
-  const cycles = useQuery(cyclesQuery());
   const selected = item.cycle ?? null;
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor="cycle-picker" className="text-xs font-medium text-fg-secondary">
-        Cycle
-      </label>
-      <div className="relative">
-        {selected && (
-          <span
-            className={`pointer-events-none absolute left-2 top-1/2 size-2 -translate-y-1/2 rounded-full ${CYCLE_STATUS_META[selected.status].dotClassName}`}
-            aria-hidden
-          />
-        )}
-        <Select
-          id="cycle-picker"
-          value={selected?.id ?? ""}
-          onChange={(value) => onPatch({ cycle_id: value || null })}
-          className="w-full"
-          triggerClassName={selected ? "pl-6" : ""}
-          options={[
-            { value: "", label: "No cycle" },
-            ...(cycles.data ?? []).map((cycle) => ({ value: cycle.id, label: cycle.name })),
-          ]}
-        />
-      </div>
+      <CycleSelect label="Cycle" value={selected?.id ?? ""} selectedLabel={selected?.name}
+        onChange={value => onPatch({ cycle_id: value || null })} />
       {/* Carryover trail (spec 56): cycles this item was in before — first-class
           data (SLQ `past_cycle`), not just an audit-log footnote. */}
       {(item.past_cycles ?? []).length > 0 && (

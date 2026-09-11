@@ -1,3 +1,6 @@
+import { ProjectSelect } from "../projects/ProjectSelect";
+import { ViewSelect } from "../views/ViewSelect";
+import { CycleSelect } from "../cycles/CycleSelect";
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { SlotId, useDisabledMatches } from "@radd/plugin-sdk";
@@ -11,7 +14,7 @@ import {
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { SlqProbeStatus, useSlqValidation } from "../../lib/hooks";
 import { KIND_META, KIND_ORDER, REPORT_INTERVAL_LABELS, REPORT_INTERVAL_ORDER } from "../../lib/meta";
-import { capabilitiesQuery, cyclesQuery, projectsQuery, viewsQuery } from "../../lib/queries";
+import { capabilitiesQuery } from "../../lib/queries";
 import { slqErrorOf } from "../../lib/slq";
 import {
   ReportInterval,
@@ -115,9 +118,6 @@ export function WidgetModal({
   const [limit, setLimit] = useState(String(widget?.config.limit ?? 10));
   const [viewId, setViewId] = useState(widget?.config.view_id ?? NONE);
 
-  const projects = useQuery(projectsQuery());
-  const cycles = useQuery(cyclesQuery());
-  const views = useQuery(viewsQuery());
   // Plugin-contributed widget types (spec 94) join the Type dropdown; the plugin renders them and
   // needs no builtin config (buildConfig defaults to {}).
   const { data: capsManifest } = useQuery(capabilitiesQuery);
@@ -225,19 +225,9 @@ export function WidgetModal({
         </div>
 
         {(needsProject || optionalProject) && (
-          <SelectField
-            label={needsProject ? "Project" : "Project (optional)"}
-            value={projectId ?? NONE}
-            onChange={(event) => setProjectId(event.target.value)}
-          >
-            {!needsProject && <option value={NONE}>All projects</option>}
-            {needsProject && <option value={NONE}>Choose a project…</option>}
-            {(projects.data ?? []).map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.key} · {project.name}
-              </option>
-            ))}
-          </SelectField>
+          <ProjectSelect label={needsProject ? "Project" : "Project (optional)"}
+            value={projectId ?? NONE} onChange={setProjectId}
+            emptyLabel={needsProject ? null : "All projects"} emptyValue={NONE} />
         )}
 
         {(type === WidgetType.reportThroughput || type === WidgetType.reportCfd) && (
@@ -281,21 +271,8 @@ export function WidgetModal({
         )}
 
         {type === WidgetType.reportBurnup && (
-          <SelectField
-            label="Cycle"
-            value={cycleId}
-            onChange={(event) => setCycleId(event.target.value)}
-            hint="Dated cycles only — a draft cycle has no window to chart"
-          >
-            <option value={NONE}>Choose a cycle…</option>
-            {(cycles.data ?? [])
-              .filter((cycle) => cycle.start_date && cycle.end_date)
-              .map((cycle) => (
-                <option key={cycle.id} value={cycle.id}>
-                  {cycle.name}
-                </option>
-              ))}
-          </SelectField>
+          <CycleSelect label="Cycle" value={cycleId} onChange={setCycleId} emptyValue={NONE}
+            emptyLabel={null} datedOnly hint="Dated cycles only — a draft cycle has no window to chart" />
         )}
 
         {MEASURE_TYPES.includes(type as WidgetTypeValue) && (
@@ -358,18 +335,7 @@ export function WidgetModal({
         )}
 
         {type === WidgetType.viewCount && (
-          <SelectField
-            label="Saved view"
-            value={viewId}
-            onChange={(event) => setViewId(event.target.value)}
-          >
-            <option value={NONE}>Choose a view…</option>
-            {(views.data ?? []).map((view) => (
-              <option key={view.id} value={view.id}>
-                {view.name}
-              </option>
-            ))}
-          </SelectField>
+          <ViewSelect value={viewId === NONE ? "" : viewId} onChange={setViewId} />
         )}
 
         <SelectField

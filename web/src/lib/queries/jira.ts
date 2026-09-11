@@ -18,7 +18,7 @@ import type {
 export const jiraConnectionsQuery = () =>
   queryOptions({
     queryKey: queryKeys.jiraConnections,
-    queryFn: () => api.get<JiraConnection[]>(ApiPath.jiraConnections),
+    queryFn: ({ signal }) => api.get<JiraConnection[]>(ApiPath.jiraConnections, { signal }),
     staleTime: 30_000,
   });
 
@@ -30,7 +30,7 @@ export const jiraConnectionsQuery = () =>
 export const jiraStatusQuery = (enabled = true) =>
   queryOptions({
     queryKey: queryKeys.jiraStatus,
-    queryFn: () => api.get<JiraConnectionStatus>(ApiPath.jiraStatus),
+    queryFn: ({ signal }) => api.get<JiraConnectionStatus>(ApiPath.jiraStatus, { signal }),
     enabled,
     retry: false,
   });
@@ -39,11 +39,11 @@ export const jiraStatusQuery = (enabled = true) =>
 export const jiraProjectsQuery = (connectionId: string | null, enabled = true) =>
   queryOptions({
     queryKey: queryKeys.jiraProjects(connectionId),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<JiraProject[]>(
         connectionId
           ? `${ApiPath.jiraProjects}?connection_id=${connectionId}`
-          : ApiPath.jiraProjects,
+          : ApiPath.jiraProjects, { signal },
       ),
     enabled,
     staleTime: 60_000,
@@ -64,7 +64,7 @@ const snapshotSettled = (snapshot: JiraSnapshot) =>
 export const jiraSnapshotsQuery = (pollMs = 1500) =>
   queryOptions({
     queryKey: queryKeys.jiraSnapshots,
-    queryFn: () => api.get<JiraSnapshot[]>(ApiPath.jiraSnapshots),
+    queryFn: ({ signal }) => api.get<JiraSnapshot[]>(ApiPath.jiraSnapshots, { signal }),
     refetchInterval: (query) =>
       (query.state.data ?? []).every(snapshotSettled) ? false : pollMs,
   });
@@ -73,13 +73,13 @@ export const jiraSnapshotsQuery = (pollMs = 1500) =>
 export const jiraPlansQuery = () =>
   queryOptions({
     queryKey: queryKeys.jiraPlans,
-    queryFn: () => api.get<JiraPlan[]>(ApiPath.jiraPlans),
+    queryFn: ({ signal }) => api.get<JiraPlan[]>(ApiPath.jiraPlans, { signal }),
   });
 
 export const jiraPlanQuery = (planId: string) =>
   queryOptions({
     queryKey: queryKeys.jiraPlan(planId),
-    queryFn: () => api.get<JiraPlan>(`${ApiPath.jiraPlans}/${planId}`),
+    queryFn: ({ signal }) => api.get<JiraPlan>(`${ApiPath.jiraPlans}/${planId}`, { signal }),
     enabled: Boolean(planId),
   });
 
@@ -90,7 +90,7 @@ const runSettled = (run: JiraRun) =>
 export const jiraRunsQuery = (pollMs = 1500) =>
   queryOptions({
     queryKey: queryKeys.jiraRuns,
-    queryFn: () => api.get<JiraRun[]>(ApiPath.jiraRuns),
+    queryFn: ({ signal }) => api.get<JiraRun[]>(ApiPath.jiraRuns, { signal }),
     refetchInterval: (query) => ((query.state.data ?? []).every(runSettled) ? false : pollMs),
   });
 
@@ -98,6 +98,6 @@ export const jiraRunsQuery = (pollMs = 1500) =>
 export const jiraPendingQuery = () =>
   queryOptions({
     queryKey: queryKeys.jiraPending,
-    queryFn: () => api.get<PendingSummary>(ApiPath.jiraPending),
+    queryFn: ({ signal }) => api.get<PendingSummary>(ApiPath.jiraPending, { signal }),
     staleTime: 30_000,
   });

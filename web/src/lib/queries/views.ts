@@ -1,8 +1,9 @@
 /** Saved views, dashboards, view counts, and SLQ item queries. */
 
 import { keepPreviousData, queryOptions } from "@tanstack/react-query";
+import { allRelationRows } from "../pagination";
 import { api } from "../api";
-import { Entity, entityMeta } from "../cache";
+import { Entity, entityMeta, projectEntityMeta } from "../cache";
 import {
   ApiPath,
   ITEMS_PAGE_LIMIT,
@@ -22,17 +23,6 @@ import type {
 } from "../types";
 
 /**
- * All views the caller can see: shared ones plus their own personal ones,
- * across every project (spec 08). Grouped client-side by `project_id` for the
- * sidebar; `project_id === null` = all-projects.
- */
-export const viewsQuery = () =>
-  queryOptions({
-    queryKey: queryKeys.views,
-    queryFn: () => api.get<View[]>(ApiPath.views),
-  });
-
-/**
  * Batched view membership counts (spec 64) — the sidebar queue badges: ONE
  * POST /views/counts per sidebar, re-polled every minute. Invisible/unknown
  * ids are omitted by the server (never errored); ids are sorted for a stable
@@ -42,11 +32,11 @@ export const viewCountsQuery = (viewIds: readonly string[], extraQ?: string) => 
   const ids = [...viewIds].sort().slice(0, VIEW_COUNTS_MAX_VIEWS);
   return queryOptions({
     queryKey: queryKeys.viewCounts(ids, extraQ),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.post<Record<string, number>>(ApiPath.viewCounts, {
         view_ids: ids,
         extra_q: extraQ || undefined,
-      }),
+      }, { signal }),
     // Counts move when items move (and when view queries are edited).
     meta: entityMeta(Entity.item, Entity.view),
     refetchInterval: VIEW_COUNTS_REFETCH_MS,
@@ -58,25 +48,17 @@ export const viewCountsQuery = (viewIds: readonly string[], extraQ?: string) => 
 export const cardLayoutPresetsQuery = () =>
   queryOptions({
     queryKey: queryKeys.cardLayoutPresets,
-    queryFn: () => api.get<CardLayoutPreset[]>(ApiPath.cardLayoutPresets),
+    queryFn: ({ signal }) => api.get<CardLayoutPreset[]>(ApiPath.cardLayoutPresets, { signal }),
     meta: entityMeta(Entity.cardLayoutPreset),
-  });
-
-/** Dashboards the caller can see (spec 75), position-ordered. */
-export const dashboardsQuery = () =>
-  queryOptions({
-    queryKey: queryKeys.dashboards,
-    meta: entityMeta(Entity.dashboard),
-    queryFn: () => api.get<Dashboard[]>(ApiPath.dashboards),
   });
 
 /** One dashboard's full definition incl. widgets + per-actor can_edit/can_manage.
  * `retry: false` — an invisible dashboard 404s and should say so immediately. */
 export const dashboardQuery = (dashboardId: string) =>
   queryOptions({
-    queryKey: queryKeys.dashboard(dashboardId),
-    meta: entityMeta(Entity.dashboard),
-    queryFn: () => api.get<Dashboard>(apiDashboardPath(dashboardId)),
+    queryKey: [...queryKeys.dashboard(dashboardId), "definition"],
+    meta: entityMeta(Entity.dashboard, Entity.project, Entity.role, Entity.member, Entity.team, Entity.group, Entity.accessGrant),
+    queryFn: ({ signal }) => api.get<Dashboard>(apiDashboardPath(dashboardId), { signal, query: { include_shares: "false" } }),
     retry: false,
   });
 
@@ -85,9 +67,10 @@ export const dashboardQuery = (dashboardId: string) =>
 export const itemsCountQuery = (scope: Record<string, string>, q: string) =>
   queryOptions({
     queryKey: queryKeys.itemsCount(scope, q),
-    meta: entityMeta(Entity.item),
-    queryFn: () =>
+    meta: projectEntityMeta(scope.project_id, Entity.item),
+    queryFn: ({ signal }) =>
       api.get<{ total: number }>(ApiPath.itemsCount, {
+        signal,
         query: { ...scope, q: q || undefined },
       }),
     retry: false,
@@ -99,9 +82,10 @@ export const itemsCountQuery = (scope: Record<string, string>, q: string) =>
 export const slqListItemsQuery = (scope: Record<string, string>, q: string, limit: number) =>
   queryOptions({
     queryKey: queryKeys.slqListItems(scope, q, limit),
-    meta: entityMeta(Entity.item),
-    queryFn: () =>
+    meta: projectEntityMeta(scope.project_id, Entity.item),
+    queryFn: ({ signal }) =>
       api.get<Item[]>(ApiPath.items, {
+        signal,
         query: { ...scope, q: q || undefined, limit: String(limit) },
       }),
     retry: false,
@@ -126,8 +110,8 @@ export const itemIdsQuery = (queryString: string) =>
   queryOptions({
     queryKey: queryKeys.itemIds(queryString),
     meta: entityMeta(Entity.item),
-    queryFn: () =>
-      api.get<ItemIds>(queryString ? `${ApiPath.itemsIds}?${queryString}` : ApiPath.itemsIds),
+    queryFn: ({ signal }) =>
+      api.get<ItemIds>(queryString ? `${ApiPath.itemsIds}?${queryString}` : ApiPath.itemsIds, { signal }),
     staleTime: 15_000,
   });
 
@@ -143,10 +127,11 @@ export const pagedViewItemsQuery = (
 ) =>
   queryOptions({
     queryKey: queryKeys.viewItemsPage(view?.id ?? "", view?.query_string ?? "", page),
-    meta: entityMeta(Entity.item),
+    meta: projectEntityMeta(new URLSearchParams(view?.query_string).get("project_id"), Entity.item),
     placeholderData: keepPreviousData,
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<Item[]>(`${ApiPath.items}?${view?.query_string ?? ""}`, {
+        signal,
         query: {
           limit: String(ITEMS_PAGE_LIMIT),
           offset: String((page - 1) * ITEMS_PAGE_LIMIT),
@@ -156,10 +141,11 @@ export const pagedViewItemsQuery = (
 
 export const infiniteViewItemsQuery = (view: Pick<View, "id" | "query_string"> | undefined) => ({
   queryKey: queryKeys.viewItems(view?.id ?? "", view?.query_string ?? ""),
-  meta: entityMeta(Entity.item),
+  meta: projectEntityMeta(new URLSearchParams(view?.query_string).get("project_id"), Entity.item),
   initialPageParam: 0,
-  queryFn: ({ pageParam }: { pageParam: number }) =>
+  queryFn: ({ signal, pageParam }: { signal: AbortSignal; pageParam: number }) =>
     api.get<Item[]>(`${ApiPath.items}?${view?.query_string ?? ""}`, {
+        signal,
       query: { limit: String(ITEMS_PAGE_LIMIT), offset: String(pageParam) },
     }),
   getNextPageParam: (lastPage: Item[], _all: Item[][], lastOffset: number) =>
@@ -180,10 +166,11 @@ export const roadmapTrayItemsQuery = (
 ) =>
   queryOptions({
     queryKey: queryKeys.roadmapTray(viewId, q, projectId ?? "", page),
-    meta: entityMeta(Entity.item),
+    meta: projectEntityMeta(projectId, Entity.item),
     placeholderData: keepPreviousData,
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<Item[]>(ApiPath.items, {
+        signal,
         query: {
           q,
           project_id: projectId ?? undefined,
@@ -196,16 +183,14 @@ export const roadmapTrayItemsQuery = (
 /**
  * A roadmap view's curated member set (roadmap wave) — read through the item
  * dialect's registry-contributed `roadmap` field, so the result is hydrated
- * AND item-RBAC-scoped for free. One page at the members cap.
+ * AND item-RBAC-scoped. Fetch every page of this curated relation.
  */
 export const roadmapMembersQuery = (viewId: string) =>
   queryOptions({
     queryKey: queryKeys.roadmapMembers(viewId),
     meta: entityMeta(Entity.item),
-    queryFn: () =>
-      api.get<Item[]>(ApiPath.items, {
-        query: { q: `roadmap = "${viewId}"`, limit: String(ROADMAP_MEMBERS_LIMIT) },
-      }),
+    queryFn: ({ signal }) =>
+      allRelationRows<Item>(ApiPath.items, { q: `roadmap = "${viewId}"` }, signal, ROADMAP_MEMBERS_LIMIT),
     staleTime: 15_000,
   });
 
@@ -219,9 +204,10 @@ export const roadmapMembersQuery = (viewId: string) =>
 export const slqItemsQuery = (scope: Record<string, string>, q: string) =>
   queryOptions({
     queryKey: queryKeys.slqItems(scope, q),
-    meta: entityMeta(Entity.item),
-    queryFn: () =>
+    meta: projectEntityMeta(scope.project_id, Entity.item),
+    queryFn: ({ signal }) =>
       api.get<Item[]>(ApiPath.items, {
+        signal,
         query: { ...scope, q, limit: String(ITEMS_PAGE_LIMIT) },
       }),
     retry: false,
@@ -237,10 +223,11 @@ export const infiniteSlqItemsQuery = (scope: Record<string, string>, q: string) 
   // Distinct key from the flat `slqItemsQuery` — same key + different cache
   // shapes (Item[] vs InfiniteData) would corrupt each other.
   queryKey: ["slqItemsInfinite", { scope, q }] as const,
-  meta: entityMeta(Entity.item),
+  meta: projectEntityMeta(scope.project_id, Entity.item),
   initialPageParam: 0,
-  queryFn: ({ pageParam }: { pageParam: number }) =>
+  queryFn: ({ signal, pageParam }: { signal: AbortSignal; pageParam: number }) =>
     api.get<Item[]>(ApiPath.items, {
+        signal,
       query: { ...scope, q, limit: String(ITEMS_PAGE_LIMIT), offset: String(pageParam) },
     }),
   getNextPageParam: (lastPage: Item[], _all: Item[][], lastOffset: number) =>
@@ -261,8 +248,9 @@ export const slqValidateQuery = (
 ) =>
   queryOptions({
     queryKey: [...queryKeys.slqValidate(projectId, q), dialect],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<{ ok: boolean }>(`${dialect}/slq/validate`, {
+        signal,
         query: { q, ...(projectId ? { project_id: projectId } : {}) },
       }),
     retry: false,

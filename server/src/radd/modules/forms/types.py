@@ -13,3 +13,8 @@ class FormEvent(StrEnum):
 
 class FormEntity(StrEnum):
     FORM = "form"
+
+
+class FormShareSubject(StrEnum):
+    USER = "user"
+    TEAM = "team"

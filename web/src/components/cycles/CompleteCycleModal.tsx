@@ -2,21 +2,22 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { apiCycleCompletePath } from "../../lib/constants";
-import { cycleLabel, sameLabel } from "../../lib/cycle-series";
+import { cycleLabel } from "../../lib/cycle-series";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { CycleStatus, type Cycle, type CycleComplete, type CycleCompleteResult } from "../../lib/types";
 import { ToastKind, pushToast } from "../../lib/toast";
 import { Button } from "../Button";
 import { Modal } from "../Modal";
 import { Select } from "../Select";
+import { useCycleDirectory } from "../../lib/useCycleDirectory";
+import { DirectoryPager } from "../DirectoryPager";
+import { TextField } from "../TextField";
 import { ErrorText } from "../ErrorText";
 
 const BACKLOG = "__backlog__";
 
 interface Props {
   cycle: Cycle;
-  /** Every cycle — the move-target options come from here. */
-  cycles: Cycle[];
   /** Open-item count when the caller already knows it (the cycle page does). */
   openCount?: number;
   onClose: () => void;
@@ -24,28 +25,20 @@ interface Props {
 
 /**
  * "Complete cycle" dialog (Jira-style close): choose where open items go — future
- * cycles of the SAME LABEL ("PIPE - …"), or the backlog — and whether to start
- * the target now. One-off cycles (no label) offer every future cycle.
+ * cycles or the backlog, and whether to start the target now. Server search
+ * starts with the same series and can be cleared to select another series.
  */
-export function CompleteCycleModal({ cycle, cycles, openCount, onClose }: Props) {
+export function CompleteCycleModal({ cycle, openCount, onClose }: Props) {
   const queryClient = useQueryClient();
-  const label = cycleLabel(cycle.name);
-  const future = cycles.filter((c) => c.id !== cycle.id && c.status !== CycleStatus.completed);
-  const sameSeries = future.filter((c) => sameLabel(cycleLabel(c.name), label));
-  // Scheduled first (the natural "next"), then drafts, numerically within each.
-  const targets = (label !== null && sameSeries.length > 0 ? sameSeries : future).sort((a, b) =>
-    a.status === b.status
-      ? a.name.localeCompare(b.name, undefined, { numeric: true })
-      : a.status === CycleStatus.draft
-        ? 1
-        : b.status === CycleStatus.draft
-          ? -1
-          : 0,
-  );
-  const [target, setTarget] = useState<string>(targets[0]?.id ?? BACKLOG);
+  const directory = useCycleDirectory({ includeCompleted: false, excludeId: cycle.id,
+    initialFilter: cycleLabel(cycle.name) ?? "" });
+  const [target, setTarget] = useState("");
+  const [selectedCycle, setSelectedCycle] = useState<Cycle | null>(null);
   const [startNext, setStartNext] = useState(true);
   const toBacklog = target === BACKLOG;
-  const targetCycle = targets.find((c) => c.id === target);
+  const targetCycle = selectedCycle;
+  const targets = selectedCycle && !directory.rows.some(row => row.id === selectedCycle.id)
+    ? [selectedCycle, ...directory.rows] : directory.rows;
 
   const complete = useMutation({
     mutationFn: () =>
@@ -76,7 +69,7 @@ export function CompleteCycleModal({ cycle, cycles, openCount, onClose }: Props)
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          complete.mutate();
+          if (target) complete.mutate();
         }}
         className="flex flex-col gap-4"
       >
@@ -87,11 +80,18 @@ export function CompleteCycleModal({ cycle, cycles, openCount, onClose }: Props)
           Completed items stay in this cycle for reporting.
         </p>
 
+        <TextField label="Find a destination cycle" value={directory.filter}
+          onChange={event => directory.setFilter(event.target.value)} placeholder="Search cycles by name…"
+          hint="Search starts with this series. Clear it to find other cycles; completed cycles are excluded." />
+        {directory.isError && <ErrorText error={directory.error} />}
         <label className="flex flex-col gap-1 text-xs text-fg-secondary">
           Move open items to
           <Select
             value={target}
-            onChange={setTarget}
+            aria-label="Destination cycle"
+            searchable={false}
+            onChange={value => { setTarget(value); setSelectedCycle(targets.find(row => row.id === value) ?? null); }}
+            placeholder={directory.isPending ? "Loading destinations…" : "Choose a destination"}
             options={[
               ...targets.map((c) => ({
                 value: c.id,
@@ -102,6 +102,7 @@ export function CompleteCycleModal({ cycle, cycles, openCount, onClose }: Props)
           />
         </label>
 
+        <DirectoryPager {...directory} onPage={directory.setPage} label="destination cycles" />
         {!toBacklog && targetCycle && (
           <label className="flex items-center gap-2 text-[13px] text-fg">
             <input
@@ -125,7 +126,7 @@ export function CompleteCycleModal({ cycle, cycles, openCount, onClose }: Props)
           <Button variant="ghost" type="button" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" disabled={complete.isPending}>
+          <Button type="submit" disabled={complete.isPending || !target}>
             {complete.isPending ? "Completing…" : "Complete cycle"}
           </Button>
         </div>

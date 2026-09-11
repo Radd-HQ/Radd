@@ -9,7 +9,7 @@ resources/plugins need no new endpoints.
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
@@ -17,9 +17,9 @@ from radd.exceptions import ConflictError, ForbiddenError
 from radd.modules.auth.deps import CurrentUser
 from radd.modules.auth.models import User
 
-from . import service
+from . import service, directory
 from .registry import all_specs, get_spec
-from .schemas import AccessGrantCreate, AccessGrantRead, ResourceSpecRead
+from .schemas import AccessGrantCreate, AccessGrantRead, AccessGrantDirectoryRead, ResourceSpecRead
 from .types import AccessEntity
 
 router = APIRouter(prefix="/grants", tags=["access"])
@@ -40,6 +40,16 @@ async def _require_manage(
     if not await spec.can_manage(session, actor, resource_id, project_id):
         raise ForbiddenError(f"no permission to manage {resource_type} grants")
     return spec
+
+
+async def _require_read_scope(session, user, resource_type, resource_id, project_id, global_only):
+    if project_id is not None and global_only:
+        raise HTTPException(
+            status_code=422, detail="Choose a project or global-only scope, not both"
+        )
+    spec = await _require_manage(session, user, resource_type, resource_id, project_id)
+    if project_id is not None and not spec.project_scoped:
+        raise HTTPException(status_code=422, detail="This resource does not support project scope")
 
 
 @router.get("/resources", response_model=list[ResourceSpecRead])
@@ -77,14 +87,50 @@ async def list_resource_specs(user: CurrentUser) -> list[ResourceSpecRead]:
     ]
 
 
+@router.get("/directory", response_model=list[AccessGrantDirectoryRead])
+async def grants_directory(
+    resource_type: str,
+    resource_id: str,
+    session: Session,
+    user: CurrentUser,
+    response: Response,
+    project_id: uuid.UUID | None = None,
+    global_only: bool = False,
+    q: str = Query(default="", max_length=200),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> list[AccessGrantDirectoryRead]:
+    await _require_read_scope(session, user, resource_type, resource_id, project_id, global_only)
+    rows, total = await directory.page(
+        session,
+        user,
+        resource_type,
+        resource_id,
+        q=q,
+        limit=limit,
+        offset=offset,
+        project_id=project_id,
+        global_only=global_only,
+    )
+    response.headers["X-Total-Count"] = str(total)
+    return rows
+
+
 @router.get("", response_model=list[AccessGrantRead])
 async def list_grants(
-    resource_type: str, resource_id: str, session: Session, user: CurrentUser
+    resource_type: str,
+    resource_id: str,
+    session: Session,
+    user: CurrentUser,
+    project_id: uuid.UUID | None = None,
+    global_only: bool = False,
 ) -> list[AccessGrantRead]:
-    await _require_manage(session, user, resource_type, resource_id)
+    await _require_read_scope(session, user, resource_type, resource_id, project_id, global_only)
     return [
         AccessGrantRead.model_validate(g)
-        for g in await service.list_for_resource(session, resource_type, resource_id)
+        for g in await service.list_for_resource(
+            session, resource_type, resource_id, project_id=project_id, global_only=global_only
+        )
     ]
 
 
@@ -93,6 +139,7 @@ async def create_grant(
     data: AccessGrantCreate, session: Session, user: CurrentUser
 ) -> list[AccessGrantRead]:
     scopes: list[uuid.UUID | None] = list(dict.fromkeys(data.project_ids)) or [None]
+    await service.lock_resource(session, data.resource_type, data.resource_id)
     for project_id in scopes:
         await _require_manage(session, user, data.resource_type, data.resource_id, project_id)
     rows = [
@@ -116,5 +163,6 @@ async def create_grant(
 @router.delete("/{grant_id}", status_code=204)
 async def delete_grant(grant_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
     grant = await service.get_grant(session, grant_id)
+    await service.lock_resource(session, grant.resource_type, grant.resource_id)
     await _require_manage(session, user, grant.resource_type, grant.resource_id, grant.project_id)
     await service.remove_grant(session, grant_id, actor_id=user.id)

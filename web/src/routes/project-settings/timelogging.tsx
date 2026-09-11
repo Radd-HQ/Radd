@@ -3,13 +3,14 @@ import { FolderKanban } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { apiProjectTimeloggingPath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
-import { projectsQuery, projectTimeloggingQuery, queryKeys } from "../../lib/queries";
+import { projectByIdQuery, projectTimeloggingQuery, queryKeys } from "../../lib/queries";
 import {
   Permission,
   SettingScope,
   type Project,
   type ProjectTimeLogging,
 } from "../../lib/types";
+import { QueryError } from "../../components/QueryError";
 import { EmptyState } from "../../components/EmptyState";
 import { TableSkeleton } from "../../components/TableSkeleton";
 import { ScopedSettingsEditor } from "../../components/settings/ScopedSettingsEditor";
@@ -22,16 +23,18 @@ import { SettingsPage } from "../../components/settings/SettingsPage";
  * `project.manage` for the project resolved from the URL context (`projectId`).
  */
 export function ProjectTimeloggingSettingsPage({ projectId }: { projectId?: string }) {
-  const projects = useQuery(projectsQuery());
-  const project = (projects.data ?? []).find((entry) => entry.id === projectId);
+  const projectQuery = useQuery(projectByIdQuery(projectId ?? ""));
+  const project = projectQuery.data;
 
   return (
     <SettingsPage
       title="Time logging"
       description="Enable time logging for this project. When on, people can log worklogs and estimates on its issues."
     >
-      {projects.isPending ? (
+      {(projectId && projectQuery.isPending) ? (
         <TableSkeleton rows={1} />
+      ) : projectQuery.isError ? (
+        <QueryError label="project" error={projectQuery.error} />
       ) : !project ? (
         <EmptyState icon={FolderKanban} message="Project not found." />
       ) : (

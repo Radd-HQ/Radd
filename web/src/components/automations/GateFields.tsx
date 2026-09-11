@@ -1,3 +1,5 @@
+import { OptionNameValues } from "../DirectoryChoices";
+import { OptionResource, type OptionResourceValue } from "../../lib/queries/options";
 /**
  * Forms for the concrete condition nodes (spec 116 revision).
  *
@@ -45,10 +47,11 @@ interface SideProps {
   mode: string;
   values: string[];
   suggestions: string[];
+  resource?: OptionResourceValue;
   onChange: (mode: string, values: string[]) => void;
 }
 
-function ChangeSide({ legend, hint, mode, values, suggestions, onChange }: SideProps) {
+function ChangeSide({ legend, hint, mode, values, suggestions, resource, onChange }: SideProps) {
   return (
     <div className="flex flex-col gap-1.5">
       <SelectField
@@ -63,8 +66,9 @@ function ChangeSide({ legend, hint, mode, values, suggestions, onChange }: SideP
           </option>
         ))}
       </SelectField>
-      {mode === MODE_SPECIFIC && (
-        <TokenMultiSelect
+      {mode === MODE_SPECIFIC && (resource
+        ? <OptionNameValues resource={resource} label={`${legend} values`} value={values} onChange={values => onChange(mode, values)} />
+        : <TokenMultiSelect
           value={values}
           onChange={(next) => onChange(mode, next)}
           options={suggestions.map((value) => ({ value, label: value }))}
@@ -134,6 +138,7 @@ export function FieldChangedFields({
         mode={String(params.from_mode ?? MODE_ANY)}
         values={(params.from_values as string[]) ?? []}
         suggestions={valueSuggestions}
+        resource={params.field === "state" ? OptionResource.state : params.field === "release" ? OptionResource.release : undefined}
         onChange={(from_mode, from_values) => set({ from_mode, from_values })}
       />
       <ChangeSide
@@ -142,6 +147,7 @@ export function FieldChangedFields({
         mode={String(params.to_mode ?? MODE_ANY)}
         values={(params.to_values as string[]) ?? []}
         suggestions={valueSuggestions}
+        resource={params.field === "state" ? OptionResource.state : params.field === "release" ? OptionResource.release : undefined}
         onChange={(to_mode, to_values) => set({ to_mode, to_values })}
       />
     </div>
@@ -150,24 +156,18 @@ export function FieldChangedFields({
 
 export function ChangedByFields({
   params,
-  people,
+  canChoosePeople,
   onChange,
 }: {
   params: Params;
-  people: string[];
+  canChoosePeople: boolean;
   onChange: (params: Params) => void;
 }) {
   return (
     <div className="flex flex-col gap-2">
       <Labelled label="People">
-        <TokenMultiSelect
-          value={(params.users as string[]) ?? []}
-          onChange={(users) => onChange({ ...params, users })}
-          options={people.map((value) => ({ value, label: value }))}
-          placeholder="Add someone…"
-          ariaLabel="People"
-          allowCreate
-        />
+        <OptionNameValues resource={OptionResource.user} label="People" canBrowse={canChoosePeople}
+          value={(params.users as string[]) ?? []} onChange={users => onChange({ ...params, users })} />
       </Labelled>
       <label className="flex w-fit cursor-pointer items-center gap-2 text-[13px] text-fg">
         <input

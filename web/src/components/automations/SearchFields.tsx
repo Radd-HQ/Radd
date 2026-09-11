@@ -1,3 +1,4 @@
+import { ProjectSelect } from "../projects/ProjectSelect";
 /**
  * The search node's form (RADD-919) — the only node that PRODUCES items.
  *
@@ -8,17 +9,15 @@
 import { SearchMode } from "../../lib/types";
 import { SelectField } from "../SelectField";
 import { TextField } from "../TextField";
-import type { PickerData } from "./ActionsBuilder";
 
 type Params = Record<string, unknown>;
 
 interface SearchFieldsProps {
   params: Params;
-  pickers: PickerData;
   onChange: (params: Params) => void;
 }
 
-export function SearchFields({ params, pickers, onChange }: SearchFieldsProps) {
+export function SearchFields({ params, onChange }: SearchFieldsProps) {
   const set = (patch: Params) => onChange({ ...params, ...patch });
 
   return (
@@ -30,19 +29,9 @@ export function SearchFields({ params, pickers, onChange }: SearchFieldsProps) {
         placeholder="state = Todo AND updated < today-14d"
         hint="SLQ, run when this node is reached. Empty finds nothing — not everything."
       />
-      <SelectField
-        label="Within"
-        value={String(params.project ?? "")}
-        onChange={(event) => set({ project: event.target.value })}
-        hint="Scoping also decides which project's custom fields the query resolves against."
-      >
-        <option value="">Every project</option>
-        {pickers.projectKeys.map((key) => (
-          <option key={key} value={key}>
-            {key}
-          </option>
-        ))}
-      </SelectField>
+      <ProjectSelect label="Within" valueBy="key" value={String(params.project ?? "")}
+        onChange={project => set({ project })} emptyLabel="Every project"
+        hint="Scoping also decides which project's custom fields the query resolves against." />
       <SelectField
         label="What reaches this node"
         value={String(params.mode ?? SearchMode.replace)}

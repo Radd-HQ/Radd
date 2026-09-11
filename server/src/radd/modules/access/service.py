@@ -25,6 +25,7 @@ from radd.modules.projects import service as projects_service
 # The ratchet test bans `access.models` outside this module.
 from .models import AccessGrant
 from .registry import get_spec
+from .resolution import SubjectContext, effective_level
 from .types import AccessEntity, AccessEvent, GrantEffect, GrantSubject
 from radd.clock import utcnow
 
@@ -43,17 +44,19 @@ def _live_clause():
 
 
 async def list_for_resource(
-    session: AsyncSession, resource_type: str, resource_id: str
+    session: AsyncSession, resource_type: str, resource_id: str, *,
+    project_id: uuid.UUID | None = None, global_only: bool = False,
 ) -> list[AccessGrant]:
-    result = await session.execute(
-        select(AccessGrant)
-        .where(
-            AccessGrant.resource_type == resource_type,
-            AccessGrant.resource_id == resource_id,
-            _live_clause(),
-        )
-        .order_by(AccessGrant.access, AccessGrant.subject_type)
+    query = select(AccessGrant).where(
+        AccessGrant.resource_type == resource_type,
+        AccessGrant.resource_id == resource_id,
+        _live_clause(),
     )
+    if project_id is not None:
+        query = query.where(AccessGrant.project_id == project_id)
+    elif global_only:
+        query = query.where(AccessGrant.project_id.is_(None))
+    result = await session.execute(query.order_by(AccessGrant.access, AccessGrant.subject_type))
     return list(result.scalars())
 
 
@@ -66,9 +69,8 @@ async def grants_for_resources(
 ) -> dict[str, list[AccessGrant]]:
     """Batch: {resource_id: grants} — one query for a page of fields/views (no N+1).
 
-    `include_expired=True` skips the RADD-820 liveness filter: the views/
-    dashboards share loaders (RADD-887) always loaded every row, and keep
-    that exact behavior."""
+    `include_expired=True` is for explicit history/diagnostic reads only.
+    Authorization consumers must use the default liveness filter."""
     ids = [str(r) for r in resource_ids]
     out: dict[str, list[AccessGrant]] = {rid: [] for rid in ids}
     if not ids:
@@ -85,14 +87,78 @@ async def grants_for_resources(
     return out
 
 
-async def resource_ids_with_grants(session: AsyncSession, resource_type: str) -> set[str]:
+def shared_resource_level(
+    resource_type: str, grants: list[AccessGrant], *, user_id: uuid.UUID,
+    team_ids: set[uuid.UUID], group_ids: set[uuid.UUID], global_access: str | None,
+) -> str | None:
+    """Shared hierarchical resource policy for view/dashboard consumers.
+
+    Load live grants first. Public access is a fallback level, not a bypass
+    around explicit denials; owners retain the owning module's intrinsic rights.
+    """
+    spec = get_spec(resource_type)
+    if spec is None or not spec.hierarchical:
+        return None
+    context = SubjectContext(user_id=user_id, team_ids=frozenset(team_ids),
+                             group_ids=frozenset(group_ids))
+    return effective_level(grants, context, None, spec, default_level=global_access)
+
+
+async def shared_resource_visible_clause(
+    session: AsyncSession, actor, resource_type: str, *, resource_id, owner_id, global_access,
+):
+    """Public SQL seam: filter shared catalogs before count/limit/hydration."""
+    from radd.modules.groups import service as groups
+    from radd.modules.teams import service as teams
+    from .shared import visible_clause
+
+    spec = get_spec(resource_type)
+    if spec is None:
+        raise ValueError(f"unknown shared resource {resource_type}")
+    context = SubjectContext(user_id=actor.id,
+        team_ids=frozenset(await teams.user_team_ids(session, actor.id)),
+        group_ids=frozenset(await groups.user_group_ids(session, actor.id)))
+    return visible_clause(spec, context, resource_id=resource_id, owner_id=owner_id,
+                          global_access=global_access, live=_live_clause())
+
+
+async def shared_resource_state_expressions(session, actor, resource_type, *, resource_id,
+                                             global_access):
+    """Public SQL seam for bounded sharing flags and exact allow/deny levels."""
+    from radd.modules.groups import service as groups
+    from radd.modules.teams import service as teams
+    from .shared import state_expressions
+
+    spec = get_spec(resource_type)
+    if spec is None:
+        raise ValueError(f"unknown shared resource {resource_type}")
+    context = SubjectContext(user_id=actor.id,
+        team_ids=frozenset(await teams.user_team_ids(session, actor.id)),
+        group_ids=frozenset(await groups.user_group_ids(session, actor.id)))
+    return state_expressions(spec, context, resource_id=resource_id,
+                             global_access=global_access, live=_live_clause())
+
+
+async def count_resource_grants(session, resource_type, resource_id):
+    """Count current grants without loading policy rows or subject objects."""
+    from sqlalchemy import func
+
+    return await session.scalar(select(func.count()).select_from(AccessGrant).where(
+        AccessGrant.resource_type == resource_type, AccessGrant.resource_id == resource_id,
+        _live_clause())) or 0
+
+
+async def resource_ids_with_grants(
+    session: AsyncSession, resource_type: str, *, ids: list[str] | None = None,
+) -> set[str]:
     """Distinct resource ids carrying ANY grant row (expired included) — drives
     the fields module's `restricted` read flag (RADD-887)."""
-    rows = await session.execute(
-        select(AccessGrant.resource_id)
-        .where(AccessGrant.resource_type == resource_type)
-        .distinct()
-    )
+    query = select(AccessGrant.resource_id).where(AccessGrant.resource_type == resource_type)
+    if ids is not None:
+        if not ids:
+            return set()
+        query = query.where(AccessGrant.resource_id.in_(ids))
+    rows = await session.execute(query.distinct())
     return set(rows.scalars())
 
 
@@ -104,6 +170,20 @@ async def get_grant(session: AsyncSession, grant_id: uuid.UUID) -> AccessGrant:
 
 
 # --- mutation -----------------------------------------------------------------
+
+
+async def lock_resource(session: AsyncSession, resource_type: str, resource_id: str) -> None:
+    """Lock through the owning module before grant authorization or mutation."""
+    spec = get_spec(resource_type)
+    if spec is not None and spec.lock_resource is not None:
+        await spec.lock_resource(session, resource_id)
+
+
+async def apply_shared_grant_edits(session, resource_type, resource_id, data, *, actor_id):
+    """Public write seam; the owner authorizes and owns the encompassing savepoint."""
+    from .shared_writes import apply_edits
+
+    await apply_edits(session, resource_type, resource_id, data, actor_id=actor_id)
 
 
 async def _validate_subject(
@@ -140,6 +220,7 @@ async def add_grant(
     effect: GrantEffect = GrantEffect.ALLOW,
     expires_at=None,
 ) -> AccessGrant:
+    await lock_resource(session, resource_type, resource_id)
     spec = get_spec(resource_type)
     if spec is None:
         raise ConflictError(AccessEntity.GRANT, reason=f"unknown resource type '{resource_type}'")
@@ -188,6 +269,12 @@ async def remove_grant(
     session: AsyncSession, grant_id: uuid.UUID, actor_id: uuid.UUID | None = None
 ) -> AccessGrant:
     grant = await get_grant(session, grant_id)
+    await lock_resource(session, grant.resource_type, grant.resource_id)
+    grant = await session.scalar(
+        select(AccessGrant).where(AccessGrant.id == grant_id).execution_options(populate_existing=True)
+    )
+    if grant is None:
+        raise NotFoundError(AccessEntity.GRANT, grant_id)
     await _emit(session, AccessEvent.REVOKED, grant, actor_id)
     await session.delete(grant)
     await session.flush()

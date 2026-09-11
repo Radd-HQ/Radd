@@ -1,8 +1,8 @@
 /** Projects, states/transitions, screens, issue types, field writability, and membership. */
 
 import { queryOptions } from "@tanstack/react-query";
-import { api } from "../api";
-import { Entity, entityMeta } from "../cache";
+import { api, ApiError } from "../api";
+import { Entity, entityMeta, projectEntityMeta } from "../cache";
 import {
   ApiPath,
   apiItemAllowedTransitionsPath,
@@ -14,6 +14,8 @@ import type {
   EffectiveScreen,
   IssueType,
   Project,
+  ProjectSummary,
+  PermissionValue,
   State,
   StateCategoryRow,
   Transition,
@@ -22,13 +24,63 @@ import type {
 export const projectsQuery = () =>
   queryOptions({
     queryKey: queryKeys.projects,
-    queryFn: () => api.get<Project[]>(ApiPath.projects),
+    meta: entityMeta(Entity.project),
+    queryFn: ({ signal }) => api.get<Project[]>(ApiPath.projects, { signal }),
   });
+
+/** Default context for a selector, without downloading its remaining choices. */
+export const firstProjectQuery = () => queryOptions({
+  queryKey: queryKeys.firstProject,
+  meta: entityMeta(Entity.project, Entity.role),
+  queryFn: ({ signal }) => api.get<Project[]>(ApiPath.projects, { signal, query: { limit: "1" } }),
+});
+
+export const PROJECTS_PAGE_SIZE = 50;
+
+export const projectSummaryQuery = () => queryOptions({
+  queryKey: queryKeys.projectSummary,
+  meta: entityMeta(Entity.project, Entity.role),
+  queryFn: ({ signal }) => api.get<ProjectSummary>(`${ApiPath.projects}/summary`, { signal }),
+});
+
+export const projectsPageQuery = (
+  q = "", page = 0, hideRelated = false, permission: PermissionValue | "" = "",
+) => queryOptions({
+  queryKey: queryKeys.projectsPage(q.trim(), page, hideRelated, permission),
+  meta: entityMeta(Entity.project, Entity.role),
+  queryFn: ({ signal }) => api.getPaged<Project>(ApiPath.projects, { signal, query: {
+    q: q.trim(), limit: String(PROJECTS_PAGE_SIZE), offset: String(page * PROJECTS_PAGE_SIZE),
+    hide_related: String(hideRelated), permission: permission || undefined,
+  } }),
+});
+
+async function readProject(path: string, signal: AbortSignal): Promise<Project | null> {
+  try { return await api.get<Project>(path, { signal }); }
+  catch (error) {
+    if (error instanceof ApiError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+export const projectByIdQuery = (id: string) => queryOptions({
+  queryKey: queryKeys.projectById(id),
+  meta: projectEntityMeta(id, Entity.project, Entity.role),
+  queryFn: ({ signal }) => readProject(`${ApiPath.projects}/${encodeURIComponent(id)}`, signal),
+  enabled: Boolean(id),
+});
+
+export const projectByKeyQuery = (key: string) => queryOptions({
+  queryKey: queryKeys.projectByKey(key),
+  meta: entityMeta(Entity.project, Entity.role),
+  queryFn: ({ signal }) => readProject(`${ApiPath.projects}/by-key/${encodeURIComponent(key.toUpperCase())}`, signal),
+  enabled: Boolean(key),
+});
 
 export const statesQuery = (projectId: string) =>
   queryOptions({
     queryKey: queryKeys.states(projectId),
-    queryFn: () => api.get<State[]>(ApiPath.states, { query: { project_id: projectId } }),
+    meta: projectEntityMeta(projectId, Entity.project),
+    queryFn: ({ signal }) => api.get<State[]>(ApiPath.states, { signal, query: { project_id: projectId } }),
     staleTime: 60_000,
   });
 
@@ -37,7 +89,8 @@ export const statesQuery = (projectId: string) =>
 export const stateCategoriesQuery = () =>
   queryOptions({
     queryKey: queryKeys.stateCategories,
-    queryFn: () => api.get<StateCategoryRow[]>(ApiPath.stateCategories),
+    meta: entityMeta(Entity.project),
+    queryFn: ({ signal }) => api.get<StateCategoryRow[]>(ApiPath.stateCategories, { signal }),
     staleTime: 60_000,
   });
 
@@ -46,7 +99,8 @@ export const stateCategoriesQuery = () =>
 export const allStatesQuery = () =>
   queryOptions({
     queryKey: queryKeys.allStates,
-    queryFn: () => api.get<State[]>(ApiPath.states),
+    meta: entityMeta(Entity.project),
+    queryFn: ({ signal }) => api.get<State[]>(ApiPath.states, { signal }),
     staleTime: 60_000,
   });
 
@@ -54,7 +108,7 @@ export const allStatesQuery = () =>
 export const transitionsQuery = (projectId: string) =>
   queryOptions({
     queryKey: queryKeys.transitions(projectId),
-    queryFn: () => api.get<Transition[]>(apiProjectTransitionsPath(projectId)),
+    queryFn: ({ signal }) => api.get<Transition[]>(apiProjectTransitionsPath(projectId), { signal }),
     meta: entityMeta(Entity.transition),
   });
 
@@ -63,7 +117,7 @@ export const transitionsQuery = (projectId: string) =>
 export const allowedTransitionsQuery = (itemId: string) =>
   queryOptions({
     queryKey: queryKeys.allowedTransitions(itemId),
-    queryFn: () => api.get<AllowedTransitions>(apiItemAllowedTransitionsPath(itemId)),
+    queryFn: ({ signal }) => api.get<AllowedTransitions>(apiItemAllowedTransitionsPath(itemId), { signal }),
     meta: entityMeta(Entity.transition, Entity.item),
   });
 
@@ -72,8 +126,10 @@ export const allowedTransitionsQuery = (itemId: string) =>
 export const fieldWritabilityQuery = (projectId: string | null | undefined) =>
   queryOptions({
     queryKey: ["field-writability", projectId ?? ""] as const,
-    queryFn: () =>
+    meta: entityMeta(Entity.field, Entity.role),
+    queryFn: ({ signal }) =>
       api.get<{ readonly_fields: string[] }>("/fields/writable", {
+        signal,
         query: { project_id: projectId ?? "" },
       }),
     enabled: Boolean(projectId),
@@ -83,8 +139,8 @@ export const fieldWritabilityQuery = (projectId: string | null | undefined) =>
 export const issueTypesQuery = (projectId: string) =>
   queryOptions({
     queryKey: queryKeys.issueTypes(projectId),
-    queryFn: () =>
-      api.get<IssueType[]>(ApiPath.issueTypes, { query: { project_id: projectId } }),
+    queryFn: ({ signal }) =>
+      api.get<IssueType[]>(ApiPath.issueTypes, { signal, query: { project_id: projectId } }),
     staleTime: 60_000,
   });
 
@@ -93,8 +149,9 @@ export const issueTypesQuery = (projectId: string) =>
 export const effectiveScreenQuery = (projectId: string, issueTypeId: string | null) =>
   queryOptions({
     queryKey: queryKeys.effectiveScreen(projectId, issueTypeId),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<EffectiveScreen>(ApiPath.screensEffective, {
+        signal,
         query: issueTypeId
           ? { project_id: projectId, issue_type_id: issueTypeId }
           : { project_id: projectId },

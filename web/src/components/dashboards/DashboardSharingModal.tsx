@@ -1,26 +1,17 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
-import {
-  ApiPath,
-  apiDashboardSharingPath,
-  apiDashboardTransferPath,
-} from "../../lib/constants";
+import { apiDashboardPath } from "../../lib/constants";
+import { emptySharingDraft, sharingEdits, type SharedSave } from "../../lib/sharing-draft";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { usePermissions } from "../../lib/hooks";
 import { Permission, type Dashboard, type ShareLevelValue } from "../../lib/types";
 import { Button } from "../Button";
 import { Modal } from "../Modal";
-import { ViewSharingEditor, SERVER_PRIVATE, type LocalShare } from "../views/ViewSharingEditor";
+import { ViewSharingEditor, SERVER_PRIVATE } from "../views/ViewSharingEditor";
 import { ErrorText } from "../ErrorText";
 
-/**
- * Sharing dialog for a dashboard (spec 75, on the spec-92 access framework since
- *) — the ViewModal sharing block
- * generalized: the server-wide level + per-user/team grant rows + ownership
- * transfer, saved atomically via PUT /dashboards/{id}/sharing (transfer LAST —
- * after it lands the actor may no longer hold manage rights).
- */
+/** Local sharing draft committed by one owner-authorized transaction. */
 export function DashboardSharingModal({
   dashboard,
   onClose,
@@ -35,86 +26,37 @@ export function DashboardSharingModal({
   const [serverAccess, setServerAccess] = useState<ShareLevelValue | typeof SERVER_PRIVATE>(
     dashboard.global_access ?? SERVER_PRIVATE,
   );
-  const [shareRows, setShareRows] = useState<LocalShare[]>(
-    dashboard.shares.map((share) => ({
-      kind: share.user ? "user" : share.team ? "team" : "group",
-      subjectId: (share.user ?? share.team ?? share.group)?.id ?? "",
-      level: share.level,
-    })),
-  );
+  const [sharingDraft, setSharingDraft] = useState(emptySharingDraft);
+  const [sharingBase] = useState({ owner: dashboard.owner_id, access: dashboard.global_access });
   const [transferTo, setTransferTo] = useState("");
 
-  /** Per-subject shares are access grants (spec 92 adopters): reconcile the local
-   *  rows against the dashboard's current grants — add the new, delete the gone.
-   *  Byte-for-byte the ViewModal idiom; only `resource_type` differs. */
-  const reconcileShares = async () => {
-    const current = (dashboard.shares ?? []).map((s) => ({
-      id: s.id,
-      key: s.user
-        ? `user:${s.user.id}`
-        : s.team
-          ? `team:${s.team.id}`
-          : `group:${s.group!.id}`,
-      level: s.level as string,
-    }));
-    const desired = shareRows
-      .filter((r) => r.subjectId)
-      .map((r) => ({ key: `${r.kind}:${r.subjectId}`, level: r.level as string }));
-    const desiredKeys = new Set(desired.map((d) => `${d.key}@${d.level}`));
-    const currentKeys = new Set(current.map((c) => `${c.key}@${c.level}`));
-    for (const c of current) {
-      if (!desiredKeys.has(`${c.key}@${c.level}`)) await api.delete(`${ApiPath.grants}/${c.id}`);
-    }
-    for (const d of desired) {
-      if (currentKeys.has(`${d.key}@${d.level}`)) continue;
-      const [kind, id] = d.key.split(":");
-      await api.post(ApiPath.grants, {
-        resource_type: "dashboard",
-        resource_id: dashboard.id,
-        subject_type: kind,
-        subject_id: id,
-        access: d.level,
-        project_ids: [],
-      });
-    }
-  };
-
   const save = useMutation({
-    mutationFn: async () => {
-      // PUT /sharing carries only the PUBLIC level now; per-subject grants go
-      // through the generic /grants API, exactly as views do.
-      await reconcileShares();
-      const payload = {
-        global_access: serverAccess === SERVER_PRIVATE ? null : serverAccess,
-      };
-      let saved = await api.put<Dashboard>(apiDashboardSharingPath(dashboard.id), payload);
-      if (transferTo) {
-        saved = await api.post<Dashboard>(apiDashboardTransferPath(dashboard.id), {
-          user_id: transferTo,
-        });
-      }
-      return saved;
-    },
+    mutationFn: () => api.post<Dashboard>(`${apiDashboardPath(dashboard.id)}/save`, {
+      sharing: { global_access: serverAccess === SERVER_PRIVATE ? null : serverAccess },
+      grants: sharingEdits(sharingDraft), transfer_to: transferTo || undefined,
+      expected_owner_id: sharingBase.owner, expected_global_access: sharingBase.access,
+    } satisfies SharedSave),
     onSuccess: async () => {
-      await invalidateEntities(queryClient, Entity.dashboard);
+      await invalidateEntities(queryClient, Entity.dashboard, Entity.accessGrant);
       onClose();
     },
   });
 
   return (
-    <Modal title="Share dashboard" onClose={onClose}>
-      <div className="flex flex-col gap-4">
+    <Modal title="Share dashboard" onClose={() => { if (!save.isPending) onClose(); }}>
+      <fieldset disabled={save.isPending} className="flex min-w-0 flex-col gap-4">
         <ViewSharingEditor
           serverAccess={serverAccess}
           onServerAccess={setServerAccess}
-          shares={shareRows}
-          onShares={setShareRows}
+          shares={[]}
+          onShares={() => {}}
+          existing={{ id: dashboard.id, draft: sharingDraft, onChange: setSharingDraft }}
           canBroadcast={canBroadcast}
           transferTo={transferTo}
           onTransferTo={setTransferTo}
           noun="dashboard"
         />
-        {save.isError && <ErrorText error={save.error} />}
+        {save.isError && <div role="alert"><ErrorText error={save.error} /></div>}
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
             Cancel
@@ -123,7 +65,7 @@ export function DashboardSharingModal({
             {save.isPending ? "Saving…" : "Save sharing"}
           </Button>
         </div>
-      </div>
+      </fieldset>
     </Modal>
   );
 }

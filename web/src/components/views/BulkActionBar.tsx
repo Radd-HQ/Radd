@@ -1,3 +1,6 @@
+import { TeamSelect } from "../teams/TeamSelect";
+import { ProjectSelect } from "../projects/ProjectSelect";
+import { CycleSelect } from "../cycles/CycleSelect";
 import { useState } from "react";
 import { PersonName } from "../PersonName";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -5,16 +8,14 @@ import { Archive, ArrowRightLeft, Flag, X } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { Entity, invalidateEntities } from "../../lib/cache";
-import { useCurrentUser, useItemWritability } from "../../lib/hooks";
+import { useCurrentUser, useItemWritability, usePermissions } from "../../lib/hooks";
 import { PRIORITY_META, PRIORITY_ORDER } from "../../lib/meta";
 import {
-  cyclesQuery,
   issueTypesQuery,
   labelsQuery,
-  projectsQuery,
+  projectSummaryQuery,
   releasesQuery,
   statesQuery,
-  teamsQuery,
   usersQuery,
 } from "../../lib/queries";
 import { pushToast, ToastKind } from "../../lib/toast";
@@ -28,7 +29,6 @@ import type {
   PriorityValue,
   Project,
 } from "../../lib/types";
-import { BACKLOG_KEY, selectableCycles } from "../../lib/view-utils";
 import { Button } from "../Button";
 import { useCan } from "../../lib/can";
 import { Modal } from "../Modal";
@@ -79,6 +79,7 @@ export function BulkActionBar({
 }: BulkActionBarProps) {
   const queryClient = useQueryClient();
   const currentUser = useCurrentUser();
+  const perms = usePermissions();
   const [moving, setMoving] = useState(false);
   // On a single-project surface, disable field actions the user can't write (spec 92) — dimmed, with
   // a reason. Cross-project selections (project === null) can't be pre-resolved per item, so they
@@ -93,11 +94,9 @@ export function BulkActionBar({
   const locked = (field: string) => project != null && !writ.fieldWritable(field);
 
   // Option sources are fetched lazily — the bar only mounts with a selection.
-  const cycles = useQuery(cyclesQuery());
   const labels = useQuery(labelsQuery());
-  const teams = useQuery(teamsQuery());
   const users = useQuery(usersQuery);
-  const projects = useQuery(projectsQuery());
+  const projectSummary = useQuery(projectSummaryQuery());
   const states = useQuery({ ...statesQuery(project?.id ?? ""), enabled: Boolean(project) });
   const types = useQuery({ ...issueTypesQuery(project?.id ?? ""), enabled: Boolean(project) });
   const releases = useQuery({ ...releasesQuery(project?.id ?? ""), enabled: Boolean(project) });
@@ -122,14 +121,13 @@ export function BulkActionBar({
   const apply = (patch: ItemBulkPatch) => bulkUpdate.mutate(patch);
 
   const bulkMove = useMutation({
-    mutationFn: (targetProjectId: string) =>
+    mutationFn: (target: Project) =>
       api.post<BulkMoveResult>(ApiPath.itemsBulkMove, {
         item_ids: [...selectedIds],
-        target_project_id: targetProjectId,
+        target_project_id: target.id,
       }),
-    onSuccess: (result, targetProjectId) => {
+    onSuccess: (result, target) => {
       void invalidateEntities(queryClient, Entity.item);
-      const target = (projects.data ?? []).find((entry) => entry.id === targetProjectId);
       const summary = `Moved ${result.moved.length} to ${target?.key ?? "project"} — keys changed, old links keep redirecting`;
       if (result.skipped.length > 0) {
         pushToast(`${summary} · ${skippedSummary(result.skipped)}`);
@@ -168,7 +166,6 @@ export function BulkActionBar({
   };
 
   const clearable = (id: string) => (id === NONE ? null : id);
-  const moveTargets = projects.data ?? [];
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-4 z-40 flex justify-center px-4">
@@ -216,15 +213,9 @@ export function BulkActionBar({
           (value) => apply({ assignee_id: clearable(value) }),
           "assignee",
         )}
-        {actionSelect(
-          "Team…",
-          [
-            { value: NONE, label: "No team" },
-            ...(teams.data ?? []).map((team) => ({ value: team.id, label: team.name })),
-          ],
-          (value) => apply({ team_id: clearable(value) }),
-          "team",
-        )}
+        <TeamSelect value="" placeholder="Team…" emptyLabel="No team" size="sm"
+          onChange={value => apply({ team_id: value || null })}
+          disabled={bulkUpdate.isPending || locked("team")} title={locked("team") ? writ.reasonFor("team") : undefined} />
         {project &&
           (types.data ?? []).length > 0 &&
           actionSelect(
@@ -233,15 +224,9 @@ export function BulkActionBar({
             (value) => apply({ type_id: value }),
             "type",
           )}
-        {actionSelect(
-          "Cycle…",
-          [
-            { value: BACKLOG_KEY, label: "Backlog" },
-            ...selectableCycles(cycles.data).map((cycle) => ({ value: cycle.id, label: cycle.name })),
-          ],
-          (value) => apply({ cycle_id: value === BACKLOG_KEY ? null : value }),
-          "cycle",
-        )}
+        <CycleSelect value="" onChange={value => apply({ cycle_id: value || null })}
+          placeholder="Cycle…" emptyLabel="Backlog" includeCompleted={false} size="sm"
+          disabled={bulkUpdate.isPending || locked("cycle")} title={locked("cycle") ? writ.reasonFor("cycle") : undefined} />
         {project &&
           (releases.data ?? []).length > 0 &&
           actionSelect(
@@ -290,7 +275,7 @@ export function BulkActionBar({
           <Archive size={13} aria-hidden />
           Archive
         </Button>
-        {moveTargets.length > 1 && (
+        {(projectSummary.data?.total ?? 0) > 1 && perms.anyProject(Permission.itemCreate) && (
           <Button variant="ghost" onClick={() => setMoving(true)}>
             <ArrowRightLeft size={13} aria-hidden />
             Move…
@@ -315,9 +300,8 @@ export function BulkActionBar({
         <div className="pointer-events-auto">
           <BulkMoveDialog
             count={selectedIds.size}
-            projects={moveTargets}
             pending={bulkMove.isPending}
-            onMove={(projectId) => bulkMove.mutate(projectId)}
+            onMove={target => bulkMove.mutate(target)}
             onClose={() => setMoving(false)}
           />
         </div>
@@ -328,18 +312,16 @@ export function BulkActionBar({
 
 function BulkMoveDialog({
   count,
-  projects,
   pending,
   onMove,
   onClose,
 }: {
   count: number;
-  projects: Project[];
   pending: boolean;
-  onMove: (projectId: string) => void;
+  onMove: (project: Project) => void;
   onClose: () => void;
 }) {
-  const [target, setTarget] = useState("");
+  const [target, setTarget] = useState<Project | null>(null);
   return (
     <Modal title={`Move ${count} item${count === 1 ? "" : "s"} to another project`} onClose={onClose}>
       <div className="space-y-4">
@@ -349,17 +331,8 @@ function BulkMoveDialog({
           custom fields the target doesn't define are dropped. Items keep their
           parent/child links — select sub-items too if they should move along.
         </p>
-        <Select
-          aria-label="Target project"
-          className="w-full"
-          value={target}
-          onChange={setTarget}
-          placeholder="Choose a project…"
-          options={projects.map((entry) => ({
-            value: entry.id,
-            label: `${entry.key} — ${entry.name}`,
-          }))}
-        />
+        <ProjectSelect label="Target project" value={target?.id ?? ""}
+          onChange={(_id, project) => setTarget(project)} permission={Permission.itemCreate} disabled={pending} />
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
             Cancel

@@ -52,11 +52,11 @@ export function FormAssistPanel({
     // The debounced draft IS the key — unlike the read-menu's stable seedKey,
     // a form draft must refetch as it grows (keepPreviousData smooths it).
     queryKey: ["form-similar", projectId, debouncedSeed],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.post<SimilarResponse>(ApiPath.aiSimilar, {
         text: debouncedSeed,
         exclude_item_id: null,
-      }),
+      }, { signal }),
     // Status error/pending/disabled all mean "don't ask" (the spec 46 gate).
     enabled:
       Boolean(status.data?.enabled) && debouncedSeed.length >= DEFLECT_MIN_QUERY_CHARS,

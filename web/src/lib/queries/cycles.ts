@@ -5,7 +5,6 @@ import { api } from "../api";
 import { Entity, entityMeta } from "../cache";
 import {
   ApiPath,
-  ITEMS_PAGE_LIMIT,
   apiCyclePath,
   apiCycleStatsPath,
 } from "../constants";
@@ -23,45 +22,70 @@ import type {
 export const cyclesQuery = (status?: CycleStatusValue) =>
   queryOptions({
     queryKey: queryKeys.cycles(status),
-    queryFn: () => api.get<Cycle[]>(ApiPath.cycles, { query: { status } }),
+    meta: entityMeta(Entity.cycle),
+    queryFn: ({ signal }) => api.get<Cycle[]>(ApiPath.cycles, { signal, query: { status } }),
   });
+
+export const CYCLES_PAGE_SIZE = 50;
+export const cyclesPageQuery = (
+  q = "", page = 0, status?: CycleStatusValue, includeCompleted = true, excludeId = "", datedOnly = false,
+) => queryOptions({
+  queryKey: queryKeys.cyclesPage(q.trim(), page, status, includeCompleted, excludeId, datedOnly),
+  meta: entityMeta(Entity.cycle, Entity.team, Entity.role),
+  queryFn: ({ signal }) => api.getPaged<Cycle>(ApiPath.cycles, { signal, query: {
+    q: q.trim(), limit: String(CYCLES_PAGE_SIZE), offset: String(page * CYCLES_PAGE_SIZE),
+    status, include_completed: String(includeCompleted), exclude_id: excludeId || undefined,
+    dated_only: String(datedOnly),
+  } }),
+});
+
+/** Prefer an active dated cycle, then the most recent dated cycle. The server
+ * chooses from the whole visible catalog before limiting the result. */
+export const defaultBurnupCycleQuery = () => queryOptions({
+  queryKey: ["cycles", "default-burnup"] as const,
+  meta: entityMeta(Entity.cycle, Entity.team, Entity.role),
+  queryFn: ({ signal }) => api.get<Cycle[]>(ApiPath.cycles, { signal,
+    query: { limit: "1", dated_only: "true", recent_first: "true" } }),
+});
+
+export const cycleSummaryQuery = (q = "") => queryOptions({
+  queryKey: queryKeys.cycleSummary(q.trim()),
+  meta: entityMeta(Entity.cycle, Entity.team, Entity.role),
+  queryFn: ({ signal }) => api.get<Partial<Record<CycleStatusValue, number>>>(`${ApiPath.cycles}/summary`, {
+    signal, query: { q: q.trim() },
+  }),
+});
 
 /** A single cycle (spec 18) — the cycle items page reads its dates/goal here. */
 export const cycleQuery = (cycleId: string) =>
   queryOptions({
     queryKey: queryKeys.cycle(cycleId),
-    queryFn: () => api.get<Cycle>(apiCyclePath(cycleId)),
+    meta: entityMeta(Entity.cycle),
+    queryFn: ({ signal }) => api.get<Cycle>(apiCyclePath(cycleId), { signal }),
   });
 
-/** EVERY item in a cycle, via the server-side cycle filter — pages through GET
- * /items?cycle_id= so big cycles (300+) are complete (the old per-project
- * fetch-and-client-filter silently truncated at the page limit). */
-export const cycleItemsQuery = (cycleId: string) =>
+export const CYCLE_ITEMS_PAGE_SIZE = 50;
+
+/** One cycle item window; every filter is applied before the server pages. */
+export const cycleItemsQuery = (cycleId: string, page = 0, q = "", assigneeId = "", teamId = "") =>
   queryOptions({
-    queryKey: ["cycleItems", cycleId] as const,
-    queryFn: async () => {
-      const all: Item[] = [];
-      for (let page = 0; page < 10; page++) {
-        const batch = await api.get<Item[]>(ApiPath.items, {
-          query: {
-            cycle_id: cycleId,
-            limit: String(ITEMS_PAGE_LIMIT),
-            offset: String(page * ITEMS_PAGE_LIMIT),
-          },
-        });
-        all.push(...batch);
-        if (batch.length < ITEMS_PAGE_LIMIT) break;
-      }
-      return all;
-    },
+    queryKey: ["cycleItems", cycleId, { page, q, assigneeId, teamId }] as const,
+    queryFn: ({ signal }) => api.get<Item[]>(ApiPath.items, { signal, query: {
+      cycle_id: cycleId, q: q || undefined, assignee_id: assigneeId || undefined,
+      team_id: teamId || undefined, limit: String(CYCLE_ITEMS_PAGE_SIZE),
+      offset: String(page * CYCLE_ITEMS_PAGE_SIZE),
+    } }),
     meta: entityMeta(Entity.item),
   });
 
 /** Recurring cycle series (per-label auto-provisioning config). */
-export const cycleSeriesQuery = () =>
+export const cycleSeriesPageQuery = (q = "", page = 0) =>
   queryOptions({
-    queryKey: ["cycle-series"] as const,
-    queryFn: () => api.get<CycleSeries[]>("/cycle-series"),
+    queryKey: queryKeys.cycleSeriesPage(q.trim(), page),
+    meta: entityMeta(Entity.cycleSeries, Entity.role),
+    queryFn: ({ signal }) => api.getPaged<CycleSeries>("/cycle-series", { signal, query: {
+      q: q.trim(), limit: String(CYCLES_PAGE_SIZE), offset: String(page * CYCLES_PAGE_SIZE),
+    } }),
   });
 
 /** Cycle-page header metrics; filters mirror the page's list filters.
@@ -73,6 +97,7 @@ export const cycleStatsQuery = (
   assigneeId?: string,
   teamId?: string,
   projectId?: string,
+  q?: string,
 ) =>
   queryOptions({
     queryKey: [
@@ -81,12 +106,14 @@ export const cycleStatsQuery = (
       assigneeId ?? null,
       teamId ?? null,
       projectId ?? null,
+      q ?? "",
     ] as const,
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<CycleStats>(apiCycleStatsPath(cycleId), {
-        query: { assignee_id: assigneeId, team_id: teamId, project_id: projectId },
+        signal,
+        query: { assignee_id: assigneeId, team_id: teamId, project_id: projectId, q },
       }),
-    meta: entityMeta(Entity.item), // item mutations change the counts/time totals
+    meta: entityMeta(Entity.item, Entity.cycle, Entity.worklog), // item mutations change the counts/time totals
     placeholderData: keepPreviousData,
   });
 
@@ -94,5 +121,5 @@ export const cycleStatsQuery = (
 export const releasesQuery = (projectId: string) =>
   queryOptions({
     queryKey: queryKeys.releases(projectId),
-    queryFn: () => api.get<Release[]>(ApiPath.releases, { query: { project_id: projectId } }),
+    queryFn: ({ signal }) => api.get<Release[]>(ApiPath.releases, { signal, query: { project_id: projectId } }),
   });

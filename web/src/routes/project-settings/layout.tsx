@@ -1,4 +1,4 @@
-import { Link, Outlet, useParams } from "@tanstack/react-router";
+import { Link, Navigate, Outlet, useParams } from "@tanstack/react-router";
 import {
   ClipboardList,
   Clock,
@@ -79,8 +79,8 @@ const PROJECT_SETTINGS_NAV: readonly {
     label: "Access",
     icon: UserRound,
     // RADD-826 (D3): delegated access management — member.create in THIS
-    // project opens the screen; project.manage implies it.
-    show: (perms, project) => perms.project(project, Permission.memberCreate),
+    // project opens the screen; revoke-only and global role managers also belong here.
+    show: (perms, project) => perms.global(Permission.roleUpdate) || perms.project(project, Permission.memberCreate) || perms.project(project, Permission.memberDelete),
   },
   {
     to: RoutePath.projectSettingsReleases,
@@ -131,19 +131,19 @@ export function ProjectSettingsLayout() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center gap-3 border-b border-subtle px-6 py-3.5">
+      <header className="flex flex-wrap items-center gap-3 border-b border-subtle px-6 py-3.5">
         <span className="rounded bg-elevated px-1.5 py-0.5 font-mono text-xs text-fg">
           {project.key}
         </span>
         <h1 className="text-sm font-semibold text-heading">{project.name}</h1>
         <span className="text-xs text-fg-muted">Project settings</span>
       </header>
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <nav
           aria-label="Project settings sections"
-          className="w-44 shrink-0 border-r border-subtle p-2"
+          className="w-full shrink-0 overflow-x-auto border-b border-subtle p-2 lg:w-44 lg:border-b-0 lg:border-r"
         >
-          <ul className="flex flex-col gap-0.5">
+          <ul className="flex whitespace-nowrap gap-0.5 lg:flex-col">
             {visible.map(({ to, label, icon: Icon }) => (
               <li key={to}>
                 <Link to={to} params={{ projectKey }} className={navLinkClasses}>
@@ -160,6 +160,16 @@ export function ProjectSettingsLayout() {
       </div>
     </div>
   );
+}
+
+/** Land on an available section, including access-only delegates. */
+export function ProjectSettingsIndex() {
+  const { projectKey, project } = useUrlProject();
+  const perms = usePermissions();
+  if (!project) return <Spinner label="Loading settings…" />;
+  const first = PROJECT_SETTINGS_NAV.find(item => item.show(perms, project));
+  return first ? <Navigate to={first.to} params={{ projectKey }} replace />
+    : <p className="p-4 text-sm text-fg-muted">You have no project settings to manage here.</p>;
 }
 
 /**

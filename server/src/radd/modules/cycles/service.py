@@ -51,6 +51,7 @@ __all__ = [
     "get_series",
     "list_cycles",
     "list_series",
+    "recent_completed_cycles",
     "to_read",
     "update_cycle",
     "update_series",
@@ -145,23 +146,10 @@ async def visible_cycles(
 ) -> tuple[list[Cycle], dict[uuid.UUID, list[uuid.UUID]]]:
     """(cycles the user may see, team_ids per cycle). Cycle managers see every
     cycle; everyone else sees public cycles plus their own teams' (spec 60)."""
-    from radd.modules.auth import authz  # deferred: avoids a load-order edge
-    from radd.modules.teams import service as teams_service
+    from .directory import page
 
-    cycles = await list_cycles(session, status=status, today=today)
-    teams_by_cycle = await team_ids_by_cycle(session, [cycle.id for cycle in cycles])
-    # Bypass = ADMINS only. Deliberately NOT cycle.manage: every member holds
-    # that (spec-36 floor), which would make restriction a no-op.
-    perms = await authz.effective_permissions(session, user)
-    if authz.Permission.GLOBAL_MANAGE in perms:
-        return cycles, teams_by_cycle
-    my_teams = set(await teams_service.user_team_ids(session, user.id))
-    allowed = [
-        cycle
-        for cycle in cycles
-        if not teams_by_cycle.get(cycle.id) or my_teams & set(teams_by_cycle[cycle.id])
-    ]
-    return allowed, teams_by_cycle
+    rows, teams, _ = await page(session, user, status=status, today=today)
+    return rows, teams
 
 
 async def cycle_visible_to(session: AsyncSession, cycle: Cycle, user: User) -> bool:
@@ -178,6 +166,13 @@ async def cycle_visible_to(session: AsyncSession, cycle: Cycle, user: User) -> b
         return True
     my_teams = await teams_service.user_team_ids(session, user.id)
     return bool(set(my_teams) & set(restricted))
+
+
+async def recent_completed_cycles(session: AsyncSession, *, actor: User | None, limit: int, today: date):
+    """Public reporting seam: restrict visibility before choosing recent cycles."""
+    from .directory import recent_completed
+
+    return await recent_completed(session, actor=actor, limit=limit, today=today)
 
 
 def _check_dates(start: date | None, end: date | None) -> None:
@@ -340,12 +335,16 @@ async def complete_cycle(
     from radd.modules.items import service as items_service
 
     cycle = await get_cycle(session, cycle_id)
+    if not await cycle_visible_to(session, cycle, actor):
+        raise NotFoundError(CycleEntity.CYCLE, cycle.id)
     if _status(cycle, today) is CycleStatus.COMPLETED:
         raise ConflictError(CycleEntity.CYCLE, reason="cycle is already completed")
 
     target: Cycle | None = None
     if data.move_open_to is not None:
         target = await get_cycle(session, data.move_open_to)
+        if not await cycle_visible_to(session, target, actor):
+            raise NotFoundError(CycleEntity.CYCLE, target.id)
         if target.id == cycle.id:
             raise ConflictError(
                 CycleEntity.CYCLE, reason="cannot move items into the cycle being completed"

@@ -36,9 +36,11 @@ export async function fetchSlqSuggest(
   query: string,
   cursor: number,
   dialect: string = SlqDialect.items,
+  signal?: AbortSignal,
 ): Promise<SlqSuggestResponse | null> {
   try {
     return await api.get<SlqSuggestResponse>(`${dialect}/slq/suggest`, {
+      signal,
       query: { ...scope, q: query, cursor: String(cursor) },
       on401: On401.throw,
     });

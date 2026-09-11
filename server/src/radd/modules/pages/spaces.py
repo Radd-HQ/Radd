@@ -21,6 +21,17 @@ async def get_space(session: AsyncSession, space_id: uuid.UUID) -> PageSpace:
     return space
 
 
+async def by_slug_or_id(session: AsyncSession, identifier: str) -> PageSpace:
+    """Prefer an exact slug, retaining legacy UUID URLs and slug ambiguity rules."""
+    space = await session.scalar(select(PageSpace).where(PageSpace.slug == identifier))
+    if space is not None:
+        return space
+    try:
+        return await get_space(session, uuid.UUID(identifier))
+    except (ValueError, AttributeError):
+        raise NotFoundError(PageEntity.SPACE, identifier) from None
+
+
 async def _slug_clash(
     session: AsyncSession, slug: str, exclude: uuid.UUID | None = None
 ) -> bool:
@@ -137,9 +148,16 @@ async def delete_space(
 
 async def list_spaces(session: AsyncSession) -> list[PageSpaceRead]:
     result = await session.execute(
-        select(PageSpace).order_by(PageSpace.position, PageSpace.name)
+        select(PageSpace).order_by(PageSpace.position, PageSpace.name, PageSpace.id)
     )
     spaces = list(result.scalars())
+    return await read_spaces(session, spaces)
+
+
+async def read_spaces(
+    session: AsyncSession, spaces: list[PageSpace]
+) -> list[PageSpaceRead]:
+    """Hydrate the existing live-page count contract for a selected window."""
     counts: dict[uuid.UUID, int] = dict(
         (
             await session.execute(

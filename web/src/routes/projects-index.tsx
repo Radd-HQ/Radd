@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import { FolderKanban, Plus } from "lucide-react";
 import { RoutePath } from "../lib/constants";
 import { usePermissions } from "../lib/hooks";
-import { useListFilter } from "../lib/list-filter";
-import { projectsQuery } from "../lib/queries";
+import { useProjectDirectory } from "../lib/useProjectDirectory";
+import { DirectoryPager } from "../components/DirectoryPager";
 import { Permission } from "../lib/types";
 import { Button } from "../components/Button";
 import { ListSearchInput } from "../components/ListSearchInput";
@@ -17,24 +16,9 @@ import { formatDate } from "../lib/dates";
 export function ProjectsIndexPage() {
   // Global-scope project.create gates the affordance (spec 06 permission union).
   const canCreate = usePermissions().global(Permission.projectCreate);
-  const projects = useQuery(projectsQuery());
+  const projects = useProjectDirectory();
   const [creating, setCreating] = useState(false);
-  // Hooks run before the pending/error early returns to keep the order stable.
-  const all = projects.data ?? [];
-  const search = useListFilter(all, (project) => [project.name, project.key]);
-  const list = search.filtered;
-
-  if (projects.isPending) {
-    return <Spinner label="Loading projects…" />;
-  }
-
-  if (projects.isError) {
-    return (
-      <div className="p-10">
-        <QueryError label="projects" error={projects.error} />
-      </div>
-    );
-  }
+  const list = projects.rows;
 
   return (
     <div className="px-8 py-8">
@@ -48,7 +32,7 @@ export function ProjectsIndexPage() {
         )}
       </div>
 
-      {all.length === 0 ? (
+      {!projects.filter && !projects.isPending && !projects.isError && projects.total === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-subtle py-16 text-fg-muted">
           <FolderKanban size={24} aria-hidden />
           <p className="text-sm">No projects yet.</p>
@@ -61,21 +45,21 @@ export function ProjectsIndexPage() {
         </div>
       ) : (
         <>
-          {all.length > 8 && (
-            <ListSearchInput
+          <ListSearchInput
               className="mb-3"
-              value={search.filter}
-              onChange={search.setFilter}
+              value={projects.filter}
+              onChange={projects.setFilter}
               placeholder="Filter projects by name or key…"
-              total={all.length}
-              matched={list.length}
+              total={projects.available}
+              matched={projects.total}
               noun="projects"
-            />
-          )}
-          {list.length === 0 ? (
+          />
+          {projects.isError ? <QueryError label="projects" error={projects.error} />
+            : projects.isPending ? <Spinner label="Loading projects…" />
+            : list.length === 0 ? (
             <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-subtle py-16 text-fg-muted">
               <FolderKanban size={24} aria-hidden />
-              <p className="text-sm">No projects match “{search.filter.trim()}”.</p>
+              <p className="text-sm">No projects match “{projects.filter.trim()}”.</p>
             </div>
           ) : (
             <ul className="divide-y divide-subtle/80 rounded-lg border border-subtle">
@@ -98,6 +82,7 @@ export function ProjectsIndexPage() {
               ))}
             </ul>
           )}
+          <DirectoryPager {...projects} onPage={projects.setPage} label="projects" />
         </>
       )}
 

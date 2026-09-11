@@ -37,7 +37,7 @@ export function MilestonesPage() {
   const projects = useProjectsQuery();
   const { data, isLoading } = useQuery({
     queryKey: listKey,
-    queryFn: () => api.get<Milestone[]>("/milestones"),
+    queryFn: ({ signal }) => api.get<Milestone[]>("/milestones", { signal }),
   });
 
   const [title, setTitle] = useState("");

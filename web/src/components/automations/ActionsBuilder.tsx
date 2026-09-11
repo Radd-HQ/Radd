@@ -1,21 +1,17 @@
 import { useId } from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
 import { ACTION_TYPE_LABELS, ACTION_TYPE_ORDER } from "../../lib/meta";
+import { usePermissions } from "../../lib/hooks";
 import {
-  cyclesQuery,
   fieldsQuery,
   labelsQuery,
-  projectsQuery,
-  releasesQuery,
-  statesQuery,
-  teamsQuery,
-  usersAdminQuery,
 } from "../../lib/queries";
 import {
   ActionType,
   CommentVisibility,
   Priority,
+  Permission,
   type ActionTypeValue,
   type CustomFieldValue,
   type FieldDef,
@@ -29,44 +25,21 @@ import { IconButton } from "../IconButton";
 
 /** Picker options gathered once for every action row (spec 20 actions builder). */
 export interface PickerData {
-  userEmails: { email: string; name: string }[];
-  teamNames: string[];
+  canChoosePeople: boolean;
   labelNames: string[];
-  cycleNames: string[];
-  stateNames: string[];
-  releaseVersions: string[];
-  projectKeys: string[];
   fields: FieldDef[];
 }
 
 const uniqueSorted = (values: string[]) => [...new Set(values)].sort((a, b) => a.localeCompare(b));
 
-/** Fetch the global pickers plus per-project state/release names. */
+/** Remaining global registries; project-owned choices load in their controls. */
 export function usePickerData(): PickerData {
-  // The ADMIN directory (RADD-769): an automation stores its assignee by
-  // EMAIL, so this picker needs the address as a VALUE, not as decoration —
-  // which is the half of the directory that stays behind `user.manage`.
-  const users = useQuery(usersAdminQuery({}));
-  const teams = useQuery(teamsQuery());
+  const perms = usePermissions();
   const labels = useQuery(labelsQuery());
-  const cycles = useQuery(cyclesQuery());
   const fields = useQuery(fieldsQuery());
-  const projects = useQuery(projectsQuery());
-  const projectIds = (projects.data ?? []).map((project) => project.id);
-  const states = useQueries({ queries: projectIds.map((id) => statesQuery(id)) });
-  const releases = useQueries({ queries: projectIds.map((id) => releasesQuery(id)) });
   return {
-    userEmails: (users.data ?? [])
-      .filter((user) => user.active)
-      .map((user) => ({ email: user.email, name: user.name })),
-    teamNames: (teams.data ?? []).map((team) => team.name),
+    canChoosePeople: perms.global(Permission.userManage),
     labelNames: uniqueSorted((labels.data ?? []).map((label) => label.name)),
-    cycleNames: (cycles.data ?? []).map((cycle) => cycle.name),
-    stateNames: uniqueSorted(states.flatMap((query) => (query.data ?? []).map((state) => state.name))),
-    releaseVersions: uniqueSorted(
-      releases.flatMap((query) => (query.data ?? []).map((release) => release.version)),
-    ),
-    projectKeys: (projects.data ?? []).map((project) => project.key),
     fields: fields.data ?? [],
   };
 }
@@ -197,19 +170,9 @@ export function ActionsBuilder({ value, onChange }: ActionsBuilderProps) {
       </div>
 
       {/* Shared suggestion lists for the free-text name/version fields. */}
-      <datalist id={`${listId}-states`}>
-        {pickers.stateNames.map((name) => (
-          <option key={name} value={name} />
-        ))}
-      </datalist>
       <datalist id={`${listId}-labels`}>
         {pickers.labelNames.map((name) => (
           <option key={name} value={name} />
-        ))}
-      </datalist>
-      <datalist id={`${listId}-releases`}>
-        {pickers.releaseVersions.map((version) => (
-          <option key={version} value={version} />
         ))}
       </datalist>
 

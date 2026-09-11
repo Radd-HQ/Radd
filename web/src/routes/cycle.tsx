@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { PersonName } from "../components/PersonName";
 import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarRange, CheckCircle2, Target } from "lucide-react";
@@ -7,8 +6,8 @@ import { RoutePath } from "../lib/constants";
 import { formatDate } from "../lib/dates";
 import { usePeek, usePermissions } from "../lib/hooks";
 import { CATEGORY_META, CATEGORY_ORDER, CYCLE_STATUS_META } from "../lib/meta";
-import { cycleItemsQuery, cycleQuery, cycleStatsQuery, cyclesQuery } from "../lib/queries";
-import { useSlqPageFilter } from "../lib/slq-filter";
+import { CYCLE_ITEMS_PAGE_SIZE, cycleItemsQuery, cycleQuery, cycleStatsQuery } from "../lib/queries";
+import { useSlqQueryState } from "../lib/slq-filter";
 import { CycleStatus, Permission, StateCategory, type Item } from "../lib/types";
 import { Button } from "../components/Button";
 import { CompleteCycleModal } from "../components/cycles/CompleteCycleModal";
@@ -18,7 +17,9 @@ import { Spinner } from "../components/Spinner";
 import { TopBarQuery } from "../components/shell/TopBarSlot";
 import { QueryBar } from "../components/views/QueryBar";
 import { QueryError } from "../components/QueryError";
-import { Select } from "../components/Select";
+import { PeopleDirectorySelect } from "../components/PeopleDirectorySelect";
+import { DirectoryPager } from "../components/DirectoryPager";
+import type { PeopleChoice } from "../lib/queries/users";
 import {
   AssigneeAvatar,
   ItemKeyLink,
@@ -27,66 +28,33 @@ import {
   ReleaseChip,
 } from "../components/items/ItemBadges";
 
-/**
- * A cycle's items page (spec 18, `/cycles/$cycleId`). Cycles span projects
- * and items live per project, so we fetch every project's
- * items and client-filter by `item.cycle?.id` (GET /items has no cycle filter).
- * Items are grouped by state category (universal across projects) with a
- * done/total progress bar.
- */
+/** Cycle items use bounded server windows. Person, team and committed SLQ
+ * scope both the rows and full-result progress/time statistics. */
 export function CyclePage() {
   const { cycleId = "" } = useParams({ strict: false });
   const perms = usePermissions();
   const cycle = useQuery(cycleQuery(cycleId));
-  const allCycles = useQuery(cyclesQuery());
   const [completing, setCompleting] = useState(false);
 
-  // One server-filtered, paged fetch — complete even for 300+ item cycles.
-  const items = useQuery(cycleItemsQuery(cycleId));
-  const itemsLoading = items.isPending;
-  const cycleItems = items.data ?? [];
-
-  // Filters (person/team) — the list AND the stats reflect them (stats re-fetch
-  // server-side with the same params; the list filters client-side).
-  const [assigneeFilter, setAssigneeFilter] = useState("");
-  const [teamFilter, setTeamFilter] = useState("");
-  const stats = useQuery(
-    cycleStatsQuery(cycleId, assigneeFilter || undefined, teamFilter || undefined),
-  );
-  // Ad-hoc SLQ bar: the probe is server-scoped to this cycle (`cycle_id` ANDs
-  // with `q`), then intersected with the fetched items. The stats endpoint
-  // knows nothing about SLQ, so while a query is active the header falls back
-  // to counting the visible slice — both progress numbers stay one source.
-  const slqFilter = useSlqPageFilter({ cycle_id: cycleId });
-  const serverStats = slqFilter.active ? undefined : stats.data;
-  const assigneeOptions = [
-    ...new Map(
-      cycleItems.filter((i) => i.assignee).map((i) => [i.assignee!.id, i.assignee!]),
-    ).values(),
-  ].sort((a, b) => a.name.localeCompare(b.name));
-  const teamOptions = [
-    ...new Map(cycleItems.filter((i) => i.team).map((i) => [i.team!.id, i.team!])).values(),
-  ].sort((a, b) => a.name.localeCompare(b.name));
-
-  const visibleItems = slqFilter
-    .filterItems(cycleItems)
-    .filter(
-      (item) =>
-        (!assigneeFilter || item.assignee?.id === assigneeFilter) &&
-        (!teamFilter || item.team?.id === teamFilter),
-    );
-
+  const [assigneeFilter, setAssigneeFilter] = useState<PeopleChoice | null>(null);
+  const [teamFilter, setTeamFilter] = useState<PeopleChoice | null>(null);
+  const slqFilter = useSlqQueryState();
+  const scope = JSON.stringify([cycleId, assigneeFilter?.id, teamFilter?.id, slqFilter.committed]);
+  const [position, setPosition] = useState({ scope, page: 0 });
+  if (position.scope !== scope) setPosition({ scope, page: 0 });
+  const page = position.scope === scope ? position.page : 0;
+  const items = useQuery(cycleItemsQuery(cycleId, page, slqFilter.committed, assigneeFilter?.id, teamFilter?.id));
+  const stats = useQuery(cycleStatsQuery(cycleId, assigneeFilter?.id, teamFilter?.id, undefined, slqFilter.committed));
+  // Never substitute the current window for whole-result totals, including
+  // while filters change or the statistics request fails.
+  const serverStats = stats.isPlaceholderData ? undefined : stats.data;
+  const visibleItems = items.data ?? [];
   const groups = CATEGORY_ORDER.map((category) => ({
     category,
     items: visibleItems.filter((item) => item.state.category === category),
   })).filter((group) => group.items.length > 0);
-
-  // Progress from the server-side stats when loaded (never a paginated subset);
-  // both numbers MUST come from the same source or the ratio lies.
-  const total = serverStats ? serverStats.total : visibleItems.length;
-  const done = serverStats
-    ? (serverStats.by_category[StateCategory.done] ?? 0)
-    : visibleItems.filter((item) => item.state.category === StateCategory.done).length;
+  const total = serverStats?.total ?? 0;
+  const done = serverStats?.by_category[StateCategory.done] ?? 0;
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
 
   if (cycle.isPending) return <Spinner label="Loading cycle…" />;
@@ -154,7 +122,7 @@ export function CyclePage() {
         <div className="mt-3 flex items-center gap-3">
           <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-elevated">
             <div
-              className="h-full rounded-full bg-emerald-500 transition-all"
+              className="h-full rounded-full bg-status-success transition-all"
               style={{ width: `${pct}%` }}
               role="progressbar"
               aria-valuenow={pct}
@@ -164,9 +132,11 @@ export function CyclePage() {
             />
           </div>
           <span className="shrink-0 text-xs text-fg-muted">
-            {done}/{total} done
+            {serverStats ? `${done}/${total} done` : "Loading totals…"}
           </span>
         </div>
+
+        {stats.isError && <QueryError label="cycle totals" error={stats.error} />}
 
         {/* Stats + filters: state counts and time totals for the filtered slice. */}
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -192,27 +162,11 @@ export function CyclePage() {
               <CycleTimeChips stats={serverStats} />
             </>
           )}
-          <span className="ml-auto flex items-center gap-2">
-            <Select
-              value={assigneeFilter}
-              onChange={setAssigneeFilter}
-              aria-label="Filter by person"
-              size="sm"
-              options={[
-                { value: "", label: "Anyone" },
-                ...assigneeOptions.map((user) => ({ value: user.id, label: <PersonName user={user} /> })),
-              ]}
-            />
-            <Select
-              value={teamFilter}
-              onChange={setTeamFilter}
-              aria-label="Filter by team"
-              size="sm"
-              options={[
-                { value: "", label: "Any team" },
-                ...teamOptions.map((team) => ({ value: team.id, label: team.name })),
-              ]}
-            />
+          <span className="ml-auto flex max-w-full flex-wrap items-center gap-2">
+            <PeopleDirectorySelect kind="person" value={assigneeFilter} onChange={setAssigneeFilter}
+              label="Filter by person" emptyLabel="Anyone" />
+            <PeopleDirectorySelect kind="team" value={teamFilter} onChange={setTeamFilter}
+              label="Filter by team" emptyLabel="Any team" />
           </span>
         </div>
       </header>
@@ -220,22 +174,18 @@ export function CyclePage() {
       {completing && (
         <CompleteCycleModal
           cycle={cycle.data}
-          cycles={allCycles.data ?? []}
-          openCount={total - done}
           onClose={() => setCompleting(false)}
         />
       )}
 
       <div className="flex-1 overflow-y-auto px-6 py-5">
-        {itemsLoading ? (
+        {items.isPending ? (
           <Spinner label="Loading items…" />
-        ) : cycleItems.length === 0 ? (
-          <EmptyState
-            icon={CalendarRange}
-            message="No items in this cycle yet — assign items to it from their detail page."
-          />
+        ) : items.isError ? (
+          <QueryError label="cycle items" error={items.error} />
         ) : visibleItems.length === 0 ? (
-          <p className="p-10 text-center text-sm text-fg-faint">No items match these filters.</p>
+          <EmptyState icon={CalendarRange} message={slqFilter.committed || assigneeFilter || teamFilter
+            ? "No items match these filters." : "No items on this page. Assign items to this cycle from their detail page."} />
         ) : (
           <div className="flex flex-col gap-6">
             {groups.map((group) => (
@@ -248,7 +198,7 @@ export function CyclePage() {
                   <h2 className="text-[13px] font-semibold text-fg">
                     {CATEGORY_META[group.category].label}
                   </h2>
-                  <span className="text-xs text-fg-muted">{group.items.length}</span>
+                  <span className="text-xs text-fg-muted">{group.items.length} on this page</span>
                 </div>
                 <ul className="rounded-lg border border-subtle">
                   {group.items.map((item) => (
@@ -259,6 +209,9 @@ export function CyclePage() {
             ))}
           </div>
         )}
+        <DirectoryPager page={page} pageSize={CYCLE_ITEMS_PAGE_SIZE} total={total}
+          busy={items.isFetching || stats.isFetching || !serverStats}
+          onPage={next => setPosition({ scope, page: next })} label="cycle items" />
       </div>
     </div>
   );
@@ -274,7 +227,10 @@ function CycleItemRow({ item }: { item: Item }) {
         tabIndex={0}
         onClick={() => open(item.key)}
         onKeyDown={(event) => {
-          if (event.key === "Enter") open(item.key);
+          if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+            event.preventDefault();
+            open(item.key);
+          }
         }}
         className="flex w-full cursor-pointer items-center gap-2.5 px-4 py-2.5 text-left hover:bg-surface/60 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
       >

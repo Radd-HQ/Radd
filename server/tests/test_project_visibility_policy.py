@@ -310,7 +310,28 @@ async def test_get_projects_endpoint_surfaces_via(db):
     item_row.reporter_id = person.id
     await db.flush()
 
-    rows = await get_projects(db, person)
+    from fastapi import Response
+    rows = await get_projects(db, person, Response())
     by_id = {row.id: row for row in rows}
     assert by_id[granted.id].via == authz_batch.ProjectVia.ENTITLED.value
     assert by_id[mine.id].via == authz_batch.ProjectVia.RELATED.value
+
+
+async def test_hide_related_pages_do_not_remove_direct_access_or_summary(db):
+    from radd.modules.projects import directory
+    await _baseline(db, ["item.read@own"])
+    granted, mine = await _projects(db, 2)
+    person = await _user(db)
+    member = await auth_roles.role_by_key(db, BuiltinRoleKey.MEMBER)
+    db.add(GlobalRoleGrant(role_id=member.id, user_id=person.id, project_id=granted.id))
+    admin = await _user(db, InstanceRole.ADMIN)
+    created = await items.create_item(db, ItemCreate(project_id=mine.id, title="My work"), admin)
+    item = await db.get(WorkItem, created.id)
+    item.reporter_id = person.id
+    await db.flush()
+    page, total = await directory.page(db, person, hide_related=True, limit=1)
+    assert total == 1 and [p.id for p in page] == [granted.id]
+    summary = await directory.summary(db, person)
+    assert summary.total == 2 and summary.related_count == 1
+    direct = await directory.by_identity(db, person, identifier=mine.id)
+    assert direct.id == mine.id and direct.via == "related"

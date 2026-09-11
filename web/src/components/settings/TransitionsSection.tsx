@@ -1,3 +1,4 @@
+import { CycleConditionValues } from "../cycles/CycleConditionValues";
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -18,7 +19,6 @@ import { ApiPath, apiTransitionPath } from "../../lib/constants";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { useCurrentUser, usePermissions } from "../../lib/hooks";
 import {
-  cyclesQuery,
   fieldsQuery,
   issueTypesQuery,
   labelsQuery,
@@ -719,6 +719,7 @@ function ConditionRow({
           project={project}
           single={singleValue(params.op)}
           values={params.values ?? []}
+          display={params.display ?? []}
           disabled={disabled}
           onChange={(values, display) => onChange({ ...params, values, display })}
         />
@@ -746,6 +747,7 @@ function ConditionValues({
   project,
   single,
   values,
+  display,
   disabled,
   onChange,
 }: {
@@ -753,6 +755,7 @@ function ConditionValues({
   project: Project;
   single: boolean;
   values: string[];
+  display: string[];
   disabled: boolean;
   onChange: (values: string[], display: string[]) => void;
 }) {
@@ -763,11 +766,13 @@ function ConditionValues({
     ...issueTypesQuery(project.id),
     enabled: choice.source === "type",
   });
-  const cycles = useQuery({ ...cyclesQuery(), enabled: choice.source === "cycle" });
   const releases = useQuery({
     ...releasesQuery(project.id),
     enabled: choice.source === "release",
   });
+
+  if (choice.source === "cycle") return <CycleConditionValues values={values} display={display}
+    single={single} disabled={disabled} onChange={onChange} />;
 
   if (choice.source === "date") {
     return (
@@ -827,9 +832,6 @@ function ConditionValues({
       break;
     case "type":
       options = (types.data ?? []).map((type) => ({ value: type.id, label: type.name }));
-      break;
-    case "cycle":
-      options = (cycles.data ?? []).map((cycle) => ({ value: cycle.id, label: cycle.name }));
       break;
     case "release":
       options = (releases.data ?? []).map((release) => ({

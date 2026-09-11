@@ -8,14 +8,15 @@ writes it, under the scope-derived authorization RADD-826 already built.
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
 from radd.kernel import registries
 from radd.modules.projects import service as projects_service
 
-from . import authz, preflight, grants, roles
+from . import authz, preflight, grants, roles, role_options, grant_directory, scoped_grants
+from radd.choices import ChoiceRead
 from .deps import CurrentUser
 from radd.exceptions import ConflictError, ForbiddenError
 
@@ -23,6 +24,8 @@ from .schemas import (
     BaselinePreflightRead,
     BaselinePreflightRequest,
     GlobalGrantRead,
+    GrantDirectoryRead,
+    SpaceGrantDirectoryRead,
     GlobalGrantsUpdate,
     PermissionRead,
     RelationOptionRead,
@@ -36,6 +39,7 @@ from pydantic import BaseModel
 
 from .types import (
     AuthEntity,
+    GrantScopeKind,
     InstanceRole,
     Permission,
     expand_permissions,
@@ -84,6 +88,76 @@ async def list_roles(session: Session, user: CurrentUser) -> list[RoleRead]:
     if not await authz.holds(session, user, Permission.ROLE_READ):
         return []
     return [RoleRead.model_validate(r) for r in await roles.list_roles(session)]
+
+
+@role_router.get("/options", response_model=list[ChoiceRead])
+async def role_choices(
+    session: Session, user: CurrentUser, response: Response,
+    q: Annotated[str, Query(max_length=200)] = "",
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    value: Annotated[str | None, Query(max_length=200)] = None,
+    key: Annotated[str | None, Query(max_length=200)] = None,
+) -> list[ChoiceRead]:
+    rows, total = await role_options.list_options(
+        session, user, q=q, limit=limit, offset=offset, value=value, key=key
+    )
+    response.headers["X-Total-Count"] = str(total)
+    return rows
+
+
+@role_router.get("/assignable/options", response_model=list[ChoiceRead])
+async def assignable_role_choices(
+    session: Session, user: CurrentUser, response: Response,
+    q: Annotated[str, Query(max_length=200)] = "",
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    value: Annotated[str | None, Query(max_length=200)] = None,
+) -> list[ChoiceRead]:
+    rows, total = await role_options.list_options(session, user, q=q, limit=limit, offset=offset, value=value, assignable=True)
+    response.headers["X-Total-Count"] = str(total)
+    return rows
+
+
+@role_grant_router.get("/by-space/{space_id}", response_model=list[SpaceGrantDirectoryRead])
+async def space_grant_directory(
+    space_id: uuid.UUID, session: Session, user: CurrentUser, response: Response,
+    q: Annotated[str, Query(max_length=200)] = "",
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[SpaceGrantDirectoryRead]:
+    rows, total = await scoped_grants.page(session, user, space_id, GrantScopeKind.SPACE, q=q, limit=limit, offset=offset)
+    response.headers["X-Total-Count"] = str(total)
+    return rows
+
+
+@role_grant_router.get("/by-project/{project_id}", response_model=list[SpaceGrantDirectoryRead])
+async def project_grant_directory(
+    project_id: uuid.UUID, session: Session, user: CurrentUser, response: Response,
+    q: Annotated[str, Query(max_length=200)] = "",
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[SpaceGrantDirectoryRead]:
+    rows, total = await scoped_grants.page(session, user, project_id, GrantScopeKind.PROJECT, q=q, limit=limit, offset=offset)
+    response.headers["X-Total-Count"] = str(total)
+    return rows
+
+
+@role_grant_router.get("/directory", response_model=list[GrantDirectoryRead])
+async def subject_grant_directory(
+    session: Session, user: CurrentUser, response: Response,
+    team_id: uuid.UUID | None = None,
+    user_id: uuid.UUID | None = None,
+    group_id: uuid.UUID | None = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[GrantDirectoryRead]:
+    rows, total = await grant_directory.subject_page(
+        session, user, team_id=team_id, user_id=user_id, group_id=group_id,
+        limit=limit, offset=offset,
+    )
+    response.headers["X-Total-Count"] = str(total)
+    return rows
 
 
 @role_router.post("", response_model=RoleRead, status_code=201)
@@ -241,7 +315,6 @@ async def list_role_grants(
     `project_teams` reads: three lists that had to be read together to answer
     one question.
     """
-    await authz.require_member(session, user)
     named = [x for x in (team_id, user_id, group_id, space_id, project_id) if x is not None]
     if len(named) != 1:
         raise ConflictError(
@@ -249,13 +322,19 @@ async def list_role_grants(
             reason="exactly one of team_id/user_id/group_id/space_id/project_id",
         )
     if space_id is not None:
+        # Wiki-only readers need no unrelated issue-project membership. Check
+        # the requested space itself; unreadable grants must not be exposed.
+        await authz.require(session, user, Permission.PAGE_READ, space_id=space_id)
         rows = await grants.grants_for_space(session, space_id)
-    elif project_id is not None:
-        rows = await grants.grants_for_project(session, project_id)
     else:
-        rows = await grants.grants_for_subject(
-            session, user_id=user_id, team_id=team_id, group_id=group_id
-        )
+        await authz.require_member(session, user)
+        if project_id is not None:
+            await scoped_grants.require_project_scope(session, user, project_id)
+            rows = await grants.grants_for_project(session, project_id)
+        else:
+            rows = await grants.grants_for_subject(
+                session, user_id=user_id, team_id=team_id, group_id=group_id
+            )
     return [GlobalGrantRead.model_validate(g) for g in rows]
 
 
@@ -413,9 +492,16 @@ async def grant_help(
 @permission_router.get("", response_model=list[PermissionRead])
 async def permission_catalog(session: Session, user: CurrentUser) -> list[PermissionRead]:
     """Every permission the system knows, with scope — for the admin role-matrix UI.
-    VOCABULARY, not data (atom names and descriptions carry no instance state),
-    so it stays on the member floor rather than role.read (RADD-816)."""
-    await authz.require_member(session, user)
+    VOCABULARY, not data (atom names and descriptions carry no instance state).
+    Role/key managers also need it before any issue project exists. Ordinary
+    readers retain the member floor; all management checks intersect credentials.
+    """
+    can_configure = any([
+        await authz.holds(session, user, permission)
+        for permission in (Permission.ROLE_CREATE, Permission.ROLE_UPDATE, Permission.SERVICE_ACCOUNT_UPDATE)
+    ])
+    if not can_configure:
+        await authz.require_member(session, user)
     # Composed from the kernel permissions registry (RADD-890): every atom's
     # scope and description is its owning module's declaration, whether that
     # module is `items` or a third-party plugin — there is no core/plugin branch

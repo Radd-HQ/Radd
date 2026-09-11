@@ -9,6 +9,8 @@ import {
   type NotificationTypeValue,
   type RuleScopeValue,
 } from "../../lib/types";
+import { subscriptionOptionsKey } from "../../lib/queries/notifications";
+import { Button } from "../../components/Button";
 import { ErrorText } from "../../components/ErrorText";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { NotificationMatrix } from "../../components/settings/notifications/NotificationMatrix";
@@ -36,7 +38,10 @@ export function NotificationSettingsPage() {
   const save = useMutation({
     mutationFn: (body: ReturnType<typeof toUpdate>) =>
       api.put<NotificationPrefs>(ApiPath.notificationPrefs, body),
-    onSuccess: (data) => queryClient.setQueryData(queryKeys.notificationPrefs, data),
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.notificationPrefs, data);
+      void queryClient.invalidateQueries({ queryKey: subscriptionOptionsKey });
+    },
   });
 
   return (
@@ -54,7 +59,8 @@ export function NotificationSettingsPage() {
     >
       {prefs.isPending && <p className="text-xs text-fg-faint">Loading preferences…</p>}
       {prefs.isError && (
-        <p className="text-xs text-red-400">Failed to load: {errorMessage(prefs.error)}</p>
+        <div role="alert" className="space-y-2"><p className="text-xs text-status-danger-ink">Failed to load: {errorMessage(prefs.error)}</p>
+          <Button variant="secondary" onClick={() => void prefs.refetch()}>Retry preferences</Button></div>
       )}
       {prefs.data && (
         <Editor
@@ -158,7 +164,7 @@ function Editor({
         </label>
       </section>
 
-      {Boolean(error) && <ErrorText error={error} />}
+      {Boolean(error) && <div role="alert"><ErrorText error={error} /></div>}
     </div>
   );
 }

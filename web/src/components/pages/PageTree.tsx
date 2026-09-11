@@ -321,8 +321,8 @@ function NewPageButton({
   const navigate = useNavigate();
   const templates = useQuery({
     queryKey: ["page-templates", spaceId],
-    queryFn: () =>
-      api.get<PageTemplate[]>(ApiPath.pageTemplates, { query: { space_id: spaceId } }),
+    queryFn: ({ signal }) =>
+      api.get<PageTemplate[]>(ApiPath.pageTemplates, { signal, query: { space_id: spaceId } }),
     enabled: !iconOnly,
     staleTime: 60_000,
   });

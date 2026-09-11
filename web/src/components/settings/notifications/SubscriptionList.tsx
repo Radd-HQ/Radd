@@ -1,14 +1,10 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
 import { Button, ButtonVariant, ButtonSize } from "../../Button";
 import { Select } from "../../Select";
 import { useConfirm } from "../../ConfirmDialog";
-import {
-  pageSpacesQuery,
-  projectsQuery,
-  teamsQuery,
-} from "../../../lib/queries";
+import type { DirectoryOption } from "../../../lib/queries/options";
+import { SubscriptionTargetPicker } from "./SubscriptionTargetPicker";
 import {
   Channel,
   NotificationType,
@@ -145,22 +141,10 @@ function AddSubscription({
   onAdd: (scope: RuleScopeValue, scopeId: string, label: string) => void;
 }) {
   const [scope, setScope] = useState<RuleScopeValue>(RuleScope.project);
-  const [target, setTarget] = useState("");
-  const projects = useQuery(projectsQuery());
-  const spaces = useQuery(pageSpacesQuery());
-  const teams = useQuery(teamsQuery());
-
-  const taken = new Set(
-    prefs.rules.filter((r) => r.scope_id).map((r) => `${r.scope}:${r.scope_id}`),
-  );
-  const candidates: { value: string; label: string }[] =
-    scope === RuleScope.project
-      ? (projects.data ?? []).map((p) => ({ value: p.id, label: `${p.key} · ${p.name}` }))
-      : scope === RuleScope.space
-        ? (spaces.data ?? []).map((s) => ({ value: s.id, label: s.name }))
-        : (teams.data ?? []).map((t) => ({ value: t.id, label: t.name }));
-  const options = candidates.filter((option) => !taken.has(`${scope}:${option.value}`));
-  const chosen = options.find((option) => option.value === target);
+  const [target, setTarget] = useState<DirectoryOption>();
+  const [open, setOpen] = useState(false);
+  const taken = new Set(prefs.rules.filter(row => row.scope === scope).map(row => row.scope_id));
+  const chosen = target && !taken.has(target.value) ? target : undefined;
 
   return (
     <div className="flex flex-wrap items-end gap-2 border-t border-subtle pt-3">
@@ -170,7 +154,7 @@ function AddSubscription({
           value={scope}
           onChange={(value) => {
             setScope(value as RuleScopeValue);
-            setTarget("");
+            setTarget(undefined);
           }}
           className="w-32"
           aria-label="Subscription kind"
@@ -181,21 +165,19 @@ function AddSubscription({
           }))}
         />
       </label>
-      <Select
-        value={target}
-        onChange={setTarget}
-        className="w-64"
-        aria-label="Subscription target"
-        placeholder={options.length ? "Choose one…" : "Nothing left to subscribe to"}
-        options={options}
-      />
+      <div className="flex min-w-0 basis-60 flex-col gap-1">
+        <span className="text-xs font-medium text-fg-secondary">Subscription target</span>
+        <Button variant="secondary" disabled={disabled} aria-label="Subscription target" aria-haspopup="dialog" onClick={() => setOpen(true)}>
+          <span className="truncate">{chosen ? [scope === RuleScope.project ? chosen.hint : "", chosen.label].filter(Boolean).join(" · ") : "Choose one…"}</span>
+        </Button>
+      </div>
+      {open && <SubscriptionTargetPicker scope={scope} onClose={() => setOpen(false)} onSelect={row => { setTarget(row); setOpen(false); }} />}
       <Button
         size={ButtonSize.sm}
         disabled={disabled || !chosen}
         onClick={() => {
           if (!chosen) return;
-          onAdd(scope, chosen.value, chosen.label);
-          setTarget("");
+          onAdd(scope, chosen.value, [scope === RuleScope.project ? chosen.hint : "", chosen.label].filter(Boolean).join(" · "));
         }}
       >
         <Plus size={14} aria-hidden />

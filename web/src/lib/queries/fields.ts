@@ -1,11 +1,12 @@
 /** Fields registry, labels, access/role grants, and issue link types. */
 
 import { queryOptions } from "@tanstack/react-query";
-import { api } from "../api";
+import { api, type Paged } from "../api";
 import {
   ApiPath,
 } from "../constants";
 import { queryKeys } from "./shared";
+import { Entity, entityMeta } from "../cache";
 import type {
   AccessGrant,
   FieldDef,
@@ -18,7 +19,8 @@ import type {
 export const fieldsQuery = () =>
   queryOptions({
     queryKey: queryKeys.fields,
-    queryFn: () => api.get<FieldDef[]>(ApiPath.fields),
+    meta: entityMeta(Entity.field),
+    queryFn: ({ signal }) => api.get<FieldDef[]>(ApiPath.fields, { signal }),
     staleTime: 60_000,
   });
 
@@ -31,20 +33,28 @@ export const fieldsQuery = () =>
 export const grantResourcesQuery = () =>
   queryOptions({
     queryKey: [...queryKeys.grants, "resources"] as const,
-    queryFn: () => api.get<GrantResourceSpec[]>(`${ApiPath.grants}/resources`),
+    queryFn: ({ signal }) => api.get<GrantResourceSpec[]>(`${ApiPath.grants}/resources`, { signal }),
     staleTime: 5 * 60_000,
   });
 
-/** Access grants (spec 92) on a resource — the reusable GrantsEditor reads this. */
-export const grantsQuery = (resourceType: string, resourceId: string) =>
-  queryOptions({
-    queryKey: [...queryKeys.grants, resourceType, resourceId] as const,
-    queryFn: () =>
-      api.get<AccessGrant[]>(
-        `${ApiPath.grants}?resource_type=${resourceType}&resource_id=${resourceId}`,
-      ),
-    staleTime: 30_000,
+export interface AccessGrantDirectoryRow extends AccessGrant {
+  subject_name: string | null; project_key: string | null; expired: boolean;
+}
+export const RESOURCE_GRANTS_PAGE_SIZE = 50;
+/** Management includes expired rows; authorization reads continue to exclude them. */
+export const resourceGrantsPageQuery = (resourceType: string, resourceId: string, q: string, page: number, projectId?: string | null) => {
+  const prefix = [...queryKeys.grants, resourceType, resourceId, "directory", q, projectId === undefined ? "all" : projectId === null ? "global" : projectId] as const;
+  return queryOptions({
+    queryKey: [...prefix, page] as const,
+    // Retain the current window during paging, never across resources or searches.
+    placeholderData: (previous: Paged<AccessGrantDirectoryRow> | undefined, query) => JSON.stringify(query?.queryKey.slice(0, -1)) === JSON.stringify(prefix) ? previous : undefined,
+    meta: entityMeta(Entity.accessGrant, Entity.role, Entity.member, Entity.team, Entity.group, Entity.project, Entity.docSpace, Entity.page,
+      ...(resourceType === "view" ? [Entity.view] : resourceType === "dashboard" ? [Entity.dashboard] : [])),
+    queryFn: ({ signal }) => api.getPaged<AccessGrantDirectoryRow>(`${ApiPath.grants}/directory`, {
+      query: { resource_type: resourceType, resource_id: resourceId, project_id: projectId ?? undefined, global_only: projectId === null ? "true" : undefined, q, limit: String(RESOURCE_GRANTS_PAGE_SIZE), offset: String(page * RESOURCE_GRANTS_PAGE_SIZE) }, signal,
+    }),
   });
+};
 
 /** Role grants (spec 91) held by one subject — the team/user Roles section. */
 /**
@@ -73,8 +83,9 @@ export const roleGrantsQuery = (subject: Partial<Record<keyof typeof GRANT_QUERY
   const id = named ? subject[named] : undefined;
   return queryOptions({
     queryKey: [...queryKeys.roleGrants, named ?? "", id ?? ""] as const,
-    queryFn: () =>
-      api.get<RoleGrant[]>(`${ApiPath.roleGrants}?${GRANT_QUERY_PARAM[named!]}=${id!}`),
+    meta: entityMeta(Entity.role),
+    queryFn: ({ signal }) =>
+      api.get<RoleGrant[]>(`${ApiPath.roleGrants}?${GRANT_QUERY_PARAM[named!]}=${id!}`, { signal }),
     enabled: Boolean(id),
     staleTime: 30_000,
   });
@@ -85,9 +96,9 @@ export const roleGrantsQuery = (subject: Partial<Record<keyof typeof GRANT_QUERY
 export const linkTypesQuery = (projectId?: string) =>
   queryOptions({
     queryKey: [...queryKeys.linkTypes, projectId ?? "all"] as const,
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<LinkTypeDef[]>(
-        projectId ? `${ApiPath.linkTypes}?project_id=${projectId}` : ApiPath.linkTypes,
+        projectId ? `${ApiPath.linkTypes}?project_id=${projectId}` : ApiPath.linkTypes, { signal },
       ),
     staleTime: 60_000,
   });
@@ -95,6 +106,6 @@ export const linkTypesQuery = (projectId?: string) =>
 export const labelsQuery = () =>
   queryOptions({
     queryKey: queryKeys.labels,
-    queryFn: () => api.get<Label[]>(ApiPath.labels),
+    queryFn: ({ signal }) => api.get<Label[]>(ApiPath.labels, { signal }),
     staleTime: 60_000,
   });

@@ -3,30 +3,29 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   CalendarRange,
-  ChevronDown,
-  ChevronRight,
   Pencil,
   Plus,
   Trash2,
   X,
 } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
-import { ApiPath, RoutePath, apiCyclePath, apiCycleSeriesPath } from "../../lib/constants";
+import { ApiPath, RoutePath, apiCyclePath } from "../../lib/constants";
 import { WEEKDAY_LABELS, parseCycleName } from "../../lib/cycle-series";
 import { formatDate } from "../../lib/dates";
 import { usePermissions } from "../../lib/hooks";
-import { useListFilter } from "../../lib/list-filter";
+import { useCycleDirectory } from "../../lib/useCycleDirectory";
+import { DirectoryPager } from "../../components/DirectoryPager";
 import { CYCLE_STATUS_META } from "../../lib/meta";
-import { cycleSeriesQuery, cyclesQuery, teamsQuery } from "../../lib/queries";
+import { cycleSummaryQuery, teamsQuery } from "../../lib/queries";
 import {
   CycleStatus,
   Permission,
   type Cycle,
   type CycleCreate,
-  type CycleSeries,
-  type CycleSeriesUpdate,
   type CycleUpdate,
+  type CycleStatusValue,
 } from "../../lib/types";
+import { SeriesSection } from "../../components/cycles/SeriesSection";
 import { CompleteCycleModal } from "../../components/cycles/CompleteCycleModal";
 import { Button } from "../../components/Button";
 import { ListSearchInput } from "../../components/ListSearchInput";
@@ -47,282 +46,64 @@ function dateRange(cycle: Cycle): string {
   return `${formatDate(cycle.start_date)} – ${formatDate(cycle.end_date)}`;
 }
 
+const CycleFilter = { live: "live", all: "all" } as const;
+type CycleFilterValue = CycleStatusValue | typeof CycleFilter[keyof typeof CycleFilter];
+
 export function CyclesSettingsPage() {
   const perms = usePermissions();
   const canManage = perms.global(Permission.cycleUpdate);
-  const cycles = useQuery(cyclesQuery());
+  const canDelete = perms.global(Permission.cycleDelete);
+  const [status, setStatus] = useState<CycleFilterValue>(CycleFilter.live);
+  const cycles = useCycleDirectory({
+    status: status === CycleFilter.live || status === CycleFilter.all ? undefined : status,
+    includeCompleted: status !== CycleFilter.live,
+  });
+  const counts = useQuery(cycleSummaryQuery(cycles.q));
+  const total = Object.values(counts.data ?? {}).reduce((sum, count) => sum + count, 0);
   const [modal, setModal] = useState<{ cycle: Cycle | null } | null>(null);
   const [completing, setCompleting] = useState<Cycle | null>(null);
-  // Completed cycles are the bulk of the list and the least often wanted, so
-  // they get their own folded section rather than burying the live ones.
-  const [completedOpen, setCompletedOpen] = useState(false);
-  const all = cycles.data ?? [];
-  // This page is the ONLY place completed cycles are visible, so the list only
-  // grows — the shared list filter (RADD-882, extracted from here) keeps it
-  // usable at 90+ cycles.
-  const search = useListFilter(all, (cycle) => [cycle.name]);
-  const list = search.filtered;
-  const live = list.filter((cycle) => cycle.status !== CycleStatus.completed);
-  const completed = list.filter((cycle) => cycle.status === CycleStatus.completed);
-  // While filtering, the fold opens itself: searching for a cycle that turns
-  // out to be completed should FIND it, not hide it behind another click.
-  const showCompleted = completedOpen || search.filtering;
 
-  return (
-    <SettingsPage
-      title="Cycles"
-      description="Global cycles, spanning every project. Status (draft / upcoming / active / completed) is derived from the dates — a cycle with no dates is a draft (staging) area to plan work into. Recurring labels auto-provision future drafts."
-      actions={
-        canManage && (
-          <Button onClick={() => setModal({ cycle: null })}>
-            <Plus size={14} aria-hidden />
-            New cycle
-          </Button>
-        )
-      }
-    >
-      {cycles.isPending ? (
-        <TableSkeleton rows={4} />
-      ) : cycles.isError ? (
-        <QueryError label="cycles" error={cycles.error} />
-      ) : all.length === 0 ? (
-        <EmptyState
-          icon={CalendarRange}
-          message={canManage ? "No cycles yet — create one to start planning." : "No cycles yet."}
-        />
-      ) : (
-        <>
-          <ListSearchInput
-            className="mb-3"
-            value={search.filter}
-            onChange={search.setFilter}
-            placeholder="Filter cycles by name…"
-            total={all.length}
-            matched={list.length}
-            noun="cycles"
-          />
-          {list.length === 0 ? (
-            <EmptyState icon={CalendarRange} message={`No cycles match “${search.filter.trim()}”.`} />
-          ) : (
-            <>
-              {live.length > 0 && (
-                <ul className="rounded-lg border border-subtle">
-                  {live.map((cycle) => (
-                    <CycleRow
-                      key={cycle.id}
-                      cycle={cycle}
-                      canManage={canManage}
-                      onEdit={() => setModal({ cycle })}
-                      onComplete={() => setCompleting(cycle)}
-                    />
-                  ))}
-                </ul>
-              )}
-
-              {completed.length > 0 && (
-                <section className={live.length > 0 ? "mt-4" : undefined}>
-                  <button
-                    type="button"
-                    onClick={() => setCompletedOpen((open) => !open)}
-                    aria-expanded={showCompleted}
-                    className="flex w-full cursor-pointer items-center gap-2 rounded-md px-1 py-1.5 text-left hover:bg-elevated/60 focus-visible:outline-2 focus-visible:outline-focus"
-                  >
-                    {showCompleted ? (
-                      <ChevronDown size={14} className="shrink-0 text-fg-muted" aria-hidden />
-                    ) : (
-                      <ChevronRight size={14} className="shrink-0 text-fg-muted" aria-hidden />
-                    )}
-                    <span className="text-xs font-semibold uppercase tracking-wide text-fg-secondary">
-                      Completed
-                    </span>
-                    <span className="text-xs tabular-nums text-fg-faint">{completed.length}</span>
-                    {search.filtering && (
-                      <span className="text-[11px] text-fg-faint">· matching “{search.filter.trim()}”</span>
-                    )}
-                  </button>
-                  {showCompleted && (
-                    <ul className="mt-1 rounded-lg border border-subtle">
-                      {completed.map((cycle) => (
-                        <CycleRow
-                          key={cycle.id}
-                          cycle={cycle}
-                          canManage={canManage}
-                          onEdit={() => setModal({ cycle })}
-                          onComplete={() => setCompleting(cycle)}
-                        />
-                      ))}
-                    </ul>
-                  )}
-                </section>
-              )}
-            </>
-          )}
-        </>
-      )}
-
-      <SeriesSection canManage={canManage} />
-
-      {modal && (
-        <CycleModal cycle={modal.cycle} onClose={() => setModal(null)} />
-      )}
-      {completing && (
-        <CompleteCycleModal
-          cycle={completing}
-          cycles={list}
-          onClose={() => setCompleting(null)}
-        />
-      )}
-    </SettingsPage>
-  );
+  return <SettingsPage title="Cycles"
+    description="Global cycles span projects. Dates determine draft, upcoming, active or completed status; recurring series keep future cycles ready."
+    actions={perms.global(Permission.cycleCreate) && <Button onClick={() => setModal({ cycle: null })}><Plus size={14} aria-hidden />New cycle</Button>}>
+    <div className="mb-3 flex flex-wrap items-center gap-2">
+      <ListSearchInput className="min-w-48 flex-1" value={cycles.filter} onChange={cycles.setFilter}
+        placeholder="Filter cycles by name…" total={total} matched={cycles.total} noun="cycles" />
+      <Select value={status} onChange={value => setStatus(value as CycleFilterValue)} aria-label="Cycle status"
+        options={[
+          { value: CycleFilter.live, label: "Active, upcoming and draft" },
+          { value: CycleFilter.all, label: "All statuses" },
+          ...Object.values(CycleStatus).map(value => ({ value, label: `${CYCLE_STATUS_META[value].label} (${counts.data?.[value] ?? 0})` })),
+        ]} />
+    </div>
+    <div aria-busy={cycles.busy}>
+      {cycles.isPending ? <TableSkeleton rows={4} />
+        : cycles.isError ? <QueryError label="cycles" error={cycles.error} />
+        : cycles.rows.length === 0 ? <EmptyState icon={CalendarRange}
+          message={cycles.filter ? `No cycles match “${cycles.filter.trim()}” in this status.` : "No cycles in this status."} />
+        : <ul className="rounded-lg border border-subtle">{cycles.rows.map(cycle =>
+          <CycleRow key={cycle.id} cycle={cycle} canManage={canManage} canDelete={canDelete}
+            onEdit={() => setModal({ cycle })} onComplete={() => setCompleting(cycle)} />
+        )}</ul>}
+      <DirectoryPager {...cycles} onPage={cycles.setPage} label="cycles" />
+    </div>
+    <SeriesSection canManage={canManage} canDelete={canDelete} />
+    {modal && <CycleModal cycle={modal.cycle} onClose={() => setModal(null)} />}
+    {completing && <CompleteCycleModal cycle={completing} onClose={() => setCompleting(null)} />}
+  </SettingsPage>;
 }
 
-/** Recurring series: per-label auto-provisioning config (created via the New-cycle
- * modal's Recurring checkbox; look-ahead + next number editable here). */
-function SeriesSection({ canManage }: { canManage: boolean }) {
-  const series = useQuery(cycleSeriesQuery());
-  if (!series.data?.length) return null;
-  return (
-    <section className="mt-6">
-      <h2 className="mb-1 text-sm font-semibold text-fg">Recurring series</h2>
-      <p className="mb-2 text-xs text-fg-muted">
-        Each label keeps its configured number of future cycles ready — drafts are created
-        automatically when a cycle of the label is created or completed.
-      </p>
-      <ul className="rounded-lg border border-subtle">
-        {series.data.map((row) => (
-          <SeriesRow key={row.id} series={row} canManage={canManage} />
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-function SeriesRow({ series, canManage }: { series: CycleSeries; canManage: boolean }) {
-  const queryClient = useQueryClient();
-  const [draftsAhead, setDraftsAhead] = useState(String(series.drafts_ahead));
-  const [nextNumber, setNextNumber] = useState(String(series.next_number));
-  const [weekday, setWeekday] = useState(
-    series.start_weekday === null ? "" : String(series.start_weekday),
-  );
-  const [duration, setDuration] = useState(String(series.duration_days ?? 14));
-  const dirty =
-    Number(draftsAhead) !== series.drafts_ahead ||
-    Number(nextNumber) !== series.next_number ||
-    (weekday === "" ? null : Number(weekday)) !== series.start_weekday ||
-    (weekday === "" ? null : Number(duration)) !== series.duration_days;
-
-  const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ["cycle-series"] });
-    void queryClient.invalidateQueries({ queryKey: ["cycles"] });
-  };
-  const save = useMutation({
-    mutationFn: () =>
-      api.patch<CycleSeries>(apiCycleSeriesPath(series.id), {
-        drafts_ahead: Number(draftsAhead),
-        next_number: Number(nextNumber),
-        // "" = clear the cadence (explicit nulls) → back to dateless drafts
-        start_weekday: weekday === "" ? null : Number(weekday),
-        duration_days: weekday === "" ? null : Number(duration),
-      } satisfies CycleSeriesUpdate),
-    onSuccess: invalidate,
-  });
-  const remove = useMutation({
-    mutationFn: () => api.delete<void>(apiCycleSeriesPath(series.id)),
-    onSuccess: invalidate,
-  });
-
-  return (
-    <li className="flex flex-wrap items-center gap-3 border-b border-subtle/60 px-4 py-2.5 last:border-b-0">
-      <span className="text-[13px] font-medium text-heading">{series.label}</span>
-      <label className="ml-auto flex items-center gap-1.5 text-xs text-fg-secondary">
-        Starts
-        <Select
-          value={weekday}
-          onChange={setWeekday}
-          disabled={!canManage}
-          size="sm"
-          aria-label="Starts"
-          options={[
-            { value: "", label: "Unscheduled" },
-            ...WEEKDAY_LABELS.map((label, index) => ({
-              value: String(index),
-              label: `${label}s`,
-            })),
-          ]}
-        />
-      </label>
-      <label className="flex items-center gap-1.5 text-xs text-fg-secondary">
-        Days
-        <input
-          type="number"
-          min={1}
-          max={90}
-          value={duration}
-          disabled={!canManage || weekday === ""}
-          onChange={(event) => setDuration(event.target.value)}
-          className="h-7 w-14 rounded-md border border-strong bg-surface px-1.5 text-xs text-heading disabled:opacity-60"
-        />
-      </label>
-      <label className="flex items-center gap-1.5 text-xs text-fg-secondary">
-        Drafts ahead
-        <input
-          type="number"
-          min={0}
-          max={20}
-          value={draftsAhead}
-          onChange={(event) => setDraftsAhead(event.target.value)}
-          disabled={!canManage}
-          className="h-7 w-16 rounded-md border border-strong bg-surface px-2 text-[13px] text-heading disabled:opacity-60"
-        />
-      </label>
-      <label className="flex items-center gap-1.5 text-xs text-fg-secondary">
-        Next number
-        <input
-          type="number"
-          min={1}
-          value={nextNumber}
-          onChange={(event) => setNextNumber(event.target.value)}
-          disabled={!canManage}
-          className="h-7 w-20 rounded-md border border-strong bg-surface px-2 text-[13px] text-heading disabled:opacity-60"
-        />
-      </label>
-      {canManage && (
-        <>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => save.mutate()}
-            disabled={!dirty || save.isPending}
-          >
-            {save.isPending ? "Saving…" : "Save"}
-          </Button>
-          <IconButton
-            danger
-            onClick={() => remove.mutate()}
-            title="Stop recurring (existing cycles are kept)"
-            aria-label="Stop recurring"
-          >
-            <Trash2 size={13} />
-          </IconButton>
-        </>
-      )}
-      {(save.isError || remove.isError) && (
-        <span className="w-full text-xs text-red-400">
-          {errorMessage(save.error ?? remove.error)}
-        </span>
-      )}
-    </li>
-  );
-}
 
 function CycleRow({
   cycle,
   canManage,
+  canDelete,
   onEdit,
   onComplete,
 }: {
   cycle: Cycle;
   canManage: boolean;
+  canDelete: boolean;
   onEdit: () => void;
   onComplete: () => void;
 }) {
@@ -336,12 +117,12 @@ function CycleRow({
   });
 
   return (
-    <li className="flex items-center gap-3 border-b border-subtle/60 px-4 py-2.5 last:border-b-0">
+    <li className="flex min-w-0 flex-wrap items-center gap-3 border-b border-subtle/60 px-4 py-2.5 last:border-b-0">
       <span className={`size-2 shrink-0 rounded-full ${status.dotClassName}`} aria-hidden />
       <Link
         to={RoutePath.cycle}
         params={{ cycleId: cycle.id }}
-        className="text-[13px] font-medium text-heading hover:underline"
+        className="min-w-0 break-words text-[13px] font-medium text-heading hover:underline"
       >
         {cycle.name}
       </Link>
@@ -351,7 +132,7 @@ function CycleRow({
       {cycle.team_ids.length > 0 && (
         <span
           title="Team-restricted — only the associated teams (and admins) see this cycle"
-          className="rounded border border-amber-400/40 bg-amber-500/10 px-1.5 py-px text-[10px] uppercase tracking-wide text-amber-300"
+          className="rounded border border-status-warning/40 bg-status-warning/10 px-1.5 py-px text-[10px] uppercase tracking-wide text-status-warning-ink"
         >
           Restricted
         </span>
@@ -365,44 +146,20 @@ function CycleRow({
           Complete…
         </Button>
       )}
-      {canManage &&
-        (confirming ? (
-          <span className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => remove.mutate()}
-              disabled={remove.isPending}
-              className="rounded px-1.5 py-0.5 text-xs text-red-400 hover:bg-elevated cursor-pointer disabled:opacity-50"
-            >
-              {remove.isPending ? "Deleting…" : "Delete"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirming(false)}
-              aria-label="Cancel delete"
-              className="rounded p-1 text-fg-muted hover:bg-elevated hover:text-fg cursor-pointer"
-            >
-              <X size={13} />
-            </button>
-          </span>
-        ) : (
-          <>
-            <IconButton
-              onClick={onEdit}
-              aria-label={`Edit ${cycle.name}`}
-            >
-              <Pencil size={13} />
-            </IconButton>
-            <IconButton
-              danger
-              onClick={() => setConfirming(true)}
-              aria-label={`Delete ${cycle.name}`}
-            >
-              <Trash2 size={13} />
-            </IconButton>
-          </>
-        ))}
-      {remove.isError && <span className="text-xs text-red-400">{errorMessage(remove.error)}</span>}
+      {canManage && <IconButton onClick={onEdit} aria-label={`Edit ${cycle.name}`}>
+        <Pencil size={13} />
+      </IconButton>}
+      {canDelete && (confirming ? (
+        <span className="flex items-center gap-1">
+          <Button variant="danger-ghost" size="sm" onClick={() => remove.mutate()} disabled={remove.isPending}>
+            {remove.isPending ? "Deleting…" : "Delete"}
+          </Button>
+          <IconButton onClick={() => setConfirming(false)} aria-label="Cancel delete"><X size={13} /></IconButton>
+        </span>
+      ) : <IconButton danger onClick={() => setConfirming(true)} aria-label={`Delete ${cycle.name}`}>
+        <Trash2 size={13} />
+      </IconButton>)}
+      {remove.isError && <span className="text-xs text-status-danger-ink">{errorMessage(remove.error)}</span>}
     </li>
   );
 }
@@ -503,7 +260,7 @@ function CycleModal({ cycle, onClose }: { cycle: Cycle | null; onClose: () => vo
             />
           </div>
         </div>
-        <p className={`text-xs ${oneDateOnly ? "text-red-400" : "text-fg-muted"}`}>
+        <p className={`text-xs ${oneDateOnly ? "text-status-danger-ink" : "text-fg-muted"}`}>
           {oneDateOnly
             ? "Set both dates, or leave both blank."
             : "Leave both blank for a draft (staging) cycle you can schedule later."}

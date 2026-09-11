@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.choices import ChoiceRead
 from radd.apitypes import TOTAL_COUNT_HEADER
 from radd.db import get_session
 from radd.modules.auth import authz
@@ -27,12 +28,26 @@ class GroupReachRead(BaseModel):
     user_count: int
 
 
+@router.get("/options", response_model=list[ChoiceRead])
+async def group_name_choices(
+    response: Response, session: Session, user: CurrentUser,
+    q: Annotated[str, Query(max_length=200)] = "",
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    value: Annotated[str | None, Query(max_length=200)] = None,
+) -> list[ChoiceRead]:
+    from . import options
+    rows, total = await options.list_options(session, user, q=q, limit=limit, offset=offset, value=value)
+    response.headers[TOTAL_COUNT_HEADER] = str(total)
+    return rows
+
+
 @router.get("", response_model=list[GroupRead])
 async def list_groups(
     response: Response,
     session: Session,
     user: CurrentUser,
-    q: str | None = None,
+    q: Annotated[str | None, Query(max_length=200)] = None,
     limit: Annotated[int | None, Query(ge=1, le=500)] = None,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[GroupRead]:
@@ -48,7 +63,10 @@ async def list_groups(
     ids = [g.id for g in rows]
     counts = await service.direct_member_counts(session, ids)
     parents, children = await service.nesting_edges(session, ids)
-    names = {g.id: g.name for g in rows}
+    transitive = await service.transitive_member_counts(session, ids)
+    related_ids = {identifier for edges in (parents, children) for values in edges.values() for identifier in values}
+    related = await service.groups_by_ids(session, related_ids - set(ids))
+    names = {g.id: g.name for g in [*rows, *related.values()]}
     reads = []
     for group in rows:
         reads.append(
@@ -58,9 +76,7 @@ async def list_groups(
                 name=group.name,
                 directory_missing_since=group.directory_missing_since,
                 direct_member_count=counts.get(group.id, 0),
-                transitive_member_count=len(
-                    await service.group_user_ids(session, group.id)
-                ),
+                transitive_member_count=transitive.get(group.id, 0),
                 parent_names=sorted(
                     names.get(pid, "?") for pid in parents.get(group.id, ())
                 ),

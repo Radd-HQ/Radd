@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.kernel.mcptools import limit_arg, limit_property, object_schema
 from radd.kernel.specs import McpToolSpec
 
-from . import authz, service as auth_service, service_accounts
+from . import account_directory, authz, service as auth_service, service_accounts
 from .models import User
 from .schemas import ServiceAccountCreate
 from .types import Permission
@@ -34,14 +34,16 @@ async def _list_service_accounts(
     session: AsyncSession, actor: User, args: Mapping[str, Any]
 ) -> Any:
     await authz.require(session, actor, Permission.GLOBAL_MANAGE)
-    accounts = await service_accounts.list_accounts(session)
+    accounts = await account_directory.accounts(
+        session, q=str(args.get("q") or ""), limit=limit_arg(args), offset=max(0, int(args.get("offset", 0))),
+    )
     return [
         {
             "id": str(a.id),
             "name": a.name,
             "email": a.email,
             "active": a.active,
-            "keys": await service_accounts.token_count(session, a.id),
+            "keys": a.token_count,
         }
         for a in accounts
     ]
@@ -76,8 +78,11 @@ LIST_USERS = McpToolSpec(
 
 LIST_SERVICE_ACCOUNTS = McpToolSpec(
     name="list_service_accounts",
-    description="Service accounts and their key counts (admin).",
-    input_schema=object_schema({}, []),
+    description="Service accounts and their key counts (admin). Search by name/email; advance offset to read further pages.",
+    input_schema=object_schema({
+        "q": {"type": "string", "maxLength": 200}, "limit": limit_property(),
+        "offset": {"type": "integer", "minimum": 0, "default": 0},
+    }, []),
     handler=_list_service_accounts,
     permission=Permission.GLOBAL_MANAGE,
     kernel_enforced=False,

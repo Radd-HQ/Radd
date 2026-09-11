@@ -1,3 +1,5 @@
+from radd.modules.access.schemas import SharedGrantEdits
+
 import uuid
 from typing import Annotated, Any, Literal
 
@@ -282,3 +284,14 @@ class DashboardRead(BaseModel):
     widgets: list[WidgetRead] = Field(default_factory=list)
     created_at: UtcDatetime
     updated_at: UtcDatetime
+
+
+class DashboardSave(BaseModel):
+    """One definition/sharing/ownership transaction; omitted sections stay intact."""
+
+    definition: DashboardUpdate | None = None
+    sharing: DashboardSharingUpdate | None = None
+    grants: SharedGrantEdits | None = None
+    transfer_to: uuid.UUID | None = None
+    expected_owner_id: uuid.UUID | None
+    expected_global_access: ShareLevel | None

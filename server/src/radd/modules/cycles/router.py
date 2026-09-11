@@ -2,17 +2,18 @@ import uuid
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
+from radd.apitypes import TOTAL_COUNT_HEADER
 from radd.exceptions import NotFoundError
 from radd.modules.auth import authz
 from radd.modules.auth.deps import CurrentUser
 
 from radd.config import settings as config
 
-from . import service
+from . import service, directory
 from .schemas import (
     CycleComplete,
     CycleCompleteResult,
@@ -41,20 +42,36 @@ async def create_cycle(data: CycleCreate, session: Session, user: CurrentUser) -
 async def list_cycles(
     session: Session,
     user: CurrentUser,
+    response: Response,
     status: Annotated[CycleStatus | None, Query()] = None,
+    q: Annotated[str, Query(max_length=200)] = "",
+    limit: Annotated[int | None, Query(ge=1, le=200)] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    include_completed: bool = True,
+    exclude_id: uuid.UUID | None = None,
+    dated_only: bool = False,
+    recent_first: bool = False,
 ) -> list[CycleRead]:
-    # RADD-816 (F6): the catalog read is a deliverable atom now — Baseline-
-    # seeded, so day-one behaviour is the old member floor, but REVOCABLE.
     if not await authz.holds(session, user, authz.Permission.CYCLE_READ):
+        response.headers[TOTAL_COUNT_HEADER] = "0"
         return []
     today = date.today()
-    # Spec 60: team-restricted cycles only reach their members (+ cycle managers).
-    cycles, teams_by_cycle = await service.visible_cycles(
-        session, user, status=status, today=today
+    cycles, teams_by_cycle, total = await directory.page(
+        session, user, status=status, today=today, q=q, limit=limit, offset=offset,
+        include_completed=include_completed, exclude_id=exclude_id,
+        dated_only=dated_only, recent_first=recent_first,
     )
-    return [
-        service.to_read(cycle, today, teams_by_cycle.get(cycle.id, [])) for cycle in cycles
-    ]
+    response.headers[TOTAL_COUNT_HEADER] = str(total)
+    return [service.to_read(cycle, today, teams_by_cycle.get(cycle.id, [])) for cycle in cycles]
+
+
+@router.get("/summary", response_model=dict[CycleStatus, int])
+async def cycle_summary(
+    session: Session, user: CurrentUser, q: Annotated[str, Query(max_length=200)] = "",
+):
+    if not await authz.holds(session, user, authz.Permission.CYCLE_READ):
+        return {}
+    return await directory.counts(session, user, q=q)
 
 
 async def _require_visible(session: AsyncSession, cycle, user) -> None:
@@ -77,6 +94,7 @@ async def update_cycle(
     cycle_id: uuid.UUID, data: CycleUpdate, session: Session, user: CurrentUser
 ) -> CycleRead:
     cycle = await service.get_cycle(session, cycle_id)
+    await _require_visible(session, cycle, user)
     await authz.require(
         session, user, authz.Permission.CYCLE_UPDATE
     )
@@ -91,6 +109,7 @@ async def cycle_stats(
     assignee_id: Annotated[uuid.UUID | None, Query()] = None,
     team_id: Annotated[uuid.UUID | None, Query()] = None,
     project_id: Annotated[uuid.UUID | None, Query()] = None,
+    q: str | None = None,
 ) -> CycleStats:
     """Cycle-page header metrics: per-category counts + time totals, honoring the
     same assignee/team filters the page applies to its item list. `project_id`
@@ -108,13 +127,13 @@ async def cycle_stats(
     await authz.require(session, user, authz.Permission.CYCLE_READ)
     await _require_visible(session, cycle, user)
     counts = await items_service.cycle_state_category_counts(
-        session, cycle_id, assignee_id=assignee_id, team_id=team_id, project_id=project_id
+        session, cycle_id, actor=user, q=q, assignee_id=assignee_id, team_id=team_id, project_id=project_id
     )
     points_total, points_done = await items_service.cycle_points_totals(
-        session, cycle_id, assignee_id=assignee_id, team_id=team_id, project_id=project_id
+        session, cycle_id, actor=user, q=q, assignee_id=assignee_id, team_id=team_id, project_id=project_id
     )
     estimate, logged, remaining = await cycle_time_totals(
-        session, cycle_id, assignee_id=assignee_id, team_id=team_id, project_id=project_id
+        session, cycle_id, actor=user, q=q, assignee_id=assignee_id, team_id=team_id, project_id=project_id
     )
     # Hours-per-day is a GLOBAL scalar (spec 67 follow-up: instance-only).
     hours_per_day = int(
@@ -148,7 +167,7 @@ async def complete_cycle(
     the cycle is stamped completed, the target optionally starts today, and drafts
     are topped up per the `cycle_drafts_ahead` setting. Item moves run as the
     caller, so item.update is enforced per project by the items service."""
-    cycle = await service.get_cycle(session, cycle_id)
+    await service.get_cycle(session, cycle_id)
     await authz.require(
         session, user, authz.Permission.CYCLE_UPDATE
     )
@@ -158,6 +177,7 @@ async def complete_cycle(
 @router.delete("/{cycle_id}", status_code=204)
 async def delete_cycle(cycle_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
     cycle = await service.get_cycle(session, cycle_id)
+    await _require_visible(session, cycle, user)
     await authz.require(
         session, user, authz.Permission.CYCLE_DELETE
     )
@@ -168,10 +188,17 @@ async def delete_cycle(cycle_id: uuid.UUID, session: Session, user: CurrentUser)
 
 
 @series_router.get("", response_model=list[CycleSeriesRead])
-async def list_series(session: Session, user: CurrentUser) -> list[CycleSeriesRead]:
+async def list_series(
+    session: Session, user: CurrentUser, response: Response,
+    q: Annotated[str, Query(max_length=200)] = "",
+    limit: Annotated[int | None, Query(ge=1, le=200)] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[CycleSeriesRead]:
     if not await authz.holds(session, user, authz.Permission.CYCLE_READ):
+        response.headers[TOTAL_COUNT_HEADER] = "0"
         return []
-    rows = await service.list_series(session)
+    rows, total = await directory.series_page(session, q=q, limit=limit, offset=offset)
+    response.headers[TOTAL_COUNT_HEADER] = str(total)
     return [CycleSeriesRead.model_validate(row) for row in rows]
 
 
@@ -179,7 +206,7 @@ async def list_series(session: Session, user: CurrentUser) -> list[CycleSeriesRe
 async def update_series(
     series_id: uuid.UUID, data: CycleSeriesUpdate, session: Session, user: CurrentUser
 ) -> CycleSeriesRead:
-    series = await service.get_series(session, series_id)
+    await service.get_series(session, series_id)
     await authz.require(
         session, user, authz.Permission.CYCLE_UPDATE
     )
@@ -192,7 +219,7 @@ async def update_series(
 @series_router.delete("/{series_id}", status_code=204)
 async def delete_series(series_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
     """Stop recurring — existing cycles are untouched, only auto-provisioning ends."""
-    series = await service.get_series(session, series_id)
+    await service.get_series(session, series_id)
     await authz.require(
         session, user, authz.Permission.CYCLE_DELETE
     )

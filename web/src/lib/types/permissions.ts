@@ -6,6 +6,8 @@
 /** Mirror of the backend `Permission` enum (GET /permissions catalog keys). */
 export const Permission = {
   globalManage: "global.manage",
+  serviceAccountCreate: "service_account.create",
+  serviceAccountUpdate: "service_account.update",
   projectCreate: "project.create",
   projectManage: "project.manage",
   /**
@@ -45,6 +47,7 @@ export const Permission = {
   cycleRead: "cycle.read",
   cycleCreate: "cycle.create",
   cycleUpdate: "cycle.update",
+  cycleDelete: "cycle.delete",
   releaseUpdate: "release.update",
   labelRead: "label.read",
   labelUpdate: "label.update",

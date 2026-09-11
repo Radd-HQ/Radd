@@ -2,9 +2,10 @@ import { Navigate, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { RoutePath } from "../lib/constants";
 import { useProjectByKey } from "../lib/hooks";
-import { viewsQuery } from "../lib/queries";
+import { viewsPageQuery } from "../lib/queries";
 import { ViewType } from "../lib/types";
 import { Spinner } from "../components/Spinner";
+import { QueryError } from "../components/QueryError";
 
 /**
  * /p/$projectKey/roadmap — LEGACY path (specs 19/77/78). Roadmaps are saved
@@ -15,17 +16,16 @@ import { Spinner } from "../components/Spinner";
 export function RoadmapPage() {
   const { projectKey = "" } = useParams({ strict: false });
   const { project } = useProjectByKey(projectKey);
-  const views = useQuery(viewsQuery());
+  const views = useQuery({ ...viewsPageQuery({ projectId: project?.id, includeGlobal: false, viewType: ViewType.roadmap }, "", 0, 1), enabled: Boolean(project) });
 
-  if (project === undefined || views.isPending) {
+  if (project === undefined || (Boolean(project) && views.isPending)) {
     return <Spinner label="Loading roadmap…" />;
   }
   if (project === null) {
     return <div className="p-10 text-sm text-fg-muted">Project “{projectKey}” not found.</div>;
   }
-  const roadmap = (views.data ?? []).find(
-    (view) => view.project_id === project.id && view.view_type === ViewType.roadmap,
-  );
+  if (views.isError) return <div className="p-10"><QueryError label="views" error={views.error} /></div>;
+  const roadmap = views.data?.rows[0];
   if (roadmap) {
     return (
       <Navigate

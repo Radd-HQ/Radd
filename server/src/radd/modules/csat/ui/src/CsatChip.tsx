@@ -23,9 +23,9 @@ export function CsatChip({ itemId }: { itemId: string }) {
   // GET /items/{id}/csat — 404-quiet: server 404s both "never surveyed" and "not answered yet".
   const { data: csat } = useQuery({
     queryKey: itemCsatKey(itemId),
-    queryFn: async (): Promise<ItemCsat | null> => {
+    queryFn: async ({ signal }): Promise<ItemCsat | null> => {
       try {
-        return await api.get<ItemCsat>(`/items/${itemId}/csat`);
+        return await api.get<ItemCsat>(`/items/${itemId}/csat`, { signal });
       } catch (error) {
         if (error instanceof ApiError && error.status === 404) return null;
         throw error;

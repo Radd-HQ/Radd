@@ -1,146 +1,87 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LayoutTemplate, Pencil, Plus, Trash2, X } from "lucide-react";
-import { api, errorMessage } from "../../lib/api";
+import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
-import { pageSpacesQuery } from "../../lib/queries";
+import { pageTemplatesPageQuery, pageTemplateByIdQuery, PAGE_TEMPLATES_PAGE_SIZE } from "../../lib/queries";
+import { OptionResource } from "../../lib/queries/options";
+import { useDirectory } from "../../lib/useDirectory";
 import type { PageTemplate } from "../../lib/types";
+import { OptionSelect } from "../DirectoryChoices";
 import { Button } from "../Button";
+import { IconButton } from "../IconButton";
 import { useConfirm } from "../ConfirmDialog";
-import { SelectField } from "../SelectField";
+import { Modal } from "../Modal";
+import { DirectoryPager } from "../DirectoryPager";
+import { ListSearchInput } from "../ListSearchInput";
 import { TableSkeleton } from "../TableSkeleton";
 import { TextField } from "../TextField";
 import { QueryError } from "../QueryError";
+import { ErrorText } from "../ErrorText";
 
-/** Settings → Pages: page-template management (RADD-1100).
- *
- * The backend family (RADD-712) — CRUD routes, `{{title}}/{{date}}/{{author}}`
- * rendering, `PageCreate.template` — shipped with only the `radd:new-from-template`
- * fence as a consumer, which itself needed a template that only curl could
- * create. This is the missing authoring surface. */
-
-const templatesKey = ["page-templates", "all"] as const;
-
+/** The template catalog is bounded; only the open editor downloads markdown. */
 export function PageTemplatesSection() {
   const queryClient = useQueryClient();
-  const templates = useQuery({
-    queryKey: templatesKey,
-    queryFn: () => api.get<PageTemplate[]>(ApiPath.pageTemplates),
-  });
-  const spaces = useQuery(pageSpacesQuery());
-  const [editing, setEditing] = useState<PageTemplate | null>(null);
+  const templates = useDirectory("page-templates", PAGE_TEMPLATES_PAGE_SIZE, pageTemplatesPageQuery);
+  const [editing, setEditing] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [confirmDialog, confirm] = useConfirm();
-
+  const { page, total, isSuccess } = templates;
+  useEffect(() => {
+    if (isSuccess && page > 0 && page * PAGE_TEMPLATES_PAGE_SIZE >= total)
+      templates.setPage(Math.max(0, Math.ceil(total / PAGE_TEMPLATES_PAGE_SIZE) - 1));
+  }, [page, total, isSuccess]);
   const remove = useMutation({
     mutationFn: (id: string) => api.delete<void>(`${ApiPath.pageTemplates}/${id}`),
     onSettled: () => void queryClient.invalidateQueries({ queryKey: ["page-templates"] }),
   });
+  return <section className="mt-10" aria-label="Page templates">
+    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+      <h2 className="text-sm font-semibold text-heading">Page templates</h2>
+      <Button size="sm" variant="secondary" onClick={() => setCreating(true)}><Plus size={12} aria-hidden />New template</Button>
+    </div>
+    <p className="mb-3 text-xs text-fg-muted">Start recurring pages from a template. Title, date and author placeholders are filled when a page is created; other placeholders remain as prompts.</p>
+    <ListSearchInput value={templates.filter} onChange={templates.setFilter} placeholder="Find templates…" total={templates.filter.trim() ? undefined : templates.total} matched={templates.total} noun="templates" />
+    <div aria-busy={templates.busy} className="mt-3">
+      {templates.isPending ? <TableSkeleton rows={2} /> : templates.isError ? <div className="space-y-2">
+        <QueryError label="page templates" error={templates.error} /><Button variant="secondary" onClick={() => void templates.refetch()}>Retry templates</Button>
+      </div> : templates.rows.length === 0 ? <p className="flex items-center gap-2 text-xs text-fg-muted"><LayoutTemplate size={13} aria-hidden />{templates.filter.trim() ? "No templates match this search." : "No templates yet."}</p>
+        : <ul aria-label="Page templates" className="rounded-lg border border-subtle">{templates.rows.map(template => <li key={template.id} className="border-b border-subtle/60 px-4 py-2.5 last:border-b-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <span className="min-w-0 break-words text-[13px] font-medium text-heading">{template.icon ? `${template.icon} ` : ""}{template.name}</span>
+            <span className="min-w-0 break-words text-[11px] text-fg-faint">{template.space_id === null ? "Every space" : template.space_name ?? "Unavailable space"}</span>
+            <span className="flex-1" />
+            <IconButton aria-label={`Edit ${template.name}`} onClick={() => setEditing(template.id)}><Pencil size={13} aria-hidden /></IconButton>
+            <IconButton danger disabled={remove.isPending} aria-label={`Delete ${template.name}`} onClick={() => {
+              void confirm({title: "Delete template?", message: `Pages already created from “${template.name}” keep their content; only the template goes.`, confirmLabel: "Delete", danger: true})
+                .then(ok => { if (ok) remove.mutate(template.id); });
+            }}><Trash2 size={13} aria-hidden /></IconButton>
+          </div>
+          {template.description && <p className="mt-0.5 break-words text-xs text-fg-muted">{template.description}</p>}
+        </li>)}</ul>}
+    </div>
+    <DirectoryPager {...templates} onPage={templates.setPage} label="page templates" />
+    {remove.isError && <ErrorText className="mt-2" error={remove.error} />}
+    {creating && <Modal title="New page template" onClose={() => setCreating(false)}><TemplateForm onDone={() => setCreating(false)} /></Modal>}
+    {editing && <TemplateEditor id={editing} onClose={() => setEditing(null)} />}
+    {confirmDialog}
+  </section>;
+}
 
-  const spaceName = (id: string | null) =>
-    id === null ? "Every space" : (spaces.data?.find((s) => s.id === id)?.name ?? "One space");
-
-  return (
-    <section className="mt-10">
-      <div className="mb-1 flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-heading">Page templates</h2>
-        {!creating && (
-          <Button size="sm" variant="secondary" onClick={() => setCreating(true)}>
-            <Plus size={12} aria-hidden />
-            New template
-          </Button>
-        )}
-      </div>
-      <p className="mb-3 text-xs text-fg-muted">
-        A shape recurring pages start from — the New page button and the
-        new-from-template fence offer these. <code className="font-mono">{"{{title}}"}</code>,{" "}
-        <code className="font-mono">{"{{date}}"}</code> and{" "}
-        <code className="font-mono">{"{{author}}"}</code> are filled in at creation; any other{" "}
-        <code className="font-mono">{"{{placeholder}}"}</code> survives as a prompt to the author.
-      </p>
-      {creating && (
-        <TemplateForm
-          spaces={spaces.data ?? []}
-          onDone={() => setCreating(false)}
-        />
-      )}
-      {templates.isPending ? (
-        <TableSkeleton rows={2} />
-      ) : templates.isError ? (
-        <QueryError label="page templates" error={templates.error} />
-      ) : templates.data.length === 0 ? (
-        !creating && (
-          <p className="flex items-center gap-2 text-xs text-fg-muted">
-            <LayoutTemplate size={13} aria-hidden />
-            No templates yet.
-          </p>
-        )
-      ) : (
-        <ul className="rounded-lg border border-subtle">
-          {templates.data.map((template) => (
-            <li key={template.id} className="border-b border-subtle/60 px-4 py-2.5 last:border-b-0">
-              <div className="flex items-center gap-2">
-                <span className="text-[13px] font-medium text-heading">
-                  {template.icon ? `${template.icon} ` : ""}
-                  {template.name}
-                </span>
-                <span className="text-[11px] text-fg-faint">{spaceName(template.space_id)}</span>
-                <span className="flex-1" />
-                <button
-                  type="button"
-                  onClick={() => setEditing(editing?.id === template.id ? null : template)}
-                  aria-label={`Edit ${template.name}`}
-                  className="rounded p-1 text-fg-muted hover:bg-elevated hover:text-fg cursor-pointer"
-                >
-                  <Pencil size={13} aria-hidden />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void confirm({
-                      title: "Delete template?",
-                      message: `Pages already created from “${template.name}” keep their content; only the template goes.`,
-                      confirmLabel: "Delete",
-                      danger: true,
-                    }).then((ok) => {
-                      if (ok) remove.mutate(template.id);
-                    });
-                  }}
-                  aria-label={`Delete ${template.name}`}
-                  className="rounded p-1 text-fg-muted hover:bg-elevated hover:text-red-300 cursor-pointer"
-                >
-                  <Trash2 size={13} aria-hidden />
-                </button>
-              </div>
-              {template.description && (
-                <p className="mt-0.5 text-xs text-fg-muted">{template.description}</p>
-              )}
-              {editing?.id === template.id && (
-                <TemplateForm
-                  existing={template}
-                  spaces={spaces.data ?? []}
-                  onDone={() => setEditing(null)}
-                />
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-      {remove.isError && (
-        <p className="mt-2 text-xs text-red-400">{errorMessage(remove.error)}</p>
-      )}
-      {confirmDialog}
-    </section>
-  );
+function TemplateEditor({id, onClose}: {id: string; onClose: () => void}) {
+  const template = useQuery(pageTemplateByIdQuery(id));
+  return <Modal title="Edit page template" onClose={onClose}>
+    {template.isPending ? <TableSkeleton rows={2} /> : template.isError ? <div className="space-y-2">
+      <QueryError label="page template" error={template.error} /><Button variant="secondary" onClick={() => void template.refetch()}>Retry template</Button>
+    </div> : <TemplateForm key={id} existing={template.data} onDone={onClose} />}
+  </Modal>;
 }
 
 function TemplateForm({
   existing,
-  spaces,
   onDone,
 }: {
   existing?: PageTemplate;
-  spaces: { id: string; name: string }[];
   onDone: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -187,18 +128,8 @@ function TemplateForm({
           required
           autoFocus={!existing}
         />
-        <SelectField
-          label="Available in"
-          value={spaceId}
-          onChange={(event) => setSpaceId(event.target.value)}
-        >
-          <option value="">Every space</option>
-          {spaces.map((space) => (
-            <option key={space.id} value={space.id}>
-              {space.name}
-            </option>
-          ))}
-        </SelectField>
+        <OptionSelect resource={OptionResource.space} label="Available in" value={spaceId} onChange={setSpaceId}
+          presets={[{value: "", label: "Every space", hint: ""}]} />
       </div>
       <TextField
         label="Description (optional)"
@@ -217,7 +148,7 @@ function TemplateForm({
           className="rounded-md border border-strong bg-base px-3 py-2 font-mono text-[12px] leading-relaxed text-fg outline-focus"
         />
       </label>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button type="submit" size="sm" disabled={save.isPending || !name.trim()}>
           {save.isPending ? "Saving…" : existing ? "Save changes" : "Create template"}
         </Button>
@@ -225,7 +156,7 @@ function TemplateForm({
           <X size={12} aria-hidden />
           Cancel
         </Button>
-        {save.isError && <span className="text-xs text-red-400">{errorMessage(save.error)}</span>}
+        {save.isError && <ErrorText error={save.error} />}
       </div>
     </form>
   );

@@ -1,3 +1,5 @@
+import { TeamSelect } from "../teams/TeamSelect";
+import { CycleSelect } from "../cycles/CycleSelect";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
@@ -13,13 +15,11 @@ import { useDebounced, useItemWritability, usePointsEnabled } from "../../lib/ho
 import { useValidateItem } from "../../lib/item-mutations";
 import { KIND_META, KIND_ORDER, PRIORITY_META, PRIORITY_ORDER } from "../../lib/meta";
 import {
-  cyclesQuery,
   issueTypesQuery,
   fieldsQuery,
   linkSearchQuery,
   releasesQuery,
   statesQuery,
-  teamsQuery,
   usersQuery,
   validationContextQuery,
 } from "../../lib/queries";
@@ -95,8 +95,6 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
   const states = useQuery(statesQuery(project.id));
   const fields = useQuery(fieldsQuery());
   const users = useQuery(usersQuery);
-  const teams = useQuery(teamsQuery());
-  const cycles = useQuery(cyclesQuery());
   const releases = useQuery(releasesQuery(project.id));
   const types = useQuery(issueTypesQuery(project.id));
   const createItem = useValidateItem();
@@ -469,37 +467,9 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
               ))}
           </SelectField>
 
-          <SelectField
-            label="Team"
-            value={teamId}
-            {...lock("team")}
-            error={errorFor("team")}
-            onChange={(event) => setTeamId(event.target.value)}
-            hint={(teams.data ?? []).length === 0 ? "No teams yet" : undefined}
-          >
-            <option value="">None</option>
-            {(teams.data ?? []).map((team) => (
-              <option key={team.id} value={team.id}>
-                {team.name}
-              </option>
-            ))}
-          </SelectField>
+          <TeamSelect label="Team" value={teamId} onChange={setTeamId} {...lock("team")} error={errorFor("team")} />
 
-          <SelectField
-            label="Cycle"
-            value={cycleId}
-            {...lock("cycle")}
-            error={errorFor("cycle")}
-            onChange={(event) => setCycleId(event.target.value)}
-            hint={(cycles.data ?? []).length === 0 ? "No cycles yet" : undefined}
-          >
-            <option value="">No cycle</option>
-            {(cycles.data ?? []).map((cycle) => (
-              <option key={cycle.id} value={cycle.id}>
-                {cycle.name}
-              </option>
-            ))}
-          </SelectField>
+          <CycleSelect label="Cycle" value={cycleId} onChange={setCycleId} {...lock("cycle")} error={errorFor("cycle")} />
 
           <SelectField
             label="Release"

@@ -5,7 +5,7 @@ import { api, errorMessage } from "../../lib/api";
 import { ApiPath, apiStatePath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
 import { CATEGORY_META, CATEGORY_ORDER } from "../../lib/meta";
-import { projectsQuery, queryKeys, stateCategoriesQuery, statesQuery } from "../../lib/queries";
+import { projectByIdQuery, queryKeys, stateCategoriesQuery, statesQuery } from "../../lib/queries";
 import {
   Permission,
   StateCategory,
@@ -37,8 +37,8 @@ import { ErrorText } from "../../components/ErrorText";
  */
 export function StatesSettingsPage({ projectId }: { projectId?: string }) {
   const perms = usePermissions();
-  const projects = useQuery(projectsQuery());
-  const project = (projects.data ?? []).find((entry) => entry.id === projectId);
+  const projectQuery = useQuery(projectByIdQuery(projectId ?? ""));
+  const project = projectQuery.data;
   // States are per-project: gate on THAT project's manage permission.
   const canManage = perms.project(project, Permission.stateManage);
   const states = useQuery({ ...statesQuery(projectId ?? ""), enabled: Boolean(projectId) });
@@ -62,8 +62,10 @@ export function StatesSettingsPage({ projectId }: { projectId?: string }) {
         </>
       }
     >
-      {projects.isPending || (projectId && states.isPending) ? (
+      {(projectId && projectQuery.isPending) || (projectId && states.isPending) ? (
         <TableSkeleton rows={5} />
+      ) : projectQuery.isError ? (
+        <QueryError label="project" error={projectQuery.error} />
       ) : !project ? (
         <EmptyState icon={Workflow} message="Project not found." />
       ) : states.isError ? (
@@ -491,8 +493,9 @@ function DeleteStateDialog({
   );
   const count = useQuery({
     queryKey: ["state-item-count", state.id] as const,
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<{ total: number }>(Api.itemsCount, {
+        signal,
         query: { project_id: projectId, state_id: state.id },
       }),
   });

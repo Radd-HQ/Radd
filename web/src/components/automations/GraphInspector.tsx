@@ -222,7 +222,7 @@ export function GraphInspector({
       )}
 
       {node.kind === NodeKind.source && (
-        <SearchFields params={node.params} pickers={pickers} onChange={setParams} />
+        <SearchFields params={node.params} onChange={setParams} />
       )}
 
       {node.kind === NodeKind.trigger && (
@@ -314,7 +314,7 @@ export function GraphInspector({
         />
       )}
       {node.type === "gate.changed_by" && (
-        <ChangedByFields params={node.params} people={(pickers.userEmails ?? []).map((u) => u.email)} onChange={setParams} />
+        <ChangedByFields params={node.params} canChoosePeople={pickers.canChoosePeople} onChange={setParams} />
       )}
       {node.type === "gate.state_category" && (
         <StateCategoryFields params={node.params} onChange={setParams} />

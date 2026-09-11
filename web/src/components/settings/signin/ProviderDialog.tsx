@@ -307,7 +307,7 @@ export function ProviderDialog({
           onChange={setEnabled}
         />
 
-        {error && <ErrorText error={error} />}
+        {error && <div role="alert"><ErrorText error={error} /></div>}
 
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose}>

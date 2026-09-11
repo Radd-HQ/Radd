@@ -6,19 +6,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
 from radd.apitypes import TOTAL_COUNT_HEADER
+from radd.choices import ChoiceRead
 from radd.db import get_session
 from radd.exceptions import ForbiddenError, UnauthorizedError
 from radd.kernel import registries
 
-from . import authz, grants, roles as roles_service, service, service_accounts, totp
+from . import account_directory, authz, grants, roles as roles_service, service, service_accounts, totp
 from .deps import CurrentUser
 from .models import User
+from .principals import require_account_session
+from .throttle import check_login_attempt
 from .schemas import (
     CarrierGrantRead,
     MembershipRead,
     AccessSummaryRead,
     ServiceAccountCreate,
     ServiceAccountRead,
+    ServiceKeySummaryRead,
     ServiceAccountUpdate,
     DuplicateUserGroup,
     LoginRequest,
@@ -78,7 +82,8 @@ def _set_session_cookie(response: Response, token: str) -> None:
 
 
 @auth_router.post("/login", status_code=204)
-async def login(data: LoginRequest, session: Session, response: Response) -> None:
+async def login(data: LoginRequest, session: Session, response: Response, request: Request) -> None:
+    check_login_attempt(request, data.email)
     user = await service.authenticate(session, data.email, data.password)
     if await service.totp_required(session, user):
         # No cookie yet — the client repeats via /login/totp with a code.
@@ -87,8 +92,9 @@ async def login(data: LoginRequest, session: Session, response: Response) -> Non
 
 
 @auth_router.post("/login/totp", status_code=204)
-async def login_totp(data: TotpLoginRequest, session: Session, response: Response) -> None:
+async def login_totp(data: TotpLoginRequest, session: Session, response: Response, request: Request) -> None:
     """Second MFA step (spec 48): stateless — password re-verified with the code."""
+    check_login_attempt(request, data.email)
     user = await service.authenticate_with_totp(session, data.email, data.password, data.code)
     _set_session_cookie(response, await service.create_session(session, user))
 
@@ -446,6 +452,20 @@ async def user_resource_access(
     )
 
 
+@user_router.get("/directory/options", response_model=list[ChoiceRead])
+async def person_name_choices(
+    response: Response, session: Session, user: CurrentUser,
+    q: Annotated[str, Query(max_length=200)] = "",
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    value: Annotated[str | None, Query(max_length=200)] = None,
+) -> list[ChoiceRead]:
+    from . import name_options
+    rows, total = await name_options.list_options(session, q=q, limit=limit, offset=offset, value=value)
+    response.headers[TOTAL_COUNT_HEADER] = str(total)
+    return rows
+
+
 @user_router.get("/directory", response_model=list[UserDirectoryEntry])
 async def list_user_directory(
     response: Response,
@@ -540,6 +560,19 @@ async def list_user_directory(
     return entries
 
 
+@user_router.get("/options", response_model=list[ChoiceRead])
+async def option_choices(
+    response: Response, session: Session, user: CurrentUser,
+    q: Annotated[str, Query(max_length=200)] = "",
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    value: Annotated[str | None, Query(max_length=320)] = None,
+) -> list[ChoiceRead]:
+    rows, total = await service.list_options(session, user, q=q, limit=limit, offset=offset, value=value)
+    response.headers[TOTAL_COUNT_HEADER] = str(total)
+    return rows
+
+
 @user_router.get("", response_model=list[UserRead])
 async def list_users(
     response: Response,
@@ -564,7 +597,7 @@ async def list_users(
 
 
 def _require_instance_admin(actor: User, action: str) -> None:
-    if InstanceRole(actor.instance_role) is not InstanceRole.ADMIN:
+    if not authz.is_instance_admin(actor):
         raise ForbiddenError(f"{action} requires an instance admin")
 
 
@@ -660,7 +693,7 @@ async def merge_user(
     """Fold a duplicate identity (Jira import / AD import / seed) into another user:
     every reference repoints, the duplicate is revoked + deactivated. Instance
     admins only."""
-    if InstanceRole(actor.instance_role) is not InstanceRole.ADMIN:
+    if not authz.is_instance_admin(actor):
         raise ForbiddenError("user merge requires an instance admin")
     target = await service.merge_users(session, user_id, data.into_user_id, actor_id=actor.id)
     return UserRead.model_validate(target)
@@ -713,9 +746,35 @@ async def create_service_account(
 
 
 @service_account_router.get("", response_model=list[ServiceAccountRead])
-async def list_service_accounts(session: Session, user: CurrentUser) -> list[ServiceAccountRead]:
+async def list_service_accounts(
+    response: Response, session: Session, user: CurrentUser,
+    q: Annotated[str, Query(max_length=200)] = "",
+    limit: Annotated[int | None, Query(ge=1, le=200)] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[ServiceAccountRead]:
     await authz.require(session, user, authz.Permission.GLOBAL_MANAGE)
-    return [await _account_read(session, a) for a in await service_accounts.list_accounts(session)]
+    if limit is not None:
+        response.headers[TOTAL_COUNT_HEADER] = str(await account_directory.account_total(session, q))
+    return await account_directory.accounts(session, q=q, limit=limit, offset=offset)
+
+
+@service_account_router.get("/{account_id}", response_model=ServiceAccountRead)
+async def get_service_account(account_id: uuid.UUID, session: Session, user: CurrentUser):
+    await authz.require(session, user, authz.Permission.GLOBAL_MANAGE)
+    return await account_directory.by_id(session, account_id)
+
+
+@service_account_router.get("/{account_id}/keys/directory", response_model=list[ServiceKeySummaryRead])
+async def service_key_directory(
+    account_id: uuid.UUID, response: Response, session: Session, user: CurrentUser,
+    q: Annotated[str, Query(max_length=200)] = "",
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+):
+    await authz.require(session, user, authz.Permission.GLOBAL_MANAGE)
+    rows, total = await account_directory.keys(session, account_id, q=q, limit=limit, offset=offset)
+    response.headers[TOTAL_COUNT_HEADER] = str(total)
+    return rows
 
 
 @service_account_router.patch("/{account_id}", response_model=ServiceAccountRead)
@@ -737,6 +796,7 @@ async def create_service_account_key(
     """Mint a key for an account that cannot log in to mint its own. The scope is
     validated against the atom catalog here — an unknown atom is a 422, not a
     permission that silently never matches."""
+    require_account_session(user)
     await authz.require(session, user, authz.Permission.SERVICE_ACCOUNT_UPDATE)
     try:
         token, raw = await service_accounts.create_key(session, account_id, data)

@@ -1,10 +1,8 @@
 import {
   createContext,
-  useCallback,
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
 } from "react";
@@ -13,7 +11,6 @@ import { useQuery } from "@tanstack/react-query";
 import {
   RoutePath,
   SLQ_PROBE_DEBOUNCE_MS,
-  SLQ_SUGGEST_DEBOUNCE_MS,
 } from "./constants";
 import {
   allowedTransitionsQuery,
@@ -22,19 +19,16 @@ import {
   fieldWritabilityQuery,
   instanceConfigQuery,
   itemByKeyQuery,
-  pageSpacesQuery,
-  projectsQuery,
+  pageSpaceSummaryQuery,
+  projectSummaryQuery,
+  projectByKeyQuery,
+  projectByIdQuery,
   resolvedSettingQuery,
   slqValidateQuery,
 } from "./queries";
 import { DEFAULT_DURATION_CONFIG, type DurationConfig } from "./duration";
 import { AuthStatus, type AuthState } from "./auth";
 import { slqErrorOf, type SlqError } from "./slq";
-import {
-  fetchSlqSuggest,
-  suggestContextLabel,
-  type SlqSuggestion,
-} from "./slq-suggest";
 import {
   InstanceRole,
   Permission,
@@ -52,7 +46,7 @@ export function useAuthState(): AuthState | undefined {
   return data;
 }
 
-/** The signed-in user, or null in anonymous dev mode / while loading. */
+/** The signed-in user, or null while unauthenticated or loading. */
 export function useCurrentUser(): Me | null {
   const authState = useAuthState();
   return authState?.status === AuthStatus.authenticated ? authState.user : null;
@@ -142,8 +136,7 @@ export function useOpenIssueRef() {
  *   admins pass everything.
  * - `project(project, p)` — from `ProjectRead.permissions`, the backend's
  *   per-project union for the CURRENT user.
- * Anonymous dev mode (auth backend absent, API open) allows everything so
- * dev stays usable. The api client's global 403 toast is the backstop.
+ * The backend remains authoritative; these checks control affordances.
  */
 export interface PermissionChecks {
   global: (permission: PermissionValue) => boolean;
@@ -168,7 +161,7 @@ export interface PermissionChecks {
   anyProject: (permission: PermissionValue) => boolean;
   /**
    * The caller holds `permission` IN THIS SPACE (RADD-814): the space leg of
-   * the scope ladder, resolved from the per-space union `GET /page-spaces`
+   * the scope ladder, resolved from the per-space union the direct space read
    * carries — the RADD-810 class was space-scoped atoms asked as global
    * questions because no space-shaped question existed to ask.
    */
@@ -183,17 +176,14 @@ export interface PermissionChecks {
 
 export function usePermissions(): PermissionChecks {
   const authState = useAuthState();
-  // Already fetched app-wide (the sidebar renders the project tree / Docs
-  // section), so these are cache reads rather than requests. `permissions` on
-  // each row is the backend's per-project / per-space union for the current user.
-  const { data: projects } = useQuery(projectsQuery());
-  const { data: spaces } = useQuery(pageSpacesQuery());
+  // A paged directory must not truncate the permission union.
+  const { data: projectSummary } = useQuery(projectSummaryQuery());
+  const { data: spaceSummary } = useQuery(pageSpaceSummaryQuery());
 
   return useMemo(() => {
     const allowAll =
-      authState?.status === AuthStatus.anonymousDev ||
       (authState?.status === AuthStatus.authenticated &&
-        authState.user.instance_role === InstanceRole.admin);
+        authState.user.global_role === InstanceRole.admin);
     // Spec 86 stage 3: the flat top-level `permissions` array IS the global set.
     const globalPermissions = new Set<PermissionValue>(
       authState?.status === AuthStatus.authenticated
@@ -208,15 +198,15 @@ export function usePermissions(): PermissionChecks {
       anyProject: (permission) =>
         allowAll ||
         globalPermissions.has(permission) ||
-        (projects ?? []).some((p) => p.permissions?.includes(permission)),
+        Boolean(projectSummary?.permissions.includes(permission)),
       space: (space, permission) =>
         allowAll || Boolean(space?.permissions?.includes(permission)),
       anySpace: (permission) =>
         allowAll ||
         globalPermissions.has(permission) ||
-        (spaces ?? []).some((s) => s.permissions?.includes(permission)),
+        Boolean(spaceSummary?.permissions.includes(permission)),
     };
-  }, [authState, projects, spaces]);
+  }, [authState, projectSummary, spaceSummary]);
 }
 
 /**
@@ -444,17 +434,16 @@ interface ProjectByKey {
   project: Project | null | undefined;
 }
 
-/** Resolve a route's $projectKey against the readable project list. */
+/** Direct resolution remains available beyond the current directory page. */
 export function useProjectByKey(projectKey: string): ProjectByKey {
-  const { data: projects } = useQuery(projectsQuery());
-  if (projects === undefined) return { project: undefined };
-  return { project: projects.find((p) => p.key === projectKey) ?? null };
+  const query = useQuery(projectByKeyQuery(projectKey));
+  return { project: query.isError ? null : query.data };
 }
 
 interface ItemByKey {
   /**
-   * The item's project, resolved from its `project_id` against the readable
-   * project list. undefined while loading, null when the item/project is absent.
+   * The item's project, resolved from its `project_id` through its direct
+   * readable-project endpoint. undefined while loading, null when the item/project is absent.
    */
   project: Project | null | undefined;
   /** The resolved item; undefined while loading, null when the key 404s. */
@@ -468,138 +457,20 @@ interface ItemByKey {
  * Resolve a canonical issue key (`TD-25`) to its item via the server's by-key
  * resolver (spec 21) — no client-side number→id list scan. The item carries
  * `project_id`; we resolve its project (the scope the detail editor needs for
- * states/fields/teams) from the cached project list.
+ * states/fields/teams) through a direct project lookup.
  */
 export function useItemByKey(itemKey: string): ItemByKey {
   const itemByKey = useQuery({ ...itemByKeyQuery(itemKey), enabled: itemKey !== "" });
   const item = itemByKey.data;
-  const { data: projects } = useQuery(projectsQuery());
-
-  const project =
-    item === undefined || projects === undefined
-      ? undefined
-      : projects.find((p) => p.id === item.project_id) ?? null;
+  const projectQuery = useQuery(projectByIdQuery(item?.project_id ?? ""));
+  const project = projectQuery.isError ? null : projectQuery.data;
 
   return {
     project,
     item: itemByKey.isError ? null : item,
-    isPending: itemByKey.isPending,
-    isError: itemByKey.isError,
+    isPending: itemByKey.isPending || (Boolean(item) && projectQuery.isPending),
+    isError: itemByKey.isError || projectQuery.isError,
   };
 }
 
-/**
- * Server-driven SLQ autocomplete controller (spec 13). Owns the debounced,
- * stale-dropping suggest fetch and the dropdown's open/active state; the editor
- * component reads the caret and applies the chosen `insert`. `scope` carries
- * an optional project_id; `null` disables autocomplete entirely.
- */
-interface SlqAutocomplete {
-  open: boolean;
-  suggestions: SlqSuggestion[];
-  contextLabel: string | null;
-  replaceFrom: number;
-  activeIndex: number;
-  setActiveIndex: (index: number) => void;
-  /** Fetch suggestions for the caret; `immediate` skips the debounce (Ctrl+Space). */
-  request: (query: string, cursor: number, immediate?: boolean) => void;
-  /** Move the highlight over insertable rows only (hints are skipped), wrapping. */
-  moveActive: (delta: number) => void;
-  /** The highlighted row if it's insertable, else null. */
-  activeSuggestion: () => SlqSuggestion | null;
-  close: () => void;
-}
-
-const firstSelectable = (rows: SlqSuggestion[]): number => {
-  const index = rows.findIndex((row) => row.insert !== "");
-  return index === -1 ? 0 : index;
-};
-
-export function useSlqAutocomplete(
-  scope: Record<string, string> | null,
-  dialect?: string,
-): SlqAutocomplete {
-  const [open, setOpen] = useState(false);
-  const [suggestions, setSuggestions] = useState<SlqSuggestion[]>([]);
-  const [contextLabel, setContextLabel] = useState<string | null>(null);
-  const [replaceFrom, setReplaceFrom] = useState(0);
-  const [activeIndex, setActiveIndex] = useState(0);
-  const seqRef = useRef(0);
-  const timerRef = useRef<number | undefined>(undefined);
-  // Keep the latest scope in a ref so `request` stays a stable callback.
-  const scopeRef = useRef(scope);
-  scopeRef.current = scope;
-
-  const close = useCallback(() => {
-    seqRef.current += 1; // drop any in-flight response
-    window.clearTimeout(timerRef.current);
-    setOpen(false);
-    setSuggestions([]);
-  }, []);
-
-  useEffect(() => () => window.clearTimeout(timerRef.current), []);
-
-  const run = useCallback(async (query: string, cursor: number) => {
-    const activeScope = scopeRef.current;
-    if (activeScope === null) return;
-    const seq = (seqRef.current += 1);
-    const response = await fetchSlqSuggest(activeScope, query, cursor, dialect);
-    if (seq !== seqRef.current) return; // a newer request superseded this one
-    if (!response || response.suggestions.length === 0) {
-      setOpen(false);
-      setSuggestions([]);
-      return;
-    }
-    setSuggestions(response.suggestions);
-    setContextLabel(suggestContextLabel(response));
-    setReplaceFrom(response.replace_from);
-    setActiveIndex(firstSelectable(response.suggestions));
-    setOpen(true);
-  }, []);
-
-  const request = useCallback(
-    (query: string, cursor: number, immediate = false) => {
-      window.clearTimeout(timerRef.current);
-      if (scopeRef.current === null) return;
-      if (immediate) {
-        void run(query, cursor);
-        return;
-      }
-      timerRef.current = window.setTimeout(() => void run(query, cursor), SLQ_SUGGEST_DEBOUNCE_MS);
-    },
-    [run],
-  );
-
-  const moveActive = useCallback(
-    (delta: number) => {
-      setActiveIndex((current) => {
-        if (suggestions.length === 0) return current;
-        let index = current;
-        for (let step = 0; step < suggestions.length; step += 1) {
-          index = (index + delta + suggestions.length) % suggestions.length;
-          if (suggestions[index].insert !== "") return index;
-        }
-        return current;
-      });
-    },
-    [suggestions],
-  );
-
-  const activeSuggestion = useCallback(() => {
-    const row = suggestions[activeIndex];
-    return row && row.insert !== "" ? row : null;
-  }, [suggestions, activeIndex]);
-
-  return {
-    open: open && suggestions.length > 0,
-    suggestions,
-    contextLabel,
-    replaceFrom,
-    activeIndex,
-    setActiveIndex,
-    request,
-    moveActive,
-    activeSuggestion,
-    close,
-  };
-}
+export { useSlqAutocomplete } from "./useSlqAutocomplete";

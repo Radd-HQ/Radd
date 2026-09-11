@@ -24,14 +24,14 @@ import {
 export const automationsQuery = () =>
   queryOptions({
     queryKey: queryKeys.automations,
-    queryFn: () => api.get<Rule[]>(ApiPath.automations),
+    queryFn: ({ signal }) => api.get<Rule[]>(ApiPath.automations, { signal }),
     retry: false,
   });
 
 /** Trigger/subject/operator catalog for the rule builder (spec 58) — static per build. */
 export const automationCatalogQuery = queryOptions({
   queryKey: queryKeys.automationCatalog,
-  queryFn: () => api.get<AutomationCatalog>(`${ApiPath.automations}/catalog`),
+  queryFn: ({ signal }) => api.get<AutomationCatalog>(`${ApiPath.automations}/catalog`, { signal }),
   staleTime: Infinity,
 });
 
@@ -43,9 +43,9 @@ export const automationCatalogQuery = queryOptions({
 export const eventSampleQuery = (eventType: string) =>
   queryOptions({
     queryKey: [...queryKeys.automationCatalog, "samples", eventType] as const,
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<EventSample>(
-        `${ApiPath.automations}/samples/events?event_type=${encodeURIComponent(eventType)}`,
+        `${ApiPath.automations}/samples/events?event_type=${encodeURIComponent(eventType)}`, { signal },
       ),
     // A sentinel trigger (manual/schedule) is not an event and has no payload.
     enabled: Boolean(eventType) && eventType !== MANUAL_TRIGGER && eventType !== SCHEDULE_TRIGGER,
@@ -57,7 +57,7 @@ export const eventSampleQuery = (eventType: string) =>
 export const runnableAutomationsQuery = () =>
   queryOptions({
     queryKey: [...queryKeys.automations, "runnable"] as const,
-    queryFn: () => api.get<RunnableRule[]>(`${ApiPath.automations}/runnable`),
+    queryFn: ({ signal }) => api.get<RunnableRule[]>(`${ApiPath.automations}/runnable`, { signal }),
     staleTime: 60_000,
     retry: false,
   });

@@ -21,14 +21,14 @@ import type {
 
 export const authStateQuery = queryOptions({
   queryKey: queryKeys.authState,
-  queryFn: fetchAuthState,
+  queryFn: ({ signal }) => fetchAuthState(signal),
   staleTime: 60_000,
   retry: false,
 });
 
 export const instanceStatusQuery = queryOptions({
   queryKey: ["instance-status"] as const,
-  queryFn: () => api.get<InstanceStatus>(ApiPath.instanceStatus),
+  queryFn: ({ signal }) => api.get<InstanceStatus>(ApiPath.instanceStatus, { signal }),
   staleTime: 60_000,
 });
 
@@ -36,22 +36,23 @@ export const instanceStatusQuery = queryOptions({
  * nav. Drives the sidebar's plugin-contributed nav — chokepoint 3. */
 export const capabilitiesQuery = queryOptions({
   queryKey: ["capabilities"] as const,
-  queryFn: () => api.get<CapabilitiesManifest>(ApiPath.capabilities),
+  queryFn: ({ signal }) => api.get<CapabilitiesManifest>(ApiPath.capabilities, { signal }),
   staleTime: 60_000,
 });
 
 /** The plugin manager's plugin list (spec 93 / A4) — the Settings → Plugins page. */
 export const pluginsQuery = queryOptions({
   queryKey: queryKeys.plugins,
-  queryFn: () => api.get<Plugin[]>(ApiPath.plugins),
+  queryFn: ({ signal }) => api.get<Plugin[]>(ApiPath.plugins, { signal }),
 });
 
 /** Scalar settings at a scope (spec 50). `scopeId` omitted for instance scope. */
 export const scopedSettingsQuery = (scope: SettingScopeValue, scopeId?: string) =>
   queryOptions({
     queryKey: ["scoped-settings", scope, scopeId ?? null] as const,
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<ScopedSetting[]>(ApiPath.scopedSettings, {
+        signal,
         query: scopeId ? { scope, scope_id: scopeId } : { scope },
       }),
   });
@@ -62,8 +63,9 @@ export const scopedSettingsQuery = (scope: SettingScopeValue, scopeId?: string) 
 export const resolvedSettingQuery = (key: SettingKeyValue, projectId?: string) =>
   queryOptions({
     queryKey: ["scoped-settings-resolved", key, projectId ?? null] as const,
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<ResolvedSetting>(ApiPath.scopedSettingsResolve, {
+        signal,
         query: { key, project_id: projectId },
       }),
     staleTime: 60_000,
@@ -73,13 +75,13 @@ export const resolvedSettingQuery = (key: SettingKeyValue, projectId?: string) =
  *  (spec 67, feeds useDurationConfig). Static per deployment. */
 export const instanceConfigQuery = queryOptions({
   queryKey: ["instanceConfig"] as const,
-  queryFn: () => api.get<InstanceConfig>(ApiPath.instance),
+  queryFn: ({ signal }) => api.get<InstanceConfig>(ApiPath.instance, { signal }),
   staleTime: Infinity,
 });
 
 /** The caller's two-factor state (spec 48) — a plain query, no entity tags. */
 export const totpStatusQuery = queryOptions({
   queryKey: queryKeys.totp,
-  queryFn: () => api.get<TotpStatus>(ApiPath.totp),
+  queryFn: ({ signal }) => api.get<TotpStatus>(ApiPath.totp, { signal }),
   retry: false,
 });

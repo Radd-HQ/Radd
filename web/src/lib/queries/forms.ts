@@ -20,18 +20,19 @@ import type {
 } from "../types";
 
 /** A project's intake forms (spec 20) — listing requires form.manage. */
-export const formsQuery = (projectId: string) =>
+export const formsQuery = (projectId: string, includeShares = true) =>
   queryOptions({
-    queryKey: queryKeys.forms(projectId),
-    queryFn: () => api.get<Form[]>(ApiPath.forms, { query: { project_id: projectId } }),
+    queryKey: includeShares ? queryKeys.forms(projectId) : [...queryKeys.forms(projectId), "definitions"],
+    queryFn: ({ signal }) => api.get<Form[]>(ApiPath.forms, { signal, query: { project_id: projectId, include_shares: String(includeShares) } }),
     retry: false,
+    meta: entityMeta(Entity.form, Entity.project, Entity.role, Entity.member, Entity.team, Entity.group),
   });
 
 /** A single form for the submit page (spec 20) — open to item.create on its project. */
 export const formQuery = (formId: string) =>
   queryOptions({
     queryKey: queryKeys.form(formId),
-    queryFn: () => api.get<Form>(apiFormPath(formId)),
+    queryFn: ({ signal }) => api.get<Form>(apiFormPath(formId), { signal }),
   });
 
 /**
@@ -40,7 +41,7 @@ export const formQuery = (formId: string) =>
  */
 export const portalFormsQuery = queryOptions({
   queryKey: queryKeys.portalForms,
-  queryFn: () => api.get<PortalGroup[]>(ApiPath.portalForms),
+  queryFn: ({ signal }) => api.get<PortalGroup[]>(ApiPath.portalForms, { signal }),
   meta: entityMeta(Entity.form),
 });
 
@@ -48,7 +49,7 @@ export const portalFormsQuery = queryOptions({
  *  a requester whose Baseline carries no read at all. */
 export const portalRequestsQuery = queryOptions({
   queryKey: queryKeys.portalRequests,
-  queryFn: () => api.get<PortalRequest[]>(ApiPath.portalRequests),
+  queryFn: ({ signal }) => api.get<PortalRequest[]>(ApiPath.portalRequests, { signal }),
   staleTime: 30_000,
 });
 
@@ -57,7 +58,7 @@ export const portalRequestsQuery = queryOptions({
 export const portalFormQuery = (formId: string) =>
   queryOptions({
     queryKey: queryKeys.portalForm(formId),
-    queryFn: () => api.get<PortalForm>(apiPortalFormPath(formId)),
+    queryFn: ({ signal }) => api.get<PortalForm>(apiPortalFormPath(formId), { signal }),
     meta: entityMeta(Entity.form),
     retry: false,
   });
@@ -74,7 +75,7 @@ export const portalFormQuery = (formId: string) =>
 export const publicCsatQuery = (token: string) =>
   queryOptions({
     queryKey: queryKeys.publicCsat(token),
-    queryFn: () => api.get<PublicCsat>(apiPublicCsatPath(token)),
+    queryFn: ({ signal }) => api.get<PublicCsat>(apiPublicCsatPath(token), { signal }),
     retry: false,
   });
 
@@ -83,7 +84,7 @@ export const publicCsatQuery = (token: string) =>
 export const portalRequestDetailQuery = (key: string) =>
   queryOptions({
     queryKey: queryKeys.portalRequest(key),
-    queryFn: () => api.get<PortalRequestDetail>(`${ApiPath.portalRequests}/${key}`),
+    queryFn: ({ signal }) => api.get<PortalRequestDetail>(`${ApiPath.portalRequests}/${key}`, { signal }),
     enabled: Boolean(key),
   });
 
@@ -91,6 +92,23 @@ export const portalRequestDetailQuery = (key: string) =>
  *  DERIVED from the caller server-side — the client never picks this id. */
 export const portalStagingAreaQuery = queryOptions({
   queryKey: [...queryKeys.portalForms, "staging-area"] as const,
-  queryFn: () => api.get<{ entity_id: string }>(`${ApiPath.portalForms}/staging-area`),
+  queryFn: ({ signal }) => api.get<{ entity_id: string }>(`${ApiPath.portalForms}/staging-area`, { signal }),
   staleTime: Infinity,
+});
+
+export const FORM_SHARING_PAGE_SIZE = 50;
+export interface FormSharingRow { id: string; user_id: string | null; team_id: string | null; created_at: string; subject_name: string | null; active: boolean | null }
+export const FormShareKind = { user: "user", team: "team" } as const;
+export type FormShareKindValue = typeof FormShareKind[keyof typeof FormShareKind];
+export const formSharingQuery = (id: string, q = "", page = 0) => queryOptions({
+  queryKey: [...queryKeys.form(id), "sharing", q.trim(), page],
+  queryFn: ({ signal }) => api.getPaged<FormSharingRow>(`${apiFormPath(id)}/sharing`, { signal, query: {
+    q: q.trim(), limit: String(FORM_SHARING_PAGE_SIZE), offset: String(page * FORM_SHARING_PAGE_SIZE),
+  } }), meta: entityMeta(Entity.form, Entity.project, Entity.role, Entity.member, Entity.team, Entity.group),
+});
+export const formShareCandidatesQuery = (id: string, kind: FormShareKindValue, q = "", page = 0) => queryOptions({
+  queryKey: [...queryKeys.form(id), "sharing-candidates", kind, q.trim(), page],
+  queryFn: ({ signal }) => api.getPaged<{ value: string; label: string; hint: string }>(`${apiFormPath(id)}/sharing/candidates`, { signal, query: {
+    kind, q: q.trim(), limit: String(FORM_SHARING_PAGE_SIZE), offset: String(page * FORM_SHARING_PAGE_SIZE),
+  } }), meta: entityMeta(Entity.form, Entity.project, Entity.role, Entity.member, Entity.team, Entity.group),
 });

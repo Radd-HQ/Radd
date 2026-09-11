@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { RoutePath } from "./constants";
 import { useCurrentUser, usePermissions } from "./hooks";
-import { dashboardsQuery, pageSpacesQuery, projectsQuery } from "./queries";
+import { dashboardSummaryQuery, pageSpaceSummaryQuery, projectSummaryQuery } from "./queries";
 import { Permission } from "./types";
 
 /**
@@ -30,13 +30,13 @@ export interface NavFacts {
 export function useNavFacts(): NavFacts {
   const me = useCurrentUser();
   const perms = usePermissions();
-  const projects = useQuery(projectsQuery());
-  const spaces = useQuery(pageSpacesQuery());
-  const dashboards = useQuery(dashboardsQuery());
+  const projects = useQuery(projectSummaryQuery());
+  const spaces = useQuery(pageSpaceSummaryQuery());
+  const dashboards = useQuery(dashboardSummaryQuery());
 
-  const projectCount = projects.data?.length;
-  const spaceCount = spaces.data?.length;
-  const dashboardCount = dashboards.data?.length;
+  const projectCount = projects.data?.total;
+  const spaceCount = spaces.data?.total;
+  const dashboardCount = dashboards.data?.total;
   const canManagePages = perms.anySpace(Permission.pageManage);
   const canCreateDashboard = perms.anyProject(Permission.dashboardCreate);
   const navTimesheet = me?.nav?.timesheet;

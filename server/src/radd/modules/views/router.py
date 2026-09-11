@@ -1,21 +1,23 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
+from radd.apitypes import TOTAL_COUNT_HEADER
 from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.deps import CurrentUser
 
-from . import counts, service
+from . import counts, directory, service
 from .schemas import (
     CardPresetCreate,
     CardPresetRead,
     CardPresetUpdate,
     ViewCountsRequest,
     ViewCreate,
+    ViewSave,
     ViewRead,
     ViewSharingUpdate,
     ViewTransfer,
@@ -36,9 +38,35 @@ async def create_view(data: ViewCreate, session: Session, user: CurrentUser) -> 
 async def list_views(
     session: Session,
     user: CurrentUser,
+    response: Response,
+    include_shares: bool = True,
     project_id: uuid.UUID | None = None,
+    q: Annotated[str, Query(max_length=200)] = "",
+    limit: Annotated[int | None, Query(ge=1, le=200)] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    include_global: bool = True,
+    global_only: bool = False,
+    view_type: Annotated[str | None, Query(max_length=100)] = None,
+    exclude_type: Annotated[str | None, Query(max_length=100)] = None,
 ) -> list[ViewRead]:
-    return await service.list_views(session, actor=user, project_id=project_id)
+    rows, total = await service.page_views(session, actor=user, include_shares=include_shares, project_id=project_id,
+        q=q, limit=limit, offset=offset, include_global=include_global, global_only=global_only,
+        view_type=view_type, exclude_type=exclude_type)
+    response.headers[TOTAL_COUNT_HEADER] = str(total)
+    return rows
+
+
+@router.get("/summary", response_model=dict[str, int])
+async def view_summary(
+    session: Session, user: CurrentUser, project_id: uuid.UUID | None = None,
+    q: Annotated[str, Query(max_length=200)] = "", include_global: bool = True,
+    global_only: bool = False,
+    view_type: Annotated[str | None, Query(max_length=100)] = None,
+    exclude_type: Annotated[str | None, Query(max_length=100)] = None,
+) -> dict[str, int]:
+    return {"total": await directory.count(session, user, project_id=project_id, q=q,
+        include_global=include_global, global_only=global_only, view_type=view_type,
+        exclude_type=exclude_type)}
 
 
 _COUNTS_DOC = (
@@ -99,6 +127,12 @@ async def update_card_preset(
 async def delete_card_preset(preset_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
     await authz.require(session, user, Permission.CARD_PRESET_DELETE)
     await service.delete_card_preset(session, preset_id, user)
+
+
+@router.get("/{view_id}", response_model=ViewRead)
+async def get_view(view_id: uuid.UUID, session: Session, user: CurrentUser,
+                   include_shares: bool = True) -> ViewRead:
+    return await service.get_view_read(session, view_id, actor=user, include_shares=include_shares)
 
 
 @router.patch("/{view_id}", response_model=ViewRead)
@@ -162,3 +196,9 @@ async def remove_view_member(
 @router.delete("/{view_id}", status_code=204)
 async def delete_view(view_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
     await service.delete_view(session, view_id, actor=user)
+
+
+@router.post("/{view_id}/save", response_model=ViewRead)
+async def save_view(view_id: uuid.UUID, data: ViewSave,
+                      session: Session, user: CurrentUser) -> ViewRead:
+    return await service.save_view(session, view_id, data, actor=user)

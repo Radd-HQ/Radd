@@ -23,15 +23,16 @@ import type {
 export const itemTimelogQuery = (itemId: string) =>
   queryOptions({
     queryKey: queryKeys.itemTimelog(itemId),
-    queryFn: () => api.get<ItemTimeSummary>(apiItemTimelogPath(itemId)),
+    queryFn: ({ signal }) => api.get<ItemTimeSummary>(apiItemTimelogPath(itemId), { signal }),
   });
 
 /** Shared work categories; `includeArchived` also returns archived ones (admin editor). */
 export const workCategoriesQuery = (includeArchived = false) =>
   queryOptions({
     queryKey: queryKeys.workCategories(includeArchived),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<WorkCategory[]>(ApiPath.workCategories, {
+        signal,
         query: { include_archived: includeArchived ? "true" : undefined },
       }),
     staleTime: 60_000,
@@ -41,7 +42,7 @@ export const workCategoriesQuery = (includeArchived = false) =>
 export const projectTimeloggingQuery = (projectId: string) =>
   queryOptions({
     queryKey: queryKeys.projectTimelogging(projectId),
-    queryFn: () => api.get<ProjectTimeLogging>(apiProjectTimeloggingPath(projectId)),
+    queryFn: ({ signal }) => api.get<ProjectTimeLogging>(apiProjectTimeloggingPath(projectId), { signal }),
     staleTime: 60_000,
   });
 
@@ -68,8 +69,9 @@ export const timesheetQuery = (params: TimesheetParams) =>
       projectId: params.projectId ?? "",
       q: params.q ?? "",
     }),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<Timesheet>(ApiPath.timesheet, {
+        signal,
         query: {
           start: params.start,
           end: params.end,

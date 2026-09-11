@@ -1,3 +1,6 @@
+import { OptionSelect } from "../DirectoryChoices";
+import { OptionResource } from "../../lib/queries/options";
+import { ProjectSelect } from "../projects/ProjectSelect";
 /**
  * Builder forms for the spec-119 nodes: the validate TRIGGER and the check.
  *
@@ -10,14 +13,7 @@
  * "this graph checks the incident form and the Bug type in two projects" is a
  * set, and any single-value control would silently keep only the last choice.
  */
-import { useMemo } from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
-import {
-  formsQuery,
-  issueTypesQuery,
-  projectsQuery,
-} from "../../lib/queries";
 import {
   ValidationMode,
   ValidationTargetKind,
@@ -63,42 +59,6 @@ const TARGET_KIND_LABELS: [ValidationTargetKindValue, string][] = [
   [ValidationTargetKind.form, "One intake form"],
 ];
 
-interface TargetOption {
-  id: string;
-  label: string;
-}
-
-/** Every pickable target, per kind, labelled so two projects' "Bug" types are
- * telling apart. Fetched HERE rather than added to `PickerData`, so the
- * per-project form and issue-type queries only run when someone is actually
- * editing a validate trigger. */
-function useTargetOptions(): Record<ValidationTargetKindValue, TargetOption[]> {
-  const projects = useQuery(projectsQuery());
-  const rows = projects.data ?? [];
-  const types = useQueries({ queries: rows.map((project) => issueTypesQuery(project.id)) });
-  const forms = useQueries({ queries: rows.map((project) => formsQuery(project.id)) });
-
-  return useMemo(() => {
-    const project: TargetOption[] = rows.map((row) => ({
-      id: row.id,
-      label: `${row.key} · ${row.name}`,
-    }));
-    const issue_type: TargetOption[] = [];
-    const form: TargetOption[] = [];
-    rows.forEach((row, index) => {
-      for (const issueType of types[index]?.data ?? []) {
-        issue_type.push({ id: issueType.id, label: `${row.key} · ${issueType.name}` });
-      }
-      for (const intakeForm of forms[index]?.data ?? []) {
-        form.push({ id: intakeForm.id, label: `${row.key} · ${intakeForm.name}` });
-      }
-    });
-    return { project, issue_type, form };
-    // The query arrays are new objects every render; their DATA is what matters.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, types.map((query) => query.data).join("|"), forms.map((query) => query.data).join("|")]);
-}
-
 export function ValidateTriggerFields({
   params,
   onChange,
@@ -106,7 +66,6 @@ export function ValidateTriggerFields({
   params: Params;
   onChange: (params: Params) => void;
 }) {
-  const options = useTargetOptions();
   const targets = (params.targets as ValidationTarget[] | undefined) ?? [];
   const mode = (params.mode as ValidationModeValue) ?? ValidationMode.advisory;
 
@@ -133,7 +92,7 @@ export function ValidateTriggerFields({
         {targets.map((target, index) => {
           const kind = target.kind ?? ValidationTargetKind.project;
           return (
-            <div key={index} className="flex items-end gap-2">
+            <div key={index} className="flex flex-wrap items-end gap-2">
               <SelectField
                 label={index === 0 ? "Applies to" : ""}
                 value={kind}
@@ -154,19 +113,10 @@ export function ValidateTriggerFields({
                   </option>
                 ))}
               </SelectField>
-              <SelectField
-                label={index === 0 ? "Which" : ""}
-                value={target.id ?? ""}
-                onChange={(event) => patch(index, { kind, id: event.target.value })}
-                className="flex-1"
-              >
-                <option value="">Choose…</option>
-                {(options[kind] ?? []).map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </SelectField>
+              {kind === ValidationTargetKind.project
+                ? <ProjectSelect label="Which" value={target.id ?? ""} onChange={id => patch(index, { kind, id })} />
+                : <OptionSelect label="Which" resource={kind === ValidationTargetKind.form ? OptionResource.form : OptionResource.issueType}
+                    value={target.id ?? ""} onChange={id => patch(index, { kind, id })} />}
               <IconButton
                 aria-label="Remove this target"
                 onClick={() => setTargets(targets.filter((_, at) => at !== index))}

@@ -1,12 +1,12 @@
-import { useState, type MouseEvent as ReactMouseEvent } from "react";
-import { Link, useParams } from "@tanstack/react-router";
+import { useMobileNavigation, closeMobileNavigation } from "./mobile-navigation";
+import { useDialogFocus } from "../../lib/dialog-focus";
+import { registerDismiss } from "../../lib/dismiss-stack";
+import { useState, useEffect, useRef, type MouseEvent as ReactMouseEvent } from "react";
+import { Link, useLocation, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useDisabledNavPaths } from "@radd/plugin-sdk";
 import {
   BarChart3,
-  BookOpen,
-  ChevronDown,
-  ChevronRight,
   Clock,
   ConciergeBell,
   Eye,
@@ -22,6 +22,8 @@ import {
   UserRound,
 } from "lucide-react";
 import { RoutePath } from "../../lib/constants";
+import { DirectoryPager } from "../DirectoryPager";
+import { useProjectDirectory } from "../../lib/useProjectDirectory";
 import { usePermissions } from "../../lib/hooks";
 import { useNavFacts } from "../../lib/nav-facts";
 import {
@@ -33,11 +35,9 @@ import {
 import { ContextMenu } from "../ContextMenu";
 import {
   capabilitiesQuery,
-  cyclesQuery,
-  dashboardsQuery,
-  pageSpacesQuery,
-  projectsQuery,
-  viewsQuery,
+  cycleSummaryQuery,
+  projectSummaryQuery,
+  projectByKeyQuery,
 } from "../../lib/queries";
 import { Permission, ViewType, type Project } from "../../lib/types";
 import { openCommandPalette } from "../CommandPalette";
@@ -45,18 +45,20 @@ import { DashboardModal } from "../dashboards/DashboardModal";
 import { NewItemModal } from "../items/NewItemModal";
 import { ViewModal } from "../views/ViewModal";
 import { useSidebarPrefs } from "./sidebar-prefs";
-import { selectableCycles } from "../../lib/view-utils";
+import { useViewDirectory, useDashboardDirectory } from "../../lib/useSharedDirectory";
+import { SidebarDirectory } from "./SidebarDirectory";
+import { SidebarSpaces } from "./SidebarSpaces";
+import { useCycleDirectory } from "../../lib/useCycleDirectory";
 import { SidebarRail } from "./SidebarRail";
 import {
   CycleRow,
   InboxLink,
-  ProjectFormLinks,
   QueueLinks,
   SectionHeader,
   ViewRowContent,
   navLinkClasses,
-  subLinkClasses,
 } from "./SidebarRows";
+import { SidebarProjectRow } from "./SidebarProjectRow";
 import { UserMenu } from "./UserMenu";
 import { modShortcut } from "../../lib/platform";
 
@@ -64,6 +66,14 @@ import { modShortcut } from "../../lib/platform";
 type ViewModalScope = { project: Project | null };
 
 export function Sidebar() {
+  const mobileNav = useMobileNavigation();
+  const path = useLocation({ select: location => location.pathname });
+  const panelRef = useRef<HTMLElement>(null);
+  useDialogFocus(panelRef, mobileNav.mobile && mobileNav.open);
+  useEffect(() => closeMobileNavigation(), [path]);
+  useEffect(() => {
+    if (mobileNav.mobile && mobileNav.open) return registerDismiss(() => { closeMobileNavigation(); return true; });
+  }, [mobileNav.mobile, mobileNav.open]);
   const perms = usePermissions();
   // Plugin-contributed nav from the backend UI manifest (spec 93 / A7, chokepoint
   // 3): an enabled plugin's nav item appears here with no edit to the shell.
@@ -82,24 +92,14 @@ export function Sidebar() {
     .filter((n) => n.requires.every((r) => perms.global(r) || perms.anyProject(r)))
     .filter((n) => !disabledNav.has(n.path));
   const nav = useNavFacts();
-  const { data: projects } = useQuery(projectsQuery());
-  const { data: views } = useQuery(viewsQuery());
-  const { data: cycles } = useQuery(cyclesQuery());
-  // RADD-808: no atom gate. `page.read` is SPACE-scoped since RADD-791, so
-  // `perms.global` was false for everyone holding it from a space or team
-  // grant — the fetch never fired and the section below never rendered.
-  // `GET /page-spaces` already answers exactly this question against the
-  // spec-92 access grants (`readable_spaces`) and returns an empty list rather
-  // than a 403, so the server's answer IS the gate. Re-deriving it client-side
-  // from atoms is the second implementation RADD-779 rejected.
-  const { data: pageSpaces } = useQuery(pageSpacesQuery());
-  const { data: dashboards } = useQuery(dashboardsQuery());
+  const { data: projectSummary } = useQuery(projectSummaryQuery());
+  const globalViews = useViewDirectory({ globalOnly: true, excludeType: ViewType.queue });
+  const queues = useViewDirectory({ viewType: ViewType.queue });
+  const cycles = useCycleDirectory({ includeCompleted: false });
+  const cycleSummary = useQuery(cycleSummaryQuery());
+  const dashboards = useDashboardDirectory();
   /** Project the "New item" modal was opened for (from its sidebar row). */
   const [newItemProject, setNewItemProject] = useState<Project | null>(null);
-  // RADD-882: 82 projects at the perf dataset — the nav section gets a compact
-  // filter (name or key) once it outgrows a glance. Kept as a slim inline input
-  // rather than the settings-page ListSearchInput: the rail is nav, not a page.
-  const [projectFilter, setProjectFilter] = useState("");
   const [viewModalScope, setViewModalScope] = useState<ViewModalScope | null>(null);
   const [newDashboardOpen, setNewDashboardOpen] = useState(false);
   // Completed cycles are hidden by default to keep the rail focused
@@ -108,6 +108,7 @@ export function Sidebar() {
   // current route's project auto-expanded unless explicitly folded.
   const { prefs, toggleSection, toggleProject } = useSidebarPrefs();
   const { projectKey: currentProjectKey } = useParams({ strict: false });
+  const currentProject = useQuery(projectByKeyQuery(currentProjectKey ?? ""));
   const sectionCollapsed = (id: string) => prefs.collapsedSections.includes(id);
   const projectExpanded = (project: Project) =>
     prefs.expandedProjects.includes(project.id) ||
@@ -119,36 +120,31 @@ export function Sidebar() {
   // count, never because of a grant; hiding them from this tree changes
   // nothing about whether they can still open one by URL, search, or My Work.
   const relatedProjectsPref = useRelatedProjectsVisibility();
-  const railProjects = (projects ?? []).filter(
-    (project) => relatedProjectsPref.mode !== "never" || project.via !== "related",
-  );
-  const hiddenRelatedProjectCount = (projects?.length ?? 0) - railProjects.length;
-  // Only offer the toggle when it can do something — nothing to hide, and the
-  // pref already at its default, would make an inert control read as a bug.
-  const showRelatedProjectsToggle =
-    relatedProjectsPref.mode === "never" ||
-    (projects ?? []).some((project) => project.via === "related");
+  const directory = useProjectDirectory(relatedProjectsPref.mode === "never");
+  const railProjects = directory.rows;
+  const projectFilter = directory.filter;
+  const contextProject = currentProject.data && !directory.filter.trim()
+    && !railProjects.some(project => project.id === currentProject.data?.id)
+    && (relatedProjectsPref.mode !== "never" || currentProject.data.via !== "related")
+    ? currentProject.data : null;
+  const setProjectFilter = directory.setFilter;
+  const hiddenRelatedProjectCount = relatedProjectsPref.mode === "never" ? projectSummary?.related_count ?? 0 : 0;
+  const showRelatedProjectsToggle = relatedProjectsPref.mode === "never" || (projectSummary?.related_count ?? 0) > 0;
 
   // Queue views (spec 64) get their own badged section below — the generic
   // view lists skip them so a queue never renders twice.
-  const queueViews = (views ?? []).filter((view) => view.view_type === ViewType.queue);
-  const allProjectsViews = (views ?? []).filter(
-    (view) => view.project_id === null && view.view_type !== ViewType.queue,
-  );
-  const viewsOf = (project: Project) =>
-    (views ?? []).filter(
-      (view) => view.project_id === project.id && view.view_type !== ViewType.queue,
-    );
+  const queueViews = queues.rows;
+  const allProjectsViews = globalViews.rows;
   // New-view affordances mirror the server (RADD-824): creating a PERSONAL
   // view needs only item.read in scope (views/service.PERSONAL_VIEW_PERMISSION)
   // — sharing is gated separately inside the modal. The all-projects scope
   // means "anywhere", not "globally" (RADD-788).
   const canCreateView = perms.anyProject(Permission.itemRead);
-  const cycleList = cycles ?? [];
-  const liveCycles = selectableCycles(cycleList);
+  const cycleCount = Object.values(cycleSummary.data ?? {}).reduce((sum, count) => sum + count, 0);
+  const liveCycles = cycles.rows;
   const canManageCycles = perms.global(Permission.cycleUpdate);
 
-  const railed = prefs.railCollapsed;
+  const railed = !mobileNav.mobile && prefs.railCollapsed;
 
   // Right-click ANY nav link → pin/unpin it as a top-bar tab. One delegated
   // handler on the aside makes every sidebar destination pinnable — present
@@ -177,10 +173,18 @@ export function Sidebar() {
   };
 
   return (
+    <>
+    {mobileNav.mobile && mobileNav.open && <div className="fixed inset-0 z-30 bg-black/50" onClick={closeMobileNavigation} aria-hidden />}
     <aside
+      ref={panelRef}
+      tabIndex={-1}
+      role={mobileNav.mobile ? "dialog" : undefined}
+      aria-modal={mobileNav.mobile && mobileNav.open ? true : undefined}
+      aria-label="Navigation"
       onContextMenu={onNavContextMenu}
       className={
-        "flex shrink-0 flex-col border-r border-subtle bg-base transition-[width] duration-150 " +
+        (mobileNav.mobile ? (mobileNav.open ? "fixed inset-y-0 left-0 z-40 flex pt-12 max-w-[85vw] " : "hidden ") : "flex ") +
+        "shrink-0 flex-col border-r border-subtle bg-base transition-[width] duration-150 " +
         (railed ? "w-14" : "w-60")
       }
     >
@@ -260,7 +264,7 @@ export function Sidebar() {
           </Link>
         ))}
 
-        {(allProjectsViews.length > 0 || canCreateView) && (
+        {(globalViews.total > 0 || Boolean(globalViews.filter) || globalViews.isError || canCreateView) && (
           <div className="mt-3">
             <SectionHeader
               label="Views"
@@ -281,7 +285,7 @@ export function Sidebar() {
               }
             />
             {!sectionCollapsed("views") && (
-              <ul>
+              <SidebarDirectory directory={globalViews} label="global views"><ul>
                 {allProjectsViews.map((view) => (
                   <li key={view.id}>
                     <Link
@@ -293,7 +297,7 @@ export function Sidebar() {
                     </Link>
                   </li>
                 ))}
-              </ul>
+              </ul></SidebarDirectory>
             )}
           </div>
         )}
@@ -309,8 +313,8 @@ export function Sidebar() {
             onToggle={() => toggleSection("dashboards")}
           />
           {!sectionCollapsed("dashboards") && (
-            <ul>
-              {(dashboards ?? []).map((dashboard) => (
+            <SidebarDirectory directory={dashboards} label="dashboards"><ul>
+              {dashboards.rows.map((dashboard) => (
                 <li key={dashboard.id}>
                   <Link
                     to={RoutePath.dashboard}
@@ -341,14 +345,14 @@ export function Sidebar() {
                   </button>
                 </li>
               )}
-            </ul>
+            </ul></SidebarDirectory>
           )}
         </div>
         )}
 
         {/* Queues (spec 64): queue views with live count badges — one batched
             counts call for the whole section; hidden when no queues exist. */}
-        {queueViews.length > 0 && (
+        {(queues.total > 0 || Boolean(queues.filter) || queues.isError) && (
           <div className="mt-3">
             <SectionHeader
               label="Queues"
@@ -356,63 +360,15 @@ export function Sidebar() {
               onToggle={() => toggleSection("queues")}
             />
             {!sectionCollapsed("queues") && (
-              <QueueLinks views={queueViews} projects={projects ?? []} />
+              <SidebarDirectory directory={queues} label="queues"><QueueLinks views={queueViews} /></SidebarDirectory>
             )}
           </div>
         )}
 
-        {/* Pages (spec 43): page spaces, between Views and Cycles.
-            Shown when the server returned spaces, or when the actor may create
-            one — deliberately-global: `page.manage` with no space is the global
-            check `create_space` itself makes, so that branch is what keeps
-            "No spaces yet." reachable for an admin on a fresh instance. Someone
-            with neither sees no section at all rather than a permanently empty
-            header (RADD-808). */}
-        {((pageSpaces ?? []).length > 0 || perms.global(Permission.pageManage)) && (
-          <div className="mt-3">
-            <SectionHeader
-              label="Pages"
-              labelTo={RoutePath.pages}
-              collapsed={sectionCollapsed("pages")}
-              onToggle={() => toggleSection("pages")}
-              actions={
-                // deliberately-global: links to space ADMIN (create/rename),
-                // which the server checks with no space id (RADD-810).
-                perms.global(Permission.pageManage) && (
-                  <Link
-                    to={RoutePath.settingsPages}
-                    aria-label="Manage page spaces"
-                    title="Manage page spaces"
-                    className="ml-auto rounded p-0.5 text-fg-faint hover:bg-overlay hover:text-fg focus-visible:outline-2 focus-visible:outline-focus"
-                  >
-                    <Settings size={12} />
-                  </Link>
-                )
-              }
-            />
-            {!sectionCollapsed("pages") &&
-              ((pageSpaces ?? []).length === 0 ? (
-                <p className="px-2 pb-1 text-xs text-fg-faint">No spaces yet.</p>
-              ) : (
-                <ul>
-                  {(pageSpaces ?? []).map((space) => (
-                    <li key={space.id}>
-                      <Link
-                        to={RoutePath.pageSpace}
-                        params={{ spaceSlug: space.slug }}
-                        className={navLinkClasses}
-                      >
-                        <BookOpen size={14} aria-hidden />
-                        <span className="truncate">{space.name}</span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              ))}
-          </div>
-        )}
+        <SidebarSpaces collapsed={sectionCollapsed("pages")} onToggle={() => toggleSection("pages")}
+          canManage={perms.anySpace(Permission.pageManage)} />
 
-        {(cycleList.length > 0 || canManageCycles) && (
+        {(cycleCount > 0 || canManageCycles) && (
           <div className="mt-3">
             <SectionHeader
               label="Cycles"
@@ -431,24 +387,20 @@ export function Sidebar() {
                 )
               }
             />
-            {!sectionCollapsed("cycles") &&
-              (liveCycles.length === 0 ? (
-                <p className="px-2 pb-1 text-xs text-fg-faint">No active cycles.</p>
-              ) : (
-                <ul>
-                  {/* Completed cycles never appear here. The sidebar is a list
-                      of places you still work; finished cycles accumulate
-                      forever and only ever grow. They live on Settings →
-                      Cycles, which has a name filter for finding one. */}
-                  {liveCycles.map((cycle) => (
-                    <CycleRow key={cycle.id} cycle={cycle} />
-                  ))}
-                </ul>
-              ))}
+            {!sectionCollapsed("cycles") && <div aria-busy={cycles.busy}>
+              {cycleCount > 10 && <input type="search" value={cycles.filter} onChange={event => cycles.setFilter(event.target.value)}
+                placeholder="Find a live cycle…" aria-label="Find a live cycle"
+                className="mx-1 mb-1 h-7 w-[calc(100%-0.5rem)] rounded-md border border-subtle bg-surface px-2 text-xs text-heading placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-focus" />}
+              {cycles.isError ? <p className="px-2 text-xs text-status-danger-ink">Cycles could not load.</p>
+                : cycles.isPending ? <p className="px-2 text-xs text-fg-muted">Loading cycles…</p>
+                : liveCycles.length === 0 ? <p className="px-2 pb-1 text-xs text-fg-faint">No matching live cycles.</p>
+                : <ul>{liveCycles.map(cycle => <CycleRow key={cycle.id} cycle={cycle} />)}</ul>}
+              <DirectoryPager {...cycles} onPage={cycles.setPage} label="sidebar cycles" />
+            </div>}
           </div>
         )}
 
-        {projects && projects.length > 0 && (
+        {((projectSummary?.total ?? 0) > 0 || directory.isError) && (
           <div className="mt-3">
             <SectionHeader
               label="Projects"
@@ -485,7 +437,7 @@ export function Sidebar() {
                 )
               }
             />
-            {!sectionCollapsed("projects") && railProjects.length > 10 && (
+            {!sectionCollapsed("projects") && ((projectSummary?.total ?? 0) > 10 || Boolean(projectFilter)) && (
               <input
                 type="search"
                 value={projectFilter}
@@ -496,118 +448,27 @@ export function Sidebar() {
               />
             )}
             {!sectionCollapsed("projects") && (
+            <div aria-busy={directory.busy}>
+            {contextProject && <div className="mb-2 border-b border-subtle pb-1">
+              <p className="px-2 text-[11px] text-fg-muted">Current project</p>
+              <ul><SidebarProjectRow project={contextProject}
+                expanded={projectExpanded(contextProject)} permissions={perms}
+                onToggle={() => toggleProject(contextProject.id, projectExpanded(contextProject))}
+                onNewItem={() => setNewItemProject(contextProject)} onNewView={() => setViewModalScope({ project: contextProject })} /></ul>
+            </div>}
+            {directory.isError && <p className="px-2 text-xs text-status-danger-ink">Projects could not load.</p>}
+            {directory.isPending && <p className="px-2 text-xs text-fg-muted">Loading projects…</p>}
+            {!directory.isPending && !directory.isError && railProjects.length === 0 && <p className="px-2 text-xs text-fg-muted">No matching projects.</p>}
             <ul>
-              {(projectFilter.trim()
-                ? railProjects.filter((project) => {
-                    const needle = projectFilter.trim().toLowerCase();
-                    return (
-                      project.name.toLowerCase().includes(needle) ||
-                      project.key.toLowerCase().includes(needle)
-                    );
-                  })
-                : railProjects
-              ).map((project) => (
-                <li key={project.id}>
-                  <div className="group/project relative flex items-center">
-                    <button
-                      type="button"
-                      onClick={() => toggleProject(project.id, projectExpanded(project))}
-                      aria-expanded={projectExpanded(project)}
-                      aria-label={`${projectExpanded(project) ? "Collapse" : "Expand"} ${project.key}`}
-                      className="ml-0.5 rounded p-0.5 text-fg-faint hover:bg-overlay hover:text-fg cursor-pointer"
-                    >
-                      {projectExpanded(project) ? (
-                        <ChevronDown size={11} aria-hidden />
-                      ) : (
-                        <ChevronRight size={11} aria-hidden />
-                      )}
-                    </button>
-                    <Link
-                      to={RoutePath.project}
-                      params={{ projectKey: project.key }}
-                      activeOptions={{ exact: true }}
-                      className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1.5 pr-7 text-[13px] text-fg-secondary hover:bg-overlay hover:text-heading focus-visible:outline-2 focus-visible:outline-focus"
-                    >
-                      <span className="rounded bg-elevated px-1 font-mono text-[11px] text-fg-secondary">
-                        {project.key}
-                      </span>
-                      <span className="truncate">{project.name}</span>
-                    </Link>
-                    {perms.project(project, Permission.itemCreate) && (
-                      <button
-                        type="button"
-                        onClick={() => setNewItemProject(project)}
-                        aria-label={`New item in ${project.key}`}
-                        title={`New item in ${project.key}`}
-                        className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-1 text-fg-faint opacity-0 transition-opacity hover:bg-overlay hover:text-fg focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-focus group-hover/project:opacity-100 cursor-pointer"
-                      >
-                        <Plus size={12} />
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Per-project section: the project's VIEWS (projects ship with
-                      Board/List/Planning/Roadmap as plain seeded views — no
-                      special entries), then the non-view surfaces. Folded by
-                      default; the current route's project auto-expands. */}
-                  {projectExpanded(project) && (
-                  <ul className="pb-1">
-                    {viewsOf(project).map((view) => (
-                      <li key={view.id}>
-                        <Link
-                          to={RoutePath.projectView}
-                          params={{ projectKey: project.key, viewId: view.id }}
-                          className={subLinkClasses}
-                        >
-                          <ViewRowContent view={view} small />
-                        </Link>
-                      </li>
-                    ))}
-                    <li>
-                      <Link
-                        to={RoutePath.projectReports}
-                        params={{ projectKey: project.key }}
-                        className={subLinkClasses}
-                      >
-                        <BarChart3 size={12} aria-hidden />
-                        Reports
-                      </Link>
-                    </li>
-                    {(perms.project(project, Permission.stateManage) ||
-                      perms.project(project, Permission.projectManage) ||
-                      perms.project(project, Permission.formManage) ||
-                      perms.project(project, Permission.releaseUpdate)) && (
-                      <li>
-                        <Link
-                          to={RoutePath.projectSettings}
-                          params={{ projectKey: project.key }}
-                          className={subLinkClasses}
-                        >
-                          <Settings size={12} aria-hidden />
-                          Settings
-                        </Link>
-                      </li>
-                    )}
-                    {perms.project(project, Permission.itemRead) && (
-                      <li>
-                        <button
-                          type="button"
-                          onClick={() => setViewModalScope({ project })}
-                          className={`${subLinkClasses} w-full cursor-pointer text-left text-fg-faint!`}
-                        >
-                          <Plus size={12} aria-hidden />
-                          New view
-                        </button>
-                      </li>
-                    )}
-                    {perms.project(project, Permission.formManage) && (
-                      <ProjectFormLinks project={project} />
-                    )}
-                  </ul>
-                  )}
-                </li>
+              {railProjects.map((project) => (
+                <SidebarProjectRow key={project.id} project={project}
+                  expanded={projectExpanded(project)} permissions={perms}
+                  onToggle={() => toggleProject(project.id, projectExpanded(project))}
+                  onNewItem={() => setNewItemProject(project)} onNewView={() => setViewModalScope({ project })} />
               ))}
             </ul>
+            <DirectoryPager {...directory} onPage={directory.setPage} label="sidebar projects" />
+            </div>
             )}
             {/* RADD-1041: a project you can read but don't SEE reads as a bug
                 without this — say what's hidden and offer the one click back. */}
@@ -670,6 +531,7 @@ export function Sidebar() {
       )}
       {newDashboardOpen && <DashboardModal onClose={() => setNewDashboardOpen(false)} />}
     </aside>
+    </>
   );
 }
 

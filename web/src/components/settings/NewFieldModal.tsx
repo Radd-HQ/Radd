@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { ApiPath, FIELD_KEY_HINT, FIELD_KEY_PATTERN } from "../../lib/constants";
 import { FIELD_TYPE_LABELS, FIELD_TYPE_ORDER, fieldTypeHasOptions } from "../../lib/meta";
-import { projectsQuery, queryKeys } from "../../lib/queries";
+import { queryKeys } from "../../lib/queries";
 import {
   FieldType,
   type CustomFieldValue,
@@ -17,17 +17,18 @@ import { SelectField } from "../SelectField";
 import { TextField } from "../TextField";
 import { CustomFieldControl } from "../items/CustomFieldsForm";
 import { OptionsEditor } from "./OptionsEditor";
-import { ScopePicker } from "./ScopePicker";
+import { FieldProjectScope } from "./FieldProjectScope";
 import { ErrorText } from "../ErrorText";
 
 interface NewFieldModalProps {
   onClose: () => void;
+  allowGlobal: boolean;
+  onCreated?: (id: string) => void;
 }
 
-/** Create a field definition. Definitions are create-only — no edit follows. */
-export function NewFieldModal({ onClose }: NewFieldModalProps) {
+/** Create a field definition. Scope and defaults can be edited after creation. */
+export function NewFieldModal({ onClose, allowGlobal, onCreated }: NewFieldModalProps) {
   const queryClient = useQueryClient();
-  const { data: projects } = useQuery(projectsQuery());
 
   const [key, setKey] = useState("");
   const [name, setName] = useState("");
@@ -48,14 +49,16 @@ export function NewFieldModal({ onClose }: NewFieldModalProps) {
 
   const createField = useMutation({
     mutationFn: (body: FieldDefCreate) => api.post<FieldDef>(ApiPath.fields, body),
-    onSuccess: async () => {
+    onSuccess: async (field) => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.fields });
+      onCreated?.(field.id);
       onClose();
     },
   });
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
+    if (!allowGlobal && projectIds.length === 0) return;
     const trimmedKey = key.trim();
     const withOptions = fieldTypeHasOptions(type);
     setKeyError(undefined);
@@ -135,7 +138,7 @@ export function NewFieldModal({ onClose }: NewFieldModalProps) {
 
         <div>
           <p className="mb-1.5 text-xs font-medium text-fg-secondary">Scope</p>
-          <ScopePicker value={projectIds} onChange={setProjectIds} projects={projects ?? []} />
+          <FieldProjectScope value={projectIds} onChange={setProjectIds} permission="field.create" allowGlobal={allowGlobal} />
           <p className="mt-1.5 text-[11px] text-fg-faint">
             A global field applies everywhere; a scoped field applies only to the projects you
             pick. You can widen a field's scope later.
@@ -144,7 +147,7 @@ export function NewFieldModal({ onClose }: NewFieldModalProps) {
 
         <p className="text-xs text-fg-muted">
           New fields start open to everyone with item access — restrict them per role/team from
-          the Permissions column after creating.
+          the field’s Restricted on section after creating.
         </p>
 
         {fieldTypeHasOptions(type) && (
@@ -188,7 +191,7 @@ export function NewFieldModal({ onClose }: NewFieldModalProps) {
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" disabled={createField.isPending || !key || !name}>
+          <Button type="submit" disabled={createField.isPending || !key || !name || (!allowGlobal && projectIds.length === 0)}>
             {createField.isPending ? "Creating…" : "Create field"}
           </Button>
         </div>

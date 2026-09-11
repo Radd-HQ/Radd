@@ -25,6 +25,12 @@ class AccessGrantRead(BaseModel):
     created_at: UtcDatetime
 
 
+class AccessGrantDirectoryRead(AccessGrantRead):
+    subject_name: str | None = None
+    project_key: str | None = None
+    expired: bool = False
+
+
 class AccessGrantCreate(BaseModel):
     """POST /grants — grant a subject an access on a resource, at global scope
     (empty project_ids) or to one/more projects (one grant row per project)."""
@@ -51,3 +57,30 @@ class ResourceSpecRead(BaseModel):
     project_scoped: bool
     hierarchical: bool
     default_open: bool
+
+
+class SharedGrantChange(BaseModel):
+    """Change one saved level, or remove it with access=null, if still current.
+
+    Subject, scope, effect and expiry are preserved on level edits. Expectations
+    prevent a stale draft from silently overwriting a different grant policy.
+    """
+
+    id: uuid.UUID
+    expected_access: str
+    expected_effect: GrantEffect
+    expected_expires_at: UtcDatetime | None
+    access: str | None
+
+
+class SharedGrantAdd(BaseModel):
+    subject_type: GrantSubject
+    subject_id: uuid.UUID
+    access: str = Field(min_length=1, max_length=20)
+    effect: GrantEffect = GrantEffect.ALLOW
+    expires_at: UtcDatetime | None = None
+
+
+class SharedGrantEdits(BaseModel):
+    changes: list[SharedGrantChange] = Field(default_factory=list)
+    additions: list[SharedGrantAdd] = Field(default_factory=list)

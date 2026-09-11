@@ -61,7 +61,7 @@ interface PublicSearchResult {
 export function PublicPagesIndexPage() {
   const spaces = useQuery({
     queryKey: ["public-kb", "spaces"],
-    queryFn: () => api.get<PublicPageSpace[]>(ApiPath.publicKbSpaces),
+    queryFn: ({ signal }) => api.get<PublicPageSpace[]>(ApiPath.publicKbSpaces, { signal }),
     retry: false,
   });
   const [query, setQuery] = useState("");
@@ -69,9 +69,9 @@ export function PublicPagesIndexPage() {
   const searching = debounced.length >= 2;
   const results = useQuery({
     queryKey: ["public-kb", "search", debounced],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<{ results: PublicSearchResult[] }>(
-        `${ApiPath.publicKbSearch}?q=${encodeURIComponent(debounced)}`,
+        `${ApiPath.publicKbSearch}?q=${encodeURIComponent(debounced)}`, { signal },
       ),
     enabled: searching,
     retry: false,
@@ -174,12 +174,12 @@ export function PublicPageSpacePage() {
   const { spaceSlug = "", pageSlug } = useParams({ strict: false });
   const spaces = useQuery({
     queryKey: ["public-kb", "spaces"],
-    queryFn: () => api.get<PublicPageSpace[]>(ApiPath.publicKbSpaces),
+    queryFn: ({ signal }) => api.get<PublicPageSpace[]>(ApiPath.publicKbSpaces, { signal }),
     retry: false,
   });
   const tree = useQuery({
     queryKey: ["public-kb", "tree", spaceSlug],
-    queryFn: () => api.get<PublicPageNode[]>(apiPublicPagesTreePath(spaceSlug)),
+    queryFn: ({ signal }) => api.get<PublicPageNode[]>(apiPublicPagesTreePath(spaceSlug), { signal }),
     retry: false,
     enabled: spaceSlug !== "",
   });
@@ -189,7 +189,7 @@ export function PublicPageSpacePage() {
   const activePageId = pageSlug ?? rows.find((row) => row.parent_id === null)?.id;
   const page = useQuery({
     queryKey: ["public-kb", "page", activePageId ?? ""],
-    queryFn: () => api.get<PublicPagesPage>(apiPublicPagesPagePath(activePageId ?? "")),
+    queryFn: ({ signal }) => api.get<PublicPagesPage>(apiPublicPagesPagePath(activePageId ?? ""), { signal }),
     retry: false,
     enabled: Boolean(activePageId),
   });

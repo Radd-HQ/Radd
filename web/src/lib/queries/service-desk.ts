@@ -21,7 +21,7 @@ import type {
 export const cannedResponsesQuery = () =>
   queryOptions({
     queryKey: queryKeys.cannedResponses,
-    queryFn: () => api.get<CannedResponse[]>(ApiPath.cannedResponses),
+    queryFn: ({ signal }) => api.get<CannedResponse[]>(ApiPath.cannedResponses, { signal }),
     meta: entityMeta(Entity.cannedResponse),
   });
 
@@ -29,8 +29,8 @@ export const cannedResponsesQuery = () =>
 export const slaPoliciesQuery = (projectId: string) =>
   queryOptions({
     queryKey: queryKeys.slaPolicies(projectId),
-    queryFn: () =>
-      api.get<SlaPolicy[]>(ApiPath.slaPolicies, { query: { project_id: projectId } }),
+    queryFn: ({ signal }) =>
+      api.get<SlaPolicy[]>(ApiPath.slaPolicies, { signal, query: { project_id: projectId } }),
     meta: entityMeta(Entity.slaPolicy),
   });
 
@@ -38,7 +38,7 @@ export const slaPoliciesQuery = (projectId: string) =>
 export const itemSlaQuery = (itemId: string) =>
   queryOptions({
     queryKey: queryKeys.itemSla(itemId),
-    queryFn: () => api.get<ItemSla>(apiItemSlaPath(itemId)),
+    queryFn: ({ signal }) => api.get<ItemSla>(apiItemSlaPath(itemId), { signal }),
     meta: entityMeta(Entity.slaPolicy, Entity.item),
     // Timers tick server-side; refresh the readout periodically while open.
     refetchInterval: SLA_BATCH_REFETCH_MS,
@@ -51,7 +51,7 @@ export const slaBatchQuery = (itemIds: readonly string[]) => {
   const ids = [...itemIds].sort().slice(0, SLA_BATCH_MAX_ITEMS);
   return queryOptions({
     queryKey: queryKeys.slaBatch(ids),
-    queryFn: () => api.post<SlaBatchResponse>(ApiPath.itemsSlaBatch, { item_ids: ids }),
+    queryFn: ({ signal }) => api.post<SlaBatchResponse>(ApiPath.itemsSlaBatch, { item_ids: ids }, { signal }),
     meta: entityMeta(Entity.slaPolicy, Entity.item),
     refetchInterval: SLA_BATCH_REFETCH_MS,
   });

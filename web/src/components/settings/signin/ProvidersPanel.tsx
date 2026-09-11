@@ -202,10 +202,11 @@ export function ProvidersPanel() {
                         variant="ghost"
                         onClick={() => void test(provider)}
                         title="Fetch the issuer's discovery document"
+                        aria-label={`Check ${provider.name} issuer`}
                       >
                         <Activity className="size-3.5" />
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => setEditing(provider)}>
+                      <Button size="sm" variant="ghost" aria-label={`Edit ${provider.name}`} onClick={() => setEditing(provider)}>
                         <Pencil className="size-3.5" />
                       </Button>
                       <Button

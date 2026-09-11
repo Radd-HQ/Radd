@@ -7,7 +7,7 @@ import { formatDate } from "../../lib/dates";
 import { usePermissions } from "../../lib/hooks";
 import { useListFilter } from "../../lib/list-filter";
 import { RELEASE_STATUS_META } from "../../lib/meta";
-import { projectsQuery, queryKeys, releasesQuery } from "../../lib/queries";
+import { projectByIdQuery, queryKeys, releasesQuery } from "../../lib/queries";
 import {
   Permission,
   ReleaseStatus,
@@ -35,10 +35,10 @@ import { ErrorText } from "../../components/ErrorText";
  */
 export function ReleasesSettingsPage({ projectId }: { projectId?: string }) {
   const perms = usePermissions();
-  const projects = useQuery(projectsQuery());
+  const projectQuery = useQuery(projectByIdQuery(projectId ?? ""));
   const [modal, setModal] = useState<{ release: Release | null } | null>(null);
 
-  const project = (projects.data ?? []).find((entry) => entry.id === projectId);
+  const project = projectQuery.data;
   // Releases are per-project: gate on THAT project's manage permission.
   const canManage = perms.project(project, Permission.releaseUpdate);
   const releases = useQuery({ ...releasesQuery(projectId ?? ""), enabled: Boolean(projectId) });
@@ -59,8 +59,10 @@ export function ReleasesSettingsPage({ projectId }: { projectId?: string }) {
         ) : undefined
       }
     >
-      {projects.isPending || (projectId && releases.isPending) ? (
+      {(projectId && projectQuery.isPending) || (projectId && releases.isPending) ? (
         <TableSkeleton rows={4} />
+      ) : projectQuery.isError ? (
+        <QueryError label="project" error={projectQuery.error} />
       ) : !project ? (
         <EmptyState icon={Rocket} message="Project not found." />
       ) : releases.isError ? (

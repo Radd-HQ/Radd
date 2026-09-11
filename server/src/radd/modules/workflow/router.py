@@ -1,17 +1,18 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
+from radd.choices import ChoiceRead
+from radd.apitypes import TOTAL_COUNT_HEADER
 from radd.modules.auth import authz
 from radd.modules.auth.deps import CurrentUser
 from radd.modules.projects import service as projects_service
 
 from . import service
 from radd.exceptions import ForbiddenError
-from radd.modules.auth.types import InstanceRole
 
 from .schemas import (
     StateCategoryCreate,
@@ -25,6 +26,21 @@ from .schemas import (
 router = APIRouter(prefix="/states", tags=["workflow"])
 
 Session = Annotated[AsyncSession, Depends(get_session)]
+
+
+@router.get("/options", response_model=list[ChoiceRead])
+async def option_choices(
+    session: Session, user: CurrentUser, response: Response,
+    q: Annotated[str, Query(max_length=200)] = "",
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    value: Annotated[str | None, Query(max_length=200)] = None,
+    project_id: uuid.UUID | None = None,
+) -> list[ChoiceRead]:
+    rows, total = await service.list_options(session, user, q=q, limit=limit,
+        offset=offset, value=value, project_id=project_id)
+    response.headers[TOTAL_COUNT_HEADER] = str(total)
+    return rows
 
 
 @router.post("", response_model=StateRead, status_code=201)
@@ -91,7 +107,7 @@ category_router = APIRouter(prefix="/state-categories", tags=["workflow"])
 
 
 def _require_instance_admin(user) -> None:
-    if user.instance_role != InstanceRole.ADMIN.value:
+    if not authz.is_instance_admin(user):
         raise ForbiddenError("managing state categories requires an instance admin")
 
 

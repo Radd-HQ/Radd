@@ -34,8 +34,9 @@ export const throughputQuery = (
 ) =>
   queryOptions({
     queryKey: queryKeys.reportThroughput(projectId, start, end, interval, q),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<ThroughputBucket[]>(ApiReportPath.throughput, {
+        signal,
         query: { project_id: projectId, start, end, interval, q: q || undefined },
       }),
     staleTime: REPORT_STALE_MS,
@@ -51,8 +52,9 @@ export const cumulativeFlowQuery = (
 ) =>
   queryOptions({
     queryKey: queryKeys.reportCumulativeFlow(projectId, start, end, interval, q),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<CumulativeFlowBucket[]>(ApiReportPath.cumulativeFlow, {
+        signal,
         query: { project_id: projectId, start, end, interval, q: q || undefined },
       }),
     staleTime: REPORT_STALE_MS,
@@ -62,8 +64,9 @@ export const cumulativeFlowQuery = (
 export const timeInStateQuery = (projectId: string, kind: ItemKindValue | null, q?: string) =>
   queryOptions({
     queryKey: queryKeys.reportTimeInState(projectId, kind, q),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<TimeInStateRow[]>(ApiReportPath.timeInState, {
+        signal,
         query: { project_id: projectId, kind: kind ?? undefined, q: q || undefined },
       }),
     staleTime: REPORT_STALE_MS,
@@ -73,8 +76,9 @@ export const timeInStateQuery = (projectId: string, kind: ItemKindValue | null, 
 export const velocityQuery = (last: number, measure: ReportMeasureValue, q?: string) =>
   queryOptions({
     queryKey: queryKeys.reportVelocity(last, measure, q),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<VelocityReport>(ApiReportPath.velocity, {
+        signal,
         query: { last: String(last), measure, q: q || undefined },
       }),
     staleTime: REPORT_STALE_MS,
@@ -84,8 +88,9 @@ export const velocityQuery = (last: number, measure: ReportMeasureValue, q?: str
 export const burnupQuery = (cycleId: string, measure: ReportMeasureValue, q?: string) =>
   queryOptions({
     queryKey: queryKeys.reportBurnup(cycleId, measure, q),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<BurnupSeries>(ApiReportPath.burnup, {
+        signal,
         query: { cycle_id: cycleId, measure, q: q || undefined },
       }),
     staleTime: REPORT_STALE_MS,
@@ -95,8 +100,9 @@ export const burnupQuery = (cycleId: string, measure: ReportMeasureValue, q?: st
 export const slaReportQuery = (projectId: string | null, weeks: number, q?: string) =>
   queryOptions({
     queryKey: queryKeys.reportSla(projectId, weeks, q),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<SlaReport>(ApiReportPath.sla, {
+        signal,
         query: { project_id: projectId ?? undefined, weeks: String(weeks), q: q || undefined },
       }),
     staleTime: REPORT_STALE_MS,

@@ -9,6 +9,7 @@ from radd.modules.events import service as events
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 
+from .options import list_options as list_options
 from .models import State, StateCategoryDef, WorkflowTransition
 from .schemas import StateCategoryCreate, StateCategoryUpdate, StateCreate, StateUpdate
 from .types import DEFAULT_STATES, StateCategory, StateEntity, StateEvent
@@ -64,7 +65,7 @@ async def update_state(
     session: AsyncSession, state_id: uuid.UUID, data: StateUpdate, actor_id: uuid.UUID | None = None
 ) -> State:
     state = await get_state(session, state_id)
-    project = await projects_service.get_project(session, state.project_id)
+    await projects_service.get_project(session, state.project_id)
     if data.name is not None:
         state.name = data.name
     if data.position is not None:

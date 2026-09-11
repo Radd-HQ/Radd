@@ -1,292 +1,68 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen, Globe, Plus, ShieldCheck, X } from "lucide-react";
 import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
-import {
-  pageSpacesQuery,
-  projectsQuery,
-  queryKeys,
-  roleGrantsQuery,
-  rolesQuery,
-} from "../../lib/queries";
-import type { RoleGrantCreate } from "../../lib/types";
+import { queryKeys } from "../../lib/queries";
+import { GRANTS_PAGE_SIZE, type GrantDirectoryRow, type GrantSubject, subjectGrantsPageQuery } from "../../lib/queries/roles";
+import { OptionResource } from "../../lib/queries/options";
 import { Button } from "../Button";
-import { Modal } from "../Modal";
-import { Select } from "../Select";
-import { SelectField } from "../SelectField";
-import { TokenMultiSelect } from "../TokenMultiSelect";
-import { ScopePicker } from "./ScopePicker";
-import { IconButton } from "../IconButton";
+import { Choices } from "../DirectoryChoices";
+import { DirectoryPager } from "../DirectoryPager";
 import { ErrorText } from "../ErrorText";
+import { IconButton } from "../IconButton";
+import { QueryError } from "../QueryError";
+import { Spinner } from "../Spinner";
+import { GrantRoleDialog } from "./GrantRoleDialog";
 
-type Subject = { teamId: string } | { userId: string } | { groupId: string };
-
-/**
- * Role grants held by a team or user (spec 91) — the unified, scopeable grant
- * surface. Lists each granted role and its scope (Global or specific projects),
- * with a Grant Role dialog that picks a role + scope. Distinct from project
- * membership: this grants a role WITHOUT making the subject a project member.
- */
-export function RoleGrantsSection({
-  subject,
-  canManage,
-}: {
-  subject: Subject;
-  canManage: boolean;
-}) {
-  const teamId = "teamId" in subject ? subject.teamId : undefined;
-  const userId = "userId" in subject ? subject.userId : undefined;
-  const groupId = "groupId" in subject ? subject.groupId : undefined;
+/** Individual mutations preserve off-page grants, including expired rows. */
+export function RoleGrantsSection({ subject, canManage }: { subject: GrantSubject; canManage: boolean }) {
+  const identity = JSON.stringify(subject);
+  const [position, setPosition] = useState({ identity, page: 0 });
+  if (position.identity !== identity) setPosition({ identity, page: 0 });
+  const page = position.identity === identity ? position.page : 0;
+  const setPage = (page: number) => setPosition({ identity, page });
   const queryClient = useQueryClient();
-  const grants = useQuery(roleGrantsQuery({ teamId, userId, groupId }));
-  const roles = useQuery(rolesQuery());
-  const projects = useQuery(projectsQuery());
-  const spaces = useQuery(pageSpacesQuery());
+  const grants = useQuery(subjectGrantsPageQuery(subject, page));
   const [granting, setGranting] = useState(false);
-
-  const roleName = new Map((roles.data ?? []).map((r) => [r.id, r.name]));
-  const projectKey = new Map((projects.data ?? []).map((p) => [p.id, p.key]));
-  const spaceName = new Map((spaces.data ?? []).map((s) => [s.id, s.name]));
-
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: queryKeys.roleGrants });
-
-  // RADD-1103: one intent, one call — swapping the role no longer means
-  // revoke + regrant (two atoms, two history events).
+  const [editing, setEditing] = useState<GrantDirectoryRow>();
+  const total = grants.data?.total ?? 0;
+  useEffect(() => {
+    if (grants.isSuccess && page > 0 && page * GRANTS_PAGE_SIZE >= total)
+      setPosition({ identity, page: Math.max(0, Math.ceil(total / GRANTS_PAGE_SIZE) - 1) });
+  }, [grants.isSuccess, total, page, identity]);
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.roleGrants });
   const changeRole = useMutation({
-    mutationFn: ({ grantId, roleId }: { grantId: string; roleId: string }) =>
-      api.patch(`${ApiPath.roleGrants}/${grantId}`, { role_id: roleId }),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.roleGrants }),
-  });
-  const revoke = useMutation({
-    mutationFn: (grantId: string) => api.delete(`${ApiPath.roleGrants}/${grantId}`),
+    mutationFn: ({ grantId, roleId }: { grantId: string; roleId: string }) => api.patch(`${ApiPath.roleGrants}/${grantId}`, { role_id: roleId }),
     onSuccess: invalidate,
   });
-
-  const list = grants.data ?? [];
-
-  return (
-    <section aria-label="Role grants">
-      <div className="mb-2 flex items-center justify-between">
-        <h4 className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">Roles</h4>
-        {canManage && (
-          <Button variant="ghost" onClick={() => setGranting(true)}>
-            <Plus size={13} aria-hidden />
-            Grant role
-          </Button>
-        )}
-      </div>
-
-      {list.length === 0 ? (
-        <p className="text-xs text-fg-muted">No role grants.</p>
-      ) : (
-        <ul className="flex flex-col gap-1">
-          {list.map((grant) => (
-            <li key={grant.id} className="flex items-center gap-2 text-[13px]">
-              <ShieldCheck size={12} className="text-fg-faint" aria-hidden />
-              {canManage ? (
-                <Select
-                  value={grant.role_id}
-                  onChange={(roleId) => changeRole.mutate({ grantId: grant.id, roleId })}
-                  options={(roles.data ?? []).map((role) => ({
-                    value: role.id,
-                    label: role.name,
-                  }))}
-                  disabled={changeRole.isPending}
-                />
-              ) : (
-                <span className="text-fg">{roleName.get(grant.role_id) ?? "role"}</span>
-              )}
-              {/* Three scopes, three chips (RADD-791). A space grant used to fall
-                  through the project branch and render "Global", which claimed
-                  the opposite of what the row actually granted. */}
-              {grant.project_id !== null ? (
-                <span className="rounded bg-elevated px-1 font-mono text-[11px] text-fg">
-                  {projectKey.get(grant.project_id) ?? "?"}
-                </span>
-              ) : grant.space_id !== null ? (
-                <span className="inline-flex items-center gap-1 rounded bg-elevated px-1.5 py-px text-[11px] text-fg">
-                  <BookOpen size={10} aria-hidden />
-                  {spaceName.get(grant.space_id) ?? "?"}
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 rounded border border-emerald-500/30 px-1.5 py-px text-[11px] text-emerald-300">
-                  <Globe size={10} /> Global
-                </span>
-              )}
-              {canManage && (
-                <IconButton
-                  danger
-                  onClick={() => revoke.mutate(grant.id)}
-                  disabled={revoke.isPending}
-                  aria-label="Revoke grant"
-                  className="ml-auto"
-                >
-                  <X size={13} />
-                </IconButton>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-      {revoke.isError && <ErrorText className="mt-1" error={revoke.error} />}
-      {changeRole.isError && <ErrorText className="mt-1" error={changeRole.error} />}
-
-      {granting && (
-        <GrantRoleDialog
-          subject={subject}
-          onClose={() => setGranting(false)}
-          onGranted={invalidate}
-        />
-      )}
-    </section>
-  );
-}
-
-function GrantRoleDialog({
-  subject,
-  onClose,
-  onGranted,
-}: {
-  subject: Subject;
-  onClose: () => void;
-  onGranted: () => void;
-}) {
-  const roles = useQuery(rolesQuery());
-  const projects = useQuery(projectsQuery());
-  const spaces = useQuery(pageSpacesQuery());
-  const [roleId, setRoleId] = useState("");
-  const [projectIds, setProjectIds] = useState<string[]>([]);
-  const [spaceIds, setSpaceIds] = useState<string[]>([]);
-
-  const grant = useMutation({
-    mutationFn: () => {
-      const body: RoleGrantCreate = {
-        role_id: roleId,
-        project_ids: projectIds,
-        space_ids: spaceIds,
-        ...("teamId" in subject
-          ? { team_id: subject.teamId }
-          : "userId" in subject
-            ? { user_id: subject.userId }
-            : { group_id: subject.groupId }),
-      };
-      return api.post(ApiPath.roleGrants, body);
-    },
-    onSuccess: () => {
-      onGranted();
-      onClose();
-    },
-  });
-
-  // D12 presets: named STARTING POINTS, never stored abstractions — clicking
-  // one just fills the same controls, and Save writes ordinary grant rows.
-  const presets = [
-    { label: "Viewer here", roleKey: "viewer", hint: "read-only on the projects you pick" },
-    { label: "Member here", roleKey: "member", hint: "day-to-day work on the projects you pick" },
-    { label: "Admin here", roleKey: "admin", hint: "full project control on the projects you pick" },
-  ];
-  const applyPreset = (roleKey: string) => {
-    const match = (roles.data ?? []).find((r) => r.key === roleKey);
-    if (match) setRoleId(match.id);
-  };
-
-  // D12: the SENTENCE is the feature — the grant reads back as the rule it
-  // enforces, and an unset scope reads as alarming as it is.
-  const roleName = (roles.data ?? []).find((r) => r.id === roleId)?.name;
-  const projectNames = projectIds
-    .map((id) => (projects.data ?? []).find((p) => p.id === id)?.key ?? "?")
-    .join(", ");
-  const spaceNames = spaceIds
-    .map((id) => (spaces.data ?? []).find((s) => s.id === id)?.name ?? "?")
-    .join(", ");
-  const subjectLabel = "teamId" in subject ? "this team" : "userId" in subject ? "this person" : "this group";
-
-  return (
-    <Modal title="Grant role" onClose={onClose}>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          grant.mutate();
-        }}
-        className="flex flex-col gap-4"
-      >
-        <div className="flex flex-wrap gap-1.5">
-          {presets.map((preset) => (
-            <button
-              key={preset.roleKey}
-              type="button"
-              onClick={() => applyPreset(preset.roleKey)}
-              title={preset.hint}
-              className="rounded-md border border-subtle px-2 py-1 text-[11px] text-fg-secondary hover:border-emphasis cursor-pointer"
-            >
-              {preset.label}
-            </button>
-          ))}
-        </div>
-
-        <SelectField label="Role" value={roleId} onChange={(e) => setRoleId(e.target.value)}>
-          <option value="">Choose a role…</option>
-          {(roles.data ?? []).map((role) => (
-            <option key={role.id} value={role.id}>
-              {role.name}
-            </option>
-          ))}
-        </SelectField>
-
-        {/* One dialog, every scope (RADD-791). Naming both a project and a space
-            is fine and means what it looks like: one grant per id, each carrying
-            its own scope. Leaving both empty is the instance-wide grant. */}
-        <div>
-          <p className="mb-1.5 text-xs font-medium text-fg-secondary">Projects</p>
-          <ScopePicker value={projectIds} onChange={setProjectIds} projects={projects.data ?? []} />
-        </div>
-
-        <div>
-          <p className="mb-1.5 text-xs font-medium text-fg-secondary">Wiki spaces</p>
-          <div className="min-w-44 max-w-72">
-            <TokenMultiSelect
-              value={spaceIds}
-              onChange={setSpaceIds}
-              options={(spaces.data ?? []).map((space) => ({
-                value: space.id,
-                label: space.name,
-                hint: space.slug,
-              }))}
-              placeholder="No space scope"
-              ariaLabel="Wiki space scope"
-            />
-          </div>
-          <p className="mt-1.5 text-[11px] text-fg-faint">
-            Leave both empty to grant the role everywhere; name projects or spaces to
-            grant it only there.
-          </p>
-        </div>
-
-        {roleId && (
-          <p className="rounded-md border border-subtle bg-elevated/50 px-3 py-2 text-xs text-fg">
-            <span className="font-medium">{roleName ?? "This role"}</span> granted to {subjectLabel}
-            {projectIds.length > 0 && <> on <span className="font-mono">{projectNames}</span></>}
-            {spaceIds.length > 0 && <> in the {spaceNames} space{spaceIds.length > 1 ? "s" : ""}</>}
-            {projectIds.length === 0 && spaceIds.length === 0 && (
-              <span className="font-semibold text-amber-400"> EVERYWHERE on this server</span>
-            )}
-            .
-          </p>
-        )}
-
-        {grant.isError && <ErrorText error={grant.error} />}
-
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={!roleId || grant.isPending}>
-            {grant.isPending ? "Granting…" : "Grant"}
-          </Button>
-        </div>
-      </form>
-    </Modal>
-  );
+  const revoke = useMutation({ mutationFn: (id: string) => api.delete(`${ApiPath.roleGrants}/${id}`), onSuccess: invalidate });
+  return <section aria-label="Role grants">
+    <div className="mb-2 flex items-center justify-between">
+      <h4 className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">Roles</h4>
+      {canManage && <Button variant="ghost" onClick={() => setGranting(true)}><Plus size={13} aria-hidden />Grant role</Button>}
+    </div>
+    <div aria-busy={grants.isFetching}>
+      {grants.isPending ? <Spinner label="Loading role grants…" /> : grants.isError ? <div className="space-y-2">
+        <QueryError label="role grants" error={grants.error} /><Button variant="secondary" onClick={() => void grants.refetch()}>Retry role grants</Button>
+      </div> : !grants.data.rows.length ? <p className="text-xs text-fg-muted">No role grants.</p> :
+        <ul className="flex flex-col gap-2">{grants.data.rows.map(grant => <li key={grant.id} data-grant-id={grant.id} className="flex min-w-0 flex-wrap items-center gap-2 text-[13px]">
+          <ShieldCheck size={12} className="shrink-0 text-fg-faint" aria-hidden />
+          {canManage ? <Button variant="ghost" className="min-w-0 max-w-full" disabled={changeRole.isPending} aria-label={`Change role ${grant.role_name ?? "unavailable"}`} onClick={() => setEditing(grant)}><span className="truncate">{grant.role_name ?? "Unavailable role"}</span></Button>
+            : <span className="min-w-0 truncate">{grant.role_name ?? "Unavailable role"}</span>}
+          {grant.project_id !== null ? <span className="max-w-full truncate rounded bg-elevated px-1 font-mono text-xs">{grant.scope_label ?? "Unavailable project"}</span>
+            : grant.space_id !== null ? <span className="inline-flex min-w-0 max-w-full items-center gap-1 rounded bg-elevated px-1.5 py-px text-xs"><BookOpen size={10} className="shrink-0" aria-hidden /><span className="truncate">{grant.scope_label ?? "Unavailable wiki space"}</span></span>
+              : <span className="inline-flex items-center gap-1 rounded border border-subtle px-1.5 py-px text-xs text-fg-secondary"><Globe size={10} aria-hidden />Global</span>}
+          {grant.expires_at && <span className="text-xs text-fg-muted">{Date.parse(grant.expires_at) <= Date.now() ? "Expired" : "Expires"} {new Date(grant.expires_at).toLocaleDateString()}</span>}
+          {canManage && <IconButton danger className="ml-auto" disabled={revoke.isPending} aria-label="Revoke grant" onClick={() => revoke.mutate(grant.id)}><X size={13} aria-hidden /></IconButton>}
+        </li>)}</ul>}
+    </div>
+    <DirectoryPager page={page} pageSize={GRANTS_PAGE_SIZE} total={total} busy={grants.isFetching} onPage={setPage} label="role grants" />
+    {revoke.isError && <ErrorText className="mt-1" error={revoke.error} />}
+    {changeRole.isError && <ErrorText className="mt-1" error={changeRole.error} />}
+    {granting && <GrantRoleDialog subject={subject} onClose={() => setGranting(false)} onGranted={() => void invalidate()} />}
+    {editing && <Choices resource={OptionResource.role} selected={editing.role_id} onClose={() => setEditing(undefined)} onSelect={row => {
+      changeRole.mutate({ grantId: editing.id, roleId: row.value }); setEditing(undefined);
+    }} />}
+  </section>;
 }

@@ -205,28 +205,19 @@ async def provisioning_rules(
             )
         ).scalars()
     )
-    out = []
-    for rule in rules:
-        grants = list(
-            (
-                await session.execute(
-                    select(SsoProviderDefaultGrant).where(
-                        SsoProviderDefaultGrant.rule_id == rule.id
-                    )
-                )
-            ).scalars()
-        )
-        teams = list(
-            (
-                await session.execute(
-                    select(SsoProviderDefaultTeam.team_id).where(
-                        SsoProviderDefaultTeam.rule_id == rule.id
-                    )
-                )
-            ).scalars()
-        )
-        out.append((rule, grants, teams))
-    return out
+    if not rules:
+        return []
+    ids = [rule.id for rule in rules]
+    grants_by_rule = {identifier: [] for identifier in ids}
+    teams_by_rule = {identifier: [] for identifier in ids}
+    for grant in await session.scalars(select(SsoProviderDefaultGrant).where(
+        SsoProviderDefaultGrant.rule_id.in_(ids)).order_by(SsoProviderDefaultGrant.id)):
+        grants_by_rule[grant.rule_id].append(grant)
+    for rule_id, team_id in await session.execute(select(
+        SsoProviderDefaultTeam.rule_id, SsoProviderDefaultTeam.team_id).where(
+        SsoProviderDefaultTeam.rule_id.in_(ids)).order_by(SsoProviderDefaultTeam.id)):
+        teams_by_rule[rule_id].append(team_id)
+    return [(rule, grants_by_rule[rule.id], teams_by_rule[rule.id]) for rule in rules]
 
 
 

@@ -25,8 +25,11 @@ router = APIRouter(prefix="/fields", tags=["fields"])
 Session = Annotated[AsyncSession, Depends(get_session)]
 
 
-def _to_read(field, restricted_ids: set[str]) -> FieldDefinitionRead:
-    read = FieldDefinitionRead.model_validate(field)
+def _to_read(field, restricted_ids: set[str], *, include_options: bool = True) -> FieldDefinitionRead:
+    read = FieldDefinitionRead(**{
+        name: (None if name == "options" and not include_options else getattr(field, name))
+        for name in FieldDefinitionRead.model_fields if name != "restricted"
+    })
     read.restricted = str(field.id) in restricted_ids
     return read
 
@@ -78,23 +81,32 @@ async def create_field(
 
 @router.patch("/{field_id}", response_model=FieldDefinitionRead)
 async def update_field(
-    field_id: uuid.UUID, data: FieldDefinitionUpdate, session: Session, user: CurrentUser
+    field_id: uuid.UUID, data: FieldDefinitionUpdate, session: Session, user: CurrentUser,
+    include_options: bool = True,
 ) -> FieldDefinitionRead:
     """Edit a field's presentation (spec 52) and scope (spec 90 follow-up)."""
     field = await service.get_field(session, field_id)
-    # Manage over the CURRENT scope, plus any project the edit widens INTO — you
-    # can't grant your field to a project you don't manage.
-    scope = list(dict.fromkeys([*field.project_ids, *(data.project_ids or [])]))
+    # An empty scope means global authority, not an empty set of permissions.
+    # Check both sides independently: a union loses the global requirement when
+    # either the current or requested scope is empty.
     await _require_manage_on_scopes(
-        session, user, scope, permission=authz.Permission.FIELD_UPDATE
+        session, user, field.project_ids, permission=authz.Permission.FIELD_UPDATE
     )
+    if data.project_ids is not None:
+        await _require_manage_on_scopes(
+            session, user, data.project_ids, permission=authz.Permission.FIELD_UPDATE
+        )
     updated = await service.update_field(session, field_id, data, actor_id=user.id)
-    return _to_read(updated, await service.restricted_field_ids(session))
+    return _to_read(
+        updated, await service.restricted_field_ids(session, ids=[str(field_id)]),
+        include_options=include_options,
+    )
 
 
 @router.post("/{field_id}/options", response_model=FieldDefinitionRead)
 async def add_field_options(
-    field_id: uuid.UUID, data: FieldOptionsExtend, session: Session, user: CurrentUser
+    field_id: uuid.UUID, data: FieldOptionsExtend, session: Session, user: CurrentUser,
+    include_options: bool = True,
 ) -> FieldDefinitionRead:
     """ADD options to a select field — the spec-100 additive-only seam, exposed
     for the settings UI. Removal is its own route below, because it has to ask
@@ -105,7 +117,10 @@ async def add_field_options(
     )
     await service.extend_options(session, field_id, data.values, actor_id=user.id)
     updated = await service.get_field(session, field_id)
-    return _to_read(updated, await service.restricted_field_ids(session))
+    return _to_read(
+        updated, await service.restricted_field_ids(session, ids=[str(field_id)]),
+        include_options=include_options,
+    )
 
 
 @router.get("/{field_id}/options/usage", response_model=dict[str, int])
@@ -123,7 +138,8 @@ async def option_usage(
 
 @router.post("/{field_id}/options/remove", response_model=FieldDefinitionRead)
 async def remove_field_option(
-    field_id: uuid.UUID, data: FieldOptionRemove, session: Session, user: CurrentUser
+    field_id: uuid.UUID, data: FieldOptionRemove, session: Session, user: CurrentUser,
+    include_options: bool = True,
 ) -> FieldDefinitionRead:
     """REMOVE one option, migrating the items that hold it (RADD-949).
 
@@ -143,7 +159,10 @@ async def remove_field_option(
         actor_id=user.id,
     )
     updated = await service.get_field(session, field_id)
-    return _to_read(updated, await service.restricted_field_ids(session))
+    return _to_read(
+        updated, await service.restricted_field_ids(session, ids=[str(field_id)]),
+        include_options=include_options,
+    )
 
 
 @router.delete("/{field_id}", status_code=204)
@@ -166,8 +185,14 @@ async def list_fields(
     limit: Annotated[int | None, Query(ge=1, le=500)] = None,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[FieldDefinitionRead]:
-    # Member floor (RADD-788): item.read in SOME project, not the global atom.
-    if not await authz.readable_projects(session, user):
+    # Global field managers need the definitions they manage even when they
+    # cannot read issues. Other readers retain the existing issue-member floor.
+    if (
+        not await authz.holds(session, user, authz.Permission.FIELD_MANAGE)
+        and not await authz.readable_projects(session, user)
+    ):
+        if limit is not None:
+            response.headers[TOTAL_COUNT_HEADER] = "0"
         return []
     restricted_ids = await service.restricted_field_ids(session)
     fields = await service.list_fields(session, q=q, limit=limit, offset=offset)

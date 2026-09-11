@@ -5,7 +5,7 @@ import { ClipboardList, ExternalLink, Pencil, Plus, Trash2, X } from "lucide-rea
 import { api, errorMessage } from "../../lib/api";
 import { RoutePath, apiFormPath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
-import { formsQuery, projectsQuery, queryKeys } from "../../lib/queries";
+import { formsQuery, projectByIdQuery, queryKeys } from "../../lib/queries";
 import { Permission, type Form, type FormUpdate } from "../../lib/types";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
@@ -21,13 +21,13 @@ import { IconButton } from "../../components/IconButton";
  */
 export function FormsSettingsPage({ projectId }: { projectId?: string }) {
   const perms = usePermissions();
-  const projects = useQuery(projectsQuery());
+  const projectQuery = useQuery(projectByIdQuery(projectId ?? ""));
   const [editing, setEditing] = useState<{ form: Form | null } | null>(null);
 
-  const project = (projects.data ?? []).find((entry) => entry.id === projectId);
+  const project = projectQuery.data;
   const canManage = perms.project(project, Permission.formManage);
   const forms = useQuery({
-    ...formsQuery(projectId ?? ""),
+    ...formsQuery(projectId ?? "", false),
     enabled: Boolean(projectId) && canManage,
   });
   const list = forms.data ?? [];
@@ -60,8 +60,10 @@ export function FormsSettingsPage({ projectId }: { projectId?: string }) {
         ) : undefined
       }
     >
-      {projects.isPending || (projectId && canManage && forms.isPending) ? (
+      {(projectId && projectQuery.isPending) || (projectId && canManage && forms.isPending) ? (
         <TableSkeleton rows={4} />
+      ) : projectQuery.isError ? (
+        <QueryError label="project" error={projectQuery.error} />
       ) : !project ? (
         <EmptyState icon={ClipboardList} message="Project not found." />
       ) : !canManage ? (
@@ -107,7 +109,7 @@ function FormRow({
 
   const toggle = useMutation({
     mutationFn: () =>
-      api.patch<Form>(apiFormPath(form.id), { enabled: !form.enabled } satisfies FormUpdate),
+      api.patch<Form>(apiFormPath(form.id), { enabled: !form.enabled } satisfies FormUpdate, { query: { include_shares: "false" } }),
     onSuccess: invalidate,
   });
   const remove = useMutation({

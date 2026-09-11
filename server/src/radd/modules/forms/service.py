@@ -21,6 +21,7 @@ from radd.modules.workflow import service as workflow
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 
+from .options import list_options as list_options
 from .models import Form, FormShare
 from .schemas import (
     FormCreate,
@@ -136,7 +137,7 @@ async def create_form(session: AsyncSession, data: FormCreate, actor: User) -> F
 
 
 async def list_forms(
-    session: AsyncSession, project_id: uuid.UUID, actor: User
+    session: AsyncSession, project_id: uuid.UUID, actor: User, *, include_shares: bool = True
 ) -> list[FormRead]:
     project = await projects_service.get_project(session, project_id)
     await authz.require(session, actor, Permission.FORM_MANAGE, project=project)
@@ -144,7 +145,7 @@ async def list_forms(
         select(Form).where(Form.project_id == project_id).order_by(Form.created_at)
     )
     forms = list(result.scalars())
-    shares = await _shares_by_form(session, [form.id for form in forms])
+    shares = await _shares_by_form(session, [form.id for form in forms]) if include_shares else {}
     return [_read(form, shares.get(form.id, [])) for form in forms]
 
 
@@ -167,7 +168,7 @@ async def render_form(session: AsyncSession, form_id: uuid.UUID, actor: User) ->
 
 
 async def update_form(
-    session: AsyncSession, form_id: uuid.UUID, data: FormUpdate, actor: User
+    session: AsyncSession, form_id: uuid.UUID, data: FormUpdate, actor: User, *, include_shares: bool = True
 ) -> FormRead:
     form = await get_form(session, form_id)
     project = await projects_service.get_project(session, form.project_id)
@@ -200,7 +201,7 @@ async def update_form(
         form.allow_public = data.allow_public
     await session.flush()
     await _emit(session, FormEvent.UPDATED, form, project, actor)
-    return _read(form, await _form_shares(session, form.id))
+    return _read(form, (await _form_shares(session, form.id)) if include_shares else ())
 
 
 # --- portal sharing (spec 73) ---
@@ -236,9 +237,8 @@ async def update_sharing(
 ) -> FormRead:
     """Replace the form's FULL portal share list (spec 73): delete-then-insert,
     the views-sharing idiom. Presence-only grants — no levels."""
-    form = await get_form(session, form_id)
-    project = await projects_service.get_project(session, form.project_id)
-    await authz.require(session, actor, Permission.FORM_MANAGE, project=project)
+    from .sharing import managed_form
+    form, project = await managed_form(session, form_id, actor, lock=True)
     await _validate_share_subjects(session, data.shares)
     await session.execute(delete(FormShare).where(FormShare.form_id == form.id))
     for entry in data.shares:

@@ -2,17 +2,19 @@ import uuid
 from typing import Annotated, Any
 
 import pydantic
-from fastapi import APIRouter, Body, Depends
+from fastapi import APIRouter, Body, Depends, Query, Response
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
+from radd.apitypes import TOTAL_COUNT_HEADER
 from radd.kernel import registries
 from radd.modules.auth.deps import CurrentUser
 
-from . import service, widgets
+from . import directory, service, widgets
 from .schemas import (
     DashboardCreate,
+    DashboardSave,
     DashboardRead,
     DashboardSharingUpdate,
     DashboardTransfer,
@@ -36,17 +38,30 @@ async def create_dashboard(
 
 
 @router.get("", response_model=list[DashboardRead])
-async def list_dashboards(session: Session, user: CurrentUser) -> list[DashboardRead]:
+async def list_dashboards(session: Session, user: CurrentUser, response: Response,
+    include_shares: bool = True, q: Annotated[str, Query(max_length=200)] = "",
+    limit: Annotated[int | None, Query(ge=1, le=200)] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[DashboardRead]:
     """Dashboards the actor can SEE (spec-57 visibility), ordered position→name."""
-    return await service.list_dashboards(session, actor=user)
+    rows, total = await service.page_dashboards(session, actor=user, include_shares=include_shares, q=q, limit=limit, offset=offset)
+    response.headers[TOTAL_COUNT_HEADER] = str(total)
+    return rows
+
+
+@router.get("/summary", response_model=dict[str, int])
+async def dashboard_summary(session: Session, user: CurrentUser,
+    q: Annotated[str, Query(max_length=200)] = "",
+) -> dict[str, int]:
+    return {"total": await directory.count(session, user, q=q)}
 
 
 @router.get("/{dashboard_id}", response_model=DashboardRead)
 async def get_dashboard(
-    dashboard_id: uuid.UUID, session: Session, user: CurrentUser
+    dashboard_id: uuid.UUID, session: Session, user: CurrentUser, include_shares: bool = True
 ) -> DashboardRead:
     """The full definition incl. widgets + per-actor can_edit/can_manage."""
-    return await service.get_dashboard_read(session, dashboard_id, actor=user)
+    return await service.get_dashboard_read(session, dashboard_id, actor=user, include_shares=include_shares)
 
 
 @router.patch("/{dashboard_id}", response_model=DashboardRead)
@@ -158,3 +173,9 @@ async def delete_widget(
     dashboard_id: uuid.UUID, widget_id: uuid.UUID, session: Session, user: CurrentUser
 ) -> None:
     await widgets.delete_widget(session, dashboard_id, widget_id, actor=user)
+
+
+@router.post("/{dashboard_id}/save", response_model=DashboardRead)
+async def save_dashboard(dashboard_id: uuid.UUID, data: DashboardSave,
+                      session: Session, user: CurrentUser) -> DashboardRead:
+    return await service.save_dashboard(session, dashboard_id, data, actor=user)

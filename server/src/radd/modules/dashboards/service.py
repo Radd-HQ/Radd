@@ -19,7 +19,7 @@ from radd.exceptions import ConflictError, ForbiddenError, NotFoundError
 from radd.modules.access import service as access_service
 from radd.modules.access.service import AccessGrant  # public re-export (RADD-887)
 from radd.modules.access.registry import ResourceSpec, register_resource
-from radd.modules.access.types import GrantSubject
+from radd.modules.access.types import GrantEffect, GrantSubject
 from radd.modules.auth import authz, service as users_service
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
@@ -82,7 +82,7 @@ async def _shares_by_dashboard(
         return {}
     id_map = {str(d): d for d in dashboard_ids}
     grants = await access_service.grants_for_resources(
-        session, DASHBOARD_RESOURCE, list(id_map), include_expired=True
+        session, DASHBOARD_RESOURCE, list(id_map)
     )
     return {id_map[rid]: rows for rid, rows in grants.items()}
 
@@ -98,19 +98,11 @@ def _grant_level(
     global_access — None = the dashboard is invisible to them. `group_ids` is
     the TRANSITIVE closure (RADD-832), so a share with a parent group reaches
     nested members."""
-    levels: set[ShareLevel] = {
-        ShareLevel(grant.access)
-        for grant in shares
-        if (grant.subject_type == GrantSubject.USER and grant.subject_id == actor_id)
-        or (grant.subject_type == GrantSubject.TEAM and grant.subject_id in team_ids)
-        or (grant.subject_type == GrantSubject.GROUP and grant.subject_id in group_ids)
-    }
-    if dashboard.global_access is not None:
-        levels.add(ShareLevel(dashboard.global_access))
-    for level in (ShareLevel.OWNER, ShareLevel.EDITOR, ShareLevel.VIEWER):
-        if level in levels:
-            return level
-    return None
+    level = access_service.shared_resource_level(
+        DASHBOARD_RESOURCE, shares, user_id=actor_id, team_ids=team_ids,
+        group_ids=group_ids, global_access=dashboard.global_access,
+    )
+    return ShareLevel(level) if level is not None else None
 
 
 async def _widgets_by_dashboard(
@@ -136,12 +128,13 @@ async def _widgets_by_dashboard(
 
 
 async def _hydrate(
-    session: AsyncSession, actor: User, dashboards: list[Dashboard]
+    session: AsyncSession, actor: User, dashboards: list[Dashboard], *, include_shares: bool = True
 ) -> list[DashboardRead]:
     """Batch-build reads: sharing state, widgets, per-ACTOR capabilities."""
     if not dashboards:
         return []
-    shares_map = await _shares_by_dashboard(session, [d.id for d in dashboards])
+    shares_map = await _shares_by_dashboard(session, [d.id for d in dashboards]) if include_shares else {}
+    states = await _sharing_state(session, actor, [row.id for row in dashboards]) if not include_shares else {}
     widgets_map = await _widgets_by_dashboard(session, [d.id for d in dashboards])
     user_ids = {d.owner_id for d in dashboards if d.owner_id is not None}
     team_ids: set[uuid.UUID] = set()
@@ -159,7 +152,11 @@ async def _hydrate(
     reads: list[DashboardRead] = []
     for dashboard in dashboards:
         shares = shares_map.get(dashboard.id, [])
-        grant = _grant_level(dashboard, shares, actor.id, actor_teams, actor_groups)
+        # Preserve deny policies outside the legacy positive-share editor's
+        # reconciliation; the generic grants API exposes the complete policy.
+        allowed_shares = [g for g in shares if g.effect == GrantEffect.ALLOW]
+        grant = (_grant_level(dashboard, shares, actor.id, actor_teams, actor_groups) if include_shares
+                 else states[dashboard.id][0])
         can_manage = dashboard.owner_id == actor.id or grant is ShareLevel.OWNER
         owner = users.get(dashboard.owner_id) if dashboard.owner_id else None
         reads.append(
@@ -195,9 +192,9 @@ async def _hydrate(
                             else None
                         ),
                     )
-                    for g in shares
+                    for g in allowed_shares
                 ],
-                shared=dashboard.global_access is not None or len(shares) > 0,
+                shared=dashboard.global_access is not None or (len(allowed_shares) > 0 if include_shares else states[dashboard.id][1]),
                 can_edit=can_manage or grant in (ShareLevel.EDITOR, ShareLevel.OWNER),
                 can_manage=can_manage,
                 position=dashboard.position,
@@ -219,10 +216,20 @@ async def _hydrate(
     return reads
 
 
-async def hydrate_one(
-    session: AsyncSession, actor: User, dashboard: Dashboard
-) -> DashboardRead:
-    return (await _hydrate(session, actor, [dashboard]))[0]
+async def hydrate_one(session: AsyncSession, actor: User, dashboard: Dashboard, *,
+                         include_shares: bool = True) -> DashboardRead:
+    return (await _hydrate(session, actor, [dashboard], include_shares=include_shares))[0]
+
+
+async def _sharing_state(session, actor, ids):
+    if not ids:
+        return {}
+    level, shared = await access_service.shared_resource_state_expressions(session, actor,
+        DASHBOARD_RESOURCE, resource_id=Dashboard.id, global_access=Dashboard.global_access)
+    rows = await session.execute(select(Dashboard.id, level, shared).where(Dashboard.id.in_(ids)))
+    return {row_id: (ShareLevel(value) if value else None, bool(has_shares))
+            for row_id, value, has_shares in rows}
+
 
 
 # --- access ---
@@ -241,10 +248,7 @@ async def _load_visible(
     """The dashboard + the actor's grant level; invisible → 404 (spec 57 —
     privacy over acknowledgment, admins included: not shared = not seen)."""
     dashboard = await get_dashboard(session, dashboard_id)
-    shares = (await _shares_by_dashboard(session, [dashboard.id])).get(dashboard.id, [])
-    team_ids = await teams_service.user_team_ids(session, actor.id)
-    group_ids = await groups_service.user_group_ids(session, actor.id)
-    grant = _grant_level(dashboard, shares, actor.id, team_ids, group_ids)
+    grant = (await _sharing_state(session, actor, [dashboard.id]))[dashboard.id][0]
     if dashboard.owner_id != actor.id and grant is None:
         raise NotFoundError(DashboardEntity.DASHBOARD, dashboard_id)
     return dashboard, grant
@@ -255,6 +259,7 @@ async def require_edit(
 ) -> Dashboard:
     """Definition + widget writes: the owner or an editor/owner-level grantee.
     Visible-but-viewer → 403. Public within the module (widgets.py gates on it)."""
+    await _lock_dashboard(session, str(dashboard_id))
     dashboard, grant = await _load_visible(session, dashboard_id, actor)
     if dashboard.owner_id == actor.id or grant in (ShareLevel.EDITOR, ShareLevel.OWNER):
         await authz.require_member(session, actor)  # RADD-788
@@ -269,7 +274,9 @@ async def _require_manage(
 ) -> Dashboard:
     """Sharing changes + delete + transfer: the owner or an OWNER-level grantee
     (co-owner) — editor grantees edit content, they don't re-share or delete."""
+    await _lock_dashboard(session, str(dashboard_id))
     dashboard, grant = await _load_visible(session, dashboard_id, actor)
+    await authz.require_member(session, actor)
     if dashboard.owner_id == actor.id or grant is ShareLevel.OWNER:
         return dashboard
     raise ForbiddenError("only the dashboard's owner (or a co-owner) can do that")
@@ -286,12 +293,25 @@ async def _can_manage_dashboard(
         dashboard = await get_dashboard(session, uuid.UUID(resource_id))
     except (ValueError, NotFoundError):
         return False
+    try:
+        await authz.require_member(session, actor)
+    except ForbiddenError:
+        return False
     if dashboard.owner_id == actor.id:
         return True
-    grants = (await _shares_by_dashboard(session, [dashboard.id])).get(dashboard.id, [])
-    team_ids = await teams_service.user_team_ids(session, actor.id)
-    group_ids = await groups_service.user_group_ids(session, actor.id)
-    return _grant_level(dashboard, grants, actor.id, team_ids, group_ids) is ShareLevel.OWNER
+    grant = (await _sharing_state(session, actor, [dashboard.id]))[dashboard.id][0]
+    return grant is ShareLevel.OWNER
+
+
+async def _lock_dashboard(session: AsyncSession, resource_id: str) -> None:
+    try:
+        resource_uuid = uuid.UUID(resource_id)
+    except ValueError:
+        raise NotFoundError(DashboardEntity.DASHBOARD, resource_id) from None
+    row = await session.scalar(select(Dashboard).where(Dashboard.id == resource_uuid)
+        .with_for_update().execution_options(populate_existing=True))
+    if row is None:
+        raise NotFoundError(DashboardEntity.DASHBOARD, resource_id)
 
 
 async def _dashboard_labels(session: AsyncSession, resource_ids) -> dict[str, str]:
@@ -318,6 +338,7 @@ _DASHBOARD_SPEC = ResourceSpec(
     project_scoped=False,  # dashboards are global, not project-scoped
     label="Dashboard",
     label_for=_dashboard_labels,
+    lock_resource=_lock_dashboard,
 )
 register_resource(_DASHBOARD_SPEC)
 
@@ -391,40 +412,25 @@ async def create_dashboard(
 async def list_dashboards(
     session: AsyncSession, *, actor: User
 ) -> list[DashboardRead]:
-    # Member floor (RADD-788): item.read in SOME project, not the global atom.
-    if not await authz.readable_projects(session, actor):
-        return []
-    candidates = list(
-        (
-            await session.execute(
-                select(Dashboard).order_by(Dashboard.position, Dashboard.name)
-            )
-        ).scalars()
-    )
-    shares_map = await _shares_by_dashboard(session, [d.id for d in candidates])
-    team_ids = await teams_service.user_team_ids(session, actor.id)
-    group_ids = await groups_service.user_group_ids(session, actor.id)
-    visible = [
-        dashboard
-        for dashboard in candidates
-        if dashboard.owner_id == actor.id
-        or _grant_level(
-            dashboard, shares_map.get(dashboard.id, []), actor.id, team_ids, group_ids
-        )
-        is not None
-    ]
-    return await _hydrate(session, actor, visible)
+    rows, _total = await page_dashboards(session, actor=actor)
+    return rows
+
+
+async def page_dashboards(session: AsyncSession, *, actor: User, include_shares: bool = True, **filters) -> tuple[list[DashboardRead], int]:
+    from . import directory
+    rows, total = await directory.page(session, actor, **filters)
+    return await _hydrate(session, actor, rows, include_shares=include_shares), total
 
 
 async def get_dashboard_read(
-    session: AsyncSession, dashboard_id: uuid.UUID, actor: User
+    session: AsyncSession, dashboard_id: uuid.UUID, actor: User, *, include_shares: bool = True
 ) -> DashboardRead:
     dashboard, _ = await _load_visible(session, dashboard_id, actor)
-    return await hydrate_one(session, actor, dashboard)
+    return await hydrate_one(session, actor, dashboard, include_shares=include_shares)
 
 
 async def update_dashboard(
-    session: AsyncSession, dashboard_id: uuid.UUID, data: DashboardUpdate, actor: User
+    session: AsyncSession, dashboard_id: uuid.UUID, data: DashboardUpdate, actor: User, *, include_shares: bool = True
 ) -> DashboardRead:
     dashboard = await require_edit(session, dashboard_id, actor)
     if data.name is not None:
@@ -435,7 +441,7 @@ async def update_dashboard(
         dashboard.position = data.position
     await session.flush()
     await emit(session, DashboardEvent.UPDATED, dashboard, actor)
-    return await hydrate_one(session, actor, dashboard)
+    return await hydrate_one(session, actor, dashboard, include_shares=include_shares)
 
 
 async def update_sharing(
@@ -447,6 +453,12 @@ async def update_sharing(
     a server-wide broadcast). Per-subject shares are managed grant-by-grant
     through the generic /grants API now — this endpoint no longer accepts them."""
     dashboard = await _require_manage(session, dashboard_id, actor)
+    return await _update_sharing(session, dashboard, data, actor)
+
+
+async def _update_sharing(
+    session: AsyncSession, dashboard: Dashboard, data: DashboardSharingUpdate, actor: User, *, include_shares: bool = True
+) -> DashboardRead:
     global_access = _validate_global_access(data.global_access)
     if data.global_access is not None and dashboard.global_access is None:
         await authz.require(
@@ -454,9 +466,9 @@ async def update_sharing(
         )
     dashboard.global_access = global_access
     await session.flush()
-    share_count = len((await _shares_by_dashboard(session, [dashboard.id])).get(dashboard.id, []))
+    share_count = await access_service.count_resource_grants(session, DASHBOARD_RESOURCE, str(dashboard.id))
     await emit(session, DashboardEvent.UPDATED, dashboard, actor, share_count=share_count)
-    return await hydrate_one(session, actor, dashboard)
+    return await hydrate_one(session, actor, dashboard, include_shares=include_shares)
 
 
 async def transfer_ownership(
@@ -468,6 +480,12 @@ async def transfer_ownership(
     PREVIOUS owner stays on as an editor grantee so a transfer never locks
     anyone out by accident (the new owner can revoke)."""
     dashboard = await _require_manage(session, dashboard_id, actor)
+    return await _transfer_ownership(session, dashboard, data, actor)
+
+
+async def _transfer_ownership(
+    session: AsyncSession, dashboard: Dashboard, data: DashboardTransfer, actor: User, *, include_shares: bool = True
+) -> DashboardRead:
     target = await users_service.get_user(session, data.user_id)
     if not target.active:
         raise ConflictError(
@@ -483,7 +501,7 @@ async def transfer_ownership(
         )
     previous_owner = dashboard.owner_id
     if previous_owner == target.id:
-        return await hydrate_one(session, actor, dashboard)
+        return await hydrate_one(session, actor, dashboard, include_shares=include_shares)
     dashboard.owner_id = target.id
     # Drop the new owner's now-redundant grant(s) — they own it outright.
     await _delete_user_grants(session, dashboard.id, target.id)
@@ -502,7 +520,7 @@ async def transfer_ownership(
         )
     await session.flush()
     await emit(session, DashboardEvent.UPDATED, dashboard, actor)
-    return await hydrate_one(session, actor, dashboard)
+    return await hydrate_one(session, actor, dashboard, include_shares=include_shares)
 
 
 async def _delete_user_grants(
@@ -548,3 +566,10 @@ async def emit(
         actor_id=actor.id,
         payload=payload,
     )
+
+
+async def save_dashboard(session, dashboard_id, data, *, actor):
+    """Public facade for an atomic definition/sharing/ownership save."""
+    from .sharing import save
+
+    return await save(session, dashboard_id, data, actor=actor)

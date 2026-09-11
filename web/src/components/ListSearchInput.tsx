@@ -24,7 +24,8 @@ export function ListSearchInput({
   placeholder: string;
   /** Defaults to `placeholder` — set when the placeholder is elliptical. */
   ariaLabel?: string;
-  total: number;
+  /** Omit when the server reports only the filtered count. */
+  total?: number;
   matched: number;
   /** Plural noun for the idle count ("teams" → "2,293 teams"). */
   noun: string;
@@ -50,8 +51,8 @@ export function ListSearchInput({
       </div>
       <span className="shrink-0 text-xs tabular-nums text-fg-muted" aria-live="polite">
         {filtering
-          ? `${matched.toLocaleString()} of ${total.toLocaleString()}`
-          : `${total.toLocaleString()} ${noun}`}
+          ? total === undefined ? `${matched.toLocaleString()} ${matched === 1 ? "match" : "matches"}` : `${matched.toLocaleString()} of ${total.toLocaleString()}`
+          : `${(total ?? matched).toLocaleString()} ${noun}`}
       </span>
     </div>
   );

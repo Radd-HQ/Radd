@@ -59,6 +59,11 @@ class PageSpaceRead(BaseModel):
     updated_at: UtcDatetime
 
 
+class PageSpaceSummaryRead(BaseModel):
+    total: int
+    permissions: list[str]
+
+
 # --- pages ---
 
 
@@ -162,6 +167,15 @@ class PageTemplateRead(BaseModel):
     icon: str
     body: str
     space_id: uuid.UUID | None
+
+
+class PageTemplateSummaryRead(BaseModel):
+    id: uuid.UUID
+    name: str
+    description: str
+    icon: str
+    space_id: uuid.UUID | None
+    space_name: str | None
 
 
 class PageExtensionRead(BaseModel):

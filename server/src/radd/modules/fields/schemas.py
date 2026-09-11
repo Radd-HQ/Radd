@@ -106,3 +106,32 @@ class FieldDefinitionUpdate(BaseModel):
     # field's scope ([] promotes it to global, non-empty scopes it to those projects).
     # Resolved via model_fields_set so an omitted list differs from an explicit [].
     project_ids: list[uuid.UUID] | None = None
+
+
+class FieldSummaryRead(BaseModel):
+    id: uuid.UUID
+    key: str
+    name: str
+    type: FieldType
+    project_count: int
+    restricted: bool
+
+
+class FieldManagementRead(FieldDefinitionRead):
+    option_count: int = 0
+    can_update: bool = False
+    can_delete: bool = False
+    can_manage: bool = False
+
+
+class FieldSettingsSummaryRead(BaseModel):
+    can_access: bool
+    can_create: bool
+    can_create_global: bool
+    can_update_global: bool
+    can_manage_builtin: bool
+    can_manage_builtin_projects: bool
+
+
+class FieldProjectReferences(BaseModel):
+    ids: list[uuid.UUID] = Field(max_length=50)

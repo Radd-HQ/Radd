@@ -73,7 +73,7 @@ export interface ViewShare {
   group: ShareSubjectRef | null;
 }
 
-/** PUT /views/{id}/sharing — the FULL sharing state, replaced atomically.
+/** PUT /views/{id}/sharing — the public access level.
  * `global_access` means "everyone on this server" (spec 86). */
 export interface ViewSharingUpdate {
   // Spec 92: the public level only; per-subject shares are access grants now.

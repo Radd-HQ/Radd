@@ -199,7 +199,7 @@ function RoleRow({
 function EmbeddingCoverageLine({ assigned }: { assigned: boolean }) {
   const coverage = useQuery({
     queryKey: queryKeys.aiEmbeddingCoverage,
-    queryFn: () => api.get<EmbeddingCoverage>(ApiPath.aiEmbeddingCoverage),
+    queryFn: ({ signal }) => api.get<EmbeddingCoverage>(ApiPath.aiEmbeddingCoverage, { signal }),
     enabled: assigned,
     refetchInterval: (query) => {
       const data = query.state.data;

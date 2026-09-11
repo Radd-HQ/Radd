@@ -3,7 +3,7 @@ import uuid
 from typing import Any
 from urllib.parse import urlencode
 
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,7 +11,7 @@ from radd.exceptions import ConflictError, ForbiddenError, NotFoundError
 from radd.modules.access import service as access_service
 from radd.modules.access.service import AccessGrant  # public re-export (RADD-887)
 from radd.modules.access.registry import ResourceSpec, register_resource
-from radd.modules.access.types import GrantSubject
+from radd.modules.access.types import GrantEffect, GrantSubject
 from radd.modules.auth import authz, service as users_service
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
@@ -46,6 +46,14 @@ from .schemas import (
     ViewUpdate,
 )
 
+from .types import (
+    CF_AXIS_PREFIX,
+    ShareLevel,
+    ViewAxis,
+    ViewEntity,
+    ViewEvent,
+)
+
 # The one mandatory card cell (spec 109) — a card without its title is unusable.
 CARD_TITLE_ATTR = "title"
 
@@ -55,13 +63,7 @@ CARD_TITLE_ATTR = "title"
 # (a view already belongs to one project). `global_access` + `owner_id` stay on
 # the View row (a public level + the accountable owner — not per-subject grants).
 VIEW_RESOURCE = "view"
-from .types import (
-    CF_AXIS_PREFIX,
-    ShareLevel,
-    ViewAxis,
-    ViewEntity,
-    ViewEvent,
-)
+
 
 # Personal use of views (create private, edit own) only needs item.read in scope;
 # the view.* CRUD atoms gate server-wide broadcasts + seeded owner-less views.
@@ -79,7 +81,7 @@ async def _shares_by_view(
         return {}
     id_map = {str(v): v for v in view_ids}
     grants = await access_service.grants_for_resources(
-        session, VIEW_RESOURCE, list(id_map), include_expired=True
+        session, VIEW_RESOURCE, list(id_map)
     )
     return {id_map[rid]: rows for rid, rows in grants.items()}
 
@@ -95,19 +97,11 @@ def _grant_level(
     grants or global_access — None = the view is invisible to them. `group_ids`
     is the TRANSITIVE closure (RADD-832), so a share with a parent group reaches
     nested members."""
-    levels: set[ShareLevel] = {
-        ShareLevel(grant.access)
-        for grant in grants
-        if (grant.subject_type == GrantSubject.USER.value and grant.subject_id == actor_id)
-        or (grant.subject_type == GrantSubject.TEAM.value and grant.subject_id in team_ids)
-        or (grant.subject_type == GrantSubject.GROUP.value and grant.subject_id in group_ids)
-    }
-    if view.global_access is not None:
-        levels.add(ShareLevel(view.global_access))
-    for level in (ShareLevel.OWNER, ShareLevel.EDITOR, ShareLevel.VIEWER):
-        if level in levels:
-            return level
-    return None
+    level = access_service.shared_resource_level(
+        VIEW_RESOURCE, grants, user_id=actor_id, team_ids=team_ids,
+        group_ids=group_ids, global_access=view.global_access,
+    )
+    return ShareLevel(level) if level is not None else None
 
 
 async def _can_manage_view(
@@ -120,12 +114,14 @@ async def _can_manage_view(
         view = await get_view(session, uuid.UUID(resource_id))
     except (ValueError, NotFoundError):
         return False
+    try:
+        await _require_scope(session, actor, PERSONAL_VIEW_PERMISSION, project_id=view.project_id)
+    except ForbiddenError:
+        return False
     if view.owner_id == actor.id:
         return True
-    grants = (await _shares_by_view(session, [view.id])).get(view.id, [])
-    team_ids = await teams_service.user_team_ids(session, actor.id)
-    group_ids = await groups_service.user_group_ids(session, actor.id)
-    if _grant_level(view, grants, actor.id, team_ids, group_ids) is ShareLevel.OWNER:
+    grant = (await _sharing_state(session, actor, [view.id]))[view.id][0]
+    if grant is ShareLevel.OWNER:
         return True
     if view.owner_id is None:
         if view.project_id is not None:
@@ -135,6 +131,17 @@ async def _can_manage_view(
             perms = await authz.effective_permissions(session, actor)
         return Permission.VIEW_UPDATE in perms
     return False
+
+
+async def _lock_view(session: AsyncSession, resource_id: str) -> None:
+    try:
+        resource_uuid = uuid.UUID(resource_id)
+    except ValueError:
+        raise NotFoundError(ViewEntity.VIEW, resource_id) from None
+    row = await session.scalar(select(View).where(View.id == resource_uuid)
+        .with_for_update().execution_options(populate_existing=True))
+    if row is None:
+        raise NotFoundError(ViewEntity.VIEW, resource_id)
 
 
 async def _view_labels(session: AsyncSession, resource_ids) -> dict[str, str]:
@@ -164,6 +171,7 @@ _VIEW_SPEC = ResourceSpec(
     project_scoped=False,  # a view already belongs to one project
     label="View",
     label_for=_view_labels,
+    lock_resource=_lock_view,
 )
 register_resource(_VIEW_SPEC)
 
@@ -187,13 +195,14 @@ async def _scope_permissions(
     return cache[key]
 
 
-async def _hydrate(session: AsyncSession, actor: User, views: list[View]) -> list[ViewRead]:
+async def _hydrate(session: AsyncSession, actor: User, views: list[View], *, include_shares: bool = True) -> list[ViewRead]:
     """Batch-build reads: sharing state + per-ACTOR capabilities (spec 57).
     can_edit = definition writes; can_manage = sharing + delete (owner, or the
     view.update atom on SEEDED owner-less views)."""
     if not views:
         return []
-    shares_map = await _shares_by_view(session, [v.id for v in views])
+    shares_map = await _shares_by_view(session, [v.id for v in views]) if include_shares else {}
+    states = await _sharing_state(session, actor, [row.id for row in views]) if not include_shares else {}
     user_ids = {v.owner_id for v in views if v.owner_id is not None}
     team_ids: set[uuid.UUID] = set()
     group_ids: set[uuid.UUID] = set()
@@ -211,7 +220,11 @@ async def _hydrate(session: AsyncSession, actor: User, views: list[View]) -> lis
     reads: list[ViewRead] = []
     for view in views:
         shares = shares_map.get(view.id, [])
-        grant = _grant_level(view, shares, actor.id, actor_teams, actor_groups)
+        # The legacy sharing editor reconciles positive shares. Deny rows are
+        # policy, not invitations, and remain on the full generic grants API.
+        allowed_shares = [g for g in shares if g.effect == GrantEffect.ALLOW]
+        grant = (_grant_level(view, shares, actor.id, actor_teams, actor_groups) if include_shares
+                 else states[view.id][0])
         if view.owner_id == actor.id or grant is ShareLevel.OWNER:
             can_manage = True
         elif view.owner_id is None:
@@ -280,11 +293,11 @@ async def _hydrate(session: AsyncSession, actor: User, views: list[View]) -> lis
                             else None
                         ),
                     )
-                    for g in shares
+                    for g in allowed_shares
                 ],
                 shared=view.owner_id is None
                 or view.global_access is not None
-                or len(shares) > 0,
+                or (len(allowed_shares) > 0 if include_shares else states[view.id][1]),
                 can_edit=can_manage or grant in (ShareLevel.EDITOR, ShareLevel.OWNER),
                 can_manage=can_manage,
                 position=view.position,
@@ -296,8 +309,20 @@ async def _hydrate(session: AsyncSession, actor: User, views: list[View]) -> lis
     return reads
 
 
-async def _hydrate_one(session: AsyncSession, actor: User, view: View) -> ViewRead:
-    return (await _hydrate(session, actor, [view]))[0]
+async def _hydrate_one(session: AsyncSession, actor: User, view: View, *,
+                         include_shares: bool = True) -> ViewRead:
+    return (await _hydrate(session, actor, [view], include_shares=include_shares))[0]
+
+
+async def _sharing_state(session, actor, ids):
+    if not ids:
+        return {}
+    level, shared = await access_service.shared_resource_state_expressions(session, actor,
+        VIEW_RESOURCE, resource_id=View.id, global_access=View.global_access)
+    rows = await session.execute(select(View.id, level, shared).where(View.id.in_(ids)))
+    return {row_id: (ShareLevel(value) if value else None, bool(has_shares))
+            for row_id, value, has_shares in rows}
+
 
 
 # --- SLQ + axis validation (spec 10) ---
@@ -514,10 +539,7 @@ async def _load_visible(
     """The view + the actor's grant level; invisible views 404 (spec 57 —
     privacy over acknowledgment, admins included: not shared = not seen)."""
     view = await get_view(session, view_id)
-    shares = (await _shares_by_view(session, [view.id])).get(view.id, [])
-    team_ids = await teams_service.user_team_ids(session, actor.id)
-    group_ids = await groups_service.user_group_ids(session, actor.id)
-    grant = _grant_level(view, shares, actor.id, team_ids, group_ids)
+    grant = (await _sharing_state(session, actor, [view.id]))[view.id][0]
     if view.owner_id != actor.id and grant is None:
         raise NotFoundError(ViewEntity.VIEW, view_id)
     return view, grant
@@ -534,6 +556,7 @@ async def visible_view(session: AsyncSession, view_id: uuid.UUID, actor: User) -
 async def _require_edit(session: AsyncSession, view_id: uuid.UUID, actor: User) -> View:
     """Definition writes: the owner, an editor/owner-level grantee, or (LEGACY
     owner-less views) a view.update atom holder. Visible-but-viewer -> 403."""
+    await _lock_view(session, str(view_id))
     view, grant = await _load_visible(session, view_id, actor)
     if view.owner_id == actor.id or grant in (ShareLevel.EDITOR, ShareLevel.OWNER):
         await _require_scope(
@@ -560,7 +583,9 @@ async def _require_manage(
     """Sharing changes + delete + transfer: the owner or an OWNER-level grantee
     (co-owner) — editor grantees edit content, they don't re-share or delete.
     Seeded owner-less views fall back to the view.* RBAC atom (`legacy_atom`)."""
+    await _lock_view(session, str(view_id))
     view, grant = await _load_visible(session, view_id, actor)
+    await _require_scope(session, actor, PERSONAL_VIEW_PERMISSION, project_id=view.project_id)
     if view.owner_id == actor.id or grant is ShareLevel.OWNER:
         return view
     if view.owner_id is None:
@@ -655,35 +680,28 @@ async def list_views(
     actor: User,
     project_id: uuid.UUID | None,
 ) -> list[ViewRead]:
-    # The member floor (RADD-788). Views are the ONLY way into a project since
-    # specs 61–67 deleted the builtin board/list/planning pages, so refusing this
-    # list on a global atom emptied every project for anyone whose access is
-    # project-scoped. Entitled to nothing anywhere -> no views, not a 403.
-    if not await authz.readable_projects(session, actor):
-        return []
-    query = select(View).order_by(View.position, View.name)
-    if project_id is not None:
-        # A project's board picker also surfaces all-projects views.
-        query = query.where(or_(View.project_id == project_id, View.project_id.is_(None)))
-    candidates = list((await session.execute(query)).scalars())
-    # Visibility (spec 57): the owner, share grantees (directly or via a team),
-    # and — when global_access is set — every active user. A view shared with
-    # team X simply doesn't exist for people outside it.
-    shares_map = await _shares_by_view(session, [v.id for v in candidates])
-    team_ids = await teams_service.user_team_ids(session, actor.id)
-    group_ids = await groups_service.user_group_ids(session, actor.id)
-    visible = [
-        view
-        for view in candidates
-        if view.owner_id == actor.id
-        or _grant_level(view, shares_map.get(view.id, []), actor.id, team_ids, group_ids)
-        is not None
-    ]
-    return await _hydrate(session, actor, visible)
+    rows, _total = await page_views(session, actor=actor, project_id=project_id)
+    return rows
+
+
+async def page_views(session: AsyncSession, *, actor: User, include_shares: bool = True, **filters) -> tuple[list[ViewRead], int]:
+    from . import directory
+    rows, total = await directory.page(session, actor, **filters)
+    return await _hydrate(session, actor, rows, include_shares=include_shares), total
+
+
+async def get_view_read(session: AsyncSession, view_id: uuid.UUID, actor: User, *, include_shares: bool = True
+) -> ViewRead:
+    from . import directory
+    stmt = await directory.query(session, actor)
+    view = await session.scalar(stmt.where(View.id == view_id))
+    if view is None:
+        raise NotFoundError(ViewEntity.VIEW, view_id)
+    return await _hydrate_one(session, actor, view, include_shares=include_shares)
 
 
 async def update_view(
-    session: AsyncSession, view_id: uuid.UUID, data: ViewUpdate, actor: User
+    session: AsyncSession, view_id: uuid.UUID, data: ViewUpdate, actor: User, *, include_shares: bool = True
 ) -> ViewRead:
     view = await _require_edit(session, view_id, actor)
     if data.name is not None:
@@ -724,7 +742,7 @@ async def update_view(
         view.position = data.position
     await session.flush()
     await _emit(session, ViewEvent.UPDATED, view, actor)
-    return await _hydrate_one(session, actor, view)
+    return await _hydrate_one(session, actor, view, include_shares=include_shares)
 
 
 async def update_sharing(
@@ -736,6 +754,12 @@ async def update_sharing(
     view.create (it's a server-wide broadcast). Per-subject shares are managed
     grant-by-grant through the generic /grants API now."""
     view = await _require_manage(session, view_id, actor, legacy_atom=Permission.VIEW_UPDATE)
+    return await _update_sharing(session, view, data, actor)
+
+
+async def _update_sharing(
+    session: AsyncSession, view: View, data: ViewSharingUpdate, actor: User, *, include_shares: bool = True
+) -> ViewRead:
     # Invalid input rejects before permission checks (a plain member setting
     # global_access='owner' should hear "never valid", not "no broadcast rights").
     global_access = _validate_global_access(data.global_access)
@@ -749,7 +773,7 @@ async def update_sharing(
     view.global_access = global_access
     await session.flush()
     await _emit(session, ViewEvent.UPDATED, view, actor)
-    return await _hydrate_one(session, actor, view)
+    return await _hydrate_one(session, actor, view, include_shares=include_shares)
 
 
 async def transfer_ownership(
@@ -761,6 +785,12 @@ async def transfer_ownership(
     grant rows are dropped; the PREVIOUS owner stays on as an editor so a
     transfer never locks anyone out by accident (the new owner can revoke)."""
     view = await _require_manage(session, view_id, actor, legacy_atom=Permission.VIEW_UPDATE)
+    return await _transfer_ownership(session, view, data, actor)
+
+
+async def _transfer_ownership(
+    session: AsyncSession, view: View, data: ViewTransfer, actor: User, *, include_shares: bool = True
+) -> ViewRead:
     target = await users_service.get_user(session, data.user_id)
     if not target.active:
         raise ConflictError(ViewEntity.VIEW, reason=f"user {target.email} is deactivated")
@@ -780,7 +810,7 @@ async def transfer_ownership(
         )
     previous_owner = view.owner_id
     if previous_owner == target.id:
-        return await _hydrate_one(session, actor, view)
+        return await _hydrate_one(session, actor, view, include_shares=include_shares)
     view.owner_id = target.id
     # Drop the new owner's now-redundant share grant(s) (they own it outright).
     await _delete_user_shares(session, view.id, target.id)
@@ -798,7 +828,7 @@ async def transfer_ownership(
         )
     await session.flush()
     await _emit(session, ViewEvent.UPDATED, view, actor)
-    return await _hydrate_one(session, actor, view)
+    return await _hydrate_one(session, actor, view, include_shares=include_shares)
 
 
 async def _delete_user_shares(
@@ -957,3 +987,10 @@ async def remove_member(
         )
     )
     await session.flush()
+
+
+async def save_view(session, view_id, data, *, actor):
+    """Public facade for an atomic definition/sharing/ownership save."""
+    from .sharing import save
+
+    return await save(session, view_id, data, actor=actor)

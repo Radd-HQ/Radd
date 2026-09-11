@@ -395,6 +395,18 @@ class TokenRead(BaseModel):
     scopes: dict | None = None  # spec 113 — null means unscoped
 
 
+class ServiceKeySummaryRead(BaseModel):
+    id: uuid.UUID
+    name: str
+    prefix_display: str
+    expires_at: UtcDatetime | None
+    last_used_at: UtcDatetime | None
+    created_at: UtcDatetime
+    restricted: bool
+    global_count: int
+    project_count: int
+
+
 # --- service accounts (spec 113) ---
 
 
@@ -539,6 +551,20 @@ class GlobalGrantRead(BaseModel):
     # wiki space (RADD-791). Never both — see the `one_scope` CHECK.
     project_id: uuid.UUID | None = None
     space_id: uuid.UUID | None = None
+
+
+class GrantDirectoryRead(GlobalGrantRead):
+    """Names are nullable when the actor cannot read their owning catalog."""
+
+    role_name: str | None = None
+    scope_label: str | None = None
+
+
+class SpaceGrantDirectoryRead(GlobalGrantRead):
+    role_name: str | None = None
+    subject_name: str | None = None
+    subject_active: bool | None = None
+    expired: bool = False
 
 
 class RoleGrantRoleUpdate(BaseModel):

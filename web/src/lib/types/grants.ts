@@ -64,6 +64,8 @@ export interface AccessGrantCreate {
 /** One role grant to a user or team. Both scope ids null = instance-wide; one
  *  set = that project, or that wiki space (RADD-791). Never both. */
 export interface RoleGrant {
+  expires_at: string | null;
+  granted_by: string | null;
   id: string;
   role_id: string;
   user_id: string | null;

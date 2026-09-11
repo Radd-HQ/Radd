@@ -3,7 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { SlotId, useDisabledMatches } from "@radd/plugin-sdk";
 import { api } from "../../lib/api";
-import { ApiPath, RoutePath, apiViewPath, apiViewSharingPath, apiViewTransferPath } from "../../lib/constants";
+import { ApiPath, RoutePath, apiViewPath } from "../../lib/constants";
 import { SlqProbeStatus, usePermissions, useSlqValidation } from "../../lib/hooks";
 import { capabilitiesQuery, fieldsQuery, queryKeys } from "../../lib/queries";
 import { slqErrorOf } from "../../lib/slq";
@@ -17,7 +17,6 @@ import {
   type ShareLevelValue,
   type View,
   type ViewCreate,
-  type ViewSharingUpdate,
   type ViewTypeValue,
   type ViewUpdate,
 } from "../../lib/types";
@@ -32,6 +31,8 @@ import { ViewSharingEditor, SERVER_PRIVATE, type LocalShare } from "./ViewSharin
 import { useKeyedRows } from "../../lib/keyed-rows";
 import { IconButton } from "../IconButton";
 import { ErrorText } from "../ErrorText";
+import { emptySharingDraft, sharingEdits, type SharedSave } from "../../lib/sharing-draft";
+import { Entity, invalidateEntities } from "../../lib/cache";
 
 interface ViewModalProps {
   /** View scope, fixed at open time: a project, or null = all-projects. */
@@ -78,22 +79,18 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
   const disabledViewTypes = useDisabledMatches(SlotId.viewType);
   const pluginViewTypes = (capsManifest?.view_types ?? []).filter((t) => !disabledViewTypes.has(t.key));
   // Sharing (spec 57): the server-wide level + per-user/team grant rows; the
-  // whole state saves atomically (inline on create, PUT /sharing on edit).
+  // whole state saves atomically (inline on create, POST /save on edit).
   // (`global_access` = the wire name for "everyone on this server".)
   const [serverAccess, setServerAccess] = useState<ShareLevelValue | typeof SERVER_PRIVATE>(
     view?.global_access ?? SERVER_PRIVATE,
   );
-  const [shareRows, setShareRows] = useState<LocalShare[]>(
-    (view?.shares ?? []).map((share) => ({
-      kind: share.user ? "user" : share.team ? "team" : "group",
-      subjectId: (share.user ?? share.team ?? share.group)?.id ?? "",
-      level: share.level,
-    })),
-  );
+  const [shareRows, setShareRows] = useState<LocalShare[]>([]);
+  const [sharingDraft, setSharingDraft] = useState(emptySharingDraft);
+  const [sharingBase] = useState({ owner: view?.owner_id ?? null, access: view?.global_access ?? null });
   // New views are always yours; existing ones only the owner (or, for legacy
   // owner-less views, a view-manage holder) may re-share.
   const canManageSharing = !view || view.can_manage;
-  // Ownership transfer (spec 57): applied on save, after the sharing PUT.
+  // Ownership transfer (spec 57): applied on save, inside the same transaction as the grant edits.
   const [transferTo, setTransferTo] = useState("");
   const [query, setQuery] = useState(view?.query ?? "");
   const [groupBy, setGroupBy] = useState<string>(view?.group_by ?? AXIS_NONE);
@@ -148,41 +145,6 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
             : { group_id: row.subjectId, level: row.level },
       );
 
-  /** On EDIT, per-subject shares are access grants (spec 92): reconcile the local
-   * rows against the view's current grants — add the new, delete the gone. */
-  const reconcileShares = async () => {
-    if (!view) return;
-    const current = (view.shares ?? []).map((s) => ({
-      id: s.id,
-      key: s.user
-        ? `user:${s.user.id}`
-        : s.team
-          ? `team:${s.team.id}`
-          : `group:${s.group!.id}`,
-      level: s.level as string,
-    }));
-    const desired = shareRows
-      .filter((r) => r.subjectId)
-      .map((r) => ({ key: `${r.kind}:${r.subjectId}`, level: r.level as string }));
-    const desiredKeys = new Set(desired.map((d) => `${d.key}@${d.level}`));
-    const currentKeys = new Set(current.map((c) => `${c.key}@${c.level}`));
-    for (const c of current) {
-      if (!desiredKeys.has(`${c.key}@${c.level}`)) await api.delete(`${ApiPath.grants}/${c.id}`);
-    }
-    for (const d of desired) {
-      if (currentKeys.has(`${d.key}@${d.level}`)) continue;
-      const [kind, id] = d.key.split(":");
-      await api.post(ApiPath.grants, {
-        resource_type: "view",
-        resource_id: view.id,
-        subject_type: kind,
-        subject_id: id,
-        access: d.level,
-        project_ids: [],
-      });
-    }
-  };
-
   const save = useMutation({
     mutationFn: async () => {
       const payload = {
@@ -200,18 +162,12 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
           .filter((entry) => entry.name && entry.query),
       };
       if (view) {
-        let saved = await api.patch<View>(apiViewPath(view.id), payload satisfies ViewUpdate);
-        if (canManageSharing) {
-          saved = await api.put<View>(apiViewSharingPath(view.id), {
-            global_access: globalAccess(),
-          } satisfies ViewSharingUpdate);
-          await reconcileShares();
-          // Transfer LAST — after it we may no longer hold manage rights.
-          if (transferTo) {
-            saved = await api.post<View>(apiViewTransferPath(view.id), { user_id: transferTo });
-          }
-        }
-        return saved;
+        if (!canManageSharing) return api.patch<View>(apiViewPath(view.id), payload satisfies ViewUpdate);
+        return api.post<View>(`${apiViewPath(view.id)}/save`, {
+          definition: payload, sharing: { global_access: globalAccess() }, grants: sharingEdits(sharingDraft),
+          transfer_to: transferTo || undefined,
+          expected_owner_id: sharingBase.owner, expected_global_access: sharingBase.access,
+        } satisfies SharedSave<ViewUpdate>);
       }
       return api.post<View>(ApiPath.views, {
         ...payload,
@@ -222,6 +178,7 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
     },
     onSuccess: async (saved) => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.views });
+      await invalidateEntities(queryClient, Entity.view, Entity.accessGrant);
       onClose();
       if (!view) {
         // Jump straight into the freshly created view.
@@ -248,8 +205,9 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
   const saveSlqError = save.isError ? slqErrorOf(save.error) : null;
 
   return (
-    <Modal title={view ? "Edit view" : "New view"} onClose={onClose} wide>
-      <form onSubmit={onSubmit} className="flex flex-col gap-4">
+    <Modal title={view ? "Edit view" : "New view"} onClose={() => { if (!save.isPending) onClose(); }} wide>
+      <form onSubmit={onSubmit}>
+      <fieldset disabled={save.isPending} className="flex min-w-0 flex-col gap-4">
         <div className="grid grid-cols-2 gap-3">
           <TextField
             label="Name"
@@ -378,6 +336,7 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
 
         {canManageSharing && (
           <ViewSharingEditor
+            existing={view ? { id: view.id, draft: sharingDraft, onChange: setSharingDraft } : undefined}
             serverAccess={serverAccess}
             onServerAccess={setServerAccess}
             shares={shareRows}
@@ -389,7 +348,7 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
         )}
 
         {save.isError && !saveSlqError && (
-          <ErrorText error={save.error} />
+          <div role="alert"><ErrorText error={save.error} /></div>
         )}
         {saveSlqError && (
           <p className="text-xs text-red-400">Query rejected on save: {saveSlqError.message}</p>
@@ -411,6 +370,7 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
             {save.isPending ? "Saving…" : view ? "Save view" : "Create view"}
           </Button>
         </div>
+      </fieldset>
       </form>
     </Modal>
   );

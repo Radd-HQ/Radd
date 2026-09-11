@@ -1,16 +1,19 @@
+import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
 from radd.db import get_session
+from radd.apitypes import TOTAL_COUNT_HEADER
 from radd.kernel import capabilities as kcaps
 from radd.modules.auth import authz
+from radd.modules.auth.types import Permission
 from radd.modules.auth.deps import CurrentUser
 
-from . import service
-from .schemas import InstanceConfigRead, InstanceStatusRead, ProjectCreate, ProjectRead
+from . import service, directory
+from .schemas import InstanceConfigRead, InstanceStatusRead, ProjectCreate, ProjectRead, ProjectSummaryRead
 
 project_router = APIRouter(prefix="/projects", tags=["projects"])
 instance_router = APIRouter(tags=["instance"])
@@ -64,9 +67,8 @@ async def instance_status(user: CurrentUser) -> InstanceStatusRead:
     generically from every capability in the `connector` category, so a new connector
     plugin appears here with zero edits."""
     from radd.exceptions import ForbiddenError
-    from radd.modules.auth.types import InstanceRole
 
-    if InstanceRole(user.instance_role) is not InstanceRole.ADMIN:
+    if not authz.is_instance_admin(user):
         raise ForbiddenError("instance settings require an instance admin")
     caps = kcaps.capability_map()
     return InstanceStatusRead(
@@ -102,45 +104,41 @@ async def login_options(session: Session) -> InstanceConfigRead:
     )
 
 
-def _project_read(project: object, permissions: frozenset, via: str | None = None) -> ProjectRead:
-    """Hydrate the CURRENT user's effective permissions onto the read model.
-
-    `via` (RADD-1041) is `auth.authz_batch.ProjectVia.value` — "entitled" or
-    "related" — carried straight from `visible_projects`'s own split, never
-    recomputed here. `create_project` has no `visible_projects` lookup behind
-    its response, so it passes none."""
-    read = ProjectRead.model_validate(project)
-    return read.model_copy(update={"permissions": sorted(permissions), "via": via})
-
-
 @project_router.post("", response_model=ProjectRead, status_code=201)
 async def create_project(data: ProjectCreate, session: Session, user: CurrentUser) -> ProjectRead:
     await authz.require(session, user, authz.Permission.PROJECT_CREATE)
     project = await service.create_project(session, data, actor_id=user.id)
     permissions = await authz.effective_permissions(session, user, project=project)
-    return _project_read(project, permissions)
+    return directory.project_read(project, permissions)
 
 
 @project_router.get("", response_model=list[ProjectRead])
-async def list_projects(session: Session, user: CurrentUser) -> list[ProjectRead]:
-    # RADD-937: the projects the caller should be OFFERED — entitled (item.read
-    # held unqualified, i.e. granted) plus the ones they have actual work in.
-    #
-    # This used to be `require_anywhere(item.read)`, which is the REACHABILITY
-    # answer: `holds_base` counts `item.read@own` as holding `item.read`, so an
-    # account with no grants at all was listed against every project on the
-    # instance. Reachability is still the right gate everywhere it is used to
-    # SCOPE rows — your own items must keep surfacing wherever they are — it is
-    # only wrong as the answer to "which projects are yours".
-    #
-    # RADD-1041: each row also carries WHY (`ProjectVisibility.via`), reusing
-    # visible_projects' own entitled/related split rather than recomputing it —
-    # presentation metadata for the sidebar's "related projects" preference.
-    # The SET of projects returned is unchanged from RADD-937: `per_project`'s
-    # keys are exactly what they were before `via` existed.
-    per_project = await authz.visible_projects(session, user)
-    projects = [p for p in await service.list_projects(session) if p.id in per_project]
-    return [
-        _project_read(p, per_project[p.id].permissions, via=per_project[p.id].via.value)
-        for p in projects
-    ]
+async def list_projects(
+    session: Session, user: CurrentUser, response: Response,
+    q: Annotated[str, Query(max_length=200)] = "",
+    limit: Annotated[int | None, Query(ge=1, le=200)] = None,
+    offset: Annotated[int, Query(ge=0)] = 0, hide_related: bool = False,
+    permission: Permission | None = None,
+    ids: Annotated[list[uuid.UUID] | None, Query(max_length=200)] = None,
+) -> list[ProjectRead]:
+    rows, total = await directory.page(
+        session, user, q=q, limit=limit, offset=offset, hide_related=hide_related, ids=ids, permission=permission,
+    )
+    response.headers[TOTAL_COUNT_HEADER] = str(total)
+    return rows
+
+
+@project_router.get("/summary", response_model=ProjectSummaryRead)
+async def project_summary(session: Session, user: CurrentUser) -> ProjectSummaryRead:
+    """Aggregate affordances are independent of the directory's current page."""
+    return await directory.summary(session, user)
+
+
+@project_router.get("/by-key/{key}", response_model=ProjectRead)
+async def project_by_key(key: str, session: Session, user: CurrentUser) -> ProjectRead:
+    return await directory.by_identity(session, user, key=key)
+
+
+@project_router.get("/{project_id}", response_model=ProjectRead)
+async def project_by_id(project_id: uuid.UUID, session: Session, user: CurrentUser) -> ProjectRead:
+    return await directory.by_identity(session, user, identifier=project_id)

@@ -63,3 +63,9 @@ class ProjectRead(BaseModel):
     #: string, not the auth enum (`ProjectVia`): projects loads before auth, so
     #: this file cannot import it — same reason `permissions` above is `str`.
     via: str | None = None
+
+
+class ProjectSummaryRead(BaseModel):
+    total: int
+    related_count: int
+    permissions: list[str]

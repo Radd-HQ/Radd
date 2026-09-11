@@ -1,3 +1,4 @@
+import { TeamSelect } from "../teams/TeamSelect";
 import { useEffect, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Slot, SlotId } from "@radd/plugin-sdk";
@@ -18,7 +19,6 @@ import {
   effectiveScreenQuery,
   issueTypesQuery,
   itemSlaQuery,
-  teamsQuery,
   projectDirectoryQuery,
 } from "../../lib/queries";
 import { ValueChip } from "./ValueChip";
@@ -645,22 +645,8 @@ function SlaPanel({ itemId }: { itemId: string }) {
   );
 }
 
-/** Team picker (`GET /teams`) — spec-02 field. */
+/** Team relationships retain their item-authorized selected label. */
 function TeamPicker({ item, onPatch }: PickerProps) {
-  const teams = useQuery(teamsQuery());
-  return (
-    <SelectField
-      label="Team"
-      value={item.team?.id ?? ""}
-      onChange={(event) => onPatch({ team_id: event.target.value || null })}
-      hint={(teams.data ?? []).length === 0 ? "No teams yet" : undefined}
-    >
-      <option value="">None</option>
-      {(teams.data ?? []).map((team) => (
-        <option key={team.id} value={team.id}>
-          {team.name}
-        </option>
-      ))}
-    </SelectField>
-  );
+  return <TeamSelect label="Team" value={item.team?.id ?? ""} selectedLabel={item.team?.name}
+    onChange={id => onPatch({ team_id: id || null })} />;
 }

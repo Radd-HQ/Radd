@@ -1,10 +1,11 @@
 import uuid
-from typing import Annotated
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
+from radd.choices import ChoiceRead
 from radd.modules.auth import service as auth
 from radd.modules.auth.deps import CurrentUser
 from radd.modules.items import service as items_service
@@ -22,7 +23,8 @@ from .schemas import (
     WatcherRef,
     WatchersRead,
 )
-from .types import NotificationType
+from .types import NotificationType, RuleScope
+from .options import subscription_options
 
 router = APIRouter(tags=["notify"])
 
@@ -75,6 +77,19 @@ async def get_preferences(session: Session, user: CurrentUser) -> NotificationPr
     page can show every inherited cell and where it came from.
     """
     return await prefs_read.read(session, user)
+
+
+@router.get("/notifications/subscription-options", response_model=list[ChoiceRead])
+async def get_subscription_options(
+    session: Session, user: CurrentUser, response: Response,
+    scope: Literal[RuleScope.PROJECT, RuleScope.SPACE, RuleScope.TEAM],
+    q: Annotated[str, Query(max_length=200)] = "",
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[ChoiceRead]:
+    rows, total = await subscription_options(session, user, scope=scope, q=q, limit=limit, offset=offset)
+    response.headers["X-Total-Count"] = str(total)
+    return rows
 
 
 @router.put("/notifications/preferences", response_model=NotificationPrefsRead)

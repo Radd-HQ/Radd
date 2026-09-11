@@ -93,7 +93,7 @@ export function ApprovalsCard({ item, project }: { item: Item; project: Project 
 
   const { data } = useQuery({
     queryKey: approvalsKey(item.id),
-    queryFn: () => api.get<ItemApprovals>(itemApprovalsPath(item.id)),
+    queryFn: ({ signal }) => api.get<ItemApprovals>(itemApprovalsPath(item.id), { signal }),
   });
 
   const refresh = () => void queryClient.invalidateQueries({ queryKey: approvalsKey(item.id) });

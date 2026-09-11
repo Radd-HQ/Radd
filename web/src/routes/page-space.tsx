@@ -4,8 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import { BookOpen, ChevronRight } from "lucide-react";
 import { RoutePath } from "../lib/constants";
 import { usePermissions } from "../lib/hooks";
-import { pageByPathQuery, pagesQuery, pageSpacesQuery } from "../lib/queries";
+import { pageByPathQuery, pagesQuery, pageSpaceByIdentityQuery } from "../lib/queries";
 import { Permission } from "../lib/types";
+import { Button } from "../components/Button";
+import { Modal } from "../components/Modal";
 import { EmptyState } from "../components/EmptyState";
 import { Spinner } from "../components/Spinner";
 import { PageView } from "../components/pages/PageView";
@@ -32,10 +34,10 @@ export function PageSpacePage() {
   const { spaceSlug = "", pageSlug } = useParams({ strict: false });
   const navigate = useNavigate();
   const perms = usePermissions();
-  const spaces = useQuery(pageSpacesQuery());
-  const space = spaces.data?.find(
-    (entry) => entry.slug === spaceSlug || entry.id === spaceSlug,
-  );
+  const spaceQuery = useQuery(pageSpaceByIdentityQuery(spaceSlug));
+  const space = spaceQuery.data;
+  const [treeOpen, setTreeOpen] = useState(false);
+  useEffect(() => setTreeOpen(false), [spaceSlug, pageSlug]);
   const pages = useQuery({ ...pagesQuery(space?.id ?? ""), enabled: Boolean(space) });
   const page = useQuery({
     ...pageByPathQuery(spaceSlug, pageSlug ?? ""),
@@ -72,9 +74,13 @@ export function PageSpacePage() {
     });
   }, [canonicalSpace, canonicalPage, spaceSlug, pageSlug, navigate]);
 
-  if (spaces.isPending || (Boolean(space) && pages.isPending)) {
+  if (spaceQuery.isPending || (Boolean(space) && pages.isPending)) {
     return <Spinner label="Loading pages…" />;
   }
+  if (spaceQuery.isError) return <div className="space-y-2 p-6">
+    <QueryError label="page space" error={spaceQuery.error} />
+    <Button variant="secondary" onClick={() => void spaceQuery.refetch()}>Retry space</Button>
+  </div>;
   if (pages.isError || !space) {
     return (
       <div className="p-6">
@@ -102,7 +108,7 @@ export function PageSpacePage() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center gap-1.5 border-b border-subtle px-5 py-3 text-sm">
+      <header className="flex min-w-0 flex-wrap items-center gap-1.5 border-b border-subtle px-5 py-3 text-sm">
         <Link
           to={RoutePath.pages}
           className="flex items-center gap-1.5 text-fg-secondary hover:text-fg"
@@ -114,7 +120,7 @@ export function PageSpacePage() {
         <Link
           to={RoutePath.pageSpace}
           params={{ spaceSlug: space.slug }}
-          className="font-medium text-heading hover:underline"
+          className="min-w-0 break-words font-medium text-heading hover:underline"
         >
           {space.name}
         </Link>
@@ -129,10 +135,18 @@ export function PageSpacePage() {
         ))}
       </header>
 
+      <div className="px-3 py-2 lg:hidden">
+        <Button variant="secondary" aria-haspopup="dialog" onClick={() => setTreeOpen(true)}>Browse pages</Button>
+      </div>
+      {treeOpen && <Modal title="Pages in this space" onClose={() => setTreeOpen(false)}>
+        <div onClick={event => { if ((event.target as HTMLElement).closest("a")) setTreeOpen(false); }}>
+          <PageTree spaceId={space.id} spaceSlug={space.slug} rows={rows} selectedId={page.data?.id} canWrite={canWrite} />
+        </div>
+      </Modal>}
       <div className="flex min-h-0 flex-1">
         <nav
           aria-label="Page tree"
-          className="w-64 shrink-0 overflow-y-auto border-r border-subtle p-2"
+          className="hidden w-64 shrink-0 overflow-y-auto border-r border-subtle p-2 lg:block"
         >
           <PageTree
             spaceId={space.id}

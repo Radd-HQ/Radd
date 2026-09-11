@@ -249,11 +249,10 @@ async def _apply_provisioning_template(
     an admin's later change" a property of the data rather than a rule someone
     has to remember — no code path reads these rules again for this account.
 
-    Every failure here is swallowed to a log line, deliberately. A rule is
-    configured weeks before it is used; a team linked to an AD group in the
-    meantime (whose membership then belongs to the directory) must not turn a
-    sign-in into an error for someone who did nothing wrong. They land on the
-    Baseline and an admin grants the rest.
+    Every failure here is swallowed to a log line, deliberately. Each application owns a savepoint so a stale target or database refusal
+    cannot poison the account/identity transaction or discard other valid rules.
+    Teams may contain direct users and directory groups; provisioning adds a
+    direct membership without changing inherited membership.
     """
     from radd.modules.auth import grants
     from radd.modules.teams import service as teams_service
@@ -263,9 +262,10 @@ async def _apply_provisioning_template(
             continue
         for template in rule_grants:
             try:
-                await grants.create_grant(
-                    session, template.role_id, user_id=user.id, project_id=template.project_id
-                )
+                async with session.begin_nested():
+                    await grants.create_grant(
+                        session, template.role_id, user_id=user.id, project_id=template.project_id
+                    )
             except Exception:  # noqa: BLE001 — a stale rule must not break a login
                 logger.warning(
                     "sso: skipped role %s (project %s) from rule %s for %s",
@@ -279,7 +279,8 @@ async def _apply_provisioning_template(
             try:
                 # A team deleted after the template was written is the stale-rule
                 # case that survives RADD-829 — skipped, sign-in completes.
-                await teams_service.add_team_member(session, team_id, user.id)
+                async with session.begin_nested():
+                    await teams_service.add_team_member(session, team_id, user.id)
             except Exception:  # noqa: BLE001
                 logger.warning(
                     "sso: skipped team %s from rule %s for %s",

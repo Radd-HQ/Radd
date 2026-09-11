@@ -20,65 +20,42 @@ import { Link } from "@tanstack/react-router";
 import { Users, UsersRound } from "lucide-react";
 import { RoutePath } from "../../lib/constants";
 import {
-  pageSpacesQuery,
-  projectsQuery,
   teamAccessQuery,
   userAccessQuery,
   userPermissionsQuery,
 } from "../../lib/queries";
 import { GrantSubject, type Membership, type PermissionSource, type ResourceTypeAccess } from "../../lib/types";
 import { SelectField } from "../SelectField";
+import { ProjectSelect } from "../projects/ProjectSelect";
+import { OptionSelect } from "../DirectoryChoices";
+import { OptionResource } from "../../lib/queries/options";
+import { Button } from "../Button";
 import { ErrorText } from "../ErrorText";
 
-const GLOBAL_SCOPE = "";
-const PROJECT_PREFIX = "project:";
-const SPACE_PREFIX = "space:";
-
-/** The atom half, with a scope picker (instance-wide / one project / one space). */
+/** The atom half resolves only an explicitly selected scope; catalogs open lazily. */
 export function EffectivePermissions({ userId }: { userId: string }) {
-  const [scope, setScope] = useState(GLOBAL_SCOPE);
-  const projects = useQuery(projectsQuery());
-  const spaces = useQuery(pageSpacesQuery());
-  const projectId = scope.startsWith(PROJECT_PREFIX) ? scope.slice(PROJECT_PREFIX.length) : undefined;
-  const spaceId = scope.startsWith(SPACE_PREFIX) ? scope.slice(SPACE_PREFIX.length) : undefined;
-  const { data, isPending, isError, error } = useQuery(
-    userPermissionsQuery(userId, { projectId, spaceId }),
-  );
+  return <section aria-label="Effective permissions"><PermissionExplanation key={userId} userId={userId} /></section>;
+}
 
-  const picker = (
-    <div className="flex items-baseline gap-2">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
-        Effective permissions
-      </p>
-      <SelectField
-        label=""
-        ariaLabel="Resolution scope"
-        className="w-52"
-        value={scope}
-        onChange={(event) => setScope(event.target.value)}
-      >
-        <option value={GLOBAL_SCOPE}>Instance-wide</option>
-        {(projects.data ?? []).length > 0 && (
-          <optgroup label="On a project">
-            {(projects.data ?? []).map((project) => (
-              <option key={project.id} value={`${PROJECT_PREFIX}${project.id}`}>
-                {project.key} — {project.name}
-              </option>
-            ))}
-          </optgroup>
-        )}
-        {(spaces.data ?? []).length > 0 && (
-          <optgroup label="In a space">
-            {(spaces.data ?? []).map((space) => (
-              <option key={space.id} value={`${SPACE_PREFIX}${space.id}`}>
-                {space.name}
-              </option>
-            ))}
-          </optgroup>
-        )}
+function PermissionExplanation({ userId }: { userId: string }) {
+  const [kind, setKind] = useState("global");
+  const [target, setTarget] = useState("");
+  const ready = kind === "global" || Boolean(target);
+  const { data, isPending, isError, error, refetch } = useQuery({
+    ...userPermissionsQuery(userId, { projectId: kind === "project" ? target : undefined,
+      spaceId: kind === "space" ? target : undefined }), enabled: ready,
+  });
+  const picker = <div className="flex flex-wrap items-end gap-2">
+    <div className="min-w-0 flex-1">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-fg-faint">Effective permissions</p>
+      <SelectField label="Resolution scope" value={kind} onChange={event => { setKind(event.target.value); setTarget(""); }}>
+        <option value="global">Instance-wide</option><option value="project">On a project</option><option value="space">In a wiki space</option>
       </SelectField>
     </div>
-  );
+    {kind === "project" && <div className="min-w-0 basis-60 grow"><ProjectSelect label="Permission project" value={target} onChange={setTarget} /></div>}
+    {kind === "space" && <div className="min-w-0 basis-60 grow"><OptionSelect label="Permission wiki space" resource={OptionResource.space} value={target} onChange={setTarget} /></div>}
+  </div>;
+  if (!ready) return <div className="space-y-2">{picker}<p className="text-xs text-fg-muted">Choose a {kind === "project" ? "project" : "wiki space"} to resolve permissions.</p></div>;
 
   if (isPending)
     return (
@@ -91,7 +68,8 @@ export function EffectivePermissions({ userId }: { userId: string }) {
     return (
       <div className="flex flex-col gap-2">
         {picker}
-        <ErrorText error={error} />
+        <div role="alert"><ErrorText error={error} /></div>
+        <Button variant="secondary" onClick={() => void refetch()}>Retry permissions</Button>
       </div>
     );
 
@@ -99,11 +77,11 @@ export function EffectivePermissions({ userId }: { userId: string }) {
   const admin = rows.find((row) => row.kind === "instance-admin");
   if (admin) {
     return (
-      <p className="rounded-md border border-accent/40 bg-accent/5 px-3 py-2 text-xs text-fg-secondary">
+      <div className="space-y-2">{picker}<p className="rounded-md border border-accent/40 bg-accent/5 px-3 py-2 text-xs text-fg-secondary">
         <strong className="text-heading">Everything.</strong> An instance administrator bypasses
         every permission check, so no role or grant applies — switch Administrator off to make
         the rules below take effect.
-      </p>
+      </p></div>
     );
   }
 
@@ -404,7 +382,7 @@ export function TeamAccessSection({ teamId }: { teamId: string }) {
       </p>
       {groups.size === 0 ? (
         <p className="text-xs text-fg-muted">
-          Nothing — this team is not attached to any project and holds no role grants.
+          This team currently confers no permissions through role grants.
         </p>
       ) : (
         [...groups.entries()].map(([label, atoms]) => (

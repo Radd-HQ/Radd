@@ -8,11 +8,13 @@ import {
   NOTIFICATIONS_POLL_MS,
   apiItemWatchersPath,
 } from "../constants";
+import type { DirectoryOption } from "./options";
 import { queryKeys } from "./shared";
 import type {
   NotificationList,
   NotificationPrefs,
   WatchersRead,
+  RuleScopeValue,
 } from "../types";
 
 /** Inbox page size (RADD-884) — the server pages at ≤200; before this the page
@@ -23,8 +25,9 @@ export const INBOX_PAGE_SIZE = 100;
 export const notificationsQuery = (unread: boolean, page = 1) =>
   queryOptions({
     queryKey: queryKeys.notifications(unread, page),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<NotificationList>(ApiPath.notifications, {
+        signal,
         query: {
           unread: unread ? "true" : undefined,
           limit: String(INBOX_PAGE_SIZE),
@@ -42,8 +45,9 @@ export const notificationsQuery = (unread: boolean, page = 1) =>
  */
 export const notificationsBadgeQuery = queryOptions({
   queryKey: queryKeys.notificationsBadge,
-  queryFn: () =>
+  queryFn: ({ signal }) =>
     api.get<NotificationList>(ApiPath.notifications, {
+        signal,
       query: { unread: "true", limit: "1" },
     }),
   meta: entityMeta(Entity.notification),
@@ -64,13 +68,23 @@ export const notificationsBadgeQuery = queryOptions({
 export const notificationPrefsQuery = () =>
   queryOptions({
     queryKey: queryKeys.notificationPrefs,
-    queryFn: () => api.get<NotificationPrefs>(ApiPath.notificationPrefs),
+    meta: entityMeta(Entity.role, Entity.project, Entity.docSpace, Entity.team, Entity.group, Entity.member),
+    queryFn: ({ signal }) => api.get<NotificationPrefs>(ApiPath.notificationPrefs, { signal }),
   });
 
 /** Watcher list + whether the current user watches (spec 26). */
 export const itemWatchersQuery = (itemId: string) =>
   queryOptions({
     queryKey: queryKeys.itemWatchers(itemId),
-    queryFn: () => api.get<WatchersRead>(apiItemWatchersPath(itemId)),
+    queryFn: ({ signal }) => api.get<WatchersRead>(apiItemWatchersPath(itemId), { signal }),
     meta: entityMeta(Entity.watcher),
   });
+
+export const subscriptionOptionsKey = ["subscription-options"] as const;
+export const subscriptionOptionsQuery = (scope: RuleScopeValue, q: string, page: number) => queryOptions({
+  queryKey: [...subscriptionOptionsKey, scope, q.trim(), page],
+  meta: entityMeta(Entity.role, Entity.project, Entity.docSpace, Entity.team, Entity.group, Entity.member),
+  queryFn: ({ signal }) => api.getPaged<DirectoryOption>("/notifications/subscription-options", {
+    signal, query: { scope, q: q.trim(), limit: "50", offset: String(page * 50) },
+  }),
+});

@@ -130,9 +130,9 @@ interface RolePanelProps {
 function RoleImpact({ roleId, dirty }: { roleId: string; dirty: boolean }) {
   const impact = useQuery({
     queryKey: ["role-impact", roleId] as const,
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<{ role_id: string; total_users: number; everyone: boolean }>(
-        `${apiRolePath(roleId)}/impact`,
+        `${apiRolePath(roleId)}/impact`, { signal },
       ),
     enabled: dirty,
     staleTime: 60_000,

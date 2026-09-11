@@ -4,7 +4,7 @@ import { Check, ChevronDown, ChevronUp, FileText, Plus, Shapes, Star, Trash2 } f
 import { api, errorMessage } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
-import { issueTypesQuery, projectsQuery, queryKeys } from "../../lib/queries";
+import { issueTypesQuery, projectByIdQuery, queryKeys } from "../../lib/queries";
 import { Permission, type IssueType } from "../../lib/types";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
@@ -20,8 +20,8 @@ const PALETTE = ["#64748b", "#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6
 /** Per-project issue types admin (spec 51). Reached at /p/$key/settings/types. */
 export function IssueTypesSettingsPage({ projectId }: { projectId?: string }) {
   const perms = usePermissions();
-  const projects = useQuery(projectsQuery());
-  const project = (projects.data ?? []).find((entry) => entry.id === projectId);
+  const projectQuery = useQuery(projectByIdQuery(projectId ?? ""));
+  const project = projectQuery.data;
   const canManage = perms.project(project, Permission.projectManage);
   const types = useQuery({ ...issueTypesQuery(projectId ?? ""), enabled: Boolean(projectId) });
   const queryClient = useQueryClient();
@@ -51,9 +51,11 @@ export function IssueTypesSettingsPage({ projectId }: { projectId?: string }) {
         </>
       }
     >
-      {projects.isPending || types.isPending ? (
+      {(projectId && projectQuery.isPending) || (projectId && types.isPending) ? (
         <TableSkeleton rows={5} />
-      ) : !projectId ? (
+      ) : projectQuery.isError ? (
+        <QueryError label="project" error={projectQuery.error} />
+      ) : !project ? (
         <EmptyState icon={Shapes} message="Create a project first — issue types live per project." />
       ) : types.isError ? (
         <QueryError label="types" error={types.error} />
@@ -64,7 +66,7 @@ export function IssueTypesSettingsPage({ projectId }: { projectId?: string }) {
               <TypeRow
                 key={issueType.id}
                 issueType={issueType}
-                projectId={projectId}
+                projectId={project.id}
                 canManage={canManage}
                 onMoveUp={index > 0 ? () => move(index, -1) : undefined}
                 onMoveDown={index < sorted.length - 1 ? () => move(index, 1) : undefined}
@@ -74,7 +76,7 @@ export function IssueTypesSettingsPage({ projectId }: { projectId?: string }) {
               <li className="px-4 py-6 text-center text-sm text-fg-muted">No types yet.</li>
             )}
           </ul>
-          {canManage && <AddTypeForm projectId={projectId} />}
+          {canManage && <AddTypeForm projectId={project.id} />}
         </>
       )}
     </SettingsPage>

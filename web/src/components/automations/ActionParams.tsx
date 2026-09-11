@@ -1,4 +1,8 @@
-import { useId, useState, type ReactNode } from "react";
+import { OptionSelect, OptionTextField } from "../DirectoryChoices";
+import { OptionResource } from "../../lib/queries/options";
+import { ProjectSelect } from "../projects/ProjectSelect";
+import { CycleSelect } from "../cycles/CycleSelect";
+import { useState, type ReactNode } from "react";
 import { Braces } from "lucide-react";
 import { AUTOMATION_CLEAR_VALUE } from "../../lib/constants";
 import { COMMENT_VISIBILITY_LABELS, PRIORITY_META, PRIORITY_ORDER } from "../../lib/meta";
@@ -22,7 +26,7 @@ interface ActionParamsProps {
 }
 
 /** Clearable pickers (assignee/team/cycle) share this option. */
-const CLEAR_OPTION = <option value={AUTOMATION_CLEAR_VALUE}>— Clear (unset) —</option>;
+const CLEAR_CHOICE = { value: AUTOMATION_CLEAR_VALUE, label: "Clear (unset)", hint: "" };
 
 /** Does this stored value carry a `{{token}}`? Mirrors the server's grammar. */
 const hasToken = (value: unknown) => /\{\{\s*[a-zA-Z0-9_.]+\s*\}\}/.test(String(value ?? ""));
@@ -128,15 +132,14 @@ export function ActionParams({ action, pickers, listId, onParams }: ActionParams
   switch (action.type) {
     case ActionType.setState:
       return (
-        <TextField
+        <OptionTextField resource={OptionResource.state}
           label="State name"
           value={str(p.state)}
-          list={`${listId}-states`}
           placeholder="In Progress"
           // Already a free-text field, so a token needs no mode switch — the
           // hint is the whole affordance (spec 120).
           hint="A state name, or a {{token}} from a node above this one."
-          onChange={(event) => set({ state: event.target.value })}
+          onChange={value => set({ state: value })}
         />
       );
     case ActionType.setPriority:
@@ -175,19 +178,8 @@ export function ActionParams({ action, pickers, listId, onParams }: ActionParams
           placeholder="{{triage.owner}}"
           onChange={(assignee) => set({ assignee })}
         >
-          <SelectField
-            label="Assignee"
-            value={str(p.assignee)}
-            onChange={(event) => set({ assignee: event.target.value })}
-          >
-            <option value="">Select…</option>
-            {CLEAR_OPTION}
-            {pickers.userEmails.map((user) => (
-              <option key={user.email} value={user.email}>
-                {user.name} ({user.email})
-              </option>
-            ))}
-          </SelectField>
+          <OptionSelect resource={OptionResource.user} label="Assignee" value={str(p.assignee)}
+            canBrowse={pickers.canChoosePeople} presets={[CLEAR_CHOICE]} onChange={assignee => set({ assignee })} />
         </TokenizableField>
       );
     case ActionType.setTeam:
@@ -199,38 +191,18 @@ export function ActionParams({ action, pickers, listId, onParams }: ActionParams
           placeholder="{{triage.team}}"
           onChange={(team) => set({ team })}
         >
-          <SelectField
-            label="Team"
-            value={str(p.team)}
-            onChange={(event) => set({ team: event.target.value })}
-          >
-            <option value="">Select…</option>
-            {CLEAR_OPTION}
-            {pickers.teamNames.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </SelectField>
+          <OptionSelect resource={OptionResource.team} label="Team" value={str(p.team)}
+            presets={[CLEAR_CHOICE]} onChange={team => set({ team })} />
         </TokenizableField>
       );
     case ActionType.assignRoundRobin:
       // No clear option and no arity control: this always runs per item (the
       // server fixes it), and "assign to nobody, round-robin" is not a thing.
       return (
-        <SelectField
-          label="Round-robin across team"
-          value={str(p.team)}
-          hint="Each item goes to the next member in turn, skipping anyone inactive or away."
-          onChange={(event) => set({ team: event.target.value })}
-        >
-          <option value="">Select…</option>
-          {pickers.teamNames.map((name) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
-          ))}
-        </SelectField>
+        <div className="flex flex-col gap-1">
+          <OptionSelect resource={OptionResource.team} label="Round-robin across team" value={str(p.team)} onChange={team => set({ team })} />
+          <p className="text-xs text-fg-muted">Each item goes to the next member in turn, skipping anyone inactive or away.</p>
+        </div>
       );
     case ActionType.addLabel:
     case ActionType.removeLabel:
@@ -252,30 +224,19 @@ export function ActionParams({ action, pickers, listId, onParams }: ActionParams
           placeholder="{{triage.cycle}}"
           onChange={(cycle) => set({ cycle })}
         >
-          <SelectField
-            label="Cycle"
-            value={str(p.cycle)}
-            onChange={(event) => set({ cycle: event.target.value })}
-          >
-            <option value="">Select…</option>
-            {CLEAR_OPTION}
-            {pickers.cycleNames.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </SelectField>
+          <CycleSelect label="Cycle" valueBy="name" value={str(p.cycle)}
+            emptyValue={AUTOMATION_CLEAR_VALUE} emptyLabel="Clear (unset)"
+            onChange={cycle => set({ cycle })} />
         </TokenizableField>
       );
     case ActionType.setRelease:
       return (
-        <TextField
+        <OptionTextField resource={OptionResource.release}
           label="Release version"
           value={str(p.release)}
-          list={`${listId}-releases`}
           placeholder="1.2.0"
           hint={`Type "${AUTOMATION_CLEAR_VALUE}" to clear`}
-          onChange={(event) => set({ release: event.target.value })}
+          onChange={value => set({ release: value })}
         />
       );
     case ActionType.setCustomField:
@@ -285,18 +246,8 @@ export function ActionParams({ action, pickers, listId, onParams }: ActionParams
     case ActionType.createItem:
       return (
         <div className="flex flex-col gap-2.5">
-          <SelectField
-            label="In project"
-            value={str(p.project)}
-            onChange={(event) => set({ project: event.target.value })}
-          >
-            <option value="">Select…</option>
-            {pickers.projectKeys.map((key) => (
-              <option key={key} value={key}>
-                {key}
-              </option>
-            ))}
-          </SelectField>
+          <ProjectSelect label="In project" valueBy="key" value={str(p.project)}
+            onChange={project => set({ project })} />
           <TextField
             label="Title"
             value={str(p.title)}
@@ -352,28 +303,11 @@ export function ActionParams({ action, pickers, listId, onParams }: ActionParams
     case ActionType.notifyUser:
       return (
         <div className="flex flex-col gap-2.5">
-          <SelectField
-            label="User"
-            value={str(p.user)}
-            onChange={(event) => set({ user: event.target.value })}
-            hint="A role notifies whoever holds it on each item, so the automation is written once for the whole project."
-          >
-            <option value="">Select…</option>
-            {/* Roles (RADD-918). The param took a literal address only, so
-                "notify the assignee" had to name a person and stopped being
-                true the moment the issue was reassigned. */}
-            <optgroup label="By role on the item">
-              <option value="assignee">Its assignee</option>
-              <option value="reporter">Its reporter</option>
-            </optgroup>
-            <optgroup label="A specific person">
-              {pickers.userEmails.map((user) => (
-                <option key={user.email} value={user.email}>
-                  {user.name} ({user.email})
-                </option>
-              ))}
-            </optgroup>
-          </SelectField>
+          <OptionSelect resource={OptionResource.user} label="User" value={str(p.user)}
+            canBrowse={pickers.canChoosePeople}
+            presets={[{ value: "assignee", label: "Its assignee", hint: "" }, { value: "reporter", label: "Its reporter", hint: "" }]}
+            onChange={user => set({ user })} />
+          <p className="text-xs text-fg-muted">A role notifies whoever holds it on each item.</p>
           <TextField
             label="Message"
             value={str(p.message)}
@@ -439,33 +373,21 @@ interface CommentControlProps {
 }
 
 /** send_email (spec 66): recipient (role or literal address) + templated
- * subject/body. The recipient is a select-or-input — a datalist offering the
- * roles and every active user's address over a free-text field. */
+ * subject/body. Roles remain small static suggestions; active users are
+ * searched only when requested, without restricting literal addresses or tokens. */
 function SendEmailParams({
   pickers,
   params,
   set,
   str,
 }: ParamsControlProps & Pick<CommentControlProps, "str">) {
-  const recipientsId = useId();
   return (
     <div className="flex flex-col gap-2.5">
-      <datalist id={recipientsId}>
-        {Object.values(EmailRecipient).map((role) => (
-          <option key={role} value={role} />
-        ))}
-        {pickers.userEmails.map((user) => (
-          <option key={user.email} value={user.email} />
-        ))}
-      </datalist>
-      <TextField
-        label="To"
-        value={str(params.to)}
-        list={recipientsId}
+      <OptionTextField resource={OptionResource.user} canBrowse={pickers.canChoosePeople}
+        label="To" value={str(params.to)} suggestions={Object.values(EmailRecipient)}
         placeholder="reporter / assignee / contact / someone@example.com"
-        hint="A role (contact = the external requester) or a literal address. A role belongs to ONE issue, so choosing one makes this run per item."
-        onChange={(event) => set({ to: event.target.value })}
-      />
+        hint="A role, a literal email address, or a template token."
+        onChange={to => set({ to })} />
       <TextField
         label="Subject"
         value={str(params.subject)}

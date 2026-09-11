@@ -13,6 +13,10 @@ from radd.modules.groups import service as groups_service
 from radd.modules.groups.service import Group
 
 from .models import Team, TeamManager, TeamMember
+from .options import list_options as list_options, reference_options as reference_options
+from .reading import (candidate_page as candidate_page, member_page as member_page,
+                      member_projection, member_counts as member_counts, stewardship_page as stewardship_page,
+                      steward_candidates as steward_candidates, group_page as group_page)
 from .schemas import TeamCreate, TeamUpdate
 from .types import TeamChange, TeamEntity, TeamEvent
 
@@ -50,9 +54,9 @@ async def list_teams(
     limit: int | None = None,
     offset: int = 0,
 ) -> list[Team]:
-    stmt = select(Team).order_by(Team.name)
-    if q:
-        stmt = stmt.where(Team.name.ilike(ilike_term(q)))
+    stmt = select(Team).order_by(Team.name, Team.id)
+    if q and q.strip():
+        stmt = stmt.where(Team.name.ilike(ilike_term(q.strip())))
     if limit is not None:
         stmt = stmt.offset(offset).limit(limit)
     return list((await session.execute(stmt)).scalars())
@@ -60,13 +64,17 @@ async def list_teams(
 
 async def count_teams(session: AsyncSession, *, q: str | None = None) -> int:
     stmt = select(func.count()).select_from(Team)
-    if q:
-        stmt = stmt.where(Team.name.ilike(ilike_term(q)))
+    if q and q.strip():
+        stmt = stmt.where(Team.name.ilike(ilike_term(q.strip())))
     return (await session.execute(stmt)).scalar_one()
 
 
-async def get_team(session: AsyncSession, team_id: uuid.UUID) -> Team:
-    team = await session.get(Team, team_id)
+async def get_team(session: AsyncSession, team_id: uuid.UUID, *, for_update: bool = False) -> Team:
+    if for_update:
+        team = await session.scalar(select(Team).where(Team.id == team_id).with_for_update()
+                                    .execution_options(populate_existing=True))
+    else:
+        team = await session.get(Team, team_id)
     if team is None:
         raise NotFoundError(TeamEntity.TEAM, team_id)
     return team
@@ -269,28 +277,27 @@ async def member_users_with_via(
     provenance. A person reached both directly and via a group appears once,
     as direct."""
     await get_team(session, team_id)
-    direct_ids = list(
-        (
-            await session.execute(
-                select(TeamMember.user_id).where(
-                    TeamMember.team_id == team_id, TeamMember.user_id.is_not(None)
-                )
-            )
-        ).scalars()
-    )
-    out: dict[uuid.UUID, tuple[User, str | None]] = {}
-    users = await auth.users_by_ids(session, direct_ids)
-    for user in users.values():
-        out[user.id] = (user, None)
-    for group in await team_groups(session, team_id):
-        group_user_ids = await groups_service.group_user_ids(session, group.id)
-        group_users = await auth.users_by_ids(session, group_user_ids - set(out))
-        for user in group_users.values():
-            out.setdefault(user.id, (user, group.name))
-    return sorted(out.values(), key=lambda pair: pair[0].name)
+    members = member_projection(team_id).subquery()
+    rows = await session.execute(select(User, members.c.via_group)
+                                 .join(members, members.c.user_id == User.id)
+                                 .order_by(User.name, User.id))
+    return [(user, via) for user, via in rows]
 
 
 # --- ownership + delegated management (spec 87) ---
+
+
+async def managers_by_team_ids(session: AsyncSession, team_ids: Iterable[uuid.UUID]) -> dict[uuid.UUID, list[uuid.UUID]]:
+    """One manager query for the requested window; no per-team steward lookup."""
+    ids = set(team_ids)
+    if not ids:
+        return {}
+    rows = await session.execute(select(TeamManager.team_id, TeamManager.user_id)
+                                 .where(TeamManager.team_id.in_(ids)).order_by(TeamManager.user_id))
+    result: dict[uuid.UUID, list[uuid.UUID]] = {identifier: [] for identifier in ids}
+    for team_id, user_id in rows:
+        result[team_id].append(user_id)
+    return result
 
 
 async def list_managers(session: AsyncSession, team_id: uuid.UUID) -> list[uuid.UUID]:
@@ -331,7 +338,7 @@ async def replace_managers(
 ) -> list[uuid.UUID]:
     """Full-state replace of the team's managers (the `PUT /views/{id}/sharing`
     idiom). Managers need not be members — a lead can run a team they are not on."""
-    team = await get_team(session, team_id)
+    team = await get_team(session, team_id, for_update=True)
     wanted = list(dict.fromkeys(user_ids))
     found = await auth.users_by_ids(session, wanted)
     for user_id in wanted:
@@ -350,6 +357,34 @@ async def replace_managers(
     return wanted
 
 
+async def add_manager(session: AsyncSession, team_id: uuid.UUID, user_id: uuid.UUID,
+                      actor_id: uuid.UUID | None = None) -> None:
+    team = await get_team(session, team_id, for_update=True)
+    target = await auth.get_user(session, user_id)
+    if not target.active or user_id == team.owner_id:
+        raise ConflictError(TeamEntity.MANAGER, reason="Choose an active person other than the owner")
+    if await session.get(TeamManager, (team_id, user_id)):
+        return
+    count = await session.scalar(select(func.count()).select_from(TeamManager).where(TeamManager.team_id == team_id))
+    if count >= 50:
+        raise ConflictError(TeamEntity.MANAGER, reason="A team may appoint up to 50 managers")
+    session.add(TeamManager(team_id=team_id, user_id=user_id))
+    await session.flush()
+    await _emit_updated(session, team, actor_id, {"action": TeamChange.MANAGERS_REPLACED,
+                                                "user_ids": [str(value) for value in await list_managers(session, team_id)]})
+
+
+async def remove_manager(session: AsyncSession, team_id: uuid.UUID, user_id: uuid.UUID,
+                         actor_id: uuid.UUID | None = None) -> None:
+    team = await get_team(session, team_id, for_update=True)
+    result = await session.execute(delete(TeamManager).where(TeamManager.team_id == team_id,
+                                                            TeamManager.user_id == user_id))
+    if not result.rowcount:
+        raise NotFoundError(TeamEntity.MANAGER, user_id)
+    await _emit_updated(session, team, actor_id, {"action": TeamChange.MANAGERS_REPLACED,
+                                                "user_ids": [str(value) for value in await list_managers(session, team_id)]})
+
+
 async def transfer_ownership(
     session: AsyncSession, team_id: uuid.UUID, user_id: uuid.UUID, actor_id: uuid.UUID | None = None
 ) -> Team:
@@ -357,7 +392,7 @@ async def transfer_ownership(
     a deactivated account would leave it administrable only by the atom holders.
     The previous owner stays on as a manager, so a transfer never locks anyone out
     by accident (the new owner can revoke)."""
-    team = await get_team(session, team_id)
+    team = await get_team(session, team_id, for_update=True)
     target = await auth.get_user(session, user_id)
     if not target.active:
         raise ConflictError(
@@ -450,3 +485,11 @@ async def _emit_updated(
         actor_id=actor_id,
         payload=payload,
     )
+
+
+async def existing_ids(session: AsyncSession, ids: Iterable[uuid.UUID]) -> set[uuid.UUID]:
+    """Validate explicit relationship targets without reading the entire registry."""
+    wanted = set(ids)
+    if not wanted:
+        return set()
+    return set(await session.scalars(select(Team.id).where(Team.id.in_(wanted))))

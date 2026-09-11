@@ -11,7 +11,7 @@ import type { MailKinds, MailRule, MailSender, MailSource } from "../types";
 export const mailSourcesQuery = () =>
   queryOptions({
     queryKey: queryKeys.mailSources,
-    queryFn: () => api.get<MailSource[]>(ApiPath.mailSources),
+    queryFn: ({ signal }) => api.get<MailSource[]>(ApiPath.mailSources, { signal }),
     staleTime: 30_000,
   });
 
@@ -19,7 +19,7 @@ export const mailSourcesQuery = () =>
 export const mailSendersQuery = () =>
   queryOptions({
     queryKey: queryKeys.mailSenders,
-    queryFn: () => api.get<MailSender[]>(ApiPath.mailSenders),
+    queryFn: ({ signal }) => api.get<MailSender[]>(ApiPath.mailSenders, { signal }),
     staleTime: 30_000,
   });
 
@@ -27,7 +27,7 @@ export const mailSendersQuery = () =>
 export const mailRulesQuery = (sourceId: string) =>
   queryOptions({
     queryKey: queryKeys.mailRules(sourceId),
-    queryFn: () => api.get<MailRule[]>(apiMailSourceRulesPath(sourceId)),
+    queryFn: ({ signal }) => api.get<MailRule[]>(apiMailSourceRulesPath(sourceId), { signal }),
   });
 
 /**
@@ -39,6 +39,6 @@ export const mailRulesQuery = (sourceId: string) =>
 export const mailKindsQuery = () =>
   queryOptions({
     queryKey: queryKeys.mailKinds,
-    queryFn: () => api.get<MailKinds>(ApiPath.mailKinds),
+    queryFn: ({ signal }) => api.get<MailKinds>(ApiPath.mailKinds, { signal }),
     staleTime: Infinity,
   });

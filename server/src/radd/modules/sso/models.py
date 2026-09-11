@@ -171,10 +171,8 @@ class SsoProviderDefaultTeam(Base, TimestampMixin):
     shape would mean a nullable column that is meaningful for exactly half the
     rows.
 
-    Only LOCAL teams belong here. A directory-linked team's membership is owned
-    by the AD group (spec 87 — `ensure_membership_editable` answers 409), so a
-    template pointing at one could only ever fail at login. The provisioner
-    skips those rather than letting a stale template break a sign-in.
+    All teams support direct user memberships alongside directory groups.
+    Provisioning adds a direct membership; directory sync does not remove it.
     """
 
     __tablename__ = "sso_provider_default_teams"

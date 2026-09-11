@@ -11,6 +11,7 @@ export * from "./items";
 export * from "./fields";
 export * from "./users";
 export * from "./views";
+export * from "./shared-directories";
 export * from "./roles";
 export * from "./cycles";
 export * from "./reports";

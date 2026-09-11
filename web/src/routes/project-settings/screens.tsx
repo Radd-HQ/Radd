@@ -8,7 +8,7 @@ import {
   effectiveScreenQuery,
   fieldsQuery,
   issueTypesQuery,
-  projectsQuery,
+  projectByIdQuery,
 } from "../../lib/queries";
 import {
   Permission,
@@ -55,8 +55,8 @@ export function ScreensSettingsPage({ projectId }: { projectId: string | undefin
   const perms = usePermissions();
   // RADD-810: project.manage is project-scoped and a project IS in context —
   // resolve against it, so a per-project manager can edit their screens.
-  const { data: allProjects } = useQuery(projectsQuery());
-  const contextProject = (allProjects ?? []).find((p) => p.id === projectId) ?? null;
+  const projectQuery = useQuery(projectByIdQuery(projectId ?? ""));
+  const contextProject = projectQuery.data;
   const types = useQuery({ ...issueTypesQuery(projectId ?? ""), enabled: Boolean(projectId) });
   const fields = useQuery(fieldsQuery());
   const [typeId, setTypeId] = useState<string>(PROJECT_DEFAULT);
@@ -67,7 +67,9 @@ export function ScreensSettingsPage({ projectId }: { projectId: string | undefin
       ? (fieldNames.get(field.slice(3)) ?? field.slice(3))
       : (BUILTIN_LABELS[field] ?? field);
 
-  if (!projectId) return <SettingsPage title="Screens">{null}</SettingsPage>;
+  if (projectQuery.isError) return <SettingsPage title="Screens"><QueryError label="project" error={projectQuery.error} /></SettingsPage>;
+  if (projectId && projectQuery.isPending) return <SettingsPage title="Screens"><Spinner label="Loading project…" /></SettingsPage>;
+  if (!projectId || !contextProject) return <SettingsPage title="Screens"><p className="text-sm text-fg-muted">Project not found.</p></SettingsPage>;
 
   return (
     <SettingsPage
