@@ -66,6 +66,7 @@ FROM ghcr.io/astral-sh/uv@sha256:dfd1e6972e100ca2fbf1f391effc3dd4aa57f319bf03c3e
 # here for the test job's `npm ci` (RADD-1037) — one fewer thing to add.
 FROM docker.io/library/node:22-bookworm
 
+# Chromium runs the built-SPA regression gate; it is baked in, not downloaded by each PR.
 # git is used by actions/checkout; python3 by publish.yaml's release_notes.py.
 # Both happen to be present in node:22-bookworm today via buildpack-deps —
 # precisely the kind of inherited accident that disappears on a base bump and
@@ -73,7 +74,7 @@ FROM docker.io/library/node:22-bookworm
 # Debian mirrors fine; it is get.helm.sh specifically that is unroutable here.)
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends ca-certificates git python3; \
+    apt-get install -y --no-install-recommends ca-certificates git python3 chromium; \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=helm      /usr/bin/helm         /usr/local/bin/helm
