@@ -40,6 +40,7 @@ export const SettingsSection = {
   audit: "audit",
   canned: "canned",
   forgejo: "forgejo",
+  github: "github",
   serviceAccounts: "service-accounts",
   pages: "pages",
   // Plugin manager (spec 93 / A4) — install/enable/disable non-core plugins. Admin.
@@ -186,6 +187,7 @@ export const RoutePath = {
   /** Canned responses admin (spec 30, global manage). */
   settingsCanned: `${SETTINGS_SEGMENT}/${SettingsSection.canned}`,
   settingsForgejo: `${SETTINGS_SEGMENT}/${SettingsSection.forgejo}`,
+  settingsGithub: `${SETTINGS_SEGMENT}/${SettingsSection.github}`,
   settingsServiceAccounts: `${SETTINGS_SEGMENT}/${SettingsSection.serviceAccounts}`,
   /** Pages (spec 43; RADD-702): spaces index, a space's tree, and the canonical
    *  page URL — `/pages/<space>/<page>`. Either segment may carry a SLUG or an

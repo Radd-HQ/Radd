@@ -50,6 +50,8 @@ export const Entity = {
   cannedResponse: "cannedResponse",
   forgejoConnection: "forgejoConnection",
   forgejoRepo: "forgejoRepo",
+  githubConnection: "githubConnection",
+  githubRepo: "githubRepo",
   serviceAccount: "serviceAccount",
   cardLayoutPreset: "cardLayoutPreset",
   slaPolicy: "slaPolicy",

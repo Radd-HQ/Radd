@@ -342,6 +342,16 @@ class Settings(BaseSettings):
     # Per-request bound on Forgejo API calls (connection test + backfill walk).
     forgejo_http_timeout_seconds: float = 30.0
 
+    # GitHub connector (see radd/modules/github, RADD-1129). Connections are rows;
+    # these SEED one connection (+ one repository) on first startup, then are inert.
+    github_webhook_secret: str = ""
+    github_api_token: str = ""  # seed only: a read-only fine-grained token
+    github_base_url: str = ""  # seed only: https://github.com (default) or a GHES host
+    github_repo: str = ""  # seed only: owner/repo to register with the seeded connection
+    github_backfill_max_commits: int = 2000
+    github_api_page_size: int = 100  # GitHub's maximum
+    github_http_timeout_seconds: float = 30.0
+
     # Jira import connector (see radd/modules/jiraimport, specs 90/100).
     # Spec 100 moved connections into the database (`jira_connections`), so these
     # now only SEED a default connection on first startup — an existing deploy
@@ -531,6 +541,7 @@ class Settings(BaseSettings):
         "radd.modules.ai",
         "radd.modules.mcp",
         "radd.modules.forgejo",
+        "radd.modules.github",
         "radd.modules.googlechat",
         "radd.modules.alertmanager",
         "radd.modules.mailintake",

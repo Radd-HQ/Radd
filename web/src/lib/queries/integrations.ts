@@ -8,6 +8,8 @@ import { queryKeys } from "./shared";
 import type {
   ForgejoConnection,
   ForgejoRepo,
+  GithubConnection,
+  GithubRepo,
   ServiceAccount,
   ServiceAccountKey,
 } from "../types";
@@ -25,6 +27,21 @@ export const forgejoReposQuery = () =>
     queryKey: queryKeys.forgejoRepos,
     queryFn: ({ signal }) => api.get<ForgejoRepo[]>(ApiPath.forgejoRepos, { signal }),
     meta: entityMeta(Entity.forgejoRepo),
+  });
+
+/** RADD-1129: GitHub hosts and their repositories (admin). */
+export const githubConnectionsQuery = () =>
+  queryOptions({
+    queryKey: queryKeys.githubConnections,
+    queryFn: ({ signal }) => api.get<GithubConnection[]>(ApiPath.githubConnections, { signal }),
+    meta: entityMeta(Entity.githubConnection),
+  });
+
+export const githubReposQuery = () =>
+  queryOptions({
+    queryKey: queryKeys.githubRepos,
+    queryFn: ({ signal }) => api.get<GithubRepo[]>(ApiPath.githubRepos, { signal }),
+    meta: entityMeta(Entity.githubRepo),
   });
 
 /** Spec 113: service accounts and the keys they hold (admin). */

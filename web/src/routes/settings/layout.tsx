@@ -151,6 +151,14 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         plugin: "forgejo",
         show: (g) => g.ws(Permission.globalManage),
       },
+      {
+        // RADD-1129 — GitHub hosts and their repositories.
+        to: RoutePath.settingsGithub,
+        label: "GitHub",
+        icon: GitBranch,
+        plugin: "github",
+        show: (g) => g.ws(Permission.globalManage),
+      },
     ],
   },
   {

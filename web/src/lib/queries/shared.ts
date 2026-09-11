@@ -124,6 +124,8 @@ export const queryKeys = {
   childItems: (parentId: string) => ["items", "children", parentId] as const,
   forgejoConnections: ["forgejoConnections"] as const,
   forgejoRepos: ["forgejoRepos"] as const,
+  githubConnections: ["githubConnections"] as const,
+  githubRepos: ["githubRepos"] as const,
   serviceAccounts: ["serviceAccounts"] as const,
   serviceAccountKeys: (id: string) => ["serviceAccounts", id, "keys"] as const,
   slaPolicies: (projectId: string) => ["slaPolicies", { projectId }] as const,

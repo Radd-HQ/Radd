@@ -60,17 +60,18 @@ jobs:
           fi
           echo "$IMG is free"
 
-      - name: Build
-        # Fed on stdin with NO build context: the Containerfile COPYs nothing
-        # from the tree, so there is no directory to send.
+      - uses: docker/setup-buildx-action@v3
+
+      # buildx pushes the layers it built rather than asking ghcr to mount the
+      # ones copied out of other ghcr images (helm, uv…) — the plain `docker
+      # push` path answers that mount with "unknown blob" and fails the job.
+      # Provenance attestations are off so the tag is a plain image manifest.
+      - name: Build and push
         run: |
           set -e
-          docker build -t "$IMAGE:${{ steps.meta.outputs.version }}" \
-            - < deploy/ci-runner.Containerfile
-          docker images "$IMAGE" --format '  {{.Repository}}:{{.Tag}}  {{.Size}}'
-
-      - name: Push
-        run: docker push "$IMAGE:${{ steps.meta.outputs.version }}"
+          docker buildx build --push --provenance=false \
+            -t "$IMAGE:${{ steps.meta.outputs.version }}" \
+            -f deploy/ci-runner.Containerfile deploy
 
       - name: What to do with it
         run: |

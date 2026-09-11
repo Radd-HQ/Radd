@@ -117,6 +117,8 @@ export const ApiPath = {
   // Spec 111 — Forgejo hosts/repos as rows.
   forgejoConnections: "/forgejo/connections",
   forgejoRepos: "/forgejo/repos",
+  githubConnections: "/github/connections",
+  githubRepos: "/github/repos",
   // Spec 113 — service accounts and their scoped keys.
   serviceAccounts: "/service-accounts",
   slaPolicies: "/sla-policies",
@@ -234,6 +236,11 @@ export const apiForgejoConnectionTestPath = (id: string) =>
   `${ApiPath.forgejoConnections}/${id}/test`;
 export const apiForgejoRepoPath = (id: string) => `${ApiPath.forgejoRepos}/${id}`;
 export const apiForgejoBackfillPath = (id: string) => `${ApiPath.forgejoRepos}/${id}/backfill`;
+export const apiGithubConnectionPath = (id: string) => `${ApiPath.githubConnections}/${id}`;
+export const apiGithubConnectionTestPath = (id: string) =>
+  `${ApiPath.githubConnections}/${id}/test`;
+export const apiGithubRepoPath = (id: string) => `${ApiPath.githubRepos}/${id}`;
+export const apiGithubBackfillPath = (id: string) => `${ApiPath.githubRepos}/${id}/backfill`;
 
 /** Spec 113: a service account's keys. */
 export const apiServiceAccountKeysPath = (id: string) => `${ApiPath.serviceAccounts}/${id}/keys`;

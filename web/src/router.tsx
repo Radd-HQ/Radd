@@ -61,6 +61,7 @@ const BackupsSettingsPage = lazyRouteComponent(() => import("./routes/settings/b
 const PluginsSettingsPage = lazyRouteComponent(() => import("./routes/settings/plugins"), "PluginsSettingsPage");
 const CannedSettingsPage = lazyRouteComponent(() => import("./routes/settings/canned"), "CannedSettingsPage");
 const ForgejoSettingsPage = lazyRouteComponent(() => import("./routes/settings/forgejo"), "ForgejoSettingsPage");
+const GithubSettingsPage = lazyRouteComponent(() => import("./routes/settings/github"), "GithubSettingsPage");
 const ServiceAccountsSettingsPage = lazyRouteComponent(() => import("./routes/settings/service-accounts"), "ServiceAccountsSettingsPage");
 const AiSettingsPage = lazyRouteComponent(() => import("./routes/settings/ai"), "AiSettingsPage");
 const StorageSettingsPage = lazyRouteComponent(() => import("./routes/settings/storage"), "StorageSettingsPage");
@@ -519,6 +520,13 @@ const settingsForgejoRoute = createRoute({
   component: ForgejoSettingsPage,
 });
 
+/** GitHub hosts + repositories (RADD-1129). */
+const settingsGithubRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: SettingsSection.github,
+  component: GithubSettingsPage,
+});
+
 /** Service accounts + scoped keys (spec 113). */
 const settingsServiceAccountsRoute = createRoute({
   getParentRoute: () => settingsRoute,
@@ -725,6 +733,7 @@ const routeTree = rootRoute.addChildren([
       settingsPluginsRoute,
       settingsCannedRoute,
       settingsForgejoRoute,
+  settingsGithubRoute,
       settingsServiceAccountsRoute,
       settingsDocsRoute,
       settingsAiRoute,

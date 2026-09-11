@@ -67,16 +67,18 @@ jobs:
           echo "${{ secrets.GITHUB_TOKEN }}" \
             | docker login "$REGISTRY" -u "${{ github.actor }}" --password-stdin
 
-      - name: Build
+      - uses: docker/setup-buildx-action@v3
+
+      # buildx pushes what it built instead of asking ghcr to mount layers that
+      # came from other ghcr images (the plain `docker push` path fails with
+      # "unknown blob" on those). Provenance attestations are off so the tag is
+      # a plain image manifest that `podman pull` and the cluster read as-is.
+      - name: Build and push
         run: |
           set -e
-          docker build -f Containerfile \
+          docker buildx build --push --provenance=false -f Containerfile \
             --build-arg RADD_VERSION="${{ steps.meta.outputs.version }}" \
             -t "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}" .
-          docker images "${{ steps.meta.outputs.image }}" --format '  {{.Repository}}:{{.Tag}}  {{.Size}}'
-
-      - name: Push
-        run: docker push "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}"
 
       - name: Install syft and trivy
         run: |
@@ -115,7 +117,7 @@ jobs:
         run: |
           set -e
           V="${{ steps.meta.outputs.version }}"
-          syft "docker:${{ steps.meta.outputs.image }}:$V" \
+          syft "registry:${{ steps.meta.outputs.image }}:$V" \
             -o cyclonedx-json="radd-$V-image.cdx.json" -q
           syft file:web/package-lock.json \
             -o cyclonedx-json="radd-$V-web.cdx.json" -q

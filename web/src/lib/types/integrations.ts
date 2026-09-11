@@ -100,6 +100,11 @@ export type ForgejoRepo = {
 
 export type ForgejoConnectionTest = { ok: boolean; version: string; detail: string };
 
+/** GitHub hosts and repositories as rows (RADD-1129) — same wire shape as Forgejo. */
+export type GithubConnection = ForgejoConnection;
+export type GithubRepo = ForgejoRepo;
+export type GithubConnectionTest = ForgejoConnectionTest;
+
 export type ForgejoBackfillReport = {
   branches: number;
   pull_requests: number;

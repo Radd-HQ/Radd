@@ -63,10 +63,10 @@ async def test_storage_ai_sso_and_forgejo_capabilities_reflect_their_db_snapshot
 def test_connectors_derive_generically_from_the_connector_category():
     cm = _map()
     connectors = {k: v["enabled"] for k, v in cm.items() if v.get("category") == "connector"}
-    # Exactly the five the old instance_status hardcoded — now derived, so a new
-    # connector plugin would appear here with no edit to projects.
+    # The five the old instance_status hardcoded plus github (RADD-1129) — now
+    # derived, so a new connector plugin appears here with no edit to projects.
     assert set(connectors) == {
-        "gitlab", "forgejo", "google_chat", "alertmanager", "email_intake",
+        "gitlab", "forgejo", "github", "google_chat", "alertmanager", "email_intake",
     }
     assert connectors["gitlab"] == bool(settings.gitlab_webhook_secret)
     # forgejo is row-backed since spec 111 — asserted in the snapshot test above.
