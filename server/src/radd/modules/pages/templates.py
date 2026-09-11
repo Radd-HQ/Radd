@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import re
 import uuid
+from collections.abc import Iterable
 from datetime import date
 
 from sqlalchemy import select
@@ -41,7 +42,10 @@ def render(body: str, *, title: str, author: str, today: date | None = None) -> 
 
 
 async def list_templates(
-    session: AsyncSession, space_id: uuid.UUID | None = None
+    session: AsyncSession,
+    space_id: uuid.UUID | None = None,
+    *,
+    readable_space_ids: Iterable[uuid.UUID] | None = None,
 ) -> list[PageTemplate]:
     """Templates usable in a space: its own, plus the global ones."""
     query = select(PageTemplate).order_by(PageTemplate.name)
@@ -49,11 +53,20 @@ async def list_templates(
         query = query.where(
             (PageTemplate.space_id == space_id) | (PageTemplate.space_id.is_(None))
         )
+    elif readable_space_ids is not None:
+        query = query.where(
+            PageTemplate.space_id.in_(set(readable_space_ids)) | PageTemplate.space_id.is_(None)
+        )
     return list((await session.execute(query)).scalars())
 
 
-async def by_name(session: AsyncSession, name: str) -> PageTemplate:
-    row = await session.execute(select(PageTemplate).where(PageTemplate.name == name))
+async def by_name(
+    session: AsyncSession, name: str, *, space_id: uuid.UUID | None = None
+) -> PageTemplate:
+    query = select(PageTemplate).where(PageTemplate.name == name)
+    if space_id is not None:
+        query = query.where((PageTemplate.space_id == space_id) | PageTemplate.space_id.is_(None))
+    row = await session.execute(query)
     template = row.scalar_one_or_none()
     if template is None:
         raise NotFoundError(PageEntity.PAGE, f"template {name!r}")

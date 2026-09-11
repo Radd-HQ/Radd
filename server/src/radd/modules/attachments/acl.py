@@ -38,10 +38,14 @@ async def _can_manage(
         attachment = await service.get_attachment(session, uuid.UUID(resource_id))
     except (ValueError, NotFoundError):
         return False
-    if attachment.created_by == actor.id:
-        return True
     binding = parents.binding_for(attachment.entity_type)
     try:
+        # Ownership never bypasses the parent's audience or credential limits.
+        await binding.require_read(session, actor, attachment.entity_id)
+        if attachment.created_by == actor.id and actor.token_scope is None:
+            return True
+        # Scoped keys need the parent's attachment-write authority too; an
+        # uploader's read-only key must not change who can read the file.
         await binding.require_write(session, actor, attachment.entity_id)
     except (ForbiddenError, NotFoundError):
         return False

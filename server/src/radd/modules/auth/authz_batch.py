@@ -48,18 +48,24 @@ async def permissions_for_projects(
     One instance role decides the tier (admin -> all, active -> member floor +
     project grants, inactive -> nothing) for every project.
     """
-    if not projects:
+    return await _permissions_for_project_ids(session, user, [project.id for project in projects])
+
+
+async def _permissions_for_project_ids(
+    session: AsyncSession, user: User, project_ids: Sequence[uuid.UUID]
+) -> dict[uuid.UUID, frozenset[Permission]]:
+    """Shared batch policy without hydrating unrelated project content."""
+    if not project_ids:
         return {}
     role = _active_role(user)
     if role is None:
-        return {project.id: frozenset() for project in projects}
+        return {project_id: frozenset() for project_id in project_ids}
     if InstanceRole(role) is InstanceRole.ADMIN:
         return {
-            project.id: _narrow_to_key_scope(user, all_permission_keys(), project.id)
-            for project in projects
+            project_id: _narrow_to_key_scope(user, all_permission_keys(), project_id)
+            for project_id in project_ids
         }
 
-    project_ids = [project.id for project in projects]
     granted: dict[uuid.UUID, set[uuid.UUID]] = {project_id: set() for project_id in project_ids}
     # RADD-929: two more queries used to run here — `project_members` and the
     # teams module's `project_teams` join — producing role ids the two grant
@@ -87,18 +93,62 @@ async def permissions_for_projects(
     # full set anywhere a list hydrates permissions instead of resolving one project.
     baseline = await floor_permissions(session, user)
     return {
-        project.id: _narrow_to_key_scope(
+        project_id: _narrow_to_key_scope(
             user,
             combine_permissions(
                 instance_role=user.instance_role,
                 permission_sets=[
-                    permissions_by_role.get(role_id, []) for role_id in granted[project.id]
+                    permissions_by_role.get(role_id, []) for role_id in granted[project_id]
                 ],
                 baseline=baseline,
             ),
-            project.id,
+            project_id,
         )
-        for project in projects
+        for project_id in project_ids
+    }
+
+
+async def permissions_for_spaces(
+    session: AsyncSession, user: User, space_ids: Sequence[uuid.UUID]
+) -> dict[uuid.UUID, frozenset[Permission]]:
+    """Batch the direct space policy, including account floors and key scope.
+
+    Keys currently carry global/project allowances. Space checks use their
+    global allowance, exactly like effective_permissions(space_id=...). A
+    project-only key cannot borrow page permissions from its account here.
+    """
+    if not space_ids:
+        return {}
+    role = _active_role(user)
+    if role is None:
+        return {space_id: frozenset() for space_id in space_ids}
+    if InstanceRole(role) is InstanceRole.ADMIN:
+        held = _narrow_to_key_scope(user, all_permission_keys(), None)
+        return {space_id: held for space_id in space_ids}
+    unscoped = await grants.unscoped_role_ids(session, user.id)
+    scoped = await grants.space_granted_role_ids(session, user.id, space_ids)
+    role_ids = unscoped | {role_id for ids in scoped.values() for role_id in ids}
+    by_role: dict[uuid.UUID, list[str]] = {}
+    if role_ids:
+        rows = await session.execute(
+            select(Role.id, Role.permissions).where(Role.id.in_(role_ids))
+        )
+        by_role = dict(rows.all())
+    floor = await floor_permissions(session, user)
+    return {
+        space_id: _narrow_to_key_scope(
+            user,
+            combine_permissions(
+                instance_role=user.instance_role,
+                permission_sets=[
+                    by_role.get(role_id, [])
+                    for role_id in unscoped | scoped.get(space_id, set())
+                ],
+                baseline=floor,
+            ),
+            None,
+        )
+        for space_id in space_ids
     }
 
 
@@ -268,8 +318,8 @@ async def project_permission_map(
         return cached
     from radd.modules.projects import service as projects_service  # deferred: projects loads after auth
 
-    projects = await projects_service.list_projects(session)
-    resolved = await permissions_for_projects(session, user, projects)
+    project_ids = await projects_service.list_project_ids(session)
+    resolved = await _permissions_for_project_ids(session, user, project_ids)
     session.info[key] = resolved
     return resolved
 

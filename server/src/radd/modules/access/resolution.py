@@ -153,10 +153,14 @@ def effective_level(
     ctx: SubjectContext,
     project_id: uuid.UUID | None,
     spec: ResourceSpec,
+    *,
+    default_level: str | None = None,
 ) -> str | None:
     """Hierarchical model (views): the HIGHEST access level the actor holds via an
     in-scope matching grant, by the order of `spec.accesses` (last = highest). None
-    = no access (closed-default resources are invisible)."""
+    = no access (closed-default resources are invisible). A public fallback
+    level participates in the same exact-level deny policy as explicit grants;
+    intrinsic ownership is a deliberate decision at the caller."""
     order = {a: i for i, a in enumerate(spec.accesses)}
     held = [
         g.access
@@ -168,6 +172,8 @@ def effective_level(
         # RADD-819: a deny of a LEVEL removes that level from consideration.
         and not _deny_verdict(grants, ctx, (g.access,), project_id)
     ]
+    if default_level in order and not _deny_verdict(grants, ctx, (default_level,), project_id):
+        held.append(default_level)
     if not held:
         return None
     return max(held, key=lambda a: order[a])
