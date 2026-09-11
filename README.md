@@ -8,6 +8,9 @@ tier are the point, not the upsell.
 
 > **Never open-core. Monetization, if ever, is hosting/support — never features.**
 
+[![Sponsor on GitHub](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/hjarrar)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-hjarrar-ffdd00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/hjarrar)
+
 ![The board view, dark theme](docs/media/board-dark.png)
 
 ## What's in the box
