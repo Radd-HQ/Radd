@@ -117,19 +117,16 @@ recorded.
 `main` is protected: it cannot be pushed to directly and merges require review.
 Open a PR from your fork and it will be reviewed.
 
-**CI does not yet run on pull requests.** A PR-check workflow (PR-head checkout,
-disposable Postgres, `pytest`, `ruff`, `npm run check`) is prepared but not landed.
-Forgejo executes the TARGET branch's workflows for a fork PR, so it only starts
-protecting PRs once it is on `main` AND an isolated runner labelled `checks` exists
-whose Docker daemon is not shared with release or deployment jobs, because fork code
-executes there. The runner image in `deploy/ci-runner.version` (1.4.0) already carries
-Chromium for it. Until then, run the gates locally and say so in the PR.
+**Every pull request is checked on GitHub Actions** (`.github/workflows/checks.yaml`):
+the backend suite and ruff against a throwaway Postgres, then the frontend
+regressions, the host and plugin builds and the Chromium smoke. The workflow has a
+read-only token and no secrets, so fork code never runs near deployment
+credentials. Green checks are necessary, not sufficient: a maintainer still reads
+the change.
 
-**How a maintainer validates a fork PR**: fetch the PR head locally
-(`git fetch origin refs/pull/<n>/head && git checkout FETCH_HEAD`), then run
-`uv run pytest -q` in `server/` and `npm run check` in `web/`, plus a render-proof when
-the change touches UI. Never merge on the contributor's word alone; the tag build runs
-the gates again anyway (the publish workflow's `test` job is the backstop).
+**How a maintainer lands a PR**: fetch its head, run a render-proof when the change
+touches UI (the checks cannot look at pixels), and land it as described in
+[docs/publishing.md](publishing.md).
 
 `npm run check` in `web/` is the unified frontend gate. Set `RADD_CHROME` if Chromium is not on a standard path or in the Playwright cache. The browser test uses a local synthetic API for repeatability; UI changes also need relevant interactions against a real backend. `npm run build` remains the quick host-only build.
 
