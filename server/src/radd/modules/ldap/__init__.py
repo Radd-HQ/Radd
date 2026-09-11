@@ -1,4 +1,3 @@
-from radd.config import settings
 from radd.kernel import CapabilitySpec
 from radd.kernel import RaddPlugin
 from radd.kernel import SettingSpec

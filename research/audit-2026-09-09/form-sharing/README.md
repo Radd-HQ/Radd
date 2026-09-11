@@ -1,0 +1,33 @@
+# Portal form sharing — 2026-09-11
+
+RADD-1115 checkpoint: verified locally, not released. P2 and the complete [research ledger](../OUTSTANDING.md) remain active.
+
+## Result
+
+The form builder previously loaded every person/team and replaced every portal share on each change. Its local copy could overwrite another manager's additions, and an existing inactive recipient could prevent unrelated changes. The replacement UI reads at most 50 saved shares and 50 eligible recipients, searches on the server and adds/removes one share at a time. Existing recipients are excluded before candidate count/pagination; inactive saved recipients remain visible and removable. Name search never exposes team names without global `team.read`; public person-directory source rules remain intact. All operations require credential-aware `form.manage` on the form's actual project.
+
+`forms/sharing.py` owns the read projection and mutations. Individual writes and the legacy full-set PUT serialize on the same form row. New writes validate only the affected recipient, preserve unseen IDs and emit the existing form.updated event with the resulting share count. Removing a row belonging to a different form is refused. The old full-set contract remains available to intentional replacement callers; it is not used by the UI.
+
+Form list/PATCH calls accept `include_shares=false` while preserving their complete legacy default. The settings page, editor save, enable toggle and sidebar use that option because they do not consume share arrays. These are still complete form-definition catalogs; their pagination and remaining field/default readers are separate work.
+
+Sharing changes save immediately, with explicit copy, loading/error states and retry. Add failures retain the selected subject; reads and mutations preserve the unfinished form definition. Both lists recover when their last page disappears. Nested recipient dialogs preserve focus, drafts and Escape behavior. Away/inactive labels remain available.
+
+Browser tracing also found the default assignee's unconditional administrative user-directory read. It now uses the shared optional email field and bounded people choices. Only `user.manage` holders can browse emails; form-only managers can enter a known address and retain/clear saved values without acquiring email-directory access. Existing backend validation remains authoritative.
+
+## Verification
+
+- [Full backend](backend-tests.txt): **2,496 passed, 4 skipped**, 170 warnings, 116.38 seconds. [Focused](focused-tests.txt): five passed. Coverage includes 252 saved shares, 126 unshared people and teams, SQL filtering before windows, credential/scope/name isolation, inactive retention, duplicate rejection, cross-form removal refusal, unchanged off-page IDs, portal entitlement/revocation and default-versus-opt-out legacy reads. Two concurrent writer cases verify new/new and legacy/new coordination on the row lock.
+- [Frontend/all-plugin checks](frontend-checks.txt), [QueryObserver identity/invalidation](query-checks.txt) and [request cancellation](cancellation-checks.txt) pass. Share and candidate keys distinguish form, kind, search and page; form/project/user/team/group/role frames invalidate the relevant observers. These are not complete worker-delivery checks.
+- [Actual browser](browser.json): traverses 126 saved shares and both 126-recipient catalogs; adds a later team without changing 126 existing share IDs, including an inactive user; retries a failed person addition; verifies that person can render the actual portal form and receives 404 after removal. Unfinished form text survives every sharing change, query error and nested cancellation. It verifies default-assignee email selection and clearing through actual form saves, and last-page recovery after deleting share 51.
+- The same browser clears its session cookie before switching to a real project-scoped manager key. `/auth/me` confirms it lacks user.manage; sharing choices still work and no admin user/email directory requests occur. The fixture key is revoked; a database read confirms no keys with the fixture name remain.
+- [390](recipient-390.png), [768](recipient-768.png), [1440](recipient-1440.png): pointer, bounds, nested focus and retained form draft pass. The 390 px screenshot was visually inspected. No captured browser console errors.
+- [Populated parity](live-parity.json): both real forms and the single saved share match the legacy API. Candidate windows are bounded at 50, with 1,103/1,104 eligible people and 2,296 teams. [Populated sharing browser](live-browser.json), [general responsive browser](live-general-browser.json) and [real LLM/search/storage/API](live-api.json) pass. Form edits were unsaved; no populated form/share/issue/comment content was written.
+- [Environment](environment.json): development issue counts remain **503,485 / 8,923**, schemas **g1093ghost / d117pkg**. App18000 PID2434354 runs workers-disabled, health200; disposable app18001 is stopped and temporary sessions/private files are revoked/removed. Runtime/new-test Ruff and `git diff --check` pass.
+
+The browser found the missing last-page recovery and the sidebar/default-assignee catalog dependencies; these were corrected before the final run. Probe corrections use the actual “Form name” label, wait for target layout to settle after viewport changes, and remove the session cookie before testing a bearer key (session cookies take precedence). The final evidence is from passing runs.
+
+## Reproduce and remaining work
+
+Follow [AGENTS.md](../../../AGENTS.md). Run tests sequentially against `radd_audit_test` only, then build all frontends, seed with `seed-form-sharing.py`, start workers-disabled port18001 and run `form-sharing-browser.mjs`. For populated reads use `live-check.py`, `form-sharing-live.py`, `form-sharing-live-browser.mjs`, then `live-browser.mjs`; the final script revokes/removes the shared temporary session. Dedicated debug ports are 18807/18808; the general probe uses 18776.
+
+Next: view/dashboard sharing still uses sequential DELETE/POST/PUT/transfer requests despite comments calling that sequence atomic. Replace it with a transaction that preserves authority, deny/expiry policy, unseen grants, draft semantics and ownership-transfer behavior, then bound its grant/subject/owner readers. Complete form-definition catalogs, remaining state/type/release/field defaults and other P2 readers/scans/authority maps stay open. Full worker delivery, load budgets, broader design/onboarding, recovery, accessibility/localization, portability/exports, API contracts and hosted CI remain outstanding. No migration, commit, push, release or CI activation occurred.

@@ -31,7 +31,7 @@ export function AppLayout() {
   return (
     <StorageChoiceProvider>
       <TopBarSlotProvider>
-        <div className="flex h-screen flex-col bg-base text-fg">
+        <div className="flex h-dvh flex-col bg-base text-fg">
           <ViewAsBanner />
           <TopBar />
           <PinsBar />

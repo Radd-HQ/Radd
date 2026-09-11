@@ -14,10 +14,10 @@ interface GrantHelp {
 const grantHelpQuery = (permission: string, projectId?: string) =>
   queryOptions({
     queryKey: ["grant-help", permission, projectId ?? null] as const,
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<GrantHelp>(
         `${ApiPath.permissions}/grant-help?permission=${encodeURIComponent(permission)}` +
-          (projectId ? `&project_id=${projectId}` : ""),
+          (projectId ? `&project_id=${projectId}` : ""), { signal },
       ),
     staleTime: 300_000,
   });

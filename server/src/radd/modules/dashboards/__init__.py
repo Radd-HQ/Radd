@@ -12,7 +12,7 @@ async def _config_handler(request: Request, exc: WidgetConfigError) -> JSONRespo
     return JSONResponse(status_code=422, content={"detail": str(exc)})
 
 
-from .service import _DASHBOARD_SPEC
+from .service import _DASHBOARD_SPEC  # noqa: E402 - bindings require initialized registries
 
 plugin = RaddPlugin(
     name="dashboards",

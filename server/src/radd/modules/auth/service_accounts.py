@@ -55,11 +55,18 @@ async def get_account(session: AsyncSession, account_id: uuid.UUID) -> User:
     return user
 
 
-async def token_count(session: AsyncSession, account_id: uuid.UUID) -> int:
+async def token_counts(session: AsyncSession, account_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
+    if not account_ids:
+        return {}
     rows = await session.execute(
-        select(func.count()).select_from(ApiToken).where(ApiToken.user_id == account_id)
+        select(ApiToken.user_id, func.count()).where(ApiToken.user_id.in_(account_ids))
+        .group_by(ApiToken.user_id)
     )
-    return int(rows.scalar_one())
+    return dict(rows.all())
+
+
+async def token_count(session: AsyncSession, account_id: uuid.UUID) -> int:
+    return (await token_counts(session, [account_id])).get(account_id, 0)
 
 
 async def create_account(

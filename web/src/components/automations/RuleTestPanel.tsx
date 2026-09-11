@@ -1,10 +1,11 @@
+import { ProjectSelect } from "../projects/ProjectSelect";
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { CircleSlash, FlaskConical } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { apiAutomationTestPath } from "../../lib/constants";
 import { ACTION_TYPE_LABELS } from "../../lib/meta";
-import { itemsQuery, projectsQuery } from "../../lib/queries";
+import { linkSearchQuery, firstProjectQuery } from "../../lib/queries";
 import type {
   ActionPreview,
   AutomationNode,
@@ -12,6 +13,8 @@ import type {
   RuleTestResult,
   RuleTrigger,
 } from "../../lib/types";
+import { TextField } from "../TextField";
+import { useDebounced } from "../../lib/hooks";
 import { Button, ButtonVariant } from "../Button";
 import { SelectField } from "../SelectField";
 import { PORT_TONE } from "./node-visuals";
@@ -43,13 +46,15 @@ interface RuleTestPanelProps {
  * right ones".
  */
 export function RuleTestPanel({ ruleId, triggers = [], nodes = [], onResult }: RuleTestPanelProps) {
-  const projects = useQuery(projectsQuery());
+  const firstProject = useQuery(firstProjectQuery());
   const [projectId, setProjectId] = useState("");
   const [itemId, setItemId] = useState("");
   const [triggerId, setTriggerId] = useState("");
-  const effectiveProjectId = projectId || projects.data?.[0]?.id || "";
+  const effectiveProjectId = projectId || firstProject.data?.[0]?.id || "";
+  const [itemSearch, setItemSearch] = useState("");
+  const search = useDebounced(itemSearch, 200);
   const items = useQuery({
-    ...itemsQuery(effectiveProjectId),
+    ...linkSearchQuery(effectiveProjectId, search),
     enabled: Boolean(effectiveProjectId),
   });
 
@@ -75,7 +80,8 @@ export function RuleTestPanel({ ruleId, triggers = [], nodes = [], onResult }: R
         </span>
       </div>
 
-      <div className="grid grid-cols-3 gap-2.5">
+      <TextField label="Find a seed issue" value={itemSearch} onChange={event => { setItemSearch(event.target.value); setItemId(""); }} placeholder="Search by key or title in the selected project…" />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
         <SelectField
           label="Start at"
           value={triggerId}
@@ -89,20 +95,9 @@ export function RuleTestPanel({ ruleId, triggers = [], nodes = [], onResult }: R
             </option>
           ))}
         </SelectField>
-        <SelectField
-          label="Project"
-          value={effectiveProjectId}
-          onChange={(event) => {
-            setProjectId(event.target.value);
-            setItemId("");
-          }}
-        >
-          {(projects.data ?? []).map((project) => (
-            <option key={project.id} value={project.id}>
-              {project.key} — {project.name}
-            </option>
-          ))}
-        </SelectField>
+        <ProjectSelect label="Project" value={effectiveProjectId} onChange={id => {
+          setProjectId(id); setItemId(""); setItemSearch("");
+        }} />
         <SelectField
           label="As if it fired for"
           value={itemId}

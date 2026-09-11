@@ -178,12 +178,13 @@ async def test_burnup_measures(db, actor):
 
 async def test_cycle_points_totals_and_filters(db, actor):
     project, cycle = await _seeded_completed_cycle(db, actor)
-    total, done = await items.cycle_points_totals(db, cycle.id)
+    total, done = await items.cycle_points_totals(db, cycle.id, actor=actor)
     assert (total, done) == (12.5, 4.5)
     # The same filter seam as cycle_state_category_counts.
-    total, done = await items.cycle_points_totals(db, cycle.id, project_id=project.id)
+    total, done = await items.cycle_points_totals(db, cycle.id, actor=actor, project_id=project.id)
     assert (total, done) == (12.5, 4.5)
-    total, done = await items.cycle_points_totals(db, cycle.id, project_id=uuid.uuid4())
-    assert (total, done) == (0.0, 0.0)
-    total, done = await items.cycle_points_totals(db, cycle.id, assignee_id=actor.id)
+    from radd.exceptions import NotFoundError
+    with pytest.raises(NotFoundError):
+        await items.cycle_points_totals(db, cycle.id, actor=actor, project_id=uuid.uuid4())
+    total, done = await items.cycle_points_totals(db, cycle.id, actor=actor, assignee_id=actor.id)
     assert (total, done) == (0.0, 0.0)  # nothing assigned to the actor

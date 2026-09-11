@@ -62,7 +62,7 @@ async def create_response(
 async def update_response(
     response_id: uuid.UUID, data: CannedResponseUpdate, session: Session, user: CurrentUser
 ) -> CannedResponseRead:
-    response = await service.get_response(session, response_id)
+    await service.get_response(session, response_id)
     await authz.require(
         session, user, Permission.CANNED_UPDATE
     )
@@ -75,7 +75,7 @@ async def update_response(
 async def delete_response(
     response_id: uuid.UUID, session: Session, user: CurrentUser
 ) -> None:
-    response = await service.get_response(session, response_id)
+    await service.get_response(session, response_id)
     await authz.require(
         session, user, Permission.CANNED_DELETE
     )

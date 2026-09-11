@@ -25,7 +25,7 @@ import type {
  */
 export const aiStatusQuery = queryOptions({
   queryKey: queryKeys.aiStatus,
-  queryFn: () => api.get<AiStatus>(ApiPath.aiStatus),
+  queryFn: ({ signal }) => api.get<AiStatus>(ApiPath.aiStatus, { signal }),
   staleTime: 60_000,
   retry: false,
 });
@@ -37,7 +37,7 @@ export const aiStatusQuery = queryOptions({
  */
 export const aiEditorActionsQuery = queryOptions({
   queryKey: queryKeys.aiEditorActions,
-  queryFn: () => api.get<AiEditorAction[]>(ApiPath.aiEditorActions),
+  queryFn: ({ signal }) => api.get<AiEditorAction[]>(ApiPath.aiEditorActions, { signal }),
   staleTime: 60_000,
   retry: false,
 });
@@ -49,7 +49,7 @@ export const aiEditorActionsQuery = queryOptions({
 export const similarItemsQuery = (itemId: string) =>
   queryOptions({
     queryKey: queryKeys.similarItems(itemId),
-    queryFn: () => api.get<SimilarResponse>(apiItemSimilarPath(itemId)),
+    queryFn: ({ signal }) => api.get<SimilarResponse>(apiItemSimilarPath(itemId), { signal }),
     retry: false,
     staleTime: 30_000,
   });
@@ -57,17 +57,17 @@ export const similarItemsQuery = (itemId: string) =>
 /**
  * Similar issues for a TEXT seed (read-mode AI menu on a comment) — fused
  * FTS + vector pools, never reranked. `seedKey` names the text's origin (the
- * comment id) so the cache key stays small and stable while the comment text
- * itself rides in the POST body.
+ * comment id). Text and excluded issue also belong in the cache identity, so
+ * editing the comment or changing its context cannot reuse an older result.
  */
 export const similarToTextQuery = (seedKey: string, text: string, excludeItemId?: string) =>
   queryOptions({
-    queryKey: queryKeys.similarToText(seedKey),
-    queryFn: () =>
+    queryKey: queryKeys.similarToText(seedKey, text, excludeItemId),
+    queryFn: ({ signal }) =>
       api.post<SimilarResponse>(ApiPath.aiSimilar, {
         text,
         exclude_item_id: excludeItemId ?? null,
-      }),
+      }, { signal }),
     retry: false,
     staleTime: 30_000,
   });
@@ -77,8 +77,9 @@ export const similarToTextQuery = (seedKey: string, text: string, excludeItemId?
 export const deflectQuery = (q: string, projectId: string) =>
   queryOptions({
     queryKey: queryKeys.deflect(q, projectId),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<DeflectResponse>(ApiPath.searchDeflect, {
+        signal,
         query: { q, project_id: projectId },
       }),
     placeholderData: keepPreviousData,
@@ -88,9 +89,10 @@ export const deflectQuery = (q: string, projectId: string) =>
 /** Palette search-as-you-type (spec 28) — key prefix + full text, RBAC-scoped. */
 export const searchQuery = (q: string, limit: number) =>
   queryOptions({
-    queryKey: queryKeys.search(q),
-    queryFn: () =>
+    queryKey: queryKeys.search(q, limit),
+    queryFn: ({ signal }) =>
       api.get<SearchResponse>(ApiPath.search, {
+        signal,
         query: { q, limit: String(limit) },
       }),
     meta: entityMeta(Entity.item),
@@ -104,7 +106,7 @@ export const searchQuery = (q: string, limit: number) =>
 export const semanticSearchQuery = (q: string) =>
   queryOptions({
     queryKey: queryKeys.searchSemantic(q),
-    queryFn: () => api.get<SemanticResponse>(ApiPath.searchSemantic, { query: { q } }),
+    queryFn: ({ signal }) => api.get<SemanticResponse>(ApiPath.searchSemantic, { signal, query: { q } }),
     placeholderData: keepPreviousData,
     retry: false,
     enabled: q.trim().length > 0,

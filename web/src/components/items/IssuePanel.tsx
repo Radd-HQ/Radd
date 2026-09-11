@@ -1,5 +1,7 @@
-import { useEffect, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { createPortal } from "react-dom";
 import { Maximize2, X } from "lucide-react";
+import { useDialogFocus } from "../../lib/dialog-focus";
 import { registerDismiss } from "../../lib/dismiss-stack";
 import { startHorizontalDrag } from "../../lib/drag";
 import { PeekSurfaceContext, useItemByKey, usePeek } from "../../lib/hooks";
@@ -22,6 +24,10 @@ import { Spinner } from "../Spinner";
  */
 export function IssuePanel() {
   const { peekKey, close, expand } = usePeek();
+  const panelRef = useRef<HTMLElement>(null);
+  useDialogFocus(panelRef, Boolean(peekKey));
+  const closeRef = useRef(close);
+  closeRef.current = close;
 
   useEffect(() => {
     if (!peekKey) return;
@@ -32,10 +38,10 @@ export function IssuePanel() {
       // Don't hijack Esc while editing a field inside the panel.
       const target = event.target as HTMLElement | null;
       if (target?.closest("input, textarea, [contenteditable='true']")) return false;
-      close();
+      closeRef.current();
       return true;
     });
-  }, [peekKey, close]);
+  }, [Boolean(peekKey)]);
 
   // Width is user-set and sticky: the peek is where you triage, and how wide
   // you want it is a standing preference, not a per-open one.
@@ -59,13 +65,18 @@ export function IssuePanel() {
     });
 
   if (!peekKey) return null;
-  return (
+  // Use the same portal layer as Modal: opening order must determine which
+  // dialog is above the other, including a peek opened from an unfinished form.
+  return createPortal(
     <>
       <div className="fixed inset-0 z-40 bg-black/50 animate-fade-in" onClick={close} aria-hidden />
       <aside
+        ref={panelRef}
+        tabIndex={-1}
+        aria-modal="true"
         role="dialog"
         aria-label={`Issue ${peekKey}`}
-        style={{ width }}
+        style={{ width, maxWidth: "calc(100vw - 1rem)" }}
         className="fixed inset-y-0 right-0 z-50 m-2 flex max-w-full animate-panel-in flex-col overflow-hidden rounded-2xl border border-subtle bg-base shadow-modal"
       >
         {/* Drag the left edge to resize. The drawer grows LEFTWARDS (it is
@@ -114,7 +125,7 @@ export function IssuePanel() {
           </PeekSurfaceContext.Provider>
         </div>
       </aside>
-    </>
+    </>, document.body
   );
 }
 

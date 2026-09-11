@@ -1,3 +1,4 @@
+import { useMobileNavigation } from "./mobile-navigation";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Bell, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
@@ -20,6 +21,7 @@ import { modShortcut } from "../../lib/platform";
  * avatar on the right. Pinned tabs live on the SECOND row (PinsBar).
  */
 export function TopBar() {
+  const mobileNav = useMobileNavigation();
   const { setEl, occupied } = useTopBarSlotHost();
   const { prefs, toggleRail } = useSidebarPrefs();
   const user = useCurrentUser();
@@ -35,9 +37,9 @@ export function TopBar() {
     <div className="relative z-50 flex h-12 shrink-0 items-center gap-3 border-b border-subtle bg-base px-4">
       <button
         type="button"
-        onClick={toggleRail}
-        aria-expanded={!railed}
-        aria-label={railed ? "Expand sidebar" : "Collapse sidebar"}
+        onClick={mobileNav.mobile ? mobileNav.toggle : toggleRail}
+        aria-expanded={mobileNav.mobile ? mobileNav.open : !railed}
+        aria-label={mobileNav.mobile ? (mobileNav.open ? "Close navigation" : "Open navigation") : (railed ? "Expand sidebar" : "Collapse sidebar")}
         title={railed ? "Expand sidebar" : "Collapse sidebar"}
         className="cursor-pointer rounded-md p-1 text-fg-muted hover:bg-overlay hover:text-fg focus-visible:outline-2 focus-visible:outline-focus"
       >

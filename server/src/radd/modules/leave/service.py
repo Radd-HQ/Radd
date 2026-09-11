@@ -12,9 +12,9 @@ from datetime import date, timedelta
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.modules.auth import authz
 from radd.exceptions import ConflictError, ForbiddenError, NotFoundError
 from radd.modules.auth.models import User
-from radd.modules.auth.types import InstanceRole
 from radd.modules.events import service as events
 from radd.modules.teams import service as teams_service
 
@@ -24,7 +24,7 @@ from .types import LeaveEntity, LeaveEvent, LeaveKind
 
 
 def _is_admin(actor: User) -> bool:
-    return InstanceRole(actor.instance_role) is InstanceRole.ADMIN
+    return authz.is_instance_admin(actor)
 
 
 async def may_manage_user(session: AsyncSession, actor: User, user_id: uuid.UUID) -> bool:

@@ -12,9 +12,8 @@ import {
 import { RoutePath } from "../../lib/constants";
 import { PRIORITY_META, PRIORITY_ORDER } from "../../lib/meta";
 import { pushToast, ToastKind } from "../../lib/toast";
-import type { Cycle, Item, ItemUpdate, Me, State } from "../../lib/types";
+import type { Item, ItemUpdate, Me, State } from "../../lib/types";
 import { ContextMenu, type MenuNode } from "../ContextMenu";
-import { selectableCycles } from "../../lib/view-utils";
 
 interface ItemContextMenuProps {
   item: Item;
@@ -27,8 +26,8 @@ interface ItemContextMenuProps {
   onStar: (item: Item, star: boolean) => void;
   /** Gates the mutating actions; false → only Open/Star/Copy show. */
   canUpdate: boolean;
-  /** Cycles (enables "Move to cycle"); project states (enables "Set state"). */
-  cycles?: Cycle[];
+  /** Opens the searchable cycle picker after this menu closes. */
+  onChooseCycle: () => void;
   states?: State[];
   currentUser: Me | null;
 }
@@ -51,7 +50,7 @@ export function ItemContextMenu({
   onAct,
   onStar,
   canUpdate,
-  cycles,
+  onChooseCycle,
   states,
   currentUser,
 }: ItemContextMenuProps) {
@@ -125,32 +124,7 @@ export function ItemContextMenu({
       });
     }
 
-    if (cycles) {
-      // Completed cycles are not move targets — see `selectableCycles`.
-      const targets = selectableCycles(cycles);
-      nodes.push({
-        kind: "submenu",
-        label: "Move to cycle",
-        items: [
-          {
-            kind: "action",
-            label: "Backlog",
-            checked: !item.cycle,
-            onSelect: () => onAct({ cycle_id: null }, { cycle: null }),
-          },
-          ...targets.map((cycle) => ({
-            kind: "action" as const,
-            label: cycle.name,
-            checked: item.cycle?.id === cycle.id,
-            onSelect: () =>
-              onAct(
-                { cycle_id: cycle.id },
-                { cycle: { id: cycle.id, name: cycle.name, status: cycle.status } },
-              ),
-          })),
-        ],
-      });
-    }
+    nodes.push({ kind: "action", label: "Move to cycle…", onSelect: onChooseCycle });
 
     const flagged = Boolean(item.flagged);
     nodes.push({

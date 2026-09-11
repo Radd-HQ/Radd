@@ -44,6 +44,7 @@ from .lifecycle import (
     user_content_summary as user_content_summary,
 )
 from .models import TotpRecoveryCode, User, UserSession, UserTotp
+from .options import list_options as list_options
 from .schemas import ProfileUpdate, UserAdminUpdate, UserCreate
 from .service_sessions import (
     create_session as create_session,
@@ -61,6 +62,7 @@ from .service_tokens import (
     list_api_tokens as list_api_tokens,
     user_for_api_token as user_for_api_token,
 )
+from .throttle import check_login_attempt as check_login_attempt
 from .types import (
     AuthEntity,
     AuthEvent,
@@ -86,7 +88,7 @@ async def create_user(
     user = User(
         email=data.email,
         name=data.name,
-        password_hash=security.hash_password(data.password),
+        password_hash=await security.hash_password_async(data.password),
         instance_role=data.instance_role,
         source=UserSource.LOCAL,  # spec 84: password accounts are "local"
     )
@@ -335,7 +337,7 @@ async def duplicate_user_groups(
 
 async def authenticate(session: AsyncSession, email: str, password: str) -> User:
     user = await get_user_by_email(session, email)
-    password_ok = security.verify_password(password, user.password_hash if user else None)
+    password_ok = await security.verify_password_async(password, user.password_hash if user else None)
     if user is None or not user.active or not password_ok:
         raise UnauthorizedError(BAD_CREDENTIALS)
     return user

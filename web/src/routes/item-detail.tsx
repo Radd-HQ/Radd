@@ -82,7 +82,7 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
   // the same cache entries the sections read, so this costs nothing extra.
   const webLinks = useQuery(itemWebLinksQuery(item.id));
   const itemPages = useQuery(itemPagesQuery(item.id));
-  const updateItem = useUpdateItem(project.id);
+  const updateItem = useUpdateItem();
   const quickActions = useIssueQuickActions(item, project.id);
   const toggleStar = useToggleStarOnItem();
   const perms = usePermissions();
@@ -191,7 +191,7 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
 
   return (
     <AiResultsContext.Provider value={openAiResults}>
-      <header className="flex items-center gap-2 border-b border-subtle px-5 py-3">
+      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-subtle px-4 py-3 sm:px-5">
         {item.kind === ItemKind.subtask ? (
           <KindBadge kind={item.kind} withLabel />
         ) : (
@@ -223,7 +223,7 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
             )}
           />
         )}
-        <span className="font-mono text-xs text-fg-muted">{item.key}</span>
+        <span className="shrink-0 font-mono text-xs text-fg-muted">{item.key}</span>
         {item.kind === ItemKind.epic && <ChildCount count={item.child_count ?? 0} />}
         {item.parent && (
           <Link

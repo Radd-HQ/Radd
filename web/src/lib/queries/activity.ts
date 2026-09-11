@@ -42,7 +42,7 @@ export const itemHistoryQuery = (itemId: string) =>
       Entity.webLink,
       Entity.vcsLink,
     ),
-    queryFn: () => api.get<ItemHistory>(apiItemHistoryPath(itemId)),
+    queryFn: ({ signal }) => api.get<ItemHistory>(apiItemHistoryPath(itemId), { signal }),
   });
 
 /** External/related links on an item (docs, designs, references). */
@@ -50,7 +50,7 @@ export const itemWebLinksQuery = (itemId: string) =>
   queryOptions({
     queryKey: queryKeys.itemWebLinks(itemId),
     meta: entityMeta(Entity.webLink),
-    queryFn: () => api.get<WebLink[]>(apiItemWebLinksPath(itemId)),
+    queryFn: ({ signal }) => api.get<WebLink[]>(apiItemWebLinksPath(itemId), { signal }),
   });
 
 /** Version-control references on an item (branches, commits, MRs/PRs). */
@@ -58,16 +58,17 @@ export const itemVcsLinksQuery = (itemId: string) =>
   queryOptions({
     queryKey: queryKeys.itemVcsLinks(itemId),
     meta: entityMeta(Entity.vcsLink),
-    queryFn: () => api.get<VcsLink[]>(apiItemVcsLinksPath(itemId)),
+    queryFn: ({ signal }) => api.get<VcsLink[]>(apiItemVcsLinksPath(itemId), { signal }),
   });
 
 /** Dependency-link / parent-picker typeahead: items across the SERVER
  *  matching `q` (title or number/key), same-project first (spec 80). */
 export const linkSearchQuery = (projectId: string, q: string, excludeId?: string, limit?: number) =>
   queryOptions({
-    queryKey: queryKeys.linkSearch(projectId, q, limit),
-    queryFn: () =>
+    queryKey: queryKeys.linkSearch(projectId, q, limit, excludeId),
+    queryFn: ({ signal }) =>
       api.get<ItemLinkSearchResult[]>(apiItemLinkSearchPath(), {
+        signal,
         query: {
           project_id: projectId,
           q,
@@ -98,8 +99,9 @@ export const auditQuery = (params: AuditParams) =>
       limit: String(params.limit ?? 100),
       offset: String(params.offset ?? 0),
     }),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<AuditEntry[]>(ApiPath.audit, {
+        signal,
         query: {
           entity_type: params.entityType || undefined,
           actor_id: params.actorId || undefined,
@@ -118,7 +120,7 @@ export const auditQuery = (params: AuditParams) =>
 export const backupStatusQuery = () =>
   queryOptions({
     queryKey: queryKeys.backupStatus(),
-    queryFn: () => api.get<BackupStatus>(`${ApiPath.backups}/status`),
+    queryFn: ({ signal }) => api.get<BackupStatus>(`${ApiPath.backups}/status`, { signal }),
     retry: false,
   });
 
@@ -126,14 +128,14 @@ export const backupStatusQuery = () =>
 export const backupsQuery = () =>
   queryOptions({
     queryKey: queryKeys.backups(),
-    queryFn: () => api.get<BackupArtifact[]>(ApiPath.backups),
+    queryFn: ({ signal }) => api.get<BackupArtifact[]>(ApiPath.backups, { signal }),
     retry: false,
   });
 
 export const backupSchedulesQuery = () =>
   queryOptions({
     queryKey: queryKeys.backupSchedules(),
-    queryFn: () => api.get<BackupSchedule[]>(`${ApiPath.backups}/schedules`),
+    queryFn: ({ signal }) => api.get<BackupSchedule[]>(`${ApiPath.backups}/schedules`, { signal }),
     retry: false,
   });
 
@@ -142,7 +144,7 @@ export const backupSchedulesQuery = () =>
 export const backupRunQuery = (runId: string | null) =>
   queryOptions({
     queryKey: queryKeys.backupRun(runId ?? ""),
-    queryFn: () => api.get<BackupRun>(`${ApiPath.backups}/runs/${runId}`),
+    queryFn: ({ signal }) => api.get<BackupRun>(`${ApiPath.backups}/runs/${runId}`, { signal }),
     enabled: Boolean(runId),
     retry: false,
   });

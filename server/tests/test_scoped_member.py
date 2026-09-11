@@ -304,6 +304,7 @@ async def test_cross_project_reports_cover_only_readable_projects(client, world)
     """
     response = await client.get("/api/v1/reports/velocity", headers=_auth(world["member_token"]))
     assert response.status_code == 200
+    assert response.json()["rows"] == [], "project-only readers have no cycle catalog grant"
     scope = response.json()["scope"]
     assert scope["covered"] == [world["granted_key"]], "velocity reached past the grant"
     assert scope["total"] > len(scope["covered"]), "the fixture needs an unreadable project"

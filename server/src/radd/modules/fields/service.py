@@ -400,9 +400,9 @@ async def definitions_for_project(session: AsyncSession, project: Project) -> li
     return list((await session.execute(query)).scalars())
 
 
-async def restricted_field_ids(session: AsyncSession) -> set[str]:
+async def restricted_field_ids(session: AsyncSession, *, ids: list[str] | None = None) -> set[str]:
     """Field ids (as strings) carrying any grant — used for the `restricted` read flag."""
-    return await access_service.resource_ids_with_grants(session, FIELD_RESOURCE)
+    return await access_service.resource_ids_with_grants(session, FIELD_RESOURCE, ids=ids)
 
 
 async def outbound_restricted_keys(

@@ -81,6 +81,13 @@ export interface Project {
   via?: "entitled" | "related" | null;
 }
 
+/** Aggregate visible-project authority, independent of a directory page. */
+export interface ProjectSummary {
+  total: number;
+  related_count: number;
+  permissions: PermissionValue[];
+}
+
 export interface ProjectCreate {
   key: string;
   name: string;
@@ -91,7 +98,8 @@ export const UserSource = {
   local: "local",
   ldap: "ldap",
   oidc: "oidc",
-  unknown: "unknown",
+  service: "service",
+  email: "email",
 } as const;
 export type UserSourceValue = (typeof UserSource)[keyof typeof UserSource];
 

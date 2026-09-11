@@ -9,7 +9,6 @@ from radd.exceptions import ConflictError, ForbiddenError
 from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.deps import CurrentUser
-from radd.modules.auth.types import InstanceRole
 from radd.modules.projects import service as projects_service
 
 from . import service
@@ -27,7 +26,7 @@ async def _authorize(
     """Gate a scope (specs 50/67): instance → instance admin, project →
     project.manage. Workspace scope no longer exists (spec 67)."""
     if scope is SettingScope.INSTANCE:
-        if InstanceRole(user.instance_role) is not InstanceRole.ADMIN:
+        if not authz.is_instance_admin(user):
             raise ForbiddenError("instance settings require an instance admin")
         return
     if scope_id is None:

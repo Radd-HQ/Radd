@@ -40,9 +40,9 @@ async def _shutdown() -> None:
     drained by the kernel's single consumer rather than a loop per module."""
 
 
-from radd.kernel.registry import register_relation
-from radd.kernel.specs import RelationSpec
-from .models import Attachment
+from radd.kernel.registry import register_relation  # noqa: E402 - bindings require initialized registries
+from radd.kernel.specs import RelationSpec  # noqa: E402 - bindings require initialized registries
+from .models import Attachment  # noqa: E402 - bindings require initialized registries
 
 # RADD-816 (Q4): what @own MEANS for a attachment — the author column. Both forms
 # mandatory (the RADD-823 contract); registered on the manifest so the loader's
@@ -56,7 +56,7 @@ ATTACHMENT_OWN = RelationSpec(
 )
 register_relation(ATTACHMENT_OWN)
 
-from .acl import _SPEC as _ATTACHMENT_SPEC
+from .acl import _SPEC as _ATTACHMENT_SPEC  # noqa: E402 - bindings require initialized registries
 
 plugin = RaddPlugin(
     cascades=lambda: gc.cascades(),

@@ -9,6 +9,7 @@ from radd.db import get_session
 from radd.exceptions import ForbiddenError, UnauthorizedError
 
 from .models import User
+from .principals import require_account_session
 from .types import PAT_PREFIX, SESSION_COOKIE_NAME
 
 _BEARER_PREFIX = "Bearer "
@@ -53,7 +54,14 @@ async def optional_user(
     if authorization.startswith(_BEARER_PREFIX):
         token = authorization[len(_BEARER_PREFIX) :].strip()
         if token.startswith(PAT_PREFIX):
-            return await service.user_for_api_token(session, token)
+            user = await service.user_for_api_token(session, token)
+            if user is not None and request.method not in _READ_METHODS:
+                # Self-service account mutations have no project/atom gate.
+                # Keep API keys out of this session-only security surface.
+                auth_root = request.url.path.split("/auth/", 1)
+                if len(auth_root) == 2 and auth_root[1] not in {"logout", "me/preferences"}:
+                    require_account_session(user)
+            return user
     return None
 
 

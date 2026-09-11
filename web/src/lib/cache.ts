@@ -26,11 +26,14 @@ export const Entity = {
   item: "item",
   comment: "comment",
   cycle: "cycle",
+  cycleSeries: "cycleSeries",
   release: "release",
   view: "view",
   label: "label",
   team: "team",
+  group: "group",
   field: "field",
+  accessGrant: "accessGrant",
   worklog: "worklog",
   workCategory: "workCategory",
   automation: "automation",
@@ -59,11 +62,17 @@ export type EntityTag = (typeof Entity)[keyof typeof Entity];
 
 interface EntityMeta extends Record<string, unknown> {
   entities: EntityTag[];
+  projectId?: string;
 }
 
 /** Spread into a query's `meta` to declare which entities its data caches. */
 export function entityMeta(...entities: EntityTag[]): EntityMeta {
   return { entities };
+}
+
+/** Declare a query's explicit server-side project filter; absent = all projects. */
+export function projectEntityMeta(projectId: string | null | undefined, ...entities: EntityTag[]): EntityMeta {
+  return {entities, projectId: projectId || undefined};
 }
 
 /**

@@ -1,0 +1,31 @@
+# Field option settings — 2026-09-10
+
+RADD-1115 checkpoint: verified locally, not released. P2 and the full [research ledger](../OUTSTANDING.md) remain in progress.
+
+## Behavior
+
+The selected field settings panel previously downloaded every option and mounted the entire filtered catalog. The populated database has 117 option-bearing fields, 1,296 options total, and a largest catalog of 215. A scroll container limited height but did not limit payload or mounted rows.
+
+`GET /fields/definitions/{id}/options` now checks the definition-read policy and expands the catalog in PostgreSQL. Literal search and replacement exclusion precede count/paging; returned strings retain their stored order. The default window is 50, with a validated maximum of 200. SQL/JSON null catalogs are empty. Hidden/missing definitions return 404, including for restricted admin keys and expired authority. Direct settings reads accept `include_options=false`, calculate `option_count` in SQL and keep the full option array out of the driver response. Existing complete reads remain compatible.
+
+Field settings, default choices and removal replacements use 50-option windows with cancellable, field/search/page/exclusion-specific query keys. Selected multi-value defaults render one window while preserving the complete draft. Saved off-page values remain visible without catalog hydration. Option/default/scope mutations request lean responses while retaining the established mutation gates and validation. Deleting a field excludes its option queries as well as its definition from the interim refetch.
+
+Required single-select removal explicitly requires a replacement even when no issues use the option, matching the backend and protecting defaults. Usage failure blocks removal; both catalogs and choices provide retry. Optional single-select removal can clear values; multi-select removal retains other values. The server still migrates item values and defaults transactionally. Clean default editors adopt a migrated default; unfinished edits survive directory refresh. Last-page option removal recovers the previous page, and newly added options are reachable.
+
+## Verification
+
+- [Full backend](backend-tests.txt): **2,480 passed, 4 skipped**, 160 warnings, 112.10 seconds. [Focused](focused-tests.txt): 11 passed. Tests cover 126-option order/windows, literal wildcard search, exclusion before paging, lean reads/writes, legacy complete reads, hidden/expired scope, scoped admin keys, and required default migration. Runtime/new-test Ruff and `git diff --check` pass.
+- [Frontend/plugin checks](frontend-checks.txt): full host plus six remotes, JavaScript checks, account/responsive smoke and HTTP autocomplete cancellation pass. [Additional query checks](query-checks.txt) exercise distinct field/search/page/exclusion identities, real QueryObserver cancellation and entity invalidation for the new option factory.
+- [Dedicated browser](browser.json): actual 126-option single/multi catalogs, 50/50/26 option and choice windows, 125 selected defaults, persisted later choices, complete off-page drafts, literal search, catalog/choice/usage failures and retries, required zero-usage replacement, excluded source, migrated defaults, boundary deletion recovery and additive writes. Captured 118 requests, including 37 option windows capped at 50, with zero full option responses or unexpected HTTP/console errors. A bounded project sidebar request is permitted.
+- Nested removal/replacement dialogs preserve drafts, focus and viewport bounds at 390/768/1440 px. Screenshots: [390](option-picker-390.png), [768](option-picker-768.png), [1440](option-picker-1440.png); the 390 px output was visually inspected.
+- [Earlier field-directory browser](directory-browser.json) passes: scoped/granular capabilities, 126-field/project paging, retained text drafts, creation, global transition, usage retry and delete-only recovery.
+- [Populated parity](live-parity.json): all 117 catalogs, all 1,296 options and saved defaults match the complete legacy API; 121 windows, maximum 50. [Populated browser](live-options-browser.json) traverses the 215-option field in 50/50/50/50/15 windows and exercises responsive default choices without saved edits. [General browser](live-browser.json) and [real LLM/search/storage/API](live-api.json) also pass.
+- [Environment](environment.json): development counts remain **503,485 / 8,923**, schemas **g1093ghost / d117pkg**. Populated app18000 PID2300745 runs workers-disabled and returns health200. Disposable app18001 stopped; fixture/audit sessions revoked and private files removed.
+
+## Reproduce and continue
+
+Use [AGENTS.md](../../../AGENTS.md) for safe database commands. Run pytest and seeding sequentially against **radd_audit_test only**. Build the web app, seed with `seed-field-options.py`, start the workers-disabled disposable app18001, and run `field-options-browser.mjs`. Repeat the prior field directory probe with its own fresh seed. Browser probes revoke their fixture sessions. On the populated app run `live-check.py`, `field-options-live.py`, `field-options-live-browser.mjs`, then `live-browser.mjs`; the last probe owns shared session cleanup. Scripts live in the parent audit directory.
+
+The first dedicated browser attempt exposed a probe dataset-attribute typo; the second completed interactions but incorrectly rejected the already bounded project sidebar. Both assertions were corrected, and the saved successful run includes an additional choice retry check. An initial full-suite command from the repository root collected the separate SDK without its package installed; the saved full backend run uses the required `server/` working directory.
+
+Remaining: legacy complete field/option registries used by issue/form/workflow consumers, issue properties/comment team catalogs, service-account/key lists and token counts, other directories, provisioning/cycle scans and authority maps. Option mutation internals still validate complete catalogs, and current defaults remain complete wire values. This checkpoint does not prove concurrent option-write behavior, sustained load, complete worker delivery, broader accessibility or any other open research outcome. No migration, commit, push, release or hosted CI activation occurred.

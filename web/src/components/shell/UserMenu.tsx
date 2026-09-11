@@ -1,13 +1,13 @@
 import { useNavigate } from "@tanstack/react-router";
+import { resetAccountSession } from "../../lib/account-session";
 import { useQueryClient } from "@tanstack/react-query";
-import { CircleUserRound, FlaskConical, LogOut, Moon, Sun } from "lucide-react";
+import { CircleUserRound, LogOut, Moon, Sun } from "lucide-react";
 import { Avatar } from "../Avatar";
 import { DropdownMenu } from "../DropdownMenu";
 import { Theme, getTheme, setTheme } from "../../lib/theme";
 import { AuthStatus, logout } from "../../lib/auth";
 import { RoutePath } from "../../lib/constants";
 import { useAuthState } from "../../lib/hooks";
-import { queryKeys } from "../../lib/queries";
 
 export function UserMenu() {
   const authState = useAuthState();
@@ -16,17 +16,7 @@ export function UserMenu() {
 
   if (!authState) return null;
 
-  if (authState.status !== AuthStatus.authenticated) {
-    return (
-      <div
-        className="mt-1 flex items-center gap-2 rounded-md bg-elevated/60 px-2 py-1.5 text-[12px] text-amber-400/90"
-        title="The auth backend isn't deployed yet; the API is open in dev."
-      >
-        <FlaskConical size={13} aria-hidden />
-        Dev mode — anonymous
-      </div>
-    );
-  }
+  if (authState.status !== AuthStatus.authenticated) return null;
 
   const { user } = authState;
 
@@ -34,8 +24,8 @@ export function UserMenu() {
     try {
       await logout();
     } finally {
-      queryClient.removeQueries({ queryKey: queryKeys.authState });
-      void navigate({ to: RoutePath.login });
+      await resetAccountSession(queryClient);
+      window.location.assign(RoutePath.login);
     }
   };
 

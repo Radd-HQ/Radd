@@ -113,7 +113,7 @@ async def _emit(
     session: AsyncSession, event_type: VcsEvent, link: ItemVcsLink, actor_id: uuid.UUID | None
 ) -> None:
     item = await items_service.require_item(session, link.item_id)
-    project = await projects_service.get_project(session, item.project_id)
+    await projects_service.get_project(session, item.project_id)
     await events.emit(
         session,
         event_type=event_type,

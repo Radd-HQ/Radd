@@ -4,8 +4,16 @@ import type { CycleStatusValue } from "../types";
 
 /** Query keys — the single source of truth; never inline key arrays elsewhere. */
 export const queryKeys = {
+  optionsPage: (resource: string, q: string, page: number) => ["directory-options", resource, { q, page }] as const,
+  optionByValue: (resource: string, value: string) => ["directory-options", resource, "value", value] as const,
   authState: ["auth", "me"] as const,
   projects: ["projects"] as const,
+  firstProject: ["projects", "first"] as const,
+  projectSummary: ["projects", "summary"] as const,
+  projectById: (id: string) => ["projects", "id", id] as const,
+  projectByKey: (key: string) => ["projects", "key", key.toUpperCase()] as const,
+  projectsPage: (q: string, page: number, hideRelated: boolean, permission: string) =>
+    ["projects", "page", { q, page, hideRelated, permission }] as const,
   states: (projectId: string) => ["states", { projectId }] as const,
   stateCategories: ["state-categories"] as const,
   allStates: ["states", "all"] as const,
@@ -16,9 +24,6 @@ export const queryKeys = {
     ["validation-context", { projectId, typeId, formId }] as const,
   effectiveScreen: (projectId: string, issueTypeId: string | null) =>
     ["screen-effective", { projectId, issueTypeId }] as const,
-  items: (projectId: string, archived = false) => ["items", { projectId, archived }] as const,
-  itemsInfinite: (projectId: string, archived = false) =>
-    ["itemsInfinite", { projectId, archived }] as const,
   item: (itemId: string) => ["item", { itemId }] as const,
   itemByKey: (key: string) => ["itemByKey", { key }] as const,
   comments: (itemId: string) => ["comments", { itemId }] as const,
@@ -37,10 +42,15 @@ export const queryKeys = {
   teamMembers: (teamId: string) => ["teamMembers", { teamId }] as const,
   tokens: ["tokens"] as const,
   views: ["views"] as const,
+  viewById: (id: string) => ["views", "id", id] as const,
+  viewsPage: (filters: Record<string, string | undefined>, q: string, page: number, limit: number) =>
+    ["views", "page", { ...filters, q, page, limit }] as const,
   viewCounts: (viewIds: readonly string[], extraQ?: string) =>
     ["viewCounts", { viewIds, extraQ: extraQ ?? "" }] as const,
   cardLayoutPresets: ["cardLayoutPresets"] as const,
   dashboards: ["dashboards"] as const,
+  dashboardsPage: (q: string, page: number) => ["dashboards", "page", { q, page }] as const,
+  dashboardSummary: ["dashboards", "summary"] as const,
   dashboard: (dashboardId: string) => ["dashboard", { dashboardId }] as const,
   itemsCount: (scope: Record<string, string>, q: string) =>
     ["itemsCount", { scope, q }] as const,
@@ -61,7 +71,11 @@ export const queryKeys = {
   roles: ["roles"] as const,
   roleGlobalGrants: (roleId: string) => ["roles", roleId, "global-grants"] as const,
   cycles: (status?: CycleStatusValue) => ["cycles", { status: status ?? null }] as const,
+  cyclesPage: (q: string, page: number, status: CycleStatusValue | undefined, includeCompleted: boolean, excludeId: string, datedOnly: boolean) =>
+    ["cycles", "page", { q, page, status, includeCompleted, excludeId, datedOnly }] as const,
+  cycleSummary: (q: string) => ["cycles", "summary", q] as const,
   cycle: (cycleId: string) => ["cycle", { cycleId }] as const,
+  cycleSeriesPage: (q: string, page: number) => ["cycle-series", "page", { q, page }] as const,
   releases: (projectId: string) => ["releases", { projectId }] as const,
   reportThroughput: (projectId: string, start: string, end: string, interval: string, q?: string) =>
     ["report", "throughput", { projectId, start, end, interval }, { q: q ?? "" }] as const,
@@ -95,15 +109,15 @@ export const queryKeys = {
   itemHistory: (itemId: string) => ["itemHistory", { itemId }] as const,
   itemWebLinks: (itemId: string) => ["itemWebLinks", { itemId }] as const,
   itemVcsLinks: (itemId: string) => ["itemVcsLinks", { itemId }] as const,
-  linkSearch: (projectId: string, q: string, limit?: number) =>
-    ["linkSearch", { projectId, q, limit: limit ?? null }] as const,
+  linkSearch: (projectId: string, q: string, limit?: number, excludeId?: string) =>
+    ["linkSearch", { projectId, q, limit: limit ?? null, excludeId: excludeId ?? null }] as const,
   audit: (params: Record<string, string>) => ["audit", params] as const,
   backupStatus: () => ["backupStatus"] as const,
   backups: () => ["backups"] as const,
   backupSchedules: () => ["backupSchedules"] as const,
   backupRun: (runId: string) => ["backupRun", { runId }] as const,
   notifications: (unread: boolean, page = 1) => ["notifications", { unread, page }] as const,
-  search: (q: string) => ["search", { q }] as const,
+  search: (q: string, limit?: number) => ["search", { q, limit }] as const,
   attachments: (entityType: string, entityId: string) =>
     ["attachments", { entityType, entityId }] as const,
   cannedResponses: ["cannedResponses"] as const,
@@ -138,7 +152,7 @@ export const queryKeys = {
   itemPages: (itemId: string) => ["itemPages", { itemId }] as const,
   pageByPath: (spaceSlug: string, pageSlug: string) =>
     ["pageByPath", { spaceSlug, pageSlug }] as const,
-  docsSearch: (q: string) => ["docsSearch", { q }] as const,
+  docsSearch: (q: string, limit?: number) => ["docsSearch", { q, limit }] as const,
   deflect: (q: string, projectId: string) => ["deflect", { q, projectId }] as const,
   totp: ["auth", "totp"] as const,
   aiStatus: ["aiStatus"] as const,
@@ -169,7 +183,7 @@ export const queryKeys = {
   mePreferences: ["auth", "me", "preferences"] as const,
   similarItems: (itemId: string) => ["similarItems", { itemId }] as const,
   // seedKey identifies the text's origin (a comment id), not the text itself.
-  similarToText: (seedKey: string) => ["similarToText", { seedKey }] as const,
+  similarToText: (seedKey: string, text: string, excludeItemId?: string) => ["similarToText", { seedKey, text, excludeItemId }] as const,
   // Jira import (specs 90, 100). The wizard used to inline these key arrays.
   jiraConnections: ["jiraConnections"] as const,
   jiraStatus: ["jiraStatus"] as const,

@@ -270,7 +270,13 @@ async def sweep_plugin_atoms(session: AsyncSession, plugin, actor_id: uuid.UUID 
                 sa_text("SELECT id, scopes FROM api_tokens WHERE scopes IS NOT NULL")
             )
         ).fetchall():
+            # Older writers stored JSON null, which passes SQL IS NOT NULL.
+            # It represents an unscoped credential, with no atoms to remove.
+            if scopes is None:
+                continue
             data = scopes if isinstance(scopes, dict) else json.loads(scopes)
+            if data is None:
+                continue
             changed = False
             if isinstance(data.get("global"), list):
                 stripped = _strip(data["global"])

@@ -279,12 +279,12 @@ async def _plan_create_item(
         if found is None:
             return _Plan(PlanKind.SKIP, f"create_item: no item {key!r} to parent under")
         create_kwargs["parent_id"] = found.id
-    for field in ("start_date", "target_date"):
-        if value := params.get(field):
+    for date_field in ("start_date", "target_date"):
+        if value := params.get(date_field):
             resolved = _resolve_date(text.line(value))
             if resolved is None:
-                return _Plan(PlanKind.SKIP, f"create_item: {field} {value!r} is not a date")
-            create_kwargs[field] = resolved
+                return _Plan(PlanKind.SKIP, f"create_item: {date_field} {value!r} is not a date")
+            create_kwargs[date_field] = resolved
 
     labels = [text.line(label) for label in (params.get("labels") or []) if str(label).strip()]
     custom = {

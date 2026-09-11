@@ -1,3 +1,4 @@
+import { accountStorageKey } from "./account-storage";
 /** Recently-viewed issue trail (spec 37) — per-browser localStorage, newest first. */
 
 const STORAGE_KEY = "radd.recent-items";
@@ -11,7 +12,7 @@ export interface RecentItem {
 
 export function listRecentItems(): RecentItem[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(accountStorageKey(STORAGE_KEY));
     const parsed = raw ? (JSON.parse(raw) as RecentItem[]) : [];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -23,7 +24,7 @@ export function recordRecentItem(key: string, title: string): void {
   try {
     const rest = listRecentItems().filter((entry) => entry.key !== key);
     const next = [{ key, title, at: Date.now() }, ...rest].slice(0, MAX_ENTRIES);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    localStorage.setItem(accountStorageKey(STORAGE_KEY), JSON.stringify(next));
   } catch {
     // Storage unavailable (private mode/quota) — the trail is best-effort.
   }
@@ -33,7 +34,7 @@ export function recordRecentItem(key: string, title: string): void {
 export function removeRecentItem(key: string): void {
   try {
     const next = listRecentItems().filter((entry) => entry.key !== key);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    localStorage.setItem(accountStorageKey(STORAGE_KEY), JSON.stringify(next));
   } catch {
     // best-effort
   }

@@ -189,7 +189,7 @@ uv run python -m radd.seed --email admin@example.com --password change-me --name
 uv run uvicorn --factory radd.app:create_app --host 0.0.0.0 --port 8000
 # full app (web UI + API): http://localhost:8000 — docs at /docs. Log in with the seeded creds.
 uv run pytest                    # self-contained: re-creates + migrates a throwaway `radd_test` DB (override: RADD_TEST_DATABASE_URL); the dev DB is never touched
-# Jira sample import (issues keep their real Jira IDs 1:1): 
+# Jira sample import (issues keep their real Jira IDs 1:1):
 #   uv run python scripts/import_jira.py --file scripts/sample_data/jira_sample.json --email ... --password ...
 # frontend dev: cd web && npm run dev (port 5173; npm run build refreshes the bundle served at :8000)
 ```

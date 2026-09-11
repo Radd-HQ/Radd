@@ -77,7 +77,7 @@ function transformPages(
 }
 
 /** PATCH an item (detail panel edits); syncs every item cache so all surfaces update live. */
-export function useUpdateItem(projectId: string) {
+export function useUpdateItem() {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -86,9 +86,6 @@ export function useUpdateItem(projectId: string) {
     onError: (error) => pushToast(errorMessage(error)),
     onSuccess: (updated) => {
       cacheItem(queryClient, updated);
-      const replace = (item: Item) => (item.id === updated.id ? updated : item);
-      queryClient.setQueryData<Item[]>(queryKeys.items(projectId), (old) => old?.map(replace));
-      queryClient.setQueryData<ItemPages>(queryKeys.itemsInfinite(projectId), mapPages(replace));
     },
     onSettled: () => invalidateItemCaches(queryClient),
   });

@@ -19,6 +19,7 @@ const SERVER_ENTITY_TAGS: Record<string, EntityTag[]> = {
   item_link: [Entity.item],
   comment: [Entity.comment, Entity.item],
   cycle: [Entity.cycle, Entity.item],
+  cycle_series: [Entity.cycleSeries],
   release: [Entity.release, Entity.item],
   view: [Entity.view],
   label: [Entity.label, Entity.item],
@@ -26,7 +27,9 @@ const SERVER_ENTITY_TAGS: Record<string, EntityTag[]> = {
   // Transition config changes shift which state moves are allowed per item.
   workflow_transition: [Entity.transition, Entity.item],
   field: [Entity.field],
+  access_grant: [Entity.accessGrant, Entity.field, Entity.attachment, Entity.page, Entity.view, Entity.dashboard],
   team: [Entity.team],
+  group: [Entity.group],
   team_member: [Entity.team],
   role: [Entity.role],
   user: [Entity.member],
@@ -53,9 +56,15 @@ const SERVER_ENTITY_TAGS: Record<string, EntityTag[]> = {
 };
 
 const ALL_TAGS = Object.values(Entity);
+const activeStops = new Set<() => void>();
+
+export function stopAllRealtime() {
+  for (const stop of [...activeStops]) stop();
+}
 
 interface RealtimeMessage {
   entity?: string;
+  queries?: string[];
 }
 
 function wsUrl(): string {
@@ -76,14 +85,41 @@ export function startRealtime(queryClient: QueryClient): () => void {
   let attempts = 0;
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
   let flushTimer: ReturnType<typeof setTimeout> | undefined;
+  let subscriptionTimer: ReturnType<typeof setTimeout> | undefined;
+  let lastSubscriptions = "";
   const pending = new Set<EntityTag>();
+  const pendingQueries = new Set<string>();
+
+  const subscribe = () => {
+    subscriptionTimer = undefined;
+    if (closed || socket?.readyState !== WebSocket.OPEN) return;
+    const queries = queryClient.getQueryCache().getAll().filter(query => query.isActive()).flatMap(query => {
+      const meta = query.meta as {entities?: EntityTag[]; projectId?: string} | undefined;
+      if (!meta?.entities?.length || query.queryHash.length > 4096) return [];
+      const entities = Object.entries(SERVER_ENTITY_TAGS).filter(([, tags]) => tags.some(tag => meta.entities!.includes(tag))).map(([entity]) => entity);
+      return entities.length ? [{id: query.queryHash, entities, project_id: meta.projectId ?? null}] : [];
+    });
+    // A rare oversized plugin surface uses the legacy coarse subscription.
+    let payload = JSON.stringify({queries: queries.length > 128 ? null : queries});
+    if (payload.length > 262144) payload = JSON.stringify({queries: null});
+    if (payload !== lastSubscriptions) {
+      socket.send(payload);
+      lastSubscriptions = payload;
+    }
+  };
+  const unsubscribeCache = queryClient.getQueryCache().subscribe(() => {
+    if (!closed) subscriptionTimer ??= setTimeout(subscribe, REALTIME_COALESCE_MS);
+  });
 
   const flush = () => {
     flushTimer = undefined;
-    if (pending.size === 0) return;
+    if (pending.size === 0 && pendingQueries.size === 0) return;
     const tags = [...pending];
     pending.clear();
-    void invalidateEntities(queryClient, ...tags);
+    const hashes = new Set(pendingQueries);
+    pendingQueries.clear();
+    if (tags.length) void invalidateEntities(queryClient, ...tags);
+    if (hashes.size) void queryClient.invalidateQueries({predicate: query => hashes.has(query.queryHash)});
   };
 
   const queue = (tags: EntityTag[]) => {
@@ -96,6 +132,9 @@ export function startRealtime(queryClient: QueryClient): () => void {
     socket = new WebSocket(wsUrl());
 
     socket.onopen = () => {
+      if (closed) return;
+      lastSubscriptions = "";
+      subscribe();
       const firstConnect = attempts === 0;
       attempts = 0;
       // Refetch the world we may have drifted from (skip the very first
@@ -104,8 +143,14 @@ export function startRealtime(queryClient: QueryClient): () => void {
     };
 
     socket.onmessage = (event: MessageEvent<string>) => {
+      if (closed) return;
       try {
         const message = JSON.parse(event.data) as RealtimeMessage;
+        if (Array.isArray(message.queries)) {
+          for (const hash of message.queries) pendingQueries.add(hash);
+          flushTimer ??= setTimeout(flush, REALTIME_COALESCE_MS);
+          return;
+        }
         const tags = message.entity ? SERVER_ENTITY_TAGS[message.entity] : undefined;
         if (tags) queue(tags);
       } catch {
@@ -126,12 +171,17 @@ export function startRealtime(queryClient: QueryClient): () => void {
   };
 
   connect();
-  return () => {
+  const stop = () => {
     closed = true;
     clearTimeout(reconnectTimer);
     clearTimeout(flushTimer);
+    clearTimeout(subscriptionTimer);
+    unsubscribeCache();
     socket?.close();
+    activeStops.delete(stop);
   };
+  activeStops.add(stop);
+  return stop;
 }
 
 /** Mount-once hook for the app shell. */

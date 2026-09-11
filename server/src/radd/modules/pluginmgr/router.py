@@ -7,8 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.db import get_session
 from radd.exceptions import ForbiddenError
 from radd.kernel import entities as kentities
+from radd.modules.auth import authz
 from radd.modules.auth.deps import CurrentUser
-from radd.modules.auth.types import InstanceRole
 
 from . import discovery, runtime, service
 from .schemas import ContributionSettings, PluginCapabilityRead, PluginRead
@@ -21,7 +21,7 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 
 
 def _require_admin(user: CurrentUser) -> None:
-    if InstanceRole(user.instance_role) is not InstanceRole.ADMIN:
+    if not authz.is_instance_admin(user):
         raise ForbiddenError("plugin management requires an instance admin")
 
 

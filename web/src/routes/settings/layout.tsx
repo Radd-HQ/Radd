@@ -1,3 +1,4 @@
+import { fieldSettingsSummaryQuery } from "../../lib/queries/field-settings";
 import { Link, Outlet } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useDisabledNavPaths } from "@radd/plugin-sdk";
@@ -34,15 +35,17 @@ import {
 } from "lucide-react";
 import { RoutePath } from "../../lib/constants";
 import { useCurrentUser, usePermissions } from "../../lib/hooks";
-import { capabilitiesQuery, projectsQuery } from "../../lib/queries";
+import { capabilitiesQuery } from "../../lib/queries";
 import { InstanceRole, Permission, type PermissionValue } from "../../lib/types";
 
 /** Predicate helpers a nav item uses to decide whether the viewer may see it. */
 interface NavGate {
+  fieldSettings?: boolean;
   /** The viewer holds `permission` at global scope (or is admin). */
   ws: (permission: PermissionValue) => boolean;
   /** The viewer holds `permission` on at least one accessible project. */
   any: (permission: PermissionValue) => boolean;
+  anySpace: (permission: PermissionValue) => boolean;
   /** The viewer is an instance admin (spec 50 — gates the Instance tab). */
   instanceAdmin: boolean;
   /** The viewer owns or manages at least one team (spec 87). Per-team
@@ -99,7 +102,7 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         to: RoutePath.settingsFields,
         label: "Fields",
         icon: SlidersHorizontal,
-        show: (g) => g.ws(Permission.fieldManage) || g.any(Permission.fieldManage),
+        show: (g) => Boolean(g.fieldSettings) || g.ws(Permission.fieldManage) || g.any(Permission.fieldManage),
       },
       {
         // Issue link types (spec 91) — instance admins manage the catalog.
@@ -175,7 +178,7 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         icon: UsersRound,
         // Spec 87: a team leader holds no global team atom — `manages_teams`
         // says they own or manage one, so their page stays reachable.
-        show: (g) => g.ws(Permission.teamUpdate) || g.managesTeams,
+        show: (g) => g.ws(Permission.teamUpdate) || g.ws(Permission.teamCreate) || g.ws(Permission.teamDelete) || g.managesTeams,
       },
       {
         to: RoutePath.settingsRoles,
@@ -208,7 +211,7 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         label: "Page spaces",
         icon: BookOpen,
         plugin: "pages",
-        show: (g) => g.ws(Permission.pageManage),
+        show: (g) => g.anySpace(Permission.pageManage),
       },
       {
         // AI provider registry + roles + feature toggles + presets (spec 101).
@@ -328,13 +331,16 @@ export function settingsPathForPlugin(name: string): { to: string; label: string
 export function SettingsLayout() {
   const perms = usePermissions();
   const user = useCurrentUser();
-  const { data: projects } = useQuery(projectsQuery());
   const { data: manifest } = useQuery(capabilitiesQuery);
 
+  const fields = useQuery({ ...fieldSettingsSummaryQuery(), enabled: manifest?.plugins.includes("fields") ?? false });
+
   const gate: NavGate = {
+    fieldSettings: fields.data?.can_access,
     // "ws" is historical shorthand — this is the GLOBAL-scope check (spec 67).
     ws: (permission) => perms.global(permission),
-    any: (permission) => (projects ?? []).some((project) => perms.project(project, permission)),
+    any: perms.anyProject,
+    anySpace: perms.anySpace,
     instanceAdmin: user?.instance_role === InstanceRole.admin,
     managesTeams: Boolean(user?.manages_teams),
   };
@@ -369,26 +375,26 @@ export function SettingsLayout() {
       <header className="border-b border-subtle px-6 py-3.5">
         <h1 className="text-sm font-semibold text-heading">Settings</h1>
       </header>
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <nav
           aria-label="Settings sections"
-          className="w-48 shrink-0 overflow-y-auto border-r border-subtle p-2"
+          className="flex w-full shrink-0 gap-2 overflow-x-auto border-b border-subtle p-2 lg:block lg:w-48 lg:overflow-y-auto lg:border-b-0 lg:border-r"
         >
           {visibleGroups.map((group, index) => (
             <section key={group.label} aria-label={group.label}>
               <h2
-                className={`px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-fg-faint ${
+                className={`hidden lg:block px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-fg-faint ${
                   index === 0 ? "pt-1" : "pt-4"
                 }`}
               >
                 {group.label}
               </h2>
-              <ul className="flex flex-col gap-0.5">
+              <ul className="flex gap-0.5 lg:flex-col">
                 {group.items.map(({ to, label, icon: Icon }) => (
                   <li key={to}>
                     <Link
                       to={to}
-                      className="flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-fg-secondary hover:bg-elevated hover:text-heading focus-visible:outline-2 focus-visible:outline-focus [&.active]:bg-elevated [&.active]:text-heading"
+                      className="flex items-center whitespace-nowrap gap-2 rounded-md px-2 py-1.5 text-[13px] text-fg-secondary hover:bg-elevated hover:text-heading focus-visible:outline-2 focus-visible:outline-focus [&.active]:bg-elevated [&.active]:text-heading"
                     >
                       <Icon size={14} aria-hidden />
                       {label}
@@ -400,16 +406,16 @@ export function SettingsLayout() {
           ))}
           {pluginSettingsNav.length > 0 && (
             <section aria-label="Extensions">
-              <h2 className="px-2 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-wider text-fg-faint">
+              <h2 className="hidden lg:block px-2 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-wider text-fg-faint">
                 Extensions
               </h2>
-              <ul className="flex flex-col gap-0.5">
+              <ul className="flex gap-0.5 lg:flex-col">
                 {pluginSettingsNav.map((n) => (
                   <li key={n.key}>
                     <a
                       href={n.path}
                       data-plugin-settings-nav={n.key}
-                      className="flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-fg-secondary hover:bg-elevated hover:text-heading focus-visible:outline-2 focus-visible:outline-focus"
+                      className="flex items-center whitespace-nowrap gap-2 rounded-md px-2 py-1.5 text-[13px] text-fg-secondary hover:bg-elevated hover:text-heading focus-visible:outline-2 focus-visible:outline-focus"
                     >
                       <Blocks size={14} aria-hidden />
                       {n.label}

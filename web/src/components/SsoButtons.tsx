@@ -37,8 +37,8 @@ function GoogleMark() {
 export function SsoButtons() {
   const providers = useQuery({
     queryKey: ["ssoPublicProviders"],
-    queryFn: () =>
-      api.get<SsoProviderPublic[]>(ApiPath.ssoPublicProviders, { on401: On401.throw }),
+    queryFn: ({ signal }) =>
+      api.get<SsoProviderPublic[]>(ApiPath.ssoPublicProviders, { signal, on401: On401.throw }),
     staleTime: Infinity,
     retry: false,
   });

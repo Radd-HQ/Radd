@@ -1,10 +1,9 @@
 import { useState, type FormEvent } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { resetAccountSession } from "../lib/account-session";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, errorMessage } from "../lib/api";
 import { isTotpRequired, ldapLogin, login, totpLogin } from "../lib/auth";
 import { On401, RoutePath } from "../lib/constants";
-import { queryKeys } from "../lib/queries";
 import { Button } from "../components/Button";
 import { RaddTile } from "../components/RaddMark";
 import { SsoButtons } from "../components/SsoButtons";
@@ -14,8 +13,7 @@ const INVALID_CREDENTIALS_MESSAGE = "Invalid email or password.";
 const INVALID_LDAP_CREDENTIALS_MESSAGE = "Invalid username or password.";
 /** A wrong code on /auth/login/totp — the backend 401s uniformly (spec 48). */
 const INVALID_TOTP_MESSAGE = "Invalid email, password, or code.";
-const AUTH_NOT_DEPLOYED_MESSAGE =
-  "Auth isn't available on this server yet (dev mode) — continue without signing in.";
+const AUTH_NOT_DEPLOYED_MESSAGE = "Sign-in is unavailable on this server. Contact your administrator.";
 
 /** Which credential form is showing (spec 42 adds the directory option). */
 const LoginMode = {
@@ -27,7 +25,6 @@ type LoginModeValue = (typeof LoginMode)[keyof typeof LoginMode];
 type LoginOptions = { sso_enabled: boolean; ldap_enabled: boolean };
 
 export function LoginPage() {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<LoginModeValue>(LoginMode.email);
   const [email, setEmail] = useState("");
@@ -40,7 +37,7 @@ export function LoginPage() {
 
   const { data: options } = useQuery({
     queryKey: ["loginOptions"],
-    queryFn: () => api.get<LoginOptions>("/instance/login-options", { on401: On401.throw }),
+    queryFn: ({ signal }) => api.get<LoginOptions>("/instance/login-options", { signal, on401: On401.throw }),
     staleTime: Infinity,
     retry: false,
   });
@@ -54,8 +51,8 @@ export function LoginPage() {
           ? totpLogin({ email: email.trim().toLowerCase(), password, code: code.trim() })
           : login({ email: email.trim().toLowerCase(), password }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.authState });
-      await navigate({ to: RoutePath.home });
+      await resetAccountSession(queryClient);
+      window.location.assign(RoutePath.home);
     },
     onError: (error) => {
       if (isTotpRequired(error)) setTotpRequired(true);
@@ -172,18 +169,7 @@ export function LoginPage() {
           {errorText && (
             <p className={`text-xs ${authMissing ? "text-amber-400" : "text-red-400"}`}>
               {errorText}
-              {authMissing && (
-                <>
-                  {" "}
-                  <button
-                    type="button"
-                    className="underline underline-offset-2 hover:text-amber-300 cursor-pointer"
-                    onClick={() => void navigate({ to: RoutePath.home })}
-                  >
-                    Open the app
-                  </button>
-                </>
-              )}
+
             </p>
           )}
           <Button type="submit" disabled={submit.isPending} className="justify-center">

@@ -27,6 +27,7 @@ class User(Base, TimestampMixin):
     #: column: it belongs to the request's principal, not to the account. None means
     #: unscoped (a session cookie, a personal token, or an internal actor).
     token_scope = None
+    api_token_id = None
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(320), unique=True)  # stored lowercase
@@ -117,7 +118,7 @@ class ApiToken(Base):
     #: Spec 113 — raw permission atoms narrowing what this key may do:
     #: {"global": [atoms], "projects": {uuid: [atoms]}}. NULL = unscoped = the
     #: account's full authority, which is what every pre-113 token carries.
-    scopes: Mapped[dict | None] = mapped_column(JSONB, default=None)
+    scopes: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True), default=None)
     expires_at: Mapped[datetime | None]
     last_used_at: Mapped[datetime | None]  # write throttled; see service.user_for_api_token
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
@@ -212,5 +213,3 @@ class GlobalRoleGrant(Base, TimestampMixin):
     space_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("page_spaces.id", ondelete="CASCADE"), index=True
     )
-
-

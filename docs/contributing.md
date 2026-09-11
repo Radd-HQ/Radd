@@ -37,7 +37,7 @@ cd server && uv sync
 export RADD_DATABASE_URL=postgresql+psycopg://radd:radd@localhost:5456/radd
 
 # Frontend
-cd web && npm install
+cd ../web && npm install
 npm run build      # refreshes the bundle served at :8000; `npm run dev` for :5173
 ```
 
@@ -48,7 +48,7 @@ codebase is put together and the conventions a change is expected to follow.
 
 ```bash
 cd server && uv run pytest -q            # the suite builds its own throwaway database
-cd web && ./node_modules/.bin/tsc -b && ./node_modules/.bin/vite build
+cd ../web && npm run check
 ```
 
 **Building is not verifying.** A clean `tsc` proves nothing about whether a UI
@@ -115,17 +115,21 @@ recorded.
 `main` is protected: it cannot be pushed to directly and merges require review.
 Open a PR from your fork and it will be reviewed.
 
-**CI does not run on pull requests.** Forgejo executes the workflows from the
-target branch rather than the PR's, so a workflow added in a PR has no effect —
-and no workflow here triggers on `pull_request` anyway. Run the tests locally
-and say so in the PR; the results are what the review goes on.
+**CI does not yet run on pull requests.** A PR-check workflow (PR-head checkout,
+disposable Postgres, `pytest`, `ruff`, `npm run check`) is prepared but not landed.
+Forgejo executes the TARGET branch's workflows for a fork PR, so it only starts
+protecting PRs once it is on `main` AND an isolated runner labelled `checks` exists
+whose Docker daemon is not shared with release or deployment jobs, because fork code
+executes there. The runner image in `deploy/ci-runner.version` (1.4.0) already carries
+Chromium for it. Until then, run the gates locally and say so in the PR.
 
-**How a maintainer validates a fork PR** (until PR CI exists): fetch the PR
-head locally (`git fetch origin refs/pull/<n>/head && git checkout FETCH_HEAD`),
-then run the same three gates — `uv run pytest -q` in `server/`, `tsc -b` and
-`vite build` in `web/` — plus a render-proof when the change touches UI. Never
-merge on the contributor's word alone; the gates are cheap and the tag build
-runs them again anyway (the publish workflow's `test` job is the backstop).
+**How a maintainer validates a fork PR**: fetch the PR head locally
+(`git fetch origin refs/pull/<n>/head && git checkout FETCH_HEAD`), then run
+`uv run pytest -q` in `server/` and `npm run check` in `web/`, plus a render-proof when
+the change touches UI. Never merge on the contributor's word alone; the tag build runs
+the gates again anyway (the publish workflow's `test` job is the backstop).
+
+`npm run check` in `web/` is the unified frontend gate. Set `RADD_CHROME` if Chromium is not on a standard path or in the Playwright cache. The browser test uses a local synthetic API for repeatability; UI changes also need relevant interactions against a real backend. `npm run build` remains the quick host-only build.
 
 ## Releases
 

@@ -105,7 +105,7 @@ async def burnup(
     measure: ReportMeasure = ReportMeasure.COUNT,
     q: str | None = None,
 ) -> BurnupSeries:
-    cycle = await cycles_service.get_cycle(session, cycle_id)
+    await cycles_service.get_cycle(session, cycle_id)
     await authz.require_member(session, user)
     return await service.burnup(session, cycle_id, measure, actor=user, q=q)
 

@@ -34,11 +34,13 @@ from radd.modules.auth.models import User
 from radd.modules.events import service as events
 from radd.modules.projects import service as projects_service
 from radd.modules.workflow import service as workflow
+from radd.modules.workflow.types import StateCategory
 
-from ..enums import ItemEntity, ItemEvent, ItemKind
+from ..enums import ItemEntity, ItemEvent
 from ..schemas import ItemRead
 from .queries import require_item
 from .read import get_item
+from .visibility import _check_builtin_field_rules, ensure_item_relation
 
 MERGE_LINK_TYPE = "duplicates"
 
@@ -117,6 +119,14 @@ def _repoint_sql(spec: Repoint) -> list[str]:
 async def merge_items(
     session: AsyncSession, source_id: uuid.UUID, target_id: uuid.UUID, actor: User
 ) -> ItemRead:
+    """Keep every repoint atomic even when a caller catches a late refusal."""
+    async with session.begin_nested():
+        return await _merge_items(session, source_id, target_id, actor)
+
+
+async def _merge_items(
+    session: AsyncSession, source_id: uuid.UUID, target_id: uuid.UUID, actor: User
+) -> ItemRead:
     if source_id == target_id:
         raise ConflictError(ItemEntity.ITEM, reason="an item cannot merge into itself")
     source = await require_item(session, source_id)
@@ -128,13 +138,29 @@ async def merge_items(
         )
     source_project = await projects_service.get_project(session, source.project_id)
     target_project = await projects_service.get_project(session, target.project_id)
-    await authz.require(session, actor, Permission.ITEM_UPDATE, project=source_project)
-    if target_project.id != source_project.id:
-        await authz.require(session, actor, Permission.ITEM_UPDATE, project=target_project)
+    source_permissions = await authz.require(
+        session, actor, Permission.ITEM_UPDATE, project=source_project
+    )
+    target_permissions = await authz.require(
+        session, actor, Permission.ITEM_UPDATE, project=target_project
+    )
+    await ensure_item_relation(session, actor, source, source_permissions, Permission.ITEM_UPDATE)
+    await ensure_item_relation(session, actor, target, target_permissions, Permission.ITEM_UPDATE)
+    # Moving a private discussion into another project's audience is not an
+    # ordinary update. Keep this operation within one permission boundary.
+    if source_project.id != target_project.id:
+        raise ConflictError(ItemEntity.ITEM, reason="merge requires items in the same project")
+    await _check_builtin_field_rules(
+        session, actor, source_project, source_permissions, {"state_id"}
+    )
+
+    await _check_builtin_field_rules(
+        session, actor, target_project, target_permissions, {"labels"}
+    )
 
     # The tombstone state must exist before anything moves.
     states = await workflow.list_states(session, source_project.id)
-    canceled = next((s for s in states if s.category == "canceled"), None)
+    canceled = next((s for s in states if s.category == StateCategory.CANCELED), None)
     if canceled is None:
         raise ConflictError(
             ItemEntity.ITEM,

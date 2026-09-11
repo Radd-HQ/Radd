@@ -41,6 +41,7 @@ from .queries import (
     count_items_in_state,
     epics_for_items,
     cycle_points_totals,
+    cycle_item_ids_query,
     cycle_state_category_counts,
     estimate_points_by_ids,
     find_item_by_key,
@@ -63,6 +64,9 @@ from .visibility import (
 )
 
 __all__ = [
+    "clone_item",
+    "convert_item_kind",
+    "merge_items",
     "add_item_link",
     "item_ref",
     "ref_from",
@@ -79,6 +83,7 @@ __all__ = [
     "reassign_state",
     "create_item",
     "cycle_points_totals",
+    "cycle_item_ids_query",
     "cycle_state_category_counts",
     "delete_item",
     "EpicRef",

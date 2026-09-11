@@ -79,7 +79,7 @@ async def list_deliveries(
     user: CurrentUser,
     limit: int = Query(50, ge=1, le=200),
 ) -> list[DeliveryRead]:
-    endpoint = await service.get_endpoint(session, endpoint_id)
+    await service.get_endpoint(session, endpoint_id)
     await authz.require(
         session, user, authz.Permission.WEBHOOK_MANAGE
     )

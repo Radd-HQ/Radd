@@ -86,7 +86,7 @@ async def record_response(
     if survey.responded_at is None:
         survey.responded_at = utcnow()
     item = await items_service.require_item(session, survey.item_id)
-    project = await projects_service.get_project(session, item.project_id)
+    await projects_service.get_project(session, item.project_id)
     await events.emit(
         session,
         event_type=CsatEvent.RESPONDED,

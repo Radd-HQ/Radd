@@ -211,3 +211,40 @@ async def test_watchers_and_stars_dedupe_instead_of_colliding(db):
         {"i": str(target.id), "u": str(admin.id)},
     )
     assert count == 1
+
+
+@pytest.mark.parametrize("unrelated", ["source", "target"])
+async def test_merge_checks_both_item_relations_before_moving_rows(db, unrelated):
+    from radd.exceptions import ForbiddenError
+    from radd.modules.auth.scopes import parse_scope
+
+    admin, project = await _world(db)
+    source = await items_service.create_item(db, ItemCreate(project_id=project.id, title="source"), actor=admin)
+    target = await items_service.create_item(db, ItemCreate(project_id=project.id, title="target"), actor=admin)
+    await comments_service.create_comment(db, source.id, CommentCreate(body="must stay"), actor=admin)
+    row = await db.get(WorkItem, source.id if unrelated == "source" else target.id)
+    row.reporter_id = None
+    row.assignee_id = None
+    await db.flush()
+    admin.token_scope = parse_scope({"global": ["item.read", "item.update@own"]})
+    with pytest.raises(ForbiddenError):
+        await items_service.merge_items(db, source.id, target.id, actor=admin)
+    admin.token_scope = None
+    assert [c.body for c in await comments_service.list_comments(db, source.id, actor=admin)] == ["must stay"]
+    assert await comments_service.list_comments(db, target.id, actor=admin) == []
+
+
+async def test_late_merge_refusal_rolls_back_even_when_caller_catches_it(db, monkeypatch):
+    from unittest.mock import AsyncMock
+    from radd.exceptions import ForbiddenError
+
+    admin, project = await _world(db)
+    source = await items_service.create_item(db, ItemCreate(project_id=project.id, title="source"), actor=admin)
+    target = await items_service.create_item(db, ItemCreate(project_id=project.id, title="target"), actor=admin)
+    await comments_service.create_comment(db, source.id, CommentCreate(body="must stay"), actor=admin)
+    monkeypatch.setattr(merge_mod.workflow, "check_transition", AsyncMock(side_effect=ForbiddenError("workflow refused")))
+    with pytest.raises(ForbiddenError):
+        await items_service.merge_items(db, source.id, target.id, actor=admin)
+    # No explicit rollback here: continuing the caller's transaction is safe.
+    assert [c.body for c in await comments_service.list_comments(db, source.id, actor=admin)] == ["must stay"]
+    assert await comments_service.list_comments(db, target.id, actor=admin) == []

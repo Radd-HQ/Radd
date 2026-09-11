@@ -5,7 +5,7 @@ atom is the RADD-808/810 failure shape: a holder of the atom at its real scope
 fails a global question, so the control silently vanishes for exactly the
 people it was built for. The ten shipped instances are fixed (space-scoped
 sites resolve against their space via RADD-814's `can({space})` leg,
-project-scoped ones against the project in context or `anyProject`); the four
+project-scoped ones against the project in context or `anyProject`); the instance operations
 that are DELIBERATELY global — space-creation gates matching `create_space`'s
 own no-space check — carry a `deliberately-global` marker comment.
 
@@ -73,6 +73,6 @@ def test_no_unannotated_global_check_of_a_scoped_atom():
             "genuinely checks it globally"
         )
     assert not violations, "\n".join(violations)
-    # Vacuous-pass guard: the four known deliberate sites must still be seen —
-    # if the scan finds none, the parser broke, not the codebase.
-    assert annotated >= 4, f"expected the annotated create-a-space gates, saw {annotated}"
+    # Creation/template/reindex in Pages settings intentionally retain one
+    # global gate; navigation and per-space actions no longer use it.
+    assert annotated >= 1, f"expected the annotated instance-space gate, saw {annotated}"

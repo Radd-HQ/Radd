@@ -8,6 +8,7 @@ import { attachmentUrl } from "../../lib/constants";
 import { attachmentsQuery } from "../../lib/queries";
 import { AttachmentParentType, type Attachment, type Item } from "../../lib/types";
 import { Button } from "../Button";
+import { IconButton } from "../IconButton";
 import { Modal } from "../Modal";
 import { AccessGrantsEditor } from "../settings/AccessGrantsEditor";
 
@@ -116,7 +117,7 @@ export function AttachmentsSection({ item, canEdit }: { item: Item; canEdit: boo
             resourceType="attachment"
             resourceId={aclTarget.id}
             accesses={["read"]}
-            description="No grants = everyone who can see this item. Any grant restricts the file to the people listed (the uploader always keeps access)."
+            description="Allow grants limit reading to the listed subjects. Deny grants exclude their subjects without restricting everyone else. Parent access is still required; uploaders and permitted parent writers retain access."
           />
         </Modal>
       )}
@@ -165,12 +166,9 @@ function AttachmentCard({
           </span>
         )}
       </a>
-      {/* Lock affordance (spec 102 ACL): restricted files always show a filled
-          accent lock; open files reveal an outline lock on hover. Editors click
-          through to the grants editor; readers just see the state. */}
+      {/* Keep management reachable by touch and keyboard, including open files. */}
       {canEdit ? (
-        <button
-          type="button"
+        <IconButton
           onClick={onLock}
           aria-label={`Manage access to ${attachment.filename}`}
           title={
@@ -179,10 +177,10 @@ function AttachmentCard({
               : "Restrict who can read this file"
           }
           className={
-            "absolute -left-1.5 -top-1.5 rounded-full border p-0.5 cursor-pointer " +
+            "absolute -left-1.5 -top-1.5 flex size-8 items-center justify-center border " +
             (attachment.restricted
               ? "border-transparent bg-accent text-white hover:bg-accent-hover"
-              : "hidden border-emphasis bg-elevated text-fg-secondary hover:text-fg group-hover/att:block")
+              : "border-emphasis bg-elevated text-fg-secondary hover:text-fg")
           }
         >
           {attachment.restricted ? (
@@ -190,7 +188,7 @@ function AttachmentCard({
           ) : (
             <LockOpen size={11} aria-hidden />
           )}
-        </button>
+        </IconButton>
       ) : (
         attachment.restricted && (
           <span
@@ -202,15 +200,15 @@ function AttachmentCard({
         )
       )}
       {canEdit && (
-        <button
-          type="button"
+        <IconButton
+          danger
           onClick={onDelete}
           aria-label={`Delete ${attachment.filename}`}
           title="Delete attachment"
-          className="absolute -right-1.5 -top-1.5 hidden rounded-full border border-emphasis bg-elevated p-0.5 text-fg-secondary hover:text-red-300 group-hover/att:block cursor-pointer"
+          className="absolute -right-1.5 -top-1.5 flex size-8 items-center justify-center border border-emphasis bg-elevated text-fg-secondary"
         >
           <X size={11} aria-hidden />
-        </button>
+        </IconButton>
       )}
     </li>
   );

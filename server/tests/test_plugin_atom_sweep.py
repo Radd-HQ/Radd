@@ -50,6 +50,16 @@ _PLUGIN = RaddPlugin(
 
 
 async def test_sweep_strips_declared_atoms_and_grants_only(db):
+    # Historical JSON-null scopes are returned as Python None, despite matching
+    # SQL IS NOT NULL. Uninstall must tolerate these unscoped credentials.
+    from radd.modules.auth.models import ApiToken, User
+    user = User(email=f"null-scope-{uuid.uuid4()}@example.com", name="Legacy token")
+    db.add(user)
+    await db.flush()
+    token = ApiToken(user_id=user.id, name="legacy", token_hash=uuid.uuid4().hex, prefix_display="legacy")
+    db.add(token)
+    await db.flush()
+    await db.execute(text("UPDATE api_tokens SET scopes = 'null'::jsonb WHERE id = :id"), {"id": token.id})
     # A role holding the plugin's atoms (one relation-qualified) AND a builtin.
     role = await auth_roles.create_role(
         db, RoleCreate(key=f"sw{uuid.uuid4().hex[:6]}", name="S", permissions=["item.read"])

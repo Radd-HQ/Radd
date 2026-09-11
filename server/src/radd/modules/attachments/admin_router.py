@@ -17,9 +17,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
 from radd.exceptions import ForbiddenError
+from radd.modules.auth import authz
 from radd.modules.auth.deps import CurrentUser
 from radd.modules.auth.models import User
-from radd.modules.auth.types import InstanceRole
 
 from . import clients, hosts, movejob
 from .models import StorageHost
@@ -42,7 +42,7 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 
 
 def _require_instance_admin(actor: User) -> None:
-    if InstanceRole(actor.instance_role) is not InstanceRole.ADMIN:
+    if not authz.is_instance_admin(actor):
         raise ForbiddenError("storage settings require an instance admin")
 
 

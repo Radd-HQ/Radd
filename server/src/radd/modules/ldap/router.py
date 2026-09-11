@@ -2,7 +2,7 @@ import asyncio
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import Request, APIRouter, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
@@ -11,7 +11,7 @@ from radd.exceptions import ConflictError, ForbiddenError, RaddError
 from radd.modules.auth import authz, service as auth_service
 from radd.modules.auth.deps import CurrentUser
 from radd.modules.auth.models import User
-from radd.modules.auth.types import SESSION_COOKIE_NAME, InstanceRole
+from radd.modules.auth.types import SESSION_COOKIE_NAME
 from radd.modules.groups import service as groups_service
 from radd.modules.teams import service as teams_service
 
@@ -45,13 +45,14 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 
 
 @router.post("/login", status_code=204)
-async def ldap_login(data: LdapLoginRequest, session: Session, response: Response) -> None:
-    await service.refresh_conn(session)  # RADD-846: a Directory edit applies here
+async def ldap_login(data: LdapLoginRequest, session: Session, response: Response, request: Request) -> None:
     """Directory sign-in (spec 42): direct bind as <username>@<domain>, then
     provisioning + role sync and an ordinary session cookie — the same shape
     as the local /auth/login. Spec 84: the same connection also answers the
     user's transitive membership in every linked team's group, so directory
     team seats join/leave on login without a service account."""
+    auth_service.check_login_attempt(request, data.username)
+    await service.refresh_conn(session)
     mirrored = await groups_service.list_groups(session)
     directory_user = await service.authenticate(
         data.username.strip(),
@@ -72,7 +73,7 @@ async def ldap_login(data: LdapLoginRequest, session: Session, response: Respons
 
 
 def _require_instance_admin(actor: User) -> None:
-    if InstanceRole(actor.instance_role) is not InstanceRole.ADMIN:
+    if not authz.is_instance_admin(actor):
         raise ForbiddenError("directory administration requires an instance admin")
 
 

@@ -20,35 +20,35 @@ import importlib
 from typing import Any
 
 # --- kernel surface (eager; safe, no module deps) ---
-from radd.db import Base, TimestampMixin, get_session
+from radd.db import Base as Base, TimestampMixin as TimestampMixin, get_session as get_session
 from radd.kernel import (
-    AutomationNodeSpec,
+    AutomationNodeSpec as AutomationNodeSpec,
     KERNEL_API_VERSION,
-    CapabilitySpec,
-    CrudResourceSpec,
-    EntityFieldSpec,
-    EntitySpec,
-    EntityRefSpec,
-    EventTypeSpec,
-    IntegrationSpec,
-    McpToolSpec,
-    NavItemSpec,
-    PermissionSpec,
-    PluginUiManifest,
-    RaddPlugin,
-    SettingSpec,
-    SlqFieldSpec,
-    TaskSpec,
-    ViewTypeSpec,
-    WidgetTypeSpec,
-    register_capability,
-    register_crud_resource,
-    register_event_type,
-    register_integration,
-    register_permission,
-    registries,
+    CapabilitySpec as CapabilitySpec,
+    CrudResourceSpec as CrudResourceSpec,
+    EntityFieldSpec as EntityFieldSpec,
+    EntitySpec as EntitySpec,
+    EntityRefSpec as EntityRefSpec,
+    EventTypeSpec as EventTypeSpec,
+    IntegrationSpec as IntegrationSpec,
+    McpToolSpec as McpToolSpec,
+    NavItemSpec as NavItemSpec,
+    PermissionSpec as PermissionSpec,
+    PluginUiManifest as PluginUiManifest,
+    RaddPlugin as RaddPlugin,
+    SettingSpec as SettingSpec,
+    SlqFieldSpec as SlqFieldSpec,
+    TaskSpec as TaskSpec,
+    ViewTypeSpec as ViewTypeSpec,
+    WidgetTypeSpec as WidgetTypeSpec,
+    register_capability as register_capability,
+    register_crud_resource as register_crud_resource,
+    register_event_type as register_event_type,
+    register_integration as register_integration,
+    register_permission as register_permission,
+    registries as registries,
 )
-from radd.kernel import entities as entities  # kernel.entities.register_entity/build_model
+from radd.kernel import entities as entities
 
 API_VERSION = KERNEL_API_VERSION
 

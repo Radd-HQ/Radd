@@ -10,7 +10,6 @@ from radd.config import settings
 from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
-from radd.modules.auth.types import InstanceRole
 from radd.modules.fields import service as fields_service
 from radd.modules.projects import service as projects_service
 
@@ -255,7 +254,7 @@ async def search(
     # to title-only rather than leak — the denied_slq_fields stance: restriction
     # is rare, a per-hit authz pass is not worth it, and a leak is worse than a
     # missing preview.
-    snippets_allowed = user.instance_role == InstanceRole.ADMIN.value
+    snippets_allowed = authz.is_instance_admin(user)
     if not snippets_allowed:
         _, restricted_builtins = await fields_service.outbound_restricted_keys(session)
         snippets_allowed = "description" not in restricted_builtins

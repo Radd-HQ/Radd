@@ -102,7 +102,7 @@ async def _space_names(session: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.
     an ImportError in a settings page.
 
     `ids` is already narrowed to what the actor may read — the caller does that
-    (`targets.readable_targets`), so listing every space here names none of them.
+    (`targets.readable_targets`), so the owner projects only those names.
     """
     if not ids:
         return {}
@@ -110,8 +110,7 @@ async def _space_names(session: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.
         from radd.modules.pages import service as pages_service
     except ImportError:
         return {}
-    spaces = await pages_service.list_spaces(session)
-    return {space.id: space.name for space in spaces if space.id in ids}
+    return await pages_service.space_names(session, ids)
 
 
 def _scope_of(row: NotificationRule) -> RuleScope | None:

@@ -55,7 +55,7 @@ async def search_deflect(
     already answer it + previously RESOLVED items in the project. The docs
     half only renders for callers who also hold page.read (no title leaks)."""
     project = await projects_service.get_project(session, project_id)
-    permissions = await authz.require(session, user, Permission.ITEM_READ, project=project)
+    await authz.require(session, user, Permission.ITEM_READ, project=project)
     q = q.strip()
     if not q:
         return DeflectResponse(docs=[], items=[])

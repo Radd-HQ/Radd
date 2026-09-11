@@ -20,9 +20,9 @@ from radd.backup import artifact as art, store
 from radd.config import settings
 from radd.db import commit_before_streaming, get_session
 from radd.exceptions import ConflictError, ForbiddenError, NotFoundError
+from radd.modules.auth import authz
 from radd.modules.auth.deps import CurrentUser
 from radd.modules.auth.models import User
-from radd.modules.auth.types import InstanceRole
 
 from . import service
 from .models import BackupRun, BackupSchedule
@@ -43,7 +43,7 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 
 
 def _require_instance_admin(actor: User) -> None:
-    if InstanceRole(actor.instance_role) is not InstanceRole.ADMIN:
+    if not authz.is_instance_admin(actor):
         raise ForbiddenError("backups require an instance admin")
 
 

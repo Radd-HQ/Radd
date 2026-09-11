@@ -45,7 +45,7 @@ async def list_policies(
 async def create_policy(data: PolicyCreate, session: Session, user: CurrentUser) -> PolicyRead:
     # SLA_* atoms stay global-scoped (admins) — resolved via the policy's
     # project's workspace membership (spec 67).
-    project = await projects_service.get_project(session, data.project_id)
+    await projects_service.get_project(session, data.project_id)
     await authz.require(session, user, Permission.SLA_CREATE)
     return PolicyRead.model_validate(await service.create_policy(session, data, actor_id=user.id))
 
@@ -54,7 +54,7 @@ async def create_policy(data: PolicyCreate, session: Session, user: CurrentUser)
 async def update_policy(
     policy_id: uuid.UUID, data: PolicyUpdate, session: Session, user: CurrentUser
 ) -> PolicyRead:
-    policy = await service.get_policy(session, policy_id)
+    await service.get_policy(session, policy_id)
     await authz.require(session, user, Permission.SLA_UPDATE)
     return PolicyRead.model_validate(
         await service.update_policy(session, policy_id, data, actor_id=user.id)
@@ -63,7 +63,7 @@ async def update_policy(
 
 @router.delete("/sla-policies/{policy_id}", status_code=204)
 async def delete_policy(policy_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
-    policy = await service.get_policy(session, policy_id)
+    await service.get_policy(session, policy_id)
     await authz.require(session, user, Permission.SLA_DELETE)
     await service.delete_policy(session, policy_id, actor_id=user.id)
 

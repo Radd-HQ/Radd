@@ -28,6 +28,13 @@ interface RequestOptions {
   body?: unknown;
   query?: Record<string, string | undefined>;
   on401?: On401Value;
+  signal?: AbortSignal;
+}
+
+let accountRequests = new AbortController();
+export function abortAccountRequests() {
+  accountRequests.abort();
+  accountRequests = new AbortController();
 }
 
 async function rawRequest(path: string, options: RequestOptions = {}): Promise<Response> {
@@ -41,6 +48,9 @@ async function rawRequest(path: string, options: RequestOptions = {}): Promise<R
   }
 
   const response = await fetch(url, {
+    signal: options.signal
+      ? AbortSignal.any([options.signal, accountRequests.signal])
+      : accountRequests.signal,
     method,
     credentials: "include",
     headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,

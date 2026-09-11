@@ -346,7 +346,7 @@ async def delete_transition(
     session: AsyncSession, transition_id: uuid.UUID, actor_id: uuid.UUID | None = None
 ) -> None:
     transition = await get_transition(session, transition_id)
-    project = await projects_service.get_project(session, transition.project_id)
+    await projects_service.get_project(session, transition.project_id)
     await _emit(session, TransitionEvent.DELETED, transition, actor_id)
     await session.delete(transition)
     await session.flush()

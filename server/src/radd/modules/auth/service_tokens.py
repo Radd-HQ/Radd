@@ -19,6 +19,7 @@ from radd.exceptions import NotFoundError
 
 from . import scopes, security
 from .models import ApiToken, User
+from .principals import require_account_session
 from .schemas import TokenCreate
 from .types import PAT_PREFIX_DISPLAY_CHARS, AuthEntity
 
@@ -35,6 +36,7 @@ async def create_api_token(
     session: AsyncSession, user: User, data: TokenCreate
 ) -> tuple[ApiToken, str]:
     """Returns (row, raw token). The raw token is shown exactly once."""
+    require_account_session(user)
     raw = security.new_api_token()
     # Spec 113: a personal token may narrow itself too — same vocabulary, same
     # intersection. Omitted stays NULL, so existing behaviour is untouched.
@@ -53,6 +55,7 @@ async def create_api_token(
 
 
 async def list_api_tokens(session: AsyncSession, user: User) -> list[ApiToken]:
+    require_account_session(user)
     result = await session.execute(
         select(ApiToken).where(ApiToken.user_id == user.id).order_by(ApiToken.created_at)
     )
@@ -60,6 +63,7 @@ async def list_api_tokens(session: AsyncSession, user: User) -> list[ApiToken]:
 
 
 async def delete_api_token(session: AsyncSession, user: User, token_id: uuid.UUID) -> None:
+    require_account_session(user)
     token = await session.get(ApiToken, token_id)
     if token is None or token.user_id != user.id:
         raise NotFoundError(AuthEntity.API_TOKEN, token_id)
@@ -80,6 +84,8 @@ async def user_for_api_token(session: AsyncSession, token: str) -> User | None:
     api_token, user = row
     if api_token.expires_at is not None and api_token.expires_at <= now:
         return None
+    user.api_token_id = api_token.id
+    user.token_scope = None
     throttle = timedelta(seconds=settings.token_last_used_throttle_seconds)
     if api_token.last_used_at is None or now - api_token.last_used_at >= throttle:
         api_token.last_used_at = now

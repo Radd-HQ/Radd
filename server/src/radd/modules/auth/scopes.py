@@ -149,13 +149,18 @@ def parse_scope(raw: object) -> TokenScope | None:
     if not isinstance(raw, dict):
         raise ValueError("scope must be an object")
     projects: dict[uuid.UUID, frozenset[Permission]] = {}
-    for key, value in (raw.get(PROJECTS_KEY) or {}).items():
+    project_values = raw.get(PROJECTS_KEY)
+    if project_values is None:
+        project_values = {}
+    if not isinstance(project_values, dict):
+        raise ValueError("scope projects must be an object keyed by project UUID")
+    for key, value in project_values.items():
         try:
             project_id = uuid.UUID(str(key))
         except ValueError:
             raise ValueError(f"scope project key '{key}' is not a uuid") from None
         projects[project_id] = _atoms(value, f"projects.{key}")
     return TokenScope(
-        global_atoms=_atoms(raw.get(GLOBAL_KEY) or [], "global"),
+        global_atoms=_atoms(raw.get(GLOBAL_KEY) if raw.get(GLOBAL_KEY) is not None else [], "global"),
         project_atoms=projects,
     )

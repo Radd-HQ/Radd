@@ -1,0 +1,24 @@
+# Wiki space navigation and directory — RADD-1115
+
+The shell and permission hook no longer fetch the complete wiki-space catalog. The sidebar and `/pages` index search and page in 50-row windows. A permission summary covers all readable spaces; direct slug/UUID resolution keeps later spaces and old links usable without visiting their directory page. The current space can appear separately beside the bounded sidebar window.
+
+The backend applies readability before search/count/paging and stable position/name/ID ordering. Summary reads omit names, descriptions and page counts. Count hydration restricts its page query to the returned window; direct reads hydrate one space. Hidden and missing direct lookups both return 404, and exact slugs retain precedence over UUID interpretation. Complete legacy reads remain available for existing internal consumers.
+
+Page navigation uses the shared modal below 1024 px, preserving content width on phones and tablets. Following a tree link or creating a page closes it; dismissal restores focus and preserves an unfinished editor draft. Browser verification exposed hover-only Edit controls and cramped author metadata. Page actions now remain visible and keyboard reachable; metadata/actions wrap instead of squeezing the author into a narrow column.
+
+Summary, window and direct query identities carry role and page-space metadata and forward cancellation signals. QueryObserver regressions verify invalidation for actual `role` and `page_space` entity names. Role query metadata is also retained for grant changes. Last-page recovery handles directory shrinkage, and index/sidebar errors retain search and retry controls.
+
+## Verification
+
+- [Full PostgreSQL suite](backend-tests.txt): **2,441 passed, 4 skipped**, 123 warnings, 98.39 seconds. [Focused suite](focused-tests.txt): 39 passed. Six new database/HTTP tests cover 126 readable spaces, hidden/expired permissions, literal search, limits/counts, current-window count SQL, direct identity collisions, requester floors and scoped admin keys.
+- [Frontend checks](frontend-checks.txt): JavaScript regressions, host and all six plugin builds, Chromium account isolation and real HTTP cancellation checks. [Source gates](source-checks.txt): runtime Ruff and whitespace checks.
+- [Actual 126-space browser](browser.json): 50/50/26 index and sidebar traversal, hidden/expired exclusion, literal/no-match search, direct UUID-to-slug navigation, later-space write authority, read-only exclusion, retry and recovery after deleting the final 26 spaces in the disposable database. All browser catalog reads specify limit 50. Deletion recovery invokes the real QueryClient; it does not claim worker transport coverage.
+- [Phone](page-edit-390.png), [tablet](page-edit-768.png) and [desktop](page-edit-1440.png): editor widths 340/478/894 px, no horizontal page overflow. Actual pointer and keyboard interactions verify tree focus/restoration, retained unsaved drafts, visible Edit without hover, metadata wrapping and new-page navigation. Saved page body remains unchanged after canceled edits; page creation/deletion occurs only in the disposable fixture.
+- [Prior role/scope regression](role-regression.json): all 126-entry grant and choice workflows still pass, including nested dialogs, persistence and retry. Shell full-space-catalog requests are now **zero**, compared with seven at the prior checkpoint. The probe scopes paging to the active picker to distinguish it from the new sidebar pager.
+- [Populated wiki reads](live-options.json), [wiki browser](live-browser.json), [general browser](live-general-browser.json) and [connected LLM/storage/search checks](live-api.json) pass. The real wiki contains six spaces; large-catalog behavior is verified separately with the disposable 126-space fixture. [Database counts/schema](live-counts.json) remain 503,485 / g1093ghost and 8,923 / d117pkg. Timing samples are functional probes, not sustained-load measurements.
+
+## Limits and next work
+
+P2 remains in progress. Settings space management, template scope selectors, effective-permission inspection and notification subscription selectors still use complete space catalogs. Settings also incorrectly treats global create-space permission as the gate for per-space management; the API already supports scoped management. Those consumers are next.
+
+This does not bound the complete page tree or the underlying authorization map. Page counts preserve their existing contract: live nonarchived pages in each readable space, without newly applying page-level restrictions to the count. Remaining complete readers, global cache conventions, worker delivery and sustained load remain explicit ledger work. No populated content/schema changes, migration, commit, push, release or hosted CI activation is part of this checkpoint.

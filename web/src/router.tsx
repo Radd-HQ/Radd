@@ -4,78 +4,79 @@ import {
   createRoute,
   createRouter,
   redirect,
+  lazyRouteComponent,
 } from "@tanstack/react-router";
 import type { QueryClient } from "@tanstack/react-query";
 import { AuthStatus } from "./lib/auth";
 import { ProjectSettingsSection, RoutePath, SettingsSection } from "./lib/constants";
 import { authStateQuery } from "./lib/queries";
-import { AppLayout } from "./routes/app-layout";
+const AppLayout = lazyRouteComponent(() => import("./routes/app-layout"), "AppLayout");
 import { PluginPage } from "./components/shell/PluginPage";
 import { SettingsPluginPage } from "./components/shell/SettingsPluginPage";
-import { CyclePage } from "./routes/cycle";
-import { FormSubmitPage } from "./routes/form-submit";
-import { ItemDetailPage } from "./routes/item-page";
-import { LoginPage } from "./routes/login";
-import { MyWorkPage } from "./routes/my-work";
-import { ProjectHomePage } from "./routes/project-home";
-import { ProjectsIndexPage } from "./routes/projects-index";
-import { PublicCsatPage } from "./routes/public-csat";
-import { PublicPagesIndexPage, PublicPageSpacePage } from "./routes/public-pages";
-import { RoadmapPage } from "./routes/roadmap";
-import { ReportsPage } from "./routes/reports";
-import { GlobalReportsPage } from "./routes/global-reports";
-import { TimesheetPage } from "./routes/timesheet";
-import { InboxPage } from "./routes/inbox";
-import { PortalPage } from "./routes/portal";
-import { PortalFormPage } from "./routes/portal-form";
-import { SettingsLayout } from "./routes/settings/layout";
-import {
-  ProjectSettingsLayout,
-  ProjectGeneralSettings,
-  ProjectAccessSettings,
-  ProjectWorkflowSettings,
-  ProjectTypesSettings,
-  ProjectScreensSettings,
-  ProjectReleasesSettings,
-  ProjectFormsSettings,
-  ProjectTimeloggingSettings,
-  ProjectSlaSettings,
-} from "./routes/project-settings/layout";
-import { GeneralSettingsPage } from "./routes/settings/general";
-import { AutomationsSettingsPage } from "./routes/settings/automations";
-import { CyclesSettingsPage } from "./routes/settings/cycles";
-import { FieldsSettingsPage } from "./routes/settings/fields";
-import { LinkTypesSettingsPage } from "./routes/settings/link-types";
-import { LabelsSettingsPage } from "./routes/settings/labels";
-import { UsersSettingsPage } from "./routes/settings/users";
-import { DirectorySettingsPage } from "./routes/settings/directory";
-import { JiraImportPage } from "./routes/settings/jira-import";
-import { ConfluenceImportPage } from "./routes/settings/confluence-import";
-import { RolesSettingsPage } from "./routes/settings/roles";
-import { TeamsSettingsPage } from "./routes/settings/teams";
-import { TimeloggingSettingsPage } from "./routes/settings/timelogging";
-import { TokensSettingsPage } from "./routes/settings/tokens";
-import { AuditSettingsPage } from "./routes/settings/audit";
-import { BackupsSettingsPage } from "./routes/settings/backups";
-import { PluginsSettingsPage } from "./routes/settings/plugins";
-import { CannedSettingsPage } from "./routes/settings/canned";
-import { ForgejoSettingsPage } from "./routes/settings/forgejo";
-import { ServiceAccountsSettingsPage } from "./routes/settings/service-accounts";
-import { AiSettingsPage } from "./routes/settings/ai";
-import { StorageSettingsPage } from "./routes/settings/storage";
-import { EmailSettingsPage } from "./routes/settings/email";
-import { SignInSettingsPage } from "./routes/settings/sign-in";
-import { MonitoringSettingsPage } from "./routes/settings/monitoring";
-import { WebhooksSettingsPage } from "./routes/settings/webhooks";
-import { NotificationSettingsPage } from "./routes/settings/notifications";
-import { ProfileSettingsPage } from "./routes/settings/profile";
-import { InstanceSettingsPage } from "./routes/settings/instance";
-import { PagesSettingsPage } from "./routes/settings/pages";
-import { ViewPage } from "./routes/view";
-import { PagesIndexPage } from "./routes/pages-index";
-import { PageSpacePage } from "./routes/page-space";
-import { PagePrintPage } from "./routes/page-print";
-import { DashboardPage } from "./routes/dashboard";
+const CyclePage = lazyRouteComponent(() => import("./routes/cycle"), "CyclePage");
+const FormSubmitPage = lazyRouteComponent(() => import("./routes/form-submit"), "FormSubmitPage");
+const ItemDetailPage = lazyRouteComponent(() => import("./routes/item-page"), "ItemDetailPage");
+const LoginPage = lazyRouteComponent(() => import("./routes/login"), "LoginPage");
+const MyWorkPage = lazyRouteComponent(() => import("./routes/my-work"), "MyWorkPage");
+const ProjectHomePage = lazyRouteComponent(() => import("./routes/project-home"), "ProjectHomePage");
+const ProjectsIndexPage = lazyRouteComponent(() => import("./routes/projects-index"), "ProjectsIndexPage");
+const PublicCsatPage = lazyRouteComponent(() => import("./routes/public-csat"), "PublicCsatPage");
+const PublicPagesIndexPage = lazyRouteComponent(() => import("./routes/public-pages"), "PublicPagesIndexPage");
+const PublicPageSpacePage = lazyRouteComponent(() => import("./routes/public-pages"), "PublicPageSpacePage");
+const RoadmapPage = lazyRouteComponent(() => import("./routes/roadmap"), "RoadmapPage");
+const ReportsPage = lazyRouteComponent(() => import("./routes/reports"), "ReportsPage");
+const GlobalReportsPage = lazyRouteComponent(() => import("./routes/global-reports"), "GlobalReportsPage");
+const TimesheetPage = lazyRouteComponent(() => import("./routes/timesheet"), "TimesheetPage");
+const InboxPage = lazyRouteComponent(() => import("./routes/inbox"), "InboxPage");
+const PortalPage = lazyRouteComponent(() => import("./routes/portal"), "PortalPage");
+const PortalFormPage = lazyRouteComponent(() => import("./routes/portal-form"), "PortalFormPage");
+const SettingsLayout = lazyRouteComponent(() => import("./routes/settings/layout"), "SettingsLayout");
+const ProjectSettingsIndex = lazyRouteComponent(() => import("./routes/project-settings/layout"), "ProjectSettingsIndex");
+const ProjectSettingsLayout = lazyRouteComponent(() => import("./routes/project-settings/layout"), "ProjectSettingsLayout");
+const ProjectGeneralSettings = lazyRouteComponent(() => import("./routes/project-settings/layout"), "ProjectGeneralSettings");
+const ProjectAccessSettings = lazyRouteComponent(() => import("./routes/project-settings/layout"), "ProjectAccessSettings");
+const ProjectWorkflowSettings = lazyRouteComponent(() => import("./routes/project-settings/layout"), "ProjectWorkflowSettings");
+const ProjectTypesSettings = lazyRouteComponent(() => import("./routes/project-settings/layout"), "ProjectTypesSettings");
+const ProjectScreensSettings = lazyRouteComponent(() => import("./routes/project-settings/layout"), "ProjectScreensSettings");
+const ProjectReleasesSettings = lazyRouteComponent(() => import("./routes/project-settings/layout"), "ProjectReleasesSettings");
+const ProjectFormsSettings = lazyRouteComponent(() => import("./routes/project-settings/layout"), "ProjectFormsSettings");
+const ProjectTimeloggingSettings = lazyRouteComponent(() => import("./routes/project-settings/layout"), "ProjectTimeloggingSettings");
+const ProjectSlaSettings = lazyRouteComponent(() => import("./routes/project-settings/layout"), "ProjectSlaSettings");
+const GeneralSettingsPage = lazyRouteComponent(() => import("./routes/settings/general"), "GeneralSettingsPage");
+const AutomationsSettingsPage = lazyRouteComponent(() => import("./routes/settings/automations"), "AutomationsSettingsPage");
+const CyclesSettingsPage = lazyRouteComponent(() => import("./routes/settings/cycles"), "CyclesSettingsPage");
+const FieldsSettingsPage = lazyRouteComponent(() => import("./routes/settings/fields"), "FieldsSettingsPage");
+const LinkTypesSettingsPage = lazyRouteComponent(() => import("./routes/settings/link-types"), "LinkTypesSettingsPage");
+const LabelsSettingsPage = lazyRouteComponent(() => import("./routes/settings/labels"), "LabelsSettingsPage");
+const UsersSettingsPage = lazyRouteComponent(() => import("./routes/settings/users"), "UsersSettingsPage");
+const DirectorySettingsPage = lazyRouteComponent(() => import("./routes/settings/directory"), "DirectorySettingsPage");
+const JiraImportPage = lazyRouteComponent(() => import("./routes/settings/jira-import"), "JiraImportPage");
+const ConfluenceImportPage = lazyRouteComponent(() => import("./routes/settings/confluence-import"), "ConfluenceImportPage");
+const RolesSettingsPage = lazyRouteComponent(() => import("./routes/settings/roles"), "RolesSettingsPage");
+const TeamsSettingsPage = lazyRouteComponent(() => import("./routes/settings/teams"), "TeamsSettingsPage");
+const TimeloggingSettingsPage = lazyRouteComponent(() => import("./routes/settings/timelogging"), "TimeloggingSettingsPage");
+const TokensSettingsPage = lazyRouteComponent(() => import("./routes/settings/tokens"), "TokensSettingsPage");
+const AuditSettingsPage = lazyRouteComponent(() => import("./routes/settings/audit"), "AuditSettingsPage");
+const BackupsSettingsPage = lazyRouteComponent(() => import("./routes/settings/backups"), "BackupsSettingsPage");
+const PluginsSettingsPage = lazyRouteComponent(() => import("./routes/settings/plugins"), "PluginsSettingsPage");
+const CannedSettingsPage = lazyRouteComponent(() => import("./routes/settings/canned"), "CannedSettingsPage");
+const ForgejoSettingsPage = lazyRouteComponent(() => import("./routes/settings/forgejo"), "ForgejoSettingsPage");
+const ServiceAccountsSettingsPage = lazyRouteComponent(() => import("./routes/settings/service-accounts"), "ServiceAccountsSettingsPage");
+const AiSettingsPage = lazyRouteComponent(() => import("./routes/settings/ai"), "AiSettingsPage");
+const StorageSettingsPage = lazyRouteComponent(() => import("./routes/settings/storage"), "StorageSettingsPage");
+const EmailSettingsPage = lazyRouteComponent(() => import("./routes/settings/email"), "EmailSettingsPage");
+const SignInSettingsPage = lazyRouteComponent(() => import("./routes/settings/sign-in"), "SignInSettingsPage");
+const MonitoringSettingsPage = lazyRouteComponent(() => import("./routes/settings/monitoring"), "MonitoringSettingsPage");
+const WebhooksSettingsPage = lazyRouteComponent(() => import("./routes/settings/webhooks"), "WebhooksSettingsPage");
+const NotificationSettingsPage = lazyRouteComponent(() => import("./routes/settings/notifications"), "NotificationSettingsPage");
+const ProfileSettingsPage = lazyRouteComponent(() => import("./routes/settings/profile"), "ProfileSettingsPage");
+const InstanceSettingsPage = lazyRouteComponent(() => import("./routes/settings/instance"), "InstanceSettingsPage");
+const PagesSettingsPage = lazyRouteComponent(() => import("./routes/settings/pages"), "PagesSettingsPage");
+const ViewPage = lazyRouteComponent(() => import("./routes/view"), "ViewPage");
+const PagesIndexPage = lazyRouteComponent(() => import("./routes/pages-index"), "PagesIndexPage");
+const PageSpacePage = lazyRouteComponent(() => import("./routes/page-space"), "PageSpacePage");
+const PagePrintPage = lazyRouteComponent(() => import("./routes/page-print"), "PagePrintPage");
+const DashboardPage = lazyRouteComponent(() => import("./routes/dashboard"), "DashboardPage");
 
 /**
  * Code-based route tree. In-app routes are children of `appLayoutRoute` so
@@ -588,7 +589,7 @@ const settingsHolidaysRoute = createRoute({
 /**
  * Per-project settings (spec 50): nested under the project so the sub-nav is
  * gated by THAT project's permissions and the project is read from the URL.
- * `/p/$projectKey/settings` itself redirects to the first section (workflow).
+ * `/p/$projectKey/settings` itself opens the first section the actor may manage.
  */
 const projectSettingsRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
@@ -599,12 +600,7 @@ const projectSettingsRoute = createRoute({
 const projectSettingsIndexRoute = createRoute({
   getParentRoute: () => projectSettingsRoute,
   path: "/",
-  beforeLoad: ({ params }) => {
-    throw redirect({
-      to: RoutePath.projectSettingsWorkflow,
-      params: { projectKey: (params as { projectKey: string }).projectKey },
-    });
-  },
+  component: ProjectSettingsIndex,
 });
 
 const projectSettingsGeneralRoute = createRoute({

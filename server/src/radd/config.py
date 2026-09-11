@@ -26,6 +26,11 @@ class Settings(BaseSettings):
 
     # Auth (see radd/modules/auth)
     session_ttl_hours: int = 720
+    auth_login_window_seconds: float = Field(default=300.0, gt=0)
+    auth_login_account_attempts: int = Field(default=20, gt=0)
+    auth_login_ip_attempts: int = Field(default=120, gt=0)
+    auth_login_bucket_limit: int = Field(default=10000, gt=0)
+    auth_password_workers: int = Field(default=4, gt=0)
     session_cookie_secure: bool = False  # enable behind HTTPS
     token_last_used_throttle_seconds: int = 60  # min interval between PAT last_used_at writes
     # Staleness bound for module-level snapshots (RADD-899) — capability pills,
@@ -116,6 +121,9 @@ class Settings(BaseSettings):
     # Realtime WebSocket tail (see radd/modules/realtime)
     realtime_poll_interval: float = 0.5
     realtime_batch: int = 200
+    realtime_session_refresh_seconds: float = Field(default=60.0, gt=0)
+    realtime_send_timeout: float = Field(default=2.0, gt=0)
+    realtime_send_concurrency: int = Field(default=32, gt=0)
 
     # Search indexer (see radd/modules/search)
     search_poll_interval: float = 1.0

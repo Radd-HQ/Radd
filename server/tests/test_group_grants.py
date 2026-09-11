@@ -157,11 +157,13 @@ def test_subject_matches_resolves_a_group_grant_through_the_closure():
 
 async def test_access_grant_validates_the_group_exists(db):
     member = await _user(db, "Validator")
+    project = await projects_service.create_project(db, ProjectCreate(key="GG"+uuid.uuid4().hex[:6], name="Grant target"))
+    view = await views_service.create_view(db, ViewCreate(name="Grant target", view_type="list", project_id=project.id), actor=member)
     with pytest.raises(ConflictError):
         await access_service.add_grant(
             db,
             "view",
-            str(uuid.uuid4()),
+            str(view.id),
             subject_type=GrantSubject.GROUP,
             subject_id=uuid.uuid4(),
             access="viewer",

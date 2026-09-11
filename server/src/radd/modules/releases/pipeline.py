@@ -17,9 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.modules.auth import service as auth_service
-from radd.modules.automations.types import SYSTEM_ACTOR_ID
 from radd.modules.items.models import WorkItem
-from radd.modules.items.schemas import ItemUpdate
 from radd.modules.projects.models import Project
 from radd.modules.settings import service as settings_service
 from radd.modules.settings.types import SettingKey
@@ -63,6 +61,8 @@ async def ensure_release(
 ):
     """Find-or-create the version. Webhook delivery is at-least-once, so a repeat
     of the same tag must reuse the row rather than create a second one."""
+    from radd.modules.automations.types import SYSTEM_ACTOR_ID
+
     existing = await releases_service.list_releases(session, project.id)
     match = next((r for r in existing if r.version == version), None)
     if match is not None:
@@ -90,6 +90,8 @@ async def sweep(session: AsyncSession, project: Project, release) -> int:
     needs a tag-to-tag commit walk and is only correct if every merge went through
     a linked PR.
     """
+    from radd.modules.automations.types import SYSTEM_ACTOR_ID
+
     waiting = await waiting_state_id(session, project)
     shipped = await shipped_state_id(session, project)
     if waiting is None or shipped is None:
@@ -118,6 +120,7 @@ async def sweep(session: AsyncSession, project: Project, release) -> int:
 
 async def items_update(session, item_id, state_id, release_id, actor):
     from radd.modules.items import service as items_service
+    from radd.modules.items.schemas import ItemUpdate
 
     await items_service.update_item(
         session, item_id, ItemUpdate(state_id=state_id, release_id=release_id), actor

@@ -139,7 +139,7 @@ def nl_system_prompt(
         registry += (
             f"\n\nIssue types on this tracker (the {key_prefix}type field): "
             + ", ".join(issue_types)
-            + f". When the user names one of these (bugs, features, …), filter with "
+            + ". When the user names one of these (bugs, features, …), filter with "
             + f"{key_prefix}type — {key_prefix}kind is ONLY the hierarchy level "
             + "(epic | issue | subtask)."
         )

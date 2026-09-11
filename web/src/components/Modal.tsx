@@ -1,4 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { useDialogFocus } from "../lib/dialog-focus";
 import { X } from "lucide-react";
 import { registerDismiss } from "../lib/dismiss-stack";
 
@@ -12,10 +14,6 @@ interface ModalProps {
   extraWide?: boolean;
 }
 
-const FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), ' +
-  'textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
 /**
  * Minimal centered modal: overlay, Escape / overlay-click / X to close. Focus
  * moves to the first form control on mount (the panel itself when there is
@@ -26,62 +24,26 @@ const FOCUSABLE =
 export function Modal({ title, onClose, children, wide = false, extraWide = false }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
     // Dismiss-stack, not a bare document listener: when the issue peek opens
     // over this modal, one Esc must close the topmost overlay only.
     return registerDismiss(() => {
-      onClose();
+      closeRef.current();
       return true;
     });
-  }, [onClose]);
-
-  // Focus lifecycle runs ONCE per modal, not per render: `onClose` is usually
-  // an inline arrow, and keying this effect on it would restore-then-steal
-  // focus on every parent render.
-  useEffect(() => {
-    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const panel = panelRef.current;
-    (panel?.querySelector<HTMLElement>("input, select, textarea, button") ?? panel)?.focus();
-
-    // The trap: Tab from the last focusable wraps to the first and vice
-    // versa; a focus that escaped entirely (backdrop mousedown) re-enters at
-    // the edge. The list is queried per keystroke, so controls that mount or
-    // disable while the dialog is open stay covered.
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Tab" || !panel) return;
-      const focusables = [...panel.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
-        (el) => el.offsetParent !== null || el === document.activeElement,
-      );
-      if (focusables.length === 0) {
-        event.preventDefault();
-        panel.focus();
-        return;
-      }
-      const first = focusables[0];
-      const last = focusables[focusables.length - 1];
-      const active = document.activeElement;
-      if (event.shiftKey) {
-        if (active === first || !panel.contains(active)) {
-          event.preventDefault();
-          last.focus();
-        }
-      } else if (active === last || !panel.contains(active)) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener("keydown", onKeyDown, true);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown, true);
-      opener?.focus();
-    };
   }, []);
 
-  return (
+  useDialogFocus(panelRef);
+
+  // A transformed toolbar/animated ancestor changes the containing block of
+  // fixed descendants. Portals keep the overlay anchored to the viewport.
+  return createPortal(
     <div
       className={
-        "fixed inset-0 z-50 flex items-start justify-center bg-black/60 animate-fade-in " +
-        (wide || extraWide ? "py-[8vh]" : "pt-[18vh]")
+        "fixed inset-0 z-50 px-2 sm:px-4 flex items-start justify-center bg-black/60 animate-fade-in " +
+        (wide || extraWide ? "py-[8vh]" : "py-[4vh] sm:pt-[18vh]")
       }
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
@@ -99,7 +61,7 @@ export function Modal({ title, onClose, children, wide = false, extraWide = fals
             ? "max-w-3xl max-h-full overflow-y-auto"
             : wide
               ? "max-w-xl max-h-full overflow-y-auto"
-              : "max-w-md")
+              : "max-w-md max-h-full overflow-y-auto")
         }
       >
         <div className="flex items-center justify-between border-b border-subtle px-4 py-3">
@@ -115,6 +77,6 @@ export function Modal({ title, onClose, children, wide = false, extraWide = fals
         </div>
         <div className="p-4">{children}</div>
       </div>
-    </div>
+    </div>, document.body
   );
 }

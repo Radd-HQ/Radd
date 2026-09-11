@@ -56,6 +56,7 @@ from .authz_batch import (
     _READABLE_CACHE_KEY as _READABLE_CACHE_KEY,
     holds as holds,
     permissions_for_projects as permissions_for_projects,
+    permissions_for_spaces as permissions_for_spaces,
     project_permission_map as project_permission_map,
     readable_projects as readable_projects,
     require_anywhere as require_anywhere,
@@ -90,6 +91,7 @@ from .authz_explain import (
     team_permission_sources as team_permission_sources,
 )
 from .models import User
+from .principals import is_instance_admin as is_instance_admin
 from .types import (
     RELATION_ANY,
     relation_contains,

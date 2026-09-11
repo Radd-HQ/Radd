@@ -7,6 +7,7 @@ from radd.kernel import CrudResourceSpec, PermissionSpec
 
 from .openapi import augment_openapi
 from .router import router
+from .settings_router import router as settings_router
 from .service import warm_schema_cache
 from .types import FieldEvent
 from .validation import FieldValidationError
@@ -19,7 +20,7 @@ async def _validation_handler(request: Request, exc: FieldValidationError) -> JS
     )
 
 
-from .service import _BUILTIN_SPEC, _FIELD_SPEC
+from .service import _BUILTIN_SPEC, _FIELD_SPEC  # noqa: E402 - bindings require initialized registries
 
 plugin = RaddPlugin(
     name="fields",
@@ -42,7 +43,7 @@ plugin = RaddPlugin(
     # depends on fields, so a hard edge would be a cycle — through the public
     # `items.service` seam, never the table.
     weak_depends=("items",),
-    routers=(router,),
+    routers=(settings_router, router),
     exception_handlers=((FieldValidationError, _validation_handler),),
     openapi_augmentors=(augment_openapi,),
     on_startup=(warm_schema_cache,),

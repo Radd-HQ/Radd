@@ -1,0 +1,8 @@
+# The markdown carries the findings; the run evidence stays local.
+# Screenshots, JSON/text results and the one-off proof/seed scripts are
+# machine-specific (paths, PIDs, ports) and add ~15 MB to a public repo.
+*.png
+*.json
+*.txt
+*.mjs
+*.py

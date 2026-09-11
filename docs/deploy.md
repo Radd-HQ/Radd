@@ -450,3 +450,12 @@ once, stored hashed); any of them works wherever the 6-digit code does —
 sign-in, disable, regenerate — and burns on use. The admin fallback (clearing
 the user's `user_totp` row) remains for the person who lost the phone AND the
 printout.
+
+
+## Login and realtime limits
+
+Password login admission is enforced in the web process, shared by local, TOTP and LDAP sign-in. Defaults: `RADD_AUTH_LOGIN_ACCOUNT_ATTEMPTS=20`, `RADD_AUTH_LOGIN_IP_ATTEMPTS=120`, `RADD_AUTH_LOGIN_WINDOW_SECONDS=300`, and at most `RADD_AUTH_LOGIN_BUCKET_LIMIT=10000` retained account/IP buckets. Attempts beyond the limits return HTTP 429 with `Retry-After`. These counters follow the documented single-web-process deployment; multiple workers or replicas require a shared admission store or equivalent ingress controls. Configure the existing trusted-proxy chain correctly so the client-IP resolver distinguishes users behind your proxy.
+
+`RADD_AUTH_PASSWORD_WORKERS=4` bounds concurrent Argon2 jobs off the event loop. Realtime defaults to `RADD_REALTIME_SEND_TIMEOUT=2` seconds, `RADD_REALTIME_SEND_CONCURRENCY=32`, and `RADD_REALTIME_SESSION_REFRESH_SECONDS=60`. Unhealthy sockets disconnect and clients refetch after reconnect. The realtime protocol accepts active-query interests with explicit project filters, validates their access, and sends only cache invalidation hints.
+
+API keys cannot mint personal or service-account credentials. Manage credentials in a browser session. Privileged instance operations still require an instance-admin account, and a scoped key must also explicitly permit `global.manage` to use that administrative bypass. Ordinary project permissions continue to be intersected with the key's scope.

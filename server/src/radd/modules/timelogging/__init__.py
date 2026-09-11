@@ -34,9 +34,9 @@ async def _duration_error_handler(request: Request, exc: DurationError) -> JSONR
     return JSONResponse(status_code=422, content={"detail": str(exc)})
 
 
-from radd.kernel.registry import register_relation
-from radd.kernel.specs import RelationSpec
-from .models import Worklog
+from radd.kernel.registry import register_relation  # noqa: E402 - bindings require initialized registries
+from radd.kernel.specs import RelationSpec  # noqa: E402 - bindings require initialized registries
+from .models import Worklog  # noqa: E402 - bindings require initialized registries
 
 # RADD-816 (Q4): what @own MEANS for a worklog — the author column. Both forms
 # mandatory (the RADD-823 contract); registered on the manifest so the loader's

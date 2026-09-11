@@ -2,8 +2,11 @@
 
 import hashlib
 import secrets
+from functools import partial
 
+from anyio import CapacityLimiter, to_thread
 from pwdlib import PasswordHash
+from radd.config import settings
 
 # Re-exported: expiry math predates radd.clock and callers (auth.service,
 # ldap.state, …) import `security.utcnow` — one clock, two doors (RADD-897).
@@ -14,6 +17,17 @@ from .types import PAT_PREFIX
 _hasher = PasswordHash.recommended()  # argon2id
 # Verified against when the user doesn't exist, so login timing stays uniform.
 _DUMMY_HASH = _hasher.hash(secrets.token_urlsafe(16))
+_password_limiter = CapacityLimiter(settings.auth_password_workers)
+
+
+async def hash_password_async(password: str) -> str:
+    return await to_thread.run_sync(hash_password, password, limiter=_password_limiter)
+
+
+async def verify_password_async(password: str, password_hash: str | None) -> bool:
+    return await to_thread.run_sync(
+        partial(verify_password, password, password_hash), limiter=_password_limiter
+    )
 
 
 def hash_password(password: str) -> str:
@@ -36,5 +50,4 @@ def new_api_token() -> str:
 
 def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
-
 

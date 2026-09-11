@@ -410,9 +410,8 @@ async def denied_slq_fields(
     admin, since per-project subjects can't be resolved for a query that spans
     them all. Restriction is rare; a leak is not.
     """
-    from radd.modules.auth.types import InstanceRole
 
-    if actor.instance_role == InstanceRole.ADMIN.value:
+    if authz.is_instance_admin(actor):
         return frozenset()
 
     denied: set[str] = set()

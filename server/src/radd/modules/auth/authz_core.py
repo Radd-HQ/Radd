@@ -25,6 +25,7 @@ from radd.modules.projects.models import Project
 
 from . import grants
 from .models import Role, User
+from .principals import is_instance_admin
 from .types import (
     BuiltinRoleKey,
     InstanceRole,
@@ -122,9 +123,9 @@ def _active_role(user: User) -> str | None:
 
 
 async def is_admin(session: AsyncSession, user: User) -> bool:
-    """Active AND instance_role == admin — THE admin predicate (spec 86 stage 3)."""
+    """An active instance admin whose credential permits the administrative bypass."""
     del session  # kept in the signature: every caller already threads one
-    return user.active and InstanceRole(user.instance_role) is InstanceRole.ADMIN
+    return is_instance_admin(user)
 
 
 async def _granted_role_ids(

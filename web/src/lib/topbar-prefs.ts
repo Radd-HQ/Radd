@@ -34,7 +34,7 @@ function readSavedFilters(prefs: Record<string, unknown> | undefined): SavedFilt
 
 /**
  * A pinned top-bar tab; `label` is the user's custom name for it.
- * Two kinds: a VIEW pin resolves live against the views list (renames follow
+ * Two kinds: a VIEW pin resolves directly by ID (renames follow
  * the view, deleted views self-heal away, same-name pins disambiguate with
  * the project key); a LINK pin is any other nav destination, captured as its
  * URL + the link text at pin time.

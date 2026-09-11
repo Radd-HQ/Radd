@@ -185,7 +185,7 @@ async def update_rule(
 
 @router.delete("/{rule_id}", status_code=204)
 async def delete_rule(rule_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
-    rule = await service.get_rule(session, rule_id)
+    await service.get_rule(session, rule_id)
     await authz.require(
         session, user, authz.Permission.AUTOMATION_DELETE
     )

@@ -92,7 +92,7 @@ async def test_a_pat_has_no_session_to_preview_on(client, world):
         json={"user_id": world["member_id"]},
         headers={"Authorization": f"Bearer {world['admin_pat']}"},
     )
-    assert response.status_code == 409
+    assert response.status_code == 403
 
 
 async def test_preview_resolves_reads_refuses_writes_and_audits(client, world):
