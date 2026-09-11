@@ -43,6 +43,7 @@ import { Permission, ViewType, type Project } from "../../lib/types";
 import { openCommandPalette } from "../CommandPalette";
 import { DashboardModal } from "../dashboards/DashboardModal";
 import { NewItemModal } from "../items/NewItemModal";
+import { NewProjectModal } from "../projects/NewProjectModal";
 import { ViewModal } from "../views/ViewModal";
 import { useSidebarPrefs } from "./sidebar-prefs";
 import { useViewDirectory, useDashboardDirectory } from "../../lib/useSharedDirectory";
@@ -101,6 +102,11 @@ export function Sidebar() {
   /** Project the "New item" modal was opened for (from its sidebar row). */
   const [newItemProject, setNewItemProject] = useState<Project | null>(null);
   const [viewModalScope, setViewModalScope] = useState<ViewModalScope | null>(null);
+  // RADD-1133: on an instance with NO projects the section used to vanish, and
+  // with it the only path to "New project" — the first admin of a fresh install
+  // had nowhere to start. project.create is global-scope (spec 06).
+  const canCreateProject = perms.global(Permission.projectCreate);
+  const [creatingProject, setCreatingProject] = useState(false);
   const [newDashboardOpen, setNewDashboardOpen] = useState(false);
   // Completed cycles are hidden by default to keep the rail focused
   // on what's live/upcoming; revealed on demand ("only explicitly ask for previous").
@@ -400,7 +406,7 @@ export function Sidebar() {
           </div>
         )}
 
-        {((projectSummary?.total ?? 0) > 0 || directory.isError) && (
+        {((projectSummary?.total ?? 0) > 0 || directory.isError || canCreateProject) && (
           <div className="mt-3">
             <SectionHeader
               label="Projects"
@@ -458,8 +464,24 @@ export function Sidebar() {
             </div>}
             {directory.isError && <p className="px-2 text-xs text-status-danger-ink">Projects could not load.</p>}
             {directory.isPending && <p className="px-2 text-xs text-fg-muted">Loading projects…</p>}
-            {!directory.isPending && !directory.isError && railProjects.length === 0 && <p className="px-2 text-xs text-fg-muted">No matching projects.</p>}
+            {!directory.isPending && !directory.isError && railProjects.length === 0 && (
+              <p className="px-2 text-xs text-fg-muted">
+                {(projectSummary?.total ?? 0) === 0 && !projectFilter.trim() ? "No projects yet." : "No matching projects."}
+              </p>
+            )}
             <ul>
+              {canCreateProject && (projectSummary?.total ?? 0) === 0 && !directory.isPending && (
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => setCreatingProject(true)}
+                    className={`${navLinkClasses} w-full cursor-pointer text-fg-muted!`}
+                  >
+                    <Plus size={14} aria-hidden />
+                    New project
+                  </button>
+                </li>
+              )}
               {railProjects.map((project) => (
                 <SidebarProjectRow key={project.id} project={project}
                   expanded={projectExpanded(project)} permissions={perms}
@@ -530,6 +552,7 @@ export function Sidebar() {
         <ViewModal project={viewModalScope.project} onClose={() => setViewModalScope(null)} />
       )}
       {newDashboardOpen && <DashboardModal onClose={() => setNewDashboardOpen(false)} />}
+      {creatingProject && <NewProjectModal onClose={() => setCreatingProject(false)} />}
     </aside>
     </>
   );
