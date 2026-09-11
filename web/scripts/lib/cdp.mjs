@@ -42,18 +42,44 @@ export async function openBrowser({ port, profile, width = 1440, height = 1000, 
     // Connection refused is the good case: nothing there.
   }
 
-  const chrome = spawn(findChrome(), chromeArgs({ port, profile }), { stdio: "ignore" });
+  // stderr is KEPT (RADD-1135): with it ignored, a Chrome that crashed and a
+  // Chrome that was merely slow produced the same one-line failure, and the CI
+  // log had nothing from the browser itself to say which.
+  const chrome = spawn(findChrome(), chromeArgs({ port, profile }), {
+    stdio: ["ignore", "ignore", "pipe"],
+  });
+  const stderr = [];
+  chrome.stderr.on("data", (chunk) => {
+    stderr.push(String(chunk));
+    if (stderr.length > 200) stderr.shift();
+  });
+  let exited = null;
+  chrome.on("exit", (code, signal) => { exited = { code, signal }; });
   // The harness owns the browser's life, not the caller. A proof that throws
   // before its own cleanup used to leak a headless Chrome per run, and every
   // proof had to remember the same two `chrome.kill()` calls in its tail.
   process.on("exit", () => { try { chrome.kill(); } catch { /* already gone */ } });
 
+  // 60 s, not 10 (RADD-1135): a FIRST launch of Google Chrome on a cold GitHub
+  // runner — profile creation, font cache, sandbox setup, under load from a
+  // sibling job — overran the old 40 x 250 ms budget twice in one day, on
+  // commits whose identical smoke passed minutes later. Locally this loop exits
+  // on the first successful poll, typically well under a second, so the budget
+  // only ever costs time when something is actually wrong.
   let version;
-  for (let i = 0; i < 40 && !version; i++) {
+  const deadline = Date.now() + 60_000;
+  while (!version && Date.now() < deadline && !exited) {
     try { version = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json(); }
     catch { await sleep(250); }
   }
-  if (!version) { chrome.kill(); throw new Error("Chrome CDP did not come up"); }
+  if (!version) {
+    chrome.kill();
+    const tail = stderr.join("").trim().split("\n").slice(-40).join("\n");
+    const why = exited
+      ? `Chrome exited (code ${exited.code}, signal ${exited.signal}) before its DevTools port opened`
+      : "Chrome CDP did not come up within 60 s";
+    throw new Error(tail ? `${why}\n--- chrome stderr (tail) ---\n${tail}` : why);
+  }
 
   const ws = new WebSocket(version.webSocketDebuggerUrl);
   await new Promise((res, rej) => {
