@@ -9,12 +9,12 @@ Every release publishes an immutable image — pin a version, there is
 deliberately no `latest` tag:
 
 ```bash
-podman pull git.radd-hq.com/radd/radd:0.33.0     # anonymous pulls work
+podman pull ghcr.io/radd-hq/radd:0.35.0     # anonymous pulls work
 ```
 
 `compose.yaml` builds from source by default; to run the published image
-instead, replace its `build:` block with `image: git.radd-hq.com/radd/radd:0.33.0`
-(or `--set image.repository=git.radd-hq.com/radd/radd` under Helm). Each
+instead, replace its `build:` block with `image: ghcr.io/radd-hq/radd:0.35.0`
+(or `--set image.repository=ghcr.io/radd-hq/radd` under Helm). Each
 release's SBOM and vulnerability report are attached to it on the releases
 page.
 
@@ -265,7 +265,7 @@ shipped whatever the commit contained, untested). Both jobs run in the pinned
 `ci-runner` image (`deploy/ci-runner.Containerfile`), so the gate needs no
 network access beyond the registries CI already reaches.
 
-Every release on the canonical repo (`git.radd-hq.com/Radd/Radd`) ships with two
+Every release on the canonical repo (`github.com/radd-hq/radd`) ships with two
 CycloneDX SBOMs as release assets: `radd-<version>-image.cdx.json` describes the
 container image (Debian packages, the installed Python environment, and what
 syft reads out of embedded binaries), and `radd-<version>-web.cdx.json` the npm

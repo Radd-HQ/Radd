@@ -71,7 +71,7 @@ podman compose exec app python scripts/import_jira.py \
 ```
 
 A prebuilt image for every release is on the project registry —
-`git.radd-hq.com/radd/radd:<version>`, anonymous pulls, no `latest` tag —
+`ghcr.io/radd-hq/radd:<version>`, anonymous pulls, no `latest` tag —
 see [docs/deploy.md](docs/deploy.md).
 
 Before real people sign in, walk the **first-run hardening** list in

@@ -1,0 +1,158 @@
+# Build the app image on a version tag and publish it to ghcr.io (RADD-1128),
+# so deployments pull an immutable, CI-built artifact:
+#
+#   git tag v0.36.0 && git push origin v0.36.0   ->  ghcr.io/radd-hq/radd:0.36.0
+#
+# The tag also publishes its changelog as a GitHub release (notes, then the two
+# CycloneDX SBOMs and the two vulnerability reports as assets) and as pages in
+# the tracker's wiki. The image only builds once the same gates a pull request
+# passes are green — the checks workflow is reused as the test job.
+#
+# No `latest` tag is published on purpose: the cluster pins an immutable
+# version, so a rollback is a value change in the deployment repo rather than a
+# race over what a moving tag currently points at.
+name: publish
+
+on:
+  push:
+    tags:
+      - "v*"
+  # Rebuild a version without moving a tag (e.g. after a base-image CVE).
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build, without the leading v (e.g. 0.36.0)"
+        required: true
+
+permissions:
+  contents: write   # the release and its assets
+  packages: write   # ghcr.io push
+
+env:
+  REGISTRY: ghcr.io
+  # Pinned tool versions: a release must not change shape because a scanner
+  # moved under it. Bump deliberately.
+  SYFT_VERSION: v1.20.0
+  TRIVY_VERSION: v0.61.0
+
+jobs:
+  test:
+    uses: ./.github/workflows/checks.yaml
+
+  image:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the changelog walks previous tags
+
+      - name: Resolve version and image name
+        id: meta
+        run: |
+          set -e
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"      # refs/tags/v0.36.0 -> 0.36.0
+          fi
+          # Container repository names MUST be lowercase.
+          REPO="$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')"
+          echo "version=$VERSION"        >> "$GITHUB_OUTPUT"
+          echo "image=$REGISTRY/$REPO"   >> "$GITHUB_OUTPUT"
+          echo "Building $REGISTRY/$REPO:$VERSION"
+
+      - name: Log in to ghcr.io
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" \
+            | docker login "$REGISTRY" -u "${{ github.actor }}" --password-stdin
+
+      - name: Build
+        run: |
+          set -e
+          docker build -f Containerfile \
+            --build-arg RADD_VERSION="${{ steps.meta.outputs.version }}" \
+            -t "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}" .
+          docker images "${{ steps.meta.outputs.image }}" --format '  {{.Repository}}:{{.Tag}}  {{.Size}}'
+
+      - name: Push
+        run: docker push "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}"
+
+      - name: Install syft and trivy
+        run: |
+          set -e
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+            | sh -s -- -b /usr/local/bin "$SYFT_VERSION"
+          curl -sSfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sh -s -- -b /usr/local/bin "$TRIVY_VERSION"
+          syft version | head -2; trivy --version | head -1
+
+      # RADD-703/704: the tag publishes its changelog — a categorized GitHub
+      # release and a page under Radd -> Release notes. The LOGIC lives in
+      # scripts/changelog.py (categories come from each [RADD-###] issue's type
+      # and labels, never from a parsed commit prefix).
+      #
+      # Never fails the build: the image is already pushed and deployable, and a
+      # tracker that happens to be down must not turn a good release red. The
+      # script says which half failed.
+      - name: Publish the changelog
+        continue-on-error: true
+        env:
+          RADD_API_TOKEN: ${{ secrets.RADD_API_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/release_notes.py --tag "v${{ steps.meta.outputs.version }}"
+
+      # RADD-1026: every shipped version carries its bill of materials — two
+      # CycloneDX documents attached to the release (the image only carries the
+      # BUILT web bundle, so the npm tree is catalogued from the lockfile), then
+      # rendered as one readable page in the wiki (RADD-1065).
+      - name: Generate, attach and publish the SBOMs
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RADD_API_TOKEN: ${{ secrets.RADD_API_TOKEN }}
+          SYFT_FILE_METADATA_SELECTION: none
+        run: |
+          set -e
+          V="${{ steps.meta.outputs.version }}"
+          syft "docker:${{ steps.meta.outputs.image }}:$V" \
+            -o cyclonedx-json="radd-$V-image.cdx.json" -q
+          syft file:web/package-lock.json \
+            -o cyclonedx-json="radd-$V-web.cdx.json" -q
+          python3 scripts/release_assets.py --tag "v$V" \
+            "radd-$V-image.cdx.json" "radd-$V-web.cdx.json"
+          python3 scripts/sbom_page.py --tag "v$V" \
+            "radd-$V-image.cdx.json" "radd-$V-web.cdx.json"
+
+      # RADD-1028: the inventory above, read for known vulnerabilities.
+      # Report-only BY DESIGN: most base-image CVEs carry no fix, and the remedy
+      # for a fixable one is the workflow_dispatch rebuild above, not a blocked
+      # tag. The JSON attaches to the release; the log gets a CRITICAL/HIGH table.
+      - name: Vulnerability scan
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          V="${{ steps.meta.outputs.version }}"
+          trivy image --scanners vuln -q \
+            -f json -o "radd-$V-image-vulns.json" \
+            "${{ steps.meta.outputs.image }}:$V"
+          trivy fs --scanners vuln -q \
+            -f json -o "radd-$V-web-vulns.json" web
+          python3 scripts/release_assets.py --tag "v$V" \
+            "radd-$V-image-vulns.json" "radd-$V-web-vulns.json"
+          echo "CRITICAL/HIGH summary (full detail in the release assets):"
+          trivy convert -f table --severity CRITICAL,HIGH "radd-$V-image-vulns.json"
+          trivy convert -f table --severity CRITICAL,HIGH "radd-$V-web-vulns.json"
+
+      - name: Deploy instructions
+        run: |
+          IMG="${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}"
+          echo "Pushed $IMG (public — anonymous pulls, no registry credential needed)."
+          echo
+          echo "To deploy, set the tag in the deployment repo's values-radd.yaml:"
+          echo "    image:"
+          echo "      repository: ${{ steps.meta.outputs.image }}"
+          echo "      tag: \"${{ steps.meta.outputs.version }}\""
+          echo "…then push that repo; its CD applies the change."

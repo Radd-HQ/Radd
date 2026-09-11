@@ -33,8 +33,8 @@ Usage:
 Environment:
     RADD_BASE_URL        default https://project.radd-hq.com
     RADD_API_TOKEN       PAT with page.write
-    FORGEJO_BASE_URL     default https://git.radd-hq.com   (asset links only)
-    FORGEJO_REPO         default Radd/Radd                 (asset links only)
+    Asset links point at the git host chosen by release_host.py (GitHub inside
+    GitHub Actions, Forgejo otherwise).
 """
 
 from __future__ import annotations
@@ -48,6 +48,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import release_host  # noqa: E402
 from release_notes import (  # noqa: E402
     ROOT_PAGE,
     SECTION_PAGE,
@@ -290,8 +291,7 @@ def main(argv: list[str] | None = None) -> int:
     tag = args.tag if args.tag.startswith("v") else f"v{args.tag}"
     version = tag[1:]
     radd_base = os.environ.get("RADD_BASE_URL", "https://project.radd-hq.com").rstrip("/")
-    forgejo_base = os.environ.get("FORGEJO_BASE_URL", "https://git.radd-hq.com").rstrip("/")
-    forgejo_repo = os.environ.get("FORGEJO_REPO", "Radd/Radd")
+    repo_url = release_host.from_env().repo_url
 
     documents = []
     for path in args.documents:
@@ -317,7 +317,7 @@ def main(argv: list[str] | None = None) -> int:
         tools(documents),
         [os.path.basename(path) for path in args.documents],
         tag,
-        f"{forgejo_base}/{forgejo_repo}",
+        repo_url,
     )
     if args.dry_run:
         print(markdown)

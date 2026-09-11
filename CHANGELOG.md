@@ -4,7 +4,7 @@ Release notes are **generated per tag**, not hand-maintained here — each
 version's notes are built from its `[RADD-###]` issues (title, type, labels)
 by `scripts/changelog.py` and published in two places by CI:
 
-- **Forgejo releases:** <https://git.radd-hq.com/Radd/Radd/releases> — notes
+- **GitHub releases:** <https://github.com/radd-hq/radd/releases> — notes
   plus the SBOMs and vulnerability reports for that image.
 - **The wiki's Release notes space** on <https://project.radd-hq.com> — the
   same notes as browsable pages, one per version, with an SBOM child page.

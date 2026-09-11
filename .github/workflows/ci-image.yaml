@@ -1,0 +1,78 @@
+# Build the CI/CD runner image and publish it to ghcr.io (RADD-807, moved from
+# Forgejo in RADD-1128):
+#
+#   deploy/ci-runner.Containerfile  ->  ghcr.io/radd-hq/ci-runner:<version>
+#
+# The deployment repository's CD job runs inside this image (kubectl, helm,
+# node for actions/checkout). It rebuilds only when the image definition
+# changes, so a bad day upstream is a red build of this image rather than a
+# deploy that cannot run.
+name: ci-image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "deploy/ci-runner.Containerfile"
+      - "deploy/ci-runner.version"
+      - ".github/workflows/ci-image.yaml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/radd-hq/ci-runner
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read the version
+        id: meta
+        run: |
+          set -e
+          V="$(tr -d '[:space:]' < deploy/ci-runner.version)"
+          [ -n "$V" ] || { echo "deploy/ci-runner.version is empty"; exit 1; }
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "Building $IMAGE:$V"
+
+      - name: Log in to ghcr.io
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" \
+            | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      # Tags are immutable here for the same reason the app image publishes no
+      # `latest`: the runner image decides what every deploy executes, so
+      # silently replacing a version would mean two deploys pinned to "the same"
+      # version ran different kubectl binaries. Bump the version file instead.
+      - name: Refuse to overwrite an existing tag
+        run: |
+          set -e
+          IMG="$IMAGE:${{ steps.meta.outputs.version }}"
+          if docker manifest inspect "$IMG" > /dev/null 2>&1; then
+            echo "$IMG already exists in the registry."
+            echo "Bump deploy/ci-runner.version rather than moving a published tag."
+            exit 1
+          fi
+          echo "$IMG is free"
+
+      - name: Build
+        # Fed on stdin with NO build context: the Containerfile COPYs nothing
+        # from the tree, so there is no directory to send.
+        run: |
+          set -e
+          docker build -t "$IMAGE:${{ steps.meta.outputs.version }}" \
+            - < deploy/ci-runner.Containerfile
+          docker images "$IMAGE" --format '  {{.Repository}}:{{.Tag}}  {{.Size}}'
+
+      - name: Push
+        run: docker push "$IMAGE:${{ steps.meta.outputs.version }}"
+
+      - name: What to do with it
+        run: |
+          echo "Pushed $IMAGE:${{ steps.meta.outputs.version }}"
+          echo "Point the deployment repo's .forgejo/workflows/deploy.yaml container.image at it."

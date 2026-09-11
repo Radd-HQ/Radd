@@ -206,16 +206,16 @@ Radd runs itself in public at **project.radd-hq.com**, hosted beside a Forgejo a
 **Two repos, two pipelines, and they are not interchangeable.** This repo builds an
 IMAGE; a separate private deployment repo decides WHICH image runs. Tag a version here
 (`git tag -a v0.2.0 && git push origin v0.2.0`) → CI publishes
-`git.radd-hq.com/radd/radd:0.2.0` → bump `image.tag` in the deployment repo → CD runs
+`ghcr.io/radd-hq/radd:0.2.0` → bump `image.tag` in the deployment repo → CD runs
 `helm upgrade`. There is **no `latest` tag**: deployments pin an immutable version, so a
 rollback is editing that value back, not a race over what a moving tag points at.
-**The publish job is gated on tests (RADD-1037):** `.forgejo/workflows/publish.yaml`'s
-`image` job now `needs: test` — a tag used to build and ship whatever the commit
-contained, untested; the `test` job runs the same three gates a PR review goes on
-(`uv run pytest`, `tsc -b`, `vite build`) and the image only builds on green. There is
-deliberately no `pull_request` trigger to protect (Forgejo runs the TARGET branch's
-workflows for a fork PR, so a workflow added there never executes) — the tag push is
-the one gate that actually runs.
+**The release pipeline runs on GitHub Actions (RADD-1128):** `.github/workflows/publish.yaml`
+reuses `checks.yaml` as its `test` job (pytest, ruff, tsc, vite, plugin builds, Chromium
+smoke), builds the image with `RADD_VERSION` from the tag, pushes to ghcr.io, then
+publishes the GitHub release with notes (`scripts/release_notes.py`), the SBOMs and the
+vulnerability reports (`release_assets.py`, `sbom_page.py` — host chosen by
+`scripts/release_host.py`). Pull requests get the same checks on GitHub's disposable
+runners; nothing with credentials runs fork code.
 
 **Never change the cluster by hand.** `kubectl edit` in production is reverted the next
 time CD runs; the deployment repo is the source of truth. The end-to-end procedure —
