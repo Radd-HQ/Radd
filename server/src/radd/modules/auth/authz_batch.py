@@ -416,8 +416,19 @@ async def require_member(
     A LIST endpoint says "nothing here for you" by returning nothing, so it calls
     `readable_projects` and returns `[]`. A single-resource read has no such
     answer — a cycle either comes back or it does not — so this one raises.
+
+    "Entitled to nothing" is decided the way `require_anywhere` decides it
+    (RADD-774): holding `item.read` in no project AND not globally. The map is
+    per-project, so on an instance with NO projects it is empty for everyone —
+    the seeded admin of a fresh install included, who then met a 403 on the
+    timesheet, cycles, dashboards and reports before creating the first project
+    (RADD-1132). A global holder gets the empty map back and the surface renders
+    its empty state; nothing becomes readable that the per-project gates would
+    refuse.
     """
     readable = await readable_projects(session, user)
-    if not readable:
+    if not readable and not holds_base(
+        await effective_permissions(session, user), Permission.ITEM_READ
+    ):
         raise ForbiddenError(f"permission '{Permission.ITEM_READ}' denied")
     return readable

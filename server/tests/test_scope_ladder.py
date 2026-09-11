@@ -16,7 +16,8 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings as config
-from radd.modules.auth import authz, grants as auth_grants, roles as auth_roles
+from radd.exceptions import ForbiddenError
+from radd.modules.auth import authz, authz_batch, grants as auth_grants, roles as auth_roles
 from radd.modules.auth.models import User
 from radd.modules.auth.schemas import RoleCreate
 from radd.modules.auth.types import (
@@ -117,3 +118,37 @@ def test_the_instance_tier_is_retired():
     from radd.modules.auth import authz as authz_module
 
     assert not hasattr(authz_module, "ALL_PERMISSIONS")
+
+
+# --- the member floor on an EMPTY instance (RADD-1132) -------------------------
+#
+# `readable_projects` is per-project, so with no projects it is empty for
+# everyone. The gate must then fall back to the GLOBAL atom, or a fresh
+# install greets its seeded admin with a 403 on every member-floor surface.
+# Pinned through both seams rather than by emptying the shared test database:
+# what changed is the gate's decision, and that is what is asserted. (The
+# Baseline role hands every user item.read@own, which `holds_base` counts as
+# the base — so a real user is never on the refusing branch unless an admin
+# has emptied the Baseline, which is the case the second assertion models.)
+
+
+async def test_require_member_on_a_projectless_instance_trusts_the_global_atom(
+    db, member, monkeypatch
+):
+    async def no_projects(session, user):
+        return {}
+
+    monkeypatch.setattr(authz_batch, "readable_projects", no_projects)
+
+    async def nothing_globally(session, user):
+        return frozenset()
+
+    monkeypatch.setattr(authz_batch, "effective_permissions", nothing_globally)
+    with pytest.raises(ForbiddenError):
+        await authz_batch.require_member(db, member)
+
+    async def item_read_globally(session, user):
+        return frozenset({Permission.ITEM_READ})
+
+    monkeypatch.setattr(authz_batch, "effective_permissions", item_read_globally)
+    assert await authz_batch.require_member(db, member) == {}
