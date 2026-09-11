@@ -80,13 +80,19 @@ jobs:
             --build-arg RADD_VERSION="${{ steps.meta.outputs.version }}" \
             -t "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}" .
 
+      # pipefail + retries: a `curl | sh` pipeline's status is sh's, so a reset
+      # connection on the download once left the step green with no syft on
+      # PATH and the SBOMs silently missing from a release. The final check
+      # turns a missing binary into a red step.
       - name: Install syft and trivy
         run: |
-          set -e
-          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+          set -euo pipefail
+          fetch() { curl -sSfL --retry 5 --retry-delay 3 --retry-all-errors "$1"; }
+          fetch https://raw.githubusercontent.com/anchore/syft/main/install.sh \
             | sh -s -- -b /usr/local/bin "$SYFT_VERSION"
-          curl -sSfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+          fetch https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
             | sh -s -- -b /usr/local/bin "$TRIVY_VERSION"
+          command -v syft >/dev/null && command -v trivy >/dev/null
           syft version | head -2; trivy --version | head -1
 
       # RADD-703/704: the tag publishes its changelog — a categorized GitHub
