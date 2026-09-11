@@ -102,6 +102,10 @@ FROM base AS runtime
 # A hand-built image without the arg says "dev", which is the truth.
 ARG RADD_VERSION=dev
 ENV RADD_VERSION=$RADD_VERSION
+# Links the ghcr.io package to the repository (RADD-1128).
+LABEL org.opencontainers.image.source="https://github.com/radd-hq/radd" \
+      org.opencontainers.image.version="$RADD_VERSION" \
+      org.opencontainers.image.licenses="AGPL-3.0-only"
 COPY --from=web /build/web/dist /app/web/dist
 # The built remotes land back where the loader looks for them: the module's own
 # ui/dist (registries.plugin_ui_dirs). The .py sources this overwrites are

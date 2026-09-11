@@ -103,3 +103,7 @@ RUN set -eux; \
     node --version; \
     npm --version; \
     python3 --version
+
+# Links the ghcr.io package to the repository (RADD-1128).
+LABEL org.opencontainers.image.source="https://github.com/radd-hq/radd" \
+      org.opencontainers.image.description="Radd CI/CD runner: node, kubectl, helm, docker CLI, syft, trivy, git, python3"
