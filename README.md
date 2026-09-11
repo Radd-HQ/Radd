@@ -6,6 +6,8 @@ group sync, custom fields, automations, webhooks, SLAs, and the MCP server are
 all here, free forever — the features other trackers gate behind a subscription
 tier are the point, not the upsell.
 
+> **Never open-core. Monetization, if ever, is hosting/support — never features.**
+
 ![The board view, dark theme](docs/media/board-dark.png)
 
 ## What's in the box
@@ -55,7 +57,7 @@ tier are the point, not the upsell.
 ## Run it
 
 ```bash
-git clone https://git.radd-hq.com/Radd/Radd.git && cd Radd
+git clone https://github.com/radd-hq/radd.git && cd radd
 podman compose up -d        # or docker compose — db + app on :8000
 podman compose exec app python -m radd.seed --email you@example.com --password change-me --name "You"
 ```

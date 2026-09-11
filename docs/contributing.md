@@ -1,7 +1,9 @@
 # Contributing
 
-Radd is developed on a self-hosted Forgejo at **https://git.radd-hq.com/Radd/Radd**.
-Anyone can sign in with Google, fork, and open a pull request. Be kind — the
+Radd's public repository is **https://github.com/radd-hq/radd**: fork it and open a
+pull request there. It mirrors a self-hosted Forgejo at `git.radd-hq.com/Radd/Radd`,
+which is where releases are tagged and built; maintainers land pull requests through
+it, so never merge on GitHub (see [docs/publishing.md](publishing.md)). Be kind — the
 [code of conduct](../CODE_OF_CONDUCT.md) applies everywhere the project talks.
 Security problems go to [SECURITY.md](../SECURITY.md)'s private channel, never
 a public issue.
@@ -23,8 +25,8 @@ with npm, and **podman** (or docker) for Postgres. The suite needs a
 pgvector tests self-skip).
 
 ```bash
-git clone https://git.radd-hq.com/Radd/Radd.git
-cd Radd
+git clone https://github.com/radd-hq/radd.git
+cd radd
 
 # Backend — dev db (:5456) + live-reloading API on :8000.
 # The container runs `alembic upgrade head` itself; seed inside it:
