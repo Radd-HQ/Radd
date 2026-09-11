@@ -60,6 +60,15 @@ def test_plan_push_links_branch_and_commit_with_canonical_ids():
     assert planned[1].title == "[TD-12] fix the farm"
 
 
+def test_external_ids_lowercase_the_repository_as_github_reports_it():
+    """GitHub sends `Radd-HQ/Radd`; the admin typed `radd-hq/radd`; CI and backfill
+    must land on the same row."""
+    planned = parsing.plan_push({**PUSH, "repository": {"full_name": "Radd-HQ/Radd", "html_url": "https://github.com/Radd-HQ/Radd"}})
+    assert planned[1].external_id == "commit:radd-hq/radd:" + "a" * 40
+    ci = parsing.plan_ci("workflow_run", {"repository": {"full_name": "Radd-HQ/Radd"}, "workflow_run": {"head_sha": "a" * 40, "conclusion": "success"}})
+    assert ci is not None and "commit:radd-hq/radd:" + "a" * 40 in ci.external_ids
+
+
 def test_plan_push_ignores_tag_pushes():
     assert parsing.plan_push({**PUSH, "ref": "refs/tags/v0.36.0"}) == []
 
