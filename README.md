@@ -40,7 +40,7 @@ tier are the point, not the upsell.
   tracking loop (file, transition, comment, log time, release, sweep) through
   the same RBAC as humans, with a catalog that adapts to what the caller may
   do.
-- **Integrations** — Forgejo/Gitea and GitLab (commits/PRs/CI on the issue,
+- **Integrations** — GitHub, Forgejo/Gitea and GitLab (commits/PRs/CI on the issue,
   releases that close the loop), Alertmanager, Google Chat, email in/out,
   signed webhooks, a REST API with OpenAPI docs, and a Python SDK for
   out-of-process extensions.

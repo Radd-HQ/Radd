@@ -258,7 +258,7 @@ helm install radd deploy/helm/radd \
   --set ingress.enabled=true --set ingress.host=radd.example.com
 ```
 
-A tag only reaches the registry after `.forgejo/workflows/publish.yaml`'s
+A tag only reaches the registry after `.github/workflows/publish.yaml`'s
 `test` job goes green — `uv run pytest` against a throwaway Postgres, `tsc -b`,
 `vite build` — which the `image` job `needs:` (RADD-1037; before this, a tag
 shipped whatever the commit contained, untested). Both jobs run in the pinned

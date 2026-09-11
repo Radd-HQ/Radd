@@ -53,7 +53,8 @@ steps belong. If two "issues" turn out to be one component, that was over-decomp
    shipped; that state is in the `done` category, so throughput counts the day the work
    was done.
 4. **A release sweeps it to Done** with the version recorded — automatically from a
-   published Forgejo release, or `POST /releases/{id}/sweep` by hand.
+   published GitHub release (the GitHub connector, RADD-1129), or
+   `POST /releases/{id}/sweep` by hand.
 5. **Plans** (a spec, a multi-session wave) are an epic with its children filed up
    front. The plan lives in the tracker, not only in `PLAN.md`.
 
@@ -200,8 +201,10 @@ Migrations after model changes: `uv run alembic revision --autogenerate -m "..."
 
 ## Releasing & deploying (the live instance)
 
-Radd runs itself in public at **project.radd-hq.com**, hosted beside a Forgejo at
-**git.radd-hq.com**. Contributor-facing setup, conventions and PR rules: `docs/contributing.md`.
+Radd runs itself in public at **project.radd-hq.com**; the code lives at
+**github.com/radd-hq/radd** (canonical since RADD-1130) and the private deployment repo
+on the self-hosted Forgejo at **git.radd-hq.com**, which also keeps a read-only mirror of
+the app repo. Contributor-facing setup, conventions and PR rules: `docs/contributing.md`.
 
 **Two repos, two pipelines, and they are not interchangeable.** This repo builds an
 IMAGE; a separate private deployment repo decides WHICH image runs. Tag a version here
@@ -223,9 +226,10 @@ pre-flight checks, the failures that have actually happened, and rollback — li
 `release` skill (`.claude/skills/release/`, local only: it carries machine-specific paths);
 the contributor-visible half is `docs/deploy.md`.
 
-`main` is protected: direct pushes and merges are whitelisted to the owner. CI does not
-run on pull requests, and cannot be made to — Forgejo executes the TARGET branch's
-workflows for fork PRs, so a workflow added in a PR never runs.
+`main` is protected on GitHub (no force-push, no deletion, admins included). Every pull
+request runs `.github/workflows/checks.yaml` on GitHub's disposable runners with a
+read-only token — the safe place for fork code, which is why PR checks never existed on
+the Forgejo runner that holds deployment credentials.
 
 ## Repo layout
 

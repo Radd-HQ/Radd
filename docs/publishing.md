@@ -1,11 +1,11 @@
 # Publication hygiene
 
-Radd's public repository is **https://github.com/radd-hq/radd**, and it carries
-the project's full history. The self-hosted Forgejo at `git.radd-hq.com/Radd/Radd`
-remains the **source of truth and the build host**: releases are tagged there,
-its pipeline builds the image, the SBOMs and the vulnerability reports, and a
-push mirror publishes every commit and tag to GitHub within minutes. GitHub is
-where issues, discussions and pull requests arrive.
+Radd's repository is **https://github.com/radd-hq/radd**: the source of truth,
+carrying the project's full history. Releases are tagged there, GitHub Actions
+builds the image, the SBOMs and the vulnerability reports, publishes the
+release, and the tracker follows it through the GitHub connector. The
+self-hosted Forgejo at `git.radd-hq.com` keeps a read-only pull mirror as a
+backup and hosts the private deployment repository; nothing is pushed to it.
 
 The history is publishable because it was **rewritten once, before the first
 public push**: an Active Directory export, a real-content import sample, the
@@ -28,22 +28,15 @@ git remote add github git@github.com:radd-hq/radd.git
 git push github main --tags
 ```
 
-Then on GitHub: make `main` the default branch and protect it (no direct
-pushes; maintainers land PRs through Forgejo), and configure the Forgejo push
-mirror (repository settings → Mirror settings → *Push to a remote repository*,
-or `POST /api/v1/repos/Radd/Radd/push_mirrors` with `sync_on_commit: true`) so
-the manual push above is the last one anyone makes to GitHub directly.
+Then on GitHub: make `main` the default branch and protect it (no force-push,
+no deletion, admins included), and register the repository webhook that feeds
+the tracker (Settings → GitHub on the instance says what to send where).
 
-**Landing a GitHub pull request.** Fetch its head, validate it with the same
-gates a release goes through, and push it to Forgejo `main`; the mirror carries
-it back to GitHub and GitHub closes the PR as merged when it sees the commits.
-Never merge on GitHub: that would fork the two histories.
-
-```bash
-git fetch https://github.com/radd-hq/radd.git pull/<n>/head:pr-<n>
-git checkout pr-<n>
-cd server && uv run pytest -q && cd ../web && npm run check
-```
+**Landing a pull request.** The checks workflow has to be green; a maintainer
+reads the change and, when it touches UI, runs a render-proof. Land it with
+*Rebase and merge* so each commit keeps its `[RADD-####]` key and arrives on the
+issue's Version control tab through the connector; a squash is fine when the PR
+is one issue's worth of work and its title carries the key.
 
 ## The gate
 

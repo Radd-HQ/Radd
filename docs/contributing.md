@@ -93,7 +93,7 @@ Radd tracks its own development, and the project is public. Two consequences.
 ```
 
 One commit per issue — never against an epic, which is a container rather than a
-unit of work. The bracket form auto-links: the Forgejo connector matches the key
+unit of work. The bracket form auto-links: the GitHub connector matches the key
 and the commit appears in the issue's Version control tab with no extra step. If a
 change genuinely spans two issues it is two commits; if it cannot be split, those
 were one issue.
