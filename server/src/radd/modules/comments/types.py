@@ -28,3 +28,9 @@ class CommentEvent(StrEnum):
 
 class CommentEntity(StrEnum):
     COMMENT = "comment"
+
+
+class CommentSlice(StrEnum):
+    ALL = "all"
+    DISCUSSION = "discussion"
+    INLINE = "inline"

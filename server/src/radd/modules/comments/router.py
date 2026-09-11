@@ -1,14 +1,15 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
 from radd.modules.auth.deps import CurrentUser
 
 from . import service
-from .schemas import CommentCreate, CommentRead, CommentUpdate
+from .schemas import CommentCreate, CommentPage, CommentRead, CommentUpdate
+from .types import CommentSlice
 
 # No prefix: routes span two roots (/items/{id}/comments for the collection,
 # /comments/{id} for direct addressing).
@@ -77,3 +78,23 @@ async def reopen_comment(
 @router.delete("/comments/{comment_id}", status_code=204)
 async def delete_comment(comment_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
     await service.delete_comment(session, comment_id, actor=user)
+
+
+@router.get("/items/{entity_id}/comments/feed", response_model=CommentPage)
+async def item_comment_page(
+    entity_id: uuid.UUID, session: Session, user: CurrentUser,
+    limit: int = Query(50, ge=1, le=200), before: str | None = Query(None, max_length=256),
+    section: CommentSlice = CommentSlice.ALL,
+) -> CommentPage:
+    return await service.comment_page(session, entity_id, user, limit=limit, before=before, section=section)
+
+
+@router.get("/{entity_type}/{entity_id}/comments/feed", response_model=CommentPage)
+async def parent_comment_page(
+    entity_type: str, entity_id: uuid.UUID, session: Session, user: CurrentUser,
+    limit: int = Query(50, ge=1, le=200), before: str | None = Query(None, max_length=256),
+    section: CommentSlice = CommentSlice.ALL,
+) -> CommentPage:
+    return await service.comment_page(
+        session, entity_id, user, entity_type, limit=limit, before=before, section=section
+    )

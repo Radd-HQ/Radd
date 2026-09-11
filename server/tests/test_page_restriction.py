@@ -327,3 +327,23 @@ async def test_batched_and_single_answers_agree(db):
     batched = await page_access.readable_page_ids(db, reader, pages)
     for page in pages:
         assert (page.id in batched) == await page_access.page_access(db, reader, page)
+
+
+async def test_restricted_page_discussion_uses_the_page_read_boundary(db):
+    from radd.exceptions import NotFoundError
+    from radd.modules.comments import service as comments
+    from radd.modules.comments.schemas import CommentCreate
+
+    admin = await _admin(db)
+    reader = await _user(db)
+    space = await _space(db, admin)
+    page = await _page(db, space, admin)
+    await _grant_space_read(db, reader, space, Permission.COMMENT_WRITE)
+    await comments.create_comment(db, page.id, CommentCreate(body="restricted discussion"), admin, "page")
+    # Space access alone must not expose a page restricted to another person.
+    await _restrict(db, page, admin, user_id=admin.id)
+    for read in (comments.list_comments, comments.comment_page):
+        with pytest.raises(NotFoundError):
+            await read(db, page.id, reader, "page")
+    with pytest.raises(NotFoundError):
+        await comments.create_comment(db, page.id, CommentCreate(body="should refuse"), reader, "page")

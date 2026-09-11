@@ -24,7 +24,7 @@ from .types import (
     CommentParentType,
     CommentVisibility,
 )
-from .visibility import internal_comment_visible
+from .reading import comment_page as comment_page, list_comments as list_comments
 from radd.clock import utcnow
 
 
@@ -74,23 +74,18 @@ async def _set_teams(
 ) -> set[uuid.UUID]:
     """Replace an internal comment's team allow-list (validated to existing teams).
     Public comments never carry restrictions. Returns the stored set."""
+    wanted = set(team_ids) if comment.visibility == CommentVisibility.INTERNAL.value else set()
+    valid = await teams.existing_ids(session, wanted)
+    missing = wanted - valid
+    if missing:
+        raise ConflictError(CommentEntity.COMMENT, reason=f"team {min(missing)} does not exist")
+    # Validate before replacing the old audience, even if a caller catches refusal.
     await session.execute(
         delete(CommentVisibilityTeam).where(CommentVisibilityTeam.comment_id == comment.id)
     )
-    if comment.visibility != CommentVisibility.INTERNAL.value or not team_ids:
-        return set()
-    valid = {team.id for team in await teams.list_teams(session)}
-    stored: set[uuid.UUID] = set()
-    for team_id in team_ids:
-        if team_id not in valid:
-            raise ConflictError(
-                CommentEntity.COMMENT, reason=f"team {team_id} does not exist"
-            )
-        if team_id not in stored:
-            session.add(CommentVisibilityTeam(comment_id=comment.id, team_id=team_id))
-            stored.add(team_id)
+    session.add_all([CommentVisibilityTeam(comment_id=comment.id, team_id=team_id) for team_id in wanted])
     await session.flush()
-    return stored
+    return wanted
 
 
 async def public_bodies_for_item(session: AsyncSession, item_id: uuid.UUID) -> list[str]:
@@ -322,62 +317,6 @@ async def create_authorized_comment(
         occurred_at=occurred_at, visible_to_teams=stored_teams,
     )
     return _to_read(comment, actor, stored_teams)
-
-
-async def _visible_comments(
-    session: AsyncSession,
-    comments: list[Comment],
-    actor: User,
-    project: Project,
-    permissions: frozenset[Permission],
-    restrictions: dict[uuid.UUID, set[uuid.UUID]],
-) -> list[Comment]:
-    """Drop internal comments the actor may not read (spec 50 — teams narrow the
-    read_internal audience). Public comments always pass."""
-    internal = [c for c in comments if c.visibility == CommentVisibility.INTERNAL.value]
-    if not internal:
-        return comments
-    has_read = Permission.COMMENT_READ_INTERNAL in permissions
-    has_manage = Permission.PROJECT_MANAGE in permissions
-    actor_teams = (
-        set()
-        if has_manage
-        else await teams.user_team_ids(session, actor.id)
-    )
-    return [
-        c
-        for c in comments
-        if c.visibility != CommentVisibility.INTERNAL.value
-        or internal_comment_visible(
-            is_author=c.author_id == actor.id,
-            has_read_internal=has_read,
-            has_manage=has_manage,
-            comment_teams=restrictions.get(c.id, set()),
-            actor_teams=actor_teams,
-        )
-    ]
-
-
-async def list_comments(
-    session: AsyncSession,
-    entity_id: uuid.UUID,
-    actor: User,
-    entity_type: str = CommentParentType.ITEM.value,
-) -> list[CommentRead]:
-    binding, project = await _parent_scope(session, entity_type, entity_id)
-    permissions = await authz.require(session, actor, Permission.ITEM_READ, project=project)
-    query = (
-        select(Comment)
-        .where(Comment.entity_type == entity_type, Comment.entity_id == entity_id)
-        .order_by(Comment.created_at, Comment.id)
-    )
-    comments = list((await session.execute(query)).scalars())
-    restrictions = await _team_restrictions(
-        session, [c.id for c in comments if c.visibility == CommentVisibility.INTERNAL.value]
-    )
-    comments = await _visible_comments(session, comments, actor, project, permissions, restrictions)
-    authors = await auth.users_by_ids(session, {c.author_id for c in comments})
-    return [_to_read(c, authors[c.author_id], restrictions.get(c.id)) for c in comments]
 
 
 async def update_comment(

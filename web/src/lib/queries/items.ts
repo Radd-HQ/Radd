@@ -1,11 +1,12 @@
 /** Items (paged/infinite/by-key), comments, and attachments. */
 
+import { commentFeedQuery, CommentSection } from "./comment-feed";
 import { queryOptions } from "@tanstack/react-query";
+import { allRelationRows } from "../pagination";
 import { api } from "../api";
 import { Entity, entityMeta } from "../cache";
 import {
   ApiPath,
-  ITEMS_PAGE_LIMIT,
   apiAttachmentsPath,
   apiItemByKeyPath,
   apiItemCommentsPath,
@@ -19,23 +20,6 @@ import type {
   ValidationContext,
 } from "../types";
 
-/** All items of a project, one page at the API cap (pagination: known gap). */
-export const itemsQuery = (projectId: string, archived = false) =>
-  queryOptions({
-    queryKey: queryKeys.items(projectId, archived),
-    // `meta.entities` = which entities this query caches; item mutations
-    // invalidate by entity, so this refreshes live (see lib/cache.ts).
-    meta: entityMeta(Entity.item),
-    queryFn: () =>
-      api.get<Item[]>(ApiPath.items, {
-        query: {
-          project_id: projectId,
-          archived: archived ? "true" : undefined,
-          limit: String(ITEMS_PAGE_LIMIT),
-        },
-      }),
-  });
-
 /**
  * Resolve an item by its canonical key (`TD-25`) via the server's by-key
  * resolver (spec 21) — the single source for the key-addressed issue page.
@@ -45,18 +29,16 @@ export const itemByKeyQuery = (key: string) =>
   queryOptions({
     queryKey: queryKeys.itemByKey(key),
     meta: entityMeta(Entity.item),
-    queryFn: () => api.get<Item>(apiItemByKeyPath(key)),
+    queryFn: ({ signal }) => api.get<Item>(apiItemByKeyPath(key), { signal }),
     retry: false,
   });
 
-/**
- * Comments for an item. The comments module may not be deployed yet (spec 02
- * lands in parallel) — the thread component feature-detects the 404.
- */
+/** Comments for an item; other readers refresh through comment event metadata. */
 export const commentsQuery = (itemId: string) =>
   queryOptions({
     queryKey: queryKeys.comments(itemId),
-    queryFn: () => api.get<Comment[]>(apiItemCommentsPath(itemId)),
+    meta: entityMeta(Entity.comment),
+    queryFn: ({ signal }) => api.get<Comment[]>(apiItemCommentsPath(itemId), { signal }),
     retry: false,
   });
 
@@ -64,8 +46,9 @@ export const commentsQuery = (itemId: string) =>
 export const attachmentsQuery = (target: AttachmentTarget) =>
   queryOptions({
     queryKey: queryKeys.attachments(target.entityType, target.entityId),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<Attachment[]>(apiAttachmentsPath(), {
+        signal,
         query: { entity_type: target.entityType, entity_id: target.entityId },
       }),
     meta: entityMeta(Entity.attachment),
@@ -80,7 +63,7 @@ export const childItemsQuery = (parentId: string) =>
   queryOptions({
     queryKey: queryKeys.childItems(parentId),
     meta: entityMeta(Entity.item),
-    queryFn: () => api.get<Item[]>(ApiPath.items, { query: { parent_id: parentId } }),
+    queryFn: ({ signal }) => allRelationRows<Item>(ApiPath.items, { parent_id: parentId }, signal),
   });
 
 /**
@@ -99,8 +82,9 @@ export const validationContextQuery = (
 ) =>
   queryOptions({
     queryKey: queryKeys.validationContext(projectId ?? "", typeId ?? null, formId ?? null),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.get<ValidationContext>(ApiPath.itemsValidateContext, {
+        signal,
         query: {
           project_id: projectId ?? "",
           type_id: typeId || undefined,
@@ -114,3 +98,6 @@ export const validationContextQuery = (
     // to the plain Create button rather than to a broken form.
     retry: false,
   });
+
+export const itemCommentFeedQuery = (itemId: string) =>
+  commentFeedQuery(queryKeys.comments(itemId), apiItemCommentsPath(itemId), CommentSection.all);

@@ -13,7 +13,7 @@ from .types import CommentParentType, CommentVisibility
 class Comment(Base, TimestampMixin):
     __tablename__ = "comments"
     # The read that matters: every comment on one parent, in order.
-    __table_args__ = (Index("ix_comments_parent", "entity_type", "entity_id"),)
+    __table_args__ = (Index("ix_comments_parent_order", "entity_type", "entity_id", "created_at", "id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     # RADD-717: polymorphic parent. No FK, because it points at several tables —

@@ -1,15 +1,17 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { MessageSquare, Trash2 } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { apiCommentPath, apiParentCommentsPath } from "../../lib/constants";
 import { relativeTime } from "../../lib/dates";
-import { pageCommentsQuery, usersQuery } from "../../lib/queries";
+import { pageCommentFeedQuery, usersQuery } from "../../lib/queries";
 import { useCurrentUser } from "../../lib/hooks";
 import { LazyRichEditor as RichEditor } from "../editor/LazyRichEditor";
 import { LazyRichViewer as RichViewer } from "../editor/LazyRichViewer";
 import { Avatar } from "../Avatar";
+import { CommentHistory } from "../CommentHistory";
+import { chronologicalComments } from "../../lib/queries/comment-feed";
 import { Button } from "../Button";
 import { useConfirm } from "../ConfirmDialog";
 
@@ -30,7 +32,8 @@ import { useConfirm } from "../ConfirmDialog";
 export function PageComments({ pageId, canComment }: { pageId: string; canComment: boolean }) {
   const user = useCurrentUser();
   const queryClient = useQueryClient();
-  const { data: comments } = useQuery(pageCommentsQuery(pageId));
+  const history = useInfiniteQuery(pageCommentFeedQuery(pageId));
+  const comments = chronologicalComments(history.data?.pages);
   const { data: users } = useQuery(usersQuery);
   const [body, setBody] = useState("");
   const [composerKey, setComposerKey] = useState(0);
@@ -63,11 +66,14 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
         ) : null}
       </h3>
 
+      <CommentHistory hasOlder={history.hasNextPage} loading={history.isFetchingNextPage}
+        onOlder={() => history.fetchNextPage()} error={history.isError ? errorMessage(history.error) : undefined}>
+      {history.isPending && <p role="status" className="text-xs text-fg-muted">Loading comments…</p>}
       <ul className="flex flex-col gap-4">
         {comments?.map((comment) => {
           const author = users?.find((u) => u.id === comment.author.id);
           return (
-            <li key={comment.id} className="flex gap-2">
+            <li data-comment-id={comment.id} key={comment.id} className="flex gap-2">
               <Avatar user={author ?? comment.author} size="sm" />
               <div className="min-w-0 flex-1">
                 <p className="flex items-baseline gap-2 text-[12px]">
@@ -101,6 +107,7 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
           );
         })}
       </ul>
+      </CommentHistory>
 
       {canComment ? (
         <div className="mt-4 flex flex-col gap-2">

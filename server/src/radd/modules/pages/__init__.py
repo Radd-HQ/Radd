@@ -13,8 +13,8 @@ from radd.kernel import PermissionSpec
 
 from . import refs
 
-from . import attachments_binding  # registers the page parent (spec 102)
-from . import comments_binding  # registers the page comment parent (RADD-717)
+from . import attachments_binding as attachments_binding  # registers the page parent (spec 102)
+from . import comments_binding as comments_binding  # registers the page comment parent (RADD-717)
 from .extensions import PAGE_EXTENSIONS
 from .grantscope import SPACE_SCOPE
 from .public_router import router as public_router

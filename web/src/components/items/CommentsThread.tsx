@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { EyeOff, MessageSquare, Pencil, Send, Trash2 } from "lucide-react";
 import { ApiError, api, errorMessage } from "../../lib/api";
 import { useAttachmentUploader } from "../../lib/useAttachmentUploader";
@@ -12,9 +12,8 @@ import {
 import { useCurrentUser, usePermissions } from "../../lib/hooks";
 import { Avatar } from "../Avatar";
 import { PersonName } from "../PersonName";
-import { cannedResponsesQuery, commentsQuery, queryKeys, teamMembersQuery, teamsQuery } from "../../lib/queries";
+import { cannedResponsesQuery, itemCommentFeedQuery, queryKeys, teamReferencesQuery, TEAMS_PAGE_SIZE } from "../../lib/queries";
 import {
-  type Team,
   AttachmentParentType,
   CommentVisibility,
   Permission,
@@ -26,10 +25,13 @@ import {
   type Project,
 } from "../../lib/types";
 import { useIssueQuickActions, type QuickAction } from "./quick-actions";
+import { CommentHistory } from "../CommentHistory";
+import { chronologicalComments } from "../../lib/queries/comment-feed";
 import { Button } from "../Button";
 import { Select } from "../Select";
 import { Spinner } from "../Spinner";
-import { TokenMultiSelect } from "../TokenMultiSelect";
+import { TeamAudience, CommentAudienceNames, COMMENT_TEAM_PREVIEW_SIZE } from "../teams/TeamAudience";
+import { QueryError } from "../QueryError";
 
 import type { AiRun } from "../editor/ai";
 import { AiReadMenu } from "../editor/AiReadMenu";
@@ -59,33 +61,6 @@ interface CommentsThreadProps {
   project: Project;
 }
 
-/** RADD-836 U2 — the audience, resolved: named teams with their headcounts
- * (group-carried members included, via the server's team member listing), or
- * the honest wide answer when no team narrows it. */
-function AudienceLine({ teamIds, teams }: { teamIds: string[]; teams: Team[] }) {
-  const counts = useQueries({
-    queries: teamIds.map((id) => teamMembersQuery(id)),
-  });
-  if (teamIds.length === 0) {
-    return (
-      <p className="self-start text-[11px] text-fg-faint">
-        Visible to everyone on this project who can read internal notes.
-      </p>
-    );
-  }
-  const parts = teamIds.map((id, index) => {
-    const name = teams.find((team) => team.id === id)?.name ?? "?";
-    const n = counts[index]?.data?.length;
-    return n === undefined ? name : `${name} (${n} ${n === 1 ? "person" : "people"})`;
-  });
-  return (
-    <p className="self-start text-[11px] text-fg-faint">
-      Visible to {parts.join(", ")} — plus internal-note readers with project manage.
-    </p>
-  );
-}
-
-
 /** Amber "Internal" chip on comments only comment.read_internal holders see. */
 function InternalBadge() {
   return (
@@ -97,9 +72,7 @@ function InternalBadge() {
 }
 
 /**
- * Comment list + composer (`/items/{id}/comments`, spec 02). The comments
- * module lands in a parallel backend wave — a 404 here means "not deployed
- * yet", so the thread degrades to a placeholder instead of erroring.
+ * Comment list + composer (`/items/{id}/comments`, spec 02).
  * Spec 07: comments carry `visibility`; the server already filters internal
  * ones out for users without comment.read_internal, and the composer only
  * offers the "Internal note" toggle to users who hold it.
@@ -115,12 +88,14 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
   // showing an editor that 403s on submit.
   const canComment = perms.project(project, Permission.commentWrite);
   const queryClient = useQueryClient();
-  const comments = useQuery(commentsQuery(itemId));
+  const comments = useInfiniteQuery(itemCommentFeedQuery(itemId));
   const { data: canned } = useQuery(cannedResponsesQuery());
-  const { data: teams } = useQuery({
-    ...teamsQuery(),
-    enabled: canReadInternal,
-  });
+  const list = chronologicalComments(comments.data?.pages);
+  const labelIds = [...new Set(list.flatMap(comment => comment.visible_to_teams.slice(0, COMMENT_TEAM_PREVIEW_SIZE)))];
+  const labelBatches: string[][] = [];
+  for (let offset = 0; offset < labelIds.length; offset += TEAMS_PAGE_SIZE) labelBatches.push(labelIds.slice(offset, offset + TEAMS_PAGE_SIZE));
+  const teamLabels = useQueries({ queries: labelBatches.map(ids => teamReferencesQuery(ids)) });
+  const teamNames = new Map(teamLabels.flatMap(query => (query.data ?? []).map(row => [row.id, row.name] as const)));
   const [body, setBody] = useState("");
   // The rich editor is uncontrolled — bump this to remount (clear) it after posting.
   const [composerKey, setComposerKey] = useState(0);
@@ -158,16 +133,15 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
     });
   };
 
-  const teamName = (id: string) => (teams ?? []).find((team) => team.id === id)?.name ?? "team";
 
   if (comments.isPending) return <Spinner label="Loading comments…" />;
 
-  if (comments.isError) {
+  if (comments.isError && !comments.data) {
     if (comments.error instanceof ApiError && comments.error.status === 404) {
       return (
         <p className="flex items-center gap-2 rounded-md border border-dashed border-subtle px-3 py-2.5 text-xs text-fg-muted">
           <MessageSquare size={13} aria-hidden />
-          Comments aren't available on this server yet.
+          This discussion is unavailable. The issue may have been removed or access may have changed.
         </p>
       );
     }
@@ -178,11 +152,14 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
     );
   }
 
-  const list = comments.data;
+
   const internalDraft = canReadInternal && visibility === CommentVisibility.internal;
 
   return (
     <div className="flex flex-col gap-3">
+      {teamLabels.some(query => query.isError) && <div><QueryError label="comment team names" error={teamLabels.find(query => query.isError)?.error} /><Button size="sm" variant="ghost" onClick={() => void Promise.all(teamLabels.filter(query => query.isError).map(query => query.refetch()))}>Retry comment team names</Button></div>}
+      <CommentHistory hasOlder={comments.hasNextPage} loading={comments.isFetchingNextPage}
+        onOlder={() => comments.fetchNextPage()} error={comments.isFetchNextPageError ? errorMessage(comments.error) : undefined}>
       {list.length === 0 ? (
         <p className="text-xs text-fg-faint">No comments yet.</p>
       ) : (
@@ -192,6 +169,7 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
             return (
               <li
                 key={comment.id}
+                data-comment-id={comment.id}
                 className={
                   "flex gap-2.5" +
                   (internal
@@ -212,7 +190,7 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
                     {internal && <InternalBadge />}
                     {internal && comment.visible_to_teams.length > 0 && (
                       <span className="text-[10px] text-amber-300/80">
-                        · {comment.visible_to_teams.map(teamName).join(", ")}
+                        · <CommentAudienceNames ids={comment.visible_to_teams} names={teamNames} />
                       </span>
                     )}
                     {editingId !== comment.id && (
@@ -269,6 +247,8 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
         </ul>
       )}
 
+      </CommentHistory>
+
       {user && !canComment ? (
         <p className="flex items-center gap-2 rounded-md border border-dashed border-subtle bg-surface/40 px-3 py-2.5 text-xs text-fg-muted">
           <EyeOff size={12} aria-hidden />
@@ -318,29 +298,7 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
               })}
             </div>
           )}
-          {internalDraft && (teams ?? []).length > 0 && (
-            <div className="flex w-full items-center gap-1.5 text-[11px]">
-              <span className="shrink-0 text-fg-muted">Visible to:</span>
-              <div className="min-w-0 flex-1">
-                <TokenMultiSelect
-                  value={visibleTeams}
-                  onChange={setVisibleTeams}
-                  options={(teams ?? []).map((team) => ({
-                    value: team.id,
-                    label: team.name,
-                  }))}
-                  placeholder="Everyone who can see internal notes"
-                  ariaLabel="Teams this internal note is visible to"
-                />
-              </div>
-            </div>
-          )}
-          {/* RADD-836 U2: WHO will read this, stated before posting — the
-              accident (an internal note to the wrong audience) is otherwise
-              unrecoverable, since a read comment cannot be unsent. */}
-          {internalDraft && (
-            <AudienceLine teamIds={visibleTeams} teams={teams ?? []} />
-          )}
+          {internalDraft && <TeamAudience value={visibleTeams} onChange={setVisibleTeams} />}
           {(canned ?? []).length > 0 && (
             <Select
               value=""

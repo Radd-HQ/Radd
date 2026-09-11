@@ -24,8 +24,9 @@ from radd.modules.auth.models import User
 from radd.modules.comments.parents import CommentParent, register_parent
 from radd.modules.comments.types import CommentParentType
 
-from . import service as pages_service
-from .types import PageEvent
+from . import service as pages_service, page_access
+from radd.exceptions import NotFoundError
+from .types import PageEvent, PageEntity
 
 
 async def _page_project(session: AsyncSession, page_id: uuid.UUID) -> None:
@@ -41,9 +42,11 @@ async def _space_of(session: AsyncSession, page_id: uuid.UUID) -> uuid.UUID:
 
 async def _page_read(session, user: User, page_id: uuid.UUID, project):
     del project  # a page has no project; its space is the scope (RADD-791)
-    return await authz.require(
-        session, user, Permission.PAGE_READ, space_id=await _space_of(session, page_id)
-    )
+    page = await pages_service.get_page(session, page_id)
+    permissions = await authz.require(session, user, Permission.PAGE_READ, space_id=page.space_id)
+    if not await page_access.page_access(session, user, page):
+        raise NotFoundError(PageEntity.PAGE, page_id)
+    return permissions
 
 
 async def _page_write(session, user: User, page_id: uuid.UUID, project):
@@ -53,7 +56,7 @@ async def _page_write(session, user: User, page_id: uuid.UUID, project):
     what did not work while these resolved globally (RADD-791)."""
     del project
     space_id = await _space_of(session, page_id)
-    await authz.require(session, user, Permission.PAGE_READ, space_id=space_id)
+    await _page_read(session, user, page_id, None)
     return await authz.require(session, user, Permission.COMMENT_WRITE, space_id=space_id)
 
 

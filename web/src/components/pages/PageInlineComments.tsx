@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, MessageSquarePlus, RotateCcw, Unlink } from "lucide-react";
-import { api } from "../../lib/api";
+import { api, errorMessage } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { apiCommentPath, apiParentCommentsPath } from "../../lib/constants";
 import { relativeTime } from "../../lib/dates";
-import { pageCommentsQuery } from "../../lib/queries";
+import { pageCommentFeedQuery } from "../../lib/queries";
 import type { Comment } from "../../lib/types";
 import { useCurrentUser } from "../../lib/hooks";
 import { makeAnchor, orderByAnchor, type TextAnchor } from "../../lib/anchoring";
 import { offsetsForSelection, rangeForOffsets, renderedText } from "../../lib/dom-text";
 import { LazyRichViewer as RichViewer } from "../editor/LazyRichViewer";
+import { CommentHistory } from "../CommentHistory";
+import { chronologicalComments, CommentSection } from "../../lib/queries/comment-feed";
 import { Button } from "../Button";
 import { LazyRichEditor as RichEditor } from "../editor/LazyRichEditor";
 
@@ -47,7 +49,8 @@ export function PageInlineComments({
 }) {
   const user = useCurrentUser();
   const queryClient = useQueryClient();
-  const { data } = useQuery(pageCommentsQuery(pageId));
+  const history = useInfiniteQuery(pageCommentFeedQuery(pageId, CommentSection.inline));
+  const data = history.data;
   const [draftAnchor, setDraftAnchor] = useState<TextAnchor | null>(null);
   const [draftBody, setDraftBody] = useState("");
   const [selectionAt, setSelectionAt] = useState<{ left: number; top: number } | null>(null);
@@ -72,7 +75,7 @@ export function PageInlineComments({
   });
 
   const inline = useMemo(
-    () => (data ?? []).filter((c) => c.anchor),
+    () => chronologicalComments(data?.pages).filter((c) => c.anchor),
     [data],
   );
 
@@ -140,7 +143,7 @@ export function PageInlineComments({
   const resolved = located.filter(({ row }) => row.resolved_at);
   const orphans = open.filter(({ start }) => start === null);
 
-  if (!inline.length && !canComment) return null;
+  if (!inline.length && !canComment && !history.hasNextPage && !history.isError && !history.isPending) return null;
 
   return (
     <>
@@ -160,6 +163,8 @@ export function PageInlineComments({
         </button>
       )}
 
+      <CommentHistory hasOlder={history.hasNextPage} loading={history.isFetchingNextPage}
+        onOlder={() => history.fetchNextPage()} error={history.isError ? errorMessage(history.error) : undefined}>
       <aside className="mt-4 flex flex-col gap-2" data-inline-comment-rail>
         {draftAnchor && (
           <div className="rounded-md border border-accent bg-surface p-2">
@@ -230,6 +235,7 @@ export function PageInlineComments({
           </div>
         )}
       </aside>
+      </CommentHistory>
     </>
   );
 }
@@ -254,6 +260,7 @@ function Thread({
   return (
     <div
       data-thread
+      data-comment-id={row.id}
       data-orphaned={orphaned || undefined}
       onMouseEnter={onFocus}
       className={

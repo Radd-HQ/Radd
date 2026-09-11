@@ -55,3 +55,8 @@ class CommentRead(BaseModel):
     anchor: CommentAnchor | None = None
     resolved_at: UtcDatetime | None = None
     resolved_by: uuid.UUID | None = None
+
+
+class CommentPage(BaseModel):
+    comments: list[CommentRead]
+    older_cursor: str | None = None
