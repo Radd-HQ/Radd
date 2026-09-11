@@ -3,8 +3,8 @@
 **Issue.** `[RADD-###]` in the commit message (or describe the problem fully
 here and a maintainer will file it — see docs/contributing.md).
 
-**Gates run locally** (CI does not run on fork PRs — your word here is what
-review starts from):
+**Gates run locally** (CI runs on fork PRs too, on GitHub's runners with a
+read-only token — but a green run there is the floor, not the review):
 
 - [ ] `cd server && uv run pytest -q`
 - [ ] `cd web && ./node_modules/.bin/tsc -b && ./node_modules/.bin/vite build`

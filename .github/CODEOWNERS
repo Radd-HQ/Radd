@@ -1,0 +1,4 @@
+# Every PR requests a review from the maintainer automatically. Reviews from
+# code owners are not REQUIRED by the branch rule (a single maintainer would
+# then block their own PRs); the file exists so nothing waits unnoticed.
+* @hjarrar
