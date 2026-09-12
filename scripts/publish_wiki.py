@@ -263,7 +263,10 @@ def write_wiki(root: Page, pages: list[Page], images: dict[str, str], wiki: Path
             old.unlink()
             print(f"  removed {old.name} (no longer in the tree)")
     for p in pages:
-        body = rewrite_images(rewrite_links(p, by_path), images)
+        # GitHub shows the page NAME as the page's title, so a body that also
+        # opens with "# Title" renders the heading twice. The name carries it.
+        body = _HEADING.sub("", p.body, count=1).lstrip("\n")
+        body = rewrite_images(rewrite_links(Page(p.archive_path, body), by_path), images)
         if p.is_index:
             body = body.rstrip() + children_list(p)
         body = body.rstrip() + footer(base, now)
