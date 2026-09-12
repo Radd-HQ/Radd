@@ -139,6 +139,19 @@ export async function openBrowser({ port, profile, width = 1440, height = 1000, 
         `credentials:"include",headers:{"Content-Type":"application/json"},` +
         `body:JSON.stringify(${JSON.stringify({ email, password })})});return r.status;})()`),
     hoverCapable: () => evalInPage(send, HOVER_CAPABLE_PROBE),
+    /** Raw CDP for what the helpers do not cover (extra headers, emulation). */
+    send,
+    /** PNG screenshot of the viewport (or the full page) to `path`. */
+    screenshot: async (path, { fullPage = false } = {}) => {
+      const { writeFile } = await import("node:fs/promises");
+      const params = { format: "png", captureBeyondViewport: fullPage };
+      if (fullPage) {
+        const { contentSize } = await send("Page.getLayoutMetrics");
+        params.clip = { x: 0, y: 0, width: contentSize.width, height: contentSize.height, scale: 1 };
+      }
+      const { data } = await send("Page.captureScreenshot", params);
+      await writeFile(path, Buffer.from(data, "base64"));
+    },
   };
 
   return { session, close: () => chrome.kill() };
