@@ -67,3 +67,21 @@ infrastructure, the maintainer's own name and public address, and the full
 narrative docs (PLAN.md, BUILD-LOG.md, docs/specs/) — the build's history is
 part of the product's story. The scrub replaced identities, not the record of
 what was built and why.
+
+## The GitHub wiki is a mirror
+
+github.com/radd-hq/radd/wiki carries the user guide, the developer guide and
+the release notes so that people without an account on project.radd-hq.com
+can read them (RADD-1137). It is a COPY: the pages are written on
+project.radd-hq.com under "Radd Documentation", and
+`scripts/publish_wiki.py` rebuilds the whole wiki from the RADD-721 export —
+images downloaded and committed beside the pages, links rewritten to wiki
+page names, a generated sidebar. Wiki editing is restricted to collaborators
+on GitHub, and a hand edit there does not survive the next run, which is the
+point. Run it after a release, from a machine holding the owner key:
+
+```bash
+git clone https://github.com/radd-hq/radd.wiki.git ../radd.wiki   # once
+python3 scripts/publish_wiki.py --wiki ../radd.wiki --push
+```
+
