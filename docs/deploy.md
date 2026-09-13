@@ -145,6 +145,16 @@ This is a stated v1 boundary, not an accident — the multi-replica path
 (queue-backed consumers, a shared realtime bus) is tracked upstream and a
 single node comfortably serves hundreds of users in the meantime.
 
+**Collaborative editing (spec 122) sharpens that rule.** A wiki page being
+co-edited is a room held in the API process's memory (`radd.modules.collab`):
+the Yjs document, who is connected, the seed grant, the debounced write to
+`page_collab_docs`. Every editor of one page must reach the SAME process, so
+with more than one API replica the whole of `/api/v1/collab/*` — the join and
+the WebSocket — needs sticky routing to one replica, or a shared relay in front
+of the rooms. Neither is built; one replica is the supported shape. The stored
+state survives a restart (a room resumes it when its `page_version` still
+matches the page's), so a rollout costs editors a reconnect, not their work.
+
 ## Multi-host storage (spec 102)
 
 The env storage settings above SEED one host row on first boot; afterwards

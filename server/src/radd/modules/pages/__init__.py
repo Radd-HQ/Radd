@@ -10,6 +10,7 @@ from radd.kernel import EntityRefSpec
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
 from radd.kernel import PermissionSpec
+from radd.kernel import SettingSpec
 
 from . import refs
 
@@ -39,6 +40,22 @@ plugin = RaddPlugin(
         ),
         PermissionSpec("page.delete", "space", "Hard-delete pages.", implied_by=("page.manage",)),
     ),
+    # Spec 122: the history window a collaborative session's autosaves obey.
+    settings_keys=(
+        SettingSpec(
+            key="page_collab_version_window_seconds",
+            type="int",
+            scopes=("instance",),
+            label="Wiki: history window for live co-editing",
+            description=(
+                "While a page is co-edited live, an autosave records a history "
+                "version only when the previous one is older than this many seconds "
+                "(the session's final save always does). A person's history is a "
+                "list of work sessions, not of pauses in typing."
+            ),
+            section="pages",
+        ),
+    ),
     # RADD-818: spec-92 resources ride the MANIFEST — the loader's clear()
     # wipes import-time registration, and the manifest is what survives it.
     access_resources=(_PAGE_SPEC,),
@@ -48,7 +65,7 @@ plugin = RaddPlugin(
         "edits with full version history + restore, issue↔page links, and live "
         "Postgres FTS search over titles/bodies. Spec 74 adds opt-in PUBLIC " "a public space is the Public role granted to Anyone on it (spec 121)."
     ),
-    depends_on=("events", "projects", "auth", "workflow", "items", "attachments", "labels", "comments", "notify", "access", "groups", "search", "teams"),
+    depends_on=("events", "projects", "auth", "workflow", "items", "attachments", "labels", "comments", "notify", "access", "groups", "search", "teams", "settings"),
     weak_depends=("ai",),
     routers=(router,),
     # RADD-923: a page and a space are subjects other modules name. Spec 118 is

@@ -14,7 +14,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError, ForbiddenError, NotFoundError
+from radd.hooks import hooks
 from radd.modules.events import service as events
+from radd.modules.settings import service as settings_service
+from radd.modules.settings.types import SettingKey
 
 from . import (
     backlinks,
@@ -25,6 +28,7 @@ from . import (
     watchers as page_watchers,
 )
 from .core import page_slugify
+from .hooks import PageBodyWriting, PageHook, PageVersionBumped
 from .models import Page, PageSpace, PageVersion
 
 if TYPE_CHECKING:  # deferred: auth loads before pages
@@ -299,6 +303,20 @@ async def create_page(
     return page
 
 
+async def _history_window_open(session: AsyncSession, page_id: uuid.UUID) -> bool:
+    """Spec 122: whether the page's newest history row is old enough for a
+    collaborative autosave to write another. No row yet = open."""
+    latest = (
+        await session.execute(
+            select(func.max(PageVersion.created_at)).where(PageVersion.page_id == page_id)
+        )
+    ).scalar_one_or_none()
+    if latest is None:
+        return True
+    window = await settings_service.resolve(session, SettingKey.PAGE_COLLAB_VERSION_WINDOW_SECONDS)
+    return (utcnow() - latest).total_seconds() >= int(window)
+
+
 async def update_page(
     session: AsyncSession,
     page_id: uuid.UUID,
@@ -308,7 +326,25 @@ async def update_page(
     permissions: "frozenset" = frozenset(),
 ) -> Page:
     page = await get_page(session, page_id)
-    if data.expected_version is not None and data.expected_version != page.version:
+    body_changes = data.body is not None and data.body != page.body
+    # Spec 122: whoever holds the page's LIVE document gets to refuse a body
+    # write that did not come from it, or to vouch for one that did. `pages`
+    # knows nothing about rooms — with no subscriber this is a no-op.
+    writing = PageBodyWriting(
+        page=page,
+        actor_id=actor_id,
+        collab_session=data.collab_session,
+        body_changes=body_changes,
+    )
+    if data.body is not None or data.collab_session is not None:
+        await hooks.dispatch(session, PageHook.BODY_WRITING, writing)
+    # A save from the room skips the optimistic check: the live document IS the
+    # current version, and the number the client last saw is stale by design.
+    if (
+        not writing.live_editor
+        and data.expected_version is not None
+        and data.expected_version != page.version
+    ):
         raise ConflictError(
             PageEntity.PAGE,
             reason=f"version conflict: page is at version {page.version}",
@@ -359,7 +395,15 @@ async def update_page(
         # not edits, and letting them consume version numbers collides with the
         # page's real imported history.
         quiet_write = importing and data.suppress_version
-        if not quiet_write:
+        # Spec 122: a collaborative session's autosaves coalesce — one history
+        # row per window (or per session, via `final`), never one per pause in
+        # typing. `version` still moves on every content change.
+        snapshot = not quiet_write and (
+            not writing.live_editor
+            or data.final
+            or await _history_window_open(session, page.id)
+        )
+        if snapshot:
             session.add(
                 PageVersion(
                     page_id=page.id,
@@ -377,6 +421,16 @@ async def update_page(
             changed.append("body")
         if not quiet_write:
             page.version += 1
+            await hooks.dispatch(
+                session,
+                PageHook.VERSION_BUMPED,
+                PageVersionBumped(
+                    page=page,
+                    collab_session=data.collab_session,
+                    body_changed="body" in changed,
+                    live_editor=writing.live_editor,
+                ),
+            )
         # Spec 117: a re-import credits the revision's real editor.
         page.updated_by = (
             data.author_id if (importing and data.author_id) else actor_id

@@ -111,6 +111,14 @@ class PageUpdate(BaseModel):
     #: construction passes occupy the version numbers the page's REAL imported
     #: history needs, and writing that history then collides on (page, version).
     suppress_version: bool = False
+    #: Spec 122. The collaborative session (from `POST /collab/pages/{id}/join`)
+    #: this save was serialised FROM. When it names a connected editor of the
+    #: page's live document the `expected_version` check is skipped — the room
+    #: IS the current version — and the history window applies.
+    collab_session: uuid.UUID | None = None
+    #: Spec 122. The session's last save: always writes a `page_versions` row,
+    #: whatever the window says.
+    final: bool = False
 
 
 class PageBacklink(BaseModel):

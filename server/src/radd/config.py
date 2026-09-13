@@ -133,6 +133,16 @@ class Settings(BaseSettings):
     realtime_send_timeout: float = Field(default=2.0, gt=0)
     realtime_send_concurrency: int = Field(default=32, gt=0)
 
+    # Collaborative editing (see radd/modules/collab, spec 122). Rooms are
+    # in-process: one API replica, or sticky routing of /api/v1/collab/*.
+    collab_seed_grant_seconds: float = Field(default=20.0, gt=0)  # a seed grant nobody used lapses
+    collab_persist_debounce_seconds: float = Field(default=1.0, gt=0)
+    collab_room_idle_seconds: float = Field(default=60.0, gt=0)  # empty room → dropped from memory
+    collab_frame_auth_seconds: float = Field(default=5.0, gt=0)  # session re-check cadence on inbound frames
+    # Scalar cascade default (instance scope, owned by `pages`): a collab save
+    # writes a page_versions row only when the last one is older than this.
+    page_collab_version_window_seconds: int = 300
+
     # Search indexer (see radd/modules/search)
     search_poll_interval: float = 1.0
     search_batch: int = 200
@@ -549,6 +559,7 @@ class Settings(BaseSettings):
         "radd.modules.sso",
         "radd.modules.ldap",
         "radd.modules.pages",
+        "radd.modules.collab",
         "radd.modules.ai",
         "radd.modules.mcp",
         "radd.modules.forgejo",

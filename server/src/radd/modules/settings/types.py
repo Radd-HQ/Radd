@@ -95,6 +95,9 @@ class SettingKey(StrEnum):
     CSAT_ENABLED = "csat_enabled"
     ESTIMATION_POINTS = "estimation_points"
     ITEM_DEFAULT_VISIBILITY = "item_default_visibility"  # spec 121
+    # Spec 122: a collaborative session writes a history row only when the
+    # previous one is older than this many seconds (or the save is final).
+    PAGE_COLLAB_VERSION_WINDOW_SECONDS = "page_collab_version_window_seconds"
     # The ack's admin-editable body (spec 47/62, RADD-1045) — Settings → Email.
     MAIL_ACK_BODY = "mail_ack_body"
     # Directory settings page + automatic user sync (spec 85) — instance-only.

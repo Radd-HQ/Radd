@@ -1,6 +1,6 @@
 # Spec 122 — Collaborative editing: one live document, many editors
 
-**Status:** proposed. **Epic:** RADD-676. **Depends on:** spec 43 (wiki), spec 27
+**Status:** building (server half RADD-1161 landed; SPA half in progress). **Epic:** RADD-676. **Depends on:** spec 43 (wiki), spec 27
 (realtime), spec 54 / RADD-745 (the house editor chrome over Milkdown).
 
 ## What is wrong
@@ -99,6 +99,34 @@ with 409 while they edit and succeeds after both leave; the version history
 grew by one row for the session, not one per keystroke burst; reload
 mid-session rejoins with the document intact; a server restart with a stored
 state resumes it.
+
+## Changed while building (server half, RADD-1161)
+
+- **Two hooks, not one.** The pre-write hook (`page.body_writing`) is as
+  specified; a second, `page.version_bumped`, was needed so the room can
+  track the version its stored state corresponds to after a save it made,
+  and so a body write by something else — only possible while no editor is
+  connected, but observers may be — RESETS the room (clients closed `4409`,
+  stored state discarded) instead of leaving a stale document for the next
+  editor to sync and then autosave over the new markdown. The version-mismatch
+  rule at room open covers restarts; this covers the in-memory room.
+- **The seed grant goes to editors only.** An observer cannot send the update
+  that would seed, so granting it one would waste the grant's window.
+- **Auth on inbound frames is throttled** (`collab_frame_auth_seconds`, 5 s):
+  a session lookup per keystroke frame would put the database behind the
+  cursor. The absolute `realtime_session_refresh_seconds` deadline is kept
+  exactly as spec 27 has it.
+- **Persistence is serialised**: a flush racing the debounce timer waits for
+  the save in flight; rescheduling cannot cancel a save under way.
+- **The room's observer filter lives in the channel adapter**, not in `YRoom`:
+  `YRoom.serve` applies every sync frame it is handed, so the role is enforced
+  by what the iterator yields.
+- Wire: `POST /api/v1/collab/pages/{id}/join` → `{session, role, seed,
+  page_version}`; `WS /api/v1/collab/pages/{id}?session=`; close codes `4401`
+  (cookie), `4403` (session unknown / not yours / room gone — rejoin), `4409`
+  (document replaced — rejoin). The saver must send its `final` save BEFORE
+  closing its socket, or the save is an ordinary one (`expected_version`
+  enforced, a row per save).
 
 ## Rejected
 
