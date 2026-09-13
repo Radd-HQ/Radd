@@ -145,7 +145,11 @@ export function useRoadmapEditing(
         kind: "patch",
         label:
           label ?? `Edit ${patches.length === 1 ? "1 item" : `${patches.length} items`}`,
-        patches: patches.map((entry) => ({ itemId: entry.itemId, after: entry.patch })),
+        patches: patches.map((entry) => ({
+          itemId: entry.itemId,
+          after: entry.patch,
+          insert: entry.insert,
+        })),
       });
       onSuccess?.();
     },

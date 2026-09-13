@@ -95,6 +95,10 @@ export function useUpdateItem() {
 export interface RoadmapDatePatch {
   itemId: string;
   patch: ItemUpdate;
+  /** RADD-1151: the full item when the roadmap's base fetch lacks it (an
+   *  unscheduled child a plan verb brings in), so the draft can DRAW it
+   *  before Save — the tray drop's INSERT, for plans. */
+  insert?: Item;
   /** Merged into every cached copy of the item for the optimistic paint. */
   optimistic: Partial<Item>;
 }

@@ -1,3 +1,5 @@
+import type { RoadmapPlanPatch } from "./model/planning";
+import type { RoadmapDatePatch } from "../../lib/item-mutations";
 import {
   useCallback,
   useEffect,
@@ -355,6 +357,24 @@ export function RoadmapSurface({
     [fetchEpicChildren, timeloggingOn, queryClient, durationConfig.hoursPerDay],
   );
 
+  // RADD-1151: a plan's patches must DRAW before Save like a tray drop does.
+  // The roadmap fetch loads scheduled items only, so an epic's unscheduled
+  // children exist nowhere in the base set — each such patch carries the
+  // loaded child as the draft-wave INSERT, and the row appears at once.
+  const withInserts = useCallback(
+    (patches: RoadmapPlanPatch[], children: Item[]): RoadmapDatePatch[] => {
+      const loaded = new Set(items.map((item) => item.id));
+      const byId = new Map(children.map((child) => [child.id, child]));
+      return patches.map(({ itemId, patch }) => ({
+        itemId,
+        patch,
+        optimistic: { ...patch },
+        insert: loaded.has(itemId) ? undefined : byId.get(itemId),
+      }));
+    },
+    [items],
+  );
+
   const handleAutoSchedule = useCallback(
     async (row: RoadmapRow) => {
       const loaded = await loadChildrenWithEstimates(row);
@@ -377,7 +397,7 @@ export function RoadmapSurface({
         row.item,
       );
       editing.applyPatches(
-        plan.patches.map(({ itemId, patch }) => ({ itemId, patch, optimistic: { ...patch } })),
+        withInserts(plan.patches, children),
         () => {
           pushToast(`Scheduled ${plan.scheduledCount} item${plan.scheduledCount === 1 ? "" : "s"}`);
           // Spec 82: once the date unit has landed, rewrite ranks to the
@@ -389,7 +409,7 @@ export function RoadmapSurface({
         `Auto-schedule ${row.item.key}'s children`,
       );
     },
-    [loadChildrenWithEstimates, durationConfig.hoursPerDay, editing],
+    [loadChildrenWithEstimates, durationConfig.hoursPerDay, editing, withInserts],
   );
 
   // "Bring children into roadmap" — the AS-IS counterpart to Auto-schedule:
@@ -413,12 +433,12 @@ export function RoadmapSurface({
       }
       const count = plan.importedCount;
       editing.applyPatches(
-        plan.patches.map(({ itemId, patch }) => ({ itemId, patch, optimistic: { ...patch } })),
+        withInserts(plan.patches, loaded.children),
         () => pushToast(`Brought ${count} ${count === 1 ? "child" : "children"} into the roadmap`),
         `Bring ${row.item.key}'s children in`,
       );
     },
-    [loadChildrenWithEstimates, editing],
+    [loadChildrenWithEstimates, editing, withInserts],
   );
 
   // Collapsed epics hide their child rows (chevron state is per-view).
