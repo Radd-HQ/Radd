@@ -488,7 +488,72 @@ async def db_session():
     maker = async_sessionmaker(engine, expire_on_commit=False)
     async with maker() as session:
         yield session
+        await session.rollback()  # flushed rows never persist
     await engine.dispose()
+
+
+async def test_negated_relations_include_items_without_the_relation(db_session):
+    """RADD-1139: `assignee != x` / `NOT IN` are the complement of the positive
+    form, so the unassigned item is on the negative side rather than lost to
+    both; `!= none` still means assigned. The same rule rides `type`."""
+    from radd.modules.auth.models import User
+    from radd.modules.auth.types import InstanceRole
+    from radd.modules.items import service as items
+    from radd.modules.items.filters import ItemListFilters
+    from radd.modules.items.schemas import ItemCreate, ItemUpdate
+    from radd.modules.itemtypes import service as itemtypes
+    from radd.modules.projects import service as projects
+    from radd.modules.projects.schemas import ProjectCreate
+
+    actor = User(
+        email=f"neg-{uuid.uuid4().hex[:8]}@example.com",
+        name="Negation Tester",
+        instance_role=InstanceRole.ADMIN.value,
+    )
+    db_session.add(actor)
+    await db_session.flush()
+    project = await projects.create_project(
+        db_session, ProjectCreate(key=f"NEG{uuid.uuid4().hex[:4].upper()}", name="Negation")
+    )
+    types = {t.name: t for t in await itemtypes.list_types(db_session, project.id)}
+    bug, task = types["Bug"], types["Task"]
+    for title, assignee, type_ in (
+        ("mine bug", actor.id, bug.id),
+        ("mine task", actor.id, task.id),
+        ("unassigned untyped", None, None),
+    ):
+        created = await items.create_item(
+            db_session,
+            ItemCreate(project_id=project.id, title=title, assignee_id=assignee, type_id=type_),
+            actor,
+        )
+        if type_ is None:  # creation falls back to the default type; an explicit null clears
+            await items.update_item(db_session, created.id, ItemUpdate(type_id=None), actor)
+
+    async def titles(q: str) -> set[str]:
+        rows = await items.list_items(
+            db_session,
+            actor=actor,
+            filters=ItemListFilters(project_id=project.id),
+            q=q,
+            limit=50,
+            offset=0,
+        )
+        return {r.title for r in rows}
+
+    everything = {"mine bug", "mine task", "unassigned untyped"}
+    assert await titles(f"assignee = {actor.email}") == {"mine bug", "mine task"}
+    assert await titles(f"assignee != {actor.email}") == {"unassigned untyped"}
+    assert await titles(f"assignee NOT IN ({actor.email})") == {"unassigned untyped"}
+    assert await titles("assignee != me") == {"unassigned untyped"}
+    assert await titles("assignee != none") == {"mine bug", "mine task"}
+    assert await titles("assignee NOT IN (none)") == {"mine bug", "mine task"}
+    assert await titles("type = Bug") == {"mine bug"}
+    assert await titles("type != Bug") == {"mine task", "unassigned untyped"}
+    assert await titles("type NOT IN (Bug, Task)") == {"unassigned untyped"}
+    for positive, negative in (("assignee = me", "assignee != me"), ("type = Bug", "type != Bug")):
+        assert await titles(positive) | await titles(negative) == everything
+        assert await titles(positive) & await titles(negative) == set()
 
 
 async def test_compile_smoke_executes_against_the_database(db_session):

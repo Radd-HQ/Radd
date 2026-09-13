@@ -1,6 +1,10 @@
 """Compilers for the builtin SLQ fields (catalog.SlqField). Relations become
 correlated IN/EXISTS subqueries — never joins — so they stay correct under OR
 and NOT. Labels use the pre-resolved name->id map from the context.
+
+Nullable to-one relations (assignee/reporter/team/type/cycle/release) pass
+`polarity(..., nullable=True)`: their negative forms are the complement of
+the positive ones, so `assignee != x` includes the unassigned (RADD-1139).
 """
 
 from datetime import datetime, timedelta
@@ -87,13 +91,13 @@ def user_match(
 def _assignee(ctx: Context, node: Condition) -> ColumnElement[bool]:
     if isinstance(node, EmptyCheck):
         return polarity(node, WorkItem.assignee_id.is_(None))
-    return polarity(node, user_match(ctx, node, WorkItem.assignee_id))
+    return polarity(node, user_match(ctx, node, WorkItem.assignee_id), nullable=True)
 
 
 def _reporter(ctx: Context, node: Condition) -> ColumnElement[bool]:
     if isinstance(node, EmptyCheck):
         return polarity(node, WorkItem.reporter_id.is_(None))
-    return polarity(node, user_match(ctx, node, WorkItem.reporter_id))
+    return polarity(node, user_match(ctx, node, WorkItem.reporter_id), nullable=True)
 
 
 def _team(ctx: Context, node: Condition) -> ColumnElement[bool]:
@@ -108,7 +112,7 @@ def _team(ctx: Context, node: Condition) -> ColumnElement[bool]:
             names.append(plain(value, node.field))
     if names:
         conditions.append(WorkItem.team_id.in_(select(Team.id).where(Team.name.in_(names))))
-    return polarity(node, or_(*conditions))
+    return polarity(node, or_(*conditions), nullable=True)
 
 
 def _type(ctx: Context, node: Condition) -> ColumnElement[bool]:
@@ -123,7 +127,7 @@ def _type(ctx: Context, node: Condition) -> ColumnElement[bool]:
             names.append(plain(value, node.field))
     if names:
         conditions.append(WorkItem.type_id.in_(itemtypes_service.ids_by_names(names)))
-    return polarity(node, or_(*conditions))
+    return polarity(node, or_(*conditions), nullable=True)
 
 
 def _label(ctx: Context, node: Condition) -> ColumnElement[bool]:
@@ -212,7 +216,7 @@ def _cycle(ctx: Context, node: Condition) -> ColumnElement[bool]:
             names.append(plain(value, node.field))
     if names:
         conditions.append(WorkItem.cycle_id.in_(cycles_service.ids_by_names(names)))
-    return polarity(node, or_(*conditions))
+    return polarity(node, or_(*conditions), nullable=True)
 
 
 def _past_cycle(ctx: Context, node: Condition) -> ColumnElement[bool]:
@@ -246,7 +250,7 @@ def _release(ctx: Context, node: Condition) -> ColumnElement[bool]:
             versions.append(plain(value, node.field))
     if versions:
         conditions.append(WorkItem.release_id.in_(releases_service.ids_by_versions(versions)))
-    return polarity(node, or_(*conditions))
+    return polarity(node, or_(*conditions), nullable=True)
 
 
 def _block_link(*, incoming: bool, target_ids: ColumnElement | None = None) -> ColumnElement[bool]:

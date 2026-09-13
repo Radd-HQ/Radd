@@ -121,10 +121,14 @@ async def test_epic_subfields_match_the_epic_itself_and_its_descendants(db, acto
     assert await _titles(db, actor, project, "epic.priority = blocker") == tree
     assert await _titles(db, actor, project, "epic.assignee = me") == tree
     assert await _titles(db, actor, project, f"epic.assignee = {actor.email}") == tree
-    # The unassigned epic and its child; NULL semantics still keep epicless items
-    # (`loner`) out of both IS EMPTY and !=.
+    # IS EMPTY is a POSITIVE predicate over the epic row, so the epicless
+    # `loner` is out; the negative `!=` reads plainly and takes it (RADD-1139).
     assert await _titles(db, actor, project, "epic.assignee IS EMPTY") == {"epic2", "issue2"}
-    assert await _titles(db, actor, project, "epic.priority != blocker") == {"epic2", "issue2"}
+    assert await _titles(db, actor, project, "epic.priority != blocker") == {
+        "epic2",
+        "issue2",
+        "loner",
+    }
     assert await _titles(db, actor, project, "epic.priority IN (blocker, normal)") == tree | {
         "epic2",
         "issue2",
@@ -134,7 +138,8 @@ async def test_epic_subfields_match_the_epic_itself_and_its_descendants(db, acto
 async def test_unfinished_epics_come_back_with_their_work(db, actor):
     """The motivating case: `epic.category != done` must not silently drop the
     epic itself — under the old strict reading its epic id was NULL, so even the
-    negated form skipped it."""
+    negated form skipped it. Nor the work under NO epic (RADD-1139): "not under
+    a finished epic" is plainly true of `loner`."""
     project, states = await _project_with_states(db)
     epic, *_ = await _ladder(db, actor, project, states)
     await items.update_item(db, epic.id, ItemUpdate(state_id=states["Done"].id), actor)
@@ -144,7 +149,40 @@ async def test_unfinished_epics_come_back_with_their_work(db, actor):
         "issue",
         "subtask",
     }
-    assert await _titles(db, actor, project, "epic.category != done") == {"epic2", "issue2"}
+    assert await _titles(db, actor, project, "epic.category != done") == {
+        "epic2",
+        "issue2",
+        "loner",
+    }
+
+
+@pytest.mark.parametrize(
+    ("positive", "negative"),
+    [
+        ("epic.category = done", "epic.category != done"),
+        ("epic.category IN (done)", "epic.category NOT IN (done)"),
+        ("epic.state = 'In Progress'", "epic.state != 'In Progress'"),
+        ("epic.state IN ('In Progress', Done)", "epic.state NOT IN ('In Progress', Done)"),
+        ("parent.priority = blocker", "parent.priority != blocker"),
+        ("parent.priority IN (blocker, high)", "parent.priority NOT IN (blocker, high)"),
+        ("epic.assignee = me", "epic.assignee != me"),
+    ],
+)
+async def test_positive_and_negative_forms_partition_the_project(db, actor, positive, negative):
+    """RADD-1139: a negative predicate over a to-one relation is the complement
+    of its positive form — an item with no epic/parent is on the negative side,
+    never lost to both. Union = every item, intersection = nothing."""
+    project, states = await _project_with_states(db)
+    epic, *_ = await _ladder(db, actor, project, states)
+    await items.update_item(db, epic.id, ItemUpdate(state_id=states["Done"].id), actor)
+    everything = await _titles(db, actor, project, "")
+    assert everything == {"epic", "issue", "subtask", "epic2", "issue2", "loner"}
+
+    matched = await _titles(db, actor, project, positive)
+    rest = await _titles(db, actor, project, negative)
+    assert matched | rest == everything
+    assert matched & rest == set()
+    assert "loner" in rest  # the relation-less item reads as "not <that>"
 
 
 async def test_bare_epic_key_none_and_empty(db, actor):
@@ -154,8 +192,9 @@ async def test_bare_epic_key_none_and_empty(db, actor):
 
     # `epic = KEY` is the whole tree, root included.
     assert await _titles(db, actor, project, f"epic = {epic_key}") == {"epic", "issue", "subtask"}
-    # != still requires an epic (NULL semantics) — the other ladder, root included.
-    assert await _titles(db, actor, project, f"epic != {epic_key}") == {"epic2", "issue2"}
+    # != is everything NOT in that tree — the other ladder, root included, and
+    # the work no epic governs (RADD-1139).
+    assert await _titles(db, actor, project, f"epic != {epic_key}") == {"epic2", "issue2", "loner"}
     # Only work no epic governs; an epic is never "epicless" now.
     assert await _titles(db, actor, project, "epic IS EMPTY") == {"loner"}
     assert await _titles(db, actor, project, "epic = none") == {"loner"}

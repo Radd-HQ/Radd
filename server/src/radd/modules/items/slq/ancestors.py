@@ -14,8 +14,11 @@ Sub-field conditions (`.state` / `.category` / `.assignee` / `.priority`)
 mirror the item-level value semantics (state matching adds case-insensitivity
 per the spec) and compile to `<ancestor id> IN (SELECT id FROM work_items
 WHERE <predicate>)` — correlated comparisons, never joins, so they stay
-correct under OR/NOT with the usual SQL NULL rule: `!=`/`NOT IN` don't match
-items without the ancestor. Bare keys resolve at COMPILE time through the
+correct under OR/NOT. Negative forms read plainly (RADD-1139): `!=`/`NOT IN`
+are the COMPLEMENT of the positive form, so `epic.category != done` includes
+work under no epic, while a positive predicate (`epic.assignee IS EMPTY`
+included) never matches an item without the ancestor — the two sides of a
+comparison partition the rows. Bare keys resolve at COMPILE time through the
 spec-68 alias-aware resolver (`compile_query` pre-pass -> Context); an
 unknown key is a positioned SlqError (-> 422). Filter-only: none of these
 fields are sortable (catalog), so ORDER BY rejects them like other
@@ -142,7 +145,7 @@ def _bare(ctx: Context, node: Condition, *, epic: bool) -> ColumnElement[bool]:
         ids.append(resolved)
     if ids:
         conditions.append(target.in_(ids))
-    return polarity(node, or_(*conditions))
+    return polarity(node, or_(*conditions), nullable=True)
 
 
 # --- sub-fields: a predicate over the ancestor row, correlated through its id ---
@@ -175,7 +178,7 @@ def _sub_condition(
 ) -> ColumnElement[bool]:
     ancestor = aliased(WorkItem)
     matching = select(ancestor.id).where(predicate(ctx, node, ancestor))
-    return polarity(node, _target(epic=epic).in_(matching))
+    return polarity(node, _target(epic=epic).in_(matching), nullable=True)
 
 
 def _compiler(*, epic: bool, predicate: _Predicate):

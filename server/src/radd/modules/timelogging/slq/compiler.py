@@ -159,7 +159,9 @@ def _rebase(node: Condition, field: str) -> Condition:
 
 
 def _issue(ctx: _Ctx, node: Condition) -> ColumnElement[bool]:
-    """Bare `issue`: EMPTY (general worklogs, spec 59) or a specific key."""
+    """Bare `issue`: EMPTY (general worklogs, spec 59) or a specific key.
+    `issue != DEV-1` reads plainly and includes general worklogs (RADD-1139),
+    like every other nullable to-one relation."""
     if isinstance(node, EmptyCheck):
         clause = Worklog.item_id.is_(None)
         return not_(clause) if node.negated else clause
@@ -171,7 +173,7 @@ def _issue(ctx: _Ctx, node: Condition) -> ColumnElement[bool]:
         if not project_key or not number.isdigit():
             raise SlqError(f"'{key}' is not an issue key", node.field_position)
         conditions.append(and_(Project.key == project_key, WorkItem.number == int(number)))
-    return polarity(node, Worklog.item_id.in_(matching.where(or_(*conditions))))
+    return polarity(node, Worklog.item_id.in_(matching.where(or_(*conditions))), nullable=True)
 
 
 def _project(ctx: _Ctx, node: Condition) -> ColumnElement[bool]:
@@ -182,7 +184,7 @@ def _project(ctx: _Ctx, node: Condition) -> ColumnElement[bool]:
         return not_(clause) if node.negated else clause
     keys = [plain(value, node.field).upper() for value in values_of(node)]
     matching = select(Project.id).where(Project.key.in_(keys))
-    return polarity(node, Worklog.project_id.in_(matching))
+    return polarity(node, Worklog.project_id.in_(matching), nullable=True)
 
 
 def _author(ctx: _Ctx, node: Condition) -> ColumnElement[bool]:
@@ -211,7 +213,7 @@ def _category(ctx: _Ctx, node: Condition) -> ColumnElement[bool]:
     matching = select(WorkCategory.id).where(
         or_(*[WorkCategory.name.ilike(name) for name in names])
     )
-    return polarity(node, Worklog.category_id.in_(matching))
+    return polarity(node, Worklog.category_id.in_(matching), nullable=True)
 
 
 def _worked_on(ctx: _Ctx, node: Condition) -> ColumnElement[bool]:

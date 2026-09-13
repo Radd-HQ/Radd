@@ -86,8 +86,25 @@ def negated(node: Condition) -> bool:
     return False
 
 
-def polarity(node: Condition, clause: ColumnElement[bool]) -> ColumnElement[bool]:
-    return not_(clause) if negated(node) else clause
+def polarity(
+    node: Condition, clause: ColumnElement[bool], *, nullable: bool = False
+) -> ColumnElement[bool]:
+    """The clause, or its negation when the condition is a negative form
+    (`!=` / `NOT IN` / `IS NOT EMPTY`).
+
+    `nullable=True` marks a to-ONE relation the row may lack (assignee, team,
+    parent, the epic, …). There the positive clause is NULL for such a row, so
+    a plain `NOT` would drop it from BOTH sides. The negative form is instead
+    the COMPLEMENT of the positive one (`IS NOT TRUE`), which is the plain
+    reading (RADD-1139): `assignee != x` includes the unassigned,
+    `epic.category != done` includes work under no epic, and `= x` / `!= x`
+    partition the rows. Only positive predicates stay false for the relation-
+    less row — which is also why `assignee != none` still means "assigned":
+    its positive form is `IS NULL`, never NULL itself, and the complement of
+    the unassigned is the assigned."""
+    if not negated(node):
+        return clause
+    return clause.is_not(True) if nullable else not_(clause)
 
 
 def is_sentinel(value: Value, sentinel: str) -> bool:

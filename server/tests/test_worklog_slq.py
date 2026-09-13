@@ -153,7 +153,10 @@ async def test_delegated_epic_filter_agrees_with_group_by_epic(db):
     child = await items_service.create_item(
         db, ItemCreate(project_id=project.id, title="Child", parent_id=epic.id), actor
     )
-    on_epic, on_child = (
+    loner = await items_service.create_item(
+        db, ItemCreate(project_id=project.id, title="Under no epic"), actor
+    )
+    on_epic, on_child, on_loner = (
         Worklog(
             item_id=item.id,
             project_id=project.id,
@@ -161,14 +164,22 @@ async def test_delegated_epic_filter_agrees_with_group_by_epic(db):
             time_spent_seconds=3600,
             worked_on=date(2026, 7, 22),
         )
-        for item in (epic, child)
+        for item in (epic, child, loner)
     )
-    db.add_all([on_epic, on_child])
+    db.add_all([on_epic, on_child, on_loner])
     await db.flush()
     epic_key = (await items_service.get_item(db, epic.id, actor)).key
 
     assert await _run(db, f"issue.epic = {epic_key}", actor) == {on_epic.id, on_child.id}
-    assert await _run(db, "issue.epic.category != done", actor) == {on_epic.id, on_child.id}
+    # The delegated negative inherits the item dialect's plain reading
+    # (RADD-1139): time on work under NO epic is "not under a finished epic".
+    assert await _run(db, "issue.epic.category = done", actor) == set()
+    assert await _run(db, "issue.epic.category != done", actor) == {
+        on_epic.id,
+        on_child.id,
+        on_loner.id,
+    }
+    assert await _run(db, f"issue.epic != {epic_key}", actor) == {on_loner.id}
     # And the grouping seam the timesheet uses reports the same attribution.
     epics = await items_service.epics_for_items(db, [epic.id, child.id])
     assert {ref.key for ref in epics.values()} == {epic_key}
