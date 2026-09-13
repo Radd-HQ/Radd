@@ -35,6 +35,10 @@ _SLQ_DOC = (
 _KIND_VALUES = [kind.value for kind in ItemKind]
 _PRIORITY_VALUES = [priority.value for priority in Priority]
 
+#: The plain-date write fields (ISO `YYYY-MM-DD`; null clears on update). One
+#: tuple feeds both the schema and the handler's parsing.
+DATE_FIELDS = ("start_date", "target_date")
+
 
 def key_property() -> dict[str, Any]:
     return {"type": "string", "description": "Item key, e.g. TD-42."}
@@ -101,6 +105,15 @@ def _item_write_properties(custom_field_properties: Mapping[str, Any]) -> dict[s
             "type": "array",
             "items": {"type": "string"},
             "description": "Full replacement label set (labels are created on demand).",
+        },
+        **{
+            field: {
+                "type": ["string", "null"],
+                "format": "date",
+                "description": f"{field.replace('_', ' ').capitalize()} as YYYY-MM-DD; "
+                "null clears it (update only).",
+            }
+            for field in DATE_FIELDS
         },
         "custom_fields": _custom_fields_schema(custom_field_properties),
     }

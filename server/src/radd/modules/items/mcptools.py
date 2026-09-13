@@ -15,6 +15,7 @@ pre-move code).
 
 import uuid
 from collections.abc import Mapping
+from datetime import date
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,6 +35,7 @@ from . import service as items_service
 from .enums import ItemEntity, ItemKind, Priority
 from .filters import ItemListFilters
 from .mcpschemas import (
+    DATE_FIELDS,
     GET_ITEM_COMMENTS_TAIL,
     comment_item_schema,
     create_item_schema,
@@ -108,6 +110,10 @@ def _item_write_fields(args: Mapping[str, Any]) -> dict[str, Any]:
         values["labels"] = [str(label) for label in args["labels"]]
     if args.get("custom_fields") is not None:
         values["custom_fields"] = dict(args["custom_fields"])
+    for field in DATE_FIELDS:  # present-and-null clears, like assignee_email
+        if field in args:
+            raw = args[field]
+            values[field] = date.fromisoformat(str(raw)) if raw is not None else None
     return values
 
 
