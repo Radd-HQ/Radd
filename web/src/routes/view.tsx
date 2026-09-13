@@ -1038,7 +1038,9 @@ export function ViewPage() {
             align="end"
             items={[
               // The old second band's one-tab "Reports" nav, folded in here.
-              ...(project
+              // Spec 121: not for a visitor — the reporting service scopes by
+              // readable projects only, so its aggregates would count hidden rows.
+              ...(project && authenticated
                 ? [
                     {
                       kind: "action" as const,

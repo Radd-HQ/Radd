@@ -6,7 +6,7 @@ import { Entity, invalidateEntities } from "../../lib/cache";
 import { apiCommentPath, apiParentCommentsPath } from "../../lib/constants";
 import { relativeTime } from "../../lib/dates";
 import { pageCommentFeedQuery, usersQuery } from "../../lib/queries";
-import { useCurrentUser } from "../../lib/hooks";
+import { useCurrentUser, useIsAuthenticated } from "../../lib/hooks";
 import { LazyRichEditor as RichEditor } from "../editor/LazyRichEditor";
 import { LazyRichViewer as RichViewer } from "../editor/LazyRichViewer";
 import { Avatar } from "../Avatar";
@@ -34,7 +34,7 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
   const queryClient = useQueryClient();
   const history = useInfiniteQuery(pageCommentFeedQuery(pageId));
   const comments = chronologicalComments(history.data?.pages);
-  const { data: users } = useQuery(usersQuery);
+  const { data: users } = useQuery({ ...usersQuery, enabled: useIsAuthenticated() });
   const [body, setBody] = useState("");
   const [composerKey, setComposerKey] = useState(0);
   const [confirmDialog, confirm] = useConfirm();

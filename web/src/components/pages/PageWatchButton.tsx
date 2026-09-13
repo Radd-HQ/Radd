@@ -1,3 +1,4 @@
+import { useIsAuthenticated } from "../../lib/hooks";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, BellOff } from "lucide-react";
 import { api } from "../../lib/api";
@@ -14,7 +15,7 @@ import { pageWatchQuery, queryKeys } from "../../lib/queries";
  */
 export function PageWatchButton({ pageId }: { pageId: string }) {
   const queryClient = useQueryClient();
-  const { data } = useQuery(pageWatchQuery(pageId));
+  const { data } = useQuery({ ...pageWatchQuery(pageId), enabled: useIsAuthenticated() });
   const watching = data?.watching ?? false;
 
   const toggle = useMutation({

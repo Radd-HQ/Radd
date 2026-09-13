@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { ContextMenu } from "../ContextMenu";
 import { RoutePath } from "../../lib/constants";
-import { usePermissions } from "../../lib/hooks";
+import { usePermissions, useIsAuthenticated } from "../../lib/hooks";
 import { projectByIdQuery, projectByKeyQuery, viewQuery } from "../../lib/queries";
 import { useNavFacts } from "../../lib/nav-facts";
 import { pinKey, useNavPins, type NavPin } from "../../lib/topbar-prefs";
@@ -80,6 +80,7 @@ function tabIcon({ pin, view }: PinnedEntry): LucideIcon {
  */
 export function PinsBar() {
   const { pins, toggle, rename } = useNavPins();
+  const authenticated = useIsAuthenticated(); // spec 121 (RADD-1149)
   const pinnedViewIds = pins.filter(pin => pin.kind === "view").map(pin => pin.id);
   const viewReads = useQueries({ queries: pinnedViewIds.map(viewQuery) });
   const views = viewReads.flatMap(query => query.data ? [query.data] : []);
@@ -126,15 +127,17 @@ export function PinsBar() {
         aria-label="Pinned"
         className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
       >
-        <Link
-          to={RoutePath.home}
-          activeOptions={{ exact: true }}
-          activeProps={{ className: `${tabBase} ${tabActive}` }}
-          inactiveProps={{ className: tabBase }}
-        >
-          <House size={13} aria-hidden />
-          My Work
-        </Link>
+        {authenticated && (
+          <Link
+            to={RoutePath.home}
+            activeOptions={{ exact: true }}
+            activeProps={{ className: `${tabBase} ${tabActive}` }}
+            inactiveProps={{ className: tabBase }}
+          >
+            <House size={13} aria-hidden />
+            My Work
+          </Link>
+        )}
         {pinned.map((entry) => {
           const { pin, view } = entry;
           const key = view ? projectKey(view.project_id) : undefined;

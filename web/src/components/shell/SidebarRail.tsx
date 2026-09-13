@@ -80,6 +80,7 @@ function RailInbox() {
 
 export function SidebarRail({ pluginNav }: { pluginNav: { key: string; path: string; label: string }[] }) {
   const navFacts = useNavFacts();
+  const authenticated = useIsAuthenticated(); // spec 121: the personal rows are an account's (RADD-1149)
   return (
     <nav className="flex flex-1 flex-col items-center gap-1 overflow-y-auto py-2" aria-label="Primary">
       <button
@@ -92,9 +93,9 @@ export function SidebarRail({ pluginNav }: { pluginNav: { key: string; path: str
         <Search size={17} aria-hidden />
       </button>
 
-      <RailInbox />
+      {authenticated && <RailInbox />}
 
-      {DESTINATIONS.filter((d) => navFacts.forPath(d.to)).map((d) => (
+      {DESTINATIONS.filter((d) => (d.to === RoutePath.home ? authenticated : navFacts.forPath(d.to))).map((d) => (
         <Link
           key={d.to}
           to={d.to}
@@ -121,11 +122,13 @@ export function SidebarRail({ pluginNav }: { pluginNav: { key: string; path: str
         </Link>
       ))}
 
-      <div className="mt-auto pt-2">
-        <Link to={RoutePath.settings} className={railButtonClasses} title="Settings" aria-label="Settings">
-          <Settings size={17} aria-hidden />
-        </Link>
-      </div>
+      {authenticated && (
+        <div className="mt-auto pt-2">
+          <Link to={RoutePath.settings} className={railButtonClasses} title="Settings" aria-label="Settings">
+            <Settings size={17} aria-hidden />
+          </Link>
+        </div>
+      )}
     </nav>
   );
 }

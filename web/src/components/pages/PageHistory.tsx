@@ -1,3 +1,4 @@
+import { useIsAuthenticated } from "../../lib/hooks";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArchiveRestore, ChevronLeft, GitCompare } from "lucide-react";
@@ -25,7 +26,7 @@ export function PageHistory({ page, canWrite }: { page: Page; canWrite: boolean 
   // offers exactly that rather than making them pick two ends.
   const [diffing, setDiffing] = useState<number | null>(null);
   const versions = useQuery(pageVersionsQuery(page.id));
-  const { data: users } = useQuery(usersQuery);
+  const { data: users } = useQuery({ ...usersQuery, enabled: useIsAuthenticated() });
 
   if (versions.isPending) return <Spinner label="Loading history…" />;
   if (versions.isError) {

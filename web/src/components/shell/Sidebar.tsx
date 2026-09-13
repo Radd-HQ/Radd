@@ -99,7 +99,8 @@ export function Sidebar() {
   const cycles = useCycleDirectory({ includeCompleted: false });
   const cycleSummary = useQuery(cycleSummaryQuery());
   // Spec 121: dashboards are an account's surface; a visitor's rail skips the fetch.
-  const dashboards = useDashboardDirectory(useIsAuthenticated());
+  const authenticated = useIsAuthenticated();
+  const dashboards = useDashboardDirectory(authenticated);
   /** Project the "New item" modal was opened for (from its sidebar row). */
   const [newItemProject, setNewItemProject] = useState<Project | null>(null);
   const [viewModalScope, setViewModalScope] = useState<ViewModalScope | null>(null);
@@ -213,12 +214,17 @@ export function Sidebar() {
           </kbd>
         </button>
 
-        <InboxLink />
+        {/* Spec 121: a visitor has no inbox and no My Work (RADD-1149). */}
+        {authenticated && (
+          <>
+            <InboxLink />
 
-        <Link to={RoutePath.home} className={navLinkClasses} activeOptions={{ exact: true }}>
-          <House size={14} aria-hidden />
-          My Work
-        </Link>
+            <Link to={RoutePath.home} className={navLinkClasses} activeOptions={{ exact: true }}>
+              <House size={14} aria-hidden />
+              My Work
+            </Link>
+          </>
+        )}
 
         {/* RADD-843: fixed destinations render only where the area can be
             useful to the actor (useNavFacts — the same predicate the rail,
@@ -515,10 +521,12 @@ export function Sidebar() {
 
       {!railed && (
         <div className="border-t border-subtle px-2 py-2">
-          <Link to={RoutePath.settings} className={navLinkClasses}>
-            <Settings size={14} aria-hidden />
-            Settings
-          </Link>
+          {authenticated && (
+            <Link to={RoutePath.settings} className={navLinkClasses}>
+              <Settings size={14} aria-hidden />
+              Settings
+            </Link>
+          )}
           <UserMenu />
         </div>
       )}

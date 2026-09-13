@@ -1,3 +1,4 @@
+import { useIsAuthenticated } from "../../lib/hooks";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { FileSearch } from "lucide-react";
 import { api } from "../../lib/api";
@@ -45,7 +46,7 @@ export function FormAssistPanel({
   const debouncedTitle = useDebounced(title, DEFLECT_DEBOUNCE_MS);
   const deflect = useQuery(deflectQuery(debouncedTitle, projectId));
 
-  const status = useQuery(aiStatusQuery);
+  const status = useQuery({ ...aiStatusQuery, enabled: useIsAuthenticated() });
   const seed = `${title}\n\n${description}`.trim().slice(0, SIMILAR_SEED_MAX_CHARS);
   const debouncedSeed = useDebounced(seed, FORM_SIMILAR_DEBOUNCE_MS);
   const similar = useQuery({

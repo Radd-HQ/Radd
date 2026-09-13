@@ -85,7 +85,15 @@ async function main() {
       const c1 = await api("POST", "/items/" + items.public.id + "/comments", { body: "a public comment", visibility: "public" });
       const c2 = await api("POST", "/items/" + items.public.id + "/comments", { body: "an internal note", visibility: "internal" });
       const visitor = (await api("POST", "/users", ${JSON.stringify({ ...VISITOR, instance_role: "member" })})).data;
-      return { pub, prv, access: access.data, items, comments: [c1.status, c2.status], visitor };
+      // A public wiki space with one page (spec 121 §5), reused across runs.
+      const spaces = (await api("GET", "/page-spaces?limit=200")).data || [];
+      let space = spaces.find((s) => s.slug === "pubprf-docs");
+      if (!space) space = (await api("POST", "/page-spaces", { name: "PUBPRF docs", slug: "pubprf-docs" })).data;
+      await api("PUT", "/page-spaces/" + space.id + "/public-access", { public: true });
+      const existing = (await api("GET", "/page-spaces/" + space.id + "/pages")).data || [];
+      let page = existing.find((p) => p.title === "Welcome visitors");
+      if (!page) page = (await api("POST", "/pages", { space_id: space.id, title: "Welcome visitors", body: "Hello from the public wiki." })).data;
+      return { pub, prv, access: access.data, items, comments: [c1.status, c2.status], visitor, space, page };
     })()`);
     context.seeded = {
       pub: seeded.pub?.key, prv: seeded.prv?.key, public: seeded.access?.public,
@@ -138,6 +146,19 @@ async function main() {
     checks["anonymous: project payload says public"] = shell.projectPublic === true;
     checks["anonymous: the private project is not there"] = shell.privateStatus === 403 || shell.privateStatus === 404;
     checks["anonymous: the public page makes no 401 request"] = Array.isArray(shell.unauthorized) && shell.unauthorized.length === 0;
+    const personal = await session.eval(`[...document.querySelectorAll("nav a, aside a, header a")].map((a) => (a.textContent || a.getAttribute("aria-label") || "").trim()).filter((t) => /^(My Work|Inbox|Settings)$/.test(t))`);
+    context.anonymous.personalLinks = personal;
+    checks["anonymous: no My Work / Inbox / Settings link"] = personal.length === 0;
+
+    await session.navigate(baseUrl + "/p/" + PUBLIC_KEY + "/reports", 3000);
+    const reports = await session.eval(`({ path: location.pathname, search: location.search })`);
+    checks["anonymous: project reports bounce to sign-in"] = reports.path === "/login" && reports.search.includes("next=");
+
+    await session.navigate(baseUrl + "/pages/" + seeded.space.slug + "/" + seeded.page.slug, 4000);
+    const wiki = await session.eval(`({ path: location.pathname, body: document.body.innerText.includes("Hello from the public wiki"), unauthorized: ${UNAUTHORIZED} })`);
+    context.wiki = wiki;
+    checks["anonymous: a public wiki page renders in the shell"] = wiki.path.startsWith("/pages/") && wiki.body === true;
+    checks["anonymous: the wiki page makes no 401 request"] = wiki.unauthorized.length === 0;
 
     await session.navigate(baseUrl + "/issues/" + publicKey, 4000);
     // The title is an editable input (not in innerText); the key is plain text.

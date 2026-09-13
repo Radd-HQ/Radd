@@ -1,3 +1,4 @@
+import { useIsAuthenticated } from "../../lib/hooks";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -74,7 +75,7 @@ export function PageView({
   spaceSlug?: string;
 }) {
   const queryClient = useQueryClient();
-  const { data: users } = useQuery(usersQuery);
+  const { data: users } = useQuery({ ...usersQuery, enabled: useIsAuthenticated() });
   const [tab, setTab] = useState<TabValue>(Tab.content);
   const [title, setTitle] = useState(page.title);
   const [editing, setEditing] = useState(false);

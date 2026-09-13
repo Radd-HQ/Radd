@@ -1,3 +1,4 @@
+import { useIsAuthenticated } from "../../lib/hooks";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -53,7 +54,7 @@ export function AiReadMenu({
   label,
   className = "",
 }: AiReadMenuProps) {
-  const status = useQuery(aiStatusQuery);
+  const status = useQuery({ ...aiStatusQuery, enabled: useIsAuthenticated() });
   const editorAi = useEditorAi();
   // On the issue page, query answers open in the reading-area results pane
   // (the dead-space fix); elsewhere (pages pages) they answer in this popover.

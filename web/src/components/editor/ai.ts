@@ -53,7 +53,7 @@ export interface EditorAi {
  * a redirect to /login — which must never happen to an anonymous visitor.
  */
 export function useEditorAi(enabled = true): EditorAi | null {
-  const status = useQuery({ ...aiStatusQuery, enabled });
+  const status = useQuery({ ...aiStatusQuery, enabled: enabled && useIsAuthenticated() });
   // Spec 121: a visitor has no preferences to read (the endpoint 401s).
   const prefs = useQuery({ ...mePreferencesQuery(), enabled: enabled && useIsAuthenticated() });
   const gateOpen =

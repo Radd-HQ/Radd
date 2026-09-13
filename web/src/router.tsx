@@ -268,6 +268,7 @@ const roadmapRoute = createRoute({
 const projectReportsRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.projectReports,
+  beforeLoad: requireAccount,
   component: ReportsPage,
 });
 
@@ -275,6 +276,7 @@ const projectReportsRoute = createRoute({
 const globalReportsRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.reports,
+  beforeLoad: requireAccount,
   component: GlobalReportsPage,
 });
 
