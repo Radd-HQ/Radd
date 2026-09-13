@@ -124,17 +124,20 @@ export const itemIdsQuery = (queryString: string) =>
 export const pagedViewItemsQuery = (
   view: Pick<View, "id" | "query_string"> | undefined,
   page: number,
+  // RADD-1154: the page size follows the viewport (`useItemsPageLimit`); it is
+  // part of the key, so a rotation refetches the right page.
+  limit: number = ITEMS_PAGE_LIMIT,
 ) =>
   queryOptions({
-    queryKey: queryKeys.viewItemsPage(view?.id ?? "", view?.query_string ?? "", page),
+    queryKey: queryKeys.viewItemsPage(view?.id ?? "", view?.query_string ?? "", page, limit),
     meta: projectEntityMeta(new URLSearchParams(view?.query_string).get("project_id"), Entity.item),
     placeholderData: keepPreviousData,
     queryFn: ({ signal }) =>
       api.get<Item[]>(`${ApiPath.items}?${view?.query_string ?? ""}`, {
         signal,
         query: {
-          limit: String(ITEMS_PAGE_LIMIT),
-          offset: String((page - 1) * ITEMS_PAGE_LIMIT),
+          limit: String(limit),
+          offset: String((page - 1) * limit),
         },
       }),
   });

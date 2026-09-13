@@ -39,6 +39,9 @@ export const AUTOMATION_CLEAR_VALUE = "none";
  * one page at the cap; beyond that pagination is a known gap (modules.md).
  */
 export const ITEMS_PAGE_LIMIT = 200;
+/** RADD-1154: a phone shows one card per screen, so a 200-item page reads as
+ *  "everything" and the pager sits 200 cards away — page smaller there. */
+export const ITEMS_PAGE_LIMIT_PHONE = 50;
 
 /** Client-side mirror of the ProjectCreate.key pattern in the API schema. */
 export const PROJECT_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9]{0,9}$/;

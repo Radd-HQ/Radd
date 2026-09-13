@@ -16,7 +16,6 @@ import { MissingPluginType } from "../components/shell/MissingPluginType";
 import { api, errorMessage } from "../lib/api";
 import { Entity, invalidateEntities } from "../lib/cache";
 import {
-  ITEMS_PAGE_LIMIT,
   NEW_ITEM_HOTKEY,
   ROADMAP_EPICS_ONLY_QUERY,
   ROADMAP_MAX_AUTO_PAGES,
@@ -30,7 +29,7 @@ import {
   roadmapShowClosedStorageKey,
 } from "../lib/constants";
 import { downloadCsv, itemsToCsv } from "../lib/csv";
-import { useCurrentUser, useKeyboardShortcut, usePermissions, usePointsEnabled, useAnonymousBounce, useIsAuthenticated } from "../lib/hooks";
+import { useCurrentUser, useKeyboardShortcut, usePermissions, usePointsEnabled, useAnonymousBounce, useIsAuthenticated, useItemsPageLimit } from "../lib/hooks";
 import {
   capabilitiesQuery,
   cyclesQuery,
@@ -355,8 +354,10 @@ export function ViewPage() {
       writeUrlState({ pg: null });
     }
   }, [pageQueryString]);
+  // RADD-1154: 50 per page on a phone, 200 otherwise.
+  const pageLimit = useItemsPageLimit();
   const pagedItems = useQuery({
-    ...pagedViewItemsQuery(fetchQueryView, page),
+    ...pagedViewItemsQuery(fetchQueryView, page, pageLimit),
     enabled: Boolean(view) && !isRoadmap,
   });
   const itemsTotal = useQuery({
@@ -369,7 +370,7 @@ export function ViewPage() {
   });
   const totalCount = itemsTotal.data?.total ?? null;
   const pageCount =
-    totalCount === null ? null : Math.max(1, Math.ceil(totalCount / ITEMS_PAGE_LIMIT));
+    totalCount === null ? null : Math.max(1, Math.ceil(totalCount / pageLimit));
   // Roadmap views auto-stream their (narrowed) match set — but in CAPPED
   // bursts, so a broad query can never re-create fetch-all: after
   // ROADMAP_MAX_AUTO_PAGES pages the stream pauses with a toolbar notice

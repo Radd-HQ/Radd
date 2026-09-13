@@ -8,10 +8,8 @@ import {
 } from "react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import {
-  RoutePath,
-  SLQ_PROBE_DEBOUNCE_MS,
-} from "./constants";
+import { useMobileNavigation } from "../components/shell/mobile-navigation";
+import { RoutePath, SLQ_PROBE_DEBOUNCE_MS, ITEMS_PAGE_LIMIT, ITEMS_PAGE_LIMIT_PHONE } from "./constants";
 import {
   allowedTransitionsQuery,
   authStateQuery,
@@ -44,6 +42,13 @@ import {
 export function useAuthState(): AuthState | undefined {
   const { data } = useQuery(authStateQuery);
   return data;
+}
+
+/** RADD-1154: how many items a paged view fetches — the phone breakpoint the
+ *  shell's mobile navigation already uses, so "phone" means one thing. */
+export function useItemsPageLimit(): number {
+  const { mobile } = useMobileNavigation();
+  return mobile ? ITEMS_PAGE_LIMIT_PHONE : ITEMS_PAGE_LIMIT;
 }
 
 /** Spec 121: a real account is signed in (not the anonymous principal). */
