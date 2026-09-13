@@ -246,3 +246,39 @@ async def test_hash_skip_only_reembeds_changed_rows(db):
         "m1",
     )
     assert fresh == [1]  # unchanged row skipped, unknown row embedded
+
+
+async def test_the_doc_sweep_consumes_the_shape_pages_for_embedding_produces(db, monkeypatch):
+    """RADD-1159: `pages_for_embedding` became (page_id, title, body) in RADD-1147
+    and the doc half of every sweep unpacked four. Drive the real producer into
+    the real consumer, so either side changing shape alone fails here."""
+    from types import SimpleNamespace
+
+    from radd.modules.ai import client
+    from radd.modules.auth.models import User
+    from radd.modules.auth.types import InstanceRole
+    from radd.modules.pages import search as pages_search, service as pages_service, spaces
+    from radd.modules.pages.schemas import PageCreate, PageSpaceCreate
+
+    user = User(
+        email=f"emb-{uuid.uuid4().hex[:8]}@example.com",
+        name="Embedder",
+        instance_role=InstanceRole.ADMIN.value,
+    )
+    db.add(user)
+    await db.flush()
+    space = await spaces.create_space(
+        db, PageSpaceCreate(name=f"emb {uuid.uuid4().hex[:6]}"), user.id
+    )
+    page = await pages_service.create_page(
+        db, PageCreate(space_id=space.id, title="runbook", body="restart the farm"), user.id
+    )
+
+    async def fake_embed(session, role, texts):
+        return [[0.1, 0.2, 0.3] for _ in texts]
+
+    monkeypatch.setattr(client, "embed", fake_embed)
+    pages = await pages_search.pages_for_embedding(db, page_ids=[page.id])
+    assert [p[0] for p in pages] == [page.id]
+    assert await embedder._embed_docs(db, SimpleNamespace(model="m1"), pages) == 1
+    assert await embedder._embed_docs(db, SimpleNamespace(model="m1"), pages) == 0  # hash-skip

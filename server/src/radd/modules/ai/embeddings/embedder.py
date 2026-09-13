@@ -253,7 +253,7 @@ async def _embed_items(session: AsyncSession, resolved, rows) -> int:
 async def _embed_docs(session: AsyncSession, resolved, pages) -> int:
     if not pages:
         return 0
-    texts = [embed_text("", title, body) for _, _, title, body in pages]
+    texts = [embed_text("", title, body) for _, title, body in pages]
     hashes = [content_hash(t) for t in texts]
     fresh = await _fresh_indexes(
         session, store.PAGE_TABLE, "page_id", [p[0] for p in pages], hashes, resolved.model
