@@ -55,14 +55,13 @@ export function ActivityPanel({
   const tabs: PanelTab[] = [
     { key: ActivityTab.comments, label: "Comments", icon: builtinIcon(MessageSquare), count: item.comment_count, render: () => <CommentsThread item={item} project={project} /> },
     { key: ActivityTab.history, label: "History", icon: builtinIcon(History), render: () => <HistoryTab itemId={item.id} /> },
-    // RADD-1153: worklogs and version-control links are account-only reads —
-    // a visitor gets no tab rather than a tab that errors (the spec-96 rule).
+    // RADD-1153: worklogs are an account-only read — a visitor gets no tab
+    // rather than a tab that errors (the spec-96 rule). Version-control links
+    // are public with the issue (RADD-1155).
     ...(timeloggingEnabled && authenticated
       ? [{ key: ActivityTab.worklog, label: "Work log", icon: builtinIcon(Clock), render: () => <WorklogTab itemId={item.id} /> } satisfies PanelTab]
       : []),
-    ...(authenticated
-      ? [{ key: ActivityTab.vcs, label: "Version control", icon: builtinIcon(GitBranch), render: () => <VcsPanel item={item} project={project} /> } satisfies PanelTab]
-      : []),
+    { key: ActivityTab.vcs, label: "Version control", icon: builtinIcon(GitBranch), render: () => <VcsPanel item={item} project={project} /> },
     ...pluginTabs,
   ];
   const active = tabs.find((t) => t.key === tab) ?? tabs[0];

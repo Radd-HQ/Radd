@@ -44,6 +44,8 @@ ANONYMOUS_ROUTES: frozenset[tuple[str, str]] = frozenset(
         ("GET", "/api/v1/items/{item_id}/web-links"),
         ("GET", "/api/v1/items/{item_id}/participants"),
         ("GET", "/api/v1/items/{item_id}/pages"),
+        # RADD-1155: a public project's commits and pull requests are public.
+        ("GET", "/api/v1/items/{item_id}/vcs-links"),
         ("GET", "/api/v1/attachments"),
         ("GET", "/api/v1/attachments/{attachment_id}"),
         ("GET", "/api/v1/views"),

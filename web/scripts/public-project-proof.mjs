@@ -171,9 +171,12 @@ async function main() {
     context.issuePage = issuePage;
     checks["anonymous: the public issue renders"] = issuePage.path === "/issues/" + publicKey && issuePage.body === true;
     // RADD-1153: nothing a visitor cannot use is rendered on the issue page.
-    const controls = await session.eval(`[...document.querySelectorAll("button, [role=tab], a")].map((e) => (e.textContent || "").trim()).filter((t) => /^(Watch|Star|Archive|Clone|Work log|Version control)$/.test(t))`);
+    const controls = await session.eval(`[...document.querySelectorAll("button, [role=tab], a")].map((e) => (e.textContent || "").trim()).filter((t) => /^(Watch|Star|Archive|Clone|Work log)$/.test(t))`);
     context.issuePage.controls = controls;
-    checks["anonymous: no Watch / Star / Archive / Clone / Work log / Version control"] = controls.length === 0;
+    checks["anonymous: no Watch / Star / Archive / Clone / Work log"] = controls.length === 0;
+    // RADD-1155: the version-control tab IS for the world — public commits, public issue.
+    const vcsTab = await session.eval(`[...document.querySelectorAll("button, [role=tab]")].some((e) => (e.textContent || "").trim() === "Version control")`);
+    checks["anonymous: the Version control tab is offered"] = vcsTab === true;
     // The rail's widgets (watchers, SLA, pickers, plugin cards) ask once and
     // take the refusal quietly; what must never happen is a 401 in a LOOP.
     const repeated = issuePage.unauthorized.filter((url, i, all) => all.indexOf(url) !== i);

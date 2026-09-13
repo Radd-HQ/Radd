@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
 from radd.modules.auth import authz
-from radd.modules.auth.deps import CurrentUser
+from radd.modules.auth.deps import Actor, CurrentUser
 from radd.modules.items import service as items_service
 
 from . import service
@@ -40,7 +40,7 @@ async def create_vcs_link(
 
 @router.get("/items/{item_id}/vcs-links", response_model=list[VcsLinkRead])
 async def list_vcs_links(
-    item_id: uuid.UUID, session: Session, user: CurrentUser
+    item_id: uuid.UUID, session: Session, user: Actor
 ) -> list[VcsLinkRead]:
     await _require_item_perm(session, user, item_id, authz.Permission.ITEM_READ)
     return [
