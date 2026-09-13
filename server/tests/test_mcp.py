@@ -2,9 +2,11 @@
 
 Pure tests: JSON-RPC envelope handling (parse -> -32700/-32600, result/error
 shapes), method routing (initialize / ping / unknown -> -32601), tools/call
-shaping (domain error -> isError:true + rollback, unknown tool -> -32602),
-tool-catalog generation from a stubbed field registry, and pages-module feature
-detection. HTTP-level auth gates (401/403) ride an in-process ASGI client that
+shaping (domain error -> isError:true + rollback, unknown tool -> -32602,
+arguments the advertised schema rejects -> -32602 with every violation in
+`data` [RADD-1106], a handler bug -> -32603 + rollback, never an HTTP 500
+[RADD-905]), tool-catalog generation from a stubbed field registry, and
+pages-module feature detection. HTTP-level auth gates (401/403) ride an in-process ASGI client that
 never touches the DB. The full PAT round trip is an integration step, not a
 unit test (repo rule: tests only where they earn their keep).
 """
@@ -224,6 +226,65 @@ async def test_domain_error_becomes_is_error_result_and_rolls_back(monkeypatch):
     assert session.rolled_back is True
 
 
+# --- RADD-1106/905: arguments are validated against the ADVERTISED schema ---
+
+
+def _tools_call(name: str, arguments: dict) -> JsonRpcRequest:
+    return JsonRpcRequest(
+        method=McpMethod.TOOLS_CALL, params={"name": name, "arguments": arguments}, id=1
+    )
+
+
+@pytest.mark.parametrize(
+    "arguments, bad_path",
+    [
+        ({"query": "x", "limit": "ten"}, "limit"),
+        ({"query": "x", "limit": [1]}, "limit"),
+    ],
+)
+async def test_a_mistyped_argument_is_invalid_params(arguments, bad_path):
+    """`limit: "ten"` used to reach `int(raw)` inside the handler and escape as a
+    ValueError-shaped tool error or a 500, depending on the tool."""
+    with pytest.raises(JsonRpcError) as info:
+        await handle_request(StubSession(), None, _tools_call(McpTool.SEARCH_PAGES.value, arguments))
+    assert info.value.code is JsonRpcErrorCode.INVALID_PARAMS
+    assert bad_path in str(info.value)
+    assert [violation["path"] for violation in info.value.data] == [bad_path]
+    assert set(info.value.data[0]) == {"path", "message"}
+
+
+async def test_an_unknown_argument_is_invalid_params():
+    """The RADD-1106 report: `list_worklogs {"key": …}` silently ignored the
+    property and answered with EVERY worklog. Every tool schema is a closed
+    object, and now the closure is enforced."""
+    with pytest.raises(JsonRpcError) as info:
+        await handle_request(
+            StubSession(), None, _tools_call(McpTool.LIST_WORKLOGS.value, {"key": "TD-1"})
+        )
+    assert info.value.code is JsonRpcErrorCode.INVALID_PARAMS
+    assert "'key'" in str(info.value)
+
+
+async def test_a_handler_bug_is_internal_error_and_rolls_back(monkeypatch):
+    """RADD-905: a KeyError inside a handler escaped as Starlette's HTTP 500 with
+    the half-applied flush still pending."""
+
+    async def buggy(session, actor, args):
+        raise KeyError("worked_on")
+
+    monkeypatch.setitem(
+        registries.mcp_tools,
+        McpTool.GET_ITEM.value,
+        replace(registries.mcp_tools[McpTool.GET_ITEM.value], handler=buggy),
+    )
+    session = StubSession()
+    with pytest.raises(JsonRpcError) as info:
+        await handle_request(session, None, _tools_call(McpTool.GET_ITEM.value, {"key": "TD-1"}))
+    assert info.value.code is JsonRpcErrorCode.INTERNAL_ERROR
+    assert "KeyError" in str(info.value)
+    assert session.rolled_back is True
+
+
 async def test_tool_success_is_json_text_content(monkeypatch):
     async def ok(session, actor, args):
         return {"echo": args["key"]}
@@ -277,7 +338,7 @@ def test_catalog_custom_fields_schema_comes_from_registry():
 def test_catalog_doc_tools_appear_only_when_docs_live():
     without = {t["name"] for t in tools.build_catalog({}, include_pages=False)}
     with_docs = {t["name"] for t in tools.build_catalog({}, include_pages=True)}
-    assert with_docs - without == {McpTool.GET_PAGE.value, McpTool.SEARCH_PAGES.value}
+    assert with_docs - without == {tool.value for tool in PAGE_TOOLS}
 
 
 # --- docs feature detection ---

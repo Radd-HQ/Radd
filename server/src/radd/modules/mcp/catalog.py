@@ -41,6 +41,9 @@ CATALOG_ORDER: tuple[McpTool, ...] = (
     McpTool.LIST_PROJECTS,
     McpTool.GET_PAGE,
     McpTool.SEARCH_PAGES,
+    McpTool.CREATE_PAGE,
+    McpTool.UPDATE_PAGE,
+    McpTool.MOVE_PAGE,
     # --- spec 114 families. Each appears only for a key that may execute it; the
     # filter (requirements.visible_catalog) reads the same permission engine the
     # call itself does, so the catalog cannot drift from the enforcement.
@@ -64,20 +67,33 @@ CATALOG_ORDER: tuple[McpTool, ...] = (
 _BUILTIN_NAMES = frozenset(tool.value for tool in CATALOG_ORDER)
 
 
+def resolved_schema(
+    spec: McpToolSpec,
+    custom_field_properties: Mapping[str, Any],
+    link_types: Sequence[str],
+) -> dict[str, Any]:
+    """THE input schema of a tool: a spec with an `input_schema_builder` gets
+    the live projections, everything else its static schema. tools/list renders
+    this and tools/call validates against it (RADD-1106) — one function, so the
+    two cannot disagree."""
+    if spec.input_schema_builder is not None:
+        return spec.input_schema_builder(
+            custom_field_properties=custom_field_properties, link_types=link_types
+        )
+    return dict(spec.input_schema)
+
+
 def _entry(
     spec: McpToolSpec,
     custom_field_properties: Mapping[str, Any],
     link_types: Sequence[str],
 ) -> dict[str, Any]:
-    """One tools/list entry. A spec with an `input_schema_builder` gets the live
-    projections; everything else renders its static schema."""
-    if spec.input_schema_builder is not None:
-        schema = spec.input_schema_builder(
-            custom_field_properties=custom_field_properties, link_types=link_types
-        )
-    else:
-        schema = dict(spec.input_schema)
-    return {"name": spec.name, "description": spec.description, "inputSchema": schema}
+    """One tools/list entry."""
+    return {
+        "name": spec.name,
+        "description": spec.description,
+        "inputSchema": resolved_schema(spec, custom_field_properties, link_types),
+    }
 
 
 def build_catalog(
@@ -130,6 +146,30 @@ def registry_catalog(builtin_names: frozenset[str]) -> list[dict[str, Any]]:
     ]
 
 
+async def live_projections(session: AsyncSession) -> tuple[Mapping[str, Any], list[str]]:
+    """The two live schema projections: the field registry's OpenAPI properties
+    (refreshed — the same source OpenAPI reads) and the instance's link-type
+    keys minus the auto-managed ones."""
+    from radd.modules.linktypes import service as linktypes_service
+
+    fields_openapi.refresh(await fields_service.list_fields(session))
+    link_types = [
+        definition.key
+        for definition in await linktypes_service.list_types(session)
+        if not definition.auto_managed
+    ]
+    return fields_openapi.schema_cache.properties, link_types
+
+
+async def live_schema(session: AsyncSession, spec: McpToolSpec) -> dict[str, Any]:
+    """The schema tools/list advertises for `spec` right now. A static schema
+    needs no session (the stub-session tests dispatch such tools with none)."""
+    if spec.input_schema_builder is None:
+        return resolved_schema(spec, {}, ())
+    custom_field_properties, link_types = await live_projections(session)
+    return resolved_schema(spec, custom_field_properties, link_types)
+
+
 async def catalog_fingerprint(session: AsyncSession, user: Any) -> str:
     """A short digest of the catalog THIS principal can see (RADD-740).
 
@@ -152,14 +192,9 @@ async def live_catalog(session: AsyncSession, user: Any = None) -> list[dict[str
     projection want the full surface, and an unauthenticated MCP request never
     reaches here (the router 401s first).
     """
-    fields_openapi.refresh(await fields_service.list_fields(session))
-    from radd.modules.linktypes import service as linktypes_service
-
+    custom_field_properties, link_types = await live_projections(session)
     catalog = build_catalog(
-        fields_openapi.schema_cache.properties,
-        include_pages=pages_available(),
-        link_types=[definition.key for definition in await linktypes_service.list_types(session)
-                    if not definition.auto_managed],
+        custom_field_properties, include_pages=pages_available(), link_types=link_types
     )
     catalog += registry_catalog(_BUILTIN_NAMES | frozenset(tool["name"] for tool in catalog))
     if user is None:

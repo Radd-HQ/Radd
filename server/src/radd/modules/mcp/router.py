@@ -11,15 +11,20 @@ Layering:
 - HTTP level: disabled instance -> 403; missing/invalid credentials -> 401
   (PAT is the primary path; a session cookie also works via the auth deps).
 - Protocol level: malformed body -> -32700/-32600, unknown method -> -32601,
-  bad tools/call params or unknown tool -> -32602 (JSON-RPC error envelopes).
+  bad tools/call params, an unknown tool, or arguments the tool's advertised
+  input schema rejects (RADD-1106: missing/unknown/mistyped properties, every
+  violation listed in `data`) -> -32602 (JSON-RPC error envelopes).
 - Tool level: domain errors (NotFound/Forbidden/Conflict/Unauthorized/…
   RaddError) -> `isError: true` results with the message text — NEVER
   JSON-RPC protocol errors. The session is rolled back first so a half-applied
-  mutation is not committed by the request teardown.
+  mutation is not committed by the request teardown. Anything else a handler
+  raises is rolled back the same way, logged with its traceback, and answered
+  as -32603 — never an HTTP 500 (RADD-905).
 """
 
 import asyncio
 import json
+import logging
 from collections.abc import AsyncIterator
 from typing import Annotated, Any
 
@@ -31,6 +36,7 @@ from radd import __version__
 from radd.config import settings
 from radd.db import SessionLocal, commit_before_streaming, get_session
 from radd.exceptions import ForbiddenError, RaddError, UnauthorizedError
+from radd.kernel.mcptools import InvalidArgumentsError
 from radd.modules.auth.deps import OptionalUser
 from radd.modules.auth.models import User
 
@@ -45,6 +51,8 @@ from .types import (
     McpContentType,
     McpMethod,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/mcp", tags=["mcp"])
 
@@ -142,6 +150,8 @@ async def _tools_call(session: AsyncSession, user: User, params: dict[str, Any])
         result = await tools.call_tool(session, user, name, arguments)
     except tools.UnknownToolError as exc:
         raise JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, str(exc)) from None
+    except InvalidArgumentsError as exc:
+        raise JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, str(exc), data=exc.errors) from None
     except _TOOL_ERROR_TYPES as exc:
         # Discard any partial flush before the request teardown commits.
         await session.rollback()
@@ -149,6 +159,15 @@ async def _tools_call(session: AsyncSession, user: User, params: dict[str, Any])
             "content": [{"type": McpContentType.TEXT.value, "text": str(exc)}],
             "isError": True,
         }
+    except Exception as exc:
+        # RADD-905: a handler bug used to escape as an HTTP 500 with the
+        # half-applied flush still pending. Roll back, keep the traceback, and
+        # answer inside the protocol.
+        await session.rollback()
+        logger.exception("mcp tool %r failed", name)
+        raise JsonRpcError(
+            JsonRpcErrorCode.INTERNAL_ERROR, f"tool '{name}' failed: {type(exc).__name__}: {exc}"
+        ) from None
     return {
         "content": [
             {

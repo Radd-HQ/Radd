@@ -15,12 +15,18 @@ from typing import Any, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.kernel.mcptools import validate_arguments
 from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
 from radd.modules.projects import service as projects_service
 
-from .catalog import build_catalog, live_catalog, pages_available  # re-export: the tool surface
+from .catalog import (  # re-export: the tool surface
+    build_catalog,
+    live_catalog,
+    live_schema,
+    pages_available,
+)
 
 __all__ = ["UnknownToolError", "build_catalog", "call_tool", "pages_available", "live_catalog"]
 
@@ -59,11 +65,15 @@ async def call_tool(
 ) -> Any:
     """Dispatch one tools/call through the kernel registry — a live lookup, so a
     disabled plugin's (or module's) tools stop dispatching the moment they leave
-    the catalog. Raises UnknownToolError for names not registered; RaddError
+    the catalog. Raises UnknownToolError for names not registered and
+    InvalidArgumentsError (RADD-1106) for arguments the tool's ADVERTISED schema
+    does not admit — the same schema tools/list renders, so a closed object
+    refuses the typo'd property it would otherwise have ignored; RaddError
     subclasses bubble up for the router to shape into `isError: true` results."""
     from radd.kernel import registries  # deferred: keep the kernel import lazy
 
     spec = registries.mcp_tools.get(name)
     if spec is None:
         raise UnknownToolError(name)
+    validate_arguments(name, await live_schema(session, spec), arguments)
     return await _call_registry_tool(session, actor, spec, arguments)

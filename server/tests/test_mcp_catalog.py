@@ -18,10 +18,14 @@ from radd.exceptions import ForbiddenError
 from radd.modules.auth import scopes
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
+from radd.kernel import registries
+from radd.kernel.mcptools import validate_arguments
 from radd.modules.mcp import tools
-from radd.modules.mcp.catalog import build_catalog
+from radd.modules.mcp.catalog import CATALOG_ORDER, build_catalog, live_schema
+from radd.modules.mcp.protocol import JsonRpcError, JsonRpcRequest
 from radd.modules.mcp.requirements import requirement_for, visible_catalog
-from radd.modules.mcp.types import McpTool
+from radd.modules.mcp.router import handle_request
+from radd.modules.mcp.types import JsonRpcErrorCode, McpMethod, McpTool
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 
@@ -35,6 +39,9 @@ WRITE_TOOLS = {
     McpTool.UPDATE_RELEASE.value,
     McpTool.SET_ITEM_RELEASE.value,
     McpTool.CREATE_SERVICE_ACCOUNT.value,
+    McpTool.CREATE_PAGE.value,  # RADD-1005: the wiki, writable
+    McpTool.UPDATE_PAGE.value,
+    McpTool.MOVE_PAGE.value,
 }
 ADMIN_TOOLS = {
     McpTool.LIST_USERS.value,
@@ -250,6 +257,7 @@ async def test_the_tracking_workflow_runs_entirely_over_mcp(db, project):
             "type": "Bug",
             "parent": epic["key"],
             "estimate_points": 3,
+            "start_date": "2026-09-01",
         },
     )
     # RADD-861: writes answer with a compact receipt — the write's EFFECT is
@@ -259,6 +267,18 @@ async def test_the_tracking_workflow_runs_entirely_over_mcp(db, project):
     assert fetched["item"]["parent"]["key"] == epic["key"]
     assert fetched["item"]["type"]["name"] == "Bug"
     assert fetched["item"]["estimate_points"] == 3.0
+    assert fetched["item"]["start_date"] == "2026-09-01"
+
+    # Plain dates ride the same present-and-null rule as the other clearables.
+    await tools.call_tool(
+        db,
+        admin,
+        McpTool.UPDATE_ITEM.value,
+        {"key": child["key"], "start_date": None, "target_date": "2026-09-30"},
+    )
+    fetched = await tools.call_tool(db, admin, McpTool.GET_ITEM.value, {"key": child["key"]})
+    assert fetched["item"]["start_date"] is None
+    assert fetched["item"]["target_date"] == "2026-09-30"
 
     logged = await tools.call_tool(
         db,
@@ -287,6 +307,86 @@ async def test_the_tracking_workflow_runs_entirely_over_mcp(db, project):
         {"project_key": project.key, "version": "9.9.9"},
     )
     assert swept == {"release": "9.9.9", "items_shipped": 0}
+
+
+# --- RADD-1106: every tool refuses arguments its advertised schema rejects ---
+
+
+@pytest.mark.parametrize("tool", [tool.value for tool in CATALOG_ORDER])
+async def test_every_tool_validates_against_the_schema_it_advertises(db, tool):
+    """Against the LIVE schema (custom fields, link types) — the same object
+    tools/list renders. A tool with required properties refuses `{}` with a
+    -32602 that names what is missing; a tool without any accepts `{}` at the
+    validation layer, so the check is never vacuous."""
+    admin = await _user(db, InstanceRole.ADMIN)
+    spec = registries.mcp_tools[tool]
+    schema = await live_schema(db, spec)
+    required = schema.get("required", [])
+    if not required:
+        validate_arguments(tool, schema, {})
+        return
+    with pytest.raises(JsonRpcError) as info:
+        await handle_request(
+            db,
+            admin,
+            JsonRpcRequest(
+                method=McpMethod.TOOLS_CALL, params={"name": tool, "arguments": {}}, id=1
+            ),
+        )
+    assert info.value.code is JsonRpcErrorCode.INVALID_PARAMS
+    for name in required:
+        assert f"'{name}'" in str(info.value)
+
+
+# --- RADD-1005: the wiki is writable over MCP ---
+
+
+async def test_the_wiki_is_writable_over_mcp(db):
+    """Create in a space by slug, edit (a new version), move under a parent —
+    and a key without page.write neither sees the write tools nor runs one."""
+    from radd.modules.pages import spaces
+    from radd.modules.pages.schemas import PageSpaceCreate
+
+    admin = await _user(db, InstanceRole.ADMIN)
+    slug = f"mcp-{uuid.uuid4().hex[:8]}"
+    space = await spaces.create_space(db, PageSpaceCreate(name="MCP wiki", slug=slug), admin.id)
+
+    created = await tools.call_tool(
+        db, admin, McpTool.CREATE_PAGE.value, {"space": slug, "title": "Runbook", "body": "v1"}
+    )
+    assert created["version"] == 1 and created["parent_id"] is None
+    assert "body" not in created  # RADD-861: a receipt, not an echo
+
+    edited = await tools.call_tool(
+        db,
+        admin,
+        McpTool.UPDATE_PAGE.value,
+        {"id": created["id"], "body": "v2", "expected_version": 1},
+    )
+    assert edited["version"] == 2
+    fetched = await tools.call_tool(db, admin, McpTool.GET_PAGE.value, {"id": created["id"]})
+    assert fetched["body"] == "v2"
+
+    parent = await tools.call_tool(
+        db, admin, McpTool.CREATE_PAGE.value, {"space": str(space.id), "title": "Parent"}
+    )
+    moved = await tools.call_tool(
+        db, admin, McpTool.MOVE_PAGE.value, {"id": created["id"], "parent_id": parent["id"]}
+    )
+    assert moved["parent_id"] == parent["id"]
+
+    reader = await _user(db, InstanceRole.ADMIN)
+    reader.token_scope = scopes.parse_scope({"global": ["page.read"]})
+    page_writes = {McpTool.CREATE_PAGE.value, McpTool.UPDATE_PAGE.value, McpTool.MOVE_PAGE.value}
+    assert not (page_writes & await _names(db, reader))
+    with pytest.raises(ForbiddenError):
+        await tools.call_tool(
+            db, reader, McpTool.CREATE_PAGE.value, {"space": slug, "title": "Sneaky"}
+        )
+    with pytest.raises(ForbiddenError):
+        await tools.call_tool(
+            db, reader, McpTool.UPDATE_PAGE.value, {"id": created["id"], "body": "sneaky"}
+        )
 
 
 # --- plugin-contributed tools ride the kernel registry (RADD-640) ---

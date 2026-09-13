@@ -26,6 +26,7 @@ dependencies = [
     "pillow>=11.0",
     "croniter>=6.2.4",
     "orjson>=3.11.9",
+    "jsonschema>=4.23",
 ]
 
 [project.optional-dependencies]
