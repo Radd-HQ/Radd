@@ -15,7 +15,12 @@ applyAppearance();
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: 1,
+      // One retry for the transient; none for a refusal — a 401/403/404 answers
+      // the same way twice, and spec 121's visitor shell must never ask twice
+      // (each ask would be a 401 in a loop from the server's point of view).
+      // Duck-typed on `status`: a plugin remote's ApiError is another class.
+      retry: (count, error) =>
+        count < 1 && ![401, 403, 404].includes(Number((error as { status?: number }).status)),
       refetchOnWindowFocus: false,
     },
   },

@@ -43,7 +43,7 @@ function GitHubMark() {
  * /instance/login-options, because a button needs the provider's id and label —
  * a boolean can only describe the single-provider world spec 40 lived in.
  */
-export function SsoButtons() {
+export function SsoButtons({ next = null }: { next?: string | null }) {
   const providers = useQuery({
     queryKey: ["ssoPublicProviders"],
     queryFn: ({ signal }) =>
@@ -66,7 +66,7 @@ export function SsoButtons() {
         {rows.map((provider) => (
           <a
             key={provider.id}
-            href={`${API_BASE}${ssoLoginPath(provider.id)}`}
+            href={`${API_BASE}${ssoLoginPath(provider.id, next ?? undefined)}`}
             className="flex items-center justify-center gap-2.5 rounded-lg border border-strong bg-surface px-4 py-2.5 text-sm font-medium text-fg hover:bg-elevated"
           >
             {provider.kind === SsoKind.google && <GoogleMark />}

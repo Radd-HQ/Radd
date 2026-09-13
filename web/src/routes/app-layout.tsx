@@ -10,6 +10,7 @@ import { TopBar } from "../components/shell/TopBar";
 import { TopBarSlotProvider } from "../components/shell/TopBarSlot";
 import { ViewAsBanner } from "../components/shell/ViewAsBanner";
 import { Toaster } from "../components/Toaster";
+import { useIsAuthenticated } from "../lib/hooks";
 import { useRealtime } from "../lib/realtime";
 
 /**
@@ -26,12 +27,21 @@ import { useRealtime } from "../lib/realtime";
  * bars own the top of the viewport, so `h-screen` inside a route would
  * overflow by exactly their height.
  */
-export function AppLayout() {
+/** The live-update socket, mounted only for a signed-in account (spec 121:
+ *  the server closes an unauthenticated socket, and a visitor would otherwise
+ *  sit in a reconnect loop). */
+function RealtimeBridge() {
   useRealtime();
+  return null;
+}
+
+export function AppLayout() {
+  const authenticated = useIsAuthenticated();
   return (
     <StorageChoiceProvider>
       <TopBarSlotProvider>
         <div className="flex h-dvh flex-col bg-base text-fg">
+          {authenticated && <RealtimeBridge />}
           <ViewAsBanner />
           <TopBar />
           <PinsBar />

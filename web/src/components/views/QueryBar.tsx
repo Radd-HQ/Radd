@@ -1,3 +1,4 @@
+import { useIsAuthenticated } from "../../lib/hooks";
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { SearchCode, Sparkles } from "lucide-react";
@@ -44,7 +45,7 @@ export function QueryBar({
   nlDialect = "items",
   placeholder = "Filter with SLQ: priority IN (high, blocker) AND assignee = me",
 }: QueryBarProps) {
-  const status = useQuery(aiStatusQuery);
+  const status = useQuery({ ...aiStatusQuery, enabled: useIsAuthenticated() });
   // null = no explicit choice yet: default to Ask on an empty bar, SLQ when a
   // query is already sitting in the editor. Explicit user switches stick.
   const [mode, setMode] = useState<QueryModeValue | null>(null);

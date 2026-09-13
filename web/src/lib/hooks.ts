@@ -27,7 +27,7 @@ import {
   slqValidateQuery,
 } from "./queries";
 import { DEFAULT_DURATION_CONFIG, type DurationConfig } from "./duration";
-import { AuthStatus, type AuthState } from "./auth";
+import { AuthStatus, type AuthState, currentPath } from "./auth";
 import { slqErrorOf, type SlqError } from "./slq";
 import {
   InstanceRole,
@@ -44,6 +44,30 @@ import {
 export function useAuthState(): AuthState | undefined {
   const { data } = useQuery(authStateQuery);
   return data;
+}
+
+/** Spec 121: a real account is signed in (not the anonymous principal). */
+export function useIsAuthenticated(): boolean {
+  return useAuthState()?.status === AuthStatus.authenticated;
+}
+
+/** Spec 121: the visitor is browsing as the Anyone principal. */
+export function useIsAnonymous(): boolean {
+  return useAuthState()?.status === AuthStatus.anonymous;
+}
+
+/**
+ * Spec 121: a visitor who hits something they cannot see is sent to sign in,
+ * carrying the page — the issue they cannot read may be one they could read
+ * signed in. Pass the page's "not found / refused" condition.
+ */
+export function useAnonymousBounce(when: boolean): void {
+  const anonymous = useIsAnonymous();
+  useEffect(() => {
+    if (anonymous && when) {
+      window.location.assign(`${RoutePath.login}?next=${encodeURIComponent(currentPath())}`);
+    }
+  }, [anonymous, when]);
 }
 
 /** The signed-in user, or null while unauthenticated or loading. */
@@ -178,7 +202,11 @@ export function usePermissions(): PermissionChecks {
   const authState = useAuthState();
   // A paged directory must not truncate the permission union.
   const { data: projectSummary } = useQuery(projectSummaryQuery());
-  const { data: spaceSummary } = useQuery(pageSpaceSummaryQuery());
+  // Spec 121: a visitor holds no space atom; do not ask (the endpoint 401s).
+  const { data: spaceSummary } = useQuery({
+    ...pageSpaceSummaryQuery(),
+    enabled: authState?.status === AuthStatus.authenticated,
+  });
 
   return useMemo(() => {
     const allowAll =

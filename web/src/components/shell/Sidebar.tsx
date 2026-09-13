@@ -24,7 +24,7 @@ import {
 import { RoutePath } from "../../lib/constants";
 import { DirectoryPager } from "../DirectoryPager";
 import { useProjectDirectory } from "../../lib/useProjectDirectory";
-import { usePermissions } from "../../lib/hooks";
+import { usePermissions, useIsAuthenticated } from "../../lib/hooks";
 import { useNavFacts } from "../../lib/nav-facts";
 import {
   pinKey,
@@ -98,7 +98,8 @@ export function Sidebar() {
   const queues = useViewDirectory({ viewType: ViewType.queue });
   const cycles = useCycleDirectory({ includeCompleted: false });
   const cycleSummary = useQuery(cycleSummaryQuery());
-  const dashboards = useDashboardDirectory();
+  // Spec 121: dashboards are an account's surface; a visitor's rail skips the fetch.
+  const dashboards = useDashboardDirectory(useIsAuthenticated());
   /** Project the "New item" modal was opened for (from its sidebar row). */
   const [newItemProject, setNewItemProject] = useState<Project | null>(null);
   const [viewModalScope, setViewModalScope] = useState<ViewModalScope | null>(null);

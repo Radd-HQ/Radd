@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { api } from "../../lib/api";
 import { startHorizontalDrag } from "../../lib/drag";
-import { useDurationConfig } from "../../lib/hooks";
+import { useDurationConfig, useIsAuthenticated } from "../../lib/hooks";
 import { projectTimeloggingQuery, timelogBatchChunkedQuery } from "../../lib/queries";
 import {
   ApiPath,
@@ -279,7 +279,7 @@ export function RoadmapSurface({
   }, [model.rows]);
   const timelogBatch = useQuery({
     ...timelogBatchChunkedQuery(timelogItemIds),
-    enabled: timeloggingOn && timelogItemIds.length > 0,
+    enabled: useIsAuthenticated() && timeloggingOn && timelogItemIds.length > 0,
     staleTime: ROADMAP_PROGRESS_STALE_MS,
   });
   // Epic tint fractions (done/total children) — the spec-76 rollup batch over

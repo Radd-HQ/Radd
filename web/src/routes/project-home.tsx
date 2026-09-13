@@ -1,7 +1,7 @@
 import { Navigate, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { RoutePath } from "../lib/constants";
-import { useProjectByKey } from "../lib/hooks";
+import { useProjectByKey, useAnonymousBounce } from "../lib/hooks";
 import { viewsPageQuery } from "../lib/queries";
 import { ViewType } from "../lib/types";
 import { Spinner } from "../components/Spinner";
@@ -22,7 +22,7 @@ export function ProjectHomePage() {
     return <Spinner label="Loading project…" />;
   }
   if (project === null) {
-    return <div className="p-10 text-sm text-fg-muted">Project “{projectKey}” not found.</div>;
+    return <ProjectNotFound projectKey={projectKey} />;
   }
   if (views.isError) return <div className="p-10"><QueryError label="views" error={views.error} /></div>;
   const first = views.data?.rows[0];
@@ -40,4 +40,11 @@ export function ProjectHomePage() {
       {project.name} has no views yet — create one from the sidebar (+ New view).
     </div>
   );
+}
+
+
+/** Spec 121: a visitor is sent to sign in instead of a dead end. */
+function ProjectNotFound({ projectKey }: { projectKey: string }) {
+  useAnonymousBounce(true);
+  return <div className="p-10 text-sm text-fg-muted">Project “{projectKey}” not found.</div>;
 }

@@ -31,6 +31,17 @@ interface RequestOptions {
   signal?: AbortSignal;
 }
 
+/** Spec 121: while the visitor is anonymous, a 401 is an ordinary refusal
+ *  (a surface they cannot use), not a lost session — it must not bounce
+ *  every public page to the login form. */
+let anonymousMode = false;
+export function setAnonymousMode(value: boolean): void {
+  anonymousMode = value;
+  // The plugin SDK's own client (a separate bundle) reads the same fact from
+  // a documented global, so a plugin remote never bounces a visitor either.
+  (globalThis as { __RADD_ANONYMOUS__?: boolean }).__RADD_ANONYMOUS__ = value;
+}
+
 let accountRequests = new AbortController();
 export function abortAccountRequests() {
   accountRequests.abort();
@@ -61,9 +72,12 @@ async function rawRequest(path: string, options: RequestOptions = {}): Promise<R
     if (
       response.status === 401 &&
       on401 === On401.redirect &&
+      !anonymousMode &&
       window.location.pathname !== RoutePath.login
     ) {
-      window.location.assign(RoutePath.login);
+      // Spec 121: carry the page back through sign-in.
+      const next = encodeURIComponent(window.location.pathname + window.location.search);
+      window.location.assign(`${RoutePath.login}?next=${next}`);
     }
     const detail = await errorDetail(response);
     if (response.status === 403) {

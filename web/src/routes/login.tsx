@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { resetAccountSession } from "../lib/account-session";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, errorMessage } from "../lib/api";
-import { isTotpRequired, ldapLogin, login, totpLogin } from "../lib/auth";
+import { isTotpRequired, ldapLogin, login, totpLogin, safeNextPath } from "../lib/auth";
 import { On401, RoutePath } from "../lib/constants";
 import { Button } from "../components/Button";
 import { RaddTile } from "../components/RaddMark";
@@ -52,7 +52,7 @@ export function LoginPage() {
           : login({ email: email.trim().toLowerCase(), password }),
     onSuccess: async () => {
       await resetAccountSession(queryClient);
-      window.location.assign(RoutePath.home);
+      window.location.assign(next ?? RoutePath.home);
     },
     onError: (error) => {
       if (isTotpRequired(error)) setTotpRequired(true);
@@ -71,6 +71,9 @@ export function LoginPage() {
   const [ssoError] = useState(() =>
     new URLSearchParams(window.location.search).get("sso_error"),
   );
+  // Spec 121: where to return after signing in (a public page the visitor was
+  // reading). Same-origin paths only.
+  const [next] = useState(() => safeNextPath(new URLSearchParams(window.location.search).get("next")));
 
   const error = submit.error;
   const authMissing = error instanceof ApiError && error.status === 404;
@@ -177,7 +180,7 @@ export function LoginPage() {
           </Button>
         </form>
 
-        <SsoButtons />
+        <SsoButtons next={next} />
       </div>
     </main>
   );

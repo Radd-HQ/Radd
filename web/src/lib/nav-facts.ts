@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { RoutePath } from "./constants";
-import { useCurrentUser, usePermissions } from "./hooks";
+import { useCurrentUser, useIsAuthenticated, usePermissions } from "./hooks";
 import { dashboardSummaryQuery, pageSpaceSummaryQuery, projectSummaryQuery } from "./queries";
 import { Permission } from "./types";
 
@@ -30,9 +30,13 @@ export interface NavFacts {
 export function useNavFacts(): NavFacts {
   const me = useCurrentUser();
   const perms = usePermissions();
+  // Spec 121: a visitor (the Anyone principal) gets the public projects and
+  // nothing personal — these facts fail CLOSED for them, and the personal
+  // summaries are not even asked for.
+  const authenticated = useIsAuthenticated();
   const projects = useQuery(projectSummaryQuery());
-  const spaces = useQuery(pageSpaceSummaryQuery());
-  const dashboards = useQuery(dashboardSummaryQuery());
+  const spaces = useQuery({ ...pageSpaceSummaryQuery(), enabled: authenticated });
+  const dashboards = useQuery({ ...dashboardSummaryQuery(), enabled: authenticated });
 
   const projectCount = projects.data?.total;
   const spaceCount = spaces.data?.total;
@@ -47,12 +51,12 @@ export function useNavFacts(): NavFacts {
     const known = (value: boolean | undefined) => value !== false;
     const facts = {
       projects: projectCount === undefined || projectCount > 0,
-      reports: projectCount === undefined || projectCount > 0,
-      timesheet: known(navTimesheet),
-      portal: known(navPortal),
-      docs: spaceCount === undefined || spaceCount > 0 || canManagePages,
+      reports: authenticated && (projectCount === undefined || projectCount > 0),
+      timesheet: authenticated && known(navTimesheet),
+      portal: authenticated && known(navPortal),
+      docs: authenticated && (spaceCount === undefined || spaceCount > 0 || canManagePages),
       dashboards:
-        dashboardCount === undefined || dashboardCount > 0 || canCreateDashboard,
+        authenticated && (dashboardCount === undefined || dashboardCount > 0 || canCreateDashboard),
     };
     const byPrefix: [string, boolean][] = [
       [RoutePath.timesheet, facts.timesheet],
@@ -72,6 +76,7 @@ export function useNavFacts(): NavFacts {
       },
     };
   }, [
+    authenticated,
     projectCount,
     spaceCount,
     dashboardCount,

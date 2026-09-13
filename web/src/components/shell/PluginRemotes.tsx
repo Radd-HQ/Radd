@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { syncContributionPrefs } from "@radd/plugin-sdk";
+import { useIsAuthenticated } from "../../lib/hooks";
 import { capabilitiesQuery } from "../../lib/queries";
 import { syncPluginRemotes } from "../../lib/plugin-loader";
 
@@ -13,12 +14,14 @@ import { syncPluginRemotes } from "../../lib/plugin-loader";
 export function PluginRemotes() {
   const { data } = useQuery(capabilitiesQuery);
   const remotes = data?.remotes;
+  const authenticated = useIsAuthenticated();
   useEffect(() => {
     void syncPluginRemotes(remotes);
   }, [remotes]);
-  // Once authenticated (the shell only renders when signed in), pull the server-side prefs.
+  // Once a real account is signed in, pull the server-side prefs (spec 121:
+  // the shell also renders for an anonymous visitor, who has none).
   useEffect(() => {
-    void syncContributionPrefs();
-  }, []);
+    if (authenticated) void syncContributionPrefs();
+  }, [authenticated]);
   return null;
 }

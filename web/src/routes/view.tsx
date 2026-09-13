@@ -1,3 +1,4 @@
+import { PublicProjectChip } from "../components/items/ItemBadges";
 import { CycleChoices } from "../components/cycles/CycleSelect";
 import {
   useCallback,
@@ -29,12 +30,7 @@ import {
   roadmapShowClosedStorageKey,
 } from "../lib/constants";
 import { downloadCsv, itemsToCsv } from "../lib/csv";
-import {
-  useCurrentUser,
-  useKeyboardShortcut,
-  usePermissions,
-  usePointsEnabled,
-} from "../lib/hooks";
+import { useCurrentUser, useKeyboardShortcut, usePermissions, usePointsEnabled, useAnonymousBounce, useIsAuthenticated } from "../lib/hooks";
 import {
   capabilitiesQuery,
   cyclesQuery,
@@ -138,6 +134,10 @@ export function ViewPage() {
   const currentUser = useCurrentUser();
 
   const views = useQuery(viewDefinitionQuery(viewId));
+  // Spec 121: a visitor who cannot see this view signs in instead (hook order:
+  // this runs on every render, ahead of the early returns below).
+  useAnonymousBounce(views.isError);
+  const authenticated = useIsAuthenticated();
   const view = views.data;
   // A plugin-contributed view type (spec 94): rendered by the plugin's `view.type` slot instead of
   // the builtin board/list surface. The header/query bar still apply — only the surface changes.
@@ -490,6 +490,7 @@ export function ViewPage() {
   const timelogByItem = useQuery({
     ...timelogBatchChunkedQuery(pageItemIds),
     enabled:
+      authenticated && // spec 121: logged time is an account's read
       !isRoadmap &&
       (hasCardAttr("logged_time") || hasListColumn("logged_time")) &&
       pageItemIds.length > 0,
@@ -815,6 +816,7 @@ export function ViewPage() {
         <span className="rounded bg-elevated px-1.5 py-0.5 font-mono text-xs text-fg">
           {project ? project.key : "All projects"}
         </span>
+        {project?.public && <PublicProjectChip />}
         <TypeIcon size={15} className="text-fg-muted" aria-hidden />
         <h1 className="text-sm font-semibold text-heading">{view.name}</h1>
         {/* Sharing state as an icon, not a labeled chip — metadata, not headline. */}

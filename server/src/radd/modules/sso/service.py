@@ -326,6 +326,16 @@ async def provision(session: AsyncSession, provider: SsoProvider, claims: dict) 
 # --- flow cookie --------------------------------------------------------------
 
 
+def safe_next_path(value: str | None) -> str | None:
+    """A return path a sign-in may honour (spec 121): an absolute same-origin
+    path — never a scheme, never protocol-relative, never the login page."""
+    if not value or not value.startswith("/") or value.startswith("//"):
+        return None
+    if value.startswith("/login"):
+        return None
+    return value
+
+
 def flow_cookie_value(flow: dict) -> str:
     return base64.urlsafe_b64encode(json.dumps(flow).encode()).decode()
 

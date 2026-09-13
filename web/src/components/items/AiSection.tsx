@@ -2,7 +2,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { FileSearch, GitMerge, Sparkles } from "lucide-react";
 import { RoutePath } from "../../lib/constants";
-import { useOpenIssueRef } from "../../lib/hooks";
+import { useOpenIssueRef, useIsAuthenticated } from "../../lib/hooks";
 import { aiStatusQuery } from "../../lib/queries";
 import type { Item, SimilarCandidate } from "../../lib/types";
 import { Button } from "../Button";
@@ -18,7 +18,7 @@ import { SimilarHoverCard, useIssuePreview } from "./SimilarHoverCard";
  * Renders nothing unless GET /ai/status says enabled — no dead buttons.
  */
 export function AiSection({ item }: { item: Item }) {
-  const status = useQuery(aiStatusQuery);
+  const status = useQuery({ ...aiStatusQuery, enabled: useIsAuthenticated() });
   // Provided by the issue detail body — this section renders nowhere else.
   const openResults = useOpenAiResults();
 

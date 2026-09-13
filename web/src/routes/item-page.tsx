@@ -1,7 +1,7 @@
 import { Link, useCanGoBack, useParams, useRouter } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { RoutePath } from "../lib/constants";
-import { useItemByKey } from "../lib/hooks";
+import { useItemByKey, useAnonymousBounce } from "../lib/hooks";
 import { Spinner } from "../components/Spinner";
 import { ItemDetailBody } from "./item-detail";
 
@@ -20,6 +20,7 @@ export function ItemDetailPage() {
   const router = useRouter();
   const canGoBack = useCanGoBack();
   const { project, item, isPending, isError } = useItemByKey(itemKey);
+  useAnonymousBounce(!isPending && (isError || project === null));
 
   const backLink = canGoBack ? (
     <button type="button" onClick={() => router.history.back()} className={backClass}>

@@ -1,3 +1,4 @@
+import { useIsAuthenticated } from "../../lib/hooks";
 import { useQuery } from "@tanstack/react-query";
 import { aiEditorActionsQuery, aiStatusQuery, mePreferencesQuery } from "../../lib/queries";
 import { AiFeature, type AiEditorAction } from "../../lib/types";
@@ -53,7 +54,8 @@ export interface EditorAi {
  */
 export function useEditorAi(enabled = true): EditorAi | null {
   const status = useQuery({ ...aiStatusQuery, enabled });
-  const prefs = useQuery({ ...mePreferencesQuery(), enabled });
+  // Spec 121: a visitor has no preferences to read (the endpoint 401s).
+  const prefs = useQuery({ ...mePreferencesQuery(), enabled: enabled && useIsAuthenticated() });
   const gateOpen =
     enabled &&
     status.data?.features[AiFeature.editorActions] === true &&

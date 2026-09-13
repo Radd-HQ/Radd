@@ -1,3 +1,4 @@
+import { useIsAuthenticated } from "../../lib/hooks";
 import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { BookOpen, Settings } from "lucide-react";
@@ -11,8 +12,8 @@ import { navLinkClasses, SectionHeader } from "./SidebarRows";
 export function SidebarSpaces({ collapsed, onToggle, canManage }: {
   collapsed: boolean; onToggle: () => void; canManage: boolean;
 }) {
-  const summary = useQuery(pageSpaceSummaryQuery());
-  const directory = usePageSpaceDirectory(!collapsed);
+  const summary = useQuery({ ...pageSpaceSummaryQuery(), enabled: useIsAuthenticated() });
+  const directory = usePageSpaceDirectory(!collapsed && useIsAuthenticated());
   const { spaceSlug = "" } = useParams({ strict: false });
   const current = useQuery(pageSpaceByIdentityQuery(spaceSlug));
   if (!summary.isError && (summary.data?.total ?? 0) === 0 && !canManage) return null;

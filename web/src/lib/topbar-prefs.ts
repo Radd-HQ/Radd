@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
+import { useIsAuthenticated } from "./hooks";
 import { ApiPath } from "./constants";
 import { mePreferencesQuery, queryKeys } from "./queries";
 
@@ -85,7 +86,7 @@ export function useSavedFilters(): {
   save: (filter: SavedFilter) => void;
   remove: (name: string) => void;
 } {
-  const prefs = useQuery(mePreferencesQuery());
+  const prefs = useQuery({ ...mePreferencesQuery(), enabled: useIsAuthenticated() });
   const write = usePreferencesWrite();
   const filters = readSavedFilters(prefs.data);
   return {
@@ -115,7 +116,7 @@ export function useNavPins(): {
   /** Set a custom tab label; empty/whitespace clears back to the default. */
   rename: (key: string, label: string) => void;
 } {
-  const prefs = useQuery(mePreferencesQuery());
+  const prefs = useQuery({ ...mePreferencesQuery(), enabled: useIsAuthenticated() });
   const write = usePreferencesWrite();
   const pins = readPins(prefs.data);
   const writePins = (next: NavPin[]) => write.mutate({ [NAV_PINS_PREF_KEY]: next });
@@ -164,7 +165,7 @@ export function useRelatedProjectsVisibility(): {
   mode: RelatedProjectsVisibility;
   setMode: (mode: RelatedProjectsVisibility) => void;
 } {
-  const prefs = useQuery(mePreferencesQuery());
+  const prefs = useQuery({ ...mePreferencesQuery(), enabled: useIsAuthenticated() });
   const write = usePreferencesWrite();
   return {
     mode: readRelatedProjectsVisibility(prefs.data),

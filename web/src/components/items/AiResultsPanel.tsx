@@ -1,3 +1,4 @@
+import { useIsAuthenticated } from "../../lib/hooks";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { FileSearch, Sparkles, X } from "lucide-react";
@@ -37,7 +38,7 @@ interface AiResultsPanelProps {
  * design: nothing is stored, closing it discards the run.
  */
 export function AiResultsPanel({ request, runId, onClose, className = "" }: AiResultsPanelProps) {
-  const status = useQuery(aiStatusQuery);
+  const status = useQuery({ ...aiStatusQuery, enabled: useIsAuthenticated() });
   // Wait for the flags before choosing one-shot vs streamed — undefined means
   // "don't start anything yet", so a run never fires twice.
   const streamOn = status.data ? status.data.stream_responses : undefined;

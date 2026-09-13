@@ -99,6 +99,9 @@ const rootRoute = createRootRouteWithContext<RouterContext>()({
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: RoutePath.login,
+  validateSearch: (search: Record<string, unknown>): { next?: string } => ({
+    next: typeof search.next === "string" && search.next ? search.next : undefined,
+  }),
   component: LoginPage,
 });
 
@@ -174,20 +177,46 @@ const appLayoutRoute = createRoute({
   validateSearch: (search: Record<string, unknown>): { peek?: string } => ({
     peek: typeof search.peek === "string" && search.peek ? search.peek : undefined,
   }),
-  beforeLoad: async ({ context }) => {
+  beforeLoad: async ({ context, location }) => {
     const authState = await context.queryClient.ensureQueryData(authStateQuery);
     if (authState.status === AuthStatus.unauthenticated) {
-      throw redirect({ to: RoutePath.login });
+      throw redirect({ to: RoutePath.login, search: { next: location.href } });
     }
+    // Spec 121: `anonymous` renders the shell for a visitor; personal routes
+    // below add `requireAccount`.
     return { authState };
   },
   component: AppLayout,
 });
 
+/** Spec 121: a route only an account can use — a visitor is sent to sign in,
+ *  carrying the page. */
+async function requireAccount({
+  context,
+  location,
+}: {
+  context: { queryClient: QueryClient };
+  location: { href: string };
+}) {
+  const authState = await context.queryClient.ensureQueryData(authStateQuery);
+  if (authState.status !== AuthStatus.authenticated) {
+    throw redirect({ to: RoutePath.login, search: { next: location.href } });
+  }
+}
+
+/** Spec 121: "/" is My Work for an account and the projects index for a visitor. */
+async function visitorToProjects({ context }: { context: { queryClient: QueryClient } }) {
+  const authState = await context.queryClient.ensureQueryData(authStateQuery);
+  if (authState.status === AuthStatus.anonymous) {
+    throw redirect({ to: RoutePath.projects });
+  }
+}
+
 /** "My Work" — the personal landing dashboard (spec 32). */
 const myWorkRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.home,
+  beforeLoad: visitorToProjects,
   component: MyWorkPage,
 });
 
@@ -246,6 +275,7 @@ const cycleRoute = createRoute({
 const formSubmitRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.formSubmit,
+  beforeLoad: requireAccount,
   component: FormSubmitPage,
 });
 
@@ -275,6 +305,7 @@ const globalReportsRoute = createRoute({
 const timesheetRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.timesheet,
+  beforeLoad: requireAccount,
   component: TimesheetPage,
 });
 
@@ -282,6 +313,7 @@ const timesheetRoute = createRoute({
 const inboxRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.inbox,
+  beforeLoad: requireAccount,
   component: InboxPage,
 });
 
@@ -289,12 +321,14 @@ const inboxRoute = createRoute({
 const portalRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.portal,
+  beforeLoad: requireAccount,
   component: PortalPage,
 });
 
 const portalFormRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.portalForm,
+  beforeLoad: requireAccount,
   component: PortalFormPage,
 });
 
@@ -345,6 +379,7 @@ const pagePrintRoute = createRoute({
 const settingsRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.settings,
+  beforeLoad: requireAccount,
   component: SettingsLayout,
 });
 
@@ -602,6 +637,7 @@ const settingsHolidaysRoute = createRoute({
 const projectSettingsRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.projectSettings,
+  beforeLoad: requireAccount,
   component: ProjectSettingsLayout,
 });
 

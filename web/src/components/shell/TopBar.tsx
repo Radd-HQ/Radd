@@ -1,10 +1,11 @@
 import { useMobileNavigation } from "./mobile-navigation";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
+import { Bell, LogIn, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
+import { currentPath } from "../../lib/auth";
 import { openCommandPalette } from "../CommandPalette";
 import { RoutePath } from "../../lib/constants";
-import { useCurrentUser } from "../../lib/hooks";
+import { useCurrentUser, useIsAuthenticated } from "../../lib/hooks";
 import { notificationsBadgeQuery } from "../../lib/queries";
 import { Avatar } from "../Avatar";
 import { RaddTile } from "../RaddMark";
@@ -69,14 +70,27 @@ export function TopBar() {
         </button>
       )}
 
-      <InboxBell />
-      {user && (
+      {user ? (
+        <>
+          <InboxBell />
+          <Link
+            to={RoutePath.settingsProfile}
+            title={`${user.name} — profile`}
+            className="shrink-0 rounded-full focus-visible:outline-2 focus-visible:outline-focus"
+          >
+            <Avatar user={user} size="sm" />
+          </Link>
+        </>
+      ) : (
+        // Spec 121: a visitor's shell — the avatar slot offers sign-in, and
+        // carries the page they were reading through it.
         <Link
-          to={RoutePath.settingsProfile}
-          title={`${user.name} — profile`}
-          className="shrink-0 rounded-full focus-visible:outline-2 focus-visible:outline-focus"
+          to={RoutePath.login}
+          search={{ next: currentPath() }}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-accent px-2.5 py-1 text-[13px] font-medium text-white hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-focus"
         >
-          <Avatar user={user} size="sm" />
+          <LogIn size={14} aria-hidden />
+          Sign in
         </Link>
       )}
     </div>
@@ -85,7 +99,7 @@ export function TopBar() {
 
 /** The notifications bell: unread badge + click-to-peek (InboxPeek drawer). */
 function InboxBell() {
-  const { data } = useQuery(notificationsBadgeQuery);
+  const { data } = useQuery({ ...notificationsBadgeQuery, enabled: useIsAuthenticated() });
   const unread = data?.unread_count ?? 0;
   return (
     <button

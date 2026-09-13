@@ -1,19 +1,21 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { shortDate } from "../lib/dates";
+import { useIsAuthenticated } from "../lib/hooks";
 import { currentLeaveQuery } from "../lib/queries/leave";
 import type { CurrentLeave } from "../lib/types";
 
 /** The one on-leave lookup every indicator shares (Avatar, PersonName). */
 export function useOnLeave(userId: string | undefined): CurrentLeave | undefined {
-  const leave = useQuery(currentLeaveQuery);
+  // Spec 121: leave is a signed-in fact; a visitor's avatars carry no dot.
+  const leave = useQuery({ ...currentLeaveQuery, enabled: useIsAuthenticated() });
   return userId ? leave.data?.find((entry) => entry.user_id === userId) : undefined;
 }
 
 /** Away-today ids, for STRING-labeled pickers (TokenMultiSelect chips filter
  * on plain text, so those suffix "🌴" instead of rendering the icon node). */
 export function useOnLeaveIds(): Set<string> {
-  const leave = useQuery(currentLeaveQuery);
+  const leave = useQuery({ ...currentLeaveQuery, enabled: useIsAuthenticated() });
   return useMemo(() => new Set((leave.data ?? []).map((entry) => entry.user_id)), [leave.data]);
 }
 

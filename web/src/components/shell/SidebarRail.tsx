@@ -6,6 +6,7 @@
  *  a rail is good at. Everything else is one click away via the search shortcut, which is why
  *  Search is pinned first. */
 
+import { useIsAuthenticated } from "../../lib/hooks";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
@@ -54,7 +55,7 @@ const DESTINATIONS: RailDestination[] = [
 ];
 
 function RailInbox() {
-  const { data } = useQuery(notificationsBadgeQuery);
+  const { data } = useQuery({ ...notificationsBadgeQuery, enabled: useIsAuthenticated() });
   const unread = data?.unread_count ?? 0;
   return (
     <Link

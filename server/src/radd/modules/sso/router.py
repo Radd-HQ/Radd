@@ -62,11 +62,16 @@ async def _resolve_provider(session: AsyncSession, provider_id: uuid.UUID | None
 
 
 @router.get("/oidc/login")
-async def oidc_login(session: Session, provider_id: uuid.UUID | None = None) -> RedirectResponse:
+async def oidc_login(
+    session: Session, provider_id: uuid.UUID | None = None, next: str | None = None
+) -> RedirectResponse:
     """Kick off the code+PKCE flow: park state/nonce/verifier/provider in a
-    short-lived HttpOnly cookie and bounce to the provider."""
+    short-lived HttpOnly cookie and bounce to the provider. `next` (spec 121)
+    is the same-origin page to return to — it rides the flow cookie, the only
+    state that survives the round trip."""
     provider = await _resolve_provider(session, provider_id)
     flow = service.new_flow(provider)
+    flow["next"] = service.safe_next_path(next)
     response = RedirectResponse(await service.authorization_url(provider, flow), status_code=307)
     response.set_cookie(
         OIDC_FLOW_COOKIE,
@@ -104,7 +109,7 @@ async def oidc_callback(code: str, state: str, request: Request, session: Sessio
         return _refused("Sign-in failed. Contact an administrator if it continues.")
 
     token = await auth_service.create_session(session, user)
-    response = RedirectResponse("/", status_code=307)
+    response = RedirectResponse(service.safe_next_path(flow.get("next")) or "/", status_code=307)
     response.delete_cookie(OIDC_FLOW_COOKIE)
     response.set_cookie(
         SESSION_COOKIE_NAME,

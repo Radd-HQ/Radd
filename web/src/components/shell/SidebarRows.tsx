@@ -1,5 +1,6 @@
 /** Presentational sidebar rows/sections — props in, JSX out (extracted from Sidebar.tsx verbatim). */
 
+import { useIsAuthenticated } from "../../lib/hooks";
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -76,7 +77,7 @@ export function SectionHeader({
 }
 /** Inbox nav row with the live unread badge (spec 26; polled — realtime with spec 27). */
 export function InboxLink() {
-  const { data } = useQuery(notificationsBadgeQuery);
+  const { data } = useQuery({ ...notificationsBadgeQuery, enabled: useIsAuthenticated() });
   const unread = data?.unread_count ?? 0;
   return (
     <Link to={RoutePath.inbox} className={navLinkClasses} data-pin-label="Inbox">
