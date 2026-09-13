@@ -818,18 +818,6 @@ async def manual_trigger_node(session: AsyncSession, rule_id: uuid.UUID) -> str 
     )
 
 
-async def schedule_states(
-    session: AsyncSession, rule_ids: list[uuid.UUID]
-) -> dict[uuid.UUID, AutomationScheduleState]:
-    """Scheduler bookkeeping rows by rule id (spec 69) — RuleRead hydration seam."""
-    if not rule_ids:
-        return {}
-    result = await session.execute(
-        select(AutomationScheduleState).where(AutomationScheduleState.rule_id.in_(rule_ids))
-    )
-    return {state.rule_id: state for state in result.scalars()}
-
-
 async def rule_reads(session: AsyncSession, rules: list[Automation]) -> list[RuleRead]:
     """RuleRead payloads with each trigger's scheduler stamps, batch-hydrated.
 
