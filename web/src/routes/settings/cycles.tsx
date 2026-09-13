@@ -16,7 +16,7 @@ import { usePermissions } from "../../lib/hooks";
 import { useCycleDirectory } from "../../lib/useCycleDirectory";
 import { DirectoryPager } from "../../components/DirectoryPager";
 import { CYCLE_STATUS_META } from "../../lib/meta";
-import { cycleSummaryQuery, teamsQuery } from "../../lib/queries";
+import { cycleSummaryQuery } from "../../lib/queries";
 import {
   CycleStatus,
   Permission,
@@ -34,7 +34,7 @@ import { Modal } from "../../components/Modal";
 import { Select } from "../../components/Select";
 import { TableSkeleton } from "../../components/TableSkeleton";
 import { TextField } from "../../components/TextField";
-import { TokenMultiSelect } from "../../components/TokenMultiSelect";
+import { TeamAudience } from "../../components/teams/TeamAudience";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { QueryError } from "../../components/QueryError";
 import { IconButton } from "../../components/IconButton";
@@ -171,8 +171,7 @@ function CycleModal({ cycle, onClose }: { cycle: Cycle | null; onClose: () => vo
   const [startDate, setStartDate] = useState(cycle?.start_date ?? "");
   const [endDate, setEndDate] = useState(cycle?.end_date ?? "");
   const [goal, setGoal] = useState(cycle?.goal ?? "");
-  // Spec 60 visibility: none checked = public, else only those teams (+ admins).
-  const teams = useQuery(teamsQuery());
+  // Spec 60 visibility: none chosen = public, else only those teams (+ admins).
   const [teamIds, setTeamIds] = useState<string[]>(cycle?.team_ids ?? []);
   // Recurring series (create only): "PIPE - 120" seeds label PIPE at 120; a bare
   // "PIPE" starts at the chosen number (import continuity).
@@ -271,26 +270,18 @@ function CycleModal({ cycle, onClose }: { cycle: Cycle | null; onClose: () => vo
           onChange={(event) => setGoal(event.target.value)}
           placeholder="What this cycle aims to ship"
         />
-        {(teams.data ?? []).length > 0 && (
-          <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-fg-secondary">Visible to</span>
-            <TokenMultiSelect
-              value={teamIds}
-              onChange={setTeamIds}
-              options={(teams.data ?? []).map((team) => ({
-                value: team.id,
-                label: team.name,
-              }))}
-              placeholder="Everyone — or pick teams…"
-              ariaLabel="Teams this cycle is visible to"
-            />
-            <p className="text-[11px] text-fg-faint">
-              {teamIds.length === 0
-                ? "Public — everyone sees this cycle."
-                : "Only members of the selected teams (and admins) see this cycle."}
-            </p>
-          </div>
-        )}
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-fg-secondary">Visible to</span>
+          {/* The bounded team picker (RADD-1115): the draft holds every chosen
+              id, one page of names mounts, and choices come from the searched
+              directory rather than a full team list. */}
+          <TeamAudience
+            value={teamIds}
+            onChange={setTeamIds}
+            emptyText="Public — everyone sees this cycle."
+            hint="Only members of the selected teams (and admins) see this cycle."
+          />
+        </div>
         {!editing && (
           <div className="flex flex-col gap-3 rounded-md border border-subtle bg-surface/40 p-3">
             <label className="flex items-center gap-2 text-[13px] text-fg">

@@ -10,8 +10,17 @@ import { TeamChoices } from "./TeamSelect";
 
 export const COMMENT_TEAM_PREVIEW_SIZE = 3;
 
-/** Complete audience IDs stay in the draft; only one window of labels/counts mounts. */
-export function TeamAudience({ value, onChange }: { value: string[]; onChange?: (ids: string[]) => void }) {
+const COMMENT_COPY = {
+  empty: "Visible to everyone on this project who can read internal notes.",
+  hint: "Team members still need access to this issue and internal notes. Project managers with internal-note access can also read it.",
+};
+
+/** Complete audience IDs stay in the draft; only one window of labels/counts mounts.
+ * The copy defaults to the internal-note audience; another surface (a cycle's
+ * visibility, RADD-1115) passes its own. */
+export function TeamAudience({ value, onChange, emptyText = COMMENT_COPY.empty, hint = COMMENT_COPY.hint }: {
+  value: string[]; onChange?: (ids: string[]) => void; emptyText?: string; hint?: string;
+}) {
   const [page, setPage] = useState(0);
   const [choosing, setChoosing] = useState(false);
   const ids = value.slice(page * TEAMS_PAGE_SIZE, (page + 1) * TEAMS_PAGE_SIZE);
@@ -21,7 +30,7 @@ export function TeamAudience({ value, onChange }: { value: string[]; onChange?: 
     if (page > 0 && page * TEAMS_PAGE_SIZE >= value.length) setPage(Math.max(0, Math.ceil(value.length / TEAMS_PAGE_SIZE) - 1));
   }, [page, value.length]);
   return <div className="w-full min-w-0 space-y-2">
-    {value.length === 0 ? <p className="text-[11px] text-fg-muted">Visible to everyone on this project who can read internal notes.</p> : <>
+    {value.length === 0 ? <p className="text-[11px] text-fg-muted">{emptyText}</p> : <>
       <p className="text-xs text-fg-secondary">Restricted to {value.length} selected team{value.length === 1 ? "" : "s"}</p>
       <ul aria-label="Selected audience teams" className="flex max-h-40 flex-wrap gap-1 overflow-y-auto">{ids.map(id => {
         const team = names.get(id);
@@ -32,7 +41,7 @@ export function TeamAudience({ value, onChange }: { value: string[]; onChange?: 
         </li>;
       })}</ul>
       <DirectoryPager page={page} pageSize={TEAMS_PAGE_SIZE} total={value.length} busy={references.isFetching} onPage={setPage} label="audience teams" />
-      <p className="text-[11px] text-fg-muted">Team members still need access to this issue and internal notes. Project managers with internal-note access can also read it.</p>
+      <p className="text-[11px] text-fg-muted">{hint}</p>
     </>}
     {references.isError && <div><QueryError label="audience teams" error={references.error} /><Button variant="ghost" size="sm" onClick={() => void references.refetch()}>Retry audience teams</Button></div>}
     {onChange && <Button variant="secondary" size="sm" aria-haspopup="dialog" onClick={() => setChoosing(true)}>Add audience team</Button>}

@@ -11,6 +11,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.apitypes import TOTAL_COUNT_HEADER
 from radd.db import get_session
 from radd.kernel import registries
 from radd.modules.projects import service as projects_service
@@ -102,7 +103,7 @@ async def role_choices(
     rows, total = await role_options.list_options(
         session, user, q=q, limit=limit, offset=offset, value=value, key=key
     )
-    response.headers["X-Total-Count"] = str(total)
+    response.headers[TOTAL_COUNT_HEADER] = str(total)
     return rows
 
 
@@ -115,7 +116,7 @@ async def assignable_role_choices(
     value: Annotated[str | None, Query(max_length=200)] = None,
 ) -> list[ChoiceRead]:
     rows, total = await role_options.list_options(session, user, q=q, limit=limit, offset=offset, value=value, assignable=True)
-    response.headers["X-Total-Count"] = str(total)
+    response.headers[TOTAL_COUNT_HEADER] = str(total)
     return rows
 
 
@@ -127,7 +128,7 @@ async def space_grant_directory(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[SpaceGrantDirectoryRead]:
     rows, total = await scoped_grants.page(session, user, space_id, GrantScopeKind.SPACE, q=q, limit=limit, offset=offset)
-    response.headers["X-Total-Count"] = str(total)
+    response.headers[TOTAL_COUNT_HEADER] = str(total)
     return rows
 
 
@@ -139,7 +140,7 @@ async def project_grant_directory(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[SpaceGrantDirectoryRead]:
     rows, total = await scoped_grants.page(session, user, project_id, GrantScopeKind.PROJECT, q=q, limit=limit, offset=offset)
-    response.headers["X-Total-Count"] = str(total)
+    response.headers[TOTAL_COUNT_HEADER] = str(total)
     return rows
 
 
@@ -156,7 +157,7 @@ async def subject_grant_directory(
         session, user, team_id=team_id, user_id=user_id, group_id=group_id,
         limit=limit, offset=offset,
     )
-    response.headers["X-Total-Count"] = str(total)
+    response.headers[TOTAL_COUNT_HEADER] = str(total)
     return rows
 
 
