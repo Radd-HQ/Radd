@@ -66,6 +66,7 @@ export const SLQ_VALUE_NOTES: readonly string[] = [
   "Bare words need no quotes; use 'single' or \"double\" quotes for spaces.",
   "Keywords are case-insensitive; field names are case-sensitive.",
   "me = the current user (assignee); none = unset relation (≡ IS EMPTY).",
+  "!= and NOT IN on a relation (assignee, team, cycle, epic.…, parent.…) also match items that have none — = and != always split the set.",
 ];
 
 export const SLQ_EXAMPLES: readonly string[] = [
