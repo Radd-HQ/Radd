@@ -1,9 +1,11 @@
 """OIDC single sign-on (spec 40 → spec 110).
 
-The flow is unchanged and standards-plain: authorization code + PKCE, `id_token`
-verified against the issuer's JWKS. What spec 110 changed is that the provider is
-a database ROW rather than the environment, so several IdPs coexist, and that
-provisioning is now explicit about the two questions the env design left implicit:
+The flow is unchanged and standards-plain: authorization code + PKCE, then the
+kind's profile strategy (`idp.py`: an `id_token` verified against the issuer's
+JWKS, or — GitHub, spec 121 — a profile API called with the access token). What
+spec 110 changed is that the provider is a database ROW rather than the
+environment, so several IdPs coexist, and that provisioning is now explicit
+about the two questions the env design left implicit:
 
   WHO IS THIS?    A (provider, subject) identity, pinned on first login. Email is
                   used ONCE, to find the account this person already has — and
@@ -22,11 +24,8 @@ import json
 import logging
 import secrets
 import time
-import uuid
 
 import httpx
-import jwt
-from jwt import PyJWKClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,57 +36,16 @@ from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole, UserSource
 from radd.modules.events import service as events
 
-from . import registry
+from . import idp, registry
 from .models import SsoProvider, UserIdentity
-from .types import WILDCARD_DOMAIN, SsoEntity, SsoEvent
+from .types import WILDCARD_DOMAIN, ProfileStrategy, SsoEntity, SsoEvent
 
 logger = logging.getLogger(__name__)
-
-# Per-provider caches — an instance runs several issuers now, so a single
-# module-level cache would have served Google's metadata for Okta's flow.
-# Metadata entries carry a fetch time and expire (RADD-899): an IdP that moves
-# its endpoints used to keep failing until a Radd restart. Key rotation was
-# never the problem — PyJWKClient refreshes keys itself.
-METADATA_TTL_SECONDS = 3600.0
-_metadata_cache: dict[uuid.UUID, tuple[float, dict]] = {}
-_jwks_clients: dict[uuid.UUID, PyJWKClient] = {}
 
 
 def enabled() -> bool:
     """Any provider ready to complete a flow (drives the kernel capability)."""
     return bool(registry.snapshot())
-
-
-def invalidate_caches(provider_id: uuid.UUID | None = None) -> None:
-    """Editing a row must not leave the old issuer's discovery document live."""
-    if provider_id is None:
-        _metadata_cache.clear()
-        _jwks_clients.clear()
-        return
-    _metadata_cache.pop(provider_id, None)
-    _jwks_clients.pop(provider_id, None)
-
-
-async def metadata(provider: SsoProvider) -> dict:
-    """Issuer discovery document, cached per provider with a TTL (RADD-899)."""
-    cached = _metadata_cache.get(provider.id)
-    if cached is not None and time.monotonic() - cached[0] < METADATA_TTL_SECONDS:
-        return cached[1]
-    url = registry.issuer_of(provider).rstrip("/") + "/.well-known/openid-configuration"
-    async with httpx.AsyncClient(timeout=settings.sso_http_timeout_seconds) as client:
-        response = await client.get(url)
-        response.raise_for_status()
-        document = response.json()
-    _metadata_cache[provider.id] = (time.monotonic(), document)
-    return document
-
-
-def _jwks(provider: SsoProvider, jwks_uri: str) -> PyJWKClient:
-    client = _jwks_clients.get(provider.id)
-    if client is None:
-        client = PyJWKClient(jwks_uri)
-        _jwks_clients[provider.id] = client
-    return client
 
 
 # --- authorization request ----------------------------------------------------
@@ -117,51 +75,26 @@ def redirect_uri() -> str:
 
 
 async def authorization_url(provider: SsoProvider, flow: dict) -> str:
-    meta = await metadata(provider)
-    params = httpx.QueryParams(
-        response_type="code",
-        client_id=provider.client_id,
-        redirect_uri=redirect_uri(),
-        scope=registry.scopes_of(provider),
-        state=flow["state"],
-        nonce=flow["nonce"],
-        code_challenge=code_challenge(flow["verifier"]),
-        code_challenge_method="S256",
-    )
-    return f"{meta['authorization_endpoint']}?{params}"
+    meta = await idp.metadata(provider)
+    params = {
+        "response_type": "code",
+        "client_id": provider.client_id,
+        "redirect_uri": redirect_uri(),
+        "scope": registry.scopes_of(provider),
+        "state": flow["state"],
+        "code_challenge": code_challenge(flow["verifier"]),
+        "code_challenge_method": "S256",
+    }
+    # The nonce is bound into the id_token, which is where it gets checked; a
+    # kind that issues none has nowhere to echo it, so it is not sent.
+    if idp.defaults_of(provider).profile is ProfileStrategy.ID_TOKEN:
+        params["nonce"] = flow["nonce"]
+    return f"{meta['authorization_endpoint']}?{httpx.QueryParams(params)}"
 
 
 async def exchange_code(provider: SsoProvider, code: str, flow: dict) -> dict:
-    """Code → verified id_token claims."""
-    meta = await metadata(provider)
-    async with httpx.AsyncClient(timeout=settings.sso_http_timeout_seconds) as client:
-        response = await client.post(
-            meta["token_endpoint"],
-            data={
-                "grant_type": "authorization_code",
-                "code": code,
-                "redirect_uri": redirect_uri(),
-                "client_id": provider.client_id,
-                "client_secret": provider.client_secret,
-                "code_verifier": flow["verifier"],
-            },
-        )
-        response.raise_for_status()
-        tokens = response.json()
-    id_token = tokens.get("id_token")
-    if not id_token:
-        raise ForbiddenError(f"{provider.name} returned no id_token")
-    signing_key = _jwks(provider, meta["jwks_uri"]).get_signing_key_from_jwt(id_token)
-    claims = jwt.decode(
-        id_token,
-        signing_key.key,
-        algorithms=["RS256", "ES256"],
-        audience=provider.client_id,
-        issuer=meta["issuer"],
-    )
-    if claims.get("nonce") != flow["nonce"]:
-        raise ForbiddenError("sign-in nonce mismatch — retry")
-    return claims
+    """Code → claims, through the kind's endpoints and profile strategy (`idp`)."""
+    return await idp.exchange_code(provider, code, flow, redirect_uri())
 
 
 # --- claim reading ------------------------------------------------------------

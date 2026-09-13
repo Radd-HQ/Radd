@@ -62,11 +62,11 @@ def configured(provider: SsoProvider) -> bool:
 
 
 def issuer_of(provider: SsoProvider) -> str:
-    return provider.issuer or KIND_DEFAULTS[SsoKind(provider.kind)]["issuer"]
+    return provider.issuer or KIND_DEFAULTS[SsoKind(provider.kind)].issuer
 
 
 def scopes_of(provider: SsoProvider) -> str:
-    return provider.scopes or KIND_DEFAULTS[SsoKind(provider.kind)]["scopes"]
+    return provider.scopes or KIND_DEFAULTS[SsoKind(provider.kind)].scopes
 
 
 async def refresh_snapshot(session: AsyncSession) -> None:
@@ -125,7 +125,7 @@ async def create_provider(
     kind = SsoKind(data.kind)
     if kind is SsoKind.OIDC and not (data.issuer or "").strip():
         raise ConflictError(SsoEntity.PROVIDER, reason="a generic OIDC provider needs an issuer URL")
-    name = (data.name or "").strip() or KIND_DEFAULTS[kind]["name"]
+    name = (data.name or "").strip() or KIND_DEFAULTS[kind].name
     await _assert_name_free(session, name)
     provider = SsoProvider(
         name=name,
@@ -249,7 +249,7 @@ async def update_provider(
     if patch.get("client_secret"):
         provider.client_secret = patch["client_secret"].strip()
     if not provider.name:
-        provider.name = KIND_DEFAULTS[SsoKind(provider.kind)]["name"]
+        provider.name = KIND_DEFAULTS[SsoKind(provider.kind)].name
     await session.flush()
     return provider
 

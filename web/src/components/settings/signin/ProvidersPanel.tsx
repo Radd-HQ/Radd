@@ -7,6 +7,7 @@ import { instanceStatusQuery, queryKeys, ssoProvidersQuery } from "../../../lib/
 import {
   SIGNUP_DOMAIN_WILDCARD,
   SsoKind,
+  type SsoKindValue,
   type SsoProbeResult,
   type SsoProviderRead,
 } from "../../../lib/types";
@@ -17,6 +18,12 @@ import { QueryError } from "../../QueryError";
 import { Table, TBody, Td, Th, THead } from "../../Table";
 import { TableSkeleton } from "../../TableSkeleton";
 import { ProviderDialog } from "./ProviderDialog";
+
+/** The host a pinned kind talks to — its row has no issuer of its own to show. */
+const PINNED_HOST: Partial<Record<SsoKindValue, string>> = {
+  [SsoKind.google]: "accounts.google.com",
+  [SsoKind.github]: "github.com",
+};
 
 /** Who may create an account here, as one readable phrase. */
 function SignupSummary({ provider }: { provider: SsoProviderRead }) {
@@ -165,9 +172,7 @@ export function ProvidersPanel() {
                     {/* The issuer, not the kind — a row labelled "Google / Google"
                         says nothing twice. */}
                     <div className="text-xs text-fg-muted">
-                      {provider.kind === SsoKind.google
-                        ? "accounts.google.com"
-                        : provider.issuer || "OIDC"}
+                      {PINNED_HOST[provider.kind] ?? (provider.issuer || "OIDC")}
                     </div>
                     {check && check !== "pending" && (
                       <div

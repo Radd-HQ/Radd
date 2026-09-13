@@ -18,6 +18,7 @@ CRUD tests are flushed, never committed; the session rolls back at teardown.
 
 import uuid
 
+import httpx
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -26,10 +27,10 @@ from radd.config import settings
 from radd.exceptions import ConflictError, ForbiddenError
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole, UserSource
-from radd.modules.sso import registry, service
+from radd.modules.sso import idp, registry, service
 from radd.modules.sso.models import UserIdentity
 from radd.modules.sso.schemas import SsoProviderCreate, SsoProviderUpdate
-from radd.modules.sso.types import WILDCARD_DOMAIN, SsoKind
+from radd.modules.sso.types import KIND_DEFAULTS, WILDCARD_DOMAIN, SsoKind
 
 
 @pytest.fixture
@@ -546,3 +547,139 @@ async def test_a_rule_that_matches_nobody_grants_nothing(db):
     user = await service.provision(db, provider, _claims(f"d-{uuid.uuid4().hex[:6]}@radd-hq.com"))
 
     assert await _grants_for(db, user.id) == []
+
+
+# --- GitHub: a kind supplies endpoints + a profile strategy (spec 121) --------
+
+GITHUB = KIND_DEFAULTS[SsoKind.GITHUB]
+
+
+@pytest.fixture
+def github_api():
+    """A MockTransport on the idp seam playing GitHub. The test edits `emails`;
+    every request is recorded so headers can be asserted."""
+    state: dict = {
+        "requests": [],
+        "user": {
+            "id": 583231,
+            "login": "octocat",
+            "name": "The Octocat",
+            "email": None,
+            "avatar_url": "https://avatars.githubusercontent.com/u/583231",
+        },
+        "emails": [
+            {"email": "octocat@hjarrar.com", "primary": True, "verified": True},
+            {"email": "old@example.org", "primary": False, "verified": True},
+        ],
+        "tokens": {"access_token": "gho_test", "token_type": "bearer"},
+    }
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        state["requests"].append(request)
+        url = str(request.url).split("?", 1)[0]
+        if url == GITHUB.token_endpoint:
+            return httpx.Response(200, json=state["tokens"])
+        if url == GITHUB.profile_url:
+            return httpx.Response(200, json=state["user"])
+        if url == GITHUB.emails_url:
+            return httpx.Response(200, json=state["emails"])
+        return httpx.Response(404, json={"message": f"unexpected {url}"})
+
+    idp.transport = httpx.MockTransport(handle)
+    yield state
+    idp.transport = None
+    idp.invalidate_caches()
+
+
+async def _github_provider(db, **overrides):
+    return await _provider(
+        db,
+        kind=SsoKind.GITHUB,
+        name=f"github-{uuid.uuid4().hex[:8]}",
+        issuer="",
+        scopes="",
+        **overrides,
+    )
+
+
+async def test_github_kind_supplies_issuer_scopes_and_endpoints(db, github_api):
+    """No issuer to paste, no discovery to fetch: the kind IS the configuration."""
+    provider = await _github_provider(db)
+
+    assert registry.issuer_of(provider) == "https://github.com"
+    assert "user:email" in registry.scopes_of(provider)
+    assert registry.configured(provider)
+
+    meta = await idp.metadata(provider)
+    assert meta["authorization_endpoint"] == GITHUB.authorization_endpoint
+    assert meta["token_endpoint"] == GITHUB.token_endpoint
+    assert github_api["requests"] == []  # synthesized, never fetched
+
+
+async def test_github_authorization_request_carries_pkce_but_no_nonce(db, github_api):
+    provider = await _github_provider(db)
+    flow = service.new_flow(provider)
+
+    url = httpx.URL(await service.authorization_url(provider, flow))
+
+    assert str(url).startswith(GITHUB.authorization_endpoint)
+    assert url.params["code_challenge_method"] == "S256"
+    assert url.params["state"] == flow["state"]
+    assert "nonce" not in url.params  # nothing would echo it back
+
+
+async def test_github_profile_reads_the_verified_primary_email(db, github_api):
+    """Subject = the numeric id (a login is renameable); email = the primary AND
+    verified entry from /user/emails, never the profile's public address."""
+    provider = await _github_provider(db)
+    flow = service.new_flow(provider)
+
+    claims = await service.exchange_code(provider, "code-1", flow)
+
+    assert claims["sub"] == "583231"
+    assert claims["email"] == "octocat@hjarrar.com"
+    assert claims["email_verified"] is True
+    assert claims["name"] == "The Octocat"
+    assert claims["picture"].startswith("https://avatars.githubusercontent.com/")
+
+    token_request, profile_request, emails_request = github_api["requests"]
+    assert token_request.headers["accept"] == "application/json"
+    assert "code_verifier=" + flow["verifier"] in token_request.content.decode()
+    assert profile_request.headers["authorization"] == "Bearer gho_test"
+    assert emails_request.headers["authorization"] == "Bearer gho_test"
+
+    user = await service.provision(db, provider, claims)
+    assert user.email == "octocat@hjarrar.com"
+
+
+async def test_github_unverified_primary_is_not_trusted(db, github_api):
+    """No verified primary → `email_verified` False, and the EXISTING
+    require_verified_email refusal handles it — no GitHub-specific path."""
+    github_api["emails"] = [{"email": "octocat@hjarrar.com", "primary": True, "verified": False}]
+    provider = await _github_provider(db)
+
+    claims = await idp.profile(provider, github_api["tokens"], service.new_flow(provider))
+
+    assert claims["email"] == "octocat@hjarrar.com"
+    assert claims["email_verified"] is False
+    with pytest.raises(ForbiddenError, match="has not verified"):
+        await service.provision(db, provider, claims)
+
+
+async def test_github_name_falls_back_to_the_login(db, github_api):
+    github_api["user"] = {**github_api["user"], "name": None}
+    provider = await _github_provider(db)
+
+    claims = await idp.profile(provider, github_api["tokens"], service.new_flow(provider))
+
+    assert claims["name"] == "octocat"
+
+
+async def test_an_oidc_kind_still_requires_an_id_token(db, github_api):
+    """The id_token strategy is untouched: an access token alone is refused
+    before anything is fetched."""
+    provider = await _provider(db)  # google
+
+    with pytest.raises(ForbiddenError, match="no id_token"):
+        await idp.profile(provider, {"access_token": "ya29.x"}, service.new_flow(provider))
+    assert github_api["requests"] == []

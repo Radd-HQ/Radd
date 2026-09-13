@@ -120,7 +120,9 @@ export function ProviderDialog({
   const [error, setError] = useState("");
 
   const kindInfo = (kinds.data ?? []).find((k) => k.kind === kind);
-  const isGoogle = kind === SsoKind.google;
+  // Only a generic OIDC issuer is typed in; Google's and GitHub's endpoints
+  // are pinned server-side.
+  const needsIssuer = kind === SsoKind.oidc;
   const wildcard = domains.includes(SIGNUP_DOMAIN_WILDCARD);
 
   const save = useMutation({
@@ -128,7 +130,7 @@ export function ProviderDialog({
       const payload: SsoProviderPayload = {
         name: name.trim(),
         enabled,
-        issuer: isGoogle ? "" : issuer.trim(),
+        issuer: needsIssuer ? issuer.trim() : "",
         client_id: clientId.trim(),
         auto_provision: autoProvision,
         allowed_signup_domains: domains,
@@ -195,7 +197,7 @@ export function ProviderDialog({
           hint="What the sign-in button says."
         />
 
-        {!isGoogle && (
+        {needsIssuer && (
           <TextField
             label="Issuer URL"
             value={issuer}

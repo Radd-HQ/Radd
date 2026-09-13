@@ -24,6 +24,21 @@ enabled, position, issuer, client id/secret, scopes, `auto_provision`,
 issuer is pinned, so an admin pastes a client id/secret and a domain list and
 nothing else. Every kind runs the SAME engine; a kind never forks the flow.
 
+**Spec 121 restatement (RADD-1145).** "A kind only supplies discovery defaults"
+was true while every kind was OIDC. GitHub is plain OAuth2 — no discovery
+document, no `id_token` — so the rule is now: **a kind supplies its ENDPOINTS
+and its PROFILE STRATEGY; the state + PKCE + one-callback + identity-pinning +
+signup-allowlist engine is shared.** `KindDefaults` (`types.py`) declares both
+per kind — `discovery` (fetch `/.well-known/openid-configuration` vs. pinned
+endpoints) and `profile` (`id_token` verified against the JWKS vs. a profile
+API called with the access token) — and `idp.py` is the only code that reads
+them: `metadata()` returns a synthetic document for a pinned kind, `profile()`
+turns either token response into the SAME claim-shaped dict, so `provision()`
+never learns which kind signed the person in. GitHub's subject is the numeric
+`id` (never `login`, which is renameable); its email is the `primary` +
+`verified` entry from `/user/emails`, emitted as `email_verified`, so
+`require_verified_email` and the email-once linking rule apply untouched.
+
 The env `oidc_*` settings survive as **seed-only** input (`seed_from_env`, runs
 only on an empty table, exactly the `ai/registry.py` rule) plus a new
 `RADD_OIDC_SIGNUP_DOMAINS`. An empty list + `auto_provision` on seeds the `"*"`

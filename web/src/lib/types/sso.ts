@@ -21,10 +21,13 @@ export interface SsoDefaultGrant {
 
 /** SSO provider registry (spec 110): providers, signup policy, login buttons. */
 
-/** Which IdP a provider talks to. Every kind runs the same OIDC code+PKCE flow. */
+/** Which IdP a provider talks to. Every kind runs the same code+PKCE flow; a
+ *  kind only supplies its endpoints and how it reads the profile (github is
+ *  plain OAuth2 — no issuer to configure, like google). */
 export const SsoKind = {
   google: "google",
   oidc: "oidc",
+  github: "github",
 } as const;
 export type SsoKindValue = (typeof SsoKind)[keyof typeof SsoKind];
 

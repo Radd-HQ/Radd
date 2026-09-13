@@ -18,7 +18,7 @@ from radd.modules.auth import authz
 from radd.modules.auth.deps import CurrentUser
 from radd.modules.auth.models import User
 
-from . import registry, service, references
+from . import idp, registry, service, references
 from .models import SsoProvider
 from .schemas import SsoDefaultGrant, SsoProvisioningRule, SsoProviderCreate, SsoProviderRead, SsoProviderUpdate
 from .types import KIND_DEFAULTS, SsoKind
@@ -77,7 +77,7 @@ async def provisioning_references(data: references.ReferenceRequest, session: Se
 async def list_kinds(user: CurrentUser) -> list[SsoKindInfo]:
     _require_instance_admin(user)
     return [
-        SsoKindInfo(kind=kind, name=d["name"], issuer=d["issuer"], scopes=d["scopes"])
+        SsoKindInfo(kind=kind, name=d.name, issuer=d.issuer, scopes=d.scopes)
         for kind, d in KIND_DEFAULTS.items()
     ]
 
@@ -104,7 +104,7 @@ async def update_provider(
 ) -> SsoProviderRead:
     _require_instance_admin(user)
     provider = await registry.update_provider(session, provider_id, data)
-    service.invalidate_caches(provider_id)
+    idp.invalidate_caches(provider_id)
     await registry.refresh_snapshot(session)
     return await _read(session, provider)
 
@@ -113,7 +113,7 @@ async def update_provider(
 async def delete_provider(provider_id: uuid.UUID, session: Session, user: CurrentUser) -> Response:
     _require_instance_admin(user)
     await registry.delete_provider(session, provider_id)
-    service.invalidate_caches(provider_id)
+    idp.invalidate_caches(provider_id)
     await registry.refresh_snapshot(session)
     return Response(status_code=204)
 
@@ -130,14 +130,15 @@ async def test_provider(
 ) -> ProbeResult:
     """Fetch the issuer's discovery document — the one thing that can be checked
     without a human completing a login. Failures come back as DATA (the admin is
-    diagnosing config), never a 502."""
+    diagnosing config), never a 502. A pinned kind (GitHub) has nothing to fetch,
+    so the probe simply reports the endpoints it knows."""
     _require_instance_admin(user)
     provider = await registry.get_provider(session, provider_id)
     if not registry.issuer_of(provider):
         return ProbeResult(ok=False, error="set an issuer URL")
-    service.invalidate_caches(provider_id)
+    idp.invalidate_caches(provider_id)
     try:
-        meta = await service.metadata(provider)
+        meta = await idp.metadata(provider)
     except Exception as exc:  # the probe button REPORTS failure; that is its job
         return ProbeResult(ok=False, error=f"could not reach the issuer: {exc}")
     return ProbeResult(ok=True, authorization_endpoint=meta.get("authorization_endpoint", ""))
