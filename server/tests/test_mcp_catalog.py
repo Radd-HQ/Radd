@@ -32,6 +32,7 @@ WRITE_TOOLS = {
     McpTool.TRANSITION_ITEM.value,
     McpTool.LOG_WORK.value,
     McpTool.CREATE_RELEASE.value,
+    McpTool.UPDATE_RELEASE.value,
     McpTool.SET_ITEM_RELEASE.value,
     McpTool.CREATE_SERVICE_ACCOUNT.value,
 }

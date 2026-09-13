@@ -49,7 +49,9 @@ TRACKER_TOOLS = {
     McpTool.UPDATE_WORKLOG,  # RADD-741: derived time gets corrected
     McpTool.DELETE_WORKLOG,
     McpTool.LIST_RELEASES,
+    McpTool.GET_RELEASE,
     McpTool.CREATE_RELEASE,
+    McpTool.UPDATE_RELEASE,
     McpTool.SWEEP_RELEASE,  # RADD-673: the spec-112 pipeline step, agent-reachable
     McpTool.SET_ITEM_RELEASE,
     McpTool.LIST_USERS,

@@ -67,6 +67,9 @@ class McpTool(StrEnum):
     LIST_PROJECTS = "list_projects"
     GET_PAGE = "get_page"
     SEARCH_PAGES = "search_pages"
+    CREATE_PAGE = "create_page"  # RADD-1005: the wiki, writable
+    UPDATE_PAGE = "update_page"
+    MOVE_PAGE = "move_page"
     # --- spec 114: families that appear only for keys that may use them ---
     GET_ALLOWED_TRANSITIONS = "get_allowed_transitions"
     TRANSITION_ITEM = "transition_item"
@@ -75,7 +78,9 @@ class McpTool(StrEnum):
     UPDATE_WORKLOG = "update_worklog"  # RADD-741
     DELETE_WORKLOG = "delete_worklog"  # RADD-741
     LIST_RELEASES = "list_releases"
+    GET_RELEASE = "get_release"  # RADD-908: the notes, readable
     CREATE_RELEASE = "create_release"
+    UPDATE_RELEASE = "update_release"  # RADD-908: the notes, writable
     SWEEP_RELEASE = "sweep_release"  # RADD-673: the spec-112 pipeline step, agent-reachable
     SET_ITEM_RELEASE = "set_item_release"
     LIST_USERS = "list_users"
@@ -84,7 +89,15 @@ class McpTool(StrEnum):
 
 
 # The doc tools ride the pages plugin (spec 43), which may be absent or disabled.
-PAGE_TOOLS = frozenset({McpTool.GET_PAGE, McpTool.SEARCH_PAGES})
+PAGE_TOOLS = frozenset(
+    {
+        McpTool.GET_PAGE,
+        McpTool.SEARCH_PAGES,
+        McpTool.CREATE_PAGE,
+        McpTool.UPDATE_PAGE,
+        McpTool.MOVE_PAGE,
+    }
+)
 
 
 #: Same headers the AI streams use: no buffering anywhere between here and the
