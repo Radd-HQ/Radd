@@ -54,6 +54,7 @@ import { Spinner } from "../components/Spinner";
 import { Table, TBody, Td, THead, Th } from "../components/Table";
 import { TextField } from "../components/TextField";
 import { ErrorText } from "../components/ErrorText";
+import { formatIso, todayIso } from "../lib/dates";
 
 const PERIODS: { value: TimesheetPeriodValue; label: string }[] = [
   { value: TimesheetPeriod.day, label: "Day" },
@@ -76,7 +77,7 @@ export function TimesheetPage() {
   const [period, setPeriodState] = useState<TimesheetPeriodValue>(
     (url.p as TimesheetPeriodValue) ?? TimesheetPeriod.week,
   );
-  const [anchor, setAnchorState] = useState(() => (url.d ? new Date(`${url.d}T00:00:00`) : new Date()));
+  const [anchor, setAnchorState] = useState(() => fromISODate(url.d ?? todayIso()));
   const [groupBy, setGroupByState] = useState<TimesheetGroupByValue>(
     (url.g as TimesheetGroupByValue) ?? TimesheetGroupBy.issue,
   );
@@ -206,7 +207,7 @@ export function TimesheetPage() {
           >
             <ChevronLeft size={16} />
           </button>
-          <Button variant="secondary" size="sm" onClick={() => setAnchor(new Date())}>
+          <Button variant="secondary" size="sm" onClick={() => setAnchor(fromISODate(todayIso()))}>
             Today
           </Button>
           <button
@@ -379,7 +380,7 @@ function LogGeneralTimeModal({ onClose }: { onClose: () => void }) {
   const [projectId, setProjectId] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [timeSpent, setTimeSpent] = useState("");
-  const [workedOn, setWorkedOn] = useState(() => toISODate(new Date()));
+  const [workedOn, setWorkedOn] = useState(() => todayIso());
   const [note, setNote] = useState("");
 
   const save = useMutation({
@@ -475,7 +476,7 @@ function LogGeneralTimeModal({ onClose }: { onClose: () => void }) {
 }
 
 function dayHeader(iso: string): string {
-  return fromISODate(iso).toLocaleDateString(undefined, { weekday: "short", day: "numeric" });
+  return formatIso(iso, { weekday: "short", day: "numeric" });
 }
 
 /** Weekday key ("mon"…"sun") for an ISO date — matches the /instance work week. */
@@ -513,7 +514,7 @@ function TimesheetGrid({
   // in-progress today always reads under), under-logging only on workdays,
   // and a leave/holiday day is never an outlier.
   const personMode = groupBy === TimesheetGroupBy.person;
-  const todayISO = toISODate(new Date());
+  const todayISO = todayIso();
   const minSeconds = (sheet?.day_min_hours ?? 6) * 3600;
   const maxSeconds = (sheet?.day_max_hours ?? 10) * 3600;
   const flagWorkDays = new Set(sheet?.work_days ?? []);

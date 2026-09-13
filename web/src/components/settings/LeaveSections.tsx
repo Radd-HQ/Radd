@@ -3,10 +3,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
-import { shortDate } from "../../lib/dates";
+import { shortDate, todayIso } from "../../lib/dates";
 import { useCurrentUser } from "../../lib/hooks";
 import { holidaysQuery, myLeaveQuery, teamsQuery } from "../../lib/queries";
-import { toISODate } from "../../lib/timesheet";
 import { InstanceRole, type LeaveCreate, type LeavePeriod } from "../../lib/types";
 import { Button } from "../Button";
 import { SelectField } from "../SelectField";
@@ -106,8 +105,8 @@ function AddPeriodForm({ kind }: { kind: "leave" | "holiday" }) {
   const teams = useQuery({ ...teamsQuery(), enabled: kind === "holiday" });
   const [teamId, setTeamId] = useState("");
   const [label, setLabel] = useState("");
-  const [startDate, setStartDate] = useState(() => toISODate(new Date()));
-  const [endDate, setEndDate] = useState(() => toISODate(new Date()));
+  const [startDate, setStartDate] = useState(() => todayIso());
+  const [endDate, setEndDate] = useState(() => todayIso());
 
   const save = useMutation({
     mutationFn: () => {

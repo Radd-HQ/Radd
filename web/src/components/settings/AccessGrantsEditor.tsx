@@ -17,6 +17,7 @@ import { TextField } from "../TextField";
 import { ExpiryChip } from "./AccessInspector";
 import { AddResourceGrantDialog } from "./AddResourceGrantDialog";
 import { SUBJECT_ICON } from "./SubjectPicker";
+import { formatDate } from "../../lib/dates";
 
 export interface ResourceGrantScope { id: string | null; label: string }
 
@@ -68,7 +69,7 @@ export function AccessGrantsEditor({ resourceType, resourceId, accesses, subject
                 <span className="min-w-0 flex-1 break-words">{grant.subject_name ?? `Unavailable ${grant.subject_type}`}</span>
                 <span className="rounded border border-subtle px-1.5 py-px">{grant.effect === "deny" ? "May not" : "May"} {grant.access}</span>
                 {grant.expires_at && (grant.expired
-                  ? <span className="text-fg-muted" title={grant.expires_at}>Expired {new Date(grant.expires_at).toLocaleDateString()}</span>
+                  ? <span className="text-fg-muted" title={grant.expires_at}>Expired {formatDate(grant.expires_at)}</span>
                   : <ExpiryChip expiresAt={grant.expires_at} />)}
                 {spec.project_scoped && (grant.project_id === null ?
                   <span className="inline-flex items-center gap-1 text-fg-muted"><Globe size={10} aria-hidden /> Global</span> :

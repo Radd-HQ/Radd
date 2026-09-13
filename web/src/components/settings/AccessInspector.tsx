@@ -31,6 +31,7 @@ import { OptionSelect } from "../DirectoryChoices";
 import { OptionResource } from "../../lib/queries/options";
 import { Button } from "../Button";
 import { ErrorText } from "../ErrorText";
+import { formatDate, formatDateTime } from "../../lib/dates";
 
 /** The atom half resolves only an explicitly selected scope; catalogs open lazily. */
 export function EffectivePermissions({ userId }: { userId: string }) {
@@ -141,9 +142,9 @@ export function ExpiryChip({ expiresAt }: { expiresAt: string }) {
         "ml-1 rounded border px-1 text-[10px] " +
         (soon ? "border-amber-500/40 text-amber-400" : "border-subtle text-fg-faint")
       }
-      title={`Expires ${ends.toLocaleString()}`}
+      title={`Expires ${formatDateTime(expiresAt)}`}
     >
-      expires {ends.toLocaleDateString()}
+      expires {formatDate(expiresAt)}
     </span>
   );
 }

@@ -10,6 +10,7 @@ import { Select } from "../Select";
 import { Spinner } from "../Spinner";
 import { TextField } from "../TextField";
 import { AddSharingGrantDialog, SHARE_LEVEL_OPTIONS } from "./AddSharingGrantDialog";
+import { formatDate } from "../../lib/dates";
 
 /** Only explicit changes are submitted; paging never turns unseen rows into deletions. */
 export function SharingGrantsEditor({ resourceType, resourceId, draft, onChange }: {
@@ -33,7 +34,7 @@ export function SharingGrantsEditor({ resourceType, resourceId, draft, onChange 
     return <li key={row.id} data-sharing-grant={row.id} className="flex min-w-0 flex-wrap items-center gap-2 rounded border border-subtle p-2 text-xs">
       <span className="min-w-0 flex-1 break-words">{row.subject_name ?? `Unavailable ${row.subject_type}`}</span>
       <span className="text-fg-muted">{row.subject_type}{row.effect === "deny" ? " · Deny" : ""}</span>
-      {row.expires_at && <span className="text-fg-muted" title={row.expires_at}>{row.expired ? "Expired" : "Expires"} {new Date(row.expires_at).toLocaleDateString()}</span>}
+      {row.expires_at && <span className="text-fg-muted" title={row.expires_at}>{row.expired ? "Expired" : "Expires"} {formatDate(row.expires_at)}</span>}
       {removed ? <span>Will be removed</span> : <Select aria-label={row.effect === "deny" ? "Denied access level" : "Access level"} size="sm"
         value={edited?.access ?? row.access} options={SHARE_LEVEL_OPTIONS}
         onChange={value => onChange(changeSharingGrant(draft, row, value as ShareLevelValue))} />}

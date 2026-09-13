@@ -65,7 +65,6 @@ import {
   importChildrenPlan,
   intraEpicBlocksEdges,
   parseDay,
-  todayIso,
   type RoadmapExtension,
   type RoadmapRow,
 } from "./roadmap-model";
@@ -74,6 +73,7 @@ import { useRoadmapDraft } from "./useRoadmapDraft";
 import { useRoadmapViewport } from "./useRoadmapViewport";
 import { ExtendDirection, type ExtendDirectionValue } from "./useBarDrag";
 import { MOD_KEY, modShortcut, shiftModShortcut } from "../../lib/platform";
+import { todayIso } from "../../lib/dates";
 
 export interface RoadmapSurfaceProps {
   /** The saved view being rendered (spec 79): `id` keys the per-view

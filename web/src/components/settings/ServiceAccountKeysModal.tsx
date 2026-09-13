@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, KeyRound, Trash2 } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { apiServiceAccountKeyPath, apiServiceAccountKeysPath } from "../../lib/constants";
 import { Entity, invalidateEntities } from "../../lib/cache";
-import { permissionsCatalogQuery } from "../../lib/queries";
 import { serviceAccountQuery, serviceKeyDirectoryQuery, SERVICE_ACCOUNT_PAGE_SIZE } from "../../lib/queries/integrations";
 import { useDirectory } from "../../lib/useDirectory";
 import type { ServiceAccount, ServiceAccountKeyCreated, TokenScopes } from "../../lib/types";
@@ -12,11 +11,10 @@ import { Button } from "../Button";
 import { DirectoryPager } from "../DirectoryPager";
 import { Modal } from "../Modal";
 import { QueryError } from "../QueryError";
-import { ProjectSelect } from "../projects/ProjectSelect";
-import { SelectField } from "../SelectField";
 import { TableSkeleton } from "../TableSkeleton";
 import { TextField } from "../TextField";
-import { TokenMultiSelect } from "../TokenMultiSelect";
+import { TokenScopeEditor, composeScopes, scopeIsIncomplete } from "./TokenScopeEditor";
+import { formatDate } from "../../lib/dates";
 
 /** Direct detail keeps an off-page account and its unfinished key form reachable. */
 export function ServiceAccountKeysModal({ id, onClose }: { id: string; onClose: () => void }) {
@@ -34,31 +32,17 @@ function KeyEditor({ account, onClose, accountError }: { account: ServiceAccount
   useEffect(() => {
     if (keys.isSuccess && !keys.busy && keys.page > 0 && keys.page * keys.pageSize >= keys.total) keys.setPage(Math.max(0, Math.ceil(keys.total / keys.pageSize) - 1));
   }, [keys.isSuccess, keys.busy, keys.page, keys.pageSize, keys.total, keys.setPage]);
-  const catalog = useQuery(permissionsCatalogQuery);
-
-  const [scopeMode, setScopeMode] = useState("restricted");
   const [keyName, setKeyName] = useState("");
-  const [projectId, setProjectId] = useState("");
-  const [atoms, setAtoms] = useState<string[]>([]);
+  // A service-account key STARTS restricted (an empty selection, so nothing can
+  // be minted until atoms are chosen): full authority is an explicit choice,
+  // and an unfinished restricted form cannot mint an unrestricted key.
+  const [scopes, setScopes] = useState<TokenScopes | null>(() => composeScopes([], []));
   const [minted, setMinted] = useState<ServiceAccountKeyCreated | null>(null);
-
-  const atomOptions = useMemo(
-    () =>
-      (catalog.data ?? [])
-        .map((entry) => ({ value: entry.key, label: entry.key, hint: entry.description, group: entry.scope }))
-        .sort((a, b) => a.value.localeCompare(b.value)),
-    [catalog.data],
-  );
+  const incomplete = scopeIsIncomplete(scopes);
 
   const mint = useMutation({
     mutationFn: () => {
-      // Full authority is an explicit choice; an unfinished restricted form cannot mint an unrestricted key.
-      if (scopeMode === "restricted" && atoms.length === 0) throw new Error("Choose at least one permission for a restricted key.");
-      const scopes: TokenScopes | null = scopeMode === "restricted"
-        ? projectId
-          ? { projects: { [projectId]: atoms } }
-          : { global: atoms }
-        : null;
+      if (incomplete) throw new Error("Choose at least one permission for a restricted key.");
       return api.post<ServiceAccountKeyCreated>(apiServiceAccountKeysPath(account.id), {
         name: keyName.trim() || "key",
         scopes,
@@ -67,7 +51,7 @@ function KeyEditor({ account, onClose, accountError }: { account: ServiceAccount
     onSuccess: async (created) => {
       setMinted(created);
       setKeyName("");
-      setAtoms([]);
+      setScopes(composeScopes([], []));
       await invalidateEntities(queryClient, Entity.serviceAccount);
     },
   });
@@ -124,7 +108,7 @@ function KeyEditor({ account, onClose, accountError }: { account: ServiceAccount
                   <span className="max-w-full break-words text-[11px] text-fg-muted">
                     {key.restricted ? `scoped: ${key.global_count} global, ${key.project_count} projects` : "full account authority"}
                   </span>
-                  {key.expires_at && <span className="text-[11px] text-fg-muted">{new Date(key.expires_at).getTime() < Date.now() ? "Expired" : `Expires ${new Date(key.expires_at).toLocaleDateString()}`}</span>}
+                  {key.expires_at && <span className="text-[11px] text-fg-muted">{new Date(key.expires_at).getTime() < Date.now() ? "Expired" : `Expires ${formatDate(key.expires_at)}`}</span>}
                   <button
                     type="button"
                     aria-label={`Revoke ${key.name}`}
@@ -154,23 +138,10 @@ function KeyEditor({ account, onClose, accountError }: { account: ServiceAccount
               onChange={(event) => setKeyName(event.target.value)}
               placeholder="mcp"
             />
-            <SelectField label="Key authority" value={scopeMode} onChange={event => setScopeMode(event.target.value)}>
-              <option value="restricted">Selected permissions</option>
-              <option value="full">Full account authority</option>
-            </SelectField>
-            {scopeMode === "restricted" && <ProjectSelect label="Scope" value={projectId} onChange={setProjectId} emptyLabel="All accessible scopes" hint="Apply the selected permissions across this account’s accessible scopes, or only to one project." />}
-            {scopeMode === "full" && <p className="text-xs text-fg-muted">This key can use all current and future permissions of this account.</p>}
-            {scopeMode === "restricted" && <div>
-              <span className="mb-1 block text-[12px] text-fg-secondary">Permissions</span>
-              <TokenMultiSelect
-                ariaLabel="Key permissions"
-                value={atoms}
-                onChange={setAtoms}
-                options={atomOptions}
-                placeholder="item.read, item.create…"
-              />
-            </div>}
-            <Button onClick={() => mint.mutate()} disabled={mint.isPending || (scopeMode === "restricted" && !atoms.length)}>
+            {/* The account's roles are not known here; the server intersects
+                whatever is chosen with them (spec 113), so the whole catalog is offered. */}
+            <TokenScopeEditor value={scopes} onChange={setScopes} disabled={mint.isPending} />
+            <Button onClick={() => mint.mutate()} disabled={mint.isPending || incomplete}>
               <KeyRound size={14} aria-hidden /> Mint key
             </Button>
             {mint.isError && (

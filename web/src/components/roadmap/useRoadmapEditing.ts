@@ -36,7 +36,6 @@ import {
   isoFromDay,
   roadmapReorderNeighbours,
   shiftIso,
-  todayIso,
   type RoadmapModel,
   type RoadmapMove,
   type RoadmapPlanPatch,
@@ -45,6 +44,7 @@ import {
 } from "./roadmap-model";
 import { BarDragMode, type CommitModifiers } from "./useBarDrag";
 import type { RoadmapDraft } from "./useRoadmapDraft";
+import { todayIso } from "../../lib/dates";
 
 /**
  * Everything stateful about roadmap EDITING (specs 77 + 78 + 79 + 82), so

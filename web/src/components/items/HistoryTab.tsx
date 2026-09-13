@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
 import { errorMessage } from "../../lib/api";
-import { relativeTime } from "../../lib/dates";
+import { formatDateTime, relativeTime } from "../../lib/dates";
 import { useDurationConfig } from "../../lib/hooks";
 import { itemHistoryQuery } from "../../lib/queries";
 import { HISTORY_FIELD_LABELS, PRIORITY_META, initials } from "../../lib/meta";
@@ -48,7 +48,7 @@ function HistoryRow({ entry }: { entry: HistoryEntry }) {
         <p className="flex flex-wrap items-baseline gap-x-1.5 text-xs">
           <span className="font-medium text-fg">{who}</span>
           <span className="text-fg-muted">{verb(entry, durationConfig)}</span>
-          <time className="text-fg-faint" dateTime={entry.at} title={new Date(entry.at).toLocaleString()}>
+          <time className="text-fg-faint" dateTime={entry.at} title={formatDateTime(entry.at)}>
             {relativeTime(entry.at)}
           </time>
         </p>

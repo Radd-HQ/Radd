@@ -16,6 +16,7 @@ import { TableSkeleton } from "../../components/TableSkeleton";
 import { TextField } from "../../components/TextField";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { QueryError } from "../../components/QueryError";
+import { formatDate } from "../../lib/dates";
 
 /** Default swatch offered by the color input for a fresh label. */
 const DEFAULT_LABEL_COLOR = "#6366f1";
@@ -169,7 +170,7 @@ function LabelRow({
           <span className="flex-1 text-[13px] text-heading">{label.name}</span>
           <span className="font-mono text-[11px] text-fg-faint">{label.color ?? "—"}</span>
           <span className="text-xs text-fg-faint">
-            {new Date(label.created_at).toLocaleDateString()}
+            {formatDate(label.created_at)}
           </span>
           {canManage && (
             <IconButton onClick={() => setEditing(true)} aria-label={`Edit ${label.name}`}>

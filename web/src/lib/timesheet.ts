@@ -1,8 +1,9 @@
 /**
  * Pure timesheet helpers (spec 22): resolve a period + anchor date into a
  * [start, end] window, enumerate the day columns, and pivot flat worklog
- * entries into grid rows grouped by issue or person. No timezone math — dates
- * are handled as local Y/M/D and formatted as `YYYY-MM-DD` to match the API.
+ * entries into grid rows grouped by issue or person. Dates are calendar days
+ * handled as local Y/M/D and formatted as `YYYY-MM-DD` to match the API;
+ * labels and "today" come from `lib/dates` (the reader's zone, RADD-1008).
  */
 
 import {
@@ -12,6 +13,7 @@ import {
   type TimesheetPeriodValue,
 } from "./constants";
 import type { TimesheetEntry } from "./types";
+import { formatIso } from "./dates";
 
 // TimesheetGroupByValue/TimesheetPeriodValue live in constants; re-export the
 // value objects here so callers import period/grouping from one place.
@@ -82,19 +84,10 @@ export function periodLabel(
   startISO: string,
   endISO: string,
 ): string {
-  const start = fromISODate(startISO);
-  const end = fromISODate(endISO);
-  if (period === TimesheetPeriod.day) {
-    return start.toLocaleDateString(undefined, { dateStyle: "full" });
-  }
-  if (period === TimesheetPeriod.month) {
-    return start.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-  }
+  if (period === TimesheetPeriod.day) return formatIso(startISO, { dateStyle: "full" });
+  if (period === TimesheetPeriod.month) return formatIso(startISO, { month: "long", year: "numeric" });
   const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
-  return `${start.toLocaleDateString(undefined, opts)} – ${end.toLocaleDateString(undefined, {
-    ...opts,
-    year: "numeric",
-  })}`;
+  return `${formatIso(startISO, opts)} – ${formatIso(endISO, { ...opts, year: "numeric" })}`;
 }
 
 export interface TimesheetRow {

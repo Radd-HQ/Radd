@@ -9,8 +9,8 @@ import {
   parseDay,
   startOfWeek,
   toIsoDay,
-  todayIso,
 } from "./dates";
+import { formatIso, todayIso } from "../../../lib/dates";
 
 // ---------------------------------------------------------------------------
 // Row model
@@ -60,7 +60,7 @@ export interface RoadmapModel {
   todayIndex: number | null;
 }
 
-const MONTH_SHORT = (date: Date) => date.toLocaleDateString(undefined, { month: "short" });
+const MONTH_SHORT = (date: Date) => formatIso(toIsoDay(date), { month: "short" });
 
 function minDate(dates: Date[]): Date {
   return dates.reduce((a, b) => (a.getTime() <= b.getTime() ? a : b));

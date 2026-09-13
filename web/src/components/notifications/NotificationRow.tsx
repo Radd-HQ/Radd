@@ -13,7 +13,7 @@ import {
   Zap,
   type LucideIcon,
 } from "lucide-react";
-import { shortDate } from "../../lib/dates";
+import { formatDateTime, shortDate } from "../../lib/dates";
 import {
   NotificationType,
   type Notification,
@@ -133,7 +133,7 @@ export function NotificationRow({
         <time
           className="text-[11px] text-fg-faint"
           dateTime={notification.created_at}
-          title={new Date(notification.created_at).toLocaleString()}
+          title={formatDateTime(notification.created_at)}
         >
           {shortDate(notification.created_at)}
         </time>

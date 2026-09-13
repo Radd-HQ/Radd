@@ -1,5 +1,5 @@
 import { MessageSquare, Package, UserRound } from "lucide-react";
-import { relativeTime } from "../../lib/dates";
+import { formatDateTime, relativeTime } from "../../lib/dates";
 import { StateCategory, type PortalRequest } from "../../lib/types";
 
 /**
@@ -102,7 +102,7 @@ export function RequestRow({
         </span>
         <span
           className="hidden shrink-0 text-[11px] text-fg-faint md:inline"
-          title={new Date(request.updated_at).toLocaleString()}
+          title={formatDateTime(request.updated_at)}
         >
           {relativeTime(request.updated_at)}
         </span>

@@ -13,6 +13,7 @@ import { ErrorText } from "../ErrorText";
 import { ListSearchInput } from "../ListSearchInput";
 import { DirectoryPager } from "../DirectoryPager";
 import { GrantScopedRoleDialog } from "./GrantScopedRoleDialog";
+import { formatDate } from "../../lib/dates";
 
 /** Direct grants in one space. Global grants remain on the global role surface. */
 export function ScopedAccessPanel({ scopeId, scopeName, kind, canGrant, canRevoke }: {
@@ -52,7 +53,7 @@ export function ScopedAccessPanel({ scopeId, scopeName, kind, canGrant, canRevok
               <Icon size={10} className="shrink-0" aria-hidden /><span className="min-w-0 break-words">{kind}: {grant.subject_name ?? "Unavailable name"}</span>
             </span>
             {grant.subject_active === false && <span className="text-xs text-fg-muted">Inactive account</span>}
-            {grant.expires_at && <span className="text-xs text-fg-muted" title={grant.expires_at}>{grant.expired ? "Expired" : "Expires"} {new Date(grant.expires_at).toLocaleDateString()}</span>}
+            {grant.expires_at && <span className="text-xs text-fg-muted" title={grant.expires_at}>{grant.expired ? "Expired" : "Expires"} {formatDate(grant.expires_at)}</span>}
             {canRevoke && <IconButton danger onClick={() => revoke.mutate(grant.id)} disabled={revoke.isPending} aria-label="Revoke grant" className="ml-auto"><X size={13} aria-hidden /></IconButton>}
           </li>;
         })}</ul>}

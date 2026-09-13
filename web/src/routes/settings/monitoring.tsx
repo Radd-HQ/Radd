@@ -12,6 +12,7 @@ import type {
 import { QueryError } from "../../components/QueryError";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { Spinner } from "../../components/Spinner";
+import { formatDateTime } from "../../lib/dates";
 
 const OVERVIEW_POLL_MS = 5_000;
 /** A consumer with backlog whose cursor hasn't moved in this long is stalled. */
@@ -95,8 +96,7 @@ function StatRow({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 function formatAt(iso: string): string {
-  const at = new Date(iso);
-  return Number.isNaN(at.getTime()) ? iso : at.toLocaleString();
+  return Number.isNaN(Date.parse(iso)) ? iso : formatDateTime(iso);
 }
 
 /** Outbound mail over the last day (RADD-1036).

@@ -14,6 +14,7 @@ import { ErrorText } from "../ErrorText";
 import { TextField } from "../TextField";
 import { DirectoryPager } from "../DirectoryPager";
 import { Modal } from "../Modal";
+import { formatDateTime } from "../../lib/dates";
 
 /** Groups remain directory-owned; a team attaches them and inherits their people. */
 export function TeamGroupsSection({ team, canManage }: { team: Team; canManage: boolean }) {
@@ -58,7 +59,7 @@ export function TeamGroupsSection({ team, canManage }: { team: Team; canManage: 
           {held.rows.map(group => <li key={group.group_id} className="flex flex-wrap items-center gap-2 py-1 text-[13px]">
             <span className="min-w-0 break-words rounded border border-subtle bg-surface px-1.5 py-px text-[11px] text-fg-secondary" title={group.dn}>{group.name}</span>
             {group.directory_missing_since && <span className="flex items-center gap-1 text-[11px] text-status-warning-ink"
-              title={`Missing since ${new Date(group.directory_missing_since).toLocaleString()} — renamed, moved, or deleted in AD. Its people are kept while it is missing.`}>
+              title={`Missing since ${formatDateTime(group.directory_missing_since)} — renamed, moved, or deleted in AD. Its people are kept while it is missing.`}>
               <TriangleAlert size={12} aria-hidden />missing from AD
             </span>}
             {canManage && <IconButton danger onClick={() => removeGroup.mutate(group.group_id)} disabled={removeGroup.isPending}

@@ -37,6 +37,7 @@ import type { AiRun } from "../editor/ai";
 import { AiReadMenu } from "../editor/AiReadMenu";
 import { LazyRichEditor as RichEditor } from "../editor/LazyRichEditor";
 import { LazyRichViewer as RichViewer } from "../editor/LazyRichViewer";
+import { formatDateTime } from "../../lib/dates";
 
 /** Upload a pasted/inserted image to the item and resolve its served URL —
  * through the storage-choice seam (spec 102); a dismissed prompt rejects, so
@@ -182,7 +183,7 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
                   <p className="flex flex-wrap items-center gap-1.5 text-xs">
                     <PersonName user={comment.author} className="font-medium text-fg" />
                     <span className="text-fg-faint">
-                      {new Date(comment.created_at).toLocaleString()}
+                      {formatDateTime(comment.created_at)}
                     </span>
                     {comment.updated_at !== comment.created_at && (
                       <span className="text-fg-faint">(edited)</span>

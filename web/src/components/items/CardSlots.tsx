@@ -1,4 +1,5 @@
 import { StateCategory, type Item } from "../../lib/types";
+import { todayIso } from "../../lib/dates";
 
 /** True when the item's target date has passed and it isn't finished. */
 export function isOverdue(item: Item): boolean {
@@ -9,6 +10,6 @@ export function isOverdue(item: Item): boolean {
   ) {
     return false;
   }
-  return item.target_date < new Date().toISOString().slice(0, 10);
+  return item.target_date < todayIso();
 }
 

@@ -28,6 +28,7 @@ import { MyLeaveSection } from "../../components/settings/LeaveSections";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { TotpPanel } from "../../components/settings/TotpPanel";
 import { ErrorText } from "../../components/ErrorText";
+import { browserTimeZone } from "../../lib/dates";
 
 /** Curated avatar palette (any hex works via the color input). */
 const AVATAR_COLORS = [
@@ -44,7 +45,7 @@ export function ProfileSettingsPage() {
   return (
     <SettingsPage
       title="Profile"
-      description="How you appear across Radd and your timezone."
+      description="How you appear across Radd, and the timezone your timestamps are shown in."
     >
       {user ? (
         <ProfileForm user={user} />
@@ -140,7 +141,7 @@ function ProfileForm({ user }: { user: Me }) {
 
   const timezones: string[] =
     typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
-  const browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const browserZone = browserTimeZone();
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -237,6 +238,10 @@ function ProfileForm({ user }: { user: Me }) {
               ...timezones.map((zone) => ({ value: zone, label: zone })),
             ]}
           />
+          <p className="text-[11px] text-fg-faint">
+            Every time Radd shows you — comments, history, the timesheet's today — is in this
+            zone. Dates without a time (due dates, cycles) are calendar days and never shift.
+          </p>
         </div>
       </div>
 

@@ -18,7 +18,6 @@
 export {
   ROADMAP_DOMAIN_PAD_DAYS,
   parseDay,
-  todayIso,
   shiftIso,
   daysBetween,
   isoDaysBetween,

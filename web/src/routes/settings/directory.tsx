@@ -24,6 +24,7 @@ import { ScopedSettingsEditor } from "../../components/settings/ScopedSettingsEd
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { StatusPill } from "./instance";
 import { ErrorText } from "../../components/ErrorText";
+import { formatDateTime } from "../../lib/dates";
 
 const sectionHeadClasses = "mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted";
 
@@ -36,7 +37,7 @@ function lastRunLine(state: DirectorySyncState | null | undefined): string {
     .join(" · ");
   const errors = Array.isArray(state.last_result.errors) ? state.last_result.errors.length : 0;
   const errorSuffix = errors > 0 ? ` · ${errors} error${errors === 1 ? "" : "s"}` : "";
-  return `Last run ${new Date(state.last_run_at).toLocaleString()}: ${counts}${errorSuffix}`;
+  return `Last run ${formatDateTime(state.last_run_at)}: ${counts}${errorSuffix}`;
 }
 
 /**

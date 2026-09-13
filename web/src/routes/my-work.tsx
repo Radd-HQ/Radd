@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CalendarClock, History, Inbox, ShieldCheck, Star, UserRound } from "lucide-react";
 import { listRecentItems } from "../lib/recent";
 import { RoutePath } from "../lib/constants";
-import { shortDate } from "../lib/dates";
+import { shiftIsoDay, shortDate, todayIso } from "../lib/dates";
 import { usePeek } from "../lib/hooks";
 import { notificationsQuery, pendingApprovalsQuery, slqItemsQuery } from "../lib/queries";
 import { PRIORITY_META } from "../lib/meta";
@@ -21,10 +21,6 @@ import { QueryBar } from "../components/views/QueryBar";
 /** Days ahead the "Due soon" section looks. */
 const DUE_SOON_DAYS = 7;
 
-function isoDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
 /** SLQ scopes for the dashboard sections (spec 32) — plain `GET /items?q=`. */
 const OPEN = "category NOT IN (done, canceled)";
 const ASSIGNED_Q = `assignee = me AND ${OPEN}`;
@@ -36,9 +32,7 @@ const STARRED_Q = `starred = true AND ${OPEN}`;
  * never leave the dashboard.
  */
 export function MyWorkPage() {
-  const dueCutoff = new Date();
-  dueCutoff.setDate(dueCutoff.getDate() + DUE_SOON_DAYS);
-  const dueQ = `assignee = me AND target <= ${isoDate(dueCutoff)} AND ${OPEN}`;
+  const dueQ = `assignee = me AND target <= ${shiftIsoDay(todayIso(), DUE_SOON_DAYS)} AND ${OPEN}`;
 
   // Page-wide SLQ filter (top-bar query): ANDs into every section's own
   // query server-side — "project = TD" narrows Due soon, Assigned and
@@ -251,7 +245,7 @@ const Section = ListSection;
 function ItemRow({ item, showDue = false }: { item: Item; showDue?: boolean }) {
   const peek = usePeek();
   const overdue = Boolean(
-    showDue && item.target_date && item.target_date < isoDate(new Date()),
+    showDue && item.target_date && item.target_date < todayIso(),
   );
   const priority = PRIORITY_META[item.priority];
   return (

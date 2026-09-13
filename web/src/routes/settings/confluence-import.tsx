@@ -9,6 +9,7 @@ import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { confluencePlansQuery, queryKeys } from "../../lib/queries";
 import type { ConfluenceSnapshot, ConfluenceMappingSection } from "../../lib/types";
+import { todayIso } from "../../lib/dates";
 
 /**
  * Import from Confluence (spec 117).
@@ -32,7 +33,7 @@ export function ConfluenceImportPage() {
   const createPlan = useMutation({
     mutationFn: (snapshot: ConfluenceSnapshot) =>
       api.post<{ id: string }>(ApiPath.confluencePlans, {
-        name: `${snapshot.name} — ${new Date().toISOString().slice(0, 10)}`,
+        name: `${snapshot.name} — ${todayIso()}`,
         snapshot_id: snapshot.id,
       }),
     onSuccess: (plan) => {

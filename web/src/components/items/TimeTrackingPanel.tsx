@@ -27,6 +27,7 @@ import { Button } from "../Button";
 import { Select } from "../Select";
 import { IconButton } from "../IconButton";
 import { ErrorText } from "../ErrorText";
+import { todayIso } from "../../lib/dates";
 
 interface Props {
   project: Project;
@@ -199,7 +200,7 @@ function LogWorkForm({ itemId }: { itemId: string }) {
   const categories = useQuery(workCategoriesQuery());
   const [open, setOpen] = useState(false);
   const [timeSpent, setTimeSpent] = useState("");
-  const [workedOn, setWorkedOn] = useState(() => new Date().toISOString().slice(0, 10));
+  const [workedOn, setWorkedOn] = useState(() => todayIso());
   const [categoryId, setCategoryId] = useState("");
   const [note, setNote] = useState("");
 

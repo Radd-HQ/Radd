@@ -2,6 +2,7 @@ import { setStorageAccount } from "./account-storage";
 import { api, ApiError, setAnonymousMode } from "./api";
 import { ApiPath, On401 } from "./constants";
 import type { LoginRequest, Me, TotpLoginRequest } from "./types";
+import { setReaderTimeZone } from "./dates";
 
 /** Authentication fails closed when the backend is missing or unavailable. */
 export const AuthStatus = {
@@ -22,6 +23,8 @@ export type AuthState =
 export async function fetchAuthState(signal?: AbortSignal): Promise<AuthState> {
   try {
     const user = await api.get<Me>(ApiPath.me, { on401: On401.throw, signal });
+    // RADD-1008: every timestamp renders in the profile's zone from here on.
+    setReaderTimeZone(user.anonymous ? "" : user.timezone);
     if (user.anonymous) {
       setAnonymousMode(true);
       return { status: AuthStatus.anonymous, user };

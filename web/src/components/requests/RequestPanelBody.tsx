@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MessageSquare, Package, UserRound } from "lucide-react";
 import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
-import { relativeTime } from "../../lib/dates";
+import { formatDateTime, relativeTime } from "../../lib/dates";
 import { portalRequestDetailQuery, queryKeys } from "../../lib/queries";
 import type { PortalRequestComment } from "../../lib/types";
 import { Button } from "../Button";
@@ -135,7 +135,7 @@ function CommentBubble({ comment }: { comment: PortalRequestComment }) {
         <span className="font-medium text-fg">
           {comment.author_is_me ? "You" : comment.author}
         </span>
-        <span className="text-fg-faint" title={new Date(comment.created_at).toLocaleString()}>
+        <span className="text-fg-faint" title={formatDateTime(comment.created_at)}>
           {relativeTime(comment.created_at)}
         </span>
       </div>

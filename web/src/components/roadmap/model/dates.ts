@@ -20,11 +20,6 @@ export function toIsoDay(date: Date): string {
   return `${date.getFullYear()}-${month}-${day}`;
 }
 
-/** Today's local ISO date — the fallback anchor when the domain is empty. */
-export function todayIso(): string {
-  return toIsoDay(new Date());
-}
-
 export function addDays(date: Date, days: number): Date {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
