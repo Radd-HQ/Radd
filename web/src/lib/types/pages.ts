@@ -9,7 +9,8 @@ export interface PageSpace {
   slug: string;
   description: string;
   position: number;
-  /** Spec 74: readable without login under /kb (doc.manage toggles it). */
+  /** Spec 121 §5: DERIVED — the Public role is granted to Anyone on this space
+   *  (written through PUT /page-spaces/{id}/public-access). */
   public: boolean;
   /** Live (non-archived) page count, hydrated by the list endpoint. */
   page_count: number;
@@ -33,8 +34,6 @@ export interface PageSpaceUpdate {
   slug?: string;
   description?: string;
   position?: number;
-  /** Spec 74: toggle the no-login /kb readability (doc.manage). */
-  public?: boolean;
 }
 
 /** One entry in the editor's insert menu (RADD-709), from the kernel registry.
@@ -186,37 +185,6 @@ export interface PageSearchResponse {
   results: PageSearchResult[];
 }
 
-// ---------------------------------------------------------------------------
-// Public pages (spec 74) — trimmed no-login shapes under /public/kb
-// ---------------------------------------------------------------------------
-
-/** GET /public/pages/spaces — a public space's card. */
-export interface PublicPageSpace {
-  id: string;
-  name: string;
-  slug: string;
-  description: string;
-}
-
-/** GET /public/pages/spaces/{id}/tree — one non-archived flat tree row. */
-export interface PublicPageNode {
-  id: string;
-  parent_id: string | null;
-  title: string;
-  slug: string;
-  position: number;
-}
-
-/** GET /public/pages/pages/{id} — body + breadcrumb only (markdown renders client-side). */
-export interface PublicPagesPage {
-  id: string;
-  space_id: string;
-  title: string;
-  body: string;
-  /** Ancestors, root first (excludes the page itself). */
-  breadcrumb: PageBreadcrumb[];
-  updated_at: string;
-}
 
 
 /** GET /search/deflect (spec 66) — KB deflection under the new-issue title:
@@ -236,4 +204,9 @@ export interface DeflectItem {
 export interface DeflectResponse {
   docs: DeflectPage[];
   items: DeflectItem[];
+}
+
+/** PUT /page-spaces/{id}/public-access (spec 121 §5). */
+export interface SpacePublicAccessUpdate {
+  public: boolean;
 }

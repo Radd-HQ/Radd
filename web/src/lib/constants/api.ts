@@ -167,9 +167,6 @@ export const ApiPath = {
   pageTemplates: "/page-templates",
   pages: "/pages",
   docsSearch: "/pages/search",
-  // PUBLIC pages (spec 74) — no login; a space's `public` flag gates.
-  publicKbSpaces: "/public/pages/spaces",
-  publicKbSearch: "/public/pages/search",
   // AI layer (spec 46) — the status gate + natural-language → SLQ.
   pagesReindex: "/pages/reindex",
   webhooks: "/webhooks",

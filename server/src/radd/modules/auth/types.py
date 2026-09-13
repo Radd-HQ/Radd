@@ -749,8 +749,13 @@ BUILTIN_ROLES: tuple[BuiltinRole, ...] = (
         # reach the world however the project is shared. Comments ride the
         # item seam and internal ones need comment.read_internal, which is
         # not here; attachments are default-open behind the parent read.
+        # page.read rides here too (RADD-1147): granted on a SPACE, the same
+        # role makes the space public — one "what the world holds" role, scoped
+        # by where it is granted. On a project the page atom is inert (page
+        # reads resolve at space scope).
         permissions=(
             "item.read@public",
+            Permission.PAGE_READ,
             Permission.LABEL_READ,
             Permission.CYCLE_READ,
             Permission.TEAM_READ,

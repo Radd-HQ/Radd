@@ -99,8 +99,9 @@ async def test_public_forms_routes_are_gone():
             paths.add(path)
     public_form_paths = {p for p in paths if "/public/forms" in p}
     assert public_form_paths == set()
-    # …while the D9 survivors stay.
-    assert any("/public/pages" in p for p in paths)
+    # …the D9 survivor stays, and spec 121 §5 folded the public wiki into the
+    # ordinary page routes (a public space is a grant, not a parallel router).
+    assert not any("/public/pages" in p for p in paths)
     assert any("/public/csat" in p for p in paths)
 
 

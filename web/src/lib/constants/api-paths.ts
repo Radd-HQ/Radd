@@ -117,12 +117,12 @@ export const apiPortalFormSubmitPath = (formId: string) =>
 /** Public (unauthenticated) form path (spec 62): GET renders, POST submits. */
 /** Tokened KB deflection for the public form page (spec 74) — docs only. */
 /** The shareable public submit URL shown in the form builder (spec 62). */
-/** Public KB paths (spec 74): a public space's tree + one page's body. */
-export const apiPublicPagesTreePath = (spaceId: string) =>
-  `${ApiPath.publicKbSpaces}/${spaceId}/tree`;
-export const apiPublicPagesPagePath = (pageId: string) => `/public/pages/pages/${pageId}`;
 /** The shareable public-KB URL shown next to a space's Public toggle (spec 74). */
-export const publicKbSpaceUrl = (spaceId: string) => `${window.location.origin}/kb/${spaceId}`;
+/** Spec 121 §5: a public space's shareable URL is its ORDINARY wiki URL. */
+export const spacePublicUrl = (spaceSlug: string) => `${window.location.origin}/pages/${spaceSlug}`;
+/** Spec 121 §5: the space's public-access switch. */
+export const apiPageSpacePublicAccessPath = (spaceId: string) =>
+  `${ApiPath.pageSpaces}/${spaceId}/public-access`;
 /** Public (unauthenticated) CSAT survey path (spec 65): GET renders, POST rates. */
 export const apiPublicCsatPath = (token: string) => `/public/csat/${encodeURIComponent(token)}`;
 

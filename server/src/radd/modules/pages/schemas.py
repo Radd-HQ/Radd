@@ -36,8 +36,6 @@ class PageSpaceUpdate(BaseModel):
     slug: str | None = Field(default=None, pattern=SLUG_PATTERN)
     description: str | None = None
     position: float | None = None
-    # Spec 74: toggle no-login readability via /public/pages (page.manage).
-    public: bool | None = None
 
 
 class PageSpaceRead(BaseModel):
@@ -48,7 +46,9 @@ class PageSpaceRead(BaseModel):
     slug: str
     description: str
     position: float
-    public: bool
+    #: Spec 121 (RADD-1147): DERIVED — the Public role is granted to Anyone on
+    #: this space. Written through PUT /page-spaces/{id}/public-access.
+    public: bool = False
     page_count: int = 0  # live (non-archived) pages; hydrated by the service
     #: RADD-814: the caller's per-SPACE permission union — the space analogue of
     #: ProjectRead.permissions, and what lets the SPA's one `can()` seam resolve
@@ -305,37 +305,7 @@ class PageSearchResponse(BaseModel):
     results: list[DocSearchResult]
 
 
-# --- public KB (spec 74) — the deliberately TRIMMED no-login shapes ---
+class SpacePublicAccessUpdate(BaseModel):
+    """PUT /page-spaces/{id}/public-access (spec 121 §5)."""
 
-
-class PublicPageSpace(BaseModel):
-    """GET /public/pages/spaces — a public space's card, nothing internal."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    name: str
-    slug: str
-    description: str
-
-
-class PublicPageNode(BaseModel):
-    """GET /public/pages/spaces/{id}/tree — one non-archived tree row."""
-
-    id: uuid.UUID
-    parent_id: uuid.UUID | None
-    title: str
-    slug: str  # RADD-702: the public tree builds /public-pages/<space>/<page> too
-    position: float
-
-
-class PublicPageRead(BaseModel):
-    """GET /public/pages/pages/{id} — body + breadcrumb only (no versions/links/
-    authors; markdown renders client-side)."""
-
-    id: uuid.UUID
-    space_id: uuid.UUID
-    title: str
-    body: str
-    breadcrumb: list[PageBreadcrumb]  # ancestors, root first
-    updated_at: UtcDatetime
+    public: bool

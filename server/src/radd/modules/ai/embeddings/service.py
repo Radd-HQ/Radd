@@ -44,13 +44,15 @@ CREATE INDEX IF NOT EXISTS ix_item_embeddings_project_id ON {ITEM_TABLE} (projec
 CREATE INDEX IF NOT EXISTS ix_item_embeddings_model ON {ITEM_TABLE} (model);
 CREATE TABLE IF NOT EXISTS {PAGE_TABLE} (
     page_id uuid PRIMARY KEY REFERENCES pages(id) ON DELETE CASCADE,
-    public boolean NOT NULL DEFAULT false,
     model varchar(200) NOT NULL,
     content_hash varchar(64) NOT NULL,
     embedding halfvec NOT NULL,
     updated_at timestamp NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS ix_page_embeddings_model ON {PAGE_TABLE} (model);
+-- RADD-1147: the embed-time copy of a space's public flag is gone (readability
+-- is resolved live through the actor's readable spaces, never from the store).
+ALTER TABLE {PAGE_TABLE} DROP COLUMN IF EXISTS public;
 """
 
 _available: bool | None = None  # process cache; extension presence can't change mid-run
@@ -158,21 +160,19 @@ async def upsert_doc(
     session: AsyncSession,
     *,
     page_id: uuid.UUID,
-    public: bool,
     model: str,
     content_hash: str,
     embedding: Sequence[float],
 ) -> None:
     await session.execute(
         text(
-            f"INSERT INTO {PAGE_TABLE} (page_id, public, model, content_hash, embedding)"
-            " VALUES (:page_id, :public, :model, :hash, (:vec)::halfvec)"
-            " ON CONFLICT (page_id) DO UPDATE SET public = :public, model = :model,"
+            f"INSERT INTO {PAGE_TABLE} (page_id, model, content_hash, embedding)"
+            " VALUES (:page_id, :model, :hash, (:vec)::halfvec)"
+            " ON CONFLICT (page_id) DO UPDATE SET model = :model,"
             " content_hash = :hash, embedding = (:vec)::halfvec, updated_at = now()"
         ),
         {
             "page_id": page_id,
-            "public": public,
             "model": model,
             "hash": content_hash,
             "vec": vector_literal(embedding),
@@ -249,7 +249,6 @@ async def nearest_docs(
     *,
     model: str,
     dim: int,
-    public_only: bool,
     limit: int,
 ) -> list[tuple[uuid.UUID, float]]:
     model, dim = _validated(model, dim)
@@ -258,13 +257,12 @@ async def nearest_docs(
         text(
             f"SELECT page_id, (embedding::halfvec({dim})) <=> (:vec)::halfvec({dim}) AS distance"
             f" FROM {PAGE_TABLE}"
-            " WHERE model = :model AND (NOT :public_only OR public)"
+            " WHERE model = :model"
             " ORDER BY distance LIMIT :limit"
         ),
         {
             "vec": vector_literal(embedding),
             "model": model,
-            "public_only": public_only,
             "limit": limit,
         },
     )

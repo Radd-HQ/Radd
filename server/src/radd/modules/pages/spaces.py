@@ -108,7 +108,7 @@ async def update_space(
 ) -> PageSpace:
     space = await get_space(session, space_id)
     changed: list[str] = []
-    for field in ("name", "slug", "description", "position", "public"):
+    for field in ("name", "slug", "description", "position"):
         value = getattr(data, field)
         if value is not None and value != getattr(space, field):
             if field == "slug" and await _slug_clash(
@@ -170,9 +170,13 @@ async def read_spaces(
             )
         ).all()
     ) if spaces else {}
+    # Spec 121 (RADD-1147): `public` is the Public → Anyone grant on the space.
+    from radd.modules.auth import public_access  # deferred: auth loads after pages' models
+
+    public = await public_access.spaces_public(session, [s.id for s in spaces])
     return [
         PageSpaceRead.model_validate(space).model_copy(
-            update={"page_count": counts.get(space.id, 0)}
+            update={"page_count": counts.get(space.id, 0), "public": public.get(space.id, False)}
         )
         for space in spaces
     ]

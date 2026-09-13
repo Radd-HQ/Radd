@@ -17,7 +17,6 @@ from . import attachments_binding as attachments_binding  # registers the page p
 from . import comments_binding as comments_binding  # registers the page comment parent (RADD-717)
 from .extensions import PAGE_EXTENSIONS
 from .grantscope import SPACE_SCOPE
-from .public_router import router as public_router
 from .router import router
 from .types import PageEvent
 
@@ -47,13 +46,11 @@ plugin = RaddPlugin(
     description=(
         "Pages: page spaces + page trees (markdown bodies), optimistic-concurrency "
         "edits with full version history + restore, issue↔page links, and live "
-        "Postgres FTS search over titles/bodies. Spec 74 adds opt-in PUBLIC "
-        "spaces readable without login under /public/pages (trees, page bodies, "
-        "public-only FTS)."
+        "Postgres FTS search over titles/bodies. Spec 74 adds opt-in PUBLIC " "a public space is the Public role granted to Anyone on it (spec 121)."
     ),
     depends_on=("events", "projects", "auth", "workflow", "items", "attachments", "labels", "comments", "notify", "access", "groups", "search", "teams"),
     weak_depends=("ai",),
-    routers=(router, public_router),
+    routers=(router,),
     # RADD-923: a page and a space are subjects other modules name. Spec 118 is
     # what forced them — `notify` scopes a wiki subscription to a SPACE id and
     # links a notification by slug, and it may reach neither through this

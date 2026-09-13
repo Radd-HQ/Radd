@@ -118,3 +118,56 @@ async def set_public_access(
             if row is not None:
                 await grants.delete_grant(session, row.id, actor_id=actor_id)
     return PublicAccess(public=public, contributions=contributions)
+
+
+# --- spaces (RADD-1147): a public wiki space is the same row, space-scoped ---
+
+
+async def spaces_public(
+    session: AsyncSession, space_ids: Iterable[uuid.UUID]
+) -> dict[uuid.UUID, bool]:
+    """Batch: {space_id: the Public role is granted to Anyone here}."""
+    ids = list(space_ids)
+    if not ids:
+        return {}
+    roles = await _switch_roles(session)
+    public_role = roles.get(BuiltinRoleKey.PUBLIC)
+    if public_role is None:
+        return {sid: False for sid in ids}
+    rows = await session.execute(
+        select(GlobalRoleGrant.space_id).where(
+            GlobalRoleGrant.space_id.in_(ids),
+            GlobalRoleGrant.user_id == ANYONE_ID,
+            GlobalRoleGrant.role_id == public_role,
+        )
+    )
+    flagged = set(rows.scalars())
+    return {sid: sid in flagged for sid in ids}
+
+
+async def set_space_public(
+    session: AsyncSession, space_id: uuid.UUID, *, public: bool, actor_id: uuid.UUID | None
+) -> bool:
+    """Write the space's switch as the grant it is (idempotent)."""
+    roles = await _switch_roles(session)
+    public_role = roles.get(BuiltinRoleKey.PUBLIC)
+    if public_role is None:
+        raise ConflictError(AuthEntity.ROLE, reason="builtin role 'public' is not seeded")
+    current = (await spaces_public(session, [space_id]))[space_id]
+    if current == public:
+        return public
+    if public:
+        await grants.create_grant(
+            session, public_role, user_id=ANYONE_ID, space_id=space_id, actor_id=actor_id
+        )
+    else:
+        row = await session.scalar(
+            select(GlobalRoleGrant).where(
+                GlobalRoleGrant.space_id == space_id,
+                GlobalRoleGrant.user_id == ANYONE_ID,
+                GlobalRoleGrant.role_id == public_role,
+            )
+        )
+        if row is not None:
+            await grants.delete_grant(session, row.id, actor_id=actor_id)
+    return public

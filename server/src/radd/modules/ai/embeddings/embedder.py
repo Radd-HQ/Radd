@@ -266,11 +266,10 @@ async def _embed_docs(session: AsyncSession, resolved, pages) -> int:
         return 0
     await store.sync_index(session, store.PAGE_TABLE, model=resolved.model, dim=dim)
     for position, index in enumerate(fresh):
-        page_id, public, _, _ = pages[index]
+        page_id, _, _ = pages[index]
         await store.upsert_doc(
             session,
             page_id=page_id,
-            public=public,
             model=resolved.model,
             content_hash=hashes[index],
             embedding=vectors[position],

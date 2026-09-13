@@ -57,6 +57,7 @@ from .schemas import (
     PageVersionMeta,
     PageVersionRead,
     ItemPageRef,
+    SpacePublicAccessUpdate,
 )
 
 router = APIRouter(tags=["pages"])
@@ -88,7 +89,7 @@ async def _page_guard(
 
 @router.get("/page-spaces", response_model=list[PageSpaceRead])
 async def list_spaces(
-    session: Session, user: CurrentUser, response: Response,
+    session: Session, user: Actor, response: Response,
     q: Annotated[str, Query(max_length=200)] = "",
     limit: Annotated[int | None, Query(ge=1, le=200)] = None,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -100,12 +101,12 @@ async def list_spaces(
 
 
 @router.get("/page-spaces/summary", response_model=PageSpaceSummaryRead)
-async def space_summary(session: Session, user: CurrentUser) -> PageSpaceSummaryRead:
+async def space_summary(session: Session, user: Actor) -> PageSpaceSummaryRead:
     return await directory.summary(session, user)
 
 
 @router.get("/page-spaces/by-identity/{identifier}", response_model=PageSpaceRead)
-async def space_by_identity(identifier: str, session: Session, user: CurrentUser) -> PageSpaceRead:
+async def space_by_identity(identifier: str, session: Session, user: Actor) -> PageSpaceRead:
     return await directory.by_identity(session, user, identifier)
 
 
@@ -141,6 +142,20 @@ async def update_space(
     return PageSpaceRead.model_validate(await spaces.update_space(session, space_id, data, user.id))
 
 
+@router.put("/page-spaces/{space_id}/public-access", response_model=PageSpaceRead)
+async def set_space_public_access(
+    space_id: uuid.UUID, data: SpacePublicAccessUpdate, session: Session, user: CurrentUser
+) -> PageSpaceRead:
+    """Spec 121 §5 (RADD-1147): a public space IS the Public role granted to
+    Anyone on it — written here as that grant, read back as `public`."""
+    from radd.modules.auth import public_access  # deferred: auth loads after pages' models
+
+    space = await spaces.get_space(session, space_id)
+    await authz.require(session, user, authz.Permission.PAGE_MANAGE, space_id=space.id)
+    await public_access.set_space_public(session, space.id, public=data.public, actor_id=user.id)
+    return (await spaces.read_spaces(session, [space]))[0]
+
+
 @router.delete("/page-spaces/{space_id}", status_code=204)
 async def delete_space(
     space_id: uuid.UUID, session: Session, user: CurrentUser, force: bool = False
@@ -157,7 +172,7 @@ async def delete_space(
 async def list_pages(
     space_id: uuid.UUID,
     session: Session,
-    user: CurrentUser,
+    user: Actor,
     include_archived: bool = False,
 ) -> list[PageSummary]:
     space = await spaces.get_space(session, space_id)
@@ -250,7 +265,7 @@ async def delete_template(
 
 
 @router.get("/pages/extensions", response_model=list[PageExtensionRead])
-async def list_page_extensions(session: Session, user: CurrentUser) -> list[PageExtensionRead]:
+async def list_page_extensions(session: Session, user: Actor) -> list[PageExtensionRead]:
     """What the editor's insert menu offers (RADD-709).
 
     Registered BEFORE `/pages/{page_id}` for the same reason `by-path` is: a
@@ -300,7 +315,7 @@ async def reindex_pages(session: Session, user: CurrentUser) -> dict[str, int]:
 
 @router.get("/pages/by-path/{space_slug}/{page_slug}", response_model=PageRead)
 async def get_page_by_path(
-    space_slug: str, page_slug: str, session: Session, user: CurrentUser
+    space_slug: str, page_slug: str, session: Session, user: Actor
 ) -> PageRead:
     """`/pages/<space>/<page>` (RADD-702). Registered BEFORE `/pages/{page_id}`
     so `by-path` is never parsed as a UUID. Either segment may be an id, which
@@ -318,7 +333,7 @@ async def get_page_by_path(
 
 @router.get("/pages/search", response_model=PageSearchResponse)
 async def search_docs(
-    q: str, session: Session, user: CurrentUser, limit: int = 20
+    q: str, session: Session, user: Actor, limit: int = 20
 ) -> PageSearchResponse:
     """Also BEFORE `/pages/{page_id}`, and for the same reason as `by-path`.
 
@@ -342,7 +357,7 @@ async def search_docs(
 
 
 @router.get("/pages/{page_id}", response_model=PageRead)
-async def get_page(page_id: uuid.UUID, session: Session, user: CurrentUser) -> PageRead:
+async def get_page(page_id: uuid.UUID, session: Session, user: Actor) -> PageRead:
     page = await _page_guard(session, user, page_id, authz.Permission.PAGE_READ)
     return await service.page_read(session, page)
 
@@ -400,7 +415,7 @@ def _zip_response(name: str, blob: bytes) -> Response:
 
 @router.get("/pages/by-label/{name}", response_model=list[PageLabelled])
 async def pages_by_label(
-    name: str, session: Session, user: CurrentUser, space: str = ""
+    name: str, session: Session, user: Actor, space: str = ""
 ) -> list[PageLabelled]:
     """Every page carrying a label (RADD-718) — the "content by label" pattern
     that lets an index page maintain itself. Declared before `/pages/{page_id}`
@@ -446,7 +461,7 @@ async def clear_watch(page_id: uuid.UUID, session: Session, user: CurrentUser) -
 
 @router.get("/pages/{page_id}/backlinks", response_model=list[PageBacklink])
 async def list_backlinks(
-    page_id: uuid.UUID, session: Session, user: CurrentUser
+    page_id: uuid.UUID, session: Session, user: Actor
 ) -> list[PageBacklink]:
     """What links to this page (RADD-713) — read from the index maintained on
     save, not by scanning every body."""
@@ -484,7 +499,7 @@ async def restore_version(
 
 @router.get("/pages/{page_id}/items", response_model=list[PageLinkedItem])
 async def linked_items(
-    page_id: uuid.UUID, session: Session, user: CurrentUser
+    page_id: uuid.UUID, session: Session, user: Actor
 ) -> list[PageLinkedItem]:
     await _page_guard(session, user, page_id, authz.Permission.PAGE_READ)
     return await links.linked_items(session, page_id, user)

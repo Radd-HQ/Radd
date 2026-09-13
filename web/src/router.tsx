@@ -21,8 +21,6 @@ const MyWorkPage = lazyRouteComponent(() => import("./routes/my-work"), "MyWorkP
 const ProjectHomePage = lazyRouteComponent(() => import("./routes/project-home"), "ProjectHomePage");
 const ProjectsIndexPage = lazyRouteComponent(() => import("./routes/projects-index"), "ProjectsIndexPage");
 const PublicCsatPage = lazyRouteComponent(() => import("./routes/public-csat"), "PublicCsatPage");
-const PublicPagesIndexPage = lazyRouteComponent(() => import("./routes/public-pages"), "PublicPagesIndexPage");
-const PublicPageSpacePage = lazyRouteComponent(() => import("./routes/public-pages"), "PublicPageSpacePage");
 const RoadmapPage = lazyRouteComponent(() => import("./routes/roadmap"), "RoadmapPage");
 const ReportsPage = lazyRouteComponent(() => import("./routes/reports"), "ReportsPage");
 const GlobalReportsPage = lazyRouteComponent(() => import("./routes/global-reports"), "GlobalReportsPage");
@@ -119,26 +117,11 @@ const publicCsatRoute = createRoute({
   component: PublicCsatPage,
 });
 
-/** PUBLIC pages (spec 74) — same idiom: root-level, no auth gate.
- * Space cards, a space's tree (first page auto-selected), a canonical page. */
-const publicKbIndexRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: RoutePath.publicPages,
-  component: PublicPagesIndexPage,
-});
-
-const publicKbSpaceRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: RoutePath.publicPageSpace,
-  component: PublicPageSpacePage,
-});
-
-// Kept until V1: the instance is public and old /kb links live in the wild (RADD-896).
 const legacyKbIndexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: RoutePath.legacyKb,
   beforeLoad: () => {
-    throw redirect({ to: RoutePath.publicPages, replace: true });
+    throw redirect({ to: RoutePath.pages, replace: true });
   },
   component: () => null,
 });
@@ -147,7 +130,7 @@ const legacyKbSpaceRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: RoutePath.legacyKbSpace,
   beforeLoad: ({ params }) => {
-    throw redirect({ to: RoutePath.publicPageSpace, params, replace: true });
+    throw redirect({ to: RoutePath.pageSpace, params, replace: true });
   },
   component: () => null,
 });
@@ -156,15 +139,9 @@ const legacyKbPageRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: RoutePath.legacyKbPage,
   beforeLoad: ({ params }) => {
-    throw redirect({ to: RoutePath.publicPage, params, replace: true });
+    throw redirect({ to: RoutePath.page, params, replace: true });
   },
   component: () => null,
-});
-
-const publicKbPageRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: RoutePath.publicPage,
-  component: PublicPageSpacePage,
 });
 
 /** Pathless layout: auth gate + app shell for every in-app route. */
@@ -705,9 +682,6 @@ const projectSettingsSlaRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   loginRoute,
   publicCsatRoute,
-  publicKbIndexRoute,
-  publicKbSpaceRoute,
-  publicKbPageRoute,
   pagePrintRoute,
   legacyKbIndexRoute,
   legacyKbSpaceRoute,

@@ -202,11 +202,7 @@ export function usePermissions(): PermissionChecks {
   const authState = useAuthState();
   // A paged directory must not truncate the permission union.
   const { data: projectSummary } = useQuery(projectSummaryQuery());
-  // Spec 121: a visitor holds no space atom; do not ask (the endpoint 401s).
-  const { data: spaceSummary } = useQuery({
-    ...pageSpaceSummaryQuery(),
-    enabled: authState?.status === AuthStatus.authenticated,
-  });
+  const { data: spaceSummary } = useQuery(pageSpaceSummaryQuery());
 
   return useMemo(() => {
     const allowAll =

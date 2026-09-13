@@ -68,8 +68,6 @@ class PageSpace(Base, TimestampMixin):
     slug: Mapped[str] = mapped_column(String(100))
     description: Mapped[str] = mapped_column(Text, default="")
     position: Mapped[float] = mapped_column(Float, default=0, server_default="0")
-    # Spec 74: opt-in PUBLIC space — readable without login via /public/pages.
-    public: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     # Spec 117 — see EXTERNAL_SOURCE_CHARS above. A re-imported space must land in
     # the space it made, not create "Space PIP (2)".
     external_source: Mapped[str] = mapped_column(

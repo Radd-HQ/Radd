@@ -85,9 +85,7 @@ async def _semantic_doc_ids(session: AsyncSession, q: str) -> list[uuid.UUID]:
 
         if not await candidates.semantic_enabled(session):
             return []
-        ranked = await candidates.doc_candidates(
-            session, q, public_only=False, limit=DEFLECT_LIMIT * 2
-        )
+        ranked = await candidates.doc_candidates(session, q, limit=DEFLECT_LIMIT * 2)
     except Exception:  # noqa: BLE001 — deflection degrades to FTS, never 500s
         return []
     return [page_id for page_id, _ in ranked]

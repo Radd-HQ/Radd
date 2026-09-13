@@ -1,5 +1,15 @@
 # Spec 74 — Public knowledge base
 
+> **Superseded by spec 121 §5 (RADD-1147, 2026-09-13).** The parallel model
+> this spec built — `page_spaces.public` as the credential, its own
+> `/public/pages` router with trimmed schemas, a separate `/public-pages` SPA,
+> a `public_only` search path and an embed-time public flag — is gone. A public
+> space is now the **Public** role granted to the **Anyone** principal on the
+> space (`PUT /page-spaces/{id}/public-access`), read through the ordinary page
+> routes by the ordinary space-scoped resolvers, inside the ordinary shell, with
+> attachments downloading through the ordinary chokepoint (the "broken images"
+> simplification below is fixed by construction). Kept as the historical record.
+
 Target-features wave, part 7. Opt-in PUBLIC wiki spaces readable without login
 (read-only, no edit affordances), plus KB deflection on the PUBLIC form page —
 deflection matters most exactly where the visitor has no account.

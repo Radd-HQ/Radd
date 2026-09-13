@@ -86,7 +86,10 @@ async def test_template_directory_filters_before_paging_and_omits_bodies(setting
 
 async def test_scoped_space_manager_cannot_perform_instance_or_grant_operations(settings_world):
     db, client, manager, admin, spaces, templates, _, grant, _, _ = settings_world
-    response = await client.patch(f"/api/v1/page-spaces/{spaces[1].id}", json={"name": "Renamed", "public": True})
+    response = await client.patch(f"/api/v1/page-spaces/{spaces[1].id}", json={"name": "Renamed"})
+    assert response.status_code == 200 and response.json()["name"] == "Renamed"
+    # Spec 121 §5: the public switch is its own call — a space-scoped manager may flip it.
+    response = await client.put(f"/api/v1/page-spaces/{spaces[1].id}/public-access", json={"public": True})
     assert response.status_code == 200 and response.json()["public"] is True
     assert (await client.patch(f"/api/v1/page-spaces/{spaces[0].id}", json={"name": "Wrong"})).status_code == 403
     assert (await client.post("/api/v1/page-spaces", json={"name": "Forbidden"})).status_code == 403

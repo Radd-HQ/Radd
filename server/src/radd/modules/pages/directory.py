@@ -50,7 +50,7 @@ async def by_identity(session: AsyncSession, actor: User, identifier: str) -> Pa
     held = await access.space_permissions(session, actor, space.id)
     if Permission.PAGE_READ not in held:
         # A direct lookup should not distinguish an unreadable space from an
-        # absent one. Public wiki access remains on its separate public routes.
+        # absent one. A public space is readable here like any other (spec 121).
         raise NotFoundError(PageEntity.SPACE, identifier)
     row = (await spaces.read_spaces(session, [space]))[0]
     row.permissions = sorted(str(permission) for permission in held)

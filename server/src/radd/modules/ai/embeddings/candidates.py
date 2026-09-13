@@ -97,12 +97,12 @@ async def item_neighbors(
 
 
 async def doc_candidates(
-    session: AsyncSession, q: str, *, public_only: bool, limit: int
+    session: AsyncSession, q: str, *, limit: int
 ) -> list[tuple[uuid.UUID, float]]:
+    """Nearest pages for `q` — UNSCOPED: the caller constrains to the actor's
+    readable spaces (RADD-1147 retired the embed-time public flag)."""
     embedded = await _query_vector(session, q)
     if embedded is None:
         return []
     vector, model = embedded
-    return await store.nearest_docs(
-        session, vector, model=model, dim=len(vector), public_only=public_only, limit=limit
-    )
+    return await store.nearest_docs(session, vector, model=model, dim=len(vector), limit=limit)

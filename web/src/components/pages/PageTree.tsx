@@ -13,7 +13,7 @@ import { ListSearchInput } from "../ListSearchInput";
 const FILTER_THRESHOLD = 8;
 
 /** The bits a row must carry to render in the tree — satisfied by the authed
- * PageSummary AND the public-KB PublicPageNode (spec 74). */
+ * PageSummary (a public space renders through the same rows — spec 121 §5). */
 interface PageTreeRow {
   id: string;
   parent_id: string | null;
@@ -21,10 +21,6 @@ interface PageTreeRow {
   slug: string;
   position: number;
 }
-
-/** Where a row's link points: the authed pages (default) or the public ones.
- * Both routes carry the same $spaceSlug/$pageSlug params, so `Link` stays typed. */
-type PageRoutePath = typeof RoutePath.page | typeof RoutePath.publicPage;
 
 interface TreeNode {
   row: PageTreeRow;
@@ -79,7 +75,6 @@ export function PageTree({
   rows,
   selectedId,
   canWrite,
-  pageRoute = RoutePath.page,
 }: {
   spaceId: string;
   /** The space's URL segment — rows build `/pages/<space>/<page>` (RADD-702). */
@@ -87,8 +82,6 @@ export function PageTree({
   rows: PageTreeRow[];
   selectedId?: string;
   canWrite: boolean;
-  /** Public trees (spec 74) link to /public-pages instead of the authed pages. */
-  pageRoute?: PageRoutePath;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(() => loadExpanded(spaceId));
 
@@ -203,7 +196,6 @@ export function PageTree({
           selectedId={selectedId}
           ancestors={ancestorsOfSelected}
           canWrite={canWrite}
-          pageRoute={pageRoute}
         />
       ))}
       {canWrite && <NewPageButton spaceId={spaceId} spaceSlug={spaceSlug} parentId={null} depth={0} />}
@@ -221,7 +213,6 @@ function TreeRow({
   onToggle,
   selectedId,
   canWrite,
-  pageRoute,
 }: {
   spaceId: string;
   node: TreeNode;
@@ -231,7 +222,6 @@ function TreeRow({
   onToggle: (pageId: string) => void;
   selectedId?: string;
   canWrite: boolean;
-  pageRoute: PageRoutePath;
   spaceSlug: string;
 }) {
   const { row, children } = node;
@@ -263,7 +253,7 @@ function TreeRow({
           <FileText size={12} className="ml-0.5 shrink-0 text-fg-faint" aria-hidden />
         )}
         <Link
-          to={pageRoute}
+          to={RoutePath.page}
           params={{ spaceSlug, pageSlug: row.slug }}
           className="min-w-0 flex-1 truncate py-1"
         >
@@ -294,8 +284,7 @@ function TreeRow({
             onToggle={onToggle}
             selectedId={selectedId}
             canWrite={canWrite}
-            pageRoute={pageRoute}
-          />
+            />
         ))}
     </>
   );

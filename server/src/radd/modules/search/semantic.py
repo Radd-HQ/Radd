@@ -86,7 +86,7 @@ async def _docs(session: AsyncSession, user: User, q: str, candidates) -> list[S
     readable = set(await pages_access.readable_spaces(session, user))
     if not readable:
         return []
-    ranked = await candidates.doc_candidates(session, q, public_only=False, limit=_ASK_LIMIT)
+    ranked = await candidates.doc_candidates(session, q, limit=_ASK_LIMIT)
     if not ranked:
         return []
     from radd.modules.pages import search as pages_search

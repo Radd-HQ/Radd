@@ -35,7 +35,7 @@ export function useNavFacts(): NavFacts {
   // summaries are not even asked for.
   const authenticated = useIsAuthenticated();
   const projects = useQuery(projectSummaryQuery());
-  const spaces = useQuery({ ...pageSpaceSummaryQuery(), enabled: authenticated });
+  const spaces = useQuery(pageSpaceSummaryQuery()); // actor-safe since spec 121 §5
   const dashboards = useQuery({ ...dashboardSummaryQuery(), enabled: authenticated });
 
   const projectCount = projects.data?.total;
@@ -54,7 +54,7 @@ export function useNavFacts(): NavFacts {
       reports: authenticated && (projectCount === undefined || projectCount > 0),
       timesheet: authenticated && known(navTimesheet),
       portal: authenticated && known(navPortal),
-      docs: authenticated && (spaceCount === undefined || spaceCount > 0 || canManagePages),
+      docs: spaceCount === undefined || spaceCount > 0 || canManagePages,
       dashboards:
         authenticated && (dashboardCount === undefined || dashboardCount > 0 || canCreateDashboard),
     };

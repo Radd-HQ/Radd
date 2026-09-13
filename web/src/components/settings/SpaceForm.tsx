@@ -2,17 +2,17 @@ import { useState, type FormEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, Plus, X } from "lucide-react";
 import { api } from "../../lib/api";
-import { ApiPath, apiPageSpacePath, publicKbSpaceUrl } from "../../lib/constants";
+import { ApiPath, apiPageSpacePath, apiPageSpacePublicAccessPath, spacePublicUrl } from "../../lib/constants";
 import { Entity, invalidateEntities } from "../../lib/cache";
-import type { PageSpace, PageSpaceCreate, PageSpaceUpdate } from "../../lib/types";
+import type { PageSpace, PageSpaceCreate, PageSpaceUpdate, SpacePublicAccessUpdate } from "../../lib/types";
 import { Button } from "../Button";
 import { TextField } from "../TextField";
 import { ErrorText } from "../ErrorText";
 
-/** The shareable /kb URL + a copy button (the spec-62 PublicLinkRow idiom). */
-function PublicPagesLinkRow({ spaceId }: { spaceId: string }) {
+/** The shareable wiki URL + a copy button (the spec-62 PublicLinkRow idiom). */
+function PublicPagesLinkRow({ spaceSlug }: { spaceSlug: string }) {
   const [copied, setCopied] = useState(false);
-  const url = publicKbSpaceUrl(spaceId);
+  const url = spacePublicUrl(spaceSlug);
   const copy = async () => {
     await navigator.clipboard.writeText(url);
     setCopied(true);
@@ -49,11 +49,19 @@ export function SpaceForm({
   const save = useMutation({
     mutationFn: () =>
       existing
-        ? api.patch<PageSpace>(apiPageSpacePath(existing.id), {
-            name: name.trim(),
-            description,
-            public: isPublic,
-          } satisfies PageSpaceUpdate)
+        ? api
+            .patch<PageSpace>(apiPageSpacePath(existing.id), {
+              name: name.trim(),
+              description,
+            } satisfies PageSpaceUpdate)
+            .then((saved) =>
+              // Spec 121 §5: the switch is a grant, written through its own call.
+              isPublic === Boolean(existing.public)
+                ? saved
+                : api.put<PageSpace>(apiPageSpacePublicAccessPath(existing.id), {
+                    public: isPublic,
+                  } satisfies SpacePublicAccessUpdate),
+            )
         : api.post<PageSpace>(ApiPath.pageSpaces, {
             name: name.trim(),
             description,
@@ -103,7 +111,7 @@ export function SpaceForm({
             Archived pages stay hidden. Use external image URLs in public pages — attachment
             links still need a login.
           </p>
-          {isPublic && <PublicPagesLinkRow spaceId={existing.id} />}
+          {isPublic && <PublicPagesLinkRow spaceSlug={existing.slug} />}
         </div>
       )}
       <div className="flex flex-wrap items-center gap-2">

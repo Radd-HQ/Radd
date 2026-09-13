@@ -21,7 +21,6 @@ async def search_pages(
     q: str,
     *,
     limit: int = 20,
-    public_only: bool = False,
     space_id: uuid.UUID | None = None,
     space_ids: "set[uuid.UUID] | None" = None,
 ) -> list[DocSearchResult]:
@@ -50,8 +49,6 @@ async def search_pages(
         .order_by(func.ts_rank_cd(tsv, tsquery).desc(), Page.updated_at.desc())
         .limit(limit)
     )
-    if public_only:
-        stmt = stmt.where(PageSpace.public.is_(True))
     if space_id is not None:
         stmt = stmt.where(Page.space_id == space_id)
     # RADD-791: constrain to the spaces the reader may see, BEFORE the limit —
@@ -71,7 +68,6 @@ async def pages_by_ids(
     session: AsyncSession,
     page_ids: list[uuid.UUID],
     *,
-    public_only: bool = False,
     space_ids: "set[uuid.UUID] | None" = None,
 ) -> list[DocSearchResult]:
     """Non-archived pages by id, result-shaped (spec 103: deflection fuses
@@ -85,10 +81,6 @@ async def pages_by_ids(
     if not page_ids:
         return []
     stmt = select(Page).where(Page.id.in_(page_ids), Page.archived_at.is_(None))
-    if public_only:
-        stmt = stmt.join(PageSpace, PageSpace.id == Page.space_id).where(
-            PageSpace.public.is_(True)
-        )
     if space_ids is not None:
         stmt = stmt.where(Page.space_id.in_(space_ids))
     return [
@@ -107,15 +99,14 @@ async def pages_for_embedding(
     missing_from: str | None = None,
     model: str = "",
     limit: int = 200,
-) -> list[tuple[uuid.UUID, bool, str, str]]:
-    """(page_id, space_is_public, title, body) for the semantic embedder —
+) -> list[tuple[uuid.UUID, str, str]]:
+    """(page_id, title, body) for the semantic embedder —
     non-archived pages only. `missing_from` = the embedder's (table, model)
     anti-join for the reconcile sweep, run here so each module queries only its
     own table shape (the mirror of search.rows_for_embedding)."""
     if page_ids is not None:
         stmt = (
-            select(Page.id, PageSpace.public, Page.title, Page.body)
-            .join(PageSpace, PageSpace.id == Page.space_id)
+            select(Page.id, Page.title, Page.body)
             .where(Page.id.in_(page_ids), Page.archived_at.is_(None))
             .limit(limit)
         )
@@ -126,8 +117,7 @@ async def pages_for_embedding(
         raise ValueError(f"unusable table name: {missing_from!r}")
     result = await session.execute(
         text(
-            "SELECT p.id, s.public, p.title, p.body FROM pages p"
-            " JOIN page_spaces s ON s.id = p.space_id"
+            "SELECT p.id, p.title, p.body FROM pages p"
             f" LEFT JOIN {missing_from} e ON e.page_id = p.id AND e.model = :model"
             " WHERE p.archived_at IS NULL AND e.page_id IS NULL"
             " ORDER BY p.updated_at DESC LIMIT :limit"

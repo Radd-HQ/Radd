@@ -40,8 +40,8 @@ export function DeflectionPanel({ query, projectId }: DeflectionPanelProps) {
 }
 
 /** Pages pages that may already answer it — shared by the authed panels and,
- * with `kb`, the public form's panel (which links the public /kb routes). */
-export function DeflectPagesSection({ docs, kb = false }: { docs: DeflectPage[]; kb?: boolean }) {
+ */
+export function DeflectPagesSection({ docs }: { docs: DeflectPage[] }) {
   if (docs.length === 0) return null;
   return (
     <section className="flex flex-col gap-1">
@@ -53,7 +53,7 @@ export function DeflectPagesSection({ docs, kb = false }: { docs: DeflectPage[];
         {docs.map((doc) => (
           <li key={doc.id}>
             <Link
-              to={kb ? RoutePath.publicPage : RoutePath.page}
+              to={RoutePath.page}
               params={{ spaceSlug: doc.space_id, pageSlug: doc.id }}
               target="_blank"
               rel="noreferrer"

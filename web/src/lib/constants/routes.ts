@@ -202,9 +202,6 @@ export const RoutePath = {
   /** Page spaces admin (spec 43, doc.manage). */
   settingsPages: `${SETTINGS_SEGMENT}/${SettingsSection.pages}`,
   /** PUBLIC pages (spec 74) — root-level, outside the auth gate. */
-  publicPages: "/public-pages",
-  publicPageSpace: "/public-pages/$spaceSlug",
-  publicPage: "/public-pages/$spaceSlug/$pageSlug",
   // Kept until V1: the instance is public and old /kb links live in the wild (RADD-896).
   legacyKb: "/kb",
   legacyKbSpace: "/kb/$spaceSlug",

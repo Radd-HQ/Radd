@@ -8,7 +8,7 @@ against, so "who may attach in the render space" is an ordinary role grant.
 
 Known follow-up (documented in the spec): PUBLIC kb spaces render without a
 session, but downloads require one — public pages need a public mint path on
-`public_router` before images work there.
+the ordinary chokepoint — RADD-1147 gave it the actor, so they do.
 """
 
 import uuid
