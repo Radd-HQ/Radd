@@ -30,6 +30,14 @@ class Settings(BaseSettings):
     auth_login_account_attempts: int = Field(default=20, gt=0)
     auth_login_ip_attempts: int = Field(default=120, gt=0)
     auth_login_bucket_limit: int = Field(default=10000, gt=0)
+    # Per-account write admission (spec 121 §9, RADD-1148): sliding window over
+    # issue + comment creation, consulted by the routers after authentication.
+    # Instance admins and the automation actor are exempt. Same single-process
+    # caveat as the login counters above.
+    write_window_seconds: int = Field(default=3600, gt=0)
+    item_creates_per_window: int = Field(default=30, gt=0)
+    comments_per_window: int = Field(default=120, gt=0)
+    write_throttle_bucket_limit: int = Field(default=10000, gt=0)
     auth_password_workers: int = Field(default=4, gt=0)
     session_cookie_secure: bool = False  # enable behind HTTPS
     token_last_used_throttle_seconds: int = 60  # min interval between PAT last_used_at writes

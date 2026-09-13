@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.db import get_session
 from radd.exceptions import ConflictError
 from radd.modules.auth.deps import Actor, CurrentUser
+from radd.modules.auth.throttle import WriteBucket, check_write
 from radd.modules.workflow.types import StateCategory
 
 from . import bulk, rollup, service
@@ -53,6 +54,7 @@ _Q_DOC = (
 
 @router.post("", response_model=ItemRead, status_code=201)
 async def create_item(data: ItemCreate, session: Session, user: CurrentUser) -> ItemRead:
+    check_write(user, WriteBucket.ITEM_CREATE)
     return await service.create_item(session, data, actor=user)
 
 

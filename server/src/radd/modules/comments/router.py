@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
 from radd.modules.auth.deps import Actor, CurrentUser
+from radd.modules.auth.throttle import WriteBucket, check_write
 
 from . import service
 from .schemas import CommentCreate, CommentPage, CommentRead, CommentUpdate
@@ -22,6 +23,7 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 async def create_comment(
     item_id: uuid.UUID, data: CommentCreate, session: Session, user: CurrentUser
 ) -> CommentRead:
+    check_write(user, WriteBucket.COMMENT_CREATE)
     return await service.create_comment(session, item_id, data, actor=user)
 
 
@@ -42,6 +44,7 @@ async def create_parent_comment(
     and every existing client — and this is the general form the rest use, e.g.
     `POST /page/{id}/comments`.
     """
+    check_write(user, WriteBucket.COMMENT_CREATE)
     return await service.create_comment(session, entity_id, data, actor=user, entity_type=entity_type)
 
 
