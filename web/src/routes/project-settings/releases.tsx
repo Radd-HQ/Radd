@@ -1,19 +1,22 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Pencil, Plus, Rocket, Trash2 } from "lucide-react";
-import { api, errorMessage } from "../../lib/api";
-import { ApiPath, apiReleasePath } from "../../lib/constants";
+import { CheckCircle2, Pencil, Plus, Rocket, Ship, Trash2 } from "lucide-react";
+import { api } from "../../lib/api";
+import { ApiPath, apiReleasePath, apiReleaseSweepPath } from "../../lib/constants";
 import { formatDate } from "../../lib/dates";
 import { usePermissions } from "../../lib/hooks";
 import { useListFilter } from "../../lib/list-filter";
 import { RELEASE_STATUS_META } from "../../lib/meta";
 import { projectByIdQuery, queryKeys, releasesQuery } from "../../lib/queries";
+import { Entity, invalidateEntities } from "../../lib/cache";
+import { pushToast, ToastKind } from "../../lib/toast";
 import {
   Permission,
   ReleaseStatus,
   SettingScope,
   type Release,
   type ReleaseCreate,
+  type ReleaseSweepResult,
   type ReleaseUpdate,
 } from "../../lib/types";
 import { Button } from "../../components/Button";
@@ -111,10 +114,12 @@ export function ReleasesSettingsPage({ projectId }: { projectId?: string }) {
         <section aria-label="Release pipeline" className="mt-8">
           <h3 className="text-[13px] font-semibold text-heading">Release pipeline</h3>
           <p className="mb-3 mt-0.5 text-xs text-fg-muted">
-            Publishing a version <strong>sweeps</strong> every item sitting in the waiting
-            state into the shipped state and records the release on each one. Both are state
-            names, resolved within this project — renaming a state is a settings edit here,
-            not a broken pipeline. Leave either empty to turn that half off.
+            Marking a version released — here, over the API, or by a published GitHub or
+            Forgejo release — <strong>sweeps</strong> every item sitting in the waiting state
+            into the shipped state and records the release on each one. Work that reaches the
+            waiting state afterwards ships with the next <em>Sweep</em>. Both are state names,
+            resolved within this project — renaming a state is a settings edit here, not a
+            broken pipeline. Leave either empty to turn that half off.
           </p>
           <ScopedSettingsEditor
             scope={SettingScope.project}
@@ -154,12 +159,29 @@ function ReleaseRow({
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: queryKeys.releases(projectId) });
 
+  // RADD-1007: becoming released sweeps server-side, so every cached item
+  // read is stale too — invalidate by entity tag, not by query family.
+  const invalidateItems = () => invalidateEntities(queryClient, Entity.item);
   const markReleased = useMutation({
     mutationFn: () =>
       api.patch<Release>(apiReleasePath(release.id), {
         status: ReleaseStatus.released,
       } satisfies ReleaseUpdate),
-    onSuccess: invalidate,
+    onSuccess: async () => {
+      await Promise.all([invalidate(), invalidateItems()]);
+    },
+  });
+  const sweep = useMutation({
+    mutationFn: () => api.post<ReleaseSweepResult>(apiReleaseSweepPath(release.id)),
+    onSuccess: async (result) => {
+      pushToast(
+        result.items_shipped === 0
+          ? `Nothing was waiting for ${release.version}.`
+          : `${release.version}: ${result.items_shipped} item${result.items_shipped === 1 ? "" : "s"} shipped.`,
+        ToastKind.success,
+      );
+      await invalidateItems();
+    },
   });
   const remove = useMutation({
     mutationFn: () => api.delete<void>(apiReleasePath(release.id)),
@@ -181,7 +203,7 @@ function ReleaseRow({
       </span>
       {canManage && (
         <>
-          {release.status === ReleaseStatus.planned && (
+          {release.status === ReleaseStatus.planned ? (
             <Button
               variant="secondary"
               size="sm"
@@ -190,6 +212,17 @@ function ReleaseRow({
             >
               <CheckCircle2 size={12} aria-hidden />
               {markReleased.isPending ? "Releasing…" : "Mark released"}
+            </Button>
+          ) : (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => sweep.mutate()}
+              disabled={sweep.isPending}
+              title="Ship every item waiting for release into this version"
+            >
+              <Ship size={12} aria-hidden />
+              {sweep.isPending ? "Sweeping…" : "Sweep"}
             </Button>
           )}
           <IconButton
@@ -218,10 +251,8 @@ function ReleaseRow({
         </>
       )}
       {confirmDialog}
-      {(markReleased.isError || remove.isError) && (
-        <span className="text-xs text-red-400">
-          {errorMessage(markReleased.error ?? remove.error)}
-        </span>
+      {(markReleased.isError || sweep.isError || remove.isError) && (
+        <ErrorText error={markReleased.error ?? sweep.error ?? remove.error} />
       )}
     </li>
   );

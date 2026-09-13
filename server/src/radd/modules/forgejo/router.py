@@ -145,7 +145,7 @@ def _version_from_tag(tag: str) -> str:
 
     A git tag and a release VERSION are not the same string: tags here are
     `vX.Y.Z` by convention, while every release recorded in the tracker is bare.
-    `ensure_release` find-or-creates by exact version, so taking the tag verbatim
+    `on_release_published` find-or-creates by exact version, so taking the tag verbatim
     minted a second `v0.6.1` release beside `0.6.1` and swept waiting work into
     it. Only a leading `v` is stripped — a tag that is genuinely named something
     else is left alone rather than guessed at.

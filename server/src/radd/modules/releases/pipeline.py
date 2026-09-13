@@ -18,13 +18,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.modules.auth import service as auth_service
 from radd.modules.items.models import WorkItem
+from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 from radd.modules.settings import service as settings_service
 from radd.modules.settings.types import SettingKey
 from radd.modules.workflow import service as workflow_service
 
 from . import service as releases_service
-from .schemas import ReleaseCreate
+from .models import Release
+from .schemas import ReleaseCreate, ReleaseUpdate
 from .types import ReleaseStatus
 
 logger = logging.getLogger(__name__)
@@ -56,31 +58,45 @@ async def shipped_state_id(session: AsyncSession, project: Project) -> uuid.UUID
     return await _state_id_by_setting(session, project, SettingKey.RELEASE_SHIPPED_STATE)
 
 
-async def ensure_release(
-    session: AsyncSession, project: Project, *, version: str, name: str = "", notes: str = ""
-):
-    """Find-or-create the version. Webhook delivery is at-least-once, so a repeat
-    of the same tag must reuse the row rather than create a second one."""
-    from radd.modules.automations.types import SYSTEM_ACTOR_ID
+async def create_release(
+    session: AsyncSession, data: ReleaseCreate, actor_id: uuid.UUID | None = None
+) -> tuple[Release, int]:
+    """Record a version; one born `released` ships what is waiting (RADD-1007).
 
-    existing = await releases_service.list_releases(session, project.id)
-    match = next((r for r in existing if r.version == version), None)
-    if match is not None:
-        return match
-    return await releases_service.create_release(
-        session,
-        ReleaseCreate(
-            project_id=project.id,
-            name=name or version,
-            version=version,
-            status=ReleaseStatus.RELEASED,
-            description=notes[:2000],
-        ),
-        actor_id=SYSTEM_ACTOR_ID,
+    Every write path — REST, MCP, the connectors' publish webhooks — comes
+    through here or `update_release`, so "a version that becomes released
+    sweeps" is one rule with one home rather than a property of the webhook.
+    Returns the release and how many items it shipped.
+    """
+    release = await releases_service.create_release(session, data, actor_id=actor_id)
+    if release.status != ReleaseStatus.RELEASED.value:
+        return release, 0
+    project = await projects_service.get_project(session, release.project_id)
+    return release, await sweep(session, project, release)
+
+
+async def update_release(
+    session: AsyncSession,
+    release_id: uuid.UUID,
+    data: ReleaseUpdate,
+    actor_id: uuid.UUID | None = None,
+) -> tuple[Release, int]:
+    """Edit a version; the planned → released transition sweeps (RADD-1007).
+    Re-marking an already-released version does not re-sweep — that is what
+    `POST /releases/{id}/sweep` and the `sweep_release` tool are for."""
+    was_released = (await releases_service.get_release(session, release_id)).status
+    release = await releases_service.update_release(session, release_id, data, actor_id=actor_id)
+    became_released = (
+        release.status == ReleaseStatus.RELEASED.value
+        and was_released != ReleaseStatus.RELEASED.value
     )
+    if not became_released:
+        return release, 0
+    project = await projects_service.get_project(session, release.project_id)
+    return release, await sweep(session, project, release)
 
 
-async def sweep(session: AsyncSession, project: Project, release) -> int:
+async def sweep(session: AsyncSession, project: Project, release: Release) -> int:
     """Move every waiting item in the project to the shipped state, recording the
     release. Idempotent: items already shipped are not in the waiting state, so a
     second run finds nothing and repoints nothing.
@@ -110,7 +126,7 @@ async def sweep(session: AsyncSession, project: Project, release) -> int:
             # every field in the request is applied, so a project that requires a
             # release to enter its shipped state is satisfied by this call rather
             # than blocked by it.
-            await items_update(session, item_id, shipped, release.id, actor)
+            await _ship_item(session, item_id, shipped, release.id, actor)
             moved += 1
         except Exception:
             logger.exception("release sweep: %s could not be shipped", item_id)
@@ -118,7 +134,7 @@ async def sweep(session: AsyncSession, project: Project, release) -> int:
     return moved
 
 
-async def items_update(session, item_id, state_id, release_id, actor):
+async def _ship_item(session, item_id, state_id, release_id, actor):
     from radd.modules.items import service as items_service
     from radd.modules.items.schemas import ItemUpdate
 
@@ -129,7 +145,27 @@ async def items_update(session, item_id, state_id, release_id, actor):
 
 async def on_release_published(
     session: AsyncSession, project: Project, *, version: str, name: str = "", notes: str = ""
-) -> tuple[object, int]:
-    """A published version: record it, then sweep. Returns (release, items moved)."""
-    release = await ensure_release(session, project, version=version, name=name, notes=notes)
-    return release, await sweep(session, project, release)
+) -> tuple[Release, int]:
+    """A published version from a connector: record it, then sweep.
+
+    Webhook delivery is at-least-once, so a repeat of the same tag reuses the
+    row and re-runs the (idempotent) sweep rather than creating a second version.
+    The notes are stored whole — the column is unbounded text, and a changelog
+    cut mid-word at 2000 characters was a data-loss bug (RADD-907).
+    """
+    from radd.modules.automations.types import SYSTEM_ACTOR_ID
+
+    existing = await releases_service.resolve_release(session, project.id, version)
+    if existing is not None:
+        return existing, await sweep(session, project, existing)
+    return await create_release(
+        session,
+        ReleaseCreate(
+            project_id=project.id,
+            name=name or version,
+            version=version,
+            status=ReleaseStatus.RELEASED,
+            description=notes,
+        ),
+        actor_id=SYSTEM_ACTOR_ID,
+    )

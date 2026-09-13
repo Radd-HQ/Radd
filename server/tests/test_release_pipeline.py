@@ -14,14 +14,18 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings as app_settings
+from radd.exceptions import NotFoundError
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate, ItemUpdate
+from radd.modules.mcp import tools
+from radd.modules.mcp.types import McpTool
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.releases import pipeline, service as releases_service
-from radd.modules.releases.schemas import ReleaseCreate
+from radd.modules.releases.schemas import ReleaseCreate, ReleaseUpdate
+from radd.modules.releases.types import ReleaseStatus
 from radd.modules.reporting import service as reporting, timeline
 from radd.modules.reporting.types import ReportInterval
 from radd.modules.settings import service as settings_service
@@ -193,3 +197,112 @@ async def test_throughput_counts_the_finish_not_the_ship(db, project, admin):
         db, project.id, date.today() - timedelta(days=1), date.today(), ReportInterval.DAY
     )
     assert sum(row.count for row in rows) == 1
+
+
+# --- every write path sweeps (RADD-1007) ---
+
+
+async def test_marking_a_version_released_sweeps(db, project, admin):
+    """The browser's "Mark released" is a PATCH; it must ship what is waiting,
+    exactly like a published connector release — one rule, one home."""
+    await _configure(db, project)
+    item = await _item_in_waiting(db, project, admin)
+    planned = await releases_service.create_release(
+        db, ReleaseCreate(project_id=project.id, name="x", version="3.0.0")
+    )
+    assert (await items_service.get_item(db, item.id, admin)).release is None
+
+    release, moved = await pipeline.update_release(
+        db, planned.id, ReleaseUpdate(status=ReleaseStatus.RELEASED), actor_id=admin.id
+    )
+    assert moved == 1 and release.released_at is not None
+    assert (await items_service.get_item(db, item.id, admin)).release.version == "3.0.0"
+
+    # Re-saving an already-released version (an edit to its notes) is not a
+    # second sweep — that is the explicit sweep's job.
+    await _item_in_waiting(db, project, admin, "later")
+    _release, again = await pipeline.update_release(
+        db, planned.id, ReleaseUpdate(description="notes"), actor_id=admin.id
+    )
+    assert again == 0
+
+
+async def test_a_version_created_as_released_sweeps(db, project, admin):
+    await _configure(db, project)
+    await _item_in_waiting(db, project, admin)
+    _release, moved = await pipeline.create_release(
+        db,
+        ReleaseCreate(
+            project_id=project.id, name="x", version="3.1.0", status=ReleaseStatus.RELEASED
+        ),
+        actor_id=admin.id,
+    )
+    assert moved == 1
+    _planned, none = await pipeline.create_release(
+        db, ReleaseCreate(project_id=project.id, name="x", version="3.2.0"), actor_id=admin.id
+    )
+    assert none == 0
+
+
+async def test_release_notes_survive_the_pipeline_whole(db, project, admin):
+    """RADD-907: the record used to keep 2000 characters of a 20 KB changelog."""
+    notes = "\n".join(f"- RADD-{n}: an entry long enough to matter" for n in range(400))
+    assert len(notes) > 2000
+    release, _ = await pipeline.on_release_published(db, project, version="4.0.0", notes=notes)
+    assert release.description == notes
+
+
+# --- the MCP surface (RADD-908) ---
+
+
+async def test_release_notes_are_readable_and_writable_over_mcp(db, project, admin):
+    await _configure(db, project)
+    await _item_in_waiting(db, project, admin)
+    published, _ = await pipeline.on_release_published(
+        db, project, version="5.0.0", notes="generated changelog"
+    )
+
+    listed = await tools.call_tool(
+        db, admin, McpTool.LIST_RELEASES.value, {"project_key": project.key}
+    )
+    assert [r["version"] for r in listed] == ["5.0.0"] and "description" not in listed[0]
+
+    read = await tools.call_tool(
+        db, admin, McpTool.GET_RELEASE.value, {"project_key": project.key, "version": "5.0.0"}
+    )
+    assert read["description"] == "generated changelog" and read["released_at"]
+
+    amended = await tools.call_tool(
+        db,
+        admin,
+        McpTool.UPDATE_RELEASE.value,
+        {
+            "project_key": project.key,
+            "version": "5.0.0",
+            "description": "## The wave\n\ngenerated changelog",
+            "name": "Radd 5",
+        },
+    )
+    assert amended["items_shipped"] == 0  # already released: no second sweep
+    stored = await releases_service.get_release(db, published.id)
+    assert stored.description.startswith("## The wave") and stored.name == "Radd 5"
+
+    with pytest.raises(NotFoundError):
+        await tools.call_tool(
+            db, admin, McpTool.GET_RELEASE.value, {"project_key": project.key, "version": "nope"}
+        )
+
+
+async def test_marking_released_over_mcp_sweeps(db, project, admin):
+    await _configure(db, project)
+    await _item_in_waiting(db, project, admin)
+    await tools.call_tool(
+        db, admin, McpTool.CREATE_RELEASE.value, {"project_key": project.key, "version": "6.0.0"}
+    )
+    shipped = await tools.call_tool(
+        db,
+        admin,
+        McpTool.UPDATE_RELEASE.value,
+        {"project_key": project.key, "version": "6.0.0", "status": ReleaseStatus.RELEASED.value},
+    )
+    assert shipped["status"] == ReleaseStatus.RELEASED.value and shipped["items_shipped"] == 1

@@ -145,7 +145,13 @@ export interface ReleaseCreate {
   description?: string;
 }
 
-/** PATCH /releases/{id} — set `status: released` to mark released. */
+/** POST /releases/{id}/sweep — what the sweep moved. */
+export interface ReleaseSweepResult {
+  release: string;
+  items_shipped: number;
+}
+
+/** PATCH /releases/{id} — `status: released` marks it released AND sweeps. */
 export interface ReleaseUpdate {
   name?: string;
   version?: string;

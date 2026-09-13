@@ -43,10 +43,11 @@ async def option_choices(
 
 @router.post("", response_model=ReleaseRead, status_code=201)
 async def create_release(data: ReleaseCreate, session: Session, user: CurrentUser) -> ReleaseRead:
+    """Writes go through the pipeline, not the service: a version that is
+    born or becomes `released` sweeps what is waiting (RADD-1007)."""
     await _require(session, user, data.project_id, authz.Permission.RELEASE_CREATE)
-    return ReleaseRead.model_validate(
-        await service.create_release(session, data, actor_id=user.id)
-    )
+    release, _moved = await pipeline.create_release(session, data, actor_id=user.id)
+    return ReleaseRead.model_validate(release)
 
 
 @router.get("", response_model=list[ReleaseRead])
@@ -70,9 +71,8 @@ async def update_release(
 ) -> ReleaseRead:
     release = await service.get_release(session, release_id)
     await _require(session, user, release.project_id, authz.Permission.RELEASE_UPDATE)
-    return ReleaseRead.model_validate(
-        await service.update_release(session, release_id, data, actor_id=user.id)
-    )
+    release, _moved = await pipeline.update_release(session, release_id, data, actor_id=user.id)
+    return ReleaseRead.model_validate(release)
 
 
 @router.delete("/{release_id}", status_code=204)
@@ -84,9 +84,9 @@ async def delete_release(release_id: uuid.UUID, session: Session, user: CurrentU
 
 @router.post("/{release_id}/sweep")
 async def sweep_release(release_id: uuid.UUID, session: Session, user: CurrentUser) -> dict:
-    """Ship everything waiting (spec 112). The same operation the release webhook
-    performs, on demand — so the pipeline works on an instance with no Forgejo at
-    all, and a missed webhook is one button rather than forty manual edits."""
+    """Ship everything waiting (spec 112), on demand. Marking a version released
+    already sweeps once; this re-runs it for work that reached the waiting state
+    afterwards, and it is the recovery for a missed connector webhook."""
     release = await service.get_release(session, release_id)
     project = await projects_service.get_project(session, release.project_id)
     await authz.require(session, user, authz.Permission.RELEASE_UPDATE, project=project)

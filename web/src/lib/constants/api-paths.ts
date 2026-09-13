@@ -82,6 +82,8 @@ export const apiCycleCompletePath = (cycleId: string) => `${apiCyclePath(cycleId
 export const apiCycleStatsPath = (cycleId: string) => `${apiCyclePath(cycleId)}/stats`;
 export const apiCycleSeriesPath = (seriesId: string) => `/cycle-series/${seriesId}`;
 export const apiReleasePath = (releaseId: string) => `${ApiPath.releases}/${releaseId}`;
+/** POST — ship everything waiting into this version (spec 112, RADD-1007). */
+export const apiReleaseSweepPath = (releaseId: string) => `${apiReleasePath(releaseId)}/sweep`;
 export const apiItemStarPath = (itemId: string) => `${ApiPath.items}/${itemId}/star`;
 export const apiItemRankPath = (itemId: string) => `${ApiPath.items}/${itemId}/rank`;
 export const apiItemArchivePath = (itemId: string) => `${ApiPath.items}/${itemId}/archive`;
