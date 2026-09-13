@@ -161,12 +161,19 @@ async function main() {
     context.wiki = wiki;
     checks["anonymous: a public wiki page renders in the shell"] = wiki.path.startsWith("/pages/") && wiki.body === true;
     checks["anonymous: the wiki page makes no 401 request"] = wiki.unauthorized.length === 0;
+    const wikiControls = await session.eval(`[...document.querySelectorAll("button")].map((e) => (e.textContent || e.getAttribute("aria-label") || "").trim()).filter((t) => /^(History|Watch this page|Stop watching this page)$/.test(t))`);
+    context.wiki.controls = wikiControls;
+    checks["anonymous: no History tab or watch on the wiki page"] = wikiControls.length === 0;
 
     await session.navigate(baseUrl + "/issues/" + publicKey, 4000);
     // The title is an editable input (not in innerText); the key is plain text.
     const issuePage = await session.eval(`({ path: location.pathname, title: document.title, body: document.body.innerText.includes(${JSON.stringify(publicKey)}), unauthorized: ${UNAUTHORIZED} })`);
     context.issuePage = issuePage;
     checks["anonymous: the public issue renders"] = issuePage.path === "/issues/" + publicKey && issuePage.body === true;
+    // RADD-1153: nothing a visitor cannot use is rendered on the issue page.
+    const controls = await session.eval(`[...document.querySelectorAll("button, [role=tab], a")].map((e) => (e.textContent || "").trim()).filter((t) => /^(Watch|Star|Archive|Clone|Work log|Version control)$/.test(t))`);
+    context.issuePage.controls = controls;
+    checks["anonymous: no Watch / Star / Archive / Clone / Work log / Version control"] = controls.length === 0;
     // The rail's widgets (watchers, SLA, pickers, plugin cards) ask once and
     // take the refusal quietly; what must never happen is a 401 in a LOOP.
     const repeated = issuePage.unauthorized.filter((url, i, all) => all.indexOf(url) !== i);

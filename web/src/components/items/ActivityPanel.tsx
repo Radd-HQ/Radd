@@ -1,3 +1,4 @@
+import { useIsAuthenticated } from "../../lib/hooks";
 import { useState, type ReactNode } from "react";
 import { Clock, GitBranch, History, MessageSquare, type LucideIcon } from "lucide-react";
 import { useSlot, SlotId } from "@radd/plugin-sdk";
@@ -38,6 +39,7 @@ export function ActivityPanel({
   timeloggingEnabled: boolean;
 }) {
   const [tab, setTab] = useState<string>(ActivityTab.comments);
+  const authenticated = useIsAuthenticated();
 
   // Plugin-contributed Activity tabs (spec 94): a plugin adds a tab next to VCS by registering an
   // `issue.tab` slot — its `title`/`icon` drive the tab button, its `render` the panel body. This
@@ -53,10 +55,14 @@ export function ActivityPanel({
   const tabs: PanelTab[] = [
     { key: ActivityTab.comments, label: "Comments", icon: builtinIcon(MessageSquare), count: item.comment_count, render: () => <CommentsThread item={item} project={project} /> },
     { key: ActivityTab.history, label: "History", icon: builtinIcon(History), render: () => <HistoryTab itemId={item.id} /> },
-    ...(timeloggingEnabled
+    // RADD-1153: worklogs and version-control links are account-only reads —
+    // a visitor gets no tab rather than a tab that errors (the spec-96 rule).
+    ...(timeloggingEnabled && authenticated
       ? [{ key: ActivityTab.worklog, label: "Work log", icon: builtinIcon(Clock), render: () => <WorklogTab itemId={item.id} /> } satisfies PanelTab]
       : []),
-    { key: ActivityTab.vcs, label: "Version control", icon: builtinIcon(GitBranch), render: () => <VcsPanel item={item} project={project} /> },
+    ...(authenticated
+      ? [{ key: ActivityTab.vcs, label: "Version control", icon: builtinIcon(GitBranch), render: () => <VcsPanel item={item} project={project} /> } satisfies PanelTab]
+      : []),
     ...pluginTabs,
   ];
   const active = tabs.find((t) => t.key === tab) ?? tabs[0];

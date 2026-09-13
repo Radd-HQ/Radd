@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { customFieldErrors, deniedCustomFieldKeys, errorMessage } from "../lib/api";
 import { RoutePath } from "../lib/constants";
 import { useArchiveItem, useCloneItem, useConvertItem, useDeleteItem, useToggleStarOnItem, useUpdateItem } from "../lib/item-mutations";
-import { useItemWritability, usePermissions, usePointsEnabled } from "../lib/hooks";
+import { useItemWritability, usePermissions, usePointsEnabled, useIsAuthenticated } from "../lib/hooks";
 import { useCan } from "../lib/can";
 import {
   fieldsQuery,
@@ -96,6 +96,10 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
   // Per-field writability (spec 92): title/description/flag are grant-restrictable builtins, so gate
   // each on its own resolved verdict — disable up front rather than 403 on save.
   const writ = useItemWritability(project, item);
+  // RADD-1153: a visitor sees no time tracking, watch, star or quick actions —
+  // each would 401 or write; the rule is hide up front, never render-then-error.
+  const authenticated = useIsAuthenticated();
+  const timeloggingOn = Boolean(timelogging.data?.enabled) && authenticated;
   const canEditTitle = writ.fieldWritable("title");
   const canEditDescription = writ.fieldWritable("description");
   const archiveItem = useArchiveItem();
@@ -234,6 +238,9 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
             <ParentTag parent={item.parent} />
           </Link>
         )}
+        {/* RADD-1153: every control here is a write or an account's — a visitor gets none. */}
+        {authenticated && (
+          <>
         <div className="ml-auto">
           <WatchButton item={item} />
         </div>
@@ -355,6 +362,8 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
           <Flag size={13} fill={item.flagged ? "currentColor" : "none"} aria-hidden />
           {item.flagged ? "Flagged" : "Flag"}
         </button>
+          </>
+        )}
         {/* Plugin-contributed header actions (spec 94): a plugin adds a button next to the title
             by registering an `issue.title.action` slot — no edit here. */}
         <Slot id={SlotId.issueTitleAction} item={item} project={project} />
@@ -550,7 +559,7 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
               <ActivityPanel
                 item={item}
                 project={project}
-                timeloggingEnabled={Boolean(timelogging.data?.enabled)}
+                timeloggingEnabled={timeloggingOn}
               />
             </section>
           </div>
@@ -581,7 +590,7 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
               customFields={customFields}
               fieldErrors={fieldErrors}
               onCustomFieldChange={onCustomFieldChange}
-              timeloggingEnabled={Boolean(timelogging.data?.enabled)}
+              timeloggingEnabled={timeloggingOn}
             />
           </SidePanel>
           </div>

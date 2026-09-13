@@ -77,6 +77,7 @@ export function PageView({
   const queryClient = useQueryClient();
   const { data: users } = useQuery({ ...usersQuery, enabled: useIsAuthenticated() });
   const [tab, setTab] = useState<TabValue>(Tab.content);
+  const authenticated = useIsAuthenticated();
   const [title, setTitle] = useState(page.title);
   const [editing, setEditing] = useState(false);
   const [restricting, setRestricting] = useState(false);
@@ -203,13 +204,17 @@ export function PageView({
             onClick={() => setTab(Tab.content)}
             label="Content"
           />
-          <TabButton
-            active={tab === Tab.history}
-            onClick={() => setTab(Tab.history)}
-            label="History"
-            icon={<History size={11} aria-hidden />}
-          />
-          <PageWatchButton pageId={page.id} />
+          {/* RADD-1153: versions and watching are account-only reads/writes —
+              a visitor gets neither control rather than one that 401s. */}
+          {authenticated && (
+            <TabButton
+              active={tab === Tab.history}
+              onClick={() => setTab(Tab.history)}
+              label="History"
+              icon={<History size={11} aria-hidden />}
+            />
+          )}
+          {authenticated && <PageWatchButton pageId={page.id} />}
           {canWrite && (
             <IconButton
               onClick={() => setChangingUrl(true)}
