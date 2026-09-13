@@ -145,6 +145,20 @@ def test_nl_system_prompt_enumerates_live_types_and_categories():
     assert "NEVER a bare `state != Done`" in worklog or "issue.state" in worklog
 
 
+def test_nl_system_prompt_enumerates_workflow_states_and_teaches_category_words():
+    """RADD-1140: the model saw only `state != Done` and wrote `state = Fixed`
+    on a workflow with no such state — a silent zero-row query. The live names
+    ride in the prompt, and the finished/unfinished words map to `category`."""
+    prompt = prompts.nl_system_prompt([], states=["Triage", "In Progress", "Done"])
+    assert "Triage, In Progress, Done" in prompt
+    assert "state ONLY for one of these names" in prompt
+    assert "fixed" in prompt and "category = done" in prompt
+    assert "open" in prompt and "category != done" in prompt
+    worklog = prompts.nl_system_prompt([], dialect="worklog", states=["Done"])
+    assert "issue.state ONLY" in worklog and "issue.category = done" in worklog
+    assert "Workflow states" not in prompts.nl_system_prompt([])
+
+
 def test_nl_retry_prompt_carries_query_and_error():
     prompt = prompts.nl_retry_prompt("open bugs", "priority = urgent", "unknown value 'urgent'")
     assert "open bugs" in prompt

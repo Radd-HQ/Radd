@@ -88,6 +88,48 @@ async def test_state_case_and_paraphrase_repair(db, world):
     assert repairs and repairs[0].replacement == "In Progress"
 
 
+async def test_state_word_with_no_real_state_becomes_its_category(db, world):
+    """RADD-1140: "fixed" is no typo of Triage/Backlog/Todo/In Progress/Code
+    Review/Done/Canceled — it is a CATEGORY spoken as a state. The comparison
+    is rewritten rather than left to compile into a silent zero-row query, and
+    reported on the same path a people-repair is."""
+    _, _, _, definitions = world
+    rendered, repairs = await _repair(db, definitions, "state = Fixed")
+    assert rendered == "category = done"
+    assert [(r.kind, r.field, r.original, r.replacement) for r in repairs] == [
+        (nlrepair.RepairKind.CATEGORY, "state", "Fixed", "category = done")
+    ]
+    assert "read 'Fixed' as category = done" in repairs[0].note()
+
+    # The not-done words flip the operator; the ancestor and delegated forms
+    # rewrite the same way, keeping their prefix.
+    rendered, _ = await _repair(db, definitions, "state = open")
+    assert rendered == "category != done"
+    rendered, _ = await _repair(db, definitions, "state != open")
+    assert rendered == "category = done"
+    rendered, _ = await _repair(db, definitions, "epic.state = closed AND priority = high")
+    assert rendered == "epic.category = done AND priority = high"
+    rendered, repairs = await _repair_worklog(db, definitions, "issue.state = resolved")
+    assert rendered == "issue.category = done"
+    assert repairs[0].field == "issue.state"
+
+
+async def test_state_that_exists_nowhere_is_kept_and_reported(db, world):
+    _, _, _, definitions = world
+    rendered, repairs = await _repair(db, definitions, "state = Nonexistentia")
+    assert rendered == "state = Nonexistentia"
+    assert [r.kind for r in repairs] == [nlrepair.RepairKind.UNKNOWN_STATE]
+    assert repairs[0].replacement == ""
+    assert "no state named 'Nonexistentia'" in repairs[0].note()
+    # Membership: each unknown name is reported, a real one passes untouched.
+    rendered, repairs = await _repair(db, definitions, "state IN (Done, Nonexistentia)")
+    assert rendered == "state IN (Done, Nonexistentia)"
+    assert [(r.kind, r.original) for r in repairs] == [
+        (nlrepair.RepairKind.UNKNOWN_STATE, "Nonexistentia")
+    ]
+    # Other entity fields keep the old silence (`assignee = zzqqxx` above).
+
+
 async def test_custom_select_option_repairs_to_the_curated_value(db, world):
     _, _, severity, definitions = world
     rendered, repairs = await _repair(db, definitions, f"{severity.key} = critical")

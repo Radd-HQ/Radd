@@ -110,6 +110,7 @@ async def nl_to_slq(
     issue_types = [
         c.value for c in await value_candidates(session, SuggestScope(), "type", "", {})
     ]
+    states = [c.value for c in await value_candidates(session, SuggestScope(), "state", "", {})]
     work_categories = (
         [c.value for c in await nlrepair.category_candidates(session)]
         if dialect is SlqDialect.WORKLOG
@@ -120,6 +121,7 @@ async def nl_to_slq(
         dialect=dialect.value,
         issue_types=issue_types,
         work_categories=work_categories,
+        states=states,
     )
     definitions_by_key: dict[str, FieldDefinition] = {}
     for definition in definitions:

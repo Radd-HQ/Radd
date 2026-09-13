@@ -10,7 +10,8 @@ from collections.abc import Sequence
 from typing import Any
 
 from radd.modules.fields.types import FieldType
-from radd.modules.ai.types import SlqDialect
+from radd.modules.workflow.types import StateCategory
+from radd.modules.ai.types import STATE_WORDS, SlqDialect
 
 # --- NL -> SLQ ---
 
@@ -60,6 +61,7 @@ Values:
 - Bare words need no quotes; use 'single' or "double" quotes for values with spaces.
 - Keywords are case-insensitive; field names are case-sensitive.
 - me = the current user (assignee/reporter); none = unset relation (same as IS EMPTY).
+- != / NOT IN on a relation (assignee, team, type, cycle, release, epic.*, parent.*) also match items where it is unset — `assignee != me` includes the unassigned.
 
 Examples:
 - state != Done AND priority IN (high, blocker)
@@ -107,15 +109,17 @@ def nl_system_prompt(
     *,
     issue_types: Sequence[str] = (),
     work_categories: Sequence[str] = (),
+    states: Sequence[str] = (),
 ) -> str:
     """The NL->SLQ system prompt: frozen grammar + the live field registry.
 
     `definitions` duck-types FieldDefinition (key/name/type/options/ai_visible);
     fields marked ai_visible=False never reach the prompt. `dialect` swaps the
     framing: "worklog" prepends the timesheet surface and prefixes custom keys
-    with `issue.` (spec 98 delegation). `issue_types`/`work_categories` are the
-    LIVE small value sets — without them the model maps "bugs" onto the generic
-    `kind` instead of the Bug issue type (seen live).
+    with `issue.` (spec 98 delegation). `issue_types`/`work_categories`/`states`
+    are the LIVE small value sets — without them the model maps "bugs" onto the
+    generic `kind` instead of the Bug issue type, and writes `state = Fixed`
+    on a workflow that has no such state (both seen live; RADD-1140).
     """
     worklog = dialect == SlqDialect.WORKLOG.value
     key_prefix = "issue." if worklog else ""
@@ -142,6 +146,18 @@ def nl_system_prompt(
             + ". When the user names one of these (bugs, features, …), filter with "
             + f"{key_prefix}type — {key_prefix}kind is ONLY the hierarchy level "
             + "(epic | issue | subtask)."
+        )
+    if states:
+        registry += (
+            f"\n\nWorkflow states on this tracker (the {key_prefix}state field, exact names): "
+            + ", ".join(states)
+            + ". Use "
+            + f"{key_prefix}state ONLY for one of these names. Words like "
+            + ", ".join(sorted(STATE_WORDS.done))
+            + f" mean {key_prefix}category = {StateCategory.DONE.value}; "
+            + ", ".join(sorted(STATE_WORDS.not_done))
+            + f" mean {key_prefix}category != {StateCategory.DONE.value} — unless the user "
+            + "names an actual state from the list."
         )
     if worklog and work_categories:
         registry += (

@@ -13,17 +13,26 @@ into a correlated subquery that matches nothing — so there is no error to
 catch (the silent-empty-result hole this closes). Repaired values are always
 re-emitted QUOTED, which both survives spaces and guarantees the replacement
 is never re-read as a grammar sentinel.
+
+States get one more step (RADD-1140): a `state = Fixed` with no lexical
+neighbour among the real states is not a typo but a CATEGORY spoken as a
+state — it is rewritten to `category = done` through the `STATE_WORDS`
+table; a state word that is neither is left alone but REPORTED, so the
+explanation says the state does not exist instead of the query quietly
+returning nothing.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import date
+from enum import StrEnum
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.modules.fields.models import FieldDefinition
-from radd.modules.ai.types import SlqDialect
+from radd.modules.workflow.types import StateCategory
+from radd.modules.ai.types import STATE_WORDS, ImpliedCategory, SlqDialect
 from radd.modules.items.slq import (
     ME_LITERAL,
     NONE_LITERAL,
@@ -36,6 +45,7 @@ from radd.modules.items.slq import (
     Value,
     is_sentinel,
 )
+from radd.modules.items.slq.catalog import SlqField
 from radd.modules.items.slq.parser import CompareOp
 from radd.modules.items.slq.custom import BOOLEAN_WORDS
 from radd.modules.items.slq.helpers import DATE_RE, ITEM_KEY_RE, relative_date
@@ -58,17 +68,37 @@ _ISSUE_PREFIX = "issue."
 # Candidate entries that are grammar, not data — never a repair target.
 _SENTINEL_VALUES = frozenset({ME_LITERAL, NONE_LITERAL, "today", "true", "false"})
 
+# `state = open` is `category != done`: the not-done words flip the operator.
+_FLIPPED_OP = {CompareOp.EQ: CompareOp.NE, CompareOp.NE: CompareOp.EQ}
+
+
+class RepairKind(StrEnum):
+    VALUE = "value"  # the value was swapped for the closest real one
+    CATEGORY = "category"  # a state word became the category comparison it meant
+    UNKNOWN_STATE = "unknown_state"  # left as written; no state carries that name
+
 
 @dataclass(frozen=True)
 class Repair:
     field: str
     original: str
-    replacement: str
+    replacement: str  # empty for UNKNOWN_STATE — nothing was substituted
     label: str | None  # display name when the value is opaque (user emails)
+    kind: RepairKind = RepairKind.VALUE
 
     def note(self) -> str:
+        match self.kind:
+            case RepairKind.CATEGORY:
+                return f"read '{self.original}' as {self.replacement} (no state by that name)"
+            case RepairKind.UNKNOWN_STATE:
+                return f"no state named '{self.original}' exists on this tracker"
         shown = f"{self.label} ({self.replacement})" if self.label else self.replacement
         return f"matched '{self.original}' to {shown}"
+
+
+def _is_state_field(field: str) -> bool:
+    """`state`, `epic.state`, `parent.state`, and their `issue.` forms."""
+    return field == SlqField.STATE.value or field.endswith(f".{SlqField.STATE.value}")
 
 
 async def repair_query(
@@ -103,7 +133,10 @@ async def repair_query(
             )
         return cache[source]
 
-    async def fix_value(field: str, value: Value) -> Value:
+    async def resolve(field: str, value: Value) -> Value | None:
+        """The value to emit — itself, or the closest real one (recorded as a
+        repair) — or None when the field HAS a candidate set and the value
+        matches nothing in it."""
         if _skip(value):
             return value
         candidates = [
@@ -121,7 +154,7 @@ async def repair_query(
             if scored is not None and (best is None or scored > best[1]):
                 best = (candidate, scored)
         if best is None:
-            return value  # nothing close — let the honest empty result stand
+            return None  # nothing close
         chosen = best[0]
         repairs.append(
             Repair(
@@ -157,14 +190,56 @@ async def repair_query(
             return 1.0
         return match.confidence
 
+    def unknown_state(field: str, value: Value) -> None:
+        repairs.append(
+            Repair(field, value.text, replacement="", label=None, kind=RepairKind.UNKNOWN_STATE)
+        )
+
+    def state_word_as_category(expr: Comparison) -> Comparison:
+        """`state = Fixed` → `category = done`; `state = open` → `category != done`.
+        A word outside the table stays as written, and is reported."""
+        implied = STATE_WORDS.implied(expr.value.text)
+        if implied is None:
+            unknown_state(expr.field, expr.value)
+            return expr
+        op = expr.op if implied is ImpliedCategory.DONE else _FLIPPED_OP[expr.op]
+        field = expr.field.removesuffix(SlqField.STATE.value) + SlqField.CATEGORY.value
+        rewritten = Comparison(
+            field,
+            op,
+            Value(StateCategory.DONE.value, position=expr.value.position),
+            expr.field_position,
+            expr.op_position,
+        )
+        repairs.append(
+            Repair(
+                expr.field,
+                expr.value.text,
+                replacement=f"{field} {op.value} {StateCategory.DONE.value}",
+                label=None,
+                kind=RepairKind.CATEGORY,
+            )
+        )
+        return rewritten
+
     async def fix_expr(expr):
         if isinstance(expr, Comparison):
             if expr.op is CompareOp.CONTAINS:
                 return expr  # `~` means substring — a partial value is the point
-            return replace(expr, value=await fix_value(expr.field, expr.value))
+            resolved = await resolve(expr.field, expr.value)
+            if resolved is not None:
+                return replace(expr, value=resolved)
+            if _is_state_field(expr.field):
+                return state_word_as_category(expr)
+            return expr  # let the honest empty result stand
         if isinstance(expr, Membership):
-            fixed = tuple([await fix_value(expr.field, value) for value in expr.values])
-            return replace(expr, values=fixed)
+            values: list[Value] = []
+            for value in expr.values:
+                resolved = await resolve(expr.field, value)
+                if resolved is None and _is_state_field(expr.field):
+                    unknown_state(expr.field, value)
+                values.append(value if resolved is None else resolved)
+            return replace(expr, values=tuple(values))
         if isinstance(expr, EmptyCheck):
             return expr
         if isinstance(expr, NotExpr):

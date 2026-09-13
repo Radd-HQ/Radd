@@ -1,6 +1,7 @@
 """Enums, schemas, errors, and tunable constants for the AI layer (spec 46)."""
 
 import uuid
+from dataclasses import dataclass
 from enum import StrEnum
 
 from pydantic import BaseModel, Field
@@ -209,6 +210,39 @@ class SimilarTextRequest(BaseModel):
     text: str = Field(min_length=1, max_length=SIMILAR_TEXT_MAX_CHARS)
     # The item the text belongs to (a comment's issue) — excluded from results.
     exclude_item_id: uuid.UUID | None = None
+
+
+class ImpliedCategory(StrEnum):
+    """What a state-like word in a question means when NO state carries that
+    name (RADD-1140): "fixed" is finished work, "open" is unfinished work."""
+
+    DONE = "done"
+    NOT_DONE = "not_done"
+
+
+@dataclass(frozen=True)
+class StateWords:
+    """Words people use as if they were workflow-state NAMES but that name a
+    CATEGORY. The NL prompt teaches them up front; the repair pass rewrites a
+    `state = <word>` that matches no real state into the category comparison
+    instead of letting it compile into a silent zero-row query."""
+
+    done: frozenset[str]
+    not_done: frozenset[str]
+
+    def implied(self, word: str) -> ImpliedCategory | None:
+        folded = word.casefold()
+        if folded in self.done:
+            return ImpliedCategory.DONE
+        if folded in self.not_done:
+            return ImpliedCategory.NOT_DONE
+        return None
+
+
+STATE_WORDS = StateWords(
+    done=frozenset({"fixed", "closed", "finished", "resolved", "complete", "completed", "shipped"}),
+    not_done=frozenset({"open", "unresolved", "active", "pending"}),
+)
 
 
 class SlqDialect(StrEnum):

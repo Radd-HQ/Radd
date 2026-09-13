@@ -87,7 +87,19 @@ plugin = RaddPlugin(
         "registry (spec 101): DB provider rows + chat/embeddings/vision roles, "
         "env-seeded once. Dormant (404) while a feature's role is unconfigured."
     ),
-    depends_on=("auth", "projects", "items", "fields", "comments", "search", "settings", "events", "pages", "timelogging"),
+    depends_on=(
+        "auth",
+        "projects",
+        "items",
+        "fields",
+        "workflow",  # RADD-1140: StateCategory for the NL state-word rewrite
+        "comments",
+        "search",
+        "settings",
+        "events",
+        "pages",
+        "timelogging",
+    ),
     # The classifier node (spec 116 phase 2). Contributed, not hardcoded in
     # `automations` — which is the whole point of the node registry: a module
     # adds a node type to the canvas without the automations module learning it
