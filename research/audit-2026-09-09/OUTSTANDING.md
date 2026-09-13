@@ -12,7 +12,7 @@ Epic **RADD-1112** is in progress. Children: **RADD-1113** long discussions (in 
 
 | ID | Required outcome | Evidence needed | Status |
 |---|---|---|---|
-| C1 | Hosted PR/main checks protect contribution without exposing release credentials | Published runner image, isolated runner registration, successful real PR check, required status setting | Open |
+| C1 | Hosted PR/main checks protect contribution without exposing release credentials | Closed by RADD-1127: `.github/workflows/checks.yaml` runs on every PR and push to `main` on GitHub's disposable runners with a read-only token; `main` protected; runner image 1.4.1 published to ghcr.io; the Forgejo `check.yaml` draft deleted | Done (GitHub Actions) |
 | D1 | Compact default board cards retain configurable richer layouts | Default migration/config decision; dense populated board screenshots and keyboard behavior | Open |
 | D2 | Issue content/actions have clear hierarchy with progressive disclosure | Populated issue at desktop/mobile, accessible overflow, essential controls visible | Open |
 | D3 | Terminology, structured filtering and optional AI are understandable | Contextual help/templates, real first-project/find/resolve walkthrough | Open |
