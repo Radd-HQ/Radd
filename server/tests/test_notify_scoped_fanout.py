@@ -37,7 +37,7 @@ from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate, ItemUpdate
 from radd.modules.notify import consumer, service as notify_service
 from radd.modules.notify.models import Notification
-from radd.modules.notify.types import CONSUMER_NAME, Channel, NotificationType, RuleScope
+from radd.modules.notify.types import Channel, NotificationType, RuleScope
 from radd.modules.pages import service as pages_service, spaces
 from radd.modules.pages.schemas import PageCreate, PageSpaceCreate, PageUpdate
 from radd.modules.projects import service as projects_service
@@ -95,15 +95,10 @@ async def _at_head(db) -> int:
 async def _drain(db, after: int) -> None:
     """Run the real dispatcher over the events this test produced.
 
-    `consumer._handle`, not `_consume`, for two reasons.
-
-    It does not COMMIT. `_consume` ends with one, and these tests create spaces
-    and projects that an instance-wide assertion elsewhere then counts — a
-    committed space made `test_space_scope`'s "an unscoped grant covers every
-    space" fail against rows from a different test file. Every row here stays
-    inside the transaction the fixture rolls back.
-
-    And it does not swallow. `_consume` wraps each event in a SAVEPOINT and logs
+    `consumer._handle`, not `_consume`, because it does not swallow (`_consume`
+    used to COMMIT as well — RADD-1047 moved that to the session opener, so a
+    committed space no longer leaks into `test_space_scope` from here). `_consume`
+    wraps each event in a SAVEPOINT and logs
     what raises, which is right in production and is exactly why RADD-1056
     survived: a page comment raised KeyError, was logged, and looked from the
     outside like a notification nobody wanted. Here it raises.

@@ -486,11 +486,15 @@ async def test_seeding_does_nothing_once_a_row_exists(db, monkeypatch):
 
     db.add(MailSource(name="already here", kind=MailSourceKind.IMAP.value, host="h", username="u"))
     await db.flush()
+    before = {s.id for s in await registry.list_sources(db)}
 
     await seeding.seed(db)
 
-    names = [s.name for s in await registry.list_sources(db)]
-    assert names == ["already here"], "env must not add a second source"
+    # The delta, not an absolute count: the shared test database may hold
+    # sources another file committed, and a row that predates this test is
+    # not evidence of seeding.
+    after = {s.id for s in await registry.list_sources(db)}
+    assert after == before, "env must not add a second source"
 
 
 async def test_seeding_creates_a_source_and_sender_on_an_empty_instance(db, monkeypatch):

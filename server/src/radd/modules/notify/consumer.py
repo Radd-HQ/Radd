@@ -4,6 +4,14 @@ Planning is pure (planner.py); this wraps it with lookups (watchers, mention
 resolution, permission filtering) and the writes. One transaction per batch;
 each event runs in a SAVEPOINT so a bad event is logged and skipped, never
 wedging the cursor.
+
+**Transaction ownership (RADD-1047):** whoever OPENS the session commits it.
+`run_once` opens one and commits after the batch it drives; `_bootstrap` commits
+per batch of the backlog it loops over. `_consume` itself never commits — it is
+handed a session and writes into it. Tests exercise it with their rolled-back
+fixture session, and a commit here made every fixture row of every such test
+permanent in the shared test database (RADD-992: a second file then saw two
+senders where it had created one).
 """
 
 import logging
@@ -93,7 +101,9 @@ async def run_once() -> int:
     async with SessionLocal() as session:
         if not await events.offset_exists(session, CONSUMER_NAME):
             return await _bootstrap(session)
-        return await _consume(session, watch_only=False)
+        processed = await _consume(session, watch_only=False)
+        await session.commit()
+        return processed
 
 
 async def _consume(session: AsyncSession, *, watch_only: bool) -> int:
@@ -114,7 +124,6 @@ async def _consume(session: AsyncSession, *, watch_only: bool) -> int:
         except Exception:
             logger.exception("notify: failed handling event %s (%s)", event.id, event.event_type)
     await events.set_offset(session, CONSUMER_NAME, batch[-1].id)
-    await session.commit()
     return len(batch)
 
 
@@ -126,6 +135,9 @@ async def _bootstrap(session: AsyncSession) -> int:
     logger.info("notify: first start — backfilling watchers from the event backlog")
     total = 0
     while processed := await _consume(session, watch_only=True):
+        # Per batch, not once at the end: a years-long backlog should land
+        # progressively, and a crash mid-way must not replay it from zero.
+        await session.commit()
         total += processed
     return total
 

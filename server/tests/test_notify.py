@@ -456,9 +456,8 @@ async def test_page_update_fan_out_obeys_the_channel_rules(db):
     head = await events_service.latest_event_id(db)
     await pages.update_page(db, page.id, PageUpdate(body="v2 — restart order changed"), author.id)
     await db.flush()
-    # `_handle`, not `_consume`: the latter COMMITS, and a space committed out of
-    # this test made `test_space_scope`'s "an unscoped grant covers every space"
-    # assert against a row from another file. Routing is still proved — the
+    # `_handle`, not `_consume`: the latter swallows (a SAVEPOINT + a log line),
+    # and here a raise should fail the test. Routing is still proved — the
     # filter below is the consumer's own `_HANDLED`, so a page event missing
     # from it would be skipped here exactly as it would be in production.
     for event in await events_service.read_after(db, head, 100):
