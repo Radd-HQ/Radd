@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
 from radd.exceptions import ConflictError
-from radd.modules.auth.deps import CurrentUser
+from radd.modules.auth.deps import Actor, CurrentUser
 from radd.modules.workflow.types import StateCategory
 
 from . import bulk, rollup, service
@@ -59,7 +59,7 @@ async def create_item(data: ItemCreate, session: Session, user: CurrentUser) -> 
 @router.get("", response_model=list[ItemRead])
 async def list_items(
     session: Session,
-    user: CurrentUser,
+    user: Actor,
     q: Annotated[str | None, Query(description=_Q_DOC)] = None,
     project_id: uuid.UUID | None = None,
     state_id: Annotated[list[uuid.UUID] | None, Query()] = None,
@@ -104,7 +104,7 @@ _VALIDATE_DOC = (
 @router.get("/slq/validate", response_model=SlqValidation, description=_VALIDATE_DOC)
 async def validate_slq(
     session: Session,
-    user: CurrentUser,
+    user: Actor,
     q: str = "",
     project_id: uuid.UUID | None = None,
 ) -> SlqValidation:
@@ -121,7 +121,7 @@ _SUGGEST_DOC = (
 @router.get("/slq/suggest", response_model=SuggestResponse, description=_SUGGEST_DOC)
 async def suggest_slq(
     session: Session,
-    user: CurrentUser,
+    user: Actor,
     q: str = "",
     cursor: Annotated[int | None, Query(ge=0)] = None,
     project_id: uuid.UUID | None = None,
@@ -138,7 +138,7 @@ async def suggest_slq(
 @router.get("/ids", response_model=ItemIds)
 async def list_item_ids(
     session: Session,
-    user: CurrentUser,
+    user: Actor,
     q: Annotated[str | None, Query(description=_Q_DOC)] = None,
     project_id: uuid.UUID | None = None,
     state_id: Annotated[list[uuid.UUID] | None, Query()] = None,
@@ -175,7 +175,7 @@ async def list_item_ids(
 @router.get("/count", response_model=ItemCount)
 async def count_items(
     session: Session,
-    user: CurrentUser,
+    user: Actor,
     q: Annotated[str | None, Query(description=_Q_DOC)] = None,
     project_id: uuid.UUID | None = None,
     state_id: Annotated[list[uuid.UUID] | None, Query()] = None,
@@ -256,18 +256,18 @@ async def link_search(
 
 
 @router.get("/by-key/{key}", response_model=ItemRead)
-async def get_item_by_key(key: str, session: Session, user: CurrentUser) -> ItemRead:
+async def get_item_by_key(key: str, session: Session, user: Actor) -> ItemRead:
     """Resolve an item by its canonical key (`TD-1234`) — powers `/issues/{key}` URLs."""
     return await service.get_item_by_key(session, key, actor=user)
 
 
 @router.get("/{item_id}", response_model=ItemRead)
-async def get_item(item_id: uuid.UUID, session: Session, user: CurrentUser) -> ItemRead:
+async def get_item(item_id: uuid.UUID, session: Session, user: Actor) -> ItemRead:
     return await service.get_item(session, item_id, actor=user)
 
 
 @router.get("/{item_id}/history", response_model=ItemHistory)
-async def get_item_history(item_id: uuid.UUID, session: Session, user: CurrentUser) -> ItemHistory:
+async def get_item_history(item_id: uuid.UUID, session: Session, user: Actor) -> ItemHistory:
     """Chronological, actor-attributed activity feed: field changes + comments,
     worklogs, and links on the item (the History tab)."""
     return await item_history(session, item_id, actor=user)

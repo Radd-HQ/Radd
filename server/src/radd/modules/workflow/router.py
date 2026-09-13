@@ -8,7 +8,7 @@ from radd.db import get_session
 from radd.choices import ChoiceRead
 from radd.apitypes import TOTAL_COUNT_HEADER
 from radd.modules.auth import authz
-from radd.modules.auth.deps import CurrentUser
+from radd.modules.auth.deps import Actor, CurrentUser
 from radd.modules.projects import service as projects_service
 
 from . import service
@@ -30,7 +30,7 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 
 @router.get("/options", response_model=list[ChoiceRead])
 async def option_choices(
-    session: Session, user: CurrentUser, response: Response,
+    session: Session, user: Actor, response: Response,
     q: Annotated[str, Query(max_length=200)] = "",
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -53,7 +53,7 @@ async def create_state(data: StateCreate, session: Session, user: CurrentUser) -
 @router.get("", response_model=list[StateRead])
 async def list_states(
     session: Session,
-    user: CurrentUser,
+    user: Actor,
     project_id: uuid.UUID | None = None,
 ) -> list[StateRead]:
     """One project's states — or, unscoped, the states of every project the
@@ -112,7 +112,7 @@ def _require_instance_admin(user) -> None:
 
 
 @category_router.get("", response_model=list[StateCategoryRead])
-async def list_state_categories(session: Session, user: CurrentUser) -> list[StateCategoryRead]:
+async def list_state_categories(session: Session, user: Actor) -> list[StateCategoryRead]:
     await authz.require_member(session, user)
     return [
         StateCategoryRead.model_validate(row)

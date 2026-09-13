@@ -54,6 +54,12 @@ class WorkItem(Base, TimestampMixin):
     team_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("teams.id"), index=True)
     # First-class shared flag (spec 24) — a core boolean attribute, not a label.
     flagged: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # Spec 121: ItemVisibility — public | internal | restricted. Enforced by
+    # the `@public` relation and the `item` row guard (service/visibility.py),
+    # so every list, count, search and gate reads it through the same seam.
+    visibility: Mapped[str] = mapped_column(
+        String(20), default="public", server_default="public", index=True
+    )
     # Spec 38: soft archive — hidden from lists/boards/views by default.
     archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # Manual sort key (spec 24): a fractional order for drag-to-rank; lower = earlier.

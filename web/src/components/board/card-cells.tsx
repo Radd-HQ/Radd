@@ -26,6 +26,7 @@ import {
   StatePill,
   TeamBadge,
   UnassignedSlot,
+  VisibilityBadge,
 } from "../items/ItemBadges";
 import { RollupRowBar } from "../items/RollupBar";
 import { SlaRowChip } from "../items/SlaChips";
@@ -162,6 +163,8 @@ export function renderCardCell(attr: string, ctx: CardCellCtx): ReactNode {
       return item.team ? <TeamBadge team={item.team} /> : null;
     case "priority":
       return <PriorityTag priority={item.priority} />;
+    case "visibility":
+      return <VisibilityBadge visibility={item.visibility} size={12} />;
     case "assignee":
       return item.assignee ? <AssigneeAvatar assignee={item.assignee} /> : <UnassignedSlot />;
     case "reporter":

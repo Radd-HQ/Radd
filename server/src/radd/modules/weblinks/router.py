@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
 from radd.modules.auth import authz
-from radd.modules.auth.deps import CurrentUser
+from radd.modules.auth.deps import Actor, CurrentUser
 from radd.modules.items import service as items_service
 
 from . import service
@@ -40,7 +40,7 @@ async def create_web_link(
 
 @router.get("/items/{item_id}/web-links", response_model=list[WebLinkRead])
 async def list_web_links(
-    item_id: uuid.UUID, session: Session, user: CurrentUser
+    item_id: uuid.UUID, session: Session, user: Actor
 ) -> list[WebLinkRead]:
     await _require_item_perm(session, user, item_id, authz.Permission.ITEM_READ)
     return [WebLinkRead.model_validate(link) for link in await service.list_for_item(session, item_id)]

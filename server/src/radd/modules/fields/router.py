@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.apitypes import TOTAL_COUNT_HEADER
 from radd.db import get_session
 from radd.modules.auth import authz
-from radd.modules.auth.deps import CurrentUser
+from radd.modules.auth.deps import Actor, CurrentUser
 from radd.modules.projects import service as projects_service
 
 from . import service
@@ -180,7 +180,7 @@ async def delete_field(field_id: uuid.UUID, session: Session, user: CurrentUser)
 async def list_fields(
     response: Response,
     session: Session,
-    user: CurrentUser,
+    user: Actor,
     q: str | None = None,
     limit: Annotated[int | None, Query(ge=1, le=500)] = None,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -203,7 +203,7 @@ async def list_fields(
 
 @router.get("/writable", response_model=FieldWritabilityRead)
 async def field_writability(
-    session: Session, user: CurrentUser, project_id: uuid.UUID
+    session: Session, user: Actor, project_id: uuid.UUID
 ) -> FieldWritabilityRead:
     """Builtin names + custom keys the current user CAN'T write in `project_id` (spec 92 access
     resolution) — the SPA disables exactly those editors up front instead of erroring on save.

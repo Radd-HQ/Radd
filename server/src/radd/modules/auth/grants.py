@@ -30,13 +30,19 @@ async def _subject_condition(session: AsyncSession, user_id: uuid.UUID):
     """A grant belongs to the user directly, to one of their teams, or — since
     RADD-832 — to one of their TRANSITIVE directory groups (a role granted to a
     parent group reaches every nested member). Both closures are memoised per
-    request (RADD-830)."""
+    request (RADD-830). Since spec 121 "directly" includes the principal rows
+    the actor stands in for (Anyone; Signed-in users when authenticated)."""
     from radd.modules.groups import service as groups  # deferred: loads after auth
     from radd.modules.teams import service as teams  # deferred: teams loads after auth
 
+    from .principals import subject_user_ids  # auth-internal; no cycle
+
     team_ids = await teams.user_team_ids(session, user_id)
     group_ids = await groups.user_group_ids(session, user_id)
-    condition = GlobalRoleGrant.user_id == user_id
+    # Spec 121: every actor also matches the Anyone principal's grants, every
+    # real account the Signed-in users principal's — the ONE place role grants
+    # learn the world exists (access grants: SubjectContext.subject_user_ids).
+    condition = GlobalRoleGrant.user_id.in_(subject_user_ids(user_id))
     if team_ids:
         condition = condition | GlobalRoleGrant.team_id.in_(team_ids)
     if group_ids:

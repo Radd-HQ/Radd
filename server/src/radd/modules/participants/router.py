@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
-from radd.modules.auth.deps import CurrentUser
+from radd.modules.auth.deps import Actor, CurrentUser
 
 from . import service
 from .schemas import ItemParticipantsRead, ParticipantAdd, ParticipantRow
@@ -17,7 +17,7 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 
 @router.get("/items/{item_id}/participants", response_model=ItemParticipantsRead)
 async def list_participants(
-    item_id: uuid.UUID, session: Session, user: CurrentUser
+    item_id: uuid.UUID, session: Session, user: Actor
 ) -> ItemParticipantsRead:
     """Hydrated participant users/teams + grant rows (item.read); `can_manage`
     is computed per actor server-side (item.update OR the item's reporter)."""

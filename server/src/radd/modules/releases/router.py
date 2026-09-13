@@ -8,7 +8,7 @@ from radd.db import get_session
 from radd.choices import ChoiceRead
 from radd.apitypes import TOTAL_COUNT_HEADER
 from radd.modules.auth import authz
-from radd.modules.auth.deps import CurrentUser
+from radd.modules.auth.deps import Actor, CurrentUser
 from radd.modules.projects import service as projects_service
 
 from . import pipeline, service
@@ -28,7 +28,7 @@ async def _require(
 
 @router.get("/options", response_model=list[ChoiceRead])
 async def option_choices(
-    session: Session, user: CurrentUser, response: Response,
+    session: Session, user: Actor, response: Response,
     q: Annotated[str, Query(max_length=200)] = "",
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -51,14 +51,14 @@ async def create_release(data: ReleaseCreate, session: Session, user: CurrentUse
 
 @router.get("", response_model=list[ReleaseRead])
 async def list_releases(
-    project_id: uuid.UUID, session: Session, user: CurrentUser
+    project_id: uuid.UUID, session: Session, user: Actor
 ) -> list[ReleaseRead]:
     await _require(session, user, project_id, authz.Permission.ITEM_READ)
     return [ReleaseRead.model_validate(r) for r in await service.list_releases(session, project_id)]
 
 
 @router.get("/{release_id}", response_model=ReleaseRead)
-async def get_release(release_id: uuid.UUID, session: Session, user: CurrentUser) -> ReleaseRead:
+async def get_release(release_id: uuid.UUID, session: Session, user: Actor) -> ReleaseRead:
     release = await service.get_release(session, release_id)
     await _require(session, user, release.project_id, authz.Permission.ITEM_READ)
     return ReleaseRead.model_validate(release)

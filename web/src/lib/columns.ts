@@ -50,6 +50,7 @@ const BUILTIN_COLUMNS: ColumnDef[] = [
   { id: "target_date", label: "Target date", width: 96, minWidth: COLUMN_MIN_WIDTH },
   { id: "team", label: "Team", width: 112, minWidth: COLUMN_MIN_WIDTH },
   { id: "priority", label: "Priority", width: 64, minWidth: COLUMN_MIN_WIDTH },
+  { id: "visibility", label: "Visibility", width: 96, minWidth: COLUMN_MIN_WIDTH },
   { id: "assignee", label: "Assignee", width: 72, minWidth: COLUMN_MIN_WIDTH },
   { id: "reporter", label: "Reporter", width: 128, minWidth: COLUMN_MIN_WIDTH },
   { id: "sla", label: "SLA", width: 96, minWidth: COLUMN_MIN_WIDTH },

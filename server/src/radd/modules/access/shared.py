@@ -16,7 +16,8 @@ def _level_clauses(spec: ResourceSpec, context: SubjectContext, *, resource_id,
     if not spec.hierarchical or spec.project_scoped:
         raise ValueError("shared visibility requires a globally scoped hierarchical resource")
     subject = or_(
-        and_(AccessGrant.subject_type == GrantSubject.USER, AccessGrant.subject_id == context.user_id),
+        and_(AccessGrant.subject_type == GrantSubject.USER,
+             AccessGrant.subject_id.in_(context.subject_user_ids)),
         and_(AccessGrant.subject_type == GrantSubject.TEAM, AccessGrant.subject_id.in_(context.team_ids)),
         and_(AccessGrant.subject_type == GrantSubject.GROUP, AccessGrant.subject_id.in_(context.group_ids)),
         and_(AccessGrant.subject_type == GrantSubject.ROLE, AccessGrant.subject_id.in_(context.role_ids)),

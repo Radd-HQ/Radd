@@ -1,3 +1,4 @@
+import { PublicProjectChip } from "../components/items/ItemBadges";
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { FolderKanban, Plus } from "lucide-react";
@@ -74,6 +75,7 @@ export function ProjectsIndexPage() {
                       {project.key}
                     </span>
                     <span className="text-sm text-heading">{project.name}</span>
+                    {project.public && <PublicProjectChip />}
                     <span className="ml-auto text-xs text-fg-faint">
                       {formatDate(project.created_at)}
                     </span>

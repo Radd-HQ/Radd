@@ -183,7 +183,14 @@ async def floor_permissions(session: AsyncSession, user: User) -> frozenset[Perm
     floor is decoupled permanently. Same memoisation, same fail-closed default."""
     from .types import UserSource
 
-    if getattr(user, "source", None) != UserSource.EMAIL.value:
+    source = getattr(user, "source", None)
+    if source == UserSource.PRINCIPAL.value:
+        # Spec 121: Anyone / Signed-in users hold NOTHING by default. The
+        # Baseline is the operator's policy for ACCOUNTS; the world's access
+        # is exactly the grants written against the principal rows, so a
+        # public project is explainable as those rows and nothing else.
+        return frozenset()
+    if source != UserSource.EMAIL.value:
         return await baseline_permissions(session)
     cached: frozenset[Permission] | None = session.info.get(_REQUESTER_CACHE_KEY)
     if cached is not None:

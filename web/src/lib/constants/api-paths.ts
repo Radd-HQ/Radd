@@ -17,6 +17,9 @@ export const apiTransitionPath = (transitionId: string) =>
   `${ApiPath.transitions}/${transitionId}`;
 export const apiProjectTransitionsPath = (projectId: string) =>
   `${ApiPath.projects}/${projectId}/transitions`;
+/** Spec 121: the project's public-access switches. */
+export const apiProjectPublicAccessPath = (projectId: string) =>
+  `${ApiPath.projects}/${projectId}/public-access`;
 export const apiItemAllowedTransitionsPath = (itemId: string) =>
   `${ApiPath.items}/${itemId}/allowed-transitions`;
 export const apiTokenPath = (tokenId: string) => `${ApiPath.tokens}/${tokenId}`;
@@ -191,8 +194,13 @@ export const apiSsoProviderPath = (providerId: string) => `${ApiPath.ssoProvider
 export const apiSsoProviderTestPath = (providerId: string) =>
   `${apiSsoProviderPath(providerId)}/test`;
 /** Where a login button points. No id = the only configured provider (spec 40 shape). */
-export const ssoLoginPath = (providerId?: string) =>
-  providerId ? `${ApiPath.ssoLogin}?provider_id=${providerId}` : ApiPath.ssoLogin;
+export const ssoLoginPath = (providerId?: string, next?: string) => {
+  const params = new URLSearchParams();
+  if (providerId) params.set("provider_id", providerId);
+  if (next) params.set("next", next); // spec 121: the page to return to
+  const query = params.toString();
+  return query ? `${ApiPath.ssoLogin}?${query}` : ApiPath.ssoLogin;
+};
 
 /** Mail configuration paths (RADD-958/969) — instance admin only. */
 export const apiMailSourcePath = (sourceId: string) => `${ApiPath.mailSources}/${sourceId}`;

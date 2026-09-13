@@ -477,6 +477,9 @@ class Settings(BaseSettings):
     # SettingKey.ESTIMATION_POINTS scalar cascade. Per-project OPT-IN: a
     # project that hasn't enabled it shows zero points UI anywhere.
     estimation_points: bool = False
+    # Spec 121: what a new issue is unless the filer says otherwise
+    # (public | internal | restricted); the `item_default_visibility` scoped setting.
+    item_default_visibility: str = "public"
 
     # Backups (spec 99, see radd/backup). The artifact is encrypted end-to-end;
     # the key lives on a DIFFERENT volume from the backups by default, so losing

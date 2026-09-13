@@ -17,7 +17,7 @@ from radd.modules.workflow.models import State
 from radd.modules.workflow.types import StateCategory
 from radd.modules.projects.models import Project
 
-from ..enums import ItemKind, ItemLinkType, Priority
+from ..enums import ItemKind, ItemLinkType, ItemVisibility, Priority
 from ..filters import NONE_LITERAL
 from ..models import ItemLabel, ItemLink, ItemStar, WorkItem
 from .catalog import ME_LITERAL, SlqField
@@ -294,6 +294,13 @@ def _flagged(ctx: Context, node: Condition) -> ColumnElement[bool]:
     return compare(WorkItem.flagged, node.op, _BOOLEAN_WORDS[node.value.text])
 
 
+def _visibility(ctx: Context, node: Condition) -> ColumnElement[bool]:
+    """Spec 121: `visibility = public|internal|restricted` (also != / IN)."""
+    return polarity(
+        node, WorkItem.visibility.in_([v.value for v in enum_values(node, ItemVisibility)])
+    )
+
+
 def _starred(ctx: Context, node: Condition) -> ColumnElement[bool]:
     """Personal star for the requesting user (spec 24): `starred = true|false`.
     An EXISTS over item_stars scoped to the current user."""
@@ -332,6 +339,7 @@ BUILTIN_COMPILERS = {
     SlqField.PAST_CYCLE: _past_cycle,
     SlqField.RELEASE: _release,
     SlqField.FLAGGED: _flagged,
+    SlqField.VISIBILITY: _visibility,
     SlqField.STARRED: _starred,
     SlqField.POINTS: _points,
     SlqField.BLOCKS: lambda ctx, node: _blocks_condition(node, incoming=False),

@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
 from radd.modules.auth import authz
-from radd.modules.auth.deps import CurrentUser
+from radd.modules.auth.deps import Actor, CurrentUser
 from radd.modules.projects import service as projects_service
 
 from . import transitions
@@ -71,7 +71,7 @@ async def delete_transition(
 
 @router.get("/items/{item_id}/allowed-transitions", response_model=AllowedTransitions)
 async def allowed_transitions_for_item(
-    item_id: uuid.UUID, session: Session, user: CurrentUser
+    item_id: uuid.UUID, session: Session, user: Actor
 ) -> AllowedTransitions:
     from radd.modules.items import service as items_service  # deferred: items loads later
 

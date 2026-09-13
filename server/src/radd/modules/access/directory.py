@@ -37,6 +37,9 @@ async def page(
     group_read = bool(await authz.readable_projects(session, actor))
     visible_projects = await authz.visible_projects(session, actor)
     projections = {
+        # Names EXISTING grant subjects, so the principals (spec 121: "Anyone",
+        # "Signed-in users") must resolve here — only mail-provisioned
+        # requesters stay unnamed. Pickers exclude principals separately.
         GrantSubject.USER: select(User.id, User.name).where(User.source != UserSource.EMAIL),
         GrantSubject.ROLE: select(Role.id, Role.name).where(role_read),
         GrantSubject.TEAM: select(Team.id, Team.name).where(team_read),

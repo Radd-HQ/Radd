@@ -21,7 +21,7 @@ from radd.modules.projects import service as projects_service
 
 from radd.modules.linktypes import service as linktypes_service
 
-from .enums import ItemKind
+from .enums import ItemKind, ItemVisibility
 from .models import ItemLabel, ItemLink, ItemStar, WorkItem
 from .schemas import (
     CycleRef,
@@ -349,6 +349,7 @@ async def hydrate(
             description=i.description,
             state=StateRef.model_validate(states[i.state_id]),
             priority=i.priority,
+            visibility=ItemVisibility(i.visibility),
             parent=parent_ref(i.parent_id),
             epic=epic_ref(i),
             assignee=(

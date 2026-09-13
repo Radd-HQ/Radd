@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import ilike_term
 from radd.modules.auth.models import User
-from radd.modules.auth.types import UserSource
+from radd.modules.auth.types import NON_PERSON_SOURCES
 from radd.modules.groups import service as groups
 from .models import Team, TeamMember, TeamManager
 from .schemas import TeamMemberRead, TeamPersonChoice, TeamStewardPerson, TeamStewardshipRead, TeamGroupRead, TeamGroupChoice
@@ -57,7 +57,7 @@ async def candidate_page(session: AsyncSession, team_id: uuid.UUID, *, q: str = 
     # accounts, no mail-provisioned requesters. Exclude the ENTIRE effective
     # roster before search/count/paging; expose no administrative user fields.
     query = _filter(select(User.id, User.name).where(
-        User.active.is_(True), User.source != UserSource.EMAIL,
+        User.active.is_(True), User.source.notin_(NON_PERSON_SOURCES),
         ~User.id.in_(select(members.c.user_id))), q)
     total = await session.scalar(select(func.count()).select_from(query.subquery()))
     rows = (await session.execute(query.order_by(User.name, User.id).limit(limit).offset(offset))).mappings()
@@ -78,7 +78,7 @@ async def stewardship_page(session: AsyncSession, team: Team, *, limit: int = 50
 
 async def steward_candidates(session: AsyncSession, team: Team, *, purpose: str,
                              q: str = "", limit: int = 50, offset: int = 0):
-    query = select(User.id, User.name).where(User.active.is_(True), User.source != UserSource.EMAIL)
+    query = select(User.id, User.name).where(User.active.is_(True), User.source.notin_(NON_PERSON_SOURCES))
     if team.owner_id:
         query = query.where(User.id != team.owner_id)
     if purpose == "manager":

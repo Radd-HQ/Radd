@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.config import settings
 from radd.db import SessionLocal
 from radd.kernel import import_models
-from radd.modules.auth import roles, service as auth
+from radd.modules.auth import principals, roles, service as auth
 from radd.modules.auth.models import User
 from radd.modules.auth.security import hash_password
 from radd.modules.auth.schemas import UserCreate
@@ -30,6 +30,7 @@ async def seed(email: str, password: str, name: str) -> None:
         # Idempotent: mirrors the startup-ensure paths (the retired
         # workspace.created hook seeded these) so a fresh DB is usable at once.
         await roles.ensure_builtin_roles(session)
+        await principals.ensure_principals(session)
         await categories.ensure_default_categories(session)
         await session.commit()
 

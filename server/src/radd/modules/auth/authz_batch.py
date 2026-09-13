@@ -182,6 +182,22 @@ class ProjectVisibility:
     via: ProjectVia
 
 
+def _entitling_relation_held(permissions: frozenset[Permission], base: Permission) -> bool:
+    """Spec 121: a ROW-PROPERTY relation (`@public`) entitles like the plain
+    atom does — it says what the project shows, not who the actor is to a
+    row — so a public project is offered to everyone who holds it, with no
+    relationship required. Reads the kernel flag; names no relation."""
+    from radd.kernel import registries
+    from .types import relation_contains, relations_held, split_permission
+
+    resource = split_permission(base)[0].split(".", 1)[0]
+    held = relations_held(permissions, base)
+    return any(
+        spec.row_property and any(relation_contains(outer, key) for outer in held)
+        for key, spec in registries.relations_for(resource).items()
+    )
+
+
 async def visible_projects(
     session: AsyncSession, user: User
 ) -> dict[uuid.UUID, ProjectVisibility]:
@@ -224,6 +240,7 @@ async def visible_projects(
         project_id: permissions
         for project_id, permissions in reachable.items()
         if Permission.ITEM_READ in permissions
+        or _entitling_relation_held(permissions, Permission.ITEM_READ)
     }
     qualified = {
         project_id: permissions

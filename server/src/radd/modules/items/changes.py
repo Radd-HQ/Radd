@@ -91,6 +91,7 @@ def diff_item_reads(
     scalar("start_date", _date(before.start_date), _date(after.start_date))
     scalar("target_date", _date(before.target_date), _date(after.target_date))
     scalar("flagged", before.flagged, after.flagged)
+    scalar("visibility", before.visibility, after.visibility)
     scalar("points", before.estimate_points, after.estimate_points)
 
     old_labels, new_labels = set(before.labels), set(after.labels)

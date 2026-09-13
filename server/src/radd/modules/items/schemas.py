@@ -11,7 +11,7 @@ from radd.modules.itemtypes.schemas import TypeRef
 from radd.modules.releases.types import ReleaseStatus
 from radd.modules.workflow.schemas import StateRef
 
-from .enums import BulkSkipReason, ItemKind, Priority
+from .enums import BulkSkipReason, ItemKind, ItemVisibility, Priority
 from radd.apitypes import UtcDatetime
 
 _custom_fields = Field(default_factory=dict, json_schema_extra={CUSTOM_FIELDS_MARKER: True})
@@ -138,6 +138,8 @@ class ItemCreate(BaseModel):
     cycle_id: uuid.UUID | None = None
     release_id: uuid.UUID | None = None  # same project as the item
     flagged: bool = False  # first-class shared flag (spec 24)
+    # Spec 121: omitted = the project's `item_default_visibility` setting.
+    visibility: ItemVisibility | None = None
     # Story points (spec 70): 0–999, one decimal (DB rounds). None = unestimated.
     estimate_points: float | None = Field(default=None, ge=0, le=999)
     # Import-only (project.manage-gated): preserve the original creation timestamp
@@ -169,6 +171,7 @@ class ItemUpdate(BaseModel):
     cycle_id: uuid.UUID | None = None
     release_id: uuid.UUID | None = None
     flagged: bool | None = None  # spec 24 — omitted = unchanged
+    visibility: ItemVisibility | None = None  # spec 121 — omitted = unchanged
     # Story points (spec 70): omitted = unchanged, explicit null = clear.
     estimate_points: float | None = Field(default=None, ge=0, le=999)
     labels: list[str] | None = None  # full replacement when provided
@@ -337,6 +340,7 @@ class ItemRead(BaseModel):
     past_cycles: list[CycleRef] = Field(default_factory=list)
     release: ReleaseRef | None = None
     flagged: bool = False
+    visibility: ItemVisibility = ItemVisibility.PUBLIC  # spec 121
     # Story points (spec 70) — always serialized; null when unused (UI gating is
     # the optionality contract, not schema surgery).
     estimate_points: float | None = None

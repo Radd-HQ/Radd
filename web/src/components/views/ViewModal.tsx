@@ -336,6 +336,7 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
 
         {canManageSharing && (
           <ViewSharingEditor
+            worldShareable={!project || Boolean(project.public)}
             existing={view ? { id: view.id, draft: sharingDraft, onChange: setSharingDraft } : undefined}
             serverAccess={serverAccess}
             onServerAccess={setServerAccess}

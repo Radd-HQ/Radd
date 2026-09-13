@@ -19,6 +19,7 @@ import type {
 } from "../../lib/types";
 import {
   FlagBadge,
+  VisibilityBadge,
   ItemKeyLink,
   KindBadge,
   StarBadge,
@@ -223,6 +224,7 @@ export function BoardCard({
         <span className="ml-auto flex items-center gap-1.5">
           {item.starred && <StarBadge size={12} />}
           {item.flagged && <FlagBadge size={12} />}
+          <VisibilityBadge visibility={item.visibility} size={12} />
           {headerEnd.map(headerCell)}
         </span>
       </div>

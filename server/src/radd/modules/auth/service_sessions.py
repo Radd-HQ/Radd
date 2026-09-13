@@ -41,6 +41,9 @@ async def create_session(session: AsyncSession, user: User) -> str:
             "this account was created from an email and has no login — sign in "
             "with SSO using the same address to claim it"
         )
+    if user.source == UserSource.PRINCIPAL:
+        # Spec 121: Anyone / Signed-in users are grant subjects, not accounts.
+        raise UnauthorizedError("a principal is not an account and cannot sign in")
     token = security.new_session_token()
     session.add(
         UserSession(

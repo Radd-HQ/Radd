@@ -11,6 +11,7 @@ from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
 from radd.modules.fields import service as fields_service
+from radd.modules.items.enums import ItemVisibility
 from radd.modules.projects import service as projects_service
 
 from . import fusion
@@ -99,7 +100,7 @@ def _scope(stmt: Select, readable: set[uuid.UUID], relation_clause=None) -> Sele
 # because a mirror exists precisely so search never joins work_items. Every
 # other registered item relation is compiled from its spec (RADD-1030) — see
 # `_rebind_to_index`; the mirror set is the fast path, not the whole answer.
-_INDEX_RELATION_COLUMNS = ("own", "assigned", "team")
+_INDEX_RELATION_COLUMNS = ("own", "assigned", "team", "public")
 
 # The table the registered item relations write their where-forms against, and
 # whose primary key `search_index.item_id` mirrors.
@@ -168,6 +169,9 @@ def _relation_clauses(relation_actor, held: set[str]) -> dict:
             if relation_actor.team_ids
             else false()
         ),
+        # Spec 121: the row's own visibility, mirrored (a where-form over
+        # work_items.visibility could never be rebound onto the index).
+        "public": SearchIndexRow.visibility == ItemVisibility.PUBLIC.value,
     }
     for key, spec in registries.relations_for("item").items():
         if key in _INDEX_RELATION_COLUMNS:
@@ -199,18 +203,19 @@ async def _relation_index_clause(session: AsyncSession, user: User):
     from radd.modules.auth.types import relation_contains
 
     per_project = await authz.readable_projects(session, user)
-    constrained: dict[uuid.UUID, frozenset[str]] = {}
-    for pid, perms in per_project.items():
-        relations = authz.relations_held(perms, Permission.ITEM_READ)
-        if authz.RELATION_ANY in relations:
-            continue
-        constrained[pid] = relations
-    if not constrained:
-        return None
     # The canonical actor (RADD-830 subject graph, memoised) — the same one the
     # list path hands to `spec.where`, so search cannot resolve "my teams"
     # differently from the filter it is supposed to agree with.
     relation_actor = await authz.relation_actor(session, user)
+    guard = _guard_index_clause(relation_actor)
+    constrained: dict[uuid.UUID, frozenset[str]] = {}
+    for pid, perms in per_project.items():
+        relations = authz.relations_held(perms, Permission.ITEM_READ)
+        if authz.RELATION_ANY in relations and guard is None:
+            continue
+        constrained[pid] = relations
+    if not constrained:
+        return None
     held_anywhere = {relation for relations in constrained.values() for relation in relations}
     clauses = _relation_clauses(relation_actor, held_anywhere)
     arms = []
@@ -218,18 +223,35 @@ async def _relation_index_clause(session: AsyncSession, user: User):
     if unconstrained:
         arms.append(SearchIndexRow.project_id.in_(unconstrained))
     for pid, relations in constrained.items():
+        if authz.RELATION_ANY in relations:
+            arms.append(and_(SearchIndexRow.project_id == pid, guard))
+            continue
         # The chain closure (any ⊃ team ⊃ own), same as the canonical resolvers.
         covered = [
             clause
             for key, clause in clauses.items()
             if any(relation_contains(held, key) for held in relations)
         ]
-        arms.append(
-            and_(
-                SearchIndexRow.project_id == pid,
-                or_(*covered) if covered else false(),
-            )
-        )
+        arm = and_(SearchIndexRow.project_id == pid, or_(*covered) if covered else false())
+        arms.append(arm if guard is None else and_(arm, guard))
+    return arms[0] if len(arms) == 1 else or_(*arms)
+
+
+def _guard_index_clause(relation_actor):
+    """Spec 121: the item row guard compiled over the mirror — open rows by the
+    mirrored `visibility`, admission through the guard's relations (the mirror
+    columns for own/assigned, the registered spec rebound for participant).
+    None when no guard binds this actor (none registered, or an admin)."""
+    from sqlalchemy import or_
+
+    from radd.kernel import registries
+
+    guard = registries.row_guards.get("item")
+    if guard is None or relation_actor.unrestricted:
+        return None
+    open_rows = SearchIndexRow.visibility != ItemVisibility.RESTRICTED.value
+    admitting = _relation_clauses(relation_actor, set(guard.admits))
+    arms = [open_rows] + [admitting[key] for key in guard.admits if key in admitting]
     return arms[0] if len(arms) == 1 else or_(*arms)
 
 

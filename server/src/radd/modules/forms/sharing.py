@@ -9,7 +9,7 @@ from radd.db import ilike_term
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.auth import authz
 from radd.modules.auth.models import User
-from radd.modules.auth.types import UserSource
+from radd.modules.auth.types import NON_PERSON_SOURCES
 from radd.modules.projects import service as projects
 from radd.modules.teams.models import Team
 
@@ -35,11 +35,11 @@ async def directory(session: AsyncSession, form_id: uuid.UUID, actor: User, *, q
     can_read_teams = await authz.holds(session, actor, authz.Permission.TEAM_READ)
     # A portal grant does not grant its manager access to hidden subject catalogs.
     name = case(
-        (User.source != UserSource.EMAIL, User.name),
+        (User.source.notin_(NON_PERSON_SOURCES), User.name),
         (FormShare.team_id.is_not(None) & can_read_teams, Team.name),
         else_=None,
     ).label("subject_name")
-    active = case((User.source != UserSource.EMAIL, User.active), else_=None).label("active")
+    active = case((User.source.notin_(NON_PERSON_SOURCES), User.active), else_=None).label("active")
     query = select(FormShare, name, active).outerjoin(User, User.id == FormShare.user_id).outerjoin(Team, Team.id == FormShare.team_id).where(FormShare.form_id == form_id)
     if q.strip():
         query = query.where(name.ilike(ilike_term(q.strip())))
@@ -54,7 +54,7 @@ async def candidates(session: AsyncSession, form_id: uuid.UUID, actor: User, kin
     await managed_form(session, form_id, actor)
     if kind == FormShareSubject.USER:
         held = select(FormShare.user_id).where(FormShare.form_id == form_id, FormShare.user_id.is_not(None))
-        query = select(cast(User.id, String).label("value"), User.name.label("label"), literal("").label("hint")).where(User.active, User.source != UserSource.EMAIL, ~User.id.in_(held))
+        query = select(cast(User.id, String).label("value"), User.name.label("label"), literal("").label("hint")).where(User.active, User.source.notin_(NON_PERSON_SOURCES), ~User.id.in_(held))
     else:
         if not await authz.holds(session, actor, authz.Permission.TEAM_READ):
             return [], 0

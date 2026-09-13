@@ -331,6 +331,10 @@ class MeRead(BaseModel):
     email: str
     name: str
     instance_role: InstanceRole
+    #: Spec 121: the request carried no credential and is acting as the Anyone
+    #: principal. The SPA keys everything personal (inbox, pins, realtime,
+    #: preferences) on this being False; `id` is the principal's fixed id.
+    anonymous: bool = False
     #: Set while this session previews another account (RADD-836 U1) — the rest
     #: of the payload describes the TARGET, which is the point.
     view_as: ViewAsRead | None = None

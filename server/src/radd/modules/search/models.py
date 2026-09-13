@@ -32,6 +32,9 @@ class SearchIndexRow(Base):
     reporter_id: Mapped[uuid.UUID | None] = mapped_column(index=True)
     assignee_id: Mapped[uuid.UUID | None] = mapped_column(index=True)
     team_id: Mapped[uuid.UUID | None] = mapped_column(index=True)
+    # Spec 121: the item's visibility, mirrored so the row guard compiles over
+    # the index without joining work_items (the d841 rule).
+    visibility: Mapped[str] = mapped_column(String(20), default="public", server_default="public")
     key: Mapped[str] = mapped_column(String(30))
     title: Mapped[str] = mapped_column(String(500), default="")
     description: Mapped[str] = mapped_column(Text, default="")

@@ -22,6 +22,25 @@ REQUIRED_PARENT_KIND: dict[ItemKind, ItemKind] = {
 }
 
 
+class ItemVisibility(StrEnum):
+    """Who may read an issue, beyond holding `item.read` on its project (spec 121 §3).
+    The vocabulary comments already use (`CommentVisibility`), one level wider.
+
+    public     — anyone holding `item.read` on the project; the WORLD when the
+                 project is public (the Public role holds `item.read@public`).
+    internal   — members only: unqualified `item.read` holders. Hidden from the
+                 world even in a public project.
+    restricted — the people on it: reporter, assignee, participants (the
+                 `item` row guard's `admits`), provided they hold `item.read`
+                 in any form. Project managers do not bypass (D1); instance
+                 admins do.
+    """
+
+    PUBLIC = "public"
+    INTERNAL = "internal"
+    RESTRICTED = "restricted"
+
+
 class ItemLinkType(StrEnum):
     """The built-in link-type KEYS (spec 91: types are now data in the `linktypes`
     module, but these keys stay stable — code references them directly). Symmetry,

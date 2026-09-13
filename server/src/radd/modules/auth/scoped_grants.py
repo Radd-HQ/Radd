@@ -10,7 +10,7 @@ from radd.db import ilike_term
 from . import authz
 from .models import GlobalRoleGrant, Role, User
 from .schemas import SpaceGrantDirectoryRead
-from .types import Permission, UserSource, GrantScopeKind
+from .types import NON_PERSON_SOURCES, Permission, GrantScopeKind
 
 
 async def page(
@@ -38,7 +38,7 @@ async def page(
         term = ilike_term(q.strip())
         terms = [
             GlobalRoleGrant.user_id.in_(
-                select(User.id).where(User.name.ilike(term), User.source != UserSource.EMAIL)
+                select(User.id).where(User.name.ilike(term), User.source.notin_(NON_PERSON_SOURCES))
             )
         ]
         if role_read:
@@ -83,7 +83,7 @@ async def page(
             await session.execute(
                 select(User.id, User.name, User.active).where(
                     User.id.in_({row.user_id for row in rows if row.user_id}),
-                    User.source != UserSource.EMAIL,
+                    User.source.notin_(NON_PERSON_SOURCES),
                 )
             )
         ).all()

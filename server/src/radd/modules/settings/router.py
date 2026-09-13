@@ -8,7 +8,7 @@ from radd.db import get_session
 from radd.exceptions import ConflictError, ForbiddenError
 from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
-from radd.modules.auth.deps import CurrentUser
+from radd.modules.auth.deps import Actor, CurrentUser
 from radd.modules.projects import service as projects_service
 
 from . import service
@@ -37,7 +37,7 @@ async def _authorize(
 
 @router.get("/resolve", response_model=ResolvedSetting)
 async def resolve_setting(
-    key: SettingKey, session: Session, user: CurrentUser, project_id: uuid.UUID | None = None
+    key: SettingKey, session: Session, user: Actor, project_id: uuid.UUID | None = None
 ) -> ResolvedSetting:
     """One key's effective value through the cascade (spec 70) — readable by any
     member (item.read on the project when given), unlike the manage-gated scope

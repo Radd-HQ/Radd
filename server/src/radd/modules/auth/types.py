@@ -23,6 +23,13 @@ class UserSource(StrEnum):
     JIRA = "jira"  # placeholder provisioned by the Jira importer (spec 90 follow-up)
     SERVICE = "service"  # spec 113 — a service account; authenticates by API key ONLY
     EMAIL = "email"  # RADD-828 — provisioned by mail ingest; cannot log in until SSO claims it
+    PRINCIPAL = "principal"  # spec 121 — Anyone / Signed-in users: a grant subject, never a person
+
+
+#: Sources that are not a PERSON to list, pick, assign or mail. The email
+#: requesters (RADD-1034) and the spec-121 principals share every exclusion;
+#: service accounts are excluded case by case (a byline may need them).
+NON_PERSON_SOURCES: tuple[UserSource, ...] = (UserSource.EMAIL, UserSource.PRINCIPAL)
 
 
 class DuplicateKind(StrEnum):
@@ -602,6 +609,12 @@ class BuiltinRoleKey(StrEnum):
     #: requester holds INSTEAD of the Baseline, so enabling mail ingest can
     #: never hand strangers the operator's staff policy row.
     REQUESTER = "requester"
+    #: Spec 121 — what the WORLD holds on a public project: granted to the
+    #: Anyone principal, project-scoped, by the "Public project" switch.
+    PUBLIC = "public"
+    #: Spec 121 — what anyone with an account may do on a public project:
+    #: granted to the Signed-in users principal by the "contributions" switch.
+    CONTRIBUTOR = "contributor"
 
 
 @dataclass(frozen=True)
@@ -722,6 +735,43 @@ BUILTIN_ROLES: tuple[BuiltinRole, ...] = (
             Permission.ATTACHMENT_CREATE,
         ),
         position=3,
+    ),
+    BuiltinRole(
+        key=BuiltinRoleKey.PUBLIC,
+        name="Public",
+        description=(
+            "What the world holds on a public project: its public issues, their "
+            "public comments and attachments, and the labels, cycles and teams "
+            "needed to render them. Granted to Anyone by the Public project switch."
+        ),
+        # item.read@public is the whole story: the relation is a property of
+        # the ROW (spec 121 §3), so internal and restricted issues never
+        # reach the world however the project is shared. Comments ride the
+        # item seam and internal ones need comment.read_internal, which is
+        # not here; attachments are default-open behind the parent read.
+        permissions=(
+            "item.read@public",
+            Permission.LABEL_READ,
+            Permission.CYCLE_READ,
+            Permission.TEAM_READ,
+        ),
+        position=4,
+    ),
+    BuiltinRole(
+        key=BuiltinRoleKey.CONTRIBUTOR,
+        name="Contributor",
+        description=(
+            "What anyone with an account may do on a public project: file issues, "
+            "comment, attach, and edit what they filed. Reading comes from Public. "
+            "Granted to Signed-in users by the contributions switch."
+        ),
+        permissions=(
+            Permission.ITEM_CREATE,
+            "item.update@own",
+            Permission.COMMENT_WRITE,
+            Permission.ATTACHMENT_CREATE,
+        ),
+        position=5,
     ),
 )
 

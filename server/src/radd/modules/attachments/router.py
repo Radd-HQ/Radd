@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import commit_before_streaming, get_session
 from radd.modules.auth import authz
-from radd.modules.auth.deps import CurrentUser
+from radd.modules.auth.deps import Actor, CurrentUser
 
 from radd.exceptions import ForbiddenError
 
@@ -68,7 +68,7 @@ async def list_attachments(
     entity_type: AttachmentParentType,
     entity_id: uuid.UUID,
     session: Session,
-    user: CurrentUser,
+    user: Actor,
 ) -> list[AttachmentRead]:
     binding = parents.binding_for(entity_type.value)
     await binding.require_read(session, user, entity_id)
@@ -93,7 +93,7 @@ async def list_attachments(
 async def download_attachment(
     attachment_id: uuid.UUID,
     session: Session,
-    user: CurrentUser,
+    user: Actor,
     w: Annotated[int | None, Query(ge=1, le=4096, description="Display width in CSS pixels")] = None,
 ) -> Response:
     """Bytes for proxy-delivery hosts; a 307 to a short presigned URL otherwise.

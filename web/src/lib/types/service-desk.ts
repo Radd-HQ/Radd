@@ -59,6 +59,9 @@ export interface InstanceConfig {
   work_week_days: string[];
   timelog_hours_per_day: number;
   timelog_days_per_week: number;
+  /** Spec 121: the principal rows' fixed ids (share subjects for "Anyone on the web"). */
+  anyone_id?: string | null;
+  signed_in_id?: string | null;
 }
 
 // ---------------------------------------------------------------------------

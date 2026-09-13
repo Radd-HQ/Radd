@@ -156,6 +156,8 @@ async def _index_item(session: AsyncSession, event: Event) -> None:
         if ref_key in item:
             ref = item.get(ref_key) or {}
             row[column] = uuid.UUID(ref["id"]) if ref.get("id") else None
+    if "visibility" in item:  # spec 121: same partial-payload rule
+        row["visibility"] = item["visibility"]
     await session.execute(
         pg_insert(SearchIndexRow)
         .values(**row)
@@ -205,12 +207,14 @@ _RELATION_SYNC = text(
     UPDATE search_index si SET
         reporter_id = wi.reporter_id,
         assignee_id = wi.assignee_id,
-        team_id = wi.team_id
+        team_id = wi.team_id,
+        visibility = wi.visibility
     FROM work_items wi
     WHERE wi.id = si.item_id
       AND (si.reporter_id IS DISTINCT FROM wi.reporter_id
         OR si.assignee_id IS DISTINCT FROM wi.assignee_id
-        OR si.team_id IS DISTINCT FROM wi.team_id)
+        OR si.team_id IS DISTINCT FROM wi.team_id
+        OR si.visibility IS DISTINCT FROM wi.visibility)
     """
 )
 

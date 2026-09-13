@@ -41,6 +41,7 @@ class SlqField(StrEnum):
     PAST_CYCLE = "past_cycle"  # cycles the item LEFT (carryover trail, spec 56)
     RELEASE = "release"  # release version | none | IS [NOT] EMPTY
     FLAGGED = "flagged"  # first-class boolean flag: = true | = false (spec 24)
+    VISIBILITY = "visibility"  # public | internal | restricted (spec 121): =, !=, IN
     STARRED = "starred"  # personal star for the requesting user: = true | = false (spec 24)
     POINTS = "points"  # story points (spec 70): comparisons + IS [NOT] EMPTY + ORDER BY
     RANK = "rank"  # manual sort key (spec 24) — ORDER BY only, no filtering
@@ -101,6 +102,7 @@ BUILTIN_OPS: dict[SlqField, FieldOps] = {
     SlqField.PAST_CYCLE: FieldOps(EQUALITY, membership=True, empty=True),
     SlqField.RELEASE: FieldOps(EQUALITY, empty=True),
     SlqField.FLAGGED: FieldOps(EQUALITY, sortable=True),
+    SlqField.VISIBILITY: FieldOps(EQUALITY, membership=True),
     SlqField.STARRED: FieldOps(EQUALITY),
     SlqField.POINTS: FieldOps(RANGE, empty=True, sortable=True),
     SlqField.RANK: FieldOps(sortable=True),  # sort-only: no compare ops

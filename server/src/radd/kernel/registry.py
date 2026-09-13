@@ -17,6 +17,7 @@ from .plugin import RaddPlugin
 from .specs import (
     AutomationNodeSpec,
     RelationSpec,
+    RowGuardSpec,
     CapabilitySpec,
     CascadeSpec,
     CrudResourceSpec,
@@ -95,6 +96,8 @@ class KernelRegistries:
     #: RADD-937: why an actor can SEE a project without being granted it.
     #: Read blind by the visibility resolver, which names no contributor.
     project_relations: dict[str, ProjectRelationSpec] = field(default_factory=dict)
+    #: resource -> the per-row admission every reader passes (spec 121).
+    row_guards: dict[str, RowGuardSpec] = field(default_factory=dict)
     project_purges: dict[str, ProjectPurgeSpec] = field(default_factory=dict)
     capabilities: dict[str, CapabilitySpec] = field(default_factory=dict)
     slq_fields: dict[str, SlqFieldSpec] = field(default_factory=dict)  # plugin SLQ query fields
@@ -125,6 +128,7 @@ class KernelRegistries:
         for f in (
             self.plugins, self.entities, self.event_types, self.entity_refs, self.permissions,
             self.settings, self.relations, self.relation_domains, self.access_resources,
+            self.row_guards,
             self.crud_resources, self.nav_facts, self.grant_scopes, self.project_purges,
             self.capabilities, self.tasks, self.consumer_names,
             self.integrations, self.plugin_ui_dirs, self.slq_fields,
@@ -154,6 +158,8 @@ class KernelRegistries:
             self.settings[s.key] = s
         for r in plugin.relations:
             self.relations[(r.resource, r.key)] = r
+        for g in plugin.row_guards:
+            self.row_guards[g.resource] = g
         for atom, resource in plugin.relation_domains:
             self.relation_domains[atom] = resource
         for ar in plugin.access_resources:
@@ -212,6 +218,8 @@ class KernelRegistries:
             self.settings.pop(s.key, None)
         for r in plugin.relations:
             self.relations.pop((r.resource, r.key), None)
+        for g in plugin.row_guards:
+            self.row_guards.pop(g.resource, None)
         for atom, _resource in plugin.relation_domains:
             self.relation_domains.pop(atom, None)
         for ar in plugin.access_resources:
@@ -324,6 +332,13 @@ def register_relation_domain(base_atom: str, resource: str) -> None:
     like register_relation; list it on the plugin manifest too so hot
     enable/disable survives the loader's clear()."""
     registries.relation_domains[base_atom] = resource
+
+
+def register_row_guard(spec: RowGuardSpec) -> RowGuardSpec:
+    """Register the per-row admission for one resource (spec 121) — the
+    `register_relation` shape, and listed on the manifest for the same reason."""
+    registries.row_guards[spec.resource] = spec
+    return spec
 
 
 def register_relation(spec: RelationSpec) -> RelationSpec:

@@ -28,7 +28,7 @@ from radd.modules.workflow.types import StateCategory
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 
-from ..enums import ItemKind, Priority
+from ..enums import ItemKind, ItemVisibility, Priority
 from ..filters import NONE_LITERAL
 from ..models import WorkItem
 from .catalog import ME_LITERAL, SlqField
@@ -205,6 +205,8 @@ async def value_candidates(
             return [_today(), _date_hint()]
         case SlqField.FLAGGED | SlqField.STARRED:
             return [Candidate(word, literal=False) for word in BOOLEAN_WORDS]
+        case SlqField.VISIBILITY:
+            return [Candidate(v.value, literal=False) for v in ItemVisibility]
     return []  # title / number: free-form
 
 

@@ -9,11 +9,19 @@ from radd.db import get_session
 from radd.apitypes import TOTAL_COUNT_HEADER
 from radd.kernel import capabilities as kcaps
 from radd.modules.auth import authz
+from radd.modules.auth.principals import ANYONE_ID, SIGNED_IN_ID
 from radd.modules.auth.types import Permission
-from radd.modules.auth.deps import CurrentUser
+from radd.modules.auth.deps import Actor, CurrentUser
 
 from . import service, directory
-from .schemas import InstanceConfigRead, InstanceStatusRead, ProjectCreate, ProjectRead, ProjectSummaryRead
+from .schemas import (
+    InstanceConfigRead,
+    InstanceStatusRead,
+    ProjectCreate,
+    ProjectRead,
+    ProjectSummaryRead,
+    PublicAccessUpdate,
+)
 
 project_router = APIRouter(prefix="/projects", tags=["projects"])
 instance_router = APIRouter(tags=["instance"])
@@ -42,7 +50,7 @@ async def _instance_hours_per_day(session: AsyncSession) -> int:
 
 
 @instance_router.get("/instance", response_model=InstanceConfigRead)
-async def instance_config(session: Session, user: CurrentUser) -> InstanceConfigRead:
+async def instance_config(session: Session, user: Actor) -> InstanceConfigRead:
     """Safe instance-level config the frontend needs (spec 35): the work week +
     the timelog duration factors (spec 67 follow-up). The auth flags come from the
     kernel capability registry (chokepoint-2 inversion), not inlined settings."""
@@ -53,11 +61,13 @@ async def instance_config(session: Session, user: CurrentUser) -> InstanceConfig
         timelog_days_per_week=settings.timelog_days_per_week,
         sso_enabled=caps.get("sso", {}).get("enabled", False),
         ldap_enabled=caps.get("ldap", {}).get("enabled", False),
+        anyone_id=ANYONE_ID,
+        signed_in_id=SIGNED_IN_ID,
     )
 
 
 @instance_router.get("/instance/status", response_model=InstanceStatusRead)
-async def instance_status(user: CurrentUser) -> InstanceStatusRead:
+async def instance_status(user: Actor) -> InstanceStatusRead:
     """Non-secret deploy status for the instance settings surface (spec 50) — admin only.
 
     Chokepoint-2 inversion (docs/plugin-platform.md §3): every flag is now read from
@@ -114,7 +124,7 @@ async def create_project(data: ProjectCreate, session: Session, user: CurrentUse
 
 @project_router.get("", response_model=list[ProjectRead])
 async def list_projects(
-    session: Session, user: CurrentUser, response: Response,
+    session: Session, user: Actor, response: Response,
     q: Annotated[str, Query(max_length=200)] = "",
     limit: Annotated[int | None, Query(ge=1, le=200)] = None,
     offset: Annotated[int, Query(ge=0)] = 0, hide_related: bool = False,
@@ -128,17 +138,44 @@ async def list_projects(
     return rows
 
 
+@project_router.put("/{project_id}/public-access", response_model=ProjectRead)
+async def set_public_access(
+    project_id: uuid.UUID, data: PublicAccessUpdate, session: Session, user: CurrentUser
+) -> ProjectRead:
+    """Spec 121: the two switches, written as the grants they are — the Public
+    role to Anyone, the Contributor role to Signed-in users. `project.manage`
+    opens the screen; D14 still applies (a delegate cannot hand the world an
+    atom they do not hold here), through the same coverage check every
+    delegated grant passes."""
+    # Deferred: auth loads after projects, so its modules are import-time cycles here.
+    from radd.modules.auth import public_access, roles as auth_roles
+    from radd.modules.auth.roles_router import ensure_delegated_role_coverage
+    from radd.modules.auth.types import BuiltinRoleKey
+
+    project = await service.get_project(session, project_id)
+    await authz.require(session, user, authz.Permission.PROJECT_MANAGE, project=project)
+    if not authz.is_instance_admin(user):
+        for key in (BuiltinRoleKey.PUBLIC, BuiltinRoleKey.CONTRIBUTOR):
+            role = await auth_roles.role_by_key(session, key.value)
+            await ensure_delegated_role_coverage(session, user, role, project)
+    await public_access.set_public_access(
+        session, project, public=data.public, contributions=data.contributions, actor_id=user.id
+    )
+    permissions = await authz.effective_permissions(session, user, project=project)
+    return await directory.project_read_with_access(session, project, permissions)
+
+
 @project_router.get("/summary", response_model=ProjectSummaryRead)
-async def project_summary(session: Session, user: CurrentUser) -> ProjectSummaryRead:
+async def project_summary(session: Session, user: Actor) -> ProjectSummaryRead:
     """Aggregate affordances are independent of the directory's current page."""
     return await directory.summary(session, user)
 
 
 @project_router.get("/by-key/{key}", response_model=ProjectRead)
-async def project_by_key(key: str, session: Session, user: CurrentUser) -> ProjectRead:
+async def project_by_key(key: str, session: Session, user: Actor) -> ProjectRead:
     return await directory.by_identity(session, user, key=key)
 
 
 @project_router.get("/{project_id}", response_model=ProjectRead)
-async def project_by_id(project_id: uuid.UUID, session: Session, user: CurrentUser) -> ProjectRead:
+async def project_by_id(project_id: uuid.UUID, session: Session, user: Actor) -> ProjectRead:
     return await directory.by_identity(session, user, identifier=project_id)

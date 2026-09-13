@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
 from radd.modules.auth import authz
-from radd.modules.auth.deps import CurrentUser
+from radd.modules.auth.deps import Actor, CurrentUser
 from radd.modules.projects import service as projects_service
 
 from . import enablement
@@ -21,7 +21,7 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 
 @router.get("/{project_id}/timelogging", response_model=ProjectTimeLoggingRead)
 async def get_timelogging(
-    project_id: uuid.UUID, session: Session, user: CurrentUser
+    project_id: uuid.UUID, session: Session, user: Actor
 ) -> ProjectTimeLoggingRead:
     project = await projects_service.get_project(session, project_id)
     await authz.require(session, user, authz.Permission.ITEM_READ, project=project)

@@ -14,6 +14,8 @@ import {
   PRIORITY_FILLS,
   PRIORITY_META,
   PRIORITY_ORDER,
+  VISIBILITY_META,
+  VISIBILITY_ORDER,
 } from "../../lib/meta";
 import {
   effectiveScreenQuery,
@@ -42,6 +44,7 @@ function ChipSelect({ chip, children }: { chip: ReactNode; children: ReactNode }
   );
 }
 import {
+  ItemVisibility,
   ScreenPlacement,
   type CustomFieldValue,
   type CustomFields,
@@ -49,11 +52,13 @@ import {
   type FieldDef,
   type Item,
   type ItemUpdate,
+  type ItemVisibilityValue,
   type PriorityValue,
   type Project,
   type State,
 } from "../../lib/types";
 import { SelectField } from "../SelectField";
+import { VisibilityChip } from "./ItemBadges";
 import { PersonName } from "../PersonName";
 import { CustomFieldControl } from "./CustomFieldsForm";
 import { LabelsEditor } from "./LabelsEditor";
@@ -313,6 +318,30 @@ export function IssueProperties({
             {PRIORITY_ORDER.map((value) => (
               <option key={value} value={value}>
                 {PRIORITY_META[value].label}
+              </option>
+            ))}
+          </SelectField>
+        </ChipSelect>
+
+        {/* Spec 121: who may read this issue. Labels follow the project: in a
+            private one public and internal are the same audience ("Normal"). */}
+        <ChipSelect
+          chip={
+            <VisibilityChip visibility={item.visibility ?? ItemVisibility.public} isPublicProject={Boolean(project.public)} />
+          }
+        >
+          <SelectField
+            label="Visibility"
+            value={item.visibility ?? ItemVisibility.public}
+            disabled={!writ.canEdit}
+            title={writ.canEdit ? undefined : writ.reasonFor("visibility")}
+            onChange={(event) => patch({ visibility: event.target.value as ItemVisibilityValue })}
+          >
+            {VISIBILITY_ORDER.filter(
+              (value) => project.public || value !== ItemVisibility.internal,
+            ).map((value) => (
+              <option key={value} value={value} title={VISIBILITY_META[value].description}>
+                {project.public ? VISIBILITY_META[value].label : VISIBILITY_META[value].privateLabel}
               </option>
             ))}
           </SelectField>

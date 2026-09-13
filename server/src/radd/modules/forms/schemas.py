@@ -70,6 +70,9 @@ DEFAULTS_COVERAGE: dict[str, tuple[str | None, str]] = {
     "description": (None, "the submitter writes it"),
     "project_id": (None, "the form belongs to one project"),
     "custom_fields": (None, "the form's exposed fields carry these"),
+    # Spec 121: a submission takes the project's `item_default_visibility`;
+    # who may read the resulting issue is the project's policy, not the form's.
+    "visibility": (None, "the project's default visibility applies"),
     "kind": ("kind", ""),
     "type_id": ("type_name", ""),
     "state_id": ("state_name", ""),

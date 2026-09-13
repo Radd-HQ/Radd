@@ -116,27 +116,104 @@ if TYPE_CHECKING:
 async def relation_actor(session: AsyncSession, user: User) -> "RelationActor":
     """The acting user as relation predicates see them. `team_ids` is the
     RADD-830 subject graph (direct + group-carried), memoised per request —
-    a relation predicate must never re-derive it."""
+    a relation predicate must never re-derive it. `unrestricted` (spec 121)
+    marks the instance admin, whom row guards do not bind (D1)."""
     from radd.kernel.specs import RelationActor
     from radd.modules.teams import service as teams  # deferred: teams loads after auth
 
     return RelationActor(
-        user_id=user.id, team_ids=frozenset(await teams.user_team_ids(session, user.id))
+        user_id=user.id,
+        team_ids=frozenset(await teams.user_team_ids(session, user.id)),
+        unrestricted=is_instance_admin(user),
     )
 
 
-def relation_filter(resource: str, relations: frozenset[str], actor: "RelationActor"):
-    """The FILTERING form: None = unconstrained (`@any` held); otherwise the OR
-    of the held relations' WHERE clauses — `false()` when nothing held, so an
-    empty answer excludes rows instead of quietly passing them (fails closed).
-    A qualifier with no registered spec contributes nothing (fails closed too:
-    an unregistered relation must never widen)."""
-    from sqlalchemy import false, or_
+# --- row guards (spec 121) ------------------------------------------------------
+#
+# A guard is a per-row admission every reader passes whatever relation they
+# hold: a restricted issue admits only the people on it. Composed INSIDE the
+# primitives below, so every resolver built on them — the item row filter, the
+# gate, capabilities, notifications — agrees without each one remembering.
+
+
+def _guard(resource: str):
+    from radd.kernel import registries
+
+    return registries.row_guards.get(resource)
+
+
+def row_guard_filter(resource: str, actor: "RelationActor"):
+    """FILTERING form of the guard: None when no guard binds this actor on
+    this resource (none registered, or the actor is unrestricted); otherwise
+    `open rows OR admitted-through-a-relation rows`."""
+    from sqlalchemy import or_
 
     from radd.kernel import registries
 
-    if RELATION_ANY in relations:
+    guard = _guard(resource)
+    if guard is None or actor.unrestricted:
         return None
+    specs = registries.relations_for(resource)
+    arms = [guard.open_where()] + [
+        specs[key].where(actor) for key in guard.admits if key in specs
+    ]
+    return arms[0] if len(arms) == 1 else or_(*arms)
+
+
+def row_guard_holds(resource: str, actor: "RelationActor", row: object) -> bool:
+    """SYNC gating form: open rows pass; guarded rows pass only through an
+    admitting relation with a pure predicate (a query-gated one fails closed)."""
+    from radd.kernel import registries
+
+    guard = _guard(resource)
+    if guard is None or actor.unrestricted or guard.open_holds(row):
+        return True
+    specs = registries.relations_for(resource)
+    return any(
+        specs[key].holds(actor, row)
+        for key in guard.admits
+        if key in specs and specs[key].holds is not None
+    )
+
+
+async def row_guard_holds_async(
+    session: AsyncSession, resource: str, actor: "RelationActor", row: object
+) -> bool:
+    """Async gating form: like the sync one, then one EXISTS for the admitting
+    relations whose membership lives in another table."""
+    from radd.kernel import registries
+
+    guard = _guard(resource)
+    if guard is None or actor.unrestricted or guard.open_holds(row):
+        return True
+    specs = registries.relations_for(resource)
+    admitting = [specs[key] for key in guard.admits if key in specs]
+    if any(spec.holds(actor, row) for spec in admitting if spec.holds is not None):
+        return True
+    pending = [spec for spec in admitting if spec.holds is None]
+    if not pending:
+        return False
+    from sqlalchemy import exists, or_, select
+
+    model = type(row)
+    clause = or_(*[spec.where(actor) for spec in pending])
+    return bool(await session.scalar(select(exists().where(model.id == row.id, clause))))
+
+
+def relation_filter(resource: str, relations: frozenset[str], actor: "RelationActor"):
+    """The FILTERING form: None = unconstrained (`@any` held and no guard binds);
+    otherwise the OR of the held relations' WHERE clauses — `false()` when
+    nothing held, so an empty answer excludes rows instead of quietly passing
+    them (fails closed). A qualifier with no registered spec contributes
+    nothing (fails closed too: an unregistered relation must never widen).
+    Spec 121: the resource's row guard is ANDed under every answer."""
+    from sqlalchemy import and_, false, or_
+
+    from radd.kernel import registries
+
+    guard = row_guard_filter(resource, actor)
+    if RELATION_ANY in relations:
+        return guard
     specs = registries.relations_for(resource)
     # Downward closure (the lattice is normative: any ⊃ team ⊃ own) — holding
     # @team covers the @own rows too, so the filter ORs every CONTAINED spec.
@@ -147,7 +224,8 @@ def relation_filter(resource: str, relations: frozenset[str], actor: "RelationAc
     ]
     if not clauses:
         return false()
-    return clauses[0] if len(clauses) == 1 else or_(*clauses)
+    held_clause = clauses[0] if len(clauses) == 1 else or_(*clauses)
+    return held_clause if guard is None else and_(held_clause, guard)
 
 
 def _held_specs(resource: str, relations: frozenset[str]) -> list:
@@ -167,7 +245,10 @@ def relation_holds_row(
 
     SYNC — only pure predicates answer here. A query-gated relation
     (`holds=None`, RADD-844) is treated as NOT held: failing closed, never
-    wide. A gate that must honour those uses `relation_holds_row_async`."""
+    wide. A gate that must honour those uses `relation_holds_row_async`.
+    Spec 121: the row guard is checked first, under every relation set."""
+    if not row_guard_holds(resource, actor, row):
+        return False
     if RELATION_ANY in relations:
         return True
     return any(
@@ -186,7 +267,10 @@ async def relation_holds_row_async(
     """The GATING form for gates that can ask the database (RADD-844): pure
     predicates answer free; a query-gated relation (`holds=None` — membership
     in another table, like `@participant`) is answered by running its
-    where-form against THIS row's id. One EXISTS covers them all."""
+    where-form against THIS row's id. One EXISTS covers them all.
+    Spec 121: the row guard is checked first, under every relation set."""
+    if not await row_guard_holds_async(session, resource, actor, row):
+        return False
     if RELATION_ANY in relations:
         return True
     held = _held_specs(resource, relations)
@@ -214,28 +298,39 @@ async def relation_row_ids_holding(
     """Batched gating (RADD-844): the ids among `rows` the relation set holds
     for. Pure predicates run in Python; every query-gated relation is folded
     into ONE membership query over the page of ids — list surfaces stamping
-    per-row capabilities stay one query, not one per row."""
+    per-row capabilities stay one query, not one per row. Spec 121: the row
+    guard is applied as one more batched predicate."""
     if not rows:
         return set()
+    guard = row_guard_filter(resource, actor)
     if RELATION_ANY in relations:
-        return {row.id for row in rows}
-    held = _held_specs(resource, relations)
-    matched = {
-        row.id
-        for row in rows
-        if any(spec.holds(actor, row) for spec in held if spec.holds is not None)
-    }
-    pending = [spec for spec in held if spec.holds is None]
-    remaining = [row for row in rows if row.id not in matched]
-    if pending and remaining:
-        from sqlalchemy import or_, select
+        matched = {row.id for row in rows}
+    else:
+        held = _held_specs(resource, relations)
+        matched = {
+            row.id
+            for row in rows
+            if any(spec.holds(actor, row) for spec in held if spec.holds is not None)
+        }
+        pending = [spec for spec in held if spec.holds is None]
+        remaining = [row for row in rows if row.id not in matched]
+        if pending and remaining:
+            from sqlalchemy import or_, select
 
-        model = type(remaining[0])
-        clause = or_(*[spec.where(actor) for spec in pending])
-        result = await session.execute(
-            select(model.id).where(model.id.in_([row.id for row in remaining]), clause)
+            model = type(remaining[0])
+            clause = or_(*[spec.where(actor) for spec in pending])
+            result = await session.execute(
+                select(model.id).where(model.id.in_([row.id for row in remaining]), clause)
+            )
+            matched.update(result.scalars())
+    if guard is not None and matched:
+        from sqlalchemy import select
+
+        model = type(rows[0])
+        admitted = await session.execute(
+            select(model.id).where(model.id.in_(list(matched)), guard)
         )
-        matched.update(result.scalars())
+        matched = set(admitted.scalars())
     return matched
 
 

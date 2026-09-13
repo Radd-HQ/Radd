@@ -22,6 +22,7 @@ import {
   SignalMedium,
   type LucideIcon,
 } from "lucide-react";
+import { Globe, Lock, Users } from "lucide-react";
 import {
   VcsProvider,
   VcsRefType,
@@ -29,6 +30,8 @@ import {
   type VcsProviderValue,
   type VcsRefTypeValue,
   type WebLinkCategoryValue,
+  ItemVisibility,
+  type ItemVisibilityValue,
 } from "./types";
 import {
   ActionType,
@@ -81,6 +84,43 @@ export const PRIORITY_META: Record<PriorityValue, PriorityMeta> = {
   [Priority.normal]: { label: "Normal", short: "NORM", icon: SignalMedium, className: "text-fg-secondary", order: 2 },
   [Priority.low]: { label: "Low", short: "LOW", icon: SignalLow, className: "text-fg-muted", order: 3 },
 };
+
+/** Spec 121 — who may read an issue. Labels differ by whether the project is
+ * public: the `label` reads right in a public project, `privateLabel` in a
+ * private one (where public and internal are the same audience). */
+export interface VisibilityMeta {
+  label: string;
+  privateLabel: string;
+  description: string;
+  icon: LucideIcon;
+}
+
+export const VISIBILITY_META: Record<ItemVisibilityValue, VisibilityMeta> = {
+  [ItemVisibility.public]: {
+    label: "Public",
+    privateLabel: "Normal",
+    description: "Anyone who can read the project — the world, if the project is public.",
+    icon: Globe,
+  },
+  [ItemVisibility.internal]: {
+    label: "Members only",
+    privateLabel: "Normal",
+    description: "Members of the project. Hidden from the world even in a public project.",
+    icon: Users,
+  },
+  [ItemVisibility.restricted]: {
+    label: "Restricted",
+    privateLabel: "Restricted",
+    description: "Only the reporter, the assignee and participants.",
+    icon: Lock,
+  },
+};
+
+export const VISIBILITY_ORDER: readonly ItemVisibilityValue[] = [
+  ItemVisibility.public,
+  ItemVisibility.internal,
+  ItemVisibility.restricted,
+];
 
 export const PRIORITY_ORDER: readonly PriorityValue[] = [
   Priority.blocker,

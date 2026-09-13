@@ -83,7 +83,7 @@ def mailable_user(user: User | None) -> bool:
         return False
     if user.id == SYSTEM_ACTOR_ID:
         return False
-    return user.source != UserSource.SERVICE.value
+    return user.source not in (UserSource.SERVICE.value, UserSource.PRINCIPAL.value)
 
 #: Primary first, then oldest, then alphabetical. Used by both reads, so "the
 #: primary" and "the first of all of them" can never disagree — the standing

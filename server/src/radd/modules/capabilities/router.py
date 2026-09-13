@@ -5,7 +5,7 @@ from fastapi import APIRouter
 
 from radd.kernel import capabilities as kcaps
 from radd.kernel import registries
-from radd.modules.auth.deps import CurrentUser
+from radd.modules.auth.deps import Actor
 
 from .schemas import (
     CapabilitiesRead,
@@ -33,7 +33,7 @@ router = APIRouter(tags=["capabilities"])
 
 
 @router.get("/capabilities", response_model=CapabilitiesRead)
-async def get_capabilities(user: CurrentUser) -> CapabilitiesRead:
+async def get_capabilities(user: Actor) -> CapabilitiesRead:
     """The backend-assembled UI manifest (docs/plugin-platform.md §3.2/§8a).
 
     `capabilities`: each enabled plugin's `CapabilitySpec` evaluated (its `check()`),

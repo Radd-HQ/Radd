@@ -131,8 +131,14 @@ def _actor(user_id=None, team_ids=()):
 
 def test_relation_filter_closes_downward_and_fails_closed():
     actor = _actor()
-    # @any -> unconstrained.
-    assert authz.relation_filter("item", frozenset({RELATION_ANY}), actor) is None
+    # @any -> unconstrained for an UNRESTRICTED actor (spec 121: items carry a
+    # row guard, so for everyone else @any now means "every non-restricted row
+    # plus the restricted ones you are on" — asserted in test_item_visibility).
+    from dataclasses import replace
+
+    assert authz.relation_filter("item", frozenset({RELATION_ANY}), replace(actor, unrestricted=True)) is None
+    guarded = authz.relation_filter("item", frozenset({RELATION_ANY}), actor)
+    assert guarded is not None and "visibility" in str(guarded)
     # Nothing held / unregistered qualifier -> matches NOTHING (false()), never all.
     for held in (frozenset(), frozenset({_EXOTIC})):
         clause = authz.relation_filter("item", held, actor)
@@ -150,9 +156,11 @@ def test_relation_holds_row_agrees_with_the_chain():
     actor = _actor(user_id=me, team_ids=(team,))
 
     class Row:
-        def __init__(self, reporter_id, team_id):
+        def __init__(self, reporter_id, team_id, visibility="public"):
             self.reporter_id = reporter_id
             self.team_id = team_id
+            self.visibility = visibility  # spec 121: the item row guard reads it
+            self.assignee_id = None
 
     mine = Row(me, None)
     teams_row = Row(uuid.uuid4(), team)

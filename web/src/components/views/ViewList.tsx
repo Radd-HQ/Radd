@@ -29,6 +29,7 @@ import {
 } from "../cycles/CycleBadges";
 import {
   FlagBadge,
+  VisibilityBadge,
   ItemKeyLink,
   KindBadge,
   StarButton,
@@ -474,6 +475,7 @@ function RowLeading({
       )}
       <KindBadge kind={item.kind} size={13} />
       {item.flagged && <FlagBadge size={12} />}
+      <VisibilityBadge visibility={item.visibility} size={12} />
       <ItemKeyLink itemKey={item.key} />
     </>
   );

@@ -10,7 +10,8 @@ from .enums import ItemEvent
 from .filters import FilterParseError
 from .router import router
 from .service.refs import item_ref
-from .service.visibility import ITEM_RELATIONS
+from .enums import ItemVisibility
+from .service.visibility import ITEM_RELATIONS, ITEM_ROW_GUARD
 # AFTER the submodule imports above, deliberately: binding the package
 # attribute earlier re-enters `items.schemas` before it is initialised.
 from . import service
@@ -67,6 +68,20 @@ plugin = RaddPlugin(
     # what it gates.
     settings_keys=(
         SettingSpec(
+            key="item_default_visibility",
+            type="string",
+            scopes=("instance", "project"),
+            label="Default issue visibility",
+            description=(
+                "What a new issue is unless the filer says otherwise (spec 121): "
+                "public (readable by anyone who can read the project — the world, "
+                "when the project is public), internal (members only), or "
+                "restricted (only the reporter, assignee and participants). An HR "
+                "project sets restricted; a public tracker keeps public."
+            ),
+            choices=tuple(v.value for v in ItemVisibility),
+        ),
+        SettingSpec(
             key="estimation_points",
             type="bool",
             scopes=("instance", "project"),
@@ -78,7 +93,7 @@ plugin = RaddPlugin(
             ),
         ),
     ),
-    depends_on=("projects", "workflow", "labels", "fields", "cycles", "releases", "auth", "teams", "events", "access", "itemtypes", "linktypes"),
+    depends_on=("projects", "workflow", "labels", "fields", "cycles", "releases", "auth", "teams", "events", "access", "itemtypes", "linktypes", "settings"),
     weak_depends=("approvals", "comments", "timelogging"),
     routers=(router,),
     exception_handlers=(
@@ -102,6 +117,7 @@ plugin = RaddPlugin(
     entity_refs=(EntityRefSpec("item", item_ref, label="Issue"),),
     # RADD-823: what @own / @team MEAN for an item (D6 reporter; D13 item.team_id).
     relations=ITEM_RELATIONS,
+    row_guards=(ITEM_ROW_GUARD,),
     # RADD-892: `work_items.project_id` carries no ON DELETE CASCADE, so a dying
     # project takes its items with it explicitly. Ordered after the tables that
     # point AT an item (order 20) and before the states/types it points at.

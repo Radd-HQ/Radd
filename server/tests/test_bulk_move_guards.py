@@ -310,5 +310,7 @@ def test_ungoverned_write_paths_stay_ungrantable():
     unmapped = set(ItemUpdate.model_fields) - set(_BUILTIN_FIELD_MAP)
     # updated_at: import metadata, project.manage-gated. type_id: the issue-type
     # axis has no rule row by design (spec 51). custom_fields: governed by
-    # writable_check, not the builtin map.
-    assert unmapped == {"updated_at", "type_id", "custom_fields"}
+    # writable_check, not the builtin map. visibility: spec 121 — governed by
+    # item.update plus the self-lockout refusal, never by a field rule (a rule
+    # hiding WHO may see an issue would itself need a visibility).
+    assert unmapped == {"updated_at", "type_id", "custom_fields", "visibility"}

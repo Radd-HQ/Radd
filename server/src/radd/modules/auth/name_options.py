@@ -4,7 +4,7 @@ from sqlalchemy import String, case, cast, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from radd.choices import ChoiceRead, page
 from .models import User
-from .types import UserSource
+from .types import NON_PERSON_SOURCES, UserSource
 
 
 async def list_options(
@@ -25,5 +25,5 @@ async def list_options(
             (User.source == UserSource.SERVICE, "Service account"),
             else_="",
         ).label("hint"),
-    ).where(User.source != UserSource.EMAIL)
+    ).where(User.source.notin_(NON_PERSON_SOURCES))
     return await page(session, projection, q=q, limit=limit, offset=offset, value=value)

@@ -33,6 +33,7 @@ from .specs import (
     ProjectPurgeSpec,
     SettingSpec,
     RelationSpec,
+    RowGuardSpec,
     SlqFieldSpec,
     TaskSpec,
     ViewTypeSpec,
@@ -90,6 +91,8 @@ class RaddPlugin:
     permissions: tuple[PermissionSpec, ...] = ()
     crud_resources: tuple[CrudResourceSpec, ...] = ()
     relations: tuple[RelationSpec, ...] = ()  # @own/@team qualifiers for this plugin's rows (RADD-823)
+    #: Spec 121 — the per-row admission every reader of this plugin's rows passes.
+    row_guards: tuple[RowGuardSpec, ...] = ()
     #: base atom -> resource whose relations qualify it (RADD-844) — for a
     #: CREATE-shaped atom gated against its PARENT (comment.write -> item).
     relation_domains: tuple[tuple[str, str], ...] = ()

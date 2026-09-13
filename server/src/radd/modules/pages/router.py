@@ -8,7 +8,7 @@ from radd.choices import ChoiceRead
 from radd.db import get_session
 from radd.kernel.registry import registries
 from radd.modules.auth import authz
-from radd.modules.auth.deps import CurrentUser
+from radd.modules.auth.deps import Actor, CurrentUser
 from radd.modules.items import service as items_service
 
 from . import (
@@ -507,7 +507,7 @@ async def unlink_item(
 
 
 @router.get("/items/{item_id}/pages", response_model=list[ItemPageRef])
-async def item_docs(item_id: uuid.UUID, session: Session, user: CurrentUser) -> list[ItemPageRef]:
+async def item_docs(item_id: uuid.UUID, session: Session, user: Actor) -> list[ItemPageRef]:
     """Pages linked to an item — path-extends the items surface (like timelogging)."""
     await items_service.require_readable_item(session, item_id, user)
     return await links.pages_for_item(session, item_id)

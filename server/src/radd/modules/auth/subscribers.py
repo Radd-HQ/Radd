@@ -1,6 +1,6 @@
 from radd.db import SessionLocal
 
-from . import roles
+from . import principals, roles
 
 
 async def ensure_seeded() -> None:
@@ -9,4 +9,5 @@ async def ensure_seeded() -> None:
     seed script and test fixtures call `roles.ensure_builtin_roles` directly)."""
     async with SessionLocal() as session:
         await roles.ensure_builtin_roles(session)
+        await principals.ensure_principals(session)
         await session.commit()

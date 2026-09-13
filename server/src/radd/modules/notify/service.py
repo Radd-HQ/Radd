@@ -120,7 +120,9 @@ def mailable_user(user: User | None) -> TypeGuard[User]:
         return False
     if user.id == SYSTEM_ACTOR_ID:
         return False
-    return user.source != UserSource.SERVICE.value
+    # Spec 121: the principal rows (Anyone / Signed-in users) are subjects,
+    # not inboxes.
+    return user.source not in (UserSource.SERVICE.value, UserSource.PRINCIPAL.value)
 
 
 # --- notifications ---

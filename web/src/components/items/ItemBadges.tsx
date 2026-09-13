@@ -1,7 +1,8 @@
 import { Link } from "@tanstack/react-router";
-import { CalendarClock, CornerDownRight, Flag, Rocket, RefreshCw, Star, Users } from "lucide-react";
+import { CalendarClock, CornerDownRight, Flag, Globe, Rocket, RefreshCw, Star, Users } from "lucide-react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { RoutePath } from "../../lib/constants";
+import { ItemVisibility, type ItemVisibilityValue } from "../../lib/types";
 import { shortDate } from "../../lib/dates";
 import {
   CATEGORY_META,
@@ -10,6 +11,7 @@ import {
   NO_KIND_ICON,
   PRIORITY_META,
   RELEASE_STATUS_META,
+  VISIBILITY_META,
 } from "../../lib/meta";
 import type {
   CycleRef,
@@ -99,6 +101,59 @@ export function FlagBadge({ size = 12 }: { size?: number }) {
   return (
     <span title="Flagged" className="shrink-0 text-amber-400">
       <Flag size={size} fill="currentColor" aria-label="Flagged" />
+    </span>
+  );
+}
+
+/** Spec 121: a lock for restricted issues, a members glyph for internal ones —
+ * shown on cards and rows only when the issue is NOT public. */
+export function VisibilityBadge({
+  visibility,
+  size = 12,
+}: {
+  visibility: ItemVisibilityValue | undefined;
+  size?: number;
+}) {
+  if (!visibility || visibility === ItemVisibility.public) return null;
+  const meta = VISIBILITY_META[visibility];
+  const Icon = meta.icon;
+  return (
+    <span title={`${meta.label} — ${meta.description}`} className="shrink-0 text-fg-muted">
+      <Icon size={size} aria-label={meta.label} />
+    </span>
+  );
+}
+
+/** Spec 121: a project whose public issues the world can read. */
+export function PublicProjectChip() {
+  return (
+    <span
+      title="Public project — its public issues are readable without signing in"
+      className="inline-flex items-center gap-1 rounded-md border border-subtle bg-surface px-1.5 py-0.5 text-[11px] text-fg-secondary"
+    >
+      <Globe size={11} aria-hidden />
+      Public
+    </span>
+  );
+}
+
+/** Spec 121: the issue rail's visibility chip (label follows the project). */
+export function VisibilityChip({
+  visibility,
+  isPublicProject,
+}: {
+  visibility: ItemVisibilityValue;
+  isPublicProject: boolean;
+}) {
+  const meta = VISIBILITY_META[visibility];
+  const Icon = meta.icon;
+  return (
+    <span
+      title={meta.description}
+      className="inline-flex items-center gap-1 rounded-md border border-subtle bg-surface px-1.5 py-0.5 text-xs text-fg-secondary"
+    >
+      <Icon size={12} aria-hidden />
+      {isPublicProject ? meta.label : meta.privateLabel}
     </span>
   );
 }

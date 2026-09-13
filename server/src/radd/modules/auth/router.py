@@ -12,7 +12,8 @@ from radd.exceptions import ForbiddenError, UnauthorizedError
 from radd.kernel import registries
 
 from . import account_directory, authz, grants, roles as roles_service, service, service_accounts, totp
-from .deps import CurrentUser
+from . import principals
+from .deps import Actor, CurrentUser
 from .models import User
 from .principals import require_account_session
 from .throttle import check_login_attempt
@@ -51,6 +52,7 @@ from .schemas import (
     UserRead,
 )
 from .types import (
+    NON_PERSON_SOURCES,
     RELATION_ANY,
     SESSION_COOKIE_NAME,
     GrantScopeKind,
@@ -195,8 +197,13 @@ async def _me_read(session: AsyncSession, user: User) -> MeRead:
 
 
 @auth_router.get("/me", response_model=MeRead)
-async def me(request: Request, user: CurrentUser, session: Session) -> MeRead:
+async def me(request: Request, user: Actor, session: Session) -> MeRead:
+    """Who is here. Spec 121: answers 200 for an unauthenticated request too —
+    `anonymous=True`, the Anyone principal's id, and its (grant-only) global
+    permissions — so the SPA can render the shell for a visitor instead of
+    bouncing every public link to the login page."""
     payload = await _me_read(session, user)
+    payload.anonymous = principals.is_anonymous(user)
     # RADD-836 U1: while previewing, the payload describes the TARGET (that is
     # the point); the banner needs to know who is really here.
     real = getattr(request.state, "view_as_real", None)
@@ -518,7 +525,8 @@ async def list_user_directory(
     as a UUID while appearing, correctly, in the schema and at /docs.
     `tests/test_route_shadowing.py` asserts it for the whole app.
     """
-    sources_excluded = None if include_requesters else [UserSource.EMAIL]
+    # Spec 121: the principal rows are never a person to pick, whatever is asked.
+    sources_excluded = [UserSource.PRINCIPAL] if include_requesters else list(NON_PERSON_SOURCES)
     rows = await service.list_users(
         session, q=q, limit=limit, offset=offset, sources_excluded=sources_excluded
     )

@@ -8,7 +8,7 @@ from radd.db import get_session
 from radd.apitypes import TOTAL_COUNT_HEADER
 from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
-from radd.modules.auth.deps import CurrentUser
+from radd.modules.auth.deps import Actor, CurrentUser
 
 from . import counts, directory, service
 from .schemas import (
@@ -37,7 +37,7 @@ async def create_view(data: ViewCreate, session: Session, user: CurrentUser) -> 
 @router.get("", response_model=list[ViewRead])
 async def list_views(
     session: Session,
-    user: CurrentUser,
+    user: Actor,
     response: Response,
     include_shares: bool = True,
     project_id: uuid.UUID | None = None,
@@ -58,7 +58,7 @@ async def list_views(
 
 @router.get("/summary", response_model=dict[str, int])
 async def view_summary(
-    session: Session, user: CurrentUser, project_id: uuid.UUID | None = None,
+    session: Session, user: Actor, project_id: uuid.UUID | None = None,
     q: Annotated[str, Query(max_length=200)] = "", include_global: bool = True,
     global_only: bool = False,
     view_type: Annotated[str | None, Query(max_length=100)] = None,
@@ -130,7 +130,7 @@ async def delete_card_preset(preset_id: uuid.UUID, session: Session, user: Curre
 
 
 @router.get("/{view_id}", response_model=ViewRead)
-async def get_view(view_id: uuid.UUID, session: Session, user: CurrentUser,
+async def get_view(view_id: uuid.UUID, session: Session, user: Actor,
                    include_shares: bool = True) -> ViewRead:
     return await service.get_view_read(session, view_id, actor=user, include_shares=include_shares)
 

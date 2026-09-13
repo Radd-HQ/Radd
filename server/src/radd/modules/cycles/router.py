@@ -9,7 +9,7 @@ from radd.db import get_session
 from radd.apitypes import TOTAL_COUNT_HEADER
 from radd.exceptions import NotFoundError
 from radd.modules.auth import authz
-from radd.modules.auth.deps import CurrentUser
+from radd.modules.auth.deps import Actor, CurrentUser
 
 from radd.config import settings as config
 
@@ -41,7 +41,7 @@ async def create_cycle(data: CycleCreate, session: Session, user: CurrentUser) -
 @router.get("", response_model=list[CycleRead])
 async def list_cycles(
     session: Session,
-    user: CurrentUser,
+    user: Actor,
     response: Response,
     status: Annotated[CycleStatus | None, Query()] = None,
     q: Annotated[str, Query(max_length=200)] = "",
@@ -67,7 +67,7 @@ async def list_cycles(
 
 @router.get("/summary", response_model=dict[CycleStatus, int])
 async def cycle_summary(
-    session: Session, user: CurrentUser, q: Annotated[str, Query(max_length=200)] = "",
+    session: Session, user: Actor, q: Annotated[str, Query(max_length=200)] = "",
 ):
     if not await authz.holds(session, user, authz.Permission.CYCLE_READ):
         return {}
@@ -81,7 +81,7 @@ async def _require_visible(session: AsyncSession, cycle, user) -> None:
 
 
 @router.get("/{cycle_id}", response_model=CycleRead)
-async def get_cycle(cycle_id: uuid.UUID, session: Session, user: CurrentUser) -> CycleRead:
+async def get_cycle(cycle_id: uuid.UUID, session: Session, user: Actor) -> CycleRead:
     cycle = await service.get_cycle(session, cycle_id)
     await authz.require(session, user, authz.Permission.CYCLE_READ)
     await _require_visible(session, cycle, user)

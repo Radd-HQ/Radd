@@ -8,7 +8,7 @@ from radd.config import settings
 from radd.db import get_session
 from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
-from radd.modules.auth.deps import CurrentUser
+from radd.modules.auth.deps import Actor
 from radd.modules.projects import service as projects_service
 
 from . import deflect, semantic, service
@@ -24,7 +24,7 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 @router.get("/search", response_model=SearchResponse)
 async def search(
     session: Session,
-    user: CurrentUser,
+    user: Actor,
     q: Annotated[str, Query(max_length=200)] = "",
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
 ) -> SearchResponse:
@@ -47,7 +47,7 @@ async def search(
 @router.get("/search/deflect", response_model=DeflectResponse)
 async def search_deflect(
     session: Session,
-    user: CurrentUser,
+    user: Actor,
     project_id: uuid.UUID,
     q: Annotated[str, Query(max_length=MAX_QUERY_CHARS)] = "",
 ) -> DeflectResponse:
@@ -80,7 +80,7 @@ async def _readable_space_ids(session, user) -> set[uuid.UUID]:
 @router.get("/search/semantic", response_model=SemanticResponse)
 async def search_semantic(
     session: Session,
-    user: CurrentUser,
+    user: Actor,
     q: Annotated[str, Query(max_length=MAX_QUERY_CHARS)] = "",
 ) -> SemanticResponse:
     """Pure meaning-based retrieval over items + docs (spec 103, the palette's

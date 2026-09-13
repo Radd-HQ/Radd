@@ -16,6 +16,10 @@ class InstanceConfigRead(BaseModel):
     timelog_days_per_week: int
     sso_enabled: bool = False  # spec 40 — the login page shows the SSO button
     ldap_enabled: bool = False  # spec 42 — the login page offers directory sign-in
+    #: Spec 121 — the principal rows' fixed ids, so the SPA can name "Anyone
+    #: on the web" as a share subject without hardcoding a wire constant.
+    anyone_id: uuid.UUID | None = None
+    signed_in_id: uuid.UUID | None = None
 
 
 class InstanceStatusRead(BaseModel):
@@ -63,6 +67,19 @@ class ProjectRead(BaseModel):
     #: string, not the auth enum (`ProjectVia`): projects loads before auth, so
     #: this file cannot import it — same reason `permissions` above is `str`.
     via: str | None = None
+    #: Spec 121 — the two public-access switches, DERIVED from grants: the
+    #: Public role held by the Anyone principal here, and the Contributor role
+    #: held by Signed-in users. Plain booleans for the chip and the Access
+    #: screen; the rows themselves live in `GET /role-grants?project_id=`.
+    public: bool = False
+    contributions: bool = False
+
+
+class PublicAccessUpdate(BaseModel):
+    """PUT /projects/{id}/public-access (spec 121): the two switches."""
+
+    public: bool
+    contributions: bool = False
 
 
 class ProjectSummaryRead(BaseModel):

@@ -22,7 +22,7 @@ from radd.modules.workflow.types import StateCategory
 
 from radd.hooks import hooks
 
-from ..enums import ItemEntity, ItemEvent, ItemKind
+from ..enums import ItemEntity, ItemEvent, ItemKind, ItemVisibility
 from ..hooks import ItemCreating, ItemHook
 from ..models import ItemStar, WorkItem
 from ..schemas import ItemCreate, ItemRankUpdate, ItemRead, ItemUpdate
@@ -51,6 +51,39 @@ from .visibility import _check_builtin_field_rules, _field_ctx, ensure_item_rela
 
 
 # --- CRUD ---
+
+
+async def _default_visibility(session: AsyncSession, project, explicit) -> str:
+    """Spec 121: the filer's choice, else the project's `item_default_visibility`."""
+    if explicit is not None:
+        return explicit.value
+    from radd.modules.settings import service as settings_service
+    from radd.modules.settings.types import SettingKey
+
+    value = await settings_service.resolve(
+        session, SettingKey.ITEM_DEFAULT_VISIBILITY, project_id=project.id
+    )
+    return ItemVisibility(value).value
+
+
+async def _refuse_self_lockout(
+    session: AsyncSession, actor: User, item: WorkItem, permissions
+) -> None:
+    """Spec 121: a visibility change that would hide the issue from the person
+    making it is refused (instance admins excepted, D1) — otherwise "restrict
+    this" is a one-way door that closes behind you."""
+    if authz.is_instance_admin(actor):
+        return
+    relations = authz.relations_held(permissions, Permission.ITEM_READ)
+    relation_actor = await authz.relation_actor(session, actor)
+    if not await authz.relation_holds_row_async(session, "item", relations, relation_actor, item):
+        raise ConflictError(
+            ItemEntity.ITEM,
+            reason=(
+                f"setting visibility to {item.visibility} would hide this issue from you — "
+                "add yourself as a participant first, or ask an instance admin"
+            ),
+        )
 
 
 async def create_item(session: AsyncSession, data: ItemCreate, actor: User) -> ItemRead:
@@ -111,6 +144,7 @@ async def create_item(session: AsyncSession, data: ItemCreate, actor: User) -> I
         cycle_id=data.cycle_id,
         release_id=data.release_id,
         flagged=data.flagged,
+        visibility=await _default_visibility(session, project, data.visibility),
         estimate_points=data.estimate_points,
         rank=next_rank,
         custom_fields=custom_fields,
@@ -223,6 +257,9 @@ async def update_item(
         item.release_id = data.release_id
     if data.flagged is not None:
         item.flagged = data.flagged
+    if data.visibility is not None and data.visibility.value != item.visibility:
+        item.visibility = data.visibility.value
+        await _refuse_self_lockout(session, actor, item, permissions)
     if "estimate_points" in data.model_fields_set:  # spec 70 — explicit null clears
         item.estimate_points = data.estimate_points
     if "start_date" in data.model_fields_set:

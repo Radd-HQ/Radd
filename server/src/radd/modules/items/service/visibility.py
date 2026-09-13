@@ -7,8 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import false, select
 
 from radd.exceptions import ForbiddenError
-from radd.kernel.registry import register_relation
-from radd.kernel.specs import RelationSpec
+from radd.kernel.registry import register_relation, register_row_guard
+from radd.kernel.specs import RelationSpec, RowGuardSpec
 from radd.modules.access import resolution as access_res, service as access_service
 from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
@@ -17,6 +17,7 @@ from radd.modules.fields import service as fields
 from radd.modules.fields.models import FieldDefinition
 from radd.modules.projects.models import Project
 
+from ..enums import ItemVisibility
 from ..models import WorkItem
 from ..schemas import ItemRead
 
@@ -62,6 +63,37 @@ ITEM_RELATIONS: tuple[RelationSpec, ...] = (
         ),
         holds=lambda actor, item: item.team_id is not None and item.team_id in actor.team_ids,
     ),
+    # Spec 121: `@public` is a property of the ROW, not of who the actor is —
+    # the issue's own visibility. Off the chain like @assigned. `row_property`
+    # is what makes holding `item.read@public` on a project ENTITLE the actor
+    # to the project (it appears in their rail with no relationship needed).
+    RelationSpec(
+        resource="item",
+        key="public",
+        label="marked public",
+        where=lambda actor: WorkItem.visibility == ItemVisibility.PUBLIC.value,
+        holds=lambda actor, item: item.visibility == ItemVisibility.PUBLIC.value,
+        row_property=True,
+    ),
+)
+
+#: Spec 121: the relations that ADMIT a reader to a RESTRICTED issue — the
+#: people on it. Resolved through the registry at query time, so an unloaded
+#: participants plugin simply does not admit. Not @team (D13's "the item's
+#: team" is a routing fact, not a confidence), not project.manage (D1).
+RESTRICTED_ADMITS: tuple[str, ...] = ("own", "assigned", "participant")
+
+#: Spec 121: the per-row admission EVERY item reader passes, whatever
+#: relation they hold. `@any` stops meaning "every row" the moment this is
+#: registered: an unqualified reader sees public + internal rows and the
+#: restricted ones they are on; a `@public` reader sees public rows only
+#: (public rows are never restricted, so the guard is moot for them).
+ITEM_ROW_GUARD = RowGuardSpec(
+    resource="item",
+    label="restricted issues admit only the people on them",
+    open_where=lambda: WorkItem.visibility != ItemVisibility.RESTRICTED.value,
+    open_holds=lambda item: item.visibility != ItemVisibility.RESTRICTED.value,
+    admits=RESTRICTED_ADMITS,
 )
 
 # Registered at import for direct-import contexts (unit tests, scripts) AND
@@ -69,6 +101,7 @@ ITEM_RELATIONS: tuple[RelationSpec, ...] = (
 # registrations, and the manifest is what survives it (the cascades precedent).
 for _spec in ITEM_RELATIONS:
     register_relation(_spec)
+register_row_guard(ITEM_ROW_GUARD)
 
 
 async def relation_read_clause(
@@ -90,13 +123,18 @@ async def relation_read_clause(
 
     constrained: dict[uuid.UUID, Any] = {}
     relation_actor = None
+    # Spec 121: the row guard binds every non-admin reader, so `@any` is only
+    # "unconstrained" when no guard applies — `relation_filter` answers None
+    # in exactly that case, and the fast path below still costs nothing when
+    # it does (the actor is resolved once, memoised).
     for project_id, permissions in permissions_by_project.items():
         relations = authz.relations_held(permissions, Permission.ITEM_READ)
-        if authz.RELATION_ANY in relations:
-            continue
         if relation_actor is None:
             relation_actor = await authz.relation_actor(session, actor)
-        constrained[project_id] = authz.relation_filter("item", relations, relation_actor)
+        clause = authz.relation_filter("item", relations, relation_actor)
+        if clause is None:
+            continue
+        constrained[project_id] = clause
     if not constrained:
         return None
     arms = []
@@ -204,11 +242,11 @@ async def ensure_item_relation(
     NotFound (`as_missing=True` — a hidden item's existence stays private, the
     spec-57 rule); a failed write raises Forbidden naming the qualifier."""
     relations = authz.relations_held(permissions, permission)
-    if authz.RELATION_ANY in relations:
-        return
     relation_actor = await authz.relation_actor(session, actor)
     # async form (RADD-844): honours query-gated relations (@participant) with
-    # one EXISTS; pure predicates still answer free.
+    # one EXISTS; pure predicates still answer free. Spec 121: `@any` no
+    # longer short-circuits HERE — the primitive applies the row guard first
+    # and answers True for @any only past it.
     if await authz.relation_holds_row_async(session, "item", relations, relation_actor, item):
         return
     if as_missing:

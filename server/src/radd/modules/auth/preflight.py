@@ -60,7 +60,7 @@ async def baseline_preflight(
                 .where(
                     User.active,
                     User.source.notin_(
-                        [UserSource.SERVICE.value, UserSource.EMAIL.value]
+                        [UserSource.SERVICE.value, UserSource.EMAIL.value, UserSource.PRINCIPAL.value]
                     ),
                 )
                 .order_by(User.name)

@@ -6,7 +6,7 @@ from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError
-from radd.modules.auth import service as auth
+from radd.modules.auth import principals, service as auth
 from radd.modules.auth.models import User
 from radd.modules.auth.types import AuthEntity
 from radd.modules.cycles import service as cycles_service
@@ -90,6 +90,9 @@ async def _resolve_assignee(
     user = await auth.get_user(session, user_id)
     if not user.active and not allow_inactive:
         raise ConflictError(AuthEntity.USER, reason=f"{user_id} is inactive")
+    # Spec 121: Anyone / Signed-in users are grant subjects, never a person
+    # an issue can belong to.
+    principals.require_person(user, what="an assignee or reporter")
     return user
 
 

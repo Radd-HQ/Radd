@@ -83,6 +83,16 @@ class SubjectContext:
     team_ids: frozenset[uuid.UUID] = field(default_factory=frozenset)
     has_manage: bool = False
 
+    @property
+    def subject_user_ids(self) -> frozenset[uuid.UUID]:
+        """The USER-subject ids this actor matches (spec 121): themselves plus
+        the principal rows they stand in for — Anyone for every actor, Signed-in
+        users for a real account. Derived here, once, so no construction site
+        can forget the world; mirrors `auth.grants._subject_condition`."""
+        from radd.modules.auth.principals import subject_user_ids
+
+        return subject_user_ids(self.user_id)
+
 
 def in_scope(grant: _GrantLike, project_id: uuid.UUID | None) -> bool:
     """A grant applies here when it's global (no project) or matches the project."""
@@ -91,7 +101,7 @@ def in_scope(grant: _GrantLike, project_id: uuid.UUID | None) -> bool:
 
 def subject_matches(grant: _GrantLike, ctx: SubjectContext) -> bool:
     if grant.subject_type == GrantSubject.USER.value:
-        return ctx.user_id is not None and grant.subject_id == ctx.user_id
+        return grant.subject_id in ctx.subject_user_ids
     if grant.subject_type == GrantSubject.TEAM.value:
         return grant.subject_id in ctx.team_ids
     if grant.subject_type == GrantSubject.ROLE.value:

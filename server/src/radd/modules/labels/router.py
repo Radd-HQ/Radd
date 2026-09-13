@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.apitypes import TOTAL_COUNT_HEADER
 from radd.db import get_session
 from radd.modules.auth import authz
-from radd.modules.auth.deps import CurrentUser
+from radd.modules.auth.deps import Actor, CurrentUser
 
 from . import service
 from .schemas import LabelCreate, LabelRead, LabelUpdate
@@ -28,7 +28,7 @@ async def create_label(data: LabelCreate, session: Session, user: CurrentUser) -
 async def list_labels(
     response: Response,
     session: Session,
-    user: CurrentUser,
+    user: Actor,
     q: str | None = None,
     limit: Annotated[int | None, Query(ge=1, le=500)] = None,
     offset: Annotated[int, Query(ge=0)] = 0,

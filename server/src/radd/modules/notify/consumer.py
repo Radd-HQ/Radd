@@ -371,15 +371,16 @@ async def _allowed(
         return False
     if item is not None:
         relations = authz.relations_held(permissions, Permission.ITEM_READ)
-        if authz.RELATION_ANY not in relations:
-            relation_actor = await authz.relation_actor(session, user)
-            # async form (RADD-844): a participant reads via a membership TABLE,
-            # not an item column — the sync gate would silently drop exactly
-            # the recipients participation exists to reach.
-            if not await authz.relation_holds_row_async(
-                session, "item", relations, relation_actor, item
-            ):
-                return False
+        relation_actor = await authz.relation_actor(session, user)
+        # async form (RADD-844): a participant reads via a membership TABLE,
+        # not an item column — the sync gate would silently drop exactly
+        # the recipients participation exists to reach. Spec 121: no @any
+        # short-circuit here — the primitive applies the row guard first, so
+        # a restricted issue never notifies someone who is not on it.
+        if not await authz.relation_holds_row_async(
+            session, "item", relations, relation_actor, item
+        ):
+            return False
     if planned.detail.get("visibility") == CommentVisibility.INTERNAL.value:
         if Permission.COMMENT_READ_INTERNAL not in permissions:
             return False

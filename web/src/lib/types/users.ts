@@ -5,6 +5,9 @@ import type { InstanceRoleValue } from "./settings";
  * caller's GLOBAL permission union top-level (the synthetic `workspaces` array
  * is gone). */
 export interface Me {
+  /** Spec 121: the request carried no credential — this is the Anyone
+   *  principal's payload, not a person's. */
+  anonymous?: boolean;
   id: string;
   email: string;
   name: string;
@@ -79,6 +82,17 @@ export interface Project {
    * only — never used to decide access, only to decide what the sidebar's
    * "related projects" preference hides from the rail. */
   via?: "entitled" | "related" | null;
+  /** Spec 121: the Public role is granted to Anyone on this project — its
+   * public issues are readable without signing in. Derived from the grant. */
+  public?: boolean;
+  /** Spec 121: the Contributor role is granted to Signed-in users here. */
+  contributions?: boolean;
+}
+
+/** PUT /projects/{id}/public-access (spec 121). */
+export interface PublicAccessUpdate {
+  public: boolean;
+  contributions: boolean;
 }
 
 /** Aggregate visible-project authority, independent of a directory page. */

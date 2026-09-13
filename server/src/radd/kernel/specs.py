@@ -159,6 +159,34 @@ class RelationActor:
 
     user_id: uuid.UUID
     team_ids: frozenset[uuid.UUID] = frozenset()
+    #: Spec 121: the actor is an instance admin — row guards do not apply
+    #: (D1: the instance admin bypasses everything; a project manager does not).
+    unrestricted: bool = False
+
+
+@dataclass(frozen=True)
+class RowGuardSpec:
+    """A per-row ADMISSION every reader of a resource passes, whatever relation
+    they hold (spec 121 §3): a restricted issue admits only the people on it.
+
+    A relation says who the actor is to a row; a guard says which rows are
+    open to everyone who may read the resource at all, and which relations
+    ADMIT a reader to the rest. The resolvers compose it under every relation
+    set — `@any` stops meaning "every row" the moment a guard is registered —
+    so a list, a count, a search and a gate agree by construction. `admits`
+    names relation KEYS resolved through the registry at query time, so an
+    unloaded plugin's relation simply does not admit.
+    """
+
+    resource: str
+    label: str
+    #: FILTERING form of "open to every reader": a boolean expression over the
+    #: resource's own table.
+    open_where: Callable[[], Any]
+    #: GATING form of the same.
+    open_holds: Callable[[Any], bool]
+    #: Relation keys that admit a reader to a guarded row.
+    admits: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -194,6 +222,12 @@ class RelationSpec:
     #: A relation needing a join ("issues shared with me") is expressible but
     #: marked, so hot paths can decline it — never silently slow.
     expensive: bool = False
+    #: Spec 121: the relation is a property of the ROW, not of who the actor
+    #: is (`@public` = the item's own visibility). Holding `item.read@public`
+    #: on a project therefore ENTITLES the actor to the project (it appears in
+    #: their rail) rather than merely relating them to rows they happen to be
+    #: on — `authz.visible_projects` reads this flag.
+    row_property: bool = False
 
     def __post_init__(self) -> None:
         if self.holds is None and not self.expensive:

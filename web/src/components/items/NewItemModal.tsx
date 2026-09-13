@@ -13,7 +13,14 @@ import type { BucketCreatePreset } from "../../lib/axis-dnd";
 import { PARENT_SEARCH_LIMIT } from "../../lib/constants";
 import { useDebounced, useItemWritability, usePointsEnabled } from "../../lib/hooks";
 import { useValidateItem } from "../../lib/item-mutations";
-import { KIND_META, KIND_ORDER, PRIORITY_META, PRIORITY_ORDER } from "../../lib/meta";
+import {
+  KIND_META,
+  KIND_ORDER,
+  PRIORITY_META,
+  PRIORITY_ORDER,
+  VISIBILITY_META,
+  VISIBILITY_ORDER,
+} from "../../lib/meta";
 import {
   issueTypesQuery,
   fieldsQuery,
@@ -24,6 +31,8 @@ import {
   validationContextQuery,
 } from "../../lib/queries";
 import {
+  ItemVisibility,
+  type ItemVisibilityValue,
   IntakeCommit,
   ItemKind,
   Priority,
@@ -114,6 +123,8 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
   const [typeId, setTypeId] = useState("");
   const [stateId, setStateId] = useState(initial?.state_id ?? "");
   const [priority, setPriority] = useState<PriorityValue>(initial?.priority ?? Priority.normal);
+  // Spec 121: "" = the project's default (`item_default_visibility`), decided server-side.
+  const [visibility, setVisibility] = useState<ItemVisibilityValue | "">("");
   const [assigneeId, setAssigneeId] = useState(initial?.assignee_id ?? "");
   const [teamId, setTeamId] = useState(initial?.team_id ?? "");
   // Parent picker (spec 80): server-wide typeahead, same-project candidates
@@ -243,6 +254,7 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
     if (chosenType) body.type_id = chosenType;
     if (assigneeId) body.assignee_id = assigneeId;
     if (teamId) body.team_id = teamId;
+    if (visibility) body.visibility = visibility;
     if (kind !== ItemKind.epic && parentPick) body.parent_id = parentPick.id;
     if (cycleId) body.cycle_id = cycleId;
     if (releaseId) body.release_id = releaseId;
@@ -380,6 +392,21 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
             {PRIORITY_ORDER.map((value) => (
               <option key={value} value={value}>
                 {PRIORITY_META[value].label}
+              </option>
+            ))}
+          </SelectField>
+
+          <SelectField
+            label="Visibility"
+            value={visibility}
+            onChange={(event) => setVisibility(event.target.value as ItemVisibilityValue | "")}
+          >
+            <option value="">Project default</option>
+            {VISIBILITY_ORDER.filter(
+              (value) => project.public || value !== ItemVisibility.internal,
+            ).map((value) => (
+              <option key={value} value={value} title={VISIBILITY_META[value].description}>
+                {project.public ? VISIBILITY_META[value].label : VISIBILITY_META[value].privateLabel}
               </option>
             ))}
           </SelectField>

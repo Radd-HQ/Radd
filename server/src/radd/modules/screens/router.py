@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
 from radd.modules.auth import authz
-from radd.modules.auth.deps import CurrentUser
+from radd.modules.auth.deps import Actor, CurrentUser
 from radd.modules.projects import service as projects_service
 
 from . import service
@@ -21,7 +21,7 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 async def effective_screen(
     project_id: uuid.UUID,
     session: Session,
-    user: CurrentUser,
+    user: Actor,
     issue_type_id: uuid.UUID | None = None,
 ) -> EffectiveScreen:
     """The resolved field layout for an item's (project, issue-type) — what the issue
@@ -35,7 +35,7 @@ async def effective_screen(
 async def get_screen(
     project_id: uuid.UUID,
     session: Session,
-    user: CurrentUser,
+    user: Actor,
     issue_type_id: uuid.UUID | None = None,
 ) -> ScreenRead:
     """A scope's stored screen (for the editor). `project.manage`."""

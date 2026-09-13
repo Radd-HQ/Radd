@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
-from radd.modules.auth.deps import CurrentUser
+from radd.modules.auth.deps import Actor, CurrentUser
 
 from . import service
 from .schemas import CommentCreate, CommentPage, CommentRead, CommentUpdate
@@ -27,7 +27,7 @@ async def create_comment(
 
 @router.get("/items/{item_id}/comments", response_model=list[CommentRead])
 async def list_comments(
-    item_id: uuid.UUID, session: Session, user: CurrentUser
+    item_id: uuid.UUID, session: Session, user: Actor
 ) -> list[CommentRead]:
     return await service.list_comments(session, item_id, actor=user)
 
@@ -47,7 +47,7 @@ async def create_parent_comment(
 
 @router.get("/{entity_type}/{entity_id}/comments", response_model=list[CommentRead])
 async def list_parent_comments(
-    entity_type: str, entity_id: uuid.UUID, session: Session, user: CurrentUser
+    entity_type: str, entity_id: uuid.UUID, session: Session, user: Actor
 ) -> list[CommentRead]:
     return await service.list_comments(session, entity_id, actor=user, entity_type=entity_type)
 
@@ -82,7 +82,7 @@ async def delete_comment(comment_id: uuid.UUID, session: Session, user: CurrentU
 
 @router.get("/items/{entity_id}/comments/feed", response_model=CommentPage)
 async def item_comment_page(
-    entity_id: uuid.UUID, session: Session, user: CurrentUser,
+    entity_id: uuid.UUID, session: Session, user: Actor,
     limit: int = Query(50, ge=1, le=200), before: str | None = Query(None, max_length=256),
     section: CommentSlice = CommentSlice.ALL,
 ) -> CommentPage:
@@ -91,7 +91,7 @@ async def item_comment_page(
 
 @router.get("/{entity_type}/{entity_id}/comments/feed", response_model=CommentPage)
 async def parent_comment_page(
-    entity_type: str, entity_id: uuid.UUID, session: Session, user: CurrentUser,
+    entity_type: str, entity_id: uuid.UUID, session: Session, user: Actor,
     limit: int = Query(50, ge=1, le=200), before: str | None = Query(None, max_length=256),
     section: CommentSlice = CommentSlice.ALL,
 ) -> CommentPage:

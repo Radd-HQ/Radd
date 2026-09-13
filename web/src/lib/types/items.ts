@@ -49,6 +49,14 @@ export const Priority = {
 } as const;
 export type PriorityValue = (typeof Priority)[keyof typeof Priority];
 
+/** Spec 121: who may read an issue beyond holding item.read on its project. */
+export const ItemVisibility = {
+  public: "public",
+  internal: "internal",
+  restricted: "restricted",
+} as const;
+export type ItemVisibilityValue = (typeof ItemVisibility)[keyof typeof ItemVisibility];
+
 export const ItemKind = {
   epic: "epic",
   issue: "issue",
@@ -127,6 +135,8 @@ export interface Item {
   release?: ReleaseRef | null;
   /** First-class shared flag (spec 24) — a core boolean, not a label. */
   flagged?: boolean;
+  /** Spec 121: public | internal | restricted. */
+  visibility?: ItemVisibilityValue;
   /** Story points (spec 70) — null/absent = unestimated; UI gated per project. */
   estimate_points?: number | null;
   /** Soft-archived timestamp (spec 38) — hidden from lists by default. */
@@ -158,6 +168,8 @@ export interface ItemCreate {
   cycle_id?: string | null;
   release_id?: string | null;
   flagged?: boolean;
+  /** Spec 121: omitted = the project's default visibility. */
+  visibility?: ItemVisibilityValue;
   /** Story points (spec 70): 0–999, one decimal. */
   estimate_points?: number | null;
 }
@@ -181,6 +193,8 @@ export interface ItemUpdate {
   cycle_id?: string | null;
   release_id?: string | null;
   flagged?: boolean;
+  /** Spec 121: omitted = unchanged. */
+  visibility?: ItemVisibilityValue;
   /** Story points (spec 70) — omitted = unchanged; explicit null clears. */
   estimate_points?: number | null;
 }
