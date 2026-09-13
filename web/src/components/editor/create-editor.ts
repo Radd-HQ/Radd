@@ -31,20 +31,33 @@ export interface EditorOptions {
   root: HTMLElement;
   /** Initial markdown. The editor is uncontrolled after creation. */
   value: string;
-  /** False for the viewer — same engine, no editing. */
-  editable: boolean;
+  /** False for the viewer — same engine, no editing. A function is asked per
+   *  transaction: the collaborative editor (spec 122) answers false until the
+   *  room's document has arrived, so nothing typed into the local copy is
+   *  silently replaced by the shared one. */
+  editable: boolean | (() => boolean);
   /** Fires on every edit with the current markdown. Omitted for the viewer. */
   onMarkdown?: (markdown: string) => void;
+  /** Off in collaborative mode (spec 122): the Yjs undo manager takes over so
+   *  Mod-z undoes YOUR edits, not a colleague's. Default on. */
+  history?: boolean;
 }
 
-export function makeEditor({ root, value, editable, onMarkdown }: EditorOptions): Editor {
-  return Editor.make()
+export function makeEditor({
+  root,
+  value,
+  editable,
+  onMarkdown,
+  history: withHistory = true,
+}: EditorOptions): Editor {
+  const isEditable = typeof editable === "function" ? editable : () => editable;
+  const editor = Editor.make()
     .config((ctx) => {
       ctx.set(rootCtx, root);
       ctx.set(defaultValueCtx, value);
       // A FUNCTION, not a boolean: ProseMirror asks per transaction, so a
       // viewer that later becomes editable needs no rebuild.
-      ctx.set(editorViewOptionsCtx, { editable: () => editable });
+      ctx.set(editorViewOptionsCtx, { editable: isEditable });
       // Four spaces, matching what the editor used to indent with — a change
       // here would rewrite the leading whitespace of every nested list on save.
       ctx.update(indentConfig.key, (base) => ({ ...base, size: 4 }));
@@ -54,13 +67,16 @@ export function makeEditor({ root, value, editable, onMarkdown }: EditorOptions)
     })
     .use(commonmark)
     .use(gfm)
-    .use(listener)
-    .use(history)
-    .use(indent)
-    .use(trailing)
-    .use(clipboard)
-    // Registered unconditionally so the paste/drop path exists; the surfaces
-    // that can upload supply the uploader through `uploadConfig`, and the ones
-    // that cannot leave it at the default, which drops the file.
-    .use(upload);
+    .use(listener);
+  if (withHistory) editor.use(history);
+  return (
+    editor
+      .use(indent)
+      .use(trailing)
+      .use(clipboard)
+      // Registered unconditionally so the paste/drop path exists; the surfaces
+      // that can upload supply the uploader through `uploadConfig`, and the ones
+      // that cannot leave it at the default, which drops the file.
+      .use(upload)
+  );
 }

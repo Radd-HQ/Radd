@@ -1,0 +1,36 @@
+/*
+ * Remote cursors and selections (spec 122) — y-prosemirror's class names,
+ * house tokens. The peer's colour arrives on `--collab-color` (cursors.ts);
+ * every other value here is a theme token, so the chrome follows light/dark
+ * without a second palette.
+ */
+.radd-rich-editor .ProseMirror-yjs-cursor {
+  position: relative;
+  margin-left: -1px;
+  margin-right: -1px;
+  border-left: 2px solid var(--collab-color, var(--accent-fill));
+  border-right: none;
+  word-break: normal;
+  pointer-events: none;
+}
+
+.radd-rich-editor .ProseMirror-yjs-cursor > div {
+  position: absolute;
+  top: -1.3em;
+  left: -2px;
+  padding: 0 5px;
+  border-radius: var(--radius-md) var(--radius-md) var(--radius-md) 0;
+  background: var(--collab-color, var(--accent-fill));
+  /* Label text sits on the peer's own fill, a non-themed surface — the same
+     deliberate exception Avatar makes with `text-white`. */
+  color: var(--color-white);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.radd-rich-editor .ProseMirror-yjs-selection {
+  background: color-mix(in srgb, var(--collab-color, var(--accent-fill)) 22%, transparent);
+}

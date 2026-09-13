@@ -29,6 +29,9 @@ interface RequestOptions {
   query?: Record<string, string | undefined>;
   on401?: On401Value;
   signal?: AbortSignal;
+  /** Let the request outlive the page (`fetch` keepalive) — the collab saver's
+   *  last write on unload (spec 122). Bodies are capped at 64 KiB by browsers. */
+  keepalive?: boolean;
 }
 
 /** Spec 121: while the visitor is anonymous, a 401 is an ordinary refusal
@@ -63,6 +66,7 @@ async function rawRequest(path: string, options: RequestOptions = {}): Promise<R
       ? AbortSignal.any([options.signal, accountRequests.signal])
       : accountRequests.signal,
     method,
+    keepalive: options.keepalive,
     credentials: "include",
     headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
     body: body !== undefined ? JSON.stringify(body) : undefined,

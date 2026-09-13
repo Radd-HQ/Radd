@@ -140,6 +140,11 @@ export interface PageUpdate {
   parent_id?: string | null;
   position?: number;
   expected_version?: number;
+  /** Spec 122: the body comes from a live room's elected saver — the server
+   *  skips the `expected_version` check for this session's writes. */
+  collab_session?: string;
+  /** Spec 122: the session's last save; the server records a version row. */
+  final?: boolean;
 }
 
 export interface PageVersionMeta {

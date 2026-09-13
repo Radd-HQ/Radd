@@ -24,6 +24,7 @@ import {
   toggleStrikethroughCommand,
 } from "@milkdown/kit/preset/gfm";
 import { upload, uploadConfig } from "@milkdown/kit/plugin/upload";
+import { collab, collabServiceCtx } from "@milkdown/plugin-collab";
 import { cursor } from "@milkdown/kit/plugin/cursor";
 import { linkTooltipPlugin } from "@milkdown/kit/component/link-tooltip";
 import { listItemBlockComponent } from "@milkdown/kit/component/list-item-block";
@@ -48,6 +49,8 @@ import { AiRunPanel, AiRunStatus, type AiRunView } from "./AiRunPanel";
 import { AiRunOutcome, reviewPending, runAi } from "./ai-run";
 import { NO_SELECTION, selectionRectPlugin, type SelectionRect } from "./selection-state";
 import { makeEditor } from "./create-editor";
+import { cursorBuilder, selectionBuilder } from "./collab/cursors";
+import { COLLAB_FRAGMENT, whenDocumentReady, type CollabConfig } from "./collab/provider";
 import { CodeBlockView } from "./CodeBlockView";
 import { placeholderPlugin } from "./placeholder";
 import { ImageNodeView } from "./ImageNodeView";
@@ -106,6 +109,11 @@ interface RichEditorProps {
    * triggers (the user directory and issue search are logged-in surfaces).
    * Formatting only. */
   anonymous?: boolean;
+  /** Spec 122: bind the document to a live room instead of the local copy.
+   *  History is replaced by the Yjs undo manager, the plain-text mode is
+   *  unavailable (a textarea cannot bind a CRDT), and `value` is the seed
+   *  template. Fixed for the instance's life — a new room means a new `key`. */
+  collab?: CollabConfig;
   className?: string;
   autoFocus?: boolean;
 }
@@ -206,6 +214,7 @@ function RichEditorInner({
   initialAiRun,
   anonymous = false,
   extensions = false,
+  collab: collabConfig,
   className = "",
   autoFocus = false,
   onSourceChange,
@@ -226,7 +235,7 @@ function RichEditorInner({
   // An initial AI run needs the rich surface (the diff review is ProseMirror
   // decorations), so it overrides the sticky plain preference for this mount.
   const [plain, setPlain] = useState(
-    () => localStorage.getItem(PLAIN_PREF_KEY) === "1" && !initialAiRun,
+    () => localStorage.getItem(PLAIN_PREF_KEY) === "1" && !initialAiRun && !collabConfig,
   );
   const [plainDraft, setPlainDraft] = useState(() => contentRef.current);
   // Stable bridge to the ProseMirror mention plugin (its handlers are reassigned below).
@@ -260,6 +269,13 @@ function RichEditorInner({
   // identity — it is a static per-surface choice, not live state.
   const extensionsRef = useRef(extensions);
   extensionsRef.current = extensions;
+  // The room binding (spec 122), read the same way: the config is fixed for
+  // this instance, and the caller remounts (new `key`) for a new room.
+  const collabRef = useRef(collabConfig ?? null);
+  collabRef.current = collabConfig ?? null;
+  // Typing is refused until the shared document has arrived and is bound —
+  // ProseMirror asks this per transaction (see create-editor.ts).
+  const collabEditableRef = useRef(!collabConfig);
   // Builds a ProseMirror node view whose body is a React portal into this tree.
   const nodeViewFactory = useNodeViewFactory();
   // Publishing the live markdown is only worth it on surfaces that HAVE
@@ -532,13 +548,22 @@ function RichEditorInner({
     // menu (mention.ts trigger + `quickActions`) acts on the ISSUE instead.
     const aiOn = ai !== null;
     const extensionsOn = extensionsRef.current;
+    const collabOn = collabRef.current;
+    // A recreate (the AI gate resolving) rebinds the room; typing is refused
+    // again until it has — the window is a few milliseconds, but a keystroke
+    // in it would land in a document about to be replaced.
+    if (collabOn) collabEditableRef.current = false;
     let sourceTimer: ReturnType<typeof setTimeout> | undefined;
     // Milkdown directly (RADD-755). Every feature this used to switch off is a
     // React component of ours now, so the wrapper was configuring nothing.
     const editor = makeEditor({
       root,
       value: contentRef.current,
-      editable: true,
+      editable: collabOn ? () => collabEditableRef.current : true,
+      // The Yjs undo manager replaces history in a room (spec 122): Mod-z
+      // must undo YOUR edits, and the history plugin's keymap, registered
+      // first, would otherwise win the key and undo everyone's.
+      history: !collabOn,
       onMarkdown: (markdown) => {
         contentRef.current = markdown;
         onChangeRef.current(markdown);
@@ -556,6 +581,7 @@ function RichEditorInner({
     // Feeds the toolbar's active state (RADD-749). A plugin view, so the snapshot
     // is recomputed from the editor's own updates rather than polled.
     editor.use(toolbarStatePlugin(setSnapshot));
+    if (collabOn) editor.use(collab);
     // The chrome Crepe used to wrap, taken from the kit directly (RADD-754).
     editor
       .use(cursor)
@@ -653,6 +679,8 @@ function RichEditorInner({
         );
     }
     editorRef.current = editor;
+    let disposed = false;
+    let cancelWait: (() => void) | undefined;
     const created = (async () => {
       if (aiOn) {
         // The review machinery, registered by us now that Crepe's AI feature is
@@ -675,6 +703,31 @@ function RichEditorInner({
           .use(selectionRectPlugin(setSelectionRect));
       }
       await editor.create();
+      if (collabOn) {
+        // The seed rule (spec 122): wait for the room, and only the client
+        // the join elected seeds — and only into a fragment that is STILL
+        // empty after sync, or two first joiners would double the page.
+        const waiting = whenDocumentReady(collabOn);
+        cancelWait = waiting.cancel;
+        await waiting.ready;
+        if (disposed) return;
+        editor.action((ctx) => {
+          const fragment = collabOn.doc.getXmlFragment(COLLAB_FRAGMENT);
+          const service = ctx
+            .get(collabServiceCtx)
+            .bindXmlFragment(fragment)
+            .setAwareness(collabOn.awareness)
+            .mergeOptions({ yCursorOpts: { cursorBuilder, selectionBuilder } });
+          // The template is the CURRENT markdown (Jira markup converted), not
+          // the raw prop — the same text the local copy has been showing.
+          if (collabOn.seed && fragment.length === 0) {
+            service.applyTemplate(contentRef.current, () => true);
+          }
+          collabEditableRef.current = true;
+          // connect() reconfigures the view, which re-asks `editable`.
+          service.connect();
+        });
+      }
       if (autoFocus) root.querySelector<HTMLElement>(".ProseMirror")?.focus();
       // Read-mode transform hand-off: run once, on the first instance that has
       // AI (the first mount often precedes the AI gate queries resolving).
@@ -686,6 +739,8 @@ function RichEditorInner({
     })();
     return () => {
       clearTimeout(sourceTimer);
+      disposed = true;
+      cancelWait?.();
       // Destroy only after create resolves, so an unmount mid-init can't race.
       void created.then(() => editor.destroy());
       if (editorRef.current === editor) editorRef.current = null;
@@ -816,13 +871,19 @@ function RichEditorInner({
         )}
         {/* GitLab-style mode bar: same markdown either way, pick your editing surface. */}
         <div className="flex items-center justify-between border-t border-subtle px-2.5 py-1">
-          <button
-            type="button"
-            onClick={togglePlain}
-            className="cursor-pointer text-[11px] text-fg-muted hover:text-fg hover:underline"
-          >
-            {plain ? "Switch to rich text editing" : "Switch to plain text editing"}
-          </button>
+          {collabConfig ? (
+            // A textarea cannot bind a CRDT: the plain mode is not offered in
+            // a room rather than offered and refused.
+            <span className="text-[11px] text-fg-muted">Editing together</span>
+          ) : (
+            <button
+              type="button"
+              onClick={togglePlain}
+              className="cursor-pointer text-[11px] text-fg-muted hover:text-fg hover:underline"
+            >
+              {plain ? "Switch to rich text editing" : "Switch to plain text editing"}
+            </button>
+          )}
           <span
             title="Markdown is supported"
             className="rounded border border-strong px-1 font-mono text-[10px] font-semibold text-fg-muted"

@@ -28,6 +28,15 @@ export const REALTIME_COALESCE_MS = 200;
 export const REALTIME_RECONNECT_BASE_MS = 1_000;
 export const REALTIME_RECONNECT_MAX_MS = 30_000;
 
+/** Collaborative editing (spec 122) — a SEPARATE socket from `/ws`: one room
+ *  per page, y-websocket protocol, `${COLLAB_WS_PATH}/{pageId}?session=…`. */
+export const COLLAB_WS_PATH = `${API_BASE}/collab/pages`;
+/** The elected saver writes the markdown this long after the last change. */
+export const COLLAB_AUTOSAVE_MS = 1_500;
+/** How many 4403/4409 closes a session answers with a fresh join before it
+ *  falls back to single-editor mode. */
+export const COLLAB_REJOIN_LIMIT = 3;
+
 /**
  * Literal a clearing automation action (set_assignee/team/cycle/release) sends
  * to unset the field — mirror of the backend `CLEAR_VALUE`.

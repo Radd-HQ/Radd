@@ -1,4 +1,4 @@
-import { useIsAuthenticated } from "../../lib/hooks";
+import { useCurrentUser, useIsAuthenticated } from "../../lib/hooks";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -13,7 +13,7 @@ import {
   Printer,
   Trash2,
 } from "lucide-react";
-import { api, ApiError } from "../../lib/api";
+import { api, ApiError, errorMessage } from "../../lib/api";
 import { useAttachmentUploader } from "../../lib/useAttachmentUploader";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import {
@@ -29,9 +29,13 @@ import { Modal } from "../Modal";
 import { PageBody } from "./PageBody";
 import { usersQuery } from "../../lib/queries";
 import { AttachmentParentType, type Page, type PageUpdate } from "../../lib/types";
-import { LazyRichEditor as RichEditor } from "../editor/LazyRichEditor";
 import type { AiRun } from "../editor/ai";
 import { AiReadMenu } from "../editor/AiReadMenu";
+import { CollabRole } from "../editor/collab/model";
+import { EditingNow } from "../editor/collab/EditingNow";
+import { useCollabSession } from "../editor/collab/useCollabSession";
+import { pushToast } from "../../lib/toast";
+import { PageEditPanel } from "./PageEditPanel";
 import { Button } from "../Button";
 import { useConfirm } from "../ConfirmDialog";
 import { DropdownMenu } from "../DropdownMenu";
@@ -52,9 +56,13 @@ type TabValue = (typeof Tab)[keyof typeof Tab];
 
 /**
  * A page (spec 43): inline-editable title, rendered markdown body with an
- * Edit mode (optimistic concurrency: Save sends expected_version; a 409 offers
- * reload-or-overwrite instead of clobbering), History tab, archive controls,
- * and the linked-issues panel.
+ * Edit mode, History tab, archive controls, and the linked-issues panel.
+ *
+ * Edit mode is a ROOM since spec 122: readers sit in it as observers (the
+ * header shows who is there), Edit joins as an editor on a shared document,
+ * and the elected saver autosaves. The spec-43 single-editor flow (Save with
+ * expected_version; reload-or-overwrite on a 409) is the fallback when the
+ * room cannot be joined.
  */
 export function PageView({
   page,
@@ -93,6 +101,15 @@ export function PageView({
   // handed to the editor as its initial whole-document run.
   const [pendingAiRun, setPendingAiRun] = useState<AiRun | null>(null);
   const [confirmDialog, confirm] = useConfirm();
+  const me = useCurrentUser();
+  // The live markdown as a ref: the saver reads it at write time, and a
+  // captured value would be the draft as of the last render.
+  const draftRef = useRef(page.body);
+  const onDraft = (markdown: string) => {
+    draftRef.current = markdown;
+    setDraft(markdown);
+  };
+  const [finishing, setFinishing] = useState(false);
   // The rendered body element, and a counter that ticks when it re-renders —
   // anchors resolve against rendered text, so they must be re-scanned then.
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -107,6 +124,23 @@ export function PageView({
   useEffect(() => setTitle(page.title), [page.title]);
 
   const invalidate = () => void invalidateEntities(queryClient, Entity.page, Entity.docSpace);
+  // Spec 122: a visitor never joins (D9); a reader is an observer; Edit is
+  // an editor. Each role change is a fresh session.
+  const collab = useCollabSession({
+    pageId: page.id,
+    role: !me ? null : editing ? CollabRole.editor : CollabRole.observer,
+    user: me,
+    getMarkdown: () => draftRef.current,
+    onSaved: (saved) => {
+      // Our own write: the version to anchor on if the room later refuses us
+      // and the single-editor Save has to take over mid-session.
+      setEditVersion(saved.version);
+      invalidate();
+    },
+    onSaveError: (error) => pushToast(`Autosave failed: ${errorMessage(error)}`),
+  });
+  // The room refused us (or there is no account): the single-editor flow.
+  const legacyEdit = collab.failed || !me;
   const save = useMutation({
     mutationFn: (body: PageUpdate) => api.patch<Page>(apiPagePath(page.id), body),
     onSuccess: () => {
@@ -141,6 +175,26 @@ export function PageView({
   };
 
   const author = users?.find((user) => user.id === page.updated_by);
+
+  const openEditor = (run: AiRun | null) => {
+    draftRef.current = page.body;
+    setDraft(page.body);
+    setEditVersion(page.version);
+    setPendingAiRun(run);
+    setEditing(true);
+  };
+  /** Leave the room: the final write first, if this client is the saver. */
+  const done = async () => {
+    setFinishing(true);
+    try {
+      await collab.finish();
+    } finally {
+      setFinishing(false);
+      setEditing(false);
+      setPendingAiRun(null);
+      invalidate();
+    }
+  };
   const archived = page.archived_at !== null;
 
   /** RADD-733: a new tab, so the reader keeps their place — the print view
@@ -198,6 +252,7 @@ export function PageView({
         <span className="shrink-0 rounded bg-elevated px-1.5 py-px font-mono text-[10px] text-fg-secondary">
           v{page.version}
         </span>
+        <EditingNow people={collab.presence.people} users={users} className="ml-1" />
         <span className="ml-auto flex flex-wrap items-center gap-1">
           <TabButton
             active={tab === Tab.content}
@@ -324,69 +379,33 @@ export function PageView({
       {tab === Tab.history ? (
         <PageHistory page={page} canWrite={canWrite} />
       ) : editing ? (
-        <div aria-label="Edit page content" className="mt-3 flex flex-col gap-2">
-          {conflict && (
-            <Callout kind="warning">
-              <div className="flex items-center gap-2">
-                This page changed since you opened it — reload it (discarding your draft) or
-                overwrite.
-                <span className="ml-auto flex shrink-0 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setConflict(false);
-                      setEditing(false);
-                      invalidate();
-                    }}
-                    className="rounded border border-callout-warning-border/60 px-1.5 py-0.5 hover:bg-callout-warning-border/10 cursor-pointer"
-                  >
-                    Reload
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => save.mutate({ body: draft })}
-                    className="rounded border border-callout-warning-border/60 px-1.5 py-0.5 hover:bg-callout-warning-border/10 cursor-pointer"
-                  >
-                    Overwrite
-                  </button>
-                </span>
-              </div>
-            </Callout>
-          )}
-          <RichEditor
-            value={draft}
-            onChange={setDraft}
-            extensions
-            onUploadImage={async (file) => {
-              const [attachment] = await uploadFiles([file]);
-              return attachmentUrl(attachment.id);
-            }}
-            autoFocus
-            placeholder="Write the page… use the toolbar for headings, tables, code — or type markdown."
-            initialAiRun={pendingAiRun ?? undefined}
-            className="[&_.ProseMirror]:min-h-[24rem]"
-          />
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              onClick={() => save.mutate({ body: draft, expected_version: editVersion })}
-              disabled={save.isPending}
-            >
-              {save.isPending ? "Saving…" : "Save"}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                setEditing(false);
-                setConflict(false);
-                setPendingAiRun(null);
-              }}
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
+        <PageEditPanel
+          draft={draft}
+          onDraft={onDraft}
+          pendingAiRun={pendingAiRun}
+          onUploadImage={async (file) => {
+            const [attachment] = await uploadFiles([file]);
+            return attachmentUrl(attachment.id);
+          }}
+          collab={collab}
+          legacy={legacyEdit}
+          editVersion={editVersion}
+          conflict={conflict}
+          saving={save.isPending}
+          onSave={(body) => save.mutate(body)}
+          onReload={() => {
+            setConflict(false);
+            setEditing(false);
+            invalidate();
+          }}
+          onCancel={() => {
+            setEditing(false);
+            setConflict(false);
+            setPendingAiRun(null);
+          }}
+          finishing={finishing}
+          onDone={() => void done()}
+        />
       ) : (
         <>
           {page.body ? (
@@ -400,28 +419,14 @@ export function PageView({
                 <AiReadMenu
                   text={page.body}
                   similar={{ seedKey: page.id }}
-                  onTransform={
-                    canWrite
-                      ? (run) => {
-                          setDraft(page.body);
-                          setEditVersion(page.version);
-                          setPendingAiRun(run);
-                          setEditing(true);
-                        }
-                      : undefined
-                  }
+                  onTransform={canWrite ? openEditor : undefined}
                   label="AI actions for this page"
                 />
                 {canWrite && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => {
-                      setDraft(page.body);
-                      setEditVersion(page.version);
-                      setPendingAiRun(null);
-                      setEditing(true);
-                    }}
+                    onClick={() => openEditor(null)}
                     aria-label="Edit page"
                     title="Edit page"
                   >
@@ -435,11 +440,7 @@ export function PageView({
           ) : canWrite ? (
             <button
               type="button"
-              onClick={() => {
-                setDraft(page.body);
-                setEditVersion(page.version);
-                setEditing(true);
-              }}
+              onClick={() => openEditor(null)}
               className="mt-3 rounded-md border border-transparent px-1.5 py-1 text-left text-[13px] text-fg-faint hover:border-subtle hover:text-fg-secondary cursor-pointer"
             >
               Write something…

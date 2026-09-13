@@ -169,6 +169,9 @@ export const apiPageVersionsPath = (pageId: string) =>
 export const apiPageVersionPath = (pageId: string, version: number) =>
   `${ApiPath.pages}/${pageId}/versions/${version}`;
 export const apiPageRestorePath = (pageId: string) => `${ApiPath.pages}/${pageId}/restore`;
+/** Collaborative editing (spec 122): join a page's room as editor or observer;
+ *  the socket itself is `COLLAB_WS_PATH/{pageId}?session=` (ui.ts). */
+export const apiCollabJoinPath = (pageId: string) => `/collab/pages/${pageId}/join`;
 export const apiPageItemsPath = (pageId: string) => `${ApiPath.pages}/${pageId}/items`;
 export const apiPageItemPath = (pageId: string, itemId: string) =>
   `${ApiPath.pages}/${pageId}/items/${itemId}`;
