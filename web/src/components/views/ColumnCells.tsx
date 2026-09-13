@@ -1,4 +1,11 @@
-import { COLUMN_MAX_WIDTH, type ColumnDef } from "../../lib/columns";
+import { useRef } from "react";
+import {
+  columnMaxWidth,
+  columnWidth,
+  TITLE_COLUMN,
+  TITLE_COLUMN_ID,
+  type ColumnDef,
+} from "../../lib/columns";
 import { startHorizontalDrag } from "../../lib/drag";
 import { formatDuration } from "../../lib/duration";
 import { useDurationConfig } from "../../lib/hooks";
@@ -34,78 +41,96 @@ import { SlaRowChip } from "../items/SlaChips";
  * render a quiet dash so the grid reads as a grid.
  */
 
-/** The Item zone's flex geometry — must stay identical in header and rows so
- * every row computes the same column positions. FIT-TO-WIDTH: the row always
- * spans exactly the container (no horizontal scroll); the Item zone absorbs
- * the slack and cells can compress toward their minimums when space is tight. */
-export const ITEM_ZONE_CLASS = "flex min-w-[240px] flex-1 items-center gap-2 overflow-hidden";
+/**
+ * FIT-TO-WIDTH geometry, shared by the header and every row so they compute
+ * the same column positions: the Item zone (selection/star/kind/flag/key/title)
+ * is a fixed-basis column like the others (RADD-1110 — it used to be flex-1,
+ * which is why it could not be resized), and a trailing SPACER absorbs the
+ * slack so the row always spans exactly the container with no horizontal
+ * scroll. When space is tight every cell compresses toward its minimum.
+ */
+export const ITEM_ZONE_CLASS = "flex items-center gap-2 overflow-hidden";
+const SLACK_SPACER_CLASS = "min-w-0 flex-1";
 
 /** A cell's flex style: preferred width as the basis, shrinkable to its min. */
 export function cellStyle(column: ColumnDef, width: number): React.CSSProperties {
   return { flexBasis: width, minWidth: Math.min(column.minWidth, width) };
 }
 
+/** The Item zone's style for a row or the header, from the same widths map. */
+export function itemZoneStyle(widths: Record<string, number>): React.CSSProperties {
+  return cellStyle(TITLE_COLUMN, columnWidth(TITLE_COLUMN, widths));
+}
+
+/** The slack absorber every row and the header end with. */
+export function SlackSpacer({ spacerRef }: { spacerRef?: React.Ref<HTMLSpanElement> }) {
+  return <span ref={spacerRef} aria-hidden className={SLACK_SPACER_CLASS} />;
+}
+
 /**
- * A boundary handle BETWEEN two columns (fit-to-width resizing): dragging
- * TRANSFERS width across the boundary — the left side grows exactly what the
- * right side shrinks — so the handle tracks the cursor and the row never
- * outgrows the screen. `left === null` is the Item|first-column boundary (the
- * flexible Item zone absorbs the counterpart automatically). Double-click
- * (detected via pointerdown click count — preventDefault suppresses real
- * dblclick events) resets the pair to defaults.
+ * A resize handle on a column's RIGHT edge. Dragging changes that column;
+ * the trailing spacer gives or takes the difference, so the handle tracks the
+ * cursor and the row never outgrows the screen. When the spacer has nothing
+ * left to give (a tight layout — the default columns on a laptop), growth is
+ * TRANSFERRED from the next column instead, down to its minimum: the handle
+ * still moves, and the row still fits. Double-click (detected via pointerdown
+ * click count — preventDefault suppresses real dblclick events) resets the
+ * column to its default.
  */
-function BoundaryHandle({
-  left,
-  right,
+function ColumnHandle({
+  column,
+  next,
   widths,
+  slack,
   onApply,
   onCommit,
 }: {
-  left: ColumnDef | null;
-  right: ColumnDef;
+  column: ColumnDef;
+  /** The column to the right, which lends width once the slack is spent. */
+  next: ColumnDef | null;
   widths: Record<string, number>;
+  /** The spacer's current width — measured at drag start, not on every move. */
+  slack: () => number;
   onApply: (patch: Record<string, number>) => void;
   onCommit: (patch: Record<string, number>) => void;
 }) {
-  const leftWidth = left ? widths[left.id] ?? left.width : 0;
-  const rightWidth = widths[right.id] ?? right.width;
-  const patch = (dx: number): Record<string, number> => ({
-    ...(left ? { [left.id]: leftWidth + dx } : {}),
-    [right.id]: rightWidth - dx,
-  });
+  const width = columnWidth(column, widths);
+  const nextWidth = next ? columnWidth(next, widths) : 0;
   return (
     <span
       role="separator"
       aria-orientation="vertical"
-      aria-label={`Resize the ${left ? left.label : "Item"} column`}
+      aria-label={`Resize the ${column.label} column`}
       title="Drag to resize — double-click to reset"
+      data-resize-column={column.id}
       onPointerDown={(event) => {
         if (event.detail >= 2) {
-          // Reset the pair to defaults.
-          onCommit({
-            ...(left ? { [left.id]: left.width } : {}),
-            [right.id]: right.width,
-          });
+          onCommit({ [column.id]: column.width });
           return;
         }
+        const room = slack();
+        const lendable = next ? nextWidth - next.minWidth : 0;
+        const patch = (px: number): Record<string, number> => {
+          const borrowed = Math.max(0, px - width - room);
+          return next && borrowed > 0
+            ? { [column.id]: px, [next.id]: nextWidth - borrowed }
+            : { [column.id]: px };
+        };
         startHorizontalDrag(event, {
-          start: 0,
-          min: -Math.min(
-            left ? leftWidth - left.minWidth : Number.POSITIVE_INFINITY,
-            COLUMN_MAX_WIDTH - rightWidth,
-          ),
-          max: Math.min(
-            left ? COLUMN_MAX_WIDTH - leftWidth : Number.POSITIVE_INFINITY,
-            rightWidth - right.minWidth,
-          ),
-          onMove: (dx) => onApply(patch(dx)),
-          onEnd: (dx) => onCommit(patch(dx)),
+          start: width,
+          min: column.minWidth,
+          max: Math.min(columnMaxWidth(column.id), width + room + lendable),
+          onMove: (px) => onApply(patch(px)),
+          onEnd: (px) => onCommit(patch(px)),
         });
       }}
       className="absolute inset-y-0 -right-1 z-10 w-2 cursor-col-resize rounded hover:bg-accent/40 active:bg-accent/60"
     />
   );
 }
+
+const HEADER_CELL_CLASS =
+  "relative flex items-center overflow-hidden text-[11px] font-medium uppercase tracking-wide text-fg-muted";
 
 /** The sticky header. Its wrapper paints an OPAQUE bg-base block spanning the
  * scroll container's full padded width, so rows scrolling past disappear
@@ -121,51 +146,42 @@ export function ListColumnHeader({
   onApply?: (patch: Record<string, number>) => void;
   onCommit?: (patch: Record<string, number>) => void;
 }) {
-  const handles = Boolean(onApply && onCommit);
+  const spacer = useRef<HTMLSpanElement>(null);
+  const slack = () => spacer.current?.getBoundingClientRect().width ?? 0;
+  const handle = (column: ColumnDef, next: ColumnDef | null) =>
+    onApply && onCommit ? (
+      <ColumnHandle
+        column={column}
+        next={next}
+        widths={widths}
+        slack={slack}
+        onApply={onApply}
+        onCommit={onCommit}
+      />
+    ) : null;
   return (
     <div className="sticky top-0 z-10 -mx-4 -mt-4 bg-base px-4 pb-1 pt-4">
       <div className="flex items-center gap-2 rounded-lg border border-subtle bg-surface px-4 py-1.5">
         <span
-          className={
-            ITEM_ZONE_CLASS +
-            " relative text-[11px] font-medium uppercase tracking-wide text-fg-muted"
-          }
+          style={itemZoneStyle(widths)}
+          data-column={TITLE_COLUMN_ID}
+          className={ITEM_ZONE_CLASS + " " + HEADER_CELL_CLASS}
         >
-          <span className="truncate pr-1.5">Item</span>
-          {handles && columns.length > 0 && (
-            <BoundaryHandle
-              left={null}
-              right={columns[0]}
-              widths={widths}
-              onApply={onApply!}
-              onCommit={onCommit!}
-            />
-          )}
+          <span className="truncate pr-1.5">{TITLE_COLUMN.label}</span>
+          {handle(TITLE_COLUMN, columns[0] ?? null)}
         </span>
-        {columns.map((column, index) => {
-          const width = widths[column.id] ?? column.width;
-          const next = columns[index + 1];
-          return (
-            <span
-              key={column.id}
-              style={cellStyle(column, width)}
-              className="relative flex items-center overflow-hidden text-[11px] font-medium uppercase tracking-wide text-fg-muted"
-            >
-              <span className="truncate pr-1.5">{column.label}</span>
-              {/* The LAST column's right edge is the screen edge — not a
-                  boundary, so no handle. */}
-              {handles && next && (
-                <BoundaryHandle
-                  left={column}
-                  right={next}
-                  widths={widths}
-                  onApply={onApply!}
-                  onCommit={onCommit!}
-                />
-              )}
-            </span>
-          );
-        })}
+        {columns.map((column, index) => (
+          <span
+            key={column.id}
+            style={cellStyle(column, columnWidth(column, widths))}
+            data-column={column.id}
+            className={HEADER_CELL_CLASS}
+          >
+            <span className="truncate pr-1.5">{column.label}</span>
+            {handle(column, columns[index + 1] ?? null)}
+          </span>
+        ))}
+        <SlackSpacer spacerRef={spacer} />
       </div>
     </div>
   );

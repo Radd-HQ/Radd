@@ -21,21 +21,37 @@ export interface ColumnDef {
 }
 
 const COLUMN_MIN_WIDTH = 56;
-export const COLUMN_MAX_WIDTH = 480;
+const COLUMN_MAX_WIDTH = 480;
 export const CUSTOM_COLUMN_PREFIX = "cf.";
 
 /** The leading Item zone (selection/star/kind/flag/key/title) is itself a
- * fixed, resizable column, stored under this pseudo id in the widths map. */
-const TITLE_COLUMN_ID = "title";
-const TITLE_MIN_WIDTH = 240;
+ * fixed, resizable column (RADD-1110), stored under this pseudo id in the
+ * widths map like any other — it is never a member of `view.columns`, so it
+ * is not in the catalog and cannot be removed or reordered. */
+export const TITLE_COLUMN_ID = "title";
 const TITLE_MAX_WIDTH = 880;
+export const TITLE_COLUMN: ColumnDef = {
+  id: TITLE_COLUMN_ID,
+  label: "Item",
+  width: 360,
+  minWidth: 240,
+};
+
+/** The widest a column may be dragged or stored. */
+export function columnMaxWidth(id: string): number {
+  return id === TITLE_COLUMN_ID ? TITLE_MAX_WIDTH : COLUMN_MAX_WIDTH;
+}
 
 /** Clamp a stored/dragged width — stale values from older layouts (or wild
  * drags) must never blow the table out sideways. */
 export function clampWidth(id: string, px: number): number {
-  const max = id === TITLE_COLUMN_ID ? TITLE_MAX_WIDTH : COLUMN_MAX_WIDTH;
-  const min = id === TITLE_COLUMN_ID ? TITLE_MIN_WIDTH : COLUMN_MIN_WIDTH;
-  return Math.min(max, Math.max(min, Math.round(px)));
+  const min = id === TITLE_COLUMN_ID ? TITLE_COLUMN.minWidth : COLUMN_MIN_WIDTH;
+  return Math.min(columnMaxWidth(id), Math.max(min, Math.round(px)));
+}
+
+/** A column's live width: the stored one, else its default. */
+export function columnWidth(column: ColumnDef, widths: Record<string, number>): number {
+  return widths[column.id] ?? column.width;
 }
 
 /** Builtin columns, in the picker's order. Ids reuse the CardSlot vocabulary

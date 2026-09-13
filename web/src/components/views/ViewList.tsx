@@ -20,7 +20,7 @@ import type {
   TimelogBatchResponse,
 } from "../../lib/types";
 import type { ViewGroup } from "../../lib/view-utils";
-import { ColumnCell, ITEM_ZONE_CLASS, ListColumnHeader } from "./ColumnCells";
+import { ColumnCell, ITEM_ZONE_CLASS, ListColumnHeader, SlackSpacer, itemZoneStyle } from "./ColumnCells";
 import {
   CycleDatesBadge,
   CycleHeaderStats,
@@ -46,9 +46,10 @@ interface ViewListProps {
    *  is on and epic-kind items are on the page. */
   rollupByItem?: RollupResponse;
   /** Table columns (spec 108): rows render one typed cell per column (aligned
-   * under the sticky header). FIT-TO-WIDTH: boundary drags transfer width
-   * between neighbours, so the row always spans exactly the screen. The
-   * column SET comes from the saved view; widths are personal. */
+   * under the sticky header). FIT-TO-WIDTH: a trailing spacer absorbs the
+   * slack and a handle borrows from its neighbour once that is spent, so the
+   * row always spans exactly the screen. The column SET comes from the saved
+   * view; widths are personal — the Item zone's included (RADD-1110). */
   listColumns: ColumnDef[];
   columnWidths?: Record<string, number>;
   onColumnsApply?: (patch: Record<string, number>) => void;
@@ -178,7 +179,9 @@ export function ViewList({
           horizontal scroll; the Item zone flexes and cells compress toward
           their minimums when space runs short. */}
       <div className="space-y-3 p-4">
-      {listColumns.length > 0 && (
+      {/* Rendered even with no configured columns: the Item zone is a real
+          column (RADD-1110), and its handle lives here. */}
+      {(listColumns.length > 0 || (onColumnsApply && onColumnsCommit)) && (
         <ListColumnHeader
           columns={listColumns}
           widths={columnWidths ?? {}}
@@ -406,11 +409,11 @@ function ListRow({
         indicatorClass
       }
     >
-      {/* Table mode (spec 108), FIT-TO-WIDTH: the Item zone flexes to absorb
-          the slack, cells share the row's single flex context (identical
-          geometry to the header), and boundary drags transfer width between
-          neighbours — the row can never outgrow the screen. */}
-      <span className={ITEM_ZONE_CLASS}>
+      {/* Table mode (spec 108), FIT-TO-WIDTH: the Item zone is a fixed-basis
+          column (RADD-1110), cells share the row's single flex context
+          (identical geometry to the header), and the trailing spacer absorbs
+          the slack — the row can never outgrow the screen. */}
+      <span style={itemZoneStyle(columnWidths ?? {})} className={ITEM_ZONE_CLASS}>
         <RowLeading
           item={item}
           selectable={selectable}
@@ -433,6 +436,7 @@ function ListRow({
           usersById={usersById}
         />
       ))}
+      <SlackSpacer />
     </li>
   );
 }
