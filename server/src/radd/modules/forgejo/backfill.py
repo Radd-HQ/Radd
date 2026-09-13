@@ -20,6 +20,7 @@ from radd.config import settings
 from radd.modules.automations.types import SYSTEM_ACTOR_ID
 from radd.modules.items import service as items_service
 from radd.modules.vcs import service as vcs
+from radd.modules.vcs.ids import branch_external_id, commit_external_id, pr_external_id
 from radd.modules.vcs.types import VcsProvider, VcsRefType
 
 from .models import ForgejoConnection, ForgejoRepo
@@ -145,7 +146,7 @@ async def run(
                 report,
                 texts=[name],
                 ref_type=VcsRefType.BRANCH,
-                external_id=f"branch:{repo.full_name}:{name}",
+                external_id=branch_external_id(repo.full_name, name),
                 title=name,
                 url=f"{web_base}/src/branch/{name}",
             )
@@ -166,7 +167,7 @@ async def run(
                 report,
                 texts=[pull.get("title"), pull.get("body"), head_ref],
                 ref_type=VcsRefType.PULL_REQUEST,
-                external_id=f"pr:{repo.full_name}:{number}",
+                external_id=pr_external_id(repo.full_name, number),
                 title=f"{pull.get('title') or ''} (#{number})".strip(),
                 url=str(pull.get("html_url") or f"{web_base}/pulls/{number}"),
                 status=str(status),
@@ -183,7 +184,7 @@ async def run(
                 report,
                 texts=[message],
                 ref_type=VcsRefType.COMMIT,
-                external_id=f"commit:{repo.full_name}:{sha}",
+                external_id=commit_external_id(repo.full_name, sha),
                 title=message.splitlines()[0][:300] if message else sha[:12],
                 url=str(commit.get("html_url") or f"{web_base}/commit/{sha}"),
             )

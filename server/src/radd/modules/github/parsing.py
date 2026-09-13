@@ -14,6 +14,7 @@ a second row (the Forgejo split is RADD-1124).
 import re
 from dataclasses import dataclass
 
+from radd.modules.vcs.ids import branch_external_id, commit_external_id, pr_external_id
 from radd.modules.vcs.types import VcsRefType
 
 from .types import PrStatus
@@ -42,26 +43,6 @@ def extract_keys(*texts: str | None) -> list[str]:
             if key not in seen:
                 seen.append(key)
     return seen
-
-
-# The repository segment is LOWERCASED: GitHub reports `Radd-HQ/Radd` in webhook
-# payloads while an admin types `radd-hq/radd` into the repository row, and
-# GitHub itself treats the two as the same repository. One spelling in the id
-# is what lets the webhook, the backfill and the CI stamp find each other.
-def _repo(repo_name: str) -> str:
-    return repo_name.strip().lower()
-
-
-def commit_external_id(repo_name: str, sha: str) -> str:
-    return f"commit:{_repo(repo_name)}:{sha}"
-
-
-def branch_external_id(repo_name: str, branch: str) -> str:
-    return f"branch:{_repo(repo_name)}:{branch}"
-
-
-def pr_external_id(repo_name: str, number: int | str) -> str:
-    return f"pr:{_repo(repo_name)}:{number}"
 
 
 def plan_push(payload: dict) -> list[PlannedLink]:

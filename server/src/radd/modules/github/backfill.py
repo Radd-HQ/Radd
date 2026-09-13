@@ -17,10 +17,11 @@ from radd.config import settings
 from radd.modules.automations.types import SYSTEM_ACTOR_ID
 from radd.modules.items import service as items_service
 from radd.modules.vcs import service as vcs
+from radd.modules.vcs.ids import branch_external_id, commit_external_id, pr_external_id
 from radd.modules.vcs.types import VcsProvider, VcsRefType
 
 from .models import GithubConnection, GithubRepo
-from .parsing import branch_external_id, commit_external_id, extract_keys, pr_external_id, pr_status
+from .parsing import extract_keys, pr_status
 
 logger = logging.getLogger(__name__)
 

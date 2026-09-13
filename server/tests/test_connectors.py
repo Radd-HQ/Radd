@@ -85,7 +85,8 @@ def test_forgejo_plan_push_links_branch_and_commits():
     assert branch.external_id == "branch:pipe/tools:td-7-farm-fix"
     assert branch.url == "https://forge.example.com/pipe/tools/src/branch/td-7-farm-fix"
     assert commit.title == "TD-7: restart render daemon"
-    assert commit.external_id == "4b2b1cdeadbeef1122334455667788990011aabb"
+    # RADD-1124: the shape the backfill and the CI stamp use, never a bare SHA.
+    assert commit.external_id == "commit:pipe/tools:4b2b1cdeadbeef1122334455667788990011aabb"
 
 
 def _forgejo_pr_payload(*, state: str, merged: bool, action: str) -> dict:

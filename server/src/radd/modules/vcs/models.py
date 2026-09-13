@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import ForeignKey, Index, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from radd.db import Base, TimestampMixin
@@ -13,6 +13,20 @@ class ItemVcsLink(Base, TimestampMixin):
     (GitLab/GitHub/Forgejo) later via the upsert write-seam in service.py."""
 
     __tablename__ = "item_vcs_links"
+    __table_args__ = (
+        # RADD-1124: one row per ref per item. Connector ids are canonical
+        # (`ids.py`), so the index is what makes a re-delivered push, a backfill
+        # after a webhook, or two deliveries racing land on ONE row. Manual
+        # links carry no external id and are left out of it.
+        Index(
+            "uq_item_vcs_links_ref",
+            "item_id",
+            "provider",
+            "external_id",
+            unique=True,
+            postgresql_where=text("external_id <> ''"),
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     item_id: Mapped[uuid.UUID] = mapped_column(

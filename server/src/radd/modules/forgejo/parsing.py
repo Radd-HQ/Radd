@@ -3,12 +3,15 @@ tests/test_connectors.py. No I/O: key resolution and writes happen in the router
 
 Deliberately mirrors gitlab/parsing.py (same key grammar, same PlannedLink shape)
 without importing it — the connectors are independent modules and either may be
-disabled without the other.
+disabled without the other. External ids come from `vcs.ids` (RADD-1124): the
+webhook, the backfill and the CI stamp must spell a ref identically, and a
+commit written here as its bare SHA was invisible to both of the others.
 """
 
 import re
 from dataclasses import dataclass
 
+from radd.modules.vcs.ids import branch_external_id, commit_external_id, pr_external_id
 from radd.modules.vcs.types import VcsRefType
 
 from .types import PrStatus
@@ -52,7 +55,7 @@ def plan_push(payload: dict) -> list[PlannedLink]:
             PlannedLink(
                 item_key=key,
                 ref_type=VcsRefType.BRANCH,
-                external_id=f"branch:{repo_name}:{branch}",
+                external_id=branch_external_id(repo_name, branch),
                 title=branch,
                 url=f"{html_url}/src/branch/{branch}" if html_url else "",
             )
@@ -65,7 +68,7 @@ def plan_push(payload: dict) -> list[PlannedLink]:
                 PlannedLink(
                     item_key=key,
                     ref_type=VcsRefType.COMMIT,
-                    external_id=str(commit.get("id", "")),
+                    external_id=commit_external_id(repo_name, str(commit.get("id", ""))),
                     title=message.splitlines()[0][:300] if message else "commit",
                     url=commit.get("url", ""),
                 )
@@ -96,7 +99,7 @@ def plan_pull_request(payload: dict) -> tuple[list[PlannedLink], bool]:
         PlannedLink(
             item_key=key,
             ref_type=VcsRefType.MERGE_REQUEST,
-            external_id=f"pr:{repo_name}:{number}",
+            external_id=pr_external_id(repo_name, number),
             title=title[:300] or f"#{number}",
             url=pull_request.get("html_url", ""),
             status=status.value,

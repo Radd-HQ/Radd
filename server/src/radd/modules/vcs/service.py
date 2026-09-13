@@ -2,6 +2,7 @@ import uuid
 from collections.abc import Sequence
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import NotFoundError
@@ -21,20 +22,17 @@ async def link_vcs(
     data: VcsLinkCreate,
     actor_id: uuid.UUID | None = None,
 ) -> ItemVcsLink:
-    link = ItemVcsLink(
-        item_id=item_id,
-        ref_type=data.ref_type.value,
-        provider=data.provider.value,
+    return await _insert_link(
+        session,
+        item_id,
+        ref_type=data.ref_type,
+        provider=data.provider,
+        external_id=data.external_id,
         title=data.title,
         url=data.url,
         status=data.status,
-        external_id=data.external_id,
-        created_by=actor_id,
+        actor_id=actor_id,
     )
-    session.add(link)
-    await session.flush()
-    await _emit(session, VcsEvent.LINKED, link, actor_id)
-    return link
 
 
 async def unlink_vcs(
@@ -75,24 +73,66 @@ async def upsert_vcs_link(
     """The CONNECTOR SEAM: the write-path GitLab/GitHub/Forgejo connectors call to keep an
     item's dev panel in sync. When `external_id` is set, find the existing row matched by
     (item_id, provider, external_id) and update it in place (title/url/status/ref_type);
-    otherwise create a fresh link. Emits vcs.updated on update, vcs.linked on create."""
-    existing = None
-    if external_id != "":
-        existing = await session.scalar(
-            select(ItemVcsLink).where(
-                ItemVcsLink.item_id == item_id,
-                ItemVcsLink.provider == provider.value,
-                ItemVcsLink.external_id == external_id,
+    otherwise create a fresh link. Emits vcs.updated on update, vcs.linked on create.
+
+    The triple is UNIQUE by index (RADD-1124), and that index — not the lookup —
+    is what guarantees one row: two deliveries of the same push racing each other
+    both miss the lookup, one insert wins, and the loser's conflict is caught here
+    and turned into the update it should have been.
+    """
+    existing = await _find_link(session, item_id, provider, external_id) if external_id else None
+    if existing is None:
+        try:
+            return await _insert_link(
+                session,
+                item_id,
+                ref_type=ref_type,
+                provider=provider,
+                external_id=external_id,
+                title=title,
+                url=url,
+                status=status,
+                actor_id=actor_id,
             )
+        except IntegrityError:
+            existing = await _find_link(session, item_id, provider, external_id)
+            if existing is None:
+                raise
+    existing.ref_type = ref_type.value
+    existing.title = title
+    existing.url = url
+    existing.status = status
+    await session.flush()
+    await _emit(session, VcsEvent.UPDATED, existing, actor_id)
+    return existing
+
+
+async def _find_link(
+    session: AsyncSession, item_id: uuid.UUID, provider: VcsProvider, external_id: str
+) -> ItemVcsLink | None:
+    return await session.scalar(
+        select(ItemVcsLink).where(
+            ItemVcsLink.item_id == item_id,
+            ItemVcsLink.provider == provider.value,
+            ItemVcsLink.external_id == external_id,
         )
-    if existing is not None:
-        existing.ref_type = ref_type.value
-        existing.title = title
-        existing.url = url
-        existing.status = status
-        await session.flush()
-        await _emit(session, VcsEvent.UPDATED, existing, actor_id)
-        return existing
+    )
+
+
+async def _insert_link(
+    session: AsyncSession,
+    item_id: uuid.UUID,
+    *,
+    ref_type: VcsRefType,
+    provider: VcsProvider,
+    external_id: str,
+    title: str,
+    url: str,
+    status: str,
+    actor_id: uuid.UUID | None,
+) -> ItemVcsLink:
+    """Insert under a SAVEPOINT so a unique-index refusal leaves the caller's
+    transaction usable — the upsert then updates the row that won."""
     link = ItemVcsLink(
         item_id=item_id,
         ref_type=ref_type.value,
@@ -103,8 +143,9 @@ async def upsert_vcs_link(
         external_id=external_id,
         created_by=actor_id,
     )
-    session.add(link)
-    await session.flush()
+    async with session.begin_nested():
+        session.add(link)
+        await session.flush()
     await _emit(session, VcsEvent.LINKED, link, actor_id)
     return link
 

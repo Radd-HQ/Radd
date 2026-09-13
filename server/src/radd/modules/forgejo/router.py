@@ -14,6 +14,7 @@ from radd.modules.items.schemas import ItemUpdate
 from radd.modules.projects import service as projects_service
 from radd.modules.releases import pipeline
 from radd.modules.vcs import service as vcs
+from radd.modules.vcs.ids import branch_external_id, commit_external_id
 from radd.modules.vcs.types import VcsProvider
 
 from . import parsing, service
@@ -127,9 +128,9 @@ async def _handle_workflow_run(session: AsyncSession, payload: dict) -> dict[str
     ci_state = _CI_STATES.get(status, CiState.UNKNOWN)
     external_ids = []
     if branch:
-        external_ids.append(f"branch:{repository}:{branch}")
+        external_ids.append(branch_external_id(repository, branch))
     if sha:
-        external_ids.append(f"commit:{repository}:{sha}")
+        external_ids.append(commit_external_id(repository, sha))
     stamped = await vcs.set_ci_state(
         session,
         provider=VcsProvider.FORGEJO,
