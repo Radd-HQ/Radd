@@ -48,12 +48,14 @@ from radd.modules.access import service as access_service
 from radd.modules.access.registry import ResourceSpec, register_resource
 from radd.modules.access.resolution import SubjectContext, has_access
 from radd.modules.access.types import Access, GrantSubject
-from radd.modules.auth import grants as role_grants
+from radd.exceptions import NotFoundError
+from radd.modules.auth import authz, grants as role_grants
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
 
 from . import access as space_access
 from .models import Page
+from .types import PageEntity
 
 PAGE_RESOURCE = "page"
 
@@ -175,6 +177,27 @@ async def page_access(
         return True
     ctx = await _subject_context(session, user, page.space_id, can_manage=False)
     return all(has_access(grants, ctx, access, None, _PAGE_SPEC) for grants in restricted)
+
+
+async def guard_page(
+    session: AsyncSession, user: User, page_id: uuid.UUID, permission: Permission
+) -> Page:
+    """Resolve a page and enforce the atom IN ITS SPACE (RADD-791), then the
+    page's OWN restriction, which can only narrow (RADD-792).
+
+    The one gate every per-page endpoint goes through — ~20 REST routes and
+    the MCP write tools (RADD-1005) — so there is one reading of who may touch
+    a page rather than two. `page.space_id` is the scope: a role granted on one
+    space reaches its pages and no others.
+    """
+    from .service import get_page  # deferred: service imports this module
+
+    page = await get_page(session, page_id)
+    await authz.require(session, user, permission, space_id=page.space_id)
+    wanted = Access.WRITE.value if permission is not Permission.PAGE_READ else Access.READ.value
+    if not await page_access(session, user, page, wanted):
+        raise NotFoundError(PageEntity.PAGE, page_id)
+    return page
 
 
 async def readable_page_ids(

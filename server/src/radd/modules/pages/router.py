@@ -30,8 +30,7 @@ from . import (
 )
 from radd.exceptions import NotFoundError
 
-from .models import Page, PageTemplate
-from radd.modules.access.types import Access
+from .models import PageTemplate
 from .types import PageEntity
 from .schemas import (
     DocLinkCreate,
@@ -63,25 +62,6 @@ from .schemas import (
 router = APIRouter(tags=["pages"])
 
 Session = Annotated[AsyncSession, Depends(get_session)]
-
-
-async def _page_guard(
-    session: AsyncSession, user, page_id: uuid.UUID, permission: authz.Permission
-) -> Page:
-    """Resolve a page and enforce the atom IN ITS SPACE (RADD-791).
-
-    The single edit that rescopes most of this router: ~20 endpoints go through
-    here, and they were all asking a global question about a page that lives
-    somewhere. `page.space_id` is the scope, so a role granted on one space
-    reaches its pages and no others.
-    """
-    page = await service.get_page(session, page_id)
-    await authz.require(session, user, permission, space_id=page.space_id)
-    # ...then the page's OWN restriction, which can only narrow (RADD-792).
-    wanted = Access.WRITE.value if permission is not authz.Permission.PAGE_READ else Access.READ.value
-    if not await page_access.page_access(session, user, page, wanted):
-        raise NotFoundError(PageEntity.PAGE, page_id)
-    return page
 
 
 # --- spaces ---
@@ -358,7 +338,7 @@ async def search_docs(
 
 @router.get("/pages/{page_id}", response_model=PageRead)
 async def get_page(page_id: uuid.UUID, session: Session, user: Actor) -> PageRead:
-    page = await _page_guard(session, user, page_id, authz.Permission.PAGE_READ)
+    page = await page_access.guard_page(session, user, page_id, authz.Permission.PAGE_READ)
     return await service.page_read(session, page)
 
 
@@ -366,7 +346,7 @@ async def get_page(page_id: uuid.UUID, session: Session, user: Actor) -> PageRea
 async def update_page(
     page_id: uuid.UUID, data: PageUpdate, session: Session, user: CurrentUser
 ) -> PageRead:
-    await _page_guard(session, user, page_id, authz.Permission.PAGE_WRITE)
+    await page_access.guard_page(session, user, page_id, authz.Permission.PAGE_WRITE)
     page = await service.update_page(session, page_id, data, user.id)
     return await service.page_read(session, page)
 
@@ -377,7 +357,7 @@ async def delete_page(
 ) -> None:
     # spec 50: hard-delete is its own atom (page.delete, implied by page.manage).
     permission = authz.Permission.PAGE_DELETE if hard else authz.Permission.PAGE_WRITE
-    await _page_guard(session, user, page_id, permission)
+    await page_access.guard_page(session, user, page_id, permission)
     if hard:
         await service.hard_delete_page(session, page_id, user.id)
     else:
@@ -388,7 +368,7 @@ async def delete_page(
 async def unarchive_page(
     page_id: uuid.UUID, session: Session, user: CurrentUser
 ) -> PageRead:
-    await _page_guard(session, user, page_id, authz.Permission.PAGE_MANAGE)
+    await page_access.guard_page(session, user, page_id, authz.Permission.PAGE_MANAGE)
     page = await service.unarchive_page(session, page_id, user.id)
     return await service.page_read(session, page)
 
@@ -399,7 +379,7 @@ async def unarchive_page(
 @router.get("/pages/{page_id}/export")
 async def export_page(page_id: uuid.UUID, session: Session, user: CurrentUser) -> Response:
     """One page and everything beneath it, as a zip of markdown."""
-    page = await _page_guard(session, user, page_id, authz.Permission.PAGE_READ)
+    page = await page_access.guard_page(session, user, page_id, authz.Permission.PAGE_READ)
     space = await spaces.get_space(session, page.space_id)
     name, blob = await page_export.export_zip(session, space, root=page)
     return _zip_response(name, blob)
@@ -433,28 +413,28 @@ async def pages_by_label(
 async def set_page_labels(
     page_id: uuid.UUID, data: PageLabelsUpdate, session: Session, user: CurrentUser
 ) -> list[str]:
-    await _page_guard(session, user, page_id, authz.Permission.PAGE_WRITE)
+    await page_access.guard_page(session, user, page_id, authz.Permission.PAGE_WRITE)
     labels = await page_labels.set_labels(session, page_id, data.labels, user.id)
     return [label.name for label in labels]
 
 
 @router.get("/pages/{page_id}/watch")
 async def get_watch(page_id: uuid.UUID, session: Session, user: CurrentUser) -> dict[str, bool]:
-    await _page_guard(session, user, page_id, authz.Permission.PAGE_READ)
+    await page_access.guard_page(session, user, page_id, authz.Permission.PAGE_READ)
     return {"watching": await page_watchers.is_watching(session, page_id, user.id)}
 
 
 @router.put("/pages/{page_id}/watch")
 async def set_watch(page_id: uuid.UUID, session: Session, user: CurrentUser) -> dict[str, bool]:
     """Watch a page (RADD-719). Idempotent — watching twice is a double click."""
-    await _page_guard(session, user, page_id, authz.Permission.PAGE_READ)
+    await page_access.guard_page(session, user, page_id, authz.Permission.PAGE_READ)
     await page_watchers.watch(session, page_id, user.id)
     return {"watching": True}
 
 
 @router.delete("/pages/{page_id}/watch")
 async def clear_watch(page_id: uuid.UUID, session: Session, user: CurrentUser) -> dict[str, bool]:
-    await _page_guard(session, user, page_id, authz.Permission.PAGE_READ)
+    await page_access.guard_page(session, user, page_id, authz.Permission.PAGE_READ)
     await page_watchers.unwatch(session, page_id, user.id)
     return {"watching": False}
 
@@ -465,7 +445,7 @@ async def list_backlinks(
 ) -> list[PageBacklink]:
     """What links to this page (RADD-713) — read from the index maintained on
     save, not by scanning every body."""
-    await _page_guard(session, user, page_id, authz.Permission.PAGE_READ)
+    await page_access.guard_page(session, user, page_id, authz.Permission.PAGE_READ)
     return await backlinks.backlink_reads(session, page_id)
 
 
@@ -473,7 +453,7 @@ async def list_backlinks(
 async def list_versions(
     page_id: uuid.UUID, session: Session, user: CurrentUser
 ) -> list[PageVersionMeta]:
-    await _page_guard(session, user, page_id, authz.Permission.PAGE_READ)
+    await page_access.guard_page(session, user, page_id, authz.Permission.PAGE_READ)
     return [PageVersionMeta.model_validate(v) for v in await service.list_versions(session, page_id)]
 
 
@@ -481,7 +461,7 @@ async def list_versions(
 async def get_version(
     page_id: uuid.UUID, version: int, session: Session, user: CurrentUser
 ) -> PageVersionRead:
-    await _page_guard(session, user, page_id, authz.Permission.PAGE_READ)
+    await page_access.guard_page(session, user, page_id, authz.Permission.PAGE_READ)
     return PageVersionRead.model_validate(await service.get_version(session, page_id, version))
 
 
@@ -489,7 +469,7 @@ async def get_version(
 async def restore_version(
     page_id: uuid.UUID, data: DocRestoreRequest, session: Session, user: CurrentUser
 ) -> PageRead:
-    await _page_guard(session, user, page_id, authz.Permission.PAGE_WRITE)
+    await page_access.guard_page(session, user, page_id, authz.Permission.PAGE_WRITE)
     page = await service.restore_version(session, page_id, data.version, user.id)
     return await service.page_read(session, page)
 
@@ -501,7 +481,7 @@ async def restore_version(
 async def linked_items(
     page_id: uuid.UUID, session: Session, user: Actor
 ) -> list[PageLinkedItem]:
-    await _page_guard(session, user, page_id, authz.Permission.PAGE_READ)
+    await page_access.guard_page(session, user, page_id, authz.Permission.PAGE_READ)
     return await links.linked_items(session, page_id, user)
 
 
@@ -509,7 +489,7 @@ async def linked_items(
 async def link_item(
     page_id: uuid.UUID, data: DocLinkCreate, session: Session, user: CurrentUser
 ) -> PageLinkedItem:
-    await _page_guard(session, user, page_id, authz.Permission.PAGE_WRITE)
+    await page_access.guard_page(session, user, page_id, authz.Permission.PAGE_WRITE)
     return await links.link_item(session, page_id, data.item_key, user)
 
 
@@ -517,7 +497,7 @@ async def link_item(
 async def unlink_item(
     page_id: uuid.UUID, item_id: uuid.UUID, session: Session, user: CurrentUser
 ) -> None:
-    await _page_guard(session, user, page_id, authz.Permission.PAGE_WRITE)
+    await page_access.guard_page(session, user, page_id, authz.Permission.PAGE_WRITE)
     await links.unlink_item(session, page_id, item_id, user.id)
 
 
