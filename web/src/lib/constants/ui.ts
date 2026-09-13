@@ -36,6 +36,9 @@ export const COLLAB_AUTOSAVE_MS = 1_500;
 /** How many 4403/4409 closes a session answers with a fresh join before it
  *  falls back to single-editor mode. */
 export const COLLAB_REJOIN_LIMIT = 3;
+/** How long after a REMOTE change the bound document is re-serialised into
+ *  the draft the saver writes (Milkdown's listener ignores those changes). */
+export const COLLAB_REMOTE_SERIALIZE_MS = 150;
 
 /**
  * Literal a clearing automation action (set_assignee/team/cycle/release) sends

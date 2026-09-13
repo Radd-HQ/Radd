@@ -99,7 +99,11 @@ export async function openCollabRoom({ pageId, role, user, onRefused }: OpenRoom
   const { awareness } = provider;
   awareness.setLocalStateField("user", user);
   awareness.setLocalStateField("role", join.role);
-  provider.on("closed", (event) => onRefused(event.code));
+  // Only the server's 44xx band is a refusal; any other close (navigation,
+  // a dropped network) is the provider's own reconnect business.
+  provider.on("closed", (event) => {
+    if (event.code >= 4400 && event.code < 4500) onRefused(event.code);
+  });
 
   let closed = false;
   const close = () => {

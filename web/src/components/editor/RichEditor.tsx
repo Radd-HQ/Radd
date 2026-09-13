@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { editorViewCtx } from "@milkdown/kit/core";
 import type { Editor } from "@milkdown/kit/core";
-import { $view, callCommand } from "@milkdown/kit/utils";
+import { $view, callCommand, getMarkdown } from "@milkdown/kit/utils";
+import { COLLAB_REMOTE_SERIALIZE_MS } from "../../lib/constants";
 import {
   createCodeBlockCommand,
   insertImageCommand,
@@ -681,6 +682,8 @@ function RichEditorInner({
     editorRef.current = editor;
     let disposed = false;
     let cancelWait: (() => void) | undefined;
+    let offRemoteUpdate: (() => void) | undefined;
+    let remoteSerializeTimer: ReturnType<typeof setTimeout> | undefined;
     const created = (async () => {
       if (aiOn) {
         // The review machinery, registered by us now that Crepe's AI feature is
@@ -727,6 +730,29 @@ function RichEditorInner({
           // connect() reconfigures the view, which re-asks `editable`.
           service.connect();
         });
+        // Milkdown's listener skips transactions flagged `addToHistory: false`
+        // — which is how y-prosemirror applies a REMOTE change — so `onChange`
+        // would never learn what the other person typed and the elected saver
+        // would serialise a draft that stopped at this client's own edits.
+        // Serialise the bound document ourselves after each update — every
+        // update, not only the provider's: the origin a remote change carries
+        // is the provider's business, and a local burst re-serialising once
+        // more 150 ms later is cheaper than a save that misses a colleague.
+        const onRemoteUpdate = () => {
+          if (disposed) return;
+          clearTimeout(remoteSerializeTimer);
+          remoteSerializeTimer = setTimeout(() => {
+            if (disposed) return;
+            const markdown = editor.action(getMarkdown());
+            contentRef.current = markdown;
+            onChangeRef.current(markdown);
+          }, COLLAB_REMOTE_SERIALIZE_MS);
+        };
+        collabOn.doc.on("update", onRemoteUpdate);
+        offRemoteUpdate = () => {
+          clearTimeout(remoteSerializeTimer);
+          collabOn.doc.off("update", onRemoteUpdate);
+        };
       }
       if (autoFocus) root.querySelector<HTMLElement>(".ProseMirror")?.focus();
       // Read-mode transform hand-off: run once, on the first instance that has
@@ -741,8 +767,21 @@ function RichEditorInner({
       clearTimeout(sourceTimer);
       disposed = true;
       cancelWait?.();
+      offRemoteUpdate?.();
       // Destroy only after create resolves, so an unmount mid-init can't race.
-      void created.then(() => editor.destroy());
+      // In a room, unbind first: the provider outlives this editor for a
+      // moment (the parent closes it after the final save), and a remote
+      // update or awareness change landing on a destroyed context throws.
+      void created.then(() => {
+        if (collabOn) {
+          try {
+            editor.action((ctx) => ctx.get(collabServiceCtx).disconnect());
+          } catch {
+            // Already torn down — nothing left to unbind.
+          }
+        }
+        editor.destroy();
+      });
       if (editorRef.current === editor) editorRef.current = null;
     };
     // Recreated on mode switch + AI gate/menu changes — `value` changes are
