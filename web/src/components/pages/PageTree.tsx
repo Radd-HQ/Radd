@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, FilePlus, FileText, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, CornerLeftUp, FilePlus, FileText, MoreHorizontal, Plus } from "lucide-react";
 import { api } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { ApiPath, RoutePath, pageTreeExpandStorageKey } from "../../lib/constants";
 import type { Page, PageCreate, PageTemplate } from "../../lib/types";
 import { DropdownMenu } from "../DropdownMenu";
 import { ListSearchInput } from "../ListSearchInput";
+import { MovePageModal } from "./MovePageModal";
 
 /** Below this many pages the tree needs no filter chrome (RADD-882). */
 const FILTER_THRESHOLD = 8;
@@ -189,6 +190,7 @@ export function PageTree({
           key={node.row.id}
           spaceId={spaceId}
           spaceSlug={spaceSlug}
+          rows={rows}
           node={node}
           depth={0}
           expanded={effectiveExpanded}
@@ -206,6 +208,7 @@ export function PageTree({
 function TreeRow({
   spaceId,
   spaceSlug,
+  rows,
   node,
   depth,
   expanded,
@@ -215,6 +218,8 @@ function TreeRow({
   canWrite,
 }: {
   spaceId: string;
+  /** The whole space's rows (unfiltered) — what "Move to…" picks a parent from. */
+  rows: PageTreeRow[];
   node: TreeNode;
   depth: number;
   expanded: Set<string>;
@@ -227,6 +232,9 @@ function TreeRow({
   const { row, children } = node;
   const isOpen = expanded.has(row.id);
   const Caret = isOpen ? ChevronDown : ChevronRight;
+  // RADD-1009: the tree's first row action. The server has accepted a
+  // `parent_id` move since spec 43; nothing in the browser ever sent one.
+  const [moving, setMoving] = useState(false);
   return (
     <>
       <div
@@ -266,17 +274,39 @@ function TreeRow({
           </span>
         )}
         {canWrite && (
-          <span className="opacity-0 transition-opacity focus-within:opacity-100 group-hover/docrow:opacity-100">
+          <span className="flex items-center opacity-0 transition-opacity focus-within:opacity-100 group-hover/docrow:opacity-100">
             <NewPageButton spaceId={spaceId} spaceSlug={spaceSlug} parentId={row.id} depth={depth} iconOnly />
+            <DropdownMenu
+              label={`Actions for ${row.title}`}
+              align="end"
+              widthClass="w-40"
+              items={[
+                { kind: "action", label: "Move to…", icon: CornerLeftUp, onSelect: () => setMoving(true) },
+              ]}
+              trigger={({ ref, toggle, open }) => (
+                <button
+                  ref={ref}
+                  type="button"
+                  onClick={toggle}
+                  aria-label={`Actions for ${row.title}`}
+                  aria-expanded={open}
+                  className="rounded p-0.5 text-fg-faint hover:bg-strong hover:text-fg cursor-pointer"
+                >
+                  <MoreHorizontal size={12} aria-hidden />
+                </button>
+              )}
+            />
           </span>
         )}
       </div>
+      {moving && <MovePageModal page={row} rows={rows} onClose={() => setMoving(false)} />}
       {isOpen &&
         children.map((child) => (
           <TreeRow
             key={child.row.id}
             spaceId={spaceId}
             spaceSlug={spaceSlug}
+            rows={rows}
             node={child}
             depth={depth + 1}
             expanded={expanded}

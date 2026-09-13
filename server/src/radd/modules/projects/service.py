@@ -9,7 +9,7 @@ from radd.hooks import hooks
 from radd.modules.events import service as events
 
 from .models import Project
-from .schemas import ProjectCreate
+from .schemas import ProjectCreate, ProjectUpdate
 from .types import ProjectEntity, ProjectEvent
 
 
@@ -34,6 +34,44 @@ async def create_project(
         payload={"key": project.key, "name": project.name},
     )
     await hooks.dispatch(session, ProjectEvent.PROJECT_CREATED, project)
+    return project
+
+
+async def update_project(
+    session: AsyncSession, project: Project, data: ProjectUpdate, actor_id: uuid.UUID | None = None
+) -> Project:
+    """Rename / describe a project (RADD-1009). The key is not a field of
+    `ProjectUpdate` on purpose — see its docstring. A no-op PATCH (nothing set,
+    or every value already current) emits nothing: an event that says
+    "updated" with an empty diff is noise to every consumer downstream."""
+    changes: list[dict[str, str]] = []
+    for field in ("name", "description"):
+        if field not in data.model_fields_set:
+            continue
+        new = getattr(data, field)
+        if new is None:
+            continue
+        old = getattr(project, field)
+        if new == old:
+            continue
+        setattr(project, field, new)
+        changes.append({"field": field, "from": old, "to": new})
+    if not changes:
+        return project
+    await session.flush()
+    await events.emit(
+        session,
+        event_type=ProjectEvent.PROJECT_UPDATED,
+        entity_type=ProjectEntity.PROJECT,
+        entity_id=project.id,
+        actor_id=actor_id,
+        payload={
+            "key": project.key,
+            "name": project.name,
+            "description": project.description,
+            "changes": changes,
+        },
+    )
     return project
 
 

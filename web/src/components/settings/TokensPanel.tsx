@@ -4,14 +4,17 @@ import { Check, Copy, KeyRound, Plus, TriangleAlert, X } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { ApiPath, apiTokenPath } from "../../lib/constants";
 import { formatDateOrNever } from "../../lib/dates";
+import { usePermissions } from "../../lib/hooks";
 import { queryKeys, tokensQuery } from "../../lib/queries";
-import type { ApiToken, ApiTokenCreate, ApiTokenCreated } from "../../lib/types";
+import type { ApiToken, ApiTokenCreate, ApiTokenCreated, TokenScopes } from "../../lib/types";
 import { Button } from "../Button";
 import { Callout } from "../Callout";
 import { EmptyState } from "../EmptyState";
+import { ErrorText } from "../ErrorText";
 import { TableSkeleton } from "../TableSkeleton";
 import { TextField } from "../TextField";
 import { SettingsPage, settingsTableClasses } from "./SettingsPage";
+import { TokenScopeEditor, TokenScopeSummary, scopeIsIncomplete } from "./TokenScopeEditor";
 
 /**
  * Personal access tokens: create (secret shown once), list, revoke. Shared by
@@ -39,6 +42,7 @@ export function TokensPanel() {
               <tr>
                 <th className={settingsTableClasses.head}>Name</th>
                 <th className={settingsTableClasses.head}>Token</th>
+                <th className={settingsTableClasses.head}>Scope</th>
                 <th className={settingsTableClasses.head}>Created</th>
                 <th className={settingsTableClasses.head}>Expires</th>
                 <th className={settingsTableClasses.head}>Last used</th>
@@ -145,6 +149,9 @@ function TokenRow({ token }: { token: ApiToken }) {
       <td className={`${settingsTableClasses.cell} font-mono text-xs text-fg-secondary`}>
         {token.prefix_display}…
       </td>
+      <td className={settingsTableClasses.cell}>
+        <TokenScopeSummary scopes={token.scopes} />
+      </td>
       <td className={settingsTableClasses.cell}>{formatDateOrNever(token.created_at)}</td>
       <td className={settingsTableClasses.cell}>{formatDateOrNever(token.expires_at)}</td>
       <td className={settingsTableClasses.cell}>{formatDateOrNever(token.last_used_at)}</td>
@@ -186,8 +193,12 @@ function TokenRow({ token }: { token: ApiToken }) {
 
 function NewTokenForm({ onCreated }: { onCreated: (token: ApiTokenCreated) => void }) {
   const queryClient = useQueryClient();
+  const perms = usePermissions();
   const [name, setName] = useState("");
   const [expiresOn, setExpiresOn] = useState("");
+  // null = the owner's full authority — what every personal token was until
+  // RADD-1009 let the browser narrow one (spec 113 shape, server-intersected).
+  const [scopes, setScopes] = useState<TokenScopes | null>(null);
 
   const createToken = useMutation({
     mutationFn: (body: ApiTokenCreate) => api.post<ApiTokenCreated>(ApiPath.tokens, body),
@@ -195,44 +206,56 @@ function NewTokenForm({ onCreated }: { onCreated: (token: ApiTokenCreated) => vo
       await queryClient.invalidateQueries({ queryKey: queryKeys.tokens });
       setName("");
       setExpiresOn("");
+      setScopes(null);
       onCreated(token);
     },
   });
 
+  const incomplete = scopeIsIncomplete(scopes);
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || incomplete) return;
     createToken.mutate({
       name: name.trim(),
       // Date-only input → expire at the end of that day (UTC).
       expires_at: expiresOn ? `${expiresOn}T23:59:59Z` : null,
+      scopes,
     });
   };
 
   return (
-    <form onSubmit={onSubmit} className="mt-4 flex items-end gap-3">
-      <div className="flex-1">
+    <form onSubmit={onSubmit} className="mt-4 flex flex-col gap-3">
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-48 flex-1">
+          <TextField
+            label="New token"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="ci-importer"
+            maxLength={200}
+          />
+        </div>
         <TextField
-          label="New token"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          placeholder="ci-importer"
-          maxLength={200}
+          label="Expires (optional)"
+          type="date"
+          value={expiresOn}
+          onChange={(event) => setExpiresOn(event.target.value)}
         />
+        <Button type="submit" disabled={createToken.isPending || !name.trim() || incomplete}>
+          <Plus size={14} aria-hidden />
+          {createToken.isPending ? "Creating…" : "Create token"}
+        </Button>
       </div>
-      <TextField
-        label="Expires (optional)"
-        type="date"
-        value={expiresOn}
-        onChange={(event) => setExpiresOn(event.target.value)}
+      {/* Only atoms the owner holds somewhere are offered: a key can never
+          exceed its account, so offering the rest would be a lie the server
+          silently corrects. An instance admin sees the whole catalog. */}
+      <TokenScopeEditor
+        value={scopes}
+        onChange={setScopes}
+        allowedAtoms={(atom) => perms.anyProject(atom)}
+        disabled={createToken.isPending}
       />
-      <Button type="submit" disabled={createToken.isPending || !name.trim()}>
-        <Plus size={14} aria-hidden />
-        {createToken.isPending ? "Creating…" : "Create token"}
-      </Button>
-      {createToken.isError && (
-        <span className="pb-2 text-xs text-red-400">{errorMessage(createToken.error)}</span>
-      )}
+      {createToken.isError && <ErrorText error={createToken.error} />}
     </form>
   );
 }

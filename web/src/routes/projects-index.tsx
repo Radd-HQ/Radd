@@ -74,7 +74,12 @@ export function ProjectsIndexPage() {
                     <span className="rounded bg-elevated px-1.5 py-0.5 font-mono text-xs text-fg">
                       {project.key}
                     </span>
-                    <span className="text-sm text-heading">{project.name}</span>
+                    <span className="flex min-w-0 flex-col">
+                      <span className="text-sm text-heading">{project.name}</span>
+                      {project.description && (
+                        <span className="truncate text-xs text-fg-muted">{project.description}</span>
+                      )}
+                    </span>
                     {project.public && <PublicProjectChip />}
                     <span className="ml-auto text-xs text-fg-faint">
                       {formatDate(project.created_at)}

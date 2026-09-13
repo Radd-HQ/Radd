@@ -20,6 +20,7 @@ from .schemas import (
     ProjectCreate,
     ProjectRead,
     ProjectSummaryRead,
+    ProjectUpdate,
     PublicAccessUpdate,
 )
 
@@ -179,3 +180,18 @@ async def project_by_key(key: str, session: Session, user: Actor) -> ProjectRead
 @project_router.get("/{project_id}", response_model=ProjectRead)
 async def project_by_id(project_id: uuid.UUID, session: Session, user: Actor) -> ProjectRead:
     return await directory.by_identity(session, user, identifier=project_id)
+
+
+@project_router.patch("/{project_id}", response_model=ProjectRead)
+async def update_project(
+    project_id: uuid.UUID, data: ProjectUpdate, session: Session, user: CurrentUser
+) -> ProjectRead:
+    """RADD-1009: rename + describe. `project.manage` on THIS project; the key
+    is not editable (see `ProjectUpdate`). Declared after `GET /{project_id}`
+    on purpose: same shape, different method, so neither can shadow the other,
+    and the literal siblings (`/summary`, `/by-key/…`) are GETs declared above."""
+    project = await service.get_project(session, project_id)
+    await authz.require(session, user, authz.Permission.PROJECT_MANAGE, project=project)
+    await service.update_project(session, project, data, actor_id=user.id)
+    permissions = await authz.effective_permissions(session, user, project=project)
+    return await directory.project_read_with_access(session, project, permissions)

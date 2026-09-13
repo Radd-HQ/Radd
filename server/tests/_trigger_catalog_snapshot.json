@@ -317,6 +317,12 @@
     "item_scoped": false,
     "label": "Project created"
   },
+  "project.updated": {
+    "group": "Admin",
+    "has_changes": true,
+    "item_scoped": false,
+    "label": "Project updated"
+  },
   "release.created": {
     "group": "Releases",
     "has_changes": false,

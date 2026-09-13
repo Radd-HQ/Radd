@@ -20,6 +20,8 @@ plugin = RaddPlugin(
     entity_refs=(EntityRefSpec("project", service.project_ref, label="Project"),),
     event_types=(
         EventTypeSpec(ProjectEvent.PROJECT_CREATED, "Project created", "Admin"),
+        # RADD-1009: rename/description edits; `changes` carries the diff.
+        EventTypeSpec(ProjectEvent.PROJECT_UPDATED, "Project updated", "Admin", has_changes=True),
     ),
     # RADD-892: what a project-scoped role grant is bound to. No `reach` — how
     # many projects someone can READ is an atom question, and auth answers it

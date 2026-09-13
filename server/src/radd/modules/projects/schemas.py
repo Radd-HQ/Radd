@@ -1,6 +1,6 @@
 import uuid
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from radd.apitypes import UtcDatetime
 
@@ -44,12 +44,37 @@ class ProjectCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
 
 
+class ProjectUpdate(BaseModel):
+    """PATCH /projects/{id} (RADD-1009): rename and describe.
+
+    The KEY is deliberately absent. Every item key (`TD-1234`) derives from it,
+    it is the instance-wide address the connectors' regexes and every issue URL
+    carry, and the project counter rides on it — a renamed key would orphan all
+    of them at once. Omitted = unchanged.
+    """
+
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=4000)
+
+    @field_validator("name")
+    @classmethod
+    def _name_has_substance(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("name must not be blank")
+        return stripped
+
+
 class ProjectRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
     key: str
     name: str
+    #: RADD-1009 — plain text, "" when the project has never been described.
+    description: str = ""
     created_at: UtcDatetime
     # The CURRENT user's effective permissions on the project (Permission values),
     # hydrated by the router via auth.authz. Plain strings: projects loads before

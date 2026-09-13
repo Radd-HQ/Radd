@@ -39,6 +39,26 @@ async def _list_projects(session: AsyncSession, actor: Any, args: Mapping[str, A
     }
 
 
+async def _update_project(session: AsyncSession, actor: Any, args: Mapping[str, Any]) -> Any:
+    """RADD-1009. Kernel-enforced: the dispatcher already required
+    `project.manage` on the `project` key before this ran, so the handler only
+    resolves + writes. `ProjectUpdate` validates (blank name, lengths)."""
+    from . import service as projects_service
+    from .schemas import ProjectUpdate
+
+    project = await projects_service.get_by_key(session, str(args["project"]))
+    fields = {k: args[k] for k in ("name", "description") if k in args}
+    await projects_service.update_project(
+        session, project, ProjectUpdate(**fields), actor_id=actor.id
+    )
+    return {
+        "id": str(project.id),
+        "key": project.key,
+        "name": project.name,
+        "description": project.description,
+    }
+
+
 LIST_PROJECTS = McpToolSpec(
     name="list_projects",
     description="List every project on this Radd instance.",
@@ -49,4 +69,24 @@ LIST_PROJECTS = McpToolSpec(
     kernel_enforced=False,
 )
 
-MCP_TOOLS = (LIST_PROJECTS,)
+UPDATE_PROJECT = McpToolSpec(
+    name="update_project",
+    description=(
+        "Rename a project or set its description. The key cannot change — item "
+        "keys derive from it. Requires project.manage on that project."
+    ),
+    input_schema=object_schema(
+        {
+            "project": {"type": "string", "description": "Project key, e.g. TD."},
+            "name": {"type": "string", "minLength": 1, "maxLength": 200},
+            "description": {"type": "string", "maxLength": 4000},
+        },
+        ["project"],
+    ),
+    handler=_update_project,
+    permission=Permission.PROJECT_MANAGE,
+    project_scoped=True,
+    project_param="project",
+)
+
+MCP_TOOLS = (LIST_PROJECTS, UPDATE_PROJECT)

@@ -14,6 +14,7 @@ import {
 import { RoutePath } from "../../lib/constants";
 import { useProjectByKey, usePermissions, type PermissionChecks } from "../../lib/hooks";
 import { PROJECT_HOMED_SECTIONS, Permission, SettingScope, type Project } from "../../lib/types";
+import { ProjectIdentityCard } from "../../components/projects/ProjectIdentityCard";
 import { ScopedSettingsEditor } from "../../components/settings/ScopedSettingsEditor";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { Spinner } from "../../components/Spinner";
@@ -137,6 +138,11 @@ export function ProjectSettingsLayout() {
         </span>
         <h1 className="text-sm font-semibold text-heading">{project.name}</h1>
         <span className="text-xs text-fg-muted">Project settings</span>
+        {project.description && (
+          <p data-project-description className="basis-full truncate text-xs text-fg-secondary">
+            {project.description}
+          </p>
+        )}
       </header>
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <nav
@@ -178,23 +184,32 @@ export function ProjectSettingsIndex() {
  */
 export function ProjectGeneralSettings() {
   const { project } = useUrlProject();
+  const perms = usePermissions();
   return (
     <SettingsPage
       title="General"
-      description="Project overrides for the cascaded settings that don't belong to a tab of their own. Each falls back to the instance default (Settings → General)."
+      description="The project's name and description, then its overrides for the cascaded settings that don't belong to a tab of their own. Each of those falls back to the instance default (Settings → General)."
     >
       {project ? (
-        // RADD-930: the REMAINDER, not everything. The release states, the
-        // working week and the CSAT opt-in now declare their own tabs, and the
-        // enforcement mode declares Workflow — which also retires the
-        // hand-written `key !== WORKFLOW_TRANSITION_MODE_KEY` exclude that used
-        // to keep a second, free-text copy of that dropdown off this page.
-        <ScopedSettingsEditor
-          scope={SettingScope.project}
-          scopeId={project.id}
-          homed={PROJECT_HOMED_SECTIONS}
-          emptyLabel="Every cascaded setting for this project lives on one of the tabs beside this one."
-        />
+        <div className="flex flex-col gap-6">
+          {/* RADD-1009: keyed on the project so a route change resets the drafts. */}
+          <ProjectIdentityCard
+            key={project.id}
+            project={project}
+            canManage={perms.project(project, Permission.projectManage)}
+          />
+          {/* RADD-930: the REMAINDER, not everything. The release states, the
+              working week and the CSAT opt-in now declare their own tabs, and the
+              enforcement mode declares Workflow — which also retires the
+              hand-written `key !== WORKFLOW_TRANSITION_MODE_KEY` exclude that used
+              to keep a second, free-text copy of that dropdown off this page. */}
+          <ScopedSettingsEditor
+            scope={SettingScope.project}
+            scopeId={project.id}
+            homed={PROJECT_HOMED_SECTIONS}
+            emptyLabel="Every cascaded setting for this project lives on one of the tabs beside this one."
+          />
+        </div>
       ) : null}
     </SettingsPage>
   );

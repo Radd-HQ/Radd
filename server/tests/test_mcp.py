@@ -41,6 +41,7 @@ TRACKER_TOOLS = {
     McpTool.LINK_ITEMS,  # RADD-739: an agent can express its plan's ORDER
     McpTool.UNLINK_ITEMS,
     McpTool.LIST_PROJECTS,
+    McpTool.UPDATE_PROJECT,  # RADD-1009: rename + describe, project.manage
     # Spec 114 families. build_catalog still returns EVERY tool — the narrowing
     # to what a caller may run happens in requirements.visible_catalog, which
     # tests/test_mcp_catalog.py covers.

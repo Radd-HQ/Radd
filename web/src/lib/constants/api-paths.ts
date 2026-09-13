@@ -17,6 +17,8 @@ export const apiTransitionPath = (transitionId: string) =>
   `${ApiPath.transitions}/${transitionId}`;
 export const apiProjectTransitionsPath = (projectId: string) =>
   `${ApiPath.projects}/${projectId}/transitions`;
+/** RADD-1009: one project by id — `PATCH` renames/describes it. */
+export const apiProjectPath = (projectId: string) => `${ApiPath.projects}/${projectId}`;
 /** Spec 121: the project's public-access switches. */
 export const apiProjectPublicAccessPath = (projectId: string) =>
   `${ApiPath.projects}/${projectId}/public-access`;
