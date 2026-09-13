@@ -1,6 +1,6 @@
 """Wire vocabulary for the collab module (spec 122)."""
 
-from enum import StrEnum
+from enum import IntEnum, StrEnum
 
 from pycrdt import YMessageType, YSyncMessageType
 
@@ -35,6 +35,19 @@ WS_CLOSE_DOCUMENT_REPLACED = 4409
 #: An empty Yjs update — what `Doc.get_update()` answers for an empty document
 #: and what `handle_sync_message` already ignores.
 EMPTY_UPDATE = b"\x00\x00"
+
+
+class YClientMessage(IntEnum):
+    """y-websocket message types the CLIENT sends that pycrdt's `YMessageType`
+    does not name. A provider asks for every awareness state on connect; a
+    server that stays silent leaves the newcomer thinking it is alone until
+    the others' next heartbeat (the saver election disagreed for 15 s)."""
+
+    QUERY_AWARENESS = 3
+
+
+def is_awareness_query(frame: bytes) -> bool:
+    return len(frame) >= 1 and frame[0] == YClientMessage.QUERY_AWARENESS
 
 
 def is_document_update(frame: bytes) -> bool:

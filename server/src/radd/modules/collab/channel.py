@@ -17,6 +17,7 @@ import asyncio
 import logging
 import time
 import uuid
+from collections.abc import Callable
 
 from anyio import Lock
 from fastapi import WebSocket, WebSocketDisconnect
@@ -26,7 +27,12 @@ from radd.config import settings
 from radd.db import SessionLocal
 from radd.modules.auth import service as auth
 
-from .types import WS_CLOSE_UNAUTHENTICATED, CollabRole, is_document_update
+from .types import (
+    WS_CLOSE_UNAUTHENTICATED,
+    CollabRole,
+    is_awareness_query,
+    is_document_update,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +52,9 @@ class RoomChannel(Channel):
         self._send_lock = Lock()
         self._validated_at = time.monotonic()
         self.closed = False
+        #: Every awareness state the room holds, as one frame — set by the room
+        #: at connect; answers the provider's query (`YRoom.serve` does not).
+        self.awareness_snapshot: Callable[[], bytes | None] = lambda: None
 
     @property
     def path(self) -> str:
@@ -84,6 +93,11 @@ class RoomChannel(Channel):
             if time.monotonic() - self._validated_at >= settings.collab_frame_auth_seconds:
                 if not await self._revalidate():
                     raise StopAsyncIteration()
+            if is_awareness_query(frame):
+                snapshot = self.awareness_snapshot()
+                if snapshot is not None:
+                    await self.send(snapshot)
+                continue  # answered here; the room has no handler for it
             if self.role == CollabRole.OBSERVER and is_document_update(frame):
                 continue  # relayed nowhere: an observer cannot change the document
             return frame

@@ -19,9 +19,9 @@ import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
-from pycrdt import Doc, TransactionEvent
-from sqlalchemy.exc import IntegrityError
+from pycrdt import Doc, TransactionEvent, create_awareness_message
 from pycrdt.websocket import YRoom
+from sqlalchemy.exc import IntegrityError
 
 from radd.config import settings
 
@@ -125,7 +125,19 @@ class Room:
     def connect(self, session: CollabSession, channel: RoomChannel) -> None:
         session.connected = True
         self.channels[session.id] = channel
+        channel.awareness_snapshot = self.awareness_snapshot
         _cancel(self._idle_task)
+
+    def awareness_snapshot(self) -> bytes | None:
+        """Everyone's awareness state as one frame, or None when the room holds
+        none. Sent to a newcomer at connect and in answer to its query, so the
+        saver election agrees from the first second rather than after the
+        others' next heartbeat."""
+        awareness = self.yroom.awareness
+        client_ids = [cid for cid, state in awareness.states.items() if state]
+        if not client_ids:
+            return None
+        return create_awareness_message(awareness.encode_awareness_update(client_ids))
 
     async def disconnect(self, session: CollabSession) -> None:
         session.connected = False

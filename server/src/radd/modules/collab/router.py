@@ -74,6 +74,9 @@ async def page_socket(
         websocket, path=str(page_id), token=token, user_id=user_id, role=collab_session.role
     )
     room.connect(collab_session, channel)
+    snapshot = room.awareness_snapshot()
+    if snapshot is not None:
+        await channel.send(snapshot)
     try:
         await room.yroom.serve(channel)
     finally:

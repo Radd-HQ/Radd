@@ -19,13 +19,16 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 from pycrdt import (
+    Awareness,
     Doc,
     Text,
     YMessageType,
     YSyncMessageType,
+    create_awareness_message,
     create_sync_message,
     create_update_message,
     handle_sync_message,
+    read_message,
 )
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -44,6 +47,7 @@ from radd.modules.collab.types import (
     WS_CLOSE_SESSION_UNKNOWN,
     WS_CLOSE_UNAUTHENTICATED,
     CollabRole,
+    YClientMessage,
 )
 from radd.modules.pages import service as pages_service, spaces
 from radd.modules.pages.models import PageSpace, PageVersion
@@ -355,3 +359,41 @@ def test_who_may_join_and_who_may_connect(stage):
         with _connect(client, page_id, cookies["grace"], observer.json()["session"]) as sock:
             sock.receive_bytes()
     assert closed.value.code == WS_CLOSE_SESSION_UNKNOWN
+
+
+def test_a_newcomer_learns_every_awareness_state_at_connect(stage):
+    """The saver election is over awareness states; a newcomer that only hears
+    the others at their next heartbeat elects itself for those seconds. The
+    room sends its snapshot at connect AND answers the provider's query."""
+    client, s = stage
+    page_id, cookies = s["page_id"], s["cookies"]
+    ada, grace = _join(client, page_id, cookies["ada"]), _join(client, page_id, cookies["grace"])
+    doc_a, doc_g = Doc(), Doc()
+    aware_a, aware_g = Awareness(doc_a), Awareness(doc_g)
+    with _connect(client, page_id, cookies["ada"], ada["session"]) as sock_a:
+        _handshake(sock_a, doc_a)
+        aware_a.set_local_state({"user": {"name": "Ada"}, "role": "editor"})
+        sock_a.send_bytes(
+            create_awareness_message(aware_a.encode_awareness_update([aware_a.client_id]))
+        )
+        _apply(sock_a, doc_a)  # the room echoes awareness to every client, sender included
+        with _connect(client, page_id, cookies["grace"], grace["session"]) as sock_g:
+            # Sent unasked at connect: Ada's state, before or after the sync frames.
+            seen = False
+            for _ in range(6):
+                frame = _apply(sock_g, doc_g) if not seen else sock_g.receive_bytes()
+                if frame[0] == YMessageType.AWARENESS:
+                    aware_g.apply_awareness_update(read_message(frame[1:]), "server")
+                    seen = aware_a.client_id in aware_g.states
+                    if seen:
+                        break
+            assert seen, "the snapshot never arrived"
+            assert aware_g.states[aware_a.client_id]["user"]["name"] == "Ada"
+            # And in answer to the provider's own query (message type 3).
+            sock_g.send_bytes(bytes([YClientMessage.QUERY_AWARENESS]))
+            kinds = []
+            for _ in range(4):  # sync frames may be queued ahead of the answer
+                kinds.append(sock_g.receive_bytes()[0])
+                if kinds[-1] == YMessageType.AWARENESS:
+                    break
+            assert YMessageType.AWARENESS in kinds, kinds
