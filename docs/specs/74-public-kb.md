@@ -1,6 +1,6 @@
 # Spec 74 — Public knowledge base
 
-> **Superseded by spec 121 §5 (RADD-1147, 2026-09-13).** The parallel model
+> **Superseded by spec 121 §5 (RADD-1147).** The parallel model
 > this spec built — `page_spaces.public` as the credential, its own
 > `/public/pages` router with trimmed schemas, a separate `/public-pages` SPA,
 > a `public_only` search path and an embed-time public flag — is gone. A public

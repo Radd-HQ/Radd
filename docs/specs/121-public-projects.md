@@ -1,6 +1,6 @@
 # Spec 121 — Public projects, issue visibility, and Sign in with GitHub
 
-User ask (2026-09-13): Radd is on GitHub and its README links to
+User ask (RADD-1141): Radd is on GitHub and its README links to
 project.radd-hq.com, where every link lands on a login page. Make a project
 **public** so anyone can read its issues and public comments without signing
 in; public saved views show only what the world may see; add **Sign in with
