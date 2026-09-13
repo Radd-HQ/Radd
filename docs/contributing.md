@@ -55,8 +55,10 @@ cd ../web && npm run check
 
 **Building is not verifying.** A clean `tsc` proves nothing about whether a UI
 change renders correctly — `web/scripts/render-proof.mjs` shows the zero-dep
-pattern for driving headless Chromium and measuring the result. Several bugs
-have shipped past a green build because nobody looked at the output.
+pattern for driving headless Chromium and measuring the result, and
+`web/scripts/collab-proof.mjs` the multi-browser form of it (three profiles
+on three debug ports editing one page). Several bugs have shipped past a
+green build because nobody looked at the output.
 
 ## What a good change looks like
 

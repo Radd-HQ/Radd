@@ -1,6 +1,6 @@
 # Spec 122 — Collaborative editing: one live document, many editors
 
-**Status:** building (server half RADD-1161 landed; SPA half in progress). **Epic:** RADD-676. **Depends on:** spec 43 (wiki), spec 27
+**Status:** built (RADD-1161/1162/1163; `web/scripts/collab-proof.mjs` green in both election outcomes). **Epic:** RADD-676. **Depends on:** spec 43 (wiki), spec 27
 (realtime), spec 54 / RADD-745 (the house editor chrome over Milkdown).
 
 ## What is wrong
@@ -127,6 +127,30 @@ state resumes it.
   (document replaced — rejoin). The saver must send its `final` save BEFORE
   closing its socket, or the save is an ordinary one (`expected_version`
   enforced, a row per save).
+
+## Changed while building (SPA half, RADD-1162, and the proof)
+
+- **The saver serialises the bound document itself.** Milkdown's listener
+  skips any transaction flagged `addToHistory: false`, which is exactly how
+  y-prosemirror applies a REMOTE change — so `onChange` never learned what
+  the other person typed and the elected saver wrote a draft that stopped at
+  its own edits. In a room, RichEditor re-serialises after every document
+  update (150 ms debounce) into the draft the saver reads.
+- **The room sends its awareness snapshot to a newcomer and answers the
+  provider's query.** pycrdt's `YRoom` relays awareness but neither sends
+  existing states at connect nor answers the y-websocket `queryAwareness`
+  message, so a second joiner elected itself saver until the first client's
+  next heartbeat — two savers for up to fifteen seconds. Both are done at the
+  channel.
+- **Unbind before destroy.** The provider outlives the editor for the final
+  save; a remote change or awareness update landing on a destroyed Milkdown
+  context threw. The editor disconnects the collab service before destroy.
+- **Only the server's 44xx band is a refusal.** A navigation or network close
+  is the provider's own reconnect business; 4403/4409 join again, bounded.
+- The proof reads the election from the DOM and has the saver type FIRST,
+  then the other person — the order that failed — so it does not depend on
+  which client the random client id favours. The server-restart resume is not
+  driven by it; the test suite covers the stored-state rule.
 
 ## Rejected
 
