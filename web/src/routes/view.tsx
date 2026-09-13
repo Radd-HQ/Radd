@@ -1038,9 +1038,9 @@ export function ViewPage() {
             align="end"
             items={[
               // The old second band's one-tab "Reports" nav, folded in here.
-              // Spec 121: not for a visitor — the reporting service scopes by
-              // readable projects only, so its aggregates would count hidden rows.
-              ...(project && authenticated
+              // Open to a visitor too (RADD-1150): every report folds over the
+              // same row filter as the lists, so the numbers match what they see.
+              ...(project
                 ? [
                     {
                       kind: "action" as const,

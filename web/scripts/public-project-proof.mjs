@@ -150,9 +150,11 @@ async function main() {
     context.anonymous.personalLinks = personal;
     checks["anonymous: no My Work / Inbox / Settings link"] = personal.length === 0;
 
-    await session.navigate(baseUrl + "/p/" + PUBLIC_KEY + "/reports", 3000);
-    const reports = await session.eval(`({ path: location.pathname, search: location.search })`);
-    checks["anonymous: project reports bounce to sign-in"] = reports.path === "/login" && reports.search.includes("next=");
+    await session.navigate(baseUrl + "/p/" + PUBLIC_KEY + "/reports", 4000);
+    const reports = await session.eval(`({ path: location.pathname, failed: document.body.innerText.includes("Failed to load"), unauthorized: ${UNAUTHORIZED} })`);
+    context.reports = reports;
+    checks["anonymous: project reports render (RADD-1150)"] = reports.path.endsWith("/reports") && reports.failed === false;
+    checks["anonymous: the reports page makes no 401 request"] = reports.unauthorized.length === 0;
 
     await session.navigate(baseUrl + "/pages/" + seeded.space.slug + "/" + seeded.page.slug, 4000);
     const wiki = await session.eval(`({ path: location.pathname, body: document.body.innerText.includes("Hello from the public wiki"), unauthorized: ${UNAUTHORIZED} })`);

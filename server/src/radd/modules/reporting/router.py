@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
 from radd.modules.auth import authz
-from radd.modules.auth.deps import CurrentUser
+from radd.modules.auth.deps import Actor
 from radd.modules.cycles import service as cycles_service
 from radd.modules.items.enums import ItemKind
 from radd.modules.projects import service as projects_service
@@ -41,7 +41,7 @@ def _window(start: date | None, end: date | None) -> tuple[date, date]:
 @router.get("/throughput", response_model=list[ThroughputBucket])
 async def throughput(
     session: Session,
-    user: CurrentUser,
+    user: Actor,
     project_id: uuid.UUID,
     start: date | None = None,
     end: date | None = None,
@@ -57,7 +57,7 @@ async def throughput(
 @router.get("/cumulative-flow", response_model=list[CumulativeFlowBucket])
 async def cumulative_flow(
     session: Session,
-    user: CurrentUser,
+    user: Actor,
     project_id: uuid.UUID,
     start: date | None = None,
     end: date | None = None,
@@ -73,7 +73,7 @@ async def cumulative_flow(
 @router.get("/time-in-state", response_model=list[TimeInStateRow])
 async def time_in_state(
     session: Session,
-    user: CurrentUser,
+    user: Actor,
     project_id: uuid.UUID,
     kind: Annotated[ItemKind | None, Query()] = None,
     q: str | None = None,
@@ -86,7 +86,7 @@ async def time_in_state(
 @router.get("/velocity", response_model=VelocityReport)
 async def velocity(
     session: Session,
-    user: CurrentUser,
+    user: Actor,
     last: Annotated[int, Query(ge=1, le=50)] = 5,
     measure: ReportMeasure = ReportMeasure.COUNT,
     q: str | None = None,
@@ -100,7 +100,7 @@ async def velocity(
 @router.get("/burnup", response_model=BurnupSeries)
 async def burnup(
     session: Session,
-    user: CurrentUser,
+    user: Actor,
     cycle_id: uuid.UUID,
     measure: ReportMeasure = ReportMeasure.COUNT,
     q: str | None = None,
@@ -113,7 +113,7 @@ async def burnup(
 @router.get("/sla", response_model=SlaReport)
 async def sla(
     session: Session,
-    user: CurrentUser,
+    user: Actor,
     project_id: uuid.UUID | None = None,
     weeks: Annotated[int, Query(ge=1, le=SLA_REPORT_MAX_WEEKS)] = SLA_REPORT_DEFAULT_WEEKS,
     q: str | None = None,

@@ -80,6 +80,15 @@ ANONYMOUS_ROUTES: frozenset[tuple[str, str]] = frozenset(
         ("GET", "/api/v1/pages/by-label/{name}"),
         ("GET", "/api/v1/pages/{page_id}/backlinks"),
         ("GET", "/api/v1/pages/{page_id}/items"),
+        # Reports (RADD-1150): every report folds over `visible_matching_ids`,
+        # the same row filter the lists use, so the world's numbers match the
+        # world's list.
+        ("GET", "/api/v1/reports/throughput"),
+        ("GET", "/api/v1/reports/cumulative-flow"),
+        ("GET", "/api/v1/reports/time-in-state"),
+        ("GET", "/api/v1/reports/velocity"),
+        ("GET", "/api/v1/reports/burnup"),
+        ("GET", "/api/v1/reports/sla"),
         ("GET", "/api/v1/search"),
         ("GET", "/api/v1/search/deflect"),
         ("GET", "/api/v1/search/semantic"),

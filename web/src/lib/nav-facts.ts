@@ -51,7 +51,7 @@ export function useNavFacts(): NavFacts {
     const known = (value: boolean | undefined) => value !== false;
     const facts = {
       projects: projectCount === undefined || projectCount > 0,
-      reports: authenticated && (projectCount === undefined || projectCount > 0),
+      reports: projectCount === undefined || projectCount > 0,
       timesheet: authenticated && known(navTimesheet),
       portal: authenticated && known(navPortal),
       docs: spaceCount === undefined || spaceCount > 0 || canManagePages,
