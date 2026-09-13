@@ -72,7 +72,40 @@ def test_connectors_derive_generically_from_the_connector_category():
     # forgejo is row-backed since spec 111 — asserted in the snapshot test above.
     assert connectors["google_chat"] == bool(settings.googlechat_webhook_url)
     assert connectors["alertmanager"] == bool(settings.alertmanager_token)
-    assert connectors["email_intake"] == bool(settings.mail_imap_host)
+    # email_intake is row-backed since RADD-958 — asserted against rows below.
+
+
+async def test_email_intake_capability_follows_the_enabled_source_rows():
+    """RADD-975. The capability reads the snapshot `mailintake.registry`
+    refreshes from ENABLED MailSource/MailSender rows; the old assertion compared
+    it to `settings.mail_imap_host`, which both sides ignored, so it held
+    whatever the registry did. Now: no enabled rows → off; an enabled polled
+    source → on; the same row disabled → off."""
+    from sqlalchemy import update
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from radd.modules.mailintake import registry
+    from radd.modules.mailintake.models import MailSender, MailSource
+    from radd.modules.mailintake.types import MailSourceKind
+
+    engine = create_async_engine(settings.database_url)
+    async with async_sessionmaker(engine, expire_on_commit=False)() as db:
+        # Inside this rolled-back transaction, nothing else is enabled.
+        await db.execute(update(MailSource).values(enabled=False))
+        await db.execute(update(MailSender).values(enabled=False))
+        await registry.refresh_snapshot(db)
+        assert _map()["email_intake"]["enabled"] is False
+
+        source = await registry.save_source(
+            db, MailSource(name="Inbox", kind=MailSourceKind.IMAP.value, host="imap.example.com", username="u")
+        )
+        assert _map()["email_intake"]["enabled"] is True
+
+        source.enabled = False
+        await registry.save_source(db, source)
+        assert _map()["email_intake"]["enabled"] is False
+        await db.rollback()
+    await engine.dispose()
 
 
 def test_evaluate_is_serializable_shape():
