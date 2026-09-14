@@ -42,6 +42,16 @@ AUTH_PERMISSIONS: tuple[PermissionSpec, ...] = (
         scope="project",
         description="Manage a project: states, fields, labels, teams, members.",
     ),
+    # RADD-1174: GLOBAL, deliberately, like `project.create`. Were it
+    # project-scoped it would join `PROJECT_PERMISSIONS`, which is the builtin
+    # project Admin role's grant set — and a delegated project admin must not be
+    # able to destroy the project they were handed. Rides `global.manage`.
+    PermissionSpec(
+        key="project.delete",
+        scope="global",
+        description="Delete a project and everything in it (global).",
+        implied_by=("global.manage",),
+    ),
     # The bespoke sentence for the user umbrella — "Manage users." (what the CRUD
     # resource below would generate) undersells it: holding it is also what makes
     # the directory readable.

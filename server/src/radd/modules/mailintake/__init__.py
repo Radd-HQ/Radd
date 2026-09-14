@@ -5,6 +5,7 @@ from radd.kernel import SettingSpec
 from . import dispatcher, registry, seeding
 from .config_router import router as config_router
 from .router import router
+from . import subscribers  # noqa: F401 — RADD-1174: the project-teardown hooks
 from .rules_router import router as rules_router
 from .types import MailEvent, OUTBOUND_CONSUMER_NAME
 

@@ -42,6 +42,7 @@ TRACKER_TOOLS = {
     McpTool.UNLINK_ITEMS,
     McpTool.LIST_PROJECTS,
     McpTool.UPDATE_PROJECT,  # RADD-1009: rename + describe, project.manage
+    McpTool.DELETE_PROJECT,  # RADD-1174: the whole project, global project.delete
     # Spec 114 families. build_catalog still returns EVERY tool — the narrowing
     # to what a caller may run happens in requirements.visible_catalog, which
     # tests/test_mcp_catalog.py covers.

@@ -40,6 +40,7 @@ CATALOG_ORDER: tuple[McpTool, ...] = (
     McpTool.COMMENT_ITEM,
     McpTool.LIST_PROJECTS,
     McpTool.UPDATE_PROJECT,
+    McpTool.DELETE_PROJECT,
     McpTool.GET_PAGE,
     McpTool.SEARCH_PAGES,
     McpTool.CREATE_PAGE,

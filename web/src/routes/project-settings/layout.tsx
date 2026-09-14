@@ -15,6 +15,7 @@ import { RoutePath } from "../../lib/constants";
 import { useProjectByKey, usePermissions, type PermissionChecks } from "../../lib/hooks";
 import { PROJECT_HOMED_SECTIONS, Permission, SettingScope, type Project } from "../../lib/types";
 import { ProjectIdentityCard } from "../../components/projects/ProjectIdentityCard";
+import { DeleteProjectCard } from "../../components/projects/DeleteProjectCard";
 import { ScopedSettingsEditor } from "../../components/settings/ScopedSettingsEditor";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { Spinner } from "../../components/Spinner";
@@ -209,6 +210,8 @@ export function ProjectGeneralSettings() {
             homed={PROJECT_HOMED_SECTIONS}
             emptyLabel="Every cascaded setting for this project lives on one of the tabs beside this one."
           />
+          {/* RADD-1174: the GLOBAL atom, so a delegated project admin never sees it. */}
+          {perms.global(Permission.projectDelete) && <DeleteProjectCard project={project} />}
         </div>
       ) : null}
     </SettingsPage>

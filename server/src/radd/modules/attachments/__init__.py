@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from . import acl, clients, gc, hosts  # noqa: F401 — acl registers the ResourceSpec
 from .admin_router import router as admin_router
 from .router import router, too_large_handler
+from . import subscribers  # noqa: F401 — RADD-1174: the project-teardown hooks
 from .routing import rules as routing_rules
 from .routing.store import RuleConfigError
 from .service import AttachmentTooLarge

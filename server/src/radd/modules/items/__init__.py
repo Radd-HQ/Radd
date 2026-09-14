@@ -9,6 +9,7 @@ from radd.kernel import SettingSpec
 from .enums import ItemEvent
 from .filters import FilterParseError
 from .router import router
+from . import subscribers  # noqa: F401 — RADD-1174: the project-teardown hooks
 from .service.refs import item_ref
 from .enums import ItemVisibility
 from .service.visibility import ITEM_RELATIONS, ITEM_ROW_GUARD

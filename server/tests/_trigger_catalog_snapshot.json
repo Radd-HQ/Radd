@@ -448,5 +448,11 @@
     "group": "Time logging",
     "item_scoped": true,
     "has_changes": true
+  },
+  "project.deleted": {
+    "label": "Project deleted",
+    "group": "Admin",
+    "item_scoped": false,
+    "has_changes": false
   }
 }

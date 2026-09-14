@@ -25,6 +25,7 @@ from .enablement_router import router as enablement_router
 from .timesheet_router import router as timesheet_router
 from .types import WorklogEvent
 from .worklog_router import router as worklog_router
+from . import subscribers  # noqa: F401 — RADD-1174: the project-teardown hooks
 
 # After the router chain on purpose: mcptools joins the loaded graph (RADD-889).
 from . import mcptools

@@ -10,6 +10,10 @@ export const Permission = {
   serviceAccountUpdate: "service_account.update",
   projectCreate: "project.create",
   projectManage: "project.manage",
+  /** RADD-1174: delete a project outright. GLOBAL on purpose — never part of
+   * the builtin project Admin role, so a delegated admin cannot destroy the
+   * project they were handed. `global.manage` implies it. */
+  projectDelete: "project.delete",
   /**
    * RADD-826: delegated project entitlement — grant/revoke a role ON this
    * project without global `role.update`. `project.manage` implies both. Named

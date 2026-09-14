@@ -15,6 +15,8 @@ from radd.modules.auth.deps import Actor, CurrentUser
 
 from . import service, directory
 from .schemas import (
+    BlockerRead,
+    ProjectContentRead,
     InstanceConfigRead,
     InstanceStatusRead,
     ProjectCreate,
@@ -180,6 +182,31 @@ async def project_by_key(key: str, session: Session, user: Actor) -> ProjectRead
 @project_router.get("/{project_id}", response_model=ProjectRead)
 async def project_by_id(project_id: uuid.UUID, session: Session, user: Actor) -> ProjectRead:
     return await directory.by_identity(session, user, identifier=project_id)
+
+
+@project_router.get("/{project_id}/content", response_model=ProjectContentRead)
+async def project_content(project_id: uuid.UUID, session: Session, user: CurrentUser) -> ProjectContentRead:
+    """RADD-1174: what deleting this project would destroy, and what forbids it —
+    the confirmation dialog's source, gated like the delete itself so the
+    numbers are never shown to someone who cannot act on them."""
+    project = await service.get_project(session, project_id)
+    await authz.require(session, user, authz.Permission.PROJECT_DELETE)
+    inspection = await service.inspect_project(session, project)
+    return ProjectContentRead(
+        counts=inspection.counts,
+        blockers=[BlockerRead(**vars(blocker)) for blocker in inspection.blockers],
+    )
+
+
+@project_router.delete("/{project_id}", status_code=204)
+async def delete_project(project_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
+    """RADD-1174: hard-delete the project and everything in it. `project.delete`
+    is a GLOBAL atom on purpose — `PROJECT_PERMISSIONS` feeds the builtin
+    project Admin role, and a delegated project admin must not be able to
+    destroy the project. A blocker (mail still routed here) is a 409 naming it."""
+    project = await service.get_project(session, project_id)
+    await authz.require(session, user, authz.Permission.PROJECT_DELETE)
+    await service.delete_project(session, project, actor_id=user.id)
 
 
 @project_router.patch("/{project_id}", response_model=ProjectRead)

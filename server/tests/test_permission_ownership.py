@@ -39,6 +39,7 @@ AUTH_OWNED = {
     "global.manage",
     "project.create",
     "project.manage",
+    "project.delete",
     "user.manage", "user.create", "user.update", "user.delete",
     "role.read", "role.create", "role.update", "role.delete",
     "member.create", "member.update", "member.delete",

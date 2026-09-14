@@ -1,16 +1,23 @@
 import uuid
 from collections.abc import Iterable
 
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError, NotFoundError
 from radd.hooks import hooks
+from radd.kernel import registries
 from radd.modules.events import service as events
 
 from .models import Project
 from .schemas import ProjectCreate, ProjectUpdate
-from .types import ProjectEntity, ProjectEvent
+from .types import (
+    ProjectDeleting,
+    ProjectEntity,
+    ProjectEvent,
+    ProjectHook,
+    ProjectInspection,
+)
 
 
 async def create_project(
@@ -142,3 +149,81 @@ async def reserve_item_number(session: AsyncSession, project_id: uuid.UUID, numb
         .where(Project.id == project_id, Project.next_number <= number)
         .values(next_number=number + 1)
     )
+
+
+# --- deletion (RADD-1174) ------------------------------------------------------
+
+
+async def inspect_project(session: AsyncSession, project: Project) -> ProjectInspection:
+    """What deleting this project would destroy, and what forbids it.
+
+    Composed by the owners: `projects` knows nothing about comments, worklogs or
+    mail routing, so it dispatches `ProjectHook.INSPECTING` and each module
+    writes its own line. The same object drives the confirmation dialog and the
+    refusal inside `delete_project`, so what the person was shown is what the
+    server enforces.
+    """
+    inspection = ProjectInspection(project=project)
+    await hooks.dispatch(session, ProjectHook.INSPECTING, inspection)
+    return inspection
+
+
+async def delete_project(
+    session: AsyncSession, project: Project, *, actor_id: uuid.UUID | None = None
+) -> ProjectInspection:
+    """HARD-delete a project and everything that lives in it (RADD-1174).
+
+    Three layers, in this order, all inside the caller's transaction so a
+    refusal anywhere leaves nothing half-deleted:
+
+    1. `inspect_project` — a blocker (a mail source still routing here) is a
+       409 naming it. Refusing beats degrading: `mail_sources.default_project_id`
+       is `SET NULL`, and a source with no default makes `intake.accept` raise
+       on every message, which the webhook turns into a 5xx that bounces valid
+       mail. Better to say so while the admin can still repoint it.
+    2. `ProjectHook.DELETING` — the owners remove what the database cannot
+       cascade: comments and attachments (polymorphic parent), grants on the
+       project's resources, scoped settings, subscriptions, and the fields and
+       link types scoped ONLY to this project — which would otherwise become
+       global, since "no scope rows" means "every project".
+    3. the `ProjectPurgeSpec` registry (RADD-892), in its FK-safe order, then
+       the row itself; whatever declared `ON DELETE CASCADE` goes with it.
+
+    The event is emitted BEFORE the delete so the kernel resolves the subject
+    ref normally — a delete is exactly when a consumer cannot look it up after.
+    Returns the inspection, so the caller can say what went.
+    """
+    inspection = await inspect_project(session, project)
+    if inspection.blockers:
+        named = "; ".join(
+            f"{b.label}" + (f" ({b.hint})" if b.hint else "") for b in inspection.blockers
+        )
+        raise ConflictError(
+            ProjectEntity.PROJECT,
+            reason=f"{project.key} cannot be deleted while something still routes to it — {named}",
+        )
+    await events.emit(
+        session,
+        event_type=ProjectEvent.PROJECT_DELETED,
+        entity_type=ProjectEntity.PROJECT,
+        entity_id=project.id,
+        actor_id=actor_id,
+        payload={"key": project.key, "name": project.name, "removed": dict(inspection.counts)},
+    )
+    await hooks.dispatch(session, ProjectHook.DELETING, ProjectDeleting(project, actor_id))
+    await purge_project_rows(session, project.id)
+    await session.delete(project)
+    await session.flush()
+    return inspection
+
+
+async def purge_project_rows(session: AsyncSession, project_id: uuid.UUID) -> None:
+    """The registry half of the teardown: every table some plugin claimed as
+    "dies with a project", deleted in the order the foreign keys survive. A
+    plain DELETE is the right verb here — these are administrative rows whose
+    per-row services would re-run permission checks and emit deletion events
+    for work that never really happened (the RADD-892 argument)."""
+    for table in registries.project_purge_tables():
+        await session.execute(
+            text(f"DELETE FROM {table} WHERE project_id = :id"), {"id": project_id}
+        )

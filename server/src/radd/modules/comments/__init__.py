@@ -5,6 +5,7 @@ from radd.kernel import PermissionSpec
 from .slq import commented_by_item_ids
 
 from .router import router
+from . import subscribers  # noqa: F401 — RADD-1174: the project-teardown hooks
 from .types import CommentEvent
 
 from radd.kernel.registry import register_relation, register_relation_domain

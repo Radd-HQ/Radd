@@ -7,6 +7,7 @@ from radd.kernel import CrudResourceSpec, PermissionSpec
 
 from .openapi import augment_openapi
 from .router import router
+from . import subscribers  # noqa: F401 — RADD-1174: the project-teardown hooks
 from .settings_router import router as settings_router
 from .service import warm_schema_cache
 from .types import FieldEvent

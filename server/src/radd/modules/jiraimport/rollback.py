@@ -23,7 +23,6 @@ from dataclasses import dataclass, field
 from sqlalchemy import delete as sa_delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd.kernel import registries
 from radd.modules.items.models import WorkItem
 
 from . import ledger
@@ -188,19 +187,17 @@ async def _delete(session: AsyncSession, entity: LedgerEntity, entity_id: str) -
                 f"{remaining} issue(s) were kept (edited since the import), so the "
                 "project was kept too"
             )
-        # Creating a project fires hooks that seed default states, issue types
-        # and views. Those are not in the ledger (the import did not ask for
-        # them) but they DO hold the project down, so undoing a created project
-        # takes them with it. RADD-892: which tables those are is no longer a
-        # list HERE — jiraimport was naming seven other modules' tables by
-        # string, so a module that added a project-scoped table (or a plugin
-        # that declared a project-scoped entity, which nothing could have
-        # anticipated) silently fell out of coverage. Each owner registers a
-        # ProjectPurgeSpec; this reads them in the order the registry resolves.
-        for table in registries.project_purge_tables():
-            await session.execute(
-                text(f"DELETE FROM {table} WHERE project_id = :id"), {"id": typed}
-            )
+        # RADD-1174: the projects module owns the teardown. This used to walk
+        # `registries.project_purge_tables()` itself, which covered the tables
+        # a `DELETE … WHERE project_id` can reach and nothing else — comments,
+        # attachments, scoped settings and the fields scoped only to this
+        # project all survived an undo. Now an import's undo is the same
+        # deletion the admin surface performs, blockers included.
+        from radd.modules.projects import service as projects_service
+
+        project = await projects_service.get_project(session, typed)
+        await projects_service.delete_project(session, project)
+        return
     await session.execute(
         text(f"DELETE FROM {_TABLES[entity]} WHERE id = :id"), {"id": typed}
     )

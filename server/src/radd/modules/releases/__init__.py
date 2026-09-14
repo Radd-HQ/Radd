@@ -4,6 +4,7 @@ from radd.kernel import CrudResourceSpec, ProjectPurgeSpec
 from radd.kernel import SettingSpec
 
 from .router import router
+from . import subscribers  # noqa: F401 — RADD-1174: the project-teardown hooks
 from .types import ReleaseEvent
 
 # After the router chain on purpose: mcptools joins the loaded graph (RADD-889).

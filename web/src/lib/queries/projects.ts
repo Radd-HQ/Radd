@@ -6,6 +6,7 @@ import { Entity, entityMeta, projectEntityMeta } from "../cache";
 import {
   ApiPath,
   apiItemAllowedTransitionsPath,
+  apiProjectContentPath,
   apiProjectTransitionsPath,
 } from "../constants";
 import { queryKeys } from "./shared";
@@ -14,6 +15,7 @@ import type {
   EffectiveScreen,
   IssueType,
   Project,
+  ProjectContentSummary,
   ProjectSummary,
   PermissionValue,
   State,
@@ -75,6 +77,15 @@ export const projectByKeyQuery = (key: string) => queryOptions({
   queryFn: ({ signal }) => readProject(`${ApiPath.projects}/by-key/${encodeURIComponent(key.toUpperCase())}`, signal),
   enabled: Boolean(key),
 });
+
+/** RADD-1174: the delete dialog's numbers + blockers. Never stale — it is
+ * read at the moment of the decision. */
+export const projectContentQuery = (projectId: string) =>
+  queryOptions({
+    queryKey: [...queryKeys.projectById(projectId), "content"] as const,
+    queryFn: ({ signal }) => api.get<ProjectContentSummary>(apiProjectContentPath(projectId), { signal }),
+    staleTime: 0,
+  });
 
 export const statesQuery = (projectId: string) =>
   queryOptions({

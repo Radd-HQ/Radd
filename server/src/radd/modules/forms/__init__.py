@@ -9,6 +9,7 @@ from . import portal
 from . import staging  # noqa: F401 — registers the staging attachment parent (RADD-800)
 from .portal_router import requests_router as portal_requests_router, router as portal_router
 from .router import router
+from . import subscribers  # noqa: F401 — RADD-1174: the project-teardown hooks
 from .types import FormEvent
 from .validation import FormValidationError
 

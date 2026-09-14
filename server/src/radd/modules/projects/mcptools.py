@@ -59,6 +59,19 @@ async def _update_project(session: AsyncSession, actor: Any, args: Mapping[str, 
     }
 
 
+async def _delete_project(session: AsyncSession, actor: Any, args: Mapping[str, Any]) -> Any:
+    """RADD-1174. Kernel-enforced on the GLOBAL `project.delete` atom (no
+    `project_param`: the atom is not held per project), so the catalog hides
+    the tool from any key that lacks it and the dispatcher refuses a call
+    regardless. A blocker comes back as the 409 reason, like every refusal."""
+    from . import service as projects_service
+
+    project = await projects_service.get_by_key(session, str(args["project"]))
+    key, name = project.key, project.name
+    inspection = await projects_service.delete_project(session, project, actor_id=actor.id)
+    return {"deleted": {"key": key, "name": name}, "removed": dict(inspection.counts)}
+
+
 LIST_PROJECTS = McpToolSpec(
     name="list_projects",
     description="List every project on this Radd instance.",
@@ -89,4 +102,20 @@ UPDATE_PROJECT = McpToolSpec(
     project_param="project",
 )
 
-MCP_TOOLS = (LIST_PROJECTS, UPDATE_PROJECT)
+DELETE_PROJECT = McpToolSpec(
+    name="delete_project",
+    description=(
+        "PERMANENTLY delete a project and everything in it: issues, comments, "
+        "attachments, worklogs, releases, views, forms, states. Cannot be undone. "
+        "Refused (409) while a mail source or rule still routes into it. Requires "
+        "the global project.delete permission."
+    ),
+    input_schema=object_schema(
+        {"project": {"type": "string", "description": "Project key, e.g. TD."}},
+        ["project"],
+    ),
+    handler=_delete_project,
+    permission=Permission.PROJECT_DELETE,
+)
+
+MCP_TOOLS = (LIST_PROJECTS, UPDATE_PROJECT, DELETE_PROJECT)

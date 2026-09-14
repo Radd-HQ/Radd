@@ -19,6 +19,10 @@ export const apiProjectTransitionsPath = (projectId: string) =>
   `${ApiPath.projects}/${projectId}/transitions`;
 /** RADD-1009: one project by id — `PATCH` renames/describes it. */
 export const apiProjectPath = (projectId: string) => `${ApiPath.projects}/${projectId}`;
+/** RADD-1174: what deleting the project destroys + what blocks it (`GET`);
+ * `DELETE apiProjectPath(id)` is the deletion itself. */
+export const apiProjectContentPath = (projectId: string) =>
+  `${ApiPath.projects}/${projectId}/content`;
 /** Spec 121: the project's public-access switches. */
 export const apiProjectPublicAccessPath = (projectId: string) =>
   `${ApiPath.projects}/${projectId}/public-access`;

@@ -98,6 +98,24 @@ export interface ProjectUpdate {
   description?: string;
 }
 
+/** RADD-1174: one thing that stops a project being deleted, named by the
+ * module that owns it (`mail_source`, `mail_rule`); `hint` says where to fix it. */
+export interface ProjectBlocker {
+  kind: string;
+  id: string;
+  label: string;
+  hint: string;
+}
+
+/** GET /projects/{id}/content (RADD-1174): what deleting the project destroys
+ * and what forbids it. `counts` is keyed by the owners' nouns — the dialog
+ * renders the ones it knows and ignores the rest, so a plugin's count degrades
+ * to nothing rather than to an error. */
+export interface ProjectContentSummary {
+  counts: Record<string, number>;
+  blockers: ProjectBlocker[];
+}
+
 /** PUT /projects/{id}/public-access (spec 121). */
 export interface PublicAccessUpdate {
   public: boolean;

@@ -44,6 +44,7 @@ WRITE_TOOLS = {
     McpTool.MOVE_PAGE.value,
 }
 ADMIN_TOOLS = {
+    McpTool.DELETE_PROJECT.value,  # RADD-1174: the global project.delete atom
     McpTool.LIST_USERS.value,
     McpTool.LIST_SERVICE_ACCOUNTS.value,
     McpTool.CREATE_SERVICE_ACCOUNT.value,

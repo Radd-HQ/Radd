@@ -1,6 +1,7 @@
 from radd.kernel import EventTypeSpec, RaddPlugin
 
 from .router import router
+from . import subscribers  # noqa: F401 — RADD-1174: the project-teardown hooks
 from .types import SettingEvent
 
 plugin = RaddPlugin(

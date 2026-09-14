@@ -66,6 +66,7 @@ class McpTool(StrEnum):
     UNLINK_ITEMS = "unlink_items"  # RADD-739
     LIST_PROJECTS = "list_projects"
     UPDATE_PROJECT = "update_project"  # RADD-1009: rename + describe
+    DELETE_PROJECT = "delete_project"  # RADD-1174: the whole project, permanently
     GET_PAGE = "get_page"
     SEARCH_PAGES = "search_pages"
     CREATE_PAGE = "create_page"  # RADD-1005: the wiki, writable

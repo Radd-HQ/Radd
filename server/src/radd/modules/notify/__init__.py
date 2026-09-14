@@ -3,6 +3,7 @@ from radd.kernel import RaddPlugin
 
 from . import dispatcher
 from .router import router
+from . import subscribers  # noqa: F401 — RADD-1174: the project-teardown hooks
 from .types import NotifyEvent, CONSUMER_NAME
 
 plugin = RaddPlugin(

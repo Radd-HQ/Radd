@@ -111,3 +111,22 @@ class ProjectSummaryRead(BaseModel):
     total: int
     related_count: int
     permissions: list[str]
+
+
+class BlockerRead(BaseModel):
+    """RADD-1174: one thing that stops a project being deleted, as the owner
+    module named it — the SPA prints `label` and links by `hint`."""
+
+    kind: str
+    id: str
+    label: str
+    hint: str = ""
+
+
+class ProjectContentRead(BaseModel):
+    """`GET /projects/{id}/content` (RADD-1174): what deleting the project
+    destroys (`counts`, keyed by the owners' nouns — `items`, `comments`,
+    `attachments`, `worklogs`, `worklog_seconds`, …) and what forbids it."""
+
+    counts: dict[str, int]
+    blockers: list[BlockerRead]

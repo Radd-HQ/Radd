@@ -68,6 +68,7 @@ class Permission(StrEnum):
     GLOBAL_MANAGE = "global.manage"  # global settings + administration (was workspace.manage)
     PROJECT_CREATE = "project.create"
     PROJECT_MANAGE = "project.manage"  # states/fields/labels/webhooks/teams/members
+    PROJECT_DELETE = "project.delete"  # RADD-1174: global on purpose — see permissions.py
     ITEM_READ = "item.read"
     ITEM_CREATE = "item.create"
     ITEM_UPDATE = "item.update"
