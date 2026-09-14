@@ -57,3 +57,6 @@ export const roadmapMembersOnlyStorageKey = (viewId: string) =>
 
 /** Peek drawer width (one drawer app-wide, so not keyed per view). */
 export const PEEK_WIDTH_STORAGE_KEY = "radd.peek.width";
+
+/** RADD-1177: the person's list page size (one of ITEMS_PAGE_SIZES). */
+export const ITEMS_PAGE_SIZE_STORAGE_KEY = "radd.itemsPageSize";

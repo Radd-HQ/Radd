@@ -26,8 +26,7 @@ import {
   apiViewPath,
   roadmapEpicsOnlyStorageKey,
   roadmapMembersOnlyStorageKey,
-  roadmapShowClosedStorageKey,
-} from "../lib/constants";
+  roadmapShowClosedStorageKey, ITEMS_PAGE_SIZES } from "../lib/constants";
 import { downloadCsv, itemsToCsv } from "../lib/csv";
 import { useCurrentUser, useKeyboardShortcut, usePermissions, usePointsEnabled, useAnonymousBounce, useIsAuthenticated, useItemsPageLimit } from "../lib/hooks";
 import {
@@ -355,7 +354,7 @@ export function ViewPage() {
     }
   }, [pageQueryString]);
   // RADD-1154: 50 per page on a phone, 200 otherwise.
-  const pageLimit = useItemsPageLimit();
+  const [pageLimit, setPageLimit] = useItemsPageLimit();
   const pagedItems = useQuery({
     ...pagedViewItemsQuery(fetchQueryView, page, pageLimit),
     enabled: Boolean(view) && !isRoadmap,
@@ -1240,9 +1239,26 @@ export function ViewPage() {
       )}
 
       {/* Classic pagination (pagination wave) — roadmaps auto-stream instead. */}
-      {!isRoadmap && ((pageCount !== null && pageCount > 1) || page > 1) && (
+      {/* RADD-1177: also shown whenever a SMALLER page would paginate — otherwise
+          the size picker is unreachable exactly when someone wants a smaller page. */}
+      {!isRoadmap &&
+        ((pageCount !== null && pageCount > 1) ||
+          page > 1 ||
+          (totalCount !== null && totalCount > Math.min(...ITEMS_PAGE_SIZES))) && (
         <div className="flex items-center justify-center border-t border-subtle/70 py-2">
-          <Pager page={page} pageCount={pageCount} total={totalCount} onPage={setPage} />
+          <Pager
+            page={page}
+            pageCount={pageCount}
+            total={totalCount}
+            onPage={setPage}
+            pageSize={pageLimit}
+            pageSizes={ITEMS_PAGE_SIZES}
+            onPageSize={(size) => {
+              // A new page size makes the page NUMBER meaningless — back to 1.
+              setPageLimit(size);
+              setPage(1);
+            }}
+          />
         </div>
       )}
 

@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -9,7 +10,10 @@ import {
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMobileNavigation } from "../components/shell/mobile-navigation";
-import { RoutePath, SLQ_PROBE_DEBOUNCE_MS, ITEMS_PAGE_LIMIT, ITEMS_PAGE_LIMIT_PHONE } from "./constants";
+import {
+  RoutePath, SLQ_PROBE_DEBOUNCE_MS, ITEMS_PAGE_LIMIT, ITEMS_PAGE_LIMIT_PHONE, ITEMS_PAGE_SIZES,
+  ITEMS_PAGE_SIZE_STORAGE_KEY,
+} from "./constants";
 import {
   allowedTransitionsQuery,
   authStateQuery,
@@ -44,11 +48,33 @@ export function useAuthState(): AuthState | undefined {
   return data;
 }
 
+function readStoredPageSize(): number | null {
+  try {
+    const raw = Number(localStorage.getItem(ITEMS_PAGE_SIZE_STORAGE_KEY));
+    return ITEMS_PAGE_SIZES.includes(raw) ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
 /** RADD-1154: how many items a paged view fetches — the phone breakpoint the
- *  shell's mobile navigation already uses, so "phone" means one thing. */
-export function useItemsPageLimit(): number {
+ *  shell's mobile navigation already uses, so "phone" means one thing.
+ *  RADD-1177: a size the person chose on the pager wins over the viewport
+ *  default and is remembered per browser — ergonomics, like column widths,
+ *  never part of the shared view. */
+export function useItemsPageLimit(): [number, (size: number) => void] {
   const { mobile } = useMobileNavigation();
-  return mobile ? ITEMS_PAGE_LIMIT_PHONE : ITEMS_PAGE_LIMIT;
+  const [stored, setStored] = useState<number | null>(readStoredPageSize);
+  const set = useCallback((size: number) => {
+    if (!ITEMS_PAGE_SIZES.includes(size)) return;
+    setStored(size);
+    try {
+      localStorage.setItem(ITEMS_PAGE_SIZE_STORAGE_KEY, String(size));
+    } catch {
+      // Best-effort persistence — the choice still holds for the session.
+    }
+  }, []);
+  return [stored ?? (mobile ? ITEMS_PAGE_LIMIT_PHONE : ITEMS_PAGE_LIMIT), set];
 }
 
 /** Spec 121: a real account is signed in (not the anonymous principal). */

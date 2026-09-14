@@ -54,6 +54,9 @@ export const ITEMS_PAGE_LIMIT = 200;
 /** RADD-1154: a phone shows one card per screen, so a 200-item page reads as
  *  "everything" and the pager sits 200 cards away — page smaller there. */
 export const ITEMS_PAGE_LIMIT_PHONE = 50;
+/** RADD-1177: the page sizes the list pager offers — personal, remembered per
+ *  browser; the largest is the server's cap, so no page costs more than today. */
+export const ITEMS_PAGE_SIZES: readonly number[] = [25, 50, 100, 200];
 
 /** Client-side mirror of the ProjectCreate.key pattern in the API schema. */
 export const PROJECT_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9]{0,9}$/;

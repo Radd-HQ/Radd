@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+import { Select } from "./Select";
 
 /** Window of page numbers around the current page: 1 … 4 [5] 6 … 42. */
 function pageWindow(page: number, pageCount: number): (number | "…")[] {
@@ -29,6 +30,9 @@ export function Pager({
   total,
   onPage,
   compact = false,
+  pageSize,
+  pageSizes,
+  onPageSize,
 }: {
   /** 1-based current page. */
   page: number;
@@ -38,6 +42,11 @@ export function Pager({
   total?: number | null;
   onPage: (page: number) => void;
   compact?: boolean;
+  /** RADD-1177: when all three are given, a per-page size picker follows the
+   *  total. The caller owns the choice (personal, remembered per browser). */
+  pageSize?: number;
+  pageSizes?: readonly number[];
+  onPageSize?: (size: number) => void;
 }) {
   const last = pageCount ?? Math.max(page, 1);
   const canPrev = page > 1;
@@ -95,6 +104,17 @@ export function Pager({
       </button>
       {!compact && total != null && (
         <span className="ml-2 text-xs text-fg-faint">{total.toLocaleString()} items</span>
+      )}
+      {!compact && pageSize !== undefined && pageSizes && onPageSize && (
+        <span className="ml-2 flex items-center gap-1 text-xs text-fg-faint" data-page-size>
+          <Select
+            size="sm"
+            value={String(pageSize)}
+            onChange={(value) => onPageSize(Number(value))}
+            options={pageSizes.map((size) => ({ value: String(size), label: String(size) }))}
+          />
+          per page
+        </span>
       )}
     </nav>
   );
