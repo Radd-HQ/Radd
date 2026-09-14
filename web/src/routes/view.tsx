@@ -568,7 +568,12 @@ export function ViewPage() {
   });
   // RADD-855: per-view bucket order — a shared view property, edit-gated.
   const updateBucketOrder = useMutation({
-    mutationFn: (body: { column_order?: string[]; swimlane_order?: string[] }) =>
+    mutationFn: (body: {
+      column_order?: string[];
+      swimlane_order?: string[];
+      hidden_columns?: string[] | null;
+      collapse_empty_columns?: boolean;
+    }) =>
       api.patch<View>(apiViewPath(viewId), body),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.views }),
   });
@@ -638,6 +643,14 @@ export function ViewPage() {
       view.column_order,
     );
   }, [view, orderedItems, columnAxis, axisContext]);
+  // RADD-1175: presence. `columns` stays the FULL set (the Order menu must be
+  // able to bring a hidden one back); the surfaces get the visible subset.
+  const hiddenKeys = useMemo(() => new Set(view?.hidden_columns ?? []), [view?.hidden_columns]);
+  const visibleColumns = useMemo(
+    () => (hiddenKeys.size ? columns.filter((column) => !hiddenKeys.has(column.key)) : columns),
+    [columns, hiddenKeys],
+  );
+  const collapseEmpty = Boolean(view?.collapse_empty_columns);
   const lanes: ViewGroup[] = useMemo(
     () =>
       view && laneAxis
@@ -975,6 +988,15 @@ export function ViewPage() {
               lanes={laneAxis ? lanes : []}
               onReorderColumns={(keys) => updateBucketOrder.mutate({ column_order: keys })}
               onReorderLanes={(keys) => updateBucketOrder.mutate({ swimlane_order: keys })}
+              hiddenKeys={hiddenKeys}
+              onToggleHidden={(key) => {
+                const next = new Set(hiddenKeys);
+                if (next.has(key)) next.delete(key);
+                else next.add(key);
+                updateBucketOrder.mutate({ hidden_columns: next.size ? [...next] : null });
+              }}
+              collapseEmpty={collapseEmpty}
+              onSetCollapseEmpty={(value) => updateBucketOrder.mutate({ collapse_empty_columns: value })}
             />
           )}
           {!isQueue && !isRoadmap && (
@@ -1152,7 +1174,8 @@ export function ViewPage() {
               <ViewSwimlanes
                 // Remount per view so the collapse set re-reads its storage key.
                 key={view.id}
-                columns={columns}
+                columns={visibleColumns}
+                collapseEmpty={collapseEmpty}
                 lanes={lanes}
                 viewId={view.id}
                 layout={cardLayout}
@@ -1168,7 +1191,8 @@ export function ViewPage() {
               />
             ) : (
               <ViewBoard
-                groups={columns}
+                groups={visibleColumns}
+                collapseEmpty={collapseEmpty}
                 layout={cardLayout}
                 usersById={usersById}
                 cfByKey={cfByKey}

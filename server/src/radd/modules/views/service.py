@@ -265,6 +265,8 @@ async def _hydrate(session: AsyncSession, actor: User, views: list[View], *, inc
                     CardLayout.model_validate(view.card_layout) if view.card_layout else None
                 ),
                 column_order=view.column_order,
+                collapse_empty_columns=view.collapse_empty_columns,
+                hidden_columns=view.hidden_columns,
                 swimlane_order=view.swimlane_order,
                 owner_id=view.owner_id,
                 owner=ShareUserRef(id=owner.id, name=owner.name) if owner else None,
@@ -644,6 +646,8 @@ async def create_view(session: AsyncSession, data: ViewCreate, actor: User) -> V
     view.card_layout = _validate_card_layout(data.card_layout)
     view.column_order = _validate_bucket_order(data.column_order)
     view.swimlane_order = _validate_bucket_order(data.swimlane_order)
+    view.collapse_empty_columns = data.collapse_empty_columns
+    view.hidden_columns = _validate_bucket_order(data.hidden_columns)
     session.add(view)
     await session.flush()
     for entry in data.shares:
@@ -740,6 +744,11 @@ async def update_view(
     for order_field in ("column_order", "swimlane_order"):
         if order_field in data.model_fields_set:
             setattr(view, order_field, _validate_bucket_order(getattr(data, order_field)))
+    # RADD-1175: column presence — same omitted/null idiom as the bucket order.
+    if data.collapse_empty_columns is not None:
+        view.collapse_empty_columns = data.collapse_empty_columns
+    if "hidden_columns" in data.model_fields_set:
+        view.hidden_columns = _validate_bucket_order(data.hidden_columns)
     if data.position is not None:
         view.position = data.position
     await session.flush()
@@ -888,10 +897,10 @@ async def delete_view(session: AsyncSession, view_id: uuid.UUID, actor: User) ->
 VIEW_FIELDS: tuple[str, ...] = (
     "name", "view_type", "query", "group_by", "swimlane_by", "cycle_filter",
     "quick_filters", "wip_limits", "columns", "card_layout", "column_order",
-    "swimlane_order", "position",
+    "swimlane_order", "collapse_empty_columns", "hidden_columns", "position",
 )
 VIEW_HIDDEN: tuple[str, ...] = ("quick_filters", "wip_limits", "columns", "card_layout")
-VIEW_COLLECTIONS: tuple[str, ...] = ("column_order", "swimlane_order")
+VIEW_COLLECTIONS: tuple[str, ...] = ("column_order", "swimlane_order", "hidden_columns")
 
 
 async def _emit(

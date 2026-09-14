@@ -178,6 +178,10 @@ class ViewCreate(BaseModel):
     # RADD-855: per-view bucket order (column axis / swimlane axis).
     column_order: list[str] | None = _bucket_order_field
     swimlane_order: list[str] | None = _bucket_order_field
+    # RADD-1175: board column presence — collapse the empty ones to a rail,
+    # and never show these keys (loosely validated, like column_order).
+    collapse_empty_columns: bool = False
+    hidden_columns: list[str] | None = _bucket_order_field
     # Sharing at birth (spec 57): the level every active user gets (None = private).
     global_access: ShareLevel | None = None
     shares: list[ViewShareEntry] = Field(default_factory=list, max_length=50)
@@ -211,6 +215,9 @@ class ViewUpdate(BaseModel):
     # RADD-855: per-view bucket order (column axis / swimlane axis).
     column_order: list[str] | None = _bucket_order_field
     swimlane_order: list[str] | None = _bucket_order_field
+    # RADD-1175: omitted = unchanged; hidden_columns explicit null/[] = none hidden.
+    collapse_empty_columns: bool | None = None
+    hidden_columns: list[str] | None = _bucket_order_field
     position: int | None = Field(default=None, ge=0)
 
 
@@ -259,6 +266,9 @@ class ViewRead(BaseModel):
     # RADD-855: per-view bucket order (column axis / swimlane axis).
     column_order: list[str] | None = _bucket_order_field
     swimlane_order: list[str] | None = _bucket_order_field
+    # RADD-1175: board column presence (see the model).
+    collapse_empty_columns: bool = False
+    hidden_columns: list[str] | None = None
     owner_id: uuid.UUID | None
     # Sharing (spec 57): who owns it, what every active user gets, and the
     # explicit grants; `shared` = visible beyond the owner (any of the above).

@@ -1,7 +1,7 @@
 import uuid
 from typing import Any
 
-from sqlalchemy import ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -37,6 +37,16 @@ class View(Base, TimestampMixin):
     # natural order), so a renamed state or new category degrades gracefully.
     column_order: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     swimlane_order: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    # RADD-1175: board column PRESENCE, saved on the view like column_order —
+    # shared shape, never a personal preference. `collapse_empty_columns`: an
+    # empty bucket renders as a narrow rail that stays a drop target (expands
+    # on hover and for the duration of a drag). `hidden_columns`: bucket keys
+    # never shown on this view; loosely validated like column_order so a
+    # departed state degrades to an ignored key. NULL = nothing hidden.
+    collapse_empty_columns: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
+    hidden_columns: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     # Optional cycle-name REGEX narrowing the header set when an axis is `cycle`
     # (specs 23/56); None/'' = all cycles. Compile-validated; matched client-side.
     cycle_filter: Mapped[str | None] = mapped_column(Text)

@@ -1,4 +1,4 @@
-import type { MouseEvent as ReactMouseEvent } from "react";
+import { useState, type MouseEvent as ReactMouseEvent } from "react";
 import { Plus } from "lucide-react";
 import type { BucketRef } from "../../lib/axis-dnd";
 import { useBucketDrop } from "../../lib/bucket-drop";
@@ -52,6 +52,10 @@ interface ViewBoardProps {
   /** Multi-select (spec 68) — card checkboxes when provided. */
   selectedIds?: Set<string>;
   onSelectToggle?: (item: Item, event: ReactMouseEvent) => void;
+  /** RADD-1175: render an EMPTY column as a narrow rail. It stays a drop
+   *  target — the rail expands on hover, and every rail expands for the
+   *  duration of a drag, so an empty state is never unreachable. */
+  collapseEmpty?: boolean;
 }
 
 const noop = () => {};
@@ -91,10 +95,13 @@ export function ViewBoard({
   onContextMenu,
   selectedIds,
   onSelectToggle,
+  collapseEmpty,
 }: ViewBoardProps) {
   const dnd = Boolean(onMoveToBucket);
   const drop = useBucketDrop<Item>(dnd);
   const dragging = drop.dragging;
+  // The one rail the pointer is over (or focus is in) — expanded in place.
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
   // The whole board scrolls — both axes on this one container. Columns size to
   // their content (`items-start`), so a long column simply makes the page longer
@@ -107,10 +114,22 @@ export function ViewBoard({
           ? group.items.reduce((sum, item) => sum + (item.estimate_points ?? 0), 0)
           : 0;
         const limit = wipLimits?.[group.key];
+        const collapsed =
+          Boolean(collapseEmpty) &&
+          group.items.length === 0 &&
+          !dragging &&
+          expandedKey !== group.key;
         return (
           <section
             key={group.key}
+            data-board-column={group.key}
+            data-collapsed={collapsed ? "true" : "false"}
             aria-label={`${group.label} (${group.items.length})`}
+            onMouseEnter={collapseEmpty ? () => setExpandedKey(group.key) : undefined}
+            onMouseLeave={collapseEmpty ? () => setExpandedKey((k) => (k === group.key ? null : k)) : undefined}
+            onFocus={collapseEmpty ? () => setExpandedKey(group.key) : undefined}
+            onBlur={collapseEmpty ? () => setExpandedKey((k) => (k === group.key ? null : k)) : undefined}
+            tabIndex={collapsed ? 0 : undefined}
             className={
               // OPEN columns: cards float on the page ground (no boxed panel) —
               // the cards themselves are the only elevated surface, which is
@@ -118,7 +137,11 @@ export function ViewBoard({
               // is `items-start`); the body's min-h-24 keeps an empty column
               // droppable. The drop highlight paints the column's own rounded
               // region since there is no border to recolor.
-              "group/column flex w-80 shrink-0 flex-col rounded-xl transition-colors " +
+              // RADD-1175: a collapsed rail is 40px of label; the width
+              // transition is what makes hover-expand read as "the column
+              // was always here", not as a layout jump.
+              "group/column flex shrink-0 flex-col rounded-xl transition-[width,background-color] " +
+              (collapsed ? "w-10 " : "w-80 ") +
               (isOver ? "bg-accent/5 ring-2 ring-accent/30" : "")
             }
             {...drop.targetProps(group.key, (dragged) =>
@@ -127,6 +150,30 @@ export function ViewBoard({
               onMoveToBucket?.(dragged, group),
             )}
           >
+            {collapsed ? (
+              <div
+                className={
+                  // Rotated label, reading bottom-to-top like a book spine; the
+                  // min height keeps the rail a comfortable drop target.
+                  "flex min-h-40 flex-col items-center gap-2 rounded-xl border border-dashed border-strong px-1 py-2 " +
+                  "text-fg-muted hover:border-emphasis hover:text-fg"
+                }
+                title={`${group.label} — empty; hover to expand`}
+              >
+                {group.dotClassName && (
+                  <span className={`size-2 shrink-0 rounded-full ${group.dotClassName}`} aria-hidden />
+                )}
+                <span className="[writing-mode:vertical-rl] rotate-180 truncate text-[12px] font-semibold">
+                  {group.label}
+                </span>
+                {limit !== undefined && (
+                  <span className="text-[10px] tabular-nums text-fg-faint" title={`WIP limit ${limit}`}>
+                    0/{limit}
+                  </span>
+                )}
+              </div>
+            ) : (
+            <>
             <header className="px-1.5 pb-1.5 pt-0.5">
               <div className="flex items-center gap-2">
                 {group.dotClassName && (
@@ -207,6 +254,8 @@ export function ViewBoard({
                 </button>
               )}
             </div>
+            </>
+            )}
           </section>
         );
       })}

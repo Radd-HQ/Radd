@@ -135,6 +135,11 @@ export interface View {
   /** RADD-855: per-view bucket order (keys; null = the axis's natural order). */
   column_order?: string[] | null;
   swimlane_order?: string[] | null;
+  /** RADD-1175: an empty column renders as a narrow rail (still a drop
+   * target — it expands on hover and while a drag is in progress). */
+  collapse_empty_columns?: boolean;
+  /** RADD-1175: bucket keys this view never shows; null = none. */
+  hidden_columns?: string[] | null;
   owner_id: string | null;
   /** Sharing (spec 57): the owner, the server-wide grant, explicit grants.
    * `global_access` = the wire name for "everyone on this server". */

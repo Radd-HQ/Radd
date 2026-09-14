@@ -36,6 +36,8 @@ interface ViewSwimlanesProps {
   /** When set, cards drag between cells and the drop sets BOTH the column and
    *  lane axis fields on the item (spec 24). */
   onMoveToCell?: (item: Item, column: BucketRef, lane: BucketRef) => void;
+  /** RADD-1175: a column empty in EVERY lane renders as a rail (see ViewBoard). */
+  collapseEmpty?: boolean;
   /** Right-click quick-actions on a card (spec 24). */
   onContextMenu?: (item: Item, event: ReactMouseEvent) => void;
   /** Multi-select (spec 68) — card checkboxes when provided. */
@@ -48,6 +50,7 @@ const noDrag = () => {};
 // Matches the board's column width so a view toggling swimlanes on/off keeps
 // its horizontal rhythm.
 const COLUMN_WIDTH_CLASSES = "w-80 shrink-0";
+const RAIL_WIDTH_CLASSES = "w-10 shrink-0";
 
 function readCollapsed(viewId: string): Set<string> {
   try {
@@ -81,6 +84,7 @@ export function ViewSwimlanes({
   onContextMenu,
   selectedIds,
   onSelectToggle,
+  collapseEmpty,
 }: ViewSwimlanesProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => readCollapsed(viewId));
   const dnd = Boolean(onMoveToCell);
@@ -104,6 +108,18 @@ export function ViewSwimlanes({
     });
   };
 
+  // RADD-1175: the rail the pointer is over; every rail expands mid-drag.
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const railOf = (column: ViewGroup) =>
+    Boolean(collapseEmpty) && column.items.length === 0 && !drop.dragging && expandedKey !== column.key;
+  const widthOf = (column: ViewGroup) => (railOf(column) ? RAIL_WIDTH_CLASSES : COLUMN_WIDTH_CLASSES);
+  const hoverProps = (column: ViewGroup) =>
+    collapseEmpty
+      ? {
+          onMouseEnter: () => setExpandedKey(column.key),
+          onMouseLeave: () => setExpandedKey((k) => (k === column.key ? null : k)),
+        }
+      : {};
   // item id → column key, computed once; cells filter each lane by it.
   const columnOfItem = useMemo(() => {
     const map = new Map<string, string>();
@@ -119,12 +135,23 @@ export function ViewSwimlanes({
         {/* Column header row — sticky above every lane. */}
         <div className="sticky top-0 z-20 flex h-9 items-end gap-3 bg-base pb-1.5">
           {columns.map((column) => (
-            <div key={column.key} className={`${COLUMN_WIDTH_CLASSES} flex items-center gap-2 px-1`}>
+            <div
+              key={column.key}
+              data-board-column={column.key}
+              data-collapsed={railOf(column) ? "true" : "false"}
+              {...hoverProps(column)}
+              className={`${widthOf(column)} flex items-center gap-2 px-1 transition-[width]`}
+              title={railOf(column) ? `${column.label} — empty; hover to expand` : undefined}
+            >
               {column.dotClassName && (
-                <span className={`size-2 rounded-full ${column.dotClassName}`} aria-hidden />
+                <span className={`size-2 shrink-0 rounded-full ${column.dotClassName}`} aria-hidden />
               )}
-              <h2 className="truncate text-[13px] font-semibold text-fg">{column.label}</h2>
-              <span className="text-xs text-fg-muted">{column.items.length}</span>
+              {!railOf(column) && (
+                <>
+                  <h2 className="truncate text-[13px] font-semibold text-fg">{column.label}</h2>
+                  <span className="text-xs text-fg-muted">{column.items.length}</span>
+                </>
+              )}
             </div>
           ))}
         </div>
@@ -163,6 +190,7 @@ export function ViewSwimlanes({
                     return (
                       <div
                         key={column.key}
+                        {...hoverProps(column)}
                         {...drop.targetProps(cellKey, (dragged) =>
                           onMoveToCell?.(
                             dragged,
@@ -177,7 +205,7 @@ export function ViewSwimlanes({
                           // Each cell is a card on the page ground; BoardCards
                           // inside step up to `elevated` (same two-step language
                           // as the board columns).
-                          `${COLUMN_WIDTH_CLASSES} flex flex-col gap-2 rounded-xl border p-2 shadow-lift transition-colors ` +
+                          `${widthOf(column)} flex flex-col gap-2 rounded-xl border p-2 shadow-lift transition-[width,background-color] ` +
                           (isOver
                             ? "border-accent bg-accent/5 ring-2 ring-accent/30 "
                             : "border-subtle bg-surface ") +
