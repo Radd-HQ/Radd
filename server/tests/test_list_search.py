@@ -104,20 +104,25 @@ async def test_labels_endpoint_sets_total_header_only_when_paged(db, admin):
     assert TOTAL_COUNT_HEADER not in unpaged.headers
 
 
-async def test_audit_q_matches_type_and_payload(db):
-    """RADD-884: the audit trail's q matches the event type or payload text."""
-    from radd.modules.events.models import Event
-    from radd.modules.events.service import query_events
+async def test_audit_q_matches_the_ledger_search_text(db):
+    """RADD-884 → spec 123: the audit trail's q matches `search_text` — the
+    event's words, the entity's label and the changed values, derived by
+    `emit` and indexed by trigram — no longer the whole payload cast to text."""
+    from radd.modules.events.service import emit, query_events
 
     tag = _tag()
-    db.add(Event(event_type=f"probe.created", entity_type="probe", entity_id=tag,
-                 payload={"title": f"needle-{tag}"}))
-    db.add(Event(event_type=f"probe.created", entity_type="probe", entity_id=tag,
-                 payload={"title": "unrelated"}))
+    await emit(db, event_type="probe.created", entity_type="probe", entity_id=tag,
+               payload={"title": f"needle-{tag}"})
+    await emit(db, event_type="probe.created", entity_type="probe", entity_id=tag,
+               payload={"title": "unrelated"})
     await db.flush()
     hits = await query_events(db, q=f"needle-{tag}")
     assert len(hits) == 1
     assert hits[0].payload["title"] == f"needle-{tag}"
+    assert hits[0].entity_label == f"needle-{tag}"
+    # The event's own words match too ("probe created"), so a term from the
+    # type finds the row without a type filter.
+    assert any(h.entity_id == tag for h in await query_events(db, q="probe created"))
 
 
 async def test_directory_pagination_and_count(db):

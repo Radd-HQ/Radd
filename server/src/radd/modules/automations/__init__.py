@@ -76,7 +76,7 @@ plugin = RaddPlugin(
         ),
         EventTypeSpec(
             AutomationEvent.SCHEDULED, "Automation scheduled run", "System",
-            trigger=False, entity_type="automation",
+            trigger=False, entity_type="automation", audited=False,
         ),
     ),
     consumer_names=(CONSUMER_NAME,),

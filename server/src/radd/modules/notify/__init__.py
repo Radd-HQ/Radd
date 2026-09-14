@@ -29,7 +29,7 @@ plugin = RaddPlugin(
         # for an auditor; the ledger (RADD-1169) hides it by default.
         EventTypeSpec(
             NotifyEvent.NOTIFICATION_CREATED, "Notification created", "System",
-            trigger=False, entity_type="notification",
+            trigger=False, entity_type="notification", audited=False,
         ),
         EventTypeSpec(NotifyEvent.ITEM_WATCHED, "Item watched", "Items", item_scoped=True),
         EventTypeSpec(NotifyEvent.ITEM_UNWATCHED, "Item unwatched", "Items", item_scoped=True),

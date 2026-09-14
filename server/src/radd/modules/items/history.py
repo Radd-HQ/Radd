@@ -12,7 +12,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd.modules.auth import service as auth
+from radd.modules.auth import authz, service as auth
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
 from radd.modules.events import service as events
@@ -103,6 +103,27 @@ def _redact_changes(
             change = {"field": field, "redacted": True}
         out.append(change)
     return out
+
+
+async def redaction_for(
+    session: AsyncSession, actor: User, project
+) -> tuple[set[str], set[str]]:
+    """The (restricted custom-field keys, denied builtin names) an actor may
+    not read in `project` — the RADD-834 seam, public since spec 123 so the
+    audit log redacts item rows exactly as the History tab does."""
+    permissions = await authz.effective_permissions(session, actor, project=project)
+    definitions = await fields.definitions_for_project(session, project)
+    ctx = await _field_ctx(session, actor, project, permissions, definitions)
+    restricted_cf = {d.key for d in definitions} - fields.readable_keys(definitions, ctx)
+    builtin_denied = set(await _builtin_read_denied(session, project, ctx))
+    return restricted_cf, builtin_denied
+
+
+def redact_changes(
+    changes: list[dict], restricted_cf: set[str], builtin_denied: set[str]
+) -> list[dict]:
+    """Public name for `_redact_changes` (spec 123)."""
+    return _redact_changes(changes, restricted_cf, builtin_denied)
 
 
 async def item_history(session: AsyncSession, item_id: uuid.UUID, actor: User) -> ItemHistory:

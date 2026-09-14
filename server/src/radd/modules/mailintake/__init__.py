@@ -84,7 +84,7 @@ plugin = RaddPlugin(
         ),
         EventTypeSpec(
             MailEvent.FAILED, "Email delivery failed", "Email", item_scoped=True,
-            subjects=("item",),
+            subjects=("item",), audited=False,
         ),
         EventTypeSpec(MailEvent.DROPPED, "Email discarded", "Email"),
         # Spec 123: mail configuration is audited with a diff; not a trigger.

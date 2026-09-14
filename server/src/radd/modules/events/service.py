@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import Text, and_, func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
@@ -15,8 +15,10 @@ from radd.kernel import changes as kchanges, registries
 # the row IS the contract every consumer loop receives, and importing it from
 # events.models made 13 modules reach into another module's models file. The
 # ratchet test bans `events.models` outside this module.
+from . import ledger
 from .models import ConsumerOffset, Event
 from .quiet import automated, is_automated, is_quiet, quiet
+from .types import EventSource
 
 __all__ = ["Event", "quiet", "is_quiet", "automated", "is_automated"]  # re-exported public seam (see above)
 
@@ -31,6 +33,7 @@ async def emit(
     payload: dict[str, Any] | None = None,
     subjects: dict[str, Any] | None = None,
     changes: list[dict[str, Any]] | None = None,
+    project_id: uuid.UUID | None = None,
     occurred_at: datetime | None = None,
     silent: bool | None = None,
     automated_cause: bool | None = None,
@@ -58,8 +61,10 @@ async def emit(
     build refs, so they cannot build them differently — which is what fourteen
     of them had done before RADD-922 fixed it by hand.
     """
+    subjects = _with_own_subject(str(entity_type), entity_id, payload, subjects)
     payload = await _with_subjects(session, payload, subjects)
     payload = _with_changes(str(event_type), payload, changes)
+    label = ledger.entity_label(str(entity_type), payload or {})
     event = Event(
         event_type=str(event_type),
         entity_type=str(entity_type),
@@ -68,10 +73,31 @@ async def emit(
         payload=payload or {},
         silent=is_quiet() if silent is None else silent,
         automated=is_automated() if automated_cause is None else automated_cause,
+        # Spec 123: the ledger columns, derived — an emitter declares nothing new.
+        project_id=project_id or ledger.project_of(payload or {}),
+        entity_label=label,
+        search_text=ledger.search_text(str(event_type), label, payload or {}),
     )
     if occurred_at is not None:
         event.created_at = occurred_at.replace(tzinfo=None)
     session.add(event)
+
+
+def _with_own_subject(
+    entity_type: str,
+    entity_id: object,
+    payload: dict[str, Any] | None,
+    subjects: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Spec 123: an event about an entity with a registered ref carries that
+    ref, whether or not the emitter thought to pass it — the ledger's label
+    and the SPA's link both read it. Costs one lookup for the emitters that
+    did not already; items and pages already do."""
+    if entity_type in (subjects or {}) or entity_type in (payload or {}):
+        return subjects
+    if entity_type not in registries.entity_refs:
+        return subjects
+    return {**(subjects or {}), entity_type: entity_id}
 
 
 class ChangesRequired(RuntimeError):
@@ -150,7 +176,11 @@ async def query_events(
     entity_type: str | None = None,
     entity_id: str | None = None,
     event_types: Sequence[str] | None = None,
+    exclude_event_types: Sequence[str] | None = None,
     actor_id: uuid.UUID | None = None,
+    project_id: uuid.UUID | None = None,
+    changed_field: str | None = None,
+    source: EventSource | None = None,
     start: datetime | None = None,
     end: datetime | None = None,
     q: str | None = None,
@@ -163,25 +193,37 @@ async def query_events(
     Any combination of filters ANDs together; results are the newest first by
     default (id DESC). The events table is append-only, so this IS the audit trail.
 
-    `q` (RADD-884) matches the event type or anywhere in the payload text.
-    Newest-first with a LIMIT, Postgres stops as soon as the page fills — fast
-    for anything that occurs, a tail scan only for terms that never match,
-    which an admin page wears.
+    `q` matches `search_text` (spec 123: the event's label, the entity's label,
+    the changed fields and their values) through the trigram index the
+    `d123ledger` migration creates — RADD-884's cast-the-whole-payload ILIKE
+    read every row. `changed_field` is a containment probe over
+    `payload -> 'changes'` (GIN, jsonb_path_ops). `exclude_event_types` is how
+    the audit view drops what `EventTypeSpec.audited=False` marks as noise.
     """
     conditions = []
     if q:
-        pattern = ilike_term(q)
-        conditions.append(
-            Event.event_type.ilike(pattern) | func.cast(Event.payload, Text).ilike(pattern)
-        )
+        conditions.append(Event.search_text.ilike(ilike_term(q)))
     if entity_type is not None:
         conditions.append(Event.entity_type == entity_type)
     if entity_id is not None:
         conditions.append(Event.entity_id == entity_id)
     if event_types:
         conditions.append(Event.event_type.in_(list(event_types)))
+    if exclude_event_types:
+        conditions.append(Event.event_type.not_in(list(exclude_event_types)))
     if actor_id is not None:
         conditions.append(Event.actor_id == actor_id)
+    if project_id is not None:
+        conditions.append(Event.project_id == project_id)
+    if changed_field:
+        conditions.append(Event.payload[kchanges.CHANGES_KEY].contains([{"field": changed_field}]))
+    if source is EventSource.PEOPLE:
+        conditions.append(Event.actor_id.is_not(None))
+        conditions.append(Event.automated.is_(False))
+    elif source is EventSource.AUTOMATIONS:
+        conditions.append(Event.automated.is_(True))
+    elif source is EventSource.SYSTEM:
+        conditions.append(Event.actor_id.is_(None))
     if start is not None:
         conditions.append(Event.created_at >= start)
     if end is not None:

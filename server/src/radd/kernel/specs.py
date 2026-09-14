@@ -86,6 +86,11 @@ class EventTypeSpec:
     item_scoped: bool = False  # a target item resolves → SLQ + item actions apply
     has_changes: bool = False  # payload carries a field diff (old/new subjects work)
     trigger: bool = True  # appears in the automation trigger catalog
+    #: Spec 123: shown in the audit log by default. False for machine noise —
+    #: a failed mail delivery, a notification row, the scheduler's tick — that
+    #: is a full citizen of the stream but buries the trail (19,516 of the dev
+    #: database's 20,615 rows were `mail.failed`). Still queryable on request.
+    audited: bool = True
     entity_type: str = ""  # the entity this event is about (for auto-registered CRUD events)
     #: Entity types this event is ABOUT (RADD-923) — `("item",)`, `("item",
     #: "release")`, `("milestone",)`. Each must have a registered `EntityRefSpec`
