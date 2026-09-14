@@ -44,36 +44,36 @@ export function SharingGrantsEditor({ resourceType, resourceId, draft, onChange 
   };
   const pending = [...changed.map(change => ({ saved: change.original, index: -1 })),
     ...draft.additions.map((_, index) => ({ saved: null, index }))];
-  return <section aria-label="Sharing recipients" className="flex min-w-0 flex-col gap-3">
+  return <section aria-label="Shared with" className="flex min-w-0 flex-col gap-3">
     <div className="flex flex-wrap gap-2">
-      <Button variant={pendingOnly ? "ghost" : "secondary"} onClick={() => setPendingOnly(false)}>Saved recipients</Button>
-      <Button variant={pendingOnly ? "secondary" : "ghost"} onClick={() => setPendingOnly(true)}>Pending edits ({pendingTotal})</Button>
+      <Button variant={pendingOnly ? "ghost" : "secondary"} onClick={() => setPendingOnly(false)}>Shared with</Button>
+      <Button variant={pendingOnly ? "secondary" : "ghost"} onClick={() => setPendingOnly(true)}>Unsaved changes ({pendingTotal})</Button>
     </div>
     {pendingOnly ? <>
       <ul className="flex flex-col gap-2">{pending.slice(pendingPage * RESOURCE_GRANTS_PAGE_SIZE, (pendingPage + 1) * RESOURCE_GRANTS_PAGE_SIZE).map(entry => {
         if (entry.saved) return savedRow(entry.saved);
         const row = draft.additions[entry.index];
         return <li key={row.draftId ?? `new-${entry.index}`} className="flex min-w-0 flex-wrap items-center gap-2 rounded border border-subtle p-2 text-xs">
-          <span className="min-w-0 flex-1 break-words">{row.subjectName ?? `New ${row.kind}`}</span><span>New recipient</span>
+          <span className="min-w-0 flex-1 break-words">{row.subjectName ?? `New ${row.kind}`}</span><span>New share</span>
           <Select aria-label="Access level" size="sm" value={row.level} options={SHARE_LEVEL_OPTIONS}
             onChange={level => onChange({ ...draft, additions: draft.additions.map((old, index) => index === entry.index ? { ...old, level: level as ShareLevelValue } : old) })} />
           <Button size="sm" variant="ghost" onClick={() => onChange({ ...draft, additions: draft.additions.filter((_, index) => index !== entry.index) })}>Remove from draft</Button>
         </li>;
       })}</ul>
-      {!pendingTotal && <p className="text-xs text-fg-muted">No recipient changes in this draft.</p>}
-      <DirectoryPager page={pendingPage} pageSize={RESOURCE_GRANTS_PAGE_SIZE} total={pendingTotal} busy={false} onPage={setPendingPage} label="pending edits" />
+      {!pendingTotal && <p className="text-xs text-fg-muted">No unsaved sharing changes.</p>}
+      <DirectoryPager page={pendingPage} pageSize={RESOURCE_GRANTS_PAGE_SIZE} total={pendingTotal} busy={false} onPage={setPendingPage} label="unsaved changes" />
     </> : <>
-      <TextField type="search" label="Find sharing recipients" value={directory.filter} onChange={event => directory.setFilter(event.target.value)} />
+      <TextField type="search" label="Find people, teams or groups" value={directory.filter} onChange={event => directory.setFilter(event.target.value)} />
       <div aria-busy={directory.busy}>
-        {directory.isPending ? <Spinner label="Loading sharing recipients…" /> : directory.isError ? <div role="alert"><ErrorText error={directory.error} />
-          <Button variant="secondary" onClick={() => void directory.refetch()}>Retry sharing recipients</Button></div> :
+        {directory.isPending ? <Spinner label="Loading who this is shared with…" /> : directory.isError ? <div role="alert"><ErrorText error={directory.error} />
+          <Button variant="secondary" onClick={() => void directory.refetch()}>Retry</Button></div> :
           <ul className="flex flex-col gap-2">{directory.rows.map(savedRow)}</ul>}
-        {directory.isSuccess && !directory.rows.length && <p className="text-xs text-fg-muted">No matching recipients.</p>}
+        {directory.isSuccess && !directory.rows.length && <p className="text-xs text-fg-muted">Nobody matches.</p>}
       </div>
-      {directory.isSuccess && <DirectoryPager {...directory} onPage={directory.setPage} label="sharing recipients" />}
+      {directory.isSuccess && <DirectoryPager {...directory} onPage={directory.setPage} label="shares" />}
     </>}
-    <Button variant="secondary" className="w-fit" onClick={() => setAdding(true)}>Add sharing recipient</Button>
-    <p className="text-xs text-fg-muted">Recipient changes stay in this draft until you save. Existing expiry and deny policies are retained.</p>
+    <Button variant="secondary" className="w-fit" onClick={() => setAdding(true)}>Share with someone…</Button>
+    <p className="text-xs text-fg-muted">{`Sharing changes are saved with the ${resourceType}. Existing expiry and deny policies are kept.`}</p>
     {adding && <AddSharingGrantDialog onClose={() => setAdding(false)} onAdd={share => {
       // Prevent duplicate additions across pages; saved duplicate policy is
       // validated transactionally by the server, with the draft retained.

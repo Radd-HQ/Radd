@@ -20,14 +20,14 @@ export function AddSharingGrantDialog({ onAdd, onClose }: { onAdd: (share: Local
   const [subject, setSubject] = useState<DirectoryOption>();
   const [level, setLevel] = useState<ShareLevelValue>(ShareLevel.viewer);
   const [choosing, setChoosing] = useState(false);
-  return <Modal title="Add sharing recipient" onClose={onClose}>
+  return <Modal title="Share with…" onClose={onClose}>
     <div className="flex flex-col gap-3">
-      <Select aria-label="Recipient kind" value={kind} onChange={value => { setKind(value as LocalShare["kind"]); setSubject(undefined); }}
+      <Select aria-label="Share with a person, team or group" value={kind} onChange={value => { setKind(value as LocalShare["kind"]); setSubject(undefined); }}
         options={[{ value: "user", label: "Person" }, { value: "team", label: "Team" }, { value: "group", label: "Directory group" }]} />
-      <Button variant="secondary" aria-haspopup="dialog" onClick={() => setChoosing(true)}>{subject?.label ?? "Choose recipient…"}</Button>
+      <Button variant="secondary" aria-haspopup="dialog" onClick={() => setChoosing(true)}>{subject?.label ?? "Choose a person, team or group…"}</Button>
       {kind === "group" && subject && <GroupReachHint groupId={subject.value} />}
       <Select aria-label="Access level" value={level} onChange={value => setLevel(value as ShareLevelValue)} options={SHARE_LEVEL_OPTIONS} />
-      <p className="text-xs text-fg-muted">This recipient is added when you save the containing dialog.</p>
+      <p className="text-xs text-fg-muted">They get access when you save.</p>
       <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>Cancel</Button>
         <Button disabled={!subject} onClick={() => { if (subject) onAdd({ draftId: crypto.randomUUID(), kind, subjectId: subject.value, subjectName: subject.label, level }); }}>Add to draft</Button></div>
     </div>

@@ -36,7 +36,7 @@ export function ViewSharingEditor({ serverAccess, onServerAccess, shares, onShar
   // Spec 121: the world is a share SUBJECT (the Anyone principal) — a viewer
   // grant to it, written through the same rows as any person or team. Only
   // offered for NEW views here; an existing view manages the row in its grants
-  // table like every other recipient.
+  // table like every other share.
   const { data: instance } = useQuery(instanceConfigQuery);
   const anyoneId = instance?.anyone_id ?? null;
   const worldShare = anyoneId ? shares.find(row => row.kind === "user" && row.subjectId === anyoneId) : undefined;
@@ -49,7 +49,7 @@ export function ViewSharingEditor({ serverAccess, onServerAccess, shares, onShar
         disabled={!canBroadcast && serverAccess === SERVER_PRIVATE}
         title={canBroadcast ? undefined : `Server-wide sharing needs ${noun} management rights in this scope`}
         size="sm" options={[
-          { value: SERVER_PRIVATE, label: "no access (specific recipients only)" },
+          { value: SERVER_PRIVATE, label: "no access (only the people and teams listed)" },
           { value: ShareLevel.viewer, label: "can view" }, { value: ShareLevel.editor, label: "can edit" },
         ]} />
     </div>
@@ -71,8 +71,8 @@ export function ViewSharingEditor({ serverAccess, onServerAccess, shares, onShar
           onChange={level => onShares(shares.map((row, i) => i === index ? { ...row, level: level as ShareLevelValue } : row))} />
         <Button size="sm" variant="ghost" onClick={() => rows.removeAt(index)}>Remove share</Button>
       </div>)}
-      <Button variant="secondary" className="w-fit" disabled={shares.length >= 50} onClick={() => setAdding(true)}>Add sharing recipient</Button>
-      {shares.length >= 50 && <p className="text-xs text-fg-muted">Create with up to 50 recipients, then add more in sharing settings.</p>}
+      <Button variant="secondary" className="w-fit" disabled={shares.length >= 50} onClick={() => setAdding(true)}>Share with someone…</Button>
+      {shares.length >= 50 && <p className="text-xs text-fg-muted">Create with up to 50 shares, then add more in sharing settings.</p>}
     </>}
     {onTransferTo && <div className="border-t border-subtle pt-3">
       <OptionSelect resource={OptionResource.person} label="Transfer ownership to" value={transferTo ?? ""} onChange={onTransferTo}
