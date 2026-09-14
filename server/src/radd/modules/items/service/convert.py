@@ -114,8 +114,8 @@ async def convert_item_kind(
                 **after.model_dump(mode="json"),
                 "project": {"id": str(project.id), "key": project.key, "name": project.name},
             },
-            "changes": changes,
         },
+        changes=changes,
     )
     builtin_denied = await _builtin_read_denied(session, project, ctx)
     return _filter_read(after, definitions, ctx, builtin_denied)

@@ -65,12 +65,8 @@ async def update_project(
         entity_type=ProjectEntity.PROJECT,
         entity_id=project.id,
         actor_id=actor_id,
-        payload={
-            "key": project.key,
-            "name": project.name,
-            "description": project.description,
-            "changes": changes,
-        },
+        payload={"key": project.key, "name": project.name, "description": project.description},
+        changes=changes,
     )
     return project
 

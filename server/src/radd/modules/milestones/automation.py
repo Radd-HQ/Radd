@@ -106,6 +106,7 @@ async def apply(ctx: Any, plan: _Plan) -> None:
     row = await ctx.session.get(Milestone, plan.milestone_id)
     if row is None:
         return
+    previous = row.status
     row.status = plan.status
     await ctx.session.flush()
     await events.emit(
@@ -115,7 +116,7 @@ async def apply(ctx: Any, plan: _Plan) -> None:
         entity_id=row.id,
         actor_id=getattr(ctx.actor, "id", None),
         subjects={"milestone": row.id},
-        payload={"changes": [{"field": "status", "to": plan.status}]},
+        changes=[{"field": "status", "from": previous, "to": plan.status}],
     )
 
 

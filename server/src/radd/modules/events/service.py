@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
 from radd.db import ilike_term
+from radd.kernel import changes as kchanges, registries
 
 # `Event` is re-exported here as the PUBLIC consumer payload type (RADD-886):
 # the row IS the contract every consumer loop receives, and importing it from
@@ -29,11 +30,20 @@ async def emit(
     actor_id: uuid.UUID | None = None,
     payload: dict[str, Any] | None = None,
     subjects: dict[str, Any] | None = None,
+    changes: list[dict[str, Any]] | None = None,
     occurred_at: datetime | None = None,
     silent: bool | None = None,
     automated_cause: bool | None = None,
 ) -> None:
     """Append to the outbox inside the caller's transaction — commits or rolls back with it.
+
+    **`changes` is the diff (spec 123)** — the `kernel.changes` shape, written
+    at the payload's top level under `changes` because it describes the EVENT.
+    An event type whose spec declares `has_changes` must carry one: `None`
+    here raises `ChangesRequired`, `[]` is the explicit "nothing visible
+    changed" (a rank-only reorder). The refusal is the RADD-923 pattern — a
+    promise the emitter cannot forget to keep — and is what makes "updated"
+    in the audit log always answer *what*.
 
     `occurred_at` overrides the row's timestamp for historical imports (naive UTC);
     the monotonic `id` still orders the stream, so consumers are unaffected.
@@ -49,6 +59,7 @@ async def emit(
     of them had done before RADD-922 fixed it by hand.
     """
     payload = await _with_subjects(session, payload, subjects)
+    payload = _with_changes(str(event_type), payload, changes)
     event = Event(
         event_type=str(event_type),
         entity_type=str(entity_type),
@@ -61,6 +72,24 @@ async def emit(
     if occurred_at is not None:
         event.created_at = occurred_at.replace(tzinfo=None)
     session.add(event)
+
+
+class ChangesRequired(RuntimeError):
+    """An emitter promised a diff (`EventTypeSpec.has_changes`) and sent none."""
+
+
+def _with_changes(
+    event_type: str, payload: dict[str, Any] | None, changes: list[dict[str, Any]] | None
+) -> dict[str, Any] | None:
+    if changes is not None:
+        return {**(payload or {}), kchanges.CHANGES_KEY: changes}
+    spec = registries.event_types.get(event_type)
+    if spec is not None and spec.has_changes and kchanges.CHANGES_KEY not in (payload or {}):
+        raise ChangesRequired(
+            f"{event_type} declares has_changes but was emitted without changes= — "
+            "pass the kernel.changes diff (or [] when nothing visible changed)"
+        )
+    return payload
 
 
 async def _with_subjects(

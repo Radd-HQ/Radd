@@ -44,6 +44,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import Base, get_session
 
+from . import changes as changes_module
 from .hosts import entity_host
 from .registry import registries
 from .specs import (
@@ -252,7 +253,9 @@ def crud_router(spec: EntitySpec) -> APIRouter:
             pid = obj_or_pid if isinstance(obj_or_pid, uuid.UUID) else obj_or_pid.project_id
         await entity_host().require(session, user, atom, project_id=pid)
 
-    async def _emit(session: AsyncSession, verb: str, obj, actor_id) -> None:
+    async def _emit(
+        session: AsyncSession, verb: str, obj, actor_id, changes: list[dict] | None = None
+    ) -> None:
         # RADD-923: the id, not a shape. What lands in the payload is the
         # entity's canonical ref — the same one every other module sees — rather
         # than the `{id, project_id}` stub this used to write, which forced a
@@ -264,7 +267,16 @@ def crud_router(spec: EntitySpec) -> APIRouter:
             entity_id=obj.id,
             actor_id=actor_id,
             subjects={key: obj.id},
+            changes=changes,
         )
+
+    # Spec 123: the columns an update can touch — every mapped column but the
+    # identity and the timestamps. `updated` declares `has_changes`, so the
+    # router must keep that promise: snapshot before the setattr loop, diff
+    # after. A plugin entity's history is then as legible as an item's.
+    diffable_columns = tuple(
+        c.name for c in model.__table__.columns if c.name not in ("id", "created_at", "updated_at")
+    )
 
     async def _get(session: AsyncSession, obj_id: uuid.UUID):
         from radd.exceptions import NotFoundError
@@ -308,10 +320,13 @@ def crud_router(spec: EntitySpec) -> APIRouter:
     async def update(obj_id: uuid.UUID, data: Update, session: Session, user: User):  # type: ignore[valid-type]
         obj = await _get(session, obj_id)
         await _require(session, user, obj, f"{key}.update")
+        before = changes_module.snapshot(obj, diffable_columns)
         for field, value in data.model_dump(exclude_unset=True).items():
             setattr(obj, field, value)
         await session.flush()
-        await _emit(session, "updated", obj, user.id)
+        await _emit(
+            session, "updated", obj, user.id, changes=changes_module.diff_object(obj, before)
+        )
         return Read.model_validate(obj)
 
     @router.delete("/{obj_id}", status_code=204)

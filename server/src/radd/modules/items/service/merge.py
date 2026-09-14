@@ -229,6 +229,6 @@ async def _merge_items(
             entity_id=item_id,
             actor_id=actor.id,
             subjects={"item": item_id},
-            payload={"changes": changes},
+            changes=changes,
         )
     return await get_item(session, target.id, actor)

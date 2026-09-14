@@ -135,6 +135,7 @@ class AuthEntityHost:
         actor_id: Any,
         payload: dict[str, Any] | None = None,
         subjects: dict[str, Any] | None = None,
+        changes: list[dict[str, Any]] | None = None,
     ) -> None:
         from radd.modules.events import service as events
 
@@ -146,6 +147,7 @@ class AuthEntityHost:
             actor_id=actor_id,
             payload=payload,
             subjects=subjects,
+            changes=changes,
         )
 
 

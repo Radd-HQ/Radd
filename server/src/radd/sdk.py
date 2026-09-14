@@ -48,6 +48,7 @@ from radd.kernel import (
     register_permission as register_permission,
     registries as registries,
 )
+from radd.kernel import changes as changes
 from radd.kernel import entities as entities
 
 API_VERSION = KERNEL_API_VERSION

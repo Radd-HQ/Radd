@@ -280,7 +280,6 @@ async def _move_one(
             **after.model_dump(mode="json"),
             "project": {"id": str(target.id), "key": target.key, "name": target.name},
         },
-        "changes": changes,
     }
     await events.emit(
         session,
@@ -289,6 +288,7 @@ async def _move_one(
         entity_id=item.id,
         actor_id=actor.id,
         payload=payload,
+        changes=changes,
     )
     return BulkMovedItem(
         item_id=item.id,

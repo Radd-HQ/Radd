@@ -22,6 +22,7 @@ from .registry import (
     registries,
 )
 from .hosts import EntityHost, entity_host, set_entity_host
+from . import changes
 from .specs import (
     OUTPUT_NAME_RE,
     AutomationNodeSpec,
@@ -61,6 +62,7 @@ __all__ = [
     "load_plugins",
     "import_models",
     "registries",
+    "changes",
     "KernelRegistries",
     "register_event_type",
     "register_permission",

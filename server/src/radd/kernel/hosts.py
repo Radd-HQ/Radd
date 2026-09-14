@@ -58,6 +58,7 @@ class EntityHost(Protocol):
         actor_id: Any,
         payload: dict[str, Any] | None = None,
         subjects: dict[str, Any] | None = None,
+        changes: list[dict[str, Any]] | None = None,
     ) -> None: ...
 
 

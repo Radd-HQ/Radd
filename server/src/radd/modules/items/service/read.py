@@ -99,10 +99,15 @@ async def _finish(
     # Field-level diff for the History tab / audit (and richer webhook/automation
     # signals). Computed from the pre-mutation snapshot; omitted on create.
     # Stays TOP-LEVEL: it describes the event, not the item.
+    # Spec 123: an update ALWAYS carries the list — a caller with no `before`
+    # snapshot (the rank-only reorder) is the explicit `[]`, which history
+    # skips; `None` on an item.updated is refused by emit. Create carries none.
     if before is not None:
-        changes = diff_item_reads(before, read, field_names=field_name_map(definitions))
-        if changes:
-            payload["changes"] = changes
+        changes: list[dict] | None = diff_item_reads(
+            before, read, field_names=field_name_map(definitions)
+        )
+    else:
+        changes = [] if event_type == ItemEvent.UPDATED else None
     await events.emit(
         session,
         event_type=event_type,
@@ -110,6 +115,7 @@ async def _finish(
         entity_id=item.id,
         actor_id=event_actor_id or actor.id,  # import: credit the original reporter
         payload=payload,
+        changes=changes,
         occurred_at=occurred_at,
     )
     builtin_denied = await _builtin_read_denied(session, project, ctx)
