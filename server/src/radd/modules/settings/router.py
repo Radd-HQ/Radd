@@ -63,7 +63,9 @@ async def set_scoped_setting(
     data: ScopedSettingWrite, session: Session, user: CurrentUser
 ) -> ScopedSettingRead:
     await _authorize(session, user, data.scope, data.scope_id)
-    await service.set_value(session, data.key, data.scope, data.scope_id, data.value)
+    await service.set_value(
+        session, data.key, data.scope, data.scope_id, data.value, actor_id=user.id
+    )
     rows = await service.list_for_scope(session, data.scope, data.scope_id)
     return next(ScopedSettingRead(**row) for row in rows if row["key"] == data.key.value)
 
@@ -77,4 +79,4 @@ async def clear_scoped_setting(
     scope_id: uuid.UUID | None = None,
 ) -> None:
     await _authorize(session, user, scope, scope_id)
-    await service.clear_value(session, key, scope, scope_id)
+    await service.clear_value(session, key, scope, scope_id, actor_id=user.id)

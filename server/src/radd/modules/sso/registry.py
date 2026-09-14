@@ -15,6 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.config import settings
 from radd.db import SessionLocal
 from radd.exceptions import ConflictError, NotFoundError
+from radd.kernel import changes
+from radd.modules.events import service as events
 
 from .models import (
     SsoProvider,
@@ -23,7 +25,7 @@ from .models import (
     SsoProvisioningRule,
 )
 from .schemas import SsoProviderCreate, SsoProviderUpdate, SsoProvisioningRule as RuleSpec
-from .types import KIND_DEFAULTS, WILDCARD_DOMAIN, SsoEntity, SsoKind, SsoProviderSource
+from .types import KIND_DEFAULTS, WILDCARD_DOMAIN, SsoEntity, SsoEvent, SsoKind, SsoProviderSource
 
 from radd.snapshot import Snapshot
 
@@ -117,10 +119,36 @@ def _clean_domains(domains: list[str]) -> list[str]:
     return cleaned
 
 
+#: Never in an event payload — a diff records that the secret CHANGED, no value.
+SECRET_FIELDS: tuple[str, ...] = ("client_secret",)
+#: Columns a provider diff never mentions (`source` is a seed marker).
+_UNDIFFED: tuple[str, ...] = (*changes.DEFAULT_EXCLUDED_COLUMNS, "source")
+
+
+async def _emit(
+    session: AsyncSession,
+    event_type: SsoEvent,
+    provider: SsoProvider,
+    actor_id: uuid.UUID | None,
+    diff: list[dict] | None = None,
+) -> None:
+    await events.emit(
+        session,
+        event_type=event_type,
+        entity_type=SsoEntity.PROVIDER,
+        entity_id=provider.id,
+        actor_id=actor_id,
+        payload={"name": provider.name, "kind": provider.kind},
+        changes=diff,
+    )
+
+
 async def create_provider(
     session: AsyncSession,
     data: SsoProviderCreate,
     source: SsoProviderSource = SsoProviderSource.USER,
+    *,
+    actor_id: uuid.UUID | None = None,
 ) -> SsoProvider:
     kind = SsoKind(data.kind)
     if kind is SsoKind.OIDC and not (data.issuer or "").strip():
@@ -151,6 +179,7 @@ async def create_provider(
     session.add(provider)
     await session.flush()
     await _replace_rules(session, provider, data.provisioning_rules)
+    await _emit(session, SsoEvent.PROVIDER_CREATED, provider, actor_id)
     return provider
 
 
@@ -222,9 +251,14 @@ async def provisioning_rules(
 
 
 async def update_provider(
-    session: AsyncSession, provider_id: uuid.UUID, data: SsoProviderUpdate
+    session: AsyncSession,
+    provider_id: uuid.UUID,
+    data: SsoProviderUpdate,
+    *,
+    actor_id: uuid.UUID | None = None,
 ) -> SsoProvider:
     provider = await get_provider(session, provider_id)
+    before = changes.snapshot(provider, changes.column_fields(provider, exclude=_UNDIFFED))
     patch = data.model_dump(exclude_unset=True)
     if "name" in patch and (patch["name"] or "").strip():
         await _assert_name_free(session, patch["name"].strip(), exclude=provider_id)
@@ -251,13 +285,22 @@ async def update_provider(
     if not provider.name:
         provider.name = KIND_DEFAULTS[SsoKind(provider.kind)].name
     await session.flush()
+    diff = changes.diff_object(provider, before, hidden=SECRET_FIELDS)
+    if data.provisioning_rules is not None:
+        # Rules are replaced whole (delete-then-insert has no stable identity to
+        # diff); the record says they were rewritten.
+        diff.append(changes.hidden_change("provisioning_rules"))
+    await _emit(session, SsoEvent.PROVIDER_UPDATED, provider, actor_id, diff)
     return provider
 
 
-async def delete_provider(session: AsyncSession, provider_id: uuid.UUID) -> None:
+async def delete_provider(
+    session: AsyncSession, provider_id: uuid.UUID, *, actor_id: uuid.UUID | None = None
+) -> None:
     """Deleting a provider drops its identity links (CASCADE) — the accounts
     themselves survive, they simply lose that way in."""
     provider = await get_provider(session, provider_id)
+    await _emit(session, SsoEvent.PROVIDER_DELETED, provider, actor_id)
     await session.delete(provider)
     await session.flush()
 

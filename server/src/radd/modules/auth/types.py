@@ -795,6 +795,10 @@ class AuthEvent(StrEnum):
     # names both parties, so the trail survives either account's deletion.
     VIEW_AS_STARTED = "auth.view_as_started"
     VIEW_AS_ENDED = "auth.view_as_ended"
+    # Spec 123: the spec-121 switches as the event an auditor looks for. The
+    # grant rows underneath emit role.updated too; this one says "made the
+    # project public" in the project's own history, with old → new.
+    PROJECT_PUBLIC_ACCESS_CHANGED = "project.public_access_changed"
 
 
 class AuthEntity(StrEnum):

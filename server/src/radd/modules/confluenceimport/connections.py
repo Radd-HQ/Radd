@@ -16,11 +16,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
 from radd.db import SessionLocal
+from radd.kernel import changes
+from radd.modules.events import service as events
 from radd.exceptions import ConflictError, NotFoundError
 
 from .models import ConfluenceConnection
 from .schemas import ConnectionCreate, ConnectionUpdate
-from .types import ConfluenceAuthMode, ConfluenceCreds, ConfluenceEntity, ConnectionSource
+from .types import ConfluenceEvent, ConfluenceAuthMode, ConfluenceCreds, ConfluenceEntity, ConnectionSource
 
 logger = logging.getLogger(__name__)
 
@@ -106,10 +108,34 @@ async def require_connection(
 # --- writes -------------------------------------------------------------------
 
 
+#: Never in an event payload — a diff records that the credential CHANGED, no value.
+SECRET_FIELDS: tuple[str, ...] = ("credential",)
+_UNDIFFED: tuple[str, ...] = (*changes.DEFAULT_EXCLUDED_COLUMNS, "source")
+
+
+async def _emit(
+    session: AsyncSession,
+    event_type: ConfluenceEvent,
+    connection: ConfluenceConnection,
+    actor_id: uuid.UUID | None,
+    diff: list[dict] | None = None,
+) -> None:
+    await events.emit(
+        session,
+        event_type=event_type,
+        entity_type=ConfluenceEntity.CONNECTION,
+        entity_id=connection.id,
+        actor_id=actor_id,
+        payload={"name": connection.name, "base_url": connection.base_url},
+        changes=diff,
+    )
+
+
 async def create_connection(
     session: AsyncSession,
     data: ConnectionCreate,
     *,
+    actor_id: uuid.UUID | None = None,
     source: ConnectionSource = ConnectionSource.USER,
 ) -> ConfluenceConnection:
     await _ensure_name_free(session, data.name)
@@ -128,13 +154,19 @@ async def create_connection(
     # moment it is created.
     if data.is_default or await _count(session) == 1:
         await _make_default(session, connection)
+    await _emit(session, ConfluenceEvent.CONNECTION_CREATED, connection, actor_id)
     return connection
 
 
 async def update_connection(
-    session: AsyncSession, connection_id: uuid.UUID, data: ConnectionUpdate
+    session: AsyncSession,
+    connection_id: uuid.UUID,
+    data: ConnectionUpdate,
+    *,
+    actor_id: uuid.UUID | None = None,
 ) -> ConfluenceConnection:
     connection = await get_connection(session, connection_id)
+    before = changes.snapshot(connection, changes.column_fields(connection, exclude=_UNDIFFED))
     fields = data.model_dump(exclude_unset=True)
     if "name" in fields and fields["name"] != connection.name:
         await _ensure_name_free(session, fields["name"])
@@ -154,12 +186,22 @@ async def update_connection(
     await session.flush()
     if fields.get("is_default"):
         await _make_default(session, connection)
+    await _emit(
+        session,
+        ConfluenceEvent.CONNECTION_UPDATED,
+        connection,
+        actor_id,
+        changes.diff_object(connection, before, hidden=SECRET_FIELDS),
+    )
     return connection
 
 
-async def delete_connection(session: AsyncSession, connection_id: uuid.UUID) -> None:
+async def delete_connection(
+    session: AsyncSession, connection_id: uuid.UUID, *, actor_id: uuid.UUID | None = None
+) -> None:
     connection = await get_connection(session, connection_id)
     was_default = connection.is_default
+    await _emit(session, ConfluenceEvent.CONNECTION_DELETED, connection, actor_id)
     await session.delete(connection)
     await session.flush()
     if was_default:

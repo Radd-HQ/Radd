@@ -9,6 +9,11 @@ class WorklogEvent(StrEnum):
     # refresh; the SPA's `item_estimate` realtime mapping existed for a year
     # with no event that could reach it.
     ESTIMATE_CHANGED = "worklog.estimate_changed"
+    # Spec 123: configuration writes, audited with a diff; not triggers.
+    CATEGORY_CREATED = "work_category.created"
+    CATEGORY_UPDATED = "work_category.updated"
+    #: entity = the PROJECT; `changes` = enabled old → new.
+    PROJECT_TIMELOGGING_CHANGED = "project.timelogging_changed"
 
 
 class TimelogEntity(StrEnum):

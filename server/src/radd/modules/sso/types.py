@@ -87,6 +87,12 @@ KIND_DEFAULTS: dict[SsoKind, KindDefaults] = {
 class SsoEvent(StrEnum):
     LOGIN = "sso.login"  # a successful OIDC sign-in (audit)
     IDENTITY_LINKED = "sso.identity_linked"  # a provider identity bound to an existing account
+    # Spec 123: provider administration, with old → new (the secret only as
+    # "changed"). Before this, an admin could re-point sign-in at another
+    # issuer and the log showed nothing.
+    PROVIDER_CREATED = "sso_provider.created"
+    PROVIDER_UPDATED = "sso_provider.updated"
+    PROVIDER_DELETED = "sso_provider.deleted"
 
 
 class SsoEntity(StrEnum):

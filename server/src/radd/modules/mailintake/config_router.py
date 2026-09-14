@@ -20,7 +20,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
 from radd.modules.auth import authz
+from radd.kernel import changes
 from radd.modules.auth.deps import CurrentUser
+from radd.modules.events import service as events
 
 from . import registry, resolve, senders
 from .config_schemas import (
@@ -35,7 +37,7 @@ from .config_schemas import (
 )
 from .models import MailSender, MailSource
 from .providers import OutboundMessage
-from .types import KIND_DEFAULTS, MailSenderKind, MailSourceKind
+from .types import KIND_DEFAULTS, MailEntity, MailEvent, MailSenderKind, MailSourceKind
 
 router = APIRouter(prefix="/mail", tags=["mailintake"])
 
@@ -130,13 +132,39 @@ async def list_sources(session: Session, user: CurrentUser) -> list[MailSourceRe
     return out
 
 
+#: Never in an event payload — a diff records that the password CHANGED, no value.
+SECRET_FIELDS: tuple[str, ...] = ("secret",)
+
+
+async def _emit_config(
+    session: AsyncSession,
+    event_type: MailEvent,
+    entity_type: MailEntity,
+    row: MailSource | MailSender,
+    actor_id: uuid.UUID,
+    diff: list[dict] | None = None,
+) -> None:
+    """Spec 123: mail configuration is audited with a diff."""
+    await events.emit(
+        session,
+        event_type=event_type,
+        entity_type=entity_type,
+        entity_id=row.id,
+        actor_id=actor_id,
+        payload={"name": row.name, "kind": row.kind},
+        changes=diff,
+    )
+
+
 @router.post("/sources", response_model=MailSourceRead, status_code=201)
 async def create_source(
     data: MailSourceWrite, session: Session, user: CurrentUser
 ) -> MailSourceRead:
     await require_mail_admin(session, user)
     row = MailSource(**data.model_dump(exclude={"secret"}), secret=data.secret or "")
-    return _source_read(await registry.save_source(session, row))
+    saved = await registry.save_source(session, row)
+    await _emit_config(session, MailEvent.SOURCE_CREATED, MailEntity.SOURCE, saved, user.id)
+    return _source_read(saved)
 
 
 @router.patch("/sources/{source_id}", response_model=MailSourceRead)
@@ -145,17 +173,29 @@ async def update_source(
 ) -> MailSourceRead:
     await require_mail_admin(session, user)
     row = await registry.get_source(session, source_id)
+    before = changes.snapshot(row, changes.column_fields(row))
     for key, value in data.model_dump(exclude={"secret"}).items():
         setattr(row, key, value)
     # Omitted = unchanged, so a port edit does not require re-typing a password.
     if "secret" in data.model_fields_set and data.secret is not None:
         row.secret = data.secret
-    return _source_read(await registry.save_source(session, row))
+    saved = await registry.save_source(session, row)
+    await _emit_config(
+        session,
+        MailEvent.SOURCE_UPDATED,
+        MailEntity.SOURCE,
+        saved,
+        user.id,
+        changes.diff_object(saved, before, hidden=SECRET_FIELDS),
+    )
+    return _source_read(saved)
 
 
 @router.delete("/sources/{source_id}", status_code=204)
 async def delete_source(source_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
     await require_mail_admin(session, user)
+    row = await registry.get_source(session, source_id)
+    await _emit_config(session, MailEvent.SOURCE_DELETED, MailEntity.SOURCE, row, user.id)
     await registry.delete_source(session, source_id)
 
 
@@ -174,7 +214,9 @@ async def create_sender(
 ) -> MailSenderRead:
     await require_mail_admin(session, user)
     row = MailSender(**data.model_dump(exclude={"secret"}), secret=data.secret or "")
-    return _sender_read(await registry.save_sender(session, row))
+    saved = await registry.save_sender(session, row)
+    await _emit_config(session, MailEvent.SENDER_CREATED, MailEntity.SENDER, saved, user.id)
+    return _sender_read(saved)
 
 
 @router.patch("/senders/{sender_id}", response_model=MailSenderRead)
@@ -183,16 +225,28 @@ async def update_sender(
 ) -> MailSenderRead:
     await require_mail_admin(session, user)
     row = await registry.get_sender(session, sender_id)
+    before = changes.snapshot(row, changes.column_fields(row))
     for key, value in data.model_dump(exclude={"secret"}).items():
         setattr(row, key, value)
     if "secret" in data.model_fields_set and data.secret is not None:
         row.secret = data.secret
-    return _sender_read(await registry.save_sender(session, row))
+    saved = await registry.save_sender(session, row)
+    await _emit_config(
+        session,
+        MailEvent.SENDER_UPDATED,
+        MailEntity.SENDER,
+        saved,
+        user.id,
+        changes.diff_object(saved, before, hidden=SECRET_FIELDS),
+    )
+    return _sender_read(saved)
 
 
 @router.delete("/senders/{sender_id}", status_code=204)
 async def delete_sender(sender_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
     await require_mail_admin(session, user)
+    row = await registry.get_sender(session, sender_id)
+    await _emit_config(session, MailEvent.SENDER_DELETED, MailEntity.SENDER, row, user.id)
     await registry.delete_sender(session, sender_id)
 
 

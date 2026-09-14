@@ -1,6 +1,7 @@
-from radd.kernel import CapabilitySpec, RaddPlugin
+from radd.kernel import CapabilitySpec, EventTypeSpec, RaddPlugin
 
 from . import registry, service
+from .types import SsoEvent
 from .admin_router import router as admin_router
 from .router import router
 
@@ -18,6 +19,21 @@ plugin = RaddPlugin(
     depends_on=("events", "projects", "auth", "teams"),
     routers=(router, admin_router),
     on_startup=(_startup,),
+    # Spec 123: provider administration is audited with a diff; not a trigger.
+    event_types=(
+        EventTypeSpec(
+            SsoEvent.PROVIDER_CREATED, "Sign-in provider created", "Admin",
+            trigger=False, entity_type="sso_provider",
+        ),
+        EventTypeSpec(
+            SsoEvent.PROVIDER_UPDATED, "Sign-in provider updated", "Admin",
+            has_changes=True, trigger=False, entity_type="sso_provider",
+        ),
+        EventTypeSpec(
+            SsoEvent.PROVIDER_DELETED, "Sign-in provider deleted", "Admin",
+            trigger=False, entity_type="sso_provider",
+        ),
+    ),
     capabilities=(
         CapabilitySpec(
             "sso",

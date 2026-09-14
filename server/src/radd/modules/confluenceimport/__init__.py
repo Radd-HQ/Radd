@@ -7,11 +7,21 @@ a staged, silent, reversible run.
 Server/DC only. Cloud would be a second `client.py` behind the same `service.py`.
 """
 
-from radd.kernel import RaddPlugin
+from radd.kernel import EventTypeSpec, RaddPlugin
 
 from . import connections, runs, snapshot
 from .pipeline_router import pipeline_router
 from .router import router
+from .types import ConfluenceEvent
+
+
+def _admin_event(event_type: ConfluenceEvent, label: str) -> EventTypeSpec:
+    """Spec 123: connection administration is audited with a diff; not a trigger."""
+    return EventTypeSpec(
+        event_type, label, "Admin",
+        has_changes=event_type.endswith(".updated"), trigger=False,
+        entity_type="confluence_connection",
+    )
 
 # No storage-host use check: a snapshot's bytes live in its own directory on disk
 # (`snapshot/package.py`), not on a storage host, so no host is held hostage by a
@@ -19,6 +29,11 @@ from .router import router
 
 plugin = RaddPlugin(
     name="confluenceimport",
+    event_types=(
+        _admin_event(ConfluenceEvent.CONNECTION_CREATED, "Confluence connection created"),
+        _admin_event(ConfluenceEvent.CONNECTION_UPDATED, "Confluence connection updated"),
+        _admin_event(ConfluenceEvent.CONNECTION_DELETED, "Confluence connection deleted"),
+    ),
     core=False,  # optional plugin — disableable via the plugin manager
     description=(
         "Confluence import wizard (spec 117): admin-managed Confluence Server/DC "

@@ -31,6 +31,8 @@ class PageEvent(StrEnum):
     SPACE_CREATED = "page_space.created"
     SPACE_UPDATED = "page_space.updated"
     SPACE_DELETED = "page_space.deleted"
+    # Spec 123: the RADD-1147 public switch, as the row an auditor looks for.
+    SPACE_PUBLIC_ACCESS_CHANGED = "page_space.public_access_changed"
     PAGE_CREATED = "page.created"
     PAGE_UPDATED = "page.updated"
     PAGE_DELETED = "page.deleted"

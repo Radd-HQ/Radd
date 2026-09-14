@@ -65,7 +65,7 @@ async def create_connection(
     data: ConnectionCreate, session: Session, user: CurrentUser
 ) -> ConnectionRead:
     _admin(user)
-    connection = await connections.create_connection(session, data)
+    connection = await connections.create_connection(session, data, actor_id=user.id)
     await session.commit()
     return ConnectionRead.model_validate(connection)
 
@@ -75,7 +75,9 @@ async def update_connection(
     connection_id: uuid.UUID, data: ConnectionUpdate, session: Session, user: CurrentUser
 ) -> ConnectionRead:
     _admin(user)
-    connection = await connections.update_connection(session, connection_id, data)
+    connection = await connections.update_connection(
+        session, connection_id, data, actor_id=user.id
+    )
     await session.commit()
     return ConnectionRead.model_validate(connection)
 
@@ -85,7 +87,7 @@ async def delete_connection(
     connection_id: uuid.UUID, session: Session, user: CurrentUser
 ) -> None:
     _admin(user)
-    await connections.delete_connection(session, connection_id)
+    await connections.delete_connection(session, connection_id, actor_id=user.id)
     await session.commit()
 
 

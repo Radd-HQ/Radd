@@ -13,6 +13,7 @@ class MailEntity(StrEnum):
     MESSAGE = "mail_message"
     SOURCE = "mail_source"
     SENDER = "mail_sender"
+    RULE = "mail_rule"
 
 
 class MailEvent(StrEnum):
@@ -31,6 +32,17 @@ class MailEvent(StrEnum):
     SENT = "mail.sent"
     DROPPED = "mail.dropped"
     FAILED = "mail.failed"
+    # Spec 123: mail configuration (sources, senders, routing rules), audited
+    # with a diff; a password appears only as "changed". Not triggers.
+    SOURCE_CREATED = "mail_source.created"
+    SOURCE_UPDATED = "mail_source.updated"
+    SOURCE_DELETED = "mail_source.deleted"
+    SENDER_CREATED = "mail_sender.created"
+    SENDER_UPDATED = "mail_sender.updated"
+    SENDER_DELETED = "mail_sender.deleted"
+    RULE_CREATED = "mail_rule.created"
+    RULE_UPDATED = "mail_rule.updated"
+    RULE_DELETED = "mail_rule.deleted"
 
 
 class MailFailureReport(StrEnum):

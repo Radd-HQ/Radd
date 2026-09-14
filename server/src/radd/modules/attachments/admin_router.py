@@ -65,7 +65,7 @@ async def create_storage_host(
     data: StorageHostCreate, session: Session, user: CurrentUser
 ) -> StorageHostRead:
     _require_instance_admin(user)
-    host = await hosts.create_host(session, data)
+    host = await hosts.create_host(session, data, actor_id=user.id)
     # create_host only refreshes the capability snapshot when it promotes a
     # default — cover the other path so the Server pill never lags this write.
     await hosts.refresh_default_snapshot(session)
@@ -83,7 +83,7 @@ async def update_storage_host(
     host_id: uuid.UUID, data: StorageHostUpdate, session: Session, user: CurrentUser
 ) -> StorageHostRead:
     _require_instance_admin(user)
-    host = await hosts.update_host(session, host_id, data)
+    host = await hosts.update_host(session, host_id, data, actor_id=user.id)
     return _read(host, await hosts.attachment_counts(session))
 
 
@@ -92,7 +92,7 @@ async def delete_storage_host(host_id: uuid.UUID, session: Session, user: Curren
     """409 (with the reason) while attachments or blobs still live on the host,
     or when it's the only host left holding the default."""
     _require_instance_admin(user)
-    await hosts.delete_host(session, host_id)
+    await hosts.delete_host(session, host_id, actor_id=user.id)
     return Response(status_code=204)
 
 
@@ -102,7 +102,7 @@ async def make_storage_host_default(
 ) -> StorageHostRead:
     _require_instance_admin(user)
     host = await hosts.get_host(session, host_id)
-    await hosts.make_default(session, host)
+    await hosts.make_default(session, host, actor_id=user.id)
     return _read(host, await hosts.attachment_counts(session))
 
 
@@ -186,7 +186,12 @@ async def list_rules(session: Session, user: CurrentUser) -> list[StorageRuleRea
 async def create_rule(data: StorageRuleCreate, session: Session, user: CurrentUser) -> StorageRuleRead:
     _require_instance_admin(user)
     rule = await routing_store.create_rule(
-        session, name=data.name, rule_type=data.rule_type, config=data.config, enabled=data.enabled
+        session,
+        name=data.name,
+        rule_type=data.rule_type,
+        config=data.config,
+        enabled=data.enabled,
+        actor_id=user.id,
     )
     return StorageRuleRead.model_validate(rule)
 
@@ -203,6 +208,7 @@ async def update_rule(
         name=fields.get("name"),
         config=fields.get("config"),
         enabled=fields.get("enabled"),
+        actor_id=user.id,
     )
     return StorageRuleRead.model_validate(rule)
 
@@ -210,7 +216,7 @@ async def update_rule(
 @router.delete("/rules/{rule_id}", status_code=204)
 async def delete_rule(rule_id: uuid.UUID, session: Session, user: CurrentUser) -> Response:
     _require_instance_admin(user)
-    await routing_store.delete_rule(session, rule_id)
+    await routing_store.delete_rule(session, rule_id, actor_id=user.id)
     return Response(status_code=204)
 
 
@@ -219,5 +225,5 @@ async def reorder_rules(
     data: StorageRuleOrder, session: Session, user: CurrentUser
 ) -> list[StorageRuleRead]:
     _require_instance_admin(user)
-    rules = await routing_store.reorder(session, data.ids)
+    rules = await routing_store.reorder(session, data.ids, actor_id=user.id)
     return [StorageRuleRead.model_validate(r) for r in rules]

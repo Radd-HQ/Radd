@@ -4,6 +4,14 @@ from enum import StrEnum
 class AttachmentEvent(StrEnum):
     CREATED = "attachment.created"
     DELETED = "attachment.deleted"
+    # Spec 123: storage administration (hosts + routing rules) with old → new;
+    # credentials appear only as "changed". Where bytes go, and who decided.
+    HOST_CREATED = "storage_host.created"
+    HOST_UPDATED = "storage_host.updated"
+    HOST_DELETED = "storage_host.deleted"
+    RULE_CREATED = "storage_rule.created"
+    RULE_UPDATED = "storage_rule.updated"
+    RULE_DELETED = "storage_rule.deleted"
 
 
 class AttachmentEntity(StrEnum):

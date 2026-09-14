@@ -18,11 +18,14 @@ from collections.abc import Sequence
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.kernel import changes
+from radd.modules.events import service as events
 from radd.modules.labels import service as labels_service
 from radd.modules.labels.service import Label
 
 from .models import Page, PageLabel, PageSpace
 from .schemas import PageLabelled
+from .types import PageEntity, PageEvent
 
 
 async def labels_of(session: AsyncSession, page_id: uuid.UUID) -> list[Label]:
@@ -70,12 +73,28 @@ async def set_labels(
 ) -> list[Label]:
     """Full replacement, matching how items take labels — a partial-update API
     for a set makes "remove the last one" ambiguous."""
+    before = sorted(label.name for label in await labels_of(session, page_id))
     labels = await labels_service.resolve_labels(session, names, actor_id=actor_id)
     await session.execute(delete(PageLabel).where(PageLabel.page_id == page_id))
     for label in labels:
         session.add(PageLabel(page_id=page_id, label_id=label.id))
     await session.flush()
-    return sorted(labels, key=lambda label: label.name)
+    result = sorted(labels, key=lambda label: label.name)
+    # Spec 123: a label change is a page update with an added/removed diff —
+    # it used to leave no event at all.
+    entry = changes.collection_change("labels", before, [label.name for label in result])
+    if entry is not None:
+        page = await session.get(Page, page_id)
+        await events.emit(
+            session,
+            event_type=PageEvent.PAGE_UPDATED,
+            entity_type=PageEntity.PAGE,
+            entity_id=page_id,
+            actor_id=actor_id,
+            subjects={"page": page_id, "page_space": page.space_id if page else None},
+            changes=[entry],
+        )
+    return result
 
 
 async def pages_with_label(

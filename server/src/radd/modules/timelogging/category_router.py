@@ -46,7 +46,7 @@ async def create_category(
     data: WorkCategoryCreate, session: Session, user: CurrentUser
 ) -> WorkCategoryRead:
     await authz.require(session, user, authz.Permission.GLOBAL_MANAGE)
-    return _read(await categories.create_category(session, data))
+    return _read(await categories.create_category(session, data, actor_id=user.id))
 
 
 @router.patch("/{category_id}", response_model=WorkCategoryRead)
@@ -55,4 +55,6 @@ async def update_category(
 ) -> WorkCategoryRead:
     await categories.get_category(session, category_id)  # 404 before the 403
     await authz.require(session, user, authz.Permission.GLOBAL_MANAGE)
-    return _read(await categories.update_category(session, category_id, data))
+    return _read(
+        await categories.update_category(session, category_id, data, actor_id=user.id)
+    )

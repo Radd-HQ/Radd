@@ -87,6 +87,24 @@ plugin = RaddPlugin(
             subjects=("item",),
         ),
         EventTypeSpec(MailEvent.DROPPED, "Email discarded", "Email"),
+        # Spec 123: mail configuration is audited with a diff; not a trigger.
+        *(
+            EventTypeSpec(
+                event_type, label, "Admin",
+                has_changes=event_type.endswith(".updated"), trigger=False, entity_type=entity,
+            )
+            for event_type, label, entity in (
+                (MailEvent.SOURCE_CREATED, "Mail source created", "mail_source"),
+                (MailEvent.SOURCE_UPDATED, "Mail source updated", "mail_source"),
+                (MailEvent.SOURCE_DELETED, "Mail source deleted", "mail_source"),
+                (MailEvent.SENDER_CREATED, "Mail sender created", "mail_sender"),
+                (MailEvent.SENDER_UPDATED, "Mail sender updated", "mail_sender"),
+                (MailEvent.SENDER_DELETED, "Mail sender deleted", "mail_sender"),
+                (MailEvent.RULE_CREATED, "Mail routing rule created", "mail_rule"),
+                (MailEvent.RULE_UPDATED, "Mail routing rule updated", "mail_rule"),
+                (MailEvent.RULE_DELETED, "Mail routing rule deleted", "mail_rule"),
+            )
+        ),
     ),
     # Federated UI (spec 94): the external-requester chip in the issue rail
     # (web/remotes/mailintake), rendered by the host via the issue.panel.section slot.

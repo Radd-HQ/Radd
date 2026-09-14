@@ -133,6 +133,16 @@ class SettingsEntity(StrEnum):
     SETTING = "scoped_setting"
 
 
+class SettingEvent(StrEnum):
+    """Spec 123: a scoped setting's value changed — `entity_id` is the KEY,
+    the payload names the scope, `changes` carries old → new (clearing an
+    override is `to: null`). Before this, `set_value` emitted nothing: who
+    made a project's issues public by default, or changed SLA hours, left no
+    trace anywhere."""
+
+    CHANGED = "setting.changed"
+
+
 def all_setting_keys() -> frozenset[str]:
     """Every key the system knows: the registry ∪ the typed alias enum (mirrors
     `auth.types.all_permission_keys`)."""

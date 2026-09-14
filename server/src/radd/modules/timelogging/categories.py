@@ -11,11 +11,13 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import SessionLocal
+from radd.kernel import changes
+from radd.modules.events import service as events
 from radd.exceptions import ConflictError, NotFoundError
 
 from .models import WorkCategory
 from .schemas import WorkCategoryCreate, WorkCategoryUpdate
-from .types import DEFAULT_WORK_CATEGORIES, TimelogEntity
+from .types import WorklogEvent, DEFAULT_WORK_CATEGORIES, TimelogEntity
 
 
 async def list_categories(
@@ -50,8 +52,26 @@ async def resolve_category(session: AsyncSession, category_id: uuid.UUID) -> Wor
     return await get_category(session, category_id)
 
 
+async def _emit(
+    session: AsyncSession,
+    event_type: WorklogEvent,
+    category: WorkCategory,
+    actor_id: uuid.UUID | None,
+    diff: list[dict] | None = None,
+) -> None:
+    await events.emit(
+        session,
+        event_type=event_type,
+        entity_type=TimelogEntity.WORK_CATEGORY,
+        entity_id=category.id,
+        actor_id=actor_id,
+        payload={"name": category.name},
+        changes=diff,
+    )
+
+
 async def create_category(
-    session: AsyncSession, data: WorkCategoryCreate
+    session: AsyncSession, data: WorkCategoryCreate, *, actor_id: uuid.UUID | None = None
 ) -> WorkCategory:
     existing = await session.scalar(
         select(WorkCategory.id).where(WorkCategory.name == data.name)
@@ -66,13 +86,19 @@ async def create_category(
     category = WorkCategory(name=data.name, position=next_position)
     session.add(category)
     await session.flush()
+    await _emit(session, WorklogEvent.CATEGORY_CREATED, category, actor_id)
     return category
 
 
 async def update_category(
-    session: AsyncSession, category_id: uuid.UUID, data: WorkCategoryUpdate
+    session: AsyncSession,
+    category_id: uuid.UUID,
+    data: WorkCategoryUpdate,
+    *,
+    actor_id: uuid.UUID | None = None,
 ) -> WorkCategory:
     category = await get_category(session, category_id)
+    before = changes.snapshot(category, ("name", "archived"))
     if data.name is not None and data.name != category.name:
         clash = await session.scalar(
             select(WorkCategory.id).where(
@@ -86,6 +112,13 @@ async def update_category(
     if data.archived is not None:
         category.archived = data.archived
     await session.flush()
+    await _emit(
+        session,
+        WorklogEvent.CATEGORY_UPDATED,
+        category,
+        actor_id,
+        changes.diff_object(category, before),
+    )
     return category
 
 

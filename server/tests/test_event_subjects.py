@@ -142,6 +142,7 @@ async def test_emit_writes_the_ref_from_an_id(db, world):
         entity_type="item",
         entity_id=world["item_id"],
         subjects={"item": world["item_id"]},
+        changes=[],  # spec 123: an item.updated must say what changed, even "nothing"
         payload={"mine": "own data"},
     )
     await db.flush()

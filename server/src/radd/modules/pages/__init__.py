@@ -78,6 +78,10 @@ plugin = RaddPlugin(
     ),
     event_types=(
         EventTypeSpec(PageEvent.SPACE_CREATED, "Page space created", "Pages"),
+        EventTypeSpec(
+            PageEvent.SPACE_PUBLIC_ACCESS_CHANGED, "Page space public access changed", "Pages",
+            has_changes=True, trigger=False, entity_type="page_space", subjects=("page_space",),
+        ),
         EventTypeSpec(PageEvent.SPACE_UPDATED, "Page space updated", "Pages"),
         EventTypeSpec(PageEvent.SPACE_DELETED, "Page space deleted", "Pages"),
         # Every page event carries both refs. Declaring the subject is what makes

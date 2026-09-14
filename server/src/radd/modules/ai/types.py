@@ -117,6 +117,22 @@ class AiEntity(StrEnum):
     PRESET = "ai_preset"
 
 
+class AiEvent(StrEnum):
+    """Spec 123: registry administration, audited with a diff. An API key only
+    ever appears as "changed"; a preset's prompt likewise (it is content, not a
+    setting). Not automation triggers."""
+
+    PROVIDER_CREATED = "ai_provider.created"
+    PROVIDER_UPDATED = "ai_provider.updated"
+    PROVIDER_DELETED = "ai_provider.deleted"
+    #: entity_id is the ROLE name (chat | embeddings | vision); `changes` names
+    #: the provider and model before and after; clearing is `to: null`.
+    ROLE_CHANGED = "ai_role.changed"
+    PRESET_CREATED = "ai_preset.created"
+    PRESET_UPDATED = "ai_preset.updated"
+    PRESET_DELETED = "ai_preset.deleted"
+
+
 # --- errors (module exception handlers map these to clean JSON responses) ---
 
 

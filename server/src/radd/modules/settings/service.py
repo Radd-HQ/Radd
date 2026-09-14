@@ -18,10 +18,11 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError
-from radd.kernel import SettingSpec, registries
+from radd.kernel import SettingSpec, changes, registries
+from radd.modules.events import service as events
 
 from .models import ScopedSetting
-from .types import SettingKey, SettingScope, SettingType, setting_spec
+from .types import SettingEvent, SettingKey, SettingScope, SettingsEntity, SettingType, setting_spec
 
 
 def _coerce(spec: SettingSpec, value: Any) -> Any:
@@ -93,6 +94,8 @@ async def set_value(
     scope: SettingScope,
     scope_id: uuid.UUID | None,
     value: Any,
+    *,
+    actor_id: uuid.UUID | None = None,
 ) -> Any:
     """Upsert one override. Raises ConflictError if the key isn't settable at
     `scope` or `scope_id` is inconsistent with it (instance = no id, project = id)."""
@@ -113,6 +116,7 @@ async def set_value(
             ScopedSetting.key == key.value,
         )
     )
+    previous = existing.value if existing is not None else None
     if existing is None:
         session.add(
             ScopedSetting(scope=scope.value, scope_id=scope_id, key=key.value, value=coerced)
@@ -120,11 +124,17 @@ async def set_value(
     else:
         existing.value = coerced
     await session.flush()
+    await _emit_changed(session, spec, key, scope, scope_id, previous, coerced, actor_id)
     return coerced
 
 
 async def clear_value(
-    session: AsyncSession, key: SettingKey, scope: SettingScope, scope_id: uuid.UUID | None
+    session: AsyncSession,
+    key: SettingKey,
+    scope: SettingScope,
+    scope_id: uuid.UUID | None,
+    *,
+    actor_id: uuid.UUID | None = None,
 ) -> None:
     """Remove an override so the wider scope (or env default) takes over again."""
     existing = await session.scalar(
@@ -135,8 +145,40 @@ async def clear_value(
         )
     )
     if existing is not None:
+        previous = existing.value
         await session.delete(existing)
         await session.flush()
+        await _emit_changed(
+            session, setting_spec(key), key, scope, scope_id, previous, None, actor_id
+        )
+
+
+async def _emit_changed(
+    session: AsyncSession,
+    spec: SettingSpec,
+    key: SettingKey,
+    scope: SettingScope,
+    scope_id: uuid.UUID | None,
+    old: Any,
+    new: Any,
+    actor_id: uuid.UUID | None,
+) -> None:
+    """Spec 123: one `setting.changed` per effective change. A write that
+    restates the stored value emits nothing — an audit row with an empty diff
+    is noise to everyone downstream (the RADD-1009 rule)."""
+    entry = changes.change(key.value, old, new, name=spec.label)
+    if entry is None:
+        return
+    await events.emit(
+        session,
+        event_type=SettingEvent.CHANGED,
+        entity_type=SettingsEntity.SETTING,
+        entity_id=key.value,
+        actor_id=actor_id,
+        payload={"key": key.value, "scope": scope.value, "section": spec.section},
+        subjects={"project": scope_id} if scope is SettingScope.PROJECT else None,
+        changes=[entry],
+    )
 
 
 async def list_for_scope(

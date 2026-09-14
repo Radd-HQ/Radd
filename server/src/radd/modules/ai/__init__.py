@@ -1,7 +1,7 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-from radd.kernel import CapabilitySpec
+from radd.kernel import CapabilitySpec, EventTypeSpec
 from radd.kernel import RaddPlugin
 from radd.kernel import SettingSpec
 
@@ -12,10 +12,18 @@ from .router import router
 from .types import (
     AiConfigError,
     AiDisabledError,
+    AiEvent,
     AiInvalidQueryError,
     AiRole,
     AiUpstreamError,
 )
+
+
+def _admin_event(event_type: AiEvent, label: str, entity_type: str, *, diff: bool = False):
+    """Spec 123: registry administration is audited, never a trigger."""
+    return EventTypeSpec(
+        event_type, label, "Admin", has_changes=diff, trigger=False, entity_type=entity_type
+    )
 
 
 async def _startup() -> None:
@@ -86,6 +94,15 @@ plugin = RaddPlugin(
         "candidates (FTS-first, LLM rerank), NL->SLQ (spec 46), plus the provider "
         "registry (spec 101): DB provider rows + chat/embeddings/vision roles, "
         "env-seeded once. Dormant (404) while a feature's role is unconfigured."
+    ),
+    event_types=(
+        _admin_event(AiEvent.PROVIDER_CREATED, "AI provider created", "ai_provider"),
+        _admin_event(AiEvent.PROVIDER_UPDATED, "AI provider updated", "ai_provider", diff=True),
+        _admin_event(AiEvent.PROVIDER_DELETED, "AI provider deleted", "ai_provider"),
+        _admin_event(AiEvent.ROLE_CHANGED, "AI model role changed", "ai_role", diff=True),
+        _admin_event(AiEvent.PRESET_CREATED, "AI preset created", "ai_preset"),
+        _admin_event(AiEvent.PRESET_UPDATED, "AI preset updated", "ai_preset", diff=True),
+        _admin_event(AiEvent.PRESET_DELETED, "AI preset deleted", "ai_preset"),
     ),
     depends_on=(
         "auth",

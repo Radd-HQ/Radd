@@ -43,6 +43,18 @@ class CiState(StrEnum):
     UNKNOWN = "unknown"
 
 
+class GithubEvent(StrEnum):
+    """Spec 123: connection + repository administration, audited with a diff.
+    Tokens and webhook secrets appear only as "changed". Not triggers."""
+
+    CONNECTION_CREATED = "github_connection.created"
+    CONNECTION_UPDATED = "github_connection.updated"
+    CONNECTION_DELETED = "github_connection.deleted"
+    REPO_CREATED = "github_repo.created"
+    REPO_UPDATED = "github_repo.updated"
+    REPO_DELETED = "github_repo.deleted"
+
+
 class GithubEntity(StrEnum):
     """Entity names for NotFound/Conflict errors."""
 

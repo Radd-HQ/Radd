@@ -17,12 +17,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
 from radd.db import SessionLocal
+from radd.kernel import changes
+from radd.modules.events import service as events
+from radd.modules.projects import service as projects_service
 from radd.exceptions import ConflictError, NotFoundError
 from radd.snapshot import Snapshot
 
 from .models import GithubConnection, GithubRepo
 from .schemas import ConnectionCreate, ConnectionUpdate, RepoCreate, RepoUpdate
-from .types import GITHUB_COM, GithubEntity
+from .types import GithubEvent, GITHUB_COM, GithubEntity
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +60,60 @@ async def get_connection(session: AsyncSession, connection_id: uuid.UUID) -> Git
     return connection
 
 
-async def create_connection(session: AsyncSession, data: ConnectionCreate) -> GithubConnection:
+#: Never in an event payload — a diff records that a credential CHANGED, no value.
+SECRET_FIELDS: tuple[str, ...] = ("api_token", "webhook_secret")
+
+
+async def _emit_connection(
+    session: AsyncSession,
+    event_type: GithubEvent,
+    connection: GithubConnection,
+    actor_id: uuid.UUID | None,
+    diff: list[dict] | None = None,
+) -> None:
+    await events.emit(
+        session,
+        event_type=event_type,
+        entity_type=GithubEntity.CONNECTION,
+        entity_id=connection.id,
+        actor_id=actor_id,
+        payload={"name": connection.name, "base_url": connection.base_url},
+        changes=diff,
+    )
+
+
+async def _repo_snapshot(session: AsyncSession, repo: GithubRepo) -> dict:
+    """What an auditor reads for a repo: the project's KEY, not its uuid."""
+    ref = await projects_service.project_ref(session, repo.project_id) if repo.project_id else None
+    return {
+        "full_name": repo.full_name,
+        "project": ref["key"] if ref else None,
+        "default_branch": repo.default_branch,
+    }
+
+
+async def _emit_repo(
+    session: AsyncSession,
+    event_type: GithubEvent,
+    repo: GithubRepo,
+    actor_id: uuid.UUID | None,
+    diff: list[dict] | None = None,
+) -> None:
+    await events.emit(
+        session,
+        event_type=event_type,
+        entity_type=GithubEntity.REPO,
+        entity_id=repo.id,
+        actor_id=actor_id,
+        payload={"full_name": repo.full_name, "connection_id": str(repo.connection_id)},
+        subjects={"project": repo.project_id},
+        changes=diff,
+    )
+
+
+async def create_connection(
+    session: AsyncSession, data: ConnectionCreate, *, actor_id: uuid.UUID | None = None
+) -> GithubConnection:
     existing = await session.execute(
         select(GithubConnection).where(GithubConnection.name == data.name)
     )
@@ -74,13 +130,19 @@ async def create_connection(session: AsyncSession, data: ConnectionCreate) -> Gi
     session.add(connection)
     await session.flush()
     await refresh_connection_snapshot(session)
+    await _emit_connection(session, GithubEvent.CONNECTION_CREATED, connection, actor_id)
     return connection
 
 
 async def update_connection(
-    session: AsyncSession, connection_id: uuid.UUID, data: ConnectionUpdate
+    session: AsyncSession,
+    connection_id: uuid.UUID,
+    data: ConnectionUpdate,
+    *,
+    actor_id: uuid.UUID | None = None,
 ) -> GithubConnection:
     connection = await get_connection(session, connection_id)
+    before = changes.snapshot(connection, changes.column_fields(connection))
     if data.name is not None:
         connection.name = data.name
     if data.base_url is not None:
@@ -96,11 +158,21 @@ async def update_connection(
         connection.verify_ssl = data.verify_ssl
     await session.flush()
     await refresh_connection_snapshot(session)
+    await _emit_connection(
+        session,
+        GithubEvent.CONNECTION_UPDATED,
+        connection,
+        actor_id,
+        changes.diff_object(connection, before, hidden=SECRET_FIELDS),
+    )
     return connection
 
 
-async def delete_connection(session: AsyncSession, connection_id: uuid.UUID) -> None:
+async def delete_connection(
+    session: AsyncSession, connection_id: uuid.UUID, *, actor_id: uuid.UUID | None = None
+) -> None:
     connection = await get_connection(session, connection_id)
+    await _emit_connection(session, GithubEvent.CONNECTION_DELETED, connection, actor_id)
     await session.delete(connection)
     await session.flush()
     await refresh_connection_snapshot(session)
@@ -140,7 +212,9 @@ async def find_repo(session: AsyncSession, full_name: str) -> GithubRepo | None:
     return rows.scalars().first()
 
 
-async def create_repo(session: AsyncSession, data: RepoCreate) -> GithubRepo:
+async def create_repo(
+    session: AsyncSession, data: RepoCreate, *, actor_id: uuid.UUID | None = None
+) -> GithubRepo:
     await get_connection(session, data.connection_id)  # 404s an unknown connection
     existing = await session.execute(
         select(GithubRepo).where(
@@ -158,21 +232,30 @@ async def create_repo(session: AsyncSession, data: RepoCreate) -> GithubRepo:
     )
     session.add(repo)
     await session.flush()
+    await _emit_repo(session, GithubEvent.REPO_CREATED, repo, actor_id)
     return repo
 
 
-async def update_repo(session: AsyncSession, repo_id: uuid.UUID, data: RepoUpdate) -> GithubRepo:
+async def update_repo(
+    session: AsyncSession, repo_id: uuid.UUID, data: RepoUpdate, *, actor_id: uuid.UUID | None = None
+) -> GithubRepo:
     repo = await get_repo(session, repo_id)
+    before = await _repo_snapshot(session, repo)
     if "project_id" in data.model_fields_set:  # explicit null clears the mapping
         repo.project_id = data.project_id
     if data.default_branch is not None:
         repo.default_branch = data.default_branch
     await session.flush()
+    diff = changes.diff(before, await _repo_snapshot(session, repo))
+    await _emit_repo(session, GithubEvent.REPO_UPDATED, repo, actor_id, diff)
     return repo
 
 
-async def delete_repo(session: AsyncSession, repo_id: uuid.UUID) -> None:
+async def delete_repo(
+    session: AsyncSession, repo_id: uuid.UUID, *, actor_id: uuid.UUID | None = None
+) -> None:
     repo = await get_repo(session, repo_id)
+    await _emit_repo(session, GithubEvent.REPO_DELETED, repo, actor_id)
     await session.delete(repo)
     await session.flush()
 

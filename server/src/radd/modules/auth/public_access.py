@@ -17,12 +17,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError
+from radd.modules.events import service as events
 from radd.modules.projects.models import Project
+from radd.modules.projects.types import ProjectEntity
 
 from . import grants
 from .models import GlobalRoleGrant, Role
 from .principals import ANYONE_ID, SIGNED_IN_ID
-from .types import AuthEntity, BuiltinRoleKey
+from .types import AuthEntity, AuthEvent, BuiltinRoleKey
 
 
 @dataclass(frozen=True)
@@ -97,12 +99,14 @@ async def set_public_access(
     roles = await _switch_roles(session)
     current = await public_access(session, project.id)
     wanted = {"public": public, "contributions": contributions}
+    flipped: list[dict] = []
     for name, principal, key in _SWITCHES:
         if key not in roles:
             raise ConflictError(AuthEntity.ROLE, reason=f"builtin role '{key}' is not seeded")
         have, want = getattr(current, name), wanted[name]
         if have == want:
             continue
+        flipped.append({"field": name, "from": have, "to": want})
         if want:
             await grants.create_grant(
                 session, roles[key], user_id=principal, project_id=project.id, actor_id=actor_id
@@ -117,6 +121,16 @@ async def set_public_access(
             )
             if row is not None:
                 await grants.delete_grant(session, row.id, actor_id=actor_id)
+    if flipped:
+        await events.emit(
+            session,
+            event_type=AuthEvent.PROJECT_PUBLIC_ACCESS_CHANGED,
+            entity_type=ProjectEntity.PROJECT,
+            entity_id=project.id,
+            actor_id=actor_id,
+            subjects={"project": project.id},
+            changes=flipped,
+        )
     return PublicAccess(public=public, contributions=contributions)
 
 
@@ -148,14 +162,16 @@ async def spaces_public(
 async def set_space_public(
     session: AsyncSession, space_id: uuid.UUID, *, public: bool, actor_id: uuid.UUID | None
 ) -> bool:
-    """Write the space's switch as the grant it is (idempotent)."""
+    """Write the space's switch as the grant it is (idempotent). Returns whether
+    anything CHANGED — the caller (pages, which owns the space vocabulary)
+    emits `page_space.public_access_changed` on True (spec 123)."""
     roles = await _switch_roles(session)
     public_role = roles.get(BuiltinRoleKey.PUBLIC)
     if public_role is None:
         raise ConflictError(AuthEntity.ROLE, reason="builtin role 'public' is not seeded")
     current = (await spaces_public(session, [space_id]))[space_id]
     if current == public:
-        return public
+        return False
     if public:
         await grants.create_grant(
             session, public_role, user_id=ANYONE_ID, space_id=space_id, actor_id=actor_id
@@ -170,4 +186,4 @@ async def set_space_public(
         )
         if row is not None:
             await grants.delete_grant(session, row.id, actor_id=actor_id)
-    return public
+    return True

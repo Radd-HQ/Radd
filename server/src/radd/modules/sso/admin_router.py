@@ -93,7 +93,7 @@ async def create_provider(
     data: SsoProviderCreate, session: Session, user: CurrentUser
 ) -> SsoProviderRead:
     _require_instance_admin(user)
-    provider = await registry.create_provider(session, data)
+    provider = await registry.create_provider(session, data, actor_id=user.id)
     await registry.refresh_snapshot(session)
     return await _read(session, provider)
 
@@ -103,7 +103,7 @@ async def update_provider(
     provider_id: uuid.UUID, data: SsoProviderUpdate, session: Session, user: CurrentUser
 ) -> SsoProviderRead:
     _require_instance_admin(user)
-    provider = await registry.update_provider(session, provider_id, data)
+    provider = await registry.update_provider(session, provider_id, data, actor_id=user.id)
     idp.invalidate_caches(provider_id)
     await registry.refresh_snapshot(session)
     return await _read(session, provider)
@@ -112,7 +112,7 @@ async def update_provider(
 @router.delete("/providers/{provider_id}", status_code=204)
 async def delete_provider(provider_id: uuid.UUID, session: Session, user: CurrentUser) -> Response:
     _require_instance_admin(user)
-    await registry.delete_provider(session, provider_id)
+    await registry.delete_provider(session, provider_id, actor_id=user.id)
     idp.invalidate_caches(provider_id)
     await registry.refresh_snapshot(session)
     return Response(status_code=204)

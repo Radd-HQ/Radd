@@ -67,6 +67,20 @@ def _sort_key(value: Any) -> tuple[int, str]:
     return (0 if value is None else 1, str(value))
 
 
+#: Columns no diff should mention: identity and the timestamps the ORM keeps.
+DEFAULT_EXCLUDED_COLUMNS: tuple[str, ...] = ("id", "created_at", "updated_at")
+
+
+def column_fields(obj: Any, *, exclude: Collection[str] = DEFAULT_EXCLUDED_COLUMNS) -> tuple[str, ...]:
+    """The mapped column names of an ORM row (or model) minus `exclude` — the
+    field list for a whole-row snapshot. Duck-typed on `__table__` so this
+    module still imports nothing from SQLAlchemy."""
+    table = getattr(obj, "__table__", None)
+    if table is None:
+        raise TypeError(f"{type(obj).__name__} has no __table__; pass the fields explicitly")
+    return tuple(name for name in table.columns.keys() if name not in exclude)
+
+
 def snapshot(obj: Any, fields: Iterable[str]) -> dict[str, Any]:
     """`{field: json_safe(getattr(obj, field))}` — take one BEFORE mutating and
     one after; `diff` the two. A missing attribute reads as None so a snapshot

@@ -1,10 +1,20 @@
-from radd.kernel import RaddPlugin
+from radd.kernel import EventTypeSpec, RaddPlugin
 
 from .router import router
+from .types import SettingEvent
 
 plugin = RaddPlugin(
     name="settings",
     description="Scalar settings that cascade project → instance → env default (specs 50/67).",
-    depends_on=("projects", "auth"),
+    depends_on=("events", "projects", "auth"),
     routers=(router,),
+    # Spec 123: every effective setting change is an audit row with old → new.
+    # Not an automation trigger — a rule that fires on its own configuration
+    # changing is a loop nobody asked for.
+    event_types=(
+        EventTypeSpec(
+            SettingEvent.CHANGED, "Setting changed", "Admin",
+            has_changes=True, trigger=False, entity_type="scoped_setting",
+        ),
+    ),
 )

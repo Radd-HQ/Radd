@@ -31,7 +31,9 @@ from . import (
 from radd.exceptions import NotFoundError
 
 from .models import PageTemplate
-from .types import PageEntity
+from radd.modules.events import service as events
+
+from .types import PageEntity, PageEvent
 from .schemas import (
     DocLinkCreate,
     PageLinkedItem,
@@ -132,7 +134,19 @@ async def set_space_public_access(
 
     space = await spaces.get_space(session, space_id)
     await authz.require(session, user, authz.Permission.PAGE_MANAGE, space_id=space.id)
-    await public_access.set_space_public(session, space.id, public=data.public, actor_id=user.id)
+    changed = await public_access.set_space_public(
+        session, space.id, public=data.public, actor_id=user.id
+    )
+    if changed:  # spec 123: the switch is its own audit row, old → new
+        await events.emit(
+            session,
+            event_type=PageEvent.SPACE_PUBLIC_ACCESS_CHANGED,
+            entity_type=PageEntity.SPACE,
+            entity_id=space.id,
+            actor_id=user.id,
+            subjects={"page_space": space.id},
+            changes=[{"field": "public", "from": not data.public, "to": data.public}],
+        )
     return (await spaces.read_spaces(session, [space]))[0]
 
 

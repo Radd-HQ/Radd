@@ -37,4 +37,4 @@ async def set_timelogging(
 ) -> ProjectTimeLoggingRead:
     project = await projects_service.get_project(session, project_id)
     await authz.require(session, user, authz.Permission.PROJECT_MANAGE, project=project)
-    return await enablement.set_enabled(session, project_id, data.enabled)
+    return await enablement.set_enabled(session, project_id, data.enabled, actor_id=user.id)

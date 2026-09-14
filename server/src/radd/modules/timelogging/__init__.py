@@ -145,5 +145,18 @@ plugin = RaddPlugin(
         EventTypeSpec(WorklogEvent.CREATED, "Work logged", "Time logging", item_scoped=True),
         EventTypeSpec(WorklogEvent.UPDATED, "Worklog edited", "Time logging", item_scoped=True),
         EventTypeSpec(WorklogEvent.DELETED, "Worklog deleted", "Time logging", item_scoped=True),
+        # Spec 123: configuration writes are audited with a diff; not triggers.
+        EventTypeSpec(
+            WorklogEvent.CATEGORY_CREATED, "Work category created", "Admin",
+            trigger=False, entity_type="work_category",
+        ),
+        EventTypeSpec(
+            WorklogEvent.CATEGORY_UPDATED, "Work category updated", "Admin",
+            has_changes=True, trigger=False, entity_type="work_category",
+        ),
+        EventTypeSpec(
+            WorklogEvent.PROJECT_TIMELOGGING_CHANGED, "Project time logging changed", "Admin",
+            has_changes=True, trigger=False, entity_type="project", subjects=("project",),
+        ),
     ),
 )

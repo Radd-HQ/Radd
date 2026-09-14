@@ -8,6 +8,15 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 
+class JiraEvent(StrEnum):
+    """Spec 123: connection administration, audited with a diff; the credential
+    appears only as "changed". Not triggers."""
+
+    CONNECTION_CREATED = "jira_connection.created"
+    CONNECTION_UPDATED = "jira_connection.updated"
+    CONNECTION_DELETED = "jira_connection.deleted"
+
+
 class JiraEntity(StrEnum):
     JIRA = "jira"  # connection-level errors (unreachable, unauthorized)
     CONNECTION = "jira_connection"

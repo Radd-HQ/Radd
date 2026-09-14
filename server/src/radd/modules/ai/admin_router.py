@@ -56,7 +56,7 @@ async def create_provider(
     data: AiProviderCreate, session: Session, user: CurrentUser
 ) -> AiProviderRead:
     _require_instance_admin(user)
-    provider = await registry.create_provider(session, data)
+    provider = await registry.create_provider(session, data, actor_id=user.id)
     await registry.refresh_snapshot(session)
     return AiProviderRead.model_validate(provider)
 
@@ -66,7 +66,7 @@ async def update_provider(
     provider_id: uuid.UUID, data: AiProviderUpdate, session: Session, user: CurrentUser
 ) -> AiProviderRead:
     _require_instance_admin(user)
-    provider = await registry.update_provider(session, provider_id, data)
+    provider = await registry.update_provider(session, provider_id, data, actor_id=user.id)
     await registry.refresh_snapshot(session)
     return AiProviderRead.model_validate(provider)
 
@@ -74,7 +74,7 @@ async def update_provider(
 @router.delete("/providers/{provider_id}", status_code=204)
 async def delete_provider(provider_id: uuid.UUID, session: Session, user: CurrentUser) -> Response:
     _require_instance_admin(user)
-    await registry.delete_provider(session, provider_id)
+    await registry.delete_provider(session, provider_id, actor_id=user.id)
     await registry.refresh_snapshot(session)
     return Response(status_code=204)
 
@@ -181,7 +181,7 @@ async def set_role(
     role: AiRole, data: AiRoleAssign, session: Session, user: CurrentUser
 ) -> AiRoleRead:
     _require_instance_admin(user)
-    row = await registry.set_role(session, role, data)
+    row = await registry.set_role(session, role, data, actor_id=user.id)
     provider = await registry.get_provider(session, row.provider_id)
     await registry.refresh_snapshot(session)
     return AiRoleRead(
@@ -196,7 +196,7 @@ async def set_role(
 @router.delete("/roles/{role}", status_code=204)
 async def clear_role(role: AiRole, session: Session, user: CurrentUser) -> Response:
     _require_instance_admin(user)
-    await registry.clear_role(session, role)
+    await registry.clear_role(session, role, actor_id=user.id)
     await registry.refresh_snapshot(session)
     return Response(status_code=204)
 
@@ -213,7 +213,9 @@ async def list_presets(session: Session, user: CurrentUser) -> list[AiPresetRead
 @router.post("/presets", response_model=AiPresetRead, status_code=201)
 async def create_preset(data: AiPresetCreate, session: Session, user: CurrentUser) -> AiPresetRead:
     _require_instance_admin(user)
-    return AiPresetRead.model_validate(await registry.create_preset(session, data))
+    return AiPresetRead.model_validate(
+        await registry.create_preset(session, data, actor_id=user.id)
+    )
 
 
 @router.patch("/presets/{preset_id}", response_model=AiPresetRead)
@@ -221,11 +223,13 @@ async def update_preset(
     preset_id: uuid.UUID, data: AiPresetUpdate, session: Session, user: CurrentUser
 ) -> AiPresetRead:
     _require_instance_admin(user)
-    return AiPresetRead.model_validate(await registry.update_preset(session, preset_id, data))
+    return AiPresetRead.model_validate(
+        await registry.update_preset(session, preset_id, data, actor_id=user.id)
+    )
 
 
 @router.delete("/presets/{preset_id}", status_code=204)
 async def delete_preset(preset_id: uuid.UUID, session: Session, user: CurrentUser) -> Response:
     _require_instance_admin(user)
-    await registry.delete_preset(session, preset_id)
+    await registry.delete_preset(session, preset_id, actor_id=user.id)
     return Response(status_code=204)

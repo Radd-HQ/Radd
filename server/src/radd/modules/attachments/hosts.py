@@ -20,10 +20,18 @@ from radd.config import settings
 from radd.db import SessionLocal
 from radd.snapshot import Snapshot
 from radd.exceptions import ConflictError, NotFoundError
+from radd.kernel import changes
+from radd.modules.events import service as events
 
 from .models import Attachment, StorageHost
 from .schemas import StorageHostCreate, StorageHostUpdate
-from .types import AttachmentEntity, DeliveryMode, StorageHostSource, StorageHostType
+from .types import (
+    AttachmentEntity,
+    AttachmentEvent,
+    DeliveryMode,
+    StorageHostSource,
+    StorageHostType,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -116,11 +124,35 @@ def _validate(host_type: StorageHostType, fields: dict) -> None:
         )
 
 
+#: Never in an event payload — a diff records that a credential CHANGED, no value.
+SECRET_FIELDS: tuple[str, ...] = ("access_key", "secret_key")
+_UNDIFFED: tuple[str, ...] = (*changes.DEFAULT_EXCLUDED_COLUMNS, "source")
+
+
+async def _emit(
+    session: AsyncSession,
+    event_type: AttachmentEvent,
+    host: StorageHost,
+    actor_id: uuid.UUID | None,
+    diff: list[dict] | None = None,
+) -> None:
+    await events.emit(
+        session,
+        event_type=event_type,
+        entity_type=AttachmentEntity.HOST,
+        entity_id=host.id,
+        actor_id=actor_id,
+        payload={"name": host.name, "host_type": host.host_type, "is_default": host.is_default},
+        changes=diff,
+    )
+
+
 async def create_host(
     session: AsyncSession,
     data: StorageHostCreate,
     *,
     source: StorageHostSource = StorageHostSource.USER,
+    actor_id: uuid.UUID | None = None,
 ) -> StorageHost:
     await _ensure_name_free(session, data.name)
     fields = data.model_dump()
@@ -144,14 +176,20 @@ async def create_host(
     await session.flush()
     # First host in is the default, so a single-host deploy is complete at once.
     if data.is_default or await _count(session) == 1:
-        await make_default(session, host)
+        await make_default(session, host, emit_event=False)
+    await _emit(session, AttachmentEvent.HOST_CREATED, host, actor_id)
     return host
 
 
 async def update_host(
-    session: AsyncSession, host_id: uuid.UUID, data: StorageHostUpdate
+    session: AsyncSession,
+    host_id: uuid.UUID,
+    data: StorageHostUpdate,
+    *,
+    actor_id: uuid.UUID | None = None,
 ) -> StorageHost:
     host = await get_host(session, host_id)
+    before = changes.snapshot(host, changes.column_fields(host, exclude=_UNDIFFED))
     fields = data.model_dump(exclude_unset=True)
     if "name" in fields and fields["name"] != host.name:
         await _ensure_name_free(session, fields["name"])
@@ -175,8 +213,15 @@ async def update_host(
     _validate(StorageHostType(host.host_type), _column_state(host))
     await session.flush()
     if fields.get("is_default"):
-        await make_default(session, host)
+        await make_default(session, host, emit_event=False)  # folded into this diff
     await refresh_default_snapshot(session)
+    await _emit(
+        session,
+        AttachmentEvent.HOST_UPDATED,
+        host,
+        actor_id,
+        changes.diff_object(host, before, hidden=SECRET_FIELDS),
+    )
     return host
 
 
@@ -189,7 +234,9 @@ def _column_state(host: StorageHost) -> dict:
     }
 
 
-async def delete_host(session: AsyncSession, host_id: uuid.UUID) -> None:
+async def delete_host(
+    session: AsyncSession, host_id: uuid.UUID, *, actor_id: uuid.UUID | None = None
+) -> None:
     host = await get_host(session, host_id)
     used = await session.scalar(
         select(func.count(Attachment.id)).where(Attachment.storage_host_id == host_id)
@@ -207,23 +254,41 @@ async def delete_host(session: AsyncSession, host_id: uuid.UUID) -> None:
                 reason=f"{held} stored blobs still reference this host",
             )
     was_default = host.is_default
+    await _emit(session, AttachmentEvent.HOST_DELETED, host, actor_id)
     await session.delete(host)
     await session.flush()
     if was_default:  # promote another so a multi-host deploy keeps a default
         remaining = await list_hosts(session)
         if remaining:
-            await make_default(session, remaining[0])
+            await make_default(session, remaining[0], actor_id=actor_id)
     await refresh_default_snapshot(session)
 
 
-async def make_default(session: AsyncSession, host: StorageHost) -> None:
-    """Exactly one default, cleared in one statement (the connections idiom)."""
+async def make_default(
+    session: AsyncSession,
+    host: StorageHost,
+    *,
+    actor_id: uuid.UUID | None = None,
+    emit_event: bool = True,
+) -> None:
+    """Exactly one default, cleared in one statement (the connections idiom).
+    Emits `storage_host.updated` (is_default false → true) unless the caller
+    folds the flip into its own diff (`emit_event=False`)."""
+    was_default = host.is_default
     await session.execute(
         update(StorageHost).where(StorageHost.id != host.id).values(is_default=False)
     )
     host.is_default = True
     await session.flush()
     await refresh_default_snapshot(session)
+    if emit_event and not was_default:
+        await _emit(
+            session,
+            AttachmentEvent.HOST_UPDATED,
+            host,
+            actor_id,
+            [{"field": "is_default", "from": False, "to": True}],
+        )
 
 
 async def _ensure_name_free(session: AsyncSession, name: str) -> None:

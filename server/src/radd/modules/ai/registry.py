@@ -20,6 +20,8 @@ from radd.config import settings
 from radd.db import SessionLocal
 from radd.snapshot import Snapshot
 from radd.exceptions import ConflictError, NotFoundError
+from radd.kernel import changes
+from radd.modules.events import service as events
 
 from .models import AiModelRole, AiPresetPrompt, AiProviderRow
 from .schemas import (
@@ -29,7 +31,15 @@ from .schemas import (
     AiProviderUpdate,
     AiRoleAssign,
 )
-from .types import AiConfigError, AiDisabledError, AiEntity, AiProviderSource, AiRole, AiWireShape
+from .types import (
+    AiConfigError,
+    AiDisabledError,
+    AiEntity,
+    AiEvent,
+    AiProviderSource,
+    AiRole,
+    AiWireShape,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -63,11 +73,53 @@ async def get_provider(session: AsyncSession, provider_id: uuid.UUID) -> AiProvi
     return provider
 
 
+#: Never in an event payload — a diff records that the key CHANGED, no value.
+SECRET_FIELDS: tuple[str, ...] = ("api_key",)
+_UNDIFFED: tuple[str, ...] = (*changes.DEFAULT_EXCLUDED_COLUMNS, "source")
+
+
+async def _emit_provider(
+    session: AsyncSession,
+    event_type: AiEvent,
+    provider: AiProviderRow,
+    actor_id: uuid.UUID | None,
+    diff: list[dict] | None = None,
+) -> None:
+    await events.emit(
+        session,
+        event_type=event_type,
+        entity_type=AiEntity.PROVIDER,
+        entity_id=provider.id,
+        actor_id=actor_id,
+        payload={"name": provider.name, "wire_shape": provider.wire_shape},
+        changes=diff,
+    )
+
+
+async def _emit_preset(
+    session: AsyncSession,
+    event_type: AiEvent,
+    preset: AiPresetPrompt,
+    actor_id: uuid.UUID | None,
+    diff: list[dict] | None = None,
+) -> None:
+    await events.emit(
+        session,
+        event_type=event_type,
+        entity_type=AiEntity.PRESET,
+        entity_id=preset.id,
+        actor_id=actor_id,
+        payload={"name": preset.name},
+        changes=diff,
+    )
+
+
 async def create_provider(
     session: AsyncSession,
     data: AiProviderCreate,
     *,
     source: AiProviderSource = AiProviderSource.USER,
+    actor_id: uuid.UUID | None = None,
 ) -> AiProviderRow:
     await _ensure_name_free(session, data.name)
     if data.wire_shape is AiWireShape.LOCAL:
@@ -82,13 +134,19 @@ async def create_provider(
     )
     session.add(provider)
     await session.flush()
+    await _emit_provider(session, AiEvent.PROVIDER_CREATED, provider, actor_id)
     return provider
 
 
 async def update_provider(
-    session: AsyncSession, provider_id: uuid.UUID, data: AiProviderUpdate
+    session: AsyncSession,
+    provider_id: uuid.UUID,
+    data: AiProviderUpdate,
+    *,
+    actor_id: uuid.UUID | None = None,
 ) -> AiProviderRow:
     provider = await get_provider(session, provider_id)
+    before = changes.snapshot(provider, changes.column_fields(provider, exclude=_UNDIFFED))
     fields = data.model_dump(exclude_unset=True)
     if "name" in fields and fields["name"] != provider.name:
         await _ensure_name_free(session, fields["name"])
@@ -106,11 +164,21 @@ async def update_provider(
     if "default_model" in fields:
         provider.default_model = fields["default_model"]
     await session.flush()
+    await _emit_provider(
+        session,
+        AiEvent.PROVIDER_UPDATED,
+        provider,
+        actor_id,
+        changes.diff_object(provider, before, hidden=SECRET_FIELDS),
+    )
     return provider
 
 
-async def delete_provider(session: AsyncSession, provider_id: uuid.UUID) -> None:
+async def delete_provider(
+    session: AsyncSession, provider_id: uuid.UUID, *, actor_id: uuid.UUID | None = None
+) -> None:
     provider = await get_provider(session, provider_id)
+    await _emit_provider(session, AiEvent.PROVIDER_DELETED, provider, actor_id)
     # Role rows cascade away in the DB; the ORM delete keeps it explicit.
     await session.delete(provider)
     await session.flush()
@@ -156,7 +224,33 @@ def _check_local_model(model: str) -> None:
         )
 
 
-async def set_role(session: AsyncSession, role: AiRole, data: AiRoleAssign) -> AiModelRole:
+async def _role_audit_state(session: AsyncSession, row: AiModelRole | None) -> dict:
+    """What an auditor reads for a role: the provider's NAME and the model."""
+    if row is None:
+        return {"provider": None, "model": None}
+    provider = await session.get(AiProviderRow, row.provider_id)
+    return {"provider": provider.name if provider else None, "model": row.model or None}
+
+
+async def _emit_role(
+    session: AsyncSession, role: AiRole, before: dict, after: dict, actor_id: uuid.UUID | None
+) -> None:
+    diff = changes.diff(before, after)
+    if diff:
+        await events.emit(
+            session,
+            event_type=AiEvent.ROLE_CHANGED,
+            entity_type=AiEntity.ROLE,
+            entity_id=role.value,
+            actor_id=actor_id,
+            payload={"role": role.value},
+            changes=diff,
+        )
+
+
+async def set_role(
+    session: AsyncSession, role: AiRole, data: AiRoleAssign, *, actor_id: uuid.UUID | None = None
+) -> AiModelRole:
     provider = await get_provider(session, data.provider_id)
     if role is AiRole.EMBEDDINGS and provider.wire_shape == AiWireShape.ANTHROPIC.value:
         raise AiConfigError(
@@ -170,6 +264,7 @@ async def set_role(session: AsyncSession, role: AiRole, data: AiRoleAssign) -> A
     if provider.wire_shape == AiWireShape.LOCAL.value:
         _check_local_model(data.model or provider.default_model)
     row = await session.get(AiModelRole, role.value)
+    before = await _role_audit_state(session, row)
     if row is None:
         row = AiModelRole(role=role.value, provider_id=provider.id, model=data.model)
         session.add(row)
@@ -177,15 +272,20 @@ async def set_role(session: AsyncSession, role: AiRole, data: AiRoleAssign) -> A
         row.provider_id = provider.id
         row.model = data.model
     await session.flush()
+    await _emit_role(session, role, before, await _role_audit_state(session, row), actor_id)
     return row
 
 
-async def clear_role(session: AsyncSession, role: AiRole) -> None:
+async def clear_role(
+    session: AsyncSession, role: AiRole, *, actor_id: uuid.UUID | None = None
+) -> None:
     row = await session.get(AiModelRole, role.value)
     if row is None:
         raise NotFoundError(AiEntity.ROLE, role.value)
+    before = await _role_audit_state(session, row)
     await session.delete(row)
     await session.flush()
+    await _emit_role(session, role, before, await _role_audit_state(session, None), actor_id)
 
 
 async def _reject_embeddings_assignment(session: AsyncSession, provider_id: uuid.UUID) -> None:
@@ -264,27 +364,45 @@ async def get_preset(session: AsyncSession, preset_id: uuid.UUID) -> AiPresetPro
     return preset
 
 
-async def create_preset(session: AsyncSession, data: AiPresetCreate) -> AiPresetPrompt:
+async def create_preset(
+    session: AsyncSession, data: AiPresetCreate, *, actor_id: uuid.UUID | None = None
+) -> AiPresetPrompt:
     preset = AiPresetPrompt(
         name=data.name, prompt=data.prompt, enabled=data.enabled, position=data.position
     )
     session.add(preset)
     await session.flush()
+    await _emit_preset(session, AiEvent.PRESET_CREATED, preset, actor_id)
     return preset
 
 
 async def update_preset(
-    session: AsyncSession, preset_id: uuid.UUID, data: AiPresetUpdate
+    session: AsyncSession,
+    preset_id: uuid.UUID,
+    data: AiPresetUpdate,
+    *,
+    actor_id: uuid.UUID | None = None,
 ) -> AiPresetPrompt:
     preset = await get_preset(session, preset_id)
+    before = changes.snapshot(preset, changes.column_fields(preset))
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(preset, field, value)
     await session.flush()
+    await _emit_preset(
+        session,
+        AiEvent.PRESET_UPDATED,
+        preset,
+        actor_id,
+        changes.diff_object(preset, before, hidden=("prompt",)),
+    )
     return preset
 
 
-async def delete_preset(session: AsyncSession, preset_id: uuid.UUID) -> None:
+async def delete_preset(
+    session: AsyncSession, preset_id: uuid.UUID, *, actor_id: uuid.UUID | None = None
+) -> None:
     preset = await get_preset(session, preset_id)
+    await _emit_preset(session, AiEvent.PRESET_DELETED, preset, actor_id)
     await session.delete(preset)
     await session.flush()
 

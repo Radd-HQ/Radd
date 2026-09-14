@@ -42,6 +42,18 @@ class CiState(StrEnum):
     UNKNOWN = "unknown"
 
 
+class ForgejoEvent(StrEnum):
+    """Spec 123: connection + repository administration, audited with a diff.
+    Tokens and webhook secrets appear only as "changed". Not triggers."""
+
+    CONNECTION_CREATED = "forgejo_connection.created"
+    CONNECTION_UPDATED = "forgejo_connection.updated"
+    CONNECTION_DELETED = "forgejo_connection.deleted"
+    REPO_CREATED = "forgejo_repo.created"
+    REPO_UPDATED = "forgejo_repo.updated"
+    REPO_DELETED = "forgejo_repo.deleted"
+
+
 class ForgejoEntity(StrEnum):
     """Entity names for NotFound/Conflict errors and events."""
 

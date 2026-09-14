@@ -56,7 +56,7 @@ async def create_connection(
     data: ConnectionCreate, session: Session, user: CurrentUser
 ) -> ConnectionRead:
     await authz.require(session, user, authz.Permission.VCSCONN_CREATE)
-    return await _read(session, await service.create_connection(session, data))
+    return await _read(session, await service.create_connection(session, data, actor_id=user.id))
 
 
 @router.get("/connections", response_model=list[ConnectionRead])
@@ -70,7 +70,7 @@ async def update_connection(
     connection_id: uuid.UUID, data: ConnectionUpdate, session: Session, user: CurrentUser
 ) -> ConnectionRead:
     await authz.require(session, user, authz.Permission.VCSCONN_UPDATE)
-    return await _read(session, await service.update_connection(session, connection_id, data))
+    return await _read(session, await service.update_connection(session, connection_id, data, actor_id=user.id))
 
 
 @router.delete("/connections/{connection_id}", status_code=204)
@@ -78,7 +78,7 @@ async def delete_connection(
     connection_id: uuid.UUID, session: Session, user: CurrentUser
 ) -> None:
     await authz.require(session, user, authz.Permission.VCSCONN_DELETE)
-    await service.delete_connection(session, connection_id)
+    await service.delete_connection(session, connection_id, actor_id=user.id)
 
 
 @router.post("/connections/{connection_id}/test", response_model=ConnectionTest)
@@ -113,7 +113,7 @@ async def test_connection(
 @router.post("/repos", response_model=RepoRead, status_code=201)
 async def create_repo(data: RepoCreate, session: Session, user: CurrentUser) -> RepoRead:
     await authz.require(session, user, authz.Permission.VCSCONN_CREATE)
-    return RepoRead.model_validate(await service.create_repo(session, data))
+    return RepoRead.model_validate(await service.create_repo(session, data, actor_id=user.id))
 
 
 @router.get("/repos", response_model=list[RepoRead])
@@ -129,13 +129,13 @@ async def update_repo(
     repo_id: uuid.UUID, data: RepoUpdate, session: Session, user: CurrentUser
 ) -> RepoRead:
     await authz.require(session, user, authz.Permission.VCSCONN_UPDATE)
-    return RepoRead.model_validate(await service.update_repo(session, repo_id, data))
+    return RepoRead.model_validate(await service.update_repo(session, repo_id, data, actor_id=user.id))
 
 
 @router.delete("/repos/{repo_id}", status_code=204)
 async def delete_repo(repo_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
     await authz.require(session, user, authz.Permission.VCSCONN_DELETE)
-    await service.delete_repo(session, repo_id)
+    await service.delete_repo(session, repo_id, actor_id=user.id)
 
 
 @router.post("/repos/{repo_id}/backfill")

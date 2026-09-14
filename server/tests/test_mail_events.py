@@ -179,11 +179,19 @@ def test_every_mail_event_is_a_registered_automation_trigger():
     what makes them appear in the rule builder — with no edit to `automations`.
     Asserted rather than assumed: a manifest that forgets one produces an event
     nobody can ever write a rule against, and nothing fails."""
+    from radd.kernel import registries
     from radd.modules.automations import catalog
 
     triggers = catalog.TRIGGERS
     for event in MailEvent:
-        assert event.value in triggers, f"{event.value} is not a trigger"
+        # Spec 123: the configuration events (mail_source.*, mail_sender.*,
+        # mail_rule.*) are registered for the audit log but deliberately NOT
+        # triggers — a rule that fires on its own mailbox being edited is noise.
+        assert event.value in registries.event_types, f"{event.value} is not registered"
+        if event.value.startswith("mail."):
+            assert event.value in triggers, f"{event.value} is not a trigger"
+        else:
+            assert event.value not in triggers, f"{event.value} should not be a trigger"
     assert triggers[MailEvent.RECEIVED.value].item_scoped is True
     # No item exists for a dropped message, by definition.
     assert triggers[MailEvent.DROPPED.value].item_scoped is False

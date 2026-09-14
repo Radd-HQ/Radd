@@ -11,6 +11,15 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 
+class ConfluenceEvent(StrEnum):
+    """Spec 123: connection administration, audited with a diff; the credential
+    appears only as "changed". Not triggers."""
+
+    CONNECTION_CREATED = "confluence_connection.created"
+    CONNECTION_UPDATED = "confluence_connection.updated"
+    CONNECTION_DELETED = "confluence_connection.deleted"
+
+
 class ConfluenceEntity(StrEnum):
     """Entity keys for `NotFoundError`/`ConflictError`."""
 

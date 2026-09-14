@@ -100,6 +100,21 @@ plugin = RaddPlugin(
     event_types=(
         EventTypeSpec(AttachmentEvent.CREATED, "Attachment added", "Attachments", item_scoped=True),
         EventTypeSpec(AttachmentEvent.DELETED, "Attachment removed", "Attachments", item_scoped=True),
+        # Spec 123: storage administration is audited with a diff; not a trigger.
+        *(
+            EventTypeSpec(
+                event_type, label, "Admin",
+                has_changes=event_type.endswith(".updated"), trigger=False, entity_type=entity,
+            )
+            for event_type, label, entity in (
+                (AttachmentEvent.HOST_CREATED, "Storage host created", "storage_host"),
+                (AttachmentEvent.HOST_UPDATED, "Storage host updated", "storage_host"),
+                (AttachmentEvent.HOST_DELETED, "Storage host deleted", "storage_host"),
+                (AttachmentEvent.RULE_CREATED, "Storage rule created", "storage_rule"),
+                (AttachmentEvent.RULE_UPDATED, "Storage rule updated", "storage_rule"),
+                (AttachmentEvent.RULE_DELETED, "Storage rule deleted", "storage_rule"),
+            )
+        ),
     ),
     capabilities=(
         CapabilitySpec("storage", "Attachment storage", "storage", check=_storage_capability),

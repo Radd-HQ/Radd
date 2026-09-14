@@ -19,7 +19,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
 from radd.exceptions import NotFoundError
+from radd.kernel import changes
 from radd.modules.auth.deps import CurrentUser
+from radd.modules.events import service as events
 from radd.modules.projects import service as projects_service
 
 from . import registry, routing
@@ -34,7 +36,7 @@ from .config_schemas import (
 )
 from .models import MailRule
 from .parsing import EmailPlan
-from .types import MailEntity
+from .types import MailEntity, MailEvent
 
 router = APIRouter(prefix="/mail", tags=["mailintake"])
 
@@ -49,6 +51,27 @@ async def list_rules(
     await registry.get_source(session, source_id)
     return [MailRuleRead.model_validate(r, from_attributes=True)
             for r in await registry.list_rules(session, source_id)]
+
+
+async def _emit_rule(
+    session: AsyncSession,
+    event_type: MailEvent,
+    row: MailRule,
+    actor_id: uuid.UUID,
+    diff: list[dict] | None = None,
+) -> None:
+    """Spec 123: routing rules are audited with a diff (config included — it is
+    small, and WHICH project a mail lands in is the decision an auditor reads)."""
+    await events.emit(
+        session,
+        event_type=event_type,
+        entity_type=MailEntity.RULE,
+        entity_id=row.id,
+        actor_id=actor_id,
+        payload={"name": row.name, "rule_type": row.rule_type, "source_id": str(row.source_id)},
+        subjects={"project": row.project_id},
+        changes=diff,
+    )
 
 
 @router.post("/sources/{source_id}/rules", response_model=MailRuleRead, status_code=201)
@@ -70,6 +93,7 @@ async def create_rule(
     )
     session.add(row)
     await session.flush()
+    await _emit_rule(session, MailEvent.RULE_CREATED, row, user.id)
     return MailRuleRead.model_validate(row, from_attributes=True)
 
 
@@ -81,6 +105,7 @@ async def update_rule(
     row = await session.get(MailRule, rule_id)
     if row is None:
         raise NotFoundError(MailEntity.MAIL, rule_id)
+    before = changes.snapshot(row, changes.column_fields(row, exclude=("id", "source_id", "created_at", "updated_at")))
     row.name = data.name
     row.rule_type = data.rule_type.value
     row.enabled = data.enabled
@@ -89,6 +114,7 @@ async def update_rule(
     if data.position is not None:
         row.position = data.position
     await session.flush()
+    await _emit_rule(session, MailEvent.RULE_UPDATED, row, user.id, changes.diff_object(row, before))
     return MailRuleRead.model_validate(row, from_attributes=True)
 
 
@@ -97,6 +123,7 @@ async def delete_rule(rule_id: uuid.UUID, session: Session, user: CurrentUser) -
     await require_mail_admin(session, user)
     row = await session.get(MailRule, rule_id)
     if row is not None:
+        await _emit_rule(session, MailEvent.RULE_DELETED, row, user.id)
         await session.delete(row)
         await session.flush()
 
@@ -110,10 +137,20 @@ async def reorder_rules(
     order is the semantics here."""
     await require_mail_admin(session, user)
     rows = {row.id: row for row in await registry.list_rules(session, source_id)}
+    moved: list[tuple[MailRule, float]] = []
     for position, rule_id in enumerate(data.rule_ids, start=1):
-        if rule_id in rows:
+        if rule_id in rows and rows[rule_id].position != float(position):
+            moved.append((rows[rule_id], rows[rule_id].position))
             rows[rule_id].position = float(position)
     await session.flush()
+    for row, previous in moved:  # spec 123: each moved rule is its own audit row
+        await _emit_rule(
+            session,
+            MailEvent.RULE_UPDATED,
+            row,
+            user.id,
+            [{"field": "position", "from": previous, "to": row.position}],
+        )
     return [MailRuleRead.model_validate(r, from_attributes=True)
             for r in await registry.list_rules(session, source_id)]
 
