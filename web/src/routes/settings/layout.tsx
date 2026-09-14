@@ -312,7 +312,8 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         to: RoutePath.settingsAudit,
         label: "Audit log",
         icon: ScrollText,
-        show: (g) => g.ws(Permission.globalManage),
+        // Spec 123: a project manager reads their own project's trail.
+        show: (g) => g.ws(Permission.globalManage) || g.any(Permission.projectManage),
       },
     ],
   },

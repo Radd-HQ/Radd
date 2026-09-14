@@ -100,6 +100,7 @@ export const ApiPath = {
   leaveCalendar: "/leave/calendar",
   // Audit log (admin) — read-only over the event stream.
   audit: "/audit",
+  auditCatalog: "/audit/catalog",
   // Backups (spec 99) — instance admin only.
   backups: "/backups",
   // Personal notifications (spec 26).

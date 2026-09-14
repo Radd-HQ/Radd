@@ -1,13 +1,12 @@
-import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight } from "lucide-react";
 import { errorMessage } from "../../lib/api";
 import { formatDateTime, relativeTime } from "../../lib/dates";
 import { useDurationConfig } from "../../lib/hooks";
 import { itemHistoryQuery } from "../../lib/queries";
-import { HISTORY_FIELD_LABELS, PRIORITY_META, initials } from "../../lib/meta";
-import type { HistoryChange, HistoryEntry, LinkChangeRef, PriorityValue } from "../../lib/types";
+import { initials } from "../../lib/meta";
+import type { HistoryEntry } from "../../lib/types";
 import { formatDuration, type DurationConfig } from "../../lib/duration";
+import { ChangeList } from "../history/ChangeLines";
 import { Spinner } from "../Spinner";
 
 /**
@@ -53,13 +52,7 @@ function HistoryRow({ entry }: { entry: HistoryEntry }) {
           </time>
         </p>
         {isUpdate && entry.changes.length > 0 && (
-          <ul className="mt-1 flex flex-col gap-0.5">
-            {entry.changes.map((change, index) => (
-              <li key={index} className="text-[13px] leading-relaxed text-fg">
-                <ChangeLine change={change} />
-              </li>
-            ))}
-          </ul>
+          <ChangeList changes={entry.changes} className="mt-1" />
         )}
         <SecondaryLine entry={entry} />
       </div>
@@ -170,114 +163,4 @@ function SecondaryLine({ entry }: { entry: HistoryEntry }) {
     );
   }
   return null;
-}
-
-function ChangeLine({ change }: { change: HistoryChange }): ReactNode {
-  const label =
-    change.field === "custom_field"
-      ? change.name ?? "Field"
-      : HISTORY_FIELD_LABELS[change.field] ?? change.field;
-
-  if (change.redacted || change.field === "description") {
-    return (
-      <>
-        <FieldLabel>{label}</FieldLabel> changed
-      </>
-    );
-  }
-  if (change.field === "flagged") {
-    return change.to ? "Flagged this issue" : "Removed the flag";
-  }
-  if (change.field === "labels") {
-    return (
-      <>
-        <FieldLabel>{label}</FieldLabel> <ChipDelta added={asStrings(change.added)} removed={asStrings(change.removed)} />
-      </>
-    );
-  }
-  if (change.field === "links") {
-    return (
-      <>
-        <FieldLabel>{label}</FieldLabel> <LinkDelta added={asLinks(change.added)} removed={asLinks(change.removed)} />
-      </>
-    );
-  }
-  return (
-    <>
-      <FieldLabel>{label}:</FieldLabel>{" "}
-      <ValueSpan field={change.field} value={change.from} muted />
-      <ArrowRight size={12} className="mx-1 inline align-[-1px] text-fg-faint" aria-hidden />
-      <ValueSpan field={change.field} value={change.to} />
-    </>
-  );
-}
-
-function FieldLabel({ children }: { children: ReactNode }) {
-  return <span className="text-fg-muted">{children}</span>;
-}
-
-function ValueSpan({
-  field,
-  value,
-  muted = false,
-}: {
-  field: string;
-  value: HistoryChange["from"];
-  muted?: boolean;
-}) {
-  const text = formatValue(field, value);
-  return <span className={muted ? "text-fg-muted line-through" : "text-heading"}>{text}</span>;
-}
-
-function formatValue(field: string, value: HistoryChange["from"]): string {
-  if (value === null || value === undefined || value === "") return "—";
-  if (field === "priority") {
-    const meta = PRIORITY_META[value as PriorityValue];
-    if (meta) return meta.label;
-  }
-  return String(value);
-}
-
-function ChipDelta({ added, removed }: { added: string[]; removed: string[] }) {
-  return (
-    <span className="inline-flex flex-wrap gap-1.5">
-      {added.map((name) => (
-        <span key={`+${name}`} className="text-emerald-400">
-          +{name}
-        </span>
-      ))}
-      {removed.map((name) => (
-        <span key={`-${name}`} className="text-red-400">
-          −{name}
-        </span>
-      ))}
-    </span>
-  );
-}
-
-function LinkDelta({ added, removed }: { added: LinkChangeRef[]; removed: LinkChangeRef[] }) {
-  return (
-    <span className="inline-flex flex-wrap gap-1.5">
-      {added.map((link) => (
-        <span key={`+${link.key}`} className="text-emerald-400">
-          +{link.key} ({link.link_type})
-        </span>
-      ))}
-      {removed.map((link) => (
-        <span key={`-${link.key}`} className="text-red-400">
-          −{link.key} ({link.link_type})
-        </span>
-      ))}
-    </span>
-  );
-}
-
-function asStrings(value: HistoryChange["added"]): string[] {
-  return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
-}
-
-function asLinks(value: HistoryChange["added"]): LinkChangeRef[] {
-  return Array.isArray(value)
-    ? value.filter((v): v is LinkChangeRef => typeof v === "object" && v !== null)
-    : [];
 }

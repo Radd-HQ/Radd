@@ -112,6 +112,7 @@ export const queryKeys = {
   linkSearch: (projectId: string, q: string, limit?: number, excludeId?: string) =>
     ["linkSearch", { projectId, q, limit: limit ?? null, excludeId: excludeId ?? null }] as const,
   audit: (params: Record<string, string>) => ["audit", params] as const,
+  auditCatalog: () => ["audit", "catalog"] as const,
   backupStatus: () => ["backupStatus"] as const,
   backups: () => ["backups"] as const,
   backupSchedules: () => ["backupSchedules"] as const,
