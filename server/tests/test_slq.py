@@ -414,7 +414,7 @@ async def test_type_invalid_operators(text: str, position: int, fragment: str):
         ("team = me", 7, "'me' is not a valid value for field 'team'"),
         ("show = none", 7, "'none' is not a valid value for field 'show'"),
         ("ORDER BY label", 9, "field 'label' is not sortable"),
-        ("ORDER BY state", 9, "field 'state' is not sortable"),
+        ("ORDER BY assignee", 9, "field 'assignee' is not sortable"),
         ("ORDER BY software", 9, "field 'software' is not sortable"),
         # planning fields (spec 14)
         ("cycle = me", 8, "'me' is not a valid value for field 'cycle'"),
@@ -464,6 +464,25 @@ async def test_order_by_compiles_priority_rank_and_direction():
     assert len(compiled.order) == 2
     assert "CASE" in str(compiled.order[0])
     assert str(compiled.order[0]).endswith("DESC")
+    assert compiled.joins == ()
+
+
+async def test_order_by_state_and_category_join_the_workflow_rows():
+    """RADD-1176: `state` sorts by workflow position (name as tiebreak),
+    `category` by tier position first; both reach `states` through a JOIN the
+    statement builders apply — never a per-row subquery (5× slower, measured)."""
+    compiled = await compile_text("ORDER BY state DESC, updated")
+    assert [str(c) for c in compiled.order] == [
+        "states.position DESC", "states.name DESC", "work_items.updated_at ASC"
+    ]
+    assert [t.__tablename__ for t, _ in compiled.joins] == ["states"]
+    assert "SELECT" not in " ".join(str(c) for c in compiled.order)
+
+    compiled = await compile_text("ORDER BY category, state")
+    assert [str(c) for c in compiled.order][:2] == [
+        "state_categories.position ASC", "states.position ASC"
+    ]
+    assert [t.__tablename__ for t, _ in compiled.joins] == ["states", "state_categories"]
 
 
 # --- compile smoke against a live session ---
@@ -554,6 +573,65 @@ async def test_negated_relations_include_items_without_the_relation(db_session):
     for positive, negative in (("assignee = me", "assignee != me"), ("type = Bug", "type != Bug")):
         assert await titles(positive) | await titles(negative) == everything
         assert await titles(positive) & await titles(negative) == set()
+
+
+async def test_order_by_state_lists_items_in_workflow_order(db_session):
+    """RADD-1176, end to end: three items in three states, listed in the
+    workflow's position order, and in reverse with DESC; category groups the
+    tiers and `state, updated DESC` orders within a state."""
+    from radd.modules.auth.models import User
+    from radd.modules.auth.types import InstanceRole
+    from radd.modules.items import service as items
+    from radd.modules.items.filters import ItemListFilters
+    from radd.modules.items.schemas import ItemCreate
+    from radd.modules.projects import service as projects
+    from radd.modules.projects.schemas import ProjectCreate
+    from radd.modules.workflow import service as workflow
+
+    actor = User(
+        email=f"ord-{uuid.uuid4().hex[:8]}@example.com", name="Order Tester",
+        instance_role=InstanceRole.ADMIN.value,
+    )
+    db_session.add(actor)
+    await db_session.flush()
+    project = await projects.create_project(
+        db_session, ProjectCreate(key=f"ORD{uuid.uuid4().hex[:4].upper()}", name="Ordering")
+    )
+    states = sorted(await workflow.list_states(db_session, project.id), key=lambda s: s.position)
+    first, middle, last = states[0], states[len(states) // 2], states[-1]
+    # Created in the OPPOSITE order to the workflow, so created-desc (the
+    # default) and workflow order disagree and the sort is observable.
+    for state in (last, middle, first):
+        await items.create_item(
+            db_session,
+            ItemCreate(project_id=project.id, title=f"in {state.name}", state_id=state.id),
+            actor,
+        )
+
+    async def titles(q: str) -> list[str]:
+        rows = await items.list_items(
+            db_session, actor=actor, filters=ItemListFilters(project_id=project.id),
+            q=q, limit=50, offset=0,
+        )
+        return [r.title for r in rows]
+
+    forward = [f"in {s.name}" for s in (first, middle, last)]
+    assert await titles("ORDER BY state") == forward
+    assert await titles("ORDER BY state DESC") == list(reversed(forward))
+    assert await titles("ORDER BY state, updated DESC") == forward
+    # `category`: tier position first, then the state's position within it.
+    from sqlalchemy import select
+
+    from radd.modules.workflow.models import StateCategoryDef
+
+    tier_position = dict(
+        (await db_session.execute(select(StateCategoryDef.key, StateCategoryDef.position))).all()
+    )
+    expected = [
+        f"in {s.name}"
+        for s in sorted((first, middle, last), key=lambda s: (tier_position[s.category_key], s.position))
+    ]
+    assert await titles("ORDER BY category") == expected
 
 
 async def test_compile_smoke_executes_against_the_database(db_session):

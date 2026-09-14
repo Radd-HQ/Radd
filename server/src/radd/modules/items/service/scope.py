@@ -57,6 +57,9 @@ async def visible_ids_query(
         )
         if compiled.where is not None:
             query = query.where(compiled.where)
+        # RADD-1176: a state-backed sort joins the workflow row it orders by.
+        for target, onclause in compiled.joins:
+            query = query.join(target, onclause)
         order = compiled.order
     return query, order
 

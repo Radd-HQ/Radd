@@ -58,7 +58,7 @@ export const SLQ_OPERATORS: readonly SlqOperatorHelp[] = [
   { op: "IN (a, b)  /  NOT IN (…)", meaning: "any of / none of the listed values" },
   { op: "IS EMPTY  /  IS NOT EMPTY", meaning: "value unset / set" },
   { op: "AND  OR  NOT  ( )", meaning: "combine conditions — AND binds tighter than OR" },
-  { op: "ORDER BY field [ASC|DESC], …", meaning: "sort the results (default: created DESC)" },
+  { op: "ORDER BY field [ASC|DESC], …", meaning: "sort the results (default: created DESC); state sorts in workflow order, category in tier order" },
 ];
 
 /** Value forms accepted on the right-hand side (spec 10). */
@@ -75,6 +75,7 @@ export const SLQ_EXAMPLES: readonly string[] = [
   '(team = "FX" OR team = "Comp") AND label = urgent',
   "assignee IS EMPTY ORDER BY created ASC",
   "updated >= 2026-01-01 ORDER BY priority DESC, updated DESC",
+  "category != done ORDER BY state, updated DESC",
 ];
 
 /** Operator hint for a registry custom field, by its type (spec 10 table). */

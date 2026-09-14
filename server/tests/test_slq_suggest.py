@@ -324,9 +324,10 @@ async def test_order_by_offers_sortable_fields_only():
     listed = set(values(await respond("ORDER BY ")))
     assert listed == {
         "kind", "priority", "title", "number", "created", "updated", "flagged", "rank", "points",  # builtins
+        "state", "category",  # RADD-1176: workflow position / tier order
         "notes", "homepage", "reviewer", "show", "budget", "spent", "due", "billable",
     }
-    assert "state" not in listed and "label" not in listed and "software" not in listed
+    assert "assignee" not in listed and "label" not in listed and "software" not in listed
 
 
 # --- value context: enum + cf sources (no DB) ---

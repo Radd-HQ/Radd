@@ -83,8 +83,10 @@ class FieldOps:
 
 BUILTIN_OPS: dict[SlqField, FieldOps] = {
     SlqField.PROJECT: FieldOps(EQUALITY, membership=True),
-    SlqField.STATE: FieldOps(EQUALITY, membership=True),
-    SlqField.CATEGORY: FieldOps(EQUALITY, membership=True),
+    # RADD-1176: sortable by WORKFLOW position / category TIER order — a
+    # join onto states in ordering.py, never a per-row subquery (5× slower).
+    SlqField.STATE: FieldOps(EQUALITY, membership=True, sortable=True),
+    SlqField.CATEGORY: FieldOps(EQUALITY, membership=True, sortable=True),
     SlqField.KIND: FieldOps(EQUALITY, membership=True, sortable=True),
     SlqField.TYPE: FieldOps(EQUALITY, membership=True, empty=True),
     SlqField.PRIORITY: FieldOps(EQUALITY, membership=True, sortable=True),

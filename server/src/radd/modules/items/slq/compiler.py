@@ -30,7 +30,7 @@ from .errors import SlqError
 from .catalog import ME_LITERAL
 from .helpers import Context, check_ops, is_sentinel, plain, polarity
 from .lexer import CompareOp
-from .ordering import order_clause
+from .ordering import order_clause, order_joins
 from .parser import BoolExpr, BoolOp, Comparison, Condition, Expr, Membership, NotExpr, Query
 
 
@@ -38,6 +38,10 @@ from .parser import BoolExpr, BoolOp, Comparison, Condition, Expr, Membership, N
 class CompiledQuery:
     where: ColumnElement[bool] | None
     order: tuple[ColumnElement[Any], ...]
+    #: RADD-1176: (target, on-clause) pairs the ORDER BY reaches through — the
+    #: `states` row for `state`/`category`. A statement builder applies them
+    #: with `.join(target, onclause)` before ordering; nothing else sees them.
+    joins: tuple[tuple[Any, Any], ...] = ()
 
 
 async def compile_query(
@@ -58,8 +62,8 @@ async def compile_query(
     ancestors = await resolve_ancestor_keys(session, ancestor_key_texts(query.where))
     ctx = Context(definitions_by_key, current_user_id, labels, ancestors, denied_fields)
     where = _expr(ctx, query.where) if query.where is not None else None
-    order = tuple(order_clause(ctx, term) for term in query.order)
-    return CompiledQuery(where=where, order=order)
+    order = tuple(column for term in query.order for column in order_clause(ctx, term))
+    return CompiledQuery(where=where, order=order, joins=order_joins(query.order))
 
 
 def _expr(ctx: Context, expr: Expr) -> ColumnElement[bool]:

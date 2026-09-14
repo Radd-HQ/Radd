@@ -111,6 +111,9 @@ async def list_items(
         )
         if compiled.where is not None:
             query = query.where(compiled.where)
+        # RADD-1176: a state-backed sort joins the workflow row it orders by.
+        for target, onclause in compiled.joins:
+            query = query.join(target, onclause)
         order = compiled.order
     # No explicit ORDER BY → manual rank order (spec 24, drag-to-reorder); rank is
     # backfilled/assigned newest-first so this matches the old created-desc default
