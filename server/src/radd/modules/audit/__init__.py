@@ -1,5 +1,6 @@
 from radd.kernel import RaddPlugin
 
+from .mcptool import AUDIT_LOG
 from .router import router
 
 plugin = RaddPlugin(
@@ -11,4 +12,6 @@ plugin = RaddPlugin(
     ),
     depends_on=("events", "auth", "projects", "items"),
     routers=(router,),
+    # RADD-1172: the same ledger over MCP, enforced by the kernel dispatcher.
+    mcp_tools=(AUDIT_LOG,),
 )
