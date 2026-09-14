@@ -29,7 +29,7 @@ export function AddSharingGrantDialog({ onAdd, onClose }: { onAdd: (share: Local
       <Select aria-label="Access level" value={level} onChange={value => setLevel(value as ShareLevelValue)} options={SHARE_LEVEL_OPTIONS} />
       <p className="text-xs text-fg-muted">They get access when you save.</p>
       <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>Cancel</Button>
-        <Button disabled={!subject} onClick={() => { if (subject) onAdd({ draftId: crypto.randomUUID(), kind, subjectId: subject.value, subjectName: subject.label, level }); }}>Add to draft</Button></div>
+        <Button disabled={!subject} onClick={() => { if (subject) onAdd({ draftId: crypto.randomUUID(), kind, subjectId: subject.value, subjectName: subject.label, level }); }}>Add</Button></div>
     </div>
     {choosing && <Choices resource={resources[kind]} selected={subject?.value} onClose={() => setChoosing(false)}
       onSelect={row => { setSubject(row); setChoosing(false); }} />}

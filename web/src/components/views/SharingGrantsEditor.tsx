@@ -12,22 +12,28 @@ import { TextField } from "../TextField";
 import { AddSharingGrantDialog, SHARE_LEVEL_OPTIONS } from "./AddSharingGrantDialog";
 import { formatDate } from "../../lib/dates";
 
-/** Only explicit changes are submitted; paging never turns unseen rows into deletions. */
+/**
+ * Who a view/dashboard is shared with, edited in place and saved with the
+ * containing dialog — nothing here writes on its own.
+ *
+ * Only explicit changes are submitted; paging never turns unseen rows into
+ * deletions. The saved list is a 50-row server window (RADD-1115), so a share
+ * added in this dialog has no server row yet: it renders at the TOP of the
+ * same list, marked New (RADD-1179) — the old "Unsaved changes" tab parked
+ * additions out of sight and read as a staging step that never existed.
+ */
 export function SharingGrantsEditor({ resourceType, resourceId, draft, onChange }: {
   resourceType: "view" | "dashboard"; resourceId: string; draft: SharingDraft; onChange: (value: SharingDraft) => void;
 }) {
   const directory = useDirectory(`${resourceType}:${resourceId}`, RESOURCE_GRANTS_PAGE_SIZE,
     (q, page) => resourceGrantsPageQuery(resourceType, resourceId, q, page));
   const [adding, setAdding] = useState(false);
-  const [pendingOnly, setPendingOnly] = useState(false);
-  const [pendingPage, setPendingPage] = useState(0);
   const changed = Object.values(draft.changes);
   const pendingTotal = changed.length + draft.additions.length;
   useEffect(() => {
     if (directory.isSuccess && !directory.busy && directory.page > 0 && directory.page * directory.pageSize >= directory.total)
       directory.setPage(Math.max(0, Math.ceil(directory.total / directory.pageSize) - 1));
   }, [directory.isSuccess, directory.busy, directory.page, directory.pageSize, directory.total, directory.setPage]);
-  useEffect(() => { setPendingPage(page => Math.min(page, Math.max(0, Math.ceil(pendingTotal / RESOURCE_GRANTS_PAGE_SIZE) - 1))); }, [pendingTotal]);
   const savedRow = (row: AccessGrantDirectoryRow) => {
     const edited = draft.changes[row.id];
     const removed = edited?.access === null;
@@ -42,44 +48,42 @@ export function SharingGrantsEditor({ resourceType, resourceId, draft, onChange 
       {edited && !removed && <Button size="sm" variant="ghost" onClick={() => onChange(changeSharingGrant(draft, row, edited.original.access as ShareLevelValue))}>Undo edit</Button>}
     </li>;
   };
-  const pending = [...changed.map(change => ({ saved: change.original, index: -1 })),
-    ...draft.additions.map((_, index) => ({ saved: null, index }))];
+  // A new share obeys the search like any other row — by its name.
+  const needle = directory.filter.trim().toLowerCase();
+  const newRows = draft.additions
+    .map((row, index) => ({ row, index }))
+    .filter(({ row }) => !needle || (row.subjectName ?? "").toLowerCase().includes(needle));
+  const newRow = ({ row, index }: (typeof newRows)[number]) =>
+    <li key={row.draftId ?? `new-${index}`} data-sharing-new className="flex min-w-0 flex-wrap items-center gap-2 rounded border border-accent/40 bg-accent/5 p-2 text-xs">
+      <span className="min-w-0 flex-1 break-words">{row.subjectName ?? `New ${row.kind}`}</span>
+      <span className="text-fg-muted">{row.kind}</span>
+      <span className="rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent-text">New</span>
+      <Select aria-label="Access level" size="sm" value={row.level} options={SHARE_LEVEL_OPTIONS}
+        onChange={level => onChange({ ...draft, additions: draft.additions.map((old, i) => i === index ? { ...old, level: level as ShareLevelValue } : old) })} />
+      <Button size="sm" variant="ghost" onClick={() => onChange({ ...draft, additions: draft.additions.filter((_, i) => i !== index) })}>Remove</Button>
+    </li>;
+  const nothingListed = directory.isSuccess && !directory.rows.length && !newRows.length;
   return <section aria-label="Shared with" className="flex min-w-0 flex-col gap-3">
-    <div className="flex flex-wrap gap-2">
-      <Button variant={pendingOnly ? "ghost" : "secondary"} onClick={() => setPendingOnly(false)}>Shared with</Button>
-      <Button variant={pendingOnly ? "secondary" : "ghost"} onClick={() => setPendingOnly(true)}>Unsaved changes ({pendingTotal})</Button>
+    <h3 className="text-xs font-semibold text-heading">Shared with</h3>
+    <TextField type="search" label="Find people, teams or groups" value={directory.filter} onChange={event => directory.setFilter(event.target.value)} />
+    <div aria-busy={directory.busy}>
+      {directory.isPending ? <Spinner label="Loading who this is shared with…" /> : directory.isError ? <div role="alert"><ErrorText error={directory.error} />
+        <Button variant="secondary" onClick={() => void directory.refetch()}>Retry</Button></div> :
+        <ul className="flex flex-col gap-2">{newRows.map(newRow)}{directory.rows.map(savedRow)}</ul>}
+      {nothingListed && <p className="text-xs text-fg-muted">{needle ? "Nobody matches." : "Not shared with anyone yet."}</p>}
     </div>
-    {pendingOnly ? <>
-      <ul className="flex flex-col gap-2">{pending.slice(pendingPage * RESOURCE_GRANTS_PAGE_SIZE, (pendingPage + 1) * RESOURCE_GRANTS_PAGE_SIZE).map(entry => {
-        if (entry.saved) return savedRow(entry.saved);
-        const row = draft.additions[entry.index];
-        return <li key={row.draftId ?? `new-${entry.index}`} className="flex min-w-0 flex-wrap items-center gap-2 rounded border border-subtle p-2 text-xs">
-          <span className="min-w-0 flex-1 break-words">{row.subjectName ?? `New ${row.kind}`}</span><span>New share</span>
-          <Select aria-label="Access level" size="sm" value={row.level} options={SHARE_LEVEL_OPTIONS}
-            onChange={level => onChange({ ...draft, additions: draft.additions.map((old, index) => index === entry.index ? { ...old, level: level as ShareLevelValue } : old) })} />
-          <Button size="sm" variant="ghost" onClick={() => onChange({ ...draft, additions: draft.additions.filter((_, index) => index !== entry.index) })}>Remove from draft</Button>
-        </li>;
-      })}</ul>
-      {!pendingTotal && <p className="text-xs text-fg-muted">No unsaved sharing changes.</p>}
-      <DirectoryPager page={pendingPage} pageSize={RESOURCE_GRANTS_PAGE_SIZE} total={pendingTotal} busy={false} onPage={setPendingPage} label="unsaved changes" />
-    </> : <>
-      <TextField type="search" label="Find people, teams or groups" value={directory.filter} onChange={event => directory.setFilter(event.target.value)} />
-      <div aria-busy={directory.busy}>
-        {directory.isPending ? <Spinner label="Loading who this is shared with…" /> : directory.isError ? <div role="alert"><ErrorText error={directory.error} />
-          <Button variant="secondary" onClick={() => void directory.refetch()}>Retry</Button></div> :
-          <ul className="flex flex-col gap-2">{directory.rows.map(savedRow)}</ul>}
-        {directory.isSuccess && !directory.rows.length && <p className="text-xs text-fg-muted">Nobody matches.</p>}
-      </div>
-      {directory.isSuccess && <DirectoryPager {...directory} onPage={directory.setPage} label="shares" />}
-    </>}
+    {directory.isSuccess && <DirectoryPager {...directory} onPage={directory.setPage} label="shares" />}
     <Button variant="secondary" className="w-fit" onClick={() => setAdding(true)}>Share with someone…</Button>
-    <p className="text-xs text-fg-muted">{`Sharing changes are saved with the ${resourceType}. Existing expiry and deny policies are kept.`}</p>
+    <p className="text-xs text-fg-muted" data-sharing-pending={pendingTotal}>
+      {pendingTotal > 0 && <span className="text-fg">{pendingTotal === 1 ? "1 unsaved change" : `${pendingTotal} unsaved changes`} · </span>}
+      {`Sharing changes are saved with the ${resourceType}. Existing expiry and deny policies are kept.`}
+    </p>
     {adding && <AddSharingGrantDialog onClose={() => setAdding(false)} onAdd={share => {
       // Prevent duplicate additions across pages; saved duplicate policy is
       // validated transactionally by the server, with the draft retained.
       if (!draft.additions.some(row => row.kind === share.kind && row.subjectId === share.subjectId && row.level === share.level))
         onChange({ ...draft, additions: [...draft.additions, share] });
-      setAdding(false); setPendingOnly(true);
+      setAdding(false);
     }} />}
   </section>;
 }
