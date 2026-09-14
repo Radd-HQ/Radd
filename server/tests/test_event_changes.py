@@ -151,26 +151,9 @@ async def test_emit_without_a_spec_promise_needs_no_diff(db):
 # --- 3. the contract ------------------------------------------------------------
 
 #: `*.updated` (and `*.changed`) event types that do not yet declare
-#: `has_changes`. The burn-down RADD-1167/RADD-1168 empty. Every entry here is a
-#: settings edit an auditor sees as "updated" with nothing behind it.
-UPDATED_WITHOUT_CHANGES_ALLOWLIST: set[str] = {
-    "backup_schedule.updated",
-    "comment.updated",
-    "cycle.updated",
-    "cycle_series.updated",
-    "field.updated",
-    "form.updated",
-    "issue_type.updated",
-    "page.updated",
-    "page_space.updated",
-    "release.updated",
-    "state.updated",
-    "team.updated",
-    "vcs.updated",
-    "weblink.updated",
-    "workflow_transition.updated",
-    "worklog.updated",
-}
+#: `has_changes`. RADD-1167/RADD-1168 emptied the burn-down (16 entries on
+#: 2026-09-14); a new `updated` type lands here only by declaring its diff.
+UPDATED_WITHOUT_CHANGES_ALLOWLIST: set[str] = set()
 
 
 def _diff_bearing_types() -> set[str]:
@@ -195,60 +178,11 @@ def test_every_updated_event_declares_a_diff():
 
 
 #: Event types a module's `*Event` enum declares that no plugin registers as an
-#: `EventTypeSpec` (48 on 2026-09-14). The audit found the class while seeding
-#: the first allowlist: `role.updated`, `user.updated`, `view.updated`… are
-#: emitted, land in the log, and have no label, no trigger, and no diff
-#: promise anywhere. RADD-1168 registers them; the list is the burn-down.
-UNREGISTERED_EVENT_TYPES_ALLOWLIST: set[str] = {
-    "access.granted",
-    "access.revoked",
-    "auth.view_as_ended",
-    "auth.view_as_started",
-    "automation.created",
-    "automation.deleted",
-    "automation.scheduled",
-    "automation.updated",
-    "canned_response.created",
-    "canned_response.deleted",
-    "canned_response.updated",
-    "dashboard.created",
-    "dashboard.deleted",
-    "dashboard.updated",
-    "field.deleted",
-    "form.deleted",
-    "issue_type.deleted",
-    "label.deleted",
-    "label.updated",
-    "ldap.login",
-    "link_type.created",
-    "link_type.deleted",
-    "link_type.updated",
-    "notification.created",
-    "role.created",
-    "role.deleted",
-    "role.updated",
-    "screen.updated",
-    "sla_policy.created",
-    "sla_policy.deleted",
-    "sla_policy.updated",
-    "sso.identity_linked",
-    "sso.login",
-    "state.deleted",
-    "team.deleted",
-    "user.created",
-    "user.deleted",
-    "user.updated",
-    "view.card_preset.created",
-    "view.card_preset.deleted",
-    "view.card_preset.updated",
-    "view.created",
-    "view.deleted",
-    "view.updated",
-    "webhook_endpoint.created",
-    "webhook_endpoint.deleted",
-    "webhook_endpoint.updated",
-    "worklog.estimate_changed",
-}
+#: `EventTypeSpec` (48 on 2026-09-14 — `role.updated`, `user.updated`,
+#: `view.updated`… were emitted, landed in the log, and had no label, no
+#: trigger and no diff promise anywhere). RADD-1168 registered every one;
+#: the set stays empty by construction.
+UNREGISTERED_EVENT_TYPES_ALLOWLIST: set[str] = set()
 
 
 def _enum_declared_event_types() -> set[str]:

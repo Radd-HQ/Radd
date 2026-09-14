@@ -28,6 +28,29 @@ plugin = RaddPlugin(
             AuthEvent.PROJECT_PUBLIC_ACCESS_CHANGED, "Project public access changed", "Admin",
             has_changes=True, trigger=False, entity_type="project", subjects=("project",),
         ),
+        # RADD-1168: emitted since spec 84/86 and never registered — no label
+        # in the audit catalog, and outside the has_changes contract. Not
+        # triggers (the automation catalog is a parity oracle).
+        EventTypeSpec(AuthEvent.USER_CREATED, "User created", "People", trigger=False, entity_type="user"),
+        EventTypeSpec(
+            AuthEvent.USER_UPDATED, "User updated", "People",
+            has_changes=True, trigger=False, entity_type="user",
+        ),
+        EventTypeSpec(AuthEvent.USER_DELETED, "User deleted", "People", trigger=False, entity_type="user"),
+        EventTypeSpec(AuthEvent.ROLE_CREATED, "Role created", "Admin", trigger=False, entity_type="role"),
+        EventTypeSpec(
+            AuthEvent.ROLE_UPDATED, "Role updated", "Admin",
+            has_changes=True, trigger=False, entity_type="role",
+        ),
+        EventTypeSpec(AuthEvent.ROLE_DELETED, "Role deleted", "Admin", trigger=False, entity_type="role"),
+        EventTypeSpec(
+            AuthEvent.VIEW_AS_STARTED, "Impersonation started", "Sign-in",
+            trigger=False, entity_type="user",
+        ),
+        EventTypeSpec(
+            AuthEvent.VIEW_AS_ENDED, "Impersonation ended", "Sign-in",
+            trigger=False, entity_type="user",
+        ),
     ),
     # RADD-892: forms/pages/timelogging are gone — auth no longer reaches into
     # the features it outranks for nav facts or wiki-space names; they register

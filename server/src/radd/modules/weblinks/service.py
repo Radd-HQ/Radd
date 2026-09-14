@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import NotFoundError
+from radd.kernel import changes
 from radd.modules.events import service as events
 from radd.modules.items import service as items_service
 from radd.modules.projects import service as projects_service
@@ -39,6 +40,7 @@ async def update_web_link(
     actor_id: uuid.UUID | None = None,
 ) -> ItemWebLink:
     link = await get_web_link(session, link_id)
+    before = changes.snapshot(link, ("url", "title", "category"))
     if data.url is not None:
         link.url = data.url
     if data.title is not None:
@@ -46,7 +48,7 @@ async def update_web_link(
     if data.category is not None:
         link.category = data.category.value
     await session.flush()
-    await _emit(session, WebLinkEvent.UPDATED, link, actor_id)
+    await _emit(session, WebLinkEvent.UPDATED, link, actor_id, changes.diff_object(link, before))
     return link
 
 
@@ -80,6 +82,7 @@ async def _emit(
     event_type: WebLinkEvent,
     link: ItemWebLink,
     actor_id: uuid.UUID | None,
+    diff: list[dict] | None = None,
 ) -> None:
     item = await items_service.require_item(session, link.item_id)
     await projects_service.get_project(session, item.project_id)
@@ -95,4 +98,5 @@ async def _emit(
             "title": link.title,
             "category": link.category,
         },
+        changes=diff,
     )

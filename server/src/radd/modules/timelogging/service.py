@@ -15,6 +15,7 @@ from radd.config import settings
 from radd.exceptions import ForbiddenError, ConflictError, NotFoundError
 from radd.modules.auth import authz, service as auth_service
 from radd.modules.auth.models import User
+from radd.kernel import changes
 from radd.modules.events import service as events
 from radd.modules.items import service as items_service
 from radd.modules.projects import service as projects_service
@@ -379,6 +380,7 @@ async def update_worklog(
     session: AsyncSession, worklog: Worklog, data: WorklogUpdate, actor_id: uuid.UUID
 ) -> WorklogRead:
     hpd = await _hours_per_day(session)
+    before = await _worklog_audit_state(session, worklog)
     if data.time_spent is not None:
         worklog.time_spent_seconds = _parse(data.time_spent, hpd)
     if data.worked_on is not None:
@@ -396,8 +398,31 @@ async def update_worklog(
             )
         worklog.category_id = data.category_id
     await session.flush()
-    await _emit(session, WorklogEvent.UPDATED, worklog, actor_id)
+    await _emit(
+        session,
+        WorklogEvent.UPDATED,
+        worklog,
+        actor_id,
+        diff=changes.diff(
+            before, await _worklog_audit_state(session, worklog), hidden=("note",)
+        ),
+    )
     return (await hydrate(session, [worklog], hpd))[0]
+
+
+async def _worklog_audit_state(session: AsyncSession, worklog: Worklog) -> dict:
+    """What a worklog diff can mention (spec 123): the category by NAME."""
+    category = (
+        await categories.get_category(session, worklog.category_id)
+        if worklog.category_id
+        else None
+    )
+    return {
+        "time_spent_seconds": worklog.time_spent_seconds,
+        "worked_on": worklog.worked_on,
+        "note": worklog.note,
+        "category": category.name if category else None,
+    }
 
 
 async def delete_worklog(
@@ -417,24 +442,31 @@ async def set_estimate(
     _, project = await _project_for_item(session, item_id)
     seconds = _parse(data.estimate, await _hours_per_day(session))
     estimate = await session.get(ItemEstimate, item_id)
+    previous = estimate.original_estimate_seconds if estimate is not None else None
     if estimate is None:
         session.add(ItemEstimate(item_id=item_id, original_estimate_seconds=seconds))
     else:
         estimate.original_estimate_seconds = seconds
     await session.flush()
-    await _emit_estimate(session, item_id, actor_id, seconds)
+    await _emit_estimate(session, item_id, actor_id, seconds, previous)
 
 
 async def clear_estimate(
     session: AsyncSession, item_id: uuid.UUID, actor_id: uuid.UUID
 ) -> None:
+    estimate = await session.get(ItemEstimate, item_id)
+    previous = estimate.original_estimate_seconds if estimate is not None else None
     await session.execute(delete(ItemEstimate).where(ItemEstimate.item_id == item_id))
     await session.flush()
-    await _emit_estimate(session, item_id, actor_id, None)
+    await _emit_estimate(session, item_id, actor_id, None, previous)
 
 
 async def _emit_estimate(
-    session: AsyncSession, item_id: uuid.UUID, actor_id: uuid.UUID, seconds: int | None
+    session: AsyncSession,
+    item_id: uuid.UUID,
+    actor_id: uuid.UUID,
+    seconds: int | None,
+    previous: int | None,
 ) -> None:
     """RADD-1102: the event that makes another client's board react to an
     estimate edit — entity_type is ITEM_ESTIMATE, which the SPA's realtime map
@@ -447,6 +479,7 @@ async def _emit_estimate(
         actor_id=actor_id,
         subjects={"item": item_id},
         payload={"original_estimate_seconds": seconds},
+        changes=[{"field": "original_estimate_seconds", "from": previous, "to": seconds}],
     )
 
 
@@ -484,6 +517,7 @@ async def _emit(
     worklog: Worklog,
     actor_id: uuid.UUID,
     occurred_at: datetime | None = None,
+    diff: list[dict] | None = None,
 ) -> None:
     await events.emit(
         session,
@@ -504,4 +538,5 @@ async def _emit(
             "time_spent_seconds": worklog.time_spent_seconds,
         },
         occurred_at=occurred_at,
+        changes=diff,
     )

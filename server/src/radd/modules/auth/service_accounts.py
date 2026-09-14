@@ -19,6 +19,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError, NotFoundError
+from radd.kernel import changes
 from radd.modules.events import service as events
 
 from . import scopes as scopes_mod
@@ -108,6 +109,7 @@ async def update_account(
     session: AsyncSession, account_id: uuid.UUID, data: ServiceAccountUpdate, actor_id: uuid.UUID
 ) -> User:
     account = await get_account(session, account_id)
+    before = changes.snapshot(account, ("name", "active"))
     if data.name is not None:
         account.name = data.name
     if data.active is not None:
@@ -120,6 +122,7 @@ async def update_account(
         entity_id=account.id,
         actor_id=actor_id,
         payload={"name": account.name, "active": account.active},
+        changes=changes.diff_object(account, before),
     )
     return account
 

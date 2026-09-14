@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError, NotFoundError
+from radd.kernel import changes
 from radd.modules.events import service as events
 
 from .models import Role
@@ -126,6 +127,7 @@ async def update_role(
     session: AsyncSession, role_id: uuid.UUID, data: RoleUpdate, actor_id: uuid.UUID | None = None
 ) -> Role:
     role = await get_role(session, role_id)
+    before = changes.snapshot(role, ROLE_FIELDS)
     if data.permissions is not None:
         ensure_permissions_mutable(role)
         role.permissions = list(data.permissions)  # spec 93/A2: validated strings
@@ -143,7 +145,15 @@ async def update_role(
     if data.position is not None:
         role.position = data.position
     await session.flush()
-    await _emit_role(session, AuthEvent.ROLE_UPDATED, role, actor_id=actor_id)
+    # Spec 123: permissions as added/removed — the payload's full list after
+    # the change is what an auditor used to have to diff by eye.
+    await _emit_role(
+        session,
+        AuthEvent.ROLE_UPDATED,
+        role,
+        actor_id=actor_id,
+        changes=changes.diff_object(role, before, collections=("permissions",)),
+    )
     return role
 
 
@@ -163,8 +173,17 @@ async def delete_role(
     await session.flush()
 
 
+#: What a role diff can mention.
+ROLE_FIELDS: tuple[str, ...] = ("name", "description", "position", "permissions")
+
+
 async def _emit_role(
-    session: AsyncSession, event_type: AuthEvent, role: Role, *, actor_id: uuid.UUID | None
+    session: AsyncSession,
+    event_type: AuthEvent,
+    role: Role,
+    *,
+    actor_id: uuid.UUID | None,
+    changes: list[dict] | None = None,
 ) -> None:
     await events.emit(
         session,
@@ -173,4 +192,5 @@ async def _emit_role(
         entity_id=role.id,
         actor_id=actor_id,
         payload={"key": role.key, "name": role.name, "permissions": list(role.permissions)},
+        changes=changes,
     )

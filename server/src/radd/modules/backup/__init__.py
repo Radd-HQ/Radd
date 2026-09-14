@@ -33,7 +33,10 @@ plugin = RaddPlugin(
         EventTypeSpec(BackupEvent.UPLOADED, "Backup uploaded", "Backups", trigger=False),
         EventTypeSpec(BackupEvent.RESTORED, "Backup restored", "Backups", trigger=False),
         EventTypeSpec(BackupEvent.SCHEDULE_CREATED, "Backup schedule created", "Backups", trigger=False),
-        EventTypeSpec(BackupEvent.SCHEDULE_UPDATED, "Backup schedule updated", "Backups", trigger=False),
+        EventTypeSpec(
+            BackupEvent.SCHEDULE_UPDATED, "Backup schedule updated", "Backups",
+            has_changes=True, trigger=False,
+        ),
         EventTypeSpec(BackupEvent.SCHEDULE_DELETED, "Backup schedule deleted", "Backups", trigger=False),
     ),
 )

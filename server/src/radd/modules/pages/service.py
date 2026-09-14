@@ -56,6 +56,7 @@ async def _emit_page(
     page: Page,
     actor_id: uuid.UUID,
     payload: dict,
+    diff: list[dict] | None = None,
 ) -> None:
     """Every page event names its PAGE and its SPACE as subjects (spec 118).
 
@@ -73,6 +74,7 @@ async def _emit_page(
         actor_id=actor_id,
         payload=payload,
         subjects={"page": page.id, "page_space": page.space_id},
+        changes=diff,
     )
 
 
@@ -317,6 +319,33 @@ async def _history_window_open(session: AsyncSession, page_id: uuid.UUID) -> boo
     return (utcnow() - latest).total_seconds() >= int(window)
 
 
+async def _page_diff(
+    session: AsyncSession, page: Page, before: dict, changed: list[str]
+) -> list[dict]:
+    """Spec 123: old → new for title/slug/position, the parent by TITLE, and
+    the body only as "changed" (a page body is content, not a value)."""
+    diff: list[dict] = []
+    for field in ("title", "slug", "position"):
+        if field in changed:
+            diff.append({"field": field, "from": before[field], "to": getattr(page, field)})
+    if "parent_id" in changed:
+        titles = {}
+        for parent_id in (before["parent_id"], page.parent_id):
+            if parent_id is not None:
+                parent = await session.get(Page, parent_id)
+                titles[parent_id] = parent.title if parent else str(parent_id)
+        diff.append(
+            {
+                "field": "parent",
+                "from": titles.get(before["parent_id"]),
+                "to": titles.get(page.parent_id),
+            }
+        )
+    if "body" in changed:
+        diff.append({"field": "body"})
+    return diff
+
+
 async def update_page(
     session: AsyncSession,
     page_id: uuid.UUID,
@@ -326,6 +355,12 @@ async def update_page(
     permissions: "frozenset" = frozenset(),
 ) -> Page:
     page = await get_page(session, page_id)
+    before = {
+        "title": page.title,
+        "slug": page.slug,
+        "parent_id": page.parent_id,
+        "position": page.position,
+    }
     body_changes = data.body is not None and data.body != page.body
     # Spec 122: whoever holds the page's LIVE document gets to refuse a body
     # write that did not come from it, or to vouch for one that did. `pages`
@@ -446,10 +481,11 @@ async def update_page(
         await backlinks.reindex(session, page)
         await page_mentions.reindex(session, page)
     payload = {"title": page.title, "version": page.version, "changed": changed}
+    diff = await _page_diff(session, page, before, changed)
     if moved:
-        await _emit_page(session, PageEvent.PAGE_MOVED, page, actor_id, payload)
+        await _emit_page(session, PageEvent.PAGE_MOVED, page, actor_id, payload, diff)
     if set(changed) - {"parent_id", "position"}:
-        await _emit_page(session, PageEvent.PAGE_UPDATED, page, actor_id, payload)
+        await _emit_page(session, PageEvent.PAGE_UPDATED, page, actor_id, payload, diff)
         # RADD-719. Auto-watch on edit, like items: touching something is the
         # strongest signal you care what happens to it next, and a watch feature
         # nobody opts into has no watchers.

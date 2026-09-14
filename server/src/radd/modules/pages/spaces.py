@@ -47,6 +47,7 @@ async def _emit_space(
     space: PageSpace,
     actor_id: uuid.UUID,
     payload: dict,
+    diff: list[dict] | None = None,
 ) -> None:
     await events.emit(
         session,
@@ -55,6 +56,7 @@ async def _emit_space(
         entity_id=space.id,
         actor_id=actor_id,
         payload=payload,
+        changes=diff,
     )
 
 
@@ -108,6 +110,7 @@ async def update_space(
 ) -> PageSpace:
     space = await get_space(session, space_id)
     changed: list[str] = []
+    diff: list[dict] = []
     for field in ("name", "slug", "description", "position"):
         value = getattr(data, field)
         if value is not None and value != getattr(space, field):
@@ -115,6 +118,7 @@ async def update_space(
                 session, value, exclude=space.id
             ):
                 raise ConflictError(PageEntity.SPACE, value)
+            diff.append({"field": field, "from": getattr(space, field), "to": value})
             setattr(space, field, value)
             changed.append(field)
     await session.flush()
@@ -122,6 +126,7 @@ async def update_space(
         await _emit_space(
             session, PageEvent.SPACE_UPDATED, space, actor_id,
             {"name": space.name, "changed": changed},
+            diff,
         )
     return space
 

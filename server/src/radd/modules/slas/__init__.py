@@ -33,6 +33,19 @@ plugin = RaddPlugin(
     on_startup=(engine.start,),
     on_shutdown=(engine.stop,),
     event_types=(
+        # RADD-1168: emitted since spec 30 and never registered. Not triggers.
+        EventTypeSpec(
+            SlaEvent.POLICY_CREATED, "SLA policy created", "Service desk",
+            trigger=False, subjects=("project",),
+        ),
+        EventTypeSpec(
+            SlaEvent.POLICY_UPDATED, "SLA policy updated", "Service desk",
+            has_changes=True, trigger=False, subjects=("project",),
+        ),
+        EventTypeSpec(
+            SlaEvent.POLICY_DELETED, "SLA policy deleted", "Service desk",
+            trigger=False, subjects=("project",),
+        ),
         EventTypeSpec(SlaEvent.BREACHED, "SLA breached", "Items", item_scoped=True),
         EventTypeSpec(SlaEvent.DUE_SOON, "SLA due soon", "Service desk", item_scoped=True),
     ),

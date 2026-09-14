@@ -15,6 +15,7 @@ from radd.modules.access.types import GrantEffect, GrantSubject
 from radd.modules.auth import authz, service as users_service
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
+from radd.kernel import changes
 from radd.modules.events import service as events
 from radd.modules.fields import service as fields
 from radd.modules.fields.models import FieldDefinition
@@ -704,6 +705,7 @@ async def update_view(
     session: AsyncSession, view_id: uuid.UUID, data: ViewUpdate, actor: User, *, include_shares: bool = True
 ) -> ViewRead:
     view = await _require_edit(session, view_id, actor)
+    before = changes.snapshot(view, VIEW_FIELDS)
     if data.name is not None:
         view.name = data.name
     if data.view_type is not None:
@@ -741,7 +743,13 @@ async def update_view(
     if data.position is not None:
         view.position = data.position
     await session.flush()
-    await _emit(session, ViewEvent.UPDATED, view, actor)
+    await _emit(
+        session,
+        ViewEvent.UPDATED,
+        view,
+        actor,
+        diff=changes.diff_object(view, before, hidden=VIEW_HIDDEN, collections=VIEW_COLLECTIONS),
+    )
     return await _hydrate_one(session, actor, view, include_shares=include_shares)
 
 
@@ -770,9 +778,16 @@ async def _update_sharing(
             Permission.VIEW_CREATE,
             project_id=view.project_id,
         )
+    previous = view.global_access
     view.global_access = global_access
     await session.flush()
-    await _emit(session, ViewEvent.UPDATED, view, actor)
+    await _emit(
+        session,
+        ViewEvent.UPDATED,
+        view,
+        actor,
+        diff=[e for e in [changes.change("global_access", previous, global_access)] if e],
+    )
     return await _hydrate_one(session, actor, view, include_shares=include_shares)
 
 
@@ -811,6 +826,11 @@ async def _transfer_ownership(
     previous_owner = view.owner_id
     if previous_owner == target.id:
         return await _hydrate_one(session, actor, view, include_shares=include_shares)
+    previous_name = (
+        (await users_service.users_by_ids(session, [previous_owner])).get(previous_owner)
+        if previous_owner
+        else None
+    )
     view.owner_id = target.id
     # Drop the new owner's now-redundant share grant(s) (they own it outright).
     await _delete_user_shares(session, view.id, target.id)
@@ -827,7 +847,19 @@ async def _transfer_ownership(
             actor_id=actor.id,
         )
     await session.flush()
-    await _emit(session, ViewEvent.UPDATED, view, actor)
+    await _emit(
+        session,
+        ViewEvent.UPDATED,
+        view,
+        actor,
+        diff=[
+            {
+                "field": "owner",
+                "from": previous_name.name if previous_name else None,
+                "to": target.name,
+            }
+        ],
+    )
     return await _hydrate_one(session, actor, view, include_shares=include_shares)
 
 
@@ -851,6 +883,17 @@ async def delete_view(session: AsyncSession, view_id: uuid.UUID, actor: User) ->
     await session.delete(view)
 
 
+#: What a view edit can touch (spec 123). Layout blobs record only that they
+#: changed — a card layout's JSON is not something an auditor reads as a value.
+VIEW_FIELDS: tuple[str, ...] = (
+    "name", "view_type", "query", "group_by", "swimlane_by", "cycle_filter",
+    "quick_filters", "wip_limits", "columns", "card_layout", "column_order",
+    "swimlane_order", "position",
+)
+VIEW_HIDDEN: tuple[str, ...] = ("quick_filters", "wip_limits", "columns", "card_layout")
+VIEW_COLLECTIONS: tuple[str, ...] = ("column_order", "swimlane_order")
+
+
 async def _emit(
     session: AsyncSession,
     event_type: ViewEvent,
@@ -858,6 +901,7 @@ async def _emit(
     actor: User,
     *,
     share_count: int | None = None,
+    diff: list[dict] | None = None,
 ) -> None:
     payload = {
         "name": view.name,
@@ -877,6 +921,8 @@ async def _emit(
         entity_id=view.id,
         actor_id=actor.id,
         payload=payload,
+        subjects={"project": view.project_id},
+        changes=diff,
     )
 
 
@@ -886,7 +932,11 @@ async def _emit(
 
 
 async def _emit_preset(
-    session: AsyncSession, event_type: ViewEvent, preset: CardLayoutPreset, actor: User
+    session: AsyncSession,
+    event_type: ViewEvent,
+    preset: CardLayoutPreset,
+    actor: User,
+    diff: list[dict] | None = None,
 ) -> None:
     await events.emit(
         session,
@@ -895,6 +945,7 @@ async def _emit_preset(
         entity_id=preset.id,
         actor_id=actor.id,
         payload={"name": preset.name},
+        changes=diff,
     )
 
 
@@ -939,6 +990,7 @@ async def update_card_preset(
     session: AsyncSession, preset_id: uuid.UUID, data: CardPresetUpdate, actor: User
 ) -> CardLayoutPreset:
     preset = await get_card_preset(session, preset_id)
+    before = changes.snapshot(preset, ("name", "layout", "position"))
     if data.name is not None:
         preset.name = data.name
     if data.layout is not None:
@@ -946,7 +998,13 @@ async def update_card_preset(
     if data.position is not None:
         preset.position = data.position
     await session.flush()
-    await _emit_preset(session, ViewEvent.CARD_PRESET_UPDATED, preset, actor)
+    await _emit_preset(
+        session,
+        ViewEvent.CARD_PRESET_UPDATED,
+        preset,
+        actor,
+        changes.diff_object(preset, before, hidden=("layout",)),
+    )
     return preset
 
 

@@ -21,6 +21,11 @@ plugin = RaddPlugin(
     on_startup=(_startup,),
     # Spec 123: provider administration is audited with a diff; not a trigger.
     event_types=(
+        # RADD-1168: emitted since spec 40 and never registered. Not triggers.
+        EventTypeSpec(SsoEvent.LOGIN, "Single sign-on", "Sign-in", trigger=False, entity_type="user"),
+        EventTypeSpec(
+            SsoEvent.IDENTITY_LINKED, "Identity linked", "Sign-in", trigger=False, entity_type="user"
+        ),
         EventTypeSpec(
             SsoEvent.PROVIDER_CREATED, "Sign-in provider created", "Admin",
             trigger=False, entity_type="sso_provider",

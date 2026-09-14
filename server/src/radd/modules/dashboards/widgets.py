@@ -17,6 +17,7 @@ import uuid
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.kernel import changes
 from radd.exceptions import ConflictError, NotFoundError, RaddError
 from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
@@ -131,8 +132,16 @@ async def create_widget(
         )
     session.add(widget)
     await session.flush()
-    await service.emit(session, DashboardEvent.UPDATED, dashboard, actor)
+    await service.emit(
+        session, DashboardEvent.UPDATED, dashboard, actor,
+        diff=[{"field": "widgets", "added": [_label(widget)], "removed": []}],
+    )
     return await service.hydrate_one(session, actor, dashboard)
+
+
+def _label(widget: DashboardWidget) -> str:
+    """A widget as an auditor reads it: its title, else its type."""
+    return widget.title or widget.widget_type
 
 
 async def _get_widget(
@@ -153,6 +162,7 @@ async def update_widget(
 ) -> DashboardRead:
     dashboard = await service.require_edit(session, dashboard_id, actor)
     widget = await _get_widget(session, dashboard, widget_id)
+    before = changes.snapshot(widget, ("title", "width", "position", "config"))
     # Omitted = unchanged, explicit null clears the title override.
     if "title" in data.model_fields_set:
         widget.title = data.title
@@ -173,7 +183,13 @@ async def update_widget(
         await _check_references(session, actor, dashboard, config)
         widget.config = config.model_dump(mode="json")
     await session.flush()
-    await service.emit(session, DashboardEvent.UPDATED, dashboard, actor)
+    diff = changes.diff_object(widget, before, hidden=("config",), labels={
+        "title": f"{_label(widget)} title",
+        "width": f"{_label(widget)} width",
+        "position": f"{_label(widget)} position",
+        "config": f"{_label(widget)} configuration",
+    })
+    await service.emit(session, DashboardEvent.UPDATED, dashboard, actor, diff=diff)
     return await service.hydrate_one(session, actor, dashboard)
 
 
@@ -182,6 +198,10 @@ async def delete_widget(
 ) -> None:
     dashboard = await service.require_edit(session, dashboard_id, actor)
     widget = await _get_widget(session, dashboard, widget_id)
+    label = _label(widget)
     await session.delete(widget)
     await session.flush()
-    await service.emit(session, DashboardEvent.UPDATED, dashboard, actor)
+    await service.emit(
+        session, DashboardEvent.UPDATED, dashboard, actor,
+        diff=[{"field": "widgets", "added": [], "removed": [label]}],
+    )

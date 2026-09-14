@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.auth.models import User
+from radd.kernel import changes
 from radd.modules.events import service as events
 from radd.clock import utcnow
 
@@ -244,6 +245,7 @@ async def update_cycle(
     actor_id: uuid.UUID | None = None,
 ) -> CycleRead:
     cycle = await get_cycle(session, cycle_id)
+    before = await _cycle_audit_state(session, cycle)
     if data.name is not None:
         cycle.name = data.name
     # Dates use the model_fields_set idiom: omitted = unchanged, explicit null =
@@ -260,7 +262,13 @@ async def update_cycle(
     else:
         team_ids = (await team_ids_by_cycle(session, [cycle.id])).get(cycle.id, [])
     await session.flush()
-    await _emit(session, CycleEvent.UPDATED, cycle, actor_id)
+    await _emit(
+        session,
+        CycleEvent.UPDATED,
+        cycle,
+        actor_id,
+        changes.diff(before, await _cycle_audit_state(session, cycle), collections=("teams",)),
+    )
     return to_read(cycle, today, team_ids)
 
 
@@ -360,6 +368,7 @@ async def complete_cycle(
     await _emit(session, CycleEvent.COMPLETED, cycle, actor.id)
 
     if target is not None and data.start_next:
+        target_before = await _cycle_audit_state(session, target)
         if target.start_date is None or target.start_date > today:
             target.start_date = today
         if target.end_date is None or target.end_date < target.start_date:
@@ -370,7 +379,13 @@ async def complete_cycle(
             )
             target.end_date = target.start_date + length
         await session.flush()
-        await _emit(session, CycleEvent.UPDATED, target, actor.id)
+        await _emit(
+            session,
+            CycleEvent.UPDATED,
+            target,
+            actor.id,
+            changes.diff(target_before, await _cycle_audit_state(session, target)),
+        )
 
     series = await _series_for_label(session, cycle_label(cycle.name))
     provisioned = (
@@ -463,6 +478,7 @@ async def update_series(
     actor_id: uuid.UUID | None = None,
 ) -> CycleSeries:
     series = await get_series(session, series_id)
+    before = changes.snapshot(series, SERIES_FIELDS)
     if data.drafts_ahead is not None:
         series.drafts_ahead = data.drafts_ahead
     if data.next_number is not None:
@@ -474,7 +490,9 @@ async def update_series(
         series.duration_days = data.duration_days
     _check_schedule(series.start_weekday, series.duration_days)
     await session.flush()
-    await _emit_series(session, SeriesEvent.UPDATED, series, actor_id)
+    await _emit_series(
+        session, SeriesEvent.UPDATED, series, actor_id, changes.diff_object(series, before)
+    )
     # Raising the look-ahead / setting a cadence provisions + schedules immediately.
     await ensure_series_drafts(session, series, today, actor_id)
     return series
@@ -553,11 +571,31 @@ async def ensure_series_drafts(
     return names
 
 
+#: What a series edit can touch — and therefore what its diff mentions.
+SERIES_FIELDS: tuple[str, ...] = ("drafts_ahead", "next_number", "start_weekday", "duration_days")
+
+
+async def _cycle_audit_state(session: AsyncSession, cycle: Cycle) -> dict:
+    """What a cycle diff can mention (spec 123): team NAMES, not ids."""
+    from radd.modules.teams import service as teams_service  # deferred: teams loads later
+
+    team_ids = (await team_ids_by_cycle(session, [cycle.id])).get(cycle.id, [])
+    found = await teams_service.teams_by_ids(session, team_ids)
+    return {
+        "name": cycle.name,
+        "start_date": cycle.start_date,
+        "end_date": cycle.end_date,
+        "goal": cycle.goal,
+        "teams": sorted(found[t].name if t in found else str(t) for t in team_ids),
+    }
+
+
 async def _emit_series(
     session: AsyncSession,
     event_type: SeriesEvent,
     series: CycleSeries,
     actor_id: uuid.UUID | None,
+    diff: list[dict] | None = None,
 ) -> None:
     await events.emit(
         session,
@@ -570,11 +608,16 @@ async def _emit_series(
             "drafts_ahead": series.drafts_ahead,
             "next_number": series.next_number,
         },
+        changes=diff,
     )
 
 
 async def _emit(
-    session: AsyncSession, event_type: CycleEvent, cycle: Cycle, actor_id: uuid.UUID | None
+    session: AsyncSession,
+    event_type: CycleEvent,
+    cycle: Cycle,
+    actor_id: uuid.UUID | None,
+    diff: list[dict] | None = None,
 ) -> None:
     await events.emit(
         session,
@@ -587,4 +630,5 @@ async def _emit(
             "start_date": cycle.start_date.isoformat() if cycle.start_date else None,
             "end_date": cycle.end_date.isoformat() if cycle.end_date else None,
         },
+        changes=diff,
     )

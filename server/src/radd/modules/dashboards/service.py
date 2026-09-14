@@ -23,6 +23,7 @@ from radd.modules.access.types import GrantEffect, GrantSubject
 from radd.modules.auth import authz, service as users_service
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
+from radd.kernel import changes
 from radd.modules.events import service as events
 from radd.modules.teams import service as teams_service
 from radd.modules.groups import service as groups_service
@@ -433,6 +434,7 @@ async def update_dashboard(
     session: AsyncSession, dashboard_id: uuid.UUID, data: DashboardUpdate, actor: User, *, include_shares: bool = True
 ) -> DashboardRead:
     dashboard = await require_edit(session, dashboard_id, actor)
+    before = changes.snapshot(dashboard, ("name", "description", "position"))
     if data.name is not None:
         dashboard.name = data.name
     if data.description is not None:
@@ -440,7 +442,10 @@ async def update_dashboard(
     if data.position is not None:
         dashboard.position = data.position
     await session.flush()
-    await emit(session, DashboardEvent.UPDATED, dashboard, actor)
+    await emit(
+        session, DashboardEvent.UPDATED, dashboard, actor,
+        diff=changes.diff_object(dashboard, before),
+    )
     return await hydrate_one(session, actor, dashboard, include_shares=include_shares)
 
 
@@ -464,10 +469,14 @@ async def _update_sharing(
         await authz.require(
             session, actor, Permission.DASHBOARD_CREATE
         )
+    previous = dashboard.global_access
     dashboard.global_access = global_access
     await session.flush()
     share_count = await access_service.count_resource_grants(session, DASHBOARD_RESOURCE, str(dashboard.id))
-    await emit(session, DashboardEvent.UPDATED, dashboard, actor, share_count=share_count)
+    await emit(
+        session, DashboardEvent.UPDATED, dashboard, actor, share_count=share_count,
+        diff=[e for e in [changes.change("global_access", previous, global_access)] if e],
+    )
     return await hydrate_one(session, actor, dashboard, include_shares=include_shares)
 
 
@@ -502,6 +511,11 @@ async def _transfer_ownership(
     previous_owner = dashboard.owner_id
     if previous_owner == target.id:
         return await hydrate_one(session, actor, dashboard, include_shares=include_shares)
+    previous_user = (
+        (await users_service.users_by_ids(session, [previous_owner])).get(previous_owner)
+        if previous_owner
+        else None
+    )
     dashboard.owner_id = target.id
     # Drop the new owner's now-redundant grant(s) — they own it outright.
     await _delete_user_grants(session, dashboard.id, target.id)
@@ -519,7 +533,16 @@ async def _transfer_ownership(
             actor_id=actor.id,
         )
     await session.flush()
-    await emit(session, DashboardEvent.UPDATED, dashboard, actor)
+    await emit(
+        session, DashboardEvent.UPDATED, dashboard, actor,
+        diff=[
+            {
+                "field": "owner",
+                "from": previous_user.name if previous_user else None,
+                "to": target.name,
+            }
+        ],
+    )
     return await hydrate_one(session, actor, dashboard, include_shares=include_shares)
 
 
@@ -550,6 +573,7 @@ async def emit(
     actor: User,
     *,
     share_count: int | None = None,
+    diff: list[dict] | None = None,
 ) -> None:
     payload: dict[str, object] = {
         "name": dashboard.name,
@@ -565,6 +589,7 @@ async def emit(
         entity_id=dashboard.id,
         actor_id=actor.id,
         payload=payload,
+        changes=diff,
     )
 
 

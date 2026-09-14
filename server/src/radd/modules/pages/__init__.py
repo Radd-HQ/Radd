@@ -82,7 +82,7 @@ plugin = RaddPlugin(
             PageEvent.SPACE_PUBLIC_ACCESS_CHANGED, "Page space public access changed", "Pages",
             has_changes=True, trigger=False, entity_type="page_space", subjects=("page_space",),
         ),
-        EventTypeSpec(PageEvent.SPACE_UPDATED, "Page space updated", "Pages"),
+        EventTypeSpec(PageEvent.SPACE_UPDATED, "Page space updated", "Pages", has_changes=True),
         EventTypeSpec(PageEvent.SPACE_DELETED, "Page space deleted", "Pages"),
         # Every page event carries both refs. Declaring the subject is what makes
         # the promise checkable: the loader refuses to boot a plugin whose events
@@ -92,7 +92,8 @@ plugin = RaddPlugin(
             PageEvent.PAGE_CREATED, "Page created", "Pages", subjects=("page", "page_space")
         ),
         EventTypeSpec(
-            PageEvent.PAGE_UPDATED, "Page updated", "Pages", subjects=("page", "page_space")
+            PageEvent.PAGE_UPDATED, "Page updated", "Pages",
+            has_changes=True, subjects=("page", "page_space")
         ),
         EventTypeSpec(
             PageEvent.PAGE_DELETED, "Page deleted", "Pages", subjects=("page", "page_space")

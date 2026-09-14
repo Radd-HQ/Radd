@@ -1,14 +1,31 @@
-from radd.kernel import RaddPlugin, SlqFieldSpec
+from radd.kernel import EventTypeSpec, RaddPlugin, SlqFieldSpec
 from radd.kernel import CrudResourceSpec, ProjectPurgeSpec
 
 from .router import router
+from .types import ViewEntity, ViewEvent
 from .slqfield import roadmap_member_item_ids
 from . import subscribers  # noqa: F401  — registers the project-created seeding hook
 
 from .service import _VIEW_SPEC
 
+def _view_event(event_type: ViewEvent, label: str, entity: str, *, diff: bool = False):
+    """RADD-1168: emitted since spec 15 and never registered. Not triggers."""
+    return EventTypeSpec(
+        event_type, label, "Views", has_changes=diff, trigger=False, entity_type=entity,
+        subjects=("project",) if entity == ViewEntity.VIEW else (),
+    )
+
+
 plugin = RaddPlugin(
     name="views",
+    event_types=(
+        _view_event(ViewEvent.CREATED, "Saved view created", "view"),
+        _view_event(ViewEvent.UPDATED, "Saved view updated", "view", diff=True),
+        _view_event(ViewEvent.DELETED, "Saved view deleted", "view"),
+        _view_event(ViewEvent.CARD_PRESET_CREATED, "Card preset created", "card_preset"),
+        _view_event(ViewEvent.CARD_PRESET_UPDATED, "Card preset updated", "card_preset", diff=True),
+        _view_event(ViewEvent.CARD_PRESET_DELETED, "Card preset deleted", "card_preset"),
+    ),
     # RADD-892: `views.project_id` carries no ON DELETE CASCADE. Its members
     # cascade off the view row, so the view alone is enough.
     project_purges=(ProjectPurgeSpec(name="views", tables=("views",), order=20),),

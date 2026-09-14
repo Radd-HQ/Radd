@@ -5,6 +5,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError, NotFoundError
+from radd.kernel import changes
 from radd.modules.events import service as events
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
@@ -66,6 +67,7 @@ async def update_state(
 ) -> State:
     state = await get_state(session, state_id)
     await projects_service.get_project(session, state.project_id)
+    before = changes.snapshot(state, ("name", "position", "category_key"))
     if data.name is not None:
         state.name = data.name
     if data.position is not None:
@@ -78,7 +80,7 @@ async def update_state(
         state.category = row.behaves_as
         state.category_key = row.key
     await session.flush()
-    await _emit(session, StateEvent.UPDATED, state, actor_id)
+    await _emit(session, StateEvent.UPDATED, state, actor_id, changes.diff_object(state, before))
     return state
 
 
@@ -194,6 +196,7 @@ async def _emit(
     event_type: StateEvent,
     state: State,
     actor_id: uuid.UUID | None = None,
+    diff: list[dict] | None = None,
 ) -> None:
     await events.emit(
         session,
@@ -202,6 +205,8 @@ async def _emit(
         entity_id=state.id,
         actor_id=actor_id,
         payload={"name": state.name, "category": state.category, "project_id": str(state.project_id)},
+        subjects={"project": state.project_id},
+        changes=diff,
     )
 
 
@@ -278,9 +283,14 @@ async def create_state_category(
 
 
 async def update_state_category(
-    session: AsyncSession, category_id: uuid.UUID, data: StateCategoryUpdate
+    session: AsyncSession,
+    category_id: uuid.UUID,
+    data: StateCategoryUpdate,
+    *,
+    actor_id: uuid.UUID | None = None,
 ) -> StateCategoryDef:
     row = await get_state_category(session, category_id)
+    before = changes.snapshot(row, ("name", "behaves_as", "color", "position"))
     if data.name is not None and data.name != row.name:
         clash = await session.scalar(
             select(StateCategoryDef).where(StateCategoryDef.name == data.name)
@@ -309,6 +319,19 @@ async def update_state_category(
     if data.position is not None:
         row.position = data.position
     await session.flush()
+    # Spec 123: re-classifying a category changes what every report means —
+    # it used to leave no event at all.
+    diff = changes.diff_object(row, before)
+    if diff:
+        await events.emit(
+            session,
+            event_type=StateEvent.CATEGORY_UPDATED,
+            entity_type=StateEntity.STATE_CATEGORY,
+            entity_id=row.id,
+            actor_id=actor_id,
+            payload={"key": row.key, "name": row.name},
+            changes=diff,
+        )
     return row
 
 

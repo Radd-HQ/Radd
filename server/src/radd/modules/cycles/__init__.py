@@ -23,11 +23,11 @@ plugin = RaddPlugin(
     routers=(router, series_router),
     event_types=(
         EventTypeSpec(CycleEvent.CREATED, "Cycle created", "Cycles"),
-        EventTypeSpec(CycleEvent.UPDATED, "Cycle updated", "Cycles"),
+        EventTypeSpec(CycleEvent.UPDATED, "Cycle updated", "Cycles", has_changes=True),
         EventTypeSpec(CycleEvent.COMPLETED, "Cycle completed", "Cycles"),
         EventTypeSpec(CycleEvent.DELETED, "Cycle deleted", "Cycles"),
         EventTypeSpec(SeriesEvent.CREATED, "Cycle series created", "Cycles"),
-        EventTypeSpec(SeriesEvent.UPDATED, "Cycle series updated", "Cycles"),
+        EventTypeSpec(SeriesEvent.UPDATED, "Cycle series updated", "Cycles", has_changes=True),
         EventTypeSpec(SeriesEvent.DELETED, "Cycle series deleted", "Cycles"),
     ),
 )

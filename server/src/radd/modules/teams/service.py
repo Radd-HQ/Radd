@@ -8,6 +8,7 @@ from radd.db import ilike_term
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.auth import service as auth
 from radd.modules.auth.models import User
+from radd.kernel import changes
 from radd.modules.events import service as events
 from radd.modules.groups import service as groups_service
 from radd.modules.groups.service import Group
@@ -97,10 +98,15 @@ async def update_team(
         )
         if existing:
             raise ConflictError(TeamEntity.TEAM, data.name)
+        previous = team.name
         team.name = data.name
         await session.flush()
         await _emit_updated(
-            session, team, actor_id, {"action": TeamChange.RENAMED, "name": team.name}
+            session,
+            team,
+            actor_id,
+            {"action": TeamChange.RENAMED, "name": team.name},
+            [{"field": "name", "from": previous, "to": team.name}],
         )
     return team
 
@@ -181,7 +187,11 @@ async def add_team_member(
     await session.flush()
     forget_user_teams(session)
     await _emit_updated(
-        session, team, actor_id, {"action": TeamChange.MEMBER_ADDED, "user_id": str(user_id)}
+        session,
+        team,
+        actor_id,
+        {"action": TeamChange.MEMBER_ADDED, "user_id": str(user_id)},
+        [{"field": "members", "added": [user.name], "removed": []}],
     )
     return user
 
@@ -197,7 +207,11 @@ async def remove_team_member(
         raise NotFoundError(TeamEntity.MEMBER, user_id)
     forget_user_teams(session)
     await _emit_updated(
-        session, team, actor_id, {"action": TeamChange.MEMBER_REMOVED, "user_id": str(user_id)}
+        session,
+        team,
+        actor_id,
+        {"action": TeamChange.MEMBER_REMOVED, "user_id": str(user_id)},
+        [{"field": "members", "added": [], "removed": await _user_names(session, [user_id])}],
     )
 
 
@@ -223,6 +237,7 @@ async def add_team_group(
         team,
         actor_id,
         {"action": TeamChange.GROUP_ADDED, "group_id": str(group_id), "group": group.name},
+        [{"field": "members", "added": [f"group {group.name}"], "removed": []}],
     )
     return group
 
@@ -245,6 +260,7 @@ async def remove_team_group(
         team,
         actor_id,
         {"action": TeamChange.GROUP_REMOVED, "group_id": str(group_id), "group": group.name},
+        [{"field": "members", "added": [], "removed": [f"group {group.name}"]}],
     )
 
 
@@ -344,6 +360,7 @@ async def replace_managers(
     for user_id in wanted:
         if user_id not in found:
             raise ConflictError(TeamEntity.MANAGER, reason=f"no such user {user_id}")
+    previous = await _user_names(session, await list_managers(session, team_id))
     await session.execute(delete(TeamManager).where(TeamManager.team_id == team_id))
     for user_id in wanted:
         session.add(TeamManager(team_id=team_id, user_id=user_id))
@@ -353,6 +370,7 @@ async def replace_managers(
         team,
         actor_id,
         {"action": TeamChange.MANAGERS_REPLACED, "user_ids": [str(u) for u in wanted]},
+        _collection("managers", previous, [found[u].name for u in wanted]),
     )
     return wanted
 
@@ -370,8 +388,16 @@ async def add_manager(session: AsyncSession, team_id: uuid.UUID, user_id: uuid.U
         raise ConflictError(TeamEntity.MANAGER, reason="A team may appoint up to 50 managers")
     session.add(TeamManager(team_id=team_id, user_id=user_id))
     await session.flush()
-    await _emit_updated(session, team, actor_id, {"action": TeamChange.MANAGERS_REPLACED,
-                                                "user_ids": [str(value) for value in await list_managers(session, team_id)]})
+    await _emit_updated(
+        session,
+        team,
+        actor_id,
+        {
+            "action": TeamChange.MANAGERS_REPLACED,
+            "user_ids": [str(value) for value in await list_managers(session, team_id)],
+        },
+        [{"field": "managers", "added": [target.name], "removed": []}],
+    )
 
 
 async def remove_manager(session: AsyncSession, team_id: uuid.UUID, user_id: uuid.UUID,
@@ -381,8 +407,16 @@ async def remove_manager(session: AsyncSession, team_id: uuid.UUID, user_id: uui
                                                             TeamManager.user_id == user_id))
     if not result.rowcount:
         raise NotFoundError(TeamEntity.MANAGER, user_id)
-    await _emit_updated(session, team, actor_id, {"action": TeamChange.MANAGERS_REPLACED,
-                                                "user_ids": [str(value) for value in await list_managers(session, team_id)]})
+    await _emit_updated(
+        session,
+        team,
+        actor_id,
+        {
+            "action": TeamChange.MANAGERS_REPLACED,
+            "user_ids": [str(value) for value in await list_managers(session, team_id)],
+        },
+        [{"field": "managers", "added": [], "removed": await _user_names(session, [user_id])}],
+    )
 
 
 async def transfer_ownership(
@@ -410,11 +444,15 @@ async def transfer_ownership(
         )
     )
     await session.flush()
+    previous_name = (
+        (await _user_names(session, [previous_owner_id]) or [None])[0] if previous_owner_id else None
+    )
     await _emit_updated(
         session,
         team,
         actor_id,
         {"action": TeamChange.OWNER_TRANSFERRED, "owner_id": str(target.id)},
+        [{"field": "owner", "from": previous_name, "to": target.name}],
     )
     return team
 
@@ -474,8 +512,24 @@ async def user_team_ids(session: AsyncSession, user_id: uuid.UUID) -> set[uuid.U
     return resolved
 
 
+async def _user_names(session: AsyncSession, user_ids) -> list[str]:
+    """Display names for a diff (spec 123) — a missing row keeps its id."""
+    ids = list(user_ids)
+    found = await auth.users_by_ids(session, ids)
+    return [found[u].name if u in found else str(u) for u in ids]
+
+
+def _collection(field: str, before: list[str], after: list[str]) -> list[dict]:
+    entry = changes.collection_change(field, before, after)
+    return [entry] if entry is not None else []
+
+
 async def _emit_updated(
-    session: AsyncSession, team: Team, actor_id: uuid.UUID | None, payload: dict
+    session: AsyncSession,
+    team: Team,
+    actor_id: uuid.UUID | None,
+    payload: dict,
+    diff: list[dict] | None = None,
 ) -> None:
     await events.emit(
         session,
@@ -483,7 +537,8 @@ async def _emit_updated(
         entity_type=TeamEntity.TEAM,
         entity_id=team.id,
         actor_id=actor_id,
-        payload=payload,
+        payload={"name": team.name, **payload},
+        changes=diff if diff is not None else [],
     )
 
 

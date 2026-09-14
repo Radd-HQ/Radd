@@ -25,5 +25,9 @@ plugin = RaddPlugin(
         EventTypeSpec(PluginEvent.ENABLED, "Plugin enabled", "Plugins", trigger=False),
         EventTypeSpec(PluginEvent.DISABLED, "Plugin disabled", "Plugins", trigger=False),
         EventTypeSpec(PluginEvent.UNINSTALLED, "Plugin uninstalled", "Plugins", trigger=False),
+        EventTypeSpec(
+            PluginEvent.CONTRIBUTIONS_CHANGED, "Plugin contributions changed", "Plugins",
+            has_changes=True, trigger=False,
+        ),
     ),
 )

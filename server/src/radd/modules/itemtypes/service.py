@@ -5,6 +5,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError, NotFoundError
+from radd.kernel import changes
 from radd.modules.events import service as events
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
@@ -79,6 +80,7 @@ async def update_type(
 ) -> IssueType:
     issue_type = await get_type(session, type_id)
     project = await projects_service.get_project(session, issue_type.project_id)
+    before = changes.snapshot(issue_type, TYPE_FIELDS)
     if data.name is not None:
         issue_type.name = data.name
     if data.color is not None:
@@ -94,7 +96,13 @@ async def update_type(
     if "description_template" in data.model_fields_set:
         issue_type.description_template = data.description_template or None
     await session.flush()
-    await _emit(session, TypeEvent.UPDATED, issue_type, actor_id)
+    await _emit(
+        session,
+        TypeEvent.UPDATED,
+        issue_type,
+        actor_id,
+        changes.diff_object(issue_type, before, hidden=("description_template",)),
+    )
     return issue_type
 
 
@@ -157,11 +165,18 @@ async def types_by_ids(
     return {t.id: t for t in result.scalars()}
 
 
+#: What an issue-type edit can touch — the template records only "changed".
+TYPE_FIELDS: tuple[str, ...] = (
+    "name", "color", "icon", "position", "is_default", "description_template",
+)
+
+
 async def _emit(
     session: AsyncSession,
     event_type: TypeEvent,
     issue_type: IssueType,
     actor_id: uuid.UUID | None = None,
+    diff: list[dict] | None = None,
 ) -> None:
     await events.emit(
         session,
@@ -170,4 +185,6 @@ async def _emit(
         entity_id=issue_type.id,
         actor_id=actor_id,
         payload={"project_id": str(issue_type.project_id), "name": issue_type.name},
+        subjects={"project": issue_type.project_id},
+        changes=diff,
     )

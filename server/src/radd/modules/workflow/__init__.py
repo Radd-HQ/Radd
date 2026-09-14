@@ -77,10 +77,28 @@ plugin = RaddPlugin(
     routers=(router, category_router, transitions_router),
     exception_handlers=((TransitionError, _transition_handler),),
     event_types=(
-        EventTypeSpec(StateEvent.CREATED, "Workflow state created", "Admin"),
-        EventTypeSpec(StateEvent.UPDATED, "Workflow state updated", "Admin"),
-        EventTypeSpec(TransitionEvent.CREATED, "Workflow transition created", "Admin"),
-        EventTypeSpec(TransitionEvent.UPDATED, "Workflow transition updated", "Admin"),
-        EventTypeSpec(TransitionEvent.DELETED, "Workflow transition deleted", "Admin"),
+        EventTypeSpec(StateEvent.CREATED, "Workflow state created", "Admin", subjects=("project",)),
+        EventTypeSpec(
+            StateEvent.UPDATED, "Workflow state updated", "Admin",
+            has_changes=True, subjects=("project",),
+        ),
+        EventTypeSpec(
+            StateEvent.DELETED, "Workflow state deleted", "Admin",
+            trigger=False, subjects=("project",),
+        ),
+        EventTypeSpec(
+            StateEvent.CATEGORY_UPDATED, "State category updated", "Admin",
+            has_changes=True, trigger=False, entity_type="state_category",
+        ),
+        EventTypeSpec(
+            TransitionEvent.CREATED, "Workflow transition created", "Admin", subjects=("project",),
+        ),
+        EventTypeSpec(
+            TransitionEvent.UPDATED, "Workflow transition updated", "Admin",
+            has_changes=True, subjects=("project",),
+        ),
+        EventTypeSpec(
+            TransitionEvent.DELETED, "Workflow transition deleted", "Admin", subjects=("project",),
+        ),
     ),
 )

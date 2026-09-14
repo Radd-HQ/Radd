@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import NotFoundError
+from radd.kernel import changes
 from radd.modules.events import service as events
 from radd.modules.items import service as items_service
 from radd.modules.projects import service as projects_service
@@ -98,12 +99,13 @@ async def upsert_vcs_link(
             existing = await _find_link(session, item_id, provider, external_id)
             if existing is None:
                 raise
+    before = changes.snapshot(existing, ("ref_type", "title", "url", "status"))
     existing.ref_type = ref_type.value
     existing.title = title
     existing.url = url
     existing.status = status
     await session.flush()
-    await _emit(session, VcsEvent.UPDATED, existing, actor_id)
+    await _emit(session, VcsEvent.UPDATED, existing, actor_id, changes.diff_object(existing, before))
     return existing
 
 
@@ -151,7 +153,11 @@ async def _insert_link(
 
 
 async def _emit(
-    session: AsyncSession, event_type: VcsEvent, link: ItemVcsLink, actor_id: uuid.UUID | None
+    session: AsyncSession,
+    event_type: VcsEvent,
+    link: ItemVcsLink,
+    actor_id: uuid.UUID | None,
+    diff: list[dict] | None = None,
 ) -> None:
     item = await items_service.require_item(session, link.item_id)
     await projects_service.get_project(session, item.project_id)
@@ -169,6 +175,7 @@ async def _emit(
             "url": link.url,
             "status": link.status,
         },
+        changes=diff,
     )
 
 

@@ -57,8 +57,11 @@ plugin = RaddPlugin(
     # RADD-889: the release tools of the spec-114 MCP catalog live with their owner.
     mcp_tools=mcptools.MCP_TOOLS,
     event_types=(
-        EventTypeSpec(ReleaseEvent.CREATED, "Release created", "Releases"),
-        EventTypeSpec(ReleaseEvent.UPDATED, "Release updated", "Releases"),
-        EventTypeSpec(ReleaseEvent.DELETED, "Release deleted", "Releases"),
+        EventTypeSpec(ReleaseEvent.CREATED, "Release created", "Releases", subjects=("project",)),
+        EventTypeSpec(
+            ReleaseEvent.UPDATED, "Release updated", "Releases",
+            has_changes=True, subjects=("project",),
+        ),
+        EventTypeSpec(ReleaseEvent.DELETED, "Release deleted", "Releases", subjects=("project",)),
     ),
 )

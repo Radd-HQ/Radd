@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import ilike_term
 from radd.exceptions import ConflictError, NotFoundError
+from radd.kernel import changes
 from radd.modules.events import service as events
 
 # `Label` is re-exported here as the PUBLIC label type (the events `Event`
@@ -61,6 +62,7 @@ async def update_label(
 ) -> Label:
     """Rename/recolor (spec 87 — the label.update atom had no endpoint until now)."""
     label = await get_label(session, label_id)
+    before = changes.snapshot(label, ("name", "color"))
     if data.name is not None and data.name != label.name:
         clash = await session.scalar(
             select(Label.id).where(Label.name == data.name, Label.id != label.id)
@@ -78,6 +80,7 @@ async def update_label(
         entity_id=label.id,
         actor_id=actor_id,
         payload={"name": label.name, "color": label.color},
+        changes=changes.diff_object(label, before),
     )
     return label
 

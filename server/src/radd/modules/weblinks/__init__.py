@@ -11,7 +11,9 @@ plugin = RaddPlugin(
     routers=(router,),
     event_types=(
         EventTypeSpec(WebLinkEvent.CREATED, "Web link added", "Links", item_scoped=True),
-        EventTypeSpec(WebLinkEvent.UPDATED, "Web link edited", "Links", item_scoped=True),
+        EventTypeSpec(
+            WebLinkEvent.UPDATED, "Web link edited", "Links", item_scoped=True, has_changes=True
+        ),
         EventTypeSpec(WebLinkEvent.DELETED, "Web link removed", "Links", item_scoped=True),
     ),
 )

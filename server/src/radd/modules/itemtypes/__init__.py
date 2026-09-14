@@ -22,7 +22,13 @@ plugin = RaddPlugin(
     depends_on=("projects", "events", "auth"),
     routers=(router,),
     event_types=(
-        EventTypeSpec(TypeEvent.CREATED, "Issue type created", "Admin"),
-        EventTypeSpec(TypeEvent.UPDATED, "Issue type updated", "Admin"),
+        EventTypeSpec(TypeEvent.CREATED, "Issue type created", "Admin", subjects=("project",)),
+        EventTypeSpec(
+            TypeEvent.UPDATED, "Issue type updated", "Admin",
+            has_changes=True, subjects=("project",),
+        ),
+        EventTypeSpec(
+            TypeEvent.DELETED, "Issue type deleted", "Admin", trigger=False, subjects=("project",),
+        ),
     ),
 )

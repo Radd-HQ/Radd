@@ -9,6 +9,7 @@ from radd.exceptions import ConflictError, ForbiddenError, NotFoundError
 from radd.modules.auth import authz, service as auth
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
+from radd.kernel import changes
 from radd.modules.events import service as events
 from radd.modules.items.schemas import UserRef
 from radd.modules.teams import service as teams
@@ -213,6 +214,7 @@ async def _emit(
     actor_id: uuid.UUID,
     occurred_at: datetime | None = None,
     visible_to_teams: set[uuid.UUID] | None = None,
+    diff: list[dict] | None = None,
 ) -> None:
     # The excerpt is included even for internal comments — in-process consumers
     # are trusted; REST reads filter by visibility, and the webhook egress
@@ -245,6 +247,7 @@ async def _emit(
             "visible_to_teams": sorted(str(team_id) for team_id in (visible_to_teams or set())),
         },
         occurred_at=occurred_at,
+        changes=diff,
     )
 
 
@@ -328,15 +331,28 @@ async def update_comment(
         session, comment, actor, project, others=Permission.PROJECT_MANAGE
     )
     _check_internal(permissions, comment.visibility)
+    body_changed = comment.body != data.body
+    previous_teams = (await _team_restrictions(session, [comment.id])).get(comment.id, set())
     comment.body = data.body
     await session.flush()
     if data.visible_to_teams is not None:
         stored_teams = await _set_teams(session, comment, data.visible_to_teams)
     else:
-        stored_teams = (await _team_restrictions(session, [comment.id])).get(comment.id, set())
+        stored_teams = previous_teams
+    # Spec 123: the body records only that it changed; team visibility by name.
+    diff: list[dict] = [changes.hidden_change("body")] if body_changed else []
+    if stored_teams != previous_teams:
+        names = await teams.teams_by_ids(session, list(previous_teams | stored_teams))
+        entry = changes.collection_change(
+            "visible_to_teams",
+            [names[t].name if t in names else str(t) for t in previous_teams],
+            [names[t].name if t in names else str(t) for t in stored_teams],
+        )
+        if entry is not None:
+            diff.append(entry)
     await _emit(
         session, CommentEvent.UPDATED, comment, actor.id,
-        visible_to_teams=stored_teams,
+        visible_to_teams=stored_teams, diff=diff,
     )
     return _to_read(comment, await auth.get_user(session, comment.author_id), stored_teams)
 
@@ -405,8 +421,16 @@ async def set_resolved(
     await _require_author_or(
         session, comment, actor, project, others=binding.manage_permission
     )
+    was_resolved = comment.resolved_at is not None
     comment.resolved_at = utcnow() if resolved else None
     comment.resolved_by = actor.id if resolved else None
     await session.flush()
+    if was_resolved != resolved:  # spec 123: resolving is an update to the record
+        stored_teams = (await _team_restrictions(session, [comment.id])).get(comment.id, set())
+        await _emit(
+            session, CommentEvent.UPDATED, comment, actor.id,
+            visible_to_teams=stored_teams,
+            diff=[{"field": "resolved", "from": was_resolved, "to": resolved}],
+        )
     author = await auth.get_user(session, comment.author_id)
     return _to_read(comment, author)

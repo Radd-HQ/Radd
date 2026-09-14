@@ -1,10 +1,11 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-from radd.kernel import RaddPlugin
+from radd.kernel import EventTypeSpec, RaddPlugin
 from radd.kernel import CrudResourceSpec
 
 from .router import router
+from .types import DashboardEvent
 from .widgets import WidgetConfigError
 
 
@@ -16,6 +17,14 @@ from .service import _DASHBOARD_SPEC  # noqa: E402 - bindings require initialize
 
 plugin = RaddPlugin(
     name="dashboards",
+    # RADD-1168: emitted since spec 57 and never registered. Not triggers.
+    event_types=(
+        EventTypeSpec(DashboardEvent.CREATED, "Dashboard created", "Views", trigger=False),
+        EventTypeSpec(
+            DashboardEvent.UPDATED, "Dashboard updated", "Views", has_changes=True, trigger=False
+        ),
+        EventTypeSpec(DashboardEvent.DELETED, "Dashboard deleted", "Views", trigger=False),
+    ),
     # Spec 75/87: create ONLY. dashboard.create is the broadcast gate on
     # `global_access`; editing and deleting are owner/editor decisions (the spec-57
     # ownership model dashboards shipped with), so no atom was ever consulted.

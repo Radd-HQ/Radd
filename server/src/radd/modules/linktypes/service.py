@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError, NotFoundError
+from radd.kernel import changes
 from radd.modules.events import service as events
 from radd.modules.projects import service as projects_service
 
@@ -142,6 +143,7 @@ async def update_type(
     session: AsyncSession, type_id: uuid.UUID, data: LinkTypeUpdate, actor_id: uuid.UUID | None = None
 ) -> LinkTypeDef:
     definition = await get_type(session, type_id)
+    before = await _audit_state(session, definition)
     if data.name is not None:
         definition.name = data.name
     if data.outward_name is not None:
@@ -162,7 +164,13 @@ async def update_type(
         wanted = list(dict.fromkeys(data.project_ids))
         definition.project_links = [LinkTypeProject(project_id=pid) for pid in wanted]
     await session.flush()
-    await _emit(session, LinkTypeEvent.UPDATED, definition, actor_id)
+    await _emit(
+        session,
+        LinkTypeEvent.UPDATED,
+        definition,
+        actor_id,
+        changes.diff(before, await _audit_state(session, definition), collections=("projects",)),
+    )
     return definition
 
 
@@ -182,8 +190,26 @@ async def delete_type(
     await session.flush()
 
 
+async def _audit_state(session: AsyncSession, definition: LinkTypeDef) -> dict:
+    """What a link-type diff can mention (spec 123): scope as project KEYS."""
+    keys = {p.id: p.key for p in await projects_service.list_projects(session)}
+    return {
+        "name": definition.name,
+        "outward_name": definition.outward_name,
+        "inward_name": definition.inward_name,
+        "direction": definition.direction,
+        "projects": sorted(
+            keys.get(link.project_id, str(link.project_id)) for link in definition.project_links
+        ),
+    }
+
+
 async def _emit(
-    session: AsyncSession, event: LinkTypeEvent, definition: LinkTypeDef, actor_id: uuid.UUID | None
+    session: AsyncSession,
+    event: LinkTypeEvent,
+    definition: LinkTypeDef,
+    actor_id: uuid.UUID | None,
+    diff: list[dict] | None = None,
 ) -> None:
     await events.emit(
         session,
@@ -192,6 +218,7 @@ async def _emit(
         entity_id=definition.id,
         actor_id=actor_id,
         payload={"key": definition.key, "name": definition.name},
+        changes=diff,
     )
 
 

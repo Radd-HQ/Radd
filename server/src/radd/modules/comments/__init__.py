@@ -59,7 +59,9 @@ plugin = RaddPlugin(
 
     event_types=(
         EventTypeSpec(CommentEvent.CREATED, "Comment added", "Comments", item_scoped=True),
-        EventTypeSpec(CommentEvent.UPDATED, "Comment edited", "Comments", item_scoped=True),
+        EventTypeSpec(
+            CommentEvent.UPDATED, "Comment edited", "Comments", item_scoped=True, has_changes=True
+        ),
         EventTypeSpec(CommentEvent.DELETED, "Comment deleted", "Comments", item_scoped=True),
     ),
 )

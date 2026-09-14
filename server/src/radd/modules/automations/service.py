@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
 from radd.exceptions import ConflictError, NotFoundError
+from radd.kernel import changes
 from radd.modules.events import service as events
 from radd.modules.fields import service as fields
 from radd.modules.auth import authz
@@ -730,6 +731,7 @@ async def update_rule(
     session: AsyncSession, rule_id: uuid.UUID, data: RuleUpdate, actor_id: uuid.UUID | None = None
 ) -> Automation:
     rule = await get_rule(session, rule_id)
+    before = changes.snapshot(rule, RULE_FIELDS)
     if data.name is not None:
         rule.name = data.name
     if data.enabled is not None:
@@ -755,7 +757,13 @@ async def update_rule(
     await session.flush()
     await _sync_triggers(session, rule, triggers)
     await _sync_validations(session, rule, triggers)
-    await _emit(session, AutomationEvent.UPDATED, rule, actor_id)
+    await _emit(
+        session,
+        AutomationEvent.UPDATED,
+        rule,
+        actor_id,
+        changes.diff_object(rule, before, hidden=("nodes", "edges")),
+    )
     return rule
 
 
@@ -875,11 +883,17 @@ def _trigger_events(rule: Automation) -> set[str]:
     return events_named
 
 
+#: What a rule edit can touch. The graph (nodes + edges) records only that it
+#: changed — its JSON is the rule's design, not a value an auditor compares.
+RULE_FIELDS: tuple[str, ...] = ("name", "enabled", "position", "orientation", "nodes", "edges")
+
+
 async def _emit(
     session: AsyncSession,
     event_type: AutomationEvent,
     rule: Automation,
     actor_id: uuid.UUID | None,
+    diff: list[dict] | None = None,
 ) -> None:
     await events.emit(
         session,
@@ -895,4 +909,5 @@ async def _emit(
             "triggers": sorted(_trigger_events(rule)),
             "enabled": rule.enabled,
         },
+        changes=diff,
     )

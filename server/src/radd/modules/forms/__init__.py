@@ -45,8 +45,12 @@ plugin = RaddPlugin(
     routers=(router, portal_router, portal_requests_router),
     exception_handlers=((FormValidationError, _form_validation_handler),),
     event_types=(
-        EventTypeSpec(FormEvent.CREATED, "Intake form created", "Admin"),
-        EventTypeSpec(FormEvent.UPDATED, "Intake form updated", "Admin"),
+        EventTypeSpec(FormEvent.CREATED, "Intake form created", "Admin", subjects=("project",)),
+        EventTypeSpec(
+            FormEvent.UPDATED, "Intake form updated", "Admin",
+            has_changes=True, subjects=("project",),
+        ),
+        EventTypeSpec(FormEvent.DELETED, "Intake form deleted", "Admin", trigger=False),
         # `trigger=False` — housekeeping, not something anyone writes a rule on.
         # "When unclaimed attachments are reclaimed, then…" is noise in the
         # automation dropdown, and the catalog is a parity oracle (67 triggers)

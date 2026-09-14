@@ -10,6 +10,7 @@ from radd.modules.auth import authz, service as auth
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
 from radd.modules.cycles import service as cycles_service
+from radd.kernel import changes
 from radd.modules.events import service as events
 from radd.modules.fields import service as fields_service
 from radd.modules.items import service as items_service
@@ -173,6 +174,7 @@ async def update_form(
     form = await get_form(session, form_id)
     project = await projects_service.get_project(session, form.project_id)
     await authz.require(session, actor, Permission.FORM_UPDATE, project=project)
+    before = changes.snapshot(form, FORM_FIELDS)
     if data.fields is not None:
         await _validate_fields(session, project, data.fields)
         form.fields = [field.model_dump(mode="json") for field in data.fields]
@@ -200,7 +202,10 @@ async def update_form(
         # re-enabling restores the same public link.
         form.allow_public = data.allow_public
     await session.flush()
-    await _emit(session, FormEvent.UPDATED, form, project, actor)
+    await _emit(
+        session, FormEvent.UPDATED, form, project, actor,
+        diff=changes.diff_object(form, before, hidden=("fields", "defaults")),
+    )
     return _read(form, (await _form_shares(session, form.id)) if include_shares else ())
 
 
@@ -240,15 +245,34 @@ async def update_sharing(
     from .sharing import managed_form
     form, project = await managed_form(session, form_id, actor, lock=True)
     await _validate_share_subjects(session, data.shares)
+    previous = await share_labels(session, await _form_shares(session, form.id))
     await session.execute(delete(FormShare).where(FormShare.form_id == form.id))
     for entry in data.shares:
         session.add(FormShare(form_id=form.id, user_id=entry.user_id, team_id=entry.team_id))
     await session.flush()
+    current = await share_labels(session, await _form_shares(session, form.id))
+    entry = changes.collection_change("shares", previous, current)
     await _emit(
         session, FormEvent.UPDATED, form, project, actor,
         extra={"share_count": len(data.shares)},
+        diff=[entry] if entry is not None else [],
     )
     return _read(form, await _form_shares(session, form.id))
+
+
+async def share_labels(session: AsyncSession, shares: Sequence[FormShare]) -> list[str]:
+    """Share subjects as an auditor reads them (spec 123): names, not ids."""
+    users = await auth.users_by_ids(session, [s.user_id for s in shares if s.user_id])
+    teams = await teams_service.teams_by_ids(session, [s.team_id for s in shares if s.team_id])
+    labels: list[str] = []
+    for share in shares:
+        if share.user_id is not None:
+            user = users.get(share.user_id)
+            labels.append(user.name if user else str(share.user_id))
+        else:
+            team = teams.get(share.team_id)
+            labels.append(f"team {team.name}" if team else str(share.team_id))
+    return labels
 
 
 async def delete_form(session: AsyncSession, form_id: uuid.UUID, actor: User) -> None:
@@ -492,6 +516,7 @@ async def _emit(
     project: Project,
     actor: User,
     extra: dict[str, object] | None = None,
+    diff: list[dict] | None = None,
 ) -> None:
     payload: dict[str, object] = {
         "name": form.name,
@@ -507,4 +532,15 @@ async def _emit(
         entity_id=form.id,
         actor_id=actor.id,
         payload=payload,
+        subjects={"project": form.project_id},
+        changes=diff,
     )
+
+
+#: What a form edit can touch. The field list and the defaults record only
+#: that they changed — they are the form's design, not a setting.
+FORM_FIELDS: tuple[str, ...] = (
+    "fields", "defaults", "name", "description", "enabled", "title_prompt",
+    "description_enabled", "description_prompt", "description_required",
+    "team_picker_enabled", "allow_public",
+)

@@ -19,6 +19,7 @@ from radd.config import settings
 from radd.db import SessionLocal
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.auth.models import User
+from radd.kernel import changes
 from radd.modules.events import service as events
 from radd.schedule import ScheduleKind, next_run
 
@@ -81,6 +82,7 @@ async def update_schedule(
     session: AsyncSession, schedule_id: uuid.UUID, data: ScheduleUpdate, actor: User
 ) -> BackupSchedule:
     schedule = await get_schedule(session, schedule_id)
+    before = changes.snapshot(schedule, ("name", "enabled", "config"))
     fields = data.model_dump(exclude_unset=True, exclude_none=True)
     if "config" in fields:
         fields["config"] = data.config.model_dump(exclude_none=True)  # type: ignore[union-attr]
@@ -97,6 +99,7 @@ async def update_schedule(
         entity_id=schedule.id,
         actor_id=actor.id,
         payload={"name": schedule.name},
+        changes=changes.diff_object(schedule, before),
     )
     return schedule
 

@@ -49,6 +49,7 @@ plugin = RaddPlugin(
     on_startup=(warm_schema_cache,),
     event_types=(
         EventTypeSpec(FieldEvent.CREATED, "Custom field created", "Admin"),
-        EventTypeSpec(FieldEvent.UPDATED, "Custom field updated", "Admin"),
+        EventTypeSpec(FieldEvent.UPDATED, "Custom field updated", "Admin", has_changes=True),
+        EventTypeSpec(FieldEvent.DELETED, "Custom field deleted", "Admin", trigger=False),
     ),
 )

@@ -330,6 +330,25 @@ async def clear_resource_types(
     return result.rowcount or 0
 
 
+async def _subject_label(session: AsyncSession, grant: AccessGrant) -> str:
+    """The grant's subject as an auditor reads it (spec 123): a name, not an id."""
+    from radd.modules.auth import roles as roles_service, service as users_service
+    from radd.modules.teams import service as teams_service
+
+    try:
+        if grant.subject_type == GrantSubject.USER:
+            user = (await users_service.users_by_ids(session, [grant.subject_id])).get(grant.subject_id)
+            return user.name if user else str(grant.subject_id)
+        if grant.subject_type == GrantSubject.TEAM:
+            team = (await teams_service.teams_by_ids(session, [grant.subject_id])).get(grant.subject_id)
+            return f"team {team.name}" if team else str(grant.subject_id)
+        if grant.subject_type == GrantSubject.ROLE:
+            return f"role {(await roles_service.get_role(session, grant.subject_id)).name}"
+    except Exception:  # noqa: BLE001 — a label is decoration on an audit row, never a failed write
+        pass
+    return str(grant.subject_id)
+
+
 async def _emit(
     session: AsyncSession, event: AccessEvent, grant: AccessGrant, actor_id: uuid.UUID | None
 ) -> None:
@@ -339,10 +358,12 @@ async def _emit(
         entity_type=AccessEntity.GRANT,
         entity_id=grant.id,
         actor_id=actor_id,
+        subjects={"project": grant.project_id},
         payload={
             "resource_type": grant.resource_type,
             "resource_id": grant.resource_id,
             "subject_type": grant.subject_type,
+            "subject": await _subject_label(session, grant),
             "subject_id": str(grant.subject_id),
             "access": grant.access,
             "effect": grant.effect,

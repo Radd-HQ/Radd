@@ -27,6 +27,9 @@ class PluginEvent(StrEnum):
     ENABLED = "plugin.enabled"
     DISABLED = "plugin.disabled"
     UNINSTALLED = "plugin.uninstalled"
+    # Spec 123: a contribution switched on/off instance-wide (RADD-1168 — the
+    # write used to leave no event).
+    CONTRIBUTIONS_CHANGED = "plugin.contributions_changed"
 
 
 class PluginEntity(StrEnum):

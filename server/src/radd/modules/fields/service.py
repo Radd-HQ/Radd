@@ -12,6 +12,7 @@ from radd.modules.access import resolution as access_res, service as access_serv
 from radd.modules.access.service import AccessGrant  # public re-export (RADD-887)
 from radd.modules.access.registry import ResourceSpec, register_resource
 from radd.modules.access.types import Access
+from radd.kernel import changes
 from radd.modules.events import service as events
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
@@ -166,6 +167,7 @@ async def update_field(
     """Edit a field's presentation (spec 52) + scope (spec 90). Read/write grants are
     managed through the generic /grants API, not here."""
     definition = await get_field(session, field_id)
+    before = await _field_audit_state(session, definition)
     if data.name is not None:
         definition.name = data.name
     if data.project_ids is not None:
@@ -190,10 +192,24 @@ async def update_field(
         entity_type=FieldEntity.FIELD,
         entity_id=definition.id,
         actor_id=actor_id,
-        payload={"key": definition.key},
+        payload={"key": definition.key, "name": definition.name},
+        changes=changes.diff(before, await _field_audit_state(session, definition)),
     )
     await _refresh_cache(session)
     return definition
+
+
+async def _field_audit_state(session: AsyncSession, definition: FieldDefinition) -> dict:
+    """What a field diff can mention (spec 123): scope as project KEYS."""
+    keys = {p.id: p.key for p in await projects_service.list_projects(session)}
+    return {
+        "name": definition.name,
+        "display": definition.display,
+        "default_value": definition.default_value,
+        "projects": sorted(
+            keys.get(link.project_id, str(link.project_id)) for link in definition.project_links
+        ),
+    }
 
 
 async def extend_options(
@@ -228,7 +244,8 @@ async def extend_options(
         entity_type=FieldEntity.FIELD,
         entity_id=definition.id,
         actor_id=actor_id,
-        payload={"key": definition.key, "options_added": added},
+        payload={"key": definition.key, "name": definition.name, "options_added": added},
+        changes=[{"field": "options", "added": added, "removed": []}],
     )
     return added
 
@@ -325,10 +342,12 @@ async def remove_option(
         actor_id=actor_id,
         payload={
             "key": definition.key,
+            "name": definition.name,
             "option_removed": value,
             "replaced_with": replace_with,
             "items_migrated": touched,
         },
+        changes=[{"field": "options", "added": [], "removed": [value]}],
     )
     return touched
 

@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError, NotFoundError
+from radd.kernel import changes
 from radd.modules.events import service as events
 from radd.modules.projects import service as projects_service
 
@@ -43,6 +44,7 @@ async def update_release(
     actor_id: uuid.UUID | None = None,
 ) -> Release:
     release = await get_release(session, release_id)
+    before = changes.snapshot(release, ("name", "version", "description", "status"))
     if data.name is not None:
         release.name = data.name
     if data.version is not None and data.version != release.version:
@@ -59,7 +61,9 @@ async def update_release(
             release.released_at = None
         release.status = data.status.value
     await session.flush()
-    await _emit(session, ReleaseEvent.UPDATED, release, actor_id)
+    await _emit(
+        session, ReleaseEvent.UPDATED, release, actor_id, changes.diff_object(release, before)
+    )
     return release
 
 
@@ -110,7 +114,11 @@ async def list_releases(session: AsyncSession, project_id: uuid.UUID) -> list[Re
 
 
 async def _emit(
-    session: AsyncSession, event_type: ReleaseEvent, release: Release, actor_id: uuid.UUID | None
+    session: AsyncSession,
+    event_type: ReleaseEvent,
+    release: Release,
+    actor_id: uuid.UUID | None,
+    diff: list[dict] | None = None,
 ) -> None:
     await projects_service.get_project(session, release.project_id)
     await events.emit(
@@ -120,4 +128,6 @@ async def _emit(
         entity_id=release.id,
         actor_id=actor_id,
         payload={"version": release.version, "name": release.name, "status": release.status},
+        subjects={"project": release.project_id},
+        changes=diff,
     )

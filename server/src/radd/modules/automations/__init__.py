@@ -1,8 +1,8 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-from .types import CONSUMER_NAME
-from radd.kernel import RaddPlugin
+from .types import CONSUMER_NAME, AutomationEvent
+from radd.kernel import EventTypeSpec, RaddPlugin
 from radd.kernel import CrudResourceSpec, PermissionSpec
 
 from . import dispatcher, scheduler
@@ -59,6 +59,26 @@ async def _validation_unavailable_handler(
 
 plugin = RaddPlugin(
     name="automations",
+    # RADD-1168: emitted since spec 12 and never registered. Not triggers — a
+    # rule that fires on rules being edited is the loop guard's nightmare.
+    event_types=(
+        EventTypeSpec(
+            AutomationEvent.CREATED, "Automation created", "Admin",
+            trigger=False, entity_type="automation_rule",
+        ),
+        EventTypeSpec(
+            AutomationEvent.UPDATED, "Automation updated", "Admin",
+            has_changes=True, trigger=False, entity_type="automation_rule",
+        ),
+        EventTypeSpec(
+            AutomationEvent.DELETED, "Automation deleted", "Admin",
+            trigger=False, entity_type="automation_rule",
+        ),
+        EventTypeSpec(
+            AutomationEvent.SCHEDULED, "Automation scheduled run", "System",
+            trigger=False, entity_type="automation",
+        ),
+    ),
     consumer_names=(CONSUMER_NAME,),
     permissions=(
         PermissionSpec(

@@ -52,7 +52,9 @@ async def set_contribution_settings(
 ) -> ContributionSettings:
     """Replace a plugin's instance-wide-disabled set (`"<slot>::<id>"` keys). Admin only."""
     _require_admin(user)
-    saved = await service.set_contribution_settings(session, plugin_id, body.disabled)
+    saved = await service.set_contribution_settings(
+        session, plugin_id, body.disabled, actor_id=user.id
+    )
     return ContributionSettings(disabled=saved)
 
 

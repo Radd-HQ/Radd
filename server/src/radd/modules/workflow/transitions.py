@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.fields.types import FieldType
+from radd.kernel import changes
 from radd.modules.events import service as events
 from radd.modules.settings import service as settings_service
 from radd.modules.settings.types import SettingKey
@@ -313,6 +314,7 @@ async def update_transition(
 ) -> WorkflowTransition:
     transition = await get_transition(session, transition_id)
     project = await projects_service.get_project(session, transition.project_id)
+    before = await _transition_audit_state(session, transition)
     # from_state_id: omitted = unchanged, explicit null = the wildcard.
     from_state_id = (
         data.from_state_id
@@ -338,7 +340,17 @@ async def update_transition(
     if data.position is not None:
         transition.position = data.position
     await session.flush()
-    await _emit(session, TransitionEvent.UPDATED, transition, actor_id)
+    await _emit(
+        session,
+        TransitionEvent.UPDATED,
+        transition,
+        actor_id,
+        changes.diff(
+            before,
+            await _transition_audit_state(session, transition),
+            collections=("rules", "applies_when"),
+        ),
+    )
     return transition
 
 
@@ -603,11 +615,30 @@ async def allowed_transitions(
     return AllowedTransitions(mode=mode, targets=targets)
 
 
+async def _transition_audit_state(
+    session: AsyncSession, transition: WorkflowTransition
+) -> dict:
+    """What a transition diff can mention (spec 123): state NAMES, the rule and
+    condition lists (diffed as added/removed entries), the position."""
+    names = await _state_names(
+        session,
+        {sid for sid in (transition.from_state_id, transition.to_state_id) if sid},
+    )
+    return {
+        "from_state": names.get(transition.from_state_id),
+        "to_state": names.get(transition.to_state_id),
+        "rules": transition.rules,
+        "applies_when": transition.applies_when,
+        "position": transition.position,
+    }
+
+
 async def _emit(
     session: AsyncSession,
     event_type: TransitionEvent,
     transition: WorkflowTransition,
     actor_id: uuid.UUID | None,
+    diff: list[dict] | None = None,
 ) -> None:
     names = await _state_names(
         session,
@@ -626,4 +657,6 @@ async def _emit(
             "rules": transition.rules,
             "applies_when": transition.applies_when,
         },
+        subjects={"project": transition.project_id},
+        changes=diff,
     )

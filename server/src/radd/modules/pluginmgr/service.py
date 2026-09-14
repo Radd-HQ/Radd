@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError, NotFoundError
 from radd.kernel import capabilities as kcaps
+from radd.kernel import changes
 from radd.modules.events import service as events
 
 from . import discovery
@@ -195,7 +196,7 @@ async def contribution_settings_all(session: AsyncSession) -> list[str]:
 
 
 async def set_contribution_settings(
-    session: AsyncSession, plugin_id: str, disabled: list[str]
+    session: AsyncSession, plugin_id: str, disabled: list[str], *, actor_id=None
 ) -> list[str]:
     """Replace a plugin's instance-wide-disabled set (`"<slot>::<id>"` keys). Get-or-creates the
     plugin's row WITHOUT changing its lifecycle: a new row is seeded with the plugin's DEFAULT
@@ -219,9 +220,21 @@ async def set_contribution_settings(
             id=plugin_id, version=plugin.version, state=default.value, config={}
         )
         session.add(row)
+    previous = list((row.config or {}).get(_DISABLED_KEY, []))
     # Reassign (not mutate) so SQLAlchemy flags the JSON column dirty.
     row.config = {**(row.config or {}), _DISABLED_KEY: list(disabled)}
     await session.flush()
+    entry = changes.collection_change("disabled_contributions", previous, list(disabled))
+    if entry is not None:
+        await events.emit(
+            session,
+            event_type=PluginEvent.CONTRIBUTIONS_CHANGED,
+            entity_type=PluginEntity.PLUGIN,
+            entity_id=plugin_id,
+            actor_id=actor_id,
+            payload={"id": plugin_id},
+            changes=[entry],
+        )
     return list(disabled)
 
 

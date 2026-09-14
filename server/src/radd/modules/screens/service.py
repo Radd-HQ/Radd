@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError
+from radd.kernel import changes
 from radd.modules.events import service as events
 from radd.modules.fields import service as fields_service
 from radd.modules.projects.models import Project
@@ -83,11 +84,12 @@ async def replace_screen(
         seen.add(row.field)
 
     screen = await _find_screen(session, project.id, issue_type_id)
+    before = _screen_rows(screen)
     if not rows:
         if screen is not None:
             await session.delete(screen)
             await session.flush()
-        await _emit(session, project, issue_type_id, actor_id)
+        await _emit(session, project, issue_type_id, actor_id, _rows_diff(before, []))
         return ScreenRead(project_id=project.id, issue_type_id=issue_type_id, fields=[])
 
     if screen is None:
@@ -101,7 +103,7 @@ async def replace_screen(
         for index, row in enumerate(rows)
     ]
     await session.flush()
-    await _emit(session, project, issue_type_id, actor_id)
+    await _emit(session, project, issue_type_id, actor_id, _rows_diff(before, _screen_rows(screen)))
     return ScreenRead(
         project_id=project.id,
         issue_type_id=issue_type_id,
@@ -154,8 +156,24 @@ async def resolve_effective(
     )
 
 
+def _screen_rows(screen: Screen | None) -> list[dict]:
+    """The screen as an auditor reads it: field + placement, in order."""
+    if screen is None:
+        return []
+    return [{"field": row.field, "placement": row.placement} for row in screen.fields]
+
+
+def _rows_diff(before: list[dict], after: list[dict]) -> list[dict]:
+    entry = changes.collection_change("fields", before, after)
+    return [entry] if entry is not None else []
+
+
 async def _emit(
-    session: AsyncSession, project: Project, issue_type_id: uuid.UUID | None, actor_id: uuid.UUID
+    session: AsyncSession,
+    project: Project,
+    issue_type_id: uuid.UUID | None,
+    actor_id: uuid.UUID,
+    diff: list[dict],
 ) -> None:
     await events.emit(
         session,
@@ -167,4 +185,6 @@ async def _emit(
             "project_id": str(project.id),
             "issue_type_id": str(issue_type_id) if issue_type_id else None,
         },
+        subjects={"project": project.id},
+        changes=diff,
     )

@@ -20,5 +20,7 @@ plugin = RaddPlugin(
     routers=(router,),
     event_types=(
         EventTypeSpec(LabelEvent.CREATED, "Label created", "Admin"),
+        EventTypeSpec(LabelEvent.UPDATED, "Label updated", "Admin", has_changes=True, trigger=False),
+        EventTypeSpec(LabelEvent.DELETED, "Label deleted", "Admin", trigger=False),
     ),
 )

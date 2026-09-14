@@ -16,6 +16,7 @@ from radd.config import settings
 from radd.modules.fields import service as fields_service
 from radd.modules.items.redaction import redact_item_payload
 from radd.exceptions import ConflictError, NotFoundError
+from radd.kernel import changes
 from radd.modules.events import service as events
 from radd.modules.events.service import Event
 from radd.clock import utcnow
@@ -68,6 +69,10 @@ def reveal_secret(endpoint: WebhookEndpoint) -> str:
     return secretbox.decrypt(endpoint.secret)
 
 
+#: What an endpoint edit can touch — and therefore what its diff mentions.
+ENDPOINT_FIELDS: tuple[str, ...] = ("url", "description", "event_types", "active")
+
+
 async def create_endpoint(
     session: AsyncSession, data: EndpointCreate, actor_id: uuid.UUID | None = None
 ) -> WebhookEndpoint:
@@ -97,7 +102,8 @@ async def update_endpoint(
     actor_id: uuid.UUID | None = None,
 ) -> WebhookEndpoint:
     endpoint = await get_endpoint(session, endpoint_id)
-    for attr in ("url", "description", "event_types", "active"):
+    before = changes.snapshot(endpoint, ENDPOINT_FIELDS)
+    for attr in ENDPOINT_FIELDS:
         value = getattr(data, attr)
         if value is not None:
             setattr(endpoint, attr, value)
@@ -109,6 +115,7 @@ async def update_endpoint(
         entity_id=endpoint.id,
         actor_id=actor_id,
         payload={"url": endpoint.url, "active": endpoint.active},
+        changes=changes.diff_object(endpoint, before, collections=("event_types",)),
     )
     return endpoint
 

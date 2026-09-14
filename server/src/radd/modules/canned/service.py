@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.exceptions import NotFoundError
 from radd.modules.auth import service as auth_service
 from radd.modules.auth.models import User
+from radd.kernel import changes
 from radd.modules.events import service as events
 from radd.modules.items.models import WorkItem
 from radd.modules.projects.models import Project
@@ -20,6 +21,7 @@ async def _emit(
     event_type: CannedEvent,
     response: CannedResponse,
     actor_id: uuid.UUID,
+    diff: list[dict] | None = None,
 ) -> None:
     await events.emit(
         session,
@@ -28,6 +30,7 @@ async def _emit(
         entity_id=response.id,
         actor_id=actor_id,
         payload={"title": response.title},
+        changes=diff,
     )
 
 
@@ -66,6 +69,7 @@ async def update_response(
     actor_id: uuid.UUID,
 ) -> CannedResponse:
     response = await get_response(session, response_id)
+    before = changes.snapshot(response, ("title", "body", "position"))
     if data.title is not None:
         response.title = data.title
     if data.body is not None:
@@ -73,7 +77,13 @@ async def update_response(
     if data.position is not None:
         response.position = data.position
     await session.flush()
-    await _emit(session, CannedEvent.UPDATED, response, actor_id)
+    await _emit(
+        session,
+        CannedEvent.UPDATED,
+        response,
+        actor_id,
+        changes.diff_object(response, before, hidden=("body",)),
+    )
     return response
 
 

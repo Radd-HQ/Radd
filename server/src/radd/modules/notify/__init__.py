@@ -25,6 +25,12 @@ plugin = RaddPlugin(
     on_startup=(dispatcher.start,),
     on_shutdown=(dispatcher.stop,),
     event_types=(
+        # RADD-1168: emitted since spec 26 and never registered. System noise
+        # for an auditor; the ledger (RADD-1169) hides it by default.
+        EventTypeSpec(
+            NotifyEvent.NOTIFICATION_CREATED, "Notification created", "System",
+            trigger=False, entity_type="notification",
+        ),
         EventTypeSpec(NotifyEvent.ITEM_WATCHED, "Item watched", "Items", item_scoped=True),
         EventTypeSpec(NotifyEvent.ITEM_UNWATCHED, "Item unwatched", "Items", item_scoped=True),
     ),

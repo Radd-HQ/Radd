@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError, NotFoundError
+from radd.kernel import changes
 from radd.modules.events import service as events
 from radd.modules.items.models import WorkItem
 from radd.modules.projects import service as projects_service
@@ -36,8 +37,20 @@ def _validate_business_window(start: int | None, end: int | None) -> None:
         raise ConflictError(SlaEntity.POLICY, reason="business hours must start before they end")
 
 
+#: What a policy edit can touch — and therefore what its diff mentions.
+POLICY_FIELDS: tuple[str, ...] = (
+    "name", "enabled", "response_minutes", "resolution_minutes", "pause_state_names",
+    "work_week_only", "priorities", "issue_type_ids", "position", "business_start_minute",
+    "business_end_minute", "warning_minutes",
+)
+
+
 async def _emit_policy(
-    session: AsyncSession, event_type: SlaEvent, policy: SlaPolicy, actor_id: uuid.UUID
+    session: AsyncSession,
+    event_type: SlaEvent,
+    policy: SlaPolicy,
+    actor_id: uuid.UUID,
+    diff: list[dict] | None = None,
 ) -> None:
     await events.emit(
         session,
@@ -46,6 +59,8 @@ async def _emit_policy(
         entity_id=policy.id,
         actor_id=actor_id,
         payload={"name": policy.name, "enabled": policy.enabled},
+        subjects={"project": getattr(policy, "project_id", None)},
+        changes=diff,
     )
 
 
@@ -97,6 +112,7 @@ async def update_policy(
     session: AsyncSession, policy_id: uuid.UUID, data: PolicyUpdate, actor_id: uuid.UUID
 ) -> SlaPolicy:
     policy = await get_policy(session, policy_id)
+    before = changes.snapshot(policy, POLICY_FIELDS)
     fields_set = data.model_fields_set
     if data.name is not None:
         policy.name = data.name
@@ -126,7 +142,15 @@ async def update_policy(
         raise ConflictError(SlaEntity.POLICY, reason="a policy needs at least one target")
     _validate_business_window(policy.business_start_minute, policy.business_end_minute)
     await session.flush()
-    await _emit_policy(session, SlaEvent.POLICY_UPDATED, policy, actor_id)
+    await _emit_policy(
+        session,
+        SlaEvent.POLICY_UPDATED,
+        policy,
+        actor_id,
+        changes.diff_object(
+            policy, before, collections=("pause_state_names", "priorities", "issue_type_ids")
+        ),
+    )
     return policy
 
 

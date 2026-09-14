@@ -134,7 +134,7 @@ async def update_state_category(
 ) -> StateCategoryRead:
     _require_instance_admin(user)
     return StateCategoryRead.model_validate(
-        await service.update_state_category(session, category_id, data)
+        await service.update_state_category(session, category_id, data, actor_id=user.id)
     )
 
 

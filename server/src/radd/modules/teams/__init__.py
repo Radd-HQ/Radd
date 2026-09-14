@@ -19,6 +19,7 @@ plugin = RaddPlugin(
     routers=(team_router,),
     event_types=(
         EventTypeSpec(TeamEvent.CREATED, "Team created", "Admin"),
-        EventTypeSpec(TeamEvent.UPDATED, "Team updated", "Admin"),
+        EventTypeSpec(TeamEvent.UPDATED, "Team updated", "Admin", has_changes=True),
+        EventTypeSpec(TeamEvent.DELETED, "Team deleted", "Admin", trigger=False),
     ),
 )

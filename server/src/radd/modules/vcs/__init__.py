@@ -11,7 +11,9 @@ plugin = RaddPlugin(
     routers=(router,),
     event_types=(
         EventTypeSpec(VcsEvent.LINKED, "VCS ref linked", "Links", item_scoped=True),
-        EventTypeSpec(VcsEvent.UPDATED, "VCS ref updated", "Links", item_scoped=True),
+        EventTypeSpec(
+            VcsEvent.UPDATED, "VCS ref updated", "Links", item_scoped=True, has_changes=True
+        ),
         EventTypeSpec(VcsEvent.UNLINKED, "VCS ref unlinked", "Links", item_scoped=True),
     ),
 )

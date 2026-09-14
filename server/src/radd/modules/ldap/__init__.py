@@ -1,12 +1,19 @@
-from radd.kernel import CapabilitySpec
+from radd.kernel import CapabilitySpec, EventTypeSpec
 from radd.kernel import RaddPlugin
 from radd.kernel import SettingSpec
 
 from . import groupsync, service, usersync
 from .router import admin_router, router, team_sync_router
+from .types import LdapEvent
 
 plugin = RaddPlugin(
     name="ldap",
+    # RADD-1168: emitted since spec 42 and never registered. Not a trigger.
+    event_types=(
+        EventTypeSpec(
+            LdapEvent.LOGIN, "Directory sign-in", "Sign-in", trigger=False, entity_type="user"
+        ),
+    ),
     core=False,  # optional plugin — disableable via the plugin manager
     description="LDAP/AD directory sign-in (spec 42): direct UPN bind (no "
     "service account), nested-group admin mapping, SSO-only provisioning and "

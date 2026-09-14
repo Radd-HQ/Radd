@@ -143,7 +143,15 @@ plugin = RaddPlugin(
     on_startup=(categories.ensure_seeded,),
     event_types=(
         EventTypeSpec(WorklogEvent.CREATED, "Work logged", "Time logging", item_scoped=True),
-        EventTypeSpec(WorklogEvent.UPDATED, "Worklog edited", "Time logging", item_scoped=True),
+        EventTypeSpec(
+            WorklogEvent.UPDATED, "Worklog edited", "Time logging",
+            item_scoped=True, has_changes=True,
+        ),
+        # RADD-1168: emitted since RADD-1102 and never registered. Not a trigger.
+        EventTypeSpec(
+            WorklogEvent.ESTIMATE_CHANGED, "Estimate changed", "Time logging",
+            item_scoped=True, has_changes=True, trigger=False, subjects=("item",),
+        ),
         EventTypeSpec(WorklogEvent.DELETED, "Worklog deleted", "Time logging", item_scoped=True),
         # Spec 123: configuration writes are audited with a diff; not triggers.
         EventTypeSpec(

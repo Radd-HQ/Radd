@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import ilike_term
 from radd.exceptions import ConflictError, NotFoundError, UnauthorizedError
+from radd.kernel import changes
 from radd.modules.events import service as events
 
 from . import security, totp
@@ -261,6 +262,7 @@ async def deactivate_user(
         entity_id=user.id,
         actor_id=actor_id,
         payload={"action": UserChange.DIRECTORY_DEACTIVATED, "active": False},
+        changes=[{"field": "active", "from": True, "to": False}],
     )
     return True
 
@@ -273,15 +275,16 @@ async def update_user_admin(
     dead while inactive — every auth lookup checks User.active) and blocks all
     three login paths. Deactivating yourself is refused (409)."""
     user = await get_user(session, user_id)
-    changes: dict[str, object] = {}
+    before = changes.snapshot(user, ("name", "active", "instance_role"))
+    patch: dict[str, object] = {}
     if data.name is not None and data.name != user.name:
         user.name = data.name
-        changes["name"] = data.name
+        patch["name"] = data.name
     if data.active is not None and data.active != user.active:
         if not data.active and user.id == actor.id:
             raise ConflictError(AuthEntity.USER, reason="you cannot deactivate your own account")
         user.active = data.active
-        changes["active"] = data.active
+        patch["active"] = data.active
         if not data.active:
             await revoke_sessions(session, user.id)
     # Spec 86: instance_role is THE role ladder (the members endpoints are gone).
@@ -289,8 +292,8 @@ async def update_user_admin(
         if data.instance_role is not InstanceRole.ADMIN and user.id == actor.id:
             raise ConflictError(AuthEntity.USER, reason="you cannot demote your own account")
         user.instance_role = data.instance_role.value
-        changes["instance_role"] = data.instance_role.value
-    if not changes:
+        patch["instance_role"] = data.instance_role.value
+    if not patch:
         return user
     await session.flush()
     await events.emit(
@@ -299,7 +302,8 @@ async def update_user_admin(
         entity_type=AuthEntity.USER,
         entity_id=user.id,
         actor_id=actor.id,
-        payload={"action": UserChange.ADMIN_UPDATED, **changes},
+        payload={"action": UserChange.ADMIN_UPDATED, **patch},
+        changes=changes.diff_object(user, before),  # spec 123: old → new, not new alone
     )
     return user
 
@@ -479,6 +483,7 @@ async def update_profile(session: AsyncSession, user: User, data: ProfileUpdate)
     """Self-service profile edit (spec 34): name, avatar, timezone. Email and
     roles are NOT editable here (user.manage endpoints own those)."""
     fields_set = data.model_fields_set
+    before = changes.snapshot(user, ("name", "avatar_color", "avatar_emoji", "timezone"))
     if data.name is not None:
         user.name = data.name
     if "avatar_color" in fields_set:
@@ -495,5 +500,6 @@ async def update_profile(session: AsyncSession, user: User, data: ProfileUpdate)
         entity_id=user.id,
         actor_id=user.id,
         payload={"action": UserChange.PROFILE_UPDATED},
+        changes=changes.diff_object(user, before),
     )
     return user

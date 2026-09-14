@@ -17,7 +17,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError, NotFoundError
-from radd.kernel import registries
+from radd.kernel import changes, registries
 from radd.modules.events import service as events
 
 from .models import GlobalRoleGrant
@@ -380,7 +380,9 @@ async def update_grant_role(
     new_role = await roles_service.get_role(session, role_id)
     grant.role_id = new_role.id
     await session.flush()
-    await _emit(session, f"{old_role.key} -> {new_role.key}", grant, "role changed", actor_id)
+    await _emit(
+        session, new_role.key, grant, "role changed", actor_id, previous_role=old_role.key
+    )
     return grant
 
 
@@ -398,9 +400,64 @@ async def delete_grant(
     await session.flush()
 
 
+async def _grant_description(
+    session: AsyncSession, grant: GlobalRoleGrant, role_key: str
+) -> dict[str, str]:
+    """What an auditor reads for a grant: the subject's NAME, the scope's KEY —
+    resolved at write time so the record survives the subject's deletion."""
+    from radd.kernel import registries
+    from radd.modules.groups import service as groups_service
+    from radd.modules.projects import service as projects_service
+    from radd.modules.teams import service as teams
+
+    from . import service as users_service
+
+    if grant.user_id is not None:
+        user = (await users_service.users_by_ids(session, [grant.user_id])).get(grant.user_id)
+        subject_type, subject = "user", (user.name if user else str(grant.user_id))
+    elif grant.team_id is not None:
+        team = (await teams.teams_by_ids(session, [grant.team_id])).get(grant.team_id)
+        subject_type, subject = "team", (team.name if team else str(grant.team_id))
+    else:
+        group = (await groups_service.groups_by_ids(session, [grant.group_id])).get(grant.group_id)
+        subject_type, subject = "group", (group.name if group else str(grant.group_id))
+    if grant.project_id is not None:
+        ref = await projects_service.project_ref(session, grant.project_id)
+        scope = f"project {ref['key']}" if ref else f"project {grant.project_id}"
+    elif grant.space_id is not None:
+        spec = registries.entity_refs.get("page_space")
+        ref = await spec.ref(session, grant.space_id) if spec is not None else None
+        label = (ref or {}).get("name") or (ref or {}).get("slug") or str(grant.space_id)
+        scope = f"space {label}"
+    else:
+        scope = "global"
+    return {"role": role_key, "subject_type": subject_type, "subject": subject, "scope": scope}
+
+
 async def _emit(
-    session: AsyncSession, role_key: str, grant: GlobalRoleGrant, action: str, actor_id: uuid.UUID | None
+    session: AsyncSession,
+    role_key: str,
+    grant: GlobalRoleGrant,
+    action: str,
+    actor_id: uuid.UUID | None,
+    *,
+    previous_role: str | None = None,
 ) -> None:
+    # Spec 123: the grant as an added/removed entry on the role's history,
+    # naming who and where; a role change is one removed + one added.
+    description = await _grant_description(session, grant, role_key)
+    if action == "granted":
+        diff = [{"field": "grants", "added": [description], "removed": []}]
+    elif action == "revoked":
+        diff = [{"field": "grants", "added": [], "removed": [description]}]
+    else:
+        diff = [
+            {
+                "field": "grants",
+                "added": [description],
+                "removed": [{**description, "role": previous_role}],
+            }
+        ]
     await events.emit(
         session,
         event_type=AuthEvent.ROLE_UPDATED,
@@ -410,12 +467,15 @@ async def _emit(
         payload={
             "action": f"grant_{action}",
             "key": role_key,
+            "subject": description["subject"],
+            "scope": description["scope"],
             "user_id": str(grant.user_id) if grant.user_id else None,
             "team_id": str(grant.team_id) if grant.team_id else None,
             "group_id": str(grant.group_id) if grant.group_id else None,
             "project_id": str(grant.project_id) if grant.project_id else None,
             "space_id": str(grant.space_id) if grant.space_id else None,
         },
+        changes=diff,
     )
 
 
@@ -461,25 +521,36 @@ async def replace_grants(
         if found_groups.get(gid) is None:
             raise ConflictError(AuthEntity.GLOBAL_GRANT, reason=f"no such group {gid}")
 
+    # Spec 123: full-state replace diffs as who gained and who lost the role.
+    previous_rows = list(
+        await session.scalars(
+            select(GlobalRoleGrant).where(GlobalRoleGrant.role_id == role_id, _unscoped())
+        )
+    )
+    previous = [await _grant_description(session, row, role.key) for row in previous_rows]
     await session.execute(
         delete(GlobalRoleGrant).where(GlobalRoleGrant.role_id == role_id, _unscoped())
     )
-    for entry in entries:
-        session.add(
-            GlobalRoleGrant(
-                role_id=role_id,
-                user_id=entry.user_id,
-                team_id=entry.team_id,
-                group_id=entry.group_id,
-            )
+    new_rows = [
+        GlobalRoleGrant(
+            role_id=role_id,
+            user_id=entry.user_id,
+            team_id=entry.team_id,
+            group_id=entry.group_id,
         )
+        for entry in entries
+    ]
+    session.add_all(new_rows)
     await session.flush()
+    current = [await _grant_description(session, row, role.key) for row in new_rows]
+    entry_diff = changes.collection_change("grants", previous, current)
     await events.emit(
         session,
         event_type=AuthEvent.ROLE_UPDATED,
         entity_type=AuthEntity.ROLE,
         entity_id=role.id,
         actor_id=actor_id,
+        changes=[entry_diff] if entry_diff is not None else [],
         payload={
             "action": "global_grants_replaced",
             "key": role.key,

@@ -41,6 +41,9 @@ class StateEvent(StrEnum):
     CREATED = "state.created"
     UPDATED = "state.updated"
     DELETED = "state.deleted"  # spec 87 — refused while items or the default flag point at it
+    # Spec 123: a category row edited (name/behaviour/colour) — it re-derives
+    # every state classified under it, and used to leave no event.
+    CATEGORY_UPDATED = "state_category.updated"
 
 
 class StateEntity(StrEnum):
