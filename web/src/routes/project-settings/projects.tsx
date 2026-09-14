@@ -12,7 +12,7 @@ export function ProjectAccessSettingsPage({ projectId }: { projectId?: string })
   const query = useQuery(projectByIdQuery(projectId ?? ""));
   const perms = usePermissions();
   const project = query.data;
-  return <SettingsPage title="Project access" description="Who can do what here. Each row grants a role to a person, team or directory group; team and group grants include nested members.">
+  return <SettingsPage history={{ entities: ["project", "role"], projectId }} title="Project access" description="Who can do what here. Each row grants a role to a person, team or directory group; team and group grants include nested members.">
     {projectId && query.isPending ? <TableSkeleton rows={3} /> : query.isError ? <QueryError label="project" error={query.error} />
       : !project ? <p className="text-sm text-fg-muted">Project not found.</p>
       : <div className="flex flex-col gap-4">

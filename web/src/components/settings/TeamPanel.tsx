@@ -26,6 +26,7 @@ import { TeamGroupsSection } from "./TeamDirectoryGroup";
 import { TeamStewardship } from "./TeamStewardship";
 import { IconButton } from "../IconButton";
 import { ErrorText } from "../ErrorText";
+import { ChangeHistoryPanel } from "../history/ChangeHistoryPanel";
 
 interface TeamPanelProps {
   team: Team;
@@ -160,6 +161,7 @@ export function TeamPanel({ team, onDeleted }: TeamPanelProps) {
           admin-shaped (the endpoint is user.manage-gated), so only render the
           section for someone the server will answer. */}
       {perms.global(Permission.userManage) && <TeamAccessSection teamId={team.id} />}
+      <ChangeHistoryPanel entityType="team" entityId={team.id} />
       </div>
     </div>
   );

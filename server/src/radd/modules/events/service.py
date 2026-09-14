@@ -204,7 +204,12 @@ async def query_events(
     if q:
         conditions.append(Event.search_text.ilike(ilike_term(q)))
     if entity_type is not None:
-        conditions.append(Event.entity_type == entity_type)
+        # One type, or several — a settings page edits users AND service
+        # accounts, and its history link asks for both (spec 123).
+        wanted = [t.strip() for t in entity_type.split(",") if t.strip()]
+        conditions.append(
+            Event.entity_type == wanted[0] if len(wanted) == 1 else Event.entity_type.in_(wanted)
+        )
     if entity_id is not None:
         conditions.append(Event.entity_id == entity_id)
     if event_types:

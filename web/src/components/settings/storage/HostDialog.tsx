@@ -16,6 +16,7 @@ import { Button } from "../../Button";
 import { Modal } from "../../Modal";
 import { SelectField } from "../../SelectField";
 import { TextField } from "../../TextField";
+import { ChangeHistoryPanel } from "../../history/ChangeHistoryPanel";
 
 /** Labeled checkbox with an indented help line (the NewFieldModal idiom). */
 function CheckboxField({
@@ -261,6 +262,7 @@ export function HostDialog({
             {save.isPending ? "Saving…" : existing ? "Save changes" : "Add host"}
           </Button>
         </div>
+        {existing && <ChangeHistoryPanel entityType="storage_host" entityId={existing.id} />}
       </form>
     </Modal>
   );

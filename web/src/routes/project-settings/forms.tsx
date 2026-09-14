@@ -34,7 +34,7 @@ export function FormsSettingsPage({ projectId }: { projectId?: string }) {
 
   if (project && canManage && editing) {
     return (
-      <SettingsPage
+      <SettingsPage history={{ entities: ["form"], projectId }}
         title={editing.form ? "Edit intake form" : "New intake form"}
         description={`Project ${project.key} — a title plus registry fields the submitter fills in.`}
       >
@@ -48,7 +48,7 @@ export function FormsSettingsPage({ projectId }: { projectId?: string }) {
   }
 
   return (
-    <SettingsPage
+    <SettingsPage history={{ entities: ["form"], projectId }}
       title="Intake forms"
       description="Forms that create a work item from a title + selected registry fields."
       actions={

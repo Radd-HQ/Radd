@@ -32,6 +32,8 @@ import { SettingsPage } from "./SettingsPage";
 type EntityName = (typeof Entity)[keyof typeof Entity];
 
 export type VcsHostConfig = {
+  /** Entity types the page edits — its "Change history" footer link (spec 123). */
+  historyEntities: string[];
   title: string;
   description: string;
   /** Where to register the webhook on the host, shown in the empty state. */
@@ -120,7 +122,7 @@ export function VcsHostSettings({ config }: { config: VcsHostConfig }) {
     (repos.data ?? []).filter((repo) => repo.connection_id === connectionId);
 
   return (
-    <SettingsPage title={config.title} description={config.description}>
+    <SettingsPage title={config.title} description={config.description} history={{ entities: config.historyEntities }}>
       {connections.isPending ? (
         <TableSkeleton rows={2} />
       ) : connections.isError ? (

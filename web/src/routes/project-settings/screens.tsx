@@ -67,12 +67,12 @@ export function ScreensSettingsPage({ projectId }: { projectId: string | undefin
       ? (fieldNames.get(field.slice(3)) ?? field.slice(3))
       : (BUILTIN_LABELS[field] ?? field);
 
-  if (projectQuery.isError) return <SettingsPage title="Screens"><QueryError label="project" error={projectQuery.error} /></SettingsPage>;
-  if (projectId && projectQuery.isPending) return <SettingsPage title="Screens"><Spinner label="Loading project…" /></SettingsPage>;
-  if (!projectId || !contextProject) return <SettingsPage title="Screens"><p className="text-sm text-fg-muted">Project not found.</p></SettingsPage>;
+  if (projectQuery.isError) return <SettingsPage history={{ entities: ["screen"], projectId }} title="Screens"><QueryError label="project" error={projectQuery.error} /></SettingsPage>;
+  if (projectId && projectQuery.isPending) return <SettingsPage history={{ entities: ["screen"], projectId }} title="Screens"><Spinner label="Loading project…" /></SettingsPage>;
+  if (!projectId || !contextProject) return <SettingsPage history={{ entities: ["screen"], projectId }} title="Screens"><p className="text-sm text-fg-muted">Project not found.</p></SettingsPage>;
 
   return (
-    <SettingsPage
+    <SettingsPage history={{ entities: ["screen"], projectId }}
       title="Screens"
       description="Arrange the issue view per issue type: show a field, collapse it under “More fields” in the compact peek, or hide it entirely. Core fields (state, type, priority) always show."
       info={

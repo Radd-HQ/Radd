@@ -31,7 +31,7 @@ export function ServiceAccountsSettingsPage() {
       await invalidateEntities(queryClient, Entity.serviceAccount);
     },
   });
-  return <SettingsPage title="Service accounts" description="Principals that authenticate with an API key and cannot sign in. Their authority comes from the roles you grant them; each key can be narrowed further to a subset of permissions.">
+  return <SettingsPage history={{ entities: ["user", "api_token"] }} title="Service accounts" description="Principals that authenticate with an API key and cannot sign in. Their authority comes from the roles you grant them; each key can be narrowed further to a subset of permissions.">
     <TextField type="search" label="Find service accounts" value={accounts.filter} onChange={event => accounts.setFilter(event.target.value)} placeholder="Search names or email addresses…" />
     <div aria-busy={accounts.busy} className="mt-3">
       {accounts.isPending ? <TableSkeleton rows={3} /> : accounts.isError ? <div><QueryError label="service accounts" error={accounts.error} /><Button variant="secondary" onClick={() => void accounts.refetch()}>Retry accounts</Button></div>

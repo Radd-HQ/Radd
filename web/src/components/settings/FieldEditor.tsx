@@ -15,6 +15,7 @@ import { FieldScopeEditor } from "./FieldScopeEditor";
 import { FieldDefaultEditor } from "./FieldDefaultEditor";
 import { FieldOptionsSection } from "./FieldOptionsSection";
 import { AccessGrantsEditor } from "./AccessGrantsEditor";
+import { ChangeHistoryPanel } from "../history/ChangeHistoryPanel";
 
 export function FieldEditor({ id, allowGlobal, onDeleted }: { id: string; allowGlobal: boolean; onDeleted: () => void }) {
   const field = useQuery(managedFieldQuery(id));
@@ -111,6 +112,9 @@ function FieldDetail({
       {del.isError && (
         <ErrorText className="px-4 py-2" error={del.error} />
       )}
+      <div className="px-4 pb-4">
+        <ChangeHistoryPanel entityType="field" entityId={field.id} />
+      </div>
       {confirmDialog}
     </div>
   );

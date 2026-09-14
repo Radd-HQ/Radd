@@ -25,6 +25,7 @@ import { RoleModal } from "../../components/settings/RoleModal";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { QueryError } from "../../components/QueryError";
 import { ErrorText } from "../../components/ErrorText";
+import { ChangeHistoryPanel } from "../../components/history/ChangeHistoryPanel";
 
 /** Roles admin (spec 09): list + expandable permission matrix per role. */
 export function RolesSettingsPage() {
@@ -37,7 +38,7 @@ export function RolesSettingsPage() {
   const list = roles.data ?? [];
 
   return (
-    <SettingsPage
+    <SettingsPage history={{ entities: ["role"] }}
       title="Roles"
       description="Named permission sets granted to project members and team attachments. Builtin roles are immutable — except Baseline, which is what everyone holds before any role is granted."
       actions={
@@ -314,6 +315,7 @@ function RolePanel({ role, catalog, canManage }: RolePanelProps) {
       {/* Spec 87: builtin roles are immutable but still grantable instance-wide,
           so this is gated on role.manage, not on `editable`. */}
       <RoleGlobalGrants roleId={role.id} editable={canManage} />
+      <ChangeHistoryPanel entityType="role" entityId={role.id} />
       {(save.isError || remove.isError) && (
         <ErrorText error={save.error ?? remove.error} />
       )}

@@ -12,6 +12,7 @@ import { SettingsPage } from "../../components/settings/SettingsPage";
 import { TableSkeleton } from "../../components/TableSkeleton";
 import { TextField } from "../../components/TextField";
 import { pushToast } from "../../lib/toast";
+import { ChangeHistoryPanel } from "../../components/history/ChangeHistoryPanel";
 
 /** Settings → Webhooks (RADD-1096). The management API existed since spec 25
  * with the SPA never calling it — endpoints were created by curl and a failing
@@ -36,7 +37,7 @@ export function WebhooksSettingsPage() {
   const [creating, setCreating] = useState(false);
 
   return (
-    <SettingsPage
+    <SettingsPage history={{ entities: ["webhook_endpoint"] }}
       title="Webhooks"
       description="Signed HTTP deliveries for every event, with retries. Each endpoint has its own signing secret (Standard Webhooks: whsec_…) — configure the receiver with it, and read the delivery log here when something doesn't arrive."
     >
@@ -210,6 +211,7 @@ function EndpointRow({ endpoint }: { endpoint: WebhookEndpoint }) {
         <div className="flex flex-col gap-3 border-t border-subtle/60 px-3 py-3">
           <CopyValue label="Signing secret" value={endpoint.secret} mono />
           <DeliveryLog endpointId={endpoint.id} />
+          <ChangeHistoryPanel entityType="webhook_endpoint" entityId={endpoint.id} />
         </div>
       )}
       {confirmDialog}

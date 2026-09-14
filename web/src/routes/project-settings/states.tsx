@@ -51,7 +51,7 @@ export function StatesSettingsPage({ projectId }: { projectId?: string }) {
   );
 
   return (
-    <SettingsPage
+    <SettingsPage history={{ entities: ["state", "workflow_transition"], projectId }}
       title="Workflow states"
       description="States grouped into fixed categories. New projects start with the default set."
       info={

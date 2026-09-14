@@ -1,5 +1,21 @@
 import { useState, type ReactNode } from "react";
-import { Info, X } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { History, Info, X } from "lucide-react";
+import { RoutePath } from "../../lib/constants";
+import { usePermissions } from "../../lib/hooks";
+import { Permission } from "../../lib/types";
+
+/**
+ * What a settings page is ABOUT, for its "Change history" footer link (spec
+ * 123, RADD-1171): the entity types it edits and, for a project's settings,
+ * the project. The link opens the audit log with exactly those filters.
+ */
+export interface SettingsHistoryContext {
+  /** Entity types this page edits (`role`, `field`, `storage_host`…). */
+  entities?: string[];
+  /** The project a per-project settings page belongs to. */
+  projectId?: string;
+}
 
 interface SettingsPageProps {
   title: string;
@@ -8,11 +24,13 @@ interface SettingsPageProps {
   actions?: ReactNode;
   /** A dismissible explanatory callout under the header. */
   info?: ReactNode;
+  /** The audit context for the footer link; omit on pages with no trail (profile, monitoring). */
+  history?: SettingsHistoryContext;
   children: ReactNode;
 }
 
 /** Common frame for a settings section: heading, blurb, actions, content. */
-export function SettingsPage({ title, description, actions, info, children }: SettingsPageProps) {
+export function SettingsPage({ title, description, actions, info, history, children }: SettingsPageProps) {
   return (
     <div className="px-8 py-8">
       <div className="mb-5 flex items-start justify-between gap-4">
@@ -24,7 +42,37 @@ export function SettingsPage({ title, description, actions, info, children }: Se
       </div>
       {info && <InfoBanner>{info}</InfoBanner>}
       {children}
+      {history && <ChangeHistoryLink history={history} />}
     </div>
+  );
+}
+
+/**
+ * The footer link every settings page carries (RADD-1171): "who changed what
+ * to what" for the context being viewed, one click away, filters preset.
+ * Hidden for a viewer the audit log would refuse (no `global.manage`; for a
+ * project page, no `project.manage` anywhere), the way the nav hides tabs.
+ */
+export function ChangeHistoryLink({ history }: { history: SettingsHistoryContext }) {
+  const perms = usePermissions();
+  const allowed =
+    perms.global(Permission.globalManage) ||
+    (Boolean(history.projectId) && perms.anyProject(Permission.projectManage));
+  if (!allowed) return null;
+  return (
+    <footer className="mt-8 border-t border-subtle/60 pt-4" data-settings-history>
+      <Link
+        to={RoutePath.settingsAudit}
+        search={{
+          entity: history.entities?.length ? history.entities.join(",") : undefined,
+          project: history.projectId,
+        }}
+        className="inline-flex items-center gap-1.5 text-[13px] text-accent-text hover:text-accent-text-strong"
+      >
+        <History size={14} aria-hidden />
+        Change history for this page
+      </Link>
+    </footer>
   );
 }
 

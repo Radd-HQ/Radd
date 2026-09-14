@@ -19,6 +19,7 @@ import { StartingAccess } from "./StartingAccess";
 import { TextField } from "../../TextField";
 import { TokenMultiSelect } from "../../TokenMultiSelect";
 import { ErrorText } from "../../ErrorText";
+import { ChangeHistoryPanel } from "../../history/ChangeHistoryPanel";
 
 /** Labeled checkbox with an indented help line (the HostDialog idiom). */
 function CheckboxField({
@@ -319,6 +320,7 @@ export function ProviderDialog({
             {save.isPending ? "Saving…" : editing ? "Save" : "Add provider"}
           </Button>
         </div>
+        {existing && <ChangeHistoryPanel entityType="sso_provider" entityId={existing.id} />}
       </form>
     </Modal>
   );

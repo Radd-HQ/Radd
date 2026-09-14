@@ -30,7 +30,9 @@ async def audit_log(
     session: Session,
     user: CurrentUser,
     project_id: uuid.UUID | None = None,
-    entity_type: str | None = None,
+    entity_type: Annotated[
+        str | None, Query(description="entity type, or several comma-separated")
+    ] = None,
     entity_id: str | None = None,
     event_type: Annotated[list[str] | None, Query(description="event type(s); repeatable")] = None,
     actor_id: uuid.UUID | None = None,

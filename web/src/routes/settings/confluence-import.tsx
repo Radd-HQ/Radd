@@ -10,6 +10,7 @@ import { ApiPath } from "../../lib/constants";
 import { confluencePlansQuery, queryKeys } from "../../lib/queries";
 import type { ConfluenceSnapshot, ConfluenceMappingSection } from "../../lib/types";
 import { todayIso } from "../../lib/dates";
+import { ChangeHistoryLink } from "../../components/settings/SettingsPage";
 
 /**
  * Import from Confluence (spec 117).
@@ -97,6 +98,7 @@ export function ConfluenceImportPage() {
             ?.scrollIntoView({ behavior: "smooth", block: "start" });
         }}
       />
+      <ChangeHistoryLink history={{ entities: ["confluence_connection"] }} />
     </div>
   );
 }

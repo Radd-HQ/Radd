@@ -93,7 +93,7 @@ export function BackupsSettingsPage() {
   const forbidden = status.error instanceof ApiError && status.error.status === 403;
   if (forbidden) {
     return (
-      <SettingsPage title="Backups" description="Scheduled snapshots, restore, and the key that protects them.">
+      <SettingsPage history={{ entities: ["backup_schedule", "backup"] }} title="Backups" description="Scheduled snapshots, restore, and the key that protects them.">
         <p className="rounded-md border border-subtle px-4 py-3 text-sm text-fg-muted">
           You need instance admin access to manage backups.
         </p>
@@ -102,7 +102,7 @@ export function BackupsSettingsPage() {
   }
 
   return (
-    <SettingsPage
+    <SettingsPage history={{ entities: ["backup_schedule", "backup"] }}
       title="Backups"
       description="Scheduled snapshots of the database and attachments, encrypted at rest."
       info={

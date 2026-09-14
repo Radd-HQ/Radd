@@ -31,6 +31,7 @@ import { TextField } from "../TextField";
 import { incompleteActionNodeIds } from "./ActionsBuilder";
 import { GraphEditor, type Orientation } from "./GraphEditor";
 import { RuleTestPanel } from "./RuleTestPanel";
+import { ChangeHistoryPanel } from "../history/ChangeHistoryPanel";
 
 interface RuleEditorProps {
   /** The rule to edit, or null to create a new one. */
@@ -160,6 +161,7 @@ export function RuleEditor({ rule, onDone }: RuleEditorProps) {
       ) : (
         <p className="text-xs text-fg-muted">Save the automation to dry-run it.</p>
       )}
+      {persistedId && <ChangeHistoryPanel entityType="automation_rule" entityId={persistedId} />}
     </form>
   );
 }

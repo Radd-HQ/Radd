@@ -27,7 +27,7 @@ export function ProjectTimeloggingSettingsPage({ projectId }: { projectId?: stri
   const project = projectQuery.data;
 
   return (
-    <SettingsPage
+    <SettingsPage history={{ entities: ["project", "scoped_setting"], projectId }}
       title="Time logging"
       description="Enable time logging for this project. When on, people can log worklogs and estimates on its issues."
     >

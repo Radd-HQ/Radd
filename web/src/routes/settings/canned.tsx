@@ -34,7 +34,7 @@ export function CannedSettingsPage() {
   const list = search.filtered;
 
   return (
-    <SettingsPage
+    <SettingsPage history={{ entities: ["canned_response"] }}
       title="Canned responses"
       description="Reusable global reply snippets — anyone can insert them from the comment composer; managing them needs admin rights."
     >

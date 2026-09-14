@@ -37,7 +37,7 @@ export function LabelsSettingsPage() {
   const [confirmDialog, confirm] = useConfirm();
 
   return (
-    <SettingsPage
+    <SettingsPage history={{ entities: ["label"] }}
       title="Labels"
       description="Global labels, shared by issues and pages. Items also auto-create one on first use, which is why this list grows on its own."
     >

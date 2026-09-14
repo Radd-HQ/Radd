@@ -16,7 +16,7 @@ export function StorageSettingsPage() {
   const isInstanceAdmin = me?.instance_role === InstanceRole.admin;
 
   return (
-    <SettingsPage
+    <SettingsPage history={{ entities: ["storage_host", "storage_rule"] }}
       title="Storage"
       description="Where attachment bytes live — filesystem roots and S3-compatible endpoints — and the routing chain that decides which host each upload lands on."
       info={

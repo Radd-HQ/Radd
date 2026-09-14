@@ -27,7 +27,7 @@ export function EmailSettingsPage() {
   const canManage = usePermissions().global(Permission.globalManage);
 
   return (
-    <SettingsPage
+    <SettingsPage history={{ entities: ["mail_source", "mail_sender", "mail_rule"] }}
       title="Email"
       description="Where mail arrives, where it is sent from, and which project each message opens in."
       info={

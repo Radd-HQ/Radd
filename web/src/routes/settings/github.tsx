@@ -13,6 +13,7 @@ import { VcsHostSettings, type VcsHostConfig } from "../../components/settings/V
 /** GitHub hosts and repositories (RADD-1129). */
 const GITHUB: VcsHostConfig = {
   title: "GitHub",
+  historyEntities: ["github_connection", "github_repo"],
   description:
     "Repositories whose pushes, branches, pull requests and check runs link themselves to issues by key. Map a repository to a project so its published releases create versions there and ship the work waiting for them.",
   webhookPath: "/api/v1/integrations/github (content type application/json, events: push, pull requests, releases, check suites, workflow runs)",

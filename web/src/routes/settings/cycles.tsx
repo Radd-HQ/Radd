@@ -63,7 +63,7 @@ export function CyclesSettingsPage() {
   const [modal, setModal] = useState<{ cycle: Cycle | null } | null>(null);
   const [completing, setCompleting] = useState<Cycle | null>(null);
 
-  return <SettingsPage title="Cycles"
+  return <SettingsPage history={{ entities: ["cycle", "cycle_series"] }} title="Cycles"
     description="Global cycles span projects. Dates determine draft, upcoming, active or completed status; recurring series keep future cycles ready."
     actions={perms.global(Permission.cycleCreate) && <Button onClick={() => setModal({ cycle: null })}><Plus size={14} aria-hidden />New cycle</Button>}>
     <div className="mb-3 flex flex-wrap items-center gap-2">

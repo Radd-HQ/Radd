@@ -40,7 +40,7 @@ export function IssueTypesSettingsPage({ projectId }: { projectId?: string }) {
   };
 
   return (
-    <SettingsPage
+    <SettingsPage history={{ entities: ["issue_type"], projectId }}
       title="Issue types"
       description="The classification of an item (Bug, Task, Story…). Separate from the epic/issue/subtask hierarchy. New items get the default type."
       info={

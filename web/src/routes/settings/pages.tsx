@@ -56,7 +56,7 @@ export function PagesSettingsPage() {
     onError: error => pushToast(errorMessage(error)),
   });
 
-  return <SettingsPage title="Page spaces" description="Organize wiki pages into spaces. Roles in each space control who can read, edit and manage it.">
+  return <SettingsPage history={{ entities: ["page_space"] }} title="Page spaces" description="Organize wiki pages into spaces. Roles in each space control who can read, edit and manage it.">
     {canManageInstance && <div className="mb-3 flex justify-end"><Button variant="ghost" onClick={() => reindex.mutate()} disabled={reindex.isPending}
       title="Rebuild backlinks and issue links from every live page.">{reindex.isPending ? "Rebuilding…" : "Rebuild link index"}</Button></div>}
     <ListSearchInput value={spaces.filter} onChange={spaces.setFilter} placeholder="Find spaces by name or slug…" total={spaces.filter.trim() ? undefined : spaces.total} matched={spaces.total} noun="spaces" />

@@ -118,7 +118,7 @@ function StatusGrid({ status }: { status: InstanceStatus }) {
 export function InstanceSettingsPage() {
   const status = useQuery(instanceStatusQuery);
   return (
-    <SettingsPage
+    <SettingsPage history={{ entities: ["plugin", "scoped_setting"] }}
       title="Server"
       description="Deploy-level status. Secrets (auth, SMTP, connector tokens) are configured via environment variables only; product defaults live on the General tab."
     >

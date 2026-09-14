@@ -44,14 +44,14 @@ export function JiraImportPage() {
 
   if (!isAdmin) {
     return (
-      <SettingsPage title="Import from Jira">
+      <SettingsPage history={{ entities: ["jira_connection"] }} title="Import from Jira">
         <EmptyState icon={Database} message="Only instance admins can run a Jira import." />
       </SettingsPage>
     );
   }
 
   return (
-    <SettingsPage
+    <SettingsPage history={{ entities: ["jira_connection"] }}
       title="Import from Jira"
       description="Download a Jira project once, decide every mapping, preview the result, then import. Nothing is guessed silently, and an import can be undone."
     >

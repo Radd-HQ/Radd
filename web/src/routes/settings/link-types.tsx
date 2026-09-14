@@ -51,14 +51,14 @@ export function LinkTypesSettingsPage() {
 
   if (!isAdmin) {
     return (
-      <SettingsPage title="Link types">
+      <SettingsPage history={{ entities: ["link_type"] }} title="Link types">
         <EmptyState icon={Link2} message="Only instance admins can manage link types." />
       </SettingsPage>
     );
   }
 
   return (
-    <SettingsPage
+    <SettingsPage history={{ entities: ["link_type"] }}
       title="Link types"
       description="The relationships items can have — each with its own directional names and scope."
       info={

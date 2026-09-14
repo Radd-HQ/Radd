@@ -13,6 +13,7 @@ import { VcsHostSettings, type VcsHostConfig } from "../../components/settings/V
 /** Forgejo/Gitea hosts and repositories (spec 111). */
 const FORGEJO: VcsHostConfig = {
   title: "Forgejo",
+  historyEntities: ["forgejo_connection", "forgejo_repo"],
   description:
     "Hosts whose pushes, branches and pull requests link themselves to issues by key. Map a repository to a project so its published releases create versions there.",
   webhookPath: "/api/v1/integrations/forgejo",

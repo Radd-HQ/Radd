@@ -192,7 +192,7 @@ export function PluginsSettingsPage() {
   const { data: plugins, isLoading, error } = useQuery(pluginsQuery);
 
   return (
-    <SettingsPage
+    <SettingsPage history={{ entities: ["plugin"] }}
       title="Plugins"
       description="Install, enable, and disable plugins. Core plugins are always on; enabling a plugin mounts its endpoints, events, permissions, and nav — no restart."
     >

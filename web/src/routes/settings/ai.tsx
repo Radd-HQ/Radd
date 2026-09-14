@@ -18,7 +18,7 @@ export function AiSettingsPage() {
   const isInstanceAdmin = me?.instance_role === InstanceRole.admin;
 
   return (
-    <SettingsPage
+    <SettingsPage history={{ entities: ["ai_provider", "ai_role", "ai_preset", "scoped_setting"] }}
       title="AI"
       description="Model providers, what each model is used for, which AI features are on, and the editor prompt library. A feature runs when its toggle is on and its role has a provider."
     >

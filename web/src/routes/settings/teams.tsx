@@ -26,7 +26,7 @@ export function TeamsSettingsPage() {
   const lastPage = Math.max(0, Math.ceil(teams.total / teams.pageSize) - 1);
   if (teams.isSuccess && teams.page > lastPage) teams.setPage(lastPage);
 
-  return <SettingsPage title="Teams"
+  return <SettingsPage history={{ entities: ["team"] }} title="Teams"
     description="Group people, then attach a team to projects with a role — that's what grants project access. A team linked to an AD group takes its members from the directory.">
     <div className="mb-3"><TextField type="search" label="Find teams" placeholder="Search teams by name…"
       value={teams.filter} onChange={event => teams.setFilter(event.target.value)} /></div>

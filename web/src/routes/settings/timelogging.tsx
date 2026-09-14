@@ -41,7 +41,7 @@ export function TimeloggingSettingsPage() {
   const leaveEnabled = usePluginEnabled("leave");
 
   return (
-    <SettingsPage
+    <SettingsPage history={{ entities: ["work_category", "scoped_setting"] }}
       title="Time logging"
       description="Instance-wide time policy: the categories people pick, what a working day means, and the holidays that interrupt it. Enable time logging for a project from that project's settings."
     >

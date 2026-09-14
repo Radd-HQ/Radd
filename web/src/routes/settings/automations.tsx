@@ -31,7 +31,7 @@ export function AutomationsSettingsPage() {
 
   if (canManage && editing) {
     return (
-      <SettingsPage
+      <SettingsPage history={{ entities: ["automation_rule"] }}
         title={editing.rule ? "Edit automation rule" : "New automation rule"}
         description="React to any event, or run on a schedule — daily, weekly, monthly or a cron expression. Conditions split issues down different branches, and actions can update them, notify people, or create new issues, which is how recurring maintenance tickets and periodic reviews get raised automatically."
       >
@@ -41,7 +41,7 @@ export function AutomationsSettingsPage() {
   }
 
   return (
-    <SettingsPage
+    <SettingsPage history={{ entities: ["automation_rule"] }}
       title="Automations"
       description="Global rules that react to an item event, match an SLQ condition, and apply actions."
       actions={

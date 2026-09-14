@@ -50,7 +50,7 @@ export function ReleasesSettingsPage({ projectId }: { projectId?: string }) {
   const list = search.filtered;
 
   return (
-    <SettingsPage
+    <SettingsPage history={{ entities: ["release"], projectId }}
       title="Releases"
       description="Versions items can target. Mark a release as released when it ships."
       actions={

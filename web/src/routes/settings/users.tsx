@@ -91,7 +91,7 @@ export function UsersSettingsPage() {
   const total = users.data?.total ?? null;
 
   return (
-    <SettingsPage
+    <SettingsPage history={{ entities: ["user"] }}
       title="Users"
       description="Every account on this server — auth source, activity, last sign-in — plus the server-wide role. Deactivating revokes sessions and blocks all sign-in paths."
       actions={

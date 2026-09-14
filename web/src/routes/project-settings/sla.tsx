@@ -83,7 +83,7 @@ export function ProjectSlaSettingsPage({ projectId }: { projectId?: string }) {
       .join(" · ");
 
   return (
-    <SettingsPage
+    <SettingsPage history={{ entities: ["sla_policy"], projectId }}
       title="SLAs"
       description="Response and resolution targets for this project's service desk. Timers pause in the listed states; breaches notify the assignee and watchers."
       info={

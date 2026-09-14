@@ -14,7 +14,7 @@ export function GeneralSettingsPage() {
   const isAdmin = user?.instance_role === InstanceRole.admin;
 
   return (
-    <SettingsPage
+    <SettingsPage history={{ entities: ["scoped_setting"] }}
       title="General"
       description="Defaults for every project — each project can override these under its own settings."
     >

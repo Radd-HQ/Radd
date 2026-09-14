@@ -14,7 +14,7 @@ export function SignInSettingsPage() {
   const isInstanceAdmin = me?.instance_role === InstanceRole.admin;
 
   return (
-    <SettingsPage
+    <SettingsPage history={{ entities: ["sso_provider"] }}
       title="Sign-in"
       description="The identity providers people can sign in with, and which email domains may create an account."
       info={
