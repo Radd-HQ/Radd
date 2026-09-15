@@ -102,7 +102,9 @@ function requiredParentKind(kind: ItemKindValue): ItemKindValue | null {
 
 export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
   const states = useQuery(statesQuery(project.id));
-  const fields = useQuery(fieldsQuery());
+  // Only the fields in scope for THIS project (RADD-1158): a field scoped to
+  // another project must not be offered here and refused on save.
+  const fields = useQuery(fieldsQuery(project.id));
   const users = useQuery(usersQuery);
   const releases = useQuery(releasesQuery(project.id));
   const types = useQuery(issueTypesQuery(project.id));

@@ -28,6 +28,7 @@ export const queryKeys = {
   itemByKey: (key: string) => ["itemByKey", { key }] as const,
   comments: (itemId: string) => ["comments", { itemId }] as const,
   fields: ["fields"] as const,
+  projectFields: (projectId: string) => ["fields", { projectId }] as const,
   linkTypes: ["linkTypes"] as const,
   roleGrants: ["roleGrants"] as const,
   grants: ["grants"] as const,

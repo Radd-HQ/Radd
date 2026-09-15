@@ -16,11 +16,20 @@ import type {
   RoleGrant,
 } from "../types";
 
-export const fieldsQuery = () =>
+/**
+ * The field registry — or, given a project, only the fields IN SCOPE for it
+ * (global ones plus those scoped to it; RADD-1158). A surface that WRITES
+ * values for a project asks for the scoped set, so a field scoped elsewhere
+ * can never be offered and then refused. The server narrows through the same
+ * predicate it validates with; a client-side filter over the full registry
+ * would be a second copy of that rule.
+ */
+export const fieldsQuery = (projectId?: string) =>
   queryOptions({
-    queryKey: queryKeys.fields,
+    queryKey: projectId ? queryKeys.projectFields(projectId) : queryKeys.fields,
     meta: entityMeta(Entity.field),
-    queryFn: ({ signal }) => api.get<FieldDef[]>(ApiPath.fields, { signal }),
+    queryFn: ({ signal }) =>
+      api.get<FieldDef[]>(ApiPath.fields, { signal, query: { project_id: projectId } }),
     staleTime: 60_000,
   });
 

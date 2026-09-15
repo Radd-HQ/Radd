@@ -380,42 +380,56 @@ async def get_field(session: AsyncSession, field_id: uuid.UUID) -> FieldDefiniti
     return definition
 
 
+def _in_scope_clause(project_id: uuid.UUID):
+    """The ONE scope predicate (spec 90 follow-up): a field is in scope for a
+    project when it is GLOBAL (no scope rows) or scoped to that project. Shared
+    by `definitions_for_project` and the `project_id` listing (RADD-1158) so the
+    directory can never disagree with what the item writer accepts."""
+    scoped_to_project = select(FieldProject.field_id).where(FieldProject.project_id == project_id)
+    return FieldDefinition.id.not_in(select(FieldProject.field_id)) | FieldDefinition.id.in_(
+        scoped_to_project
+    )
+
+
+def _listing_filters(query, *, q: str | None, project: Project | None):
+    if q:
+        query = query.where(
+            FieldDefinition.name.ilike(ilike_term(q)) | FieldDefinition.key.ilike(ilike_term(q))
+        )
+    if project is not None:
+        query = query.where(_in_scope_clause(project.id))
+    return query
+
+
 async def list_fields(
     session: AsyncSession,
     *,
     q: str | None = None,
     limit: int | None = None,
     offset: int = 0,
+    project: Project | None = None,
 ) -> list[FieldDefinition]:
-    query = select(FieldDefinition).order_by(FieldDefinition.created_at)
-    if q:
-        query = query.where(
-            FieldDefinition.name.ilike(ilike_term(q)) | FieldDefinition.key.ilike(ilike_term(q))
-        )
+    """The registry, optionally narrowed to the fields in scope for `project`
+    (RADD-1158: the New Item form asks for exactly the set a create will accept)."""
+    query = _listing_filters(
+        select(FieldDefinition).order_by(FieldDefinition.created_at), q=q, project=project
+    )
     if limit is not None:
         query = query.offset(offset).limit(limit)
     return list((await session.execute(query)).scalars())
 
 
-async def count_fields(session: AsyncSession, *, q: str | None = None) -> int:
-    query = select(func.count()).select_from(FieldDefinition)
-    if q:
-        query = query.where(
-            FieldDefinition.name.ilike(ilike_term(q)) | FieldDefinition.key.ilike(ilike_term(q))
-        )
+async def count_fields(
+    session: AsyncSession, *, q: str | None = None, project: Project | None = None
+) -> int:
+    query = _listing_filters(select(func.count()).select_from(FieldDefinition), q=q, project=project)
     return (await session.execute(query)).scalar_one()
 
 
 async def definitions_for_project(session: AsyncSession, project: Project) -> list[FieldDefinition]:
     """Fields in scope for a project: the GLOBAL ones (no scope rows) plus those
     scoped to this project (spec 90 follow-up — a field may be scoped to several)."""
-    scoped_to_project = select(FieldProject.field_id).where(
-        FieldProject.project_id == project.id
-    )
-    query = select(FieldDefinition).where(
-        FieldDefinition.id.not_in(select(FieldProject.field_id))
-        | FieldDefinition.id.in_(scoped_to_project)
-    )
+    query = select(FieldDefinition).where(_in_scope_clause(project.id))
     return list((await session.execute(query)).scalars())
 
 

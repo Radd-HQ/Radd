@@ -184,7 +184,12 @@ async def list_fields(
     q: str | None = None,
     limit: Annotated[int | None, Query(ge=1, le=500)] = None,
     offset: Annotated[int, Query(ge=0)] = 0,
+    project_id: uuid.UUID | None = None,
 ) -> list[FieldDefinitionRead]:
+    """The registry, or with `project_id` only the fields IN SCOPE for that project
+    (global ones plus those scoped to it — the set an item create there accepts,
+    RADD-1158). The same read gate either way: the unscoped list already carries
+    every definition's `project_ids`, so the scoped list reveals nothing more."""
     # Global field managers need the definitions they manage even when they
     # cannot read issues. Other readers retain the existing issue-member floor.
     if (
@@ -194,10 +199,15 @@ async def list_fields(
         if limit is not None:
             response.headers[TOTAL_COUNT_HEADER] = "0"
         return []
+    project = (
+        await projects_service.get_project(session, project_id) if project_id is not None else None
+    )
     restricted_ids = await service.restricted_field_ids(session)
-    fields = await service.list_fields(session, q=q, limit=limit, offset=offset)
+    fields = await service.list_fields(session, q=q, limit=limit, offset=offset, project=project)
     if limit is not None:
-        response.headers[TOTAL_COUNT_HEADER] = str(await service.count_fields(session, q=q))
+        response.headers[TOTAL_COUNT_HEADER] = str(
+            await service.count_fields(session, q=q, project=project)
+        )
     return [_to_read(f, restricted_ids) for f in fields]
 
 
