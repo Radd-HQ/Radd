@@ -168,6 +168,7 @@ class CommentDraft:
     body: str
     author_id: uuid.UUID | None
     created: str | None
+    internal: bool = False  # RADD-1180: Jira restricted it, so Radd does too
 
 
 @dataclass
@@ -256,6 +257,7 @@ def build(
             body=comment.body,
             author_id=_author_id(comment.author_key, comment.author_email, vocab),
             created=comment.created,
+            internal=comment.internal,
         )
         for comment in legacy.comments
     ]

@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.modules.auth.models import User
 from radd.modules.comments import service as comments_service
 from radd.modules.comments.schemas import CommentCreate
+from radd.modules.comments.types import CommentVisibility
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate, ItemUpdate
 from radd.modules.notify import service as notify_service
@@ -280,6 +281,13 @@ async def _comments(
                     body=comment.body,
                     author_id=comment.author_id,
                     created_at=_as_datetime(comment.created),
+                    # RADD-1180. A Jira internal note imported as a public comment
+                    # is a leak, and on a public project a published one.
+                    visibility=(
+                        CommentVisibility.INTERNAL
+                        if comment.internal
+                        else CommentVisibility.PUBLIC
+                    ),
                 ),
                 actor,
             )

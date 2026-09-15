@@ -144,6 +144,23 @@ def test_parent_epic_comments_worklogs_links():
     assert draft.links[1].target_key == "DEV-300" and draft.links[1].link_type == "duplicates"
 
 
+def test_a_restricted_jira_comment_is_drafted_internal():
+    """RADD-1180: Jira hides a comment two ways — a Service Desk internal note
+    (`jsdPublic: false`) and a classic role/group restriction — and both mean an
+    INTERNAL Radd comment. Absent both, public: those keys appear only where JSM or
+    a restriction is in play, so a missing one cannot be read as "assume the worst"
+    without making every comment on an ordinary Jira internal."""
+    issue = _issue(comment={"comments": [
+        {"body": "for the customer", "author": {"name": "jsmith"}},
+        {"body": "agent only", "author": {"name": "jsmith"}, "jsdPublic": False},
+        {"body": "admins only", "author": {"name": "jsmith"},
+         "visibility": {"type": "role", "value": "Administrators"}},
+        {"body": "shared with the customer", "author": {"name": "jsmith"}, "jsdPublic": True},
+    ]})
+    draft = map_issue(issue, [], {})
+    assert [c.internal for c in draft.comments] == [False, True, True, False]
+
+
 def test_epic_link_field_becomes_parent_when_no_subtask_parent():
     issue = _issue(customfield_10008="DEV-500")
     draft = map_issue(issue, [], {}, epic_link_field="customfield_10008")

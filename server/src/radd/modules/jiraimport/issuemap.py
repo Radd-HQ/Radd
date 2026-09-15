@@ -148,6 +148,25 @@ def map_category(fields: dict) -> str:
     return CATEGORY_MAP.get(key.lower(), "todo")
 
 
+def comment_is_internal(comment: dict) -> bool:
+    """Jira's two ways of saying "not everyone sees this" (RADD-1180).
+
+    `jsdPublic: false` is a Service Desk internal note — the agent-only half of the
+    JSM comment box. `visibility` is classic Jira's role/group restriction
+    (`{"type": "role", "value": "Administrators"}`). Both become an INTERNAL Radd
+    comment; the restriction's role/group name is DROPPED rather than guessed at a
+    team, so an internal comment is visible to every comment.read_internal holder.
+
+    Absent both, a comment is public. The default matters: these fields only appear
+    on instances that have JSM or a restriction in play, and a missing field must
+    mean "unrestricted", never "assume the worst" — that would make every ordinary
+    comment on an ordinary Jira internal.
+    """
+    if comment.get("jsdPublic") is False:
+        return True
+    return bool(comment.get("visibility"))
+
+
 @dataclass
 class SprintDraft:
     """One Jira sprint an issue belongs to (spec 90 follow-up) → a Radd cycle. We
@@ -285,6 +304,8 @@ class CommentDraft:
     # avoid duplicates by skipping comments on a re-import entirely.
     jira_id: str = ""
     author_key: str = ""  # Jira username, the stable identity the plan maps
+    # RADD-1180: Jira was hiding this comment from somebody, so Radd must too.
+    internal: bool = False
 
 
 @dataclass
@@ -520,6 +541,7 @@ def map_issue(
             created=to_utc_naive(c.get("created")),
             jira_id=str(c.get("id") or ""),
             author_key=person_key(c.get("author")),
+            internal=comment_is_internal(c),
         )
         for c in ((fields.get("comment") or {}).get("comments") or [])
     ]

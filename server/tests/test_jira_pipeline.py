@@ -60,7 +60,7 @@ async def db():
 
 
 def _issue(key, *, summary, type_name="Task", status="To Do", category="new",
-           priority="P2", parent=None, links=None, comment=None, worklog=None,
+           priority="P2", parent=None, links=None, comments=None, worklog=None,
            components=None, versions=None, cf=None):
     fields = {
         "summary": summary,
@@ -77,8 +77,10 @@ def _issue(key, *, summary, type_name="Task", status="To Do", category="new",
         fields["parent"] = {"key": parent}
     if links:
         fields["issuelinks"] = links
-    if comment:
-        fields["comment"] = {"comments": [comment], "total": 1, "maxResults": 1}
+    if comments:
+        fields["comment"] = {
+            "comments": comments, "total": len(comments), "maxResults": len(comments),
+        }
     if worklog:
         fields["worklog"] = {"worklogs": [worklog], "total": 1, "maxResults": 1}
     if components:
@@ -335,8 +337,8 @@ async def test_an_import_preserves_keys_dates_and_authorship_and_is_silent(db):
     snapshot_id = await _snapshot(db, "SRC", [
         _issue("SRC-7", summary="Seven", status="Rejeté", category="done", priority="P1",
                components=["API"], versions=["1.4.0"],
-               comment={"id": "900", "body": "a note", "author": {"name": "adela"},
-                        "created": "2021-05-05T10:00:00.000+0000"}),
+               comments=[{"id": "900", "body": "a note", "author": {"name": "adela"},
+                          "created": "2021-05-05T10:00:00.000+0000"}]),
     ])
     try:
         plan = await _plan_for(db, snapshot_id, key)
@@ -367,13 +369,51 @@ async def test_an_import_preserves_keys_dates_and_authorship_and_is_silent(db):
         await _cleanup([key])
 
 
+async def test_an_internal_jira_comment_imports_as_an_internal_comment(db):
+    """RADD-1180: importing a JSM internal note (or a role-restricted comment) as a
+    PUBLIC Radd comment publishes it to every project member — and on a spec-121
+    public project, to the world. Asserted on the stored rows, because the leak is
+    in the column, not in the draft."""
+    key = f"IN{uuid.uuid4().hex[:4].upper()}"
+    actor_id = await _admin(db)
+    snapshot_id = await _snapshot(db, "SRC", [
+        _issue("SRC-3", summary="Three", comments=[
+            {"id": "910", "body": "for the customer", "author": {"name": "adela"},
+             "created": "2021-05-05T10:00:00.000+0000"},
+            {"id": "911", "body": "agent-only note", "author": {"name": "adela"},
+             "created": "2021-05-05T10:05:00.000+0000", "jsdPublic": False},
+            {"id": "912", "body": "administrators only", "author": {"name": "adela"},
+             "created": "2021-05-05T10:06:00.000+0000",
+             "visibility": {"type": "role", "value": "Administrators"}},
+        ]),
+    ])
+    try:
+        plan = await _plan_for(db, snapshot_id, key)
+        run = await _run(db, plan, actor_id, RunKind.IMPORT)
+        assert RunStage(run.stage) is RunStage.DONE, run.problems
+
+        async with SessionLocal() as s:
+            item = await items_service.find_item_by_key(s, f"{key}-3")
+            rows = dict((await s.execute(
+                text("SELECT body, visibility FROM comments "
+                     "WHERE entity_type = 'item' AND entity_id = :i"),
+                {"i": item.id})).all())
+            assert rows == {
+                "for the customer": "public",
+                "agent-only note": "internal",
+                "administrators only": "internal",
+            }
+    finally:
+        await _cleanup([key])
+
+
 async def test_a_reimport_refreshes_rather_than_duplicating(db):
     key = f"RE{uuid.uuid4().hex[:4].upper()}"
     actor_id = await _admin(db)
     snapshot_id = await _snapshot(db, "SRC", [
         _issue("SRC-1", summary="First title",
-               comment={"id": "901", "body": "once", "author": {"name": "adela"},
-                        "created": "2021-05-05T10:00:00.000+0000"}),
+               comments=[{"id": "901", "body": "once", "author": {"name": "adela"},
+                          "created": "2021-05-05T10:00:00.000+0000"}]),
     ])
     try:
         plan = await _plan_for(db, snapshot_id, key)
