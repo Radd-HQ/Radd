@@ -10,6 +10,7 @@ import {
   validationFindings,
 } from "../../lib/api";
 import type { BucketCreatePreset } from "../../lib/axis-dnd";
+import { fieldInScope } from "../../lib/field-scope";
 import { PARENT_SEARCH_LIMIT } from "../../lib/constants";
 import { useDebounced, useItemWritability, usePointsEnabled } from "../../lib/hooks";
 import { useValidateItem } from "../../lib/item-mutations";
@@ -103,6 +104,10 @@ function requiredParentKind(kind: ItemKindValue): ItemKindValue | null {
 export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
   const states = useQuery(statesQuery(project.id));
   const fields = useQuery(fieldsQuery());
+  const projectFields = useMemo(
+    () => (fields.data ?? []).filter(field => fieldInScope(field, project.id)),
+    [fields.data, project.id],
+  );
   const users = useQuery(usersQuery);
   const releases = useQuery(releasesQuery(project.id));
   const types = useQuery(issueTypesQuery(project.id));
@@ -224,7 +229,7 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
   const labelForField = (key: string): string | undefined => {
     if (key.startsWith(CUSTOM_FIELD_PREFIX)) {
       const bare = key.slice(CUSTOM_FIELD_PREFIX.length);
-      return (fields.data ?? []).find((definition) => definition.key === bare)?.name ?? bare;
+      return projectFields.find((definition) => definition.key === bare)?.name ?? bare;
     }
     return BUILTIN_FIELD_LABELS[key];
   };
@@ -237,7 +242,9 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
     // Only send values the user set — the registry 422s on missing required keys.
     const setValues: CustomFields = {};
     for (const [key, value] of Object.entries(customFields)) {
-      if (value !== null && value !== undefined) setValues[key] = value;
+      if (value !== null && value !== undefined && projectFields.some(field => field.key === key)) {
+        setValues[key] = value;
+      }
     }
     const body: ItemCreate = {
       project_id: project.id,
@@ -564,11 +571,11 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
           )}
         </div>
 
-        {(fields.data ?? []).length > 0 && (
+        {projectFields.length > 0 && (
           <fieldset className="flex flex-col gap-3 rounded-md border border-subtle p-3">
             <legend className="px-1 text-xs font-medium text-fg-muted">Custom fields</legend>
             <CustomFieldsForm
-              fields={fields.data ?? []}
+              fields={projectFields}
               values={customFields}
               // `cf.<key>` is how a finding names a custom field; the form keys
               // by the bare key, and that is the only translation between them.
