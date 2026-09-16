@@ -73,6 +73,10 @@ async def page_socket(
     channel = RoomChannel(
         websocket, path=str(page_id), token=token, user_id=user_id, role=collab_session.role
     )
+    # A join is an identity, not a durable grant: access may have changed since
+    # POST /join, including while this client was disconnected.
+    if not await channel._revalidate():
+        return
     room.connect(collab_session, channel)
     snapshot = room.awareness_snapshot()
     if snapshot is not None:

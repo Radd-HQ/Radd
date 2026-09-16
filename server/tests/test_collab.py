@@ -397,3 +397,93 @@ def test_a_newcomer_learns_every_awareness_state_at_connect(stage):
                 if kinds[-1] == YMessageType.AWARENESS:
                     break
             assert YMessageType.AWARENESS in kinds, kinds
+
+
+async def _reader_permissions(s, permissions):
+    engine = create_async_engine(settings.database_url)
+    async with async_sessionmaker(engine)() as db:
+        role = await db.get(Role, s['role_id'])
+        role.permissions = [str(p) for p in permissions]
+        await db.commit()
+    await engine.dispose()
+
+
+@pytest.mark.parametrize('role', [CollabRole.OBSERVER, CollabRole.EDITOR])
+@pytest.mark.parametrize('connected', [False, True])
+def test_revoked_page_access_closes_live_and_reused_joins(stage, role, connected):
+    client, s = stage
+    permissions = [Permission.PAGE_READ, Permission.PAGE_WRITE]
+    client.portal.call(_reader_permissions, s, permissions)
+    reader = _join(client, s['page_id'], s['cookies']['reader'], role)
+    # Keep read access when revoking an editor: a formerly writable join must
+    # not silently retain its write role just because the person can still read.
+    remaining = [Permission.PAGE_READ] if role == CollabRole.EDITOR else []
+    if not connected:
+        client.portal.call(_reader_permissions, s, remaining)
+        with pytest.raises(WebSocketDisconnect) as closed:
+            with _connect(client, s['page_id'], s['cookies']['reader'], reader['session']) as sock:
+                sock.receive_bytes()
+        assert closed.value.code == WS_CLOSE_SESSION_UNKNOWN
+        return
+
+    ada = _join(client, s['page_id'], s['cookies']['ada'])
+    doc_a, doc_r = Doc(), Doc()
+    with _connect(client, s['page_id'], s['cookies']['ada'], ada['session']) as sock_a:
+        _handshake(sock_a, doc_a)
+        with _connect(client, s['page_id'], s['cookies']['reader'], reader['session']) as sock_r:
+            _handshake(sock_r, doc_r)
+            client.portal.call(_reader_permissions, s, remaining)
+            if role == CollabRole.EDITOR:
+                _type(sock_r, doc_r, 'forbidden edit')
+            else:
+                _type(sock_a, doc_a, 'new private text')
+            with pytest.raises(WebSocketDisconnect) as closed:
+                sock_r.receive_bytes()
+            assert closed.value.code == WS_CLOSE_SESSION_UNKNOWN
+            if role == CollabRole.EDITOR:
+                assert 'forbidden edit' not in _body(hub.room(s['page_id']).ydoc)
+                _type(sock_a, doc_a, 'allowed')
+                _read_until(sock_a, doc_a, 'allowed')
+
+
+async def _restrict_ancestor(s):
+    from radd.modules.access import service as access
+    from radd.modules.access.types import Access, GrantSubject
+    from radd.modules.pages.page_access import PAGE_RESOURCE
+    from radd.modules.pages.schemas import PageUpdate
+
+    engine = create_async_engine(settings.database_url)
+    async with async_sessionmaker(engine)() as db:
+        parent = await pages_service.create_page(
+            db, PageCreate(space_id=s['space_id'], title='Restricted parent'), s['users']['ada']
+        )
+        await pages_service.update_page(db, s['page_id'], PageUpdate(parent_id=parent.id), s['users']['ada'])
+        await access.add_grant(db, PAGE_RESOURCE, str(parent.id), subject_type=GrantSubject.USER,
+                               subject_id=s['users']['ada'], access=Access.READ.value, actor_id=s['users']['ada'])
+        await db.commit()
+    await engine.dispose()
+
+
+def test_live_reader_loses_access_after_move_under_restricted_ancestor(stage):
+    client, s = stage
+    reader = _join(client, s['page_id'], s['cookies']['reader'], CollabRole.OBSERVER)
+    with _connect(client, s['page_id'], s['cookies']['reader'], reader['session']) as sock:
+        _handshake(sock, Doc())
+        client.portal.call(_restrict_ancestor, s)
+        channel = hub.room(s['page_id']).channels[uuid.UUID(reader['session'])]
+        assert client.portal.call(channel._revalidate) is False
+        with pytest.raises(WebSocketDisconnect) as closed:
+            sock.receive_bytes()
+        assert closed.value.code == WS_CLOSE_SESSION_UNKNOWN
+
+
+def test_idle_reader_is_closed_on_permission_refresh_deadline(stage, monkeypatch):
+    monkeypatch.setattr(settings, 'realtime_session_refresh_seconds', 0.1)
+    client, s = stage
+    reader = _join(client, s['page_id'], s['cookies']['reader'], CollabRole.OBSERVER)
+    with _connect(client, s['page_id'], s['cookies']['reader'], reader['session']) as sock:
+        _handshake(sock, Doc())
+        client.portal.call(_reader_permissions, s, [])
+        with pytest.raises(WebSocketDisconnect) as closed:
+            sock.receive_bytes()
+        assert closed.value.code == WS_CLOSE_SESSION_UNKNOWN
