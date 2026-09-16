@@ -16,23 +16,31 @@ plugin = RaddPlugin(
     description="Email-to-issue intake (spec 47) + the requester loop (spec 62): an "
     "IMAP poller turning unseen messages into items (or reply comments on a keyed "
     "subject) as the system actor, mail_contacts for external requesters, ack "
-    "emails, an outbound consumer mailing public comments back to the contact, and "
-    "the `service.send_item_mail` transport every module mails an issue through.",
+    "emails, an outbound consumer mailing public comments and resolution notices "
+    "back to the contact, and the `service.send_item_mail` transport every module "
+    "mails an issue through.",
     # attachments: mail parts become item attachments through the spec-102
     # polymorphic seam (RADD-956).
     # notify is GONE from this list (RADD-968): outbound used to mail notify's
     # watcher set, a second fan-out beside the one deciding the inbox. Users are
     # mailed by notify now, which reaches this module the other way — a deferred,
     # feature-detected call to `service.send_item_mail`.
+    # workflow joined the list in RADD-982: the resolution notice fires on
+    # ENTERING the done category, and the diff records the previous state by
+    # NAME, so `list_states` is what turns that name back into a category.
     depends_on=(
         "projects", "auth", "items", "comments", "automations", "events",
-        "attachments", "settings",
+        "attachments", "settings", "workflow",
     ),
     # RADD-961: the AI routing rule reaches `ai` DEFERRED and feature-detected —
     # the module is optional and disableable, and a missing one must fall through
     # to the next rule rather than cost a customer their email. Same edge
     # `attachments` declares for its own LLM storage rule.
-    weak_depends=("ai",),
+    # csat is the second (RADD-982): it depends_on THIS module, so the
+    # resolution notice's "yield to the survey" question can only be asked the
+    # deferred way — and an uninstalled or disabled csat answering by absence
+    # is exactly the right answer.
+    weak_depends=("ai", "csat"),
     routers=(router, config_router, rules_router),
     # RADD-1045: the ack's plain-text body, instance-only — a service desk's
     # wording is instance policy, not per-project. Writing it goes through the
@@ -52,6 +60,22 @@ plugin = RaddPlugin(
                 "Plain-text body of the receipt sent when an email opens a ticket. "
                 "Tokens: {{key}}, {{title}}, {{link}}, {{requester_name}} — an "
                 "unrecognised token is sent verbatim. Empty sends the default wording."
+            ),
+            section="email",
+        ),
+        # RADD-982: per PROJECT as well as instance, because one installation
+        # runs a service desk and a dev project, and only one of them has
+        # customers to tell. ON by default — see `config.mail_send_resolved`.
+        SettingSpec(
+            key="mail_send_resolved",
+            type="bool",
+            scopes=("instance", "project"),
+            label="Resolution emails",
+            description=(
+                "Email the ticket's external contacts when it moves into a done "
+                "state (RADD-982). A project with CSAT surveys on sends the survey "
+                "instead — it already announces the resolution, and one message "
+                "beats two."
             ),
             section="email",
         ),

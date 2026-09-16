@@ -15,12 +15,37 @@ from radd.modules.events import service as events
 from radd.modules.items import service as items_service
 from radd.modules.items.enums import ItemEntity
 from radd.modules.projects import service as projects_service
+from radd.modules.settings import service as settings_service
+from radd.modules.settings.types import SettingKey
 
 from .models import CsatSurvey
 from .schemas import PublicCsatRead, PublicCsatSubmit
 from .types import PAYLOAD_COMMENT_EXCERPT_CHARS, CsatEntity, CsatEvent
 from radd.clock import utcnow
 
+
+
+async def announces_resolution(session: AsyncSession, project_id: uuid.UUID) -> bool:
+    """Will this project's requesters already be told their ticket resolved,
+    by the survey? (RADD-982.)
+
+    The survey's first line IS "your request has been resolved", so on a
+    CSAT project the resolution notice and the survey are two messages saying
+    one thing. Someone has to yield, and the survey wins: it carries the
+    announcement AND asks a question, so dropping it would lose the question.
+
+    The rule is stated HERE rather than in `mailintake` because the condition
+    is csat's own setting, and a second module resolving `csat_enabled` is a
+    second module that keeps resolving it after this one stops. `mailintake`
+    reaches this function DEFERRED and feature-detected (`weak_depends`) — it
+    cannot depend on csat, which depends on it — so an uninstalled or disabled
+    csat answers "not announcing" by absence, which is exactly true.
+    """
+    return bool(
+        await settings_service.resolve(
+            session, SettingKey.CSAT_ENABLED, project_id=project_id
+        )
+    )
 
 
 async def survey_for_item(session: AsyncSession, item_id: uuid.UUID) -> CsatSurvey | None:

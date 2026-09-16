@@ -430,6 +430,11 @@ class Settings(BaseSettings):
     # Requester loop (spec 62): acknowledge intake/public-form items that captured
     # a contact (needs smtp_host); the outbound consumer mails public comments back.
     mail_send_ack: bool = True
+    # RADD-982: the env/config default behind the `mail_send_resolved` scalar
+    # setting (Settings → Email; overridable per project). ON, unlike CSAT's
+    # opt-in: the lifecycle ending in silence was the defect, and a desk that
+    # has to be configured before it says "done" says it on no instance at all.
+    mail_send_resolved: bool = True
     # RADD-1045: the ack's plain-text body is a `mail_ack_body` scalar-cascade
     # setting (Settings → Email) — this is its env/config default, which is
     # also what an unset OR explicitly-blank override falls back to

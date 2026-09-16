@@ -100,6 +100,9 @@ class SettingKey(StrEnum):
     PAGE_COLLAB_VERSION_WINDOW_SECONDS = "page_collab_version_window_seconds"
     # The ack's admin-editable body (spec 47/62, RADD-1045) — Settings → Email.
     MAIL_ACK_BODY = "mail_ack_body"
+    # RADD-982: mail the ticket's external contacts when it resolves. Per
+    # project, because one instance runs both a service desk and a dev project.
+    MAIL_SEND_RESOLVED = "mail_send_resolved"
     # Directory settings page + automatic user sync (spec 85) — instance-only.
     LDAP_URL = "ldap_url"
     LDAP_USER_DOMAIN = "ldap_user_domain"

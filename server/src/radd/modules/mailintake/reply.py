@@ -18,7 +18,7 @@ account: the external `mail_contact`.
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +26,7 @@ from radd import mailrender
 from radd.modules.auth import service as auth
 
 from . import service
+from .transport import MailAttachment
 from .types import REPLY_REASON_TEMPLATES, MailRecipientKind
 
 
@@ -55,6 +56,30 @@ class OutboundReply:
     author: str
     item: mailrender.ItemMail
     recipients: tuple[Recipient, ...]
+
+    #: A reply CONTINUES the requester's thread, so the stored subject wins —
+    #: the transport's default. Stated as an attribute since RADD-982 because
+    #: the consumer now ships two kinds of message and reads this off both,
+    #: rather than knowing which one it holds (`outbound.OutboundPlan`).
+    pin_subject: bool = False
+
+    async def prepare(self, session: AsyncSession) -> tuple["OutboundReply | None", tuple[MailAttachment, ...]]:
+        """The body as it is NOW, not as the event excerpt had it (RADD-988): a
+        comment that turned internal or was deleted since planning sends
+        nothing, and its inline images ride along only from approved storage
+        hosts. Returns the reply to render plus the attachments to send."""
+        from radd.modules.comments import service as comments
+
+        from . import attachments
+
+        body = await comments.public_reply_body(session, self.comment_id, self.item_id)
+        if body is None:
+            return None, ()
+        body, images = await attachments.prepare(session, self.item_id, body)
+        return replace(self, body=body), images
+
+    def render(self, recipient: Recipient) -> mailrender.RenderedMail:
+        return render(self, recipient)
 
 
 async def recipients_for(session: AsyncSession, item_id: uuid.UUID) -> tuple[Recipient, ...]:
