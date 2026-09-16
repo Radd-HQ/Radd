@@ -1,8 +1,17 @@
-"""Outbound comment mail to the external requester (spec 62, rebuilt RADD-955/968).
+"""Outbound mail to the external requester (spec 62, rebuilt RADD-955/968).
 
 A public comment on a ticket that came in by email is mailed back to the person
 who raised it, in a message their client threads under the original rather than
 stacking as a new conversation.
+
+**Two messages since RADD-982, one consumer.** The comment reply (`reply.py`)
+and the resolution notice (`resolved.py`) are the same job — tell the external
+contact something that happened on their ticket — read off the same stream with
+the same at-most-once cursor, so a second consumer would have been a second copy
+of every property below for no gain. What differs between them is the PLAN, and
+the plan answers for itself: `recipients`, `subject`, `comment_id`,
+`pin_subject` and `render(recipient)` are the whole interface `_deliver` reads
+(`OutboundPlan`), so adding a third message is a planner and a line in `_plan`.
 
 Cursor idiom = the shared head-seeded scaffold (`events.runner.run_head_seeded`):
 consumer offset `mailintake.outbound`, first start seeds AT THE STREAM HEAD (a
@@ -24,6 +33,7 @@ Message-ID and the `mail.sent`/`mail.failed` events cannot drift apart.
 
 import logging
 import uuid
+from typing import Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,10 +46,11 @@ from radd.modules.comments.types import CommentEvent, CommentVisibility
 from radd.modules.events import runner
 from radd.modules.events.service import Event
 from radd.modules.items import service as items
+from radd.modules.items.enums import ItemEvent
 from radd.modules.projects import service as projects_service
 
-from . import service
-from .reply import OutboundReply, recipients_for, render
+from . import resolved, service
+from .reply import OutboundReply, Recipient, recipients_for
 from .types import OUTBOUND_BATCH, OUTBOUND_CONSUMER_NAME, REPLY_SUBJECT_TEMPLATE
 
 logger = logging.getLogger(__name__)
@@ -48,6 +59,25 @@ logger = logging.getLogger(__name__)
 #: `author` ref is missing is a bug upstream, but "commented" with an empty name
 #: in front of it is a broken sentence in someone's mailbox.
 UNKNOWN_AUTHOR = "Someone"
+
+
+class OutboundPlan(Protocol):
+    """What this consumer needs of a planned message, and nothing more.
+
+    A Protocol rather than a base class because the two planners are
+    dataclasses that share no state — only the questions `_deliver` asks. It is
+    also the list of things the TRANSPORT decides per message, which is why
+    `pin_subject` is on it: the consumer must not be the place that remembers
+    which message threads under the requester's subject and which opens its own.
+    """
+
+    item_id: uuid.UUID
+    subject: str
+    comment_id: uuid.UUID | None
+    pin_subject: bool
+    recipients: tuple[Recipient, ...]
+
+    def render(self, recipient: Recipient) -> mailrender.RenderedMail: ...
 
 
 def should_reply(*, has_recipients: bool, visibility: str, actor_id: uuid.UUID | None) -> bool:
@@ -69,12 +99,20 @@ def should_reply(*, has_recipients: bool, visibility: str, actor_id: uuid.UUID |
     return True
 
 
-async def _plan(session: AsyncSession, event: Event) -> OutboundReply | None:
+async def _plan(session: AsyncSession, event: Event) -> OutboundPlan | None:
+    """Which planner, if any, claims this event.
+
+    The `outbound_configured` gate stays FIRST and shared: with nowhere to send
+    from, every message this consumer ships is equally undeliverable, and the
+    cursor must still advance so enabling a sender later replays nothing.
+    """
     if not await service.outbound_configured(session):
         return None  # unconfigured = advance silently, plan nothing
-    if event.event_type != CommentEvent.CREATED.value:
-        return None
-    return await _plan_reply(session, event)
+    if event.event_type == CommentEvent.CREATED.value:
+        return await _plan_reply(session, event)
+    if event.event_type == ItemEvent.UPDATED.value:
+        return await resolved.plan(session, event)
+    return None
 
 
 async def run_once() -> int:
@@ -115,29 +153,30 @@ async def _plan_reply(session: AsyncSession, event: Event) -> OutboundReply | No
     )
 
 
-async def _deliver_all(replies: list[OutboundReply]) -> None:
-    for reply in replies:
-        await _deliver(reply)
+async def _deliver_all(plans: list[OutboundPlan]) -> None:
+    for plan in plans:
+        await _deliver(plan)
 
 
-async def _deliver(reply: OutboundReply) -> None:
+async def _deliver(plan: OutboundPlan) -> None:
     """Its own session per message: the consumer's cursor is already committed
     by this point (at-most-once, by design), so there is no transaction left to
     join and the transport opens what it needs."""
     async with SessionLocal() as session:
-        for recipient in reply.recipients:
+        for recipient in plan.recipients:
             # Composed PER RECIPIENT: the footer says why this address is on the
             # thread (RADD-967). Today that is one address, but the seam is the
             # same one notify uses for the watcher wording.
-            message = render(reply, recipient)
+            message = plan.render(recipient)
             await service.send_item_mail(
                 session,
-                item_id=reply.item_id,
+                item_id=plan.item_id,
                 to_address=recipient.email,
                 to_name=recipient.name,
-                subject=reply.subject,
+                subject=plan.subject,
                 text=message.text,
                 html=message.html,
-                comment_id=reply.comment_id,
+                comment_id=plan.comment_id,
+                pin_subject=plan.pin_subject,
             )
         await session.commit()

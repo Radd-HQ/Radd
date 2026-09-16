@@ -214,6 +214,38 @@ def comment_reply(item: ItemMail, *, author: str, body: str, reason: str) -> Ren
 ACK_LINK_LABEL = "View the ticket"
 
 
+def _contact_notice(item: ItemMail, *, body: str, reason: str, link_label: str) -> RenderedMail:
+    """The shape every message to an EXTERNAL contact takes: the ticket named in
+    plain text, the prose, then the link (RADD-982 named it; RADD-967 built it).
+
+    Not `comment_reply`'s shape, and the difference is the point. A reply quotes
+    a person and links an issue the recipient may be able to open; this is the
+    desk speaking about a ticket to someone with no account, so the header is a
+    LABEL rather than an anchor and the link is an affordance at the end rather
+    than the subject of the sentence.
+
+    It is a private composer rather than one renderer serving both messages,
+    because the ack and the resolution notice are different messages that
+    happen to look alike today — sharing the chrome is reuse, sharing the
+    function would make the next divergence an edit to both callers' meaning.
+
+    **`reason` rides BOTH halves** (RADD-982). It used to be passed only to
+    `_document`, so the "why am I getting this" line existed in the html and
+    not in the text — the exact drift this module's "both parts, always" rule
+    exists to prevent, invisible because the one caller never passed a reason.
+    `comment_reply` had always put it in both.
+    """
+    footer = f"\n{reason}" if reason else ""
+    text = f"{item.label}\n\n{body}\n\n{link_label}: {item.url}\n{footer}"
+    content = (
+        f'<div style="font-size:12px;color:{MUTED};padding-bottom:10px;'
+        f'border-bottom:1px solid {BORDER};margin-bottom:16px;">{_esc(item.label)}</div>'
+        f"<div>{_lines(body)}</div>"
+        f'<div style="margin-top:18px;">{_button(item.url, link_label)}</div>'
+    )
+    return RenderedMail(text=text, html=_document(content, footer=_esc(reason)))
+
+
 def acknowledgement(item: ItemMail, *, body: str, reason: str = "") -> RenderedMail:
     """The receipt an external requester gets when their mail opens a ticket.
 
@@ -241,14 +273,28 @@ def acknowledgement(item: ItemMail, *, body: str, reason: str = "") -> RenderedM
     drop the bracket mention from the body and replies still thread, because the
     subject line is what `parsing.extract_reply_key` actually reads.
     """
-    text = f"{item.label}\n\n{body}\n\n{ACK_LINK_LABEL}: {item.url}\n"
-    content = (
-        f'<div style="font-size:12px;color:{MUTED};padding-bottom:10px;'
-        f'border-bottom:1px solid {BORDER};margin-bottom:16px;">{_esc(item.label)}</div>'
-        f"<div>{_lines(body)}</div>"
-        f'<div style="margin-top:18px;">{_button(item.url, ACK_LINK_LABEL)}</div>'
-    )
-    return RenderedMail(text=text, html=_document(content, footer=_esc(reason)))
+    return _contact_notice(item, body=body, reason=reason, link_label=ACK_LINK_LABEL)
+
+
+#: The resolution notice's link affordance. The same words as the ack's today —
+#: named separately because it answers a different question ("what happened?"
+#: rather than "did you get this?") and will not always agree with it.
+RESOLVED_LINK_LABEL = "View the ticket"
+
+
+def resolution(item: ItemMail, *, body: str, reason: str = "") -> RenderedMail:
+    """The notice an external contact gets when their ticket resolves (RADD-982).
+
+    The last message of the lifecycle, and until now the only one that did not
+    exist: a requester's ticket went ack → replies → silence, because the one
+    message that said "resolved" was the CSAT survey, which is per-project
+    opt-in and off by default.
+
+    `body` arrives already rendered, `acknowledgement`'s contract and for its
+    reason: the wording is `mailintake`'s policy (`RESOLVED_BODY_TEMPLATE`),
+    and this module reads no settings and owns no vocabulary about states.
+    """
+    return _contact_notice(item, body=body, reason=reason, link_label=RESOLVED_LINK_LABEL)
 
 
 def digest_line(entry: DigestEntry, *, divider: bool = True) -> RenderedMail:

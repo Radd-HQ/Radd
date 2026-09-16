@@ -56,6 +56,15 @@ class OutboundReply:
     item: mailrender.ItemMail
     recipients: tuple[Recipient, ...]
 
+    #: A reply CONTINUES the requester's thread, so the stored subject wins —
+    #: the transport's default. Stated as an attribute since RADD-982 because
+    #: the consumer now ships two kinds of message and reads this off both,
+    #: rather than knowing which one it holds (`outbound.OutboundPlan`).
+    pin_subject: bool = False
+
+    def render(self, recipient: Recipient) -> mailrender.RenderedMail:
+        return render(self, recipient)
+
 
 async def recipients_for(session: AsyncSession, item_id: uuid.UUID) -> tuple[Recipient, ...]:
     """Every external person on this issue's mail thread (RADD-968, RADD-980).

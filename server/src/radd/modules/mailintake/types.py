@@ -427,6 +427,40 @@ ACK_SUBJECT_TEMPLATE = "[{key}] {title}"
 # Outbound reply to the contact when an agent leaves a PUBLIC comment.
 REPLY_SUBJECT_TEMPLATE = "Re: [{key}] {title}"
 
+# --- the resolution notice (RADD-982) ---
+
+# The `changes` diff token for a state move (`items/changes.py`'s `scalar("state", …)`).
+# Copied rather than imported, exactly as `csat.types` copies it: `items` exports no
+# name for it, and a second reader of the diff should not be the reason it gains one.
+STATE_CHANGE_FIELD = "state"
+
+#: Its own sentence, not a `Re:` on the requester's — the resolution OPENS a topic
+#: the way the CSAT survey does, so `send_item_mail` is asked to pin it. Threading
+#: is untouched: In-Reply-To/References still come from the message store, so a
+#: client still files this under the ticket's conversation.
+RESOLVED_SUBJECT_TEMPLATE = "[{key}] Your request has been resolved"
+
+#: What the notice says. `{state}` is the state it actually landed in, because a
+#: desk with "Resolved" and "Closed" means two different things by them and the
+#: requester is the one person who cannot look the difference up.
+RESOLVED_BODY_TEMPLATE = (
+    "Your request {key} — {title} — has been marked {state}.\n"
+    "\n"
+    "If it isn't sorted, reply to this email and the ticket picks up where it "
+    "left off."
+)
+
+#: The notice's footer — the same "why am I getting this" wording as a reply,
+#: pointed at the end of the conversation rather than the middle of it.
+RESOLVED_REASON_TEMPLATE = (
+    "You are receiving this because you contacted us about {key}."
+)
+
+#: The csat plugin's id in the kernel registry. mailintake reaches it DEFERRED and
+#: feature-detected (`weak_depends`), so a disabled or uninstalled csat means "not
+#: announcing" rather than an ImportError — the `ai` seam's shape (RADD-961).
+CSAT_PLUGIN_ID = "csat"
+
 # Why each recipient is being written to — the footer of an outbound reply.
 REPLY_REASON_TEMPLATES = {
     MailRecipientKind.WATCHER: "You are watching {key} — reply to this email to comment.",

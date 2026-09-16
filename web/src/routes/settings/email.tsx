@@ -3,6 +3,7 @@ import { usePermissions } from "../../lib/hooks";
 import { Permission } from "../../lib/types";
 import { EmptyState } from "../../components/EmptyState";
 import { AckTemplatePanel } from "../../components/settings/email/AckTemplatePanel";
+import { AutomaticMessagesPanel } from "../../components/settings/email/AutomaticMessagesPanel";
 import { SendersPanel } from "../../components/settings/email/SendersPanel";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { SourcesPanel } from "../../components/settings/email/SourcesPanel";
@@ -48,6 +49,7 @@ export function EmailSettingsPage() {
         <div className="flex flex-col gap-10">
           <SourcesPanel />
           <SendersPanel />
+          <AutomaticMessagesPanel />
           <AckTemplatePanel />
         </div>
       )}
