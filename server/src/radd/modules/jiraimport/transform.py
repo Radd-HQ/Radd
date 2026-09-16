@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
+from typing import Any
 
 from radd.modules.fields.types import FieldType
 from radd.modules.items.enums import ItemKind, Priority
@@ -168,7 +169,8 @@ class CommentDraft:
     body: str
     author_id: uuid.UUID | None
     created: str | None
-    internal: bool = False  # RADD-1180: Jira restricted it, so Radd does too
+    internal: bool = False  # JSM internal notes retain the staff audience
+    restriction: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -258,6 +260,7 @@ def build(
             author_id=_author_id(comment.author_key, comment.author_email, vocab),
             created=comment.created,
             internal=comment.internal,
+            restriction=comment.restriction,
         )
         for comment in legacy.comments
     ]

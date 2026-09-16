@@ -159,6 +159,7 @@ class ProblemKind(StrEnum):
     PARENT_INCOMPATIBLE = "parent_incompatible"
     LINK_UNRESOLVED = "link_unresolved"
     WORKLOG_FAILED = "worklog_failed"
+    COMMENT_RESTRICTED = "comment_restricted"
     USER_UNRESOLVED = "user_unresolved"
     VALUE_DROPPED = "value_dropped"
     PERMISSION = "permission"

@@ -70,6 +70,29 @@ async def _team_restrictions(
     return out
 
 
+async def comment_audiences(
+    session: AsyncSession, comment_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, dict]:
+    """Body-free audience metadata for an operator's import-provenance audit.
+
+    Internal service seam, not an HTTP reader. The caller owns authorization.
+    """
+    rows = await session.execute(
+        select(Comment.id, Comment.entity_type, Comment.entity_id, Comment.visibility)
+        .where(Comment.id.in_(comment_ids))
+    )
+    restrictions = await _team_restrictions(session, comment_ids)
+    return {
+        row.id: {
+            "entity_type": row.entity_type,
+            "entity_id": str(row.entity_id),
+            "visibility": row.visibility,
+            "team_ids": sorted(str(team) for team in restrictions.get(row.id, set())),
+        }
+        for row in rows
+    }
+
+
 async def _set_teams(
     session: AsyncSession, comment: Comment, team_ids: list[uuid.UUID]
 ) -> set[uuid.UUID]:

@@ -248,7 +248,7 @@ async def _pipeline(
                     "action": outcome.action,
                     "reason": outcome.reason,
                     "title": draft.title[:120],
-                    "comments": len(draft.comments),
+                    "comments": outcome.comments,
                     "worklogs": len(draft.worklogs),
                     "links": len(draft.links),
                 }

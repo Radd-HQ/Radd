@@ -471,10 +471,19 @@ def import_comments(
     ctx: Context, item_id: str, issue: dict[str, Any], attachment_urls: dict[str, str] | None = None
 ) -> None:
     for comment in issue.get("comments") or []:
+        if comment.get("restriction") or isinstance(comment.get("visibility"), dict):
+            ctx.report.warn(f"{issue['jira_key']}: restricted comment omitted; map its audience before importing")
+            continue
         entry = ctx.users_by_email.get(comment["author_email"])
         # Native author + timestamp (project.manage overrides) — no text prefix needed.
         body = replace_attachment_embeds(comment["body"], attachment_urls or {})
-        payload: dict[str, Any] = {"body": jira_to_markdown(body)}
+        payload: dict[str, Any] = {
+            "body": jira_to_markdown(body),
+            "visibility": "internal" if (
+                comment.get("internal") or comment.get("jsdPublic") is False
+                or comment.get("visibility") == "internal"
+            ) else "public",
+        }
         if entry:
             payload["author_id"] = entry["id"]
         if comment.get("created"):

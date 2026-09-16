@@ -112,12 +112,26 @@ async def apply_item(
         )
         return outcome
 
+    if import_comments:
+        for comment in draft.comments:
+            if comment.restriction:
+                outcome.problems.append(Problem(
+                    kind=ProblemKind.COMMENT_RESTRICTED,
+                    message="Restricted Jira comment omitted: its role/group audience needs explicit mapping",
+                    subject=f"{draft.jira_key}#{comment.jira_id}",
+                    detail="Already imported comments require the historical visibility audit; reimport does not repair them."
+                    if comment.jira_id in seen_comment_ids else "The original comment remains in the source snapshot.",
+                ))
+
     existing = await items_service.find_item_by_key(session, radd_key)
     outcome.action = "update" if existing is not None else "create"
     if not commit:
         # Dry run: report what the writes WOULD be, without making them.
         outcome.item_id = existing.id if existing else None
-        outcome.comments = 0 if existing else len(draft.comments)
+        outcome.comments = sum(
+            not comment.restriction and (not comment.jira_id or comment.jira_id not in seen_comment_ids)
+            for comment in draft.comments
+        ) if import_comments else 0
         outcome.worklogs = 0 if existing else len(draft.worklogs)
         outcome.links = len(draft.links)
         return outcome
@@ -271,6 +285,8 @@ async def _comments(
     """
     written = 0
     for comment in draft.comments:
+        if comment.restriction:
+            continue  # No guessed audience: the run reports the omission, even on reimport.
         if comment.jira_id and comment.jira_id in seen:
             continue
         try:

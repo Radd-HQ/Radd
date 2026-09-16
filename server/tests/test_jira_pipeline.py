@@ -389,7 +389,12 @@ async def test_an_internal_jira_comment_imports_as_an_internal_comment(db):
     ])
     try:
         plan = await _plan_for(db, snapshot_id, key)
+        dry = await _run(db, plan, actor_id, RunKind.DRY_RUN)
+        assert dry.counts["comments"] == 2
+        assert any(p["kind"] == "comment_restricted" and p["subject"] == "SRC-3#912" for p in dry.problems)
         run = await _run(db, plan, actor_id, RunKind.IMPORT)
+        assert run.counts["comments"] == 2
+        assert any(p["kind"] == "comment_restricted" and p["subject"] == "SRC-3#912" for p in run.problems)
         assert RunStage(run.stage) is RunStage.DONE, run.problems
 
         async with SessionLocal() as s:
@@ -401,7 +406,7 @@ async def test_an_internal_jira_comment_imports_as_an_internal_comment(db):
             assert rows == {
                 "for the customer": "public",
                 "agent-only note": "internal",
-                "administrators only": "internal",
+
             }
     finally:
         await _cleanup([key])
@@ -738,3 +743,63 @@ async def test_ordinary_creation_still_refuses_a_deactivated_assignee(db):
         async with SessionLocal() as s:
             await s.execute(text("DELETE FROM users WHERE id=:u"), {"u": leaver_id})
             await s.commit()
+
+
+async def test_historical_comment_audit_is_body_free_read_only_and_uses_exact_provenance(db):
+    import copy
+    import json
+    from sqlalchemy.exc import DBAPIError
+    from radd.modules.jiraimport.audit_comments import report_rows
+
+    key = f"AU{uuid.uuid4().hex[:4].upper()}"
+    actor_id = await _admin(db)
+    raw = _issue('SRC-1', summary='History', comments=[
+        {'id': str(i), 'body': f'secret-body-{i}', 'author': {'name': 'adela'}}
+        for i in range(1, 6)
+    ])
+    snapshot_id = await _snapshot(db, 'SRC', [raw])
+    try:
+        plan = await _plan_for(db, snapshot_id, key)
+        run = await _run(db, plan, actor_id, RunKind.IMPORT)
+        # Reconstruct the pre-fix situation: rows were created public even
+        # though the captured source had internal/restricted audiences.
+        historical = copy.deepcopy(raw)
+        source_comments = historical['fields']['comment']['comments']
+        source_comments[0]['jsdPublic'] = False
+        source_comments[1]['visibility'] = {'type': 'group', 'value': 'private-team'}
+        source_comments.pop(3)  # source missing -> unknown, never safe
+        async with SessionLocal() as s:
+            snapshot = await s.get(JiraSnapshotIssue, (snapshot_id, 'SRC-1'))
+            snapshot.payload = historical
+            await s.execute(text("DELETE FROM comments WHERE body='secret-body-5'"))
+            await s.commit()
+        async with SessionLocal() as s:
+            await s.execute(text('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY'))
+            rows = [row async for row in report_rows(s, [run.id])]
+            by_source = {row['source']: row for row in rows}
+            assert {key: row['action'] for key, row in by_source.items()} == {
+                'SRC-1#1': 'make_internal',
+                'SRC-1#2': 'review_restricted_audience',
+                'SRC-1#3': 'no_change_indicated',
+                'SRC-1#4': 'source_unavailable',
+                'SRC-1#5': 'target_missing',
+            }
+            assert all(row['comment_id'] for row in rows)
+            assert by_source['SRC-1#2']['source_restriction']['value'] == 'private-team'
+            assert 'secret-body' not in json.dumps(rows)
+            # Prove the report runs under PostgreSQL's write prohibition.
+            with pytest.raises(DBAPIError):
+                await s.execute(text("UPDATE comments SET visibility='internal' WHERE body='secret-body-1'"))
+            await s.rollback()
+        again = await _run(db, plan, actor_id, RunKind.IMPORT)
+        assert any(p['kind'] == 'comment_restricted' for p in again.problems)
+        async with SessionLocal() as s:
+            assert await s.scalar(text("SELECT visibility FROM comments WHERE body='secret-body-1'")) == 'public'
+            # Removing a snapshot never turns an unauditable run into a clean bill.
+            snapshot = await s.get(JiraSnapshot, snapshot_id)
+            await s.delete(snapshot)
+            await s.commit()
+            rows = [row async for row in report_rows(s, [run.id])]
+            assert all(row['action'] in ('source_unavailable', 'target_missing') for row in rows)
+    finally:
+        await _cleanup([key])
