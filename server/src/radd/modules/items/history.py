@@ -34,6 +34,10 @@ from .service.visibility import _builtin_read_denied, _field_ctx
 # reporting reads it. Keep in sync with those modules' *Event enums.
 # NOTE: csat.*, approval.*, and item.participant_* (specs 65/71/72) are emitted
 # with entity_type=item DIRECTLY, so they reach the feed without an entry here.
+# mail.* is the opposite case and the reason RADD-984 exists: the mail channel
+# emits under entity_type=mail_intake with the item as a SUBJECT, so it could
+# only ever arrive as a related type — and until it was listed, a reply that
+# never reached the customer was invisible on every screen in the product.
 RELATED_EVENT_TYPES: tuple[str, ...] = (
     "comment.created",
     "comment.updated",
@@ -49,6 +53,11 @@ RELATED_EVENT_TYPES: tuple[str, ...] = (
     "vcs.unlinked",
     "attachment.created",
     "attachment.deleted",
+    # The mail channel (RADD-960/984). `mail.dropped` is deliberately absent:
+    # it names no item, by definition, so there is no feed for it to join.
+    "mail.received",
+    "mail.sent",
+    "mail.failed",
 )
 
 _INTERNAL = "internal"
@@ -71,6 +80,14 @@ _DETAIL_KEYS = (
     "verdict",  # approval.voted: approve | decline
     "participant",  # item.participant_* (spec 72): the user/team display name
     "team",  # item.participant_*: set (a {id,name} ref) when the subject is a team
+    # Mail (RADD-984). `recipients` is one address per event since RADD-1036's
+    # per-message emission, but it stays a LIST on the wire — the renderer reads
+    # the count, so a future batched send needs no second shape.
+    "recipients",
+    "recipient_count",
+    "sender",  # mail.received: who wrote in
+    "error",  # mail.failed: one line an operator can act on
+    "given_up",  # mail.failed: the retry ladder ran out — nobody will hear from us
 )
 
 

@@ -12,7 +12,13 @@ import { Spinner } from "../Spinner";
 /**
  * The History tab: the item's chronological, actor-attributed activity feed
  * (`GET /items/{id}/history`) — field changes with old→new values, plus comment,
- * worklog, and link events. Oldest first, matching the composer-at-bottom flow.
+ * worklog, link and MAIL events. Oldest first, matching the composer-at-bottom flow.
+ *
+ * Mail joined the feed in RADD-984, and the failure leg is why: `mail.failed`
+ * was emitted per message and read by nothing, so "the customer never got your
+ * reply" existed only in the event table. A failed row is rendered LOUD and
+ * carries the relay's own error; a send is rendered like every other row,
+ * because the timeline is a ledger, not an alert.
  */
 export function HistoryTab({ itemId }: { itemId: string }) {
   const history = useQuery(itemHistoryQuery(itemId));
@@ -37,6 +43,9 @@ export function HistoryTab({ itemId }: { itemId: string }) {
 function HistoryRow({ entry }: { entry: HistoryEntry }) {
   const who = entry.actor?.name ?? "System";
   const isUpdate = entry.type === "item.updated";
+  // The one row in the feed that is bad news, coloured rather than merely
+  // worded so it is findable by scanning (RADD-984).
+  const failed = entry.type === "mail.failed";
   const durationConfig = useDurationConfig();
   return (
     <li className="flex gap-2.5">
@@ -46,7 +55,9 @@ function HistoryRow({ entry }: { entry: HistoryEntry }) {
       <div className="min-w-0 flex-1">
         <p className="flex flex-wrap items-baseline gap-x-1.5 text-xs">
           <span className="font-medium text-fg">{who}</span>
-          <span className="text-fg-muted">{verb(entry, durationConfig)}</span>
+          <span className={failed ? "font-medium text-status-danger-ink" : "text-fg-muted"}>
+            {verb(entry, durationConfig)}
+          </span>
           <time className="text-fg-faint" dateTime={entry.at} title={formatDateTime(entry.at)}>
             {relativeTime(entry.at)}
           </time>
@@ -132,9 +143,32 @@ function verb(entry: HistoryEntry, durationConfig: DurationConfig): string {
       return detail.team
         ? `removed the ${String(detail.participant ?? "?")} team from participants`
         : `removed participant ${String(detail.participant ?? "?")}`;
+    // The mail channel (RADD-984) — all three are actorless, so they render as
+    // "System …", which is the truth: a consumer sent them, not a person.
+    case "mail.received":
+      return detail.sender
+        ? `received an email from ${String(detail.sender)}`
+        : "received an email";
+    case "mail.sent":
+      return `emailed ${mailAudience(detail)}`;
+    case "mail.failed":
+      return `could not email ${mailAudience(detail)}`;
     default:
       return entry.type;
   }
+}
+
+/**
+ * Who a mail event was addressed to. `recipients` is a list on the wire even
+ * though the transport emits one event per message — reading the count rather
+ * than assuming arity is what keeps this row honest if that ever batches again.
+ */
+function mailAudience(detail: Record<string, unknown>): string {
+  const recipients = Array.isArray(detail.recipients) ? detail.recipients : [];
+  const count = Number(detail.recipient_count ?? recipients.length);
+  if (recipients.length === 1) return String(recipients[0]);
+  if (count > 1) return `${count} recipients`;
+  return "the recipient";
 }
 
 function refTypeLabel(detail: Record<string, unknown>): string {
@@ -147,6 +181,17 @@ function SecondaryLine({ entry }: { entry: HistoryEntry }) {
   const detail = entry.detail ?? {};
   if (entry.type.startsWith("comment.") && detail.visibility === "internal") {
     return <p className="mt-0.5 text-[11px] text-amber-300/80">Internal note</p>;
+  }
+  // A delivery failure says WHAT the relay said and whether anyone will try
+  // again — the two facts an agent needs before re-answering by hand (RADD-984).
+  if (entry.type === "mail.failed") {
+    const error = typeof detail.error === "string" ? detail.error : "";
+    return (
+      <p className="mt-0.5 text-[11px] text-status-danger-ink">
+        {detail.given_up ? "Delivery failed — no further attempts." : "Delivery failed."}
+        {error ? ` ${error}` : ""}
+      </p>
+    );
   }
   const url = typeof detail.url === "string" ? detail.url : null;
   const title = typeof detail.title === "string" && detail.title ? detail.title : url;
