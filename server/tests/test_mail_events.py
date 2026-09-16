@@ -9,13 +9,18 @@ CARRY enough for a rule to be worth writing (who sent it, from what domain, did 
 open the ticket or land on one) — and must NOT carry the body, because an event
 payload is readable by anything that can read the stream while the body already
 lives on the item behind the item's own read gate.
+
+**RADD-984 added the third thing: somebody READS them.** `mail.sent`/`.failed`
+were emitted per message and consumed by nothing — no UI, no feed — so an agent
+could not learn that the customer never got the answer. The last three tests
+walk the item's History feed, which is the screen an agent is already on.
 """
 
 import uuid
 from email.message import EmailMessage
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings
@@ -23,8 +28,10 @@ from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.events.models import Event
 from radd.modules.items import service as items_service
+from radd.modules.items.history import item_history
 from radd.modules.items.schemas import ItemCreate
-from radd.modules.mailintake import intake, parsing, threading
+from radd.modules.mailintake import intake, parsing, threading, transport
+from radd.modules.mailintake.models import MailSender
 from radd.modules.mailintake.types import MailDirection, MailEvent
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
@@ -195,3 +202,77 @@ def test_every_mail_event_is_a_registered_automation_trigger():
     assert triggers[MailEvent.RECEIVED.value].item_scoped is True
     # No item exists for a dropped message, by definition.
     assert triggers[MailEvent.DROPPED.value].item_scoped is False
+
+
+# --- the feed that reads them (RADD-984) ------------------------------------
+
+
+@pytest.fixture
+async def relay(db, monkeypatch):
+    """The environment relay, captured — never a real send. Rows disabled so a
+    sender another test committed cannot be what answers."""
+    from radd import smtp as smtp_util
+
+    await db.execute(update(MailSender).values(enabled=False))
+    monkeypatch.setattr(settings, "smtp_host", "smtp.test")
+    monkeypatch.setattr(smtp_util, "send_message", lambda *a, **k: "<out@radd>")
+    return smtp_util
+
+
+async def _history_types(db, item_id, actor) -> list[str]:
+    return [entry.type for entry in (await item_history(db, item_id, actor)).entries]
+
+
+async def test_a_delivery_failure_is_visible_on_the_items_history(db, world, relay, monkeypatch):
+    """The audit finding, end to end. `send_item_mail` never raises, so before
+    this the ONLY record that a reply was not delivered was a row in the events
+    table — invisible on every screen in the product."""
+    actor, project, item = world
+
+    def explode(*args, **kwargs):
+        raise OSError("relay refused: 550 mailbox unavailable")
+
+    monkeypatch.setattr(relay, "send_message", explode)
+    assert (
+        await transport.send_item_mail(
+            db, item_id=item.id, to_address="jane@vip-customer.com", subject="[X] re", text="t"
+        )
+        is None
+    )
+
+    entries = (await item_history(db, item.id, actor)).entries
+    failed = [e for e in entries if e.type == MailEvent.FAILED.value]
+    assert len(failed) == 1
+    detail = failed[0].detail or {}
+    assert detail["recipients"] == ["jane@vip-customer.com"]
+    # The relay's own words, so the agent knows whether to retype the address
+    # or call someone — the reason `error` is on the payload at all.
+    assert "550 mailbox unavailable" in detail["error"]
+    assert detail["given_up"] is False  # nobody is retrying a reply; it is simply over
+
+
+async def test_a_sent_message_and_an_inbound_one_both_reach_the_history(db, world, relay):
+    """Sent and received belong there too: "did the customer get my reply" is
+    not a question you can answer from failures alone."""
+    actor, project, _ = world
+    outcome = await _accept(db, raw(message_id="<feed@ext>"), project.key)
+    await transport.send_item_mail(
+        db, item_id=outcome.item_id, to_address="jane@vip-customer.com", subject="s", text="t"
+    )
+
+    types = await _history_types(db, outcome.item_id, actor)
+    assert MailEvent.RECEIVED.value in types
+    assert MailEvent.SENT.value in types
+    entries = (await item_history(db, outcome.item_id, actor)).entries
+    received = next(e for e in entries if e.type == MailEvent.RECEIVED.value)
+    assert (received.detail or {})["sender"] == "jane@vip-customer.com"
+    # Actorless: a consumer sent it, not a person. The row renders as "System".
+    assert received.actor is None
+
+
+async def test_a_dropped_message_never_reaches_any_items_history(db, world, relay):
+    """`mail.dropped` names no item by definition, so there is no feed for it to
+    join — and listing it would attach one item's id to another's loop guard."""
+    actor, project, item = world
+    await _accept(db, raw(message_id="<auto2@ext>", Auto_Submitted="auto-replied"), project.key)
+    assert MailEvent.DROPPED.value not in await _history_types(db, item.id, actor)
