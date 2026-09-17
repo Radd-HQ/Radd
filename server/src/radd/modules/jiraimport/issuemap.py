@@ -447,6 +447,16 @@ def _points(raw: Any) -> float | None:
     return value if 0 <= value <= 999 else None
 
 
+def mapped_team(fields: dict, mappings: list[FieldMappingEntry]) -> str | None:
+    """Use the same native team mapping in provisioning and item decoding."""
+    name = None
+    for entry in mappings:
+        if entry.action is FieldAction.NATIVE and entry.builtin_target is BuiltinTarget.TEAM:
+            raw = _scalar(fields.get(entry.jira_id))
+            name = entry.value_map.get(raw, raw) if raw else None
+    return (name.strip() or None) if name else None
+
+
 def _apply_native(
     draft: IssueDraft,
     mappings: list[FieldMappingEntry],
@@ -461,10 +471,7 @@ def _apply_native(
         raw = fields.get(m.jira_id)
         target = m.builtin_target
         if target is BuiltinTarget.TEAM:
-            name = _scalar(raw)
-            # value_map translates the raw value to a team name (Sysadmin "L1" →
-            # "Tier 1"); an unmapped value passes through as its own team name.
-            draft.native_team = m.value_map.get(name, name) if name else None
+            draft.native_team = mapped_team(fields, mappings)
         elif target is BuiltinTarget.STATUS:
             name = _scalar(raw)
             # Only an explicit value_map entry remaps a status → a state name; an

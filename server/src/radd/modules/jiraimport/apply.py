@@ -53,6 +53,7 @@ REFRESHED_COLUMNS = (
     "description",
     "state_id",
     "priority",
+    "team_id",
     "assignee_id",
     "reporter_id",
     "type_id",
@@ -230,6 +231,7 @@ def _create_of(draft: ItemDraft, project_id: uuid.UUID) -> ItemCreate:
         type_id=draft.type_id,
         state_id=draft.state_id,
         priority=draft.priority,
+        team_id=draft.team_id,
         assignee_id=draft.assignee_id,
         reporter_id=draft.reporter_id,
         labels=draft.labels,
@@ -257,6 +259,7 @@ def _update_of(draft: ItemDraft) -> ItemUpdate:
         "updated_at": _as_datetime(draft.updated or draft.created),
     }
     for key, value in (
+        ("team_id", draft.team_id),
         ("assignee_id", draft.assignee_id),
         ("reporter_id", draft.reporter_id),
         ("type_id", draft.type_id),

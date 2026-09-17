@@ -58,6 +58,7 @@ class Vocab:
     field_options: dict[str, frozenset[str]]
     sprint_field_ids: tuple[str, ...]
     epic_link_field_id: str
+    team_ids: dict[str, uuid.UUID] = field(default_factory=dict)
 
     @classmethod
     def of(
@@ -70,6 +71,7 @@ class Vocab:
         sprint_field_ids: tuple[str, ...],
         epic_link_field_id: str,
         field_options: dict[str, frozenset[str]] | None = None,
+        team_ids: dict[str, uuid.UUID] | None = None,
     ) -> "Vocab":
         component = next(
             (c for c in mappings.components if c.action is ComponentAction.FIELD), None
@@ -113,6 +115,7 @@ class Vocab:
             field_options=field_options or {},
             sprint_field_ids=sprint_field_ids,
             epic_link_field_id=epic_link_field_id,
+            team_ids=team_ids or {},
         )
 
 
@@ -133,6 +136,7 @@ class ItemDraft:
     reporter_id: uuid.UUID | None
     created: str | None
     updated: str | None
+    team_id: uuid.UUID | None = None
     labels: list[str] = field(default_factory=list)
     custom_fields: dict = field(default_factory=dict)
     parent_jira_key: str = ""
@@ -217,6 +221,7 @@ def build(
         reporter_id=_person_id(fields.get("reporter"), vocab),
         created=legacy.created,
         updated=legacy.updated,
+        team_id=vocab.team_ids.get((legacy.native_team or "").strip().lower()),
         labels=list(legacy.labels),
         custom_fields=dict(legacy.custom_fields),
         parent_jira_key=legacy.parent_jira_key or "",

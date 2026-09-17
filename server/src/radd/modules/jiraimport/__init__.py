@@ -32,7 +32,7 @@ plugin = RaddPlugin(
     description="Jira import wizard (specs 90, 100): admin-managed Jira Server/DC "
     "connections — list projects, run JQL, infer an inbound schema, map fields to "
     "local custom fields, and run staged background imports.",
-    depends_on=("auth", "projects", "fields", "items", "workflow", "comments", "cycles", "attachments", "events", "itemtypes", "linktypes", "notify", "releases", "timelogging", "weblinks"),
+    depends_on=("auth", "projects", "fields", "items", "workflow", "comments", "cycles", "attachments", "events", "itemtypes", "linktypes", "notify", "releases", "timelogging", "weblinks", "teams"),
     # Deferred + feature-detected: `apply.py` suppresses spec-119 intake
     # validation around each item it writes, because an import is history rather
     # than somebody submitting a request.

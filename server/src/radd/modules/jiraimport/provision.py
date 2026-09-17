@@ -33,10 +33,15 @@ from radd.modules.timelogging import enablement as timelog_enablement
 from radd.modules.workflow import service as workflow_service
 from radd.modules.workflow.schemas import StateCreate
 
-from . import ledger
-from .models import JiraPlan
+from radd.modules.teams import service as teams_service
+from radd.modules.teams.schemas import TeamCreate
+
+from . import ledger, issuemap
+from .snapshot import store
+from .models import JiraPlan, JiraRun
 from .plan.schemas import PlanMappings
 from .types import (
+    BuiltinTarget,
     FieldAction,
     FieldScope,
     LedgerEntity,
@@ -55,6 +60,7 @@ class Provisioned:
     field_keys: set[str] = field(default_factory=set)
     state_ids: dict[str, uuid.UUID] = field(default_factory=dict)  # Jira status → state
     type_ids: dict[str, uuid.UUID] = field(default_factory=dict)  # Jira type → issue type
+    team_ids: dict[str, uuid.UUID] = field(default_factory=dict)
     user_ids: dict[str, uuid.UUID] = field(default_factory=dict)  # Jira user key → user
     link_type_keys: set[str] = field(default_factory=set)
     problems: list[Problem] = field(default_factory=list)
@@ -89,6 +95,7 @@ async def run(
         if commit:
             # Worklogs 409 unless time logging is on for the project.
             await timelog_enablement.set_enabled(session, out.project_id, True)
+    await _teams(session, plan, mappings, run_id, commit, out)
     await _users(session, mappings, run_id, placeholder_domain, commit, out)
     return out
 
@@ -523,3 +530,35 @@ async def _users(
                     detail=str(exc),
                 )
             )
+
+
+async def _teams(session, plan, mappings, run_id, commit, out) -> None:
+    entries = [m for m in mappings.fields
+               if m.action is FieldAction.NATIVE and m.builtin_target is BuiltinTarget.TEAM]
+    if not entries:
+        return
+    existing = {t.name.strip().lower(): t.id for t in await teams_service.list_teams(session)}
+    run = await session.get(JiraRun, run_id) if run_id else None
+    async for row in store.iter_issues(session, plan.snapshot_id):
+        name = issuemap.mapped_team(row.payload.get("fields") or {}, entries)
+        if not name:
+            continue
+        key = name.lower()
+        if key in out.team_ids:
+            continue
+        if key in existing:
+            out.team_ids[key] = existing[key]
+            continue
+        if not commit:
+            TeamCreate(name=name)  # Preview enforces the same name bounds.
+            out.team_ids[key] = uuid.uuid4()
+            out._bump("teams")
+            continue
+        async with session.begin_nested():
+            created = await teams_service.create_team(
+                session, TeamCreate(name=name), actor_id=run.actor_id if run else None
+            )
+            out.team_ids[key] = created.id
+            out._bump("teams")
+            if run_id:
+                ledger.created(session, run_id, LedgerEntity.TEAM, created.id, subject=name)

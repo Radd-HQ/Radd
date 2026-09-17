@@ -168,6 +168,7 @@ async def _pipeline(
         state_ids=provisioned.state_ids,
         type_ids=provisioned.type_ids,
         user_ids=provisioned.user_ids,
+        team_ids=provisioned.team_ids,
         sprint_field_ids=_sprint_fields(snapshot),
         epic_link_field_id=_epic_field(snapshot),
         # So a value the target select will not accept is dropped from the field

@@ -803,3 +803,44 @@ async def test_historical_comment_audit_is_body_free_read_only_and_uses_exact_pr
             assert all(row['action'] in ('source_unavailable', 'target_missing') for row in rows)
     finally:
         await _cleanup([key])
+
+
+@pytest.mark.parametrize("preimport", [False, True])
+async def test_native_team_mapping_dry_run_reimport_and_rollback(db, preimport):
+    from radd.modules.jiraimport.schemas import FieldMappingEntry
+    from radd.modules.jiraimport.types import BuiltinTarget, FieldAction
+    key = f"TM{uuid.uuid4().hex[:4].upper()}"
+    team_name = f"Domain-{uuid.uuid4().hex[:8]}"
+    actor = await _admin(db)
+    snapshot = await _snapshot(db, 'SRC', [
+        _issue('SRC-1', summary='One', cf={'customfield_domain': {'value': 'Pipeline'}}),
+        _issue('SRC-2', summary='Two', cf={'customfield_domain': {'value': 'Pipeline'}}),
+    ])
+    plan = await _plan_for(db, snapshot, key)
+    try:
+        if preimport:
+            await _run(db, plan, actor, RunKind.IMPORT)  # Previously imported without a team.
+        mappings = plan_service.mappings(plan)
+        mappings.fields = [m for m in mappings.fields if m.jira_id != 'customfield_domain']
+        mappings.fields.append(FieldMappingEntry(jira_id='customfield_domain', jira_name='Domain',
+            action=FieldAction.NATIVE, builtin_target=BuiltinTarget.TEAM,
+            value_map={'Pipeline': team_name}))
+        plan.mappings = mappings.model_dump(mode='json')
+        await db.commit()
+        dry = await _run(db, plan, actor, RunKind.DRY_RUN)
+        assert dry.counts.get('teams_created') == 1, (dry.counts, dry.problems)
+        assert await db.scalar(text('SELECT count(*) FROM teams WHERE name=:n'), {'n': team_name}) == 0
+        imported = await _run(db, plan, actor, RunKind.IMPORT)
+        assert imported.stage == RunStage.DONE.value, imported.problems
+        async with SessionLocal() as s:
+            team = await s.scalar(text('SELECT id FROM teams WHERE name=:n'), {'n': team_name})
+            for number in [1, 2]:
+                assert (await items_service.find_item_by_key(s, f'{key}-{number}')).team_id == team
+            result = await rollback.execute(s, await s.get(JiraRun, imported.id), include_schema=True, skip_edited=False)
+            assert not result.problems
+            await s.commit()
+            restored = await items_service.find_item_by_key(s, f'{key}-1')
+            assert (restored is not None and restored.team_id is None) if preimport else restored is None
+            assert await s.scalar(text('SELECT count(*) FROM teams WHERE name=:n'), {'n': team_name}) == 0
+    finally:
+        await _cleanup([key])
