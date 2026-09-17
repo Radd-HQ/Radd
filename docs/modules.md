@@ -664,3 +664,10 @@ rights; starring does not change workflow state or a shared board's order.
 Proof: `web/scripts/starred-proof.mjs` (toggle, keyboard isolation, failed writes,
 completed rows, cursor paging, cross-page search, filters, rail and mobile layout)
 and `server/tests/test_personal_starred.py` (per-user isolation and completed pins).
+
+RADD-1211 adds a List/Cards switch to Starred. The presentation preference is
+stored per account in this browser, with cards as the initial default. Both
+layouts share the same query, filters, loaded cursor windows and personal-star
+actions; changing layout does not refetch the issue collection. The list shows
+key/title, status, priority and owner in aligned desktop columns and wraps into
+compact rows on narrow screens.

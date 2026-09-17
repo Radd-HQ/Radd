@@ -95,6 +95,12 @@ try{
  await s.click('button',t=>t==='Show more');
  await until(async()=> (await s.eval('document.body.innerText')).includes('Saved issue 53'));
  assert(requests.some(r=>r.searchParams?.get('after')==='50'));
+ const beforeLayout=requests.filter(r=>r.pathname==='/api/v1/items').length;
+ await s.click('button',t=>t==='List');
+ assert.equal(await s.eval(`document.querySelectorAll('ul[aria-label="Starred list"]>li').length`),53,'Layout retains every loaded issue');
+ assert.equal(requests.filter(r=>r.pathname==='/api/v1/items').length,beforeLayout,'Layout is presentation only');
+ assert.equal(await s.eval(`document.querySelector('[aria-label="Starred layout"] button[aria-pressed="true"]').textContent`),'List');
+
  await s.click('button[aria-label="Unstar DEV-1"]');
  await until(async()=> !await s.eval(`Boolean(document.querySelector('li[aria-label="DEV-1"]'))`));
  assert(!stars.has(1));
@@ -109,13 +115,20 @@ try{
  await s.click('button[aria-label="Collapse sidebar"]');
  assert(await s.eval(`Boolean(document.querySelector('a[aria-label="Starred"]'))`),'Collapsed navigation retains Starred');
  await s.click('button[aria-label="Expand sidebar"]');
+ await s.screenshot('/tmp/radd-starred-list-proof.png');
+ await s.click('button',t=>t==='Cards');
+ assert(await s.eval(`Boolean(document.querySelector('ul[aria-label="Starred cards"]'))`));
  await s.screenshot('/tmp/radd-starred-proof.png');
+ await s.click('button',t=>t==='List');
+ await s.navigate(`http://127.0.0.1:${server.address().port}/starred`,1500);
+ await until(async()=>await s.eval(`Boolean(document.querySelector('ul[aria-label="Starred list"]>li'))`));
+
  await s.send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:false});
- await s.screenshot('/tmp/radd-starred-mobile-proof.png');
+ await s.screenshot('/tmp/radd-starred-list-mobile-proof.png');
  assert(await s.eval('document.documentElement.scrollWidth<=window.innerWidth'),'No horizontal page overflow');
  stars.clear();
  await s.navigate(`http://127.0.0.1:${server.address().port}/starred`,1500);
  await until(async()=> (await s.eval('document.body.innerText')).includes('No starred issues yet'));
  assert.deepEqual(s.consoleErrors.filter(e=>!e.includes('500')),[]);
- console.log('PASS: read-only quick stars, keyboard isolation, failure recovery, personal pin board, completed issues, cursor paging, search beyond first page, status filters and mobile layout.');
+ console.log('PASS: read-only quick stars, keyboard isolation, failure recovery, personal pin board, completed issues, cursor paging, search beyond first page, status filters mobile layout, list/card switching without refetch and persisted layout.');
 }finally{browser?.close();await new Promise(resolve=>server.close(resolve));}
