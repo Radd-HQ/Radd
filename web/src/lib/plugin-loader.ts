@@ -28,81 +28,95 @@ export type RemoteStatusValue = (typeof RemoteStatus)[keyof typeof RemoteStatus]
 
 interface LoadedRemote {
   name: string;
+  identity: string;
   status: RemoteStatusValue;
   module?: PluginModule;
   error?: string;
+  cancelled: boolean;
+  pending?: Promise<void>;
 }
 
 const loaded = new Map<string, LoadedRemote>();
+const identity = (remote: PluginRemote) => JSON.stringify([remote.remote_entry, remote.ui_api_version]);
 
-function buildContext(name: string): PluginContext {
+function buildContext(entry: LoadedRemote): PluginContext {
   return {
-    plugin: name,
-    registerSlot: (slot, contribution) => registerSlot(slot, contribution, { plugin: name }),
+    plugin: entry.name,
+    registerSlot: (slot, contribution) => {
+      // An activation that finished after disable/replacement cannot add stale UI.
+      if (!entry.cancelled && loaded.get(entry.name) === entry) {
+        registerSlot(slot, contribution, { plugin: entry.name });
+      }
+    },
   };
 }
 
-async function loadRemote(remote: PluginRemote): Promise<void> {
-  const { name, remote_entry: entry, ui_api_version: version } = remote;
+async function deactivate(entry: LoadedRemote): Promise<void> {
+  try {
+    await entry.module?.deactivate?.(buildContext(entry));
+  } catch (error) {
+    console.error(`[radd] plugin UI "${entry.name}" deactivate() failed:`, error);
+  }
+}
+
+async function loadRemote(remote: PluginRemote, entry: LoadedRemote): Promise<void> {
+  const { name, remote_entry: url, ui_api_version: version } = remote;
   if (!isUiApiCompatible(version)) {
-    console.warn(
-      `[radd] plugin "${name}" UI (ui_api_version=${version}) is incompatible with this host — not loaded`,
-    );
-    loaded.set(name, { name, status: RemoteStatus.incompatible, error: `ui_api_version ${version}` });
+    entry.status = RemoteStatus.incompatible;
+    entry.error = `ui_api_version ${version}`;
     return;
   }
   try {
-    const imported = (await import(/* @vite-ignore */ entry)) as
-      | PluginModule
-      | { default?: PluginModule };
-    // A remote may `export default definePlugin({...})` (the common case) or export `activate`
-    // as a named export — accept either.
+    const imported = (await import(/* @vite-ignore */ url)) as PluginModule | { default?: PluginModule };
+    if (entry.cancelled) return;
     const mod = ("default" in imported && imported.default ? imported.default : imported) as PluginModule;
+    entry.module = mod;
     if (!Array.isArray(mod.contributions) && typeof mod.activate !== "function") {
-      throw new Error("remote entry exports neither `contributions` nor `activate`");
+      throw new Error("remote entry exports neither contributions nor activate");
     }
-    const ctx = buildContext(name);
-    // Declarative contributions first (the manifest style), then the imperative escape hatch.
+    const ctx = buildContext(entry);
     for (const [i, c] of (mod.contributions ?? []).entries()) {
       const { slot, id, ...rest } = c;
       ctx.registerSlot(slot, { id: id ?? `${slot}#${i}`, ...rest });
     }
-    if (typeof mod.activate === "function") await mod.activate(ctx);
-    loaded.set(name, { name, status: RemoteStatus.loaded, module: mod });
-    console.info(`[radd] plugin UI "${name}" loaded`);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`[radd] plugin UI "${name}" failed to load (quarantined):`, error);
-    loaded.set(name, { name, status: RemoteStatus.errored, error: message });
-  }
-}
-
-function unloadRemote(name: string): void {
-  const entry = loaded.get(name);
-  if (entry?.module?.deactivate) {
-    try {
-      entry.module.deactivate(buildContext(name));
-    } catch (error) {
-      console.error(`[radd] plugin UI "${name}" deactivate() threw:`, error);
+    await mod.activate?.(ctx);
+    if (entry.cancelled) {
+      await deactivate(entry);
+      return;
     }
+    entry.status = RemoteStatus.loaded;
+  } catch (error) {
+    if (loaded.get(name) === entry) unregisterPlugin(name);
+    entry.cancelled = true;
+    entry.status = RemoteStatus.errored;
+    entry.error = error instanceof Error ? error.message : String(error);
+    await deactivate(entry);
+    console.error(`[radd] plugin UI "${name}" failed to load:`, entry.error);
   }
-  unregisterPlugin(name);
-  loaded.delete(name);
 }
 
-/**
- * Reconcile loaded remotes with the ENABLED set from the manifest. Idempotent — safe to call on
- * every capabilities change. Returns when all newly-enabled remotes have settled.
- */
+/** Reconcile immediately, including in-flight loads. Changed URLs reload; failed
+ * entries remain quarantined until replacement or disable/re-enable. */
 export async function syncPluginRemotes(remotes: PluginRemote[] | undefined): Promise<void> {
   const enabled = new Map((remotes ?? []).map((r) => [r.name, r]));
-
-  // Unload remotes that are no longer enabled (disable → live unmount).
-  for (const name of [...loaded.keys()]) {
-    if (!enabled.has(name)) unloadRemote(name);
+  const cleanup: Promise<void>[] = [];
+  for (const [name, entry] of loaded) {
+    const next = enabled.get(name);
+    if (!next || identity(next) !== entry.identity) {
+      entry.cancelled = true;
+      unregisterPlugin(name);
+      loaded.delete(name);
+      // In-flight activation owns its eventual cleanup; do not deactivate twice.
+      if (!entry.pending) cleanup.push(deactivate(entry));
+    }
   }
-
-  // Load newly-enabled remotes (skip ones already loaded/quarantined this session).
-  const toLoad = [...enabled.values()].filter((r) => !loaded.has(r.name));
-  await Promise.all(toLoad.map(loadRemote));
+  for (const remote of enabled.values()) {
+    if (loaded.has(remote.name)) continue;
+    const entry: LoadedRemote = {
+      name: remote.name, identity: identity(remote), status: RemoteStatus.loaded, cancelled: false,
+    };
+    loaded.set(remote.name, entry);
+    entry.pending = loadRemote(remote, entry).finally(() => { entry.pending = undefined; });
+  }
+  await Promise.all([...cleanup, ...[...loaded.values()].map((entry) => entry.pending)]);
 }

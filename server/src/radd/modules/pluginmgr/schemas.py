@@ -21,6 +21,11 @@ class PluginRead(BaseModel):
     description: str
     can_toggle: bool
     capabilities: list[PluginCapabilityRead] = []
+    active: bool = False
+    restart_required: bool = False
+    origin: str = "builtin"
+    dependencies: list[str] = []
+    problems: list[str] = []
 
 
 class ContributionSettings(BaseModel):

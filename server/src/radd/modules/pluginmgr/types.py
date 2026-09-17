@@ -12,13 +12,13 @@ class PluginOrigin(StrEnum):
 
 class PluginState(StrEnum):
     """The lifecycle states (docs/plugin-platform.md §10). Core plugins are always
-    ENABLED and locked. Non-core: DISCOVERED → INSTALLED (migrations up) → ENABLED
-    ⇄ DISABLED → UNINSTALLED (migrations down)."""
+    ENABLED and locked. Non-core: DISCOVERED → INSTALLED → ENABLED ⇄ DISABLED.
+    These are desired states, applied on process restart. Forgetting preserves data."""
 
     DISCOVERED = "discovered"  # known to the manager, not installed
-    INSTALLED = "installed"  # tables migrated, not active
-    ENABLED = "enabled"  # active (routers mounted, tasks running, nav shown)
-    DISABLED = "disabled"  # installed but inactive
+    INSTALLED = "installed"  # registered, not requested active
+    ENABLED = "enabled"  # requested active on restart
+    DISABLED = "disabled"  # requested inactive on restart
     ERRORED = "errored"  # quarantined: load/startup threw (boot survives)
 
 

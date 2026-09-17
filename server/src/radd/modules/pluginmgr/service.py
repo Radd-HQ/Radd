@@ -2,19 +2,20 @@
 
 Core plugins (`config.modules`) are always ENABLED and cannot be disabled/uninstalled.
 Non-core plugins carry a row in `installed_plugins`; absent a row they are DISCOVERED.
-Enable/disable flip the state (the running app mounts/unmounts accordingly + the next
-boot resolves the enabled set); install/uninstall are the heavy migration steps.
+Enable/disable save desired state. All processes apply it on restart. Install registers
+a delivered package; uninstall forgets it and preserves data. Neither runs package managers.
 """
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError, NotFoundError
 from radd.kernel import capabilities as kcaps
-from radd.kernel import changes
+from radd.kernel import changes, registries
+from radd.kernel.loader import plugin_problems
 from radd.modules.events import service as events
 
 from . import discovery
@@ -36,6 +37,11 @@ class PluginInfo:
     # connector still reports whether its env config is present (the Plugins
     # page is the home for per-connector status; settings reorg).
     capabilities: tuple[dict, ...] = ()
+    active: bool = False
+    restart_required: bool = False
+    origin: str = "builtin"
+    dependencies: tuple[str, ...] = ()
+    problems: tuple[str, ...] = ()
 
 
 def _capabilities(plugin) -> tuple[dict, ...]:
@@ -63,7 +69,9 @@ async def list_plugins(session: AsyncSession) -> list[PluginInfo]:
     state (DISCOVERED until installed)."""
     rows = await _states(session)
     infos: list[PluginInfo] = []
-    for plugin_id, (plugin, _path) in discovery.core_plugins().items():
+    core_plugins = discovery.core_plugins()
+    installable_plugins = discovery.installable_plugins()
+    for plugin_id, (plugin, _path) in core_plugins.items():
         row = rows.get(plugin_id)
         if plugin.core:
             state, toggle = PluginState.ENABLED, False
@@ -73,12 +81,33 @@ async def list_plugins(session: AsyncSession) -> list[PluginInfo]:
         infos.append(PluginInfo(plugin_id, plugin.name, plugin.version, plugin.core, state,
                                 plugin.description, can_toggle=toggle,
                                 capabilities=_capabilities(plugin)))
-    for plugin_id, (plugin, _path) in discovery.installable_plugins().items():
+    for plugin_id, (plugin, _path) in installable_plugins.items():
         row = rows.get(plugin_id)
         state = PluginState(row.state) if row else PluginState.DISCOVERED
         infos.append(PluginInfo(plugin_id, plugin.name, plugin.version, False, state,
                                 plugin.description, can_toggle=True,
                                 capabilities=_capabilities(plugin)))
+    known = {**core_plugins, **installable_plugins}
+    enabled_names = {i.name for i in infos if i.state == PluginState.ENABLED}
+    infos = [replace(
+        i, active=i.id in registries.plugins,
+        restart_required=(i.state == PluginState.ENABLED) != (i.id in registries.plugins),
+        origin="builtin" if i.id in core_plugins else "package",
+        dependencies=known[i.id][0].depends_on,
+        problems=tuple(plugin_problems(known[i.id][0], enabled_names)),
+    ) for i in infos]
+    for plugin_id, row in rows.items():
+        if plugin_id not in known:
+            infos.append(PluginInfo(
+                plugin_id, plugin_id, row.version, False, PluginState(row.state),
+                "Previously registered package is unavailable in this deployment", False,
+                active=plugin_id in registries.plugins, origin="missing",
+                problems=("Restore the package in the deployment image to manage it. Stored data is retained.",),
+            ))
+    for name, problem in discovery.discovery_errors.items():
+        infos.append(PluginInfo(f"discovery:{name}", name, "unknown", False, PluginState.ERRORED,
+                                "Package could not be discovered", False, origin="package",
+                                problems=(problem,)))
     infos.sort(key=lambda i: (i.core, i.id))
     return infos
 
@@ -128,12 +157,16 @@ async def _upsert(session: AsyncSession, plugin, state: PluginState) -> Installe
         session.add(row)
     else:
         row.state = state.value
+        row.version = plugin.version
     await session.flush()
     return row
 
 
 async def install(session: AsyncSession, plugin_id: str, actor_id: uuid.UUID | None = None) -> InstalledPlugin:
     plugin, _path, kind = _resolve_toggleable(plugin_id)
+    problems = plugin_problems(plugin, {p.name for p, _ in discovery.all_known().values()})
+    if problems:
+        raise ConflictError(PluginEntity.PLUGIN, reason="; ".join(problems))
     if kind == PluginOrigin.BOOTSTRAP.value:  # ships in the main migration chain — install ⇒ ensure enabled
         return await enable(session, plugin_id, actor_id)
     row = await _row(session, plugin_id)
@@ -152,6 +185,10 @@ async def install(session: AsyncSession, plugin_id: str, actor_id: uuid.UUID | N
 
 async def enable(session: AsyncSession, plugin_id: str, actor_id: uuid.UUID | None = None) -> InstalledPlugin:
     plugin, _path, _kind = _resolve_toggleable(plugin_id)
+    infos = await list_plugins(session)
+    problems = plugin_problems(plugin, {i.name for i in infos if i.state == PluginState.ENABLED and i.origin != "missing"})
+    if problems:
+        raise ConflictError(PluginEntity.PLUGIN, reason="; ".join(problems))
     row = await _upsert(session, plugin, PluginState.ENABLED)
     await _emit(session, PluginEvent.ENABLED, plugin_id, actor_id)
     return row
@@ -160,6 +197,11 @@ async def enable(session: AsyncSession, plugin_id: str, actor_id: uuid.UUID | No
 async def disable(session: AsyncSession, plugin_id: str, actor_id: uuid.UUID | None = None) -> InstalledPlugin:
     plugin, _path, kind = _resolve_toggleable(plugin_id)
     _ensure_no_dependents(plugin)
+    dependents = [i.name for i in await list_plugins(session)
+                  if i.id != plugin.id and i.state == PluginState.ENABLED
+                  and plugin.name in i.dependencies]
+    if dependents:
+        raise ConflictError(PluginEntity.PLUGIN, reason=f"Required by {', '.join(dependents)}")
     row = await _row(session, plugin_id)
     # An installable plugin must actually be enabled to disable; an optional bootstrap
     # plugin is enabled-by-default (no row), so disabling writes a DISABLED row.
@@ -333,6 +375,14 @@ async def uninstall(session: AsyncSession, plugin_id: str, actor_id: uuid.UUID |
             PluginEntity.PLUGIN, reason=f"{plugin_id} is a builtin — disable it instead of uninstalling"
         )
     _ensure_no_dependents(plugin)
+    dependents = [i.name for i in await list_plugins(session)
+                  if i.id != plugin.id and i.state == PluginState.ENABLED
+                  and plugin.name in i.dependencies]
+    if dependents:
+        raise ConflictError(PluginEntity.PLUGIN, reason=f"Required by {', '.join(dependents)}")
+    if plugin.id in registries.plugins:
+        raise ConflictError(PluginEntity.PLUGIN,
+                            reason="Disable this plugin and restart all processes before uninstalling")
     await sweep_plugin_atoms(session, plugin, actor_id)
     row = await _row(session, plugin_id)
     if row is not None:

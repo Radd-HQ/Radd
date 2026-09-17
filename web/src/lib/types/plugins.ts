@@ -66,5 +66,10 @@ export interface Plugin {
   state: string;
   description: string;
   can_toggle: boolean;
+  active: boolean;
+  restart_required: boolean;
+  origin: string;
+  dependencies: string[];
+  problems: string[];
   capabilities: PluginCapability[];
 }

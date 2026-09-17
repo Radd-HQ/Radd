@@ -10,6 +10,7 @@ import { type Plugin } from "../../lib/types";
 import { Button } from "../../components/Button";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { SettingsPage } from "../../components/settings/SettingsPage";
+import { TextField } from "../../components/TextField";
 import { Spinner } from "../../components/Spinner";
 import { QueryError } from "../../components/QueryError";
 import { settingsPathForPlugin } from "./layout";
@@ -58,7 +59,8 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
     mutationFn: () => api.post<Plugin[]>(`${ApiPath.plugins}/${plugin.id}/disable`),
     onSuccess: invalidate,
   });
-  const busy = enable.isPending || disable.isPending;
+  const busy = enable.isPending || disable.isPending || install.isPending || uninstall.isPending;
+  const actionError = enable.error || disable.error || install.error || uninstall.error;
   const enabled = plugin.state === "enabled";
   // A plugin OPTS IN to instance-wide contribution toggles (spec 94) by contributing a
   // `pluginManagerSection` widget keyed by its registry name — the kernel forces nothing. If it did,
@@ -89,6 +91,7 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
             <span className="truncate text-[13px] font-medium text-heading">{plugin.id}</span>
             <span className="text-[11px] text-fg-muted">v{plugin.version}</span>
             <StateBadge state={plugin.state} />
+            <span className="text-[11px] text-fg-muted">{plugin.origin === "package" ? "Package" : "Built in"}</span>
             {/* Connector configured-ness (env token present) — the home for
                 per-connector status since the 2026-08-01 reorg; the Server
                 Overview keeps only a summary count. */}
@@ -115,12 +118,21 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
           {plugin.description && (
             <p className="mt-0.5 truncate text-[12px] text-fg-muted">{plugin.description}</p>
           )}
+          <p className="mt-1 text-[12px] text-fg-muted">
+            {plugin.active ? "Loaded on this server" : "Not loaded on this server"}
+            {plugin.restart_required && " · Restart required to apply this change"}
+          </p>
+          {plugin.dependencies?.length > 0 && <p className="mt-1 text-[12px] text-fg-muted">
+            Requires: {plugin.dependencies.join(", ")}
+          </p>}
+          {plugin.problems?.map((problem) => <p key={problem} className="mt-1 text-[12px] text-fg">{problem}</p>)}
+          {actionError && <p role="alert" className="mt-1 text-[12px] text-fg">{actionError.message}</p>}
         </div>
         {/* RADD-928: a plugin that owns a settings tab links to it from here, so
             "where do I configure this?" is answered on the plugin's own row —
             the discoverability a dedicated tab otherwise costs. Only while
             enabled: the tab is withdrawn with the plugin. */}
-        {enabled && settingsLink && (
+        {plugin.active && settingsLink && (
           <Link
             to={settingsLink.to}
             className="flex items-center gap-1 rounded-md px-2 py-1 text-[12px] text-accent-text hover:bg-elevated hover:text-accent-text-strong focus-visible:outline-2 focus-visible:outline-focus"
@@ -133,8 +145,10 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
           <span className="flex items-center gap-1 text-[12px] text-fg-muted">
             <Lock size={12} aria-hidden /> Core
           </span>
+        ) : !plugin.can_toggle ? (
+          <span className="text-[12px] text-fg-muted">Package needs attention</span>
         ) : plugin.state === "discovered" ? (
-          <Button size="sm" disabled={install.isPending} onClick={() => install.mutate()}>
+          <Button size="sm" disabled={busy} onClick={() => install.mutate()}>
             {install.isPending ? "Installing…" : "Install"}
           </Button>
         ) : enabled ? (
@@ -143,28 +157,28 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
           </Button>
         ) : (
           <>
-            <Button size="sm" disabled={busy} onClick={() => enable.mutate()}>
+            <Button size="sm" disabled={busy || (plugin.problems?.length ?? 0) > 0} onClick={() => enable.mutate()}>
               Enable
             </Button>
-            <Button
+            {plugin.origin === "package" && <Button
               size="sm"
               variant="ghost"
               className="border border-strong hover:border-red-500/50 hover:text-red-300"
-              disabled={uninstall.isPending}
+              disabled={busy || plugin.active}
               onClick={() => {
                 void confirm({
-                  title: `Uninstall ${plugin.id}?`,
+                  title: `Forget ${plugin.id}?`,
                   message:
-                    "Uninstalling runs the plugin's migrations DOWN — its tables and their data are removed. Disable keeps the data; this does not.",
-                  confirmLabel: "Uninstall",
+                    "This removes registration and plugin-specific permission grants. Stored plugin data and the deployed package remain. Reinstalling will require reviewing permissions again.",
+                  confirmLabel: "Forget plugin",
                   danger: true,
                 }).then((ok) => {
                   if (ok) uninstall.mutate();
                 });
               }}
             >
-              {uninstall.isPending ? "Uninstalling…" : "Uninstall…"}
-            </Button>
+              {uninstall.isPending ? "Forgetting…" : "Forget…"}
+            </Button>}
           </>
         )}
       </div>
@@ -190,19 +204,34 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
 
 export function PluginsSettingsPage() {
   const { data: plugins, isLoading, error } = useQuery(pluginsQuery);
+  const [search, setSearch] = useState("");
+  const visible = (plugins ?? []).filter(plugin =>
+    `${plugin.id} ${plugin.name} ${plugin.description}`.toLowerCase().includes(search.trim().toLowerCase()));
 
   return (
     <SettingsPage history={{ entities: ["plugin"] }}
       title="Plugins"
-      description="Install, enable, and disable plugins. Core plugins are always on; enabling a plugin mounts its endpoints, events, permissions, and nav — no restart."
+      description="Manage plugin packages delivered with your deployment. Enable and disable save the requested state; restart all web and worker processes to apply it."
     >
+      <div className="mb-4 rounded-lg border border-subtle bg-surface p-4 text-[13px] text-fg-secondary">
+        <p className="font-medium text-heading">Add a plugin</p>
+        <p className="mt-1">Deploy an image containing the versioned plugin package to both web and workers.
+          It appears here automatically. Install it, review its requirements, enable it, then restart all processes.</p>
+        <p className="mt-2">Updates use a new deployment image. Disabling keeps data; forgetting also removes plugin-specific grants.
+          The loaded status below describes this server only.</p>
+      </div>
+      <div className="mb-4">
+        <TextField label="Find a plugin" placeholder="Search by name or description…"
+          value={search} onChange={event => setSearch(event.target.value)} />
+      </div>
       {isLoading ? (
         <Spinner />
       ) : error ? (
         <QueryError label="plugins" error={error} />
       ) : (
         <ul className="overflow-hidden rounded-lg border border-subtle/80 bg-surface/40">
-          {(plugins ?? []).map((p) => (
+          {visible.length === 0 && <li className="px-4 py-3 text-[13px] text-fg-muted">No plugins match your search.</li>}
+          {visible.map((p) => (
             <PluginRow key={p.id} plugin={p} />
           ))}
         </ul>

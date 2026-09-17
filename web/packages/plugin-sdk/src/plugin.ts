@@ -29,7 +29,7 @@ export interface PluginModule {
   contributions?: PluginContribution[];
   /** Imperative escape hatch, for dynamic/conditional registration. */
   activate?: (ctx: PluginContext) => void | Promise<void>;
-  deactivate?: (ctx: PluginContext) => void;
+  deactivate?: (ctx: PluginContext) => void | Promise<void>;
 }
 
 /** Identity helper for type-checking a remote's entry module. */

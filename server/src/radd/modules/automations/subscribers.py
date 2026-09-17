@@ -41,7 +41,7 @@ def is_enabled() -> bool:
     turned off, which is the one thing disabling a plugin has to mean.
 
     Asked of the kernel registry rather than kept as a flag of our own —
-    `pluginmgr.runtime.unmount_plugin` pops it there, and `ai.features.
+    The boot loader omits disabled plugins there, and `ai.features.
     plugin_loaded` is the same question asked the same way. A private flag would
     be a second copy of that fact, and a lifecycle hook is the wrong place to
     keep it: it is per-PROCESS, so an app teardown anywhere would leave the next

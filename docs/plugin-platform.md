@@ -1,5 +1,6 @@
 # Radd Plugin Platform — architecture & plan
 
+Current implemented development and lifecycle contract: [spec 124](specs/124-external-plugin-workflow.md) and [developer workflow](plugin-development.md). These supersede the live-install and automatic-migration proposals below.
 **Status: design document, partially superseded.** The kernel (spec 93), the frontend
 plugin platform (spec 94), scoped keys (spec 113) and the MCP tool registry (spec 114) are
 **BUILT** — §-references to "today" below describe the pre-93 codebase. This document is

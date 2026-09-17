@@ -206,6 +206,11 @@ class KernelRegistries:
         """Remove a plugin's contributions (runtime disable) — its nav, event types,
         atoms, resources, capabilities, integrations, and entities stop being served."""
         self.plugins.pop(plugin.id, None)
+        for task in plugin.tasks:
+            if self.tasks.get(task.name) is task:
+                self.tasks.pop(task.name)
+        remaining_consumers = {name for p in self.plugins.values() for name in p.consumer_names}
+        self.consumer_names.difference_update(set(plugin.consumer_names) - remaining_consumers)
         for e in plugin.entities:
             self.entities.pop(e.key, None)
         for et in plugin.event_types:

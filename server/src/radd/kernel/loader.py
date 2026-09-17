@@ -26,6 +26,17 @@ def _api_compatible(plugin_api: str, kernel_api: str) -> bool:
         return False
 
 
+def plugin_problems(plugin: RaddPlugin, enabled_names: set[str]) -> list[str]:
+    """Shared preflight for boot, management and developer tooling."""
+    problems = []
+    if not _api_compatible(plugin.api_version, KERNEL_API_VERSION):
+        problems.append(f"Plugin {plugin.id} targets API {plugin.api_version}; host is {KERNEL_API_VERSION}")
+    missing = sorted(set(plugin.depends_on) - enabled_names)
+    if missing:
+        problems.append(f"Enable required plugins first: {', '.join(missing)}")
+    return problems
+
+
 def load_plugins(paths: tuple[str, ...]) -> list[RaddPlugin]:
     plugins: list[RaddPlugin] = []
     seen: set[str] = set()

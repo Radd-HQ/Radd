@@ -37,7 +37,9 @@ def plugin_states() -> dict[str, str]:
         with engine.connect() as conn:
             rows = conn.execute(text("SELECT id, state FROM installed_plugins")).all()
             return {r[0]: r[1] for r in rows}
-    except ProgrammingError:
+    except ProgrammingError as exc:
+        if getattr(exc.orig, "sqlstate", None) != "42P01":
+            raise
         # UndefinedTable: alembic hasn't run yet. The one condition that
         # legitimately means "everything default".
         logger.info("installed_plugins missing — fresh database, no plugin overrides")
@@ -57,4 +59,20 @@ def resolve_boot_paths() -> tuple[str, ...]:
     for pid, (plugin, path) in discovery.installable_plugins().items():
         if states.get(pid) == PluginState.ENABLED.value:
             paths.append(path)
-    return tuple(paths)
+    # External distributions are discovered in arbitrary package order. Resolve
+    # dependencies before invoking the loader, which still enforces the contract.
+    from radd.kernel.loader import PluginLoadError
+
+    known = {path: plugin for plugin, path in discovery.all_known().values()}
+    ordered: list[str] = []
+    seen: set[str] = set()
+    while paths:
+        ready = [path for path in paths if set(known[path].depends_on) <= seen]
+        if not ready:
+            details = {known[path].name: sorted(set(known[path].depends_on) - seen) for path in paths}
+            raise PluginLoadError(f"Plugin dependencies missing or cyclic: {details}")
+        for path in ready:
+            ordered.append(path)
+            seen.add(known[path].name)
+            paths.remove(path)
+    return tuple(ordered)

@@ -1,5 +1,6 @@
 # Plugin UI — extension points & how to write a plugin
 
+Current package/deployment workflow: [plugin development](plugin-development.md). Backend enable/disable changes apply after restarting all web and worker processes.
 **The point:** you add UI *anywhere* in Radd by **registering a slot contribution** from your plugin,
 never by editing the host or another plugin. The host renders named `<Slot>` anchors and knows no
 plugin; your plugin targets an anchor by id. Adding a settings page, a new dashboard type, a tab next
@@ -204,8 +205,7 @@ Rules that keep it isolated:
 
 Build: `node web/scripts/build-all.mjs` discovers every `<plugin>/ui/` and builds it. Install an
 external plugin with `uv pip install -e <path>` (it's discovered via its `radd.plugins` entry point),
-then enable it in **Settings → Plugins** — its UI loads at runtime, and disabling it removes the UI
-live.
+then enable it in **Settings → Plugins** — its UI loads at runtime, and restart the web and workers to apply the requested state.
 
 ---
 

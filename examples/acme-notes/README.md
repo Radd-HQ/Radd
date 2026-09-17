@@ -1,5 +1,6 @@
 # acme-notes — an example external Radd plugin
 
+Current package/deployment workflow: [plugin development](../../docs/plugin-development.md). Backend enable/disable changes apply after restarting all web and worker processes.
 A complete, independent plugin (its own `pyproject.toml` + its own UI build) that installs into a
 running Radd with **zero edits to Radd**, discovered via its `radd.plugins` entry point. Copy this
 directory as the starting point for a new plugin. Full reference: `docs/plugin-ui.md`.
@@ -78,5 +79,4 @@ cd server && uv pip install -e ../examples/acme-notes
 # then enable it in the app: Settings → Plugins → acme-notes → Enable
 ```
 
-Disabling it in Settings → Plugins removes its UI live; uninstalling (`uv pip uninstall acme-notes`)
-removes the plugin.
+Disable in Settings → Plugins, restart all processes, then use Forget to remove registration and plugin-specific grants. Remove the Python package from a subsequent deployment image; stored data is retained.

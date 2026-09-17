@@ -1,19 +1,15 @@
-import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
 from radd.exceptions import ForbiddenError
-from radd.kernel import entities as kentities
 from radd.modules.auth import authz
 from radd.modules.auth.deps import CurrentUser
 
-from . import discovery, runtime, service
+from . import service
 from .schemas import ContributionSettings, PluginCapabilityRead, PluginRead
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/plugins", tags=["plugins"])
 
@@ -30,6 +26,8 @@ def _read(info: service.PluginInfo) -> PluginRead:
         id=info.id, name=info.name, version=info.version, core=info.core,
         state=info.state.value, description=info.description, can_toggle=info.can_toggle,
         capabilities=[PluginCapabilityRead(**cap) for cap in info.capabilities],
+        active=info.active, restart_required=info.restart_required,
+        origin=info.origin, dependencies=list(info.dependencies), problems=list(info.problems),
     )
 
 
@@ -66,67 +64,21 @@ async def install(plugin_id: str, session: Session, user: CurrentUser) -> list[P
 
 
 @router.post("/{plugin_id}/enable", response_model=list[PluginRead])
-async def enable(plugin_id: str, request: Request, session: Session, user: CurrentUser) -> list[PluginRead]:
+async def enable(plugin_id: str, session: Session, user: CurrentUser) -> list[PluginRead]:
     _require_admin(user)
     await service.enable(session, plugin_id, actor_id=user.id)
-    # Hot-mount into the running app (no restart) — best effort; the state is the
-    # source of truth and the next boot resolves it regardless.
-    entry = discovery.installable_plugins().get(plugin_id) or discovery.core_plugins().get(plugin_id)
-    if entry is not None:
-        plugin, path = entry
-        try:
-            runtime.mount_plugin(request.app, plugin, path)
-            # An entity plugin with no migration (e.g. an external plugin using create_all) needs
-            # its tables created on runtime enable — idempotent, mirrors the boot lifespan step.
-            if plugin.entities:
-                await kentities.ensure_tables()
-            # Mirror the boot lifespan: a hot-enabled plugin's startup hooks run
-            # too (the ai plugin seeds its registry + starts the embedder here).
-            for hook in plugin.on_startup:
-                await hook()
-        except Exception:  # a mount failure must not fail the state change…
-            # …but it must not be INVISIBLE either — a silently-failed unmount
-            # is how a "disabled" plugin kept serving (same class, enable side).
-            logger.exception("hot-mount of %s failed; saved state applies on next boot", plugin_id)
     return [_read(i) for i in await service.list_plugins(session)]
 
 
 @router.post("/{plugin_id}/disable", response_model=list[PluginRead])
-async def disable(plugin_id: str, request: Request, session: Session, user: CurrentUser) -> list[PluginRead]:
+async def disable(plugin_id: str, session: Session, user: CurrentUser) -> list[PluginRead]:
     _require_admin(user)
     await service.disable(session, plugin_id, actor_id=user.id)
-    entry = discovery.installable_plugins().get(plugin_id) or discovery.core_plugins().get(plugin_id)
-    if entry is not None:
-        plugin, path = entry
-        # Shutdown hooks BEFORE unmount, mirroring the boot lifespan in reverse —
-        # without this the ai plugin's embeddings dispatcher kept running after
-        # a hot-disable.
-        for hook in plugin.on_shutdown:
-            try:
-                await hook()
-            except Exception:
-                logger.exception("shutdown hook of %s failed during hot-disable", plugin_id)
-        try:
-            runtime.unmount_plugin(request.app, plugin, path)
-        except Exception:
-            logger.exception("hot-unmount of %s failed; saved state applies on next boot", plugin_id)
     return [_read(i) for i in await service.list_plugins(session)]
 
 
 @router.post("/{plugin_id}/uninstall", response_model=list[PluginRead])
-async def uninstall(plugin_id: str, request: Request, session: Session, user: CurrentUser) -> list[PluginRead]:
+async def uninstall(plugin_id: str, session: Session, user: CurrentUser) -> list[PluginRead]:
     _require_admin(user)
-    entry = discovery.installable_plugins().get(plugin_id) or discovery.core_plugins().get(plugin_id)
-    if entry is not None:
-        plugin, path = entry
-        for hook in plugin.on_shutdown:
-            try:
-                await hook()
-            except Exception:
-                logger.exception("shutdown hook of %s failed during uninstall", plugin_id)
-        try:
-            runtime.unmount_plugin(request.app, plugin, path)
-        except Exception:
-            logger.exception("hot-unmount of %s failed during uninstall", plugin_id)
     await service.uninstall(session, plugin_id, actor_id=user.id)
     return [_read(i) for i in await service.list_plugins(session)]
