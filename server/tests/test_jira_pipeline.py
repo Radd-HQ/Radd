@@ -917,3 +917,54 @@ async def test_two_source_users_share_one_new_email_identity(db):
         assert again.counts.get('users_created', 0) == 0
     finally:
         await _cleanup([key])
+
+
+async def test_map_existing_state_and_type_never_creates_missing_targets(db):
+    from radd.modules.jiraimport import provision
+    key = f"MP{uuid.uuid4().hex[:4].upper()}"
+    actor = await _admin(db)
+    snapshot = await _snapshot(db, 'SRC', [_issue('SRC-1', summary='Mapped')])
+    plan = await _plan_for(db, snapshot, key)
+    try:
+        await _run(db, plan, actor, RunKind.IMPORT)
+        mappings = plan_service.mappings(plan)
+        state = mappings.statuses[0]
+        state.action = VocabAction.MAP
+        state.state_name = 'Missing mapped state'
+        issue_type = mappings.issue_types[0]
+        issue_type.action = VocabAction.MAP
+        issue_type.type_name = 'Missing mapped type'
+        plan.mappings = mappings.model_dump(mode='json')
+        problems = await plan_service.validate_plan(db, plan)
+        assert {'statuses','issue_types'} <= {p.section for p in problems}
+        project = await db.scalar(text('SELECT id FROM projects WHERE key=:k'), {'k':key})
+        out = provision.Provisioned()
+        await provision._states(db, mappings, project, None, True, out)
+        await provision._issue_types(db, mappings, project, None, True, out)
+        assert len(out.problems) == 2
+        assert state.jira not in out.state_ids
+        assert issue_type.jira not in out.type_ids
+        assert await db.scalar(text('SELECT count(*) FROM states WHERE name=:n'), {'n':state.state_name}) == 0
+        assert await db.scalar(text('SELECT count(*) FROM issue_types WHERE name=:n'), {'n':issue_type.type_name}) == 0
+    finally:
+        await db.rollback()
+        await _cleanup([key])
+
+
+async def test_option_extension_uses_translated_targets_not_raw_source_values(db):
+    from radd.modules.fields import service as fields
+    from radd.modules.fields.schemas import FieldDefinitionCreate
+    from radd.modules.fields.types import FieldType
+    from radd.modules.jiraimport import provision
+    from radd.modules.jiraimport.plan.schemas import PlanMappings
+    from radd.modules.jiraimport.schemas import FieldMappingEntry
+    from radd.modules.jiraimport.types import FieldAction
+    definition = await fields.create_field(db, FieldDefinitionCreate(
+        key=f'translated_{uuid.uuid4().hex[:6]}', name='Severity', type=FieldType.SELECT, options=['Normal']))
+    mappings = PlanMappings(fields=[FieldMappingEntry(
+        jira_id='severity', jira_name='Severity', action=FieldAction.MAP, target_key=definition.key,
+        observed_values=['P1','Urgent','P2'], value_map={'P1':'Critical','Urgent':'Critical','P2':'Normal'}, extend_options=True)])
+    await provision._extend_options(db, mappings, {definition.key:definition}, None, True, provision.Provisioned())
+    await db.refresh(definition)
+    assert definition.options == ['Normal','Critical']
+    await db.rollback()

@@ -91,7 +91,7 @@ def _issue_types(mappings: PlanMappings) -> list[PlanProblem]:
     out: list[PlanProblem] = []
     active = [m for m in mappings.issue_types if m.action is not VocabAction.IGNORE]
     for entry in active:
-        if entry.action is VocabAction.CREATE and not entry.type_name.strip():
+        if not entry.type_name.strip():
             out.append(
                 PlanProblem(
                     section="issue_types", subject=entry.jira, message="a type name is required"

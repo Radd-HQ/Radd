@@ -17,11 +17,14 @@ from radd.modules.auth import service as auth_service
 from radd.modules.fields import service as fields_service
 from radd.modules.fields.types import FieldType
 from radd.modules.linktypes import service as linktypes_service
+from radd.modules.projects import service as projects_service
+from radd.modules.workflow import service as workflow_service
+from radd.modules.itemtypes import service as itemtypes_service
 
 from .. import connections, profile as profile_mod
 from ..models import JiraConnection, JiraPlan, JiraSnapshot
 from ..snapshot import service as snapshot_service
-from ..types import JiraEntity
+from ..types import JiraEntity, VocabAction
 from . import suggest, validate as validate_mod
 from .schemas import PlanCreate, PlanMappings, PlanOptions, PlanProblem, PlanUpdate
 
@@ -132,12 +135,28 @@ async def validate_plan(session: AsyncSession, plan: JiraPlan) -> list[PlanProbl
             for d in definitions
             if d.project_ids and plan.radd_project_id not in d.project_ids
         }
-    return validate_mod.validate(
+    result = validate_mod.validate(
         mappings(plan),
         existing_fields={d.key: FieldType(d.type) for d in definitions},
         existing_link_type_keys=set(catalog),
         out_of_scope_fields=out_of_scope,
     )
+
+    try:
+        target = await projects_service.get_by_key(session, plan.radd_project_key)
+    except NotFoundError:
+        target = None
+    states = await workflow_service.list_states(session, target.id) if target else []
+    types = await itemtypes_service.list_types(session, target.id) if target else []
+    for section, entries, names, attr in (
+        ("statuses", mappings(plan).statuses, {s.name.strip().lower() for s in states}, "state_name"),
+        ("issue_types", mappings(plan).issue_types, {t.name.strip().lower() for t in types}, "type_name"),
+    ):
+        for entry in entries:
+            if entry.action is VocabAction.MAP and getattr(entry, attr).strip().lower() not in names:
+                result.append(PlanProblem(section=section, subject=entry.jira,
+                    message="Choose an existing target in this project, or choose Create."))
+    return result
 
 
 def mappings(plan: JiraPlan) -> PlanMappings:

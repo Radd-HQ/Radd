@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, CircleAlert, Loader2, Play, Save, Wand2 } from "lucide-react";
 import { api } from "../../../lib/api";
 import { ApiPath } from "../../../lib/constants";
-import { fieldsQuery, jiraPlanQuery, queryKeys } from "../../../lib/queries";
+import { fieldsQuery, jiraPlanQuery, queryKeys, statesQuery, issueTypesQuery, projectByKeyQuery, teamsQuery } from "../../../lib/queries";
 import {
   RunKind,
   type FieldMappingEntry,
@@ -65,6 +65,15 @@ export function PlanEditor({
   const queryClient = useQueryClient();
   const plan = useQuery(jiraPlanQuery(planId));
   const fields = useQuery(fieldsQuery());
+  const targetProject = useQuery({ ...projectByKeyQuery(plan.data?.radd_project_key ?? ""), enabled: Boolean(plan.data?.radd_project_key) && !plan.data?.radd_project_id, retry: false });
+  const projectId = plan.data?.radd_project_id ?? targetProject.data?.id ?? "";
+  const states = useQuery({ ...statesQuery(projectId), enabled: Boolean(projectId) });
+  const types = useQuery({ ...issueTypesQuery(projectId), enabled: Boolean(projectId) });
+  const teams = useQuery(teamsQuery());
+  const existingKeys = useMemo(() => (fields.data ?? []).map(f => f.key), [fields.data]);
+  const fieldLabels = useMemo(() => Object.fromEntries((fields.data ?? []).map(f => [f.key, `${f.name} (${f.key})`])), [fields.data]);
+  const existingOptions = useMemo(() => Object.fromEntries((fields.data ?? []).map(f => [f.key, f.options ?? []])), [fields.data]);
+  const nativeOptions = useMemo(() => ({team: (teams.data ?? []).map(t => t.name)}), [teams.data]);
   const [draft, setDraft] = useState<PlanMappings | null>(null);
   const [options, setOptions] = useState<PlanOptions | null>(null);
   const [tab, setTab] = useState<TabKey>("fields");
@@ -120,18 +129,19 @@ export function PlanEditor({
     },
   });
 
-  if (plan.isPending || !draft || !options) return <Spinner label="Loading the plan…" />;
-  if (plan.isError) return <QueryError label="import plan" error={plan.error} />;
-
   /** Patch one row of one mapping table. */
-  const patch = <K extends TabKey>(key: K) =>
-    (index: number, changes: Partial<PlanMappings[K][number]>) =>
+  const patch = useCallback(<K extends TabKey>(key: K, index: number, changes: Partial<PlanMappings[K][number]>) =>
       setDraft((current) => {
         if (!current) return current;
         const rows = [...current[key]] as PlanMappings[K];
         rows[index] = { ...rows[index], ...changes };
         return { ...current, [key]: rows };
-      });
+      }), []);
+
+  const patchFields = useCallback((index: number, changes: Partial<FieldMappingEntry>) => patch("fields", index, changes), [patch]);
+
+  if (plan.isPending || !draft || !options) return <Spinner label="Loading the plan…" />;
+  if (plan.isError) return <QueryError label="import plan" error={plan.error} />;
 
   const bulkUsers = (
     apply: (row: UserMapping, index: number) => Partial<UserMapping> | null,
@@ -193,32 +203,32 @@ export function PlanEditor({
         {tab === "fields" && (
           <FieldsTable
             rows={draft.fields}
-            existingKeys={(fields.data ?? []).map((f) => f.key)}
-            existingOptions={Object.fromEntries(
-              (fields.data ?? []).filter((f) => f.options?.length).map((f) => [f.key, f.options!]),
-            )}
+            existingKeys={existingKeys}
+            fieldLabels={fieldLabels}
+            nativeOptions={nativeOptions}
+            existingOptions={existingOptions}
             problems={problemsFor("fields")}
             highlight={highlight}
-            onChange={patch("fields")}
+            onChange={patchFields}
           />
         )}
         {tab === "issue_types" && (
-          <IssueTypesTable rows={draft.issue_types} onChange={patch("issue_types")} />
+          <IssueTypesTable types={types.data ?? []} rows={draft.issue_types} onChange={(index, changes) => patch("issue_types", index, changes)} />
         )}
         {tab === "statuses" && (
-          <StatusesTable rows={draft.statuses} onChange={patch("statuses")} />
+          <StatusesTable states={states.data ?? []} rows={draft.statuses} onChange={(index, changes) => patch("statuses", index, changes)} />
         )}
         {tab === "priorities" && (
-          <PrioritiesTable rows={draft.priorities} onChange={patch("priorities")} />
+          <PrioritiesTable rows={draft.priorities} onChange={(index, changes) => patch("priorities", index, changes)} />
         )}
         {tab === "link_types" && (
-          <LinkTypesTable rows={draft.link_types} onChange={patch("link_types")} />
+          <LinkTypesTable rows={draft.link_types} onChange={(index, changes) => patch("link_types", index, changes)} />
         )}
         {tab === "users" && (
           <UsersTable
             rows={draft.users}
             domain={options.placeholder_email_domain}
-            onChange={patch("users")}
+            onChange={(index, changes) => patch("users", index, changes)}
             onBulk={bulkUsers}
             onDomainChange={(value) =>
               setOptions((current) =>
@@ -227,12 +237,12 @@ export function PlanEditor({
             }
           />
         )}
-        {tab === "sprints" && <SprintsTable rows={draft.sprints} onChange={patch("sprints")} />}
+        {tab === "sprints" && <SprintsTable rows={draft.sprints} onChange={(index, changes) => patch("sprints", index, changes)} />}
         {tab === "versions" && (
-          <VersionsTable rows={draft.versions} onChange={patch("versions")} />
+          <VersionsTable rows={draft.versions} onChange={(index, changes) => patch("versions", index, changes)} />
         )}
         {tab === "components" && (
-          <ComponentsTable rows={draft.components} onChange={patch("components")} />
+          <ComponentsTable rows={draft.components} onChange={(index, changes) => patch("components", index, changes)} />
         )}
       </div>
 

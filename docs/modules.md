@@ -566,3 +566,5 @@ or their subject names. Legacy complete reads remain available. The SPA uses
 these lean reads, the generic grant directory, lazy authorized subject choices,
 and `SharingGrantsEditor`'s paged saved/pending drafts. Ownership choices use
 public person IDs; no administrative email catalog is needed.
+
+Importer mapping usability and Planning retrieval notes: [Jira/Confluence mapping sweep](import-mapping-usability.md) and [Planning pagination](planning-pagination.md). These changes add no module dependencies.

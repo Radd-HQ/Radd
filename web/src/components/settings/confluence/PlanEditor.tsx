@@ -69,13 +69,18 @@ export function PlanEditor({
   });
 
   const validate = useMutation({
-    mutationFn: () => api.post<ConfluencePlanProblem[]>(`${ApiPath.confluencePlans}/${planId}/validate`, {}),
+    mutationFn: async () => {
+      await save.mutateAsync();
+      return api.post<ConfluencePlanProblem[]>(`${ApiPath.confluencePlans}/${planId}/validate`, {});
+    },
     onSuccess: setProblems,
   });
 
   const run = useMutation({
-    mutationFn: (dryRun: boolean) =>
-      api.post(ApiPath.confluenceRuns, { plan_id: planId, dry_run: dryRun }),
+    mutationFn: async (dryRun: boolean) => {
+      await save.mutateAsync();
+      return api.post(ApiPath.confluenceRuns, { plan_id: planId, dry_run: dryRun });
+    },
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: queryKeys.confluenceRuns });
       onRan();
@@ -178,18 +183,12 @@ export function PlanEditor({
         </Button>
         <Button
           variant={ButtonVariant.secondary}
-          onClick={async () => {
-            await save.mutateAsync();
-            run.mutate(true);
-          }}
+          onClick={() => run.mutate(true)}
         >
           Dry run
         </Button>
         <Button
-          onClick={async () => {
-            await save.mutateAsync();
-            run.mutate(false);
-          }}
+          onClick={() => run.mutate(false)}
         >
           Import
         </Button>
@@ -295,7 +294,7 @@ function ActionSelect({
 }) {
   return (
     <SelectField
-      label=""
+      label="Action"
       value={value}
       onChange={(e) => onChange(e.target.value)}
       className="min-w-40"

@@ -269,7 +269,8 @@ async def _extend_options(
         if not current:
             continue  # not a select, or unconstrained — nothing to extend
         known = {v.casefold() for v in current}
-        missing = [v for v in entry.observed_values if v and v.casefold() not in known]
+        translated = dict.fromkeys(entry.value_map.get(v, v) for v in entry.observed_values)
+        missing = [v for v in translated if v and v.casefold() not in known]
         if not missing:
             continue
         if not commit:
@@ -333,6 +334,13 @@ async def _states(
         if existing is not None:
             out.state_ids[entry.jira] = existing.id
             continue
+        if entry.action is VocabAction.MAP:
+            out.problems.append(Problem(
+                kind=ProblemKind.PROVISION_FAILED,
+                message="the selected existing state is not in the target project; select one or choose Create",
+                subject=entry.jira, section="statuses", mapping_key=entry.jira,
+            ))
+            continue
         if not commit:
             # A dry run must still RESOLVE, or every issue would report "no state"
             # and the preview would be a wall of false failures. A synthetic id
@@ -383,6 +391,13 @@ async def _issue_types(
         existing = by_name.get(name.lower())
         if existing is not None:
             out.type_ids[entry.jira] = existing.id
+            continue
+        if entry.action is VocabAction.MAP:
+            out.problems.append(Problem(
+                kind=ProblemKind.PROVISION_FAILED,
+                message="the selected existing type is not in the target project; select one or choose Create",
+                subject=entry.jira, section="issue_types", mapping_key=entry.jira,
+            ))
             continue
         if not commit:
             out.type_ids[entry.jira] = uuid.uuid4()

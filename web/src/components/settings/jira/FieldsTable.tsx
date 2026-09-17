@@ -1,3 +1,5 @@
+import { memo, useEffect, useState } from "react";
+import { ValueMappings } from "./ValueMappings";
 import {
   BuiltinTarget,
   FieldAction,
@@ -72,6 +74,8 @@ export function FieldsTable({
   rows,
   existingKeys,
   existingOptions = {},
+  fieldLabels = {},
+  nativeOptions = {},
   problems,
   highlight = "",
   onChange,
@@ -80,11 +84,14 @@ export function FieldsTable({
   existingKeys: string[];
   /** Current option list per field key, so a MAP row can offer to extend it. */
   existingOptions?: Record<string, string[]>;
+  fieldLabels?: Record<string, string>;
+  nativeOptions?: Record<string, string[]>;
   problems: PlanProblem[];
   /** A field key or Jira id a run problem pointed at — ring it and open its band. */
   highlight?: string;
   onChange: (index: number, patch: Partial<FieldMappingEntry>) => void;
 }) {
+  const indexById = new Map(rows.map((row, index) => [row.jira_id, index]));
   const problemFor = new Map(problems.map((p) => [p.subject, p.message]));
   const isTarget = (r: FieldMappingEntry) =>
     Boolean(highlight) && (r.target_key === highlight || r.jira_id === highlight);
@@ -123,9 +130,11 @@ export function FieldsTable({
               <FieldRow
                 key={entry.jira_id}
                 entry={entry}
-                index={rows.indexOf(entry)}
+                index={indexById.get(entry.jira_id)!}
                 existingKeys={existingKeys}
                 existingOptions={existingOptions}
+                fieldLabels={fieldLabels}
+                nativeOptions={nativeOptions}
                 problem={problemFor.get(entry.jira_id)}
                 highlighted={isTarget(entry)}
                 onChange={onChange}
@@ -138,11 +147,13 @@ export function FieldsTable({
   );
 }
 
-function FieldRow({
+const FieldRow = memo(function FieldRow({
   entry,
   index,
   existingKeys,
   existingOptions,
+  fieldLabels,
+  nativeOptions,
   problem,
   highlighted = false,
   onChange,
@@ -151,6 +162,8 @@ function FieldRow({
   index: number;
   existingKeys: string[];
   existingOptions: Record<string, string[]>;
+  fieldLabels: Record<string, string>;
+  nativeOptions: Record<string, string[]>;
   problem?: string;
   highlighted?: boolean;
   onChange: (index: number, patch: Partial<FieldMappingEntry>) => void;
@@ -176,7 +189,7 @@ function FieldRow({
           reason={entry.band_reason}
         />
         <SelectField
-          label=""
+          label="Action"
           ariaLabel={`${entry.jira_name}: what to do with this field`}
           className="w-40"
           value={entry.action}
@@ -205,7 +218,7 @@ function FieldRow({
 
         {entry.action === FieldAction.native && (
           <SelectField
-            label=""
+            label="RADD feature"
             ariaLabel={`${entry.jira_name}: which Radd feature`}
             className="w-44"
             value={entry.builtin_target ?? ""}
@@ -221,7 +234,7 @@ function FieldRow({
 
         {entry.action === FieldAction.map && (
           <SelectField
-            label=""
+            label="Existing RADD field"
             ariaLabel={`${entry.jira_name}: existing field to map into`}
             className="w-48"
             value={entry.target_key}
@@ -230,7 +243,7 @@ function FieldRow({
             <option value="">Pick a field…</option>
             {existingKeys.map((key) => (
               <option key={key} value={key}>
-                {key}
+                {fieldLabels[key] ?? key}
               </option>
             ))}
           </SelectField>
@@ -238,20 +251,24 @@ function FieldRow({
 
         {entry.action === FieldAction.create && (
           <>
+            <label className="flex flex-col gap-1 text-xs text-fg-secondary">Field label
             <input
               aria-label={`${entry.jira_name}: new field label`}
               value={entry.create_name}
               onChange={(e) => set({ create_name: e.target.value })}
               className="h-8 w-40 rounded-md border border-strong bg-surface px-2.5 text-[13px] text-heading outline-none focus-visible:outline-2 focus-visible:outline-focus"
             />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-fg-secondary">Field key
             <input
               aria-label={`${entry.jira_name}: new field key`}
               value={entry.target_key}
               onChange={(e) => set({ target_key: e.target.value.toLowerCase() })}
               className="h-8 w-40 rounded-md border border-strong bg-surface px-2.5 font-mono text-[12px] text-heading outline-none focus-visible:outline-2 focus-visible:outline-focus"
             />
+            </label>
             <SelectField
-              label=""
+              label="Field type"
               ariaLabel={`${entry.jira_name}: new field type`}
               className="w-32"
               value={entry.create_type ?? "text"}
@@ -264,7 +281,7 @@ function FieldRow({
               ))}
             </SelectField>
             <SelectField
-              label=""
+              label="Scope"
               ariaLabel={`${entry.jira_name}: new field scope`}
               className="w-28"
               value={entry.create_scope}
@@ -284,7 +301,7 @@ function FieldRow({
         const current = existingOptions[entry.target_key];
         if (!current?.length) return null;
         const known = new Set(current.map((v) => v.toLowerCase()));
-        const missing = entry.observed_values.filter((v) => !known.has(v.toLowerCase()));
+        const missing = entry.observed_values.map(v => entry.value_map[v] ?? v).filter((v) => !known.has(v.toLowerCase()));
         if (missing.length === 0) return null;
         return (
           <label className="mt-1.5 flex items-start gap-2 pl-1 text-xs text-fg-secondary">
@@ -316,26 +333,16 @@ function FieldRow({
       {entry.action === FieldAction.create &&
         (entry.create_type === "select" || entry.create_type === "multi_select") && (
           <div className="mt-1.5 pl-1">
-            <input
-              aria-label={`${entry.jira_name}: options`}
-              value={(entry.create_options ?? []).join(", ")}
-              placeholder="comma-separated options"
-              onChange={(e) =>
-                set({
-                  create_options: e.target.value
-                    .split(",")
-                    .map((v) => v.trim())
-                    .filter(Boolean),
-                })
-              }
-              className="h-8 w-full rounded-md border border-strong bg-surface px-2.5 text-[12px] text-heading outline-none focus-visible:outline-2 focus-visible:outline-focus"
-            />
+            <CommaOptions values={entry.create_options ?? []} label={`${entry.jira_name}: options`} onChange={create_options => set({ create_options })} />
           </div>
         )}
+      {(entry.action === FieldAction.map || entry.action === FieldAction.create || (entry.action === FieldAction.native && entry.builtin_target === BuiltinTarget.team)) && <ValueMappings
+        values={entry.observed_values} targets={entry.action === FieldAction.native ? nativeOptions[entry.builtin_target ?? ""] ?? [] : existingOptions[entry.target_key] ?? entry.create_options ?? []}
+        mapping={entry.value_map} onChange={value_map => set({ value_map })} />}
       {problem && <p className="mt-1 text-xs text-red-400">{problem}</p>}
     </div>
   );
-}
+});
 
 function slugify(name: string): string {
   const lowered = name
@@ -345,4 +352,16 @@ function slugify(name: string): string {
     .replace(/^_+|_+$/g, "");
   const safe = lowered || "field";
   return (/^[a-z]/.test(safe) ? safe : `f_${safe}`).slice(0, 50);
+}
+
+function CommaOptions({ values, label, onChange }: { values: string[]; label: string; onChange: (values: string[]) => void }) {
+  const [text, setText] = useState(values.join(", "));
+  const parse = (value: string) => value.split(",").map(v => v.trim()).filter(Boolean);
+  useEffect(() => {
+    if (JSON.stringify(parse(text)) !== JSON.stringify(values)) setText(values.join(", "));
+  }, [values]);
+  return <label className="flex flex-col gap-1 text-xs text-fg-secondary">Allowed options (comma-separated)
+    <input aria-label={label} value={text} onChange={e => { setText(e.target.value); onChange(parse(e.target.value)); }}
+      className="h-8 rounded border border-strong bg-surface px-2 text-heading" />
+  </label>;
 }

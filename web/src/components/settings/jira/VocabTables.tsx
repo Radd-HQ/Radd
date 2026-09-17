@@ -1,3 +1,4 @@
+import type { State, IssueType } from "../../../lib/types";
 import {
   ComponentAction,
   VocabAction,
@@ -41,6 +42,7 @@ function VocabTable<T extends { jira: string; count: number }>({
   // the unused fold holds itself open while filtering so matches can't hide.
   const search = useListFilter(rows, (entry) => [entry.jira]);
   const [used, unused] = splitByUse(search.filtered);
+  const indexes = new Map(rows.map((entry, index) => [entry.jira, index]));
   return (
     <div className="flex flex-col gap-3">
       {rows.length > FILTER_THRESHOLD && (
@@ -56,7 +58,7 @@ function VocabTable<T extends { jira: string; count: number }>({
       <MappingSection title={usedTitle} count={used.length} defaultOpen forceOpen={search.filtering}>
         {used.map((entry) => (
           <div key={entry.jira} className="flex flex-wrap items-center gap-2 px-3 py-2">
-            {row(entry, rows.indexOf(entry))}
+            {row(entry, indexes.get(entry.jira)!)}
           </div>
         ))}
       </MappingSection>
@@ -68,7 +70,7 @@ function VocabTable<T extends { jira: string; count: number }>({
       >
         {unused.map((entry) => (
           <div key={entry.jira} className="flex flex-wrap items-center gap-2 px-3 py-2">
-            {row(entry, rows.indexOf(entry))}
+            {row(entry, indexes.get(entry.jira)!)}
           </div>
         ))}
       </MappingSection>
@@ -86,9 +88,11 @@ type Patch<K extends keyof PlanMappings> = (index: number, patch: Partial<PlanMa
  * with no way to correct it.
  */
 export function IssueTypesTable({
+  types = [],
   rows,
   onChange,
 }: {
+  types?: IssueType[];
   rows: IssueTypeMapping[];
   onChange: Patch<"issue_types">;
 }) {
@@ -100,7 +104,7 @@ export function IssueTypesTable({
         <>
           <RowLabel value={entry.jira} count={entry.count} />
           <SelectField
-            label=""
+            label="Hierarchy level"
             ariaLabel={`${entry.jira}: hierarchy level`}
             className="w-32"
             value={entry.kind}
@@ -111,7 +115,7 @@ export function IssueTypesTable({
             <option value="subtask">Subtask</option>
           </SelectField>
           <SelectField
-            label=""
+            label="Action"
             ariaLabel={`${entry.jira}: what to do`}
             className="w-36"
             value={entry.action}
@@ -124,12 +128,15 @@ export function IssueTypesTable({
             ))}
           </SelectField>
           {entry.action !== VocabAction.ignore && (
-            <input
-              aria-label={`${entry.jira}: Radd type name`}
-              value={entry.type_name}
-              onChange={(e) => onChange(index, { type_name: e.target.value })}
-              className="h-8 w-44 rounded-md border border-strong bg-surface px-2.5 text-[13px] text-heading outline-none focus-visible:outline-2 focus-visible:outline-focus"
-            />
+            entry.action === VocabAction.map ? <SelectField label="Existing RADD type" value={entry.type_name}
+              onChange={e => onChange(index, { type_name: e.target.value })}>
+              <option value="">Choose an existing type…</option>
+              {entry.type_name && !types.some(t => t.name === entry.type_name) && <option value={entry.type_name} disabled>{entry.type_name} — not in target project</option>}
+              {types.map(type => <option key={type.id} value={type.name}>{type.name}</option>)}
+            </SelectField> : <label className="flex flex-col gap-1 text-xs text-fg-secondary">New RADD type name<input
+              aria-label={`${entry.jira}: Radd type name`} value={entry.type_name}
+              onChange={e => onChange(index, { type_name: e.target.value })}
+              className="h-8 w-44 rounded-md border border-strong bg-surface px-2.5 text-heading" /></label>
           )}
         </>
       )}
@@ -146,9 +153,11 @@ export function IssueTypesTable({
  * literal English words and got everything else wrong.
  */
 export function StatusesTable({
+  states = [],
   rows,
   onChange,
 }: {
+  states?: State[];
   rows: StatusMapping[];
   onChange: Patch<"statuses">;
 }) {
@@ -160,11 +169,15 @@ export function StatusesTable({
         <>
           <RowLabel value={entry.jira} count={entry.count} />
           <SelectField
-            label=""
+            label="Action"
             ariaLabel={`${entry.jira}: what to do`}
             className="w-36"
             value={entry.action}
-            onChange={(e) => onChange(index, { action: e.target.value as VocabActionValue })}
+            onChange={(e) => {
+              const action = e.target.value as VocabActionValue;
+              const state = states.find(s => s.name === entry.state_name);
+              onChange(index, { action, ...(action === VocabAction.map ? { state_name: state?.name ?? "", ...(state ? { category: state.category } : {}) } : {}) });
+            }}
           >
             {ACTION_OPTIONS.map(([value, label]) => (
               <option key={value} value={value}>
@@ -174,14 +187,19 @@ export function StatusesTable({
           </SelectField>
           {entry.action !== VocabAction.ignore && (
             <>
-              <input
-                aria-label={`${entry.jira}: Radd state name`}
-                value={entry.state_name}
-                onChange={(e) => onChange(index, { state_name: e.target.value })}
-                className="h-8 w-44 rounded-md border border-strong bg-surface px-2.5 text-[13px] text-heading outline-none focus-visible:outline-2 focus-visible:outline-focus"
-              />
+              {entry.action === VocabAction.map ? <SelectField label="Existing RADD state" value={entry.state_name}
+                onChange={e => { const state = states.find(s => s.name === e.target.value); onChange(index, { state_name: e.target.value, ...(state ? { category: state.category } : {}) }); }}>
+                <option value="">Choose an existing state…</option>
+                {entry.state_name && !states.some(s => s.name === entry.state_name) && <option value={entry.state_name} disabled>{entry.state_name} — not in target project</option>}
+                {states.map(state => <option key={state.id} value={state.name}>{state.name} ({state.category})</option>)}
+              </SelectField> : <label className="flex flex-col gap-1 text-xs text-fg-secondary">New RADD state name<input
+                aria-label={`${entry.jira}: Radd state name`} value={entry.state_name}
+                onChange={e => onChange(index, { state_name: e.target.value })}
+                className="h-8 w-44 rounded-md border border-strong bg-surface px-2.5 text-heading" /></label>}
               <SelectField
-                label=""
+                label="Reporting category"
+                hint={entry.action === VocabAction.map ? "Uses the existing state’s category." : "Controls boards, reports and completed-work handling."}
+                disabled={entry.action === VocabAction.map}
                 ariaLabel={`${entry.jira}: state category`}
                 className="w-36"
                 value={entry.category}
@@ -265,7 +283,7 @@ export function LinkTypesTable({
             detail={entry.outward_name ? `“${entry.outward_name}”` : undefined}
           />
           <SelectField
-            label=""
+            label="Action"
             ariaLabel={`${entry.jira}: what to do`}
             className="w-36"
             value={entry.action}
@@ -311,7 +329,7 @@ export function SprintsTable({
             detail={[entry.state, entry.start_date, entry.end_date].filter(Boolean).join(" · ")}
           />
           <SelectField
-            label=""
+            label="Action"
             ariaLabel={`${entry.jira}: what to do`}
             className="w-36"
             value={entry.action}
@@ -342,7 +360,7 @@ export function VersionsTable({
         <>
           <RowLabel value={entry.jira} count={entry.count} />
           <SelectField
-            label=""
+            label="Action"
             ariaLabel={`${entry.jira}: what to do`}
             className="w-40"
             value={entry.action}
@@ -373,7 +391,7 @@ export function ComponentsTable({
         <>
           <RowLabel value={entry.jira} count={entry.count} />
           <SelectField
-            label=""
+            label="Action"
             ariaLabel={`${entry.jira}: what to do`}
             className="w-40"
             value={entry.action}
