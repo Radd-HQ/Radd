@@ -115,6 +115,21 @@ def _seed_builtin_roles() -> None:
 
 
 @pytest.fixture(scope="session", autouse=True)
+def isolated_encryption_key(tmp_path_factory):
+    """Cursor tests must never depend on or create the instance's real key."""
+    from radd import secretbox
+
+    original = settings.backup_key_file
+    settings.backup_key_file = str(tmp_path_factory.mktemp("encryption") / "key")
+    secretbox.reset_key_cache()
+    try:
+        yield
+    finally:
+        secretbox.reset_key_cache()
+        settings.backup_key_file = original
+
+
+@pytest.fixture(scope="session", autouse=True)
 def _fresh_test_database():
     _recreate_database()
     _migrate_database()
