@@ -1,4 +1,8 @@
-import { useState, type MouseEvent as ReactMouseEvent } from "react";
+import type { BoardLoading } from "../../lib/useBoardItems";
+import { useBoardDragScroll } from "../../lib/board-scroll";
+import { BoardLoadBoundary } from "./BoardLoadBoundary";
+import { BoardNavigator } from "./BoardNavigator";
+import { useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { Plus } from "lucide-react";
 import type { BucketRef } from "../../lib/axis-dnd";
 import { useBucketDrop } from "../../lib/bucket-drop";
@@ -18,10 +22,8 @@ import { IconButton } from "../IconButton";
 
 interface ViewBoardProps {
   groups: ViewGroup[];
-  onLoadColumn?: (key: string) => void;
-  columnLoading?: (key: string) => boolean;
-  columnError?: (key: string) => boolean;
-  columnHasMore?: (key: string) => boolean;
+  loading?: BoardLoading;
+  updating?: boolean;
   /** Card layout (spec 109) — passed through to every card. */
   layout?: CardLayout;
   /** Directory names + field defs for placed `cf.<key>` cells. */
@@ -85,7 +87,7 @@ function ColumnCount({ count, limit }: { count: number; limit: number | undefine
  */
 export function ViewBoard({
   groups,
-  onLoadColumn, columnLoading, columnError, columnHasMore,
+  loading, updating,
   layout,
   usersById,
   cfByKey,
@@ -102,17 +104,21 @@ export function ViewBoard({
   onSelectToggle,
   collapseEmpty,
 }: ViewBoardProps) {
+  const root = useRef<HTMLDivElement>(null);
   const dnd = Boolean(onMoveToBucket);
   const drop = useBucketDrop<Item>(dnd);
   const dragging = drop.dragging;
+  const dragScroll = useBoardDragScroll(root, Boolean(dragging));
   // The one rail the pointer is over (or focus is in) — expanded in place.
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
-  // The whole board scrolls — both axes on this one container. Columns size to
-  // their content (`items-start`), so a long column simply makes the page longer
-  // rather than growing a scrollbar of its own.
   return (
-    <div className="flex min-h-0 flex-1 items-start gap-5 overflow-auto bg-base px-5 py-4">
+    <>
+    <BoardNavigator columns={groups} updating={updating} onColumn={key=>{
+      const node=Array.from(root.current?.querySelectorAll<HTMLElement>("[data-board-column]")??[]).find(n=>n.dataset.boardColumn===key);
+      if(node&&root.current) root.current.scrollLeft=node.offsetLeft-root.current.offsetLeft-20;
+    }} />
+    <div ref={root} data-board-scroll onDragOverCapture={dragScroll} className="relative flex min-h-0 flex-1 items-stretch gap-5 overflow-x-auto overflow-y-hidden bg-base px-5 py-4">
       {groups.map((group) => {
         const isOver = drop.isOver(group.key);
         const points = showPoints
@@ -121,7 +127,7 @@ export function ViewBoard({
         const limit = wipLimits?.[group.key];
         const collapsed =
           Boolean(collapseEmpty) &&
-          group.items.length === 0 &&
+          (group.total ?? group.items.length) === 0 &&
           !dragging &&
           expandedKey !== group.key;
         return (
@@ -129,7 +135,7 @@ export function ViewBoard({
             key={group.key}
             data-board-column={group.key}
             data-collapsed={collapsed ? "true" : "false"}
-            aria-label={`${group.label} (${group.items.length})`}
+            aria-label={`${group.label} (${group.total ?? group.items.length})`}
             onMouseEnter={collapseEmpty ? () => setExpandedKey(group.key) : undefined}
             onMouseLeave={collapseEmpty ? () => setExpandedKey((k) => (k === group.key ? null : k)) : undefined}
             onFocus={collapseEmpty ? () => setExpandedKey(group.key) : undefined}
@@ -138,14 +144,13 @@ export function ViewBoard({
             className={
               // OPEN columns: cards float on the page ground (no boxed panel) —
               // the cards themselves are the only elevated surface, which is
-              // what gives the board its calm. Height follows content (the row
-              // is `items-start`); the body's min-h-24 keeps an empty column
-              // droppable. The drop highlight paints the column's own rounded
+              // what gives the board its calm. Columns fill the viewport;
+              // their bodies scroll independently. The drop highlight paints the rounded
               // region since there is no border to recolor.
               // RADD-1175: a collapsed rail is 40px of label; the width
               // transition is what makes hover-expand read as "the column
               // was always here", not as a layout jump.
-              "group/column flex shrink-0 flex-col rounded-xl transition-[width,background-color] " +
+              "group/column flex min-h-0 shrink-0 flex-col rounded-xl transition-[width,background-color] " +
               (collapsed ? "w-10 " : "w-80 ") +
               (isOver ? "bg-accent/5 ring-2 ring-accent/30" : "")
             }
@@ -179,7 +184,7 @@ export function ViewBoard({
               </div>
             ) : (
             <>
-            <header className="px-1.5 pb-1.5 pt-0.5">
+            <header className="shrink-0 px-1.5 pb-1.5 pt-0.5">
               <div className="flex items-center gap-2">
                 {group.dotClassName && (
                   <span className={`size-2 rounded-full ${group.dotClassName}`} aria-hidden />
@@ -224,11 +229,13 @@ export function ViewBoard({
               )}
             </header>
             <div
+              data-column-scroll
+              tabIndex={0}
+              aria-label={`${group.label} issues`}
               className={
-                // No scroll of its own: the body grows with its cards and the
-                // page carries the scrolling. `min-h-24` keeps an empty column a
-                // droppable target rather than a header-sized strip.
-                "flex min-h-24 flex-col gap-2.5 px-0.5 pb-1 transition-colors " +
+                // Header stays fixed; only this column scrolls. Children must
+                // never shrink to fit the available viewport height.
+                "flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto overscroll-contain px-0.5 pb-1 transition-colors [&>*]:shrink-0 " +
                 (!isOver && dnd && dragging ? "rounded-xl bg-elevated/40" : "")
               }
             >
@@ -249,11 +256,7 @@ export function ViewBoard({
                   onSelectToggle={onSelectToggle}
                 />
               ))}
-              {onLoadColumn && (columnHasMore ? columnHasMore(group.key) : group.total !== undefined && group.items.length < group.total) && <button
-                className="w-full rounded border border-subtle px-3 py-2 text-xs text-accent-text hover:bg-surface"
-                disabled={columnLoading?.(group.key)} onClick={()=>onLoadColumn(group.key)}>
-                {columnLoading?.(group.key) ? "Loading…" : columnError?.(group.key) ? "Retry loading this column" : `Show 25 more · ${group.items.length} of ${group.total}`}
-              </button>}
+              <BoardLoadBoundary loading={group.total === 0 ? undefined : loading} column={group.key} />
 
               {onQuickAdd && (
                 <button
@@ -272,5 +275,6 @@ export function ViewBoard({
         );
       })}
     </div>
+    </>
   );
 }

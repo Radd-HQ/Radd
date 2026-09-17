@@ -671,3 +671,35 @@ layouts share the same query, filters, loaded cursor windows and personal-star
 actions; changing layout does not refetch the issue collection. The list shows
 key/title, status, priority and owner in aligned desktop columns and wraps into
 compact rows on narrow screens.
+
+### Stable board navigation (RADD-1212)
+
+Boards now use `useBoardItems`, separate from grouped-list paging. On
+`GET /items/grouped`, `summary_only` returns complete authorized totals, point
+sums and a small group directory without hydrating cards or ranking all matching
+issues. `grouped_labels.py` resolves only keys from that authorized aggregate
+through the existing auth/teams/projects/items spine. Readable-ancestor guards
+also cover epic directory entries. `grouped_axes.py` keeps direct UUID predicates
+on indexed fields for individual column reads.
+
+`rows_only` requires a complete column/lane key, reads limit+1 ordered IDs and
+returns an actor/scope/cell-bound cursor. It does not recount groups. Both paths
+retain SLQ, row visibility and field-read guards. The ordinary grouped-list
+contract and numbered list pagination remain available.
+
+`ViewBoard` keeps stable columns with a searchable navigator, fixed headers,
+independent vertical scrolling and automatic cursor continuation. Its column
+statistics cover every matching issue, not loaded cards. Cursor windows are
+separately cached; appending does not replay earlier windows or the summary.
+`ViewSwimlanes` retains complete lane headers and delays mounting off-screen
+lanes; visible cells fetch independently. Visited content stays mounted to
+preserve native selection/find/drag behaviour. `BoardLoadBoundary` observes
+clipping ancestors, stops on failures and offers local retry. Drag edge scrolling
+is shared in `board-scroll.ts`. Group paging controls now belong only to grouped
+lists. Mutations invalidate summaries and card windows through entity metadata.
+
+Proof: `web/scripts/board-navigation-proof.mjs` (also the grouped-pagination
+entry point); backend summary/cursor/permission invariants in
+`tests/test_board_loading.py`, `test_item_visibility.py` and
+`test_slq_field_oracle.py`. This is incremental loading, not card virtualization:
+very deep browsing still accumulates mounted cards.

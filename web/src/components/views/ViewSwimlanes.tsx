@@ -1,4 +1,9 @@
-import { useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
+import type { BoardLoading } from "../../lib/useBoardItems";
+import { useBoardDragScroll } from "../../lib/board-scroll";
+import { BoardLoadBoundary } from "./BoardLoadBoundary";
+import { BoardNavigator } from "./BoardNavigator";
+import { BoardLaneContent } from "./BoardLaneContent";
+import { useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useBucketDrop } from "../../lib/bucket-drop";
 import type { CardLayout } from "../../lib/card-layout";
@@ -15,6 +20,8 @@ import type { ViewGroup } from "../../lib/view-utils";
 import { BoardCard } from "../board/BoardCard";
 
 interface ViewSwimlanesProps {
+  loading?: BoardLoading;
+  updating?: boolean;
   /** Column buckets over ALL items — identical across every swimlane. */
   columns: ViewGroup[];
   /** Swimlane buckets over ALL items. */
@@ -73,6 +80,7 @@ function readCollapsed(viewId: string): Set<string> {
 export function ViewSwimlanes({
   columns,
   lanes,
+  loading, updating,
   viewId,
   layout,
   usersById,
@@ -86,10 +94,12 @@ export function ViewSwimlanes({
   onSelectToggle,
   collapseEmpty,
 }: ViewSwimlanesProps) {
+  const root=useRef<HTMLDivElement>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => readCollapsed(viewId));
   const dnd = Boolean(onMoveToCell);
   // Cells are keyed `${lane.key}::${column.key}` — one hovered cell at a time.
   const drop = useBucketDrop<Item>(dnd);
+  const dragScroll=useBoardDragScroll(root,Boolean(drop.dragging));
 
   const toggleLane = (laneKey: string) => {
     setCollapsed((previous) => {
@@ -111,7 +121,7 @@ export function ViewSwimlanes({
   // RADD-1175: the rail the pointer is over; every rail expands mid-drag.
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const railOf = (column: ViewGroup) =>
-    Boolean(collapseEmpty) && column.items.length === 0 && !drop.dragging && expandedKey !== column.key;
+    Boolean(collapseEmpty) && (column.total ?? column.items.length) === 0 && !drop.dragging && expandedKey !== column.key;
   const widthOf = (column: ViewGroup) => (railOf(column) ? RAIL_WIDTH_CLASSES : COLUMN_WIDTH_CLASSES);
   const hoverProps = (column: ViewGroup) =>
     collapseEmpty
@@ -130,7 +140,17 @@ export function ViewSwimlanes({
   }, [columns]);
 
   return (
-    <div className="flex-1 overflow-auto">
+    <>
+    <BoardNavigator columns={columns} lanes={lanes} updating={updating}
+      onColumn={key=>{
+        const node=Array.from(root.current?.querySelectorAll<HTMLElement>("[data-board-column]")??[]).find(n=>n.dataset.boardColumn===key);
+        if(node&&root.current) root.current.scrollLeft+=node.getBoundingClientRect().left-root.current.getBoundingClientRect().left-20;
+      }}
+      onLane={key=>{
+        const node=Array.from(root.current?.querySelectorAll<HTMLElement>("[data-board-lane]")??[]).find(n=>n.dataset.boardLane===key);
+        if(node&&root.current) root.current.scrollTop+=node.getBoundingClientRect().top-root.current.getBoundingClientRect().top-36;
+      }} />
+    <div ref={root} data-board-scroll onDragOverCapture={dragScroll} className="min-h-0 flex-1 overflow-auto">
       <div className="min-w-max px-5 pb-6">
         {/* Column header row — sticky above every lane. */}
         <div className="sticky top-0 z-20 flex h-9 items-end gap-3 bg-base pb-1.5">
@@ -160,7 +180,7 @@ export function ViewSwimlanes({
           const isCollapsed = collapsed.has(lane.key);
           const Chevron = isCollapsed ? ChevronRight : ChevronDown;
           return (
-            <section key={lane.key} aria-label={`${lane.label} (${lane.items.length})`}>
+            <section key={lane.key} data-board-lane={lane.key} aria-label={`${lane.label} (${lane.total ?? lane.items.length})`}>
               {/* Sticky lane header, pinned below the column row; the inner
                   button sticks left so the name survives horizontal scroll. */}
               <header className="sticky top-9 z-10 border-t border-subtle/70 bg-base py-1">
@@ -180,7 +200,7 @@ export function ViewSwimlanes({
               </header>
 
               {!isCollapsed && (
-                <div className="flex gap-3 pb-3">
+                <BoardLaneContent>{()=> <div className="flex gap-3 pb-3">
                   {columns.map((column) => {
                     const cellItems = lane.items.filter(
                       (item) => columnOfItem.get(item.id) === column.key,
@@ -230,15 +250,17 @@ export function ViewSwimlanes({
                             onSelectToggle={onSelectToggle}
                           />
                         ))}
+                        <BoardLoadBoundary loading={column.total === 0 || lane.total === 0 ? undefined : loading} column={column.key} lane={lane.key} />
                       </div>
                     );
                   })}
-                </div>
+                </div>}</BoardLaneContent>
               )}
             </section>
           );
         })}
       </div>
     </div>
+    </>
   );
 }

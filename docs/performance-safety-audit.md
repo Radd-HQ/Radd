@@ -90,3 +90,27 @@ replacement. Large custom-text boundaries use a bounded encrypted offset token
 instead of emitting an unusably long URL. Mutable sort values still mean this is
 not snapshot isolation. No new indexes or production latency guarantee are
 claimed; complicated filters, authorization and full counts can remain expensive.
+
+## Board navigation replacement: RADD-1212
+
+Approved after the group-pager usability review. Board summaries and individual
+cell windows now have distinct request modes; grouped lists keep their existing
+paging. Complete column/lane identities come from summaries rather than loaded
+cards. The summary avoids global issue ranking; single-cell reads use direct
+UUID predicates, limit+1 and the existing authorization-bound cursor machinery.
+
+Local read-only backend probes (different requests, not an equivalent full-page
+benchmark): the former all-project assignee group switch fetched 500 cards in
+6.9 seconds, including 4.9 seconds of aggregate/ranking work. The new summary
+took 1.0 seconds; individual 25-card requests took 0.30–0.84 seconds in the sampled
+columns. State/assignee summaries took 1.56 seconds. Actual network/browser and
+scope costs vary; these are not production latency guarantees.
+
+Browser proof verifies visible-first loading, full totals/points, independent
+scrolling, automatic continuation, local retry retaining prior cards, searchable
+column jumps, preserved scroll position, drag/drop and complete swimlane
+structure. Permission and field-restriction tests exercise both summary and
+row modes. No aggregate cache shared between users was introduced. No card
+virtualization was introduced; previously loaded cards remain accessible, so
+extremely deep exploration still grows the DOM. Changes to filter/sort reset
+loading scope; ordinary horizontal navigation retains it.

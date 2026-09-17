@@ -282,5 +282,13 @@ async def test_grouped_counts_and_queue_obey_the_same_row_visibility(db, world, 
     result = await grouped_items(db, actor, GroupPageRequest(project_id=project.id, axis="priority"))
     assert {i.id for c in result.cells for i in c.items} == expected
     assert sum(result.column_totals.values()) == len(expected)
+    summary = await grouped_items(db, actor, GroupPageRequest(project_id=project.id, axis="priority", summary_only=True))
+    assert summary.column_totals == result.column_totals
+    assert not summary.cells
+    visible_rows = set()
+    for key in summary.column_totals:
+        page = await grouped_items(db, actor, GroupPageRequest(project_id=project.id, axis="priority", column_key=key, rows_only=True, cursor_mode=True))
+        visible_rows.update(i.id for c in page.cells for i in c.items)
+    assert visible_rows == expected
     queue = await queue_items(db, actor, project_id=project.id, q="", limit=50, offset=0)
     assert {i.id for i in queue} == expected

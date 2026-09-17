@@ -1,0 +1,137 @@
+/** RADD-1212: built UI proof of stable, visible-first board navigation. */
+import assert from 'node:assert/strict';
+import http from 'node:http';
+import {readFileSync,existsSync,statSync} from 'node:fs';
+import {mkdtemp} from 'node:fs/promises';
+import path from 'node:path';
+import {openBrowser} from './lib/cdp.mjs';
+const dist=new URL('../dist/',import.meta.url).pathname;
+const requests=[];
+let failSecondWindow = true;
+const project={id:'project',key:'DEV',name:'Development',permissions:['item.read','item.update'],created_at:'2026-01-01'};
+const cycles=[{id:'active',name:'Current sprint',status:'active',start_date:'2026-09-10',end_date:'2026-09-24'}, {id:'draft',name:'Next sprint',status:'draft',start_date:null,end_date:null},{id:'closed',name:'Historical sprint',status:'completed'}];
+const view={id:'planning',project_id:project.id,name:'Planning',view_type:'board',query:'',query_string:'project_id=project',group_by:'state',swimlane_by:null,quick_filters:[],columns:['item','priority','state'],column_order:[],hidden_columns:[],cycle_filter:null,can_edit:false,can_manage:false};
+const item=(n,cycle=null)=>({id:`i-${n}`,key:`DEV-${n}`,number:n,project_id:project.id,title:`${cycle?'Sprint':'Backlog'} work ${n}`,description:'',state:{id:'todo',name:'To do',category:'todo',color:'#999'},priority:'high',kind:'issue',type:null,assignee:null,reporter:null,team:null,cycle,labels:[],custom_fields:{},starred:false,flagged:false,visibility:'public',created_at:'2026-09-01',updated_at:'2026-09-17',comment_count:0,attachment_count:0});
+const sprintRows=Array.from({length:201},(_,i)=>item(15000+i,cycles[i===200?1:0]));
+const backlog=Array.from({length:401},(_,i)=>item(i+1));
+const states=Array.from({length:30},(_,i)=>({id:i===0?'todo':i===1?'progress':`state-${i}`,name:i===0?'To do':i===1?'In progress':`Stage ${i}`,category:'todo',position:i}));
+const moves=[];
+const server=http.createServer(async(req,res)=>{
+ const url=new URL(req.url,'http://local');
+ if(url.pathname.startsWith('/api/')){
+  let data=[]; const p=url.pathname;
+  if(p==='/api/v1/sla-queue-items'){requests.push({queue:url});data=[{...item(url.searchParams.get('offset')==='200'?901:900),title:url.searchParams.get('offset')==='200'?'Later queue page':'Overdue queue item'}];}
+  else if(p==='/api/v1/items/grouped'){
+   const request=Object.fromEntries(url.searchParams);requests.push({group:request});
+   if(request.after==='50' && failSecondWindow){failSecondWindow=false;res.statusCode=503;res.setHeader('content-type','application/json');res.end(JSON.stringify({detail:'Temporary fixture failure'}));return;}
+   const column_totals=Object.fromEntries(states.map((s,i)=>[s.id,i===0?80:1]));
+   const lane_totals=view.swimlane_by?{high:100,normal:9}:{__all__:109};
+   const column_labels=Object.fromEntries(states.map(s=>[s.id,s.name]));
+   data={cells:[],total_groups:view.swimlane_by?60:30,column_points:{todo:240,progress:3},column_totals,lane_totals,column_labels,lane_labels:{high:'High',normal:'Normal'},epic_refs:{}};
+   if(request.rows_only==='true') {
+    const col=request.column_key,ln=request.lane_key??'__all__';
+    const count=request.lane ? (ln==='high'?(col==='todo'?71:1):ln==='normal'&&col==='todo'?9:0) : col==='todo'?80:1,offset=Number(request.after??0),idx=states.findIndex(s=>s.id===col);
+    const all=Array.from({length:count},(_,i)=>({...item(idx*1000+i+1),title:`Board work ${idx*1000+i+1}`,state:states[idx],priority:ln==='normal'?'normal':'high'}));
+    data={...data,cells:[{column:col,lane:ln,total:null,items:all.slice(offset,offset+25),next_cursor:offset+25<count?String(offset+25):null}],column_totals:{},lane_totals:{},column_points:{}};
+   }
+  } else if(p==='/api/v1/items'||p==='/api/v1/items/count'){
+   requests.push(url);
+   const sprint=url.searchParams.getAll('cycle_id').length>0;
+   const q=url.searchParams.get('q')??'';
+   const pool=sprint?sprintRows:q.includes('cycle IS EMPTY')?backlog:Array.from({length:14704},(_,i)=>({...item(i+1,cycles[2]),state:{id:'done',name:'Done',category:'done'}}));
+   data=p.endsWith('/count')?{total:view.view_type==='queue'?201:pool.length}:pool.slice(Number(url.searchParams.get('offset')??0),Number(url.searchParams.get('offset')??0)+Number(url.searchParams.get('limit')??50));
+  } else if(req.method==='PATCH' && p.startsWith('/api/v1/items/')){ let raw='';for await(const chunk of req)raw+=chunk; moves.push(JSON.parse(raw));data={...item(1),state:states.find(s=>s.id===moves.at(-1).state_id)??states[0]};
+  } else if(p==='/api/v1/auth/me')data={id:'person',name:'Tester',email:'tester@example.com',global_role:'member',instance_role:'member',permissions:[],timezone:'UTC'};
+  else if(p==='/api/v1/views/planning')data=view;
+  else if(p==='/api/v1/views')data=[view];
+  else if(p==='/api/v1/projects/summary')data={total:1,related_count:1,permissions:['item.read','item.update']};
+  else if(p==='/api/v1/page-spaces/summary')data={total:0,permissions:[]};
+  else if(p==='/api/v1/projects')data=[project];
+  else if(p.startsWith('/api/v1/projects/'))data=project;
+  else if(p==='/api/v1/cycles')data=cycles;
+  else if(p==='/api/v1/states')data=states;
+  else if(p.includes('/capabilities'))data={capabilities:[],nav:[],plugins:[],ui:[],view_types:[]};
+  else if(p.includes('/notifications'))data={items:[],notifications:[],unread_count:0,total:0};
+  else if(p.includes('/preferences'))data={};
+  else if(p.includes('/config'))data={};
+  else if(p.includes('settings'))data={value:true};
+  else if(p.includes('/stats'))data={};
+  res.setHeader('content-type','application/json');res.setHeader('X-Total-Count',String(Array.isArray(data)?data.length:0));res.end(JSON.stringify(data));return;
+ }
+ const file=path.join(dist,url.pathname==='/'?'index.html':url.pathname);
+ const target=existsSync(file)&&statSync(file).isFile()?file:path.join(dist,'index.html');
+ res.setHeader('content-type',target.endsWith('.js')?'application/javascript':target.endsWith('.css')?'text/css':'text/html');res.end(readFileSync(target));
+});
+await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+let browser;
+try{
+ browser=await openBrowser({port:19467,profile:await mkdtemp('/tmp/radd-grouped-proof-'),width:1600,height:1000});
+ const s=browser.session;await s.navigate(`http://127.0.0.1:${server.address().port}/p/DEV/v/planning`,3500);
+ const until=async (test)=>{for(let i=0;i<100;i++){if(await test())return;await new Promise(r=>setTimeout(r,50));}throw new Error(await s.eval('document.body.innerText')+'\n'+s.consoleErrors.join('\n'));};
+ await until(async()=> (await s.eval('document.body.innerText')).includes('Board work 1001'));
+ let text=await s.eval('document.body.innerText');
+ assert(text.includes('Board work 1'));assert(!text.includes('Previous groups'));assert(!text.includes('Show 25 more'));
+ assert.equal(requests.filter(r=>r.group?.summary_only==='true').length,1);
+ assert(requests.filter(r=>r.group?.rows_only==='true').length<8,'Only visible columns load initially');
+ assert(!requests.some(r=>r.group?.column_key==='state-29'),'Far column remains unloaded');
+ const metrics=await s.eval(`(()=>{const c=document.querySelector('[data-board-column="todo"]'),b=c.querySelector('[data-column-scroll]'),card=b.querySelector('[draggable]');return {height:b.clientHeight,scroll:b.scrollHeight,card:card.getBoundingClientRect().height,total:c.innerText}})()`);
+ assert(metrics.scroll>metrics.height&&metrics.card>70,'Column scrolls without crushing cards');
+ assert(metrics.total.includes('80')&&metrics.total.includes('240'),'Full statistics, not loaded-page totals');
+ const bottom=()=>s.eval(`(()=>{const n=document.querySelector('[data-board-column="todo"] [data-column-scroll]');n.scrollTop=n.scrollHeight})()`);
+ await bottom();await until(async()=>requests.some(r=>r.group?.after==='25'));
+ await until(async()=> (await s.eval('document.body.innerText')).includes('Board work 50'));
+ await bottom();await until(async()=> (await s.eval('document.body.innerText')).includes('Retry loading'));
+ assert((await s.eval('document.body.innerText')).includes('Board work 50'),'Failure keeps prior cards');
+ await s.click('button',t=>t.includes('Retry loading'));
+ await until(async()=> (await s.eval('document.body.innerText')).includes('Board work 75'));
+ await bottom();await until(async()=> (await s.eval('document.body.innerText')).includes('Board work 80'));
+ assert.deepEqual(requests.filter(r=>r.group?.column_key==='todo').map(r=>r.group.after??null),[null,'25','50','50','75']);
+ assert.equal(requests.filter(r=>r.group?.summary_only==='true').length,1,'Continuation never recounts board');
+ await s.eval(`document.querySelector('input[aria-label="Select DEV-1"]').click()`);
+ const scrollBefore=await s.eval(`document.querySelector('[data-column-scroll]').scrollTop`);
+ await s.click('button[aria-label="Jump to column"]');
+ await s.eval(`(()=>{const n=document.querySelector('input[placeholder]');const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;set.call(n,'Stage 29');n.dispatchEvent(new Event('input',{bubbles:true}))})()`);
+ await s.click('[role="option"]',t=>t.includes('Stage 29'));
+ await until(async()=>requests.some(r=>r.group?.column_key==='state-29'));
+ await until(async()=> (await s.eval('document.body.innerText')).includes('Board work 29001'));
+ await s.click('button[aria-label="Jump to column"]');await s.click('[role="option"]',t=>t.includes('To do'));
+ await until(async()=>await s.eval(`document.querySelector('[data-board-scroll]').scrollLeft<50`));
+ assert.equal(await s.eval(`document.querySelector('[data-column-scroll]').scrollTop`),scrollBefore,'Returning preserves column scroll');
+ assert(await s.eval(`document.querySelector('input[aria-label="Select DEV-1"]').checked`),'Selection survives navigation');
+ assert.equal(requests.filter(r=>r.group?.column_key==='todo'&&!r.group.after).length,1,'Returning reuses cached cards');
+ await s.eval(`document.querySelector('[data-column-scroll]').scrollTop=0`);
+ await s.screenshot('/tmp/radd-board-navigation-proof.png');
+ await s.eval(`(()=>{const dt=new DataTransfer();window.proofDrag=dt;document.querySelector('[data-board-column="todo"] [draggable]').dispatchEvent(new DragEvent('dragstart',{bubbles:true,cancelable:true,dataTransfer:dt}))})()`);
+ await new Promise(r=>setTimeout(r,100));
+ await s.eval(`(()=>{const n=document.querySelector('[data-board-scroll]'),r=n.getBoundingClientRect();n.dispatchEvent(new DragEvent('dragover',{bubbles:true,cancelable:true,dataTransfer:window.proofDrag,clientX:r.right-10,clientY:r.top+100}))})()`);
+ await until(async()=>await s.eval(`document.querySelector('[data-board-scroll]').scrollLeft>0`));
+ await s.eval(`document.querySelector('[data-board-scroll]').scrollLeft=0`);
+ await s.eval(`(()=>{const n=document.querySelector('[data-board-column="progress"]');n.dispatchEvent(new DragEvent('dragover',{bubbles:true,cancelable:true,dataTransfer:window.proofDrag}));n.dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:window.proofDrag}))})()`);
+ await until(async()=>moves.length>0);assert.equal(moves.at(-1).state_id,'progress');
+ view.swimlane_by='priority';requests.length=0;
+ await s.navigate(`http://127.0.0.1:${server.address().port}/p/DEV/v/planning`,1500);
+ await until(async()=>requests.some(r=>r.group?.lane_key==='high'));
+ assert.equal(await s.eval(`document.querySelectorAll('[data-board-lane]').length`),4,'Complete natural lane structure is present');
+ assert(requests.filter(r=>r.group?.rows_only&&r.group.lane==='priority').every(r=>r.group.lane_key&&r.group.column_key),'Each fetch targets a complete cell');
+ assert(!requests.some(r=>Number(r.group?.group_offset)>0),'No cell-set paging');
+ await s.screenshot('/tmp/radd-board-swimlanes-proof.png');
+ assert.deepEqual(s.consoleErrors.filter(e=>!e.includes('503')),[]);
+ console.log('PASS: stable columns, visible-first requests, full totals, automatic cursor continuation/retry, searchable jump, preserved scroll/cache, drag/drop and complete swimlanes.');
+ await s.send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+ view.swimlane_by=null;
+ await s.navigate(`http://127.0.0.1:${server.address().port}/p/DEV/v/planning`,1500);
+ await until(async()=> (await s.eval('document.body.innerText')).includes('Board work 1'));
+ assert(await s.eval(`(()=>{const r=document.querySelector('button[aria-label="Jump to column"]').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth})()`),'Mobile column navigator stays on screen');
+ await s.screenshot('/tmp/radd-board-mobile-proof.png');
+ await s.send('Emulation.clearDeviceMetricsOverride');
+ view.view_type='queue';view.group_by=null;view.swimlane_by=null;requests.length=0;
+ await s.navigate(`http://127.0.0.1:${server.address().port}/p/DEV/v/planning`,2000);
+ await until(async()=> (await s.eval('document.body.innerText')).includes('Overdue queue item'));
+ assert.ok(requests.some(r=>r.queue));assert.ok(!requests.some(r=>r.pathname?.endsWith('/items')));
+ await s.click('button[aria-label="Next page"]');
+ await until(async()=> (await s.eval('document.body.innerText')).includes('Later queue page'));
+ assert.ok(requests.some(r=>r.queue?.searchParams.get('offset')==='200'));
+ assert.deepEqual(s.consoleErrors.filter(e=>!e.includes('503')),[]);
+ console.log('PASS: queue uses the server urgency endpoint across pagination.');
+ console.log('PASS: board immediately shows rare state, loads further rows without losing other groups, displays full count and avoids global paging.');
+}finally{browser?.close();await new Promise(resolve=>server.close(resolve));}

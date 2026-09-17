@@ -235,12 +235,13 @@ async def test_index_blanks_restricted_description(db, admin, project):
     assert row.description == secret
 
 
-async def test_grouped_points_do_not_disclose_restricted_field(db, admin, project, member):
+@pytest.mark.parametrize("summary_only", [False, True])
+async def test_grouped_points_do_not_disclose_restricted_field(db, admin, project, member, summary_only):
     from radd.modules.items.grouped import GroupPageRequest, grouped_items
 
     await items.create_item(db, ItemCreate(project_id=project.id, title="private points", estimate_points=13), admin)
     await _restrict_builtin_read(db, "estimate_points")
-    request = GroupPageRequest(project_id=project.id, axis="state")
+    request = GroupPageRequest(project_id=project.id, axis="state", summary_only=summary_only)
     restricted = await grouped_items(db, member, request)
     assert restricted.column_points is None
     assert all(c.points is None for c in restricted.cells)
