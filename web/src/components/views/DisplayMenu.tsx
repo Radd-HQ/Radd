@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, LayoutTemplate, SlidersHorizontal, X } from "lucide-react";
 import {
   CARD_SLOT_LABELS,
@@ -46,8 +46,10 @@ export function DisplayMenu({
   state,
   columnsEditor,
   cardDesigner,
+  viewOptions,
 }: {
   state: CardDisplayState;
+  viewOptions?: ReactNode;
   columnsEditor?: ColumnsEditor;
   cardDesigner?: CardDesignerEntry;
 }) {
@@ -76,8 +78,9 @@ export function DisplayMenu({
         open={open}
         onClose={() => setOpen(false)}
         label="Card display options"
-        className="w-60 p-3"
+        className={viewOptions ? "w-80 max-h-[80vh] overflow-y-auto p-3" : "w-60 p-3"}
       >
+            {viewOptions && <div className="mb-3 border-b border-subtle pb-3">{viewOptions}</div>}
             {cardDesigner ? (
               <div>
                 <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted">

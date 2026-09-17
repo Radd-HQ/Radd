@@ -1,4 +1,4 @@
-# Planning workflow — RADD-1197 / RADD-1202
+# Planning workflow — RADD-1197 / RADD-1202 / RADD-1207
 
 Planning is a scheduling screen with independently fetched sections. It no longer
 paginates a global issue result and then discards historical/completed rows.
@@ -11,16 +11,28 @@ paginates a global issue result and then discards historical/completed rows.
    whether explicitly closed or past its end date. Each row names its source
    sprint. Users can move work into a live sprint or the backlog; this section
    is not itself a writable sprint and nothing is moved automatically.
-3. **Backlog** contains only open, unscheduled issues. Search by title, Priority,
-   Recently updated and Manual ordering apply only here. Only its own result
-   controls the backlog pager. Priority is the initial ordering.
+3. **Backlog** contains only open, unscheduled issues. Priority, Recently updated
+   and Manual ordering live on its card. Only its own result controls the backlog
+   pager. Priority is the initial ordering.
 4. **Completed sprint history** is explicitly opened and selects one historical
    sprint at a time. Finished/canceled work appears here; unfinished historical
    work stays in Needs rescheduling. History rows are not drag sources/targets.
 
 Sprint issues always retain manual rank order. Completed/canceled issues in
 active sprints are shown by default, with a personal **Show completed issues in
-active sprints** toggle. Upcoming/draft sprints show open work.
+active sprints** toggle inside **Display**. Upcoming/draft sprints show open work.
+Display also contains completed history selection and shared sprint hide/restore.
+There is no separate Planning toolbar.
+
+Each section has a search icon beside its header. It reveals a title quick filter
+inside that card, expands a collapsed card, and queries all matching section
+issues on the server, including rows not yet loaded. Clear/Escape restores the
+ordinary section; Escape returns focus to the icon. Independent results show
+loaded/matching counts, retry and **Show more matches** in 200-row slices. The
+ordinary backlog pager is hidden while its quick filter is active. Searching one
+section does not change another section's filters or the header statistics.
+Manual reorder is disabled while filtering, so unseen neighbours are not treated
+as adjacent; cross-section scheduling remains available.
 
 Collapse state, the completed-work toggle and backlog ordering are personal to
 an account/view. Search and history selection are session state. Hiding a sprint
@@ -29,7 +41,7 @@ makes hidden scope explicit. Planning fixes the section order rather than applyi
 an old arbitrary column order. Backlog and rescheduling cannot be hidden.
 
 Saved and temporary query conditions, project constraints and cycle-name filters
-remain effective. A visible note explains that these may exclude completed work
+remain effective. A note in Display explains that these may exclude completed work
 even when the display toggle is enabled. Planning's order controls replace the
 query's ORDER BY for their respective sections. Basic Planning needs no query.
 
@@ -42,7 +54,7 @@ respects restricted cycle fields, and runs inside the normal authorized issue
 query. No migration or automatic repair of existing issues is required.
 
 Counts describe matching open sprint issues, open backlog and issues needing
-rescheduling. The backlog count follows its search. Individual section counts
+rescheduling. Card quick-filter counts are separate from those totals. Individual section counts
 show loaded/matching totals where available; sprint progress describes loaded
 rows until sprint loading finishes. Empty states distinguish unscheduled work,
 no matching search/filters, historical work and incomplete loading. Count failures
@@ -62,6 +74,11 @@ backlog rows, active/upcoming/draft ordering, unfinished historical work, comple
 work visibility, lazy history, search/empty states, backlog sorting, personal
 collapse, shared hide/restore, rescheduling drops, reopening and read-only controls.
 Its screenshot is `/tmp/radd-planning-workflow-proof.png`.
+RADD-1207 additionally checks section search beyond the backlog's loaded page,
+401 matches across Show more, unchanged sprint progress during filtering,
+keyboard clearing, collapsed-section expansion and mobile Display bounds.
+Screenshots: `/tmp/radd-planning-controls-proof.png`,
+`/tmp/radd-planning-search-proof.png`, `/tmp/radd-planning-display-mobile-proof.png`.
 
 `server/tests/test_slq.py` checks the lifecycle partitions against real database
 rows, including date-expired and explicitly closed sprints, null cycles, paging,

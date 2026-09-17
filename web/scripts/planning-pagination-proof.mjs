@@ -48,6 +48,7 @@ const server=http.createServer(async (req,res)=>{
     if(q.includes('ORDER BY updated DESC'))pool=[...pool].reverse();
    } else throw new Error('Planning fetched an unpartitioned global page: '+url);
 
+   if(q.includes('title ~')) { const term=JSON.parse(q.match(/title ~ ("(?:[^"\\]|\\.)*")/)?.[1]??'""'); pool=pool.filter(i=>i.title.includes(term)); }
    data=p.endsWith('/count')?{total:pool.length}:pool.slice(Number(url.searchParams.get('offset')??0),Number(url.searchParams.get('offset')??0)+Number(url.searchParams.get('limit')??50));
   } else if(p==='/api/v1/auth/me')data={id:'person',name:'Tester',email:'tester@example.com',global_role:'member',instance_role:'member',permissions:[],timezone:'UTC'};
   else if(p==='/api/v1/views/planning')data=view;
@@ -94,6 +95,11 @@ try{
  assert.equal(await s.eval(`document.querySelector('section[aria-label="Current sprint"] header button').getAttribute('aria-expanded')`),'false');
  assert.equal(writes.length,0);
  await s.click('section[aria-label="Current sprint"] header button');
+ // Controls live in Display, not a second toolbar. Each section has its own search.
+ assert(!await s.eval(`Boolean(document.querySelector('[aria-label="Planning controls"]'))`));
+ assert.equal(await s.eval(`document.querySelectorAll('section button[aria-label^="Search "]').length`),5);
+ const display=()=>s.click('button',t=>t.trim()==='Display');
+ await display();
  // Show completed applies only to the sprint stream, never backlog pagination.
  const completedToggle=`[...document.querySelectorAll('label')].find(l=>l.textContent.includes('Show completed issues in active sprints')).querySelector('input')`;
  await s.eval(completedToggle+'.click()');
@@ -101,35 +107,63 @@ try{
  await s.eval(completedToggle+'.click()');
  await until(async()=> (await s.eval('document.body.innerText')).includes('Completed active work'));
  // History is explicitly requested and kept separate from unfinished work.
- await s.click('button',t=>t==='Completed sprint history');
+ await s.eval(`[...document.querySelectorAll('label')].find(l=>l.textContent.includes('Completed sprint history')).querySelector('input').click()`);
  await until(async()=> (await s.eval('document.body.innerText')).includes('Finished historical work'));
  assert((await s.eval('document.body.innerText')).includes('Unfinished historical work'));
- await s.click('button',t=>t==='Completed sprint history');
+ await s.eval(`[...document.querySelectorAll('label')].find(l=>l.textContent.includes('Completed sprint history')).querySelector('input').click()`);
+ await display();
+ await s.click('button[aria-label="Search Backlog"]');
  // Search only the backlog; empty explanations are visible.
  await s.click('input[type="search"]');await s.send('Input.insertText',{text:'nothing matches'});
- await until(async()=> (await s.eval('document.body.innerText')).includes('No backlog issues match your search or filters.'));
+ await until(async()=> (await s.eval('document.body.innerText')).includes('No issue titles match this section’s filter.'));
  assert((await s.eval('document.body.innerText')).includes('Sprint work 15200'));
  await s.eval(`document.querySelector('input[type="search"]').select()`);await s.send('Input.insertText',{text:'Backlog work 401'});
  await until(async()=> (await s.eval('document.body.innerText')).includes('Backlog work 401'));
+ await s.eval(`document.querySelector('input[type="search"]').select()`);await s.send('Input.insertText',{text:'Backlog work'});
+ await until(async()=> (await s.eval('document.body.innerText')).includes('200 shown · 401 matching'));
+ assert(!await s.eval(`Boolean(document.querySelector('button[aria-label="Next page"]'))`));
+ await s.click('button',t=>t==='Show more matches');
+ await until(async()=> (await s.eval('document.body.innerText')).includes('400 shown · 401 matching'));
+ await s.click('button',t=>t==='Show more matches');
+ await until(async()=> (await s.eval('document.body.innerText')).includes('401 shown · 401 matching'));
  await s.eval(`document.querySelector('input[type="search"]').select()`);await s.send('Input.insertText',{text:' '});
- await until(async()=> (await s.eval('document.body.innerText')).includes('401 backlog'));
+ await until(async()=>await s.eval(`document.querySelector('section[aria-label="Backlog"] ul')?.children.length===200 && Boolean(document.querySelector('button[aria-label="Next page"]'))`));
  // Exercise the kit select controls through their rendered buttons/options.
  const pick=async(label,option)=>{
+  await s.eval(`[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===${JSON.stringify(label)}).scrollIntoView({block:'center'})`);
   await s.click('button',new Function('text',`return text.trim()===${JSON.stringify(label)}`));
-  await new Promise(r=>setTimeout(r,150));
+  await until(async()=>await s.eval(`Boolean(document.querySelector('[role="option"]'))`));
   await s.click('[role="option"]',new Function('text',`return text.trim()===${JSON.stringify(option)}`));
  };
  await pick('Priority','Recently updated');
  await until(async()=>requests.some(u=>u.searchParams.get('q')?.includes('cycle IS EMPTY')&&u.searchParams.get('q')?.includes('ORDER BY updated DESC')));
  await pick('Recently updated','Manual');
  await until(async()=>requests.some(u=>u.searchParams.get('q')?.includes('cycle IS EMPTY')&&u.searchParams.get('q')?.includes('ORDER BY rank')));
+ await display();
  await pick('Choose a sprint…','Current sprint');
  await until(async()=>!await s.eval(`Boolean(document.querySelector('section[aria-label="Current sprint"]'))`));
  assert(writes.some(p=>p.hidden_columns?.includes('active')));
  assert((await s.eval('document.body.innerText')).includes('Restore 1 hidden sprint'));
  await s.click('button',t=>t.includes('Restore 1 hidden sprint'));
  await until(async()=>await s.eval(`Boolean(document.querySelector('section[aria-label="Current sprint"]'))`));
+ await display();
 
+ // Sprint quick search stays scoped and does not rewrite progress from its one result.
+
+ await s.click('button[aria-label="Search Current sprint"]');
+ await s.click('input[aria-label="Search titles in Current sprint"]');await s.send('Input.insertText',{text:'Sprint work 15099'});
+ await until(async()=>await s.eval(`document.querySelector('section[aria-label="Current sprint"] ul').children.length===1 && document.querySelector('section[aria-label="Current sprint"] ul').innerText.includes('Sprint work 15099')`));
+ assert((await s.eval(`document.querySelector('section[aria-label="Current sprint"] header').innerText`)).includes('1/201'));
+ assert((await s.eval('document.body.innerText')).includes('Unfinished historical work'));
+ await s.eval(`document.querySelector('[aria-label="Select DEV-15099"]').click()`);
+ await s.eval(`document.querySelector('[aria-label="Select DEV-15200"]').dispatchEvent(new MouseEvent('click',{bubbles:true,shiftKey:true}))`);
+ assert.equal(await s.eval(`document.querySelectorAll('section input[type="checkbox"]:checked').length`),2,'Shift selection must use filtered rows');
+ await s.click('input[aria-label="Search titles in Current sprint"]');
+ await s.send('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape'});
+ await s.send('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape'});
+ await until(async()=>await s.eval(`document.querySelector('section[aria-label="Current sprint"] ul').children.length===201`));
+ assert.equal(await s.eval('document.activeElement.getAttribute("aria-label")'),'Search Current sprint');
+ assert.equal(await s.eval(`document.querySelectorAll('section input[type="checkbox"]:checked').length`),0,'Changing filter clears selection');
  // The recovery section is a source of work, never a writable synthetic sprint ID.
  const drag=async(source,target)=>{
   await s.eval(`document.querySelector(${JSON.stringify(source)}).dispatchEvent(new DragEvent('dragstart',{bubbles:true,dataTransfer:new DataTransfer()}))`);
@@ -151,11 +185,24 @@ try{
  view.can_edit=false;view.can_manage=false;project.permissions=['item.read'];
  view.query='priority = high ORDER BY created DESC';view.query_string='project_id=project&q='+encodeURIComponent(view.query);
  await s.navigate(`http://127.0.0.1:${server.address().port}/p/DEV/v/planning`,2000);
+ await s.click('button',t=>t.trim()==='Display');
  await until(async()=> (await s.eval('document.body.innerText')).includes('Saved and temporary filters still apply'));
  assert((await s.eval('document.body.innerText')).includes('Manual'));
  assert(!(await s.eval('document.body.innerText')).includes('Hide a sprint for this view'));
  assert(requests.some(u=>u.searchParams.get('q')?.includes('priority = high')&&u.searchParams.get('q')?.includes('cycle IS EMPTY')));
  assert.equal(await s.eval(`document.querySelector('section[aria-label="Current sprint"] header button').getAttribute('aria-expanded')`),'false');
+ await display();
+ await s.screenshot('/tmp/radd-planning-controls-proof.png');
+ // Search opens a collapsed group without toggling other cards.
+ await s.click('button[aria-label="Search Backlog"]');
+ assert.equal(await s.eval(`document.querySelector('section[aria-label="Backlog"] header button').getAttribute('aria-expanded')`),'true');
+ await s.screenshot('/tmp/radd-planning-search-proof.png');
+ await s.send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:false});
+ await display();
+ await new Promise(r=>setTimeout(r,300));
+ await s.screenshot('/tmp/radd-planning-display-mobile-proof.png');
+ const rect=await s.eval(`(()=>{const r=document.querySelector('[aria-label="Card display options"]').getBoundingClientRect();return {left:r.left,right:r.right,height:r.height}})()`);
+ assert(rect.left>=0&&rect.right<=390&&rect.height<=844,'Display must fit mobile viewport');
  assert.deepEqual(s.consoleErrors,[]);
- console.log('PASS: scheduling order, >200 sprint rows, independent backlog pages/search/order, rescheduling, completed toggle, history, collapse and hide/restore.');
+ console.log('PASS: Planning workflow, section search across 401 matches, unchanged progress, Display controls, keyboard focus, collapsed search and mobile popover bounds.');
 }finally{browser?.close();await new Promise(resolve=>server.close(resolve));}

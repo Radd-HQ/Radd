@@ -1,6 +1,9 @@
+import { Button } from "../Button";
+import { TextField } from "../TextField";
+import type { SectionSearchControl } from "../../lib/usePlanningSectionSearch";
 import { accountStorageKey } from "../../lib/account-storage";
-import { useEffect, useState, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { useEffect, useState, type ReactNode, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { ChevronDown, ChevronRight, Search, X } from "lucide-react";
 import type { BucketRef } from "../../lib/axis-dnd";
 import { useBucketDrop } from "../../lib/bucket-drop";
 import { usePeek } from "../../lib/hooks";
@@ -39,6 +42,8 @@ import {
 interface ViewListProps {
   /** One group = one section; a single unlabeled group renders flat. */
   groups: ViewGroup[];
+  sectionSearch?: (group: ViewGroup) => SectionSearchControl;
+  sectionTools?: (group: ViewGroup) => ReactNode;
   /** Card display config (slots/labels/scale) — defaults to the list preset. */
   display?: CardDisplayConfig;
   /** Batch SLA timers by item id (spec 63) — set while the sla slot is on. */
@@ -107,6 +112,8 @@ function isTopHalf(event: ReactDragEvent): boolean {
  */
 export function ViewList({
   groups,
+  sectionSearch,
+  sectionTools,
   display = defaultCardDisplay(DEFAULT_LIST_SLOTS),
   slaByItem,
   rollupByItem,
@@ -125,6 +132,8 @@ export function ViewList({
   onStar,
   onReorder,
 }: ViewListProps) {
+  const [searchOpen, setSearchOpen] = useState<Set<string>>(new Set());
+  useEffect(() => setSearchOpen(new Set()), [viewId]);
   const flat = groups.length === 1 && groups[0].key === FLAT_GROUP_KEY;
   const [collapsed, setCollapsed] = useState<Set<string>>(() => readCollapsed(viewId));
   const collapseAccount = accountStorageKey("list-collapse");
@@ -193,6 +202,8 @@ export function ViewList({
         />
       )}
       {groups.map((group) => {
+        const search = sectionSearch?.(group);
+        const searching = searchOpen.has(group.key) || Boolean(search?.filtered);
         const isCollapsed = !flat && collapsed.has(group.key);
         const Chevron = isCollapsed ? ChevronRight : ChevronDown;
         const isOver = drop.isOver(group.key);
@@ -216,19 +227,20 @@ export function ViewList({
           >
             {!flat && (
               <header className={"border-b " + (isOver ? "border-accent/40 bg-accent/10" : "border-subtle")}>
+                <div className="flex items-center">
                 <button
                   type="button"
                   onClick={() => toggle(group.key)}
                   aria-expanded={!isCollapsed}
                   title={`${isCollapsed ? "Expand" : "Collapse"} ${group.label} (only for you)`}
-                  className="flex w-full cursor-pointer flex-wrap items-center gap-2 px-4 py-2.5 text-left hover:bg-elevated/60 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
+                  className="flex min-w-0 flex-1 cursor-pointer flex-wrap items-center gap-2 px-4 py-2.5 text-left hover:bg-elevated/60 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
                 >
                   <Chevron size={13} className="shrink-0 text-fg-muted" aria-hidden />
                   {group.dotClassName && (
                     <span className={`size-2 rounded-full ${group.dotClassName}`} aria-hidden />
                   )}
                   <h2 className="text-xs font-semibold text-fg">{group.label}</h2>
-                  <span className="text-xs text-fg-faint">{group.total !== undefined ? `${group.items.length} / ${group.total}` : group.items.length}</span>
+                  {!search?.filtered && <span className="text-xs text-fg-faint">{group.total !== undefined ? `${group.items.length} / ${group.total}` : group.items.length}</span>}
                   {group.cycleMeta ? (
                     <>
                       <CycleStatusPill status={group.cycleMeta.status} />
@@ -254,6 +266,24 @@ export function ViewList({
                     )
                   )}
                 </button>
+                <div className="flex shrink-0 items-center gap-2 pr-3">
+                  {sectionTools?.(group)}
+                  {search && <Button size="sm" variant="ghost" aria-label={`Search ${group.label}`} title={`Search ${group.label}`} aria-expanded={searching}
+                    onClick={() => {
+                      setSearchOpen(previous => { const next = new Set(previous); if (searching) next.delete(group.key); else next.add(group.key); return next; });
+                      if (searching) search.onChange("");
+                      else if (isCollapsed) toggle(group.key);
+                    }}><Search size={14} aria-hidden /></Button>}
+                </div>
+                </div>
+                {search && searching && <div className="flex flex-wrap items-center gap-2 border-t border-subtle px-4 py-2">
+                  <TextField label="Filter titles" autoFocus type="search" aria-label={`Search titles in ${group.label}`} placeholder="Filter issue titles…" value={search.value}
+                    onChange={e => search.onChange(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Escape") { search.onChange(""); setSearchOpen(previous => { const next = new Set(previous); next.delete(group.key); return next; }); e.currentTarget.closest('section')?.querySelector<HTMLButtonElement>('button[aria-label^="Search "]')?.focus(); } }} />
+                  {search.value && <Button size="sm" variant="ghost" aria-label={`Clear search in ${group.label}`} onClick={() => search.onChange("")}><X size={13} aria-hidden /></Button>}
+                  {search.filtered && <span role="status" className="text-xs text-fg-muted">{search.pending ? "Searching…" : search.error ? "Search unavailable" : `${search.loaded} shown · ${search.total ?? "…"} matching`}</span>}
+                  {search.error && <Button size="sm" variant="secondary" onClick={search.onRetry}>Retry search</Button>}
+                </div>}
                 {group.progress !== undefined && (
                   <div className="h-0.5 w-full bg-elevated" aria-hidden>
                     <div className="h-full bg-accent" style={{ width: `${Math.round(group.progress * 100)}%` }} />
@@ -302,6 +332,7 @@ export function ViewList({
                 })}
               </ul>
             )}
+            {!isCollapsed && search?.filtered && search.more && <div className="p-3"><Button size="sm" variant="secondary" onClick={search.onMore}>Show more matches</Button></div>}
           </section>
         );
       })}

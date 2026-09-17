@@ -260,6 +260,10 @@ Keywords case-insensitive; field names case-sensitive; quoted values are always 
 Large-view measurements and the proposed independent Show more/rendering design
 are recorded in [the September 17 review](large-view-review-2026-09-17.md)
 (RADD-1203; implementation follow-ups RADD-1204–1206).
+Planning's visibility/history settings live in Display; each section has a
+server-backed title quick filter, and backlog ordering lives on the backlog card
+(`usePlanningSectionSearch.ts`, RADD-1207). These filters preserve section stats
+and use independent matching counts; full aggregate corrections remain RADD-1205.
 
 A saved view carries SLQ (`query`) and its `ViewRead.query_string` is the ready-made `GET /items?` composition — `q=<urlencoded>` (omitted when the query is empty) plus `project_id=<id>` for project-scoped views (the demo scripts that walked this round-trip were deleted in RADD-1082). The spec-08 structured params (`state_id`, `category`, `kind`, `priority`, `assignee_id`/`team_id` incl. literal `none`, `label`, `cf=k:v`) all remain on `GET /items` and AND with `q`: within one param values OR, across params AND. Malformed values → 422. Performance note: cf equality uses JSONB containment (`custom_fields @> …`) — sequential scan today; expression/GIN indexes come later keyed off the field registry's `indexed` flag. Migration `6afdeaf4f62d` converted every stored `ViewFilters` document to equivalent SLQ (ids resolved to names/emails; `none` → `IS EMPTY`; unresolvable references dropped clause-wise, logged) and dropped the `filters` column.
 

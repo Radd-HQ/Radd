@@ -1,3 +1,6 @@
+import { Select } from "../components/Select";
+import { BACKLOG_KEY } from "../lib/view-utils";
+import { usePlanningSectionSearch } from "../lib/usePlanningSectionSearch";
 import { PlanningControls } from "../components/views/PlanningControls";
 import { accountStorageKey } from "../lib/account-storage";
 import { useGroupedItems } from "../lib/useGroupedItems";
@@ -369,6 +372,7 @@ export function ViewPage() {
   const sprintItems = usePlanningSprints(planning.sprints, isPlanning && cycles.isSuccess && planning.cycleCount > 0);
   const recoveryItems = usePlanningSprints(planning.recovery, isPlanning && cycles.isSuccess, 1);
   const historyItems = usePlanningSprints(planning.history, isPlanning && planningOptions.history && Boolean(planning.historyId), 1);
+  const sectionSearch = usePlanningSectionSearch(planning, isPlanning && cycles.isSuccess, accountStorageKey(`planning-search:${viewId}`), planningOptions.history);
   const openSprintCount = useQuery({
     ...planningCountQuery(planning.sprintOpen),
     enabled: isPlanning && cycles.isSuccess && planning.cycleCount > 0,
@@ -453,14 +457,19 @@ export function ViewPage() {
   );
   const roadmapFlat = useMemo(() => itemPages.data?.pages.flat(), [itemPages.data]);
   const items = {
-    data: isGrouped ? groupedItems.items : isRoadmap ? roadmapFlat : isPlanning ? [...sprintItems.items, ...recoveryItems.items, ...(pagedItems.data ?? []), ...historyItems.items] : pagedItems.data,
+    data: isGrouped ? groupedItems.items : isRoadmap ? roadmapFlat : isPlanning ? sectionSearch.displayItems([
+      ...planning.scheduled.filter(g => !view?.hidden_columns?.includes(g.key)).map(g => ({key: g.key, items: sprintItems.items.filter(i => i.cycle?.id === g.key)})),
+      {key: RESCHEDULING_KEY, items: recoveryItems.items},
+      {key: BACKLOG_KEY, items: pagedItems.data ?? []},
+      ...(planningOptions.history && planning.historyId ? [{key: `history:${planning.historyId}`, items: historyItems.items}] : []),
+    ]) : pagedItems.data,
     isPending: isGrouped ? groupedItems.isPending && !cycles.isError : isRoadmap ? itemPages.isPending : pagedItems.isPending || (isPlanning && (cycles.isPending || recoveryItems.isPending || (planning.cycleCount > 0 && sprintItems.isPending))),
     isError: isGrouped ? (groupedItems.isError && !groupedItems.data) || ((columnAxis === "cycle" || laneAxis === "cycle") && cycles.isError) : isRoadmap ? itemPages.isError : pagedItems.isError || (isPlanning && (cycles.isError || (recoveryItems.isError && !recoveryItems.data) || (planning.cycleCount > 0 && sprintItems.isError && !sprintItems.data))),
     error: isGrouped ? groupedItems.error ?? cycles.error : isRoadmap ? itemPages.error : pagedItems.error ?? (isPlanning ? cycles.error ?? recoveryItems.error ?? sprintItems.error : null),
   };
   // Since the pagination wave the bar COMPOSES into the fetch (see
   // effectiveView above) — the loaded page already IS the filtered page.
-  const pageItems = useMemo(() => items.data ?? [], [items.data]);
+  const pageItems = useMemo(() => [...new Map((items.data ?? []).map(item => [item.id, item])).values()], [items.data]);
 
   // Queue views (spec 64): a fixed-column triage list — axes ignored, SLA
   // chips always on, and (without an explicit ORDER BY in the SLQ) the loaded
@@ -595,7 +604,7 @@ export function ViewPage() {
   useEffect(() => {
     setSelected(new Set());
     setAnchor(null);
-  }, [view?.id]);
+  }, [view?.id, sectionSearch.signature]);
 
   // Soft WIP limits (spec 76): the column-header ⋯ menu PATCHes the full map
   // (delete-key to clear one column; an emptied map clears the column).
@@ -777,7 +786,7 @@ export function ViewPage() {
 
   // Multi-select toggle: plain click toggles + sets the range anchor; shift-click
   // selects the range from the anchor in the current render order.
-  const orderedIds = useMemo(() => columns.flatMap((g) => g.items.map((i) => i.id)), [columns]);
+  const orderedIds = (isPlanning ? sectionSearch.apply(visibleColumns) : columns).flatMap(g => g.items.map(i => i.id));
   const onSelectToggle = (item: Item, event: ReactMouseEvent) => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -1050,6 +1059,11 @@ export function ViewPage() {
           {!isQueue && !isRoadmap && (
             <DisplayMenu
               state={cardDisplay}
+              viewOptions={isPlanning ? <PlanningControls options={planningOptions} onChange={changePlanning} plan={planning}
+                hidden={hiddenKeys} canEdit={Boolean(view.can_edit)} saving={updateBucketOrder.isPending}
+                onHide={id => updateBucketOrder.mutate({hidden_columns: [...hiddenKeys, id]})}
+                onRestore={() => updateBucketOrder.mutate({hidden_columns: [...hiddenKeys].filter(id => !planning.scheduled.some(g => g.key === id))})}
+                filtered={Boolean(fetchQueryView?.query.trim())} /> : undefined}
               columnsEditor={
                 !isBoard && view
                   ? {
@@ -1160,11 +1174,7 @@ export function ViewPage() {
         </div>
       </header>
 
-      {isPlanning && <PlanningControls options={planningOptions} onChange={changePlanning} plan={planning}
-        hidden={hiddenKeys} canEdit={Boolean(view.can_edit)} saving={updateBucketOrder.isPending}
-        onHide={id => updateBucketOrder.mutate({hidden_columns: [...hiddenKeys, id]})}
-        onRestore={() => updateBucketOrder.mutate({hidden_columns: [...hiddenKeys].filter(id => !planning.scheduled.some(g => g.key === id))})}
-        filtered={Boolean(fetchQueryView?.query.trim())} />}
+
       {isPlanning && (itemsTotal.isError || openSprintCount.isError || recoveryItems.countError) && <p role="status" className="px-4 py-2 text-xs text-fg-muted">Some Planning counts are unavailable. Displayed rows may still be used.</p>}
       {isPlanning && updateBucketOrder.isError && <p role="alert" className="px-4 py-2 text-sm text-fg-muted">Could not save sprint visibility. {errorMessage(updateBucketOrder.error)}</p>}
       {items.isPending ? (
@@ -1270,7 +1280,9 @@ export function ViewPage() {
             )
           ) : (
             <ViewList
-              groups={isPlanning || isGrouped ? visibleColumns : columns}
+              groups={isPlanning ? sectionSearch.apply(visibleColumns) : isGrouped ? visibleColumns : columns}
+              sectionSearch={isPlanning ? sectionSearch.control : undefined}
+              sectionTools={isPlanning ? group => group.key === BACKLOG_KEY ? <Select aria-label="Backlog order" size="sm" value={planningOptions.backlogOrder} onChange={value => changePlanning({backlogOrder: value as PlanningOptions["backlogOrder"]})} options={[{value:"priority",label:"Priority"},{value:"recent",label:"Recently updated"},{value:"manual",label:"Manual"}]} /> : null : undefined}
               viewId={view.id}
               display={display}
               slaByItem={slaByItem}
@@ -1322,7 +1334,7 @@ export function ViewPage() {
       {/* Classic pagination (pagination wave) — roadmaps auto-stream instead. */}
       {/* RADD-1177: also shown whenever a SMALLER page would paginate — otherwise
           the size picker is unreachable exactly when someone wants a smaller page. */}
-      {!isRoadmap && !isGrouped &&
+      {!isRoadmap && !isGrouped && !(isPlanning && sectionSearch.backlogFiltered) &&
         ((pageCount !== null && pageCount > 1) ||
           page > 1 ||
           (totalCount !== null && totalCount > Math.min(...ITEMS_PAGE_SIZES))) && (
