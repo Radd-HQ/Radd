@@ -26,6 +26,8 @@ class PluginRead(BaseModel):
     origin: str = "builtin"
     dependencies: list[str] = []
     problems: list[str] = []
+    live_supported: bool = False
+    managed: bool = False
 
 
 class ContributionSettings(BaseModel):

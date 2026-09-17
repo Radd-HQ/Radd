@@ -42,6 +42,8 @@ class PluginInfo:
     origin: str = "builtin"
     dependencies: tuple[str, ...] = ()
     problems: tuple[str, ...] = ()
+    live_supported: bool = False
+    managed: bool = False
 
 
 def _capabilities(plugin) -> tuple[dict, ...]:
@@ -89,11 +91,15 @@ async def list_plugins(session: AsyncSession) -> list[PluginInfo]:
                                 capabilities=_capabilities(plugin)))
     known = {**core_plugins, **installable_plugins}
     enabled_names = {i.name for i in infos if i.state == PluginState.ENABLED}
+    from . import live, store
+    managed_ids = {entry["id"] for entry in store.catalog().values()}
     infos = [replace(
         i, active=i.id in registries.plugins,
         restart_required=(i.state == PluginState.ENABLED) != (i.id in registries.plugins),
         origin="builtin" if i.id in core_plugins else "package",
         dependencies=known[i.id][0].depends_on,
+        live_supported=live.supported(known[i.id][0]) and i.id not in core_plugins,
+        managed=i.id in managed_ids,
         problems=tuple(plugin_problems(known[i.id][0], enabled_names)),
     ) for i in infos]
     for plugin_id, row in rows.items():
@@ -389,3 +395,13 @@ async def uninstall(session: AsyncSession, plugin_id: str, actor_id: uuid.UUID |
         await session.delete(row)
         await session.flush()
     await _emit(session, PluginEvent.UNINSTALLED, plugin_id, actor_id)
+
+
+async def record_package_upload(session: AsyncSession, info: dict, actor_id: uuid.UUID) -> None:
+    await events.emit(session, event_type=PluginEvent.PACKAGE_UPLOADED,
+                      entity_type=PluginEntity.PLUGIN, entity_id=info["id"], actor_id=actor_id,
+                      payload={key: info[key] for key in ("id", "version", "sha256", "distribution")})
+
+
+async def record_package_removal(session: AsyncSession, plugin_id: str, actor_id: uuid.UUID) -> None:
+    await _emit(session, PluginEvent.PACKAGE_REMOVED, plugin_id, actor_id)

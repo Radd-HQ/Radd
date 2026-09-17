@@ -70,7 +70,8 @@ RUN uv sync --locked --no-dev --no-install-project --extra localembed
 COPY server/ ./
 RUN uv sync --locked --no-dev --extra localembed
 
-ENV RADD_WEB_DIST=/app/web/dist \
+ENV RADD_PLUGINS_DIR=/data/plugins \
+    RADD_WEB_DIST=/app/web/dist \
     RADD_ATTACHMENTS_DIR=/data/attachments \
     RADD_AI_LOCAL_EMBED_CACHE=/data/models \
     RADD_BACKUP_DIR=/opt/radd/backups \

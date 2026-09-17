@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Slot, SlotId, useSlotMatch } from "@radd/plugin-sdk";
@@ -59,8 +59,12 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
     mutationFn: () => api.post<Plugin[]>(`${ApiPath.plugins}/${plugin.id}/disable`),
     onSuccess: invalidate,
   });
-  const busy = enable.isPending || disable.isPending || install.isPending || uninstall.isPending;
-  const actionError = enable.error || disable.error || install.error || uninstall.error;
+  const removePackage = useMutation({
+    mutationFn: () => api.delete(`${ApiPath.plugins}/${plugin.id}/package`),
+    onSuccess: invalidate,
+  });
+  const busy = removePackage.isPending || enable.isPending || disable.isPending || install.isPending || uninstall.isPending;
+  const actionError = enable.error || disable.error || install.error || uninstall.error || removePackage.error;
   const enabled = plugin.state === "enabled";
   // A plugin OPTS IN to instance-wide contribution toggles (spec 94) by contributing a
   // `pluginManagerSection` widget keyed by its registry name — the kernel forces nothing. If it did,
@@ -120,7 +124,8 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
           )}
           <p className="mt-1 text-[12px] text-fg-muted">
             {plugin.active ? "Loaded on this server" : "Not loaded on this server"}
-            {plugin.restart_required && " · Restart required to apply this change"}
+            {plugin.restart_required && (plugin.live_supported ? " · Applying live change…" : " · Restart required to apply this change")}
+            {plugin.live_supported && " · Supports live activation"}
           </p>
           {plugin.dependencies?.length > 0 && <p className="mt-1 text-[12px] text-fg-muted">
             Requires: {plugin.dependencies.join(", ")}
@@ -148,9 +153,16 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
         ) : !plugin.can_toggle ? (
           <span className="text-[12px] text-fg-muted">Package needs attention</span>
         ) : plugin.state === "discovered" ? (
-          <Button size="sm" disabled={busy} onClick={() => install.mutate()}>
-            {install.isPending ? "Installing…" : "Install"}
-          </Button>
+          <>
+            <Button size="sm" disabled={busy} onClick={() => install.mutate()}>
+              {install.isPending ? "Installing…" : "Install"}
+            </Button>
+            {plugin.managed && <Button size="sm" variant="ghost" disabled={busy} onClick={() => {
+              void confirm({title: `Remove ${plugin.id} package files?`,
+                message: "Removes the uploaded code and UI from the plugin directory after every process confirms it is unused. Stored plugin data remains. Reusing the same Python module name requires restarting the processes.",
+                confirmLabel: "Remove files", danger: true}).then(ok => {if (ok) removePackage.mutate();});
+            }}>Remove files…</Button>}
+          </>
         ) : enabled ? (
           <Button size="sm" variant="secondary" disabled={busy} onClick={() => disable.mutate()}>
             Disable
@@ -202,8 +214,53 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
   );
 }
 
+function PackageUpload() {
+  const client = useQueryClient();
+  const input = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [dialog, confirm] = useConfirm();
+  const upload = useMutation({
+    mutationFn: async () => {
+      if (!file) return;
+      const packageInfo = await api.post<{id: string}>(`${ApiPath.plugins}/packages/upload`, file);
+      try {
+        await api.post(`${ApiPath.plugins}/${packageInfo.id}/install`);
+      } catch (error) {
+        throw new Error(`Package uploaded but registration failed. Find it below and retry Install. ${error instanceof Error ? error.message : error}`);
+      }
+      return packageInfo;
+    },
+    onSettled: () => client.invalidateQueries({queryKey: queryKeys.plugins}),
+    onSuccess: () => {setFile(null); if (input.current) input.current.value = "";},
+  });
+  return <div className="mb-4 rounded-lg border border-subtle bg-surface p-4 text-[13px] text-fg-secondary">
+    <p className="font-medium text-heading">Upload a plugin package</p>
+    <p className="mt-1">Choose a built Python wheel (.whl), up to 32 MiB. Code and UI are stored in the shared plugin directory; no new RADD image is needed.</p>
+    <div className="mt-3 flex flex-wrap items-center gap-3">
+      <input ref={input} type="file" accept=".whl" aria-label="Plugin wheel" disabled={upload.isPending}
+        onChange={event => {upload.reset(); setFile(event.target.files?.[0] ?? null);}} />
+      <Button disabled={!file || upload.isPending || file.size > 32 * 1024 * 1024} onClick={() => {
+        void confirm({title: "Install trusted plugin code?",
+          message: "Plugins run server code with RADD's access. Only install packages from a source you trust. Upload validates and registers the package; activation is a separate action.",
+          confirmLabel: "Upload and install"}).then(ok => {if (ok) upload.mutate();});
+      }}>{upload.isPending ? "Uploading and validating…" : "Upload and install"}</Button>
+    </div>
+    {file && file.size > 32 * 1024 * 1024 && <p role="alert" className="mt-2">Package exceeds the 32 MiB limit.</p>}
+    {upload.error && <p role="alert" className="mt-2">{upload.error.message}</p>}
+    {upload.isSuccess && <p role="status" className="mt-2">Package installed. Find it below and enable it when ready.</p>}
+    <p className="mt-2">UI-only plugins apply live. Backend plugins require a restart of web and workers. Additional Python dependencies must already be available.</p>
+    {dialog}
+  </div>;
+}
+
 export function PluginsSettingsPage() {
-  const { data: plugins, isLoading, error } = useQuery(pluginsQuery);
+  const { data: plugins, isLoading, error } = useQuery({...pluginsQuery, refetchInterval: 2000});
+  const client = useQueryClient();
+  const activeKey = (plugins ?? []).filter(p => p.active).map(p => p.id).sort().join(",");
+  useEffect(() => {void client.invalidateQueries({queryKey: ["capabilities"]});}, [client, activeKey]);
+  const {data: peers} = useQuery({queryKey: ["plugin-processes"],
+    queryFn: () => api.get<Array<{process: string; stale: boolean; error?: string}>>(`${ApiPath.plugins}/runtime`),
+    refetchInterval: 5000});
   const [search, setSearch] = useState("");
   const visible = (plugins ?? []).filter(plugin =>
     `${plugin.id} ${plugin.name} ${plugin.description}`.toLowerCase().includes(search.trim().toLowerCase()));
@@ -211,15 +268,12 @@ export function PluginsSettingsPage() {
   return (
     <SettingsPage history={{ entities: ["plugin"] }}
       title="Plugins"
-      description="Manage plugin packages delivered with your deployment. Enable and disable save the requested state; restart all web and worker processes to apply it."
+      description="Upload and manage extensions. Live-capable plugins apply automatically; backend changes show when a restart is needed."
     >
-      <div className="mb-4 rounded-lg border border-subtle bg-surface p-4 text-[13px] text-fg-secondary">
-        <p className="font-medium text-heading">Add a plugin</p>
-        <p className="mt-1">Deploy an image containing the versioned plugin package to both web and workers.
-          It appears here automatically. Install it, review its requirements, enable it, then restart all processes.</p>
-        <p className="mt-2">Updates use a new deployment image. Disabling keeps data; forgetting also removes plugin-specific grants.
-          The loaded status below describes this server only.</p>
-      </div>
+      <PackageUpload />
+      {peers?.some(peer => peer.stale || peer.error) && <p role="status" className="mb-4 text-[13px] text-fg">
+        Some process reports are stale or failed. Package removal is blocked until those processes are confirmed stopped.
+      </p>}
       <div className="mb-4">
         <TextField label="Find a plugin" placeholder="Search by name or description…"
           value={search} onChange={event => setSearch(event.target.value)} />

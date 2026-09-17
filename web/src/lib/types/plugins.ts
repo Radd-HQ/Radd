@@ -71,5 +71,7 @@ export interface Plugin {
   origin: string;
   dependencies: string[];
   problems: string[];
+  managed: boolean;
+  live_supported: boolean;
   capabilities: PluginCapability[];
 }

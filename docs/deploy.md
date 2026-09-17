@@ -471,3 +471,17 @@ Issue and comment creation carry a per-account sliding window (spec 121 §9 — 
 `RADD_AUTH_PASSWORD_WORKERS=4` bounds concurrent Argon2 jobs off the event loop. Realtime defaults to `RADD_REALTIME_SEND_TIMEOUT=2` seconds, `RADD_REALTIME_SEND_CONCURRENCY=32`, and `RADD_REALTIME_SESSION_REFRESH_SECONDS=60`. Unhealthy sockets disconnect and clients refetch after reconnect. The realtime protocol accepts active-query interests with explicit project filters, validates their access, and sends only cache invalidation hints.
 
 API keys cannot mint personal or service-account credentials. Manage credentials in a browser session. Privileged instance operations still require an instance-admin account, and a scoped key must also explicitly permit `global.manage` to use that administrative bypass. Ordinary project permissions continue to be intersected with the key's scope.
+
+## Uploaded plugin storage
+
+The image uses `RADD_PLUGINS_DIR=/data/plugins`. Web and worker processes must
+share that persistent directory. The Helm chart creates a dedicated plugin PVC;
+`plugins.size`, `plugins.storageClassName` and `plugins.accessMode` control it.
+The default ReadWriteOnce mode requires compatible placement; use a ReadWriteMany
+class for multi-node replicas. The filesystem must support advisory locks and
+atomic rename. Back up this volume along with the database and retain release
+wheels separately. S3 attachment storage does not replace the plugin volume.
+
+Uploaded pure-Python packages need no custom RADD image if their dependencies
+already exist. UI-only manifests can activate live; backend hooks/routes/tasks
+still need process restarts. See [managed plugin packages](specs/125-managed-plugin-packages.md).

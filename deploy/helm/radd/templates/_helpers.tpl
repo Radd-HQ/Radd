@@ -62,8 +62,9 @@ recoverable independently of the artifacts only holds if they can't be lost
 together. The migrate Job mounts neither (it only touches the database).
 */}}
 {{- define "radd.volumeMounts" -}}
-{{- if or (not .Values.storage.s3) .Values.backups.enabled }}
 volumeMounts:
+  - name: plugins
+    mountPath: /data/plugins
 {{- if not .Values.storage.s3 }}
   - name: data
     mountPath: /data
@@ -73,11 +74,12 @@ volumeMounts:
     mountPath: {{ .Values.backups.mountPath }}
 {{- end }}
 {{- end }}
-{{- end }}
 
 {{- define "radd.volumes" -}}
-{{- if or (not .Values.storage.s3) .Values.backups.enabled }}
 volumes:
+  - name: plugins
+    persistentVolumeClaim:
+      claimName: {{ .Release.Name }}-plugins
 {{- if not .Values.storage.s3 }}
   - name: data
     persistentVolumeClaim:
@@ -87,6 +89,5 @@ volumes:
   - name: backups
     persistentVolumeClaim:
       claimName: {{ .Release.Name }}-backups
-{{- end }}
 {{- end }}
 {{- end }}

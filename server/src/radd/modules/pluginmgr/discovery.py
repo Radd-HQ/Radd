@@ -41,6 +41,9 @@ def _load(path: str) -> RaddPlugin | None:
 def entrypoint_plugins() -> dict[str, tuple[RaddPlugin, str]]:
     """External plugins advertised via the `radd.plugins` entry-point group. A broken/incompatible
     entry point is skipped (quarantined), never fatal — one bad plugin can't block discovery."""
+    from .store import refresh_paths
+
+    refresh_paths()
     out: dict[str, tuple[RaddPlugin, str]] = {}
     discovery_errors.clear()
     for ep in entry_points(group=ENTRY_POINT_GROUP):

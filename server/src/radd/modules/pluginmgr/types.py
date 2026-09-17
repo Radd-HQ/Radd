@@ -23,6 +23,8 @@ class PluginState(StrEnum):
 
 
 class PluginEvent(StrEnum):
+    PACKAGE_UPLOADED = "plugin.package_uploaded"
+    PACKAGE_REMOVED = "plugin.package_removed"
     INSTALLED = "plugin.installed"
     ENABLED = "plugin.enabled"
     DISABLED = "plugin.disabled"

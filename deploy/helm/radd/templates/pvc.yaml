@@ -36,3 +36,20 @@ spec:
     requests:
       storage: {{ .Values.backups.size }}
 {{- end }}
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-plugins
+  labels:
+    {{- include "radd.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.plugins.accessMode }}
+  {{- with .Values.plugins.storageClassName }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.plugins.size }}

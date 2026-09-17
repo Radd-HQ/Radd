@@ -88,3 +88,9 @@ tolerations: []
 #       - name: ndots
 #         value: "1"
 dnsConfig: {}
+
+# Persistent code store shared by web and workers, including S3 deployments.
+plugins:
+  size: 2Gi
+  storageClassName: ""
+  accessMode: ReadWriteOnce # use ReadWriteMany when replicas span nodes

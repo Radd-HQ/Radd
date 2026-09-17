@@ -3,6 +3,29 @@
 Use the RADD release you intend to deploy. Plugins live in their own repositories;
 the RADD checkout supplies the SDK and development environment.
 
+## Install a packaged plugin without rebuilding RADD
+
+Open **Settings → Plugins**, choose a built `.whl`, and click **Upload and install**.
+After registration, enable it. Compatible UI-only plugins apply live across web
+and workers; backend plugins show a restart requirement. The wheel must include
+its built UI and use Python dependencies already available in RADD.
+
+The code is stored in `RADD_PLUGINS_DIR` (`/data/plugins` in containers). Mount the
+same persistent directory in every web and worker. The Helm chart supplies a
+separate plugin PVC, including when attachments use S3. Use ReadWriteMany storage
+for multi-node replicas; the filesystem must support locking and atomic rename.
+Back up this volume alongside the database.
+
+To remove an upload: **Disable → wait/restart → Forget → Remove files**. Business
+data remains. File removal waits for process acknowledgements. Stale reports
+require an operator to confirm that the recorded process has stopped before
+removing that report. Replacing the same Python module requires a restart after
+removal; live backend code replacement is not supported yet.
+
+See [spec 125](specs/125-managed-plugin-packages.md) for the live subset, cleanup
+rules and remaining work. The image-based recipe below remains available for
+plugins that need additional dependencies or native libraries.
+
 ## Create and link
 
 From RADD's `server/` directory:

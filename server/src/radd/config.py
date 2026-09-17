@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
     # Built SPA to serve at / (empty or missing dir = API-only). Default: the repo's web/dist.
     web_dist: str = ""
+    # Shared persistent volume, identical on every web and worker process.
+    plugins_dir: str = "var/plugins"
 
     # Auth (see radd/modules/auth)
     session_ttl_hours: int = 720

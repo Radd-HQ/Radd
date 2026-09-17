@@ -1,15 +1,9 @@
-"""pluginmgr — the plugin manager (lifecycle + admin API, docs/plugin-platform.md §10).
-
-A core plugin that owns the `installed_plugins` table and the install/enable/disable/
-uninstall state machine over non-core plugins. Enable/disable flip the state (persisted)
-and hot-mount/unmount routers in the running app; `create_app` also resolves the enabled
-set at boot. Core plugins are locked (always enabled). This is what makes "runtime toggle
-in the admin UI" real.
-"""
+"""Plugin state, managed package storage and per-process live UI reconciliation."""
 
 from radd.kernel import EventTypeSpec, RaddPlugin
 
 from .router import router
+from . import live
 from .types import PluginEvent
 
 plugin = RaddPlugin(
@@ -18,9 +12,13 @@ plugin = RaddPlugin(
     depends_on=("auth", "events"),
     weak_depends=("access",),
     routers=(router,),
+    on_startup=(live.start,),
+    on_shutdown=(live.stop,),
     # Admin lifecycle events — registered for audit/webhooks but NOT automation
     # triggers (trigger=False), so they don't clutter the rule builder.
     event_types=(
+        EventTypeSpec(PluginEvent.PACKAGE_UPLOADED, "Plugin package uploaded", "Plugins", trigger=False),
+        EventTypeSpec(PluginEvent.PACKAGE_REMOVED, "Plugin package removed", "Plugins", trigger=False),
         EventTypeSpec(PluginEvent.INSTALLED, "Plugin installed", "Plugins", trigger=False),
         EventTypeSpec(PluginEvent.ENABLED, "Plugin enabled", "Plugins", trigger=False),
         EventTypeSpec(PluginEvent.DISABLED, "Plugin disabled", "Plugins", trigger=False),

@@ -12,7 +12,7 @@ import { syncPluginRemotes } from "../../lib/plugin-loader";
  * server (so toggles follow them across browsers). Renders nothing.
  */
 export function PluginRemotes() {
-  const { data } = useQuery(capabilitiesQuery);
+  const { data } = useQuery({...capabilitiesQuery, refetchInterval: 15000});
   const remotes = data?.remotes;
   const authenticated = useIsAuthenticated();
   useEffect(() => {

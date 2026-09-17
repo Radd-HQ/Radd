@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { readFileSync, existsSync, statSync } from 'node:fs';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { openBrowser } from './lib/cdp.mjs';
 const dist = new URL('../dist/', import.meta.url).pathname;
@@ -10,12 +10,19 @@ const plugin = {id:'acme-tools',name:'acme-tools',version:'0.1.0',core:false,sta
   description:'Company extension',can_toggle:true,capabilities:[],active:false,restart_required:false,
   origin:'package',dependencies:[],problems:[]};
 let failDisable = false;
+let uploaded = null;
 const server = http.createServer(async (req,res) => {
   const p = new URL(req.url, 'http://fixture').pathname;
   if(p.startsWith('/api/')) {
     let data = [];
     if(p.endsWith('/auth/me')) data={id:'admin',name:'Administrator',email:'admin@example.com',instance_role:'admin',permissions:['global.manage'],timezone:'UTC'};
     else if(p === '/api/v1/plugins') data=[plugin];
+    else if(p.endsWith('/plugins/packages/upload')) {
+      const chunks=[]; for await (const chunk of req) chunks.push(chunk);
+      uploaded={body:Buffer.concat(chunks),type:req.headers['content-type']};
+      data={id:plugin.id};
+    }
+    else if(p.endsWith('/plugins/acme-tools/install')) data=[plugin];
     else if(p.endsWith('/plugins/acme-tools/enable')) {plugin.state='enabled';plugin.restart_required=true;data=[plugin];}
     else if(p.endsWith('/plugins/acme-tools/disable')) {
       if(failDisable) {res.writeHead(409,{'content-type':'application/json'});res.end(JSON.stringify({detail:'Required by dependent-plugin'}));return;}
@@ -48,6 +55,17 @@ try {
     throw Error(`Missing ${text}: `+await s.eval('document.body.innerText'));
   };
   await until('Company extension');
+  const wheelFile=(await mkdtemp('/tmp/radd-upload-proof-'))+'/fixture.whl';
+  await writeFile(wheelFile,Buffer.from('PK browser transport fixture'));
+  const {root}=await s.send('DOM.getDocument');
+  const {nodeId}=await s.send('DOM.querySelector',{nodeId:root.nodeId,selector:'input[type=file]'});
+  await s.send('DOM.setFileInputFiles',{nodeId,files:[wheelFile]});
+  await s.click('button',t=>t.trim()==='Upload and install');
+  await until('Install trusted plugin code?');
+  await s.click('[role="dialog"] button',t=>t.trim()==='Upload and install');
+  await until('Package installed. Find it below and enable it when ready.');
+  assert.equal(uploaded.type,'application/octet-stream');
+  assert.equal(uploaded.body.toString(),'PK browser transport fixture');
   await until('Not loaded on this server');
   await s.click('input[placeholder="Search by name or description…"]');
   await s.send('Input.insertText',{text:'absent-plugin'});
@@ -69,5 +87,5 @@ try {
   assert(!await s.eval(`document.body.innerText.includes('migrations DOWN')`));
   await new Promise(resolve=>setTimeout(resolve,300));
   await s.send('Page.captureScreenshot',{format:'png'}).then(r=>import('node:fs').then(fs=>fs.writeFileSync('/tmp/radd-plugin-workflow/settings.png',Buffer.from(r.data,'base64'))));
-  console.log('Plugin Settings proof passed: activation pending, errors visible, data-retention confirmation');
+  console.log('Plugin Settings proof passed: binary upload/install, search, activation pending, errors and retained data');
 } finally {if(browser)await browser.close();await new Promise(resolve=>server.close(resolve));}
