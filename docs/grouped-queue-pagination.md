@@ -1,14 +1,18 @@
 # Grouped views and service queues — RADD-1201
 
-Grouped boards and grouped lists now use `GET /items/grouped`. The server applies
-query/project scope and row visibility, then ranks issues within each column/lane
-combination before paging. Each response includes up to 20 populated combinations,
-25 issues per combination, and complete column/lane counts. More rows append within
-the current group set; a separate group-set navigator handles large numbers of
-combinations. Empty configured groups remain available as drop targets. Explicit
-SLQ order is respected within groups, otherwise manual rank applies. Hidden columns
-and the visible noncompleted cycle set constrain retrieval. Broad select-all is
-not offered for this partitioned surface; loaded-row selection remains available.
+Grouped boards and grouped lists use `GET /items/grouped` with a complete
+summary and separate cursor windows for individual columns/cells. Counts and
+point totals cover the complete authorized result, independently of loaded rows.
+Boards load visible cells; grouped lists load visible expanded sections and
+continue automatically when scrolling within each section. A searchable group
+picker replaces group-set paging. Group bodies have a bounded height so large
+groups do not push all later headers thousands of rows away. Small screens use
+a shorter scrolling area. Collapse, selection, ordering and drop targets remain
+available; empty configured groups remain drop targets. Hidden columns and the
+visible cycle set constrain retrieval. Lists ignore a saved board swimlane axis.
+Broad select-all is not offered for this partitioned surface; selection refers
+to loaded rows. The legacy shared Load more/group pager hook has been removed
+(RADD-1217).
 
 The item service exposes its authorized ID query and accepts a selected-ID subset
 for final hydration; the subset still passes ordinary visibility/capability rules.

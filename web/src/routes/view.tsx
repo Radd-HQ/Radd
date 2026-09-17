@@ -4,7 +4,6 @@ import { BACKLOG_KEY } from "../lib/view-utils";
 import { usePlanningSectionSearch } from "../lib/usePlanningSectionSearch";
 import { PlanningControls } from "../components/views/PlanningControls";
 import { accountStorageKey } from "../lib/account-storage";
-import { useGroupedItems } from "../lib/useGroupedItems";
 import { DEFAULT_PLANNING, planningGroups, RESCHEDULING_KEY, type PlanningOptions, planningQueries } from "../lib/planning-query";
 import { planningCountQuery, usePlanningSprints } from "../lib/usePlanningSprints";
 import { PublicProjectChip } from "../components/items/ItemBadges";
@@ -369,8 +368,8 @@ export function ViewPage() {
   ) });
   const planning = useMemo(() => planningQueries(fetchQueryView, cycles.data, {...planningOptions, search: backlogSearch}), [fetchQueryView, cycles.data, planningOptions, backlogSearch]);
   const isBoard = view?.view_type === ViewType.board;
-  const boardItems = useBoardItems(fetchQueryView, columnAxis, laneAxis, cycles.data, isGrouped && isBoard && (!(columnAxis === "cycle" || laneAxis === "cycle") || cycles.isSuccess));
-  const groupedItems = useGroupedItems(fetchQueryView, columnAxis, laneAxis, cycles.data, isGrouped && !isBoard && (!(columnAxis === "cycle" || laneAxis === "cycle") || cycles.isSuccess));
+  const boardItems = useBoardItems(fetchQueryView, columnAxis, isBoard ? laneAxis : null, cycles.data, isGrouped && (!(columnAxis === "cycle" || (isBoard && laneAxis === "cycle")) || cycles.isSuccess));
+  const groupedItems = boardItems;
   const pagedFetchView = isPlanning ? planning.backlog : fetchQueryView;
   const sprintItems = usePlanningSprints(planning.sprints, isPlanning && cycles.isSuccess && planning.cycleCount > 0);
   const recoveryItems = usePlanningSprints(planning.recovery, isPlanning && cycles.isSuccess, 1);
@@ -467,7 +466,7 @@ export function ViewPage() {
       ...(planningOptions.history && planning.historyId ? [{key: `history:${planning.historyId}`, items: historyItems.items}] : []),
     ]) : pagedItems.data,
     isPending: isPlanning ? false : isBoard ? boardItems.isPending && !cycles.isError : isGrouped ? groupedItems.isPending && !cycles.isError : isRoadmap ? itemPages.isPending : pagedItems.isPending,
-    isError: isPlanning ? false : isBoard ? (boardItems.isError && !boardItems.data) || ((columnAxis === "cycle" || laneAxis === "cycle") && cycles.isError) : isGrouped ? (groupedItems.isError && !groupedItems.data) || ((columnAxis === "cycle" || laneAxis === "cycle") && cycles.isError) : isRoadmap ? itemPages.isError : pagedItems.isError,
+    isError: isPlanning ? false : isBoard ? (boardItems.isError && !boardItems.data) || ((columnAxis === "cycle" || laneAxis === "cycle") && cycles.isError) : isGrouped ? (groupedItems.isError && !groupedItems.data) || (columnAxis === "cycle" && cycles.isError) : isRoadmap ? itemPages.isError : pagedItems.isError,
     error: isBoard ? boardItems.error ?? cycles.error : isGrouped ? groupedItems.error ?? cycles.error : isRoadmap ? itemPages.error : pagedItems.error ?? (isPlanning ? cycles.error ?? recoveryItems.error ?? sprintItems.error : null),
   };
   // Since the pagination wave the bar COMPOSES into the fetch (see
@@ -692,7 +691,7 @@ export function ViewPage() {
 
     // RADD-855: the view's own bucket order, over the axis's natural order.
     return applyBucketOrder(
-      (isBoard ? boardGroups(groupItemsForView(orderedItems, columnAxis, axisContext), columnAxis, boardItems.first, false, allStates.data, groupItemsForView([], columnAxis, axisContext).map(g=>g.key)) : groupItemsForView(orderedItems, columnAxis, axisContext).map(g => ({...g,total:isGrouped ? groupedItems.first?.column_totals[g.key] ?? 0 : undefined, totalPoints:isGrouped ? groupedItems.first?.column_points?.[g.key] : undefined}))),
+      (isGrouped ? boardGroups(groupItemsForView(orderedItems, columnAxis, axisContext), columnAxis, boardItems.first, false, allStates.data, groupItemsForView([], columnAxis, axisContext).map(g=>g.key)) : groupItemsForView(orderedItems, columnAxis, axisContext).map(g => ({...g,total:isGrouped ? groupedItems.first?.column_totals[g.key] ?? 0 : undefined, totalPoints:isGrouped ? groupedItems.first?.column_points?.[g.key] : undefined}))),
       view.column_order,
     );
   }, [isBoard, boardItems.first, view, orderedItems, columnAxis, axisContext, isGrouped, groupedItems.first, isPlanning, planning, sprintItems.items, recoveryItems.items, pagedItems.data, historyItems.items, cycles.data, planningOptions, fetchQueryView, recoveryItems.total, totalCount, historyItems.total, sprintItems.more, pagedItems.isPending, pagedItems.isError, recoveryItems.isPending, recoveryItems.isError, historyItems.isPending, historyItems.isError, sprintItems.isPending, sprintItems.isError]);
@@ -1226,7 +1225,7 @@ export function ViewPage() {
           truncated={roadmapTruncated}
           onLoadMore={() => setRoadmapAutoCap((cap) => cap + ROADMAP_MAX_AUTO_PAGES)}
         />
-      ) : pageItems.length === 0 && !cycleGrouped && !isBoard ? (
+      ) : pageItems.length === 0 && !cycleGrouped && !isGrouped && !isBoard ? (
         <p className="p-10 text-center text-sm text-fg-faint">
           {slqFilter.active ? "No items match this query." : "No items match this view."}
         </p>
@@ -1287,6 +1286,7 @@ export function ViewPage() {
             )
           ) : (
             <ViewList
+              loading={isGrouped ? groupedItems : undefined}
               groups={isPlanning ? sectionSearch.apply(visibleColumns) : isGrouped ? visibleColumns : columns}
               sectionSearch={isPlanning ? sectionSearch.control : undefined}
               sectionStatus={isPlanning ? group => {
@@ -1318,18 +1318,6 @@ export function ViewPage() {
         </div>
       )}
 
-      {isGrouped && !isBoard && <div className="flex flex-wrap items-center justify-center gap-3 border-t border-subtle p-3 text-sm">
-        {(groupedItems.first?.total_groups ?? 0) > 20 && <>
-          <span>Group set {groupedItems.group + 1} of {Math.ceil((groupedItems.first?.total_groups ?? 0)/20)}</span>
-          <Button variant="secondary" size="sm" disabled={!groupedItems.group || groupedItems.isFetching} onClick={()=>groupedItems.setGroup(groupedItems.group-1)}>Previous groups</Button>
-          <Button variant="secondary" size="sm" disabled={(groupedItems.group+1)*20 >= (groupedItems.first?.total_groups ?? 0) || groupedItems.isFetching} onClick={()=>groupedItems.setGroup(groupedItems.group+1)}>Next groups</Button>
-        </>}
-        {groupedItems.hasNextPage ? <>
-          <span>{view.view_type === "board" && !laneAxis ? "Load more using the button in each column." : "Loaded rows are a slice of each group."}</span>
-          {!(view.view_type === "board" && !laneAxis) && <Button variant="secondary" size="sm" disabled={groupedItems.isFetching} onClick={()=>void groupedItems.fetchNextPage()}>{groupedItems.isFetching ? "Loading…" : "Load more in these groups"}</Button>}
-        </> : <span className="text-fg-muted">All issues in this group set are loaded.</span>}
-        {groupedItems.isFetchNextPageError && <span role="alert">Could not load more. Try again.</span>}
-      </div>}
       {isPlanning && (recoveryItems.more || (planningOptions.history && historyItems.more)) && <div className="flex flex-wrap items-center gap-3 border-t border-subtle p-3 text-xs text-fg-muted">
         {recoveryItems.more && <Button variant="secondary" size="sm" disabled={recoveryItems.isFetchingNextPage} onClick={recoveryItems.loadMore}>Load more issues needing rescheduling</Button>}
         {planningOptions.history && historyItems.more && <Button variant="secondary" size="sm" disabled={historyItems.isFetchingNextPage} onClick={historyItems.loadMore}>Load more history</Button>}

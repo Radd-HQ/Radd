@@ -1,9 +1,12 @@
+import { Select } from "../Select";
+import { BoardLoadBoundary } from "./BoardLoadBoundary";
+import type { BoardLoading } from "../../lib/useBoardItems";
 import { QuickStar } from "../items/QuickStar";
 import { Button } from "../Button";
 import { TextField } from "../TextField";
 import type { SectionSearchControl } from "../../lib/usePlanningSectionSearch";
 import { accountStorageKey } from "../../lib/account-storage";
-import { useEffect, useState, type ReactNode, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useRef, useState, type ReactNode, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { ChevronDown, ChevronRight, Search, X } from "lucide-react";
 import type { BucketRef } from "../../lib/axis-dnd";
 import { useBucketDrop } from "../../lib/bucket-drop";
@@ -40,6 +43,7 @@ import {
 } from "../items/ItemBadges";
 
 interface ViewListProps {
+  loading?: BoardLoading;
   /** One group = one section; a single unlabeled group renders flat. */
   groups: ViewGroup[];
   sectionSearch?: (group: ViewGroup) => SectionSearchControl;
@@ -112,6 +116,7 @@ function isTopHalf(event: ReactDragEvent): boolean {
  * field; within-section drag reorders (manual rank) when `onReorder` is set.
  */
 export function ViewList({
+  loading,
   groups,
   sectionSearch,
   sectionTools,
@@ -181,6 +186,8 @@ export function ViewList({
     reset();
   };
 
+  const root = useRef<HTMLDivElement>(null);
+
   return (
     // Card layout: the scroll area IS the page ground, and each group is a card
     // floating on it. Full-bleed on purpose — the cards stretch to the window,
@@ -188,7 +195,20 @@ export function ViewList({
     // NOT a flex column: flex items shrink by default, so a view with many
     // groups (planning groups by epic — 92 of them here) squashed every card to
     // a ~12px strip. Block flow + space-y lets each card take its content height.
-    <div className="flex-1 overflow-y-auto bg-base">
+    <div ref={root} data-list-scroll className="min-h-0 flex-1 overflow-y-auto bg-base">
+      {loading && <div className="sticky top-0 z-20 flex items-center gap-3 border-b border-subtle bg-base px-4 py-2">
+        <Select value="" placeholder="Jump to group…" aria-label="Jump to group" size="sm" searchable className="w-64"
+          options={groups.map(g => ({value:g.key,label:`${g.label} · ${g.total ?? g.items.length}`}))}
+          onChange={key => {
+            if (collapsed.has(key)) toggle(key);
+            requestAnimationFrame(() => {
+              const node = Array.from(root.current?.querySelectorAll<HTMLElement>("[data-list-group]") ?? []).find(n => n.dataset.listGroup === key);
+              if (node && root.current) root.current.scrollTop += node.getBoundingClientRect().top - root.current.getBoundingClientRect().top - 56;
+              node?.querySelector<HTMLButtonElement>("header button")?.focus({preventScroll:true});
+            });
+          }}/>
+        <span className="text-xs text-fg-muted">Scroll within a group to browse its issues.</span>
+      </div>}
       {/* FIT-TO-WIDTH: the table always spans exactly the container — no
           horizontal scroll; the Item zone flexes and cells compress toward
           their minimums when space runs short. */}
@@ -212,6 +232,7 @@ export function ViewList({
         return (
           <section
             key={group.key}
+            data-list-group={group.key}
             aria-label={group.label}
             className={
               "overflow-hidden rounded-xl border bg-surface shadow-lift " +
@@ -293,6 +314,7 @@ export function ViewList({
             )}
             {sectionStatus?.(group)}
             {!isCollapsed && (
+              <div data-list-group-scroll={loading ? group.key : undefined} className={loading ? "overflow-y-auto" : undefined} style={loading ? {maxHeight:"min(60vh, max(8rem, calc(100dvh - 20rem)))"} : undefined} tabIndex={loading ? 0 : undefined} role={loading ? "region" : undefined} aria-label={loading ? `${group.label} issues` : undefined}>
               <ul className={draggable && group.items.length === 0 ? "min-h-9" : undefined}>
                 {group.items.length === 0 && group.emptyMessage && (
                   <li className="px-4 py-3 text-xs text-fg-muted">{group.emptyMessage}</li>
@@ -332,6 +354,8 @@ export function ViewList({
                   );
                 })}
               </ul>
+              {loading && (group.total ?? 0) > 0 && <BoardLoadBoundary loading={loading} column={group.key}/>}
+              </div>
             )}
             {!isCollapsed && search?.filtered && search.more && <div className="p-3"><Button size="sm" variant="secondary" onClick={search.onMore}>Show more matches</Button></div>}
           </section>

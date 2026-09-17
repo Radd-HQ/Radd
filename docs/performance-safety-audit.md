@@ -94,8 +94,8 @@ claimed; complicated filters, authorization and full counts can remain expensive
 ## Board navigation replacement: RADD-1212
 
 Approved after the group-pager usability review. Board summaries and individual
-cell windows now have distinct request modes; grouped lists keep their existing
-paging. Complete column/lane identities come from summaries rather than loaded
+cell windows now have distinct request modes. RADD-1217 extends this model to
+grouped lists, with independent scrolling sections and a searchable group picker. Complete column/lane identities come from summaries rather than loaded
 cards. The summary avoids global issue ranking; single-cell reads use direct
 UUID predicates, limit+1 and the existing authorization-bound cursor machinery.
 
