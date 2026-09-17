@@ -55,3 +55,52 @@ no source author resolves; comments retain nullable source authorship.
 The browser proof selects/saves an existing space for an unused entry, a target
 account, and a macro renderer, in addition to the previous Jira checks. Backend
 checks cover ignored attribution and permission-safe mapping behavior.
+
+## Import home and recovery review (RADD-1214)
+
+Settings now has one **Import data** entry, with Jira and Confluence cards and
+icons. Disabled importers link to Plugins; the existing importer URLs remain
+valid. Each importer links back to the home. Confluence uses the same settings
+frame and administrator presentation guard as Jira. Its Server/Data Center-only
+compatibility is explicit; this change does not add Confluence Cloud support.
+
+Confirmed problems fixed:
+
+- Confluence run “Fix in…” links now select the run's original plan, then its
+  mapping tab and source. Deleted plans have no misleading fix action.
+- Editors remount when changing plans, preventing old editor state from being
+  presented as the newly selected plan. Error jumps scroll after mappings load.
+- Jira failed plan requests show the error rather than an endless spinner.
+  Save/check/import actions share a busy state; edits clear stale validation.
+- Confluence mapping search matches source and destination values and opens
+  matching unused entries. Validation links filter to the named source.
+- Confluence connection saves/tests/deletes, download operations, plan creation,
+  run listing/cancellation, and undo preflight failures are now visible.
+  Testing a non-default connection displays that connection's result.
+- Confluence downloads offer a source connection. Space listing, recursive page
+  browsing, query-cache identity, and snapshot creation all use that connection.
+  Switching sources clears the previous source's selections.
+- Both editors call the action “Save mappings” and explain that check/dry-run
+  saves first. A dry run is a preview, not a guarantee that destination data
+  cannot change before an import.
+
+Validation: 131 backend importer tests passed (Jira pipeline, mapping,
+connections, snapshots, inference; Confluence runs and storage conversion).
+`web/scripts/import-mapping-proof.mjs` exercises source value translation,
+existing destinations, unused mappings, save-before-check/run, mapping search,
+and original-plan recovery in Chromium. TypeScript and production build passed.
+Built-app browser verification also checked the import home, both icons,
+legacy route, and download source selector. No company deployment or remote
+source import was performed.
+
+Remaining usability work worth a separate change:
+
+- Protect unsaved mappings when navigating away or choosing another plan;
+  currently Save mappings is explicit. Autosave needs conflict handling so two
+  administrators cannot silently overwrite one another's plans.
+- Reusable mapping templates and plan duplication across snapshots, with a
+  review of missing source values and deleted destinations before reuse.
+- A per-record comparison before replaying an import: mapping changes apply on
+  the next run, and replay must not be presented as undoing a previous import.
+- Confluence mapping catalogs still render all matches. For exceptionally large
+  people catalogs, add incremental rows while retaining complete validation.

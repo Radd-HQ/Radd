@@ -1,3 +1,5 @@
+import type { ConfluenceStatus } from "../../../lib/types";
+import { QueryError } from "../../QueryError";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Plus, Trash2, XCircle } from "lucide-react";
@@ -41,7 +43,7 @@ export function ConnectionsPanel() {
 
   const test = useMutation({
     mutationFn: (id: string) =>
-      api.post(`${ApiPath.confluenceConnections}/${id}/test`, {}),
+      api.post<ConfluenceStatus>(`${ApiPath.confluenceConnections}/${id}/test`, {}),
     onSuccess: invalidate,
   });
 
@@ -85,6 +87,8 @@ export function ConnectionsPanel() {
         </p>
       )}
 
+      {(connections.isError || status.isError || remove.isError || test.isError) && <QueryError label="connection action" error={connections.error ?? status.error ?? remove.error ?? test.error}/>}
+      {test.data && <p role="status" className="text-sm text-fg-secondary">{test.data.ok ? "Connection test succeeded" : "Connection test failed"}: {test.data.detail || test.data.user}</p>}
       {rows.length > 0 && (
         <ul className="divide-y divide-subtle">
           {rows.map((connection) => (
@@ -201,6 +205,7 @@ function ConnectionModal({
   return (
     <Modal title={connection ? "Edit connection" : "Add a Confluence"} onClose={onClose}>
       <div className="flex flex-col gap-3">
+        {save.isError && <QueryError label="save connection" error={save.error}/>}
         <TextField
           label="Name"
           value={name}

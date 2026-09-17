@@ -12,7 +12,6 @@ import {
   CircleUserRound,
   Clock,
   DatabaseBackup,
-  BookUp,
   DatabaseZap,
   GitBranch,
   HardDrive,
@@ -286,20 +285,9 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         show: (g) => g.instanceAdmin,
       },
       {
-        // Jira import wizard (spec 90) — the connection speaks for a service
-        // account and importing rewrites projects.
-        to: RoutePath.settingsJiraImport,
-        label: "Import from Jira",
+        to: RoutePath.settingsImportData,
+        label: "Import data",
         icon: DatabaseZap,
-        plugin: "jiraimport",
-        show: (g) => g.instanceAdmin,
-      },
-      {
-        // Confluence import wizard (spec 117) — the wiki half of the migration.
-        to: RoutePath.settingsConfluenceImport,
-        label: "Import from Confluence",
-        icon: BookUp,
-        plugin: "confluenceimport",
         show: (g) => g.instanceAdmin,
       },
       {
@@ -329,6 +317,7 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
  * without duplicating the page into an accordion row.
  */
 export function settingsPathForPlugin(name: string): { to: string; label: string } | null {
+  if (name === "jiraimport" || name === "confluenceimport") return { to: RoutePath.settingsImportData, label: "Import data" };
   for (const group of SETTINGS_NAV_GROUPS) {
     const match = group.items.find((item) => item.plugin === name);
     if (match) return { to: match.to, label: match.label };

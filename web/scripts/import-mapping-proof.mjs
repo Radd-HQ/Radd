@@ -11,11 +11,12 @@ const confluencePlan={id:'fixture',mappings:{spaces:[{key:'DOC',name:'Docs',coun
 const plan={id:'fixture',name:'Mapping proof',radd_project_id:'project',radd_project_key:'DEV',radd_project_name:'Development',provisioned_at:null,options:{quiet:true},mappings:{fields:[field('severity','Severity',{band:'in_use',action:'map',target_key:'severity',observed_values:['P1','P2']}),field('domain','Domain',{band:'in_use',action:'native',builtin_target:'team',observed_values:['Pipeline','Support']}),...Array.from({length:335},(_,i)=>field(`f${i}`,`Unused ${i}`))],statuses:[{jira:'In Review',count:200,action:'map',state_name:'Old missing state',category:'todo'}],issue_types:[],priorities:[],users:[],sprints:[],versions:[],components:[],link_types:[]}};
 let server,browser;
 try{
- await writeFile(entry,`import React from 'react';import{createRoot}from'react-dom/client';import{QueryClient,QueryClientProvider}from'@tanstack/react-query';import{PlanEditor}from'./src/components/settings/jira/PlanEditor';import{PlanEditor as ConfluenceEditor}from'./src/components/settings/confluence/PlanEditor';import './src/index.css';const client=new QueryClient({defaultOptions:{queries:{retry:false}}});createRoot(document.getElementById('root')).render(<QueryClientProvider client={client}><main style={{padding:32}}>{location.search ? <ConfluenceEditor planId="fixture" focus={null} onRan={()=>{}}/> : <PlanEditor planId="fixture" onRunStarted={()=>{}}/>}</main></QueryClientProvider>);`);
+ await writeFile(entry,`import React from 'react';import{createRoot}from'react-dom/client';import{QueryClient,QueryClientProvider}from'@tanstack/react-query';import{PlanEditor}from'./src/components/settings/jira/PlanEditor';import{RunsPanel}from'./src/components/settings/confluence/RunsPanel';import{PlanEditor as ConfluenceEditor}from'./src/components/settings/confluence/PlanEditor';import './src/index.css';const client=new QueryClient({defaultOptions:{queries:{retry:false}}});createRoot(document.getElementById('root')).render(<QueryClientProvider client={client}><main style={{padding:32}}>{location.search === "?runs" ? <RunsPanel onFix={(plan,section,key)=>{document.body.dataset.fix=JSON.stringify({plan,section,key})}}/> : location.search ? <ConfluenceEditor planId="fixture" focus={null} onRan={()=>{}}/> : <PlanEditor planId="fixture" onRunStarted={()=>{}}/>}</main></QueryClientProvider>);`);
  server=await createServer({root,server:{host:'127.0.0.1',port:19451},plugins:[{name:'fixtures',configureServer(s){s.middlewares.use(async(req,res,next)=>{
   if(req.url.startsWith('/__proof')){res.setHeader('content-type','text/html');res.end(await s.transformIndexHtml('/__proof','<div id="root"></div><script type="module" src="/__mapping-proof.tsx"></script>'));return;}
   if(req.url.startsWith('/api/')){let data=[];
-   if(req.url.includes('/confluence/')){if(req.method==='PATCH'){let body='';for await(const chunk of req)body+=chunk;const draft=JSON.parse(body);confluencePlan.mappings=draft.mappings;confluencePlan.options=draft.options;confluenceWrites.push('save:'+draft.mappings.spaces[0].action);}else if(req.method==='POST')confluenceWrites.push(req.url.includes('/validate')?'validate':'run');data=req.url.includes('/validate')?[]:confluencePlan;}
+   if(req.url.includes('/confluence/runs') && req.method==='GET'){data=[{id:'run',plan_id:'original-plan',stage:'done',dry_run:true,counts:{},problems:[{kind:'mapping',section:'macros',mapping_key:'custom',message:'Choose renderer'}]}];}
+   else if(req.url.includes('/confluence/')){if(req.method==='PATCH'){let body='';for await(const chunk of req)body+=chunk;const draft=JSON.parse(body);confluencePlan.mappings=draft.mappings;confluencePlan.options=draft.options;confluenceWrites.push('save:'+draft.mappings.spaces[0].action);}else if(req.method==='POST')confluenceWrites.push(req.url.includes('/validate')?'validate':'run');data=req.url.includes('/validate')?[]:confluencePlan;}
    else if(req.url.includes('/plans/fixture')){if(req.method==='PATCH'){let body='';for await(const chunk of req)body+=chunk;saved=JSON.parse(body);plan.mappings=saved.mappings;}data=plan;}
    else if(req.url.includes('/page-spaces'))data=[{id:'space-target',name:'Company docs'}];
    else if(req.url.includes('/pages/extensions'))data=[{name:'toc',label:'Contents'},{name:'callout',label:'Callout'}];
@@ -72,11 +73,20 @@ try{
  await s.click('button',text=>text.startsWith('Macros'));await new Promise(r=>setTimeout(r,200));
  await s.click('button[aria-haspopup="listbox"]',text=>text==='Contents');
  await s.click('[role="option"]',text=>text==='Callout');
- await s.click('button',text=>text.trim()==='Save');
+ await s.click('button',text=>text.trim()==='Save mappings');
  await new Promise(r=>setTimeout(r,200));
  assert.ok(confluencePlan.mappings.spaces.some(x=>x.key==='UNUSED'&&x.action==='map'&&x.space_id==='space-target'));
  assert.equal(confluencePlan.mappings.users[0].user_id,'target-user');
  assert.equal(confluencePlan.mappings.macros[0].extension,'callout');
+ await s.click('button',text=>text.startsWith('Spaces'));
+ await s.click('input[placeholder="Find a source or destination…"]');
+ await s.send('Input.insertText',{text:'UNUSED'});
+ assert.ok(await s.eval('document.querySelector("details").open'));
+ assert.ok((await s.eval('document.body.innerText')).includes('Unused docs'));
+ await s.navigate('http://127.0.0.1:19451/__proof?runs',1500);
+ await s.click('button',text=>text.startsWith('Fix in'));
+ assert.deepEqual(JSON.parse(await s.eval('document.body.dataset.fix')), {plan:'original-plan',section:'macros',key:'custom'});
+ console.log('PASS: searching reveals unused Confluence mappings; run recovery targets the original plan.');
  assert.deepEqual(s.consoleErrors,[]);
  console.log('PASS: Confluence existing-space, account and renderer selections save, including unused entries.');
  console.log('PASS: Confluence Check and Dry run each save the edited mapping before the action.');

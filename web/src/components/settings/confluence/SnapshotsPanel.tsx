@@ -1,3 +1,4 @@
+import { QueryError } from "../../QueryError";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, Download, Trash2, X } from "lucide-react";
@@ -9,6 +10,7 @@ import { useConfirm } from "../../ConfirmDialog";
 import { api } from "../../../lib/api";
 import { ApiPath } from "../../../lib/constants";
 import {
+  confluenceConnectionsQuery,
   confluenceSnapshotsQuery,
   confluenceSpacesQuery,
   confluenceTreeQuery,
@@ -65,7 +67,8 @@ export function SnapshotsPanel({
         </Button>
       </header>
 
-      {rows.length === 0 ? (
+      {(cancel.isError || remove.isError) && <QueryError label="download action" error={cancel.error ?? remove.error}/>}
+      {snapshots.isError ? <QueryError label="downloads" error={snapshots.error}/> : snapshots.isPending ? <p>Loading downloads…</p> : rows.length === 0 ? (
         <p className="text-[13px] text-fg-faint">Nothing downloaded yet.</p>
       ) : (
         <ul className="divide-y divide-subtle">
@@ -173,11 +176,14 @@ function NewDownloadModal({
   const [includeHistory, setIncludeHistory] = useState(false);
   const [historyLimit, setHistoryLimit] = useState("");
 
-  const spaces = useQuery(confluenceSpacesQuery(null));
+  const [connectionId, setConnectionId] = useState("");
+  const connections = useQuery(confluenceConnectionsQuery());
+  const spaces = useQuery(confluenceSpacesQuery(connectionId || null));
 
   const start = useMutation({
     mutationFn: () =>
       api.post(ApiPath.confluenceSnapshots, {
+        connection_id: connectionId || null,
         scope: {
           kind,
           space_key: spaceKey,
@@ -201,6 +207,12 @@ function NewDownloadModal({
   return (
     <Modal title="Download from Confluence" onClose={onClose} wide>
       <div className="flex flex-col gap-3">
+        {start.isError && <QueryError label="start download" error={start.error}/>}
+        {connections.isError && <QueryError label="connections" error={connections.error}/>}
+        <SelectField label="Source connection" value={connectionId} onChange={e => { setConnectionId(e.target.value); setSpaceKey(""); setRootPageId(""); setPageIds([]); }}>
+          <option value="">Default connection</option>
+          {(connections.data ?? []).map(c => <option key={c.id} value={c.id}>{c.name} — {c.base_url}</option>)}
+        </SelectField>
         <SelectField label="What to bring" value={kind} onChange={(e) => setKind(e.target.value)}>
           <option value={ConfluenceScopeKind.space}>A whole space</option>
           <option value={ConfluenceScopeKind.subtree}>A page and everything under it</option>
@@ -232,6 +244,7 @@ function NewDownloadModal({
         {kind !== ConfluenceScopeKind.space && spaceKey && (
           <div className="max-h-72 overflow-y-auto rounded-lg border border-subtle">
             <PageBranch
+              connectionId={connectionId}
               spaceKey={spaceKey}
               parentId=""
               depth={0}
@@ -291,6 +304,7 @@ function NewDownloadModal({
  * "this space is empty", not "still loading". A branch costs one request.
  */
 function PageBranch({
+  connectionId,
   spaceKey,
   parentId,
   depth,
@@ -300,6 +314,7 @@ function PageBranch({
   onPick,
   onToggle,
 }: {
+  connectionId: string;
   spaceKey: string;
   parentId: string;
   depth: number;
@@ -310,7 +325,7 @@ function PageBranch({
   onToggle: (id: string, on: boolean) => void;
 }) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
-  const level = useQuery(confluenceTreeQuery(spaceKey, parentId));
+  const level = useQuery(confluenceTreeQuery(spaceKey, parentId, true, connectionId || null));
 
   if (level.isLoading) {
     return <p className="px-3 py-2 text-[13px] text-fg-faint">Loading…</p>;
@@ -374,6 +389,7 @@ function PageBranch({
           </div>
           {open[node.id] && (
             <PageBranch
+              connectionId={connectionId}
               spaceKey={spaceKey}
               parentId={node.id}
               depth={depth + 1}

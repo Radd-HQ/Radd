@@ -97,6 +97,11 @@ export function PlanEditor({
     setHighlight(focus.mappingKey);
   }, [focus?.nonce]);
 
+  useEffect(() => { setValidation(null); }, [draft, options]);
+  useEffect(() => {
+    if (focus && draft) document.getElementById("jira-mappings")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [focus?.nonce, Boolean(draft)]);
+
   const save = useMutation({
     mutationFn: () =>
       api.patch<JiraPlan>(`${ApiPath.jiraPlans}/${planId}`, {
@@ -140,8 +145,9 @@ export function PlanEditor({
 
   const patchFields = useCallback((index: number, changes: Partial<FieldMappingEntry>) => patch("fields", index, changes), [patch]);
 
-  if (plan.isPending || !draft || !options) return <Spinner label="Loading the plan…" />;
   if (plan.isError) return <QueryError label="import plan" error={plan.error} />;
+  if (plan.isPending || !draft || !options) return <Spinner label="Loading the plan…" />;
+  const busy = save.isPending || validate.isPending || start.isPending;
 
   const bulkUsers = (
     apply: (row: UserMapping, index: number) => Partial<UserMapping> | null,
@@ -177,6 +183,7 @@ export function PlanEditor({
             <button
               key={key}
               type="button"
+              aria-pressed={tab === key}
               onClick={() => setTab(key)}
               className={
                 "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors cursor-pointer " +
@@ -276,30 +283,30 @@ export function PlanEditor({
       )}
 
       <div className="flex flex-wrap items-center gap-2 border-t border-subtle pt-3">
-        <Button variant="secondary" onClick={() => save.mutate()} disabled={save.isPending}>
+        <Button variant="secondary" onClick={() => save.mutate()} disabled={busy}>
           <Save size={13} /> {save.isPending ? "Saving…" : "Save mappings"}
         </Button>
-        <Button variant="secondary" onClick={() => validate.mutate()} disabled={validate.isPending}>
+        <Button variant="secondary" onClick={() => validate.mutate()} disabled={busy}>
           {validate.isPending ? <Loader2 size={13} className="animate-spin" /> : <Wand2 size={13} />}
           Check
         </Button>
         <Button
           variant="secondary"
           onClick={() => start.mutate(RunKind.dry_run)}
-          disabled={start.isPending}
+          disabled={busy}
           title="Resolve everything and report — writes nothing"
         >
           Dry run
         </Button>
         <Button
           onClick={() => start.mutate(RunKind.import)}
-          disabled={start.isPending}
+          disabled={busy}
           title="Create the targets and import the issues"
         >
           <Play size={13} /> Import
         </Button>
         <span className="text-xs text-fg-faint">
-          A dry run uses the same code as the import, so it cannot disagree with it.
+          Check and dry run save your mappings first. Review the report before importing; destination data may change between runs.
         </span>
       </div>
     </div>

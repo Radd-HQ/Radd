@@ -1,3 +1,5 @@
+import { Link } from "@tanstack/react-router";
+import { RoutePath } from "../../lib/constants";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, CircleAlert, Database } from "lucide-react";
@@ -52,6 +54,7 @@ export function JiraImportPage() {
 
   return (
     <SettingsPage history={{ entities: ["jira_connection"] }}
+      actions={<Link to={RoutePath.settingsImportData} className="text-sm text-accent-text">← Import data</Link>}
       title="Import from Jira"
       description="Download a Jira project once, decide every mapping, preview the result, then import. Nothing is guessed silently, and an import can be undone."
     >
@@ -88,7 +91,7 @@ export function JiraImportPage() {
         {planId && (
           <section id="jira-mappings" className="rounded-lg border border-subtle bg-surface p-4">
             <h2 className="mb-3 text-[13px] font-medium text-heading">Mappings</h2>
-            <PlanEditor planId={planId} onRunStarted={() => undefined} focus={focus} />
+            <PlanEditor key={planId} planId={planId} onRunStarted={() => undefined} focus={focus} />
           </section>
         )}
 

@@ -50,6 +50,7 @@ const LinkTypesSettingsPage = lazyRouteComponent(() => import("./routes/settings
 const LabelsSettingsPage = lazyRouteComponent(() => import("./routes/settings/labels"), "LabelsSettingsPage");
 const UsersSettingsPage = lazyRouteComponent(() => import("./routes/settings/users"), "UsersSettingsPage");
 const DirectorySettingsPage = lazyRouteComponent(() => import("./routes/settings/directory"), "DirectorySettingsPage");
+const ImportDataPage = lazyRouteComponent(() => import("./routes/settings/import-data"), "ImportDataPage");
 const JiraImportPage = lazyRouteComponent(() => import("./routes/settings/jira-import"), "JiraImportPage");
 const ConfluenceImportPage = lazyRouteComponent(() => import("./routes/settings/confluence-import"), "ConfluenceImportPage");
 const RolesSettingsPage = lazyRouteComponent(() => import("./routes/settings/roles"), "RolesSettingsPage");
@@ -465,6 +466,11 @@ const settingsDirectoryRoute = createRoute({
 });
 
 /** Jira import wizard (spec 90) — instance-admin only. */
+const settingsImportDataRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: SettingsSection.importData,
+  component: ImportDataPage,
+});
 const settingsJiraImportRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: SettingsSection.jiraImport,
@@ -744,6 +750,7 @@ const routeTree = rootRoute.addChildren([
       settingsTeamsRoute,
       settingsUsersRoute,
       settingsDirectoryRoute,
+      settingsImportDataRoute,
       settingsJiraImportRoute,
       settingsConfluenceImportRoute,
       settingsRolesRoute,

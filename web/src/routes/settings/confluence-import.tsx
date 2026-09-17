@@ -1,3 +1,8 @@
+import { useCurrentUser } from "../../lib/hooks";
+import { InstanceRole } from "../../lib/types";
+import { QueryError } from "../../components/QueryError";
+import { Link } from "@tanstack/react-router";
+import { RoutePath } from "../../lib/constants";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, ButtonVariant } from "../../components/Button";
@@ -10,7 +15,7 @@ import { ApiPath } from "../../lib/constants";
 import { confluencePlansQuery, queryKeys } from "../../lib/queries";
 import type { ConfluenceSnapshot, ConfluenceMappingSection } from "../../lib/types";
 import { todayIso } from "../../lib/dates";
-import { ChangeHistoryLink } from "../../components/settings/SettingsPage";
+import { SettingsPage } from "../../components/settings/SettingsPage";
 
 /**
  * Import from Confluence (spec 117).
@@ -22,6 +27,7 @@ import { ChangeHistoryLink } from "../../components/settings/SettingsPage";
  */
 export function ConfluenceImportPage() {
   const client = useQueryClient();
+  const isAdmin = useCurrentUser()?.instance_role === InstanceRole.admin;
   const [planId, setPlanId] = useState("");
   const [focus, setFocus] = useState<{
     section: ConfluenceMappingSection;
@@ -29,7 +35,7 @@ export function ConfluenceImportPage() {
     nonce: number;
   } | null>(null);
 
-  const plans = useQuery(confluencePlansQuery());
+  const plans = useQuery({ ...confluencePlansQuery(), enabled: isAdmin });
 
   const createPlan = useMutation({
     mutationFn: (snapshot: ConfluenceSnapshot) =>
@@ -45,16 +51,12 @@ export function ConfluenceImportPage() {
 
   const rows = plans.data ?? [];
 
+  if (!isAdmin) return <SettingsPage title="Import from Confluence"><p>Only instance admins can import data.</p></SettingsPage>;
   return (
+    <SettingsPage title="Import from Confluence" description="Download Server / Data Center spaces or pages once, review mappings, dry run, then import. Confluence Cloud is not supported." history={{ entities: ["confluence_connection"] }} actions={<Link to={RoutePath.settingsImportData} className="text-sm text-accent-text">← Import data</Link>}>
     <div className="flex flex-col gap-4">
-      <header>
-        <h1 className="text-lg font-semibold text-heading">Import from Confluence</h1>
-        <p className="text-[13px] text-fg-muted">
-          Download a space, a section or a set of pages once, decide what its macros
-          and restrictions become, then import — reversibly.
-        </p>
-      </header>
-
+      {createPlan.isError && <QueryError label="create import plan" error={createPlan.error}/>}
+      {plans.isError && <QueryError label="import plans" error={plans.error}/>}
       <ConnectionsPanel />
 
       <SnapshotsPanel onPlanFrom={(snapshot) => createPlan.mutate(snapshot)} />
@@ -81,7 +83,7 @@ export function ConfluenceImportPage() {
       )}
 
       {planId && (
-        <PlanEditor
+        <PlanEditor key={planId}
           planId={planId}
           focus={focus}
           onRan={() => {
@@ -91,14 +93,16 @@ export function ConfluenceImportPage() {
       )}
 
       <RunsPanel
-        onFix={(section, key) => {
+        onFix={(targetPlan, section, key) => {
+          setPlanId(targetPlan);
           setFocus({ section, key, nonce: Date.now() });
           document
             .getElementById("confluence-mappings")
             ?.scrollIntoView({ behavior: "smooth", block: "start" });
         }}
       />
-      <ChangeHistoryLink history={{ entities: ["confluence_connection"] }} />
+
     </div>
+    </SettingsPage>
   );
 }

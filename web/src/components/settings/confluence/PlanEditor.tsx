@@ -44,6 +44,8 @@ export function PlanEditor({
   const [options, setOptions] = useState<ConfluencePlanOptions | null>(null);
   const [problems, setProblems] = useState<ConfluencePlanProblem[]>([]);
   const [highlight, setHighlight] = useState("");
+  const [filter, setFilter] = useState("");
+  const [checked, setChecked] = useState(false);
 
   const initialized = useRef<string | null>(null);
   useEffect(() => {
@@ -59,8 +61,13 @@ export function PlanEditor({
     if (focus) {
       setTab(focus.section);
       setHighlight(focus.key);
+      setFilter(focus.key);
     }
   }, [focus]);
+
+  useEffect(() => {
+    if (focus && draft) document.getElementById("confluence-mappings")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [focus?.nonce, Boolean(draft)]);
 
   const save = useMutation({
     mutationFn: () =>
@@ -78,7 +85,7 @@ export function PlanEditor({
       await save.mutateAsync();
       return api.post<ConfluencePlanProblem[]>(`${ApiPath.confluencePlans}/${planId}/validate`, {});
     },
-    onSuccess: setProblems,
+    onSuccess: (result) => { setProblems(result); setChecked(true); },
   });
 
   const run = useMutation({
@@ -98,8 +105,9 @@ export function PlanEditor({
   }
 
   const rows = draft[tab] as { count: number }[];
-  const used = rows.filter((row) => row.count > 0);
-  const unused = rows.filter((row) => row.count === 0);
+  const matching = rows.filter(row => !filter.trim() || Object.values(row as Record<string, unknown>).some(value => typeof value === "string" && value.toLocaleLowerCase().includes(filter.trim().toLocaleLowerCase())));
+  const used = matching.filter((row) => row.count > 0);
+  const unused = matching.filter((row) => row.count === 0);
 
   const patchRow = (subset: typeof rows, index: number, changes: Record<string, unknown>) => {
     const list = [...(draft[tab] as unknown[])];
@@ -107,6 +115,7 @@ export function PlanEditor({
     list[realIndex] = { ...list[realIndex] as object, ...changes };
     setDraft({ ...draft, [tab]: list });
     setProblems([]);
+    setChecked(false);
   };
   const busy = save.isPending || validate.isPending || run.isPending;
   return (
@@ -126,7 +135,7 @@ export function PlanEditor({
             <button
               key={section}
               type="button"
-              onClick={() => setTab(section)}
+              onClick={() => { setTab(section); setFilter(""); }}
               aria-pressed={tab === section}
               className={`rounded-lg px-2.5 py-1 text-[13px] ${
                 tab === section
@@ -143,6 +152,9 @@ export function PlanEditor({
         })}
       </div>
 
+      <label className="mb-3 block text-xs text-fg-muted">Filter mappings
+        <input type="search" value={filter} onChange={e => setFilter(e.target.value)} placeholder="Find a source or destination…" className="ml-2 rounded border border-subtle bg-elevated px-3 py-2 text-fg"/>
+      </label>
       <MappingRows
         section={tab}
         rows={used}
@@ -151,10 +163,11 @@ export function PlanEditor({
       />
 
       {unused.length > 0 && (
-        <details className="mt-3 rounded border border-subtle p-3"><summary>{unused.length} unused entries — expand to configure</summary><MappingRows section={tab} rows={unused} highlight={highlight} onChange={(index, changes) => patchRow(unused, index, changes)}/></details>
+        <details open={filter.trim() ? true : undefined} className="mt-3 rounded border border-subtle p-3"><summary>{unused.length} unused entries — expand to configure</summary><MappingRows section={tab} rows={unused} highlight={highlight} onChange={(index, changes) => patchRow(unused, index, changes)}/></details>
       )}
 
-      <OptionsFieldset options={options} onChange={setOptions} />
+      <OptionsFieldset options={options} onChange={next => { setOptions(next); setProblems([]); setChecked(false); }} />
+      {checked && problems.length === 0 && <p role="status" className="mt-3 text-sm text-accent-text">No mapping problems found. Run a dry run to preview the import.</p>}
 
       {problems.length > 0 && (
         <ul className="mt-3 space-y-1">
@@ -168,7 +181,7 @@ export function PlanEditor({
                 <button
                   type="button"
                   className="font-medium text-accent-text hover:underline"
-                  onClick={() => setTab(problem.section)}
+                  onClick={() => { setTab(problem.section); setHighlight(problem.subject); setFilter(problem.subject); }}
                 >
                   {CONFLUENCE_SECTION_LABELS[problem.section]}
                 </button>
@@ -181,12 +194,13 @@ export function PlanEditor({
       )}
 
       {(save.isError || validate.isError || run.isError) && <QueryError label="mapping action" error={save.error ?? validate.error ?? run.error}/>}
+      <p className="mt-3 text-xs text-fg-muted">Check and dry run save your mappings first. Changing mappings affects the next run; review its report before importing again.</p>
       <div className="mt-4 flex flex-wrap justify-end gap-2">
         <Button disabled={busy} variant={ButtonVariant.ghost} onClick={() => save.mutate()}>
-          Save
+          {save.isPending ? "Saving…" : "Save mappings"}
         </Button>
         <Button disabled={busy} variant={ButtonVariant.ghost} onClick={() => validate.mutate()}>
-          Check
+          {validate.isPending ? "Checking…" : "Check"}
         </Button>
         <Button
           disabled={busy}
@@ -239,7 +253,7 @@ function MappingRows({
               <tr
                 key={name}
                 className={`border-b border-subtle last:border-0 ${
-                  highlight && name === highlight ? "bg-elevated" : ""
+                  highlight && Object.values(row).includes(highlight) ? "bg-elevated" : ""
                 }`}
               >
                 <td className="py-1.5 pr-3 font-mono text-[12px] text-fg">{name}</td>

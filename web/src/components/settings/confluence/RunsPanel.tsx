@@ -1,3 +1,4 @@
+import { QueryError } from "../../QueryError";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Undo2, X } from "lucide-react";
 import { Button, ButtonVariant } from "../../Button";
@@ -25,7 +26,7 @@ import {
 export function RunsPanel({
   onFix,
 }: {
-  onFix: (section: ConfluenceMappingSection, key: string) => void;
+  onFix: (planId: string, section: ConfluenceMappingSection, key: string) => void;
 }) {
   const client = useQueryClient();
   const [confirmNode, confirm] = useConfirm();
@@ -45,13 +46,32 @@ export function RunsPanel({
     onSuccess: invalidate,
   });
 
+  const undo = useMutation({
+    mutationFn: async (id: string) => {
+      const preflight = await api.get<ConfluenceRollbackPreflight>(
+        `${ApiPath.confluenceRuns}/${id}/rollback`,
+      );
+      if (await confirm({
+        title: "Undo this import?",
+        message: `${preflight.total} record(s) will be reversed.` +
+          (preflight.edited_since > 0
+            ? ` ${preflight.edited_since} page(s) have been edited since and will be left alone.`
+            : ""),
+        confirmLabel: "Undo",
+        danger: true,
+      })) rollback.mutate(id);
+    },
+  });
+
   const rows = runs.data ?? [];
+  if (runs.isError) return <QueryError label="import runs" error={runs.error}/>;
   if (!rows.length) {
     return null;
   }
 
   return (
     <section className="rounded-xl border border-subtle bg-surface p-4">
+      {(cancel.isError || rollback.isError || undo.isError) && <QueryError label="run action" error={cancel.error ?? rollback.error ?? undo.error}/>}
       <h2 className="mb-3 text-sm font-semibold text-heading">Runs</h2>
       <ul className="divide-y divide-subtle">
         {rows.map((run) => {
@@ -86,31 +106,14 @@ export function RunsPanel({
                   <Button
                     variant={ButtonVariant.ghost}
                     size="sm"
-                    onClick={async () => {
-                      const preflight = await api.get<ConfluenceRollbackPreflight>(
-                        `${ApiPath.confluenceRuns}/${run.id}/rollback`,
-                      );
-                      if (
-                        await confirm({
-                          title: "Undo this import?",
-                          message:
-                            `${preflight.total} record(s) will be reversed.` +
-                            (preflight.edited_since > 0
-                              ? ` ${preflight.edited_since} page(s) have been edited since and will be left alone.`
-                              : ""),
-                          confirmLabel: "Undo",
-                          danger: true,
-                        })
-                      ) {
-                        rollback.mutate(run.id);
-                      }
-                    }}
+                    disabled={undo.isPending || rollback.isPending}
+                    onClick={() => undo.mutate(run.id)}
                   >
                     <Undo2 className="size-4" aria-hidden /> Undo
                   </Button>
                 )}
               </div>
-              {run.problems.length > 0 && <ProblemList problems={run.problems} onFix={onFix} />}
+              {run.problems.length > 0 && <ProblemList problems={run.problems} onFix={(section, key) => { if (run.plan_id) onFix(run.plan_id, section, key); }} canFix={Boolean(run.plan_id)} />}
             </li>
           );
         })}
@@ -123,9 +126,11 @@ export function RunsPanel({
 /** Grouped, because one bad macro produces the same problem on 200 pages. */
 function ProblemList({
   problems,
+  canFix,
   onFix,
 }: {
   problems: ConfluenceProblem[];
+  canFix: boolean;
   onFix: (section: ConfluenceMappingSection, key: string) => void;
 }) {
   const grouped = new Map<string, { problem: ConfluenceProblem; count: number }>();
@@ -147,7 +152,7 @@ function ProblemList({
             {problem.message}
             {count > 1 && <span className="text-fg-faint"> ×{count}</span>}
           </span>
-          {problem.section && problem.mapping_key && (
+          {canFix && problem.section && problem.mapping_key && (
             <button
               type="button"
               className="shrink-0 font-medium text-accent-text hover:underline"

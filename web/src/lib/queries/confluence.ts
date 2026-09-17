@@ -72,13 +72,14 @@ export const confluenceTreeQuery = (
   spaceKey: string,
   parentId = "",
   enabled = true,
+  connectionId: string | null = null,
 ) =>
   queryOptions({
-    queryKey: queryKeys.confluenceTree(spaceKey, parentId),
+    queryKey: [...queryKeys.confluenceTree(spaceKey, parentId), connectionId],
     queryFn: ({ signal }) =>
       api.get<ConfluencePageNode[]>(`${ApiPath.confluenceSpaces}/${spaceKey}/tree`, {
         signal,
-        query: { parent_id: parentId || undefined },
+        query: { parent_id: parentId || undefined, connection_id: connectionId || undefined },
       }),
     enabled: enabled && Boolean(spaceKey),
     retry: false,
