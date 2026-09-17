@@ -8,6 +8,7 @@ import {
   Clock,
   House,
   Inbox,
+  Star,
   Layers,
   Plus,
   Search,
@@ -81,6 +82,7 @@ type PaletteEntry =
 const STATIC_GOTOS: GotoEntry[] = [
   { label: "My Work", icon: House, to: RoutePath.home },
   { label: "Inbox", icon: Inbox, to: RoutePath.inbox },
+  { label: "Starred", icon: Star, to: RoutePath.starred },
   { label: "Projects", icon: Layers, to: RoutePath.projects },
   { label: "Reports", icon: BarChart3, to: RoutePath.reports },
   { label: "Timesheet", icon: Clock, to: RoutePath.timesheet },

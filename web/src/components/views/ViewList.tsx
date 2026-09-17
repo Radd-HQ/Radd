@@ -1,3 +1,4 @@
+import { QuickStar } from "../items/QuickStar";
 import { Button } from "../Button";
 import { TextField } from "../TextField";
 import type { SectionSearchControl } from "../../lib/usePlanningSectionSearch";
@@ -36,7 +37,6 @@ import {
   VisibilityBadge,
   ItemKeyLink,
   KindBadge,
-  StarButton,
 } from "../items/ItemBadges";
 
 interface ViewListProps {
@@ -517,7 +517,7 @@ function RowLeading({
         />
       )}
       {onStar && (
-        <StarButton starred={Boolean(item.starred)} onToggle={() => onStar(item, !item.starred)} />
+        <QuickStar item={item} />
       )}
       <KindBadge kind={item.kind} size={13} />
       {item.flagged && <FlagBadge size={12} />}

@@ -10,6 +10,7 @@ import {
   ConciergeBell,
   GanttChartSquare,
   House,
+  Star,
   Inbox,
   Layers,
   LayoutDashboard,
@@ -55,6 +56,7 @@ const VIEW_TYPE_ICONS: Record<string, LucideIcon> = {
 
 const LINK_ICONS: [prefix: string, icon: LucideIcon][] = [
   ["/inbox", Inbox],
+  ["/starred", Star],
   ["/timesheet", Clock],
   ["/reports", BarChart3],
   ["/docs", BookOpen],

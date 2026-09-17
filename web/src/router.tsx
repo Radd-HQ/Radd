@@ -18,6 +18,7 @@ const CyclePage = lazyRouteComponent(() => import("./routes/cycle"), "CyclePage"
 const FormSubmitPage = lazyRouteComponent(() => import("./routes/form-submit"), "FormSubmitPage");
 const ItemDetailPage = lazyRouteComponent(() => import("./routes/item-page"), "ItemDetailPage");
 const LoginPage = lazyRouteComponent(() => import("./routes/login"), "LoginPage");
+const StarredPage = lazyRouteComponent(() => import("./routes/starred"), "StarredPage");
 const MyWorkPage = lazyRouteComponent(() => import("./routes/my-work"), "MyWorkPage");
 const ProjectHomePage = lazyRouteComponent(() => import("./routes/project-home"), "ProjectHomePage");
 const ProjectsIndexPage = lazyRouteComponent(() => import("./routes/projects-index"), "ProjectsIndexPage");
@@ -196,6 +197,13 @@ const myWorkRoute = createRoute({
   path: RoutePath.home,
   beforeLoad: visitorToProjects,
   component: MyWorkPage,
+});
+
+const starredRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: RoutePath.starred,
+  beforeLoad: visitorToProjects,
+  component: StarredPage,
 });
 
 const projectsIndexRoute = createRoute({
@@ -692,6 +700,7 @@ const routeTree = rootRoute.addChildren([
   legacyKbPageRoute,
   appLayoutRoute.addChildren([
     myWorkRoute,
+    starredRoute,
     projectsIndexRoute,
     projectRoute,
     issueRoute,

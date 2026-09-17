@@ -59,35 +59,45 @@ export function StarBadge({ size = 12 }: { size?: number }) {
 }
 
 /**
- * Clickable star toggle (spec 24). Reveals on row hover unless already starred;
+ * Clickable personal star toggle, visible on touch and keyboard surfaces;
  * stops propagation so it doesn't open the item.
  */
 export function StarButton({
   starred,
   onToggle,
   size = 13,
+  disabled = false,
+  itemKey,
   className = "",
 }: {
   starred: boolean;
   onToggle: () => void;
+  disabled?: boolean;
+  itemKey?: string;
   size?: number;
   className?: string;
 }) {
   return (
     <button
       type="button"
+      disabled={disabled}
+      aria-busy={disabled}
+      draggable={false}
+      onPointerDown={event=>event.stopPropagation()}
+      onDragStart={event=>{event.preventDefault();event.stopPropagation();}}
+      onKeyDown={event=>{if(event.key === "Enter" || event.key === " ") event.stopPropagation();}}
       aria-pressed={starred}
-      aria-label={starred ? "Unstar" : "Star"}
-      title={starred ? "Unstar" : "Star"}
+      aria-label={`${starred ? "Unstar" : "Star"}${itemKey ? ` ${itemKey}` : ""}`}
+      title={starred ? "Remove from Starred" : "Save to Starred"}
       onClick={(event: ReactMouseEvent) => {
         event.stopPropagation();
         onToggle();
       }}
       className={
-        "shrink-0 cursor-pointer rounded p-0.5 " +
+        "shrink-0 cursor-pointer rounded p-1.5 focus-visible:outline-2 focus-visible:outline-focus disabled:cursor-wait " +
         (starred
-          ? "text-amber-300"
-          : "text-fg-faint hover:text-amber-300 opacity-0 group-hover/row:opacity-100 focus:opacity-100 ") +
+          ? "text-accent-text"
+          : "text-fg-faint hover:text-accent-text ") +
         className
       }
     >

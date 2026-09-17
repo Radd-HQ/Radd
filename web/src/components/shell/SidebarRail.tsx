@@ -14,6 +14,7 @@ import {
   Clock,
   ConciergeBell,
   House,
+  Star,
   Inbox,
   Layers,
   Search,
@@ -48,6 +49,7 @@ interface RailDestination {
  * defect class. */
 const DESTINATIONS: RailDestination[] = [
   { to: RoutePath.home, icon: House, label: "My Work", exact: true },
+  { to: RoutePath.starred, icon: Star, label: "Starred" },
   { to: RoutePath.portal, icon: ConciergeBell, label: "Submission Portal" },
   { to: RoutePath.projects, icon: Layers, label: "Projects", exact: true },
   { to: RoutePath.reports, icon: BarChart3, label: "Reports" },

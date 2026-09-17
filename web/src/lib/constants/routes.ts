@@ -105,6 +105,7 @@ export const RoutePath = {
   timesheet: "/timesheet",
   /** Personal notification inbox (spec 26). */
   inbox: "/inbox",
+  starred: "/starred",
   /** Requester portal (spec 73): the intake-form directory — every signed-in user. */
   portal: "/portal",
   /** Portal submit page for one eligible form (spec 73). */

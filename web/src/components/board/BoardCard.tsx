@@ -22,10 +22,10 @@ import {
   VisibilityBadge,
   ItemKeyLink,
   KindBadge,
-  StarBadge,
   TypeChip,
 } from "../items/ItemBadges";
 import { renderCardCell, type CardCellCtx } from "./card-cells";
+import { QuickStar } from "../items/QuickStar";
 import { CardChildren } from "./CardChildren";
 
 interface BoardCardProps {
@@ -222,7 +222,7 @@ export function BoardCard({
         <ItemKeyLink itemKey={item.key} />
         {headerStart.map(headerCell)}
         <span className="ml-auto flex items-center gap-1.5">
-          {item.starred && <StarBadge size={12} />}
+          <QuickStar item={item} />
           {item.flagged && <FlagBadge size={12} />}
           <VisibilityBadge visibility={item.visibility} size={12} />
           {headerEnd.map(headerCell)}

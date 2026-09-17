@@ -230,7 +230,7 @@ export function useToggleStarOnItem() {
       if (star) await api.put<Item>(apiItemStarPath(itemId));
       else await api.delete<void>(apiItemStarPath(itemId));
     },
-    onSettled: () => invalidateItemCaches(queryClient),
+    onSettled: () => invalidateEntities(queryClient, Entity.item),
   });
 }
 

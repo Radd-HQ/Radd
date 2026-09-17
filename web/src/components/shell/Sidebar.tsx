@@ -12,6 +12,7 @@ import {
   Eye,
   EyeOff,
   House,
+  Star,
   Layers,
   LayoutDashboard,
   Pin,
@@ -222,6 +223,10 @@ export function Sidebar() {
             <Link to={RoutePath.home} className={navLinkClasses} activeOptions={{ exact: true }}>
               <House size={14} aria-hidden />
               My Work
+            </Link>
+            <Link to={RoutePath.starred} className={navLinkClasses} data-pin-label="Starred">
+              <Star size={14} aria-hidden />
+              Starred
             </Link>
           </>
         )}

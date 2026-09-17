@@ -1,3 +1,4 @@
+import { QuickStar } from "../components/items/QuickStar";
 import type { LucideIcon } from "lucide-react";
 import { api, type CursorPage } from "../lib/api";
 import { Entity, entityMeta } from "../lib/cache";
@@ -230,6 +231,7 @@ function ItemRow({ item, showDue = false }: { item: Item; showDue?: boolean }) {
           (overdue ? "bg-red-500/5" : "")
         }
       >
+        <QuickStar item={item} />
         <ItemKeyLink
           itemKey={item.key}
           className="shrink-0 rounded bg-elevated px-1.5 font-mono text-[11px] text-fg-secondary hover:text-accent-text hover:underline"

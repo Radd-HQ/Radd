@@ -59,6 +59,7 @@ export function useNavFacts(): NavFacts {
         authenticated && (dashboardCount === undefined || dashboardCount > 0 || canCreateDashboard),
     };
     const byPrefix: [string, boolean][] = [
+      [RoutePath.starred, authenticated],
       [RoutePath.timesheet, facts.timesheet],
       [RoutePath.reports, facts.reports],
       [RoutePath.portal, facts.portal],

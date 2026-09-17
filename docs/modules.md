@@ -645,3 +645,22 @@ Full count/stat queries remain separate. `target`/`start` date ORDER BY support
 also fixes the Due soon query's previously unsupported target sort. Cursor
 reads are not snapshots: moving an issue across the sort boundary can still
 change what a later page sees. Refresh rebuilds the sequence from its start.
+
+### Personal Starred pin board (RADD-1210)
+
+`/starred` is an authenticated, cross-project personal card grid, linked from the
+full sidebar, collapsed rail and command palette (and pinnable in the top bar).
+It queries the existing actor-scoped `starred = true` filter, includes completed
+issues, supports title search, status filtering and sorting, and uses cursor
+Show more with separate full counts. Ordinary archived/access filters still
+apply. Opening a title uses the normal peek flow and modified-click links.
+
+`QuickStar` reuses the existing personal star API on board cards, list/Planning
+rows, My Work and the pin board. The button is visible without hover, keyboard
+accessible and isolated from parent click/drag actions. It shows the requested
+state while pending, disables duplicate writes until cache reconciliation and
+reports failed saves. Personal stars require read access, never shared edit
+rights; starring does not change workflow state or a shared board's order.
+Proof: `web/scripts/starred-proof.mjs` (toggle, keyboard isolation, failed writes,
+completed rows, cursor paging, cross-page search, filters, rail and mobile layout)
+and `server/tests/test_personal_starred.py` (per-user isolation and completed pins).
