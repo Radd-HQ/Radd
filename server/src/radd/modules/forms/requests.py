@@ -127,7 +127,7 @@ async def _comment_signals(
     theirs: dict[uuid.UUID, object] = {}
     for entity_id, author_id, created_at in rows:
         counts[entity_id] = counts.get(entity_id, 0) + 1
-        if author_id == SYSTEM_ACTOR_ID:
+        if author_id is None or author_id == SYSTEM_ACTOR_ID:
             continue  # neither bucket: it is not the requester, and it is not an answer
         bucket = mine if author_id == reporters.get(entity_id) else theirs
         current = bucket.get(entity_id)

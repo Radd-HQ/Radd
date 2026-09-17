@@ -342,3 +342,15 @@ async def test_the_detail_view_carries_no_issue_internals(db, admin):
         # what opening it adds
         "description", "comments",
     }
+
+
+async def test_unattributed_import_comment_is_counted_but_not_an_agent_answer(db, admin):
+    requester = await _member(db)
+    project = await _project(db)
+    form = await _shared_form(db, admin, project, requester)
+    filed = await _file(db, form, requester)
+    await comments_service.create_comment(db, filed.id,
+        CommentCreate(body='Unknown historical author', author_id=None), admin)
+    row = next(r for r in await requests_service.list_my_requests(db, requester) if r.key == filed.key)
+    assert row.comment_count == 1
+    assert row.awaiting_requester is False

@@ -389,3 +389,15 @@ async def test_an_agents_emailed_reply_satisfies_the_response_target(db, admin):
 
     after = await evaluation.evaluate_items(db, policy, [opened.item_id])
     assert after[opened.item_id][SlaKind.RESPONSE][1].met_at is not None
+
+
+async def test_unattributed_import_comment_does_not_satisfy_response_target(db, admin):
+    from radd.modules.comments import service as comments
+    from radd.modules.comments.schemas import CommentCreate
+    project = await _project(db, 'unknown', f'UN{uuid.uuid4().hex[:4].upper()}')
+    item = await _item(db, admin, project.id)
+    policy = await slas.create_policy(db,
+        PolicyCreate(project_id=project.id, name='Response', response_minutes=60), actor_id=admin.id)
+    await comments.create_comment(db, item.id, CommentCreate(body='Unknown history', author_id=None), admin)
+    result = await evaluation.evaluate_items(db, policy, [item.id])
+    assert result[item.id][SlaKind.RESPONSE][1].met_at is None

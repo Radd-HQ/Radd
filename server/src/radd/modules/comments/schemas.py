@@ -45,7 +45,7 @@ class CommentRead(BaseModel):
     id: uuid.UUID
     entity_type: str = "item"  # RADD-717
     entity_id: uuid.UUID
-    author: UserRef
+    author: UserRef | None
     body: str
     visibility: CommentVisibility
     visible_to_teams: list[uuid.UUID] = Field(default_factory=list)  # spec 50

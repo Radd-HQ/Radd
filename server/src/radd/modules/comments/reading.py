@@ -47,8 +47,8 @@ async def _hydrate(session, rows):
     from .service import _team_restrictions, _to_read
 
     restrictions = await _team_restrictions(session, [row.id for row in rows])
-    authors = await auth.users_by_ids(session, {row.author_id for row in rows})
-    return [_to_read(row, authors[row.author_id], restrictions.get(row.id)) for row in rows]
+    authors = await auth.users_by_ids(session, {row.author_id for row in rows if row.author_id is not None})
+    return [_to_read(row, authors.get(row.author_id), restrictions.get(row.id)) for row in rows]
 
 
 def _cursor(row: Comment) -> str:

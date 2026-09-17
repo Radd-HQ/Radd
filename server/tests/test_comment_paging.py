@@ -151,3 +151,18 @@ async def test_http_feed_is_bounded_and_rejects_invalid_pagination(world):
         for params in ({"limit": 201}, {"limit": 0}, {"before": "malformed"}, {"section": "unknown"}):
             assert (await client.get(path, params=params)).status_code == 422
         await client.post("/api/v1/auth/logout")
+
+
+async def test_unknown_author_reads_updates_and_resolves_without_becoming_the_actor(world):
+    from radd.modules.comments.schemas import CommentUpdate
+    db, author, reader, item = world
+    unknown = await service.create_comment(db, item.id, CommentCreate(body='unknown', author_id=None), author)
+    assert unknown.author is None
+    ordinary = await service.create_comment(db, item.id, CommentCreate(body='ordinary'), author)
+    assert ordinary.author.id == author.id
+    override = await service.create_comment(db, item.id, CommentCreate(body='other', author_id=reader.id), author)
+    assert override.author.id == reader.id
+    page = await service.comment_page(db, item.id, author)
+    assert next(c for c in page.comments if c.id == unknown.id).author is None
+    updated = await service.update_comment(db, unknown.id, CommentUpdate(body='edited'), author)
+    assert updated.author is None

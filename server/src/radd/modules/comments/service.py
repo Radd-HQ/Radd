@@ -30,7 +30,7 @@ from radd.clock import utcnow
 
 
 def _to_read(
-    comment: Comment, author: User, visible_to_teams: set[uuid.UUID] | None = None
+    comment: Comment, author: User | None, visible_to_teams: set[uuid.UUID] | None = None
 ) -> CommentRead:
     return CommentRead(
         id=comment.id,
@@ -41,7 +41,7 @@ def _to_read(
             name=author.name,
             avatar_color=author.avatar_color,
             avatar_emoji=author.avatar_emoji,
-        ),
+        ) if author else None,
         body=comment.body,
         visibility=CommentVisibility(comment.visibility),
         visible_to_teams=sorted(visible_to_teams or set()),
@@ -149,7 +149,7 @@ async def public_comments_for_item(
 
 async def public_comment_times(
     session: AsyncSession, item_ids: Iterable[uuid.UUID]
-) -> list[tuple[uuid.UUID, uuid.UUID, datetime]]:
+) -> list[tuple[uuid.UUID, uuid.UUID | None, datetime]]:
     """(item_id, author_id, created_at) for every PUBLIC comment on the items,
     oldest first — the SLA first-response seam (spec 30)."""
     ids = list(item_ids)
@@ -234,7 +234,7 @@ async def _emit(
     session: AsyncSession,
     event_type: CommentEvent,
     comment: Comment,
-    actor_id: uuid.UUID,
+    actor_id: uuid.UUID | None,
     occurred_at: datetime | None = None,
     visible_to_teams: set[uuid.UUID] | None = None,
     diff: list[dict] | None = None,
@@ -320,9 +320,8 @@ async def create_authorized_comment(
     can_import = Permission.PROJECT_MANAGE in permissions
     # An IMPORT states the author explicitly; falling back to the actor there
     # credited whoever ran the import with thousands of other people's comments
-    # (spec 90 follow-up). The importer now provisions a placeholder
-    # account for anyone unknown, so `author_id` is set — and an import that
-    # still cannot name the author leaves it unattributed rather than wrong.
+    # (spec 90 follow-up). A mapped source user resolves to a real account;
+    # skipped or absent source identities remain NULL (RADD-1195).
     author_id = data.author_id if (can_import and "author_id" in data.model_fields_set) else actor.id
     occurred_at = data.created_at if (can_import and data.created_at) else None
     comment = Comment(
@@ -342,7 +341,7 @@ async def create_authorized_comment(
         session, CommentEvent.CREATED, comment, author_id,
         occurred_at=occurred_at, visible_to_teams=stored_teams,
     )
-    return _to_read(comment, actor, stored_teams)
+    return _to_read(comment, await auth.get_user(session, author_id) if author_id else None, stored_teams)
 
 
 async def update_comment(
@@ -377,7 +376,7 @@ async def update_comment(
         session, CommentEvent.UPDATED, comment, actor.id,
         visible_to_teams=stored_teams, diff=diff,
     )
-    return _to_read(comment, await auth.get_user(session, comment.author_id), stored_teams)
+    return _to_read(comment, await auth.get_user(session, comment.author_id) if comment.author_id else None, stored_teams)
 
 
 async def delete_comment(session: AsyncSession, comment_id: uuid.UUID, actor: User) -> None:
@@ -455,5 +454,5 @@ async def set_resolved(
             visible_to_teams=stored_teams,
             diff=[{"field": "resolved", "from": was_resolved, "to": resolved}],
         )
-    author = await auth.get_user(session, comment.author_id)
+    author = await auth.get_user(session, comment.author_id) if comment.author_id else None
     return _to_read(comment, author)

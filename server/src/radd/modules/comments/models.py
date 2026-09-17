@@ -24,7 +24,7 @@ class Comment(Base, TimestampMixin):
         String(30), default=CommentParentType.ITEM.value, server_default=CommentParentType.ITEM.value
     )
     entity_id: Mapped[uuid.UUID] = mapped_column(index=True)
-    author_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
+    author_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
     body: Mapped[str] = mapped_column(Text)
     # CommentVisibility; internal comments require Permission.COMMENT_READ_INTERNAL.
     visibility: Mapped[str] = mapped_column(String(10), default=CommentVisibility.PUBLIC)

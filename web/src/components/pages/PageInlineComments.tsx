@@ -197,7 +197,7 @@ export function PageInlineComments({
             row={row}
             orphaned={start === null}
             focused={row.id === focusedId}
-            canResolve={canComment || row.author.id === user?.id}
+            canResolve={canComment || (!!row.author && row.author.id === user?.id)}
             onFocus={() => setFocusedId(row.id)}
             onResolve={() => resolve.mutate({ id: row.id, resolved: true })}
           />
@@ -226,7 +226,7 @@ export function PageInlineComments({
                   row={row}
                   orphaned={false}
                   focused={false}
-                  canResolve={canComment || row.author.id === user?.id}
+                  canResolve={canComment || (!!row.author && row.author.id === user?.id)}
                   resolvedView
                   onFocus={() => setFocusedId(row.id)}
                   onResolve={() => resolve.mutate({ id: row.id, resolved: false })}
@@ -274,7 +274,7 @@ function Thread({
         “{row.anchor?.quote}”
       </p>
       <p className="text-[12px]">
-        <span className="font-medium text-heading">{row.author.name}</span>{" "}
+        <span className="font-medium text-heading">{row.author?.name ?? "Unknown author"}</span>{" "}
         <span className="text-fg-faint" title={row.created_at}>
           {relativeTime(row.created_at)}
         </span>

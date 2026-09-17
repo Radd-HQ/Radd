@@ -386,3 +386,23 @@ def test_the_attachment_url_matches_a_real_route():
     assert template in set(walk(create_app().routes)), (
         f"the importer emits {emitted}, which no route serves"
     )
+
+
+async def test_unknown_comment_author_imports_and_reads_without_false_attribution(db):
+    from radd.modules.confluenceimport.models.snapshot import ConfluenceSnapshotComment
+    from radd.modules.comments import service as comments
+    actor = await _admin(db)
+    snapshot = await _snapshot(db, actor, [{'id':'1', 'title':'Unknown comments'}])
+    row = await db.scalar(select(ConfluenceSnapshotPage).where(ConfluenceSnapshotPage.snapshot_id == snapshot.id))
+    snapshot.include_comments = True
+    db.add(ConfluenceSnapshotComment(snapshot_id=snapshot.id, comment_id='missing-author',
+        page_id=row.page_id, body='<p>Unattributed history</p>', author='',
+        created_at='2018-04-25T05:46:56Z'))
+    await db.flush()
+    run = await _run(db, snapshot, actor)
+    assert run.counts.get('comments') == 1
+    page = (await _pages_in(db, snapshot))[0]
+    rows = await comments.list_comments(db, page.id, actor, entity_type='page')
+    assert len(rows) == 1 and rows[0].author is None
+    assert rows[0].body.strip() == 'Unattributed history'
+    assert rows[0].created_at.year == 2018

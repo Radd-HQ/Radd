@@ -24,7 +24,7 @@ export interface Comment {
   /** RADD-717: what this hangs off — "item" or "page". */
   entity_type: string;
   entity_id: string;
-  author: UserRef;
+  author: UserRef | null;
   body: string;
   visibility: CommentVisibilityValue;
   /** Spec 50: team ids an internal comment is narrowed to (empty = all readers). */

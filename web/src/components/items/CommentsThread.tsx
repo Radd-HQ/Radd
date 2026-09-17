@@ -178,10 +178,10 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
                     : "")
                 }
               >
-                <Avatar user={comment.author} size="sm" className="mt-0.5" />
+                <Avatar user={comment.author ?? { id: "", name: "Unknown author" }} size="sm" className="mt-0.5" />
                 <div className="group/comment min-w-0 flex-1">
                   <p className="flex flex-wrap items-center gap-1.5 text-xs">
-                    <PersonName user={comment.author} className="font-medium text-fg" />
+                    <PersonName user={comment.author ?? { id: "", name: "Unknown author" }} className="font-medium text-fg" />
                     <span className="text-fg-faint">
                       {formatDateTime(comment.created_at)}
                     </span>
@@ -202,7 +202,7 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
                           text={comment.body}
                           similar={{ seedKey: comment.id, excludeItemId: itemId }}
                           onTransform={
-                            user?.id === comment.author.id || canManageProject
+                            (!!comment.author && user?.id === comment.author.id) || canManageProject
                               ? (run) => {
                                   setPendingAiRun(run);
                                   setEditingId(comment.id);
@@ -212,7 +212,7 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
                           label="AI actions for this comment"
                           className="opacity-0 transition-opacity group-hover/comment:opacity-100 aria-expanded:opacity-100"
                         />
-                        {(user?.id === comment.author.id || canManageProject) && (
+                        {((!!comment.author && user?.id === comment.author.id) || canManageProject) && (
                           <CommentActions
                             comment={comment}
                             itemId={itemId}

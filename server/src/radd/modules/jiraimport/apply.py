@@ -185,7 +185,7 @@ async def apply_item(
         await notify_service.add_watchers(session, outcome.item_id, draft.watcher_ids)
     if import_comments and outcome.item_id:
         outcome.comments = await _comments(
-            session, draft, outcome.item_id, actor, run_id, seen_comment_ids
+            session, draft, outcome.item_id, actor, run_id, seen_comment_ids, outcome
         )
     if import_worklogs and outcome.item_id:
         outcome.worklogs = await _worklogs(
@@ -279,6 +279,7 @@ async def _comments(
     actor: User,
     run_id: uuid.UUID | None,
     seen: set[str],
+    outcome: Outcome,
 ) -> int:
     """Comments, deduplicated by Jira's own comment id.
 
@@ -293,36 +294,40 @@ async def _comments(
         if comment.jira_id and comment.jira_id in seen:
             continue
         try:
-            created = await comments_service.create_comment(
-                session,
-                item_id,
-                CommentCreate(
-                    body=comment.body,
-                    author_id=comment.author_id,
-                    created_at=_as_datetime(comment.created),
-                    # RADD-1180. A Jira internal note imported as a public comment
-                    # is a leak, and on a public project a published one.
-                    visibility=(
-                        CommentVisibility.INTERNAL
-                        if comment.internal
-                        else CommentVisibility.PUBLIC
-                    ),
-                ),
-                actor,
-            )
-            if run_id:
-                ledger.created(
+            async with session.begin_nested():
+                created = await comments_service.create_comment(
                     session,
-                    run_id,
-                    LedgerEntity.COMMENT,
-                    created.id,
-                    subject=f"{draft.jira_key}#{comment.jira_id}",
+                    item_id,
+                    CommentCreate(
+                        body=comment.body,
+                        author_id=comment.author_id,
+                        created_at=_as_datetime(comment.created),
+                        # RADD-1180. A Jira internal note imported as a public comment
+                        # is a leak, and on a public project a published one.
+                        visibility=(
+                            CommentVisibility.INTERNAL
+                            if comment.internal
+                            else CommentVisibility.PUBLIC
+                        ),
+                    ),
+                    actor,
                 )
+                if run_id:
+                    ledger.created(
+                        session,
+                        run_id,
+                        LedgerEntity.COMMENT,
+                        created.id,
+                        subject=f"{draft.jira_key}#{comment.jira_id}",
+                    )
             if comment.jira_id:
                 seen.add(comment.jira_id)
             written += 1
-        except Exception:  # noqa: BLE001 — a bad comment must not lose the issue
-            continue
+        except Exception as exc:  # noqa: BLE001 — keep the transaction usable
+            outcome.problems.append(Problem(
+                kind=ProblemKind.COMMENT_FAILED, message="a comment could not be imported",
+                subject=f"{draft.jira_key}#{comment.jira_id}", detail=str(exc),
+            ))
     return written
 
 

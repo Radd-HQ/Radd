@@ -71,17 +71,17 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
       {history.isPending && <p role="status" className="text-xs text-fg-muted">Loading comments…</p>}
       <ul className="flex flex-col gap-4">
         {comments?.map((comment) => {
-          const author = users?.find((u) => u.id === comment.author.id);
+          const author = users?.find((u) => u.id === comment.author?.id);
           return (
             <li data-comment-id={comment.id} key={comment.id} className="flex gap-2">
-              <Avatar user={author ?? comment.author} size="sm" />
+              <Avatar user={author ?? comment.author ?? { id: "", name: "Unknown author" }} size="sm" />
               <div className="min-w-0 flex-1">
                 <p className="flex items-baseline gap-2 text-[12px]">
-                  <span className="font-medium text-heading">{comment.author.name}</span>
+                  <span className="font-medium text-heading">{comment.author?.name ?? "Unknown author"}</span>
                   <span className="text-fg-faint" title={comment.created_at}>
                     {relativeTime(comment.created_at)}
                   </span>
-                  {comment.author.id === user?.id && (
+                  {(!!comment.author && comment.author.id === user?.id) && (
                     <button
                       type="button"
                       onClick={() =>

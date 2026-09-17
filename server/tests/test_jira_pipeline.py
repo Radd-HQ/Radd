@@ -844,3 +844,38 @@ async def test_native_team_mapping_dry_run_reimport_and_rollback(db, preimport):
             assert await s.scalar(text('SELECT count(*) FROM teams WHERE name=:n'), {'n': team_name}) == 0
     finally:
         await _cleanup([key])
+
+
+async def test_unknown_comment_author_and_bad_comment_do_not_abort_import(db, monkeypatch):
+    from radd.modules.comments import service as comments
+    key = f"UA{uuid.uuid4().hex[:4].upper()}"
+    actor = await _admin(db)
+    snapshot = await _snapshot(db, 'SRC', [
+        _issue('SRC-1', summary='One', comments=[
+            {'id': '1', 'body': 'unknown author', 'created': '2018-04-25T05:46:56.000+0000'},
+            {'id': '2', 'body': 'bad comment'},
+            {'id': '3', 'body': 'known author', 'author': {'name': 'adela'}},
+        ]), _issue('SRC-2', summary='After the failure'),
+    ])
+    plan = await _plan_for(db, snapshot, key)
+    original = comments.create_comment
+    async def failing(session, item_id, data, user):
+        if data.body == 'bad comment':
+            await session.execute(text('SELECT 1/0'))
+        return await original(session, item_id, data, user)
+    monkeypatch.setattr(comments, 'create_comment', failing)
+    try:
+        run = await _run(db, plan, actor, RunKind.IMPORT)
+        assert run.stage == RunStage.DONE.value, run.problems
+        assert run.counts['comments'] == 2
+        assert any(p['kind'] == 'comment_failed' for p in run.problems)
+        async with SessionLocal() as s:
+            item = await items_service.find_item_by_key(s, f'{key}-1')
+            rows = await comments.list_comments(s, item.id, await s.get(User, actor))
+            assert len(rows) == 2
+            assert rows[0].author is None
+            assert rows[0].created_at.year == 2018
+            assert rows[1].author is not None and rows[1].author.id != actor
+            assert await items_service.find_item_by_key(s, f'{key}-2')
+    finally:
+        await _cleanup([key])

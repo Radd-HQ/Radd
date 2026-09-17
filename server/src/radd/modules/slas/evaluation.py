@@ -73,7 +73,7 @@ async def evaluate_items(
             item = item_map.get(item_id)
             if item is None or item_id in responses:
                 continue
-            if author_id == item.reporter_id or author_id == SYSTEM_ACTOR_ID:
+            if author_id is None or author_id == item.reporter_id or author_id == SYSTEM_ACTOR_ID:
                 continue
             responses[item_id] = at
 
