@@ -46,6 +46,7 @@ from .types import (
     SpaceAction,
     TERMINAL_RUN_STAGES,
     UpsertAction,
+    UserAction,
 )
 
 logger = logging.getLogger(__name__)
@@ -336,6 +337,9 @@ async def _people(
 
     out: dict[str, uuid.UUID] = {}
     for entry in mappings.users:
+        # An explicit attribution decision wins over every matching heuristic.
+        if entry.action is UserAction.IGNORE:
+            continue
         if entry.user_id:
             out[entry.username] = entry.user_id
             continue

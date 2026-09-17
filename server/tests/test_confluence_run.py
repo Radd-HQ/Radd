@@ -406,3 +406,49 @@ async def test_unknown_comment_author_imports_and_reads_without_false_attributio
     assert len(rows) == 1 and rows[0].author is None
     assert rows[0].body.strip() == 'Unattributed history'
     assert rows[0].created_at.year == 2018
+
+
+async def test_ignored_people_never_resolve_by_id_email_domain_or_name(db):
+    from radd.modules.confluenceimport.schemas import PlanMappings, UserMapping
+    from radd.modules.confluenceimport.types import UserAction
+    actor = await _admin(db)
+    actor.name = f"Unique ignored {uuid.uuid4()}"
+    await db.flush()
+    username, domain = actor.email.split("@")
+    entries = [
+        UserMapping(username="explicit", user_id=actor.id),
+        UserMapping(username="email", email=actor.email),
+        UserMapping(username=username),
+        UserMapping(username="display", display_name=actor.name),
+    ]
+    assert set((await runs._people(db, PlanMappings(users=entries), email_domain=domain)).values()) == {actor.id}
+    for entry in entries:
+        entry.action = UserAction.IGNORE
+    assert await runs._people(db, PlanMappings(users=entries), email_domain=domain) == {}
+
+
+async def test_ignored_comment_author_stays_unattributed_in_real_run(db):
+    from radd.modules.confluenceimport.models.snapshot import ConfluenceSnapshotComment
+    from radd.modules.confluenceimport.schemas import UserMapping
+    from radd.modules.confluenceimport.types import UserAction
+    from radd.modules.comments import service as comments
+    actor = await _admin(db)
+    source_author = await _admin(db)
+    snapshot = await _snapshot(db, actor, [{'id':'1', 'title':'Ignored author'}])
+    row = await db.scalar(select(ConfluenceSnapshotPage).where(ConfluenceSnapshotPage.snapshot_id == snapshot.id))
+    db.add(ConfluenceSnapshotComment(snapshot_id=snapshot.id, comment_id='ignored-author',
+        page_id=row.page_id, body='<p>Historical comment</p>', author='old-account',
+        created_at='2018-04-25T05:46:56Z'))
+    plan = await plan_service.create_plan(db, PlanCreate(name='Ignored author', snapshot_id=snapshot.id))
+    mappings = plan_service.mappings_of(plan)
+    mappings.users = [UserMapping(username='old-account', email=source_author.email,
+        user_id=source_author.id, action=UserAction.IGNORE)]
+    plan.mappings = mappings.model_dump(mode='json')
+    plan.options = PlanOptions(import_comments=True).model_dump(mode='json')
+    await db.flush()
+    run = await runs.start_run(db, plan.id, dry_run=False, actor_id=actor.id)
+    await runs._pipeline(db, run)
+    page = (await _pages_in(db, snapshot))[0]
+    imported = await comments.list_comments(db, page.id, actor, entity_type='page')
+    assert len(imported) == 1
+    assert imported[0].author is None
