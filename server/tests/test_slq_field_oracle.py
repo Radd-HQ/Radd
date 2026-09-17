@@ -228,8 +228,13 @@ async def test_index_blanks_restricted_description(db, admin, project):
     await db.refresh(row)
     assert row.description == ""
 
-    # Revoking the grant restores the text from work_items.
+    # Revocation keeps the restriction; only explicit reset restores parent access.
     await access_service.remove_grant(db, grant.id)
+    await indexer.sync_description_restriction(db)
+    await db.refresh(row)
+    assert row.description == ""
+    modes = await access_service.restriction_modes(db, "builtin_field", BuiltinItemField.DESCRIPTION.value)
+    await access_service.restore_inheritance(db, modes[0]["id"], None)
     await indexer.sync_description_restriction(db)
     await db.refresh(row)
     assert row.description == secret

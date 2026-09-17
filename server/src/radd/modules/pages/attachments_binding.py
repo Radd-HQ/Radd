@@ -17,20 +17,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.modules.attachments import parents
 from radd.modules.attachments.types import AttachmentParentType
-from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
 
 from .types import PageEvent
 from radd.modules.auth.models import User
 
-from . import service
+from . import service, page_access
 
 
 async def _guard(
     session: AsyncSession, user: User, page_id: uuid.UUID, permission: Permission
 ) -> None:
-    page = await service.get_page(session, page_id)  # 404 before 403, like the router
-    await authz.require(session, user, permission, space_id=page.space_id)
+    await page_access.guard_page(session, user, page_id, permission)
 
 
 async def _page_read(session: AsyncSession, user: User, page_id: uuid.UUID) -> None:
@@ -49,6 +47,10 @@ async def _no_project(session: AsyncSession, page_id: uuid.UUID) -> uuid.UUID | 
     return None
 
 
+async def _space_id(session: AsyncSession, page_id: uuid.UUID) -> uuid.UUID:
+    return (await service.get_page(session, page_id)).space_id
+
+
 parents.register_parent(
     parents.ParentBinding(
         entity_type=AttachmentParentType.PAGE.value,
@@ -57,5 +59,6 @@ parents.register_parent(
         require_write=_page_write,
         require_admin=_page_admin,
         project_id_of=_no_project,
+        space_id_of=_space_id,
     )
 )

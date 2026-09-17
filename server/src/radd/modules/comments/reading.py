@@ -100,3 +100,12 @@ async def comment_page(
         comments=await _hydrate(session, list(reversed(rows))),
         older_cursor=_cursor(rows[-1]) if more else None,
     )
+
+
+async def can_read_comment(session, comment_id, actor):
+    """Live parent and discussion visibility for deferred delivery."""
+    comment = await session.get(Comment, comment_id)
+    if comment is None:
+        return False
+    query = await _read_query(session, comment.entity_id, actor, comment.entity_type, CommentSlice.ALL)
+    return await session.scalar(query.where(Comment.id == comment_id)) is not None

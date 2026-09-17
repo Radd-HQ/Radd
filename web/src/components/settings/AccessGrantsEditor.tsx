@@ -17,6 +17,7 @@ import { TextField } from "../TextField";
 import { ExpiryChip } from "./AccessInspector";
 import { AddResourceGrantDialog } from "./AddResourceGrantDialog";
 import { SUBJECT_ICON } from "./SubjectPicker";
+import { GrantExpiryButton } from "./GrantExpiryButton";
 import { formatDate } from "../../lib/dates";
 
 export interface ResourceGrantScope { id: string | null; label: string }
@@ -32,13 +33,27 @@ export function AccessGrantsEditor({ resourceType, resourceId, accesses, subject
   const directory = useDirectory(`${resourceType}:${resourceId}:${scope === undefined ? "all" : scope.id ?? "global"}`, RESOURCE_GRANTS_PAGE_SIZE,
     (q, page) => resourceGrantsPageQuery(resourceType, resourceId, q, page, scope?.id));
   const [adding, setAdding] = useState(false);
+  const [resetId, setResetId] = useState<string>();
+  const modes = useQuery({
+    queryKey: ["access-restrictions", resourceType, resourceId, scope?.id],
+    queryFn: () => api.get<{id: string; access: string; project_id: string | null}[]>(
+      `${ApiPath.grants}/restrictions/${resourceType}/${resourceId}`,
+      { query: scope === undefined ? {} : scope.id ? { project_id: scope.id } : { global_only: "true" } }),
+  });
+  const reset = useMutation({
+    mutationFn: (id: string) => api.delete(`${ApiPath.grants}/restrictions/${id}`),
+    onSuccess: () => { setResetId(undefined); invalidate(); },
+  });
   const spec = resources.data?.find(r => r.resource_type === resourceType);
   useEffect(() => {
     if (!directory.busy && !directory.isError && directory.page > 0 && !directory.rows.length)
       directory.setPage(Math.max(0, Math.ceil(directory.total / directory.pageSize) - 1));
   }, [directory.busy, directory.isError, directory.page, directory.rows.length, directory.total, directory.pageSize, directory.setPage]);
-  const invalidate = () => void invalidateEntities(queryClient,
-    Entity.accessGrant, Entity.field, Entity.attachment, Entity.page, Entity.view, Entity.dashboard);
+  const invalidate = () => {
+    void modes.refetch();
+    void invalidateEntities(queryClient,
+      Entity.accessGrant, Entity.field, Entity.attachment, Entity.page, Entity.view, Entity.dashboard);
+  };
   const revoke = useMutation({ mutationFn: (id: string) => api.delete(`${ApiPath.grants}/${id}`), onSuccess: invalidate });
   const effectiveAccesses = accesses ?? spec?.accesses ?? [];
   const effectiveSubjects = subjectKinds ?? spec?.subjects ?? [];
@@ -52,6 +67,19 @@ export function AccessGrantsEditor({ resourceType, resourceId, accesses, subject
         {!description && <p className="text-xs text-fg-muted">{spec.default_open && !spec.hierarchical
           ? "Allow grants limit an access level to their subjects; deny grants exclude their subjects. Project scopes and expiry determine where and when a grant applies."
           : "Grants follow this resource's access model. Existing parent and owner permissions still apply."}</p>}
+        {spec.default_open && !spec.hierarchical && <div className="space-y-2 text-xs">
+          <p className="text-fg-muted">Restrictions stay in place when grants expire or are revoked. Deny rules still apply when parent access is restored.</p>
+          {modes.data?.map(mode => <div key={mode.id} className="rounded border border-subtle p-2">
+            <span>Restricted {mode.access}{mode.project_id ? " in this project" : ""}.</span>{" "}
+            {resetId === mode.id ? <>
+              <p>Remove the allow list for this access level and return to parent permissions? Existing deny rules remain.</p>
+              <Button disabled={reset.isPending} onClick={() => reset.mutate(mode.id)}>Restore parent access</Button>
+              <Button variant="ghost" onClick={() => setResetId(undefined)}>Cancel</Button>
+            </> : <Button variant="ghost" onClick={() => setResetId(mode.id)}>Restore parent access…</Button>}
+          </div>)}
+          {modes.isError && <ErrorText error={modes.error} />}
+          {reset.isError && <ErrorText error={reset.error} />}
+        </div>}
         <TextField type="search" label="Find resource grants" value={directory.filter} onChange={event => directory.setFilter(event.target.value)} placeholder="Subject, project, access or effect…" />
         <div aria-busy={directory.busy}>
           {directory.isPending ? <Spinner label="Loading resource grants…" /> : directory.isError ? <div role="alert" className="space-y-2">
@@ -59,7 +87,7 @@ export function AccessGrantsEditor({ resourceType, resourceId, accesses, subject
             <Button variant="secondary" onClick={() => void directory.refetch()}>Retry resource grants</Button>
           </div> : !directory.rows.length ? <p className="text-xs text-fg-muted">
             {directory.q ? "No matching grants." : spec.default_open
-              ? "No grants are configured here. Parent permissions and other restrictions still apply."
+              ? (modes.data?.length ? "No grant rows here. The access levels marked restricted above remain restricted." : "No grants are configured here. Parent permissions and other restrictions still apply.")
               : "No grants are configured here. Access follows this resource's owner and sharing settings."}
           </p> : <ul className="flex flex-col gap-2">
             {directory.rows.map(grant => {
@@ -74,6 +102,7 @@ export function AccessGrantsEditor({ resourceType, resourceId, accesses, subject
                 {spec.project_scoped && (grant.project_id === null ?
                   <span className="inline-flex items-center gap-1 text-fg-muted"><Globe size={10} aria-hidden /> Global</span> :
                   <span className="rounded bg-elevated px-1 font-mono">{grant.project_key ?? (scope?.id === grant.project_id ? scope.label : "Unavailable project")}</span>)}
+                <GrantExpiryButton path={`${ApiPath.grants}/${grant.id}`} onSaved={invalidate} />
                 <IconButton danger aria-label="Revoke grant" disabled={revoke.isPending || directory.busy} onClick={() => revoke.mutate(grant.id)}><X size={13} aria-hidden /></IconButton>
               </li>;
             })}

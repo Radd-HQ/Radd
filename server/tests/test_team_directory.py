@@ -14,7 +14,7 @@ from radd.modules.projects.models import Project
 from radd.modules.teams.models import Team,TeamManager
 
 
-@pytest.mark.parametrize('scope,manage,delete', [('global',True,True),('project',False,False),('owner',True,True),('manager',True,False),('delete',False,True)])
+@pytest.mark.parametrize('scope,manage,delete', [('global',True,True),('project',False,False),('owner',False,False),('manager',False,False),('delete',False,True)])
 async def test_team_capabilities_match_global_write_guards(scope,manage,delete):
     engine=create_async_engine(settings.database_url)
     async with async_sessionmaker(engine,expire_on_commit=False)() as db:
@@ -67,7 +67,7 @@ async def test_team_windows_search_count_and_batch_hydration():
                 assert r.headers['X-Total-Count']=='126'
                 assert sum('FROM team_managers' in stmt for stmt in sql)==1,sql
                 assert not any('projects.next_number' in stmt for stmt in sql)
-                assert all(row['managers']==[str(actor.id)] and row['can_manage'] and not row['can_delete'] for row in r.json())
+                assert all(row['managers']==[str(actor.id)] and not row['can_manage'] and not row['can_delete'] for row in r.json())
                 seen.extend(row['id'] for row in r.json())
             assert len(set(seen))==126
             r=await client.get('/api/v1/teams',params={'q':prefix+' 125','limit':1});assert r.headers['X-Total-Count']=='1'
@@ -82,3 +82,14 @@ async def test_team_windows_search_count_and_batch_hydration():
             assert r.status_code==403
         await db.rollback()
     await engine.dispose()
+
+
+async def team_reader_account(db, actor):
+    """Real team reader with intrinsic stewardship; key write scope grants no role."""
+    from radd.modules.auth.models import Role, GlobalRoleGrant
+    actor.instance_role = "member"
+    role = Role(key="team-reader-" + uuid.uuid4().hex, name="Team reader", permissions=["team.read"])
+    db.add(role)
+    await db.flush()
+    db.add(GlobalRoleGrant(role_id=role.id, user_id=actor.id))
+    await db.flush()

@@ -523,3 +523,13 @@ async def projects_with_team_items(session: AsyncSession, user) -> set[uuid.UUID
         select(WorkItem.project_id).where(WorkItem.team_id.in_(team_ids)).distinct()
     )
     return set(rows.scalars())
+
+
+async def require_key_item_permission(session, actor, item, permission):
+    """Intrinsic issue actions still obey a key's atom, scope and row qualifier."""
+    from radd.modules.auth.principals import require_key_permission
+    require_key_permission(actor, permission, item.project_id)
+    scope = getattr(actor, "token_scope", None)
+    if scope is not None:
+        permissions = scope.narrow(frozenset({permission}), item.project_id)
+        await ensure_item_relation(session, actor, item, permissions, permission)

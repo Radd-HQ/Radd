@@ -30,7 +30,7 @@ plugin = RaddPlugin(
     # ownership model dashboards shipped with), so no atom was ever consulted.
     crud_resources=(
         CrudResourceSpec(
-            "dashboard", "global", "dashboards", "global.manage", actions=("create",)
+            "dashboard", "global", "dashboards", "global.manage", actions=("create", "update", "delete")
         ),
     ),
     # RADD-818: spec-92 resources ride the MANIFEST — the loader's clear()

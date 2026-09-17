@@ -395,7 +395,7 @@ async def export_page(page_id: uuid.UUID, session: Session, user: CurrentUser) -
     """One page and everything beneath it, as a zip of markdown."""
     page = await page_access.guard_page(session, user, page_id, authz.Permission.PAGE_READ)
     space = await spaces.get_space(session, page.space_id)
-    name, blob = await page_export.export_zip(session, space, root=page)
+    name, blob = await page_export.export_zip(session, space, root=page, actor=user)
     return _zip_response(name, blob)
 
 
@@ -460,7 +460,7 @@ async def list_backlinks(
     """What links to this page (RADD-713) — read from the index maintained on
     save, not by scanning every body."""
     await page_access.guard_page(session, user, page_id, authz.Permission.PAGE_READ)
-    return await backlinks.backlink_reads(session, page_id)
+    return await backlinks.backlink_reads(session, page_id, actor=user)
 
 
 @router.get("/pages/{page_id}/versions", response_model=list[PageVersionMeta])
@@ -519,7 +519,7 @@ async def unlink_item(
 async def item_docs(item_id: uuid.UUID, session: Session, user: Actor) -> list[ItemPageRef]:
     """Pages linked to an item — path-extends the items surface (like timelogging)."""
     await items_service.require_readable_item(session, item_id, user)
-    return await links.pages_for_item(session, item_id)
+    return await links.pages_for_item(session, item_id, actor=user)
 
 
 # --- search ---

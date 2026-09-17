@@ -170,6 +170,10 @@ async def quiet_backlog(db):
 
 
 async def _notify(db, user: User, item, type_: NotificationType, **payload) -> None:
+    from radd.modules.auth import grants
+    from radd.modules.auth.roles import role_by_key
+    role = await role_by_key(db, "member")
+    await grants.create_grant(db, role.id, user_id=user.id, project_id=item.project_id)
     await notify_service.create_notification(
         db,
         user_id=user.id,

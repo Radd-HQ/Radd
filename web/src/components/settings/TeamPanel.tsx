@@ -26,6 +26,7 @@ import { TeamGroupsSection } from "./TeamDirectoryGroup";
 import { TeamStewardship } from "./TeamStewardship";
 import { IconButton } from "../IconButton";
 import { ErrorText } from "../ErrorText";
+import { TeamAccessImpact } from "./TeamAccessImpact";
 import { ChangeHistoryPanel } from "../history/ChangeHistoryPanel";
 
 interface TeamPanelProps {
@@ -136,8 +137,10 @@ export function TeamPanel({ team, onDeleted }: TeamPanelProps) {
         </div>
         <DirectoryPager {...members} onPage={members.setPage} label="members" />
         {removeMember.isError && <ErrorText className="mt-1" error={removeMember.error} />}
+        {canEditMembers && <TeamAccessImpact teamId={team.id} />}
         {canEditMembers && (
-          <form onSubmit={onAddMember} className="mt-3 flex items-end gap-2">
+          <form onSubmit={onAddMember} className="mt-3 flex flex-wrap items-end gap-2">
+            <p className="w-full text-xs text-fg-muted">Adding a member gives them this team’s roles and shared-resource access. Review the role grants and access sources below before adding them.</p>
             <div className="flex-1">
               <PeopleDirectorySelect kind="person" candidateTeamId={team.id}
                 label="Add member" emptyLabel="Choose a person…" value={candidate} onChange={setCandidate} />

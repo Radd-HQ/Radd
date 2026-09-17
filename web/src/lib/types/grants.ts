@@ -79,6 +79,7 @@ export interface RoleGrant {
 /** POST /role-grants — grant a role to a subject instance-wide (no ids), on
  * projects, or in wiki spaces (one grant per id). */
 export interface RoleGrantCreate {
+  expires_at?: string;
   role_id: string;
   user_id?: string | null;
   team_id?: string | null;

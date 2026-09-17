@@ -11,5 +11,6 @@ plugin = RaddPlugin(
     "module; this plugin is the transport, the catalog composer (spec-114 caller filter "
     "included) and the dispatcher.",
     depends_on=("auth", "projects", "fields", "linktypes"),
+    weak_depends=("pages",),
     routers=(router,),
 )

@@ -20,7 +20,8 @@ from radd.modules.auth.models import User
 from . import service, directory
 from .registry import all_specs, get_spec
 from .schemas import AccessGrantCreate, AccessGrantRead, AccessGrantDirectoryRead, ResourceSpecRead
-from .types import AccessEntity
+from .types import AccessEntity, AccessEvent
+from .schemas import AccessGrantExpiry
 
 router = APIRouter(prefix="/grants", tags=["access"])
 
@@ -166,3 +167,37 @@ async def delete_grant(grant_id: uuid.UUID, session: Session, user: CurrentUser)
     await service.lock_resource(session, grant.resource_type, grant.resource_id)
     await _require_manage(session, user, grant.resource_type, grant.resource_id, grant.project_id)
     await service.remove_grant(session, grant_id, actor_id=user.id)
+
+
+@router.get("/restrictions/{resource_type}/{resource_id}")
+async def restriction_modes(resource_type: str, resource_id: str, session: Session, user: CurrentUser,
+                            project_id: uuid.UUID | None = None, global_only: bool = False):
+    await _require_read_scope(session, user, resource_type, resource_id, project_id, global_only)
+    rows = await service.restriction_modes(session, resource_type, resource_id)
+    if project_id is not None or global_only:
+        rows = [row for row in rows if row["project_id"] == project_id]
+    return rows
+
+
+@router.delete("/restrictions/{policy_id}", status_code=204)
+async def restore_inheritance(policy_id: uuid.UUID, session: Session, user: CurrentUser):
+    from .models import AccessRestriction
+    policy = await session.get(AccessRestriction, policy_id)
+    if policy is None:
+        from radd.exceptions import NotFoundError
+        raise NotFoundError("restriction", policy_id)
+    await service.lock_resource(session, policy.resource_type, policy.resource_id)
+    await _require_manage(session, user, policy.resource_type, policy.resource_id, policy.project_id)
+    await service.restore_inheritance(session, policy_id, user.id)
+
+
+@router.patch("/{grant_id}", response_model=AccessGrantRead)
+async def change_expiry(grant_id: uuid.UUID, data: AccessGrantExpiry, session: Session, user: CurrentUser):
+    grant = await service.get_grant(session, grant_id)
+    await service.lock_resource(session, grant.resource_type, grant.resource_id)
+    await _require_manage(session, user, grant.resource_type, grant.resource_id, grant.project_id)
+    previous_expiry = grant.expires_at
+    grant.expires_at = data.expires_at.replace(tzinfo=None) if data.expires_at else None
+    await session.flush()
+    await service._emit(session, AccessEvent.GRANTED, grant, user.id, changes=[{"field": "expires_at", "from": previous_expiry.isoformat() if previous_expiry else None, "to": grant.expires_at.isoformat() if grant.expires_at else None}])
+    return AccessGrantRead.model_validate(grant)

@@ -1,3 +1,4 @@
+from radd.modules.auth.principals import require_key_permission
 import uuid
 from typing import Annotated, Literal
 
@@ -7,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.apitypes import TOTAL_COUNT_HEADER
 from radd.choices import ChoiceRead
 from radd.db import get_session
+from radd.exceptions import ForbiddenError
 from radd.modules.auth import authz
 from radd.modules.auth.deps import CurrentUser
 
@@ -33,19 +35,21 @@ team_router = APIRouter(prefix="/teams", tags=["teams"])
 Session = Annotated[AsyncSession, Depends(get_session)]
 
 
-async def _require_manage(session: AsyncSession, user, team: Team) -> None:
+async def _require_manage(session: AsyncSession, user, team: Team, *, writing=True) -> None:
     """Spec 87: administering a team means holding the instance-wide `team.update`
     atom OR being this team's owner/manager. The second half is the delegation —
     a team leader runs their own team without being handed every team."""
+    require_key_permission(user, authz.Permission.TEAM_UPDATE if writing else authz.Permission.TEAM_READ)
     if await service.is_team_steward(session, user.id, team):
         return
     await authz.require(session, user, authz.Permission.TEAM_UPDATE)
 
 
-async def _require_own(session: AsyncSession, user, team: Team) -> None:
+async def _require_own(session: AsyncSession, user, team: Team, *, writing=True) -> None:
     """Stricter tier: appointing managers and transferring ownership. Managers are
     deliberately excluded — a delegate must not be able to appoint further
     delegates or hand the team away."""
+    require_key_permission(user, authz.Permission.TEAM_UPDATE if writing else authz.Permission.TEAM_READ)
     if team.owner_id == user.id:
         return
     await authz.require(session, user, authz.Permission.TEAM_UPDATE)
@@ -64,6 +68,14 @@ async def _team_reads(session: AsyncSession, teams: list[Team], user) -> list[Te
         owns = team.owner_id == user.id
         read.can_manage = owns or user.id in read.managers or authz.holds_base(permissions, authz.Permission.TEAM_UPDATE)
         read.can_delete = owns or authz.holds_base(permissions, authz.Permission.TEAM_DELETE)
+        try:
+            require_key_permission(user, authz.Permission.TEAM_UPDATE)
+        except ForbiddenError:
+            read.can_manage = False
+        try:
+            require_key_permission(user, authz.Permission.TEAM_DELETE)
+        except ForbiddenError:
+            read.can_delete = False
         reads.append(read)
     return reads
 
@@ -159,6 +171,7 @@ async def delete_team(team_id: uuid.UUID, session: Session, user: CurrentUser) -
     """Delete a team (spec 87). Owner or a team.delete holder; 409 while the team
     still grants access to any project."""
     team = await service.get_team(session, team_id)
+    require_key_permission(user, authz.Permission.TEAM_DELETE)
     if team.owner_id != user.id:
         await authz.require(session, user, authz.Permission.TEAM_DELETE)
     await service.delete_team(session, team_id, actor_id=user.id)
@@ -171,7 +184,7 @@ async def read_stewardship(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> TeamStewardshipRead:
     team = await service.get_team(session, team_id)
-    await _require_own(session, user, team)
+    await _require_own(session, user, team, writing=False)
     return await service.stewardship_page(session, team, limit=limit, offset=offset)
 
 
@@ -184,7 +197,7 @@ async def list_steward_candidates(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[TeamPersonChoice]:
     team = await service.get_team(session, team_id)
-    await _require_own(session, user, team)
+    await _require_own(session, user, team, writing=False)
     rows, total = await service.steward_candidates(session, team, purpose=purpose, q=q, limit=limit, offset=offset)
     response.headers[TOTAL_COUNT_HEADER] = str(total)
     return rows
@@ -255,7 +268,7 @@ async def list_member_candidates(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[TeamPersonChoice]:
     team = await service.get_team(session, team_id)
-    await _require_manage(session, user, team)
+    await _require_manage(session, user, team, writing=False)
     rows, total = await service.candidate_page(session, team_id, q=q, limit=limit, offset=offset)
     response.headers[TOTAL_COUNT_HEADER] = str(total)
     return rows
@@ -298,7 +311,7 @@ async def list_group_candidates(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[TeamGroupChoice]:
     team = await service.get_team(session, team_id)
-    await _require_manage(session, user, team)
+    await _require_manage(session, user, team, writing=False)
     rows, total = await service.group_page(session, team_id, candidates=True, q=q, limit=limit, offset=offset)
     response.headers[TOTAL_COUNT_HEADER] = str(total)
     return rows
@@ -351,4 +364,25 @@ async def team_access(team_id: uuid.UUID, session: Session, user: CurrentUser) -
             ResourceTypeAccessRead.model_validate(s, from_attributes=True).model_dump(mode="json")
             for s in resources
         ],
+    }
+
+
+@team_router.get("/{team_id}/access-impact")
+async def team_access_impact(team_id: uuid.UUID, session: Session, user: CurrentUser):
+    """Stewards need the reach of a membership change without private resource titles."""
+    team = await service.get_team(session, team_id)
+    await _require_manage(session, user, team, writing=False)
+    from radd.modules.auth import grants
+    from radd.modules.access import inspect
+    from radd.clock import utcnow
+
+    rows = [g for g in await grants.grants_for_subject(session, team_id=team_id)
+            if g.expires_at is None or g.expires_at > utcnow()]
+    sections = await inspect.subject_access(session, team_ids=[team_id])
+    return {
+        "roles": len(rows),
+        "global_roles": sum(g.project_id is None and g.space_id is None for g in rows),
+        "projects": len({g.project_id for g in rows if g.project_id}),
+        "spaces": len({g.space_id for g in rows if g.space_id}),
+        "resource_rules": [{"label": s.label, "count": sum(r.expires_at is None or r.expires_at > utcnow() for r in s.rows)} for s in sections if s.rows],
     }

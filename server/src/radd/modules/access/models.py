@@ -50,3 +50,15 @@ class AccessGrant(Base, TimestampMixin):
     project_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"), index=True
     )
+
+
+class AccessRestriction(Base):
+    """Explicit closed mode survives the expiry/removal of individual allows."""
+    __tablename__ = "access_restrictions"
+    __table_args__ = (UniqueConstraint("resource_type", "resource_id", "access", "project_id",
+        name="uq_access_restriction_scope", postgresql_nulls_not_distinct=True),)
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    resource_type: Mapped[str] = mapped_column(String(40))
+    resource_id: Mapped[str] = mapped_column(String(100))
+    access: Mapped[str] = mapped_column(String(20))
+    project_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))

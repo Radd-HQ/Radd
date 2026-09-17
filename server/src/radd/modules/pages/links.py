@@ -53,7 +53,7 @@ async def link_item(
     if item is None:
         raise NotFoundError("item", item_key)
     project = await projects_service.get_project(session, item.project_id)
-    await authz.require(session, actor, authz.Permission.ITEM_READ, project=project)
+    await items_service.require_readable_item(session, item.id, actor)
     existing = await session.get(ItemPageLink, (item.id, page.id))
     if existing is not None and not existing.derived:
         raise ConflictError("page_link", item_key)
@@ -138,6 +138,12 @@ async def linked_items(
             continue
         if not authz.holds_base(permissions.get(item.project_id, frozenset()), authz.Permission.ITEM_READ):
             continue
+        from radd.modules.items.service.visibility import ensure_item_relation
+        from radd.exceptions import ForbiddenError
+        try:
+            await ensure_item_relation(session, actor, item, permissions[item.project_id], authz.Permission.ITEM_READ)
+        except (ForbiddenError, NotFoundError):
+            continue
         project = projects[item.project_id]
         state = states.get(item.state_id)
         results.append(
@@ -153,7 +159,7 @@ async def linked_items(
     return sorted(results, key=lambda linked: linked.key)
 
 
-async def pages_for_item(session: AsyncSession, item_id: uuid.UUID) -> list[ItemPageRef]:
+async def pages_for_item(session: AsyncSession, item_id: uuid.UUID, *, actor=None) -> list[ItemPageRef]:
     """Live (non-archived) pages linked to an item — the issue page's Docs row."""
     rows = await session.execute(
         select(Page, PageSpace.name)
@@ -162,9 +168,14 @@ async def pages_for_item(session: AsyncSession, item_id: uuid.UUID) -> list[Item
         .where(ItemPageLink.item_id == item_id, Page.archived_at.is_(None))
         .order_by(Page.title)
     )
+    pairs = rows.all()
+    if actor is not None:
+        from .page_access import readable_page_ids
+        allowed = await readable_page_ids(session, actor, [page for page, _ in pairs])
+        pairs = [(page, name) for page, name in pairs if page.id in allowed]
     return [
         ItemPageRef(
             page_id=page.id, space_id=page.space_id, title=page.title, space_name=space_name
         )
-        for page, space_name in rows.all()
+        for page, space_name in pairs
     ]

@@ -38,6 +38,7 @@ from .schemas import (
 )
 from pydantic import BaseModel
 
+from radd.modules.access.schemas import AccessGrantExpiry
 from .types import (
     AuthEntity,
     GrantScopeKind,
@@ -114,8 +115,10 @@ async def assignable_role_choices(
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
     value: Annotated[str | None, Query(max_length=200)] = None,
+    project_id: uuid.UUID | None = None,
+    space_id: uuid.UUID | None = None,
 ) -> list[ChoiceRead]:
-    rows, total = await role_options.list_options(session, user, q=q, limit=limit, offset=offset, value=value, assignable=True)
+    rows, total = await role_options.list_options(session, user, q=q, limit=limit, offset=offset, value=value, assignable=True, project_id=project_id, space_id=space_id)
     response.headers[TOTAL_COUNT_HEADER] = str(total)
     return rows
 
@@ -282,7 +285,7 @@ async def replace_global_grants(
     role_id: uuid.UUID, data: GlobalGrantsUpdate, session: Session, user: CurrentUser
 ) -> list[GlobalGrantRead]:
     await authz.require(session, user, Permission.ROLE_UPDATE)
-    rows = await grants.replace_grants(session, role_id, data.grants, actor_id=user.id)
+    rows = await grants.replace_grants(session, role_id, data.grants, actor_id=user.id, expected_grant_ids=data.expected_grant_ids)
     return [GlobalGrantRead.model_validate(g) for g in rows]
 
 
@@ -537,3 +540,26 @@ async def permission_catalog(session: Session, user: CurrentUser) -> list[Permis
             )
         )
     return catalog
+
+
+
+@role_grant_router.patch("/{grant_id}/expiry", response_model=GlobalGrantRead)
+async def change_role_grant_expiry(grant_id: uuid.UUID, data: AccessGrantExpiry, session: Session, user: CurrentUser):
+    from .models import GlobalRoleGrant
+    from radd.exceptions import NotFoundError
+
+    grant = await session.get(GlobalRoleGrant, grant_id)
+    if grant is None:
+        raise NotFoundError("role grant", grant_id)
+    role = await roles.get_role(session, grant.role_id)
+    if not await authz.holds(session, user, Permission.ROLE_UPDATE):
+        if grant.project_id is None:
+            raise ForbiddenError("changing this grant requires role.update")
+        project = await projects_service.get_project(session, grant.project_id)
+        await authz.require(session, user, Permission.MEMBER_UPDATE, project=project)
+        await ensure_delegated_role_coverage(session, user, role, project)
+    previous_expiry = grant.expires_at
+    grant.expires_at = data.expires_at.replace(tzinfo=None) if data.expires_at else None
+    await session.flush()
+    await grants._emit(session, role.key, grant, "expiry changed", user.id, previous_expiry=previous_expiry)
+    return GlobalGrantRead.model_validate(grant)

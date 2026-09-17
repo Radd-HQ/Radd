@@ -13,11 +13,12 @@ import { ErrorText } from "../ErrorText";
 import { ListSearchInput } from "../ListSearchInput";
 import { DirectoryPager } from "../DirectoryPager";
 import { GrantScopedRoleDialog } from "./GrantScopedRoleDialog";
+import { GrantExpiryButton } from "./GrantExpiryButton";
 import { formatDate } from "../../lib/dates";
 
 /** Direct grants in one space. Global grants remain on the global role surface. */
-export function ScopedAccessPanel({ scopeId, scopeName, kind, canGrant, canRevoke }: {
-  scopeId: string; scopeName: string; kind: "space" | "project"; canGrant: boolean; canRevoke: boolean;
+export function ScopedAccessPanel({ scopeId, scopeName, kind, canGrant, canRevoke, canRenew }: {
+  scopeId: string; scopeName: string; kind: "space" | "project"; canGrant: boolean; canRevoke: boolean; canRenew: boolean;
 }) {
   const queryClient = useQueryClient();
   const grants = useDirectory(`${kind}:${scopeId}`, GRANTS_PAGE_SIZE, (q, page) => kind === "space" ? spaceGrantsPageQuery(scopeId, q, page) : projectGrantsPageQuery(scopeId, q, page));
@@ -54,12 +55,13 @@ export function ScopedAccessPanel({ scopeId, scopeName, kind, canGrant, canRevok
             </span>
             {grant.subject_active === false && <span className="text-xs text-fg-muted">Inactive account</span>}
             {grant.expires_at && <span className="text-xs text-fg-muted" title={grant.expires_at}>{grant.expired ? "Expired" : "Expires"} {formatDate(grant.expires_at)}</span>}
+            {canRenew && <GrantExpiryButton path={`${ApiPath.roleGrants}/${grant.id}/expiry`} onSaved={invalidate} />}
             {canRevoke && <IconButton danger onClick={() => revoke.mutate(grant.id)} disabled={revoke.isPending} aria-label="Revoke grant" className="ml-auto"><X size={13} aria-hidden /></IconButton>}
           </li>;
         })}</ul>}
     </div>
     <DirectoryPager {...grants} onPage={grants.setPage} label={`${kind} grants`} />
-    <p className="mt-2 flex items-start gap-1 text-[11px] text-fg-faint"><Globe size={10} className="mt-0.5 shrink-0" aria-hidden />Instance-wide roles apply here too and are managed under Roles.</p>
+    <p className="mt-2 flex items-start gap-1 text-[11px] text-fg-faint"><Globe size={10} className="mt-0.5 shrink-0" aria-hidden />This list shows direct grants only. Instance-wide roles, team membership and nested directory groups can also provide access. Use the person’s access inspector to review those sources.</p>
     {revoke.isError && <div role="alert"><ErrorText error={revoke.error} /></div>}
     {granting && <GrantScopedRoleDialog scopeId={scopeId} scopeName={scopeName} kind={kind} onClose={() => setGranting(false)} onGranted={invalidate} />}
   </section>;

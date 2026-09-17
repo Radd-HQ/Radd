@@ -17,6 +17,7 @@ REPORTER — an identity check, not a permission — so a requester can share
 their own ticket. Flush, never commit; cross-module via public service fns.
 """
 
+from radd.modules.items.service.visibility import require_key_item_permission
 import uuid
 
 from sqlalchemy import select
@@ -156,11 +157,16 @@ async def list_participants(
 ) -> ItemParticipantsRead:
     item, project, permissions = await _item_project(session, item_id, actor)
     reads = await _reads(session, await _rows(session, item_id))
+    can_manage = _can_manage(permissions, actor, item)
+    try:
+        await require_key_item_permission(session, actor, item, Permission.ITEM_UPDATE)
+    except ForbiddenError:
+        can_manage = False
     return ItemParticipantsRead(
         users=[read.user for read in reads if read.user],
         teams=[read.team for read in reads if read.team],
         rows=reads,
-        can_manage=_can_manage(permissions, actor, item),
+        can_manage=can_manage,
     )
 
 
@@ -168,6 +174,7 @@ async def add_participant(
     session: AsyncSession, item_id: uuid.UUID, data: ParticipantAdd, actor: User
 ) -> ParticipantRow:
     item, project, permissions = await _item_project(session, item_id, actor)
+    await require_key_item_permission(session, actor, item, Permission.ITEM_UPDATE)
     if not _can_manage(permissions, actor, item):
         raise ForbiddenError(
             "adding participants requires item.update or being the item's reporter"
@@ -216,10 +223,12 @@ async def remove_participant(
         project = await projects_service.get_project(session, item.project_id)
     else:
         item, project, permissions = await _item_project(session, item_id, actor)
+        await require_key_item_permission(session, actor, item, Permission.ITEM_UPDATE)
         if not _can_manage(permissions, actor, item):
             raise ForbiddenError(
                 "removing participants requires item.update or being the item's reporter"
             )
+    await require_key_item_permission(session, actor, item, Permission.ITEM_UPDATE)
     read = (await _reads(session, [row]))[0]
     await session.delete(row)
     await session.flush()

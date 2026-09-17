@@ -25,7 +25,9 @@ async def _require_item_perm(
     # atom layers on top of the same resolution.
     _item, project, _perms = await items_service.require_readable_item(session, item_id, user)
     if permission is not authz.Permission.ITEM_READ:
-        await authz.require(session, user, permission, project=project)
+        permissions = await authz.require(session, user, permission, project=project)
+        from radd.modules.items.service.visibility import ensure_item_relation
+        await ensure_item_relation(session, user, _item, permissions, permission)
 
 
 @router.post("/items/{item_id}/vcs-links", response_model=VcsLinkRead, status_code=201)

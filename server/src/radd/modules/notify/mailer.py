@@ -65,6 +65,7 @@ from radd.modules.events import service as events
 from radd.modules.mailintake.types import MailFailureReport
 
 from . import lines, retry, service
+from .authorization import notification_readable
 from .models import Notification
 from .types import NotificationType
 
@@ -101,7 +102,7 @@ async def run_batch(session: AsyncSession) -> int:
     stamped: list[uuid.UUID] = []
     for row in rows:
         user = users.get(row.user_id)
-        if not service.mailable_user(user):
+        if not service.mailable_user(user) or not await notification_readable(session, row, user):
             # Inactive, address-less, a spec-113 SERVICE account or the system
             # actor (RADD-996) — none of them a mailbox. Nowhere to send it;
             # never retry it.

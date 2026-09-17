@@ -9,6 +9,7 @@ import { Button } from "../Button";
 import { Choices } from "../DirectoryChoices";
 import { ErrorText } from "../ErrorText";
 import { Modal } from "../Modal";
+import { TextField } from "../TextField";
 import { Select } from "../Select";
 
 const subjectResources = { person: OptionResource.person, team: OptionResource.teamReference, group: OptionResource.group };
@@ -19,6 +20,7 @@ export function GrantScopedRoleDialog({ scopeId, scopeName, kind: scopeKind, onC
   scopeId: string; scopeName: string; kind: "space" | "project"; onClose: () => void; onGranted: () => void;
 }) {
   const perms = usePermissions();
+  const [expiresAt, setExpiresAt] = useState("");
   const [kind, setKind] = useState<SubjectKind>("person");
   const [subject, setSubject] = useState<DirectoryOption>();
   const [role, setRole] = useState<DirectoryOption>();
@@ -26,6 +28,7 @@ export function GrantScopedRoleDialog({ scopeId, scopeName, kind: scopeKind, onC
   const canReadRoles = perms.global(Permission.roleRead);
   const grant = useMutation({
     mutationFn: () => api.post(ApiPath.roleGrants, {
+      expires_at: expiresAt ? new Date(expiresAt).toISOString() : undefined,
       role_id: role!.value, ...(scopeKind === "space" ? { space_ids: [scopeId] } : { project_ids: [scopeId] }),
       ...(kind === "team" ? { team_id: subject!.value } : kind === "group" ? { group_id: subject!.value } : { user_id: subject!.value }),
     } satisfies RoleGrantCreate),
@@ -53,10 +56,11 @@ export function GrantScopedRoleDialog({ scopeId, scopeName, kind: scopeKind, onC
         {!canReadRoles && <p className="text-xs text-fg-muted">You need access to the role directory to choose a role.</p>}
       </div>
       <p className="text-xs text-fg-muted">This role applies in {scopeName} only.</p>
+      <TextField type="datetime-local" label="Expires (optional)" value={expiresAt} onChange={e => setExpiresAt(e.target.value)} hint="Uses your local time. Empty means permanent." />
       {grant.isError && <div role="alert"><ErrorText error={grant.error} /></div>}
       <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>Cancel</Button><Button type="submit" disabled={!role || !subject || grant.isPending}>{grant.isPending ? "Granting…" : "Grant"}</Button></div>
     </form>
     {picker === "subject" && <Choices resource={subjectResources[kind]} selected={subject?.value} onSelect={value => { setSubject(value); setPicker(undefined); }} onClose={() => setPicker(undefined)} />}
-    {picker === "role" && <Choices resource={OptionResource.role} selected={role?.value} onSelect={value => { setRole(value); setPicker(undefined); }} onClose={() => setPicker(undefined)} />}
+    {picker === "role" && <Choices resource={OptionResource.assignableRole} scope={scopeKind === "project" ? { project_id: scopeId } : { space_id: scopeId }} selected={role?.value} onSelect={value => { setRole(value); setPicker(undefined); }} onClose={() => setPicker(undefined)} />}
   </Modal>;
 }

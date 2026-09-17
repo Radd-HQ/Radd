@@ -538,6 +538,7 @@ class GlobalGrantsUpdate(BaseModel):
     hold this role instance-wide, replaced atomically."""
 
     grants: list[GlobalGrantEntry] = Field(default_factory=list, max_length=100)
+    expected_grant_ids: list[uuid.UUID] = Field(max_length=100)
 
 
 class GlobalGrantRead(BaseModel):

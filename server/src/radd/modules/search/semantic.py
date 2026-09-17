@@ -96,6 +96,8 @@ async def _docs(session: AsyncSession, user: User, q: str, candidates) -> list[S
     found = await pages_search.pages_by_ids(
         session, [page_id for page_id, _ in ranked], space_ids=readable
     )
+    from radd.modules.pages.service import drop_restricted_results
+    found = await drop_restricted_results(session, user, found)
     pages = {row.page_id: row for row in found}
     results: list[SemanticDoc] = []
     for page_id, distance in ranked:

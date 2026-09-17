@@ -364,13 +364,14 @@ def test_pages_available_when_the_pages_plugin_is_registered():
 async def test_doc_handler_calls_the_pages_service(monkeypatch):
     seen = {}
 
-    async def get_page(session, page_id):
+    async def get_page(session, actor, page_id, permission):
+        assert permission == "page.read"
         seen["page_id"] = page_id
         return {"title": "Farm runbook"}
 
-    from radd.modules.pages import service as pages_service
+    from radd.modules.pages import page_access
 
-    monkeypatch.setattr(pages_service, "get_page", get_page)
+    monkeypatch.setattr(page_access, "guard_page", get_page)
     page_id = "0d9f2c66-1cd5-4b25-9a90-1b1f4a2f3c11"
     result = await tools.call_tool(
         None, None, McpTool.GET_PAGE.value, {"id": page_id}

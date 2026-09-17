@@ -13,6 +13,7 @@ import { ErrorText } from "../ErrorText";
 import { IconButton } from "../IconButton";
 import { QueryError } from "../QueryError";
 import { Spinner } from "../Spinner";
+import { GrantExpiryButton } from "./GrantExpiryButton";
 import { GrantRoleDialog } from "./GrantRoleDialog";
 import { formatDate } from "../../lib/dates";
 
@@ -55,6 +56,7 @@ export function RoleGrantsSection({ subject, canManage }: { subject: GrantSubjec
             : grant.space_id !== null ? <span className="inline-flex min-w-0 max-w-full items-center gap-1 rounded bg-elevated px-1.5 py-px text-xs"><BookOpen size={10} className="shrink-0" aria-hidden /><span className="truncate">{grant.scope_label ?? "Unavailable wiki space"}</span></span>
               : <span className="inline-flex items-center gap-1 rounded border border-subtle px-1.5 py-px text-xs text-fg-secondary"><Globe size={10} aria-hidden />Global</span>}
           {grant.expires_at && <span className="text-xs text-fg-muted">{Date.parse(grant.expires_at) <= Date.now() ? "Expired" : "Expires"} {formatDate(grant.expires_at)}</span>}
+          {canManage && <GrantExpiryButton path={`${ApiPath.roleGrants}/${grant.id}/expiry`} onSaved={() => void invalidate()} />}
           {canManage && <IconButton danger className="ml-auto" disabled={revoke.isPending} aria-label="Revoke grant" onClick={() => revoke.mutate(grant.id)}><X size={13} aria-hidden /></IconButton>}
         </li>)}</ul>}
     </div>

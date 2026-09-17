@@ -15,11 +15,11 @@ const nouns = { [OptionResource.state]: "state names", [OptionResource.release]:
   [OptionResource.issueType]: "issue types", [OptionResource.form]: "intake forms", [OptionResource.user]: "people", [OptionResource.team]: "team names", [OptionResource.role]: "roles", [OptionResource.space]: "wiki spaces", [OptionResource.person]: "people", [OptionResource.teamReference]: "teams", [OptionResource.group]: "directory groups", [OptionResource.assignableRole]: "roles" };
 
 /** Complete directory via search/pages, with only one window mounted. */
-export function Choices({ resource, selected = "", onSelect, onClose, presets = [], canBrowse = true, selectedValues = [] }: {
-  resource: OptionResourceValue; selected?: string; presets?: DirectoryOption[]; canBrowse?: boolean; selectedValues?: string[];
+export function Choices({ resource, selected = "", onSelect, onClose, presets = [], canBrowse = true, selectedValues = [], scope = {} }: {
+  scope?: Record<string, string>; resource: OptionResourceValue; selected?: string; presets?: DirectoryOption[]; canBrowse?: boolean; selectedValues?: string[];
   onSelect: (option: DirectoryOption) => void; onClose: () => void;
 }) {
-  const directory = useDirectory(resource, OPTIONS_PAGE_SIZE, (q, page) => ({ ...optionsPageQuery(resource, q, page), enabled: canBrowse }));
+  const directory = useDirectory(`${resource}:${JSON.stringify(scope)}`, OPTIONS_PAGE_SIZE, (q, page) => ({ ...optionsPageQuery(resource, q, page, scope), enabled: canBrowse }));
   return <Modal title={`Choose ${nouns[resource]}`} onClose={onClose}>
     {canBrowse && <TextField type="search" label={`Find ${nouns[resource]}`} value={directory.filter}
       onChange={event => directory.setFilter(event.target.value)} placeholder="Search…" />}

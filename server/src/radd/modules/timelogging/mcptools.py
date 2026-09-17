@@ -20,6 +20,7 @@ from radd.modules.auth import authz
 from radd.modules.auth.models import User
 from radd.modules.auth.types import Permission
 from radd.modules.items import service as items_service
+from radd.modules.projects import service as projects_service
 
 from . import categories as timelogging_categories, service as timelogging_service, timesheet
 from .schemas import WorklogCreate, WorklogUpdate
@@ -39,6 +40,8 @@ async def _log_work(session: AsyncSession, actor: User, args: Mapping[str, Any])
     from datetime import date as _date
 
     read = await items_service.get_item_by_key(session, str(args["key"]), actor=actor)
+    project = await projects_service.get_project(session, read.project_id)
+    await authz.require(session, actor, Permission.WORKLOG_WRITE, project=project)
     worked_on = _date.fromisoformat(str(args["worked_on"])) if args.get("worked_on") else None
     category_id = (
         await _category_id(session, str(args["category"])) if args.get("category") else None

@@ -125,7 +125,7 @@ export function MirroredGroupsSection({ directoryReady }: { directoryReady: bool
                           {group.directory_missing_since ? (
                             <span
                               className="inline-flex items-center gap-1 rounded border border-amber-500/40 px-1.5 py-px text-[11px] text-amber-400"
-                              title={`Stopped resolving in the directory ${formatDateTime(group.directory_missing_since)} — grants kept, removals held. An AD outage must not become a permission outage.`}
+                              title={`Missing since ${formatDateTime(group.directory_missing_since)}. Memberships and access are retained until reviewed.`}
                             >
                               <AlertTriangle size={11} aria-hidden />
                               missing in AD
@@ -139,6 +139,7 @@ export function MirroredGroupsSection({ directoryReady }: { directoryReady: bool
                         <tr key={`${group.id}-roles`}>
                           <td className={settingsTableClasses.cell} />
                           <td className={settingsTableClasses.cell} colSpan={5}>
+                            {group.directory_missing_since && <p className="mb-3 text-xs text-status-warning-ink">Missing since {formatDateTime(group.directory_missing_since)}. Existing members still receive this group’s access. Restore the original directory identity for a renamed group, or explicitly revoke its roles and remove its team links if it was deleted. Directory outages do not automatically remove access; review resource deny rules before removing membership.</p>}
                             <RoleGrantsSection
                               subject={{ groupId: group.id }}
                               canManage={perms.global(Permission.roleUpdate)}

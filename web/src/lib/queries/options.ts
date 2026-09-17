@@ -25,11 +25,11 @@ const tags = {
 const optionMeta = (resource: OptionResourceValue) => resource === OptionResource.team || resource === OptionResource.teamReference
   ? entityMeta(Entity.team, Entity.project, Entity.role, Entity.member, Entity.group)
   : entityMeta(tags[resource], Entity.project, Entity.role);
-export const optionsPageQuery = (resource: OptionResourceValue, q = "", page = 0) => queryOptions({
-  queryKey: queryKeys.optionsPage(resource, q.trim(), page),
+export const optionsPageQuery = (resource: OptionResourceValue, q = "", page = 0, scope: Record<string, string> = {}) => queryOptions({
+  queryKey: [...queryKeys.optionsPage(resource, q.trim(), page), scope],
   meta: optionMeta(resource),
   queryFn: ({ signal }) => api.getPaged<DirectoryOption>(`/${resource}/options`, { signal, query: {
-    q: q.trim(), limit: String(OPTIONS_PAGE_SIZE), offset: String(page * OPTIONS_PAGE_SIZE),
+    ...scope, q: q.trim(), limit: String(OPTIONS_PAGE_SIZE), offset: String(page * OPTIONS_PAGE_SIZE),
   } }),
 });
 export const optionByValueQuery = (resource: OptionResourceValue, value: string) => queryOptions({

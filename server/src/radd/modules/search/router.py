@@ -62,7 +62,7 @@ async def search_deflect(
     # RADD-791: page.read is SPACE-scoped now, so "does this project's permission
     # set contain it" is no longer a question that means anything. Deflect into
     # the spaces this reader may actually open.
-    docs = await deflect.deflect_docs(session, q, space_ids=await _readable_space_ids(session, user))
+    docs = await deflect.deflect_docs(session, q, space_ids=await _readable_space_ids(session, user), actor=user)
     return DeflectResponse(
         docs=docs, items=await deflect.deflect_items(session, project, q, actor=user)
     )

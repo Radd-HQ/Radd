@@ -31,6 +31,10 @@ class AccessGrantDirectoryRead(AccessGrantRead):
     expired: bool = False
 
 
+class AccessGrantExpiry(BaseModel):
+    expires_at: UtcDatetime | None
+
+
 class AccessGrantCreate(BaseModel):
     """POST /grants — grant a subject an access on a resource, at global scope
     (empty project_ids) or to one/more projects (one grant row per project)."""

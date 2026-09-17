@@ -10,6 +10,7 @@ dashboard has an owner from birth. Widget CRUD + config validation live in
 widgets.py.
 """
 
+from radd.modules.auth.principals import require_key_permission, key_allows
 import uuid
 
 from sqlalchemy import select
@@ -196,8 +197,8 @@ async def _hydrate(
                     for g in allowed_shares
                 ],
                 shared=dashboard.global_access is not None or (len(allowed_shares) > 0 if include_shares else states[dashboard.id][1]),
-                can_edit=can_manage or grant in (ShareLevel.EDITOR, ShareLevel.OWNER),
-                can_manage=can_manage,
+                can_edit=(can_manage or grant in (ShareLevel.EDITOR, ShareLevel.OWNER)) and key_allows(actor, Permission.DASHBOARD_UPDATE),
+                can_manage=can_manage and key_allows(actor, Permission.DASHBOARD_UPDATE),
                 position=dashboard.position,
                 widgets=[
                     WidgetRead(
@@ -262,6 +263,7 @@ async def require_edit(
     Visible-but-viewer → 403. Public within the module (widgets.py gates on it)."""
     await _lock_dashboard(session, str(dashboard_id))
     dashboard, grant = await _load_visible(session, dashboard_id, actor)
+    require_key_permission(actor, Permission.DASHBOARD_UPDATE)
     if dashboard.owner_id == actor.id or grant in (ShareLevel.EDITOR, ShareLevel.OWNER):
         await authz.require_member(session, actor)  # RADD-788
         return dashboard
@@ -271,12 +273,13 @@ async def require_edit(
 
 
 async def _require_manage(
-    session: AsyncSession, dashboard_id: uuid.UUID, actor: User
+    session: AsyncSession, dashboard_id: uuid.UUID, actor: User, permission: Permission = Permission.DASHBOARD_UPDATE
 ) -> Dashboard:
     """Sharing changes + delete + transfer: the owner or an OWNER-level grantee
     (co-owner) — editor grantees edit content, they don't re-share or delete."""
     await _lock_dashboard(session, str(dashboard_id))
     dashboard, grant = await _load_visible(session, dashboard_id, actor)
+    require_key_permission(actor, permission)
     await authz.require_member(session, actor)
     if dashboard.owner_id == actor.id or grant is ShareLevel.OWNER:
         return dashboard
@@ -295,6 +298,7 @@ async def _can_manage_dashboard(
     except (ValueError, NotFoundError):
         return False
     try:
+        require_key_permission(actor, Permission.DASHBOARD_UPDATE)
         await authz.require_member(session, actor)
     except ForbiddenError:
         return False
@@ -385,6 +389,7 @@ async def create_dashboard(
     session: AsyncSession, data: DashboardCreate, actor: User
 ) -> DashboardRead:
     # Invalid input rejects before permission checks (never-valid beats no-rights).
+    require_key_permission(actor, Permission.DASHBOARD_CREATE)
     global_access = _validate_global_access(data.global_access)
     # Server-wide visibility is a broadcast — the dashboard.create atom gates
     # it. Sharing with specific people/teams is a personal act: membership suffices.
@@ -561,7 +566,7 @@ async def _delete_user_grants(
 async def delete_dashboard(
     session: AsyncSession, dashboard_id: uuid.UUID, actor: User
 ) -> None:
-    dashboard = await _require_manage(session, dashboard_id, actor)
+    dashboard = await _require_manage(session, dashboard_id, actor, Permission.DASHBOARD_DELETE)
     await emit(session, DashboardEvent.DELETED, dashboard, actor)
     await session.delete(dashboard)
 

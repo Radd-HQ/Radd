@@ -122,3 +122,15 @@ async def ensure_principals(session) -> None:
         row.source = UserSource.PRINCIPAL.value
         row.instance_role = InstanceRole.MEMBER.value
     await session.flush()
+
+
+def require_key_permission(user: User, permission: Permission, project_id: uuid.UUID | None = None) -> None:
+    """Intrinsic account rights remain bounded by an explicitly scoped credential."""
+    scope = getattr(user, "token_scope", None)
+    if scope is not None and not scope.narrow(frozenset({permission}), project_id):
+        raise ForbiddenError(f"API key scope requires {permission}")
+
+
+def key_allows(user, permission, project_id=None):
+    scope = getattr(user, "token_scope", None)
+    return scope is None or bool(scope.narrow(frozenset({permission}), project_id))

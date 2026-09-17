@@ -19,6 +19,7 @@ export function ProjectAccessSettingsPage({ projectId }: { projectId?: string })
           <PublicAccessCard project={project} canManage={perms.project(project, Permission.projectManage)} />
           <ScopedAccessPanel key={project.id} kind="project" scopeId={project.id} scopeName={project.name}
             canGrant={perms.global(Permission.roleUpdate) || perms.project(project, Permission.memberCreate)}
+            canRenew={perms.global(Permission.roleUpdate) || perms.project(project, Permission.memberUpdate)}
             canRevoke={perms.global(Permission.roleUpdate) || perms.project(project, Permission.memberDelete)} />
         </div>}
   </SettingsPage>;

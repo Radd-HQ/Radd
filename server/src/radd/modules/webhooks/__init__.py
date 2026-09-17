@@ -12,7 +12,7 @@ plugin = RaddPlugin(
         PermissionSpec(
             "webhook.manage",
             "global",
-            "Manage webhook endpoints (global).",
+            "Manage endpoints that export instance event payloads to external services.",
             implied_by=("global.manage",),
         ),
     ),

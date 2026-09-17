@@ -128,6 +128,16 @@ async def run_batch(session: AsyncSession) -> int:
         pending = [
             n for n in notifications if n.read_at is None and n.created_at >= cutoff
         ]
+        if service.mailable_user(user):
+            from .authorization import notification_readable
+
+            allowed = []
+            for notification in pending:
+                if await notification_readable(session, notification, user):
+                    allowed.append(notification)
+                else:
+                    notification.emailed_at = now
+            pending = allowed
         # Opted-out users — and, since RADD-996, service accounts and the system
         # actor — still get their rows stamped below (the backlog drains).
         if user_id not in digest_off and service.mailable_user(user) and pending:

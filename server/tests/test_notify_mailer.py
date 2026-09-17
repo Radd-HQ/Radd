@@ -287,7 +287,12 @@ async def _channels(
 
 
 async def _notify(db, user: User, type_: NotificationType, item, **detail) -> None:
-    """One notification row of `type_`, addressed at the world's item."""
+    """One eligible notification row, addressed at the world's item."""
+    if not await db.scalar(select(grants.GlobalRoleGrant.id).where(
+        grants.GlobalRoleGrant.user_id == user.id,
+        grants.GlobalRoleGrant.project_id == item.project_id,
+    )):
+        await _grant(db, user, BuiltinRoleKey.MEMBER, item.project_id)
     await notify_service.create_notification(
         db,
         user_id=user.id,
@@ -350,6 +355,7 @@ async def test_a_notification_with_no_body_to_quote_still_gets_a_readable_email(
     _agent, project, item = world
     watcher = await _user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
     key = f"{project.key}-{item.number}"
+    await _grant(db, watcher, BuiltinRoleKey.MEMBER, project.id)
     await notify_service.create_notification(
         db,
         user_id=watcher.id,
@@ -1007,6 +1013,7 @@ async def test_without_mailintake_the_env_relay_still_sends(
     monkeypatch.setattr(settings, "smtp_starttls", False)
     monkeypatch.setattr(settings, "smtp_from_address", RELAY_FROM)
     watcher = await _user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
+    await _grant(db, watcher, BuiltinRoleKey.MEMBER, item.project_id)
     await notify_service.create_notification(
         db,
         user_id=watcher.id,

@@ -44,6 +44,7 @@ class ParentBinding:
     #: form, a binding that looks complete and silently leaks. Failing loudly at
     #: import is the better failure.
     deleted_event: str
+    space_id_of: ProjectOf | None = None
 
 
 _BINDINGS: dict[str, ParentBinding] = {}

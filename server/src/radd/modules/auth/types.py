@@ -200,6 +200,8 @@ class Permission(StrEnum):
     # spec-57 ownership model from birth, so editing and deleting are decided by
     # owner/editor grants and no atom was ever consulted.
     DASHBOARD_CREATE = "dashboard.create"
+    DASHBOARD_UPDATE = "dashboard.update"
+    DASHBOARD_DELETE = "dashboard.delete"
 
 
 class CrudAction(StrEnum):

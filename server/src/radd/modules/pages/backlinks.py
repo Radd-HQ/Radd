@@ -106,7 +106,7 @@ async def reindex(session: AsyncSession, page: Page) -> None:
     await session.flush()
 
 
-async def backlink_reads(session: AsyncSession, page_id: uuid.UUID) -> list[PageBacklink]:
+async def backlink_reads(session: AsyncSession, page_id: uuid.UUID, *, actor=None) -> list[PageBacklink]:
     """Live (non-archived) pages linking here, newest edit first.
 
     Joined to the space because a backlink can come from a different one, and a
@@ -120,6 +120,11 @@ async def backlink_reads(session: AsyncSession, page_id: uuid.UUID) -> list[Page
         .where(PageLink.target_page_id == page_id, Page.archived_at.is_(None))
         .order_by(Page.updated_at.desc())
     )
+    pairs = rows.all()
+    if actor is not None:
+        from .page_access import readable_page_ids
+        allowed = await readable_page_ids(session, actor, [page for page, _ in pairs])
+        pairs = [(page, slug) for page, slug in pairs if page.id in allowed]
     return [
         PageBacklink(
             id=page.id,
@@ -129,7 +134,7 @@ async def backlink_reads(session: AsyncSession, page_id: uuid.UUID) -> list[Page
             space_slug=space_slug,
             updated_at=page.updated_at,
         )
-        for page, space_slug in rows.all()
+        for page, space_slug in pairs
     ]
 
 

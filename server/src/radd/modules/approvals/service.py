@@ -367,7 +367,9 @@ async def create_request(
     session: AsyncSession, item_id: uuid.UUID, data: ApprovalRequestCreate, actor: User
 ) -> ApprovalRequestRead:
     item, project, _perms = await items_service.require_readable_item(session, item_id, actor)
-    await authz.require(session, actor, Permission.ITEM_UPDATE, project=project)
+    permissions = await authz.require(session, actor, Permission.ITEM_UPDATE, project=project)
+    from radd.modules.items.service.visibility import ensure_item_relation
+    await ensure_item_relation(session, actor, item, permissions, Permission.ITEM_UPDATE)
     state = await workflow.get_state(session, data.to_state_id)
     if state.project_id != project.id:
         raise ConflictError(
@@ -456,6 +458,9 @@ async def vote(
 ) -> VoteResult:
     request = await _get_request(session, request_id)
     project = await _request_project(session, request)
+    from radd.modules.items.service.visibility import require_key_item_permission
+    item_for_key = await items_service.require_item(session, request.item_id)
+    await require_key_item_permission(session, actor, item_for_key, Permission.ITEM_UPDATE)
     if request.status != ApprovalStatus.PENDING.value:
         raise ConflictError(
             ApprovalEntity.REQUEST, reason=f"request is {request.status}, not pending"
@@ -559,6 +564,9 @@ async def cancel_request(
 ) -> None:
     request = await _get_request(session, request_id)
     project = await _request_project(session, request)
+    from radd.modules.items.service.visibility import require_key_item_permission
+    item_for_key = await items_service.require_item(session, request.item_id)
+    await require_key_item_permission(session, actor, item_for_key, Permission.ITEM_UPDATE)
     if request.status not in _LIVE:
         raise ConflictError(
             ApprovalEntity.REQUEST, reason=f"request is {request.status} — nothing to cancel"
@@ -600,6 +608,11 @@ async def pending_for_user(
     for request in requests:
         item = items_by_id.get(request.item_id)
         if item is None:
+            continue
+        try:
+            from radd.modules.items.service.visibility import require_key_item_permission
+            await require_key_item_permission(session, actor, item, Permission.ITEM_READ)
+        except ForbiddenError:
             continue
         for entry in request.approvers or []:
             entry_id = uuid.UUID(str(entry.get("id")))

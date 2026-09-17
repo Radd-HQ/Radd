@@ -77,11 +77,12 @@ async def subject_access(
     team_ids = set(team_ids)
     role_ids = set(role_ids)
     group_ids = set(group_ids)
+    from radd.modules.auth.principals import subject_user_ids
     conditions = []
     if user_id is not None:
         conditions.append(
             (AccessGrant.subject_type == GrantSubject.USER.value)
-            & (AccessGrant.subject_id == user_id)
+            & (AccessGrant.subject_id.in_(subject_user_ids(user_id)))
         )
     if team_ids:
         conditions.append(
@@ -117,6 +118,27 @@ async def subject_access(
             u.id: u.name
             for u in (await users_service.users_by_ids(session, granter_ids)).values()
         }
+    if user_id is not None:
+        from .registry import get_spec
+        from radd.modules.auth import grants as role_grants
+        from radd.exceptions import NotFoundError
+        applicable = []
+        for grant in grants:
+            if grant.subject_type == GrantSubject.ROLE:
+                spec = get_spec(grant.resource_type)
+                try:
+                    if spec and spec.roles_for:
+                        scoped_roles = await spec.roles_for(session, user_id, grant.resource_id)
+                    elif grant.project_id is not None:
+                        scoped_roles = await role_grants.granted_role_ids(session, user_id, grant.project_id)
+                    else:
+                        scoped_roles = role_ids
+                except NotFoundError:
+                    continue
+                if grant.subject_id not in scoped_roles:
+                    continue
+            applicable.append(grant)
+        grants = applicable
     by_type: dict[str, list[AccessGrant]] = {}
     for grant in grants:
         by_type.setdefault(grant.resource_type, []).append(grant)
@@ -173,6 +195,12 @@ def _subject_name(
         return role_names.get(grant.subject_id)
     if grant.subject_type == GrantSubject.GROUP.value:
         return group_names.get(grant.subject_id)
+    if grant.subject_type == GrantSubject.USER.value:
+        from radd.modules.auth.principals import ANYONE_ID, SIGNED_IN_ID
+        if grant.subject_id == ANYONE_ID:
+            return "Anyone"
+        if grant.subject_id == SIGNED_IN_ID:
+            return "Signed-in users"
     return None
 
 

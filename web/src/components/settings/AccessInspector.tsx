@@ -316,6 +316,7 @@ export function ResourceSections({
   const openTypes = sections.filter((s) => s.default_open).map((s) => s.label.toLowerCase());
   return (
     <div className="flex flex-col gap-1.5">
+      <p className="text-xs text-fg-muted">These are grant sources, not a guarantee of access. Parent permissions, restrictions, expiry and credential scopes are checked together when opening a resource. A role applies only where it is held.</p>
       {withRows.length === 0 ? (
         <p className="text-xs text-fg-muted">No resource grants name {subject}.</p>
       ) : (

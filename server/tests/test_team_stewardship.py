@@ -1,4 +1,5 @@
 """Steward windows preserve authority and unseen managers during edits."""
+from test_team_directory import team_reader_account
 import asyncio
 import uuid
 import httpx
@@ -27,7 +28,7 @@ async def test_steward_endpoints_follow_owner_global_gate(scope, allowed):
         team=Team(name=prefix,owner_id=actor.id if scope=='owner' else None);db.add(team);await db.flush()
         if scope=='manager':db.add(TeamManager(team_id=team.id,user_id=actor.id));await db.flush()
         scopes={'global':['team.read']}
-        if scope=='global':scopes['global'].append('team.update')
+        if scope in ('global','owner'):scopes['global'].append('team.update')
         if scope=='delete':scopes['global'].append('team.delete')
         if scope=='project':scopes['projects']={str(uuid.uuid4()):['team.update']}
         _,token=await auth.create_api_token(db,actor,TokenCreate(name='Test',scopes=scopes))
@@ -57,7 +58,8 @@ async def test_steward_pages_candidates_legacy_rows_and_manager_promotion():
         db.add_all([actor,*managers,*candidates,inactive,mail,service]);await db.flush()
         team=Team(name=prefix,owner_id=actor.id);db.add(team);await db.flush()
         db.add_all([TeamManager(team_id=team.id,user_id=p.id) for p in managers]);await db.flush()
-        _,token=await auth.create_api_token(db,actor,TokenCreate(name='Owner',scopes={'global':['team.read']}))
+        await team_reader_account(db,actor)
+        _,token=await auth.create_api_token(db,actor,TokenCreate(name='Owner',scopes={'global':['team.read','team.update']}))
         async def override():yield db
         app=create_app();app.dependency_overrides[get_session]=override
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://test',headers={'Authorization':f'Bearer {token}'}) as client:

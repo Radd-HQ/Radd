@@ -13,14 +13,14 @@ import uuid
 from collections import defaultdict
 from collections.abc import Iterable
 
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError, NotFoundError
 from radd.kernel import changes, registries
 from radd.modules.events import service as events
 
-from .models import GlobalRoleGrant
+from .models import GlobalRoleGrant, Role
 from .schemas import GlobalGrantEntry
 from .types import AuthEntity, AuthEvent, GrantScopeKind
 from radd.clock import utcnow
@@ -327,6 +327,7 @@ async def create_grant(
         raise ConflictError(
             AuthEntity.GLOBAL_GRANT, reason="a grant has at most one scope"
         )
+    await session.execute(select(Role.id).where(Role.id == role_id).with_for_update())
     role = await roles_service.get_role(session, role_id)
     if user_id is not None and user_id not in await users_service.users_by_ids(session, [user_id]):
         raise ConflictError(AuthEntity.GLOBAL_GRANT, reason=f"no such user {user_id}")
@@ -376,6 +377,7 @@ async def update_grant_role(
     grant = await session.get(GlobalRoleGrant, grant_id)
     if grant is None:
         raise NotFoundError(AuthEntity.GLOBAL_GRANT, grant_id)
+    await session.execute(select(Role.id).where(Role.id.in_({grant.role_id, role_id})).order_by(Role.id).with_for_update())
     old_role = await roles_service.get_role(session, grant.role_id)
     new_role = await roles_service.get_role(session, role_id)
     grant.role_id = new_role.id
@@ -394,6 +396,7 @@ async def delete_grant(
     grant = await session.get(GlobalRoleGrant, grant_id)
     if grant is None:
         raise NotFoundError(AuthEntity.GLOBAL_GRANT, grant_id)
+    await session.execute(select(Role.id).where(Role.id == grant.role_id).with_for_update())
     role = await roles_service.get_role(session, grant.role_id)
     await _emit(session, role.key, grant, "revoked", actor_id)
     await session.delete(grant)
@@ -442,11 +445,14 @@ async def _emit(
     actor_id: uuid.UUID | None,
     *,
     previous_role: str | None = None,
+    previous_expiry=None,
 ) -> None:
     # Spec 123: the grant as an added/removed entry on the role's history,
     # naming who and where; a role change is one removed + one added.
     description = await _grant_description(session, grant, role_key)
-    if action == "granted":
+    if action == "expiry changed":
+        diff = [{"field": "expires_at", "from": previous_expiry.isoformat() if previous_expiry else None, "to": grant.expires_at.isoformat() if grant.expires_at else None}]
+    elif action == "granted":
         diff = [{"field": "grants", "added": [description], "removed": []}]
     elif action == "revoked":
         diff = [{"field": "grants", "added": [], "removed": [description]}]
@@ -484,6 +490,7 @@ async def replace_grants(
     role_id: uuid.UUID,
     entries: list[GlobalGrantEntry],
     actor_id: uuid.UUID | None = None,
+    expected_grant_ids: list[uuid.UUID] | None = None,
 ) -> list[GlobalRoleGrant]:
     """Full-state replace of who holds this role GLOBALLY (the Roles page editor).
     Only global grants (project_id NULL) are touched — project-scoped grants are
@@ -493,6 +500,9 @@ async def replace_grants(
 
     from . import roles as roles_service, service as users_service
 
+    from .models import Role
+
+    await session.execute(select(Role.id).where(Role.id == role_id).with_for_update())
     role = await roles_service.get_role(session, role_id)
     seen: set[tuple[str, uuid.UUID]] = set()
     for entry in entries:
@@ -527,20 +537,25 @@ async def replace_grants(
             select(GlobalRoleGrant).where(GlobalRoleGrant.role_id == role_id, _unscoped())
         )
     )
+    if expected_grant_ids is not None and set(expected_grant_ids) != {r.id for r in previous_rows}:
+        raise ConflictError(AuthEntity.GLOBAL_GRANT, reason="Role holders changed; reload before saving")
     previous = [await _grant_description(session, row, role.key) for row in previous_rows]
-    await session.execute(
-        delete(GlobalRoleGrant).where(GlobalRoleGrant.role_id == role_id, _unscoped())
-    )
-    new_rows = [
-        GlobalRoleGrant(
-            role_id=role_id,
-            user_id=entry.user_id,
-            team_id=entry.team_id,
-            group_id=entry.group_id,
-        )
-        for entry in entries
-    ]
-    session.add_all(new_rows)
+    # Retained subjects keep their identity, expiry and original attribution.
+    # Saving another holder must never turn a temporary grant into a permanent one.
+    existing = {(r.user_id, r.team_id, r.group_id): r for r in previous_rows}
+    new_rows = []
+    for entry in entries:
+        key = (entry.user_id, entry.team_id, entry.group_id)
+        row = existing.pop(key, None)
+        if row is None:
+            row = GlobalRoleGrant(
+                role_id=role_id, user_id=entry.user_id, team_id=entry.team_id,
+                group_id=entry.group_id, granted_by=actor_id,
+            )
+            session.add(row)
+        new_rows.append(row)
+    for row in existing.values():
+        await session.delete(row)
     await session.flush()
     current = [await _grant_description(session, row, role.key) for row in new_rows]
     entry_diff = changes.collection_change("grants", previous, current)

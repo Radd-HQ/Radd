@@ -19,6 +19,8 @@ async def list_options(
     value: str | None = None,
     key: str | None = None,
     assignable: bool = False,
+    project_id=None,
+    space_id=None,
 ) -> tuple[list[ChoiceRead], int]:
     if not await authz.holds(session, actor, authz.Permission.ROLE_READ):
         return [], 0
@@ -27,6 +29,24 @@ async def list_options(
     )
     if assignable:
         projection = projection.where(Role.key != BuiltinRoleKey.BASELINE)
+        if value is None and not await authz.holds(session, actor, authz.Permission.ROLE_UPDATE):
+            if project_id is None or space_id is not None:
+                return [], 0
+            from radd.modules.projects import service as projects
+            from radd.exceptions import ForbiddenError
+            from .roles_router import ensure_delegated_role_coverage
+
+            project = await projects.get_project(session, project_id)
+            if not await authz.holds(session, actor, authz.Permission.MEMBER_CREATE, project=project):
+                return [], 0
+            allowed = []
+            for role in await session.scalars(select(Role)):
+                try:
+                    await ensure_delegated_role_coverage(session, actor, role, project)
+                except ForbiddenError:
+                    continue
+                allowed.append(role.id)
+            projection = projection.where(Role.id.in_(allowed))
     if key is not None:
         projection = projection.where(Role.key == key)
     return await page(session, projection, q=q, limit=limit, offset=offset, value=value)

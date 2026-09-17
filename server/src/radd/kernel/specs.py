@@ -528,6 +528,7 @@ class McpToolSpec:
     handler: Callable[..., Awaitable[Any]]
     permission: str = ""
     project_scoped: bool = False  # visibility: show only where the atom holds (spec 114)
+    space_scoped: bool = False
     project_param: str = ""  # input property naming the project; enum-rewritten + enforced
     #: LIVE schema (RADD-889): when set, the catalog composer calls it with
     #: keyword projections — today `custom_field_properties` (the field

@@ -1,4 +1,5 @@
 """Group paging retains nested counts, external edge names and team authority."""
+from test_team_directory import team_reader_account
 import uuid
 import httpx
 import pytest
@@ -25,8 +26,9 @@ async def test_group_candidates_match_attachment_guards(scope,allowed):
         team=Team(name=prefix,owner_id=actor.id if scope=='owner' else None)
         group=Group(name=prefix,dn=prefix);db.add_all([team,group]);await db.flush()
         if scope=='manager':db.add(TeamManager(team_id=team.id,user_id=actor.id));await db.flush()
+        if scope in ('owner','manager'):await team_reader_account(db,actor)
         scopes={'global':['team.read']}
-        if scope=='global':scopes['global'].append('team.update')
+        if scope in ('global','owner','manager'):scopes['global'].append('team.update')
         if scope=='project':scopes['projects']={str(uuid.uuid4()):['team.update']}
         _,token=await auth.create_api_token(db,actor,TokenCreate(name='Group reader',scopes=scopes))
         async def override():yield db
@@ -56,7 +58,7 @@ async def test_group_windows_counts_and_cross_page_nesting_names():
         db.add_all([*held,*candidates,child,team]);await db.flush()
         db.add_all([TeamMember(team_id=team.id,group_id=g.id) for g in held])
         db.add(GroupParent(parent_id=candidates[125].id,child_id=child.id));db.add(GroupMember(group_id=child.id,user_id=actor.id));await db.flush()
-        _,token=await auth.create_api_token(db,actor,TokenCreate(name='Owner',scopes={'global':['team.read']}))
+        _,token=await auth.create_api_token(db,actor,TokenCreate(name='Owner',scopes={'global':['team.read','team.update']}))
         _,admin=await auth.create_api_token(db,actor,TokenCreate(name='Admin',scopes=None))
         async def override():yield db
         app=create_app();app.dependency_overrides[get_session]=override

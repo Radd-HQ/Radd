@@ -23,7 +23,7 @@ from radd.modules.projects import service as projects_service
 # helpers and every share-shaped read return, and importing it from
 # access.models made four modules reach into another module's models file.
 # The ratchet test bans `access.models` outside this module.
-from .models import AccessGrant
+from .models import AccessGrant, AccessRestriction
 from .registry import get_spec
 from .resolution import SubjectContext, effective_level
 from .types import AccessEntity, AccessEvent, GrantEffect, GrantSubject
@@ -84,6 +84,12 @@ async def grants_for_resources(
     result = await session.execute(select(AccessGrant).where(*conditions))
     for grant in result.scalars():
         out.setdefault(grant.resource_id, []).append(grant)
+    spec = get_spec(resource_type)
+    if spec is not None and spec.default_open and not spec.hierarchical:
+        policies = await session.scalars(select(AccessRestriction).where(
+            AccessRestriction.resource_type == resource_type, AccessRestriction.resource_id.in_(ids)))
+        for policy in policies:
+            out.setdefault(policy.resource_id, []).append(_restriction_marker(policy))
     return out
 
 
@@ -159,7 +165,10 @@ async def resource_ids_with_grants(
             return set()
         query = query.where(AccessGrant.resource_id.in_(ids))
     rows = await session.execute(query.distinct())
-    return set(rows.scalars())
+    policy_query = select(AccessRestriction.resource_id).where(AccessRestriction.resource_type == resource_type)
+    if ids is not None:
+        policy_query = policy_query.where(AccessRestriction.resource_id.in_(ids))
+    return set(rows.scalars()) | set(await session.scalars(policy_query))
 
 
 async def get_grant(session: AsyncSession, grant_id: uuid.UUID) -> AccessGrant:
@@ -174,6 +183,10 @@ async def get_grant(session: AsyncSession, grant_id: uuid.UUID) -> AccessGrant:
 
 async def lock_resource(session: AsyncSession, resource_type: str, resource_id: str) -> None:
     """Lock through the owning module before grant authorization or mutation."""
+    from sqlalchemy import text
+
+    await session.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+                          {"key": f"access:{resource_type}:{resource_id}"})
     spec = get_spec(resource_type)
     if spec is not None and spec.lock_resource is not None:
         await spec.lock_resource(session, resource_id)
@@ -260,6 +273,11 @@ async def add_grant(
         granted_by=actor_id,
     )
     session.add(grant)
+    if spec.default_open and not spec.hierarchical and effect == GrantEffect.ALLOW:
+        from sqlalchemy.dialects.postgresql import insert
+        await session.execute(insert(AccessRestriction).values(
+            resource_type=resource_type, resource_id=resource_id, access=access, project_id=project_id
+        ).on_conflict_do_nothing(constraint="uq_access_restriction_scope"))
     await session.flush()
     await _emit(session, AccessEvent.GRANTED, grant, actor_id)
     return grant
@@ -286,6 +304,8 @@ async def clear_resource(
 ) -> None:
     """Drop every grant on a resource — called when the resource itself is deleted
     (grants have no FK to their polymorphic resource)."""
+    await session.execute(delete(AccessRestriction).where(
+        AccessRestriction.resource_type == resource_type, AccessRestriction.resource_id == resource_id))
     await session.execute(
         delete(AccessGrant).where(
             AccessGrant.resource_type == resource_type, AccessGrant.resource_id == resource_id
@@ -324,6 +344,7 @@ async def clear_resource_types(
     types = list(resource_types)
     if not types:
         return 0
+    await session.execute(delete(AccessRestriction).where(AccessRestriction.resource_type.in_(types)))
     result = await session.execute(
         delete(AccessGrant).where(AccessGrant.resource_type.in_(types))
     )
@@ -350,13 +371,14 @@ async def _subject_label(session: AsyncSession, grant: AccessGrant) -> str:
 
 
 async def _emit(
-    session: AsyncSession, event: AccessEvent, grant: AccessGrant, actor_id: uuid.UUID | None
+    session: AsyncSession, event: AccessEvent, grant: AccessGrant, actor_id: uuid.UUID | None, *, changes=None
 ) -> None:
     await events.emit(
         session,
         event_type=event,
         entity_type=AccessEntity.GRANT,
         entity_id=grant.id,
+        changes=changes,
         actor_id=actor_id,
         subjects={"project": grant.project_id},
         payload={
@@ -367,6 +389,7 @@ async def _emit(
             "subject_id": str(grant.subject_id),
             "access": grant.access,
             "effect": grant.effect,
+            "expires_at": grant.expires_at.isoformat() if grant.expires_at else None,
             "project_id": str(grant.project_id) if grant.project_id else None,
         },
     )
@@ -390,3 +413,33 @@ async def sweep_expired_grants() -> int:
             removed += result.rowcount or 0
         await session.commit()
     return removed
+
+
+def _restriction_marker(policy):
+    # Internal resolver input, never a persisted grant or a directory row. It
+    # restricts the access without matching any principal.
+    from types import SimpleNamespace
+    return SimpleNamespace(id=policy.id, resource_id=policy.resource_id,
+        resource_type=policy.resource_type, access=policy.access, project_id=policy.project_id,
+        subject_type="restriction", subject_id=uuid.UUID(int=0), effect=GrantEffect.ALLOW.value,
+        granted_by=None, expires_at=None)
+
+
+async def restriction_modes(session, resource_type, resource_id):
+    rows = await session.scalars(select(AccessRestriction).where(
+        AccessRestriction.resource_type == resource_type, AccessRestriction.resource_id == resource_id))
+    return [{"id": row.id, "access": row.access, "project_id": row.project_id} for row in rows]
+
+
+async def restore_inheritance(session, policy_id, actor_id):
+    policy = await session.get(AccessRestriction, policy_id)
+    if policy is None:
+        raise NotFoundError(AccessEntity.GRANT, policy_id)
+    # Remove remaining allows for this access/scope; keep explicit denies.
+    await session.execute(delete(AccessGrant).where(
+        AccessGrant.resource_type == policy.resource_type, AccessGrant.resource_id == policy.resource_id,
+        AccessGrant.access == policy.access, AccessGrant.project_id == policy.project_id,
+        AccessGrant.effect == GrantEffect.ALLOW))
+    await _emit(session, AccessEvent.REVOKED, _restriction_marker(policy), actor_id)
+    await session.delete(policy)
+    await session.flush()

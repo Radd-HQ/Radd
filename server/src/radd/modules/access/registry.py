@@ -55,6 +55,7 @@ class ResourceSpec:
     # Serialize ACL writes with the owner's sharing/transfer transaction. Reads
     # never acquire this lock; callers lock before checking mutable authority.
     lock_resource: LockResource | None = None
+    roles_for: Callable[[AsyncSession, uuid.UUID, str], Awaitable[set[uuid.UUID]]] | None = None
 
 
 # RADD-818: the store is the KERNEL registry, not a private dict — the

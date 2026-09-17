@@ -98,7 +98,8 @@ async def test_batch_and_clear(db):
     await access.add_grant(db, FIELD, r1, subject_type=GrantSubject.TEAM, subject_id=team.id, access=Access.READ.value)
     await access.add_grant(db, FIELD, r2, subject_type=GrantSubject.TEAM, subject_id=team.id, access=Access.WRITE.value)
     batch = await access.grants_for_resources(db, FIELD, [r1, r2, "empty"])
-    assert len(batch[r1]) == 1 and len(batch[r2]) == 1 and batch["empty"] == []
+    assert len(batch[r1]) == 2 and len(batch[r2]) == 2 and batch["empty"] == []
+    assert batch[r1][-1].subject_type == "restriction"
     await access.clear_resource(db, FIELD, r1)
     assert await access.list_for_resource(db, FIELD, r1) == []
     assert len(await access.list_for_resource(db, FIELD, r2)) == 1

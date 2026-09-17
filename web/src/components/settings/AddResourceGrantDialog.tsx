@@ -37,6 +37,8 @@ export function AddResourceGrantDialog({ resourceType, resourceId, accesses, sub
   const [access, setAccess] = useState(accesses[0]);
   const [effect, setEffect] = useState<"allow" | "deny">("allow");
   const [expiresAt, setExpiresAt] = useState("");
+  const [global, setGlobal] = useState(false);
+  const scopeChosen = !projectScoped || scope !== undefined || global;
   const [projects, setProjects] = useState<DirectoryOption[]>([]);
   const [picker, setPicker] = useState<"subject" | "project">();
   const canBrowse = kind === GrantSubject.user ||
@@ -54,7 +56,7 @@ export function AddResourceGrantDialog({ resourceType, resourceId, accesses, sub
   });
   return <Modal title="Add resource grant" onClose={onClose}>
     <form className="flex min-w-0 flex-col gap-4" onSubmit={event => {
-      event.preventDefault(); if (subject && !add.isPending) add.mutate();
+      event.preventDefault(); if (subject && (scopeChosen || projects.length > 0) && !add.isPending) add.mutate();
     }}>
       <SelectField label="Subject kind" value={kind} onChange={event => {
         setKind(event.target.value as GrantSubjectValue); setSubject(undefined);
@@ -77,19 +79,19 @@ export function AddResourceGrantDialog({ resourceType, resourceId, accesses, sub
       {projectScoped && scope !== undefined && <p className="text-xs text-fg-muted">Grant scope: {scope.label}. This grant applies only in the selected scope.</p>}
       {projectScoped && scope === undefined && <div className="space-y-2">
         <p className="text-xs font-medium text-fg-secondary">Project scope</p>
-        {projects.length === 0 ? <p className="text-xs text-fg-muted">Global — everywhere.</p> :
+        {projects.length === 0 ? <p className="text-xs text-fg-muted">Choose projects or explicitly select everywhere.</p> :
           <ul aria-label="Selected grant projects" className="flex max-h-32 flex-wrap gap-1 overflow-auto">
             {projects.map(project => <li key={project.value} className="inline-flex max-w-full items-center gap-1 rounded border border-subtle px-2 py-1 text-xs">
               <span className="truncate">{project.label}</span>
               <IconButton aria-label={`Remove ${project.label}`} onClick={() => setProjects(rows => rows.filter(p => p.value !== project.value))}><X size={12} aria-hidden /></IconButton>
             </li>)}
           </ul>}
-        <Button variant="secondary" onClick={() => setPicker("project")}>Add projects</Button>
-        <p className="text-xs text-fg-muted">Leave projects empty to apply this grant everywhere.</p>
+        <Button variant="secondary" onClick={() => { setGlobal(false); setPicker("project"); }}>Add projects</Button>
+        <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={global} onChange={e => { setGlobal(e.target.checked); setProjects([]); }} />Apply everywhere</label>
       </div>}
       <TextField type="date" label="Expires (optional)" value={expiresAt} onChange={e => setExpiresAt(e.target.value)} hint="Empty means permanent. The grant stops applying at midnight UTC on this date." />
       {add.isError && <div role="alert"><ErrorText error={add.error} /></div>}
-      <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>Cancel</Button><Button type="submit" disabled={!subject || add.isPending}>{add.isPending ? "Adding…" : "Add grant"}</Button></div>
+      <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>Cancel</Button><Button type="submit" disabled={!subject || (!scopeChosen && !projects.length) || add.isPending}>{add.isPending ? "Adding…" : "Add grant"}</Button></div>
     </form>
     {picker === "subject" && <Choices resource={subjects[kind].resource} selected={subject?.value} onClose={() => setPicker(undefined)} onSelect={row => { setSubject(row); setPicker(undefined); }} />}
     {picker === "project" && projectPermission && <FieldProjectChoices permission={projectPermission} selected={projects.map(p => p.value)} onClose={() => setPicker(undefined)} onSelect={(id, label) => {

@@ -63,3 +63,9 @@ async def readable_spaces(
         for space_id, held in per_space.items()
         if Permission.PAGE_READ in held
     }
+
+
+async def all_space_permissions(session, user):
+    """Permission catalog for integrations; includes write-only spaces."""
+    from sqlalchemy import select
+    return await permissions_by_space(session, user, list(await session.scalars(select(PageSpace.id))))

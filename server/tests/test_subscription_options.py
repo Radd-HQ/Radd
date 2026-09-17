@@ -78,7 +78,7 @@ async def test_candidates_match_authority_and_do_not_use_another_accounts_subscr
     r=await client.get('/api/v1/notifications/subscription-options',params={'scope':'space'})
     assert r.json()==[]
     for scope in ['project','space','team']:
-        r=await client.get('/api/v1/notifications/subscription-options',params={'scope':scope,'q':'000'})
+        r=await client.get('/api/v1/notifications/subscription-options',params={'scope':scope,'q':'no-such-directory-entry'})
         assert r.json()==[] and r.headers['X-Total-Count']=='0'
 
 

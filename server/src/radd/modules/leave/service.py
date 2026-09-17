@@ -28,6 +28,8 @@ def _is_admin(actor: User) -> bool:
 
 
 async def may_manage_user(session: AsyncSession, actor: User, user_id: uuid.UUID) -> bool:
+    if getattr(actor, "token_scope", None) is not None:
+        return False
     if actor.id == user_id or _is_admin(actor):
         return True
     # A steward (owner/manager) of any team the subject belongs to may cover
@@ -39,6 +41,8 @@ async def may_manage_user(session: AsyncSession, actor: User, user_id: uuid.UUID
 
 
 async def _authorize(session: AsyncSession, actor: User, period: LeavePeriod) -> None:
+    if getattr(actor, "token_scope", None) is not None:
+        raise ForbiddenError("leave changes require an account session or a full-access key")
     if period.team_id is not None:
         if not _is_admin(actor):
             raise ForbiddenError("team holidays are managed by instance admins")

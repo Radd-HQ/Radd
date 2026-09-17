@@ -70,6 +70,17 @@ async def _attachment_labels(session: AsyncSession, resource_ids) -> dict[str, s
     return {str(attachment_id): filename for attachment_id, filename in rows.all()}
 
 
+async def _roles_for_attachment(session, user_id, resource_id):
+    from radd.modules.auth import grants
+    attachment = await session.get(Attachment, uuid.UUID(resource_id))
+    if attachment is None:
+        return set()
+    binding = parents.binding_for(attachment.entity_type)
+    project_id = await binding.project_id_of(session, attachment.entity_id)
+    space_id = await binding.space_id_of(session, attachment.entity_id) if binding.space_id_of else None
+    return await grants.granted_role_ids(session, user_id, project_id, space_id=space_id)
+
+
 _SPEC = access_registry.ResourceSpec(
     resource_type=ATTACHMENT_RESOURCE,
     can_manage=_can_manage,
@@ -80,6 +91,7 @@ _SPEC = access_registry.ResourceSpec(
     project_scoped=False,
     label="Attachment",
     label_for=_attachment_labels,
+    roles_for=_roles_for_attachment,
 )
 access_registry.register_resource(_SPEC)
 
@@ -104,7 +116,9 @@ async def _base_subjects(
     else:
         # No project (wiki parents): role-subject grants can't resolve a scope,
         # so user/team/group subjects carry the restriction.
-        role_ids = frozenset()
+        from radd.modules.auth import grants as role_grants
+        space_id = await binding.space_id_of(session, attachment.entity_id) if binding.space_id_of else None
+        role_ids = frozenset(await role_grants.granted_role_ids(session, user.id, space_id=space_id))
         team_ids = frozenset(await teams_service.user_team_ids(session, user.id))
         group_ids = frozenset(await groups_service.user_group_ids(session, user.id))
     try:
@@ -140,9 +154,9 @@ async def attachment_readable(
         await binding.require_read(session, user, attachment.entity_id)
     except (ForbiddenError, NotFoundError):
         return False
-    grants = await access_service.list_for_resource(
-        session, ATTACHMENT_RESOURCE, str(attachment.id)
-    )
+    grants = (await access_service.grants_for_resources(
+        session, ATTACHMENT_RESOURCE, [str(attachment.id)]
+    ))[str(attachment.id)]
     if not grants:
         return True
     role_ids, team_ids, group_ids, parent_writable = await _base_subjects(

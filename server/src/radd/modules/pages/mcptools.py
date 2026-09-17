@@ -73,14 +73,16 @@ def _optional_uuid(value: Any) -> uuid.UUID | None:
 
 
 async def _get_page(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
-    page = await pages_service.get_page(session, uuid.UUID(str(args["id"])))
+    page = await page_access.guard_page(session, actor, uuid.UUID(str(args["id"])), Permission.PAGE_READ)
     return jsonable(page)
 
 
 async def _search_pages(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
     limit = limit_arg(args)
     # Spec 86: docs are global — a single search over every space.
-    results = jsonable(await pages_search.search_pages(session, str(args["query"]), limit=limit))
+    from .access import readable_spaces
+    results = await pages_search.search_pages(session, str(args["query"]), limit=limit, space_ids=set(await readable_spaces(session, actor)))
+    results = jsonable(await pages_service.drop_restricted_results(session, actor, results))
     return (results if isinstance(results, list) else [results])[:limit]
 
 
@@ -138,6 +140,7 @@ GET_PAGE = McpToolSpec(
     input_schema=object_schema({"id": _PAGE_ID}, ["id"]),
     handler=_get_page,
     permission=Permission.PAGE_READ,
+    space_scoped=True,
     kernel_enforced=False,
 )
 
@@ -153,6 +156,7 @@ SEARCH_PAGES = McpToolSpec(
     ),
     handler=_search_pages,
     permission=Permission.PAGE_READ,
+    space_scoped=True,
     kernel_enforced=False,
 )
 
@@ -178,6 +182,7 @@ CREATE_PAGE = McpToolSpec(
     ),
     handler=_create_page,
     permission=Permission.PAGE_WRITE,
+    space_scoped=True,
     kernel_enforced=False,
 )
 
@@ -200,6 +205,7 @@ UPDATE_PAGE = McpToolSpec(
     ),
     handler=_update_page,
     permission=Permission.PAGE_WRITE,
+    space_scoped=True,
     kernel_enforced=False,
 )
 
@@ -221,6 +227,7 @@ MOVE_PAGE = McpToolSpec(
     ),
     handler=_move_page,
     permission=Permission.PAGE_WRITE,
+    space_scoped=True,
     kernel_enforced=False,
 )
 

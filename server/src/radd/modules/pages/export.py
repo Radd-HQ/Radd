@@ -108,7 +108,7 @@ def _paths(pages: list[Page], root_id: uuid.UUID | None) -> dict[uuid.UUID, list
 
 
 async def export_zip(
-    session: AsyncSession, space: PageSpace, root: Page | None = None
+    session: AsyncSession, space: PageSpace, root: Page | None = None, *, actor=None
 ) -> tuple[str, bytes]:
     """(filename, zip bytes) for a whole space, or one page's subtree."""
     pages = await _tree(session, space.id)
@@ -124,6 +124,10 @@ async def export_zip(
                     changed = True
         pages = [page for page in pages if page.id in keep]
 
+    if actor is not None:
+        from .page_access import readable_page_ids
+        allowed = await readable_page_ids(session, actor, pages)
+        pages = [page for page in pages if page.id in allowed]
     paths = _paths(pages, root.parent_id if root is not None else None)
     by_slug = {(space.slug, page.slug): paths[page.id] for page in pages if page.id in paths}
 

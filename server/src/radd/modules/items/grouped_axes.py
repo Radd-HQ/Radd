@@ -1,6 +1,7 @@
 """Board bucket expressions and index-friendly single-bucket predicates."""
 
 import uuid
+from .slq.catalog import SlqField
 from sqlalchemy import String, cast, func, literal
 from radd.modules.workflow.models import State
 from .models import WorkItem
@@ -34,7 +35,7 @@ def bucket_filter(axis, key, expression, project_id):
         "team": (WorkItem.team_id, "__no_team__"),
         "cycle": (WorkItem.cycle_id, "__backlog__"),
     }
-    if axis == "state" and project_id:
+    if axis == SlqField.STATE and project_id:
         columns["state"] = (WorkItem.state_id, None)
     if axis not in columns:
         return expression == key

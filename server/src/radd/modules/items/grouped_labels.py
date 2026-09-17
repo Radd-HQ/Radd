@@ -6,6 +6,7 @@ readable-ancestor guard in grouped_items; do not call this with arbitrary IDs.
 
 import uuid
 
+from .slq.catalog import SlqField
 from sqlalchemy import select
 
 from radd.modules.auth.models import User
@@ -23,12 +24,12 @@ async def board_labels(session, axis, totals):
         else []
     )
     if axis in ("assignee", "team"):
-        model = User if axis == "assignee" else Team
+        model = User if axis == SlqField.ASSIGNEE else Team
         for key, name in (
             await session.execute(select(model.id, model.name).where(model.id.in_(ids)))
         ).all():
             labels[str(key)] = name
-    elif axis == "epic":
+    elif axis == SlqField.EPIC:
         rows = (
             await session.execute(
                 select(WorkItem.id, Project.key, WorkItem.number, WorkItem.title, WorkItem.kind)

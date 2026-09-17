@@ -1,4 +1,5 @@
 """Effective membership must be deduplicated before roster/candidate windows."""
+from test_team_directory import team_reader_account
 import uuid
 
 import httpx
@@ -61,7 +62,8 @@ async def test_roster_http_windows_provenance_candidates_and_guards():
         db.add_all([GroupMember(group_id=roots[2].id, user_id=u.id) for u in people[40:]])
         db.add_all([GroupMember(group_id=roots[1].id, user_id=u.id) for u in people[100:]])
         db.add(GroupParent(parent_id=roots[0].id, child_id=roots[2].id)); await db.flush()
-        _, token = await auth.create_api_token(db, actor, TokenCreate(name='Roster', scopes={'global': ['team.read']}))
+        await team_reader_account(db, actor)
+        _, token = await auth.create_api_token(db, actor, TokenCreate(name='Roster', scopes={'global': ['team.read', 'team.update']}))
         async def override(): yield db
         app = create_app(); app.dependency_overrides[get_session] = override
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test',

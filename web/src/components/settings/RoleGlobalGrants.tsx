@@ -34,7 +34,8 @@ export function RoleGlobalGrants({ roleId, editable }: { roleId: string; editabl
   const save = useMutation({
     mutationFn: (rows: GlobalGrant[]) =>
       api.put<GlobalGrant[]>(apiRoleGlobalGrantsPath(roleId), {
-        grants: rows.map((row) => ({ user_id: row.user_id, team_id: row.team_id })),
+        expected_grant_ids: (grants.data ?? []).map((row) => row.id),
+        grants: rows.map((row) => ({ user_id: row.user_id, team_id: row.team_id, group_id: row.group_id })),
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.roleGlobalGrants(roleId) });

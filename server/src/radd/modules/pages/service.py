@@ -19,6 +19,9 @@ from radd.modules.events import service as events
 from radd.modules.settings import service as settings_service
 from radd.modules.settings.types import SettingKey
 
+from radd.modules.auth import authz
+from . import page_access
+
 from . import (
     backlinks,
     core,
@@ -257,6 +260,11 @@ async def create_page(
         parent = await get_page(session, data.parent_id)
         if parent.space_id != space.id:
             raise ConflictError(PageEntity.PAGE, reason="parent page is in a different space")
+        if not _may_import(permissions):
+            from radd.modules.auth.service import get_user
+            parent_actor = await get_user(session, actor_id)
+            await page_access.guard_page(session, parent_actor, parent.id, authz.Permission.PAGE_READ)
+            await page_access.guard_page(session, parent_actor, parent.id, authz.Permission.PAGE_WRITE)
     position = (
         data.position
         if data.position is not None
@@ -392,6 +400,11 @@ async def update_page(
             parent = await get_page(session, data.parent_id)
             if parent.space_id != page.space_id:
                 raise ConflictError(PageEntity.PAGE, reason="parent page is in a different space")
+            if not _may_import(permissions):
+                from radd.modules.auth.service import get_user
+                parent_actor = await get_user(session, actor_id)
+                await page_access.guard_page(session, parent_actor, parent.id, authz.Permission.PAGE_READ)
+                await page_access.guard_page(session, parent_actor, parent.id, authz.Permission.PAGE_WRITE)
             parent_of = {
                 row.id: row.parent_id for row in await _space_rows(session, page.space_id)
             }

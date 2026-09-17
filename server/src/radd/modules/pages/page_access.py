@@ -91,6 +91,12 @@ async def _page_labels(session: AsyncSession, resource_ids) -> dict[str, str]:
     return {str(page_id): title for page_id, title in rows.all()}
 
 
+async def _roles_for_page(session, user_id, resource_id):
+    from .service import get_page
+    page = await get_page(session, uuid.UUID(resource_id))
+    return await role_grants.granted_role_ids(session, user_id, space_id=page.space_id)
+
+
 _PAGE_SPEC = ResourceSpec(
     resource_type=PAGE_RESOURCE,
     can_manage=_can_manage_page,
@@ -104,6 +110,7 @@ _PAGE_SPEC = ResourceSpec(
     project_scoped=False,
     label="Page",
     label_for=_page_labels,
+    roles_for=_roles_for_page,
 )
 register_resource(_PAGE_SPEC)
 

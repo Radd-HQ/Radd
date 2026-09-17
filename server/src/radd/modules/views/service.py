@@ -1,3 +1,4 @@
+from radd.modules.auth.principals import require_key_permission, key_allows
 import re
 import uuid
 from typing import Any
@@ -116,6 +117,7 @@ async def _can_manage_view(
     except (ValueError, NotFoundError):
         return False
     try:
+        require_key_permission(actor, Permission.VIEW_UPDATE, view.project_id)
         await _require_scope(session, actor, PERSONAL_VIEW_PERMISSION, project_id=view.project_id)
     except ForbiddenError:
         return False
@@ -301,8 +303,8 @@ async def _hydrate(session: AsyncSession, actor: User, views: list[View], *, inc
                 shared=view.owner_id is None
                 or view.global_access is not None
                 or (len(allowed_shares) > 0 if include_shares else states[view.id][1]),
-                can_edit=can_manage or grant in (ShareLevel.EDITOR, ShareLevel.OWNER),
-                can_manage=can_manage,
+                can_edit=(can_manage or grant in (ShareLevel.EDITOR, ShareLevel.OWNER)) and key_allows(actor, Permission.VIEW_UPDATE, view.project_id),
+                can_manage=can_manage and key_allows(actor, Permission.VIEW_UPDATE, view.project_id),
                 position=view.position,
                 query_string=urlencode(pairs),
                 created_at=view.created_at,
@@ -561,6 +563,7 @@ async def _require_edit(session: AsyncSession, view_id: uuid.UUID, actor: User) 
     owner-less views) a view.update atom holder. Visible-but-viewer -> 403."""
     await _lock_view(session, str(view_id))
     view, grant = await _load_visible(session, view_id, actor)
+    require_key_permission(actor, Permission.VIEW_UPDATE, view.project_id)
     if view.owner_id == actor.id or grant in (ShareLevel.EDITOR, ShareLevel.OWNER):
         await _require_scope(
             session,
@@ -588,6 +591,7 @@ async def _require_manage(
     Seeded owner-less views fall back to the view.* RBAC atom (`legacy_atom`)."""
     await _lock_view(session, str(view_id))
     view, grant = await _load_visible(session, view_id, actor)
+    require_key_permission(actor, legacy_atom, view.project_id)
     await _require_scope(session, actor, PERSONAL_VIEW_PERMISSION, project_id=view.project_id)
     if view.owner_id == actor.id or grant is ShareLevel.OWNER:
         return view
@@ -622,6 +626,7 @@ async def create_view(session: AsyncSession, data: ViewCreate, actor: User) -> V
     global_access = data.global_access
     # Server-wide visibility is a broadcast — the view.create atom gates it.
     # Sharing with specific people/teams is a personal act: item.read suffices.
+    require_key_permission(actor, Permission.VIEW_CREATE, data.project_id)
     permission = Permission.VIEW_CREATE if global_access is not None else PERSONAL_VIEW_PERMISSION
     await _require_scope(session, actor, permission, project_id=data.project_id)
     view = View(

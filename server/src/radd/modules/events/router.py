@@ -23,7 +23,7 @@ async def list_events(
     after: int = Query(0, ge=0, description="Return events with id greater than this offset"),
     limit: int = Query(100, ge=1, le=500),
 ) -> list[EventRead]:
-    # Member and up; the stream itself is instance-wide (trusted consumers).
-    # The floor is item.read in SOME project (RADD-788), not the global atom.
-    await authz.require_member(session, user)
+    # Raw instance-wide payloads are for administrative integrations.
+    # Project managers use the scoped, redacted audit endpoint.
+    await authz.require(session, user, authz.Permission.GLOBAL_MANAGE)
     return [EventRead.model_validate(e) for e in await service.read_after(session, after, limit)]

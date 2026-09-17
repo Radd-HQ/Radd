@@ -81,8 +81,10 @@ async def item_timelog(
 async def set_estimate(
     item_id: uuid.UUID, data: EstimateSet, session: Session, user: CurrentUser
 ) -> ItemTimeSummary:
-    _, project = await _item_project(session, item_id, user)
-    await authz.require(session, user, authz.Permission.ITEM_UPDATE, project=project)
+    item, project = await _item_project(session, item_id, user)
+    permissions = await authz.require(session, user, authz.Permission.ITEM_UPDATE, project=project)
+    from radd.modules.items.service.visibility import ensure_item_relation
+    await ensure_item_relation(session, user, item, permissions, authz.Permission.ITEM_UPDATE)
     await enablement.require_enabled(session, project.id)
     await service.set_estimate(session, item_id, data, actor_id=user.id)
     return await service.item_summary(session, item_id, project)
@@ -92,8 +94,10 @@ async def set_estimate(
 async def clear_estimate(
     item_id: uuid.UUID, session: Session, user: CurrentUser
 ) -> ItemTimeSummary:
-    _, project = await _item_project(session, item_id, user)
-    await authz.require(session, user, authz.Permission.ITEM_UPDATE, project=project)
+    item, project = await _item_project(session, item_id, user)
+    permissions = await authz.require(session, user, authz.Permission.ITEM_UPDATE, project=project)
+    from radd.modules.items.service.visibility import ensure_item_relation
+    await ensure_item_relation(session, user, item, permissions, authz.Permission.ITEM_UPDATE)
     await service.clear_estimate(session, item_id, actor_id=user.id)
     return await service.item_summary(session, item_id, project)
 

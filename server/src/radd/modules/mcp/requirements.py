@@ -43,6 +43,7 @@ class ToolRequirement:
 
     permission: Permission | None = None
     project_scoped: bool = False
+    space_scoped: bool = False
     #: The input property naming a project, rewritten to an enum of the projects
     #: where `permission` actually holds.
     project_param: str | None = None
@@ -63,6 +64,7 @@ def requirement_for(name: str) -> ToolRequirement | None:
         # atom participates in every membership test a builtin does.
         permission=cast(Permission, spec.permission) if spec.permission else None,
         project_scoped=spec.project_scoped,
+        space_scoped=spec.space_scoped,
         project_param=spec.project_param or None,
     )
 
@@ -111,6 +113,10 @@ async def visible_catalog(
     global_permissions = await authz.effective_permissions(session, user)
     keys_by_id = {project.id: project.key for project in projects}
 
+    per_space = {}
+    if any((requirement := requirement_for(tool["name"])) and requirement.space_scoped for tool in catalog):
+        from radd.modules.pages.access import all_space_permissions
+        per_space = await all_space_permissions(session, user)
     visible: list[dict[str, Any]] = []
     for tool in catalog:
         requirement = requirement_for(tool["name"])
@@ -127,6 +133,10 @@ async def visible_catalog(
         # holds_base, not raw membership (RADD-825): a floor of item.read@OWN
         # still runs get_item — the relation resolvers narrow WHICH rows answer,
         # and hiding must match what the dispatcher's `authz.require` enforces.
+        if requirement.space_scoped:
+            if authz.holds_base(global_permissions, requirement.permission) or any(authz.holds_base(held, requirement.permission) for held in per_space.values()):
+                visible.append(tool)
+            continue
         if not requirement.project_scoped:
             if authz.holds_base(global_permissions, requirement.permission):
                 visible.append(tool)

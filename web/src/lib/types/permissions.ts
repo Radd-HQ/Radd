@@ -80,6 +80,8 @@ export const Permission = {
   pageDelete: "page.delete",
   /** Spec 75: the server-wide-broadcast gate on dashboard sharing (global). */
   dashboardCreate: "dashboard.create",
+  dashboardUpdate: "dashboard.update",
+  dashboardDelete: "dashboard.delete",
 } as const;
 // Spec 50: permissions are open-ended data now (77 CRUD atoms + custom roles).
 // The named `Permission` const above still autocompletes the ones used in gating;

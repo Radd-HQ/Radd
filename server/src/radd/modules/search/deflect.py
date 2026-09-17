@@ -32,7 +32,7 @@ RESOLVED_CATEGORIES = (StateCategory.DONE, StateCategory.CANCELED)
 
 
 async def deflect_docs(
-    session: AsyncSession, q: str, *, space_ids: "set[uuid.UUID] | None" = None
+    session: AsyncSession, q: str, *, space_ids: "set[uuid.UUID] | None" = None, actor=None
 ) -> list[DeflectDoc]:
     """Top wiki pages: docs FTS fused with semantic candidates when available
     (spec 103) — KB questions rarely reuse the answer's exact words. Empty when
@@ -55,9 +55,13 @@ async def deflect_docs(
 
         fused = fusion.rrf_fuse([ordered_ids, semantic_ids])
         missing = [page_id for page_id, _ in fused if page_id not in by_id]
-        for page in await docs_search.pages_by_ids(session, missing):
+        for page in await docs_search.pages_by_ids(session, missing, space_ids=space_ids):
             by_id[page.page_id] = page
         ordered_ids = [page_id for page_id, _ in fused if page_id in by_id]
+    if actor is not None:
+        from radd.modules.pages.service import drop_restricted_results
+        allowed = {row.page_id for row in await drop_restricted_results(session, actor, list(by_id.values()))}
+        ordered_ids = [page_id for page_id in ordered_ids if page_id in allowed]
     if not ordered_ids:
         return []
     space_names = {
@@ -133,6 +137,16 @@ async def deflect_items(
         for row in await _resolved_rows_by_ids(session, project, missing, resolved_state_ids):
             by_id[row.item_id] = row
         ordered_ids = [item_id for item_id, _ in fused if item_id in by_id]
+    if actor is not None and ordered_ids:
+        from radd.modules.auth import authz
+        from radd.modules.items.service.visibility import relation_read_clause
+        held = await authz.effective_permissions(session, actor, project=project)
+        clause = await relation_read_clause(session, actor, {project.id: held})
+        stmt = select(WorkItem.id).where(WorkItem.id.in_(ordered_ids))
+        if clause is not None:
+            stmt = stmt.where(clause)
+        allowed = set((await session.scalars(stmt)).all())
+        ordered_ids = [item_id for item_id in ordered_ids if item_id in allowed]
     return [
         DeflectItem(key=by_id[item_id].key, title=by_id[item_id].title)
         for item_id in ordered_ids[:DEFLECT_LIMIT]

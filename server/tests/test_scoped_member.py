@@ -170,7 +170,6 @@ FLOOR_PATHS = [
     "/api/v1/teams",
     "/api/v1/fields",
     "/api/v1/dashboards",
-    "/api/v1/events",
     "/api/v1/work-categories",
     "/api/v1/canned-responses",
     "/api/v1/automations/runnable",
