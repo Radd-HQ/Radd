@@ -39,6 +39,7 @@ from .storage.macros import BUILTIN_MACROS
 from .types import (
     ConfluenceEntity,
     GroupAction,
+    UserAction,
     MacroAction,
     MappingSection,
     SpaceAction,
@@ -236,7 +237,38 @@ async def validate_plan(session: AsyncSession, plan_id: uuid.UUID) -> list[PlanP
                 section=MappingSection.SPACES, subject=space.key,
                 message="mapped to an existing space, but no space is chosen",
             ))
+    for group in mappings.groups:
+        if group.action is GroupAction.MAP and bool(group.group_id) == bool(group.team_id):
+            problems.append(PlanProblem(section=MappingSection.GROUPS, subject=group.name,
+                message="choose exactly one destination group or team"))
+    from radd.modules.pages import spaces
+    from radd.modules.groups import service as groups
+    from radd.modules.teams import service as teams
+    from radd.modules.auth.models import User
+    from radd.kernel.registry import registries
+    for space in mappings.spaces:
+        if space.action is SpaceAction.MAP and space.space_id:
+            try:
+                await spaces.get_space(session, space.space_id)
+            except NotFoundError:
+                problems.append(PlanProblem(section=MappingSection.SPACES, subject=space.key, message="chosen space no longer exists"))
+    for user in mappings.users:
+        if user.action is not UserAction.IGNORE and user.user_id and await session.get(User, user.user_id) is None:
+            problems.append(PlanProblem(section=MappingSection.USERS, subject=user.username, message="chosen account no longer exists"))
+    destinations = [(g.name, g.group_id, g.team_id) for g in mappings.groups if g.action is GroupAction.MAP]
+    if options.unresolved_principal is UnresolvedPrincipal.MAP_TO:
+        destinations.append(("Unresolved principals", options.unresolved_group_id, options.unresolved_team_id))
+    for subject, group_id, team_id in destinations:
+        try:
+            if group_id:
+                await groups.get_group(session, group_id)
+            if team_id:
+                await teams.get_team(session, team_id)
+        except NotFoundError:
+            problems.append(PlanProblem(section=MappingSection.GROUPS, subject=subject, message="chosen permission destination no longer exists"))
     for macro in mappings.macros:
+        if macro.action is MacroAction.EXTENSION and macro.extension and macro.extension not in registries.page_extensions:
+            problems.append(PlanProblem(section=MappingSection.MACROS, subject=macro.name, message="chosen page renderer is not installed"))
         if macro.action is MacroAction.EXTENSION and not macro.extension:
             problems.append(PlanProblem(
                 section=MappingSection.MACROS, subject=macro.name,

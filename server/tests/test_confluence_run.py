@@ -452,3 +452,35 @@ async def test_ignored_comment_author_stays_unattributed_in_real_run(db):
     imported = await comments.list_comments(db, page.id, actor, entity_type='page')
     assert len(imported) == 1
     assert imported[0].author is None
+
+
+async def test_mapping_validation_identifies_deleted_destinations(db):
+    from radd.modules.confluenceimport.schemas import GroupMapping, MacroMapping, UserMapping
+    from radd.modules.confluenceimport.types import GroupAction, MacroAction, SpaceAction
+    actor = await _admin(db)
+    snapshot = await _snapshot(db, actor, [{'id':'1', 'title':'Destinations'}])
+    plan = await plan_service.create_plan(db, PlanCreate(name='Destinations', snapshot_id=snapshot.id))
+    mapping = plan_service.mappings_of(plan)
+    mapping.spaces[0].action = SpaceAction.MAP
+    mapping.spaces[0].space_id = uuid.uuid4()
+    mapping.users = [UserMapping(username='old', user_id=uuid.uuid4())]
+    mapping.groups = [GroupMapping(name='missing', action=GroupAction.MAP, group_id=uuid.uuid4()),
+                      GroupMapping(name='empty', action=GroupAction.MAP)]
+    mapping.macros = [MacroMapping(name='macro', action=MacroAction.EXTENSION, extension='not-installed')]
+    plan.mappings = mapping.model_dump(mode='json')
+    problems = await plan_service.validate_plan(db, plan.id)
+    assert {'spaces', 'users', 'groups', 'macros'} <= {p.section.value for p in problems}
+    assert any(p.subject == 'empty' and 'exactly one' in p.message for p in problems)
+
+
+async def test_empty_permission_mapping_does_not_fall_back_to_matching_account(db):
+    from radd.modules.confluenceimport import restrictions
+    from radd.modules.confluenceimport.schemas import GroupMapping
+    from radd.modules.confluenceimport.types import GroupAction
+    actor = await _admin(db)
+    source = {'read':{'restrictions':{'user':{'results':[{'username':actor.email}]}}}}
+    matched = await restrictions.resolve(db, source, options=PlanOptions(), overrides={})
+    assert not matched.blocked and len(matched.grants) == 1
+    blocked = await restrictions.resolve(db, source, options=PlanOptions(), overrides={
+        f'user:{actor.email}': GroupMapping(name=f'user:{actor.email}', action=GroupAction.MAP)})
+    assert blocked.blocked and not blocked.grants

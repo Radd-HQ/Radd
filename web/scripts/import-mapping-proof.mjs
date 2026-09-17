@@ -7,7 +7,7 @@ const root=new URL('../',import.meta.url).pathname,entry=root+'__mapping-proof.t
 const field=(id,name,extra={})=>({jira_id:id,jira_name:name,action:'ignore',target_key:'',create_name:'',create_type:null,create_options:null,create_scope:'global',value_map:{},observed_values:[],samples:[],band:'unused',band_reason:'',extend_options:false,...extra});
 let saved;
 const confluenceWrites=[];
-const confluencePlan={id:'fixture',mappings:{spaces:[{key:'DOC',name:'Docs',count:2,action:'create'}],macros:[],users:[],groups:[],labels:[],jira_links:[]},options:{quiet:true,import_attachments:false,import_comments:false,unresolved_principal:'fail'}};
+const confluencePlan={id:'fixture',mappings:{spaces:[{key:'DOC',name:'Docs',count:2,action:'create'},{key:'UNUSED',name:'Unused docs',count:0,action:'ignore'}],macros:[{name:'custom',count:1,action:'extension',extension:'toc'}],users:[{username:'old',count:1,action:'map',user_id:null}],groups:[{name:'group:old',count:1,action:'identity',group_id:null,team_id:null}],labels:[],jira_links:[]},options:{quiet:true,import_attachments:false,import_comments:false,unresolved_principal:'fail'}};
 const plan={id:'fixture',name:'Mapping proof',radd_project_id:'project',radd_project_key:'DEV',radd_project_name:'Development',provisioned_at:null,options:{quiet:true},mappings:{fields:[field('severity','Severity',{band:'in_use',action:'map',target_key:'severity',observed_values:['P1','P2']}),field('domain','Domain',{band:'in_use',action:'native',builtin_target:'team',observed_values:['Pipeline','Support']}),...Array.from({length:335},(_,i)=>field(`f${i}`,`Unused ${i}`))],statuses:[{jira:'In Review',count:200,action:'map',state_name:'Old missing state',category:'todo'}],issue_types:[],priorities:[],users:[],sprints:[],versions:[],components:[],link_types:[]}};
 let server,browser;
 try{
@@ -17,6 +17,9 @@ try{
   if(req.url.startsWith('/api/')){let data=[];
    if(req.url.includes('/confluence/')){if(req.method==='PATCH'){let body='';for await(const chunk of req)body+=chunk;const draft=JSON.parse(body);confluencePlan.mappings=draft.mappings;confluencePlan.options=draft.options;confluenceWrites.push('save:'+draft.mappings.spaces[0].action);}else if(req.method==='POST')confluenceWrites.push(req.url.includes('/validate')?'validate':'run');data=req.url.includes('/validate')?[]:confluencePlan;}
    else if(req.url.includes('/plans/fixture')){if(req.method==='PATCH'){let body='';for await(const chunk of req)body+=chunk;saved=JSON.parse(body);plan.mappings=saved.mappings;}data=plan;}
+   else if(req.url.includes('/page-spaces'))data=[{id:'space-target',name:'Company docs'}];
+   else if(req.url.includes('/pages/extensions'))data=[{name:'toc',label:'Contents'},{name:'callout',label:'Callout'}];
+   else if(req.url.includes('/users/directory')){data=[{id:'target-user',name:'Merged account'}];res.setHeader('X-Total-Count','1');}
    else if(req.url.includes('/fields'))data=[{key:'severity',name:'Severity',type:'select',options:['Critical','Normal'],project_ids:[]}];
    else if(req.url.includes('/states'))data=[{id:'review',name:'Review',category:'in_progress'},{id:'done',name:'Done',category:'done'}];
    else if(req.url.includes('/teams'))data=[{id:'pipeline',name:'Pipeline Engineering'},{id:'support',name:'Support'}];
@@ -57,7 +60,25 @@ try{
  await s.click('button',text=>text.trim()==='Dry run');
  for(let i=0;i<50&&!confluenceWrites.includes('run');i++)await new Promise(r=>setTimeout(r,50));
  assert.deepEqual(confluenceWrites,['save:ignore','validate','save:ignore','run']);
+ await s.click('summary',text=>text.includes('unused entries'));
+ await s.eval("[...document.querySelectorAll('tr')].find(r=>r.textContent.includes('Unused docs')).setAttribute('data-unused','yes')");
+ await s.click('[data-unused] button[aria-haspopup="listbox"]',text=>text==='Skip');
+ await s.click('[role="option"]',text=>text==='Use existing space');await new Promise(r=>setTimeout(r,200));
+ await s.click('button[aria-haspopup="listbox"]',text=>text.includes('Choose a destination'));
+ await s.click('[role="option"]',text=>text==='Company docs');
+ await s.click('button',text=>text.startsWith('People'));
+ await s.click('button[aria-label="Choose attribution account"]');await new Promise(r=>setTimeout(r,250));
+ await s.click('button',text=>text==='Merged account');
+ await s.click('button',text=>text.startsWith('Macros'));await new Promise(r=>setTimeout(r,200));
+ await s.click('button[aria-haspopup="listbox"]',text=>text==='Contents');
+ await s.click('[role="option"]',text=>text==='Callout');
+ await s.click('button',text=>text.trim()==='Save');
+ await new Promise(r=>setTimeout(r,200));
+ assert.ok(confluencePlan.mappings.spaces.some(x=>x.key==='UNUSED'&&x.action==='map'&&x.space_id==='space-target'));
+ assert.equal(confluencePlan.mappings.users[0].user_id,'target-user');
+ assert.equal(confluencePlan.mappings.macros[0].extension,'callout');
  assert.deepEqual(s.consoleErrors,[]);
+ console.log('PASS: Confluence existing-space, account and renderer selections save, including unused entries.');
  console.log('PASS: Confluence Check and Dry run each save the edited mapping before the action.');
  console.log(`PASS: status dropdown saves name/category; field/team translations save existing targets; 337-field catalog filters correctly (interaction sequence ${Date.now()-before} ms).`);
 }finally{browser?.close();await server?.close();await rm(entry,{force:true});}

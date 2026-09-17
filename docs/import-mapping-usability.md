@@ -34,3 +34,24 @@ Remaining sweep findings, saved as work items:
 
 These changes are local and await release. The deployed Emden instance has not
 been updated or used for these tests.
+
+## Follow-up implementation (RADD-1199 / RADD-1200)
+
+The remaining Confluence destination controls are now implemented: existing space,
+new space name, a searched/paged attribution account picker, directory group or
+feature team for permission mappings, installed macro renderer, and the fallback
+permission destination. Unused rows use the same editable controls. A background
+plan refetch no longer overwrites the local draft. Save/check/run failures are
+shown in the editor and action buttons are disabled while a request is pending.
+
+Validation checks missing or deleted destinations and missing renderer plugins.
+An incomplete explicit permission mapping blocks the page rather than falling
+back to identity matching; an incomplete existing-space mapping cannot create a
+new space. Ignored user mappings now stop before explicit-ID, email, domain and
+name resolution. This affects author/mention matching, independently of page ACL
+resolution. Page creation/version records still record an importing writer where
+no source author resolves; comments retain nullable source authorship.
+
+The browser proof selects/saves an existing space for an unused entry, a target
+account, and a macro renderer, in addition to the previous Jira checks. Backend
+checks cover ignored attribution and permission-safe mapping behavior.

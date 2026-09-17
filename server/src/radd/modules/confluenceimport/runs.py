@@ -383,8 +383,9 @@ async def _spaces(
     for entry in mappings.spaces:
         if entry.action is SpaceAction.IGNORE:
             continue
-        if entry.action is SpaceAction.MAP and entry.space_id:
-            out[entry.key] = entry.space_id
+        if entry.action is SpaceAction.MAP:
+            if entry.space_id:
+                out[entry.key] = entry.space_id
             continue
         existing = await page_spaces.find_space_by_external(
             session, snapshot.external_source, entry.key

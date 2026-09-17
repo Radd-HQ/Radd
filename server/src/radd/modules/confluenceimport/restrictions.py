@@ -143,6 +143,9 @@ async def _principal(
             out.grants.append((GrantSubject.TEAM, override.team_id, access))
             return
 
+        _block(out, key, name, page_title, "mapped destination is missing")
+        return
+
     subject = await _identity(session, name, is_user=is_user)
     if subject is not None:
         out.grants.append((subject[0], subject[1], access))

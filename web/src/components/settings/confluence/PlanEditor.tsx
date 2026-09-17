@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ChevronRight } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { Button, ButtonVariant } from "../../Button";
 import { SelectField } from "../../SelectField";
 import { api } from "../../../lib/api";
@@ -15,6 +15,9 @@ import {
   type ConfluencePlanOptions,
   type ConfluencePlanProblem,
 } from "../../../lib/types";
+
+import { MappingTarget } from "./MappingTarget";
+import { QueryError } from "../../QueryError";
 
 const TABS: ConfluenceMappingSection[] = ["spaces", "macros", "users", "groups", "labels", "jira_links"];
 
@@ -42,12 +45,14 @@ export function PlanEditor({
   const [problems, setProblems] = useState<ConfluencePlanProblem[]>([]);
   const [highlight, setHighlight] = useState("");
 
+  const initialized = useRef<string | null>(null);
   useEffect(() => {
-    if (plan.data) {
+    if (plan.data && initialized.current !== planId) {
+      initialized.current = planId;
       setDraft(plan.data.mappings);
       setOptions(plan.data.options);
     }
-  }, [plan.data]);
+  }, [plan.data, planId]);
 
   // "Fix in Macros → drawio" lands here: the tab switches and the row lights up.
   useEffect(() => {
@@ -87,6 +92,7 @@ export function PlanEditor({
     },
   });
 
+  if (plan.isError) return <QueryError label="import plan" error={plan.error}/>;
   if (!draft || !options) {
     return <p className="text-[13px] text-fg-faint">Loading the plan…</p>;
   }
@@ -95,6 +101,14 @@ export function PlanEditor({
   const used = rows.filter((row) => row.count > 0);
   const unused = rows.filter((row) => row.count === 0);
 
+  const patchRow = (subset: typeof rows, index: number, changes: Record<string, unknown>) => {
+    const list = [...(draft[tab] as unknown[])];
+    const realIndex = list.indexOf(subset[index]);
+    list[realIndex] = { ...list[realIndex] as object, ...changes };
+    setDraft({ ...draft, [tab]: list });
+    setProblems([]);
+  };
+  const busy = save.isPending || validate.isPending || run.isPending;
   return (
     <section className="rounded-xl border border-subtle bg-surface p-4" id="confluence-mappings">
       <header className="mb-3">
@@ -133,19 +147,11 @@ export function PlanEditor({
         section={tab}
         rows={used}
         highlight={highlight}
-        onChange={(index, changes) => {
-          const next = { ...draft };
-          const list = [...(next[tab] as unknown[])];
-          const target = used[index];
-          const realIndex = (next[tab] as unknown[]).indexOf(target);
-          list[realIndex] = { ...(target as object), ...changes };
-          (next[tab] as unknown[]) = list;
-          setDraft(next);
-        }}
+        onChange={(index, changes) => patchRow(used, index, changes)}
       />
 
       {unused.length > 0 && (
-        <UnusedSection section={tab} rows={unused} />
+        <details className="mt-3 rounded border border-subtle p-3"><summary>{unused.length} unused entries — expand to configure</summary><MappingRows section={tab} rows={unused} highlight={highlight} onChange={(index, changes) => patchRow(unused, index, changes)}/></details>
       )}
 
       <OptionsFieldset options={options} onChange={setOptions} />
@@ -174,20 +180,23 @@ export function PlanEditor({
         </ul>
       )}
 
+      {(save.isError || validate.isError || run.isError) && <QueryError label="mapping action" error={save.error ?? validate.error ?? run.error}/>}
       <div className="mt-4 flex flex-wrap justify-end gap-2">
-        <Button variant={ButtonVariant.ghost} onClick={() => save.mutate()}>
+        <Button disabled={busy} variant={ButtonVariant.ghost} onClick={() => save.mutate()}>
           Save
         </Button>
-        <Button variant={ButtonVariant.ghost} onClick={() => validate.mutate()}>
+        <Button disabled={busy} variant={ButtonVariant.ghost} onClick={() => validate.mutate()}>
           Check
         </Button>
         <Button
+          disabled={busy}
           variant={ButtonVariant.secondary}
           onClick={() => run.mutate(true)}
         >
           Dry run
         </Button>
         <Button
+          disabled={busy}
           onClick={() => run.mutate(false)}
         >
           Import
@@ -219,6 +228,7 @@ function MappingRows({
             <th className="py-1.5 pr-3 font-medium">Name</th>
             <th className="py-1.5 pr-3 font-medium">Used</th>
             <th className="py-1.5 pr-3 font-medium">What happens</th>
+            <th className="py-1.5 font-medium">Destination</th>
             <th className="py-1.5 font-medium">Why</th>
           </tr>
         </thead>
@@ -241,6 +251,7 @@ function MappingRows({
                     onChange={(action) => onChange(index, { action })}
                   />
                 </td>
+                <td className="p-2"><MappingTarget section={section} row={row} onChange={changes => onChange(index, changes)}/></td>
                 <td className="py-1.5 text-[12px] text-fg-muted">
                   {String(row.reason ?? row.sample_page ?? "")}
                 </td>
@@ -256,6 +267,7 @@ function MappingRows({
 const ACTIONS: Record<ConfluenceMappingSection, { value: string; label: string }[]> = {
   spaces: [
     { value: "create", label: "Create a space" },
+    { value: "map", label: "Use existing space" },
     { value: "ignore", label: "Skip" },
   ],
   macros: [
@@ -270,6 +282,7 @@ const ACTIONS: Record<ConfluenceMappingSection, { value: string; label: string }
   ],
   groups: [
     { value: "identity", label: "Same group" },
+    { value: "map", label: "Choose group or team" },
     { value: "fail", label: "Refuse the page" },
   ],
   labels: [
@@ -309,41 +322,6 @@ function ActionSelect({
 }
 
 /** Count 0 — collapsed and ignored by default, so it cannot crowd the decisions. */
-function UnusedSection({
-  section,
-  rows,
-}: {
-  section: ConfluenceMappingSection;
-  rows: Record<string, unknown>[];
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="mt-3 rounded-lg border border-subtle">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex w-full items-center gap-1.5 px-3 py-2 text-left text-[13px] text-fg-secondary hover:bg-elevated"
-      >
-        <ChevronRight
-          className={`size-4 text-fg-muted transition-transform ${open ? "rotate-90" : ""}`}
-          aria-hidden
-        />
-        {rows.length} unused in {CONFLUENCE_SECTION_LABELS[section].toLowerCase()} — ignored
-      </button>
-      {open && (
-        <ul className="border-t border-subtle px-3 py-2 text-[12px] text-fg-muted">
-          {rows.map((row, index) => (
-            <li key={index} className="py-0.5 font-mono">
-              {String(row.name ?? row.key ?? row.username ?? row.project_key ?? "")}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
 function OptionsFieldset({
   options,
   onChange,
@@ -405,8 +383,9 @@ function OptionsFieldset({
           hint="Refusing is the safe default: importing a restricted page open exposes it, and nobody notices."
         >
           <option value={ConfluenceUnresolvedPrincipal.fail}>Do not import that page</option>
-          <option value={ConfluenceUnresolvedPrincipal.map_to}>Restrict it to a chosen group</option>
+          <option value={ConfluenceUnresolvedPrincipal.map_to}>Restrict it to a chosen group or team</option>
         </SelectField>
+        {options.unresolved_principal === ConfluenceUnresolvedPrincipal.map_to && <MappingTarget section="groups" row={{action:"map",group_id:options.unresolved_group_id,team_id:options.unresolved_team_id}} onChange={changes => set({unresolved_group_id:changes.group_id as string | null,unresolved_team_id:changes.team_id as string | null})}/>}
       </div>
     </fieldset>
   );
