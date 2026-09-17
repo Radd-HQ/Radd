@@ -21,6 +21,7 @@ interface ViewBoardProps {
   onLoadColumn?: (key: string) => void;
   columnLoading?: (key: string) => boolean;
   columnError?: (key: string) => boolean;
+  columnHasMore?: (key: string) => boolean;
   /** Card layout (spec 109) — passed through to every card. */
   layout?: CardLayout;
   /** Directory names + field defs for placed `cf.<key>` cells. */
@@ -84,7 +85,7 @@ function ColumnCount({ count, limit }: { count: number; limit: number | undefine
  */
 export function ViewBoard({
   groups,
-  onLoadColumn, columnLoading, columnError,
+  onLoadColumn, columnLoading, columnError, columnHasMore,
   layout,
   usersById,
   cfByKey,
@@ -248,7 +249,7 @@ export function ViewBoard({
                   onSelectToggle={onSelectToggle}
                 />
               ))}
-              {onLoadColumn && group.total !== undefined && group.items.length < group.total && <button
+              {onLoadColumn && (columnHasMore ? columnHasMore(group.key) : group.total !== undefined && group.items.length < group.total) && <button
                 className="w-full rounded border border-subtle px-3 py-2 text-xs text-accent-text hover:bg-surface"
                 disabled={columnLoading?.(group.key)} onClick={()=>onLoadColumn(group.key)}>
                 {columnLoading?.(group.key) ? "Loading…" : columnError?.(group.key) ? "Retry loading this column" : `Show 25 more · ${group.items.length} of ${group.total}`}

@@ -1,7 +1,7 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
@@ -66,6 +66,7 @@ async def grouped_page(data: Annotated[GroupPageRequest, Query()], session: Sess
 
 @router.get("", response_model=list[ItemRead])
 async def list_items(
+    response: Response,
     session: Session,
     user: Actor,
     q: Annotated[str | None, Query(description=_Q_DOC)] = None,
@@ -83,6 +84,8 @@ async def list_items(
     archived: Annotated[bool, Query(description="true = archived items ONLY (spec 38)")] = False,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    cursor_mode: bool = False,
+    after: str | None = Query(None, max_length=16384),
 ) -> list[ItemRead]:
     filters = ItemListFilters(
         project_id=project_id,
@@ -98,9 +101,17 @@ async def list_items(
         cf=tuple(cf or ()),
         archived=archived,
     )
-    return await service.list_items(
-        session, actor=user, filters=filters, q=q, limit=limit, offset=offset
+    from .filters import FilterParseError
+    if after and not cursor_mode:
+        raise FilterParseError("after requires cursor_mode")
+    page = {} if cursor_mode else None
+    rows = await service.list_items(
+        session, actor=user, filters=filters, q=q, limit=limit, offset=offset,
+        cursor_page=page, after=after,
     )
+    if page is not None:
+        response.headers["X-Next-Cursor"] = page['next'] or ""
+    return rows
 
 
 _VALIDATE_DOC = (

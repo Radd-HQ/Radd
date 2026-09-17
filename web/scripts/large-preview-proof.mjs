@@ -31,7 +31,11 @@ const server=http.createServer(async(req,res)=>{
    const parent=url.searchParams.get('parent_id');
    const label=parent?'Child':q.includes('starred')?'Starred':q.includes('target <=')?'Due':'Assigned';
    const pool=Array.from({length:parent?120:60},(_,i)=>({...item(i+1000),title:`${label} preview ${i+1}`}));
-   data=p.endsWith('/count')?{total:pool.length}:pool.slice(Number(url.searchParams.get('offset')??0),Number(url.searchParams.get('offset')??0)+Number(url.searchParams.get('limit')??50));
+   const offset=Number(url.searchParams.get('after')??url.searchParams.get('offset')??0);
+   const limit=Number(url.searchParams.get('limit')??50);
+   data=p.endsWith('/count')?{total:pool.length}:pool.slice(offset,offset+limit);
+   if(url.searchParams.get('cursor_mode')==='true') res.setHeader('X-Next-Cursor',offset+limit<pool.length?String(offset+limit):'');
+
   } else if(p==='/api/v1/auth/me')data={id:'person',name:'Tester',email:'tester@example.com',global_role:'member',instance_role:'member',permissions:[],timezone:'UTC'};
   else if(p==='/api/v1/views/planning')data=view;
   else if(p==='/api/v1/views')data=[view];
@@ -83,6 +87,8 @@ try{
  await s.click('section[aria-label="Due soon"] button',t=>t==='Show more');
  await until(async()=> (await s.eval('document.body.innerText')).includes('Due preview 60'));
  assert.equal(await s.eval(`document.querySelectorAll('section[aria-label="Due soon"] li').length`),60);
+ assert(requests.some(r=>r.searchParams?.get('after')==='25'),'Show more uses a cursor');
+ assert(!requests.some(r=>r.searchParams?.has('offset')),'My Work does not send offsets');
  await s.screenshot('/tmp/radd-my-work-preview-proof.png');
  assert.deepEqual(s.consoleErrors,[]);
  console.log('PASS: deferred children, 50-row progressive children to exhaustion, bounded My Work, server ordering, all matches reachable.');

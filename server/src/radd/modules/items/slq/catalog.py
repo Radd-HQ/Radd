@@ -112,8 +112,8 @@ BUILTIN_OPS: dict[SlqField, FieldOps] = {
     SlqField.RANK: FieldOps(sortable=True),  # sort-only: no compare ops
     SlqField.BLOCKS: FieldOps(frozenset({CompareOp.EQ}), empty=True),
     SlqField.BLOCKED: FieldOps(frozenset({CompareOp.EQ}), empty=True),
-    SlqField.START: FieldOps(RANGE, empty=True),
-    SlqField.TARGET: FieldOps(RANGE, empty=True),
+    SlqField.START: FieldOps(RANGE, empty=True, sortable=True),
+    SlqField.TARGET: FieldOps(RANGE, empty=True, sortable=True),
     # Ancestor fields (spec 83): op surfaces mirror their item-level counterparts;
     # none are sortable, so ORDER BY rejects them like other unsupported sorts.
     SlqField.EPIC: FieldOps(EQUALITY, membership=True, empty=True),

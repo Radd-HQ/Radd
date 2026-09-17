@@ -36,6 +36,8 @@ _SORT_COLUMNS: dict[SlqField, tuple[ColumnElement[Any], ...]] = {
     # `category`: the tier order (backlog → todo → in progress → done →
     # canceled), then the state's position within the tier.
     SlqField.CATEGORY: (StateCategoryDef.position, State.position, State.name),
+    SlqField.START: WorkItem.start_date,
+    SlqField.TARGET: WorkItem.target_date,
     SlqField.CREATED: WorkItem.created_at,
     SlqField.UPDATED: WorkItem.updated_at,
     SlqField.NUMBER: WorkItem.number,

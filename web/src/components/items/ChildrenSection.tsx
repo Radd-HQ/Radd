@@ -52,7 +52,7 @@ export function ChildrenSection({
   const childKind = item.kind === ItemKind.epic ? ItemKind.issue : ItemKind.subtask;
   const isChecklist = childKind === ItemKind.subtask;
   const children = useInfiniteQuery({ ...childItemPagesQuery(item.id), enabled: expanded });
-  const childRows = children.data?.pages.flat() ?? [];
+  const childRows = [...new Map((children.data?.pages.flatMap(page=>page.rows) ?? []).map(item=>[item.id,item])).values()];
 
   // The rollup counts EVERY descendant; the list shows direct children. When the
   // card is collapsed the rollup is the only number available, so it is what the

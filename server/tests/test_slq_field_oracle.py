@@ -246,3 +246,15 @@ async def test_grouped_points_do_not_disclose_restricted_field(db, admin, projec
     assert all(c.points is None for c in restricted.cells)
     allowed = await grouped_items(db, admin, request)
     assert sum(allowed.column_points.values()) == 13
+
+
+async def test_cursor_sort_rechecks_field_access_on_continuation(db, admin, project, member):
+    for n in range(3):
+        await items.create_item(db, ItemCreate(project_id=project.id, title=f"points {n}", estimate_points=n), admin)
+    page = {}
+    kwargs = dict(actor=member, filters=ItemListFilters(project_id=project.id), q="ORDER BY points ASC", limit=1, offset=0)
+    await items.list_items(db, **kwargs, cursor_page=page)
+    assert page['next']
+    await _restrict_builtin_read(db, "estimate_points")
+    with pytest.raises(SlqError):
+        await items.list_items(db, **kwargs, cursor_page={}, after=page['next'])

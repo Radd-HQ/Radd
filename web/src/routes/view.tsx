@@ -1273,6 +1273,7 @@ export function ViewPage() {
                 onLoadColumn={isGrouped ? groupedItems.loadColumn : undefined}
                 columnLoading={groupedItems.columnLoading}
                 columnError={groupedItems.columnError}
+                columnHasMore={groupedItems.columnHasMore}
                 wipLimits={stateColumns ? view.wip_limits ?? undefined : undefined}
                 onSetWipLimit={canSetWipLimit ? setWipLimit : undefined}
                 onMoveToBucket={columnDraggable ? moveToBucket : undefined}
@@ -1321,8 +1322,8 @@ export function ViewPage() {
           <Button variant="secondary" size="sm" disabled={(groupedItems.group+1)*20 >= (groupedItems.first?.total_groups ?? 0) || groupedItems.isFetching} onClick={()=>groupedItems.setGroup(groupedItems.group+1)}>Next groups</Button>
         </>}
         {groupedItems.hasNextPage ? <>
-          <span>Loaded rows are a slice of each group.</span>
-          <Button variant="secondary" size="sm" disabled={groupedItems.isFetching} onClick={()=>void groupedItems.fetchNextPage()}>{groupedItems.isFetching ? "Loading…" : "Load more in these groups"}</Button>
+          <span>{view.view_type === "board" && !laneAxis ? "Load more using the button in each column." : "Loaded rows are a slice of each group."}</span>
+          {!(view.view_type === "board" && !laneAxis) && <Button variant="secondary" size="sm" disabled={groupedItems.isFetching} onClick={()=>void groupedItems.fetchNextPage()}>{groupedItems.isFetching ? "Loading…" : "Load more in these groups"}</Button>}
         </> : <span className="text-fg-muted">All issues in this group set are loaded.</span>}
         {groupedItems.isFetchNextPageError && <span role="alert">Could not load more. Try again.</span>}
       </div>}

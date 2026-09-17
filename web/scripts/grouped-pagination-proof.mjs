@@ -7,6 +7,7 @@ import path from 'node:path';
 import {openBrowser} from './lib/cdp.mjs';
 const dist=new URL('../dist/',import.meta.url).pathname;
 const requests=[];
+let failSecondWindow = true;
 const project={id:'project',key:'DEV',name:'Development',permissions:['item.read'],created_at:'2026-01-01'};
 const cycles=[{id:'active',name:'Current sprint',status:'active',start_date:'2026-09-10',end_date:'2026-09-24'}, {id:'draft',name:'Next sprint',status:'draft',start_date:null,end_date:null},{id:'closed',name:'Historical sprint',status:'completed'}];
 const view={id:'planning',project_id:project.id,name:'Planning',view_type:'board',query:'',query_string:'project_id=project',group_by:'state',swimlane_by:null,quick_filters:[],columns:['item','priority','state'],column_order:[],hidden_columns:[],cycle_filter:null,can_edit:false,can_manage:false};
@@ -19,10 +20,11 @@ const server=http.createServer(async(req,res)=>{
   let data=[]; const p=url.pathname;
   if(p==='/api/v1/sla-queue-items'){requests.push({queue:url});data=[{...item(url.searchParams.get('offset')==='200'?901:900),title:url.searchParams.get('offset')==='200'?'Later queue page':'Overdue queue item'}];}
   else if(p==='/api/v1/items/grouped'){
-   const request={item_offset:Number(url.searchParams.get('item_offset')??0),axis:url.searchParams.get('axis'),column_key:url.searchParams.get('column_key')};requests.push({group:request});
+   const request={after:url.searchParams.get('after'),item_offset:Number(url.searchParams.get('after')??url.searchParams.get('item_offset')??0),axis:url.searchParams.get('axis'),column_key:url.searchParams.get('column_key')};requests.push({group:request});
+   if(request.after==='50' && failSecondWindow){failSecondWindow=false;res.statusCode=503;res.setHeader('content-type','application/json');res.end(JSON.stringify({detail:'Temporary fixture failure'}));return;}
    const make=(n,state)=>({...item(n),title:`Board work ${n}`,state:{id:state,name:state==='todo'?'To do':'In progress',category:state==='todo'?'todo':'in_progress'}});
-   const all=Array.from({length:30},(_,i)=>make(i+1,'todo'));const rare=make(300,'progress');
-   data={cells:[{column:'todo',lane:'__all__',total:30,items:all.slice(request.item_offset,request.item_offset+25)},{column:'progress',lane:'__all__',total:1,items:request.item_offset?[]:[rare]}],total_groups:2,column_points:{todo:90,progress:3},column_totals:{todo:30,progress:1},lane_totals:{__all__:31}};
+   const all=Array.from({length:80},(_,i)=>make(i+1,'todo'));const rare=make(300,'progress');
+   data={cells:[{column:'todo',lane:'__all__',total:80,next_cursor:request.item_offset+25<80?String(request.item_offset+25):null,items:all.slice(request.item_offset,request.item_offset+25)},{column:'progress',lane:'__all__',total:1,items:request.item_offset?[]:[rare]}],total_groups:2,column_points:{todo:240,progress:3},column_totals:{todo:80,progress:1},lane_totals:{__all__:81}};
    if(request.column_key) data.cells=data.cells.filter(c=>c.column===request.column_key);
   } else if(p==='/api/v1/items'||p==='/api/v1/items/count'){
    requests.push(url);
@@ -61,12 +63,24 @@ try{
  let text=await s.eval('document.body.innerText');assert.ok(text.includes('Board work 1'));assert.ok(text.includes('26 loaded'));assert.ok(!text.includes('Board work 30\n'));
  assert.ok(requests.every(r=>r.group),'Board must never request a globally paged list/count');
  await s.click('button',text=>text.includes('Show 25 more'));
- await until(async()=> (await s.eval('document.body.innerText')).includes('31 loaded'));
- text=await s.eval('document.body.innerText');assert.ok(text.includes('Board work 300'));assert.ok(text.includes('31 loaded'));
- assert.equal(requests[1].group.item_offset,25);assert.equal(requests[1].group.column_key,'todo');assert.ok(text.includes('90'),'Full column points remain visible');
+ await until(async()=> (await s.eval('document.body.innerText')).includes('51 loaded'));
+ text=await s.eval('document.body.innerText');assert.ok(text.includes('Board work 300'));assert.ok(text.includes('51 loaded'));
+ assert.equal(requests[1].group.item_offset,25);assert.equal(requests[1].group.after,'25');assert.equal(requests[1].group.column_key,'todo');assert.ok(text.includes('240'),'Full column points remain visible');
+ await s.click('button',text=>text.includes('Show 25 more'));
+ await until(async()=> (await s.eval('document.body.innerText')).includes('Retry loading this column'));
+ assert((await s.eval('document.body.innerText')).includes('Board work 50'),'A failed next window must retain earlier cards');
+ await s.click('button',text=>text.includes('Retry loading this column'));
+ await until(async()=> (await s.eval('document.body.innerText')).includes('76 loaded'));
+ for(const expected of [81]) {
+  await s.click('button',text=>text.includes('Show 25 more'));
+  await until(async()=> (await s.eval('document.body.innerText')).includes(`${expected} loaded`));
+ }
+ assert.deepEqual(requests.map(r=>r.group.after),[null,'25','50','50','75'],'Append reuses previous cursor windows');
+ text=await s.eval('document.body.innerText');
+ assert(!text.includes('Show 25 more'),'End of column has no more button');
  assert(!text.includes('Load more in these groups'),'No redundant group paging after all rows loaded');
  await s.eval(`document.querySelector('[title="Story points in all matching column issues"]').scrollIntoView({block:'center'})`);
- await s.screenshot('/tmp/radd-grouped-board-proof.png');assert.deepEqual(s.consoleErrors,[]);
+ await s.screenshot('/tmp/radd-grouped-board-proof.png');assert.deepEqual(s.consoleErrors.filter(e=>!e.includes('503')),[]);
  view.view_type='queue';view.group_by=null;requests.length=0;
  await s.navigate(`http://127.0.0.1:${server.address().port}/p/DEV/v/planning`,2000);
  await until(async()=> (await s.eval('document.body.innerText')).includes('Overdue queue item'));
@@ -74,7 +88,7 @@ try{
  await s.click('button[aria-label="Next page"]');
  await until(async()=> (await s.eval('document.body.innerText')).includes('Later queue page'));
  assert.ok(requests.some(r=>r.queue?.searchParams.get('offset')==='200'));
- assert.deepEqual(s.consoleErrors,[]);
+ assert.deepEqual(s.consoleErrors.filter(e=>!e.includes('503')),[]);
  console.log('PASS: queue uses the server urgency endpoint across pagination.');
  console.log('PASS: board immediately shows rare state, loads further rows without losing other groups, displays full count and avoids global paging.');
 }finally{browser?.close();await new Promise(resolve=>server.close(resolve));}

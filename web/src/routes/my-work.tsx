@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { api } from "../lib/api";
+import { api, type CursorPage } from "../lib/api";
 import { Entity, entityMeta } from "../lib/cache";
 import { Link } from "@tanstack/react-router";
 import { MyForms } from "../components/forms/MyForms";
@@ -262,19 +262,19 @@ function WorkPreview({icon, title, q, limit, showDue = false, empty}: {
   icon: LucideIcon; title: string; q: string; limit: number; showDue?: boolean; empty: string;
 }) {
   const query = useInfiniteQuery({
-    queryKey: ["my-work-preview", q, limit], meta: entityMeta(Entity.item), initialPageParam: 0,
-    queryFn: ({signal, pageParam}) => api.get<Item[]>("/items", {signal, query: {q, limit: String(limit), offset: String(pageParam)}}),
-    getNextPageParam: (last: Item[], _pages: Item[][], offset: number) => last.length === limit ? offset + limit : undefined,
+    queryKey: ["my-work-cursor-preview", q, limit], meta: entityMeta(Entity.item), initialPageParam: null as string | null,
+    queryFn: ({signal, pageParam}) => api.getCursor<Item>("/items", {signal, query: {q, limit: String(limit), after: pageParam ?? undefined}}),
+    getNextPageParam: (last: CursorPage<Item>) => last.next ?? undefined,
   });
   const count = useQuery(itemsCountQuery({}, q));
-  const rows = query.data?.pages.flat() ?? [];
+  const rows = [...new Map((query.data?.pages.flatMap(page=>page.rows) ?? []).map(item=>[item.id,item])).values()];
   return <Section icon={icon} title={title} count={count.data?.total ?? rows.length}
     empty={query.isPending ? "Loading…" : query.isError ? "Could not load issues." : empty}
     action={<span className="flex items-center gap-2 text-xs text-fg-muted">
       {query.isPending ? "Loading…" : `${rows.length} shown`}
       {count.isError ? " · Total unavailable" : !count.data ? " · Counting…" : ""}
       {query.isError && <button className="underline" onClick={() => void query.refetch()}>Retry</button>}
-      {query.hasNextPage && (!count.data || rows.length < count.data.total) && <button className="text-accent-text underline" disabled={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()}>{query.isFetchingNextPage ? "Loading…" : "Show more"}</button>}
+      {query.hasNextPage && <button className="text-accent-text underline" disabled={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()}>{query.isFetchingNextPage ? "Loading…" : "Show more"}</button>}
     </span>}>
     {query.isError && !rows.length && <li role="alert" className="p-3 text-xs text-fg-muted">Could not load issues. Use Retry.</li>}
     {rows.map(item => <ItemRow key={item.id} item={item} showDue={showDue} />)}

@@ -1,6 +1,7 @@
 """Listing + SLQ: the filtered/paginated list and the live SLQ validation."""
 
 import uuid
+from dataclasses import asdict
 from collections.abc import Sequence
 
 from sqlalchemy import select
@@ -14,7 +15,7 @@ from radd.modules.fields.models import FieldDefinition
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 
-from .. import slq
+from .. import slq, cursors
 from ..filters import ItemListFilters
 from ..hydration import hydrate
 from ..listing import apply_filters, cf_definitions
@@ -67,6 +68,8 @@ async def list_items(
     limit: int,
     offset: int,
     selected_ids: Sequence[uuid.UUID] | None = None,
+    cursor_page: dict | None = None,
+    after: str | None = None,
 ) -> list[ItemRead]:
     projects: dict[uuid.UUID, Project] = {}
     permissions: dict[uuid.UUID, frozenset[Permission]] = {}
@@ -108,9 +111,7 @@ async def list_items(
             definitions_by_key=await cf_definitions(session, projects.get(filters.project_id)),
             current_user_id=actor.id,
             project_id=filters.project_id,
-            denied_fields=await denied_slq_fields(
-                session, actor, projects.get(filters.project_id)
-            ),
+            denied_fields=await denied_slq_fields(session, actor, projects.get(filters.project_id)),
         )
         if compiled.where is not None:
             query = query.where(compiled.where)
@@ -122,16 +123,47 @@ async def list_items(
     # backfilled/assigned newest-first so this matches the old created-desc default
     # while being reorderable. Explicit sorts keep created-desc as the tiebreak.
     default_order = () if order else (WorkItem.rank.asc(),)
-    query = (
-        query.order_by(*order, *default_order, WorkItem.created_at.desc()).limit(limit).offset(offset)
-    )
-    items = list((await session.execute(query)).scalars())
+    ordering = (*order, *default_order, WorkItem.created_at.desc(), WorkItem.id.asc())
+    if cursor_page is not None:
+        if offset or selected_ids is not None:
+            from ..filters import FilterParseError
+
+            raise FilterParseError(
+                "Cursor continuation cannot be combined with offset or selected IDs"
+            )
+        scope = cursors.scope_key(actor, [asdict(filters), q or "", "list-v1"])
+        expressions = [column for column, _ in cursors.terms(ordering)]
+        position = 0
+        if after:
+            boundary, position = cursors.decode(after, scope, len(expressions))
+            query = (
+                query.offset(position)
+                if boundary is None
+                else query.where(cursors.after_clause(ordering, boundary))
+            )
+        rows = list(
+            (
+                await session.execute(
+                    query.add_columns(*expressions).order_by(*ordering).limit(limit + 1)
+                )
+            ).all()
+        )
+        page = rows[:limit]
+        items = [row[0] for row in page]
+        cursor_page["next"] = (
+            cursors.encode(scope, page[-1][1:], position + len(page)) if len(rows) > limit else None
+        )
+    else:
+        query = query.order_by(*ordering).limit(limit).offset(offset)
+        items = list((await session.execute(query)).scalars())
 
     for pid in {i.project_id for i in items} - projects.keys():
         project = await projects_service.get_project(session, pid)
         projects[pid] = project
         permissions[pid] = await authz.effective_permissions(session, actor, project=project)
-    visible = [i for i in items if authz.holds_base(permissions[i.project_id], Permission.ITEM_READ)]
+    visible = [
+        i for i in items if authz.holds_base(permissions[i.project_id], Permission.ITEM_READ)
+    ]
     readable_map = await authz.readable_projects(session, actor)
     reads = await hydrate(
         session,

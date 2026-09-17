@@ -625,3 +625,23 @@ other assignments before pagination. `childItemPagesQuery` loads direct children
 in workflow category/state order, 50 at a time on expansion, in issue detail and
 board cards. `childItemsQuery` remains the complete relation for other consumers;
 rollup and child counts remain independent of the number of displayed rows.
+
+### Hybrid continuation (RADD-1209)
+
+`GET /items?cursor_mode=true` keeps its Item array response and adds
+`X-Next-Cursor`; callers send `after` for continuation, never with an offset.
+`items/cursors.py` uses compiler ordering expressions, PostgreSQL null placement,
+and a unique ID tie-breaker. Boundary values are encrypted with the existing
+instance secretbox and bound to actor, query and structured scope. Each page
+rechecks current authorization; tokens are positions, not access grants. Large
+custom-text boundaries fall back to an encrypted offset token to keep URLs below
+proxy limits. These rare windows retain offset pagination's mutation caveats.
+
+My Work and expanded children use sequential cursor pages behind the same Show
+more buttons. Ordinary boards receive a cursor per column and independently
+continue it; invalidation rebuilds the cursor chain and cached windows are reused
+on append. Numbered list/backlog and swimlane group navigation remain available.
+Full count/stat queries remain separate. `target`/`start` date ORDER BY support
+also fixes the Due soon query's previously unsupported target sort. Cursor
+reads are not snapshots: moving an issue across the sort boundary can still
+change what a later page sees. Refresh rebuilds the sequence from its start.

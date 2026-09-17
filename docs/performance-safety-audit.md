@@ -75,3 +75,18 @@ blocked recovery response), and My Work/children proofs. The Planning proof also
 covers search beyond the first page, full progress under completed-row filtering,
 range selection, keyboard focus, drag/drop and mobile controls. Screenshots were
 inspected locally. Fixture tests establish behavior, not deployed performance.
+
+## Hybrid follow-up approved: RADD-1209
+
+Optional cursor continuation is now used for My Work, expanded direct children,
+and ordinary board columns. Existing numbered lists/backlog, matrix paging and
+Planning's sprint stream retain their current navigation. The Show more UI is
+unchanged; aggregate statistics are independent. Tests cover mixed directions,
+nulls, workflow ordering, custom numeric fields, deleted anchors, insertion before
+the boundary, scope mismatch and permission checks on subsequent requests.
+
+This addresses the safe optional mode discussed under D1, not a wholesale cursor
+replacement. Large custom-text boundaries use a bounded encrypted offset token
+instead of emitting an unusably long URL. Mutable sort values still mean this is
+not snapshot isolation. No new indexes or production latency guarantee are
+claimed; complicated filters, authorization and full counts can remain expensive.

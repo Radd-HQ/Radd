@@ -28,7 +28,7 @@ import { ErrorText } from "../ErrorText";
 export function CardChildren({ parentId }: { parentId: string }) {
   const openRef = useOpenIssueRef();
   const children = useInfiniteQuery(childItemPagesQuery(parentId));
-  const sorted = children.data?.pages.flat() ?? [];
+  const sorted = [...new Map((children.data?.pages.flatMap(page=>page.rows) ?? []).map(item=>[item.id,item])).values()];
 
   return (
     // The card's own onClick opens the parent in peek; nothing in here should.

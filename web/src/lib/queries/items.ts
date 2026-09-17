@@ -3,7 +3,7 @@
 import { commentFeedQuery, CommentSection } from "./comment-feed";
 import { queryOptions } from "@tanstack/react-query";
 import { allRelationRows } from "../pagination";
-import { api } from "../api";
+import { api, type CursorPage } from "../api";
 import { Entity, entityMeta } from "../cache";
 import {
   ApiPath,
@@ -104,11 +104,11 @@ export const itemCommentFeedQuery = (itemId: string) =>
 
 /** Incremental direct-child reads; complete-relation callers retain childItemsQuery. */
 export const childItemPagesQuery = (parentId: string) => ({
-  queryKey: ["child-item-pages", parentId],
+  queryKey: ["child-item-cursors", parentId],
   meta: entityMeta(Entity.item),
-  initialPageParam: 0,
-  queryFn: ({ signal, pageParam }: {signal: AbortSignal; pageParam: number}) =>
-    api.get<Item[]>(ApiPath.items, {signal, query: {parent_id: parentId,
-      q: "ORDER BY category ASC, number ASC", limit: "50", offset: String(pageParam)}}),
-  getNextPageParam: (last: Item[], _pages: Item[][], offset: number) => last.length === 50 ? offset + 50 : undefined,
+  initialPageParam: null as string | null,
+  queryFn: ({ signal, pageParam }: {signal: AbortSignal; pageParam: string | null}) =>
+    api.getCursor<Item>(ApiPath.items, {signal, query: {parent_id: parentId,
+      q: "ORDER BY category ASC, number ASC", limit: "50", after: pageParam ?? undefined}}),
+  getNextPageParam: (last: CursorPage<Item>) => last.next ?? undefined,
 });

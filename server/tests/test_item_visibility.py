@@ -144,6 +144,17 @@ async def test_list_count_and_get_agree(db, world, who):
         db, actor=actor, filters=ItemListFilters(project_id=project.id), limit=50, offset=0
     )
     assert {i.id for i in listed} == expected, f"list for {who}"
+    cursor_ids, after = [], None
+    for _ in range(5):
+        page = {}
+        chunk = await items.list_items(db, actor=actor, filters=ItemListFilters(project_id=project.id),
+            limit=1, offset=0, cursor_page=page, after=after)
+        cursor_ids.extend(i.id for i in chunk)
+        after = page['next']
+        if not after:
+            break
+    assert set(cursor_ids) == expected and len(cursor_ids) == len(expected), f"cursor visibility for {who}"
+
 
     query, _ = await visible_ids_query(
         db, actor=actor, filters=ItemListFilters(project_id=project.id), q=None

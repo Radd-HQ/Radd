@@ -106,6 +106,13 @@ export interface Paged<T> {
   total: number | null;
 }
 
+export interface CursorPage<T> { rows: T[]; next: string | null }
+
+async function cursorRequest<T>(path: string, options: Omit<RequestOptions, "method" | "body"> = {}): Promise<CursorPage<T>> {
+  const response = await rawRequest(path, {...options, query: {...options.query, cursor_mode: "true"}});
+  return {rows: await response.json() as T[], next: response.headers.get("X-Next-Cursor") || null};
+}
+
 const TOTAL_COUNT_HEADER = "X-Total-Count";
 
 async function pagedRequest<T>(
@@ -279,6 +286,7 @@ export function deniedCustomFieldKeys(error: unknown): string[] {
 }
 
 export const api = {
+  getCursor: cursorRequest,
   get: <T>(path: string, options?: Omit<RequestOptions, "method" | "body">) =>
     request<T>(path, options),
   /** GET a paged list: rows + the X-Total-Count total (null when unpaged). */

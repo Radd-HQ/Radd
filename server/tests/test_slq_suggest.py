@@ -324,6 +324,7 @@ async def test_order_by_offers_sortable_fields_only():
     listed = set(values(await respond("ORDER BY ")))
     assert listed == {
         "kind", "priority", "title", "number", "created", "updated", "flagged", "rank", "points",  # builtins
+        "start", "target",  # RADD-1209: planning date order
         "state", "category",  # RADD-1176: workflow position / tier order
         "notes", "homepage", "reviewer", "show", "budget", "spent", "due", "billable",
     }

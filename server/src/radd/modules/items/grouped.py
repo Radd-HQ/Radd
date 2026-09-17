@@ -9,7 +9,8 @@ from sqlalchemy.orm import aliased
 from radd.exceptions import ForbiddenError
 from radd.modules.workflow.models import State, StateCategoryDef
 
-from .filters import ItemListFilters
+from .filters import ItemListFilters, FilterParseError
+from . import cursors
 from .hierarchy import nearest_epic_case
 from .models import WorkItem
 from .schemas import ItemRead
@@ -24,6 +25,8 @@ class GroupPageRequest(BaseModel):
     q: str = ""
     axis: str
     column_key: str | None = None
+    cursor_mode: bool = False
+    after: str | None = Field(None, max_length=16384)
     lane: str | None = None
     hidden_columns: list[str] = Field(default_factory=list)
     hidden_lanes: list[str] = Field(default_factory=list)
@@ -43,6 +46,7 @@ class GroupCell(BaseModel):
     total: int
     items: list[ItemRead]
     points: float | None = None
+    next_cursor: str | None = None
 
 
 class GroupPage(BaseModel):
@@ -73,6 +77,10 @@ def _axis(axis, project_id, epic):
 
 
 async def grouped_items(session, actor, data: GroupPageRequest) -> GroupPage:
+    if data.after and (
+        not data.cursor_mode or data.column_key is None or data.lane or data.item_offset
+    ):
+        raise FilterParseError("Board continuation requires one column without swimlanes or offset")
     filters = ItemListFilters(project_id=data.project_id)
     visible, order = await visible_ids_query(session, actor=actor, filters=filters, q=data.q)
     # Group values must obey the same field-read restrictions as SLQ predicates.
@@ -130,7 +138,12 @@ async def grouped_items(session, actor, data: GroupPageRequest) -> GroupPage:
     counts = list(
         (
             await session.execute(
-                select(ranked.c.col, ranked.c.lane, func.count(), func.coalesce(func.sum(ranked.c.points), 0.0))
+                select(
+                    ranked.c.col,
+                    ranked.c.lane,
+                    func.count(),
+                    func.coalesce(func.sum(ranked.c.points), 0.0),
+                )
                 .group_by(ranked.c.col, ranked.c.lane)
                 .order_by(func.min(ranked.c.global_pos), ranked.c.col, ranked.c.lane)
             )
@@ -157,29 +170,85 @@ async def grouped_items(session, actor, data: GroupPageRequest) -> GroupPage:
         lane_totals[ln] = lane_totals.get(ln, 0) + count
     if not chosen:
         return GroupPage(
-            cells=[], total_groups=len(counts), column_totals=column_totals, lane_totals=lane_totals, column_points=column_points
+            cells=[],
+            total_groups=len(counts),
+            column_totals=column_totals,
+            lane_totals=lane_totals,
+            column_points=column_points,
         )
     from sqlalchemy import tuple_
 
-    # Only selected cells need per-cell ranks. Computing global ranks here as
-    # well forced a second whole-result sort on every item slice.
-    selected = query.where(
-        tuple_(column, lane).in_([(col, ln) for col, ln, _, _ in chosen])
-    ).add_columns(
-        func.row_number().over(partition_by=(column, lane), order_by=ranking).label("pos")
-    ).subquery()
-    rows = list(
-        (
-            await session.execute(
-                select(selected)
-                .where(
-                    selected.c.pos > data.item_offset,
-                    selected.c.pos <= data.item_offset + data.item_limit,
-                )
-                .order_by(selected.c.col, selected.c.lane, selected.c.pos)
-            )
-        ).all()
+    boundary_columns = [
+        column.label(f"cursor_{i}") for i, (column, _) in enumerate(cursors.terms(ranking))
+    ]
+    scope_data = data.model_dump(
+        mode="json",
+        exclude={
+            "after",
+            "cursor_mode",
+            "column_key",
+            "item_offset",
+            "item_limit",
+            "group_offset",
+            "group_limit",
+        },
     )
+
+    def cell_scope(col, ln):
+        return cursors.scope_key(actor, ["board-v1", scope_data, col, ln])
+
+    selected_query = query.where(tuple_(column, lane).in_([(col, ln) for col, ln, _, _ in chosen]))
+    if data.after:
+        boundary, cursor_position = cursors.decode(
+            data.after, cell_scope(data.column_key, "__all__"), len(ranking)
+        )
+        selected_query = (
+            selected_query.offset(cursor_position)
+            if boundary is None
+            else selected_query.where(cursors.after_clause(ranking, boundary))
+        )
+        fetched = list(
+            (
+                await session.execute(
+                    selected_query.add_columns(*boundary_columns)
+                    .order_by(*ranking)
+                    .limit(data.item_limit + 1)
+                )
+            ).all()
+        )
+        rows = fetched[: data.item_limit]
+        continued_more = len(fetched) > data.item_limit
+    else:
+        selected = selected_query.add_columns(
+            *boundary_columns,
+            func.row_number().over(partition_by=(column, lane), order_by=ranking).label("pos"),
+        ).subquery()
+        rows = list(
+            (
+                await session.execute(
+                    select(selected)
+                    .where(
+                        selected.c.pos > data.item_offset,
+                        selected.c.pos <= data.item_offset + data.item_limit,
+                    )
+                    .order_by(selected.c.col, selected.c.lane, selected.c.pos)
+                )
+            ).all()
+        )
+        continued_more = False
+        cursor_position = data.item_offset
+
+    def next_cursor(col, ln, count):
+        cell_rows = [r for r in rows if r.col == col and r.lane == ln]
+        more = continued_more if data.after else count > data.item_offset + len(cell_rows)
+        if not data.cursor_mode or data.lane or not more or not cell_rows:
+            return None
+        return cursors.encode(
+            cell_scope(col, ln),
+            [getattr(cell_rows[-1], f"cursor_{i}") for i in range(len(ranking))],
+            cursor_position + len(cell_rows),
+        )
+
     ids = [row.id for row in rows]
     reads = (
         await list_items(
@@ -194,11 +263,16 @@ async def grouped_items(session, actor, data: GroupPageRequest) -> GroupPage:
             column=col,
             lane=ln,
             total=count,
+            next_cursor=next_cursor(col, ln, count),
             points=float(points) if points_readable else None,
             items=[by_id[r.id] for r in rows if r.col == col and r.lane == ln and r.id in by_id],
         )
         for col, ln, count, points in chosen
     ]
     return GroupPage(
-        cells=cells, total_groups=len(counts), column_totals=column_totals, lane_totals=lane_totals, column_points=column_points
+        cells=cells,
+        total_groups=len(counts),
+        column_totals=column_totals,
+        lane_totals=lane_totals,
+        column_points=column_points,
     )

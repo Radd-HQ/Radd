@@ -423,7 +423,6 @@ async def test_type_invalid_operators(text: str, position: int, fragment: str):
         ("blocks = TD5", 9, "expected an item key like TD-12"),
         ("blocked = 42", 10, "expected an item key like TD-12"),
         ("ORDER BY cycle", 9, "field 'cycle' is not sortable"),
-        ("ORDER BY start", 9, "field 'start' is not sortable"),
         ("ORDER BY blocks", 9, "field 'blocks' is not sortable"),
     ],
 )
@@ -768,3 +767,9 @@ async def test_cycle_lifecycle_query_rejects_invalid_and_read_restricted_fields(
     with pytest.raises(SlqError, match="read-restricted"):
         await compile_query(None, parse("cycle.status = completed"), definitions_by_key={},
                             current_user_id=USER_ID, denied_fields=frozenset({"cycle.status"}))
+
+
+async def test_planning_dates_are_sortable():
+    compiled = await compile_text("ORDER BY start ASC, target DESC")
+    assert "start_date ASC" in str(compiled.order[0])
+    assert "target_date DESC" in str(compiled.order[1])
