@@ -115,3 +115,28 @@ async def test_queue_live_deadline_beats_global_rank_and_explicit_order_wins(set
         db, actor, project_id=project.id, q="ORDER BY number ASC", limit=1, offset=0
     )
     assert [i.id for i in explicit] == [normal.id]
+
+
+@pytest.mark.parametrize("axis", ["state", "priority", "assignee", "epic"])
+async def test_group_slices_preserve_order_and_totals_with_lanes(setup, axis):
+    db, actor, project = setup
+    for n in range(9):
+        await items.create_item(
+            db,
+            ItemCreate(project_id=project.id, title=f"slice {n}",
+                       priority="high" if n % 2 else "normal"),
+            actor=actor,
+        )
+    request = GroupPageRequest(project_id=project.id, axis=axis, lane="priority",
+                               q="ORDER BY number DESC", item_limit=2)
+    full = await grouped_items(db, actor, request.model_copy(update={"item_limit": 50}))
+    expected = {(c.column, c.lane): [i.id for i in c.items] for c in full.cells}
+    seen = {key: [] for key in expected}
+    for offset in range(0, 10, 2):
+        page = await grouped_items(db, actor, request.model_copy(update={"item_offset": offset}))
+        assert page.column_totals == full.column_totals
+        assert page.lane_totals == full.lane_totals
+        assert [(c.column, c.lane) for c in page.cells] == list(expected)
+        for cell in page.cells:
+            seen[cell.column, cell.lane].extend(i.id for i in cell.items)
+    assert seen == expected

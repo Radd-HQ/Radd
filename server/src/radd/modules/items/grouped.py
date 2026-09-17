@@ -93,10 +93,12 @@ async def grouped_items(session, actor, data: GroupPageRequest) -> GroupPage:
         select(WorkItem.id, column.label("col"), lane.label("lane"))
         .join(State, State.id == WorkItem.state_id)
         .join(StateCategoryDef, StateCategoryDef.key == State.category_key)
-        .outerjoin(parent, parent.id == WorkItem.parent_id)
-        .outerjoin(grand, grand.id == parent.parent_id)
         .where(WorkItem.id.in_(visible))
     )
+    if "epic" in (data.axis, data.lane):
+        query = query.outerjoin(parent, parent.id == WorkItem.parent_id).outerjoin(
+            grand, grand.id == parent.parent_id
+        )
     if data.hidden_columns:
         query = query.where(column.not_in(data.hidden_columns))
     if data.hidden_lanes:
@@ -116,7 +118,6 @@ async def grouped_items(session, actor, data: GroupPageRequest) -> GroupPage:
         else (WorkItem.rank.asc(), WorkItem.created_at.desc(), WorkItem.id.asc())
     )
     ranked = query.add_columns(
-        func.row_number().over(partition_by=(column, lane), order_by=ranking).label("pos"),
         func.row_number().over(order_by=ranking).label("global_pos"),
     ).subquery()
     counts = list(
@@ -150,16 +151,22 @@ async def grouped_items(session, actor, data: GroupPageRequest) -> GroupPage:
         )
     from sqlalchemy import tuple_
 
+    # Only selected cells need per-cell ranks. Computing global ranks here as
+    # well forced a second whole-result sort on every item slice.
+    selected = query.where(
+        tuple_(column, lane).in_([(col, ln) for col, ln, _ in chosen])
+    ).add_columns(
+        func.row_number().over(partition_by=(column, lane), order_by=ranking).label("pos")
+    ).subquery()
     rows = list(
         (
             await session.execute(
-                select(ranked)
+                select(selected)
                 .where(
-                    tuple_(ranked.c.col, ranked.c.lane).in_([(col, ln) for col, ln, _ in chosen]),
-                    ranked.c.pos > data.item_offset,
-                    ranked.c.pos <= data.item_offset + data.item_limit,
+                    selected.c.pos > data.item_offset,
+                    selected.c.pos <= data.item_offset + data.item_limit,
                 )
-                .order_by(ranked.c.col, ranked.c.lane, ranked.c.pos)
+                .order_by(selected.c.col, selected.c.lane, selected.c.pos)
             )
         ).all()
     )

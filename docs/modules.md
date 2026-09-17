@@ -589,3 +589,10 @@ retrieval belongs to `items.grouped`; the live urgency endpoint belongs to `slas
 and consumes the public `items.service.visible_ids_query` and `list_items(selected_ids=)`
 seams. Existing slas → items and confluenceimport → pages/auth/groups/teams dependencies
 remain unchanged. [Grouped/queue retrieval details](grouped-queue-pagination.md).
+
+### Large-view performance safety audit (RADD-1204)
+
+`docs/performance-safety-audit.md` records compatibility constraints for the
+approved optimization wave. Grouped reads compute global rank only for group
+ordering; selected cells alone receive per-cell ranks. Ancestor joins are used
+only for epic axes. Authorization, group ordering and page totals are unchanged.
