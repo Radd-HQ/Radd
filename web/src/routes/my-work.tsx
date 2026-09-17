@@ -1,16 +1,19 @@
+import type { LucideIcon } from "lucide-react";
+import { api } from "../lib/api";
+import { Entity, entityMeta } from "../lib/cache";
 import { Link } from "@tanstack/react-router";
 import { MyForms } from "../components/forms/MyForms";
 import { ListSection } from "../components/requests/ListSection";
 import { MyRequests } from "../components/requests/RequestSection";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
 import { CalendarClock, History, Inbox, ShieldCheck, Star, UserRound } from "lucide-react";
 import { listRecentItems } from "../lib/recent";
 import { RoutePath } from "../lib/constants";
 import { shiftIsoDay, shortDate, todayIso } from "../lib/dates";
 import { usePeek } from "../lib/hooks";
-import { notificationsQuery, pendingApprovalsQuery, slqItemsQuery } from "../lib/queries";
+import { notificationsQuery, pendingApprovalsQuery, itemsCountQuery } from "../lib/queries";
 import { PRIORITY_META } from "../lib/meta";
-import { combineQueryWithFilters } from "../lib/slq";
+import { combineQueryWithFilters, splitQueryOrder } from "../lib/slq";
 import { useSlqQueryState } from "../lib/slq-filter";
 import type { Item } from "../lib/types";
 import { Avatar } from "../components/Avatar";
@@ -41,16 +44,9 @@ export function MyWorkPage() {
   const withFilter = (q: string) =>
     slqFilter.committed ? combineQueryWithFilters(q, [slqFilter.committed]) : q;
 
-  const assigned = useQuery(slqItemsQuery({}, withFilter(ASSIGNED_Q)));
-  const due = useQuery(slqItemsQuery({}, withFilter(dueQ)));
-  const starred = useQuery(slqItemsQuery({}, withFilter(STARRED_Q)));
   const notifications = useQuery(notificationsQuery(true));
-
-  const dueSorted = [...(due.data ?? [])].sort((a, b) =>
-    (a.target_date ?? "").localeCompare(b.target_date ?? ""),
-  );
-  const dueIds = new Set(dueSorted.map((item) => item.id));
-  const assignedRest = (assigned.data ?? []).filter((item) => !dueIds.has(item.id));
+  const queryFor = (q: string, order: string) => { const parts = splitQueryOrder(withFilter(q)); return `${parts.where} ${parts.order || `ORDER BY ${order}`}`; };
+  const laterQ = `${ASSIGNED_Q} AND (target IS EMPTY OR target > ${shiftIsoDay(todayIso(), DUE_SOON_DAYS)})`;
 
   return (
     <div className="w-full px-6 py-6">
@@ -71,38 +67,9 @@ export function MyWorkPage() {
 
         <AwaitingApprovalSection />
 
-        <Section
-          icon={CalendarClock}
-          title="Due soon"
-          count={dueSorted.length}
-          empty="Nothing due in the next week."
-        >
-          {dueSorted.map((item) => (
-            <ItemRow key={item.id} item={item} showDue />
-          ))}
-        </Section>
-
-        <Section
-          icon={UserRound}
-          title="Assigned to me"
-          count={assignedRest.length}
-          empty="Nothing else on your plate."
-        >
-          {assignedRest.map((item) => (
-            <ItemRow key={item.id} item={item} />
-          ))}
-        </Section>
-
-        <Section
-          icon={Star}
-          title="Starred"
-          count={(starred.data ?? []).length}
-          empty="Star issues to pin them here."
-        >
-          {(starred.data ?? []).slice(0, 8).map((item) => (
-            <ItemRow key={item.id} item={item} />
-          ))}
-        </Section>
+        <WorkPreview icon={CalendarClock} title="Due soon" q={queryFor(dueQ, "target ASC, priority DESC, number DESC")} limit={25} showDue empty="Nothing due in the next week." />
+        <WorkPreview icon={UserRound} title="Assigned to me" q={queryFor(laterQ, "rank")} limit={25} empty="Nothing else on your plate." />
+        <WorkPreview icon={Star} title="Starred" q={queryFor(STARRED_Q, "rank")} limit={8} empty="Star issues to pin them here." />
 
         <RecentlyViewedSection />
 
@@ -288,4 +255,29 @@ function ItemRow({ item, showDue = false }: { item: Item; showDue?: boolean }) {
       </div>
     </li>
   );
+}
+
+/** Small initial windows; every matching row remains reachable without leaving My Work. */
+function WorkPreview({icon, title, q, limit, showDue = false, empty}: {
+  icon: LucideIcon; title: string; q: string; limit: number; showDue?: boolean; empty: string;
+}) {
+  const query = useInfiniteQuery({
+    queryKey: ["my-work-preview", q, limit], meta: entityMeta(Entity.item), initialPageParam: 0,
+    queryFn: ({signal, pageParam}) => api.get<Item[]>("/items", {signal, query: {q, limit: String(limit), offset: String(pageParam)}}),
+    getNextPageParam: (last: Item[], _pages: Item[][], offset: number) => last.length === limit ? offset + limit : undefined,
+  });
+  const count = useQuery(itemsCountQuery({}, q));
+  const rows = query.data?.pages.flat() ?? [];
+  return <Section icon={icon} title={title} count={count.data?.total ?? rows.length}
+    empty={query.isPending ? "Loading…" : query.isError ? "Could not load issues." : empty}
+    action={<span className="flex items-center gap-2 text-xs text-fg-muted">
+      {query.isPending ? "Loading…" : `${rows.length} shown`}
+      {count.isError ? " · Total unavailable" : !count.data ? " · Counting…" : ""}
+      {query.isError && <button className="underline" onClick={() => void query.refetch()}>Retry</button>}
+      {query.hasNextPage && (!count.data || rows.length < count.data.total) && <button className="text-accent-text underline" disabled={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()}>{query.isFetchingNextPage ? "Loading…" : "Show more"}</button>}
+    </span>}>
+    {query.isError && !rows.length && <li role="alert" className="p-3 text-xs text-fg-muted">Could not load issues. Use Retry.</li>}
+    {rows.map(item => <ItemRow key={item.id} item={item} showDue={showDue} />)}
+    {query.isFetchNextPageError && <li role="alert" className="p-3 text-xs text-fg-muted">Could not load more. Try again.</li>}
+  </Section>;
 }

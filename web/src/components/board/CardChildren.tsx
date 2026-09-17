@@ -1,11 +1,9 @@
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { RoutePath } from "../../lib/constants";
 import { useOpenIssueRef } from "../../lib/hooks";
 import { CATEGORY_META } from "../../lib/meta";
-import { childItemsQuery } from "../../lib/queries";
-import { compareChildrenOpenFirst } from "../../lib/view-utils";
+import { childItemPagesQuery } from "../../lib/queries";
 import { Spinner } from "../Spinner";
 import { ErrorText } from "../ErrorText";
 
@@ -20,7 +18,7 @@ import { ErrorText } from "../ErrorText";
  * Deliberately NOT the issue page's `ChildRow`: that row carries a tick box, an
  * assignee and a per-project states query, which on a 200-card board would be
  * 200 idle queries. What the two surfaces share is what would actually drift if
- * written twice — the ORDERING RULE (`compareChildrenOpenFirst`) and the CLICK
+ * written twice — the server-side workflow ORDERING RULE (`childItemPagesQuery`) and the CLICK
  * RULE (`useOpenIssueRef`, RADD-699). The rows are real links for the same
  * reason the issue page's are: a child should be cmd-clickable into a new tab.
  *
@@ -29,11 +27,8 @@ import { ErrorText } from "../ErrorText";
  */
 export function CardChildren({ parentId }: { parentId: string }) {
   const openRef = useOpenIssueRef();
-  const children = useQuery(childItemsQuery(parentId));
-  const sorted = useMemo(
-    () => [...(children.data ?? [])].sort(compareChildrenOpenFirst),
-    [children.data],
-  );
+  const children = useInfiniteQuery(childItemPagesQuery(parentId));
+  const sorted = children.data?.pages.flat() ?? [];
 
   return (
     // The card's own onClick opens the parent in peek; nothing in here should.
@@ -44,7 +39,7 @@ export function CardChildren({ parentId }: { parentId: string }) {
     >
       {children.isPending ? (
         <Spinner label="Loading children…" />
-      ) : children.isError ? (
+      ) : children.isError && !children.data ? (
         <ErrorText error={children.error} />
       ) : sorted.length === 0 ? (
         <p className="text-[11px] text-fg-faint">No children.</p>
@@ -80,6 +75,9 @@ export function CardChildren({ parentId }: { parentId: string }) {
           })}
         </ul>
       )}
+      {children.hasNextPage && <button className="mt-2 text-xs text-accent-text underline" disabled={children.isFetchingNextPage}
+        onClick={() => void children.fetchNextPage()}>{children.isFetchingNextPage ? "Loading…" : "Show 50 more children"}</button>}
+      {children.isFetchNextPageError && <p role="alert" className="text-xs text-fg-muted">Could not load more children. Try again.</p>}
     </div>
   );
 }

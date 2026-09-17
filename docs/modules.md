@@ -616,3 +616,12 @@ existing response encodings. `useStableItemBatches` keeps prior chunk membership
 on append for rollup, SLA and timelog hooks. Existing entity invalidation still
 refreshes active chunks; complete scheduling timelog readers remain unchanged.
 No partial shared Item projection or guessed invalidation dependency was added.
+
+### Progressive personal and child lists (RADD-1208)
+
+My Work requests bounded server-ordered previews with full counts and per-section
+Show more (25 due, 25 other assigned, 8 starred). Due items are separated from
+other assignments before pagination. `childItemPagesQuery` loads direct children
+in workflow category/state order, 50 at a time on expansion, in issue detail and
+board cards. `childItemsQuery` remains the complete relation for other consumers;
+rollup and child counts remain independent of the number of displayed rows.

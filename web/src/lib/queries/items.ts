@@ -101,3 +101,14 @@ export const validationContextQuery = (
 
 export const itemCommentFeedQuery = (itemId: string) =>
   commentFeedQuery(queryKeys.comments(itemId), apiItemCommentsPath(itemId), CommentSection.all);
+
+/** Incremental direct-child reads; complete-relation callers retain childItemsQuery. */
+export const childItemPagesQuery = (parentId: string) => ({
+  queryKey: ["child-item-pages", parentId],
+  meta: entityMeta(Entity.item),
+  initialPageParam: 0,
+  queryFn: ({ signal, pageParam }: {signal: AbortSignal; pageParam: number}) =>
+    api.get<Item[]>(ApiPath.items, {signal, query: {parent_id: parentId,
+      q: "ORDER BY category ASC, number ASC", limit: "50", offset: String(pageParam)}}),
+  getNextPageParam: (last: Item[], _pages: Item[][], offset: number) => last.length === 50 ? offset + 50 : undefined,
+});

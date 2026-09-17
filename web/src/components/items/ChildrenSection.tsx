@@ -1,5 +1,5 @@
-import { useMemo, useState, type FormEvent } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState, type FormEvent } from "react";
+import { useMutation, useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, Plus, Square, SquareCheckBig } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { api, errorMessage } from "../../lib/api";
@@ -7,7 +7,7 @@ import { Entity, invalidateEntities } from "../../lib/cache";
 import { ApiPath, RoutePath, apiItemPath } from "../../lib/constants";
 import { useOpenIssueRef, usePermissions } from "../../lib/hooks";
 import { CATEGORY_META } from "../../lib/meta";
-import { childItemsQuery, statesQuery } from "../../lib/queries";
+import { childItemPagesQuery, statesQuery } from "../../lib/queries";
 import {
   ItemKind,
   Permission,
@@ -19,7 +19,6 @@ import {
 import { Avatar } from "../Avatar";
 import { formatPoints } from "./ItemBadges";
 import { Spinner } from "../Spinner";
-import { compareChildrenOpenFirst } from "../../lib/view-utils";
 import { ErrorText } from "../ErrorText";
 
 /**
@@ -52,7 +51,8 @@ export function ChildrenSection({
 
   const childKind = item.kind === ItemKind.epic ? ItemKind.issue : ItemKind.subtask;
   const isChecklist = childKind === ItemKind.subtask;
-  const children = useQuery({ ...childItemsQuery(item.id), enabled: expanded });
+  const children = useInfiniteQuery({ ...childItemPagesQuery(item.id), enabled: expanded });
+  const childRows = children.data?.pages.flat() ?? [];
 
   // The rollup counts EVERY descendant; the list shows direct children. When the
   // card is collapsed the rollup is the only number available, so it is what the
@@ -114,20 +114,23 @@ export function ChildrenSection({
         <div className="mt-3">
           {children.isPending ? (
             <Spinner label="Loading children…" />
-          ) : children.isError ? (
+          ) : children.isError && !children.data ? (
             <ErrorText error={children.error} />
-          ) : children.data.length === 0 ? (
+          ) : childRows.length === 0 ? (
             <p className="text-[13px] text-fg-faint">
               {isChecklist ? "No subtasks yet." : "No child items yet."}
             </p>
           ) : (
             <ChildList
-              items={children.data}
+              items={childRows}
               project={project}
               checklist={isChecklist}
               canWrite={canWrite}
             />
           )}
+          {children.hasNextPage && <button className="mt-2 text-xs text-accent-text underline" disabled={children.isFetchingNextPage}
+            onClick={() => void children.fetchNextPage()}>{children.isFetchingNextPage ? "Loading…" : "Show 50 more children"}</button>}
+          {children.isFetchNextPageError && <p role="alert" className="text-xs text-fg-muted">Could not load more children. Try again.</p>}
           {canCreate && <QuickAdd parent={item} project={project} childKind={childKind} />}
         </div>
       )}
@@ -146,8 +149,8 @@ function ChildList({
   checklist: boolean;
   canWrite: boolean;
 }) {
-  // Open work first, then done/canceled (shared rule — see the comparator).
-  const sorted = useMemo(() => [...items].sort(compareChildrenOpenFirst), [items]);
+  // Workflow category/state order is applied on the server before pagination.
+  const sorted = items;
   return (
     <ul className="flex flex-col">
       {sorted.map((child) => (
