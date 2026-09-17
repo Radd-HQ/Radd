@@ -596,3 +596,14 @@ remain unchanged. [Grouped/queue retrieval details](grouped-queue-pagination.md)
 approved optimization wave. Grouped reads compute global rank only for group
 ordering; selected cells alone receive per-cell ranks. Ancestor joins are used
 only for epic axes. Authorization, group ordering and page totals are unchanged.
+
+### Group totals and independent loading (RADD-1205)
+
+`items/grouped.py` accepts an optional column window and computes full point
+sums alongside counts, withholding sums for restricted fields. `useGroupedItems`
+keeps explicit per-column windows, deduplicates rows and preserves group paging.
+Ordinary boards expose Show 25 more per column. Planning renders section-local
+loading/errors; cycle headers share authorized whole-cycle statistics instead
+of computing progress from loaded rows. Row filtering does not alter those
+whole-sprint totals. See `docs/performance-safety-audit.md` for compatibility
+limits and the browser/database regression evidence.

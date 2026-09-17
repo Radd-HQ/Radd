@@ -233,3 +233,16 @@ async def test_index_blanks_restricted_description(db, admin, project):
     await indexer.sync_description_restriction(db)
     await db.refresh(row)
     assert row.description == secret
+
+
+async def test_grouped_points_do_not_disclose_restricted_field(db, admin, project, member):
+    from radd.modules.items.grouped import GroupPageRequest, grouped_items
+
+    await items.create_item(db, ItemCreate(project_id=project.id, title="private points", estimate_points=13), admin)
+    await _restrict_builtin_read(db, "estimate_points")
+    request = GroupPageRequest(project_id=project.id, axis="state")
+    restricted = await grouped_items(db, member, request)
+    assert restricted.column_points is None
+    assert all(c.points is None for c in restricted.cells)
+    allowed = await grouped_items(db, admin, request)
+    assert sum(allowed.column_points.values()) == 13

@@ -140,3 +140,22 @@ async def test_group_slices_preserve_order_and_totals_with_lanes(setup, axis):
         for cell in page.cells:
             seen[cell.column, cell.lane].extend(i.id for i in cell.items)
     assert seen == expected
+
+
+async def test_column_only_reads_keep_full_points_and_honor_hidden_scope(setup):
+    db, actor, project = setup
+    for n in range(7):
+        issue = await items.create_item(db, ItemCreate(project_id=project.id, title=f"points {n}",
+                                       priority="high" if n < 5 else "normal"), actor=actor)
+        (await db.get(WorkItem, issue.id)).estimate_points = 3
+    await db.flush()
+    request = GroupPageRequest(project_id=project.id, axis="priority", item_limit=2)
+    full = await grouped_items(db, actor, request)
+    assert full.column_points == {"high": 15.0, "normal": 6.0}
+    focused = await grouped_items(db, actor, request.model_copy(update={"column_key": "high", "item_offset": 2}))
+    assert focused.column_totals == {"high": 5}
+    assert focused.column_points == {"high": 15.0}
+    assert len(focused.cells) == 1 and len(focused.cells[0].items) == 2
+    assert not ({i.id for c in full.cells for i in c.items} & {i.id for c in focused.cells for i in c.items})
+    hidden = await grouped_items(db, actor, request.model_copy(update={"column_key": "high", "hidden_columns": ["high"]}))
+    assert hidden.cells == [] and hidden.column_totals == {}

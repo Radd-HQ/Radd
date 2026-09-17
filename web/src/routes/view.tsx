@@ -463,8 +463,8 @@ export function ViewPage() {
       {key: BACKLOG_KEY, items: pagedItems.data ?? []},
       ...(planningOptions.history && planning.historyId ? [{key: `history:${planning.historyId}`, items: historyItems.items}] : []),
     ]) : pagedItems.data,
-    isPending: isGrouped ? groupedItems.isPending && !cycles.isError : isRoadmap ? itemPages.isPending : pagedItems.isPending || (isPlanning && (cycles.isPending || recoveryItems.isPending || (planning.cycleCount > 0 && sprintItems.isPending))),
-    isError: isGrouped ? (groupedItems.isError && !groupedItems.data) || ((columnAxis === "cycle" || laneAxis === "cycle") && cycles.isError) : isRoadmap ? itemPages.isError : pagedItems.isError || (isPlanning && (cycles.isError || (recoveryItems.isError && !recoveryItems.data) || (planning.cycleCount > 0 && sprintItems.isError && !sprintItems.data))),
+    isPending: isPlanning ? false : isGrouped ? groupedItems.isPending && !cycles.isError : isRoadmap ? itemPages.isPending : pagedItems.isPending,
+    isError: isPlanning ? false : isGrouped ? (groupedItems.isError && !groupedItems.data) || ((columnAxis === "cycle" || laneAxis === "cycle") && cycles.isError) : isRoadmap ? itemPages.isError : pagedItems.isError,
     error: isGrouped ? groupedItems.error ?? cycles.error : isRoadmap ? itemPages.error : pagedItems.error ?? (isPlanning ? cycles.error ?? recoveryItems.error ?? sprintItems.error : null),
   };
   // Since the pagination wave the bar COMPOSES into the fetch (see
@@ -688,14 +688,17 @@ export function ViewPage() {
     if (isPlanning) return planningGroups(planning, sprintItems.items, recoveryItems.items,
       pagedItems.data ?? [], historyItems.items, cycles.data, planningOptions,
       Boolean(fetchQueryView?.query.trim()), recoveryItems.total, totalCount ?? undefined,
-      historyItems.total, Boolean(sprintItems.more));
+      historyItems.total, Boolean(sprintItems.more)).map(group => {
+        const query = group.key === BACKLOG_KEY ? pagedItems : group.key === RESCHEDULING_KEY ? recoveryItems : group.key.startsWith("history:") ? historyItems : sprintItems;
+        return {...group, emptyMessage: query.isPending || query.isError ? undefined : group.emptyMessage};
+      });
 
     // RADD-855: the view's own bucket order, over the axis's natural order.
     return applyBucketOrder(
-      groupItemsForView(orderedItems, columnAxis, axisContext).map(g => ({...g,total:isGrouped ? groupedItems.first?.column_totals[g.key] ?? 0 : undefined})),
+      groupItemsForView(orderedItems, columnAxis, axisContext).map(g => ({...g,total:isGrouped ? groupedItems.first?.column_totals[g.key] ?? 0 : undefined, totalPoints:isGrouped ? groupedItems.first?.column_points?.[g.key] : undefined})),
       view.column_order,
     );
-  }, [view, orderedItems, columnAxis, axisContext, isGrouped, groupedItems.first, isPlanning, planning, sprintItems.items, recoveryItems.items, pagedItems.data, historyItems.items, cycles.data, planningOptions, fetchQueryView, recoveryItems.total, totalCount, historyItems.total, sprintItems.more]);
+  }, [view, orderedItems, columnAxis, axisContext, isGrouped, groupedItems.first, isPlanning, planning, sprintItems.items, recoveryItems.items, pagedItems.data, historyItems.items, cycles.data, planningOptions, fetchQueryView, recoveryItems.total, totalCount, historyItems.total, sprintItems.more, pagedItems.isPending, pagedItems.isError, recoveryItems.isPending, recoveryItems.isError, historyItems.isPending, historyItems.isError, sprintItems.isPending, sprintItems.isError]);
   // RADD-1175: presence. `columns` stays the FULL set (the Order menu must be
   // able to bring a hidden one back); the surfaces get the visible subset.
   const hiddenKeys = useMemo(() => new Set(view?.hidden_columns ?? []), [view?.hidden_columns]);
@@ -1175,6 +1178,8 @@ export function ViewPage() {
       </header>
 
 
+      {isPlanning && cycles.isPending && <p role="status" className="px-4 py-2 text-xs text-fg-muted">Loading sprint sections…</p>}
+      {isPlanning && cycles.isError && <p role="alert" className="px-4 py-2 text-xs text-fg-muted">Could not load sprint sections. <button className="underline" onClick={()=>void cycles.refetch()}>Retry sprints</button></p>}
       {isPlanning && (itemsTotal.isError || openSprintCount.isError || recoveryItems.countError) && <p role="status" className="px-4 py-2 text-xs text-fg-muted">Some Planning counts are unavailable. Displayed rows may still be used.</p>}
       {isPlanning && updateBucketOrder.isError && <p role="alert" className="px-4 py-2 text-sm text-fg-muted">Could not save sprint visibility. {errorMessage(updateBucketOrder.error)}</p>}
       {items.isPending ? (
@@ -1270,6 +1275,9 @@ export function ViewPage() {
                     : undefined
                 }
                 showPoints={pointsEnabled && stateColumns}
+                onLoadColumn={isGrouped ? groupedItems.loadColumn : undefined}
+                columnLoading={groupedItems.columnLoading}
+                columnError={groupedItems.columnError}
                 wipLimits={stateColumns ? view.wip_limits ?? undefined : undefined}
                 onSetWipLimit={canSetWipLimit ? setWipLimit : undefined}
                 onMoveToBucket={columnDraggable ? moveToBucket : undefined}
@@ -1282,6 +1290,11 @@ export function ViewPage() {
             <ViewList
               groups={isPlanning ? sectionSearch.apply(visibleColumns) : isGrouped ? visibleColumns : columns}
               sectionSearch={isPlanning ? sectionSearch.control : undefined}
+              sectionStatus={isPlanning ? group => {
+                const query = group.key === BACKLOG_KEY ? pagedItems : group.key === RESCHEDULING_KEY ? recoveryItems : group.key.startsWith("history:") ? historyItems : sprintItems;
+                return query.isPending ? <p role="status" className="px-4 py-2 text-xs text-fg-muted">Loading {group.label}…</p>
+                  : query.isError ? <p role="alert" className="px-4 py-2 text-xs text-fg-muted">Could not refresh {group.label}. <button className="underline" onClick={()=>void query.refetch()}>Retry section</button></p> : null;
+              } : undefined}
               sectionTools={isPlanning ? group => group.key === BACKLOG_KEY ? <Select aria-label="Backlog order" size="sm" value={planningOptions.backlogOrder} onChange={value => changePlanning({backlogOrder: value as PlanningOptions["backlogOrder"]})} options={[{value:"priority",label:"Priority"},{value:"recent",label:"Recently updated"},{value:"manual",label:"Manual"}]} /> : null : undefined}
               viewId={view.id}
               display={display}
@@ -1328,7 +1341,7 @@ export function ViewPage() {
         <div role="status" className="border-t border-subtle px-4 py-2 text-sm text-fg-muted">
           {sprintItems.isFetchingNextPage ? "Loading more sprint work…" : "More sprint work is available."}
           {(sprintItems.paused || sprintItems.isFetchNextPageError) && <button type="button" className="ml-3 underline" onClick={sprintItems.loadMore}>Load more sprint work</button>}
-          <span className="ml-2">Sprint totals describe the loaded rows until loading completes.</span>
+          <span className="ml-2">Issue rows are still loading; sprint statistics cover the whole sprint.</span>
         </div>
       )}
       {/* Classic pagination (pagination wave) — roadmaps auto-stream instead. */}

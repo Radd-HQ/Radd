@@ -19,6 +19,7 @@ const historyRows=[{...item(18000,cycles[3]),title:'Finished historical work',st
 const backlog=Array.from({length:401},(_,i)=>item(i+1));
 const writes=[];
 const itemWrites=[];
+let releaseRecovery; const recoveryGate=new Promise(resolve=>releaseRecovery=resolve);
 const server=http.createServer(async (req,res)=>{
  const url=new URL(req.url,'http://local');
  if(url.pathname.startsWith('/api/')){
@@ -39,6 +40,7 @@ const server=http.createServer(async (req,res)=>{
    requests.push(url);
    const sprint=url.searchParams.getAll('cycle_id').length>0;
    const q=url.searchParams.get('q')??'';
+   if(q.includes('cycle.status = completed') && p.endsWith('/items')) await recoveryGate;
    let pool;
    if(q.includes('cycle.status = completed')) pool=q.includes('category NOT IN')?recoveryRows:historyRows;
    else if(sprint) pool=sprintRows.filter(i=>url.searchParams.getAll('cycle_id').includes(i.cycle.id)).filter(i=>q.includes('OR cycle.status = active')||i.state.category!=='done');
@@ -64,7 +66,7 @@ const server=http.createServer(async (req,res)=>{
   else if(p.includes('/preferences'))data={};
   else if(p.includes('/config'))data={};
   else if(p.includes('/settings'))data={value:false};
-  else if(p.includes('/stats'))data={};
+  else if(p.includes('/stats')){ const id=p.split('/')[4]; const rows=sprintRows.filter(i=>i.cycle?.id===id); data={total:rows.length,by_category:{done:rows.filter(i=>i.state.category==='done').length},estimate_seconds:0,logged_seconds:0,remaining_seconds:0}; }
   res.setHeader('content-type','application/json');res.setHeader('X-Total-Count',String(Array.isArray(data)?data.length:0));res.end(JSON.stringify(data));return;
  }
  const file=path.join(dist,url.pathname==='/'?'index.html':url.pathname);
@@ -78,6 +80,10 @@ try{
  const s=browser.session;await s.navigate(`http://127.0.0.1:${server.address().port}/p/DEV/v/planning`,3500);
  const until=async (test)=>{for(let i=0;i<100;i++){if(await test())return;await new Promise(r=>setTimeout(r,50));}throw new Error(await s.eval('document.body.innerText')+'\n'+s.consoleErrors.join('\n'));};
  await until(async()=> (await s.eval('document.body.innerText')).includes('Sprint work 15200'));
+ assert((await s.eval('document.body.innerText')).includes('Backlog work 1'),'Healthy backlog must render before recovery responds');
+ assert((await s.eval('document.body.innerText')).includes('Loading Needs rescheduling'),'Delayed section has its own loading state');
+ releaseRecovery();
+ await until(async()=> (await s.eval('document.body.innerText')).includes('Unfinished historical work'));
  const names=await s.eval(`Array.from(document.querySelectorAll('section[aria-label]')).filter(e=>e.querySelector('header button')).map(e=>e.getAttribute('aria-label'))`);
  assert.deepEqual(names,['Current sprint','Dated upcoming sprint','Next sprint','Needs rescheduling','Backlog']);
  let text=await s.eval('document.body.innerText');assert.ok(text.includes('Backlog work 1'));assert.equal(await s.eval(`Boolean(document.querySelector('section[aria-label="History · Historical sprint"]'))`),false);assert.ok(text.includes('201 open sprint issues · 401 backlog · 1 need rescheduling'));
@@ -104,6 +110,7 @@ try{
  const completedToggle=`[...document.querySelectorAll('label')].find(l=>l.textContent.includes('Show completed issues in active sprints')).querySelector('input')`;
  await s.eval(completedToggle+'.click()');
  await until(async()=>{const t=await s.eval('document.body.innerText');return !t.includes('Completed active work')&&t.includes('Backlog work 201');});
+ assert((await s.eval(`document.querySelector('section[aria-label="Current sprint"] header').innerText`)).includes('1/201'),'Hiding completed rows must preserve full progress');
  await s.eval(completedToggle+'.click()');
  await until(async()=> (await s.eval('document.body.innerText')).includes('Completed active work'));
  // History is explicitly requested and kept separate from unfinished work.

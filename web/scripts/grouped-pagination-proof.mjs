@@ -19,10 +19,11 @@ const server=http.createServer(async(req,res)=>{
   let data=[]; const p=url.pathname;
   if(p==='/api/v1/sla-queue-items'){requests.push({queue:url});data=[{...item(url.searchParams.get('offset')==='200'?901:900),title:url.searchParams.get('offset')==='200'?'Later queue page':'Overdue queue item'}];}
   else if(p==='/api/v1/items/grouped'){
-   const request={item_offset:Number(url.searchParams.get('item_offset')??0),axis:url.searchParams.get('axis')};requests.push({group:request});
+   const request={item_offset:Number(url.searchParams.get('item_offset')??0),axis:url.searchParams.get('axis'),column_key:url.searchParams.get('column_key')};requests.push({group:request});
    const make=(n,state)=>({...item(n),title:`Board work ${n}`,state:{id:state,name:state==='todo'?'To do':'In progress',category:state==='todo'?'todo':'in_progress'}});
    const all=Array.from({length:30},(_,i)=>make(i+1,'todo'));const rare=make(300,'progress');
-   data={cells:[{column:'todo',lane:'__all__',total:30,items:all.slice(request.item_offset,request.item_offset+25)},{column:'progress',lane:'__all__',total:1,items:request.item_offset?[]:[rare]}],total_groups:2,column_totals:{todo:30,progress:1},lane_totals:{__all__:31}};
+   data={cells:[{column:'todo',lane:'__all__',total:30,items:all.slice(request.item_offset,request.item_offset+25)},{column:'progress',lane:'__all__',total:1,items:request.item_offset?[]:[rare]}],total_groups:2,column_points:{todo:90,progress:3},column_totals:{todo:30,progress:1},lane_totals:{__all__:31}};
+   if(request.column_key) data.cells=data.cells.filter(c=>c.column===request.column_key);
   } else if(p==='/api/v1/items'||p==='/api/v1/items/count'){
    requests.push(url);
    const sprint=url.searchParams.getAll('cycle_id').length>0;
@@ -42,7 +43,7 @@ const server=http.createServer(async(req,res)=>{
   else if(p.includes('/notifications'))data={items:[],notifications:[],unread_count:0,total:0};
   else if(p.includes('/preferences'))data={};
   else if(p.includes('/config'))data={};
-  else if(p.includes('/settings'))data={value:false};
+  else if(p.includes('settings'))data={value:true};
   else if(p.includes('/stats'))data={};
   res.setHeader('content-type','application/json');res.setHeader('X-Total-Count',String(Array.isArray(data)?data.length:0));res.end(JSON.stringify(data));return;
  }
@@ -59,10 +60,12 @@ try{
  await until(async()=> (await s.eval('document.body.innerText')).includes('Board work 300'));
  let text=await s.eval('document.body.innerText');assert.ok(text.includes('Board work 1'));assert.ok(text.includes('26 loaded'));assert.ok(!text.includes('Board work 30\n'));
  assert.ok(requests.every(r=>r.group),'Board must never request a globally paged list/count');
- await s.click('button',text=>text==='Load more in these groups');
+ await s.click('button',text=>text.includes('Show 25 more'));
  await until(async()=> (await s.eval('document.body.innerText')).includes('31 loaded'));
  text=await s.eval('document.body.innerText');assert.ok(text.includes('Board work 300'));assert.ok(text.includes('31 loaded'));
- assert.equal(requests[1].group.item_offset,25);
+ assert.equal(requests[1].group.item_offset,25);assert.equal(requests[1].group.column_key,'todo');assert.ok(text.includes('90'),'Full column points remain visible');
+ assert(!text.includes('Load more in these groups'),'No redundant group paging after all rows loaded');
+ await s.eval(`document.querySelector('[title="Story points in all matching column issues"]').scrollIntoView({block:'center'})`);
  await s.screenshot('/tmp/radd-grouped-board-proof.png');assert.deepEqual(s.consoleErrors,[]);
  view.view_type='queue';view.group_by=null;requests.length=0;
  await s.navigate(`http://127.0.0.1:${server.address().port}/p/DEV/v/planning`,2000);

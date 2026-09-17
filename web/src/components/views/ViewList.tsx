@@ -29,7 +29,7 @@ import {
   CycleDatesBadge,
   CycleHeaderStats,
   CycleStatusPill,
-  DoneCountPill,
+  CycleHeaderProgress,
 } from "../cycles/CycleBadges";
 import {
   FlagBadge,
@@ -44,6 +44,7 @@ interface ViewListProps {
   groups: ViewGroup[];
   sectionSearch?: (group: ViewGroup) => SectionSearchControl;
   sectionTools?: (group: ViewGroup) => ReactNode;
+  sectionStatus?: (group: ViewGroup) => ReactNode;
   /** Card display config (slots/labels/scale) — defaults to the list preset. */
   display?: CardDisplayConfig;
   /** Batch SLA timers by item id (spec 63) — set while the sla slot is on. */
@@ -114,6 +115,7 @@ export function ViewList({
   groups,
   sectionSearch,
   sectionTools,
+  sectionStatus,
   display = defaultCardDisplay(DEFAULT_LIST_SLOTS),
   slaByItem,
   rollupByItem,
@@ -250,14 +252,12 @@ export function ViewList({
                       <span className="ml-auto flex flex-wrap items-center gap-1.5">
                         {group.cycleId && (
                           <CycleHeaderStats
+                            showProgress
                             cycleId={group.cycleId}
                             projectId={cycleStatsProjectId}
                           />
                         )}
-                        <DoneCountPill
-                          done={group.cycleMeta.done}
-                          total={group.cycleMeta.total}
-                        />
+
                       </span>
                     </>
                   ) : (
@@ -284,13 +284,14 @@ export function ViewList({
                   {search.filtered && <span role="status" className="text-xs text-fg-muted">{search.pending ? "Searching…" : search.error ? "Search unavailable" : `${search.loaded} shown · ${search.total ?? "…"} matching`}</span>}
                   {search.error && <Button size="sm" variant="secondary" onClick={search.onRetry}>Retry search</Button>}
                 </div>}
-                {group.progress !== undefined && (
+                {group.cycleId ? <CycleHeaderProgress cycleId={group.cycleId} projectId={cycleStatsProjectId} /> : group.progress !== undefined && (
                   <div className="h-0.5 w-full bg-elevated" aria-hidden>
                     <div className="h-full bg-accent" style={{ width: `${Math.round(group.progress * 100)}%` }} />
                   </div>
                 )}
               </header>
             )}
+            {sectionStatus?.(group)}
             {!isCollapsed && (
               <ul className={draggable && group.items.length === 0 ? "min-h-9" : undefined}>
                 {group.items.length === 0 && group.emptyMessage && (

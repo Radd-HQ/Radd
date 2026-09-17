@@ -76,18 +76,21 @@ function TimeChip({
 export function CycleHeaderStats({
   cycleId,
   projectId,
+  showProgress = false,
 }: {
+  showProgress?: boolean;
   cycleId: string;
   /** REQUIRED on project-scoped surfaces: cycles span projects, so an unscoped
    * fetch would show other projects' time in this project's handle. */
   projectId?: string;
 }) {
-  const stats = useQuery(cycleStatsQuery(cycleId, undefined, undefined, projectId));
+  const stats = useQuery({...cycleStatsQuery(cycleId, undefined, undefined, projectId), placeholderData: undefined});
   const data = stats.data;
-  if (!data || (!data.estimate_seconds && !data.logged_seconds && !data.remaining_seconds)) {
-    return null;
-  }
-  return <CycleTimeChips stats={data} />;
+  if (!data) return showProgress ? <span className="text-xs text-fg-muted">{stats.isError ? "Sprint stats unavailable" : "Loading sprint stats…"}</span> : null;
+  return <span className="inline-flex flex-wrap items-center gap-1.5" title="Whole sprint totals within this project; row filters do not change these statistics">
+    {(data.estimate_seconds || data.logged_seconds || data.remaining_seconds) ? <CycleTimeChips stats={data} /> : null}
+    {showProgress && <DoneCountPill done={data.by_category?.done ?? 0} total={data.total} />}
+  </span>;
 }
 
 /**
@@ -122,4 +125,14 @@ export function CycleTimeChips({ stats }: { stats: CycleStats }) {
       />
     </span>
   );
+}
+
+/** Full authorized cycle progress, sharing the header's cached stats request. */
+export function CycleHeaderProgress({cycleId, projectId}: {cycleId: string; projectId?: string}) {
+  const stats = useQuery({...cycleStatsQuery(cycleId, undefined, undefined, projectId), placeholderData: undefined});
+  if (!stats.data?.total) return null;
+  const progress = (stats.data.by_category.done ?? 0) / stats.data.total;
+  return <div className="h-0.5 w-full bg-elevated" aria-label="Full sprint progress">
+    <div className="h-full bg-accent" style={{width:`${Math.round(progress*100)}%`}} />
+  </div>;
 }

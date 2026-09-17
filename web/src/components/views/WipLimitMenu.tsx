@@ -43,7 +43,7 @@ export function WipLimitMenu({
         items={[
           {
             kind: "action",
-            label: "Set WIP limit…",
+            label: "Set work-in-progress limit…",
             onSelect: () => {
               setDraft(limit !== undefined ? String(limit) : "");
               setEditing(true);
@@ -72,6 +72,7 @@ export function WipLimitMenu({
         className="w-48 p-2"
       >
             <form onSubmit={submit} className="flex flex-col gap-2">
+              <p className="text-xs text-fg-muted">Warn when this column reaches its intended workload. This does not hide issues or block moves.</p>
               <label className="text-[11px] font-medium text-fg-secondary">
                 WIP limit for {columnLabel}
               </label>

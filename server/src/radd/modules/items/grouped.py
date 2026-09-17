@@ -23,6 +23,7 @@ class GroupPageRequest(BaseModel):
     project_id: uuid.UUID | None = None
     q: str = ""
     axis: str
+    column_key: str | None = None
     lane: str | None = None
     hidden_columns: list[str] = Field(default_factory=list)
     hidden_lanes: list[str] = Field(default_factory=list)
@@ -41,6 +42,7 @@ class GroupCell(BaseModel):
     lane: str
     total: int
     items: list[ItemRead]
+    points: float | None = None
 
 
 class GroupPage(BaseModel):
@@ -48,6 +50,7 @@ class GroupPage(BaseModel):
     total_groups: int
     column_totals: dict[str, int]
     lane_totals: dict[str, int]
+    column_points: dict[str, float] | None = None
 
 
 def _axis(axis, project_id, epic):
@@ -99,6 +102,8 @@ async def grouped_items(session, actor, data: GroupPageRequest) -> GroupPage:
         query = query.outerjoin(parent, parent.id == WorkItem.parent_id).outerjoin(
             grand, grand.id == parent.parent_id
         )
+    if data.column_key is not None:
+        query = query.where(column == data.column_key)
     if data.hidden_columns:
         query = query.where(column.not_in(data.hidden_columns))
     if data.hidden_lanes:
@@ -117,13 +122,15 @@ async def grouped_items(session, actor, data: GroupPageRequest) -> GroupPage:
         if order
         else (WorkItem.rank.asc(), WorkItem.created_at.desc(), WorkItem.id.asc())
     )
+    points_readable = "points" not in denied and "estimate_points" not in denied
     ranked = query.add_columns(
+        (WorkItem.estimate_points if points_readable else literal(0.0)).label("points"),
         func.row_number().over(order_by=ranking).label("global_pos"),
     ).subquery()
     counts = list(
         (
             await session.execute(
-                select(ranked.c.col, ranked.c.lane, func.count())
+                select(ranked.c.col, ranked.c.lane, func.count(), func.coalesce(func.sum(ranked.c.points), 0.0))
                 .group_by(ranked.c.col, ranked.c.lane)
                 .order_by(func.min(ranked.c.global_pos), ranked.c.col, ranked.c.lane)
             )
@@ -142,19 +149,22 @@ async def grouped_items(session, actor, data: GroupPageRequest) -> GroupPage:
         )
     chosen = counts[data.group_offset : data.group_offset + data.group_limit]
     column_totals, lane_totals = {}, {}
-    for col, ln, count in counts:
+    column_points = {} if points_readable else None
+    for col, ln, count, points in counts:
+        if column_points is not None:
+            column_points[col] = column_points.get(col, 0.0) + float(points)
         column_totals[col] = column_totals.get(col, 0) + count
         lane_totals[ln] = lane_totals.get(ln, 0) + count
     if not chosen:
         return GroupPage(
-            cells=[], total_groups=len(counts), column_totals=column_totals, lane_totals=lane_totals
+            cells=[], total_groups=len(counts), column_totals=column_totals, lane_totals=lane_totals, column_points=column_points
         )
     from sqlalchemy import tuple_
 
     # Only selected cells need per-cell ranks. Computing global ranks here as
     # well forced a second whole-result sort on every item slice.
     selected = query.where(
-        tuple_(column, lane).in_([(col, ln) for col, ln, _ in chosen])
+        tuple_(column, lane).in_([(col, ln) for col, ln, _, _ in chosen])
     ).add_columns(
         func.row_number().over(partition_by=(column, lane), order_by=ranking).label("pos")
     ).subquery()
@@ -184,10 +194,11 @@ async def grouped_items(session, actor, data: GroupPageRequest) -> GroupPage:
             column=col,
             lane=ln,
             total=count,
+            points=float(points) if points_readable else None,
             items=[by_id[r.id] for r in rows if r.col == col and r.lane == ln and r.id in by_id],
         )
-        for col, ln, count in chosen
+        for col, ln, count, points in chosen
     ]
     return GroupPage(
-        cells=cells, total_groups=len(counts), column_totals=column_totals, lane_totals=lane_totals
+        cells=cells, total_groups=len(counts), column_totals=column_totals, lane_totals=lane_totals, column_points=column_points
     )

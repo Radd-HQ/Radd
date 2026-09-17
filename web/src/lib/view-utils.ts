@@ -44,6 +44,7 @@ export interface ViewGroup {
   reorderDisabled?: boolean;
   /** Complete server-side group count when rows are loaded in slices. */
   total?: number;
+  totalPoints?: number;
   /** Stable bucket key (state/user/team/cycle id, enum member, option, or sentinel). */
   key: string;
   label: string;

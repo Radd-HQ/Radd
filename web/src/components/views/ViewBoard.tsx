@@ -18,6 +18,9 @@ import { IconButton } from "../IconButton";
 
 interface ViewBoardProps {
   groups: ViewGroup[];
+  onLoadColumn?: (key: string) => void;
+  columnLoading?: (key: string) => boolean;
+  columnError?: (key: string) => boolean;
   /** Card layout (spec 109) — passed through to every card. */
   layout?: CardLayout;
   /** Directory names + field defs for placed `cf.<key>` cells. */
@@ -81,6 +84,7 @@ function ColumnCount({ count, limit }: { count: number; limit: number | undefine
  */
 export function ViewBoard({
   groups,
+  onLoadColumn, columnLoading, columnError,
   layout,
   usersById,
   cfByKey,
@@ -111,7 +115,7 @@ export function ViewBoard({
       {groups.map((group) => {
         const isOver = drop.isOver(group.key);
         const points = showPoints
-          ? group.items.reduce((sum, item) => sum + (item.estimate_points ?? 0), 0)
+          ? group.totalPoints ?? group.items.reduce((sum, item) => sum + (item.estimate_points ?? 0), 0)
           : 0;
         const limit = wipLimits?.[group.key];
         const collapsed =
@@ -183,8 +187,8 @@ export function ViewBoard({
                 {group.total !== undefined && group.items.length < group.total && <span className="text-xs text-fg-muted">{group.items.length} loaded /</span>}
                 <ColumnCount count={group.total ?? group.items.length} limit={limit} />
                 {showPoints && points > 0 && (
-                  <span className="text-xs text-fg-muted" title="Story points in this column">
-                    · Σ {formatPoints(points)} pts
+                  <span className="text-xs text-fg-muted" title={group.totalPoints === undefined ? "Story points in loaded cards" : "Story points in all matching column issues"}>
+                    · Σ {formatPoints(points)} pts{group.totalPoints === undefined && group.total !== undefined && group.items.length < group.total ? " loaded" : ""}
                   </span>
                 )}
                 <span className="ml-auto flex items-center gap-0.5">
@@ -244,6 +248,12 @@ export function ViewBoard({
                   onSelectToggle={onSelectToggle}
                 />
               ))}
+              {onLoadColumn && group.total !== undefined && group.items.length < group.total && <button
+                className="w-full rounded border border-subtle px-3 py-2 text-xs text-accent-text hover:bg-surface"
+                disabled={columnLoading?.(group.key)} onClick={()=>onLoadColumn(group.key)}>
+                {columnLoading?.(group.key) ? "Loading…" : columnError?.(group.key) ? "Retry loading this column" : `Show 25 more · ${group.items.length} of ${group.total}`}
+              </button>}
+
               {onQuickAdd && (
                 <button
                   type="button"
