@@ -258,7 +258,7 @@ Keywords case-insensitive; field names case-sensitive; quoted values are always 
 ## Saved views ↔ items (specs 08 + 10)
 
 Large-view measurements and the proposed independent Show more/rendering design
-are recorded in [the September 17 review](large-view-review-2026-09-17.md)
+are recorded in [the large-view review](large-view-review.md)
 (RADD-1203; implementation follow-ups RADD-1204–1206).
 Planning's visibility/history settings live in Display; each section has a
 server-backed title quick filter, and backlog ordering lives on the backlog card

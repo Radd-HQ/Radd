@@ -1,7 +1,6 @@
 # Import mapping and attribution fixes
 
-RADD-1194, RADD-1195 and RADD-1196 address three import failures reported on
-2026-09-17. They are not a deployment or a repair of existing production data.
+RADD-1194, RADD-1195 and RADD-1196 address three reported import failures. They are not a deployment or a repair of existing production data.
 
 - Jira fields mapped to Team now provision/reuse teams from cached values and
   assign the resolved team on new and refreshed issues. Value translations are

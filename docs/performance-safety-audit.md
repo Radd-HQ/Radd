@@ -24,7 +24,7 @@ groups, stable totals, search beyond the first slice, selection and drag/drop,
 keyboard focus, changed data and account isolation. Tests alone do not establish
 production speed; record comparable local profiles separately.
 
-## Implemented outcome (2026-09-17)
+## Implemented outcome
 
 - **A1 / RADD-1204:** remove redundant global ranking from the selected-cell
   query and ancestor joins when not grouping by epic. One comparable local

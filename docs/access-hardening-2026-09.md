@@ -30,4 +30,4 @@ Regression coverage lives in `test_authorization_surfaces.py`, `test_authorizati
 
 This change is intended for the next release. It is not evidence that the company deployment has already been upgraded or that every external integration has been exercised.
 
-Validation recorded on 2026-09-18: full backend suite **2,775 passed, 4 skipped**; final focused checks **76 passed** after the last credential/delivery refinements; frontend tests **21 passed**; TypeScript, production build, Ruff and diff checks passed. Browser proofs passed six grant-dialog checks and three restriction-reset checks. Production build retains the existing bundle-size advisory.
+Validation for RADD-1213: full backend suite **2,775 passed, 4 skipped**; final focused checks **76 passed** after the last credential/delivery refinements; frontend tests **21 passed**; TypeScript, production build, Ruff and diff checks passed. Browser proofs passed six grant-dialog checks and three restriction-reset checks. Production build retains the existing bundle-size advisory.
