@@ -66,6 +66,7 @@ async def list_items(
     q: str | None = None,
     limit: int,
     offset: int,
+    selected_ids: Sequence[uuid.UUID] | None = None,
 ) -> list[ItemRead]:
     projects: dict[uuid.UUID, Project] = {}
     permissions: dict[uuid.UUID, frozenset[Permission]] = {}
@@ -85,6 +86,8 @@ async def list_items(
         readable = await authz.require_anywhere(session, actor, Permission.ITEM_READ)
 
     query = select(WorkItem)
+    if selected_ids is not None:
+        query = query.where(WorkItem.id.in_(selected_ids))
     if not filters.project_id:
         query = query.where(WorkItem.project_id.in_(readable.keys()))
     # RADD-817: the relation row filter — item.read@own/@team narrows WHICH rows,

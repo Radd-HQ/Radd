@@ -568,3 +568,10 @@ and `SharingGrantsEditor`'s paged saved/pending drafts. Ownership choices use
 public person IDs; no administrative email catalog is needed.
 
 Importer mapping usability and Planning retrieval notes: [Jira/Confluence mapping sweep](import-mapping-usability.md) and [Planning pagination](planning-pagination.md). These changes add no module dependencies.
+
+**RADD-1199/1200/1201:** Confluence destination controls and ignored-author resolution
+are described in [the mapping sweep](import-mapping-usability.md). Grouped item
+retrieval belongs to `items.grouped`; the live urgency endpoint belongs to `slas.queue`
+and consumes the public `items.service.visible_ids_query` and `list_items(selected_ids=)`
+seams. Existing slas → items and confluenceimport → pages/auth/groups/teams dependencies
+remain unchanged. [Grouped/queue retrieval details](grouped-queue-pagination.md).

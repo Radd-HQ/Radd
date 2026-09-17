@@ -37,6 +37,8 @@ import {
  */
 
 export interface ViewGroup {
+  /** Complete server-side group count when rows are loaded in slices. */
+  total?: number;
   /** Stable bucket key (state/user/team/cycle id, enum member, option, or sentinel). */
   key: string;
   label: string;
@@ -86,6 +88,8 @@ const NO_EPIC_LABEL = "No epic";
 interface AxisContext {
   /** The view's project's states (undefined for all-projects views). */
   states?: State[];
+  /** Cross-project states resolve category keys without changing name-grouped state columns. */
+  allStates?: State[];
   /** State categories (RADD-854) — the vocabulary rows the category axis
    *  buckets by (semantic fallback when absent). */
   stateCategories?: StateCategoryRow[];
@@ -200,8 +204,9 @@ export function groupItemsForView(
       // the states list) are unavailable, fall back to the six semantic
       // categories so a stale surface degrades instead of flattening.
       const rows = [...(context.stateCategories ?? [])].sort((a, b) => a.position - b.position);
-      const keyOf = new Map((context.states ?? []).map((s) => [s.id, s.category_key]));
-      if (rows.length > 0 && (context.states ?? []).length > 0) {
+      const categoryStates = context.states ?? context.allStates ?? [];
+      const keyOf = new Map(categoryStates.map((s) => [s.id, s.category_key]));
+      if (rows.length > 0 && categoryStates.length > 0) {
         return rows.map((row) => ({
           key: row.key,
           label: row.name,

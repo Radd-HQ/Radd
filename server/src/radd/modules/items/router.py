@@ -11,6 +11,7 @@ from radd.modules.auth.throttle import WriteBucket, check_write
 from radd.modules.workflow.types import StateCategory
 
 from . import bulk, rollup, service
+from .grouped import GroupPageRequest, GroupPage, grouped_items
 from .enums import ItemEntity, ItemKind, Priority
 from .filters import NONE_LITERAL, ItemListFilters
 from .history import item_history
@@ -56,6 +57,11 @@ _Q_DOC = (
 async def create_item(data: ItemCreate, session: Session, user: CurrentUser) -> ItemRead:
     check_write(user, WriteBucket.ITEM_CREATE)
     return await service.create_item(session, data, actor=user)
+
+
+@router.get("/grouped", response_model=GroupPage)
+async def grouped_page(data: Annotated[GroupPageRequest, Query()], session: Session, user: Actor) -> GroupPage:
+    return await grouped_items(session, user, data)
 
 
 @router.get("", response_model=list[ItemRead])

@@ -1,3 +1,4 @@
+import { useGroupedItems } from "../lib/useGroupedItems";
 import { planningQueries } from "../lib/planning-query";
 import { usePlanningSprints } from "../lib/usePlanningSprints";
 import { PublicProjectChip } from "../components/items/ItemBadges";
@@ -74,7 +75,7 @@ import {
 } from "../lib/columns";
 import { combineQueryWithFilters, composeQueryWithBar } from "../lib/slq";
 import { useSlqPageFilter } from "../lib/slq-filter";
-import { orderBySlaUrgency } from "../lib/queue";
+
 import { axisLabel, applyBucketOrder,
   groupItemsForView, type ViewGroup } from "../lib/view-utils";
 import {
@@ -330,10 +331,19 @@ export function ViewPage() {
     return { ...effectiveView, query: combined, query_string: params.toString() };
   }, [effectiveView, isRoadmap, showClosed, epicsOnly, memberFiltering, membersClause]);
 
+  const columnAxis =
+    view?.view_type === ViewType.planning
+      ? ViewAxis.cycle
+      : view?.view_type === ViewType.queue
+        ? null
+        : (view?.group_by ?? (view?.view_type === ViewType.board ? ViewAxis.state : null));
+  const laneAxis = view?.view_type === ViewType.board ? view.swimlane_by : null;
+  const isGrouped = Boolean(view && !isPlanning && !isRoadmap && view.view_type !== ViewType.queue && columnAxis);
   const cycles = useQuery({ ...cyclesQuery(), enabled: Boolean(view) && (
     view?.view_type === ViewType.planning || view?.group_by === ViewAxis.cycle || view?.swimlane_by === ViewAxis.cycle
   ) });
   const planning = useMemo(() => planningQueries(fetchQueryView, cycles.data), [fetchQueryView, cycles.data]);
+  const groupedItems = useGroupedItems(fetchQueryView, columnAxis, laneAxis, cycles.data, isGrouped && (!(columnAxis === "cycle" || laneAxis === "cycle") || cycles.isSuccess));
   const pagedFetchView = isPlanning ? planning.backlog : fetchQueryView;
   const sprintItems = usePlanningSprints(planning.sprints, isPlanning && cycles.isSuccess && planning.cycleCount > 0);
   // Roadmaps auto-stream their whole (narrowed) match set below; every OTHER
@@ -366,7 +376,7 @@ export function ViewPage() {
   const [pageLimit, setPageLimit] = useItemsPageLimit();
   const pagedItems = useQuery({
     ...pagedViewItemsQuery(pagedFetchView, page, pageLimit),
-    enabled: Boolean(view) && !isRoadmap,
+    enabled: Boolean(view) && !isRoadmap && !isGrouped,
   });
   const itemsTotal = useQuery({
     // The spec-75 count endpoint: same filter surface + visibility as the list.
@@ -374,7 +384,7 @@ export function ViewPage() {
       pagedFetchView?.project_id ? { project_id: pagedFetchView.project_id } : {},
       pagedFetchView?.query ?? "",
     ),
-    enabled: Boolean(view) && !isRoadmap,
+    enabled: Boolean(view) && !isRoadmap && !isGrouped,
   });
   const totalCount = itemsTotal.data?.total ?? null;
   const pageCount =
@@ -413,10 +423,10 @@ export function ViewPage() {
   );
   const roadmapFlat = useMemo(() => itemPages.data?.pages.flat(), [itemPages.data]);
   const items = {
-    data: isRoadmap ? roadmapFlat : isPlanning ? [...sprintItems.items, ...(pagedItems.data ?? [])] : pagedItems.data,
-    isPending: isRoadmap ? itemPages.isPending : pagedItems.isPending || (isPlanning && (cycles.isPending || (planning.cycleCount > 0 && sprintItems.isPending))),
-    isError: isRoadmap ? itemPages.isError : pagedItems.isError || (isPlanning && (cycles.isError || (planning.cycleCount > 0 && sprintItems.isError && !sprintItems.data))),
-    error: isRoadmap ? itemPages.error : pagedItems.error ?? (isPlanning ? cycles.error ?? sprintItems.error : null),
+    data: isGrouped ? groupedItems.items : isRoadmap ? roadmapFlat : isPlanning ? [...sprintItems.items, ...(pagedItems.data ?? [])] : pagedItems.data,
+    isPending: isGrouped ? groupedItems.isPending && !cycles.isError : isRoadmap ? itemPages.isPending : pagedItems.isPending || (isPlanning && (cycles.isPending || (planning.cycleCount > 0 && sprintItems.isPending))),
+    isError: isGrouped ? (groupedItems.isError && !groupedItems.data) || ((columnAxis === "cycle" || laneAxis === "cycle") && cycles.isError) : isRoadmap ? itemPages.isError : pagedItems.isError || (isPlanning && (cycles.isError || (planning.cycleCount > 0 && sprintItems.isError && !sprintItems.data))),
+    error: isGrouped ? groupedItems.error ?? cycles.error : isRoadmap ? itemPages.error : pagedItems.error ?? (isPlanning ? cycles.error ?? sprintItems.error : null),
   };
   // Since the pagination wave the bar COMPOSES into the fetch (see
   // effectiveView above) — the loaded page already IS the filtered page.
@@ -424,7 +434,7 @@ export function ViewPage() {
 
   // Queue views (spec 64): a fixed-column triage list — axes ignored, SLA
   // chips always on, and (without an explicit ORDER BY in the SLQ) the loaded
-  // page re-ordered client-side by SLA urgency.
+  // server orders the complete match set by live SLA urgency before paging.
   const isQueue = view?.view_type === ViewType.queue;
   const isBoard = view?.view_type === ViewType.board;
   // Per-view card display (slots/labels/scale) — persisted under the view's id.
@@ -509,11 +519,7 @@ export function ViewPage() {
   }).data;
   // The server's order stands when the view's SLQ sorts explicitly; otherwise
   // queues default to breached-first → ascending due_at → oldest created.
-  const hasExplicitOrder = /\border\s+by\b/i.test(view?.query ?? "");
-  const orderedItems = useMemo(
-    () => (isQueue && !hasExplicitOrder ? orderBySlaUrgency(pageItems, slaByItem) : pageItems),
-    [isQueue, hasExplicitOrder, pageItems, slaByItem],
-  );
+  const orderedItems = pageItems;
   const states = useQuery({
     ...statesQuery(view?.project_id ?? ""),
     enabled: Boolean(view?.project_id),
@@ -614,13 +620,7 @@ export function ViewPage() {
   // A board without columns is still a board — fall back to state columns.
   // A PLANNING view is always cycle-grouped, a QUEUE is always a flat triage
   // list (both ignore their stored axes).
-  const columnAxis =
-    view?.view_type === ViewType.planning
-      ? ViewAxis.cycle
-      : isQueue
-        ? null
-        : (view?.group_by ?? (view?.view_type === ViewType.board ? ViewAxis.state : null));
-  const laneAxis = view?.view_type === ViewType.board ? view.swimlane_by : null;
+
 
   const stateCategories = useQuery({
     ...stateCategoriesQuery(),
@@ -631,12 +631,13 @@ export function ViewPage() {
   const axisContext = useMemo(
     () => ({
       states: states.data,
+      allStates: allStates.data,
       stateCategories: stateCategories.data,
       fields: fields.data,
       cycles: cycles.data,
       cycleFilter: view?.cycle_filter,
     }),
-    [states.data, stateCategories.data, fields.data, cycles.data, view?.cycle_filter],
+    [states.data, allStates.data, stateCategories.data, fields.data, cycles.data, view?.cycle_filter],
   );
   // A cycle-grouped view shows every (matching) cycle as a header — including
   // empty staging cycles — so it renders even when the SLQ matched no items.
@@ -647,10 +648,10 @@ export function ViewPage() {
     if (!columnAxis) return [{ key: FLAT_GROUP_KEY, label: "All items", items: orderedItems }];
     // RADD-855: the view's own bucket order, over the axis's natural order.
     return applyBucketOrder(
-      groupItemsForView(orderedItems, columnAxis, axisContext),
+      groupItemsForView(orderedItems, columnAxis, axisContext).map(g => ({...g,total:isGrouped ? groupedItems.first?.column_totals[g.key] ?? 0 : undefined})),
       view.column_order,
     );
-  }, [view, orderedItems, columnAxis, axisContext]);
+  }, [view, orderedItems, columnAxis, axisContext, isGrouped, groupedItems.first]);
   // RADD-1175: presence. `columns` stays the FULL set (the Order menu must be
   // able to bring a hidden one back); the surfaces get the visible subset.
   const hiddenKeys = useMemo(() => new Set(view?.hidden_columns ?? []), [view?.hidden_columns]);
@@ -663,11 +664,11 @@ export function ViewPage() {
     () =>
       view && laneAxis
         ? applyBucketOrder(
-            groupItemsForView(orderedItems, laneAxis, axisContext),
+            groupItemsForView(orderedItems, laneAxis, axisContext).map(g => ({...g,total:isGrouped ? groupedItems.first?.lane_totals[g.key] ?? 0 : undefined})),
             view.swimlane_order,
           )
         : [],
-    [view, orderedItems, laneAxis, axisContext],
+    [view, orderedItems, laneAxis, axisContext, isGrouped, groupedItems.first],
   );
 
   // Cross-bucket drag (spec 24): dropping an item on a bucket sets the field the
@@ -768,9 +769,9 @@ export function ViewPage() {
   // page shows even while the bar is active (pagination wave).
   const matchingIds = useQuery({
     ...itemIdsQuery(effectiveView?.query_string ?? ""),
-    enabled: Boolean(view) && selected.size > 0 && !isPlanning,
+    enabled: Boolean(view) && selected.size > 0 && !isPlanning && !isGrouped,
   });
-  const matching = !isPlanning && matchingIds.data
+  const matching = !isPlanning && !isGrouped && matchingIds.data
     ? {
         total: matchingIds.data.total,
         pending: matchingIds.isFetching,
@@ -965,7 +966,9 @@ export function ViewPage() {
 
         <div className="ml-auto flex items-center gap-2">
           <span className="text-xs text-fg-faint">
-            {isPlanning
+            {isGrouped
+              ? `${groupedItems.items.length.toLocaleString()} loaded · ${Object.values(groupedItems.first?.column_totals ?? {}).reduce((a,b)=>a+b,0).toLocaleString()} matching items`
+              : isPlanning
               ? `${sprintItems.items.length.toLocaleString()}${sprintItems.total !== undefined ? ` / ${sprintItems.total.toLocaleString()}` : ""} sprint items · ${totalCount?.toLocaleString() ?? "…"} open backlog`
               : isRoadmap
               ? // Roadmap auto-stream (spec 79): the count ticks while pages load.
@@ -1225,7 +1228,7 @@ export function ViewPage() {
             )
           ) : (
             <ViewList
-              groups={isPlanning ? visibleColumns : columns}
+              groups={isPlanning || isGrouped ? visibleColumns : columns}
               viewId={view.id}
               display={display}
               slaByItem={slaByItem}
@@ -1249,6 +1252,18 @@ export function ViewPage() {
         </div>
       )}
 
+      {isGrouped && <div className="flex flex-wrap items-center justify-center gap-3 border-t border-subtle p-3 text-sm">
+        {(groupedItems.first?.total_groups ?? 0) > 20 && <>
+          <span>Group set {groupedItems.group + 1} of {Math.ceil((groupedItems.first?.total_groups ?? 0)/20)}</span>
+          <Button variant="secondary" size="sm" disabled={!groupedItems.group || groupedItems.isFetching} onClick={()=>groupedItems.setGroup(groupedItems.group-1)}>Previous groups</Button>
+          <Button variant="secondary" size="sm" disabled={(groupedItems.group+1)*20 >= (groupedItems.first?.total_groups ?? 0) || groupedItems.isFetching} onClick={()=>groupedItems.setGroup(groupedItems.group+1)}>Next groups</Button>
+        </>}
+        {groupedItems.hasNextPage ? <>
+          <span>Loaded rows are a slice of each group.</span>
+          <Button variant="secondary" size="sm" disabled={groupedItems.isFetching} onClick={()=>void groupedItems.fetchNextPage()}>{groupedItems.isFetching ? "Loading…" : "Load more in these groups"}</Button>
+        </> : <span className="text-fg-muted">All issues in this group set are loaded.</span>}
+        {groupedItems.isFetchNextPageError && <span role="alert">Could not load more. Try again.</span>}
+      </div>}
       {isPlanning && sprintItems.more && (
         <div role="status" className="border-t border-subtle px-4 py-2 text-sm text-fg-muted">
           {sprintItems.isFetchingNextPage ? "Loading more sprint work…" : "More sprint work is available."}
@@ -1259,7 +1274,7 @@ export function ViewPage() {
       {/* Classic pagination (pagination wave) — roadmaps auto-stream instead. */}
       {/* RADD-1177: also shown whenever a SMALLER page would paginate — otherwise
           the size picker is unreachable exactly when someone wants a smaller page. */}
-      {!isRoadmap &&
+      {!isRoadmap && !isGrouped &&
         ((pageCount !== null && pageCount > 1) ||
           page > 1 ||
           (totalCount !== null && totalCount > Math.min(...ITEMS_PAGE_SIZES))) && (

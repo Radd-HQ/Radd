@@ -149,7 +149,7 @@ export function ViewSwimlanes({
               {!railOf(column) && (
                 <>
                   <h2 className="truncate text-[13px] font-semibold text-fg">{column.label}</h2>
-                  <span className="text-xs text-fg-muted">{column.items.length}</span>
+                  <span className="text-xs text-fg-muted">{column.total !== undefined ? `${column.items.length} / ${column.total}` : column.items.length}</span>
                 </>
               )}
             </div>
@@ -175,7 +175,7 @@ export function ViewSwimlanes({
                     <span className={`size-2 rounded-full ${lane.dotClassName}`} aria-hidden />
                   )}
                   <h3 className="text-[13px] font-semibold text-fg">{lane.label}</h3>
-                  <span className="text-xs text-fg-muted">{lane.items.length}</span>
+                  <span className="text-xs text-fg-muted">{lane.total !== undefined ? `${lane.items.length} / ${lane.total}` : lane.items.length}</span>
                 </button>
               </header>
 

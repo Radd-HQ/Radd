@@ -29,6 +29,7 @@ ANONYMOUS_ROUTES: frozenset[tuple[str, str]] = frozenset(
         ("GET", "/api/v1/projects/by-key/{key}"),
         ("GET", "/api/v1/projects/{project_id}"),
         ("GET", "/api/v1/items"),
+        ("GET", "/api/v1/items/grouped"),  # read-only; same authorized ID scope
         ("GET", "/api/v1/items/slq/validate"),
         ("GET", "/api/v1/items/slq/suggest"),
         ("GET", "/api/v1/items/ids"),

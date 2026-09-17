@@ -224,7 +224,7 @@ export function ViewList({
                     <span className={`size-2 rounded-full ${group.dotClassName}`} aria-hidden />
                   )}
                   <h2 className="text-xs font-semibold text-fg">{group.label}</h2>
-                  <span className="text-xs text-fg-faint">{group.items.length}</span>
+                  <span className="text-xs text-fg-faint">{group.total !== undefined ? `${group.items.length} / ${group.total}` : group.items.length}</span>
                   {group.cycleMeta ? (
                     <>
                       <CycleStatusPill status={group.cycleMeta.status} />

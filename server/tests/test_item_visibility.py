@@ -242,6 +242,11 @@ async def test_http_world_sees_public_rows_only(db, world):
         listed = await client.get("/api/v1/items", params={"project_id": str(project.id)})
         assert listed.status_code == 200, listed.text
         assert {i["id"] for i in listed.json()} == {str(rows[ItemVisibility.PUBLIC].id)}
+        grouped = await client.get("/api/v1/items/grouped", params={"project_id": str(project.id), "axis": "priority"})
+        assert grouped.status_code == 200, grouped.text
+        assert {i["id"] for cell in grouped.json()["cells"] for i in cell["items"]} == {str(rows[ItemVisibility.PUBLIC].id)}
+        empty_cycles = await client.get("/api/v1/items/grouped", params={"project_id": str(project.id), "axis": "cycle", "cycle_scope": "true"})
+        assert empty_cycles.status_code == 200, empty_cycles.text
         counted = await client.get("/api/v1/items/count", params={"project_id": str(project.id)})
         assert counted.json()["total"] == 1
         hidden = await client.get(f"/api/v1/items/{rows[ItemVisibility.INTERNAL].id}")
@@ -255,3 +260,16 @@ async def test_http_world_sees_public_rows_only(db, world):
     ) as client:
         listed = await client.get("/api/v1/items", params={"project_id": str(project.id)})
         assert {i["visibility"] for i in listed.json()} == {"public", "internal"}
+
+
+@pytest.mark.parametrize("who", sorted(EXPECTED))
+async def test_grouped_counts_and_queue_obey_the_same_row_visibility(db, world, who):
+    from radd.modules.items.grouped import GroupPageRequest, grouped_items
+    from radd.modules.slas.queue import queue_items
+    project, rows, actor = world["project"], world["rows"], world["actors"][who]
+    expected = {rows[level].id for level in EXPECTED[who]}
+    result = await grouped_items(db, actor, GroupPageRequest(project_id=project.id, axis="priority"))
+    assert {i.id for c in result.cells for i in c.items} == expected
+    assert sum(result.column_totals.values()) == len(expected)
+    queue = await queue_items(db, actor, project_id=project.id, q="", limit=50, offset=0)
+    assert {i.id for i in queue} == expected

@@ -122,18 +122,19 @@ export const itemIdsQuery = (queryString: string) =>
  * below (they auto-stream their whole match set).
  */
 export const pagedViewItemsQuery = (
-  view: Pick<View, "id" | "query_string"> | undefined,
+  view: (Pick<View, "id" | "query_string"> & Partial<Pick<View, "view_type">>) | undefined,
   page: number,
   // RADD-1154: the page size follows the viewport (`useItemsPageLimit`); it is
   // part of the key, so a rotation refetches the right page.
   limit: number = ITEMS_PAGE_LIMIT,
 ) =>
   queryOptions({
-    queryKey: queryKeys.viewItemsPage(view?.id ?? "", view?.query_string ?? "", page, limit),
+    queryKey: [...queryKeys.viewItemsPage(view?.id ?? "", view?.query_string ?? "", page, limit), view?.view_type],
+    refetchInterval: view?.view_type === "queue" ? 60_000 : false,
     meta: projectEntityMeta(new URLSearchParams(view?.query_string).get("project_id"), Entity.item),
     placeholderData: keepPreviousData,
     queryFn: ({ signal }) =>
-      api.get<Item[]>(`${ApiPath.items}?${view?.query_string ?? ""}`, {
+      api.get<Item[]>(`${view?.view_type === "queue" ? "/sla-queue-items" : ApiPath.items}?${view?.query_string ?? ""}`, {
         signal,
         query: {
           limit: String(limit),

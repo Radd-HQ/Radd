@@ -1,7 +1,7 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
@@ -12,6 +12,8 @@ from radd.modules.items import service as items_service
 from radd.modules.projects import service as projects_service
 
 from . import evaluation, service
+from .queue import queue_items
+from radd.modules.items.schemas import ItemRead
 from .schemas import (
     BatchTimerRead,
     ItemSlaEntry,
@@ -105,3 +107,9 @@ async def item_sla(item_id: uuid.UUID, session: Session, user: CurrentUser) -> I
                 ItemSlaEntry(policy_id=policy.id, policy_name=policy.name, timers=timers_read)
             )
     return ItemSlaRead(entries=entries)
+
+
+@router.get("/sla-queue-items", response_model=list[ItemRead])
+async def queue_page(session: Session, user: CurrentUser, project_id: uuid.UUID | None = None,
+                     q: str = "", limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):
+    return await queue_items(session, user, project_id=project_id, q=q, limit=limit, offset=offset)

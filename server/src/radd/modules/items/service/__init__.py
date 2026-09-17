@@ -17,6 +17,8 @@ An items-internal caller that genuinely needs one imports it from the concern
 module directly, e.g. `from .service.visibility import _internal_visible`.
 """
 
+from .scope import visible_ids_query
+
 from .core import (
     create_item,
     delete_item,
@@ -64,6 +66,7 @@ from .visibility import (
 )
 
 __all__ = [
+    "visible_ids_query",
     "clone_item",
     "convert_item_kind",
     "merge_items",
