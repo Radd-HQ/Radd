@@ -699,3 +699,14 @@ async def test_every_stored_view_query_still_compiles(db_session):
             project_id=view.project_id,
         )
         await db_session.execute(select(WorkItem).where(compiled.where).limit(1))
+
+
+async def test_planning_backlog_partition_and_default_order_compile():
+    compiled = await compile_text(
+        "cycle IS EMPTY AND category NOT IN (done, canceled) "
+        "ORDER BY category ASC, priority DESC, updated DESC, number ASC"
+    )
+    assert "cycle_id IS NULL" in str(compiled.where)
+    assert [t.__tablename__ for t, _ in compiled.joins] == ["states", "state_categories"]
+    assert any("CASE" in str(term) and str(term).endswith("DESC") for term in compiled.order)
+    assert str(compiled.order[-1]) == "work_items.number ASC"

@@ -1,3 +1,5 @@
+import { planningQueries } from "../lib/planning-query";
+import { usePlanningSprints } from "../lib/usePlanningSprints";
 import { PublicProjectChip } from "../components/items/ItemBadges";
 import { CycleChoices } from "../components/cycles/CycleSelect";
 import {
@@ -238,6 +240,7 @@ export function ViewPage() {
   // more than ~3 months ago ("Show closed" in the surface toolbar lifts it,
   // persisted per view).
   const isRoadmap = view?.view_type === ViewType.roadmap;
+  const isPlanning = view?.view_type === ViewType.planning;
   const [showClosed, setShowClosed] = useState(
     () => window.localStorage.getItem(roadmapShowClosedStorageKey(viewId)) === "1",
   );
@@ -327,8 +330,14 @@ export function ViewPage() {
     return { ...effectiveView, query: combined, query_string: params.toString() };
   }, [effectiveView, isRoadmap, showClosed, epicsOnly, memberFiltering, membersClause]);
 
+  const cycles = useQuery({ ...cyclesQuery(), enabled: Boolean(view) && (
+    view?.view_type === ViewType.planning || view?.group_by === ViewAxis.cycle || view?.swimlane_by === ViewAxis.cycle
+  ) });
+  const planning = useMemo(() => planningQueries(fetchQueryView, cycles.data), [fetchQueryView, cycles.data]);
+  const pagedFetchView = isPlanning ? planning.backlog : fetchQueryView;
+  const sprintItems = usePlanningSprints(planning.sprints, isPlanning && cycles.isSuccess && planning.cycleCount > 0);
   // Roadmaps auto-stream their whole (narrowed) match set below; every OTHER
-  // view type pages CLASSICALLY since the pagination wave — one page at a
+  // view type pages its result (Planning pages only its backlog) CLASSICALLY since the pagination wave — one page at a
   // time behind a first/prev/numbers/next/last Pager, page carried in the URL.
   const itemPages = useInfiniteQuery({
     ...infiniteViewItemsQuery(fetchQueryView),
@@ -344,7 +353,7 @@ export function ViewPage() {
   };
   // A changed query invalidates the page NUMBER (page 7 of the old result set
   // means nothing in the new one) — snap back to 1, but never on mount.
-  const pageQueryString = fetchQueryView?.query_string ?? "";
+  const pageQueryString = pagedFetchView?.query_string ?? "";
   const prevPageQsRef = useRef(pageQueryString);
   useEffect(() => {
     if (prevPageQsRef.current !== pageQueryString) {
@@ -356,20 +365,23 @@ export function ViewPage() {
   // RADD-1154: 50 per page on a phone, 200 otherwise.
   const [pageLimit, setPageLimit] = useItemsPageLimit();
   const pagedItems = useQuery({
-    ...pagedViewItemsQuery(fetchQueryView, page, pageLimit),
+    ...pagedViewItemsQuery(pagedFetchView, page, pageLimit),
     enabled: Boolean(view) && !isRoadmap,
   });
   const itemsTotal = useQuery({
     // The spec-75 count endpoint: same filter surface + visibility as the list.
     ...itemsCountQuery(
-      fetchQueryView?.project_id ? { project_id: fetchQueryView.project_id } : {},
-      fetchQueryView?.query ?? "",
+      pagedFetchView?.project_id ? { project_id: pagedFetchView.project_id } : {},
+      pagedFetchView?.query ?? "",
     ),
     enabled: Boolean(view) && !isRoadmap,
   });
   const totalCount = itemsTotal.data?.total ?? null;
   const pageCount =
     totalCount === null ? null : Math.max(1, Math.ceil(totalCount / pageLimit));
+  useEffect(() => {
+    if (isPlanning && pageCount !== null && page > pageCount && !itemsTotal.isFetching) setPage(pageCount);
+  }, [isPlanning, pageCount, page, itemsTotal.isFetching]);
   // Roadmap views auto-stream their (narrowed) match set — but in CAPPED
   // bursts, so a broad query can never re-create fetch-all: after
   // ROADMAP_MAX_AUTO_PAGES pages the stream pauses with a toolbar notice
@@ -401,10 +413,10 @@ export function ViewPage() {
   );
   const roadmapFlat = useMemo(() => itemPages.data?.pages.flat(), [itemPages.data]);
   const items = {
-    data: isRoadmap ? roadmapFlat : pagedItems.data,
-    isPending: isRoadmap ? itemPages.isPending : pagedItems.isPending,
-    isError: isRoadmap ? itemPages.isError : pagedItems.isError,
-    error: isRoadmap ? itemPages.error : pagedItems.error,
+    data: isRoadmap ? roadmapFlat : isPlanning ? [...sprintItems.items, ...(pagedItems.data ?? [])] : pagedItems.data,
+    isPending: isRoadmap ? itemPages.isPending : pagedItems.isPending || (isPlanning && (cycles.isPending || (planning.cycleCount > 0 && sprintItems.isPending))),
+    isError: isRoadmap ? itemPages.isError : pagedItems.isError || (isPlanning && (cycles.isError || (planning.cycleCount > 0 && sprintItems.isError && !sprintItems.data))),
+    error: isRoadmap ? itemPages.error : pagedItems.error ?? (isPlanning ? cycles.error ?? sprintItems.error : null),
   };
   // Since the pagination wave the bar COMPOSES into the fetch (see
   // effectiveView above) — the loaded page already IS the filtered page.
@@ -512,9 +524,6 @@ export function ViewPage() {
     ...allStatesQuery(),
     enabled: Boolean(view) && !view?.project_id,
   });
-  const cycles = useQuery({ ...cyclesQuery(), enabled: Boolean(view) && (
-    view?.view_type === ViewType.planning || view?.group_by === ViewAxis.cycle || view?.swimlane_by === ViewAxis.cycle
-  ) });
   // Story points (spec 70): resolved per project (all-projects views fall
   // back to the instance default) — drives the board columns' Σ pts header.
   const pointsEnabled = usePointsEnabled(view?.project_id ?? undefined);
@@ -675,7 +684,7 @@ export function ViewPage() {
   // explicit sort (rank is the default) or explicitly `ORDER BY rank`. A view
   // sorted by another field can't be hand-reordered (the sort would fight it).
   // Shared by list rows AND the roadmap's row-label reorder (spec 82).
-  const viewQuery = view?.query ?? "";
+  const viewQuery = (isPlanning ? planning.backlog?.query : view?.query) ?? "";
   const rankOrdered =
     !/\border\s+by\b/i.test(viewQuery) || /\border\s+by\s+rank\b/i.test(viewQuery);
   const projectScoped = Boolean(view?.project_id);
@@ -759,9 +768,9 @@ export function ViewPage() {
   // page shows even while the bar is active (pagination wave).
   const matchingIds = useQuery({
     ...itemIdsQuery(effectiveView?.query_string ?? ""),
-    enabled: Boolean(view) && selected.size > 0,
+    enabled: Boolean(view) && selected.size > 0 && !isPlanning,
   });
-  const matching = matchingIds.data
+  const matching = !isPlanning && matchingIds.data
     ? {
         total: matchingIds.data.total,
         pending: matchingIds.isFetching,
@@ -956,7 +965,9 @@ export function ViewPage() {
 
         <div className="ml-auto flex items-center gap-2">
           <span className="text-xs text-fg-faint">
-            {isRoadmap
+            {isPlanning
+              ? `${sprintItems.items.length.toLocaleString()}${sprintItems.total !== undefined ? ` / ${sprintItems.total.toLocaleString()}` : ""} sprint items · ${totalCount?.toLocaleString() ?? "…"} open backlog`
+              : isRoadmap
               ? // Roadmap auto-stream (spec 79): the count ticks while pages load.
                 `${pageItems.length} items${itemPages.hasNextPage ? "…" : ""}`
               : totalCount !== null
@@ -1214,7 +1225,7 @@ export function ViewPage() {
             )
           ) : (
             <ViewList
-              groups={columns}
+              groups={isPlanning ? visibleColumns : columns}
               viewId={view.id}
               display={display}
               slaByItem={slaByItem}
@@ -1238,6 +1249,13 @@ export function ViewPage() {
         </div>
       )}
 
+      {isPlanning && sprintItems.more && (
+        <div role="status" className="border-t border-subtle px-4 py-2 text-sm text-fg-muted">
+          {sprintItems.isFetchingNextPage ? "Loading more sprint work…" : "More sprint work is available."}
+          {(sprintItems.paused || sprintItems.isFetchNextPageError) && <button type="button" className="ml-3 underline" onClick={sprintItems.loadMore}>Load more sprint work</button>}
+          <span className="ml-2">Sprint totals describe the loaded rows until loading completes.</span>
+        </div>
+      )}
       {/* Classic pagination (pagination wave) — roadmaps auto-stream instead. */}
       {/* RADD-1177: also shown whenever a SMALLER page would paginate — otherwise
           the size picker is unreachable exactly when someone wants a smaller page. */}
@@ -1246,6 +1264,7 @@ export function ViewPage() {
           page > 1 ||
           (totalCount !== null && totalCount > Math.min(...ITEMS_PAGE_SIZES))) && (
         <div className="flex items-center justify-center border-t border-subtle/70 py-2">
+          {isPlanning && <span className="mr-3 text-xs text-fg-muted">Open backlog</span>}
           <Pager
             page={page}
             pageCount={pageCount}
