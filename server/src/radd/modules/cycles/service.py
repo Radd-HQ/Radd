@@ -87,6 +87,14 @@ def to_read(
 # --- team visibility (spec 60): no rows = public; rows = those teams only ---
 
 
+def ids_by_status(statuses: list[str]):
+    """Derived lifecycle query shared by Planning and SLQ; no date rules duplicated."""
+    from datetime import date
+    from .directory import status_expression
+
+    return select(Cycle.id).where(status_expression(date.today()).in_(statuses))
+
+
 def ids_by_names(names: list[str]):
     """Select of cycle ids matching these NAMES — the query-fragment seam the
     items SLQ `cycle` builtin composes into `WorkItem.cycle_id IN (…)`

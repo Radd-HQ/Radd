@@ -6,17 +6,19 @@ import { entityMeta, Entity } from "./cache";
 import type { View } from "./types";
 
 const AUTO_PAGES = 10;
-/** Bounded automatic loading of sprint work; backlog pagination never changes this key. */
-export function usePlanningSprints(view: View | undefined, enabled: boolean) {
-  const query = useInfiniteQuery({ ...infiniteViewItemsQuery(view), enabled });
-  const count = useQuery({
-    queryKey: ["planning-sprint-count", view?.query_string],
+export function planningCountQuery(view: View | undefined) {
+  return {
+    queryKey: ["planning-count", view?.query_string],
     meta: entityMeta(Entity.item, Entity.cycle),
-    queryFn: ({ signal }) => api.get<{ total: number }>(`/items/count?${view?.query_string}`, { signal }),
-    enabled,
-  });
-  const [cap, setCap] = useState(AUTO_PAGES);
-  useEffect(() => setCap(AUTO_PAGES), [view?.query_string]);
+    queryFn: ({ signal }: { signal: AbortSignal }) => api.get<{ total: number }>(`/items/count?${view?.query_string}`, { signal }),
+  };
+}
+/** Bounded automatic loading of sprint work; backlog pagination never changes this key. */
+export function usePlanningSprints(view: View | undefined, enabled: boolean, autoPages = AUTO_PAGES) {
+  const query = useInfiniteQuery({ ...infiniteViewItemsQuery(view), enabled });
+  const count = useQuery({ ...planningCountQuery(view), enabled });
+  const [cap, setCap] = useState(autoPages);
+  useEffect(() => setCap(autoPages), [view?.query_string, autoPages]);
   const loaded = query.data?.pages.length ?? 0;
   useEffect(() => {
     if (enabled && query.hasNextPage && !query.isFetchingNextPage && !query.isFetchNextPageError && loaded < cap) {
@@ -27,8 +29,9 @@ export function usePlanningSprints(view: View | undefined, enabled: boolean) {
     ...query,
     items: enabled ? query.data?.pages.flat() ?? [] : [],
     total: enabled ? count.data?.total : 0,
+    countError: enabled && count.isError,
     more: enabled && query.hasNextPage,
     paused: enabled && query.hasNextPage && loaded >= cap,
-    loadMore: () => { setCap(current => current + AUTO_PAGES); void query.fetchNextPage(); },
+    loadMore: () => { setCap(current => current + autoPages); void query.fetchNextPage(); },
   };
 }

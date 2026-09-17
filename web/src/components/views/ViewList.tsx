@@ -1,4 +1,5 @@
-import { useState, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { accountStorageKey } from "../../lib/account-storage";
+import { useEffect, useState, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type { BucketRef } from "../../lib/axis-dnd";
 import { useBucketDrop } from "../../lib/bucket-drop";
@@ -83,7 +84,7 @@ export const FLAT_GROUP_KEY = "__all__";
 function readCollapsed(viewId: string | undefined): Set<string> {
   if (!viewId) return new Set();
   try {
-    const raw = window.localStorage.getItem(listSectionCollapseStorageKey(viewId));
+    const raw = window.localStorage.getItem(accountStorageKey(listSectionCollapseStorageKey(viewId)));
     const parsed: unknown = raw ? JSON.parse(raw) : [];
     return new Set(
       Array.isArray(parsed) ? parsed.filter((k): k is string => typeof k === "string") : [],
@@ -126,6 +127,8 @@ export function ViewList({
 }: ViewListProps) {
   const flat = groups.length === 1 && groups[0].key === FLAT_GROUP_KEY;
   const [collapsed, setCollapsed] = useState<Set<string>>(() => readCollapsed(viewId));
+  const collapseAccount = accountStorageKey("list-collapse");
+  useEffect(() => setCollapsed(readCollapsed(viewId)), [viewId, collapseAccount]);
   // Within-section REORDER state (spec 24) — not covered by useBucketDrop:
   // the source section (fromKey) and the hovered row indicator (dropRow).
   const [fromKey, setFromKey] = useState<string | null>(null);
@@ -148,7 +151,7 @@ export function ViewList({
       else next.add(key);
       if (viewId) {
         try {
-          window.localStorage.setItem(listSectionCollapseStorageKey(viewId), JSON.stringify([...next]));
+          window.localStorage.setItem(accountStorageKey(listSectionCollapseStorageKey(viewId)), JSON.stringify([...next]));
         } catch {
           // Best-effort — collapse still works for the session.
         }
@@ -158,7 +161,7 @@ export function ViewList({
   };
 
   const reorderInto = (group: ViewGroup, target: Item, before: boolean) => {
-    if (!dragging) return;
+    if (!dragging || group.reorderDisabled) return;
     const siblings = group.items.filter((i) => i.id !== dragging.id);
     const idx = siblings.findIndex((i) => i.id === target.id);
     const afterId = before ? (idx > 0 ? siblings[idx - 1].id : null) : target.id;
@@ -208,7 +211,7 @@ export function ViewList({
             {...drop.targetProps(group.key, (dragged) =>
               // The GROUP is the bucket ref — it carries the axis's structural
               // extras (an epic lane's `epicRef`) that {key,label} would drop.
-              onMoveToBucket?.(dragged, group),
+              !group.dropDisabled && onMoveToBucket?.(dragged, group),
             )}
           >
             {!flat && (
@@ -217,6 +220,7 @@ export function ViewList({
                   type="button"
                   onClick={() => toggle(group.key)}
                   aria-expanded={!isCollapsed}
+                  title={`${isCollapsed ? "Expand" : "Collapse"} ${group.label} (only for you)`}
                   className="flex w-full cursor-pointer flex-wrap items-center gap-2 px-4 py-2.5 text-left hover:bg-elevated/60 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
                 >
                   <Chevron size={13} className="shrink-0 text-fg-muted" aria-hidden />
@@ -259,15 +263,19 @@ export function ViewList({
             )}
             {!isCollapsed && (
               <ul className={draggable && group.items.length === 0 ? "min-h-9" : undefined}>
+                {group.items.length === 0 && group.emptyMessage && (
+                  <li className="px-4 py-3 text-xs text-fg-muted">{group.emptyMessage}</li>
+                )}
                 {group.items.map((item) => {
                   const canReorderHere =
-                    reorderable && dragging !== null && fromKey === group.key && dragging.id !== item.id;
+                    reorderable && !group.reorderDisabled && dragging !== null && fromKey === group.key && dragging.id !== item.id;
                   const indicator = dropRow?.id === item.id ? dropRow.before : null;
                   return (
                     <ListRow
                       key={item.id}
                       item={item}
-                      draggable={draggable}
+                      sourceCycle={group.showSourceCycle ? item.cycle?.name : undefined}
+                      draggable={draggable && !group.dragDisabled}
                       onDragStart={() => {
                         drop.startDrag(item);
                         setFromKey(group.key);
@@ -304,6 +312,7 @@ export function ViewList({
 
 interface ListRowProps {
   item: Item;
+  sourceCycle?: string;
   display: CardDisplayConfig;
   /** Batch SLA timers for the sla slot (spec 63). */
   sla?: SlaBatchTimer[];
@@ -330,6 +339,7 @@ interface ListRowProps {
 
 function ListRow({
   item,
+  sourceCycle,
   display,
   sla,
   rollup,
@@ -421,7 +431,7 @@ function ListRow({
           onSelectToggle={onSelectToggle}
           onStar={onStar}
         />
-        <span className="min-w-0 flex-1 truncate text-[13px] text-heading">{item.title}</span>
+        <span className="min-w-0 flex-1 text-[13px] text-heading"><span className="block truncate">{item.title}</span>{sourceCycle && <span className="block truncate text-[11px] text-fg-muted">From {sourceCycle}</span>}</span>
       </span>
       {listColumns.map((column) => (
         <ColumnCell

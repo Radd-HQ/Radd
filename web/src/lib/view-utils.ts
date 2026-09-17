@@ -37,6 +37,11 @@ import {
  */
 
 export interface ViewGroup {
+  emptyMessage?: string;
+  dropDisabled?: boolean;
+  dragDisabled?: boolean;
+  showSourceCycle?: boolean;
+  reorderDisabled?: boolean;
   /** Complete server-side group count when rows are loaded in slices. */
   total?: number;
   /** Stable bucket key (state/user/team/cycle id, enum member, option, or sentinel). */
@@ -99,10 +104,9 @@ interface AxisContext {
   cycles?: Cycle[];
   /** Optional cycle-name glob narrowing the `cycle` header set; null/'' = all. */
   cycleFilter?: string | null;
-  /** Reveal COMPLETED cycles in the `cycle` header set. No surface sets this
-   *  today — completed cycles are viewable ONLY on Settings → Cycles, by
-   *  product decision — but the grouping stays parameterised rather than
-   *  hard-coded so a future surface can opt in. Note it omits their ITEMS too
+  /** Reveal COMPLETED cycles in the `cycle` header set. Planning uses this
+   *  to build its historical sprint selector. Other axes omit completed
+   *  cycles by default. Note it omits their ITEMS too
    *  (same semantics as `cycleFilter`: a cycle that isn't a header has nowhere
    *  to put them). */
   includeCompletedCycles?: boolean;
@@ -110,8 +114,8 @@ interface AxisContext {
 
 /**
  * Cycles a user can still move work INTO — everything except completed.
- * Completed cycles are viewable only on Settings → Cycles (product decision),
- * and a picker that offers them invites moving live work into a finished
+ * Completed cycles are available in Planning history and Settings → Cycles;
+ * a scheduling picker offering them invites moving live work into a finished
  * sprint. Shared by the sidebar, the item context menu and bulk edit so the
  * three cannot drift.
  */

@@ -38,6 +38,7 @@ class SlqField(StrEnum):
     CREATED = "created"  # date comparisons (whole-day semantics)
     UPDATED = "updated"
     CYCLE = "cycle"  # cycle name | none | IS [NOT] EMPTY
+    CYCLE_STATUS = "cycle.status"
     PAST_CYCLE = "past_cycle"  # cycles the item LEFT (carryover trail, spec 56)
     RELEASE = "release"  # release version | none | IS [NOT] EMPTY
     FLAGGED = "flagged"  # first-class boolean flag: = true | = false (spec 24)
@@ -101,6 +102,7 @@ BUILTIN_OPS: dict[SlqField, FieldOps] = {
     SlqField.CREATED: FieldOps(RANGE, sortable=True),
     SlqField.UPDATED: FieldOps(RANGE, sortable=True),
     SlqField.CYCLE: FieldOps(EQUALITY, empty=True),
+    SlqField.CYCLE_STATUS: FieldOps(EQUALITY, membership=True),
     SlqField.PAST_CYCLE: FieldOps(EQUALITY, membership=True, empty=True),
     SlqField.RELEASE: FieldOps(EQUALITY, empty=True),
     SlqField.FLAGGED: FieldOps(EQUALITY, sortable=True),

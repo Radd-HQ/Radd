@@ -1,6 +1,8 @@
+import { PlanningControls } from "../components/views/PlanningControls";
+import { accountStorageKey } from "../lib/account-storage";
 import { useGroupedItems } from "../lib/useGroupedItems";
-import { planningQueries } from "../lib/planning-query";
-import { usePlanningSprints } from "../lib/usePlanningSprints";
+import { DEFAULT_PLANNING, planningGroups, RESCHEDULING_KEY, type PlanningOptions, planningQueries } from "../lib/planning-query";
+import { planningCountQuery, usePlanningSprints } from "../lib/usePlanningSprints";
 import { PublicProjectChip } from "../components/items/ItemBadges";
 import { CycleChoices } from "../components/cycles/CycleSelect";
 import {
@@ -31,7 +33,7 @@ import {
   roadmapMembersOnlyStorageKey,
   roadmapShowClosedStorageKey, ITEMS_PAGE_SIZES } from "../lib/constants";
 import { downloadCsv, itemsToCsv } from "../lib/csv";
-import { useCurrentUser, useKeyboardShortcut, usePermissions, usePointsEnabled, useAnonymousBounce, useIsAuthenticated, useItemsPageLimit } from "../lib/hooks";
+import { useCurrentUser, useDebounced, useKeyboardShortcut, usePermissions, usePointsEnabled, useAnonymousBounce, useIsAuthenticated, useItemsPageLimit } from "../lib/hooks";
 import {
   capabilitiesQuery,
   cyclesQuery,
@@ -242,6 +244,25 @@ export function ViewPage() {
   // persisted per view).
   const isRoadmap = view?.view_type === ViewType.roadmap;
   const isPlanning = view?.view_type === ViewType.planning;
+  const planningStorage = accountStorageKey(`radd.planning:${viewId}`);
+  const readPlanning = (): PlanningOptions => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(planningStorage) ?? "{}");
+      return { ...DEFAULT_PLANNING,
+        showCompleted: stored.showCompleted !== false,
+        backlogOrder: ["priority", "recent", "manual"].includes(stored.backlogOrder) ? stored.backlogOrder : "priority",
+      };
+    } catch { return {...DEFAULT_PLANNING}; }
+  };
+  const [planningOptions, setPlanningOptions] = useState<PlanningOptions>(readPlanning);
+  useEffect(() => setPlanningOptions(readPlanning()), [planningStorage]);
+  const changePlanning = (patch: Partial<PlanningOptions>) => setPlanningOptions(current => {
+    const next = {...current, ...patch};
+    try { localStorage.setItem(planningStorage, JSON.stringify({showCompleted: next.showCompleted, backlogOrder: next.backlogOrder})); } catch { /* session still works */ }
+    return next;
+  });
+  const backlogSearch = useDebounced(planningOptions.search, 250);
+
   const [showClosed, setShowClosed] = useState(
     () => window.localStorage.getItem(roadmapShowClosedStorageKey(viewId)) === "1",
   );
@@ -342,10 +363,17 @@ export function ViewPage() {
   const cycles = useQuery({ ...cyclesQuery(), enabled: Boolean(view) && (
     view?.view_type === ViewType.planning || view?.group_by === ViewAxis.cycle || view?.swimlane_by === ViewAxis.cycle
   ) });
-  const planning = useMemo(() => planningQueries(fetchQueryView, cycles.data), [fetchQueryView, cycles.data]);
+  const planning = useMemo(() => planningQueries(fetchQueryView, cycles.data, {...planningOptions, search: backlogSearch}), [fetchQueryView, cycles.data, planningOptions, backlogSearch]);
   const groupedItems = useGroupedItems(fetchQueryView, columnAxis, laneAxis, cycles.data, isGrouped && (!(columnAxis === "cycle" || laneAxis === "cycle") || cycles.isSuccess));
   const pagedFetchView = isPlanning ? planning.backlog : fetchQueryView;
   const sprintItems = usePlanningSprints(planning.sprints, isPlanning && cycles.isSuccess && planning.cycleCount > 0);
+  const recoveryItems = usePlanningSprints(planning.recovery, isPlanning && cycles.isSuccess, 1);
+  const historyItems = usePlanningSprints(planning.history, isPlanning && planningOptions.history && Boolean(planning.historyId), 1);
+  const openSprintCount = useQuery({
+    ...planningCountQuery(planning.sprintOpen),
+    enabled: isPlanning && cycles.isSuccess && planning.cycleCount > 0,
+  });
+
   // Roadmaps auto-stream their whole (narrowed) match set below; every OTHER
   // view type pages its result (Planning pages only its backlog) CLASSICALLY since the pagination wave — one page at a
   // time behind a first/prev/numbers/next/last Pager, page carried in the URL.
@@ -378,14 +406,16 @@ export function ViewPage() {
     ...pagedViewItemsQuery(pagedFetchView, page, pageLimit),
     enabled: Boolean(view) && !isRoadmap && !isGrouped,
   });
-  const itemsTotal = useQuery({
+  const ordinaryItemsTotal = useQuery({
     // The spec-75 count endpoint: same filter surface + visibility as the list.
     ...itemsCountQuery(
       pagedFetchView?.project_id ? { project_id: pagedFetchView.project_id } : {},
       pagedFetchView?.query ?? "",
     ),
-    enabled: Boolean(view) && !isRoadmap && !isGrouped,
+    enabled: Boolean(view) && !isRoadmap && !isGrouped && !isPlanning,
   });
+  const planningItemsTotal = useQuery({ ...planningCountQuery(planning.backlog), enabled: isPlanning });
+  const itemsTotal = isPlanning ? planningItemsTotal : ordinaryItemsTotal;
   const totalCount = itemsTotal.data?.total ?? null;
   const pageCount =
     totalCount === null ? null : Math.max(1, Math.ceil(totalCount / pageLimit));
@@ -423,10 +453,10 @@ export function ViewPage() {
   );
   const roadmapFlat = useMemo(() => itemPages.data?.pages.flat(), [itemPages.data]);
   const items = {
-    data: isGrouped ? groupedItems.items : isRoadmap ? roadmapFlat : isPlanning ? [...sprintItems.items, ...(pagedItems.data ?? [])] : pagedItems.data,
-    isPending: isGrouped ? groupedItems.isPending && !cycles.isError : isRoadmap ? itemPages.isPending : pagedItems.isPending || (isPlanning && (cycles.isPending || (planning.cycleCount > 0 && sprintItems.isPending))),
-    isError: isGrouped ? (groupedItems.isError && !groupedItems.data) || ((columnAxis === "cycle" || laneAxis === "cycle") && cycles.isError) : isRoadmap ? itemPages.isError : pagedItems.isError || (isPlanning && (cycles.isError || (planning.cycleCount > 0 && sprintItems.isError && !sprintItems.data))),
-    error: isGrouped ? groupedItems.error ?? cycles.error : isRoadmap ? itemPages.error : pagedItems.error ?? (isPlanning ? cycles.error ?? sprintItems.error : null),
+    data: isGrouped ? groupedItems.items : isRoadmap ? roadmapFlat : isPlanning ? [...sprintItems.items, ...recoveryItems.items, ...(pagedItems.data ?? []), ...historyItems.items] : pagedItems.data,
+    isPending: isGrouped ? groupedItems.isPending && !cycles.isError : isRoadmap ? itemPages.isPending : pagedItems.isPending || (isPlanning && (cycles.isPending || recoveryItems.isPending || (planning.cycleCount > 0 && sprintItems.isPending))),
+    isError: isGrouped ? (groupedItems.isError && !groupedItems.data) || ((columnAxis === "cycle" || laneAxis === "cycle") && cycles.isError) : isRoadmap ? itemPages.isError : pagedItems.isError || (isPlanning && (cycles.isError || (recoveryItems.isError && !recoveryItems.data) || (planning.cycleCount > 0 && sprintItems.isError && !sprintItems.data))),
+    error: isGrouped ? groupedItems.error ?? cycles.error : isRoadmap ? itemPages.error : pagedItems.error ?? (isPlanning ? cycles.error ?? recoveryItems.error ?? sprintItems.error : null),
   };
   // Since the pagination wave the bar COMPOSES into the fetch (see
   // effectiveView above) — the loaded page already IS the filtered page.
@@ -646,18 +676,23 @@ export function ViewPage() {
   const columns: ViewGroup[] = useMemo(() => {
     if (!view) return [];
     if (!columnAxis) return [{ key: FLAT_GROUP_KEY, label: "All items", items: orderedItems }];
+    if (isPlanning) return planningGroups(planning, sprintItems.items, recoveryItems.items,
+      pagedItems.data ?? [], historyItems.items, cycles.data, planningOptions,
+      Boolean(fetchQueryView?.query.trim()), recoveryItems.total, totalCount ?? undefined,
+      historyItems.total, Boolean(sprintItems.more));
+
     // RADD-855: the view's own bucket order, over the axis's natural order.
     return applyBucketOrder(
       groupItemsForView(orderedItems, columnAxis, axisContext).map(g => ({...g,total:isGrouped ? groupedItems.first?.column_totals[g.key] ?? 0 : undefined})),
       view.column_order,
     );
-  }, [view, orderedItems, columnAxis, axisContext, isGrouped, groupedItems.first]);
+  }, [view, orderedItems, columnAxis, axisContext, isGrouped, groupedItems.first, isPlanning, planning, sprintItems.items, recoveryItems.items, pagedItems.data, historyItems.items, cycles.data, planningOptions, fetchQueryView, recoveryItems.total, totalCount, historyItems.total, sprintItems.more]);
   // RADD-1175: presence. `columns` stays the FULL set (the Order menu must be
   // able to bring a hidden one back); the surfaces get the visible subset.
   const hiddenKeys = useMemo(() => new Set(view?.hidden_columns ?? []), [view?.hidden_columns]);
   const visibleColumns = useMemo(
-    () => (hiddenKeys.size ? columns.filter((column) => !hiddenKeys.has(column.key)) : columns),
-    [columns, hiddenKeys],
+    () => (hiddenKeys.size ? columns.filter((column) => (isPlanning && !column.cycleId) || !hiddenKeys.has(column.key)) : columns),
+    [columns, hiddenKeys, isPlanning],
   );
   const collapseEmpty = Boolean(view?.collapse_empty_columns);
   const lanes: ViewGroup[] = useMemo(
@@ -714,7 +749,7 @@ export function ViewPage() {
   const canSetWipLimit = stateColumns && projectScoped && Boolean(view?.can_edit);
 
   const moveToBucket = (item: Item, bucket: BucketRef) => {
-    if (!columnAxis) return;
+    if (!columnAxis || (isPlanning && (bucket.key === RESCHEDULING_KEY || bucket.key.startsWith("history:")))) return;
     const plan = bucketMovePlan(item, columnAxis, bucket, dndCtx);
     if (plan) {
       move.mutate({ itemId: item.id, patch: plan.patch, optimistic: plan.optimistic });
@@ -969,7 +1004,7 @@ export function ViewPage() {
             {isGrouped
               ? `${groupedItems.items.length.toLocaleString()} loaded · ${Object.values(groupedItems.first?.column_totals ?? {}).reduce((a,b)=>a+b,0).toLocaleString()} matching items`
               : isPlanning
-              ? `${sprintItems.items.length.toLocaleString()}${sprintItems.total !== undefined ? ` / ${sprintItems.total.toLocaleString()}` : ""} sprint items · ${totalCount?.toLocaleString() ?? "…"} open backlog`
+              ? `${planning.cycleCount ? openSprintCount.data?.total.toLocaleString() ?? "…" : "0"} open sprint issues · ${totalCount?.toLocaleString() ?? "…"} backlog · ${recoveryItems.total?.toLocaleString() ?? "…"} need rescheduling`
               : isRoadmap
               ? // Roadmap auto-stream (spec 79): the count ticks while pages load.
                 `${pageItems.length} items${itemPages.hasNextPage ? "…" : ""}`
@@ -995,7 +1030,7 @@ export function ViewPage() {
               Reset view
             </Button>
           )}
-          {!isQueue && !isRoadmap && Boolean(view?.can_edit) && columnAxis && (
+          {!isPlanning && !isQueue && !isRoadmap && Boolean(view?.can_edit) && columnAxis && (
             <BucketOrderMenu
               columns={columns}
               lanes={laneAxis ? lanes : []}
@@ -1125,6 +1160,13 @@ export function ViewPage() {
         </div>
       </header>
 
+      {isPlanning && <PlanningControls options={planningOptions} onChange={changePlanning} plan={planning}
+        hidden={hiddenKeys} canEdit={Boolean(view.can_edit)} saving={updateBucketOrder.isPending}
+        onHide={id => updateBucketOrder.mutate({hidden_columns: [...hiddenKeys, id]})}
+        onRestore={() => updateBucketOrder.mutate({hidden_columns: [...hiddenKeys].filter(id => !planning.scheduled.some(g => g.key === id))})}
+        filtered={Boolean(fetchQueryView?.query.trim())} />}
+      {isPlanning && (itemsTotal.isError || openSprintCount.isError || recoveryItems.countError) && <p role="status" className="px-4 py-2 text-xs text-fg-muted">Some Planning counts are unavailable. Displayed rows may still be used.</p>}
+      {isPlanning && updateBucketOrder.isError && <p role="alert" className="px-4 py-2 text-sm text-fg-muted">Could not save sprint visibility. {errorMessage(updateBucketOrder.error)}</p>}
       {items.isPending ? (
         <Spinner label="Loading items…" />
       ) : items.isError ? (
@@ -1246,7 +1288,7 @@ export function ViewPage() {
               onSelectToggle={selectable ? onSelectToggle : undefined}
               onStar={onStar}
               // Queues order by SLA urgency — manual drag-rank would fight it.
-              onReorder={rankOrdered && canUpdate && !isQueue ? onReorder : undefined}
+              onReorder={(isPlanning || rankOrdered) && canUpdate && !isQueue ? onReorder : undefined}
             />
           )}
         </div>
@@ -1264,6 +1306,12 @@ export function ViewPage() {
         </> : <span className="text-fg-muted">All issues in this group set are loaded.</span>}
         {groupedItems.isFetchNextPageError && <span role="alert">Could not load more. Try again.</span>}
       </div>}
+      {isPlanning && (recoveryItems.more || (planningOptions.history && historyItems.more)) && <div className="flex flex-wrap items-center gap-3 border-t border-subtle p-3 text-xs text-fg-muted">
+        {recoveryItems.more && <Button variant="secondary" size="sm" disabled={recoveryItems.isFetchingNextPage} onClick={recoveryItems.loadMore}>Load more issues needing rescheduling</Button>}
+        {planningOptions.history && historyItems.more && <Button variant="secondary" size="sm" disabled={historyItems.isFetchingNextPage} onClick={historyItems.loadMore}>Load more history</Button>}
+        {(recoveryItems.isFetchNextPageError || historyItems.isFetchNextPageError) && <span role="alert">Could not load more issues. Try again.</span>}
+      </div>}
+      {isPlanning && planningOptions.history && historyItems.isError && <p role="alert" className="p-3 text-sm text-fg-muted">Could not load sprint history. <Button variant="secondary" size="sm" onClick={() => void historyItems.refetch()}>Retry history</Button></p>}
       {isPlanning && sprintItems.more && (
         <div role="status" className="border-t border-subtle px-4 py-2 text-sm text-fg-muted">
           {sprintItems.isFetchingNextPage ? "Loading more sprint work…" : "More sprint work is available."}

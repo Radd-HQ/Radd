@@ -1,5 +1,8 @@
 # Module map
 
+RADD-1202: Planning uses active/upcoming/draft sprint sections, a separate open historical-work rescheduling section, an independently paged/searched/sorted backlog and explicitly opened per-sprint history. `planning-query.ts` / `PlanningControls.tsx` own these controls; `cycle.status` delegates to the cycle directory’s lifecycle expression. See [Planning workflow](planning-pagination.md).
+
+
 RADD-988: service-desk public replies export only verified images from explicitly enabled storage hosts. `attachments/email_export.py` owns the host/ownership/ACL/size policy; `mailintake/attachments.py` resolves explicit local comment references at delivery; `mailtypes.MailAttachment` carries MIME parts through the shared transport. Storage admin UI exposes `email_images_allowed` (migration `d988emailimages`, default off). See [service-desk email images](service-desk-email-images.md).
 
 

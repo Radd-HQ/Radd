@@ -197,6 +197,9 @@ async def value_candidates(
             return [_none()] + await _item_key_candidates(session, scope, partial)
         case SlqField.BLOCKS | SlqField.BLOCKED:
             return await _item_key_candidates(session, scope, partial)
+        case SlqField.CYCLE_STATUS:
+            from radd.modules.cycles.types import CycleStatus
+            return _enum_candidates(CycleStatus, builtin)
         case SlqField.CYCLE | SlqField.PAST_CYCLE:
             return [_none()] + _entities(await _cycle_names(session, scope), builtin)
         case SlqField.RELEASE:

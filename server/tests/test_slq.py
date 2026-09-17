@@ -710,3 +710,61 @@ async def test_planning_backlog_partition_and_default_order_compile():
     assert [t.__tablename__ for t, _ in compiled.joins] == ["states", "state_categories"]
     assert any("CASE" in str(term) and str(term).endswith("DESC") for term in compiled.order)
     assert str(compiled.order[-1]) == "work_items.number ASC"
+
+
+async def test_planning_cycle_lifecycle_partitions_before_paging(db_session):
+    """RADD-1202: historical unfinished work is neither backlog nor lost history."""
+    from datetime import date, datetime, timedelta
+    from radd.modules.auth.models import User
+    from radd.modules.cycles.models import Cycle
+    from radd.modules.items import service as items
+    from radd.modules.items.filters import ItemListFilters
+    from radd.modules.items.schemas import ItemCreate
+    from radd.modules.projects import service as projects
+    from radd.modules.projects.schemas import ProjectCreate
+    from radd.modules.workflow.models import State
+
+    actor = User(email=f"planning-{uuid.uuid4()}@example.test", name="Planner", instance_role="admin")
+    db_session.add(actor)
+    await db_session.flush()
+    project = await projects.create_project(db_session, ProjectCreate(
+        key=f"PLAN{uuid.uuid4().hex[:4].upper()}", name="Planning"))
+    states = list(await db_session.scalars(select(State).where(State.project_id == project.id)))
+    todo = next(s for s in states if s.category == "todo")
+    done = next(s for s in states if s.category == "done")
+    today = date.today()
+    active = Cycle(name="Active", start_date=today, end_date=today)
+    upcoming = Cycle(name="Upcoming", start_date=today + timedelta(days=1), end_date=today + timedelta(days=7))
+    draft = Cycle(name="Draft")
+    completed = Cycle(name="Explicit close", start_date=today, end_date=today, completed_at=datetime.now())
+    expired = Cycle(name="Expired", start_date=today - timedelta(days=7), end_date=today - timedelta(days=1))
+    db_session.add_all([active, upcoming, draft, completed, expired])
+    await db_session.flush()
+    for cycle in [active, upcoming, draft, completed, expired, None]:
+        for state in [todo, done]:
+            await items.create_item(db_session, ItemCreate(
+                project_id=project.id, title=f"{cycle.name if cycle else 'Backlog'} {state.category}",
+                state_id=state.id, cycle_id=cycle.id if cycle else None), actor)
+
+    async def titles(q, limit=50, offset=0):
+        rows = await items.list_items(db_session, actor=actor, filters=ItemListFilters(project_id=project.id),
+                                      q=q, limit=limit, offset=offset)
+        return {r.title for r in rows}
+
+    recovery = "cycle.status = completed AND category NOT IN (done,canceled) ORDER BY rank"
+    assert await titles(recovery) == {"Explicit close todo", "Expired todo"}
+    assert len(await titles(recovery, 1, 0)) == len(await titles(recovery, 1, 1)) == 1
+    assert not (await titles(recovery, 1, 0) & await titles(recovery, 1, 1))
+    assert await titles("cycle IS EMPTY AND category NOT IN (done,canceled)") == {"Backlog todo"}
+    assert await titles("cycle.status IN (active,upcoming,draft) AND (category NOT IN (done,canceled) OR cycle.status = active)") == {
+        "Active todo", "Active done", "Upcoming todo", "Draft todo"}
+    assert await titles("cycle.status = completed AND category IN (done,canceled)") == {"Explicit close done", "Expired done"}
+    assert "Backlog todo" in await titles("cycle.status != completed")
+
+
+async def test_cycle_lifecycle_query_rejects_invalid_and_read_restricted_fields():
+    with pytest.raises(SlqError, match="invalid cycle.status"):
+        await compile_text("cycle.status = invalid")
+    with pytest.raises(SlqError, match="read-restricted"):
+        await compile_query(None, parse("cycle.status = completed"), definitions_by_key={},
+                            current_user_id=USER_ID, denied_fields=frozenset({"cycle.status"}))

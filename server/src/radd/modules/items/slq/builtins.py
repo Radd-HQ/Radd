@@ -14,6 +14,7 @@ from sqlalchemy.orm import aliased
 
 from radd.modules.auth.models import User
 from radd.modules.cycles import service as cycles_service
+from radd.modules.cycles.types import CycleStatus
 from radd.modules.itemtypes import service as itemtypes_service
 from radd.modules.releases import service as releases_service
 from radd.modules.teams.models import Team
@@ -340,6 +341,11 @@ BUILTIN_COMPILERS = {
     SlqField.CREATED: lambda ctx, node: _timestamp(WorkItem.created_at, node),
     SlqField.UPDATED: lambda ctx, node: _timestamp(WorkItem.updated_at, node),
     SlqField.CYCLE: _cycle,
+    SlqField.CYCLE_STATUS: lambda ctx, node: polarity(
+        node, WorkItem.cycle_id.in_(cycles_service.ids_by_status(
+            [value.value for value in enum_values(node, CycleStatus)]
+        )), nullable=True
+    ),
     SlqField.PAST_CYCLE: _past_cycle,
     SlqField.RELEASE: _release,
     SlqField.FLAGGED: _flagged,

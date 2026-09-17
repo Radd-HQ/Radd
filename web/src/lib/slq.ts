@@ -27,6 +27,7 @@ export const SLQ_BUILTIN_FIELDS: readonly SlqFieldHelp[] = [
   { field: "assignee", values: "email | me | none", example: "assignee = me" },
   { field: "reporter", values: "email | me | none", example: "reporter = me" },
   { field: "team", values: "team name | none", example: 'team = "FX"' },
+  { field: "cycle.status", values: "active | upcoming | draft | completed", example: "cycle.status = completed" },
   { field: "cycle", values: "cycle name | none", example: 'cycle = "PIPE - 115"' },
   {
     field: "past_cycle",

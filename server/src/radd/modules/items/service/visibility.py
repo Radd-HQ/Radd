@@ -427,7 +427,7 @@ _BUILTIN_TO_SLQ_FIELDS: dict[str, tuple[str, ...]] = {
     ),
     "start_date": ("start",),
     "target_date": ("target",),
-    "cycle": ("cycle", "past_cycle"),
+    "cycle": ("cycle", "cycle.status", "past_cycle"),
     "release": ("release",),
     "flagged": ("flagged",),
     "estimate_points": ("points",),
