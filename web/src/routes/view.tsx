@@ -49,7 +49,7 @@ import {
   queryKeys,
   roadmapMembersQuery,
   statesQuery,
-  timelogBatchChunkedQuery,
+  useTimelogBatches,
   usersQuery,
   viewQuery as viewDefinitionQuery,
   allStatesQuery,
@@ -548,14 +548,9 @@ export function ViewPage() {
   // Logged time on cards: one chunked batch over the page's items while the
   // slot/column is on. Quiet-degrade (retry: false in the query) — cards just
   // omit the readout when timelogging is off or the batch fails.
-  const timelogByItem = useQuery({
-    ...timelogBatchChunkedQuery(pageItemIds),
-    enabled:
-      authenticated && // spec 121: logged time is an account's read
-      !isRoadmap &&
-      (hasCardAttr("logged_time") || hasListColumn("logged_time")) &&
-      pageItemIds.length > 0,
-  }).data;
+  const timelogByItem = useTimelogBatches(pageItemIds,
+    authenticated && !isRoadmap && (hasCardAttr("logged_time") || hasListColumn("logged_time")));
+
   // The server's order stands when the view's SLQ sorts explicitly; otherwise
   // queues default to breached-first → ascending due_at → oldest created.
   const orderedItems = pageItems;

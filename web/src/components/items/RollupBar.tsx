@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useStableItemBatches } from "../../lib/useStableItemBatches";
+import { useQueries } from "@tanstack/react-query";
 import { rollupBatchQuery } from "../../lib/queries";
 import type { ItemRollup, RollupResponse } from "../../lib/types";
 import { formatPoints } from "./ItemBadges";
@@ -63,10 +64,8 @@ export function useRollupBatch(
   enabled: boolean,
   staleTimeMs?: number,
 ): RollupResponse | undefined {
-  const query = useQuery({
-    ...rollupBatchQuery(itemIds),
-    enabled: enabled && itemIds.length > 0,
-    staleTime: staleTimeMs,
-  });
-  return enabled ? query.data : undefined;
+  const batches = useStableItemBatches(enabled ? itemIds : []);
+  const queries = useQueries({queries: batches.map(ids => ({...rollupBatchQuery(ids), staleTime: staleTimeMs,}))});
+  if (!enabled) return undefined;
+  return Object.assign({}, ...queries.map(q => q.data ?? {})) as RollupResponse;
 }

@@ -607,3 +607,12 @@ loading/errors; cycle headers share authorized whole-cycle statistics instead
 of computing progress from loaded rows. Row filtering does not alter those
 whole-sprint totals. See `docs/performance-safety-audit.md` for compatibility
 limits and the browser/database regression evidence.
+
+### Collection bytes and supplementary batches (RADD-1206)
+
+`CollectionCompressionMiddleware` gzips only GET item collections (items,
+grouped items and SLA queue) above 2 KiB, preserving full Item contracts and
+existing response encodings. `useStableItemBatches` keeps prior chunk membership
+on append for rollup, SLA and timelog hooks. Existing entity invalidation still
+refreshes active chunks; complete scheduling timelog readers remain unchanged.
+No partial shared Item projection or guessed invalidation dependency was added.

@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useStableItemBatches } from "../../lib/useStableItemBatches";
+import { useQueries } from "@tanstack/react-query";
 import { slaBatchQuery } from "../../lib/queries";
 import type { SlaBatchResponse, SlaBatchTimer } from "../../lib/types";
 
@@ -92,9 +93,8 @@ export function SlaRowChip({ timers }: { timers: SlaBatchTimer[] | undefined }) 
  * nothing and returns undefined.
  */
 export function useSlaBatch(itemIds: string[], enabled: boolean): SlaBatchResponse | undefined {
-  const query = useQuery({
-    ...slaBatchQuery(itemIds),
-    enabled: enabled && itemIds.length > 0,
-  });
-  return enabled ? query.data : undefined;
+  const batches = useStableItemBatches(enabled ? itemIds : []);
+  const queries = useQueries({queries: batches.map(ids => ({...slaBatchQuery(ids), }))});
+  if (!enabled) return undefined;
+  return Object.assign({}, ...queries.map(q => q.data ?? {})) as SlaBatchResponse;
 }

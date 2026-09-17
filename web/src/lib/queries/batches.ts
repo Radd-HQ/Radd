@@ -1,3 +1,5 @@
+import { useQueries } from "@tanstack/react-query";
+import { useStableItemBatches } from "../useStableItemBatches";
 /** Batched item-card data: epic rollups (spec 76) + timelog seconds (spec 78). */
 
 import { queryOptions } from "@tanstack/react-query";
@@ -49,3 +51,11 @@ export const timelogBatchChunkedQuery = (itemIds: readonly string[]) => {
     retry: false,
   });
 };
+
+/** Appending items does not refetch previous time batches. Existing mutation and
+ * worklog invalidations still refresh each active chunk through entity metadata. */
+export function useTimelogBatches(ids: readonly string[], enabled: boolean) {
+  const batches = useStableItemBatches(enabled ? ids : [], TIMELOG_BATCH_MAX_ITEMS);
+  const queries = useQueries({queries: batches.map(batch => timelogBatchChunkedQuery(batch))});
+  return enabled ? Object.assign({}, ...queries.map(q => q.data ?? {})) as TimelogBatchResponse : undefined;
+}
