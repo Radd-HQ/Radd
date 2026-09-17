@@ -167,6 +167,19 @@ async def public_comment_times(
     return [tuple(row) for row in result.all()]  # type: ignore[misc]
 
 
+async def public_reply_body(
+    session: AsyncSession, comment_id: uuid.UUID, item_id: uuid.UUID
+) -> str | None:
+    """Current public body for external mail; a stale event cannot disclose a
+    comment that has since been made internal, deleted or moved."""
+    return await session.scalar(select(Comment.body).where(
+        Comment.id == comment_id,
+        Comment.entity_type == CommentParentType.ITEM.value,
+        Comment.entity_id == item_id,
+        Comment.visibility == CommentVisibility.PUBLIC.value,
+    ))
+
+
 async def comment_body(session: AsyncSession, comment_id: uuid.UUID) -> str | None:
     """Full body for stream consumers (the event excerpt is capped — notify
     mention-scans the whole text). None if the comment is gone."""

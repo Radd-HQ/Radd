@@ -170,6 +170,7 @@ async def create_host(
         delivery_mode=data.delivery_mode.value,
         presign_expiry_seconds=data.presign_expiry_seconds,
         user_selectable=data.user_selectable,
+        email_images_allowed=data.email_images_allowed,
         source=source.value,
     )
     session.add(host)
@@ -210,6 +211,8 @@ async def update_host(
         host.presign_expiry_seconds = fields["presign_expiry_seconds"]
     if "user_selectable" in fields:
         host.user_selectable = fields["user_selectable"]
+    if "email_images_allowed" in fields:
+        host.email_images_allowed = bool(fields["email_images_allowed"])
     _validate(StorageHostType(host.host_type), _column_state(host))
     await session.flush()
     if fields.get("is_default"):

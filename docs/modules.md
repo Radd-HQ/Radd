@@ -1,5 +1,8 @@
 # Module map
 
+RADD-988: service-desk public replies export only verified images from explicitly enabled storage hosts. `attachments/email_export.py` owns the host/ownership/ACL/size policy; `mailintake/attachments.py` resolves explicit local comment references at delivery; `mailtypes.MailAttachment` carries MIME parts through the shared transport. Storage admin UI exposes `email_images_allowed` (migration `d988emailimages`, default off). See [service-desk email images](service-desk-email-images.md).
+
+
 How the server is assembled and how modules connect. **Update this file in the same change that adds a module, event type, or cross-module dependency.**
 
 ## Kernel (spec 93 — `radd/kernel/`)

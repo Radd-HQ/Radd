@@ -21,6 +21,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
+from radd.mailtypes import MailAttachment
+
 
 @dataclass(frozen=True)
 class RawMessage:
@@ -51,6 +53,7 @@ class OutboundMessage:
     to_name: str = ""
     html_body: str = ""
     headers: Mapping[str, str] = field(default_factory=dict)
+    attachments: tuple[MailAttachment, ...] = ()
 
 
 @runtime_checkable

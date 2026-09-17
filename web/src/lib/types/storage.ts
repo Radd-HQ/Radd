@@ -40,6 +40,7 @@ export interface StorageHostRead {
   /** null = the server-wide default expiry. */
   presign_expiry_seconds: number | null;
   user_selectable: boolean;
+  email_images_allowed: boolean;
   is_default: boolean;
   source: StorageHostSourceValue;
   /** Filled server-side from one grouped count query. */
@@ -61,6 +62,7 @@ export interface StorageHostCreatePayload {
   delivery_mode?: DeliveryModeValue;
   presign_expiry_seconds?: number | null;
   user_selectable?: boolean;
+  email_images_allowed?: boolean;
   is_default?: boolean;
 }
 

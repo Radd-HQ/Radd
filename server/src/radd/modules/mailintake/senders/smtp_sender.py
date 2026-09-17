@@ -46,6 +46,7 @@ class SmtpSender:
             to_name=message.to_name,
             headers=dict(message.headers),
             html_body=message.html_body or None,
+            attachments=message.attachments,
             config=smtp.SmtpConfig(
                 host=resolve.sender_host(self._row),
                 port=resolve.sender_port(self._row),

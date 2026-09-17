@@ -38,6 +38,7 @@ class StorageHostCreate(BaseModel):
     delivery_mode: DeliveryMode = DeliveryMode.PROXY
     presign_expiry_seconds: int | None = Field(default=None, ge=30, le=86400)
     user_selectable: bool = False
+    email_images_allowed: bool = False
     is_default: bool = False
 
 
@@ -54,6 +55,7 @@ class StorageHostUpdate(BaseModel):
     delivery_mode: DeliveryMode | None = None
     presign_expiry_seconds: int | None = Field(default=None, ge=30, le=86400)
     user_selectable: bool | None = None
+    email_images_allowed: bool | None = None
     is_default: bool | None = None
 
 
@@ -114,6 +116,7 @@ class StorageHostRead(BaseModel):
     delivery_mode: str
     presign_expiry_seconds: int | None
     user_selectable: bool
+    email_images_allowed: bool
     is_default: bool
     source: str
     # Filled by the admin router from one grouped count query.

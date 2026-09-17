@@ -24,6 +24,7 @@ Message-ID and the `mail.sent`/`mail.failed` events cannot drift apart.
 
 import logging
 import uuid
+from dataclasses import replace
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -38,7 +39,7 @@ from radd.modules.events.service import Event
 from radd.modules.items import service as items
 from radd.modules.projects import service as projects_service
 
-from . import service
+from . import attachments, service
 from .reply import OutboundReply, recipients_for, render
 from .types import OUTBOUND_BATCH, OUTBOUND_CONSUMER_NAME, REPLY_SUBJECT_TEMPLATE
 
@@ -129,7 +130,11 @@ async def _deliver(reply: OutboundReply) -> None:
             # Composed PER RECIPIENT: the footer says why this address is on the
             # thread (RADD-967). Today that is one address, but the seam is the
             # same one notify uses for the watcher wording.
-            message = render(reply, recipient)
+            body = await comments.public_reply_body(session, reply.comment_id, reply.item_id)
+            if body is None:
+                break
+            body, images = await attachments.prepare(session, reply.item_id, body)
+            message = render(replace(reply, body=body), recipient)
             await service.send_item_mail(
                 session,
                 item_id=reply.item_id,
@@ -139,5 +144,6 @@ async def _deliver(reply: OutboundReply) -> None:
                 text=message.text,
                 html=message.html,
                 comment_id=reply.comment_id,
+                attachments=images,
             )
         await session.commit()

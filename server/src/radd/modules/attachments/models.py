@@ -63,6 +63,8 @@ class StorageHost(Base, TimestampMixin):
     delivery_mode: Mapped[str] = mapped_column(String(20), default=DeliveryMode.PROXY.value)
     presign_expiry_seconds: Mapped[int | None] = mapped_column(Integer)  # None = global default
     user_selectable: Mapped[bool] = mapped_column(Boolean, server_default=false(), default=False)
+    # Explicit permission to copy images outside the storage network via email.
+    email_images_allowed: Mapped[bool] = mapped_column(Boolean, server_default=false(), default=False)
     is_default: Mapped[bool] = mapped_column(Boolean, server_default=false(), default=False)
     source: Mapped[str] = mapped_column(String(10), default=StorageHostSource.USER.value)
 

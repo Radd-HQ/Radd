@@ -18,6 +18,7 @@ from email.message import EmailMessage
 from email.utils import make_msgid
 
 from radd.config import settings
+from radd.mailtypes import MailAttachment
 
 # Connect + send bound per message — an unreachable relay must not wedge a worker.
 SMTP_TIMEOUT_SECONDS = 15.0
@@ -62,6 +63,7 @@ def send_message(
     headers: Mapping[str, str] | None = None,
     config: SmtpConfig | None = None,
     html_body: str | None = None,
+    attachments: tuple[MailAttachment, ...] = (),
 ) -> str:
     """Send one email; return the `Message-ID` that was ACTUALLY SENT.
 
@@ -100,6 +102,11 @@ def send_message(
         # After set_content, so the text part stays FIRST — `multipart/alternative`
         # is ordered worst-to-best and a client shows the last part it can render.
         message.add_alternative(html_body, subtype="html")
+    for attachment in attachments:
+        maintype, subtype = attachment.content_type.split("/", 1)
+        message.add_attachment(
+            attachment.data, maintype=maintype, subtype=subtype, filename=attachment.filename
+        )
     with smtplib.SMTP(cfg.host, cfg.port, timeout=SMTP_TIMEOUT_SECONDS) as smtp:
         if cfg.starttls:
             smtp.starttls()

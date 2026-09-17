@@ -694,8 +694,10 @@ async def test_a_google_sender_dispatches_to_the_smtp_transport(db, world, monke
     used: dict = {}
 
     def fake_send(
-        to_address, subject, body, *, to_name="", headers=None, html_body=None, config=None
+        to_address, subject, body, *, to_name="", headers=None, html_body=None, config=None,
+        attachments=(),
     ):
+        assert attachments == (), "plain test mail must remain attachment-free"
         used["config"] = config
         return "<sent@gmail>"
 
@@ -741,8 +743,10 @@ async def test_a_hostless_preset_row_is_what_the_transport_sends_through(db, wor
     used: dict = {}
 
     def fake_send(
-        to_address, subject, body, *, to_name="", headers=None, html_body=None, config=None
+        to_address, subject, body, *, to_name="", headers=None, html_body=None, config=None,
+        attachments=(),
     ):
+        assert attachments == (), "plain test mail must remain attachment-free"
         used["config"] = config
         used["headers"] = headers
         return "<sent@gmail>"

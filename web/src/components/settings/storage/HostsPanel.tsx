@@ -213,6 +213,12 @@ function HostRow({
         <Td className="font-medium text-heading">
           <span className="inline-flex items-center gap-1.5">
             {host.name}
+            {host.email_images_allowed && (
+              <span className="rounded bg-elevated px-1.5 py-px text-[10px] font-normal text-fg-secondary"
+                title="Images from this host may be attached to public service-desk replies">
+                Email images
+              </span>
+            )}
             {host.is_default && (
               <span
                 className="rounded bg-accent/15 px-1.5 py-px text-[10px] font-normal text-accent-text"

@@ -83,6 +83,7 @@ export function HostDialog({
     existing?.presign_expiry_seconds != null ? String(existing.presign_expiry_seconds) : "",
   );
   const [userSelectable, setUserSelectable] = useState(existing?.user_selectable ?? false);
+  const [emailImagesAllowed, setEmailImagesAllowed] = useState(existing?.email_images_allowed ?? false);
   const [isDefault, setIsDefault] = useState(existing?.is_default ?? false);
 
   const isS3 = hostType === StorageHostType.s3;
@@ -115,6 +116,7 @@ export function HostDialog({
       presign_expiry_seconds: expiry.trim() === "" ? null : Number(expiry),
       user_selectable: userSelectable,
       is_default: isDefault,
+      email_images_allowed: emailImagesAllowed,
       ...(isS3
         ? {
             endpoint: endpoint.trim(),
@@ -240,6 +242,12 @@ export function HostDialog({
           help="Offered to users when a user-choice routing rule is active."
           checked={userSelectable}
           onChange={setUserSelectable}
+        />
+        <CheckboxField
+          label="Allow images in service-desk email"
+          help="Copies images referenced in public replies into email. Enable only for storage approved for external sharing, such as General. Restricted files are excluded. Off by default."
+          checked={emailImagesAllowed}
+          onChange={setEmailImagesAllowed}
         />
         <CheckboxField
           label="Default host"

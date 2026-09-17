@@ -46,6 +46,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
+from radd.mailtypes import MailAttachment
 from radd.db import SessionLocal
 from radd.modules.events import service as events
 
@@ -229,6 +230,7 @@ async def send_item_mail(
     html: str = "",
     comment_id: uuid.UUID | None = None,
     pin_subject: bool = False,
+    attachments: tuple[MailAttachment, ...] = (),
     failure: MailFailureReport = MailFailureReport.REPORT,
 ) -> str | None:
     """Mail one person about one issue. Returns the Message-ID that went on the
@@ -296,6 +298,7 @@ async def send_item_mail(
             headers=headers,
             comment_id=comment_id,
             failure=failure,
+            attachments=attachments,
         )
 
 
@@ -369,6 +372,7 @@ async def _deliver(
     headers: dict[str, str],
     comment_id: uuid.UUID | None,
     failure: MailFailureReport,
+    attachments: tuple[MailAttachment, ...] = (),
 ) -> str | None:
     """One message onto one relay, and the report of what happened to it.
 
@@ -392,6 +396,7 @@ async def _deliver(
                 body=text,
                 html_body=html,
                 headers=headers,
+                attachments=attachments,
             )
         )
     except Exception as exc:
