@@ -502,7 +502,8 @@ async def _users(
             out.user_ids[entry.jira_key] = existing
             continue
         if not commit:
-            out.user_ids[entry.jira_key] = uuid.uuid4()
+            by_email[email] = uuid.uuid4()
+            out.user_ids[entry.jira_key] = by_email[email]
             out._bump("users")
             continue
         try:

@@ -194,7 +194,6 @@ def _link_types(mappings: PlanMappings, existing: set[str]) -> list[PlanProblem]
 
 def _users(mappings: PlanMappings) -> list[PlanProblem]:
     out: list[PlanProblem] = []
-    seen_emails: dict[str, str] = {}
     for entry in mappings.users:
         if entry.action in (UserAction.MATCH, UserAction.FALLBACK) and entry.user_id is None:
             out.append(
@@ -217,16 +216,6 @@ def _users(mappings: PlanMappings) -> list[PlanProblem]:
                         ),
                     )
                 )
-            elif (other := seen_emails.get(email)) and other != entry.jira_key:
-                out.append(
-                    PlanProblem(
-                        section="users",
-                        subject=entry.display_name or entry.jira_key,
-                        message=f"'{email}' is also used for {other} — two accounts would collide",
-                    )
-                )
-            else:
-                seen_emails[email] = entry.jira_key
     return out
 
 

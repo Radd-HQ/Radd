@@ -879,3 +879,41 @@ async def test_unknown_comment_author_and_bad_comment_do_not_abort_import(db, mo
             assert await items_service.find_item_by_key(s, f'{key}-2')
     finally:
         await _cleanup([key])
+
+
+async def test_two_source_users_share_one_new_email_identity(db):
+    from radd.modules.jiraimport.plan.validate import validate
+    from radd.modules.jiraimport import provision
+    key = f"MU{uuid.uuid4().hex[:4].upper()}"
+    actor = await _admin(db)
+    email = f'merged-{uuid.uuid4().hex[:8]}@example.com'
+    snapshot = await _snapshot(db, 'SRC', [_issue('SRC-1', summary='Merged', comments=[
+        {'id':'1', 'body':'First account', 'author':{'name':'adela'}},
+        {'id':'2', 'body':'Second account', 'author':{'name':'bruno'}},
+    ])])
+    plan = await _plan_for(db, snapshot, key)
+    mappings = plan_service.mappings(plan)
+    for user in mappings.users:
+        user.action = UserAction.PLACEHOLDER
+        user.placeholder_email = email.upper() if user.jira_key == 'adela' else ' '+email+' '
+    assert not [p for p in validate(mappings, existing_fields={}, existing_link_type_keys=set()) if p.section == 'users']
+    preview = provision.Provisioned()
+    await provision._users(db, mappings, None, '', False, preview)
+    assert preview.created['users'] == 1
+    assert len(set(preview.user_ids.values())) == 1
+    plan.mappings = mappings.model_dump(mode='json')
+    await db.commit()
+    try:
+        run = await _run(db, plan, actor, RunKind.IMPORT)
+        assert run.stage == RunStage.DONE.value, run.problems
+        async with SessionLocal() as s:
+            item = await items_service.find_item_by_key(s, f'{key}-1')
+            assert item.assignee_id == item.reporter_id
+            authors = (await s.execute(text('SELECT author_id FROM comments WHERE entity_id=:i'), {'i':item.id})).scalars().all()
+            assert authors == [item.assignee_id, item.assignee_id]
+            assert await s.scalar(text('SELECT count(*) FROM users WHERE email=:e'), {'e':email}) == 1
+        again = await _run(db, plan, actor, RunKind.IMPORT)
+        assert again.stage == RunStage.DONE.value
+        assert again.counts.get('users_created', 0) == 0
+    finally:
+        await _cleanup([key])

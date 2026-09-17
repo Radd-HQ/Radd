@@ -141,6 +141,10 @@ export function UsersTable({
             className="w-64"
           />
         </div>
+        <p className="mt-2 text-xs text-fg-muted">
+          Source accounts using the same target email share one RADD user.
+          Existing users keep their current name and account settings.
+        </p>
         {missingAddress > 0 && (
           <p className="mt-2 flex items-center gap-1.5 text-xs text-amber-400">
             <CircleAlert size={13} />
