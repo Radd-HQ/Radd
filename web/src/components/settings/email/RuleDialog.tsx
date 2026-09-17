@@ -5,6 +5,7 @@ import { api } from "../../../lib/api";
 import { apiMailRulePath, apiMailSourceRulesPath } from "../../../lib/constants";
 import { projectsQuery } from "../../../lib/queries";
 import {
+  MAIL_NO_MATCH_ANSWER,
   MailRuleType,
   type MailRule,
   type MailRuleTypeValue,
@@ -157,6 +158,20 @@ export function RuleDialog({
                   </IconButton>
                 </div>
               ))}
+              {/* The answer the admin did not write and cannot remove (RADD-994).
+                  The prompt hint has described it since RADD-989, but the person
+                  building a category list reads the LIST — and a choice the model
+                  is given that the list does not show gets fought in the prompt
+                  or duplicated as an "Other" row. Dashed and unfilled because it
+                  is not a row of theirs to edit. */}
+              <div className="flex items-center gap-2 rounded-md border border-dashed border-subtle px-2 py-1.5">
+                <span className="flex-1 text-[13px] text-fg-secondary">
+                  {MAIL_NO_MATCH_ANSWER}
+                </span>
+                <span className="shrink-0 text-[11px] text-fg-muted">
+                  always offered → this source's default project
+                </span>
+              </div>
               <Button
                 size="sm"
                 variant="ghost"

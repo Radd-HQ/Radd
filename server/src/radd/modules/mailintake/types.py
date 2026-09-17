@@ -239,11 +239,20 @@ class MailRuleStatus(StrEnum):
     rule reads as a working one. `feature_enabled` raising for an unregistered
     feature was invisible for a release precisely because its outcome rendered as
     "no rule matched — source default".
+
+    **The last two exist so that ABSENCE means one thing** (RADD-994). The trace
+    used to hold only the rules the walk consulted, which is three different
+    stories told as the same silence: a rule switched off, a rule sitting below
+    the winner, and a rule that was deleted all rendered as "not in the list".
+    "Why didn't my rule fire" is the commonest routing question there is, and the
+    honest answer for two of those three is a row, not a gap.
     """
 
     MATCHED = "matched"
     DECLINED = "declined"
     ERRORED = "errored"
+    DISABLED = "disabled"        # switched off — the walk skipped it (RADD-994)
+    NOT_REACHED = "not_reached"  # an earlier rule matched and stopped the chain
 
 
 #: The extra choice every llm rule offers the model on top of its own answers

@@ -237,13 +237,73 @@ async def test_the_first_matching_rule_wins_by_position(db, world):
     assert decision.project_id == dev.id  # position 1
 
 
-async def test_a_disabled_rule_is_skipped(db, world):
+async def test_a_disabled_rule_is_skipped_but_still_appears_in_the_trace(db, world):
+    """Skipped, and SAID to be skipped (RADD-994).
+
+    The walk used to filter `enabled` in SQL, so a switched-off rule left no row
+    at all — indistinguishable from one that was deleted. "Why didn't my rule
+    fire" is the commonest routing question there is and the trace answered it
+    with silence, which is the one answer that cannot be acted on.
+    """
     source, _, dev = world
     db.add(_rule(source, MailRuleType.RECIPIENT.value, {"addresses": ["pipeline@radd-hq.com"]},
                  project=dev, enabled=False))
     await db.flush()
     plan = parsing.parse_email(message(to="pipeline@radd-hq.com"))
-    assert (await routing.decide(db, plan, source_id=source.id)).project_id is None
+    decision = await routing.decide(db, plan, source_id=source.id)
+    # It would have matched had it been on — which is exactly why its absence
+    # from the trace was confusing.
+    assert decision.project_id is None
+    assert [o.status for o in decision.outcomes] == [MailRuleStatus.DISABLED]
+
+
+async def test_the_rules_below_the_winner_are_recorded_as_not_reached(db, world):
+    """Position is the explanation, so the trace has to show the position.
+
+    With disabled rules now in the list, a rule missing from it means one thing:
+    it does not exist. That only holds if the rules the walk stopped short of are
+    in it too — otherwise "below the match" and "deleted" swap one silence for
+    another.
+
+    The middle rule pins the decided part: a disabled rule below the winner reads
+    OFF, not "not reached". Both are true of it; only one is worth telling an
+    admin, because reordering a switched-off rule changes nothing.
+    """
+    source, default, dev = world
+    db.add(_rule(source, MailRuleType.RECIPIENT.value, {"addresses": ["help@radd-hq.com"]},
+                 project=dev, position=1))
+    db.add(_rule(source, MailRuleType.SUBJECT.value, {"contains": ["anything"]},
+                 project=default, position=2, enabled=False))
+    db.add(_rule(source, MailRuleType.SENDER.value, {"patterns": ["@customer.example"]},
+                 project=default, position=3))
+    await db.flush()
+
+    decision = await routing.decide(db, parsing.parse_email(message()), source_id=source.id)
+    assert decision.project_id == dev.id
+    assert [o.status for o in decision.outcomes] == [
+        MailRuleStatus.MATCHED, MailRuleStatus.DISABLED, MailRuleStatus.NOT_REACHED
+    ]
+    # The third rule WOULD have matched this sender. Not reached is not "no match".
+    assert decision.outcomes[-1].rule_name
+
+
+async def test_a_rule_that_matches_but_names_no_project_says_so(db, world):
+    """It stops the chain and lands on the source default anyway (RADD-994).
+
+    Two wrong sentences were available here and the code used both: `decide`
+    said "rule: X", naming a destination the rule never chose, and the dry run
+    recomputed it from `project_id` into "no rule matched", denying that anything
+    matched at all. Either one sends an admin to debug the rule that behaved.
+    """
+    source, default, _ = world
+    db.add(_rule(source, MailRuleType.RECIPIENT.value, {"addresses": ["help@radd-hq.com"]}))
+    await db.flush()
+
+    decision = await routing.decide(db, parsing.parse_email(message()), source_id=source.id)
+    assert decision.project_id is None
+    assert decision.outcomes[0].status is MailRuleStatus.MATCHED
+    assert "names no project" in decision.reason
+    assert (await intake._target_project(db, parsing.parse_email(message()), "", source.id)).id == default.id
 
 
 # --- sender and subject ----------------------------------------------------------
@@ -353,6 +413,31 @@ async def test_the_llm_rule_falls_through_when_no_chat_role_is_assigned(db, worl
     decision = await routing.decide(db, parsing.parse_email(message()), source_id=source.id)
     assert decision.project_id is None and not calls
     assert decision.outcomes[-1].status is MailRuleStatus.DECLINED
+
+
+async def test_a_decline_reaches_the_destination_line_not_just_the_trace(
+    db, world, admin, chat_role, monkeypatch
+):
+    """RADD-994's wording fix. The model answering "None of these" is the feature
+    working, and the headline called it "no rule matched" — the one phrasing that
+    says the chain had nothing to say. The destination line borrows the decline
+    the way it already borrows a match.
+    """
+    from radd.modules.mailintake.config_schemas import RoutingPreviewRequest
+    from radd.modules.mailintake.rules_router import preview_routing
+
+    source, default, dev = world
+    await _set_mail_routing(db, True)
+    _stub_choice(monkeypatch, NO_MATCH_ANSWER)
+    db.add(_llm_rule(source, dev))
+    await db.flush()
+
+    result = await preview_routing(
+        source.id, RoutingPreviewRequest(recipient="help@radd-hq.com"), db, admin
+    )
+    assert result.project_id == default.id
+    assert "declined" in result.reason and NO_MATCH_ANSWER in result.reason
+    assert routing.SOURCE_DEFAULT_REASON not in result.reason
 
 
 async def test_an_llm_rule_with_no_answers_is_reported_as_broken(db, world):

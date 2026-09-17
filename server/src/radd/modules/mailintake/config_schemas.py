@@ -208,6 +208,10 @@ class RoutingRuleOutcome(BaseModel):
     chain continue to the source default, and a preview that reports only the
     destination describes them identically — so a broken rule reads as an
     inapplicable one, which is how a KeyError went unnoticed for a release.
+
+    Since RADD-994 the list is the WHOLE chain, so `disabled` and `not_reached`
+    arrive here too. Absence now means one thing — no such rule — instead of
+    three, which is what "why didn't my rule fire" is actually asking.
     """
 
     rule_id: uuid.UUID | None = None
@@ -222,6 +226,6 @@ class RoutingPreviewResult(BaseModel):
     matched_rule_id: uuid.UUID | None = None
     matched_rule_name: str = ""
     reason: str = ""
-    #: Every rule consulted, in chain order, up to and including the match.
+    #: The whole chain, in order: consulted, skipped (disabled) or never reached.
     #: Additive — the destination fields above are unchanged.
     outcomes: list[RoutingRuleOutcome] = []

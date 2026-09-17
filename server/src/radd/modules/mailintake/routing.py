@@ -22,6 +22,14 @@ did not match leave identical traces, so a rule broken for a release reads as a
 rule that never applied — which is precisely what happened. Every rule the walk
 consults leaves a `RuleOutcome`, and the dry run renders them.
 
+**The trace is the whole chain, not the part that ran** (RADD-994). Consulting
+only the enabled rules above the winner meant three different stories arrived as
+the same silence: a rule switched off, a rule below the match, and a rule that
+was deleted were all "not in the list". So the walk loads every rule and skips
+the disabled ones in Python — one predicate's worth of work to make absence mean
+exactly one thing — and a match records what it stopped. The cost is a handful of
+in-memory rows on a path that was already reading them.
+
 Rules are cheap-first by convention: address and subject matching costs nothing,
 the AI classifier costs an inference, so the seeded order puts it last and only
 mail that no deterministic rule claimed pays for it.
@@ -50,6 +58,17 @@ LLM_TIMEOUT_SECONDS = 15.0
 #: Cap on a recorded failure string — it reaches an admin's screen, not a log file.
 MAX_DETAIL_CHARS = 200
 
+#: The destination line when the walk ended and nothing claimed the message. It
+#: is the dataclass default and the one place this sentence is written: the dry
+#: run used to restate it, which is how a chain whose rule actively DECLINED was
+#: reported as a chain where nothing applied (RADD-994).
+SOURCE_DEFAULT_REASON = "no rule matched — source default"
+
+#: What a switched-off rule leaves behind (RADD-994). A disabled rule is not a
+#: failure and not a decision; it is configuration, and saying so is the whole
+#: point of giving it a row.
+DISABLED_DETAIL = "switched off — the chain skipped it"
+
 
 @dataclass(frozen=True)
 class RuleOutcome:
@@ -77,8 +96,12 @@ class RoutingDecision:
     project_id: uuid.UUID | None
     matched_rule_id: uuid.UUID | None = None
     matched_rule_name: str = ""
-    reason: str = "no rule matched — source default"
-    #: Every rule the chain consulted, in order, up to and including the match.
+    #: Always accurate, never restated downstream (RADD-994) — a caller that
+    #: recomputes this sentence from `project_id` alone reports a rule that
+    #: declined, and a rule that matched but names no project, as nothing having
+    #: happened at all.
+    reason: str = SOURCE_DEFAULT_REASON
+    #: Every rule in the chain, in order — consulted, skipped or never reached.
     outcomes: tuple[RuleOutcome, ...] = ()
 
 
@@ -237,6 +260,20 @@ async def _match_llm(session: AsyncSession, plan: EmailPlan, config: dict) -> Ll
     return LlmVerdict(project_id, MailRuleStatus.MATCHED, f"the model answered {choice!r}")
 
 
+def _match_reason(rule: MailRule) -> str:
+    """The destination line for a deterministic match.
+
+    A rule that matches while naming NO project stops the chain and still lands
+    on the source default, so "rule: X" would describe a destination the rule did
+    not choose and the old fallback ("no rule matched") would deny that anything
+    matched at all. Both are wrong in the same direction — they send an admin off
+    to debug the rule that already did its job (RADD-994).
+    """
+    if rule.project_id is None:
+        return f"rule: {rule.name} matched but names no project — source default"
+    return f"rule: {rule.name}"
+
+
 async def decide(
     session: AsyncSession, plan: EmailPlan, *, source_id: uuid.UUID | None
 ) -> RoutingDecision:
@@ -245,25 +282,59 @@ async def decide(
         return RoutingDecision(None, reason="no source — instance default")
     rows = await session.execute(
         select(MailRule)
-        .where(MailRule.source_id == source_id, MailRule.enabled.is_(True))
+        .where(MailRule.source_id == source_id)
         .order_by(MailRule.position, MailRule.created_at)
     )
+    chain = list(rows.scalars())
     outcomes: list[RuleOutcome] = []
 
     def record(rule: MailRule, status: MailRuleStatus, detail: str = "") -> None:
         outcomes.append(RuleOutcome(rule.id, rule.name, status, detail[:MAX_DETAIL_CHARS]))
 
-    for rule in rows.scalars():
+    def stopped_at(index: int) -> tuple[RuleOutcome, ...]:
+        """The rest of the chain, recorded rather than dropped (RADD-994).
+
+        A rule below the winner is not a rule that declined, and leaving it out
+        made it indistinguishable from one that was deleted. Its position is the
+        explanation, so the trace has to show the position.
+
+        **A disabled rule down here still reads DISABLED**, not NOT_REACHED. Both
+        are true of it and only one is worth saying: being off is unconditional,
+        so acting on it always helps, while "the chain stopped above you" sends an
+        admin to reorder a rule that would still not have fired. It also leaves
+        NOT_REACHED meaning exactly one thing — enabled, and below the match.
+        """
+        outcomes.extend(
+            RuleOutcome(
+                later.id,
+                later.name,
+                MailRuleStatus.NOT_REACHED if later.enabled else MailRuleStatus.DISABLED,
+                "" if later.enabled else DISABLED_DETAIL,
+            )
+            for later in chain[index + 1 :]
+        )
+        return tuple(outcomes)
+
+    #: The last deliberate decline, if any. Only the classifier can articulate one
+    #: — a deterministic rule declining is just "no match" — and it is the reason
+    #: the destination line borrows when nothing claims the message.
+    declined = ""
+    for index, rule in enumerate(chain):
+        if not rule.enabled:
+            record(rule, MailRuleStatus.DISABLED, DISABLED_DETAIL)
+            continue
         config = rule.config or {}
         try:
             if rule.rule_type == MailRuleType.LLM.value:
                 verdict = await _match_llm(session, plan, config)
                 record(rule, verdict.status, verdict.detail)
                 if verdict.project_id is None:
+                    if verdict.status is MailRuleStatus.DECLINED:
+                        declined = f"AI classifier: {rule.name} declined — {verdict.detail}"
                     continue
                 return RoutingDecision(
                     verdict.project_id, rule.id, rule.name,
-                    f"AI classifier: {rule.name} — {verdict.detail}", tuple(outcomes),
+                    f"AI classifier: {rule.name} — {verdict.detail}", stopped_at(index),
                 )
             matched = {
                 MailRuleType.RECIPIENT.value: _match_recipient,
@@ -279,10 +350,19 @@ async def decide(
             if matched(plan, config):
                 record(rule, MailRuleStatus.MATCHED)
                 return RoutingDecision(
-                    rule.project_id, rule.id, rule.name, f"rule: {rule.name}", tuple(outcomes)
+                    rule.project_id, rule.id, rule.name, _match_reason(rule), stopped_at(index)
                 )
-            record(rule, MailRuleStatus.DECLINED, "no match")
+            # No detail: DECLINED already means "ran, did not claim it", and the
+            # panel renders a label saying exactly that. A detail repeating the
+            # status is a second line that adds nothing and crowds out the rows
+            # whose detail is the whole point (RADD-994).
+            record(rule, MailRuleStatus.DECLINED)
         except Exception as exc:  # noqa: BLE001 — one broken rule must not cost the message
             logger.warning("mail routing: rule %r raised, skipped", rule.name, exc_info=True)
             record(rule, MailRuleStatus.ERRORED, f"{type(exc).__name__}: {exc}")
-    return RoutingDecision(None, outcomes=tuple(outcomes))
+    # A decline is the model SAYING no, which is the feature working; reporting it
+    # as "no rule matched" describes the one outcome the chain was given a vocabulary
+    # for as the absence of any outcome at all (RADD-994).
+    return RoutingDecision(
+        None, reason=declined or SOURCE_DEFAULT_REASON, outcomes=tuple(outcomes)
+    )

@@ -24,6 +24,12 @@ const STATUS_STYLE: Record<MailRuleStatusValue, { label: string; text: string }>
   [MailRuleStatus.matched]: { label: "matched", text: "text-accent-text-strong" },
   [MailRuleStatus.declined]: { label: "no match", text: "text-fg-muted" },
   [MailRuleStatus.errored]: { label: "failed", text: "text-status-danger-ink" },
+  // RADD-994. Deliberately the same muted ink as `no match`: all three mean "did
+  // not decide this message", and the WORD is the distinction. Reaching for a
+  // fainter tier to make them quieter would put 11px text under 4.5:1, which is
+  // the trade this codebase has already refused once.
+  [MailRuleStatus.disabled]: { label: "off", text: "text-fg-muted" },
+  [MailRuleStatus.not_reached]: { label: "not reached", text: "text-fg-muted" },
 };
 
 /**
@@ -37,6 +43,13 @@ const STATUS_STYLE: Record<MailRuleStatusValue, { label: string; text: string }>
  * matched — source default" — which is how every AI mail rule stayed broken for
  * a release. A rule that raised is now called out above the destination, because
  * a destination computed from a chain that partly failed is not an answer.
+ *
+ * RADD-994 finished the thought. The trace held only the rules the walk had
+ * consulted, so a rule switched OFF, a rule BELOW the winner and a rule that had
+ * been DELETED all rendered as the same nothing — and "why didn't my rule fire"
+ * is the question this panel exists to answer. It is now the whole chain, in
+ * order, numbered as the chain numbers it, with each rule's detail on its own
+ * wrapping line rather than clipped into a column nobody could widen.
  */
 export function PreviewDialog({
   source,
@@ -131,25 +144,39 @@ function PreviewResult({ result }: { result: RoutingPreviewResult }) {
       {outcomes.length > 0 && (
         <div className="flex flex-col gap-1">
           <span className="text-[11px] font-medium uppercase tracking-wide text-fg-muted">
-            Rules consulted
+            The chain, top to bottom
           </span>
           {outcomes.map((outcome, index) => {
             const style = STATUS_STYLE[outcome.status];
             return (
+              // `data-rule-status` is the proof's handle: the labels are prose and
+              // will be reworded, the statuses are the wire contract.
               <div
                 key={outcome.rule_id ?? index}
-                className="flex items-baseline gap-2 text-[12px]"
+                data-rule-status={outcome.status}
+                className="flex flex-col gap-0.5 rounded-md border border-subtle bg-surface/40 px-2 py-1.5"
               >
-                <span className="min-w-0 flex-1 truncate text-fg-secondary">
-                  {outcome.rule_name || "(unnamed rule)"}
-                </span>
-                <span className={`shrink-0 font-medium ${style?.text ?? "text-fg-muted"}`}>
-                  {style?.label ?? outcome.status}
-                </span>
-                {outcome.detail && (
-                  <span className="min-w-0 flex-[2] truncate text-[11px] text-fg-faint">
-                    {outcome.detail}
+                <div className="flex items-baseline gap-2 text-[12px]">
+                  <span className="w-4 shrink-0 text-center font-mono text-[11px] text-fg-faint">
+                    {index + 1}
                   </span>
+                  <span className="min-w-0 flex-1 truncate text-fg-secondary">
+                    {outcome.rule_name || "(unnamed rule)"}
+                  </span>
+                  <span className={`shrink-0 font-medium ${style?.text ?? "text-fg-muted"}`}>
+                    {style?.label ?? outcome.status}
+                  </span>
+                </div>
+                {outcome.detail && (
+                  // Wrapped, never truncated (RADD-994): this is the most
+                  // informative field on the panel — "the classifier failed
+                  // (TimeoutError)" — and it was clipped inside a modal with no
+                  // way to read the rest. A tooltip would have been the cheaper
+                  // fix and the wrong one; a line that takes the space it needs
+                  // is readable without hovering anything.
+                  <p className="pl-6 text-[11px] leading-snug break-words text-fg-faint">
+                    {outcome.detail}
+                  </p>
                 )}
               </div>
             );
