@@ -249,13 +249,30 @@ export interface MailTestResult {
 /** What one rule did on the sample message (RADD-989). `errored` is the reason
  * this exists: a rule that CRASHED and one that simply declined both let the
  * chain fall to the source default, so a destination alone describes them
- * identically — and a broken rule reads as an inapplicable one. */
+ * identically — and a broken rule reads as an inapplicable one.
+ *
+ * `disabled` and `not_reached` (RADD-994) are what make an EMPTY row meaningful:
+ * a switched-off rule, a rule below the winner and a deleted rule used to render
+ * as the same absence, so the trace answered "why didn't my rule fire" with
+ * silence. Adding them here is what forces `STATUS_STYLE` to grow chrome for
+ * them — a `Record` over this const cannot compile with a status missing. */
 export const MailRuleStatus = {
   matched: "matched",
   declined: "declined",
   errored: "errored",
+  disabled: "disabled",
+  not_reached: "not_reached",
 } as const;
 export type MailRuleStatusValue = (typeof MailRuleStatus)[keyof typeof MailRuleStatus];
+
+/** The extra answer every AI routing rule offers the model on top of its own
+ * categories — mirrored from `mailintake/types.py`'s `NO_MATCH_ANSWER` (RADD-989).
+ * It is appended at ask time and never stored as an answer row, which is exactly
+ * why the editor has to STATE it (RADD-994): an admin who cannot see it either
+ * writes a prompt that fights it ("answer only Engineering or IT") or adds their
+ * own duplicate "Other → DESK". A wire constant with no compiler behind it — if
+ * the Python side is reworded, this line is what goes stale. */
+export const MAIL_NO_MATCH_ANSWER = "None of these";
 
 export interface RoutingRuleOutcome {
   rule_id: string | null;
@@ -271,6 +288,6 @@ export interface RoutingPreviewResult {
   matched_rule_id: string | null;
   matched_rule_name: string;
   reason: string;
-  /** Every rule consulted, in chain order, up to and including the match. */
+  /** The whole chain, in order: consulted, skipped (disabled) or never reached. */
   outcomes: RoutingRuleOutcome[];
 }

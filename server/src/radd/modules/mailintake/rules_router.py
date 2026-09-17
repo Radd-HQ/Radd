@@ -194,7 +194,13 @@ async def preview_routing(
         project_key=key,
         matched_rule_id=decision.matched_rule_id,
         matched_rule_name=decision.matched_rule_name,
-        reason=decision.reason if decision.project_id else "no rule matched — source default",
+        # Verbatim (RADD-994). This used to be recomputed from `project_id`,
+        # which flattened two real answers back into "no rule matched": a
+        # classifier that DECLINED, and a rule that matched while naming no
+        # project. `decide` already knows which of those happened — a second
+        # opinion here can only be a worse one, and it made the dry run disagree
+        # with the line the live path logs.
+        reason=decision.reason,
         # The per-rule trace (RADD-989). Without it "no rule matched — source
         # default" is the answer for a chain whose only rule CRASHED, and the
         # admin's next move is to rewrite a rule that was already correct.
