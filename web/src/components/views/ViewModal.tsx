@@ -97,6 +97,7 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
   const [swimlaneBy, setSwimlaneBy] = useState<string>(view?.swimlane_by ?? AXIS_NONE);
   const [cycleFilter, setCycleFilter] = useState(view?.cycle_filter ?? "");
   const [quickFilters, setQuickFilters] = useState<QuickFilter[]>(view?.quick_filters ?? []);
+  const quickFilterError = quickFilterProblem(quickFilters);
   // Stable per-row keys (RADD-901): each quick-filter row owns an SlqEditor,
   // and keying by index re-keyed every row below a removal.
   const quickFilterRows = useKeyedRows(quickFilters, setQuickFilters);
@@ -157,9 +158,13 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
             ? (swimlaneBy as AxisToken)
             : null,
         cycle_filter: cycleAxisPicked ? cycleFilter.trim() || null : null,
+        // RADD-1229: a chip without a label used to be DROPPED here, silently —
+        // save closed the modal and the filter was gone. The label defaults to
+        // the condition itself; only a row with nothing in it is left out, and
+        // a label with no condition blocks the save (see quickFilterError).
         quick_filters: quickFilters
-          .map((entry) => ({ name: entry.name.trim(), query: entry.query.trim() }))
-          .filter((entry) => entry.name && entry.query),
+          .map((entry) => ({ name: quickFilterLabel(entry), query: entry.query.trim() }))
+          .filter((entry) => entry.query),
       };
       if (view) {
         if (!canManageSharing) return api.patch<View>(apiViewPath(view.id), payload satisfies ViewUpdate);
@@ -323,6 +328,11 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
               onRemove={() => quickFilterRows.removeAt(index)}
             />
           ))}
+          {quickFilterError && (
+            <div data-quick-filter-error>
+              <ErrorText error={quickFilterError} />
+            </div>
+          )}
           {quickFilters.length < 10 && (
             <button
               type="button"
@@ -365,6 +375,7 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
               !name.trim() ||
               probe.status === SlqProbeStatus.invalid ||
               Boolean(cycleFilterError) ||
+              Boolean(quickFilterError) ||
               save.isPending
             }
           >
@@ -375,6 +386,18 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
       </form>
     </Modal>
   );
+}
+
+/** The chip's label: what was typed, else the condition itself (RADD-1229). */
+export function quickFilterLabel(entry: QuickFilter): string {
+  return entry.name.trim() || entry.query.trim().slice(0, 60);
+}
+
+/** Why the quick filters cannot be saved as they stand, or null (RADD-1229):
+ * a label without a condition is the one shape that means nothing. */
+export function quickFilterProblem(entries: QuickFilter[]): string | null {
+  const orphan = entries.find((entry) => entry.name.trim() && !entry.query.trim());
+  return orphan ? `Quick filter “${orphan.name.trim()}” has no condition.` : null;
 }
 
 /** One quick-filter row: label + a COMPACT SlqEditor, so chip conditions get the
@@ -396,7 +419,7 @@ function QuickFilterRow({
       <input
         value={filter.name}
         onChange={(event) => onChange({ ...filter, name: event.target.value })}
-        placeholder="Label"
+        placeholder="Label (defaults to the condition)"
         maxLength={60}
         className="h-8 w-36 shrink-0 rounded-md border border-strong bg-surface px-2 text-[13px] text-heading"
       />
