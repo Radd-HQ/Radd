@@ -62,11 +62,20 @@ export function PageHistory({ page, canWrite }: { page: Page; canWrite: boolean 
   }
 
   const list = versions.data;
+  const grouped = groupedVersions(page.version, list.map((v) => v.version));
   return (
     <div className="mt-3">
       <p className="mb-2 px-1 text-xs text-fg-muted">
         v{page.version} is the current version{list.length > 0 ? "; earlier versions:" : "."}
       </p>
+      {grouped.length > 0 && (
+        <p className="mb-2 px-1 text-xs text-fg-faint" data-history-grouped>
+          {grouped.join(", ")} {grouped.length === 1 && !grouped[0].includes("–") ? "was an autosave" : "were autosaves"}{" "}
+          inside a live editing session and {grouped.length === 1 && !grouped[0].includes("–") ? "is" : "are"} folded
+          into the entry that followed: history keeps one entry per editing window plus the
+          session's final save, not one per pause in typing.
+        </p>
+      )}
       {list.length === 0 ? (
         <p className="px-1 text-[13px] text-fg-faint">No earlier versions yet.</p>
       ) : (
@@ -106,6 +115,24 @@ export function PageHistory({ page, canWrite }: { page: Page; canWrite: boolean 
       )}
     </div>
   );
+}
+
+/** RADD-1244 (radd-hq/radd#16): the version numbers that have no history row
+ *  — spec 122 coalesces a live session's autosaves into one entry per window —
+ *  as ranges ("v2–v3"), so the gap reads as a decision rather than a loss. */
+export function groupedVersions(current: number, listed: number[]): string[] {
+  const have = new Set(listed);
+  const ranges: string[] = [];
+  let start: number | null = null;
+  for (let v = 1; v <= current; v += 1) {
+    const missing = v < current && !have.has(v);
+    if (missing && start === null) start = v;
+    if (!missing && start !== null) {
+      ranges.push(start === v - 1 ? `v${start}` : `v${start}–v${v - 1}`);
+      start = null;
+    }
+  }
+  return ranges;
 }
 
 function VersionViewer({
