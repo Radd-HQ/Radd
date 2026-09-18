@@ -337,6 +337,15 @@ const docSpaceRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.pageSpace,
   component: PageSpacePage,
+  // `?archived=1` opens the space's archive browser (RADD-1228). Same
+  // normalisation as the print route: the router JSON-parses search values.
+  // The OPTIONAL key is what keeps `search` optional on every existing link.
+  validateSearch: (search: Record<string, unknown>): { archived?: true } => ({
+    archived:
+      search.archived === true || search.archived === 1 || search.archived === "1"
+        ? true
+        : undefined,
+  }),
 });
 
 const pageRoute = createRoute({

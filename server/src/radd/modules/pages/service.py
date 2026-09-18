@@ -137,6 +137,7 @@ async def list_pages(
                 has_children=row.id in children,
                 updated_at=row.updated_at,
                 labels=label_names.get(row.id, []),
+                archived_at=row.archived_at,
             )
             for row in rows
             if row.id in visible
@@ -530,14 +531,37 @@ async def archive_page(session: AsyncSession, page_id: uuid.UUID, actor_id: uuid
 async def unarchive_page(
     session: AsyncSession, page_id: uuid.UUID, actor_id: uuid.UUID
 ) -> Page:
+    """Clear `archived_at` on the page — and on every archived ANCESTOR.
+
+    The tree hides a page whose ancestor is archived (`core.visible_page_ids`),
+    so restoring only the page would leave it exactly as invisible as before
+    and the button would read as broken (RADD-1228). Restoring the chain puts
+    the page back at the path it was archived from; re-parenting it to the
+    nearest live ancestor was rejected because that change would outlive both
+    restores. Siblings under a restored ancestor that were archived in their
+    own right stay archived — the chain is the minimum that makes this page
+    reachable.
+    """
     page = await get_page(session, page_id)
-    if page.archived_at is not None:
-        page.archived_at = None
-        await session.flush()
-        await _emit_page(
-            session, PageEvent.PAGE_RESTORED, page, actor_id,
-            {"title": page.title, "action": RestoreKind.UNARCHIVE},
-        )
+    by_id = {row.id: row for row in await _space_rows(session, page.space_id)}
+    chain: list[Page] = [page]
+    current = page.parent_id
+    for _ in range(len(by_id) + 1):
+        if current is None:
+            break
+        ancestor = by_id.get(current)
+        if ancestor is None:
+            break
+        chain.append(ancestor)
+        current = ancestor.parent_id
+    for row in chain:
+        if row.archived_at is not None:
+            row.archived_at = None
+            await session.flush()
+            await _emit_page(
+                session, PageEvent.PAGE_RESTORED, row, actor_id,
+                {"title": row.title, "action": RestoreKind.UNARCHIVE},
+            )
     return page
 
 

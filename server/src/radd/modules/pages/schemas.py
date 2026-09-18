@@ -218,6 +218,9 @@ class PageSummary(BaseModel):
     has_children: bool
     updated_at: UtcDatetime
     labels: list[str] = Field(default_factory=list)  # RADD-718
+    # RADD-1228: set only in the `include_archived` listing, where the client
+    # has to tell an archived page from a live descendant hidden with it.
+    archived_at: UtcDatetime | None = None
 
 
 class PageBreadcrumb(BaseModel):

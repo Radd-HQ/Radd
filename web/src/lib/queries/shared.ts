@@ -147,6 +147,7 @@ export const queryKeys = {
   pagesByLabel: (name: string, space: string) =>
     ["pagesByLabel", { name, space }] as const,
   pages: (spaceId: string) => ["pages", { spaceId }] as const,
+  pagesArchived: (spaceId: string) => ["pagesArchived", { spaceId }] as const,
   page: (pageId: string) => ["page", { pageId }] as const,
   pageVersions: (pageId: string) => ["pageVersions", { pageId }] as const,
   pageVersion: (pageId: string, version: number) =>

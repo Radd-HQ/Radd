@@ -120,6 +120,19 @@ export const pagesQuery = (spaceId: string) =>
     queryFn: ({ signal }) => api.get<PageSummary[]>(apiPageSpacePagesPath(spaceId), { signal }),
   });
 
+/** The whole space INCLUDING archived subtrees (RADD-1228) — the archive
+ *  browser's rows. `page.manage` on the server; only ask when the actor holds it. */
+export const archivedPagesQuery = (spaceId: string) =>
+  queryOptions({
+    queryKey: queryKeys.pagesArchived(spaceId),
+    meta: entityMeta(Entity.page),
+    queryFn: ({ signal }) =>
+      api.get<PageSummary[]>(apiPageSpacePagesPath(spaceId), {
+        signal,
+        query: { include_archived: "true" },
+      }),
+  });
+
 /** Full page: body + space + breadcrumb (the canonical page view). */
 export const pageQuery = (pageId: string) =>
   queryOptions({

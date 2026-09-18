@@ -1,7 +1,7 @@
 import { useCurrentUser, useIsAuthenticated } from "../../lib/hooks";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import {
   Link2,
   Archive,
@@ -66,7 +66,7 @@ type TabValue = (typeof Tab)[keyof typeof Tab];
  */
 export function PageView({
   page,
-  canWrite,
+  canWrite: canWriteProp,
   canComment,
   canManage,
   spaceSlug,
@@ -83,6 +83,12 @@ export function PageView({
   spaceSlug?: string;
 }) {
   const queryClient = useQueryClient();
+  // RADD-1228: an archived page is READ-ONLY until restored — every editor
+  // this component offers hangs off `canWrite`, so closing it here closes them
+  // all (title, body, URL, labels, links, history restore). Restore and
+  // permanent delete stay on `canManage`.
+  const archived = page.archived_at !== null;
+  const canWrite = canWriteProp && !archived;
   const { data: users } = useQuery({ ...usersQuery, enabled: useIsAuthenticated() });
   const [tab, setTab] = useState<TabValue>(Tab.content);
   const authenticated = useIsAuthenticated();
@@ -195,7 +201,6 @@ export function PageView({
       invalidate();
     }
   };
-  const archived = page.archived_at !== null;
 
   /** RADD-733: a new tab, so the reader keeps their place — the print view
    *  replaces the whole document and the browser's print dialog blocks it. */
@@ -214,9 +219,21 @@ export function PageView({
     <PageExtensionCtx.Provider value={extensionContext}>
     <div className="@container/page-view px-6 py-5">
       {archived && (
-        <Callout kind="warning" icon={Archive} className="mb-3">
-          <div className="flex items-center gap-2">
-            This page is archived — it's hidden from the tree until restored.
+        <Callout kind="warning" icon={Archive} className="mb-3" data-archived-banner>
+          <div className="flex flex-wrap items-center gap-2">
+            <span>
+              This page is archived — read-only and hidden from the tree until restored.
+            </span>
+            {canManage && spaceSlug && (
+              <Link
+                to={RoutePath.pageSpace}
+                params={{ spaceSlug }}
+                search={{ archived: true }}
+                className="underline-offset-2 hover:underline"
+              >
+                All archived pages
+              </Link>
+            )}
             {canManage && (
               <button
                 type="button"
@@ -337,7 +354,7 @@ export function PageView({
               <Lock size={13} aria-hidden />
             </IconButton>
           )}
-          {canWrite && !archived && (
+          {canWrite && (
             <IconButton
               onClick={() => archive.mutate()}
               title="Archive — hidden from the tree until restored"

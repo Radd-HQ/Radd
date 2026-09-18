@@ -1,10 +1,10 @@
-import { Link, useNavigate, useParams } from "@tanstack/react-router";
+import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
-import { BookOpen, ChevronRight } from "lucide-react";
+import { Archive, BookOpen, ChevronRight } from "lucide-react";
 import { RoutePath } from "../lib/constants";
 import { usePermissions } from "../lib/hooks";
-import { pageByPathQuery, pagesQuery, pageSpaceByIdentityQuery } from "../lib/queries";
+import { archivedPagesQuery, pageByPathQuery, pagesQuery, pageSpaceByIdentityQuery } from "../lib/queries";
 import { Permission } from "../lib/types";
 import { Button } from "../components/Button";
 import { Modal } from "../components/Modal";
@@ -13,6 +13,7 @@ import { Spinner } from "../components/Spinner";
 import { PageView } from "../components/pages/PageView";
 import { BreadcrumbCrumb } from "../components/pages/BreadcrumbCrumb";
 import { PageTree } from "../components/pages/PageTree";
+import { ArchivedPagesPanel, archivedRows } from "../components/pages/ArchivedPagesPanel";
 import { PublicBadge } from "../components/pages/PublicBadge";
 import { QueryError } from "../components/QueryError";
 import { AiResultsPanel } from "../components/items/AiResultsPanel";
@@ -32,6 +33,8 @@ import { ErrorText } from "../components/ErrorText";
  */
 export function PageSpacePage() {
   const { spaceSlug = "", pageSlug } = useParams({ strict: false });
+  // `?archived=1` (RADD-1228): the archive browser in place of a page.
+  const { archived: browsingArchive = false } = useSearch({ strict: false }) as { archived?: boolean };
   const navigate = useNavigate();
   const perms = usePermissions();
   const spaceQuery = useQuery(pageSpaceByIdentityQuery(spaceSlug));
@@ -39,6 +42,11 @@ export function PageSpacePage() {
   const [treeOpen, setTreeOpen] = useState(false);
   useEffect(() => setTreeOpen(false), [spaceSlug, pageSlug]);
   const pages = useQuery({ ...pagesQuery(space?.id ?? ""), enabled: Boolean(space) });
+  // The archive is a `page.manage` listing on the server; asking without the
+  // atom would be a 403 in the console on every visit, so it is gated here too.
+  const canBrowseArchive = Boolean(space) && perms.space(space!, Permission.pageManage);
+  const archive = useQuery({ ...archivedPagesQuery(space?.id ?? ""), enabled: canBrowseArchive });
+  const archivedCount = archive.data ? archivedRows(archive.data).length : 0;
   const page = useQuery({
     ...pageByPathQuery(spaceSlug, pageSlug ?? ""),
     enabled: Boolean(spaceSlug) && Boolean(pageSlug),
@@ -155,6 +163,29 @@ export function PageSpacePage() {
             selectedId={page.data?.id}
             canWrite={canWrite}
           />
+          {canBrowseArchive && (
+            <Link
+              to={RoutePath.pageSpace}
+              params={{ spaceSlug: space.slug }}
+              search={{ archived: true }}
+              data-archived-pages-link
+              aria-current={browsingArchive && !pageSlug ? "page" : undefined}
+              className={
+                "mt-3 flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs " +
+                (browsingArchive && !pageSlug
+                  ? "bg-elevated text-heading"
+                  : "text-fg-muted hover:bg-elevated/60 hover:text-fg")
+              }
+            >
+              <Archive size={12} aria-hidden />
+              Archived pages
+              {archivedCount > 0 && (
+                <span className="ml-auto rounded bg-elevated px-1 font-mono text-[10px] text-fg-faint">
+                  {archivedCount}
+                </span>
+              )}
+            </Link>
+          )}
         </nav>
 
         {/* `@container/page` so the AI pane's `@4xl:` variants have something to
@@ -197,6 +228,16 @@ export function PageSpacePage() {
                   </div>
                 </div>
               </AiResultsContext.Provider>
+            )
+          ) : browsingArchive && canBrowseArchive ? (
+            archive.isPending ? (
+              <Spinner label="Loading archived pages…" />
+            ) : archive.isError ? (
+              <div className="p-6">
+                <QueryError label="archived pages" error={archive.error} />
+              </div>
+            ) : (
+              <ArchivedPagesPanel spaceSlug={space.slug} rows={archive.data ?? []} />
             )
           ) : (
             <div className="p-6">

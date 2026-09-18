@@ -92,6 +92,9 @@ export interface PageSummary {
   updated_at: string;
   /** RADD-718 — hydrated in one query for the whole tree. */
   labels: string[];
+  /** RADD-1228 — only the `include_archived` listing sets it; a live page
+   *  hidden under an archived ancestor carries null. */
+  archived_at?: string | null;
 }
 
 export interface PageBreadcrumb {
