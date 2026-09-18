@@ -202,9 +202,35 @@ async def _apply_plan(
             event_id=None,
             item_id=item.id if item is not None else None,
             actor_id=SYSTEM_ACTOR_ID,
-            payload={"message": message, "rule": rule_name},
+            payload={
+                "message": message,
+                "rule": rule_name,
+                **await _notification_item_ref(session, item),
+            },
         )
     return None
+
+
+async def _notification_item_ref(session: AsyncSession, item: WorkItem | None) -> dict[str, str]:
+    """The `item_key`/`item_title` pair every other item-scoped notification
+    carries (RADD-972) — display values resolved at WRITE time, spec 26's rule.
+
+    The row already had `item_id`, but nothing that composes a line from the
+    payload (the digest, the per-event email) does a lookup — that is the rule,
+    and the automation type was the one exception to it, so its email line
+    could name the rule that fired and not the issue it fired on. Read through
+    `items.item_ref`, the seam every emitter uses for the same pair, rather than
+    joining the project here: the key's spelling is items' to own.
+
+    An itemless rule (a schedule at set arity, a universal action) has no ref
+    and gets none; the renderers' linkless degradation stays for that case.
+    """
+    if item is None:
+        return {}
+    ref = await items.item_ref(session, item.id)
+    if ref is None:
+        return {}
+    return {"item_key": str(ref.get("key") or ""), "item_title": str(ref.get("title") or "")}
 
 
 

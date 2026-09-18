@@ -129,9 +129,10 @@ def entry(notification: Notification, actor_names: dict[uuid.UUID, str]) -> mail
     title = payload.get("item_title") or ""
     return mailrender.DigestEntry(
         headline=line,
-        # Automation notifications carry neither (their payload is message+rule),
-        # so the line degrades to the message with no link rather than to a
-        # `/issues/` URL with nothing after it.
+        # An ITEMLESS automation notification (a schedule at set arity, a
+        # universal action) carries neither, so the line degrades to the message
+        # with no link rather than to a `/issues/` URL with nothing after it.
+        # Item-scoped rules have carried the pair since RADD-972.
         subject=f"[{key}] {title}".strip() if key else "",
         excerpt=payload.get("excerpt") or "",
         url=mailrender.issue_url(base, key) if key else "",
