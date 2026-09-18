@@ -35,6 +35,8 @@ export interface Comment {
   anchor: CommentAnchor | null;
   resolved_at: string | null;
   resolved_by: string | null;
+  parent_comment_id?: string | null;
+  reply_count?: number;
 }
 
 /** The authenticated actor is the author; `internal` needs comment.read_internal. */

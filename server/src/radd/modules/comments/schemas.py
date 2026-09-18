@@ -41,6 +41,10 @@ class CommentUpdate(BaseModel):
     visible_to_teams: list[uuid.UUID] | None = None
 
 
+class CommentReplyCreate(BaseModel):
+    body: str = Field(min_length=1)
+
+
 class CommentRead(BaseModel):
     id: uuid.UUID
     entity_type: str = "item"  # RADD-717
@@ -55,6 +59,8 @@ class CommentRead(BaseModel):
     anchor: CommentAnchor | None = None
     resolved_at: UtcDatetime | None = None
     resolved_by: uuid.UUID | None = None
+    parent_comment_id: uuid.UUID | None = None
+    reply_count: int = 0
 
 
 class CommentPage(BaseModel):

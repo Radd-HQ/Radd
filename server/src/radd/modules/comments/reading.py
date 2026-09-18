@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import HTTPException
-from sqlalchemy import JSON, or_, select, tuple_
+from sqlalchemy import JSON, func, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.modules.auth.authz import Permission
@@ -24,7 +24,8 @@ async def _read_query(session, entity_id, actor, entity_type, section):
     binding = binding_for(entity_type)
     project = await binding.project_of(session, entity_id)
     permissions = await binding.require_read(session, actor, entity_id, project)
-    query = select(Comment).where(Comment.entity_type == entity_type, Comment.entity_id == entity_id)
+    query = select(Comment).where(Comment.entity_type == entity_type, Comment.entity_id == entity_id,
+                                  Comment.parent_comment_id.is_(None))
     if Permission.PROJECT_MANAGE not in permissions:
         allowed = [Comment.visibility != CommentVisibility.INTERNAL, Comment.author_id == actor.id]
         if Permission.COMMENT_READ_INTERNAL in permissions:
@@ -48,7 +49,11 @@ async def _hydrate(session, rows):
 
     restrictions = await _team_restrictions(session, [row.id for row in rows])
     authors = await auth.users_by_ids(session, {row.author_id for row in rows if row.author_id is not None})
-    return [_to_read(row, authors.get(row.author_id), restrictions.get(row.id)) for row in rows]
+    roots = [row.id for row in rows if row.anchor and row.parent_comment_id is None]
+    counts = dict((await session.execute(select(Comment.parent_comment_id, func.count())
+        .where(Comment.parent_comment_id.in_(roots)).group_by(Comment.parent_comment_id))).all()) if roots else {}
+    return [_to_read(row, authors.get(row.author_id), restrictions.get(row.id))
+            .model_copy(update={"reply_count": counts.get(row.id, 0)}) for row in rows]
 
 
 def _cursor(row: Comment) -> str:
@@ -107,5 +112,9 @@ async def can_read_comment(session, comment_id, actor):
     comment = await session.get(Comment, comment_id)
     if comment is None:
         return False
+    if comment.parent_comment_id:
+        comment = await session.get(Comment, comment.parent_comment_id)
+        if comment is None:
+            return False
     query = await _read_query(session, comment.entity_id, actor, comment.entity_type, CommentSlice.ALL)
-    return await session.scalar(query.where(Comment.id == comment_id)) is not None
+    return await session.scalar(query.where(Comment.id == comment.id)) is not None

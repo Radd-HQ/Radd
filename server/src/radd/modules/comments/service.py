@@ -50,6 +50,7 @@ def _to_read(
         anchor=CommentAnchor(**comment.anchor) if comment.anchor else None,
         resolved_at=comment.resolved_at,
         resolved_by=comment.resolved_by,
+        parent_comment_id=comment.parent_comment_id,
     )
 
 
@@ -309,6 +310,7 @@ async def create_authorized_comment(
     *,
     entity_type: str = CommentParentType.ITEM.value,
     permissions: frozenset[Permission] = frozenset(),
+    parent_comment_id: uuid.UUID | None = None,
 ) -> CommentRead:
     """Write a comment whose authorisation the CALLER has already decided.
 
@@ -343,7 +345,8 @@ async def create_authorized_comment(
         author_id=author_id,
         body=data.body,
         anchor=data.anchor.model_dump() if data.anchor else None,
-        visibility=data.visibility.value
+        visibility=data.visibility.value,
+        parent_comment_id=parent_comment_id,
     )
     if occurred_at is not None:
         comment.created_at = occurred_at.replace(tzinfo=None)
@@ -361,6 +364,11 @@ async def update_comment(
     session: AsyncSession, comment_id: uuid.UUID, data: CommentUpdate, actor: User
 ) -> CommentRead:
     comment = await _get(session, comment_id)
+    if comment.parent_comment_id:
+        from .threads import require_thread
+        await require_thread(session, comment.parent_comment_id, actor)
+        if data.visible_to_teams is not None:
+            raise ConflictError(CommentEntity.COMMENT, reason="Replies inherit their thread's audience")
     binding, project = await _parent_scope(session, comment.entity_type, comment.entity_id)
     permissions = await _require_author_or(
         session, comment, actor, project, others=Permission.PROJECT_MANAGE
@@ -394,6 +402,9 @@ async def update_comment(
 
 async def delete_comment(session: AsyncSession, comment_id: uuid.UUID, actor: User) -> None:
     comment = await _get(session, comment_id)
+    if comment.parent_comment_id:
+        from .threads import require_thread
+        await require_thread(session, comment.parent_comment_id, actor)
     binding, project = await _parent_scope(session, comment.entity_type, comment.entity_id)
     permissions = await _require_author_or(
         session, comment, actor, project, others=Permission.COMMENT_DELETE
@@ -452,6 +463,8 @@ async def set_resolved(
     error, because two people clicking at once is ordinary.
     """
     comment = await _get(session, comment_id)
+    if comment.parent_comment_id:
+        raise ConflictError(CommentEntity.COMMENT, reason="Resolve the thread, not an individual reply")
     binding, project = await _parent_scope(session, comment.entity_type, comment.entity_id)
     await _require_author_or(
         session, comment, actor, project, others=binding.manage_permission

@@ -13,7 +13,10 @@ from .types import CommentParentType, CommentVisibility
 class Comment(Base, TimestampMixin):
     __tablename__ = "comments"
     # The read that matters: every comment on one parent, in order.
-    __table_args__ = (Index("ix_comments_parent_order", "entity_type", "entity_id", "created_at", "id"),)
+    __table_args__ = (
+        Index("ix_comments_parent_order", "entity_type", "entity_id", "created_at", "id"),
+        Index("ix_comments_thread_order", "parent_comment_id", "created_at", "id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     # RADD-717: polymorphic parent. No FK, because it points at several tables —
@@ -26,6 +29,10 @@ class Comment(Base, TimestampMixin):
     entity_id: Mapped[uuid.UUID] = mapped_column(index=True)
     author_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
     body: Mapped[str] = mapped_column(Text)
+    # Flat conversation under an anchored root; deleting it removes its replies.
+    parent_comment_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("comments.id", ondelete="CASCADE"), nullable=True
+    )
     # CommentVisibility; internal comments require Permission.COMMENT_READ_INTERNAL.
     visibility: Mapped[str] = mapped_column(String(10), default=CommentVisibility.PUBLIC)
 

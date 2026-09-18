@@ -185,7 +185,7 @@ export function PageSpacePage() {
                       className="order-first m-6 mb-0 w-[calc(100%-3rem)] @4xl:sticky @4xl:top-0 @4xl:order-2 @4xl:ml-0 @4xl:max-h-[calc(100vh-8rem)] @4xl:w-96 @4xl:shrink-0"
                     />
                   )}
-                  <div className="min-w-0 flex-1">
+                  <div className="w-full min-w-0 flex-1 @4xl:w-auto">
                     <PageView
                       key={page.data.id}
                       page={page.data}

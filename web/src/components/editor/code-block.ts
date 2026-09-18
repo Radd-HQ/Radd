@@ -1,4 +1,5 @@
 import { EditorState as CmState, Compartment } from "@codemirror/state";
+import { registerTextProjection } from "../../lib/dom-text";
 import {
   EditorView as CmView,
   keymap,
@@ -273,6 +274,14 @@ export function mountCodeMirror(options: {
     view.dispatch({ effects: language.reconfigure([support]) });
   }
 
+  const source = parent.closest("[data-code-block]")?.querySelector("[data-code-source]");
+  const unregisterProjection = source ? registerTextProjection(source, {
+    pointAt: (offset) => view.visibleRanges.some(range => offset >= range.from && offset <= range.to)
+      ? view.domAtPos(offset) : null,
+    offsetAt: (node, offset) => view.contentDOM.contains(node) ? view.posAtDOM(node, offset) : null,
+    reveal: (offset) => view.dispatch({effects: CmView.scrollIntoView(offset, {y: "center"})}),
+  }) : undefined;
+
   return {
     view,
     syncFromNode,
@@ -284,6 +293,6 @@ export function mountCodeMirror(options: {
           CmState.readOnly.of(!next),
         ]),
       }),
-    destroy: () => view.destroy(),
+    destroy: () => { unregisterProjection?.(); view.destroy(); },
   };
 }

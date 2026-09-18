@@ -41,6 +41,8 @@ ANONYMOUS_ROUTES: frozenset[tuple[str, str]] = frozenset(
         ("GET", "/api/v1/items/{entity_id}/comments/feed"),
         ("GET", "/api/v1/{entity_type}/{entity_id}/comments"),
         ("GET", "/api/v1/{entity_type}/{entity_id}/comments/feed"),
+        # Replies are readable only through the root's live parent/audience gates.
+        ("GET", "/api/v1/comments/{comment_id}/replies"),
         ("GET", "/api/v1/items/{item_id}/allowed-transitions"),
         ("GET", "/api/v1/items/{item_id}/web-links"),
         ("GET", "/api/v1/items/{item_id}/participants"),

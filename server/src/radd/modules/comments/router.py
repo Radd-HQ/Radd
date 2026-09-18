@@ -8,8 +8,8 @@ from radd.db import get_session
 from radd.modules.auth.deps import Actor, CurrentUser
 from radd.modules.auth.throttle import WriteBucket, check_write
 
-from . import service
-from .schemas import CommentCreate, CommentPage, CommentRead, CommentUpdate
+from . import service, threads
+from .schemas import CommentCreate, CommentPage, CommentRead, CommentReplyCreate, CommentUpdate
 from .types import CommentSlice
 
 # No prefix: routes span two roots (/items/{id}/comments for the collection,
@@ -17,6 +17,19 @@ from .types import CommentSlice
 router = APIRouter(tags=["comments"])
 
 Session = Annotated[AsyncSession, Depends(get_session)]
+
+
+@router.get("/comments/{comment_id}/replies", response_model=CommentPage)
+async def comment_replies(comment_id: uuid.UUID, session: Session, user: Actor,
+    limit: int = Query(50, ge=1, le=200), before: str | None = Query(None, max_length=256),
+) -> CommentPage:
+    return await threads.reply_page(session, comment_id, user, limit=limit, before=before)
+
+
+@router.post("/comments/{comment_id}/replies", response_model=CommentRead, status_code=201)
+async def reply_to_comment(comment_id: uuid.UUID, data: CommentReplyCreate, session: Session, user: CurrentUser) -> CommentRead:
+    check_write(user, WriteBucket.COMMENT_CREATE)
+    return await threads.create_reply(session, comment_id, data, user)
 
 
 @router.post("/items/{item_id}/comments", response_model=CommentRead, status_code=201)

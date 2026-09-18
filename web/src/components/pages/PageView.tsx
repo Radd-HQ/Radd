@@ -212,7 +212,7 @@ export function PageView({
 
   return (
     <PageExtensionCtx.Provider value={extensionContext}>
-    <div className="px-6 py-5">
+    <div className="@container/page-view px-6 py-5">
       {archived && (
         <Callout kind="warning" icon={Archive} className="mb-3">
           <div className="flex items-center gap-2">
@@ -378,104 +378,117 @@ export function PageView({
 
       {tab === Tab.history ? (
         <PageHistory page={page} canWrite={canWrite} />
-      ) : editing ? (
-        <PageEditPanel
-          draft={draft}
-          onDraft={onDraft}
-          pendingAiRun={pendingAiRun}
-          onUploadImage={async (file) => {
-            const [attachment] = await uploadFiles([file]);
-            return attachmentUrl(attachment.id);
-          }}
-          collab={collab}
-          legacy={legacyEdit}
-          editVersion={editVersion}
-          conflict={conflict}
-          saving={save.isPending}
-          onSave={(body) => save.mutate(body)}
-          onReload={() => {
-            setConflict(false);
-            setEditing(false);
-            invalidate();
-          }}
-          onCancel={() => {
-            setEditing(false);
-            setConflict(false);
-            setPendingAiRun(null);
-          }}
-          finishing={finishing}
-          onDone={() => void done()}
-        />
       ) : (
-        <>
-          {page.body ? (
-            <div
-              ref={bodyRef}
-              className="mt-3 rounded-md px-1.5 py-1"
-            >
-              <div className="mb-2 flex flex-wrap items-center justify-end gap-1">
-                {/* Read-mode AI (spec 103 follow-up): find-similar/summarize for
-                    every reader; transforms only for writers. */}
-                <AiReadMenu
-                  text={page.body}
-                  similar={{ seedKey: page.id }}
-                  onTransform={canWrite ? openEditor : undefined}
-                  label="AI actions for this page"
+        <div className="grid min-w-0 items-start gap-6 @3xl/page-view:grid-cols-[minmax(0,1fr)_18rem]" data-page-content-layout>
+          <div className="min-w-0">
+            {editing ? (
+              <div ref={bodyRef}>
+                <PageEditPanel
+                  draft={draft}
+                  onDraft={onDraft}
+                  pendingAiRun={pendingAiRun}
+                  onUploadImage={async (file) => {
+                    const [attachment] = await uploadFiles([file]);
+                    return attachmentUrl(attachment.id);
+                  }}
+                  collab={collab}
+                  legacy={legacyEdit}
+                  editVersion={editVersion}
+                  conflict={conflict}
+                  saving={save.isPending}
+                  onSave={(body) => save.mutate(body)}
+                  onReload={() => {
+                    setConflict(false);
+                    setEditing(false);
+                    invalidate();
+                  }}
+                  onCancel={() => {
+                    setEditing(false);
+                    setConflict(false);
+                    setPendingAiRun(null);
+                  }}
+                  finishing={finishing}
+                  onDone={() => void done()}
                 />
-                {canWrite && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => openEditor(null)}
-                    aria-label="Edit page"
-                    title="Edit page"
-                  >
-                    <Pencil size={12} aria-hidden />
-                    Edit page
-                  </Button>
-                )}
               </div>
-              <PageBody text={page.body} onReady={() => setBodyVersion((v) => v + 1)} />
-            </div>
-          ) : canWrite ? (
-            <button
-              type="button"
-              onClick={() => openEditor(null)}
-              className="mt-3 rounded-md border border-transparent px-1.5 py-1 text-left text-[13px] text-fg-faint hover:border-subtle hover:text-fg-secondary cursor-pointer"
-            >
-              Write something…
-            </button>
-          ) : (
-            <p className="mt-3 px-1.5 text-[13px] text-fg-faint">This page is empty.</p>
-          )}
+            ) : (
+              <>
+                <div ref={bodyRef}>
+                  {page.body ? (
+                    <div
+                      className="mt-3 rounded-md px-1.5 py-1"
+                    >
+                      <div className="mb-2 flex flex-wrap items-center justify-end gap-1">
+                        {/* Read-mode AI (spec 103 follow-up): find-similar/summarize for
+                            every reader; transforms only for writers. */}
+                        <AiReadMenu
+                          text={page.body}
+                          similar={{ seedKey: page.id }}
+                          onTransform={canWrite ? openEditor : undefined}
+                          label="AI actions for this page"
+                        />
+                        {canWrite && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openEditor(null)}
+                            aria-label="Edit page"
+                            title="Edit page"
+                          >
+                            <Pencil size={12} aria-hidden />
+                            Edit page
+                          </Button>
+                        )}
+                      </div>
+                      <PageBody text={page.body} onReady={() => setBodyVersion((v) => v + 1)} />
+                    </div>
+                  ) : canWrite ? (
+                    <button
+                      type="button"
+                      onClick={() => openEditor(null)}
+                      className="mt-3 rounded-md border border-transparent px-1.5 py-1 text-left text-[13px] text-fg-faint hover:border-subtle hover:text-fg-secondary cursor-pointer"
+                    >
+                      Write something…
+                    </button>
+                  ) : (
+                    <p className="mt-3 px-1.5 text-[13px] text-fg-faint">This page is empty.</p>
+                  )}
 
-          {/* RADD-943: the panel owns its heading, because whether it is open
-              is a property of what it contains. */}
-          <PageLinkedItems pageId={page.id} canWrite={canWrite} />
+                </div>
 
-          {/* RADD-944 deleted the automatic subpage index that used to sit
-              here. Children are the page tree's job, and the author's, via
-              `radd:children`/`radd:toc` — RADD-714's own suppression rule
-              (stand aside when an extension is present) conceded that the
-              placed version was the better one. Backlinks stay automatic
-              below: "what points at me" cannot be expressed inline any other
-              way, which is why `radd:backlinks` is the INLINE alternative
-              rather than the only way to get them. */}
+                {/* RADD-943: the panel owns its heading, because whether it is open
+                    is a property of what it contains. */}
+                <PageLinkedItems pageId={page.id} canWrite={canWrite} />
 
-          {/* RADD-726: anchored threads beside the passage they are about. */}
-          <PageInlineComments
-            pageId={page.id}
-            bodyRef={bodyRef}
-            bodyVersion={bodyVersion}
-            canComment={canComment}
-          />
+                {/* RADD-944 deleted the automatic subpage index that used to sit
+                    here. Children are the page tree's job, and the author's, via
+                    `radd:children`/`radd:toc` — RADD-714's own suppression rule
+                    (stand aside when an extension is present) conceded that the
+                    placed version was the better one. Backlinks stay automatic
+                    below: "what points at me" cannot be expressed inline any other
+                    way, which is why `radd:backlinks` is the INLINE alternative
+                    rather than the only way to get them. */}
 
-          <PageBacklinksPanel pageId={page.id} />
+                <PageBacklinksPanel pageId={page.id} />
 
-          {/* RADD-717: a page is where a decision gets written down; the
-              argument about it needs somewhere to live besides chat. */}
-          <PageComments pageId={page.id} canComment={canComment} />
-        </>
+                {/* RADD-717: a page is where a decision gets written down; the
+                    argument about it needs somewhere to live besides chat. */}
+                <PageComments pageId={page.id} canComment={canComment} />
+              </>
+            )}
+          </div>
+          <aside aria-label="Page annotations" data-page-comment-sidebar
+            className="sticky top-3 z-10 order-first min-w-0 max-h-[32vh] overflow-y-auto rounded-lg border border-subtle bg-base p-3 @3xl/page-view:order-last @3xl/page-view:max-h-[calc(100dvh-9rem)]">
+            <PageInlineComments
+              pageId={page.id}
+              bodyRef={bodyRef}
+              bodyVersion={bodyVersion}
+              editing={editing}
+              canComment={canComment}
+              canManage={canManage}
+            />
+          </aside>
+        </div>
       )}
       {confirmDialog}
       {changingUrl && spaceSlug && (

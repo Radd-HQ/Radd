@@ -148,7 +148,7 @@ export function CodeBlockView() {
           be where CodeMirror lives — the two would fight over the same DOM. It
           is hidden, not absent: without it ProseMirror treats the node as a leaf
           and the text stops round-tripping. */}
-      <div ref={contentRef} className="hidden" />
+      <div ref={contentRef} className="hidden" data-code-source />
     </div>
   );
 }

@@ -1,20 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, MessageSquarePlus, RotateCcw, Unlink } from "lucide-react";
+import { MessageSquarePlus } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { apiCommentPath, apiParentCommentsPath } from "../../lib/constants";
-import { relativeTime } from "../../lib/dates";
 import { pageCommentFeedQuery } from "../../lib/queries";
 import type { Comment } from "../../lib/types";
 import { useCurrentUser } from "../../lib/hooks";
-import { makeAnchor, orderByAnchor, type TextAnchor } from "../../lib/anchoring";
-import { offsetsForSelection, rangeForOffsets, renderedText } from "../../lib/dom-text";
-import { LazyRichViewer as RichViewer } from "../editor/LazyRichViewer";
+import { locateAnchor, makeAnchor, orderByAnchor, type TextAnchor } from "../../lib/anchoring";
+import { offsetsForSelection, rangeForOffsets, renderedText, revealTextOffset, scrollRangeIntoView } from "../../lib/dom-text";
 import { CommentHistory } from "../CommentHistory";
 import { chronologicalComments, CommentSection } from "../../lib/queries/comment-feed";
 import { Button } from "../Button";
 import { LazyRichEditor as RichEditor } from "../editor/LazyRichEditor";
+
+import { PageCommentThread as Thread } from "./PageCommentThread";
+import { PageCommentPopover } from "./PageCommentPopover";
+import { useCommentPointer, type CommentHit } from "./useCommentPointer";
 
 const HIGHLIGHT = "radd-inline-comment";
 const HIGHLIGHT_FOCUS = "radd-inline-comment-focus";
@@ -38,14 +40,18 @@ export function PageInlineComments({
   pageId,
   bodyRef,
   bodyVersion,
+  editing = false,
   canComment,
+  canManage = false,
 }: {
   pageId: string;
   /** The element the page body renders into — the anchors' coordinate space. */
   bodyRef: React.RefObject<HTMLElement | null>;
   /** Bump to re-scan after the body re-renders (a save, a lazy segment). */
   bodyVersion: number;
+  editing?: boolean;
   canComment: boolean;
+  canManage?: boolean;
 }) {
   const user = useCurrentUser();
   const queryClient = useQueryClient();
@@ -55,8 +61,19 @@ export function PageInlineComments({
   const [draftBody, setDraftBody] = useState("");
   const [selectionAt, setSelectionAt] = useState<{ left: number; top: number } | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
+  const focusedIdRef = useRef(focusedId);
+  focusedIdRef.current = focusedId;
+  const navigation = useRef(0);
+  const hits = useRef<CommentHit[]>([]);
   const [showResolved, setShowResolved] = useState(false);
   const pendingSelection = useRef<TextAnchor | null>(null);
+  const railRef = useRef<HTMLElement>(null);
+  // Exclude editor toolbars and page controls from the anchor coordinate space.
+  const anchorRoot = useCallback(() => {
+    const host = bodyRef.current;
+    return host?.querySelector<HTMLElement>("[data-page-body]")
+      ?? host?.querySelector<HTMLElement>(".ProseMirror") ?? host;
+  }, [bodyRef]);
 
   const invalidate = () => void invalidateEntities(queryClient, Entity.comment);
   const post = useMutation({
@@ -85,7 +102,7 @@ export function PageInlineComments({
   >([]);
 
   const rescan = useCallback(() => {
-    const root = bodyRef.current;
+    const root = anchorRoot();
     if (!root) return;
     const text = renderedText(root);
     const ordered = orderByAnchor(text, inline);
@@ -96,35 +113,47 @@ export function PageInlineComments({
       })),
     );
 
-    // Paint. Resolved threads leave the highlight layer as well as the rail.
-    if (typeof CSS === "undefined" || !("highlights" in CSS)) return;
+    // Cache visible ranges for pointer hit testing as well as highlighting.
+    hits.current = [];
     const open: Range[] = [];
     const focused: Range[] = [];
     for (const { row, location } of ordered) {
-      if (row.resolved_at || location?.status !== "located") continue;
+      if ((row.resolved_at && row.id !== focusedIdRef.current) || location?.status !== "located") continue;
       const range = rangeForOffsets(root, location.start, location.end);
       if (!range) continue;
-      (row.id === focusedId ? focused : open).push(range);
+      if (!row.resolved_at) hits.current.push({id: row.id, range});
+      (row.id === focusedIdRef.current ? focused : open).push(range);
     }
+    if (typeof CSS === "undefined" || !("highlights" in CSS)) return;
     CSS.highlights.set(HIGHLIGHT, new Highlight(...open));
     CSS.highlights.set(HIGHLIGHT_FOCUS, new Highlight(...focused));
-  }, [bodyRef, inline, focusedId]);
+  }, [anchorRoot, inline, focusedId]);
 
   useEffect(() => {
     rescan();
+    let frame = 0;
+    const observer = new MutationObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(rescan);
+    });
+    if (bodyRef.current) observer.observe(bodyRef.current, {subtree: true, childList: true, characterData: true});
     return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
       if (typeof CSS !== "undefined" && "highlights" in CSS) {
         CSS.highlights.delete(HIGHLIGHT);
         CSS.highlights.delete(HIGHLIGHT_FOCUS);
       }
     };
-  }, [rescan, bodyVersion]);
+  }, [rescan, bodyVersion, bodyRef, editing]);
 
   // RADD-731: select text in the body, comment on it.
   useEffect(() => {
-    const root = bodyRef.current;
+    const root = anchorRoot();
     if (!root || !canComment) return;
     const onUp = () => {
+      const root = anchorRoot();
+      if (!root) return;
       const offsets = offsetsForSelection(root);
       if (!offsets) {
         setSelectionAt(null);
@@ -137,7 +166,35 @@ export function PageInlineComments({
     };
     document.addEventListener("mouseup", onUp);
     return () => document.removeEventListener("mouseup", onUp);
-  }, [bodyRef, canComment]);
+  }, [anchorRoot, canComment, bodyVersion, editing]);
+
+  const jumpToPassage = async (row: Comment) => {
+    floating.close();
+    const request = ++navigation.current;
+    const root = anchorRoot();
+    if (!root || !row.anchor) return;
+    const location = locateAnchor(renderedText(root), row.anchor);
+    setFocusedId(row.id);
+    if (location.status !== "located") { rescan(); return; }
+    await revealTextOffset(root, location.start);
+    if (!root.isConnected || request !== navigation.current) return;
+    // Editing may have moved the quote while CodeMirror rendered its viewport.
+    const current = locateAnchor(renderedText(root), row.anchor);
+    if (current.status !== "located") { rescan(); return; }
+    const range = rangeForOffsets(root, current.start, current.end);
+    if (range) scrollRangeIntoView(range);
+    rescan();
+  };
+
+  const floating = useCommentPointer(bodyRef, hits, editing, setFocusedId);
+  const floatingRow = inline.find(row => row.id === floating.pointer?.id && !row.resolved_at);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const replyProps = (row: Comment) => ({
+    canReply: canComment,
+    draft: replyDrafts[row.id] ?? "",
+    onDraft: (value: string) => setReplyDrafts(previous => ({...previous, [row.id]: value})),
+  });
 
   const open = located.filter(({ row }) => !row.resolved_at);
   const resolved = located.filter(({ row }) => row.resolved_at);
@@ -147,6 +204,14 @@ export function PageInlineComments({
 
   return (
     <>
+      {floating.pointer && floatingRow && (
+        <PageCommentPopover pointer={floating.pointer} onClose={floating.close} onKeep={floating.keep}
+          onLeave={floating.leave} onPin={floating.pin}>
+          <Thread row={floatingRow} orphaned={false} focused canResolve={floating.pointer.pinned && (canManage || (canComment && floatingRow.author?.id === user?.id))}
+            onResolve={() => {floating.close(); setFocusedId(null); resolve.mutate({id: floatingRow.id, resolved: true});}}
+            expanded={floating.pointer.pinned} onToggle={floating.pointer.pinned ? floating.close : floating.pin} {...replyProps(floatingRow)} />
+        </PageCommentPopover>
+      )}
       {selectionAt && canComment && (
         <button
           type="button"
@@ -154,6 +219,8 @@ export function PageInlineComments({
           onMouseDown={(event) => {
             event.preventDefault(); // keep the selection alive
             setDraftAnchor(pendingSelection.current);
+            const pane = railRef.current?.closest<HTMLElement>("[data-page-comment-sidebar]");
+            if (pane) pane.scrollTop = 0;
             setSelectionAt(null);
           }}
           className="fixed z-[60] flex items-center gap-1 rounded-md border border-strong bg-overlay px-2 py-1 text-[12px] text-fg shadow-pop cursor-pointer"
@@ -165,7 +232,13 @@ export function PageInlineComments({
 
       <CommentHistory hasOlder={history.hasNextPage} loading={history.isFetchingNextPage}
         onOlder={() => history.fetchNextPage()} error={history.isError ? errorMessage(history.error) : undefined}>
-      <aside className="mt-4 flex flex-col gap-2" data-inline-comment-rail>
+      <section ref={railRef} className="flex flex-col gap-2" data-inline-comment-rail>
+        <h2 className="text-xs font-semibold text-heading">Inline comments ({open.length}{history.hasNextPage ? "+" : ""})</h2>
+        {resolve.isError && <p role="alert" className="text-xs text-status-danger-ink">{errorMessage(resolve.error)}</p>}
+        {history.isPending && <p role="status" className="text-xs text-fg-muted">Loading comments…</p>}
+        {!history.isPending && !open.length && !draftAnchor && (
+          <p className="text-xs text-fg-muted">{canComment ? "Select a passage to comment on it." : "No open inline comments."}</p>
+        )}
         {draftAnchor && (
           <div className="rounded-md border border-accent bg-surface p-2">
             <p className="mb-1 text-[11px] italic text-fg-muted">“{draftAnchor.quote}”</p>
@@ -194,12 +267,19 @@ export function PageInlineComments({
         {open.map(({ row, start }) => (
           <Thread
             key={row.id}
+            expanded={expandedId === row.id && !floating.pointer?.pinned}
+            onToggle={() => {floating.close(); setExpandedId(expandedId === row.id ? null : row.id);}}
+            {...replyProps(row)}
             row={row}
             orphaned={start === null}
             focused={row.id === focusedId}
-            canResolve={canComment || (!!row.author && row.author.id === user?.id)}
+            canResolve={canManage || (canComment && row.author?.id === user?.id)}
             onFocus={() => setFocusedId(row.id)}
-            onResolve={() => resolve.mutate({ id: row.id, resolved: true })}
+            onNavigate={() => jumpToPassage(row)}
+            onResolve={() => {
+              setFocusedId(null);
+              resolve.mutate({ id: row.id, resolved: true });
+            }}
           />
         ))}
 
@@ -220,78 +300,26 @@ export function PageInlineComments({
               Resolved ({resolved.length})
             </button>
             {showResolved &&
-              resolved.map(({ row }) => (
+              resolved.map(({ row, start }) => (
                 <Thread
                   key={row.id}
+                  expanded={expandedId === row.id}
+                  onToggle={() => setExpandedId(expandedId === row.id ? null : row.id)}
+                  {...replyProps(row)}
                   row={row}
-                  orphaned={false}
-                  focused={false}
-                  canResolve={canComment || (!!row.author && row.author.id === user?.id)}
+                  orphaned={start === null}
+                  focused={row.id === focusedId}
+                  canResolve={canManage || (canComment && row.author?.id === user?.id)}
                   resolvedView
                   onFocus={() => setFocusedId(row.id)}
+                  onNavigate={() => jumpToPassage(row)}
                   onResolve={() => resolve.mutate({ id: row.id, resolved: false })}
                 />
               ))}
           </div>
         )}
-      </aside>
+      </section>
       </CommentHistory>
     </>
-  );
-}
-
-function Thread({
-  row,
-  orphaned,
-  focused,
-  canResolve,
-  resolvedView = false,
-  onFocus,
-  onResolve,
-}: {
-  row: Comment;
-  orphaned: boolean;
-  focused: boolean;
-  canResolve: boolean;
-  resolvedView?: boolean;
-  onFocus: () => void;
-  onResolve: () => void;
-}) {
-  return (
-    <div
-      data-thread
-      data-comment-id={row.id}
-      data-orphaned={orphaned || undefined}
-      onMouseEnter={onFocus}
-      className={
-        "rounded-md border bg-surface p-2 " +
-        (focused ? "border-strong" : "border-subtle") +
-        (resolvedView ? " opacity-70" : "")
-      }
-    >
-      <p className="mb-1 flex items-center gap-1 text-[11px] italic text-fg-muted">
-        {orphaned && <Unlink size={10} aria-hidden className="shrink-0" />}
-        “{row.anchor?.quote}”
-      </p>
-      <p className="text-[12px]">
-        <span className="font-medium text-heading">{row.author?.name ?? "Unknown author"}</span>{" "}
-        <span className="text-fg-faint" title={row.created_at}>
-          {relativeTime(row.created_at)}
-        </span>
-      </p>
-      <div className="mt-0.5">
-        <RichViewer text={row.body} />
-      </div>
-      {canResolve && (
-        <button
-          type="button"
-          onClick={onResolve}
-          className="mt-1 flex items-center gap-1 rounded px-1 text-[11px] text-fg-muted hover:text-fg cursor-pointer"
-        >
-          {resolvedView ? <RotateCcw size={10} aria-hidden /> : <Check size={10} aria-hidden />}
-          {resolvedView ? "Reopen" : "Resolve"}
-        </button>
-      )}
-    </div>
   );
 }
