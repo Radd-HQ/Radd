@@ -301,8 +301,11 @@ def test_outside_write_is_refused_while_an_editor_is_connected(stage):
             cookies={SESSION_COOKIE_NAME: cookies["ada"]},
         )
         assert saved.status_code == 200, saved.text
-        assert saved.json()["version"] == 3
-        assert hub.room(page_id).page_version == 3
+        # RADD-1244: the rename just wrote a history row, so this live save
+        # sits inside its window — no row, no bump, and the room owes a seal.
+        assert saved.json()["version"] == 2
+        assert hub.room(page_id).page_version == 2
+        assert hub.room(page_id).unsealed is True
     accepted = client.patch(patch, json={"body": "after they left"}, cookies=grace)
     assert accepted.status_code == 200, accepted.text
     # …and that write replaced the room's document: the room is gone with it.
@@ -333,11 +336,54 @@ def test_collab_saves_coalesce_into_one_history_row_per_window(stage):
             response = client.patch(patch, json={"body": body, "collab_session": joined["session"]}, cookies=ada)
             assert response.status_code == 200, response.text
         assert client.portal.call(rows) == 1  # the first opened the window; the rest sat inside it
+        # RADD-1244: the version moved with the ROW (v1 -> v2 on the first
+        # save) and stayed put for the two autosaves inside the window.
+        assert response.json()["version"] == 2
         response = client.patch(
             patch, json={"body": "done", "collab_session": joined["session"], "final": True}, cookies=ada
         )
-        assert response.status_code == 200 and response.json()["version"] == 5
+        assert response.status_code == 200 and response.json()["version"] == 3
         assert client.portal.call(rows) == 2
+
+
+def test_a_session_that_ends_without_a_final_save_is_sealed_when_the_room_drops(stage):
+    """RADD-1244: a crashed tab leaves autosaved content with no row and an
+    unmoved version; dropping the room writes the row and bumps, so a stale
+    REST client cannot pass the version check against a body it never saw."""
+    client, s = stage
+    page_id, cookies = s["page_id"], s["cookies"]
+    joined = _join(client, page_id, cookies["ada"])
+    ada = {SESSION_COOKIE_NAME: cookies["ada"]}
+    grace = {SESSION_COOKIE_NAME: cookies["grace"]}
+    patch = f"{API}/pages/{page_id}"
+
+    async def rows() -> int:
+        engine = create_async_engine(settings.database_url)
+        async with async_sessionmaker(engine)() as db:
+            count = (
+                await db.execute(
+                    select(func.count()).select_from(PageVersion).where(PageVersion.page_id == page_id)
+                )
+            ).scalar_one()
+        await engine.dispose()
+        return count
+
+    with _connect(client, page_id, cookies["ada"], joined["session"]) as sock:
+        _handshake(sock, Doc())
+        # The staged page already reads "first" — these two must both change it.
+        for body in ("alpha", "beta"):
+            response = client.patch(patch, json={"body": body, "collab_session": joined["session"]}, cookies=ada)
+            assert response.status_code == 200, response.text
+        assert response.json()["version"] == 2 and client.portal.call(rows) == 1
+        assert hub.room(page_id).unsealed is True
+    # No final save: the socket just went away. Dropping the room seals it.
+    client.portal.call(lambda: hub.drop(hub.room(page_id)))
+    assert client.portal.call(rows) == 2
+    assert client.get(patch, cookies=ada).json()["version"] == 3
+    # A client that read v2 is now told the truth instead of overwriting "second".
+    stale = client.patch(patch, json={"body": "from v2", "expected_version": 2}, cookies=grace)
+    assert stale.status_code == 409, stale.text
+    assert client.get(patch, cookies=ada).json()["body"] == "beta"
 
 
 def test_who_may_join_and_who_may_connect(stage):

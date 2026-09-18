@@ -24,6 +24,8 @@ from pycrdt.websocket import YRoom
 from sqlalchemy.exc import IntegrityError
 
 from radd.config import settings
+from radd.db import SessionLocal
+from radd.modules.pages import service as pages_service
 
 from . import store
 from .channel import RoomChannel
@@ -54,6 +56,9 @@ class Room:
     ) -> None:
         self.page_id = page_id
         self.page_version = page_version
+        #: RADD-1244: a live autosave wrote the body inside the history window,
+        #: so no row and no bump. Cleared by the next bump; acted on at drop.
+        self.unsealed = False
         self.ydoc = doc
         self.has_content = has_content
         self.yroom = YRoom(ydoc=doc, log=logger, exception_handler=self._room_exception)
@@ -163,10 +168,14 @@ class Room:
         self._dirty = True
         self._schedule_persist()
 
+    def mark_unsealed(self) -> None:
+        self.unsealed = True
+
     def track_version(self, version: int) -> None:
         """The page was saved FROM this room: the stored state now corresponds to
         `version`. Re-persist so a restart resumes rather than discards."""
         self.page_version = version
+        self.unsealed = False
         self._dirty = True
         self._schedule_persist()
 
@@ -231,6 +240,7 @@ class CollabHub:
         rooms, self.rooms = list(self.rooms.values()), {}
         for room in rooms:
             await room.stop()
+            await _seal(room)
 
     async def open(self, page_id: uuid.UUID, page_version: int) -> Room:
         room = self.rooms.get(page_id)
@@ -276,6 +286,11 @@ class CollabHub:
         if room is not None:
             room.track_version(version)
 
+    def mark_unsealed(self, page_id: uuid.UUID) -> None:
+        room = self.rooms.get(page_id)
+        if room is not None:
+            room.mark_unsealed()
+
     async def invalidate(self, page_id: uuid.UUID) -> None:
         """The body was replaced behind the room's back: drop it, discard the
         stored state, and send every client back through `join`."""
@@ -288,6 +303,24 @@ class CollabHub:
         if self.rooms.get(room.page_id) is room:
             del self.rooms[room.page_id]
         await room.stop()
+        await _seal(room)
+
+
+async def _seal(room: Room) -> None:
+    """RADD-1244: a session that ended without its final save — a crashed
+    tab, a dropped socket — left autosaved content with no history row and an
+    unmoved version. Write the row and bump, so the number counts what
+    History holds and a stale REST client cannot pass the version check
+    against a body it never saw."""
+    if not room.unsealed:
+        return
+    room.unsealed = False
+    try:
+        async with SessionLocal() as session:
+            await pages_service.seal_history(session, room.page_id)
+            await session.commit()
+    except Exception:
+        logger.exception("collab: sealing history for page %s failed", room.page_id)
 
 
 hub = CollabHub()

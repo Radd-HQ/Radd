@@ -31,6 +31,10 @@ from .models import Page
 class PageHook(StrEnum):
     BODY_WRITING = "page.body_writing"
     VERSION_BUMPED = "page.version_bumped"
+    #: RADD-1244: a live autosave changed the body WITHOUT a history row (inside
+    #: the window) — so `version` did not move. Whoever owns the session must
+    #: seal it (write the row, bump) when the session ends without a final save.
+    BODY_AUTOSAVED = "page.body_autosaved"
 
 
 @dataclass
@@ -47,6 +51,14 @@ class PageBodyWriting:
     #: Set by a handler when `collab_session` names a connected editor of this
     #: page's live document — the save came FROM the room.
     live_editor: bool = False
+
+
+@dataclass(frozen=True)
+class PageBodyAutosaved:
+    """The subject of `PageHook.BODY_AUTOSAVED`: the body is saved, the
+    version is NOT bumped, and no history row exists for this content yet."""
+
+    page: Page
 
 
 @dataclass(frozen=True)

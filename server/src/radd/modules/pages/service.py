@@ -31,7 +31,7 @@ from . import (
     watchers as page_watchers,
 )
 from .core import page_slugify
-from .hooks import PageBodyWriting, PageHook, PageVersionBumped
+from .hooks import PageBodyAutosaved, PageBodyWriting, PageHook, PageVersionBumped
 from .models import Page, PagePathHistory, PageSpace, PageVersion
 
 if TYPE_CHECKING:  # deferred: auth loads before pages
@@ -332,6 +332,30 @@ async def create_page(
     return page
 
 
+async def seal_history(session: AsyncSession, page_id: uuid.UUID) -> Page | None:
+    """RADD-1244: close a live editing session whose last autosaves wrote no
+    history row — the tab crashed, the socket dropped, the process stopped —
+    by writing the row for the CURRENT content and bumping the version. Called
+    by the collab room when it drops with unsealed autosaves; a no-op when the
+    page is gone. Every session therefore ends with a bump, by the client's
+    final save or by this."""
+    page = await session.get(Page, page_id)
+    if page is None:
+        return None
+    session.add(
+        PageVersion(
+            page_id=page.id,
+            version=page.version,
+            title=page.title,
+            body=page.body,
+            author_id=page.updated_by,
+        )
+    )
+    page.version += 1
+    await session.flush()
+    return page
+
+
 async def _history_window_open(session: AsyncSession, page_id: uuid.UUID) -> bool:
     """Spec 122: whether the page's newest history row is old enough for a
     collaborative autosave to write another. No row yet = open."""
@@ -478,7 +502,11 @@ async def update_page(
         quiet_write = importing and data.suppress_version
         # Spec 122: a collaborative session's autosaves coalesce — one history
         # row per window (or per session, via `final`), never one per pause in
-        # typing. `version` still moves on every content change.
+        # typing. RADD-1244: `version` moves WITH the row, never without it —
+        # the number a person sees counts what History can open. A live
+        # autosave inside the window writes the body and nothing else; the
+        # collab room seals the session (row + bump) if it ends without a
+        # final save, so the concurrency token never lags a saved body.
         snapshot = not quiet_write and (
             not writing.live_editor
             or data.final
@@ -500,7 +528,7 @@ async def update_page(
         if data.body is not None and data.body != page.body:
             page.body = data.body
             changed.append("body")
-        if not quiet_write:
+        if snapshot:
             page.version += 1
             await hooks.dispatch(
                 session,
@@ -512,6 +540,8 @@ async def update_page(
                     live_editor=writing.live_editor,
                 ),
             )
+        elif not quiet_write and "body" in changed:
+            await hooks.dispatch(session, PageHook.BODY_AUTOSAVED, PageBodyAutosaved(page=page))
         # Spec 117: a re-import credits the revision's real editor.
         page.updated_by = (
             data.author_id if (importing and data.author_id) else actor_id

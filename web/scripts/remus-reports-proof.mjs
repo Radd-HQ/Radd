@@ -15,7 +15,7 @@
  *   #14 the collapsed rail carries Pages;
  *   #15 in the wiki the top button is "New page" and creates one under the
  *       open page; elsewhere it is still "New item";
- *   #16 a linear (REST-written) history carries no "grouped" note;
+ *   #16 History lists every version below the current one (v3 → v2, v1);
  *   #17 a manager can delete a LIVE page from the page, landing on the space.
  * Every check is a measurement. Fixtures are deleted at the end.
  */
@@ -148,9 +148,11 @@ async function main() {
     await session.navigate(`${baseUrl}/pages/${SLUG}/${setup.parent.path}`, 2500);
     await session.click("button", (t) => /^History$/.test(t)).catch(() => session.click('[role="tab"]', (t) => /History/.test(t)));
     await sleep(800);
-    const history = await session.eval(`({ versions: [...document.querySelectorAll("li span")].map((s) => s.textContent.trim()).filter((t) => /^v\\d+$/.test(t)), grouped: document.querySelector("[data-history-grouped]")?.textContent?.trim() ?? null })`);
+    const history = await session.eval(`({ versions: [...document.querySelectorAll("li span")].map((s) => s.textContent.trim()).filter((t) => /^v\\d+$/.test(t)), current: document.body.textContent.match(/v(\\d+) is the current version/)?.[1] ?? null })`);
     context.history = history;
-    checks.linearHistoryListsEveryVersionAndNoGroupedNote = history.versions.join() === "v2,v1" && history.grouped === null;
+    // RADD-1244: the header's number is one more than the rows History lists —
+    // every version number is a row, none is skipped.
+    checks.historyListsEveryVersionBelowTheCurrentOne = history.versions.join() === "v2,v1" && history.current === "3";
 
     // --- #12: a page uuid in the space slot lands on the page ------------------
     await session.navigate(`${baseUrl}/pages/${setup.parent.id}`, 2500);

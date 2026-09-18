@@ -185,3 +185,25 @@ dialog; each sees the other's text and cursor; a reader sees who is editing
 and the saved text; an outside write during a session is refused and
 succeeds afterwards; history shows one revision per session; the proof above
 is green; `uv run pytest` and the web gates stay green.
+
+
+## Addendum (RADD-1244): the version counts history rows
+
+The first cut bumped `version` on every autosave and coalesced only the
+history rows, so a page could read **v4** in its header while History
+offered v1 alone — v2 and v3 had never been rows. The number people see
+must count what they can open, so the bump moved UNDER the snapshot: a live
+autosave inside the window writes the body and nothing else (`version`
+unchanged, `PageHook.BODY_AUTOSAVED` dispatched), and the row + bump happen
+together — on the first save of a window, on the session's final save, and
+now on a third path: **the seal**. A session that ends without its final
+save (a crashed tab, a dropped socket, a process stop) leaves autosaved
+content with no row and an unmoved version, which is exactly the state where
+a REST client holding the old number would pass `expected_version` and
+overwrite text it never saw. The room remembers the unsealed autosave
+(`Room.unsealed`) and, when it drops or the hub shuts down,
+`pages.service.seal_history` writes the row for the current content and
+bumps. Every session therefore ends with a bump, by the client or by the
+server, and the concurrency token is as strong as before. The History tab's
+"grouped versions" note shipped the same day was removed: there is nothing
+to explain any more.

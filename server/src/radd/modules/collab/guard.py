@@ -13,7 +13,7 @@ from radd.exceptions import ConflictError
 from radd.hooks import hooks
 from radd.kernel.registry import registries
 from radd.modules.auth import service as auth
-from radd.modules.pages.hooks import PageBodyWriting, PageHook, PageVersionBumped
+from radd.modules.pages.hooks import PageBodyAutosaved, PageBodyWriting, PageHook, PageVersionBumped
 from radd.modules.pages.types import PageEntity
 
 from .rooms import hub
@@ -47,6 +47,15 @@ async def guard_live_document(session: AsyncSession, subject: PageBodyWriting) -
     users = await auth.users_by_ids(session, {editor.user_id for editor in editors})
     names = sorted({user.name or user.email for user in users.values()})
     raise ConflictError(PageEntity.PAGE, reason=f"being edited live by {', '.join(names)}")
+
+
+@hooks.on(PageHook.BODY_AUTOSAVED)
+async def remember_unsealed(session: AsyncSession, subject: PageBodyAutosaved) -> None:
+    """A live autosave inside the history window: the body moved, the version
+    did not. The room owes a seal if the session ends without a final save."""
+    del session
+    if is_enabled():
+        hub.mark_unsealed(subject.page.id)
 
 
 @hooks.on(PageHook.VERSION_BUMPED)
