@@ -275,6 +275,28 @@ async def _comment_item(session: AsyncSession, actor: User, args: Mapping[str, A
     from radd.modules.comments.types import CommentVisibility
 
     current = await items_service.get_item_by_key(session, str(args["key"]), actor=actor)
+    if args.get("reply_to"):
+        # RADD-1246: a reply under one of the item's comments. `internal`
+        # unset means "the thread's own audience"; an internal thread makes
+        # the reply internal regardless.
+        from radd.modules.comments import threads
+        from radd.modules.comments.schemas import CommentReplyCreate
+        from radd.modules.comments.types import CommentParentType
+
+        root_id = uuid.UUID(str(args["reply_to"]))
+        root = await threads.require_thread(session, root_id, actor)
+        if root.entity_type != CommentParentType.ITEM.value or root.entity_id != current.id:
+            raise NotFoundError("comment", str(root_id))
+        comment = await threads.create_reply(
+            session,
+            root_id,
+            CommentReplyCreate(
+                body=str(args["body"]),
+                visibility=CommentVisibility.INTERNAL if args.get("internal") else None,
+            ),
+            actor,
+        )
+        return {"id": str(comment.id), "reply_to": str(root_id), "created_at": comment.created_at.isoformat()}
     visibility = CommentVisibility.INTERNAL if args.get("internal") else CommentVisibility.PUBLIC
     comment = await comments_service.create_comment(
         session,

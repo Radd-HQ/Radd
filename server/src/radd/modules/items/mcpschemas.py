@@ -145,7 +145,13 @@ def comment_item_schema() -> dict[str, Any]:
                 "type": "boolean",
                 "default": False,
                 "description": "Team-only visibility (requires the "
-                "internal-comments permission).",
+                "internal-comments permission). On a reply, unset means the "
+                "thread's own audience; an internal thread makes the reply internal.",
+            },
+            "reply_to": {
+                "type": "string",
+                "description": "Reply under one of the item's comments — its id, as get_item "
+                "lists them. Replies are one level deep.",
             },
         },
         ["key", "body"],

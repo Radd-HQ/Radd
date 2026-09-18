@@ -32,6 +32,7 @@ import { Select } from "../Select";
 import { Spinner } from "../Spinner";
 import { TeamAudience, CommentAudienceNames, COMMENT_TEAM_PREVIEW_SIZE } from "../teams/TeamAudience";
 import { QueryError } from "../QueryError";
+import { CommentReplies, repliesLabel } from "../comments/CommentReplies";
 
 import type { AiRun } from "../editor/ai";
 import { AiReadMenu } from "../editor/AiReadMenu";
@@ -104,6 +105,9 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
   const [visibility, setVisibility] = useState<CommentVisibilityValue>(CommentVisibility.public);
   const [visibleTeams, setVisibleTeams] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // RADD-1246: which thread is open, and each thread's unsent reply draft.
+  const [openThread, setOpenThread] = useState<string | null>(null);
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   // A read-mode AI transform pending for the comment being opened for edit —
   // handed to the editor as its initial whole-document run.
   const [pendingAiRun, setPendingAiRun] = useState<AiRun | null>(null);
@@ -241,6 +245,29 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
                     <div className="mt-0.5">
                       <RichViewer text={comment.body} />
                     </div>
+                  )}
+                  {user && (
+                    <button
+                      type="button"
+                      onClick={() => setOpenThread(openThread === comment.id ? null : comment.id)}
+                      aria-expanded={openThread === comment.id}
+                      data-thread-toggle={comment.id}
+                      className="mt-1.5 text-xs text-fg-muted hover:text-fg hover:underline cursor-pointer"
+                    >
+                      {repliesLabel(comment, openThread === comment.id, canComment)}
+                    </button>
+                  )}
+                  {openThread === comment.id && (
+                    <CommentReplies
+                      row={comment}
+                      canReply={canComment}
+                      draft={replyDrafts[comment.id] ?? ""}
+                      onDraft={(value) => setReplyDrafts((drafts) => ({ ...drafts, [comment.id]: value }))}
+                      // An internal thread makes every reply internal; a public
+                      // one may take an internal reply from someone who may write them.
+                      internalLocked={internal}
+                      canInternal={!internal && canReadInternal}
+                    />
                   )}
                 </div>
               </li>

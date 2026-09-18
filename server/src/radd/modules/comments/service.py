@@ -364,11 +364,17 @@ async def update_comment(
     session: AsyncSession, comment_id: uuid.UUID, data: CommentUpdate, actor: User
 ) -> CommentRead:
     comment = await _get(session, comment_id)
+    root = None
     if comment.parent_comment_id:
-        from .threads import require_thread
-        await require_thread(session, comment.parent_comment_id, actor)
+        from .threads import reply_audience, require_thread
+        root = await require_thread(session, comment.parent_comment_id, actor)
         if data.visible_to_teams is not None:
-            raise ConflictError(CommentEntity.COMMENT, reason="Replies inherit their thread's audience")
+            # RADD-1246: a reply may move within its thread's audience, never past it.
+            root_teams = (await _team_restrictions(session, [root.id])).get(root.id, set())
+            _visibility, narrowed = reply_audience(
+                root, root_teams, CommentVisibility(comment.visibility), data.visible_to_teams
+            )
+            data = data.model_copy(update={"visible_to_teams": sorted(narrowed)})
     binding, project = await _parent_scope(session, comment.entity_type, comment.entity_id)
     permissions = await _require_author_or(
         session, comment, actor, project, others=Permission.PROJECT_MANAGE
@@ -380,6 +386,10 @@ async def update_comment(
     await session.flush()
     if data.visible_to_teams is not None:
         stored_teams = await _set_teams(session, comment, data.visible_to_teams)
+        if root is None and stored_teams != previous_teams:
+            # The thread's audience is its replies' ceiling (RADD-1246).
+            from .threads import narrow_replies
+            await narrow_replies(session, comment, stored_teams)
     else:
         stored_teams = previous_teams
     # Spec 123: the body records only that it changed; team visibility by name.

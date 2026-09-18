@@ -42,7 +42,14 @@ class CommentUpdate(BaseModel):
 
 
 class CommentReplyCreate(BaseModel):
+    """RADD-1246: `visibility` omitted = the thread's own. Under an INTERNAL
+    thread a reply is internal whatever is sent (public is refused) and its
+    teams may only NARROW the thread's; under a public thread it may go
+    internal, to any teams the writer may address."""
+
     body: str = Field(min_length=1)
+    visibility: CommentVisibility | None = None
+    visible_to_teams: list[uuid.UUID] = Field(default_factory=list)
 
 
 class CommentRead(BaseModel):

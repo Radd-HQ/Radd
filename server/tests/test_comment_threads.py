@@ -86,8 +86,10 @@ async def test_resolution_reopen_and_cascade_preserve_the_conversation(world):
         await service.set_resolved(db, reply.id, reader, resolved=True)
     await service.set_resolved(db, root.id, author, resolved=False)
     await threads.create_reply(db, root.id, CommentReplyCreate(body="Open again"), reader)
-    with pytest.raises(ConflictError):
-        await service.update_comment(db, reply.id, CommentUpdate(body="Cannot broaden audience", visible_to_teams=[]), reader)
+    # RADD-1246: a reply may be edited within its thread's audience — on a
+    # public thread an empty team list is that audience, so this is allowed.
+    edited = await service.update_comment(db, reply.id, CommentUpdate(body="Edited within audience", visible_to_teams=[]), reader)
+    assert edited.visibility is CommentVisibility.PUBLIC and edited.visible_to_teams == []
     await service.delete_comment(db, root.id, author)
     await db.flush()
     assert (await db.scalars(select(Comment.id).where(Comment.parent_comment_id == root.id))).all() == []

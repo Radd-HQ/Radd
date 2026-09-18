@@ -2,7 +2,7 @@ import { Check, RotateCcw, Unlink } from "lucide-react";
 import { relativeTime } from "../../lib/dates";
 import type { Comment } from "../../lib/types";
 import { LazyRichViewer as RichViewer } from "../editor/LazyRichViewer";
-import { PageCommentReplies } from "./PageCommentReplies";
+import { CommentReplies, repliesLabel } from "../comments/CommentReplies";
 
 export function PageCommentThread({
   row,
@@ -62,9 +62,9 @@ export function PageCommentThread({
       </div>
       <button type="button" onClick={onToggle} aria-expanded={expanded}
         className="mt-2 text-xs text-fg-muted hover:text-fg hover:underline">
-        {expanded ? "Hide replies" : row.reply_count ? `${row.reply_count} ${row.reply_count === 1 ? "reply" : "replies"}` : canReply ? "Reply" : "View thread"}
+        {repliesLabel(row, expanded, canReply)}
       </button>
-      {expanded && <PageCommentReplies row={row} canReply={canReply} draft={draft} onDraft={onDraft} />}
+      {expanded && <CommentReplies row={row} canReply={canReply} draft={draft} onDraft={onDraft} />}
       {canResolve && (
         <button
           type="button"

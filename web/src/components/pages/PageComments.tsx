@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { CommentReplies, repliesLabel } from "../comments/CommentReplies";
 import { MessageSquare, Trash2 } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
@@ -38,6 +39,9 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
   const [body, setBody] = useState("");
   const [composerKey, setComposerKey] = useState(0);
   const [confirmDialog, confirm] = useConfirm();
+  // RADD-1246: a discussion comment is a thread like an annotation is.
+  const [openThread, setOpenThread] = useState<string | null>(null);
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
 
   const invalidate = () => void invalidateEntities(queryClient, Entity.comment);
 
@@ -102,6 +106,25 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
                 <div className="mt-0.5 rounded-md border border-subtle bg-surface px-2 py-1">
                   <RichViewer text={comment.body} />
                 </div>
+                {user && (
+                  <button
+                    type="button"
+                    onClick={() => setOpenThread(openThread === comment.id ? null : comment.id)}
+                    aria-expanded={openThread === comment.id}
+                    data-thread-toggle={comment.id}
+                    className="mt-1 text-xs text-fg-muted hover:text-fg hover:underline cursor-pointer"
+                  >
+                    {repliesLabel(comment, openThread === comment.id, canComment)}
+                  </button>
+                )}
+                {openThread === comment.id && (
+                  <CommentReplies
+                    row={comment}
+                    canReply={canComment}
+                    draft={replyDrafts[comment.id] ?? ""}
+                    onDraft={(value) => setReplyDrafts((drafts) => ({ ...drafts, [comment.id]: value }))}
+                  />
+                )}
               </div>
             </li>
           );
