@@ -169,6 +169,9 @@ export function PageView({
   });
   const hardDelete = useMutation({
     mutationFn: () => api.delete<void>(apiPagePath(page.id), { query: { hard: "true" } }),
+    // The page is gone; stay on its space rather than on a 404.
+    onSuccess: () =>
+      void navigate({ to: RoutePath.pageSpace, params: { spaceSlug: page.space.slug } }),
     onSettled: invalidate,
   });
 
@@ -374,13 +377,18 @@ export function PageView({
               <Archive size={13} aria-hidden />
             </IconButton>
           )}
-          {canManage && archived && (
+          {/* RADD-1245 (radd-hq/radd#17): offered on a LIVE page as well, the
+              way an issue's Delete is — archive stays the reversible choice
+              beside it. The server still refuses a page with live children. */}
+          {canManage && (
             <IconButton
               danger
               onClick={() =>
                 void confirm({
                   title: "Delete page permanently",
-                  message: "Permanently delete this page and its history?",
+                  message: archived
+                    ? "Permanently delete this page and its history?"
+                    : "Permanently delete this page and its history? This cannot be undone — Archive keeps it restorable.",
                   confirmLabel: "Delete",
                   danger: true,
                 }).then((ok) => {
