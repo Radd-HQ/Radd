@@ -19,6 +19,7 @@ from radd.kernel import RaddPlugin, registries
 from radd.kernel.loader import plugin_problems
 
 from . import discovery, store
+from .types import PluginState
 
 logger = logging.getLogger(__name__)
 _task: asyncio.Task | None = None
@@ -77,7 +78,7 @@ async def reconcile() -> None:
     # No await while holding the shared filesystem lock.
     async with SessionLocal() as session:
         rows = await _states(session)
-    desired = {key for key, row in rows.items() if row.state == 'enabled'}
+    desired = {key for key, row in rows.items() if row.state == PluginState.ENABLED}
     catalog_file = store.root() / 'catalog.json'
     fingerprint = (str(store.root()), tuple(sorted(desired)), tuple(sorted(registries.plugins)),
                    catalog_file.stat().st_mtime_ns if catalog_file.exists() else None)
