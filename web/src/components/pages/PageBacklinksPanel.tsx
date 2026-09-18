@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Link2 } from "lucide-react";
-import { RoutePath } from "../../lib/constants";
 import { pageBacklinksQuery } from "../../lib/queries";
 import { relativeTime } from "../../lib/dates";
+import { pageLink } from "../../lib/page-links";
 
 /**
  * "What links to this page" (RADD-713), below the body on every page.
@@ -28,8 +28,7 @@ export function PageBacklinksPanel({ pageId }: { pageId: string }) {
         {data.map((page) => (
           <li key={page.id} className="flex items-baseline gap-2">
             <Link
-              to={RoutePath.page}
-              params={{ spaceSlug: page.space_slug, pageSlug: page.slug }}
+              {...pageLink(page.space_slug, page.path)}
               className="text-[13px] text-accent-text hover:underline"
             >
               {page.title}

@@ -78,8 +78,16 @@ def test_a_pre_702_uuid_link_still_resolves():
     """Links made before pages had slugs are `/pages/<uuid>`, and the API still
     accepts that shape — they must not silently stop counting."""
     page_id = uuid.uuid4()
-    _, ids = backlinks._targets(f"[old](/pages/{page_id})")
-    assert ids == {page_id}
+    _, keys = backlinks._targets(f"[old](/pages/{page_id})")
+    assert keys == {str(page_id)}
+
+
+def test_a_permalink_and_a_nested_path_are_links_too():
+    """RADD-1233: `/pages?pageId=<number>` is the permalink, and a path has as
+    many segments as the page is deep."""
+    paths, keys = backlinks._targets("[p](/pages?pageId=12402) and [n](/pages/eng/ops/runbook)")
+    assert keys == {"12402"}
+    assert paths == {("eng", "ops/runbook")}
 
 
 # --- the write path keeps the index true --------------------------------------

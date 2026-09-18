@@ -12,6 +12,7 @@ from radd.modules.auth.deps import Actor, CurrentUser
 from radd.modules.items import service as items_service
 
 from . import (
+    paths,
     access,
     directory,
     options as space_options,
@@ -307,18 +308,34 @@ async def reindex_pages(session: Session, user: CurrentUser) -> dict[str, int]:
     }
 
 
-@router.get("/pages/by-path/{space_slug}/{page_slug}", response_model=PageRead)
+@router.get("/pages/by-path/{space_slug}/{path:path}", response_model=PageRead)
 async def get_page_by_path(
-    space_slug: str, page_slug: str, session: Session, user: Actor
+    space_slug: str, path: str, session: Session, user: Actor
 ) -> PageRead:
-    """`/pages/<space>/<page>` (RADD-702). Registered BEFORE `/pages/{page_id}`
-    so `by-path` is never parsed as a UUID. Either segment may be an id, which
-    is what lets a pre-702 UUID link resolve and redirect instead of rotting."""
-    page = await service.resolve_page_by_slug(session, space_slug, page_slug)
-    # Resolve FIRST, then check the space it turned out to live in — a slug pair
-    # is not a permission, and checking before the lookup would have been the
-    # global question again. Then the page's own restriction (RADD-792); a
-    # restricted page 404s rather than 403ing, so its EXISTENCE stays private.
+    """`/pages/<space>/<slug>/<slug>/…` (RADD-702, RADD-1233). Registered BEFORE
+    `/pages/{page_id}` so `by-path` is never parsed as a UUID. The space segment
+    may be an id; a single page segment may be an id or a number, which is what
+    lets every pre-1233 link resolve and redirect instead of rotting. The
+    answer carries the CANONICAL `path`; a client that arrived by any other
+    address compares and redirects."""
+    space = await spaces.by_slug_or_id(session, space_slug)
+    # Check the space BEFORE resolving inside it — a path is not a permission —
+    # then the page's own restriction (RADD-792): a restricted page 404s rather
+    # than 403ing, so its EXISTENCE stays private.
+    await authz.require(session, user, authz.Permission.PAGE_READ, space_id=space.id)
+    page = await paths.resolve(session, space, path)
+    if not await page_access.page_access(session, user, page):
+        raise NotFoundError(PageEntity.PAGE, page.id)
+    return await service.page_read(session, page)
+
+
+@router.get("/pages/by-number/{number}", response_model=PageRead)
+async def get_page_by_number(number: int, session: Session, user: Actor) -> PageRead:
+    """The permalink lookup (RADD-1233): `/pages?pageId=12402` → this. Also
+    before `/pages/{page_id}`, for the same reason as `by-path`."""
+    page = await paths.by_key(session, str(number))
+    if page is None:
+        raise NotFoundError(PageEntity.PAGE, str(number))
     await authz.require(session, user, authz.Permission.PAGE_READ, space_id=page.space_id)
     if not await page_access.page_access(session, user, page):
         raise NotFoundError(PageEntity.PAGE, page.id)

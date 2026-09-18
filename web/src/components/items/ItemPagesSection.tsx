@@ -6,7 +6,6 @@ import { api } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import {
   PALETTE_SEARCH_LIMIT,
-  RoutePath,
   SEARCH_DEBOUNCE_MS,
   apiPageItemPath,
   apiPageItemsPath,
@@ -17,6 +16,7 @@ import { Permission, type PageLinkedItem, type Item } from "../../lib/types";
 import { Button } from "../Button";
 import { IconButton } from "../IconButton";
 import { ErrorText } from "../ErrorText";
+import { pagePermalink } from "../../lib/page-links";
 
 /**
  * Docs block INSIDE the Related links card (spec 43): pages pages linked to
@@ -51,8 +51,7 @@ export function ItemPagesSection({ item }: { item: Item }) {
               >
                 <BookOpen size={14} className="shrink-0 text-fg-muted" aria-hidden />
                 <Link
-                  to={RoutePath.page}
-                  params={{ spaceSlug: ref.space_id, pageSlug: ref.page_id }}
+                  {...pagePermalink(ref.page_id)}
                   className="min-w-0 flex-1 truncate text-[13px] text-fg hover:underline"
                 >
                   {ref.title}

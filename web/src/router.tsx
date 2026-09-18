@@ -142,7 +142,11 @@ const legacyKbPageRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: RoutePath.legacyKbPage,
   beforeLoad: ({ params }) => {
-    throw redirect({ to: RoutePath.page, params, replace: true });
+    throw redirect({
+      to: RoutePath.page,
+      params: { spaceSlug: params.spaceSlug, _splat: params.pageSlug },
+      replace: true,
+    });
   },
   component: () => null,
 });
@@ -331,6 +335,17 @@ const docsIndexRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.pages,
   component: PagesIndexPage,
+  // `?pageId=<number>` is the page PERMALINK (RADD-1233): the index resolves
+  // it and redirects to the page's current path. The OPTIONAL key keeps
+  // `search` optional on every plain link to the index.
+  validateSearch: (search: Record<string, unknown>): { pageId?: string | number } => ({
+    pageId:
+      typeof search.pageId === "number"
+        ? search.pageId
+        : typeof search.pageId === "string" && search.pageId
+          ? search.pageId
+          : undefined,
+  }),
 });
 
 const docSpaceRoute = createRoute({

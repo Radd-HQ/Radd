@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useSearch } from "@tanstack/react-router";
-import { pageByPathQuery, pagesQuery, usersQuery } from "../lib/queries";
+import { pageByPathQuery, pageQuery, pagesQuery, usersQuery } from "../lib/queries";
+import { pageHref } from "../lib/page-links";
 import { PageBody } from "../components/pages/PageBody";
 import { PageExtensionCtx } from "../lib/page-extensions";
 import { headingAnchorId, headingsOf } from "../lib/markdown-outline";
@@ -25,14 +26,14 @@ import "./page-print.css";
  * what must not be in the output.
  */
 export function PagePrintPage() {
-  const { spaceSlug, pageSlug } = useParams({ strict: false }) as {
+  const { spaceSlug, _splat: pagePath = "" } = useParams({ strict: false }) as {
     spaceSlug: string;
-    pageSlug: string;
+    _splat?: string;
   };
   const search = useSearch({ strict: false }) as { subpages?: boolean };
   const withSubpages = search.subpages === true;
 
-  const { data: page } = useQuery(pageByPathQuery(spaceSlug, pageSlug));
+  const { data: page } = useQuery(pageByPathQuery(spaceSlug, pagePath));
   const { data: users } = useQuery(usersQuery);
   const { data: rows, isSuccess: treeLoaded } = useQuery({
     ...pagesQuery(page?.space_id ?? ""),
@@ -124,13 +125,13 @@ export function PagePrintPage() {
           pageId={child.id}
           spaceId={page.space_id}
           spaceSlug={spaceSlug}
-          pageSlug={child.slug}
           onReady={bump}
         />
       ))}
 
       <footer className="radd-print-footer">
-        {window.location.origin}/pages/{spaceSlug}/{pageSlug}
+        {window.location.origin}
+        {pageHref(page.space.slug, page.path)}
       </footer>
     </div>
   );
@@ -141,16 +142,15 @@ function SubPage({
   pageId,
   spaceId,
   spaceSlug,
-  pageSlug,
   onReady,
 }: {
   pageId: string;
   spaceId: string;
   spaceSlug: string;
-  pageSlug: string;
   onReady: () => void;
 }) {
-  const { data } = useQuery(pageByPathQuery(spaceSlug, pageSlug));
+  // By id: the tree row already names the child, and an id needs no path.
+  const { data } = useQuery(pageQuery(pageId));
   // The body has to arrive before it can render; report ready only once it has.
   useEffect(() => {
     if (data && !data.body) onReady();

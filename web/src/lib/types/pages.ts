@@ -55,8 +55,11 @@ export interface PageExtensionSpec {
  *  backlink may come from another space and the URL needs both segments. */
 export interface PageBacklink {
   id: string;
+  number: number;
   title: string;
   slug: string;
+  /** RADD-1233: space-relative path — the link target. */
+  path: string;
   space_id: string;
   space_slug: string;
   updated_at: string;
@@ -65,8 +68,10 @@ export interface PageBacklink {
 /** A page carrying a label (RADD-718), for `radd:label-list`. */
 export interface PageLabelled {
   id: string;
+  number: number;
   title: string;
   slug: string;
+  path: string;
   space_slug: string;
   updated_at: string;
 }
@@ -84,9 +89,13 @@ export interface PageTemplate {
 /** Flat tree row from GET /page-spaces/{id}/pages — the client builds the tree. */
 export interface PageSummary {
   id: string;
+  /** RADD-1233: the human key — what a permalink carries. */
+  number: number;
   parent_id: string | null;
   title: string;
   slug: string;
+  /** RADD-1233: `parent-slug/…/slug`, space-relative. */
+  path: string;
   position: number;
   has_children: boolean;
   updated_at: string;
@@ -99,16 +108,23 @@ export interface PageSummary {
 
 export interface PageBreadcrumb {
   id: string;
+  number: number;
   title: string;
   slug: string;
+  path: string;
 }
 
 export interface Page {
   id: string;
+  /** RADD-1233: the human key — what a permalink carries. */
+  number: number;
   space_id: string;
   parent_id: string | null;
   title: string;
   slug: string;
+  /** RADD-1233: the CANONICAL space-relative address. A view that arrived by
+   *  any other address (a permalink, a stale path) compares and redirects. */
+  path: string;
   body: string;
   position: number;
   /** Optimistic-concurrency guard: PATCH sends it back as expected_version. */

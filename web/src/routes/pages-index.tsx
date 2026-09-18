@@ -1,10 +1,12 @@
-import { Link } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { BookOpen, Settings } from "lucide-react";
 import { RoutePath } from "../lib/constants";
 import { usePermissions } from "../lib/hooks";
+import { pageLink } from "../lib/page-links";
 import { usePageSpaceDirectory } from "../lib/usePageSpaceDirectory";
-import { pageSpaceSummaryQuery } from "../lib/queries";
+import { pageByKeyQuery, pageSpaceSummaryQuery } from "../lib/queries";
 import { Permission } from "../lib/types";
 import { Button } from "../components/Button";
 import { DirectoryPager } from "../components/DirectoryPager";
@@ -13,8 +15,34 @@ import { ListSearchInput } from "../components/ListSearchInput";
 import { Spinner } from "../components/Spinner";
 import { QueryError } from "../components/QueryError";
 
-/** The readable wiki directory; only one search window is mounted. */
+/** The readable wiki directory; only one search window is mounted. Also the
+ *  permalink resolver: `/pages?pageId=<number>` lands here (RADD-1233). */
 export function PagesIndexPage() {
+  const { pageId } = useSearch({ strict: false }) as { pageId?: string | number };
+  if (pageId !== undefined && pageId !== "") return <PagePermalink pageId={String(pageId)} />;
+  return <PagesDirectory />;
+}
+
+/** Resolve a permalink and REPLACE it with the page's readable address — the
+ *  key survives every rename and move, the path is what people read. */
+function PagePermalink({ pageId }: { pageId: string }) {
+  const navigate = useNavigate();
+  const page = useQuery(pageByKeyQuery(pageId));
+  useEffect(() => {
+    if (!page.data) return;
+    void navigate({ ...pageLink(page.data.space.slug, page.data.path), replace: true });
+  }, [page.data, navigate]);
+  if (page.isError) {
+    return (
+      <div className="p-6">
+        <QueryError label="page" error={page.error} />
+      </div>
+    );
+  }
+  return <Spinner label="Opening page…" />;
+}
+
+function PagesDirectory() {
   const perms = usePermissions();
   const spaces = usePageSpaceDirectory();
   const summary = useQuery(pageSpaceSummaryQuery());

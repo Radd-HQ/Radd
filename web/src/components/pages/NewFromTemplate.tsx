@@ -4,11 +4,12 @@ import { useNavigate } from "@tanstack/react-router";
 import { FilePlus } from "lucide-react";
 import { api } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
-import { ApiPath, RoutePath } from "../../lib/constants";
+import { ApiPath } from "../../lib/constants";
 import { ExtensionCard, usePageExtensionContext } from "../../lib/page-extensions";
 import type { Page } from "../../lib/types";
 import { Button } from "../Button";
 import { TextField } from "../TextField";
+import { pageLink } from "../../lib/page-links";
 
 /**
  * `radd:new-from-template` — a button that creates a CHILD of the page it sits
@@ -42,10 +43,7 @@ export function NewFromTemplate({ params }: { params: Record<string, unknown> })
       setAsking(false);
       setTitle("");
       void invalidateEntities(queryClient, Entity.page);
-      void navigate({
-        to: RoutePath.page,
-        params: { spaceSlug: ctx.spaceSlug ?? "", pageSlug: page.slug },
-      });
+      void navigate(pageLink(page.space.slug, page.path));
     },
   });
 

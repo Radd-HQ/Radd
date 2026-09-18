@@ -28,6 +28,7 @@ import zipfile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from . import core
 from .core import page_slugify
 from .models import Page, PageSpace
 
@@ -36,7 +37,7 @@ _UNSAFE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
 _PAGE_LINK = re.compile(
     r"(?P<open>]\(\s*|href\s*=\s*[\"'])"
-    r"(?:https?://[^/\s)\"']+)?/pages/(?P<space>[^/?#\s)\"']+)/(?P<page>[^/?#\s)\"']+)"
+    r"(?:https?://[^/\s)\"']+)?/pages/(?P<space>[^/?#\s)\"']+)/(?P<page>[^?#\s)\"']+)"
 )
 
 
@@ -64,10 +65,11 @@ def _relative(from_parts: list[str], to_parts: list[str]) -> str:
 
 
 def rewrite_links(body: str, own_path: list[str], by_slug: dict[tuple[str, str], list[str]]) -> str:
-    """Point internal links at their file in the archive; leave the rest alone."""
+    """Point internal links at their file in the archive; leave the rest alone.
+    `by_slug` is keyed by (space slug, page PATH) — RADD-1233."""
 
     def swap(match: re.Match[str]) -> str:
-        target = by_slug.get((match.group("space"), match.group("page")))
+        target = by_slug.get((match.group("space"), match.group("page").strip("/")))
         if target is None:
             return match.group(0)  # outside the archive — an instance link, honestly
         return match.group("open") + _relative(own_path, target)
@@ -129,7 +131,24 @@ async def export_zip(
         allowed = await readable_page_ids(session, actor, pages)
         pages = [page for page in pages if page.id in allowed]
     paths = _paths(pages, root.parent_id if root is not None else None)
-    by_slug = {(space.slug, page.slug): paths[page.id] for page in pages if page.id in paths}
+    # RADD-1233: a link names the page's PATH, so key the archive map by it —
+    # computed over the whole tree, since a subtree export still links by the
+    # page's full address.
+    page_paths = core.page_paths(await _tree(session, space.id))
+    by_slug = {
+        (space.slug, page_paths.get(page.id, page.slug)): paths[page.id]
+        for page in pages
+        if page.id in paths
+    }
+    # …and, like the resolver's last-segment fallback, a bare slug that names
+    # exactly one exported page: what a pre-1233 link to a nested page is.
+    by_last: dict[str, list[list[str]]] = {}
+    for page in pages:
+        if page.id in paths:
+            by_last.setdefault(page.slug, []).append(paths[page.id])
+    for slug, targets in by_last.items():
+        if len(targets) == 1:
+            by_slug.setdefault((space.slug, slug), targets[0])
 
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:

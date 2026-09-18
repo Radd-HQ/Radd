@@ -3,6 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCheck, Inbox } from "lucide-react";
 import { RoutePath } from "../lib/constants";
+import { pagePermalink } from "../lib/page-links";
 import {
   useMarkAllNotificationsRead,
   useMarkNotificationsRead,
@@ -30,7 +31,11 @@ export function InboxPage() {
     if (!notification.read) markRead.mutate([notification.id]);
     if (notification.item_key) {
       void navigate({ to: RoutePath.issue, params: { itemKey: notification.item_key } });
+      return;
     }
+    // RADD-1233: a page notification opens the page's permalink.
+    const pageKey = notification.detail.page_number ?? notification.detail.page_id;
+    if (pageKey) void navigate(pagePermalink(pageKey));
   };
 
   return (

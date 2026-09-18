@@ -279,6 +279,7 @@ function AuditRow({ entry, showProject }: { entry: AuditEntry; showProject: bool
             <Link
               to={link.to}
               params={link.params ?? {}}
+              search={link.search ?? {}}
               className="text-[13px] font-medium text-accent-text hover:text-accent-text-strong"
               data-audit-entity-link
             >

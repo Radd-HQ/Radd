@@ -113,7 +113,7 @@ PAGE_EXTENSIONS: tuple[PageExtensionSpec, ...] = (
             "properties": {
                 "page": {
                     "type": "string",
-                    "description": "The page's slug, or <space-slug>/<page-slug>.",
+                    "description": "The page's path in this space (parent-slug/slug), its number, or <space-slug>:<path> for another space.",
                 }
             },
         },

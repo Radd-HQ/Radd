@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ChevronDown } from "lucide-react";
-import { RoutePath } from "../../lib/constants";
+import { pageLink } from "../../lib/page-links";
 import { pagesQuery } from "../../lib/queries";
 import { Popover } from "../Popover";
 import type { PageBreadcrumb } from "../../lib/types";
@@ -34,8 +34,7 @@ export function BreadcrumbCrumb({
   return (
     <span className="relative flex min-w-0 items-center">
       <Link
-        to={RoutePath.page}
-        params={{ spaceSlug, pageSlug: crumb.slug }}
+        {...pageLink(spaceSlug, crumb.path)}
         className="truncate text-fg-secondary hover:text-fg"
       >
         {crumb.title}
@@ -62,8 +61,7 @@ export function BreadcrumbCrumb({
           siblings.map((sibling) => (
             <Link
               key={sibling.id}
-              to={RoutePath.page}
-              params={{ spaceSlug, pageSlug: sibling.slug }}
+              {...pageLink(spaceSlug, sibling.path)}
               onClick={() => setOpen(false)}
               className="block truncate px-3 py-1.5 text-[13px] text-fg hover:bg-elevated"
             >

@@ -30,12 +30,13 @@ if TYPE_CHECKING:  # deferred: auth loads before pages
 
 
 async def page_ref(session: AsyncSession, page_id) -> dict | None:
-    """`{id, title, slug, version}` — what an inbox row renders without a join."""
+    """`{id, number, title, slug, version}` — what an inbox row renders and links without a join."""
     page = await session.get(Page, page_id)
     if page is None:
         return None
     return {
         "id": str(page.id),
+        "number": page.number,
         "title": page.title,
         "slug": page.slug,
         "version": page.version,

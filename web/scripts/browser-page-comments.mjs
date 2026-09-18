@@ -13,7 +13,7 @@ const space = {id: "space", slug: "handbook", name: "Handbook", permissions: ["*
 const early = "Review this opening passage";
 const late = "Review this final passage";
 const codeQuote = "deep_code_annotation_target";
-const page = {id: "page", space_id: space.id, space, slug: "long-page", title: "Long page annotations", parent_id: null,
+const page = {id: "page", number: 1, space_id: space.id, space, slug: "long-page", path: "long-page", title: "Long page annotations", parent_id: null,
   position: 0, version: 1, created_by: user.id, updated_by: user.id, created_at: "2026-01-01", updated_at: "2026-01-01", archived_at: null, labels: [], breadcrumb: [],
   body: `## Introduction\n\n${early}.\n\n` + Array.from({length: 45}, (_, i) => `## Section ${i + 1}\n\nA deliberately long document. Paragraph ${i + 1} keeps its own position while the comments stay available.\n\n`).join("") + `## Conclusion\n\n${late}.\n\nRepeated ambiguous phrase.\n\nRepeated ambiguous phrase.`};
 page.body += "\n\n```text\n" + Array.from({length: 100}, (_, i) => `configuration_line_${i}`).join("\n") + `\n${codeQuote}\n` + "```";

@@ -61,7 +61,10 @@ async def test_established_slugs_never_move_on_title_edits(db, space):
     assert renamed.slug == "original"  # RADD-702: the URL is a promise
 
 
-async def test_same_title_under_two_parents_suffixes(db, space):
+async def test_same_title_under_two_parents_keeps_both_slugs(db, space):
+    """RADD-1233 retired the per-space rule this test used to assert: a slug is
+    unique among SIBLINGS, so two parents may each have a `setup`. The suffix
+    still appears where it means something — beside a sibling."""
     row, actor = space
     a = await service.create_page(db, PageCreate(space_id=row.id, title="Parent A"), actor)
     b = await service.create_page(db, PageCreate(space_id=row.id, title="Parent B"), actor)
@@ -71,10 +74,15 @@ async def test_same_title_under_two_parents_suffixes(db, space):
     second = await service.create_page(
         db, PageCreate(space_id=row.id, title="Untitled", parent_id=b.id), actor
     )
+    third = await service.create_page(
+        db, PageCreate(space_id=row.id, title="Untitled", parent_id=a.id), actor
+    )
     one = await service.update_page(db, first.id, PageUpdate(title="Setup"), actor)
     two = await service.update_page(db, second.id, PageUpdate(title="Setup"), actor)
+    three = await service.update_page(db, third.id, PageUpdate(title="Setup"), actor)
     assert one.slug == "setup"
-    assert two.slug == "setup-2"  # suffixed, never stuck at untitled
+    assert two.slug == "setup"  # a different parent: no suffix
+    assert three.slug == "setup-2"  # the same parent: suffixed, never stuck at untitled
 
 
 async def test_explicit_slug_change_still_works(db, space):

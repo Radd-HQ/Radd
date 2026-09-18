@@ -40,6 +40,7 @@ import { Button } from "../Button";
 import { useConfirm } from "../ConfirmDialog";
 import { DropdownMenu } from "../DropdownMenu";
 import { PageExtensionCtx } from "../../lib/page-extensions";
+import { pageLink, pagePermalink, pagePrintHref } from "../../lib/page-links";
 import { PageBacklinksPanel } from "./PageBacklinksPanel";
 import { PageComments } from "./PageComments";
 import { PageWatchButton } from "./PageWatchButton";
@@ -206,8 +207,7 @@ export function PageView({
    *  replaces the whole document and the browser's print dialog blocks it. */
   const openPrint = (subpages: boolean) => {
     if (!spaceSlug) return;
-    const query = subpages ? "?subpages=1" : "";
-    window.open(`/pages/${spaceSlug}/${page.slug}/print${query}`, "_blank", "noopener");
+    window.open(pagePrintHref(spaceSlug, page.path, subpages), "_blank", "noopener");
   };
 
   const extensionContext = useMemo(
@@ -269,6 +269,16 @@ export function PageView({
         <span className="shrink-0 rounded bg-elevated px-1.5 py-px font-mono text-[10px] text-fg-secondary">
           v{page.version}
         </span>
+        {/* RADD-1233: the page's number IS its permalink — shown where the
+            version is, so the stable address is one right-click away. */}
+        <Link
+          {...pagePermalink(page.number)}
+          data-page-number={page.number}
+          title="Permanent link — survives renames and moves"
+          className="shrink-0 rounded bg-elevated px-1.5 py-px font-mono text-[10px] text-fg-secondary hover:text-fg"
+        >
+          #{page.number}
+        </Link>
         <EditingNow people={collab.presence.people} users={users} className="ml-1" />
         <span className="ml-auto flex flex-wrap items-center gap-1">
           <TabButton
@@ -520,10 +530,7 @@ export function PageView({
                   setChangingUrl(false);
                   // The old slug is freed the moment the rename lands — move
                   // to the canonical address rather than 404ing in place.
-                  navigate({
-                    to: RoutePath.page,
-                    params: { spaceSlug, pageSlug: updated.slug },
-                  });
+                  navigate(pageLink(spaceSlug, updated.path));
                 },
               },
             );

@@ -8,6 +8,7 @@
  */
 import type { AuditEntry, AuditSourceValue } from "./types";
 import { RoutePath } from "./constants";
+import { pagePermalink } from "./page-links";
 
 /** Every filter rides in the URL — short inline params, shareable as they are. */
 export interface AuditSearch {
@@ -49,6 +50,7 @@ export function parseAuditSearch(search: Record<string, unknown>): AuditSearch {
 export interface AuditLink {
   to: string;
   params?: Record<string, string>;
+  search?: Record<string, string | number>;
 }
 
 /** Settings pages by entity type — the instance-scoped ones. */
@@ -104,11 +106,11 @@ export function auditEntityLink(entry: AuditEntry): AuditLink | null {
     return { to: RoutePath.issue, params: { itemKey: refs.item.key } };
   }
   if (entry.entity_type === "page") {
+    // RADD-1233: the permalink — a ref written at event time may name a path
+    // that has since moved, and the number (or id) never does.
     const page = refs.page;
-    const space = refs.page_space;
-    if (page && space && typeof page.slug === "string" && typeof space.slug === "string") {
-      return { to: RoutePath.page, params: { spaceSlug: space.slug, pageSlug: page.slug } };
-    }
+    const key = typeof page?.number === "number" ? page.number : page?.id;
+    if (typeof key === "number" || typeof key === "string") return pagePermalink(key);
     return null;
   }
   if (entry.entity_type === "project" && entry.project) {

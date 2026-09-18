@@ -6,7 +6,8 @@ without a database.
 """
 
 import uuid
-from collections.abc import Collection, Mapping
+from collections.abc import Collection, Iterable, Mapping, Sequence
+from typing import Protocol
 
 from .types import MAX_QUERY_CHARS, SLUG_MAX_CHARS, SLUG_SEPARATOR_RE, TSQUERY_TOKEN_RE
 
@@ -92,6 +93,65 @@ def unique_slug(candidate: str, taken: Collection[str]) -> str:
     while f"{candidate}-{suffix}" in taken:
         suffix += 1
     return f"{candidate}-{suffix}"
+
+
+class PathRow(Protocol):
+    """What the path helpers need of a page row — the tree's three columns."""
+
+    id: uuid.UUID
+    parent_id: uuid.UUID | None
+    slug: str
+
+
+def page_paths(rows: Iterable[PathRow]) -> dict[uuid.UUID, str]:
+    """Every row's path — `parent-slug/child-slug/…`, space-relative — from the
+    rows themselves (RADD-1233). Nothing is stored: the tree is loaded whole per
+    space already, so the path is a fold over rows that are in memory anyway.
+    A row whose parent is missing (a restricted ancestor dropped by the reader
+    filter) starts its path where its visible ancestry does."""
+    by_id = {row.id: row for row in rows}
+    cache: dict[uuid.UUID, str] = {}
+
+    def path_of(row: PathRow) -> str:
+        hit = cache.get(row.id)
+        if hit is not None:
+            return hit
+        segments: list[str] = []
+        current: PathRow | None = row
+        for _ in range(len(by_id) + 1):
+            if current is None:
+                break
+            segments.append(current.slug)
+            current = by_id.get(current.parent_id) if current.parent_id else None
+        else:  # a loop in the data: a path that never terminates is no address
+            segments = [row.slug]
+        result = "/".join(reversed(segments))
+        cache[row.id] = result
+        return result
+
+    return {row.id: path_of(row) for row in by_id.values()}
+
+
+def walk_path(rows: Iterable[PathRow], segments: Sequence[str]) -> uuid.UUID | None:
+    """The page at `segments`, walking the tree from the root, or None.
+
+    `rows` need only hold the candidates — the live pages whose slug appears in
+    `segments` — which is what makes resolution one query: the walk matches
+    `parent_id` level by level, and a same-named page at another depth simply
+    never matches its level's parent.
+    """
+    if not segments:
+        return None
+    by_parent: dict[uuid.UUID | None, dict[str, uuid.UUID]] = {}
+    for row in rows:
+        by_parent.setdefault(row.parent_id, {})[row.slug] = row.id
+    parent: uuid.UUID | None = None
+    for segment in segments:
+        found = by_parent.get(parent, {}).get(segment)
+        if found is None:
+            return None
+        parent = found
+    return parent
 
 
 def visible_page_ids(

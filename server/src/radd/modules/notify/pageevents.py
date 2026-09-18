@@ -73,6 +73,7 @@ def _page_payload(page: dict, space: dict) -> dict:
     """
     return {
         "page_id": page.get("id"),
+        "page_number": page.get("number"),
         "page_slug": page.get("slug"),
         "space_slug": space.get("slug"),
         "title": page.get("title"),

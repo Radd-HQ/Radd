@@ -9,7 +9,8 @@
  *    count, and the rendered DOM is measured for break rules.
  *  - RADD-737: with subpages, a contents list and one sheet per child.
  *
- * Usage: node scripts/page-print-proof.mjs <baseUrl> <spaceSlug> <pageSlug> <email> <password>
+ * Usage: node scripts/page-print-proof.mjs <baseUrl> <spaceSlug> <pagePath> <email> <password>
+ *   (RADD-1233: the print view lives at /print/pages/<space>/<path>)
  */
 import { spawn } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -153,10 +154,10 @@ async function main() {
     })()`);
   };
 
-  const single = await visit(`${baseUrl}/pages/${spaceSlug}/${pageSlug}/print`);
+  const single = await visit(`${baseUrl}/print/pages/${spaceSlug}/${pageSlug}`);
   const singlePdf = await send("Page.printToPDF", { printBackground: true }, sessionId);
 
-  const withSubs = await visit(`${baseUrl}/pages/${spaceSlug}/${pageSlug}/print?subpages=1`);
+  const withSubs = await visit(`${baseUrl}/print/pages/${spaceSlug}/${pageSlug}?subpages=1`);
   const subsPdf = await send("Page.printToPDF", { printBackground: true }, sessionId);
 
   if (process.env.RADD_PDF) writeFileSync(process.env.RADD_PDF, Buffer.from(subsPdf.data, "base64"));

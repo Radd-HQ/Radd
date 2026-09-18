@@ -126,14 +126,19 @@ async def pages_with_label(
     # what the space boundary exists to hold.
     if space_ids is not None:
         query = query.where(Page.space_id.in_(space_ids))
-    rows = await session.execute(query)
+    pairs = (await session.execute(query)).all()
+    from . import paths
+
+    page_paths = await paths.paths_for(session, [page for page, _ in pairs])
     return [
         PageLabelled(
             id=page.id,
+            number=page.number,
             title=page.title,
             slug=page.slug,
+            path=page_paths[page.id],
             space_slug=slug,
             updated_at=page.updated_at,
         )
-        for page, slug in rows.all()
+        for page, slug in pairs
     ]

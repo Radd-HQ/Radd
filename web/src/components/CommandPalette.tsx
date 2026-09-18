@@ -21,6 +21,7 @@ import type { LucideIcon } from "lucide-react";
 import { useNavFacts } from "../lib/nav-facts";
 import { PALETTE_SEARCH_LIMIT, RoutePath, SEARCH_DEBOUNCE_MS } from "../lib/constants";
 import { usePermissions } from "../lib/hooks";
+import { pagePermalink } from "../lib/page-links";
 import {
   aiStatusQuery,
   pageSearchQuery,
@@ -263,15 +264,9 @@ export function CommandPalette() {
     } else if (entry.kind === "semantic-item") {
       void navigate({ to: RoutePath.issue, params: { itemKey: entry.result.key } });
     } else if (entry.kind === "doc") {
-      void navigate({
-        to: RoutePath.page,
-        params: { spaceSlug: entry.result.space_id, pageSlug: entry.result.page_id },
-      });
+      void navigate(pagePermalink(entry.result.page_id));
     } else if (entry.kind === "semantic-doc") {
-      void navigate({
-        to: RoutePath.page,
-        params: { spaceSlug: entry.result.space_id, pageSlug: entry.result.page_id },
-      });
+      void navigate(pagePermalink(entry.result.page_id));
     } else if (entry.kind === "action") {
       setNewItemProject(entry.project);
     } else {

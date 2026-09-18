@@ -126,8 +126,10 @@ class PageBacklink(BaseModel):
     backlink may come from ANOTHER space, and the URL needs both segments."""
 
     id: uuid.UUID
+    number: int
     title: str
     slug: str
+    path: str
     space_id: uuid.UUID
     space_slug: str
     updated_at: UtcDatetime
@@ -137,8 +139,10 @@ class PageLabelled(BaseModel):
     """A page carrying a label (RADD-718), for `radd:label-list`."""
 
     id: uuid.UUID
+    number: int
     title: str
     slug: str
+    path: str
     space_slug: str
     updated_at: UtcDatetime
 
@@ -211,9 +215,12 @@ class PageSummary(BaseModel):
     """Flat tree row — the client assembles the hierarchy."""
 
     id: uuid.UUID
+    number: int
     parent_id: uuid.UUID | None
     title: str
     slug: str
+    #: RADD-1233: the space-relative address, `parent-slug/…/slug`.
+    path: str
     position: float
     has_children: bool
     updated_at: UtcDatetime
@@ -224,22 +231,28 @@ class PageSummary(BaseModel):
 
 
 class PageBreadcrumb(BaseModel):
-    """An ancestor in the trail. Carries the slug so the client can build the
-    ancestor's URL without a second fetch (RADD-702)."""
+    """An ancestor in the trail. Carries its path so the client can build the
+    ancestor's URL without a second fetch (RADD-702, RADD-1233)."""
 
     id: uuid.UUID
+    number: int
     title: str
     slug: str
+    path: str
 
 
 class PageRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
+    number: int
     space_id: uuid.UUID
     parent_id: uuid.UUID | None
     title: str
     slug: str
+    #: RADD-1233: the canonical space-relative address. A client that reached
+    #: the page by a stale or permalink address compares and redirects here.
+    path: str
     body: str
     position: float
     version: int

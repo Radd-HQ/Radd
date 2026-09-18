@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCheck, Inbox, X } from "lucide-react";
 import { RoutePath } from "../../lib/constants";
 import { usePeek } from "../../lib/hooks";
+import { pagePermalink } from "../../lib/page-links";
 import {
   useMarkAllNotificationsRead,
   useMarkNotificationsRead,
@@ -36,6 +37,7 @@ export function InboxPeek() {
   const markRead = useMarkNotificationsRead();
   const markAllRead = useMarkAllNotificationsRead();
   const peek = usePeek();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const onToggle = () => setOpen((current) => !current);
@@ -63,6 +65,12 @@ export function InboxPeek() {
       // paint on top anyway) — close the inbox so Esc/backdrop behave sanely.
       setOpen(false);
       peek.open(notification.item_key);
+      return;
+    }
+    const pageKey = notification.detail.page_number ?? notification.detail.page_id;
+    if (pageKey) {
+      setOpen(false);
+      void navigate(pagePermalink(pageKey));
     }
   };
 

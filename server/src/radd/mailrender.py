@@ -54,8 +54,10 @@ def issue_url(base_url: str, key: str) -> str:
     return f"{site(base_url)}{ISSUE_PATH}/{key}"
 
 
-def page_url(base_url: str, space_slug: str, page_slug: str) -> str:
-    return f"{site(base_url)}{PAGE_PATH}/{space_slug}/{page_slug}"
+def page_url(base_url: str, page_key: str | int) -> str:
+    """The PERMALINK (RADD-1233): a page's number (or id) survives every rename
+    and move, which a path assembled from slugs at send time did not."""
+    return f"{site(base_url)}{PAGE_PATH}?pageId={page_key}"
 
 
 def inbox_url(base_url: str) -> str:

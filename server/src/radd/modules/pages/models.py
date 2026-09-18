@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     DateTime,
     Float,
@@ -78,6 +79,14 @@ class PageSpace(Base, TimestampMixin):
     )
 
 
+#: One sequence for every page on the instance — `pages.number`. Created by
+#: the `d1233pagepath` migration; the column's SERVER default draws from it, so
+#: the value comes back with the INSERT (eager_defaults) instead of as a
+#: post-flush lazy load — which in an async session is the MissingGreenlet
+#: error, and is exactly what a SQLAlchemy `Sequence()` default produces.
+PAGE_NUMBER_SEQUENCE = "pages_number_seq"
+
+
 class Page(Base, TimestampMixin):
     """A markdown page in a space's tree. `version` is the optimistic-concurrency
     guard (PATCH with a stale expected_version → 409); content-changing updates
@@ -88,16 +97,32 @@ class Page(Base, TimestampMixin):
     # The tree loads per space and expands per parent; the FTS expression GIN
     # index (to_tsvector('english', title || ' ' || body)) lives in the
     # migration — SQLAlchemy models can't express it declaratively.
-    # `slug` is unique PER SPACE, not globally: two spaces may each have a
-    # `getting-started`, and forcing global uniqueness would make the second one
-    # `getting-started-2` for no reason a reader could see (RADD-702).
+    # RADD-1233: `slug` is unique among LIVE SIBLINGS only — the partial
+    # expression index `uq_pages_live_sibling_slug` (space, coalesce(parent),
+    # slug WHERE archived_at IS NULL) also lives in the migration. The id is the
+    # page's key; the slug is the segment it contributes to a PATH, and a path
+    # is unambiguous exactly when siblings differ. Two pages under different
+    # parents may share a name; an archived page no longer squats on its.
     __table_args__ = (
         Index("ix_pages_space_parent", "space_id", "parent_id"),
-        UniqueConstraint("space_id", "slug", name="uq_pages_space_slug"),
         _external_unique("pages"),
     )
+    # `number` comes from the database (the sequence); fetch it with the INSERT
+    # rather than on first read — in an async session a lazy attribute load
+    # after the flush is the MissingGreenlet error.
+    __mapper_args__ = {"eager_defaults": True}
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    # RADD-1233: the page's HUMAN key — a small instance-wide integer from one
+    # sequence, the way an issue has `RADD-1233`. It is what a permalink
+    # carries (`/pages?pageId=12402`): a UUID in an address nobody can read,
+    # type or say aloud is an identifier only a database could love.
+    number: Mapped[int] = mapped_column(
+        BigInteger,
+        unique=True,
+        nullable=False,
+        server_default=text(f"nextval('{PAGE_NUMBER_SEQUENCE}')"),
+    )
     space_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("page_spaces.id", ondelete="CASCADE")
     )
@@ -105,9 +130,12 @@ class Page(Base, TimestampMixin):
         ForeignKey("pages.id", ondelete="CASCADE"), nullable=True
     )
     title: Mapped[str] = mapped_column(String(500))
-    # The URL segment (RADD-702). Derived from the title at CREATE and then
-    # FROZEN: renaming a page must not break links that already exist, so the
-    # only thing that rewrites a slug is an explicit request to.
+    # The page's segment of its URL path (RADD-702, RADD-1233). Derived from the
+    # title at CREATE and then FROZEN: the only things that rewrite a slug are
+    # an explicit request, and a move or restore that lands beside a live
+    # sibling already using it. Every rewrite leaves the old value in
+    # `page_path_history` (the page's whole old path), so a stale link still
+    # finds the page.
     slug: Mapped[str] = mapped_column(String(120))
     body: Mapped[str] = mapped_column(Text, default="")
     position: Mapped[float] = mapped_column(Float, default=0, server_default="0")
@@ -140,6 +168,31 @@ class PageVersion(Base):
     title: Mapped[str] = mapped_column(String(500))
     body: Mapped[str] = mapped_column(Text)
     author_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class PagePathHistory(Base):
+    """An address this page USED to answer to (RADD-1233).
+
+    Written whenever a page's path changes — an explicit rename, a move, a
+    restore that had to dodge a live sibling — for the page AND every
+    descendant whose path changed with it. The resolver's second step: a path
+    that no longer walks the tree is looked up here EXACTLY, so the address
+    somebody copied last month lands on the page it named, never on a
+    same-named neighbour. Rows go with the page.
+    """
+
+    __tablename__ = "page_path_history"
+    __table_args__ = (Index("ix_page_path_history_space_path", "space_id", "path"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    page_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("pages.id", ondelete="CASCADE"), index=True
+    )
+    space_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("page_spaces.id", ondelete="CASCADE")
+    )
+    path: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 

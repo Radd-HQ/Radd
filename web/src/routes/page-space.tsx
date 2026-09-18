@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Archive, BookOpen, ChevronRight } from "lucide-react";
 import { RoutePath } from "../lib/constants";
 import { usePermissions } from "../lib/hooks";
+import { pageLink } from "../lib/page-links";
 import { archivedPagesQuery, pageByPathQuery, pagesQuery, pageSpaceByIdentityQuery } from "../lib/queries";
 import { Permission } from "../lib/types";
 import { Button } from "../components/Button";
@@ -21,18 +22,24 @@ import { AiResultsContext, type AiResultRequest } from "../components/items/ai-r
 import { ErrorText } from "../components/ErrorText";
 
 /**
- * `/pages/$spaceSlug` (+ `/pages/$spaceSlug/$pageSlug`) — the two-pane pages
+ * `/pages/$spaceSlug` (+ `/pages/$spaceSlug/<path…>`) — the two-pane pages
  * view (spec 43): the collapsible tree beside the selected page.
  *
- * Both segments address by slug OR id (RADD-702), which is what makes the URL
- * migration free: a pre-702 `/docs/<uuid>/<uuid>` link, a search result that
- * only knows ids, and a hand-typed `/pages/handbook/onboarding` all land here,
- * and the effect below rewrites the address bar to the canonical slug form. It
- * REPLACES the history entry — arriving by an old link shouldn't cost the
- * visitor a Back press to escape.
+ * The page segment is a PATH through the tree (RADD-1233), carried by the
+ * splat. The space may be an id; a single page segment may be a number or an
+ * id; a stale path resolves through the page's old addresses (RADD-702's
+ * promise, kept by the server). Whatever address you arrived by, the effect
+ * below rewrites the bar to the canonical one the answer carries. It REPLACES
+ * the history entry — arriving by an old link shouldn't cost the visitor a
+ * Back press to escape.
  */
 export function PageSpacePage() {
-  const { spaceSlug = "", pageSlug } = useParams({ strict: false });
+  const { spaceSlug = "", _splat: pagePath = "" } = useParams({ strict: false }) as {
+    spaceSlug?: string;
+    _splat?: string;
+  };
+  // The tree's `selectedId` and every effect below key on "is a page open".
+  const pageSlug = pagePath || undefined;
   // `?archived=1` (RADD-1228): the archive browser in place of a page.
   const { archived: browsingArchive = false } = useSearch({ strict: false }) as { archived?: boolean };
   const navigate = useNavigate();
@@ -48,7 +55,7 @@ export function PageSpacePage() {
   const archive = useQuery({ ...archivedPagesQuery(space?.id ?? ""), enabled: canBrowseArchive });
   const archivedCount = archive.data ? archivedRows(archive.data).length : 0;
   const page = useQuery({
-    ...pageByPathQuery(spaceSlug, pageSlug ?? ""),
+    ...pageByPathQuery(spaceSlug, pagePath),
     enabled: Boolean(spaceSlug) && Boolean(pageSlug),
   });
 
@@ -67,20 +74,18 @@ export function PageSpacePage() {
   }, []);
 
   const canonicalSpace = space?.slug;
-  const canonicalPage = page.data?.slug;
+  const canonicalPage = page.data?.path;
   useEffect(() => {
     if (!canonicalSpace) return;
     const spaceOff = canonicalSpace !== spaceSlug;
-    const pageOff = Boolean(pageSlug) && Boolean(canonicalPage) && canonicalPage !== pageSlug;
+    const pageOff = Boolean(pageSlug) && Boolean(canonicalPage) && canonicalPage !== pagePath;
     if (!spaceOff && !pageOff) return;
-    void navigate({
-      to: pageSlug ? RoutePath.page : RoutePath.pageSpace,
-      params: pageSlug
-        ? { spaceSlug: canonicalSpace, pageSlug: canonicalPage ?? pageSlug }
-        : { spaceSlug: canonicalSpace },
-      replace: true,
-    });
-  }, [canonicalSpace, canonicalPage, spaceSlug, pageSlug, navigate]);
+    if (pageSlug) {
+      void navigate({ ...pageLink(canonicalSpace, canonicalPage ?? pagePath), replace: true });
+    } else {
+      void navigate({ to: RoutePath.pageSpace, params: { spaceSlug: canonicalSpace }, replace: true });
+    }
+  }, [canonicalSpace, canonicalPage, spaceSlug, pageSlug, pagePath, navigate]);
 
   if (spaceQuery.isPending || (Boolean(space) && pages.isPending)) {
     return <Spinner label="Loading pages…" />;

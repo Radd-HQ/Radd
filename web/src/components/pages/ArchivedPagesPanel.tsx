@@ -4,7 +4,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Archive, ArchiveRestore, ExternalLink } from "lucide-react";
 import { api } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
-import { RoutePath, apiPageUnarchivePath } from "../../lib/constants";
+import { apiPageUnarchivePath } from "../../lib/constants";
+import { pageLink } from "../../lib/page-links";
 import { formatDateTime } from "../../lib/dates";
 import type { Page, PageSummary } from "../../lib/types";
 import { Button } from "../Button";
@@ -130,8 +131,7 @@ function ArchivedPageRow({ row, spaceSlug }: { row: ArchivedRow; spaceSlug: stri
     >
       <div className="min-w-0 flex-1">
         <Link
-          to={RoutePath.page}
-          params={{ spaceSlug, pageSlug: page.slug }}
+          {...pageLink(spaceSlug, page.path)}
           className="flex min-w-0 items-center gap-1.5 text-sm font-medium text-heading hover:underline"
         >
           <span className="min-w-0 truncate">{page.title}</span>

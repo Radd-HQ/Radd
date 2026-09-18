@@ -58,6 +58,7 @@ def receipt(page: Page) -> dict[str, Any]:
     the edit landed (the version moved), never the body."""
     return {
         "id": str(page.id),
+        "number": page.number,
         "slug": page.slug,
         "title": page.title,
         "version": page.version,
@@ -163,7 +164,7 @@ SEARCH_PAGES = McpToolSpec(
 CREATE_PAGE = McpToolSpec(
     name="create_page",
     description="Create a wiki page in a space. Answers with a receipt "
-    "(id, slug, title, version, parent_id), not the body.",
+    "(id, number, slug, title, version, parent_id), not the body.",
     input_schema=object_schema(
         {
             "space": {"type": "string", "description": "Space SLUG (or id)."},

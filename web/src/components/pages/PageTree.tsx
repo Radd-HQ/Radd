@@ -4,7 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, CornerLeftUp, FilePlus, FileText, MoreHorizontal, Plus } from "lucide-react";
 import { api } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
-import { ApiPath, RoutePath, pageTreeExpandStorageKey } from "../../lib/constants";
+import { ApiPath, pageTreeExpandStorageKey } from "../../lib/constants";
+import { pageLink } from "../../lib/page-links";
 import type { Page, PageCreate, PageTemplate } from "../../lib/types";
 import { DropdownMenu } from "../DropdownMenu";
 import { ListSearchInput } from "../ListSearchInput";
@@ -20,6 +21,8 @@ interface PageTreeRow {
   parent_id: string | null;
   title: string;
   slug: string;
+  /** RADD-1233: the row's space-relative address — what its link carries. */
+  path: string;
   position: number;
 }
 
@@ -78,7 +81,7 @@ export function PageTree({
   canWrite,
 }: {
   spaceId: string;
-  /** The space's URL segment — rows build `/pages/<space>/<page>` (RADD-702). */
+  /** The space's URL segment — rows build `/pages/<space>/<path>` (RADD-702, RADD-1233). */
   spaceSlug: string;
   rows: PageTreeRow[];
   selectedId?: string;
@@ -261,8 +264,7 @@ function TreeRow({
           <FileText size={12} className="ml-0.5 shrink-0 text-fg-faint" aria-hidden />
         )}
         <Link
-          to={RoutePath.page}
-          params={{ spaceSlug, pageSlug: row.slug }}
+          {...pageLink(spaceSlug, row.path)}
           className="min-w-0 flex-1 truncate py-1"
         >
           {row.title}
@@ -354,7 +356,7 @@ function NewPageButton({
         template,
       } satisfies PageCreate),
     onSuccess: (page) =>
-      void navigate({ to: RoutePath.page, params: { spaceSlug, pageSlug: page.slug } }),
+      void navigate(pageLink(spaceSlug, page.path)),
     onSettled: () => void invalidateEntities(queryClient, Entity.page, Entity.docSpace),
   });
 

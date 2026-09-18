@@ -339,7 +339,9 @@ def test_nothing_a_person_typed_survives_as_markup():
 
 def test_a_trailing_slash_on_the_base_url_does_not_double_up():
     assert mailrender.issue_url("https://radd.example.com/", "MR-1") == f"{BASE_URL}/issues/MR-1"
-    assert mailrender.page_url(BASE_URL, "ops", "runbook") == f"{BASE_URL}/pages/ops/runbook"
+    # RADD-1233: mail links a page by its PERMALINK — a number, or an id for
+    # notifications written before pages were numbered.
+    assert mailrender.page_url(BASE_URL, 12402) == f"{BASE_URL}/pages?pageId=12402"
     assert mailrender.inbox_url(BASE_URL + "//") == f"{BASE_URL}/inbox"
 
 
@@ -471,8 +473,12 @@ DIGEST_PAYLOADS = {
     NotificationType.SLA_DUE_SOON: {"kind": "response", "policy": "Support"},
     NotificationType.AUTOMATION: {"message": "Escalated to tier 2", "rule": "Escalate"},
     NotificationType.APPROVAL: {"action": "requested", "to_state": "Released"},
+    # RADD-1233: a page line links the PERMALINK; the slugs stay for the row's
+    # text, never for its link.
     NotificationType.PAGE_UPDATED: {
         "title": "Render farm runbook",
+        "page_id": "6d1c2a7e-1111-4bd6-9f5a-000000000001",
+        "page_number": 42,
         "space_slug": "ops",
         "page_slug": "render-farm-runbook",
     },
@@ -487,6 +493,7 @@ DIGEST_PAYLOADS = {
     NotificationType.UPDATED: {"fields": ["priority", "labels"]},
     NotificationType.PAGE_CREATED: {
         "title": "Colour pipeline",
+        "page_id": "6d1c2a7e-1111-4bd6-9f5a-000000000002",
         "space_slug": "ops",
         "page_slug": "colour-pipeline",
     },
@@ -543,7 +550,7 @@ def test_an_issue_line_links_the_issue_and_a_page_line_links_the_page():
         {},
     )
     assert commented.url == f"{BASE_URL}/issues/MR-1"
-    assert page.url == f"{BASE_URL}/pages/ops/render-farm-runbook"
+    assert page.url == f"{BASE_URL}/pages?pageId=42"
 
 
 def test_a_notification_with_no_item_key_carries_no_link():
@@ -588,7 +595,9 @@ def test_the_digest_renders_both_parts_and_always_offers_the_inbox():
     for part in (message.text, message.html):
         assert f"{BASE_URL}/inbox" in part
         assert f"{BASE_URL}/issues/MR-1" in part
-        assert f"{BASE_URL}/pages/ops/render-farm-runbook" in part
+        assert f"{BASE_URL}/pages?pageId=42" in part
+        # A row written before pages were numbered still links, by id.
+        assert f"{BASE_URL}/pages?pageId=6d1c2a7e-1111-4bd6-9f5a-000000000002" in part
     assert message.html.lstrip().startswith("<html")
 
 

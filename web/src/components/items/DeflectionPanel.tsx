@@ -6,6 +6,7 @@ import { useDebounced, useOpenIssueRef } from "../../lib/hooks";
 import { deflectQuery } from "../../lib/queries";
 import type { DeflectPage, DeflectItem } from "../../lib/types";
 import { SimilarHoverCard, useIssuePreview } from "./SimilarHoverCard";
+import { pagePermalink } from "../../lib/page-links";
 
 interface DeflectionPanelProps {
   /** The half-typed issue title driving the lookup. */
@@ -53,8 +54,7 @@ export function DeflectPagesSection({ docs }: { docs: DeflectPage[] }) {
         {docs.map((doc) => (
           <li key={doc.id}>
             <Link
-              to={RoutePath.page}
-              params={{ spaceSlug: doc.space_id, pageSlug: doc.id }}
+              {...pagePermalink(doc.id)}
               target="_blank"
               rel="noreferrer"
               className="group flex items-baseline gap-1.5 text-xs text-fg hover:text-accent-text"

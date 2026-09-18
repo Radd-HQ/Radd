@@ -154,8 +154,9 @@ export const queryKeys = {
     ["pageVersion", { pageId, version }] as const,
   pageItems: (pageId: string) => ["pageItems", { pageId }] as const,
   itemPages: (itemId: string) => ["itemPages", { itemId }] as const,
-  pageByPath: (spaceSlug: string, pageSlug: string) =>
-    ["pageByPath", { spaceSlug, pageSlug }] as const,
+  pageByPath: (spaceSlug: string, path: string) =>
+    ["pageByPath", { spaceSlug, path }] as const,
+  pageByKey: (key: string) => ["pageByKey", { key }] as const,
   docsSearch: (q: string, limit?: number) => ["docsSearch", { q, limit }] as const,
   deflect: (q: string, projectId: string) => ["deflect", { q, projectId }] as const,
   totp: ["auth", "totp"] as const,

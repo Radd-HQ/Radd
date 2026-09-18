@@ -93,7 +93,7 @@ def headline(type_: NotificationType, actor: str, payload: dict) -> str:
 
 
 #: Notification kinds whose subject is a PAGE, not an issue — they carry the
-#: wiki payload (`space_slug`/`page_slug`/`title`) and link into `/pages/`.
+#: wiki payload (`page_id`/`page_number`/`title`) and link to the page permalink.
 _PAGE_KINDS = frozenset(
     {NotificationType.PAGE_UPDATED, NotificationType.PAGE_CREATED}
 )
@@ -117,11 +117,13 @@ def entry(notification: Notification, actor_names: dict[uuid.UUID, str]) -> mail
     line = headline(type_, actor_name(notification, actor_names), payload)
     base = settings.app_base_url
     if type_ in _PAGE_KINDS:
-        space, page = payload.get("space_slug"), payload.get("page_slug")
+        # RADD-1233: the permalink — the payload's number when it has one, the
+        # id otherwise (rows written before pages were numbered).
+        key = payload.get("page_number") or payload.get("page_id")
         return mailrender.DigestEntry(
             headline=line,
             subject=payload.get("title") or "",
-            url=mailrender.page_url(base, space, page) if space and page else "",
+            url=mailrender.page_url(base, key) if key else "",
         )
     key = payload.get("item_key") or ""
     title = payload.get("item_title") or ""

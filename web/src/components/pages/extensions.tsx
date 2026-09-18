@@ -11,7 +11,6 @@ import {
   Tags,
   OctagonAlert,
 } from "lucide-react";
-import { RoutePath } from "../../lib/constants";
 import { comparePagesNaturally } from "./PageTree";
 import {
   ExtensionCard,
@@ -26,6 +25,7 @@ import { Markdown, MarkdownSourceCtx } from "../../lib/markdown";
 import { IncludedPage } from "./IncludedPage";
 import { NewFromTemplate } from "./NewFromTemplate";
 import { IMPORT_EXTENSIONS } from "./ImportExtensions";
+import { pageLink } from "../../lib/page-links";
 
 /**
  * The first-party page extensions (RADD-710 / RADD-715).
@@ -87,8 +87,7 @@ function TableOfContents({ params }: { params: Record<string, unknown> }) {
             {subpages.map(({ page, level }) => (
               <li key={page.id} style={{ paddingLeft: `${level * 12}px` }}>
                 <Link
-                  to={RoutePath.page}
-                  params={{ spaceSlug: ctx.spaceSlug ?? "", pageSlug: page.slug }}
+                  {...pageLink(ctx.spaceSlug ?? "", page.path)}
                   className="flex items-center gap-1 text-[13px] text-accent-text hover:underline"
                 >
                   <ChevronRight size={11} aria-hidden className="shrink-0 text-fg-faint" />
@@ -157,14 +156,13 @@ function ChildPages({ params }: { params: Record<string, unknown> }) {
           <section key={page.id}>
             <h2 className="mt-4 mb-1 text-lg font-semibold text-heading">
               <Link
-                to={RoutePath.page}
-                params={{ spaceSlug: ctx.spaceSlug ?? "", pageSlug: page.slug }}
+                {...pageLink(ctx.spaceSlug ?? "", page.path)}
                 className="hover:underline"
               >
                 {page.title}
               </Link>
             </h2>
-            <IncludedPage params={{ page: page.slug }} />
+            <IncludedPage params={{ page: page.path }} />
           </section>
         ))}
       </div>
@@ -179,8 +177,7 @@ function ChildPages({ params }: { params: Record<string, unknown> }) {
           {list.map(({ page, level }) => (
             <li key={page.id} style={{ paddingLeft: `${level * 12}px` }}>
               <Link
-                to={RoutePath.page}
-                params={{ spaceSlug: ctx.spaceSlug ?? "", pageSlug: page.slug }}
+                {...pageLink(ctx.spaceSlug ?? "", page.path)}
                 className="flex items-center gap-1 text-[13px] text-accent-text hover:underline"
               >
                 <ListTree size={11} aria-hidden className="shrink-0 text-fg-faint" />
@@ -215,8 +212,7 @@ export function Backlinks() {
           {data.map((page) => (
             <li key={page.id}>
               <Link
-                to={RoutePath.page}
-                params={{ spaceSlug: page.space_slug, pageSlug: page.slug }}
+                {...pageLink(page.space_slug, page.path)}
                 className="flex items-center gap-1 text-[13px] text-accent-text hover:underline"
               >
                 <Link2 size={11} aria-hidden className="shrink-0 text-fg-faint" />
@@ -269,8 +265,7 @@ function LabelList({ params }: { params: Record<string, unknown> }) {
           {data.map((page) => (
             <li key={page.id}>
               <Link
-                to={RoutePath.page}
-                params={{ spaceSlug: page.space_slug, pageSlug: page.slug }}
+                {...pageLink(page.space_slug, page.path)}
                 className="flex items-center gap-1 text-[13px] text-accent-text hover:underline"
               >
                 <Tags size={11} aria-hidden className="shrink-0 text-fg-faint" />

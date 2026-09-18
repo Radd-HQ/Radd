@@ -2,7 +2,7 @@ import { createContext, useContext } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
-import { RoutePath } from "../../lib/constants";
+import { pageLink } from "../../lib/page-links";
 import { pageByPathQuery } from "../../lib/queries";
 import { ExtensionCard, usePageExtensionContext } from "../../lib/page-extensions";
 import { PageBody } from "./PageBody";
@@ -33,21 +33,25 @@ export function IncludedPage({ params }: { params: Record<string, unknown> }) {
   const chain = useContext(IncludeChainCtx);
   const raw = typeof params.page === "string" ? params.page.trim() : "";
 
-  // `space/page` addresses another space; a bare slug means "this space".
-  const [spaceSlug, pageSlug] = raw.includes("/")
-    ? (raw.split("/").slice(-2) as [string, string])
-    : [ctx.spaceSlug ?? "", raw];
+  // RADD-1233: `page` is a PATH in this space (`slug/slug`), or a page number;
+  // `<space>:<path>` reaches into another space. The colon, not a slash — a
+  // slash is a path separator now, so `a/b` has to mean "b under a, here".
+  const colon = raw.indexOf(":");
+  const [spaceSlug, pagePath] =
+    colon > 0 ? [raw.slice(0, colon), raw.slice(colon + 1)] : [ctx.spaceSlug ?? "", raw];
 
   const { data, isLoading, isError, error } = useQuery({
-    ...pageByPathQuery(spaceSlug, pageSlug),
-    enabled: Boolean(spaceSlug && pageSlug),
+    ...pageByPathQuery(spaceSlug, pagePath),
+    enabled: Boolean(spaceSlug && pagePath),
   });
 
   if (!raw) {
     return (
       <ExtensionCard label="Include">
         <p className="text-[13px] text-fg-secondary">
-          Set <code className="font-mono">page</code> to the slug of the page to include.
+          Set <code className="font-mono">page</code> to the path of the page to include
+          (<code className="font-mono">parent/child</code>), its number, or{" "}
+          <code className="font-mono">space:path</code> for a page in another space.
         </p>
       </ExtensionCard>
     );
@@ -96,8 +100,7 @@ export function IncludedPage({ params }: { params: Record<string, unknown> }) {
           Included from
         </span>
         <Link
-          to={RoutePath.page}
-          params={{ spaceSlug, pageSlug: data.slug }}
+          {...pageLink(data.space.slug, data.path)}
           className="flex items-center gap-1 text-[12px] text-accent-text hover:underline"
         >
           {data.title}

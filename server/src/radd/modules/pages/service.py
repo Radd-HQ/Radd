@@ -32,7 +32,7 @@ from . import (
 )
 from .core import page_slugify
 from .hooks import PageBodyWriting, PageHook, PageVersionBumped
-from .models import Page, PageSpace, PageVersion
+from .models import Page, PagePathHistory, PageSpace, PageVersion
 
 if TYPE_CHECKING:  # deferred: auth loads before pages
     from radd.modules.auth.models import User
@@ -126,13 +126,17 @@ async def list_pages(
     # RADD-718: one query for the whole tree. A query per row is how a 200-page
     # space becomes slow the moment labels are shown in the rail.
     label_names = await page_labels.labels_for_pages(session, [row.id for row in rows])
+    # RADD-1233: paths fold over the rows already in hand — no extra query.
+    row_paths = core.page_paths(rows)
     return sorted(
         (
             PageSummary(
                 id=row.id,
+                number=row.number,
                 parent_id=row.parent_id,
                 title=row.title,
                 slug=row.slug,
+                path=row_paths[row.id],
                 position=row.position,
                 has_children=row.id in children,
                 updated_at=row.updated_at,
@@ -160,60 +164,72 @@ async def _next_position(
 #: RADD-860: the slugs the create-flow placeholder produces — upgradeable.
 _PLACEHOLDER_SLUG_RE = re.compile(r"untitled(-\d+)?")
 
+#: `_reslug`'s "keep the page's current parent" sentinel — None is a real parent.
+_SAME_PARENT = object()
+
 
 async def _free_slug(
     session: AsyncSession,
     space_id: uuid.UUID,
+    parent_id: uuid.UUID | None,
     candidate: str,
     *,
     exclude_id: uuid.UUID | None = None,
 ) -> str:
-    """`candidate` made unique within the space (RADD-702). The taken set is read
-    per call rather than caught as an IntegrityError: a 409 on 'a page over there
-    already uses this URL' would be a strange thing to show someone who only
-    typed a title."""
-    query = select(Page.slug).where(Page.space_id == space_id)
+    """`candidate` made unique among the LIVE SIBLINGS under `parent_id`
+    (RADD-1233; per-space before that). The taken set is read per call rather
+    than caught as an IntegrityError: a 409 on 'a page over there already uses
+    this URL' would be a strange thing to show someone who only typed a title.
+    Archived siblings do not count — the name is free the moment its holder is
+    archived, which is the point of keying pages by id."""
+    query = select(Page.slug).where(
+        Page.space_id == space_id, Page.parent_id == parent_id, Page.archived_at.is_(None)
+    )
     if exclude_id is not None:
         query = query.where(Page.id != exclude_id)
     taken = set((await session.execute(query)).scalars())
     return core.unique_slug(page_slugify(candidate), taken)
 
 
-async def resolve_page_by_slug(session: AsyncSession, space_slug: str, page_slug: str) -> Page:
-    """`/pages/<space>/<page>` → the page. Both segments accept an ID as well as
-    a slug, which is what keeps every UUID URL ever shared alive (RADD-702)."""
-    space = await _space_by_slug_or_id(session, space_slug)
-    page = (
-        await session.execute(
-            select(Page).where(Page.space_id == space.id, Page.slug == page_slug)
-        )
-    ).scalar_one_or_none()
-    if page is None:
-        page = await _page_by_id_text(session, page_slug, space.id)
-    if page is None:
-        raise NotFoundError(PageEntity.PAGE, f"{space_slug}/{page_slug}")
-    return page
+async def _reslug(
+    session: AsyncSession,
+    page: Page,
+    candidate: str,
+    *,
+    parent_id: uuid.UUID | None | object = _SAME_PARENT,
+) -> bool:
+    """Give `page` the slug `candidate`, made free among its live siblings —
+    under `parent_id` when a move is in flight, since the siblings it must not
+    collide with are the ones it is about to have. True if it changed.
+
+    Runs BEFORE the caller assigns a new parent: the taken-set query autoflushes
+    pending changes, and a flushed row with the new parent and the old slug is
+    the unique violation this function exists to avoid. Remembering the old
+    ADDRESS is `_remember_paths`' job, once every change of the write is in."""
+    under = page.parent_id if parent_id is _SAME_PARENT else parent_id
+    slug = await _free_slug(session, page.space_id, under, candidate, exclude_id=page.id)
+    if slug == page.slug:
+        return False
+    page.slug = slug
+    return True
 
 
-async def _space_by_slug_or_id(session: AsyncSession, value: str) -> PageSpace:
-    from .spaces import by_slug_or_id
-
-    return await by_slug_or_id(session, value)
-
-
-async def _page_by_id_text(
-    session: AsyncSession, value: str, space_id: uuid.UUID
-) -> Page | None:
-    try:
-        page_id = uuid.UUID(value)
-    except ValueError:
-        return None
-    page = (
-        await session.execute(
-            select(Page).where(Page.id == page_id, Page.space_id == space_id)
-        )
-    ).scalar_one_or_none()
-    return page
+def _remember_paths(
+    session: AsyncSession, rows: list[Page], before: dict[uuid.UUID, str]
+) -> list[uuid.UUID]:
+    """Write a `page_path_history` row for every page whose address changed
+    between `before` (paths computed over `rows` before the write) and now.
+    `rows` are the space's ORM rows, mutated in place by the write, so the
+    'after' fold costs no query. A renamed or moved ancestor moves its whole
+    subtree's addresses, and every one of them is a link somebody may hold."""
+    after = core.page_paths(rows)
+    changed: list[uuid.UUID] = []
+    for row in rows:
+        old = before.get(row.id)
+        if old is not None and old != after.get(row.id):
+            session.add(PagePathHistory(page_id=row.id, space_id=row.space_id, path=old))
+            changed.append(row.id)
+    return changed
 
 
 def _may_import(permissions: "frozenset" = frozenset()) -> bool:
@@ -289,7 +305,9 @@ async def create_page(
         space_id=space.id,
         parent_id=data.parent_id,
         title=data.title,
-        slug=await _free_slug(session, space.id, data.slug or page_slugify(data.title)),
+        slug=await _free_slug(
+            session, space.id, data.parent_id, data.slug or page_slugify(data.title)
+        ),
         body=body,
         position=position,
         created_by=author_id,
@@ -396,6 +414,16 @@ async def update_page(
 
     changed: list[str] = []
     moved = False
+    # RADD-1233: anything that can change the page's ADDRESS — a move, a slug,
+    # or a title that upgrades a placeholder slug — snapshots the space's paths
+    # first, so the old ones can be remembered for stale links afterwards.
+    address_may_change = (
+        ("parent_id" in data.model_fields_set and data.parent_id != page.parent_id)
+        or (data.slug is not None and data.slug != page.slug)
+        or (data.title is not None and _PLACEHOLDER_SLUG_RE.fullmatch(page.slug) is not None)
+    )
+    space_rows = await _space_rows(session, page.space_id) if address_may_change else []
+    paths_before = core.page_paths(space_rows) if address_may_change else {}
     if "parent_id" in data.model_fields_set and data.parent_id != page.parent_id:
         if data.parent_id is not None:
             parent = await get_page(session, data.parent_id)
@@ -406,11 +434,15 @@ async def update_page(
                 parent_actor = await get_user(session, actor_id)
                 await page_access.guard_page(session, parent_actor, parent.id, authz.Permission.PAGE_READ)
                 await page_access.guard_page(session, parent_actor, parent.id, authz.Permission.PAGE_WRITE)
-            parent_of = {
-                row.id: row.parent_id for row in await _space_rows(session, page.space_id)
-            }
+            parent_of = {row.id: row.parent_id for row in space_rows}
             if core.would_create_cycle(page.id, data.parent_id, parent_of):
                 raise ConflictError(PageEntity.PAGE, reason="move would create a cycle")
+        # RADD-1233: the slug is unique among SIBLINGS, and the page is about
+        # to change which pages those are. A collision under the new parent
+        # gets the numbered suffix, with the old slug remembered for stale
+        # links. Decided BEFORE the parent moves (see `_reslug`).
+        if await _reslug(session, page, page.slug, parent_id=data.parent_id):
+            changed.append("slug")
         page.parent_id = data.parent_id
         changed.append("parent_id")
         moved = True
@@ -425,18 +457,18 @@ async def update_page(
     # "Untitled" → `untitled-N`, and a URL nobody chose protects nobody — the
     # first REAL title upgrades it. Established slugs stay immovable.
     if data.slug is not None and data.slug != page.slug:
-        page.slug = await _free_slug(
-            session, page.space_id, page_slugify(data.slug), exclude_id=page.id
-        )
-        changed.append("slug")
+        if await _reslug(session, page, data.slug) and "slug" not in changed:
+            changed.append("slug")
     elif (
         data.title is not None
         and data.title != page.title
         and _PLACEHOLDER_SLUG_RE.fullmatch(page.slug)
         and page_slugify(data.title) not in ("untitled", "page")
     ):
-        page.slug = await _free_slug(session, page.space_id, data.title, exclude_id=page.id)
-        changed.append("slug")
+        if await _reslug(session, page, data.title) and "slug" not in changed:
+            changed.append("slug")
+    if address_may_change:
+        _remember_paths(session, space_rows, paths_before)
 
     if core.should_snapshot(page.title, page.body, data.title, data.body):
         importing = _may_import(permissions)
@@ -543,7 +575,9 @@ async def unarchive_page(
     reachable.
     """
     page = await get_page(session, page_id)
-    by_id = {row.id: row for row in await _space_rows(session, page.space_id)}
+    space_rows = await _space_rows(session, page.space_id)
+    paths_before = core.page_paths(space_rows)
+    by_id = {row.id: row for row in space_rows}
     chain: list[Page] = [page]
     current = page.parent_id
     for _ in range(len(by_id) + 1):
@@ -556,12 +590,16 @@ async def unarchive_page(
         current = ancestor.parent_id
     for row in chain:
         if row.archived_at is not None:
+            # RADD-1233: while it was archived a live sibling may have taken
+            # its name; the restored page yields, and the event says so.
+            payload: dict = {"title": row.title, "action": RestoreKind.UNARCHIVE}
+            previous = row.slug
+            if await _reslug(session, row, row.slug):
+                payload["slug_was"] = previous
             row.archived_at = None
             await session.flush()
-            await _emit_page(
-                session, PageEvent.PAGE_RESTORED, row, actor_id,
-                {"title": row.title, "action": RestoreKind.UNARCHIVE},
-            )
+            await _emit_page(session, PageEvent.PAGE_RESTORED, row, actor_id, payload)
+    _remember_paths(session, space_rows, paths_before)
     return page
 
 
@@ -602,6 +640,7 @@ async def page_read(session: AsyncSession, page: Page) -> PageRead:
     """Full page + its space + the ancestor breadcrumb trail (root first)."""
     space = await get_space(session, page.space_id)
     by_id = {row.id: row for row in await _space_rows(session, page.space_id)}
+    row_paths = core.page_paths(by_id.values())
     trail: list[PageBreadcrumb] = []
     current = page.parent_id
     for _ in range(len(by_id) + 1):
@@ -610,16 +649,26 @@ async def page_read(session: AsyncSession, page: Page) -> PageRead:
         ancestor = by_id.get(current)
         if ancestor is None:
             break
-        trail.append(PageBreadcrumb(id=ancestor.id, title=ancestor.title, slug=ancestor.slug))
+        trail.append(
+            PageBreadcrumb(
+                id=ancestor.id,
+                number=ancestor.number,
+                title=ancestor.title,
+                slug=ancestor.slug,
+                path=row_paths[ancestor.id],
+            )
+        )
         current = ancestor.parent_id
     label_names = [label.name for label in await page_labels.labels_of(session, page.id)]
     return PageRead(
         id=page.id,
+        number=page.number,
         labels=label_names,
         space_id=page.space_id,
         parent_id=page.parent_id,
         title=page.title,
         slug=page.slug,
+        path=row_paths.get(page.id, page.slug),
         body=page.body,
         position=page.position,
         version=page.version,

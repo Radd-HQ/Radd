@@ -13,15 +13,18 @@ indexed lookup.
 **What counts as a link.** Whatever the editor actually emits for an internal
 page reference:
 
-  - `/pages/<space-slug>/<page-slug>` — the canonical form since RADD-702,
+  - `/pages/<space-slug>/<path…>` — the canonical form (RADD-702, RADD-1233:
+    the path has as many segments as the page is deep),
   - the same path with the instance's origin in front, because pasting a URL
     from the address bar is how most links get made,
+  - `/pages?pageId=<number|uuid>` — the permalink (RADD-1233),
   - `/pages/<uuid>` and bare page UUIDs in a link target, which is what pre-702
     links look like and what the API still accepts.
 
-Resolution is by (space slug, page slug) and falls back to the id form. A link
-that resolves to nothing is simply not indexed: pages are written before they
-exist, and a dangling link is a normal state of a wiki, not an error to report.
+Resolution runs the same resolver the address bar does (`paths.resolve`), so a
+link counts as a backlink exactly when clicking it would land. A link that
+resolves to nothing is simply not indexed: pages are written before they exist,
+and a dangling link is a normal state of a wiki, not an error to report.
 """
 
 from __future__ import annotations
@@ -45,49 +48,58 @@ _LINK_TARGET = re.compile(
 _HTML_HREF = re.compile(r"""href\s*=\s*["'](?P<url>[^"']+)""")
 
 _PAGES_PATH = re.compile(
-    r"(?:^|//[^/]+)?/pages/(?P<first>[^/?#\s]+)(?:/(?P<second>[^/?#\s]+))?"
+    r"(?:^|//[^/]+)?/pages/(?P<first>[^/?#\s]+)(?:/(?P<rest>[^?#\s]+))?"
 )
+_PERMALINK = re.compile(r"(?:^|//[^/]+)?/pages\?(?:[^#\s]*&)?pageId=(?P<key>[^&#\s]+)")
 
 
-def _targets(body: str) -> tuple[set[tuple[str, str]], set[uuid.UUID]]:
-    """(space-slug, page-slug) pairs and bare page ids referenced by `body`."""
-    slugs: set[tuple[str, str]] = set()
-    ids: set[uuid.UUID] = set()
+def _targets(body: str) -> tuple[set[tuple[str, str]], set[str]]:
+    """(space-slug, path) pairs and page KEYS (a uuid or a number, as text)
+    referenced by `body`."""
+    paths_: set[tuple[str, str]] = set()
+    keys: set[str] = set()
     urls = [match.group("url") for match in _LINK_TARGET.finditer(body)]
     urls += [match.group("url") for match in _HTML_HREF.finditer(body)]
     for url in urls:
+        permalink = _PERMALINK.search(url)
+        if permalink:
+            keys.add(permalink.group("key"))
+            continue
         found = _PAGES_PATH.search(url)
         if not found:
             continue
-        first, second = found.group("first"), found.group("second")
-        if second:
-            slugs.add((first, second))
+        first, rest = found.group("first"), found.group("rest")
+        if rest:
+            paths_.add((first, rest))
             continue
         # `/pages/<uuid>` — the pre-702 shape.
         try:
-            ids.add(uuid.UUID(first))
+            keys.add(str(uuid.UUID(first)))
         except ValueError:
             continue
-    return slugs, ids
+    return paths_, keys
 
 
 async def resolve_targets(session: AsyncSession, body: str) -> set[uuid.UUID]:
     """The page ids `body` links to. Unresolvable links are dropped, not raised:
     linking to a page you are about to write is ordinary wiki behaviour."""
-    slugs, ids = _targets(body)
+    from radd.exceptions import NotFoundError
+
+    from . import paths
+    from .spaces import by_slug_or_id
+
+    page_paths, keys = _targets(body)
     resolved: set[uuid.UUID] = set()
-    if ids:
-        rows = await session.execute(select(Page.id).where(Page.id.in_(ids)))
-        resolved |= set(rows.scalars())
-    for space_slug, page_slug in slugs:
-        row = await session.execute(
-            select(Page.id)
-            .join(PageSpace, PageSpace.id == Page.space_id)
-            .where(PageSpace.slug == space_slug, Page.slug == page_slug)
-        )
-        found = row.scalar_one_or_none()
-        if found is not None:
-            resolved.add(found)
+    for key in keys:
+        page = await paths.by_key(session, key)
+        if page is not None:
+            resolved.add(page.id)
+    for space_slug, path in page_paths:
+        try:
+            space = await by_slug_or_id(session, space_slug)
+            resolved.add((await paths.resolve(session, space, path)).id)
+        except NotFoundError:
+            continue
     return resolved
 
 
@@ -125,11 +137,16 @@ async def backlink_reads(session: AsyncSession, page_id: uuid.UUID, *, actor=Non
         from .page_access import readable_page_ids
         allowed = await readable_page_ids(session, actor, [page for page, _ in pairs])
         pairs = [(page, slug) for page, slug in pairs if page.id in allowed]
+    from . import paths
+
+    page_paths = await paths.paths_for(session, [page for page, _ in pairs])
     return [
         PageBacklink(
             id=page.id,
+            number=page.number,
             title=page.title,
             slug=page.slug,
+            path=page_paths[page.id],
             space_id=page.space_id,
             space_slug=space_slug,
             updated_at=page.updated_at,

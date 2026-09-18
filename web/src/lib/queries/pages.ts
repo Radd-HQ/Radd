@@ -18,6 +18,7 @@ import {
   apiItemPagesPath,
 } from "../constants";
 import { queryKeys } from "./shared";
+import { encodePath } from "../page-links";
 import type {
   PageLinkedItem,
   PageTemplate,
@@ -142,15 +143,30 @@ export const pageQuery = (pageId: string) =>
     retry: false,
   });
 
-/** A page addressed the way the URL addresses it (RADD-702): `<space>/<page>`,
- *  where either segment may be a slug OR an id — which is what lets a pre-702
- *  UUID link resolve so the view can redirect it to the canonical slug URL. */
-export const pageByPathQuery = (spaceSlug: string, pageSlug: string) =>
+/** A page addressed the way the URL addresses it (RADD-702, RADD-1233):
+ *  `<space>/<slug>/<slug>/…`. The space may be an id; a single page segment
+ *  may be a number or an id; a stale path resolves through the page's old
+ *  addresses. The answer carries the canonical `path`, and the view redirects
+ *  to it when the address it arrived by differs. */
+export const pageByPathQuery = (spaceSlug: string, path: string) =>
   queryOptions({
-    queryKey: queryKeys.pageByPath(spaceSlug, pageSlug),
+    queryKey: queryKeys.pageByPath(spaceSlug, path),
     meta: entityMeta(Entity.page),
     queryFn: ({ signal }) =>
-      api.get<Page>(`${ApiPath.pages}/by-path/${encodeURIComponent(spaceSlug)}/${encodeURIComponent(pageSlug)}`, { signal }),
+      api.get<Page>(`${ApiPath.pages}/by-path/${encodeURIComponent(spaceSlug)}/${encodePath(path)}`, { signal }),
+    retry: false,
+  });
+
+/** The permalink lookup (RADD-1233): `?pageId=<number>`, or a UUID for links
+ *  minted before pages were numbered. */
+export const pageByKeyQuery = (key: string) =>
+  queryOptions({
+    queryKey: queryKeys.pageByKey(key),
+    meta: entityMeta(Entity.page),
+    queryFn: ({ signal }) =>
+      /^\d+$/.test(key)
+        ? api.get<Page>(`${ApiPath.pages}/by-number/${key}`, { signal })
+        : api.get<Page>(apiPagePath(key), { signal }),
     retry: false,
   });
 

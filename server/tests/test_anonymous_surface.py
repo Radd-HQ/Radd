@@ -79,7 +79,9 @@ ANONYMOUS_ROUTES: frozenset[tuple[str, str]] = frozenset(
         ("GET", "/api/v1/page-spaces/by-identity/{identifier}"),
         ("GET", "/api/v1/page-spaces/{space_id}/pages"),
         ("GET", "/api/v1/pages/extensions"),
-        ("GET", "/api/v1/pages/by-path/{space_slug}/{page_slug}"),
+        # RADD-1233: a page is addressed by its PATH or its number.
+        ("GET", "/api/v1/pages/by-path/{space_slug}/{path:path}"),
+        ("GET", "/api/v1/pages/by-number/{number}"),
         ("GET", "/api/v1/pages/search"),
         ("GET", "/api/v1/pages/{page_id}"),
         ("GET", "/api/v1/pages/by-label/{name}"),
