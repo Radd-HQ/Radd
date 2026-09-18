@@ -53,7 +53,9 @@ try {
   await type('input[type="password"]', "directory-password");
   await button("Sign in"); await until(() => requests.length === 1);
   assert.equal(requests[0].path, "/api/v1/auth/ldap/login");
+  await until(() => s.eval(`document.body.innerText.includes('Invalid username or password.')`));
   await button("Sign in with a local account");
+  await until(() => s.eval(`!!document.querySelector('input[type="email"]')`));
   assert.equal(await s.eval(`document.querySelector('input[type="password"]').value`), "");
   await type('input[type="email"]', "admin@example.test");
   await type('input[type="password"]', "local-password");
