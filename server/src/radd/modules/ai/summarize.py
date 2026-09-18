@@ -19,6 +19,7 @@ from radd.modules.items.history import item_history
 from radd.modules.items.schemas import HistoryEntry
 
 from . import client, features, prompts
+from .prose import prose
 from .editor import sse_frame
 from .types import (
     SUMMARY_COMMENTS_BUDGET_CHARS,
@@ -149,10 +150,12 @@ async def summarize_prompt(session: AsyncSession, item_id: uuid.UUID, actor: Use
         priority=str(read.priority),
         assignee=read.assignee.name if read.assignee else None,
         labels=read.labels,
-        description=read.description[:SUMMARY_MAX_DESCRIPTION_CHARS],
+        # RADD-1232: prose only — image references, data URIs and bare
+        # addresses are budget spent on strings the model can only guess at.
+        description=prose(read.description)[:SUMMARY_MAX_DESCRIPTION_CHARS],
         comments=take_recent(
             [
-                (comment.author.name, comment.body[:SUMMARY_MAX_COMMENT_CHARS])
+                (comment.author.name, prose(comment.body)[:SUMMARY_MAX_COMMENT_CHARS])
                 for comment in comments
             ],
             SUMMARY_COMMENTS_BUDGET_CHARS,

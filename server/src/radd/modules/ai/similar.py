@@ -31,6 +31,7 @@ from radd.modules.settings import service as settings_service
 from radd.modules.settings.types import SettingKey
 
 from . import client, features, prompts
+from .prose import prose
 from .editor import sse_frame
 from .types import (
     FTS_MATCH_REASON,
@@ -254,7 +255,7 @@ async def similar_items(
     read = await items_service.get_item(session, item_id, actor)  # enforces item.read
     ai_on = await features.feature_enabled(session, AiFeature.SIMILAR_RERANK)
     stream_on = bool(await settings_service.resolve(session, SettingKey.AI_STREAM_RESPONSES))
-    text_seed = f"{read.title}\n{read.description}"
+    text_seed = f"{read.title}\n{prose(read.description)}"  # RADD-1232
     snippets: dict[str, str] = {}
     candidates = await _semantic_pool(session, text_seed, actor, item_id=item_id)
     if not candidates:
@@ -282,7 +283,7 @@ async def similar_items(
         prompts.similar_user_prompt(
             key=read.key,
             title=read.title,
-            description=read.description[:SUMMARY_MAX_DESCRIPTION_CHARS],
+            description=prose(read.description)[:SUMMARY_MAX_DESCRIPTION_CHARS],
             # Semantic candidates carry no FTS headline — the model judges
             # those on title alone.
             candidates=[
@@ -342,7 +343,7 @@ async def similar_reasons_prompt(
     return prompts.similar_user_prompt(
         key=read.key,
         title=read.title,
-        description=read.description[:SUMMARY_MAX_DESCRIPTION_CHARS],
+        description=prose(read.description)[:SUMMARY_MAX_DESCRIPTION_CHARS],
         candidates=[(key, title, "") for key, title in titled],
     )
 

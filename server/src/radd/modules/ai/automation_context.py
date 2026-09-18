@@ -37,6 +37,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.config import settings
 from radd.modules.auth.models import User
 
+from .prose import prose
+
 #: Hard ceiling on how many items are even considered, independent of the
 #: character budget — a 200-item scheduled run should not build a 200-item string
 #: only to discard most of it. Sized to `automation_schedule_max_items` so the
@@ -87,9 +89,9 @@ def _render_item(read: Any, comments: list[Any], options: ContextOptions, worklo
                 facts.append(f"{key}={value}")
         lines.append("  " + "; ".join(facts))
     if options.description and read.description:
-        lines.append(f"  description: {read.description.strip()}")
+        lines.append(f"  description: {prose(read.description)}")  # RADD-1232
     for comment in comments:
-        lines.append(f"  comment by {comment.author.name}: {comment.body.strip()}")
+        lines.append(f"  comment by {comment.author.name}: {prose(comment.body)}")
     if worklog is not None:
         lines.append(f"  time logged: {worklog}")
     return "\n".join(lines)

@@ -32,6 +32,7 @@ from radd.modules.events.service import Event
 from .. import client, features, registry
 from ..types import AiFeature, AiRole
 from . import service as store
+from ..prose import prose
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +99,9 @@ def embed_text(key: str, title: str, description: str) -> str:
     changes every content hash, so the reconcile sweep re-embeds the corpus on
     its own — no migration, no manual backfill.
     """
-    joined = "\n".join(part for part in (key, title, description) if part)
+    # RADD-1232: prose only. A pasted screenshot is a base64 data URI of tens
+    # of kilobytes that used to fill the whole embed budget with noise.
+    joined = "\n".join(part for part in (key, title, prose(description)) if part)
     return joined[: settings.ai_embed_max_chars]
 
 
