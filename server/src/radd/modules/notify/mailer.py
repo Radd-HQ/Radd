@@ -48,6 +48,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
+from collections.abc import Mapping
 from datetime import timedelta
 
 from sqlalchemy import or_, select, update
@@ -227,6 +228,12 @@ async def _send(
         key=key, title=payload.get("item_title") or "", base_url=settings.app_base_url
     )
     reason = lines.MAIL_REASON_TEMPLATE.format(key=key or "this issue")
+    # RADD-985: every USER-addressed message says how to stop it — a footer link
+    # and the `List-Unsubscribe` header the big providers rank senders on. The
+    # recipient here is always an account holder (a notification row IS the
+    # proof), which is what makes the preferences page the right target; the
+    # requester-facing mail in `mailintake` never carries either.
+    preferences = preferences_url()
     entry = lines.entry(notification, actor_names)
     type_ = NotificationType(notification.type)
     body = (
@@ -240,12 +247,13 @@ async def _send(
             author=lines.actor_name(notification, actor_names),
             body=body,
             reason=reason,
+            preferences=preferences,
         )
     else:
         # A comment deleted between the fan-out and this tick, or a type with no
         # body of its own: the digest's line on its own, with this recipient's
         # reason under it — never an empty quote block.
-        message = mailrender.notice(entry, reason=reason)
+        message = mailrender.notice(entry, reason=reason, preferences=preferences)
     # A notification with no item (`page_updated`) has no key to bracket, so the
     # line names itself rather than shipping a subject of "[]".
     subject = (
@@ -253,9 +261,10 @@ async def _send(
         if key
         else (entry.subject or entry.headline)
     )
+    headers = mailrender.unsubscribe_headers(preferences)
     transport = _mail_transport()
     if transport is None or notification.item_id is None:
-        return await _send_direct(user.email, user.name, subject, message)
+        return await _send_direct(user.email, user.name, subject, message, headers=headers)
     return bool(
         await transport.send_item_mail(
             session,
@@ -267,8 +276,16 @@ async def _send(
             html=message.html,
             comment_id=await _comment_id(session, notification),
             failure=failure,
+            headers=headers,
         )
     )
+
+
+def preferences_url() -> str:
+    """Where this instance's recipients turn notification email off — the one
+    URL both of notify's channels print and put in `List-Unsubscribe`, read
+    off settings HERE so `mailrender` keeps reading none."""
+    return mailrender.preferences_url(settings.app_base_url)
 
 
 async def _comment_id(session: AsyncSession, notification: Notification) -> uuid.UUID | None:
@@ -316,6 +333,7 @@ async def send_plain(
     message: mailrender.RenderedMail,
     *,
     failure: MailFailureReport = MailFailureReport.REPORT,
+    headers: Mapping[str, str] | None = None,
 ) -> bool:
     """One message about NO single item, through the transport (RADD-983).
 
@@ -338,7 +356,7 @@ async def send_plain(
     """
     transport = _mail_transport()
     if transport is None:
-        return await _send_direct(to_address, to_name, subject, message)
+        return await _send_direct(to_address, to_name, subject, message, headers=headers)
     return bool(
         await transport.send_plain_mail(
             session,
@@ -348,12 +366,18 @@ async def send_plain(
             text=message.text,
             html=message.html,
             failure=failure,
+            headers=headers,
         )
     )
 
 
 async def _send_direct(
-    to_address: str, to_name: str, subject: str, message: mailrender.RenderedMail
+    to_address: str,
+    to_name: str,
+    subject: str,
+    message: mailrender.RenderedMail,
+    *,
+    headers: Mapping[str, str] | None = None,
 ) -> bool:
     """mailintake absent: the env relay, no threading. The digest's posture —
     a message with no conversation is better than no message."""
@@ -366,6 +390,7 @@ async def _send_direct(
             subject,
             message.text,
             to_name=to_name,
+            headers=headers,
             html_body=message.html,
         )
     except Exception:

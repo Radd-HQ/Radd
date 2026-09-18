@@ -37,6 +37,8 @@ entry points are thin wrappers around it.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import logging
 import uuid
 from contextlib import asynccontextmanager
@@ -232,9 +234,15 @@ async def send_item_mail(
     pin_subject: bool = False,
     attachments: tuple[MailAttachment, ...] = (),
     failure: MailFailureReport = MailFailureReport.REPORT,
+    headers: Mapping[str, str] | None = None,
 ) -> str | None:
     """Mail one person about one issue. Returns the Message-ID that went on the
     wire, or None when nothing was sent (no relay, no address, a failure).
+
+    `headers` are the CALLER's extra headers (RADD-985: notify's mailer adds
+    `List-Unsubscribe` to user-addressed mail). They never override what this
+    file computes — Reply-To, In-Reply-To and References are the thread's, and
+    a caller that could replace them could split a customer's conversation.
 
     `subject` is the OPENING subject — `[KEY] Title` — used only while the item
     has no mail thread; after that the stored one wins, prefixed `Re: `.
@@ -283,7 +291,7 @@ async def send_item_mail(
         sender, row = await _sender(db, item_id)
         if sender is None:
             return None
-        headers, subject = await _thread_headers(
+        thread_headers, subject = await _thread_headers(
             db, item_id, row=row, subject=subject, pin_subject=pin_subject
         )
         return await _deliver(
@@ -295,7 +303,7 @@ async def send_item_mail(
             subject=subject,
             text=text,
             html=html,
-            headers=headers,
+            headers={**(headers or {}), **thread_headers},
             comment_id=comment_id,
             failure=failure,
             attachments=attachments,
@@ -311,9 +319,13 @@ async def send_plain_mail(
     text: str,
     html: str = "",
     failure: MailFailureReport = MailFailureReport.REPORT,
+    headers: Mapping[str, str] | None = None,
 ) -> str | None:
     """Mail one person about NO issue in particular (RADD-983). Returns the
     Message-ID that went on the wire, or None when nothing was sent.
+
+    `headers` as in `send_item_mail` — here there is nothing of this file's to
+    collide with, so they go on the wire as given.
 
     The sibling of `send_item_mail`, and deliberately not a special case of it:
     a notification digest is about ten items and an automation's `send_email`
@@ -353,7 +365,7 @@ async def send_plain_mail(
             subject=subject,
             text=text,
             html=html,
-            headers={},
+            headers=dict(headers or {}),
             comment_id=None,
             failure=failure,
         )
