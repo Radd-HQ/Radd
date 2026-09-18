@@ -85,6 +85,8 @@ const STATIC_GOTOS: GotoEntry[] = [
   { label: "Inbox", icon: Inbox, to: RoutePath.inbox },
   { label: "Starred", icon: Star, to: RoutePath.starred },
   { label: "Projects", icon: Layers, to: RoutePath.projects },
+  // RADD-1241: the wiki is a destination like the others (gated by facts.docs).
+  { label: "Pages", icon: BookOpen, to: RoutePath.pages },
   { label: "Reports", icon: BarChart3, to: RoutePath.reports },
   { label: "Timesheet", icon: Clock, to: RoutePath.timesheet },
   { label: "Settings", icon: Settings, to: RoutePath.settings },
