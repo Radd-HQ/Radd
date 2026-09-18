@@ -67,7 +67,7 @@ export function InboxPeek() {
       peek.open(notification.item_key);
       return;
     }
-    const pageKey = notification.detail.page_number ?? notification.detail.page_id;
+    const pageKey = notification.detail.page_number;
     if (pageKey) {
       setOpen(false);
       void navigate(pagePermalink(pageKey));

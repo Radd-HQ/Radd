@@ -494,6 +494,7 @@ DIGEST_PAYLOADS = {
     NotificationType.PAGE_CREATED: {
         "title": "Colour pipeline",
         "page_id": "6d1c2a7e-1111-4bd6-9f5a-000000000002",
+        "page_number": 43,
         "space_slug": "ops",
         "page_slug": "colour-pipeline",
     },
@@ -596,8 +597,7 @@ def test_the_digest_renders_both_parts_and_always_offers_the_inbox():
         assert f"{BASE_URL}/inbox" in part
         assert f"{BASE_URL}/issues/MR-1" in part
         assert f"{BASE_URL}/pages?pageId=42" in part
-        # A row written before pages were numbered still links, by id.
-        assert f"{BASE_URL}/pages?pageId=6d1c2a7e-1111-4bd6-9f5a-000000000002" in part
+        assert f"{BASE_URL}/pages?pageId=43" in part
     assert message.html.lstrip().startswith("<html")
 
 

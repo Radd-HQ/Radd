@@ -3,7 +3,9 @@
 A slug is unique among LIVE SIBLINGS, not across the space: the id is the key,
 the slug is the segment a page contributes to its path, and a path is
 unambiguous exactly when siblings differ. `page_path_history` keeps every path a
-page has answered to, so a stale link still resolves — exactly.
+page has answered to, so a stale link still resolves — exactly; it is seeded with
+every nested page's pre-1233 single-slug address, and old notification payloads
+get their page number, so no resolver or renderer needs a legacy branch.
 """
 from alembic import op
 import sqlalchemy as sa
@@ -50,6 +52,21 @@ def upgrade():
     )
     op.create_index("ix_page_path_history_page_id", "page_path_history", ["page_id"])
     op.create_index("ix_page_path_history_space_path", "page_path_history", ["space_id", "path"])
+    # Every pre-1233 link to a NESTED page named only the page's slug
+    # (`/pages/<space>/<slug>`). That is exactly an old address, so it goes in
+    # the history like any other — and the resolver needs no legacy branch.
+    # Root pages are skipped: their path IS their slug.
+    op.execute(
+        "INSERT INTO page_path_history (id, page_id, space_id, path) "
+        "SELECT gen_random_uuid(), id, space_id, slug FROM pages WHERE parent_id IS NOT NULL"
+    )
+    # Notification rows written before pages were numbered link by id; give
+    # them the number so every row links the same way (RADD-1234).
+    op.execute(
+        "UPDATE notifications n SET payload = n.payload || jsonb_build_object('page_number', p.number) "
+        "FROM pages p WHERE n.payload ? 'page_id' AND NOT (n.payload ? 'page_number') "
+        "AND p.id::text = n.payload->>'page_id'"
+    )
 
 
 def downgrade():

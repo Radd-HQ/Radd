@@ -43,15 +43,18 @@ The SPA resolves a permalink and *replaces* it with the readable address.
    descendant whose address changed with it — ever had, written on rename,
    move and restore. A stale path is looked up *exactly*, so it lands on the
    page it named and never on a namesake that holds the address now.
-3. **Legacy**: a single segment is tried as a bare slug anywhere in the space,
-   only when it names exactly one page (pre-1233 `/pages/<space>/<slug>` links
-   to nested pages). Several matches are a 404, not a guess.
+3. There is no third step. The migration seeded the history with every nested
+   page's pre-1233 single-slug address (`/pages/<space>/<slug>`), and wrote
+   the page number into every notification payload that predates numbering,
+   so no resolver or renderer carries a legacy branch (RADD-1234).
 
 Rejected: a bare-UUID URL (unreadable, no architectural gain over id-keyed +
 path); a `/archived/…` prefix (cosmetic, does not free the name); a
 materialised path column or `ltree` (a single index probe on read, but subtree
 rewrites on every move and rename, for trees of hundreds of rows); last-segment
-heuristics for stale links (a moved page and its namesake became a coin toss).
+heuristics for stale links (a moved page and its namesake became a coin toss);
+a bare-slug fallback in code for old links (the migration knows every old
+address, so it records them instead).
 
 ## Consequences accepted
 

@@ -5,8 +5,9 @@ The rules the address bar, the tree and every emitted link stand on:
 - a slug is unique among LIVE SIBLINGS and nowhere else — two pages may share
   a name under different parents, and an archived page no longer holds its;
 - a path resolves in one query by walking the tree; a stale path resolves
-  EXACTLY through the addresses the page used to have, and a bare legacy slug
-  only when it names one page;
+  EXACTLY through the addresses the page used to have — the migration seeded
+  those with every nested page's pre-1233 single-slug address, so there is no
+  guessing step;
 - a page's number is a permalink that a rename or move cannot break.
 """
 
@@ -20,6 +21,7 @@ from radd.exceptions import NotFoundError
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.pages import core, paths, service as pages_service, spaces
+from radd.modules.pages.models import PagePathHistory
 from radd.modules.pages.schemas import PageCreate, PageSpaceCreate, PageUpdate
 
 A, B, C, D = (uuid.uuid4() for _ in range(4))
@@ -128,7 +130,7 @@ async def test_a_path_resolves_by_walking_and_a_number_is_a_permalink(db):
     assert (await paths.resolve(db, space, "operations/runbook/")).id == under_ops.id
     with pytest.raises(NotFoundError):
         await paths.resolve(db, space, "engineering/nope")
-    # The same name at two depths is ambiguous as a bare segment — no guess.
+    # A bare segment that is nobody's address is not guessed at.
     with pytest.raises(NotFoundError):
         await paths.resolve(db, space, "runbook")
 
@@ -146,7 +148,13 @@ async def test_a_stale_path_still_finds_the_page(db):
     eng = await _page(db, space, admin, "Engineering")
     page = await _page(db, space, admin, "Laptops", eng.id)
 
-    # A pre-1233 link to a nested page named only the page's slug.
+    # A pre-1233 link to a nested page named only the page's slug. For pages
+    # that existed at migration time the history row was SEEDED; a page made
+    # after it has no such address, and the resolver does not guess.
+    with pytest.raises(NotFoundError):
+        await paths.resolve(db, space, "laptops")
+    db.add(PagePathHistory(page_id=page.id, space_id=space.id, path="laptops"))
+    await db.flush()
     assert (await paths.resolve(db, space, "laptops")).id == page.id
 
     # Rename: the old segment is remembered.

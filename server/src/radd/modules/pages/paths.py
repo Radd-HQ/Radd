@@ -16,11 +16,10 @@ rename rewrites nothing.
 
 When the walk fails, the path is looked up EXACTLY in `page_path_history` —
 every address the page and its descendants ever had is written there on
-rename, move and restore — so a stale link lands on the page it named, never
-on a same-named neighbour. Last, a single segment is tried as a bare slug
-anywhere in the space: what a pre-1233 `/pages/<space>/<slug>` link to a
-nested page looks like. One match resolves (the client then redirects to the
-current path); several is a 404, not a guess.
+rename, move and restore, and the migration seeded it with every nested
+page's pre-1233 single-slug address — so a stale link lands on the page it
+named, never on a same-named neighbour, and there is no third, guessing step.
+The client then redirects to the current path.
 """
 
 from __future__ import annotations
@@ -76,8 +75,6 @@ async def resolve(session: AsyncSession, space: PageSpace, path: str) -> Page:
     if found is not None:
         return next(row for row in candidates if row.id == found)
     stale = await _by_history(session, space.id, join(segments))
-    if stale is None and len(segments) == 1:
-        stale = await _by_bare_slug(session, space.id, segments[0])
     if stale is None:
         raise NotFoundError(PageEntity.PAGE, f"{space.slug}/{path}")
     return stale
@@ -114,18 +111,6 @@ async def _by_history(session: AsyncSession, space_id: uuid.UUID, path: str) -> 
             .limit(1)
         )
     ).scalar_one_or_none()
-
-
-async def _by_bare_slug(session: AsyncSession, space_id: uuid.UUID, slug: str) -> Page | None:
-    """Exactly one live page in the space with this slug, at any depth, or None."""
-    rows = (
-        await session.execute(
-            select(Page)
-            .where(Page.space_id == space_id, Page.archived_at.is_(None), Page.slug == slug)
-            .limit(2)
-        )
-    ).scalars().all()
-    return rows[0] if len(rows) == 1 else None
 
 
 async def paths_for(session: AsyncSession, pages: Iterable[Page]) -> dict[uuid.UUID, str]:

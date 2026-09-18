@@ -34,7 +34,7 @@ export function InboxPage() {
       return;
     }
     // RADD-1233: a page notification opens the page's permalink.
-    const pageKey = notification.detail.page_number ?? notification.detail.page_id;
+    const pageKey = notification.detail.page_number;
     if (pageKey) void navigate(pagePermalink(pageKey));
   };
 

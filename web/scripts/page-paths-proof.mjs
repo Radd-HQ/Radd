@@ -15,8 +15,8 @@
  *   4. a page renamed and moved is still reached by its OLD address, which
  *      redirects to the new one — and a same-named neighbour is not confused
  *      with it;
- *   5. a legacy single-segment `/pages/<space>/laptops` link to a nested page
- *      still lands;
+ *   5. a legacy single-segment `/pages/<space>/<slug>` link is NOT guessed at:
+ *      only the page's recorded old addresses resolve;
  *   6. an archived "Onboarding" no longer blocks a new one: the new page is
  *      `onboarding`, not `onboarding-2`;
  *   7. the print view lives under /print and shows the path in its footer.
@@ -132,11 +132,10 @@ async function main() {
     context.neighbour = v;
     checks.theNamesakeIsNotConfusedWithIt = v.title === "Hardware" && v.path === p("operations/onboarding/hardware");
 
-    // 4. a legacy single-segment link to a nested page
-    await session.navigate(`${baseUrl}${p("hardware-2")}`, 3000);
-    v = await view();
-    context.legacy = v;
-    checks.legacySingleSegmentLinkLands = v.title === "Laptops" && v.path === p("operations/onboarding/hardware-2");
+    // 4. a bare segment that was never an address is not guessed at
+    const bare = await session.eval(`(async () => { ${API} return (await api("GET", "/pages/by-path/${SLUG}/hardware-2")).status; })()`);
+    context.bare = bare;
+    checks.bareSegmentIsNotGuessedAt = bare === 404;
 
     // 5. archived pages do not squat on names
     const archived = await session.eval(`(async () => { ${API}

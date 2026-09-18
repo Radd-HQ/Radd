@@ -135,7 +135,7 @@ export interface Notification {
    *  to render and link without a join — resolved at write time, so a later
    *  rename cannot make the entry lie about what it told you at the time. */
   page_id?: string;
-  /** RADD-1233: the permalink key (absent on rows written before pages were numbered). */
+  /** RADD-1233: the permalink key — on every page row, the migration backfilled the old ones. */
   page_number?: number;
   page_slug?: string;
   space_slug?: string;
