@@ -10,8 +10,9 @@
  *               condition blocks the save with a message instead of vanishing;
  *   RADD-1230 — creating an issue raises a toast whose Open action lands on
  *               the new issue;
- *   RADD-1231 — every scrolling element carries the same thin, themed
- *               scrollbar (computed style, both themes).
+ *   RADD-1231 — every scrolling element carries the same 12px, rounded,
+ *               themed scrollbar (measured rail, thumb style, both themes;
+ *               the Gecko-only rule is proven NOT to apply to Chrome).
  * Every check is a measurement. The project is deleted at the end.
  */
 import { resolve } from "node:path";
@@ -138,20 +139,35 @@ async function main() {
     context.landed = landed;
     checks.openLandsOnTheNewIssue = new RegExp(`/issues/${KEY}-\\d+$`).test(landed.path);
 
-    // --- RADD-1231: one scrollbar --------------------------------------------
+    // --- RADD-1231: one scrollbar, big enough to grab ------------------------
+    // Headless Chrome is the -webkit- path: the rail is the difference between
+    // the box and its client width on an element that actually scrolls.
     const scroll = await session.eval(`(() => {
-      const el = [...document.querySelectorAll("*")].find((n) => /auto|scroll/.test(getComputedStyle(n).overflowY) && n.scrollHeight > n.clientHeight) ?? document.documentElement;
+      const el = [...document.querySelectorAll("*")].find((n) => /auto|scroll/.test(getComputedStyle(n).overflowY) && n.scrollHeight > n.clientHeight);
+      if (!el) return null;
       const cs = getComputedStyle(el);
-      const root = getComputedStyle(document.documentElement);
-      return { width: cs.scrollbarWidth, color: cs.scrollbarColor, thumbToken: root.getPropertyValue("--color-zinc-700").trim() };
+      const thumb = getComputedStyle(el, "::-webkit-scrollbar-thumb");
+      return {
+        rail: el.offsetWidth - el.clientWidth - (parseFloat(cs.borderLeftWidth) || 0) - (parseFloat(cs.borderRightWidth) || 0),
+        standardWidth: cs.scrollbarWidth,
+        thumbColor: thumb.backgroundColor,
+        thumbRadius: thumb.borderRadius,
+      };
     })()`);
     context.scroll = scroll;
-    checks.scrollbarsAreThinAndThemed = scroll.width === "thin" && scroll.color !== "auto" && scroll.color.length > 0;
+    checks.chromeRailIsTwelvePixels = scroll?.rail === 12;
+    checks.chromeKeepsTheStyledThumb = scroll?.standardWidth === "auto" && /rgb/.test(scroll?.thumbColor ?? "") && /9999px|px/.test(scroll?.thumbRadius ?? "");
+    // The Gecko block must NOT apply here — it is what would collapse Chrome to thin.
+    const geckoScoped = await session.eval(`!CSS.supports("-moz-appearance", "none") && getComputedStyle(document.documentElement).scrollbarColor === "auto"`);
+    checks.geckoRuleIsScopedAwayFromChrome = geckoScoped === true;
     await session.eval(`document.documentElement.classList.add("light")`);
     await sleep(100);
-    const light = await session.eval(`(() => { const cs = getComputedStyle(document.documentElement); return { color: cs.scrollbarColor, token: cs.getPropertyValue("--color-zinc-700").trim() }; })()`);
+    const light = await session.eval(`(() => {
+      const el = [...document.querySelectorAll("*")].find((n) => /auto|scroll/.test(getComputedStyle(n).overflowY) && n.scrollHeight > n.clientHeight);
+      return el ? getComputedStyle(el, "::-webkit-scrollbar-thumb").backgroundColor : null;
+    })()`);
     context.light = light;
-    checks.lightThemeRemapsTheThumb = light.color !== scroll.color && light.token !== scroll.thumbToken;
+    checks.lightThemeRemapsTheThumb = Boolean(light) && light !== scroll?.thumbColor;
   } finally {
     if (projectId) {
       await session.eval(`(async () => { ${API} return (await api("DELETE", "/projects/${projectId}")).status; })()`).catch(() => null);

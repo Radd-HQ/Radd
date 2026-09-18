@@ -239,31 +239,40 @@
   body {
     @apply bg-base text-fg antialiased;
   }
-  /* RADD-1231: ONE scrollbar for every browser. Without a rule each engine
-     draws its own — Chrome a wide square-cornered bar, Firefox a thin one —
-     and a board with three scrolling columns showed both at once across
-     screenshots. The standard properties are the whole story in Firefox and
-     Chrome 121+ (which then IGNORES the -webkit- rules); the -webkit- block
-     is for Safari. Tokens, so the light theme remaps them. */
-  * {
-    scrollbar-width: thin;
-    scrollbar-color: var(--color-zinc-700) transparent;
-  }
+  /* RADD-1231: ONE scrollbar for every browser, big enough to grab. Without
+     a rule each engine draws its own — Chrome a wide square-cornered bar,
+     Firefox a thin one. Chrome, Safari and Edge are fully stylable through
+     the -webkit- pseudo-elements: a 12px rail with a rounded 8px thumb.
+     Firefox (and Zen) only offers the standard properties, and its width is
+     a choice between `thin` (~8px, too small to grab) and `auto` (the
+     platform's ~12px) — so it gets `auto` plus our colours, which also
+     switches it to non-native rendering with a rounded thumb. The Gecko
+     block is scoped with @supports, because Chrome 121+ honours the
+     standard properties too and then IGNORES the -webkit- rules; unscoped,
+     the first version made Chrome thin as well. Tokens, so the light theme
+     remaps the thumb. */
   *::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 12px;
+    height: 12px;
   }
   *::-webkit-scrollbar-track {
     background: transparent;
   }
   *::-webkit-scrollbar-thumb {
-    border: 3px solid transparent;
+    min-height: 40px;
+    border: 2px solid transparent;
     border-radius: 9999px;
     background-color: var(--color-zinc-700);
     background-clip: padding-box;
   }
   *::-webkit-scrollbar-thumb:hover {
     background-color: var(--color-zinc-600);
+  }
+  @supports (-moz-appearance: none) {
+    * {
+      scrollbar-width: auto;
+      scrollbar-color: var(--color-zinc-700) transparent;
+    }
   }
 }
 
