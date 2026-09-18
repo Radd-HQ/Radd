@@ -872,6 +872,94 @@ async def test_the_digest_skips_a_service_account_and_stamps_it(
         assert row.emailed_at is not None, "the backlog must drain either way"
 
 
+# --- every user-addressed email says how to stop it (RADD-985) ----------------
+
+
+PREFERENCES_URL = f"{BASE_URL}/settings/notifications"
+
+
+def _html(message: EmailMessage) -> str:
+    return message.get_body(("html",)).get_content()
+
+
+async def test_a_notification_email_carries_list_unsubscribe_and_a_preferences_link(
+    db, world, relay, sender_row, quiet_backlog
+):
+    """Audit finding #7's deliverability half. No email Radd sent carried
+    `List-Unsubscribe` or a settings link — Gmail and Outlook rank a bulk sender
+    on the header, and the footer was prose with no anchor. Both parts now say
+    where the mail is turned off, and the header lets the client offer it.
+
+    The link is `/settings/notifications`, NOT `/settings/profile` as the issue
+    was filed: spec 118 moved the matrix to its own tab after the filing, and a
+    link to the profile page would land on a section that says "see the
+    Notifications tab".
+
+    The thread headers are asserted alongside: the caller's headers ride the
+    same dictionary as Reply-To/In-Reply-To/References and must not displace
+    them, or a client-side "unsubscribe" would cost a customer their thread.
+    """
+    agent, project, item = world
+    watcher = await _user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
+    await notify_service.add_watchers(db, item.id, [agent.id, watcher.id])
+    await _grant(db, watcher, BuiltinRoleKey.MEMBER, project.id)
+    await _comment(db, item, agent, "Restarted it.")
+    await consumer._consume(db, watch_only=False)
+
+    assert await mailer.run_batch(db) == 1
+
+    message = _addressed(relay, watcher.email)[0]
+    assert str(message["List-Unsubscribe"]) == f"<{PREFERENCES_URL}>"
+    assert str(message["Reply-To"]) == RELAY_REPLY_TO, "the thread's headers still win"
+    assert f"Notification settings: {PREFERENCES_URL}" in _text(message)
+    assert f'href="{PREFERENCES_URL}"' in _html(message)
+    assert "Notification settings" in _html(message)
+
+
+async def test_the_env_relay_copy_says_how_to_stop_it_too(
+    db, world, relay, quiet_backlog, monkeypatch
+):
+    """The header is the mailer's, not the transport's: with mailintake absent
+    the message goes over `radd.smtp` directly and must carry it just the same —
+    a deliverability signal that depended on which module was loaded would be
+    the RADD-983 shape again."""
+    _agent, _project, item = world
+    monkeypatch.setattr(mailer, "_mail_transport", lambda: None)
+    monkeypatch.setattr(settings, "smtp_host", "smtp.env.test")
+    monkeypatch.setattr(settings, "smtp_starttls", False)
+    monkeypatch.setattr(settings, "smtp_from_address", RELAY_FROM)
+    watcher = await _user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
+    await _grant(db, watcher, BuiltinRoleKey.MEMBER, item.project_id)
+    await _notify(db, watcher, NotificationType.STATE_CHANGED, item, **{"from": "Open", "to": "Done"})
+    await db.execute(
+        update(Notification).where(Notification.user_id == watcher.id).values(email=True)
+    )
+
+    assert await mailer.run_batch(db) == 1
+
+    message = _addressed(relay, watcher.email)[0]
+    assert str(message["List-Unsubscribe"]) == f"<{PREFERENCES_URL}>"
+    assert f"Notification settings: {PREFERENCES_URL}" in _text(message)
+
+
+async def test_the_digest_carries_the_header_and_the_link_in_both_parts(
+    db, world, relay, env_relay, quiet_backlog
+):
+    """The slower channel, through `send_plain` — the one with no item and so
+    nothing of the transport's to merge with; its headers go out as given."""
+    _agent, _project, item = world
+    human = await _user(db, name="Hana", email=f"h-{uuid.uuid4().hex[:8]}@example.com")
+    await _notify(db, human, NotificationType.STATE_CHANGED, item, **{"from": "Open", "to": "Done"})
+
+    assert await emailer.run_batch(db) == 1
+
+    message = _addressed(relay, human.email)[0]
+    assert str(message["List-Unsubscribe"]) == f"<{PREFERENCES_URL}>"
+    assert f"Notification settings: {PREFERENCES_URL}" in _text(message)
+    assert f'href="{PREFERENCES_URL}"' in _html(message)
+    assert f"{BASE_URL}/inbox" in _text(message), "the inbox link is still offered"
+
+
 # --- delivery failures back off (RADD-997) ------------------------------------
 
 

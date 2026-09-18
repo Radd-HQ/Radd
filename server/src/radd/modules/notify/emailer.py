@@ -61,6 +61,9 @@ def compose(notifications: list[Notification], actor_names: dict[uuid.UUID, str]
     return mailrender.digest(
         [lines.entry(notification, actor_names) for notification in notifications],
         inbox=mailrender.inbox_url(settings.app_base_url),
+        # RADD-985: the digest is user-addressed by definition, so it says
+        # where it is turned off — the same URL the per-event mailer prints.
+        preferences=mailer.preferences_url(),
     )
 
 
@@ -155,6 +158,7 @@ async def run_batch(session: AsyncSession) -> int:
                 # between are silent, and the tick that exhausts every row's
                 # ladder is the one marked given-up.
                 failure=retry.failure_report(min(row.email_attempts for row in pending)),
+                headers=mailrender.unsubscribe_headers(mailer.preferences_url()),
             )
             if delivered:
                 sent += 1

@@ -319,6 +319,47 @@ def test_the_footer_says_why_this_address_is_on_the_thread():
     assert "contacted us about MR-1" in requester.text
     assert watcher.text != requester.text
     assert requester.html != watcher.html
+    # RADD-985: the settings link is the USER-addressed caller's to add, and
+    # the requester path never adds it — a customer has no matrix to open, and
+    # the reply-to-comment wording is already how they take part.
+    for part in (requester.text, requester.html):
+        assert mailrender.NOTIFICATION_SETTINGS_LABEL not in part
+        assert mailrender.PREFERENCES_PATH not in part
+
+
+def test_user_addressed_renderers_link_the_notification_settings_in_both_parts():
+    """RADD-985: the three renderers notify mails through — the comment reply,
+    the single notice and the digest — print where the mail is turned off in
+    the text half and the html half, and the header helper spells the same URL
+    in angle brackets. Absent the argument, nothing is printed and no header is
+    made: an empty `List-Unsubscribe` is worse than none."""
+    preferences = mailrender.preferences_url(BASE_URL + "/")
+    assert preferences == f"{BASE_URL}/settings/notifications"
+    item = mailrender.ItemMail(key="MR-1", title="Printer on fire", base_url=BASE_URL)
+    entry = mailrender.DigestEntry(headline="Ada Agent moved Open → Done", subject="[MR-1] x")
+    rendered = [
+        mailrender.comment_reply(
+            item, author="Ada", body="Restarted.", reason="because", preferences=preferences
+        ),
+        mailrender.notice(entry, reason="because", preferences=preferences),
+        mailrender.digest([entry], inbox=f"{BASE_URL}/inbox", preferences=preferences),
+    ]
+    for message in rendered:
+        assert f"{mailrender.NOTIFICATION_SETTINGS_LABEL}: {preferences}" in message.text
+        assert f'href="{preferences}"' in message.html
+        assert message.html.count(mailrender.NOTIFICATION_SETTINGS_LABEL) == 1
+    bare = [
+        mailrender.comment_reply(item, author="Ada", body="Restarted.", reason="because"),
+        mailrender.notice(entry, reason="because"),
+        mailrender.digest([entry], inbox=f"{BASE_URL}/inbox"),
+    ]
+    for message in bare:
+        assert mailrender.NOTIFICATION_SETTINGS_LABEL not in message.text
+        assert mailrender.NOTIFICATION_SETTINGS_LABEL not in message.html
+    assert mailrender.unsubscribe_headers(preferences) == {
+        mailrender.LIST_UNSUBSCRIBE_HEADER: f"<{preferences}>"
+    }
+    assert mailrender.unsubscribe_headers("") == {}
 
 
 def test_nothing_a_person_typed_survives_as_markup():
@@ -802,6 +843,10 @@ async def test_the_ack_leaves_through_the_default_sender_row(
     # RADD-977: the receipt the requester actually receives carries the link.
     assert f"{BASE_URL}/issues/{key}" in sent.get_body(("plain",)).get_content()
     assert f'href="{BASE_URL}/issues/{key}"' in sent.get_body(("html",)).get_content()
+    # RADD-985: requester-facing mail says nothing about notification settings —
+    # the conversation is their ticket, and there is no matrix to link.
+    assert sent.get(mailrender.LIST_UNSUBSCRIBE_HEADER) is None
+    assert mailrender.NOTIFICATION_SETTINGS_LABEL not in sent.get_body(("plain",)).get_content()
 
 
 async def test_pinning_the_subject_changes_nothing_a_client_threads_on(db, world):

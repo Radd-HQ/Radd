@@ -41,6 +41,9 @@ from typing import NamedTuple
 ISSUE_PATH = "/issues"
 PAGE_PATH = "/pages"
 INBOX_PATH = "/inbox"
+#: Where a signed-in person turns notification email off — the matrix moved to
+#: its own settings tab in spec 118, so this is NOT the profile page.
+PREFERENCES_PATH = "/settings/notifications"
 
 
 def site(base_url: str) -> str:
@@ -60,6 +63,28 @@ def page_url(base_url: str, space_slug: str, page_slug: str) -> str:
 
 def inbox_url(base_url: str) -> str:
     return f"{site(base_url)}{INBOX_PATH}"
+
+
+def preferences_url(base_url: str) -> str:
+    return f"{site(base_url)}{PREFERENCES_PATH}"
+
+
+#: The footer affordance on USER-addressed mail (RADD-985): one label for both
+#: parts, so the text half and the html half cannot disagree about what it is.
+NOTIFICATION_SETTINGS_LABEL = "Notification settings"
+
+#: RFC 2369. Gmail and Outlook rank a bulk sender without it as spam-adjacent,
+#: and it is what puts an "Unsubscribe" affordance in their own chrome. The
+#: value is the preferences page in angle brackets; the one-click POST variant
+#: (RFC 8058) needs a tokened endpoint and is deliberately not claimed.
+LIST_UNSUBSCRIBE_HEADER = "List-Unsubscribe"
+
+
+def unsubscribe_headers(preferences: str) -> dict[str, str]:
+    """The headers a user-addressed message carries so a mail client can offer
+    "stop these" without the recipient reading the footer. Empty when there is
+    nowhere to point — a header with an empty URL is worse than none."""
+    return {LIST_UNSUBSCRIBE_HEADER: f"<{preferences}>"} if preferences else {}
 
 
 # --- the palette (mail clients have no tokens; these are the tokens) ---
@@ -134,6 +159,19 @@ def _anchor(url: str, label: str, *, color: str = LINK) -> str:
     return f'<a href="{_esc(url)}" style="color:{color};text-decoration:underline;">{_esc(label)}</a>'
 
 
+def _preferences_line(preferences: str) -> str:
+    """The text half of the footer affordance, or nothing."""
+    return f"{NOTIFICATION_SETTINGS_LABEL}: {preferences}" if preferences else ""
+
+
+def _preferences_html(preferences: str) -> str:
+    return (
+        f" · {_anchor(preferences, NOTIFICATION_SETTINGS_LABEL, color=MUTED)}"
+        if preferences
+        else ""
+    )
+
+
 def _button(url: str, label: str) -> str:
     return (
         f'<a href="{_esc(url)}" style="display:inline-block;background:{LINK};color:#ffffff;'
@@ -182,23 +220,34 @@ def _quoted(body: str) -> str:
 # --- the messages ---
 
 
-def comment_reply(item: ItemMail, *, author: str, body: str, reason: str) -> RenderedMail:
+def comment_reply(
+    item: ItemMail, *, author: str, body: str, reason: str, preferences: str = ""
+) -> RenderedMail:
     """A public comment, mailed to someone on the issue.
 
     `reason` is the recipient's own — a watcher and an external requester are on
     the thread for different reasons, and one wording cannot honestly say both.
+
+    `preferences` is the notification-settings URL and is passed by the
+    USER-addressed caller only (notify's mailer, RADD-985). A requester has no
+    matrix to open: the conversation is their ticket, and the reply-to-comment
+    wording already says how to take part in it.
     """
     headline = f"{author} commented on {item.label}"
     text = "\n".join(
-        [
-            headline,
-            "",
-            body.strip(),
-            "",
-            "--",
-            f"View the issue: {item.url}",
-            reason,
-        ]
+        filter(
+            None,
+            [
+                headline,
+                "",
+                body.strip(),
+                "",
+                "--",
+                f"View the issue: {item.url}",
+                reason,
+                _preferences_line(preferences),
+            ],
+        )
     )
     content = (
         _header(item)
@@ -206,7 +255,8 @@ def comment_reply(item: ItemMail, *, author: str, body: str, reason: str) -> Ren
         + _quoted(body)
         + _button(item.url, "View issue")
     )
-    return RenderedMail(text=text, html=_document(content, footer=_esc(reason)))
+    footer = _esc(reason) + _preferences_html(preferences)
+    return RenderedMail(text=text, html=_document(content, footer=footer))
 
 
 #: The receipt's link affordance, one label for both parts. Deliberately SECOND
@@ -286,14 +336,14 @@ def digest_line(entry: DigestEntry, *, divider: bool = True) -> RenderedMail:
     )
 
 
-def notice(entry: DigestEntry, *, reason: str) -> RenderedMail:
+def notice(entry: DigestEntry, *, reason: str, preferences: str = "") -> RenderedMail:
     """ONE notification as its own email — the per-event message, as opposed to
     the batched `digest` (RADD-968).
 
     Same vocabulary, none of the batching chrome: the footer is the recipient's
     own reason, because "you have email digests on" is not why this arrived.
     A comment has its own renderer (`comment_reply`) that quotes the full body;
-    this is what every other type gets.
+    this is what every other type gets. `preferences` as in `comment_reply`.
     """
     head = f"{entry.subject} — {entry.headline}" if entry.subject else entry.headline
     body = [head, ""]
@@ -302,20 +352,31 @@ def notice(entry: DigestEntry, *, reason: str) -> RenderedMail:
     if entry.url:
         body.append(f"View the issue: {entry.url}")
     body.append(reason)
+    if preferences:
+        body.append(_preferences_line(preferences))
     text = "\n".join(body)
     content = digest_line(entry, divider=False).html
     if entry.url:
         content += _button(entry.url, "View issue")
-    return RenderedMail(text=text, html=_document(content, footer=_esc(reason)))
+    footer = _esc(reason) + _preferences_html(preferences)
+    return RenderedMail(text=text, html=_document(content, footer=footer))
 
 
-def digest(entries: Sequence[DigestEntry], *, inbox: str) -> RenderedMail:
+def digest(
+    entries: Sequence[DigestEntry], *, inbox: str, preferences: str = ""
+) -> RenderedMail:
     """The batched notification email. `inbox` is the recipient's inbox URL —
-    the one link that is always right when a line's own is missing."""
+    the one link that is always right when a line's own is missing;
+    `preferences` is where the digest itself is turned off (RADD-985)."""
     last = len(entries) - 1
     rendered = [digest_line(entry, divider=index != last) for index, entry in enumerate(entries)]
     text = "\n\n".join(line.text for line in rendered)
     text += f"\n\n—\nYour Radd inbox: {inbox}"
+    if preferences:
+        text += f"\n{_preferences_line(preferences)}"
     content = "".join(line.html for line in rendered)
-    footer = f"You are receiving this because you have email digests on. {_anchor(inbox, 'Your Radd inbox')}"
+    footer = (
+        f"You are receiving this because you have email digests on. "
+        f"{_anchor(inbox, 'Your Radd inbox')}{_preferences_html(preferences)}"
+    )
     return RenderedMail(text=text, html=_document(content, footer=footer))
