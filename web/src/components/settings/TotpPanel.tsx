@@ -8,6 +8,7 @@ import type { TotpRecoveryCodes, TotpSetup, TotpStatus } from "../../lib/types";
 import { Button } from "../Button";
 import { TextField } from "../TextField";
 import { ErrorText } from "../ErrorText";
+import { CopyValue } from "./CopyValue";
 
 const INVALID_CODE_MESSAGE = "Invalid code.";
 
@@ -105,8 +106,8 @@ function SetupPanel({ pending }: { pending: boolean }) {
         paste the secret as a time-based (TOTP) entry, or use the full otpauth URI. Then enter a
         generated code below to turn two-factor on.
       </p>
-      <CopyField label="Secret" value={setup.secret} />
-      <CopyField label="otpauth URI" value={setup.otpauth_uri} />
+      <CopyValue label="Secret" value={setup.secret} secret mono size="md" />
+      <CopyValue label="otpauth URI" value={setup.otpauth_uri} secret size="md" />
       <form onSubmit={onConfirm} className="flex items-end gap-3">
         <TextField
           label="Confirm code"
@@ -323,42 +324,3 @@ function CopyAllButton({ value }: { value: string }) {
   );
 }
 
-/** Monospace value with a copy button — the setup secret and otpauth URI. */
-function CopyField({ label, value }: { label: string; value: string }) {
-  const [copied, setCopied] = useState(false);
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard unavailable (permissions/insecure context) — the value stays
-      // visible in the <code> block for manual selection.
-    }
-  };
-
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="text-xs font-medium text-fg-secondary">{label}</span>
-      <div className="flex items-center gap-2">
-        <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded-md border border-strong bg-base px-3 py-2 font-mono text-xs text-heading">
-          {value}
-        </code>
-        <Button variant="ghost" onClick={() => void copy()}>
-          {copied ? (
-            <>
-              <Check size={14} className="text-emerald-400" aria-hidden />
-              Copied
-            </>
-          ) : (
-            <>
-              <Copy size={14} aria-hidden />
-              Copy
-            </>
-          )}
-        </Button>
-      </div>
-    </div>
-  );
-}

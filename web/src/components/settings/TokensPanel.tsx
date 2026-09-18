@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Copy, KeyRound, Plus, TriangleAlert, X } from "lucide-react";
+import { KeyRound, Plus, TriangleAlert, X } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { ApiPath, apiTokenPath } from "../../lib/constants";
 import { formatDateOrNever } from "../../lib/dates";
@@ -9,6 +9,7 @@ import { queryKeys, tokensQuery } from "../../lib/queries";
 import type { ApiToken, ApiTokenCreate, ApiTokenCreated, TokenScopes } from "../../lib/types";
 import { Button } from "../Button";
 import { Callout } from "../Callout";
+import { CopyValue } from "./CopyValue";
 import { EmptyState } from "../EmptyState";
 import { ErrorText } from "../ErrorText";
 import { TableSkeleton } from "../TableSkeleton";
@@ -77,7 +78,9 @@ export function TokensSettingsBody() {
   );
 }
 
-/** The one moment the full secret exists client-side — copy it or lose it. */
+/** The one moment the full secret exists client-side — copy it or lose it.
+ * Hidden by default (RADD-1227): the panel sits on a page that gets screen-
+ * shared and screenshotted, so Copy is the action and Reveal is opt-in. */
 function CreatedTokenPanel({
   created,
   onDismiss,
@@ -85,50 +88,28 @@ function CreatedTokenPanel({
   created: ApiTokenCreated;
   onDismiss: () => void;
 }) {
-  const [copied, setCopied] = useState(false);
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(created.token);
-      setCopied(true);
-    } catch {
-      // Clipboard unavailable (permissions/insecure context) — the token stays
-      // visible in the <code> block for manual selection.
-    }
-  };
-
   return (
     <Callout kind="warning" icon={null} className="mb-5 rounded-lg p-4">
       <div className="mb-2 flex items-center gap-2 text-[13px] font-medium">
         <TriangleAlert size={15} aria-hidden />
         Copy “{created.name}” now — this token won't be shown again.
-      </div>
-      <div className="flex items-center gap-2">
-        <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded-md border border-strong bg-base px-3 py-2 font-mono text-xs text-heading">
-          {created.token}
-        </code>
-        <Button variant="ghost" onClick={() => void copy()}>
-          {copied ? (
-            <>
-              <Check size={14} className="text-emerald-400" aria-hidden />
-              Copied
-            </>
-          ) : (
-            <>
-              <Copy size={14} aria-hidden />
-              Copy
-            </>
-          )}
-        </Button>
         <button
           type="button"
           onClick={onDismiss}
           aria-label="Dismiss new token"
-          className="rounded p-1 text-fg-muted hover:bg-elevated hover:text-fg cursor-pointer"
+          className="ml-auto rounded p-1 text-fg-muted hover:bg-elevated hover:text-fg cursor-pointer"
         >
           <X size={15} />
         </button>
       </div>
+      <CopyValue
+        label="Token"
+        value={created.token}
+        hint={`${created.prefix_display}…`}
+        secret
+        mono
+        size="md"
+      />
     </Callout>
   );
 }

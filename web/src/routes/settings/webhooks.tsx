@@ -209,7 +209,7 @@ function EndpointRow({ endpoint }: { endpoint: WebhookEndpoint }) {
       </div>
       {open && (
         <div className="flex flex-col gap-3 border-t border-subtle/60 px-3 py-3">
-          <CopyValue label="Signing secret" value={endpoint.secret} mono />
+          <CopyValue label="Signing secret" value={endpoint.secret} secret mono />
           <DeliveryLog endpointId={endpoint.id} />
           <ChangeHistoryPanel entityType="webhook_endpoint" entityId={endpoint.id} />
         </div>

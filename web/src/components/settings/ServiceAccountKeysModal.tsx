@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, KeyRound, Trash2 } from "lucide-react";
+import { KeyRound, Trash2 } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { apiServiceAccountKeyPath, apiServiceAccountKeysPath } from "../../lib/constants";
 import { Entity, invalidateEntities } from "../../lib/cache";
@@ -13,6 +13,7 @@ import { Modal } from "../Modal";
 import { QueryError } from "../QueryError";
 import { TableSkeleton } from "../TableSkeleton";
 import { TextField } from "../TextField";
+import { CopyValue } from "./CopyValue";
 import { TokenScopeEditor, composeScopes, scopeIsIncomplete } from "./TokenScopeEditor";
 import { formatDate } from "../../lib/dates";
 
@@ -71,17 +72,8 @@ function KeyEditor({ account, onClose, accountError }: { account: ServiceAccount
             <p className="text-[12px] font-medium text-heading">
               Copy this key now — it is never shown again.
             </p>
-            <div className="mt-2 flex items-center gap-2">
-              <code className="flex-1 overflow-x-auto rounded bg-base px-2 py-1 font-mono text-[12px]">
-                {minted.token}
-              </code>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => navigator.clipboard?.writeText(minted.token)}
-              >
-                <Copy size={13} aria-hidden /> Copy
-              </Button>
+            <div className="mt-2">
+              <CopyValue label="Key" value={minted.token} hint={`${minted.prefix_display}…`} secret mono />
             </div>
           </div>
         )}
