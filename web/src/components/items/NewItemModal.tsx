@@ -11,7 +11,8 @@ import {
 } from "../../lib/api";
 import type { BucketCreatePreset } from "../../lib/axis-dnd";
 import { fieldInScope } from "../../lib/field-scope";
-import { PARENT_SEARCH_LIMIT } from "../../lib/constants";
+import { PARENT_SEARCH_LIMIT, RoutePath } from "../../lib/constants";
+import { pushToast, ToastKind } from "../../lib/toast";
 import { useDebounced, useItemWritability, usePointsEnabled } from "../../lib/hooks";
 import { useValidateItem } from "../../lib/item-mutations";
 import {
@@ -279,7 +280,17 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
           // `created` is null exactly when the draft did not survive — the
           // checks refused it. Keeping the modal open is the point: the person
           // is about to fix what it says.
-          if (result.created) onClose();
+          if (result.created) {
+            // RADD-1230: the modal closes wherever it was opened from — a
+            // board, the pins bar — so the one thing the person wants next,
+            // the issue itself, is a click away rather than a search away.
+            pushToast(`Created ${result.created.key}`, ToastKind.success, {
+              label: "Open",
+              to: RoutePath.issue,
+              params: { itemKey: result.created.key },
+            });
+            onClose();
+          }
         },
         // This endpoint answers with a VERDICT, so findings normally arrive
         // above. Parsed here too because the same draft can also be refused by
