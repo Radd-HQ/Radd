@@ -9,24 +9,18 @@ import { RaddTile } from "../components/RaddMark";
 import { SsoButtons } from "../components/SsoButtons";
 import { TextField } from "../components/TextField";
 
+import { Spinner } from "../components/Spinner";
+type LoginOptions = { ldap_enabled: boolean; sso_enabled: boolean };
+
 const INVALID_CREDENTIALS_MESSAGE = "Invalid email or password.";
 const INVALID_LDAP_CREDENTIALS_MESSAGE = "Invalid username or password.";
 /** A wrong code on /auth/login/totp — the backend 401s uniformly (spec 48). */
 const INVALID_TOTP_MESSAGE = "Invalid email, password, or code.";
 const AUTH_NOT_DEPLOYED_MESSAGE = "Sign-in is unavailable on this server. Contact your administrator.";
 
-/** Which credential form is showing (spec 42 adds the directory option). */
-const LoginMode = {
-  email: "email",
-  directory: "directory",
-} as const;
-type LoginModeValue = (typeof LoginMode)[keyof typeof LoginMode];
-
-type LoginOptions = { sso_enabled: boolean; ldap_enabled: boolean };
-
 export function LoginPage() {
   const queryClient = useQueryClient();
-  const [mode, setMode] = useState<LoginModeValue>(LoginMode.email);
+  const [localOpen, setLocalOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -35,13 +29,20 @@ export function LoginPage() {
   const [totpRequired, setTotpRequired] = useState(false);
   const [code, setCode] = useState("");
 
-  const { data: options } = useQuery({
+  const optionsQuery = useQuery({
     queryKey: ["loginOptions"],
     queryFn: ({ signal }) => api.get<LoginOptions>("/instance/login-options", { signal, on401: On401.throw }),
-    staleTime: Infinity,
+    staleTime: 0,
     retry: false,
   });
-  const directory = mode === LoginMode.directory && options?.ldap_enabled;
+  const directory = optionsQuery.data?.ldap_enabled === true && !localOpen;
+  const toggleLocal = () => {
+    setLocalOpen(open => !open);
+    setPassword("");
+    setTotpRequired(false);
+    setCode("");
+    submit.reset();
+  };
 
   const submit = useMutation({
     mutationFn: () =>
@@ -111,21 +112,20 @@ export function LoginPage() {
           </div>
         )}
 
-        <form
+        {optionsQuery.isPending && !localOpen && <Spinner label="Loading sign-in options…" />}
+        {optionsQuery.isError && (
+          <p className="mb-3 text-xs text-fg-muted">
+            Could not load sign-in options. Local account sign-in is still available.{" "}
+            <button type="button" className="underline" onClick={() => void optionsQuery.refetch()}>Retry</button>
+          </p>
+        )}
+        {(directory || localOpen) && <form
           onSubmit={onSubmit}
           className="flex flex-col gap-4 rounded-lg border border-subtle bg-surface/40 p-5"
         >
-          {options?.ldap_enabled && (
-            <ModeToggle
-              mode={mode}
-              onChange={(next) => {
-                setMode(next);
-                setTotpRequired(false);
-                setCode("");
-                submit.reset();
-              }}
-            />
-          )}
+          <p className="text-xs text-fg-muted">
+            {directory ? "Use your directory username and AD / LDAP password." : "Use your local Radd account password. Your directory password does not apply here."}
+          </p>
           {directory ? (
             <TextField
               label="Username"
@@ -178,39 +178,15 @@ export function LoginPage() {
           <Button type="submit" disabled={submit.isPending} className="justify-center">
             {submit.isPending ? "Signing in…" : "Sign in"}
           </Button>
-        </form>
+        </form>}
 
+        <button type="button" disabled={submit.isPending} aria-expanded={localOpen}
+          className="mt-4 block w-full text-center text-xs text-fg-muted underline hover:text-fg"
+          onClick={toggleLocal}>
+          {localOpen ? "Close local account sign-in" : "Sign in with a local account"}
+        </button>
         <SsoButtons next={next} />
       </div>
     </main>
-  );
-}
-
-/** Email / Directory switch — only rendered when the instance has LDAP configured. */
-function ModeToggle({
-  mode,
-  onChange,
-}: {
-  mode: LoginModeValue;
-  onChange: (mode: LoginModeValue) => void;
-}) {
-  const tab = (value: LoginModeValue, label: string) => (
-    <button
-      type="button"
-      onClick={() => onChange(value)}
-      className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium ${
-        mode === value
-          ? "bg-strong/70 text-heading"
-          : "text-fg-secondary hover:text-fg"
-      }`}
-    >
-      {label}
-    </button>
-  );
-  return (
-    <div className="flex gap-1 rounded-lg bg-elevated/60 p-1">
-      {tab(LoginMode.email, "Email")}
-      {tab(LoginMode.directory, "Directory")}
-    </div>
   );
 }

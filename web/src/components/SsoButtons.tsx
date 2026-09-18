@@ -48,7 +48,7 @@ export function SsoButtons({ next = null }: { next?: string | null }) {
     queryKey: ["ssoPublicProviders"],
     queryFn: ({ signal }) =>
       api.get<SsoProviderPublic[]>(ApiPath.ssoPublicProviders, { signal, on401: On401.throw }),
-    staleTime: Infinity,
+    staleTime: 0,
     retry: false,
   });
 

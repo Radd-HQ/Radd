@@ -89,6 +89,7 @@ try {
   await s.click('[role="menuitem"]', text => text.includes("Log out"));
   await new Promise(resolve => setTimeout(resolve, 700));
   assert.equal(await s.eval("location.pathname"), "/login");
+  await s.click("button", text => text.trim() === "Sign in with a local account");
   await s.click('input[type="email"]');
   await s.send("Input.insertText", {text: "b@example.com"});
   await s.click('input[type="password"]');
