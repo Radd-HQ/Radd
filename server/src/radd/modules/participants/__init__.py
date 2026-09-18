@@ -7,7 +7,7 @@ from radd.kernel.specs import RelationSpec
 from radd.modules.items.models import WorkItem
 
 from .models import ItemParticipant
-from . import service
+from . import mcptools, service
 from .router import router
 from .types import ParticipantEvent
 
@@ -60,6 +60,8 @@ plugin = RaddPlugin(
     ),
     depends_on=("events", "projects", "auth", "teams", "items", "notify"),
     routers=(router,),
+    # RADD-1236: the roster over MCP — by item key, person by email, team by name.
+    mcp_tools=mcptools.MCP_TOOLS,
     relations=(ITEM_PARTICIPANT,),
     event_types=(
         EventTypeSpec(ParticipantEvent.ADDED, "Participant added", "Service desk", item_scoped=True),
