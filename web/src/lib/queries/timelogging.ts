@@ -2,6 +2,7 @@
 
 import { queryOptions } from "@tanstack/react-query";
 import { api } from "../api";
+import { Entity, entityMeta } from "../cache";
 import {
   ApiPath,
   apiItemTimelogPath,
@@ -23,6 +24,10 @@ import type {
 export const itemTimelogQuery = (itemId: string) =>
   queryOptions({
     queryKey: queryKeys.itemTimelog(itemId),
+    // RADD-1237: without entity tags this query was never SUBSCRIBED, so a
+    // worklog logged out of band (MCP log_work, another tab) sat unseen until
+    // a reload — the realtime hub only forwards what a live query asked for.
+    meta: entityMeta(Entity.worklog, Entity.item),
     queryFn: ({ signal }) => api.get<ItemTimeSummary>(apiItemTimelogPath(itemId), { signal }),
   });
 
