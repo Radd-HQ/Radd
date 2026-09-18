@@ -11,16 +11,7 @@ import { mePreferencesQuery, queryKeys } from "../../lib/queries";
 import { type Me, type ProfileUpdate } from "../../lib/types";
 import { Avatar } from "../../components/Avatar";
 import { EDITOR_AI_PREF_KEY } from "../../components/editor/ai";
-import {
-  Density,
-  Theme,
-  getDensity,
-  getTheme,
-  setDensity,
-  setTheme,
-  type DensityValue,
-  type ThemeValue,
-} from "../../lib/theme";
+import { Density, Theme, setDensity, setTheme, useAppearance } from "../../lib/theme";
 import { Button } from "../../components/Button";
 import { Select } from "../../components/Select";
 import { TextField } from "../../components/TextField";
@@ -297,8 +288,7 @@ function EditorAiPanel() {
 
 /** Theme + density (spec 39) — per-browser, applied instantly. */
 function AppearanceSection() {
-  const [theme, setThemeState] = useState<ThemeValue>(getTheme());
-  const [density, setDensityState] = useState<DensityValue>(getDensity());
+  const { theme, density } = useAppearance();
   return (
     <section className="mt-8 border-t border-subtle pt-6">
       <h2 className="mb-3 text-sm font-semibold text-fg">Appearance</h2>
@@ -309,10 +299,7 @@ function AppearanceSection() {
             <button
               key={option}
               type="button"
-              onClick={() => {
-                setTheme(option);
-                setThemeState(option);
-              }}
+              onClick={() => setTheme(option)}
               className={
                 "rounded-md border px-2.5 py-1 capitalize cursor-pointer " +
                 (theme === option
@@ -330,10 +317,7 @@ function AppearanceSection() {
             <button
               key={option}
               type="button"
-              onClick={() => {
-                setDensity(option);
-                setDensityState(option);
-              }}
+              onClick={() => setDensity(option)}
               className={
                 "rounded-md border px-2.5 py-1 capitalize cursor-pointer " +
                 (density === option

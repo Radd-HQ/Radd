@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { CircleUserRound, LogOut, Moon, Sun } from "lucide-react";
 import { Avatar } from "../Avatar";
 import { DropdownMenu } from "../DropdownMenu";
-import { Theme, getTheme, setTheme } from "../../lib/theme";
+import { Theme, setTheme, useAppearance } from "../../lib/theme";
 import { AuthStatus, logout } from "../../lib/auth";
 import { RoutePath } from "../../lib/constants";
 import { useAuthState } from "../../lib/hooks";
@@ -29,7 +29,9 @@ export function UserMenu() {
     }
   };
 
-  const dark = getTheme() === Theme.dark;
+  // RADD-1238: subscribed, so the entry flips with the theme instead of
+  // repeating the previous click.
+  const dark = useAppearance().theme === Theme.dark;
 
   return (
     <DropdownMenu
