@@ -424,6 +424,55 @@ async def test_automation_notify_action_obeys_the_mute(db):
     assert await _count(db, heard, NotificationType.AUTOMATION) == 1
 
 
+async def test_an_automation_notification_carries_the_issue_it_fired_on(db):
+    """RADD-972. The engine wrote `{message, rule}` and set `item_id` on the row,
+    so every renderer that composes a line from the PAYLOAD — the digest, the
+    per-event email — could name the rule and not the issue: the line was
+    linkless, by RADD-967's degradation, on the one type where the link is the
+    whole point of being told. The ref is resolved at write time like every
+    other item-scoped type (spec 26); an itemless rule keeps the degradation.
+    """
+    from radd.modules.automations.engine import _apply_plan
+    from radd.modules.automations.planning import _Plan
+    from radd.modules.automations.types import PlanKind
+    from radd.modules.items.models import WorkItem
+    from radd.modules.notify import lines
+
+    actor = User(
+        email=f"target-{uuid.uuid4().hex[:8]}@example.com",
+        name="Automation target",
+        instance_role=InstanceRole.ADMIN.value,  # may create the item it is told about
+    )
+    db.add(actor)
+    await db.flush()
+    project, created = await _shareable_item(db, actor)
+    item = await db.get(WorkItem, created.id)
+    key = f"{project.key}-{created.number}"
+
+    for target in (item, None):
+        await _apply_plan(
+            db,
+            _Plan(PlanKind.NOTIFY, "notify_user", notify=(actor.id, "Escalated to tier 2")),
+            target,
+            actor,
+            rule_name="Escalate",
+        )
+
+    rows = await _rows(db, actor)
+    assert len(rows) == 2
+    with_item = next(row for row in rows if row.item_id == created.id)
+    without = next(row for row in rows if row.item_id is None)
+    assert with_item.payload["item_key"] == key
+    assert with_item.payload["item_title"] == "Printer on fire"
+    assert with_item.payload["message"] == "Escalated to tier 2"
+    assert "item_key" not in without.payload
+
+    linked = lines.entry(with_item, {})
+    assert linked.url.endswith(f"/issues/{key}")
+    assert linked.subject == f"[{key}] Printer on fire"
+    assert lines.entry(without, {}).url == ""
+
+
 async def test_page_update_fan_out_obeys_the_channel_rules(db):
     """The wiki path, now off the outbox like everything else (spec 118).
 

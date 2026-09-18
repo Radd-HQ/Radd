@@ -547,8 +547,9 @@ def test_an_issue_line_links_the_issue_and_a_page_line_links_the_page():
 
 
 def test_a_notification_with_no_item_key_carries_no_link():
-    """Automation notifications carry `{message, rule}` and nothing else, so the
-    line degrades to the message rather than to `/issues/` with nothing after."""
+    """An ITEMLESS automation notification carries `{message, rule}` and nothing
+    else (an item-scoped one has carried the ref since RADD-972), so the line
+    degrades to the message rather than to `/issues/` with nothing after."""
     entry = lines.entry(
         Notification(
             user_id=uuid.uuid4(),
