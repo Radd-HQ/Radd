@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Link, useParams } from "@tanstack/react-router";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { Link, useNavigate, useParams } from "@tanstack/react-router";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BarChart3,
   BookOpen,
@@ -25,12 +25,15 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { ContextMenu } from "../ContextMenu";
-import { RoutePath } from "../../lib/constants";
+import { api } from "../../lib/api";
+import { Entity, invalidateEntities } from "../../lib/cache";
+import { ApiPath, RoutePath } from "../../lib/constants";
+import { pageLink } from "../../lib/page-links";
 import { usePermissions, useIsAuthenticated } from "../../lib/hooks";
-import { projectByIdQuery, projectByKeyQuery, viewQuery } from "../../lib/queries";
+import { pageByPathQuery, pageSpaceByIdentityQuery, projectByIdQuery, projectByKeyQuery, viewQuery } from "../../lib/queries";
 import { useNavFacts } from "../../lib/nav-facts";
 import { pinKey, useNavPins, type NavPin } from "../../lib/topbar-prefs";
-import { Permission, type Project, type View } from "../../lib/types";
+import { Permission, type Page, type PageCreate, type Project, type View } from "../../lib/types";
 import { NewItemModal } from "../items/NewItemModal";
 import { ProjectPicker } from "../projects/ProjectPicker";
 import { Button } from "../Button";
@@ -236,8 +239,52 @@ export function PinsBar() {
   );
 }
 
-/** The route project creates in one click; other scopes open server search. */
+/** RADD-1243 (radd-hq/radd#15): the button creates what the route holds. In
+ *  the wiki it is "New page" — under the open page, or at the root of the
+ *  space — and everywhere else the New item it always was. A space the person
+ *  cannot write in falls back to the item button, so nothing disappears. */
 function NewItemButton() {
+  const { spaceSlug, _splat: pagePath = "" } = useParams({ strict: false }) as {
+    spaceSlug?: string;
+    _splat?: string;
+  };
+  if (spaceSlug) return <NewPageButton spaceSlug={spaceSlug} pagePath={pagePath} />;
+  return <NewWorkItemButton />;
+}
+
+function NewPageButton({ spaceSlug, pagePath }: { spaceSlug: string; pagePath: string }) {
+  const perms = usePermissions();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const space = useQuery(pageSpaceByIdentityQuery(spaceSlug));
+  const page = useQuery({ ...pageByPathQuery(spaceSlug, pagePath), enabled: Boolean(pagePath) });
+  const create = useMutation({
+    mutationFn: () =>
+      api.post<Page>(ApiPath.pages, {
+        space_id: space.data!.id,
+        parent_id: page.data?.id ?? null,
+        title: "Untitled",
+      } satisfies PageCreate),
+    onSuccess: (created) => void navigate(pageLink(created.space.slug, created.path)),
+    onSettled: () => void invalidateEntities(queryClient, Entity.page, Entity.docSpace),
+  });
+  if (!space.data || !perms.space(space.data, Permission.pageWrite)) return <NewWorkItemButton />;
+  const under = pagePath && page.data ? page.data.title : null;
+  return (
+    <Button
+      size="sm"
+      onClick={() => create.mutate()}
+      disabled={create.isPending || (Boolean(pagePath) && !page.data)}
+      title={under ? `New page under ${under}` : `New page in ${space.data.name}`}
+      data-new-page
+    >
+      <Plus size={13} aria-hidden />New page
+    </Button>
+  );
+}
+
+/** The route project creates in one click; other scopes open server search. */
+function NewWorkItemButton() {
   const perms = usePermissions();
   const { projectKey } = useParams({ strict: false });
   const routeProject = useQuery(projectByKeyQuery(projectKey ?? ""));
