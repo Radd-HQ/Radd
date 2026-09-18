@@ -27,6 +27,7 @@ from typing import Any
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.config import settings
 from radd.kernel.mcptools import limit_arg, limit_property, object_schema
 from radd.kernel.specs import McpToolSpec
 from radd.modules.auth import authz
@@ -63,6 +64,11 @@ def receipt(page: Page) -> dict[str, Any]:
         "title": page.title,
         "version": page.version,
         "parent_id": str(page.parent_id) if page.parent_id else None,
+        # RADD-1240: the address to hand a person. A permalink, because it
+        # survives renames and moves — and because an agent given only an id
+        # assembled `/pages/<uuid>` itself, which is a space address that does
+        # not exist (radd-hq/radd#12).
+        "url": f"{settings.app_base_url.rstrip('/')}/pages?pageId={page.number}",
     }
 
 

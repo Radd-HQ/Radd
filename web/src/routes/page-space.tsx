@@ -5,7 +5,7 @@ import { Archive, BookOpen, ChevronRight } from "lucide-react";
 import { RoutePath } from "../lib/constants";
 import { usePermissions } from "../lib/hooks";
 import { pageLink } from "../lib/page-links";
-import { archivedPagesQuery, pageByPathQuery, pagesQuery, pageSpaceByIdentityQuery } from "../lib/queries";
+import { archivedPagesQuery, pageByKeyQuery, pageByPathQuery, pagesQuery, pageSpaceByIdentityQuery } from "../lib/queries";
 import { Permission } from "../lib/types";
 import { Button } from "../components/Button";
 import { Modal } from "../components/Modal";
@@ -33,6 +33,8 @@ import { ErrorText } from "../components/ErrorText";
  * the history entry — arriving by an old link shouldn't cost the visitor a
  * Back press to escape.
  */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function PageSpacePage() {
   const { spaceSlug = "", _splat: pagePath = "" } = useParams({ strict: false }) as {
     spaceSlug?: string;
@@ -46,6 +48,19 @@ export function PageSpacePage() {
   const perms = usePermissions();
   const spaceQuery = useQuery(pageSpaceByIdentityQuery(spaceSlug));
   const space = spaceQuery.data;
+  // RADD-1240 (radd-hq/radd#12): an agent handed a page's id assembled
+  // `/pages/<uuid>` itself — a SPACE address that does not exist, answered
+  // with "Page space not found." and nowhere to go. When the segment is a
+  // uuid no space owns, ask whether it names a page, and land on the page.
+  const segmentIsId = UUID.test(spaceSlug);
+  const rescue = useQuery({
+    ...pageByKeyQuery(spaceSlug),
+    enabled: segmentIsId && spaceQuery.data === null,
+  });
+  useEffect(() => {
+    if (!rescue.data) return;
+    void navigate({ ...pageLink(rescue.data.space.slug, rescue.data.path), replace: true });
+  }, [rescue.data, navigate]);
   const [treeOpen, setTreeOpen] = useState(false);
   useEffect(() => setTreeOpen(false), [spaceSlug, pageSlug]);
   const pages = useQuery({ ...pagesQuery(space?.id ?? ""), enabled: Boolean(space) });
@@ -94,11 +109,23 @@ export function PageSpacePage() {
     <QueryError label="page space" error={spaceQuery.error} />
     <Button variant="secondary" onClick={() => void spaceQuery.refetch()}>Retry space</Button>
   </div>;
+  if (segmentIsId && !space && (rescue.isPending || rescue.data)) {
+    return <Spinner label="Opening page…" />;
+  }
   if (pages.isError || !space) {
     return (
-      <div className="p-6">
+      <div className="space-y-3 p-6">
         {!space ? (
-          <ErrorText size="sm" error="Page space not found." />
+          <>
+            <ErrorText size="sm" error={`Page space not found: ${spaceSlug}`} />
+            <p className="text-[13px] text-fg-muted">
+              A page address is <code>/pages/&lt;space&gt;/&lt;page&gt;</code>, or{" "}
+              <code>/pages?pageId=&lt;number&gt;</code> for a permalink.{" "}
+              <Link to={RoutePath.pages} className="text-accent-text underline-offset-2 hover:underline">
+                All spaces
+              </Link>
+            </p>
+          </>
         ) : (
           <QueryError label="pages" error={pages.error} />
         )}
