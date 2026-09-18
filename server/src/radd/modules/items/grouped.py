@@ -61,6 +61,11 @@ async def grouped_items(session, actor, data: GroupPageRequest) -> GroupPage:
         .join(StateCategoryDef, StateCategoryDef.key == State.category_key)
         .where(WorkItem.id.in_(visible))
     )
+    if data.project_id is not None:
+        # Keep the authorized subquery, but expose the project restriction to
+        # the outer rank scan too. Otherwise LIMIT can walk the global rank
+        # index and probe permission membership for unrelated projects.
+        query = query.where(WorkItem.project_id == data.project_id)
     if "epic" in (data.axis, data.lane):
         query = query.outerjoin(parent, parent.id == WorkItem.parent_id).outerjoin(
             grand, grand.id == parent.parent_id

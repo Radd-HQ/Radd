@@ -1,0 +1,172 @@
+{
+  "tables": {
+    "work_items": 501298,
+    "comments": 1791684,
+    "events": 21271,
+    "search_index": 501298,
+    "projects": 106,
+    "users": 1114,
+    "teams": 2299,
+    "field_definitions": 319
+  },
+  "database_size": "10 GB",
+  "database_settings_raw": {
+    "effective_cache_size": "524288",
+    "jit": "on",
+    "max_connections": "100",
+    "max_parallel_workers_per_gather": "2",
+    "shared_buffers": "16384",
+    "statement_timeout": "0",
+    "work_mem": "4096"
+  },
+  "app_pool": {
+    "retained": 5,
+    "overflow": 10,
+    "workers_in_process": true
+  },
+  "indexes": [
+    [
+      "comments",
+      "CREATE INDEX ix_comments_author_id ON public.comments USING btree (author_id)"
+    ],
+    [
+      "comments",
+      "CREATE INDEX ix_comments_entity_id ON public.comments USING btree (entity_id)"
+    ],
+    [
+      "comments",
+      "CREATE INDEX ix_comments_parent_order ON public.comments USING btree (entity_type, entity_id, created_at, id)"
+    ],
+    [
+      "comments",
+      "CREATE INDEX ix_comments_unresolved_inline ON public.comments USING btree (entity_type, entity_id) WHERE ((anchor IS NOT NULL) AND (resolved_at IS NULL))"
+    ],
+    [
+      "comments",
+      "CREATE UNIQUE INDEX pk_comments ON public.comments USING btree (id)"
+    ],
+    [
+      "events",
+      "CREATE INDEX ix_events_actor_id ON public.events USING btree (actor_id)"
+    ],
+    [
+      "events",
+      "CREATE INDEX ix_events_automated ON public.events USING btree (id) WHERE automated"
+    ],
+    [
+      "events",
+      "CREATE INDEX ix_events_changes ON public.events USING gin (((payload -> 'changes'::text)) jsonb_path_ops)"
+    ],
+    [
+      "events",
+      "CREATE INDEX ix_events_entity ON public.events USING btree (entity_type, entity_id)"
+    ],
+    [
+      "events",
+      "CREATE INDEX ix_events_event_type ON public.events USING btree (event_type)"
+    ],
+    [
+      "events",
+      "CREATE INDEX ix_events_project_id ON public.events USING btree (project_id)"
+    ],
+    [
+      "events",
+      "CREATE INDEX ix_events_search_trgm ON public.events USING gin (search_text gin_trgm_ops)"
+    ],
+    [
+      "events",
+      "CREATE UNIQUE INDEX pk_events ON public.events USING btree (id)"
+    ],
+    [
+      "search_index",
+      "CREATE INDEX ix_search_index_assignee_id ON public.search_index USING btree (assignee_id)"
+    ],
+    [
+      "search_index",
+      "CREATE INDEX ix_search_index_project_id ON public.search_index USING btree (project_id)"
+    ],
+    [
+      "search_index",
+      "CREATE INDEX ix_search_index_reporter_id ON public.search_index USING btree (reporter_id)"
+    ],
+    [
+      "search_index",
+      "CREATE INDEX ix_search_index_team_id ON public.search_index USING btree (team_id)"
+    ],
+    [
+      "search_index",
+      "CREATE INDEX ix_search_index_tsv ON public.search_index USING gin (tsv)"
+    ],
+    [
+      "search_index",
+      "CREATE UNIQUE INDEX pk_search_index ON public.search_index USING btree (item_id)"
+    ],
+    [
+      "work_items",
+      "CREATE INDEX ix_work_items_assignee_id ON public.work_items USING btree (assignee_id)"
+    ],
+    [
+      "work_items",
+      "CREATE INDEX ix_work_items_cycle_id ON public.work_items USING btree (cycle_id)"
+    ],
+    [
+      "work_items",
+      "CREATE INDEX ix_work_items_parent_id ON public.work_items USING btree (parent_id)"
+    ],
+    [
+      "work_items",
+      "CREATE INDEX ix_work_items_project_id ON public.work_items USING btree (project_id)"
+    ],
+    [
+      "work_items",
+      "CREATE INDEX ix_work_items_project_rank ON public.work_items USING btree (project_id, rank)"
+    ],
+    [
+      "work_items",
+      "CREATE INDEX ix_work_items_rank ON public.work_items USING btree (rank)"
+    ],
+    [
+      "work_items",
+      "CREATE INDEX ix_work_items_release_id ON public.work_items USING btree (release_id)"
+    ],
+    [
+      "work_items",
+      "CREATE INDEX ix_work_items_reporter_id ON public.work_items USING btree (reporter_id)"
+    ],
+    [
+      "work_items",
+      "CREATE INDEX ix_work_items_state_id ON public.work_items USING btree (state_id)"
+    ],
+    [
+      "work_items",
+      "CREATE INDEX ix_work_items_team_id ON public.work_items USING btree (team_id)"
+    ],
+    [
+      "work_items",
+      "CREATE INDEX ix_work_items_type_id ON public.work_items USING btree (type_id)"
+    ],
+    [
+      "work_items",
+      "CREATE INDEX ix_work_items_visibility ON public.work_items USING btree (visibility)"
+    ],
+    [
+      "work_items",
+      "CREATE UNIQUE INDEX pk_work_items ON public.work_items USING btree (id)"
+    ],
+    [
+      "work_items",
+      "CREATE UNIQUE INDEX uq_work_items_project_id_number ON public.work_items USING btree (project_id, number)"
+    ]
+  ],
+  "enabled_sla_policies": 0,
+  "pg_stat_statements_installed": false,
+  "host": {
+    "system": "Linux",
+    "logical_cpus": 12,
+    "cpu": "AMD Ryzen 5 5600X 6-Core Processor",
+    "memory_kib": {
+      "MemTotal": 32739368,
+      "MemAvailable": 13315896
+    }
+  }
+}

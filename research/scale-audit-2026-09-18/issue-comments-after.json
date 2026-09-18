@@ -1,0 +1,328 @@
+{
+  "url": "/issues/PUBPRF-73",
+  "renderedIssue": true,
+  "metrics": {
+    "longTasks": [],
+    "shifts": [
+      {
+        "start": 665.5,
+        "value": 0.0019052218364197528,
+        "recentInput": false
+      },
+      {
+        "start": 1214.800000011921,
+        "value": 0.00020119298864293983,
+        "recentInput": false
+      }
+    ],
+    "milestones": [
+      {
+        "label": "descriptionHost",
+        "at": 1186.8999999761581
+      },
+      {
+        "label": "richContent",
+        "at": 1207.199999988079
+      }
+    ]
+  },
+  "resources": [
+    {
+      "path": "/api/v1/auth/me",
+      "start": 130,
+      "responseStart": 152,
+      "end": 153,
+      "duration": 22,
+      "bytes": 610
+    },
+    {
+      "path": "/assets/LazyRichEditor-MtZgZtO_.js",
+      "start": 161,
+      "responseStart": 329,
+      "end": 334,
+      "duration": 173,
+      "bytes": 7033
+    },
+    {
+      "path": "/assets/LazyRichViewer-DJ1Hl-Bh.js",
+      "start": 162,
+      "responseStart": 349,
+      "end": 352,
+      "duration": 190,
+      "bytes": 55683
+    },
+    {
+      "path": "/api/v1/projects/summary",
+      "start": 564,
+      "responseStart": 638,
+      "end": 639,
+      "duration": 75,
+      "bytes": 414
+    },
+    {
+      "path": "/api/v1/page-spaces/summary",
+      "start": 564,
+      "responseStart": 637,
+      "end": 639,
+      "duration": 75,
+      "bytes": 396
+    },
+    {
+      "path": "/api/v1/page-spaces?q=&limit=50&offset=0",
+      "start": 565,
+      "responseStart": 653,
+      "end": 654,
+      "duration": 89,
+      "bytes": 941
+    },
+    {
+      "path": "/api/v1/capabilities",
+      "start": 566,
+      "responseStart": 604,
+      "end": 620,
+      "duration": 54,
+      "bytes": 3000
+    },
+    {
+      "path": "/api/v1/views?include_global=true&global_only=true&exclude_type=queue&include_shares=false&q=&limit=50&offset=0",
+      "start": 567,
+      "responseStart": 657,
+      "end": 658,
+      "duration": 92,
+      "bytes": 1115
+    },
+    {
+      "path": "/api/v1/views?include_global=true&global_only=false&view_type=queue&include_shares=false&q=&limit=50&offset=0",
+      "start": 567,
+      "responseStart": 669,
+      "end": 673,
+      "duration": 107,
+      "bytes": 302
+    },
+    {
+      "path": "/api/v1/cycles?q=&limit=50&offset=0&include_completed=false&dated_only=false",
+      "start": 567,
+      "responseStart": 668,
+      "end": 672,
+      "duration": 105,
+      "bytes": 302
+    },
+    {
+      "path": "/api/v1/cycles/summary?q=",
+      "start": 568,
+      "responseStart": 673,
+      "end": 674,
+      "duration": 106,
+      "bytes": 302
+    },
+    {
+      "path": "/api/v1/projects?q=&limit=50&offset=0&hide_related=false",
+      "start": 568,
+      "responseStart": 697,
+      "end": 701,
+      "duration": 133,
+      "bytes": 581
+    },
+    {
+      "path": "/api/v1/items/by-key/PUBPRF-73",
+      "start": 568,
+      "responseStart": 732,
+      "end": 733,
+      "duration": 165,
+      "bytes": 1349
+    },
+    {
+      "path": "/api/v1/projects/2251eea0-e945-4d1a-afaf-ff26c283b1b7",
+      "start": 735,
+      "responseStart": 775,
+      "end": 776,
+      "duration": 41,
+      "bytes": 579
+    },
+    {
+      "path": "/api/v1/states?project_id=2251eea0-e945-4d1a-afaf-ff26c283b1b7",
+      "start": 735,
+      "responseStart": 774,
+      "end": 775,
+      "duration": 40,
+      "bytes": 1958
+    },
+    {
+      "path": "/api/v1/fields",
+      "start": 736,
+      "responseStart": 803,
+      "end": 804,
+      "duration": 68,
+      "bytes": 153517
+    },
+    {
+      "path": "/api/v1/screens/effective?project_id=2251eea0-e945-4d1a-afaf-ff26c283b1b7&issue_type_id=1d5236e4-4b99-40b1-b4c9-7062c758ad99",
+      "start": 736,
+      "responseStart": 776,
+      "end": 782,
+      "duration": 46,
+      "bytes": 3989
+    },
+    {
+      "path": "/api/v1/fields/writable?project_id=2251eea0-e945-4d1a-afaf-ff26c283b1b7",
+      "start": 736,
+      "responseStart": 783,
+      "end": 784,
+      "duration": 48,
+      "bytes": 322
+    },
+    {
+      "path": "/api/v1/attachments?entity_type=item&entity_id=73a9a5e2-ccc3-4e63-bca7-0975a9a33106",
+      "start": 820,
+      "responseStart": 863,
+      "end": 864,
+      "duration": 44,
+      "bytes": 302
+    },
+    {
+      "path": "/api/v1/items/73a9a5e2-ccc3-4e63-bca7-0975a9a33106/comments/feed?section=all&limit=50",
+      "start": 821,
+      "responseStart": 866,
+      "end": 868,
+      "duration": 47,
+      "bytes": 1227
+    },
+    {
+      "path": "/api/v1/canned-responses",
+      "start": 821,
+      "responseStart": 833,
+      "end": 834,
+      "duration": 13,
+      "bytes": 330
+    },
+    {
+      "path": "/api/v1/issue-types?project_id=2251eea0-e945-4d1a-afaf-ff26c283b1b7",
+      "start": 822,
+      "responseStart": 857,
+      "end": 860,
+      "duration": 38,
+      "bytes": 1341
+    },
+    {
+      "path": "/api/v1/items/73a9a5e2-ccc3-4e63-bca7-0975a9a33106/mail-contacts",
+      "start": 822,
+      "responseStart": 835,
+      "end": 837,
+      "duration": 14,
+      "bytes": 330
+    },
+    {
+      "path": "/api/v1/items/73a9a5e2-ccc3-4e63-bca7-0975a9a33106/participants",
+      "start": 823,
+      "responseStart": 868,
+      "end": 869,
+      "duration": 46,
+      "bytes": 352
+    },
+    {
+      "path": "/api/v1/leave/current",
+      "start": 823,
+      "responseStart": 850,
+      "end": 852,
+      "duration": 29,
+      "bytes": 330
+    },
+    {
+      "path": "/api/v1/items/73a9a5e2-ccc3-4e63-bca7-0975a9a33106/csat",
+      "start": 823,
+      "responseStart": 853,
+      "end": 855,
+      "duration": 32,
+      "bytes": 330
+    },
+    {
+      "path": "/api/v1/auth/me",
+      "start": 824,
+      "responseStart": 902,
+      "end": 904,
+      "duration": 80,
+      "bytes": 610
+    },
+    {
+      "path": "/api/v1/items/73a9a5e2-ccc3-4e63-bca7-0975a9a33106/approvals",
+      "start": 824,
+      "responseStart": 864,
+      "end": 867,
+      "duration": 43,
+      "bytes": 330
+    },
+    {
+      "path": "/api/v1/releases?project_id=2251eea0-e945-4d1a-afaf-ff26c283b1b7",
+      "start": 825,
+      "responseStart": 896,
+      "end": 898,
+      "duration": 73,
+      "bytes": 302
+    },
+    {
+      "path": "/api/v1/labels",
+      "start": 825,
+      "responseStart": 898,
+      "end": 899,
+      "duration": 74,
+      "bytes": 302
+    },
+    {
+      "path": "/api/v1/items/73a9a5e2-ccc3-4e63-bca7-0975a9a33106/sla",
+      "start": 825,
+      "responseStart": 883,
+      "end": 888,
+      "duration": 63,
+      "bytes": 330
+    },
+    {
+      "path": "/api/v1/items/73a9a5e2-ccc3-4e63-bca7-0975a9a33106/allowed-transitions",
+      "start": 826,
+      "responseStart": 910,
+      "end": 912,
+      "duration": 86,
+      "bytes": 893
+    },
+    {
+      "path": "/api/v1/scoped-settings/resolve?key=estimation_points&project_id=2251eea0-e945-4d1a-afaf-ff26c283b1b7",
+      "start": 826,
+      "responseStart": 907,
+      "end": 909,
+      "duration": 83,
+      "bytes": 341
+    },
+    {
+      "path": "/api/v1/projects/2251eea0-e945-4d1a-afaf-ff26c283b1b7/timelogging",
+      "start": 827,
+      "responseStart": 926,
+      "end": 930,
+      "duration": 103,
+      "bytes": 369
+    },
+    {
+      "path": "/api/v1/items/73a9a5e2-ccc3-4e63-bca7-0975a9a33106/web-links",
+      "start": 828,
+      "responseStart": 926,
+      "end": 930,
+      "duration": 103,
+      "bytes": 302
+    },
+    {
+      "path": "/api/v1/items/73a9a5e2-ccc3-4e63-bca7-0975a9a33106/pages",
+      "start": 828,
+      "responseStart": 928,
+      "end": 931,
+      "duration": 103,
+      "bytes": 302
+    },
+    {
+      "path": "/assets/RichViewer-Dsuhv6SF.js",
+      "start": 885,
+      "responseStart": 927,
+      "end": 930,
+      "duration": 45,
+      "bytes": 1282
+    }
+  ],
+  "errors": []
+}

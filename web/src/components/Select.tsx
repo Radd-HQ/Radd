@@ -24,6 +24,8 @@ export interface SelectOption {
 interface SelectProps {
   value: string;
   onChange: (value: string) => void;
+  /** Prepare choices on pointer or keyboard opening. */
+  onOpen?: () => void;
   options: SelectOption[];
   /** Trigger text when no option matches `value`. */
   placeholder?: string;
@@ -91,6 +93,7 @@ function optionText(option: SelectOption): string {
 export function Select({
   value,
   onChange,
+  onOpen,
   options,
   placeholder,
   disabled = false,
@@ -148,6 +151,7 @@ export function Select({
 
   const openList = (index?: number, seedQuery = "") => {
     if (disabled) return;
+    onOpen?.();
     const rect = triggerRef.current?.getBoundingClientRect();
     if (rect) {
       const rows = Math.min(options.length * ROW_HEIGHT + 8, PANEL_MAX_HEIGHT);

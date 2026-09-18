@@ -16,6 +16,7 @@ interface SelectFieldProps {
   value?: string | number;
   /** Native-select-shaped handler: only `event.target.value` is populated. */
   onChange?: ChangeEventHandler<HTMLSelectElement>;
+  onOpen?: () => void;
   disabled?: boolean;
   title?: string;
   id?: string;
@@ -103,6 +104,7 @@ export function SelectField({
   children,
   value,
   onChange,
+  onOpen,
   disabled,
   title,
   id,
@@ -127,6 +129,7 @@ export function SelectField({
         id={selectId}
         value={value === undefined || value === null ? "" : String(value)}
         onChange={handleChange}
+        onOpen={onOpen}
         options={optionsFrom(children)}
         disabled={disabled}
         invalid={Boolean(error)}

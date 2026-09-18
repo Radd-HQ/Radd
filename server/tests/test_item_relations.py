@@ -233,6 +233,14 @@ async def test_reads_carry_the_per_row_verdict(db, scenario):
     assert other.capabilities.can_comment  # comment.write is unqualified here
     detail = await items.get_item(db, fixture["other"].id, restricted)
     assert detail.capabilities is not None and not detail.capabilities.can_update
+    renamed = await items.update_item(db, own.id, ItemUpdate(title="updated own issue"), restricted)
+    assert renamed.capabilities == (await items.get_item(db, own.id, restricted)).capabilities
+    handed_over = await items.update_item(
+        db, own.id, ItemUpdate(reporter_id=_admin.id), restricted
+    )
+    assert handed_over.capabilities is not None
+    assert not handed_over.capabilities.can_update
+    assert handed_over.capabilities == (await items.get_item(db, own.id, restricted)).capabilities
 
 
 async def test_hydration_refs_pass_the_relation_filter(db, scenario):

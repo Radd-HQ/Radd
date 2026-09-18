@@ -9,7 +9,7 @@ from radd.modules.auth import service as auth
 from radd.modules.auth import authz
 from radd.modules.auth.types import SESSION_COOKIE_NAME
 
-from .hub import ClientInfo, hub, validate_subscriptions
+from .hub import ClientInfo, hub, validate_subscriptions, authorize_item_subscriptions
 from .types import WS_CLOSE_UNAUTHENTICATED
 
 router = APIRouter(tags=["realtime"])
@@ -55,8 +55,10 @@ async def realtime_socket(websocket: WebSocket) -> None:
                                 await websocket.close(code=WS_CLOSE_UNAUTHENTICATED)
                                 return
                             readable = await authz.readable_projects(session, current)
-                            info.subscriptions = validate_subscriptions(
-                                data.get("queries"), set(map(str, readable))
+                            info.subscriptions = await authorize_item_subscriptions(
+                                session, current, validate_subscriptions(
+                                    data.get("queries"), set(map(str, readable))
+                                )
                             )
             except TimeoutError:
                 async with SessionLocal() as session:
@@ -67,8 +69,10 @@ async def realtime_socket(websocket: WebSocket) -> None:
                         break
                     if info.subscriptions is not None:
                         readable = await authz.readable_projects(session, user)
-                        info.subscriptions = validate_subscriptions(
-                            info.subscriptions, set(map(str, readable))
+                        info.subscriptions = await authorize_item_subscriptions(
+                            session, user, validate_subscriptions(
+                                info.subscriptions, set(map(str, readable))
+                            )
                         )
     except (ValueError, TypeError, AttributeError):
         await websocket.close(code=1008)

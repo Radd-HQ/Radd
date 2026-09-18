@@ -83,7 +83,6 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
   const webLinks = useQuery(itemWebLinksQuery(item.id));
   const itemPages = useQuery(itemPagesQuery(item.id));
   const updateItem = useUpdateItem();
-  const quickActions = useIssueQuickActions(item, project.id);
   const toggleStar = useToggleStarOnItem();
   const perms = usePermissions();
   const can = useCan();
@@ -135,6 +134,7 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
   const [title, setTitle] = useState(item.title);
   const [description, setDescription] = useState(item.description);
   const [editingDescription, setEditingDescription] = useState(false);
+  const quickActions = useIssueQuickActions(item, project.id, editingDescription);
   // A read-mode AI transform pending for the description edit session about to
   // open — handed to the editor as its initial whole-document run.
   const [pendingAiRun, setPendingAiRun] = useState<AiRun | null>(null);

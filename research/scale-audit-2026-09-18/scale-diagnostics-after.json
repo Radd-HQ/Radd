@@ -1,0 +1,38 @@
+{
+  "summary_jit_off": {
+    "ms": 396.17,
+    "queries": 14,
+    "result_sha256": "54099db4e28fe572cf2e23d1ee5fa2de5809dae4d20d095c368d5f72e53848a8",
+    "execution_ms": 176.283,
+    "planning_ms": 0.79,
+    "jit": null
+  },
+  "summary_jit_on": {
+    "ms": 258.39,
+    "queries": 14,
+    "result_sha256": "54099db4e28fe572cf2e23d1ee5fa2de5809dae4d20d095c368d5f72e53848a8",
+    "execution_ms": 221.049,
+    "planning_ms": 0.705,
+    "jit": {
+      "Functions": 266,
+      "Options": {
+        "Inlining": false,
+        "Optimization": false,
+        "Expressions": true,
+        "Deforming": true
+      },
+      "Timing": {
+        "Generation": 7.551,
+        "Inlining": 0.0,
+        "Optimization": 7.556,
+        "Emission": 66.006,
+        "Total": 81.113
+      }
+    }
+  },
+  "large_item_batch": {
+    "ids": 100864,
+    "returned": 100864,
+    "ms": 5432.44
+  }
+}

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ComponentProps } from "react";
 import type { RichViewer } from "./RichViewer";
 
@@ -12,6 +12,25 @@ const RichViewerImpl = lazy(() =>
 function PlainFallback({ text }: { text: string }) {
   return (
     <div className="whitespace-pre-wrap text-[14px] leading-relaxed text-fg">{text}</div>
+  );
+}
+
+function ReadyViewer(props: ComponentProps<typeof RichViewer>) {
+  const [ready, setReady] = useState(false);
+  const onReady = useRef(props.onReady);
+  onReady.current = props.onReady;
+  useLayoutEffect(() => {
+    if (ready) onReady.current?.();
+  }, [ready]);
+  return (
+    <div className="relative" aria-busy={!ready}>
+      {!ready && <PlainFallback text={props.text} />}
+      <div className={ready ? undefined : "invisible absolute inset-x-0 top-0"} aria-hidden={!ready}>
+        <Suspense fallback={null}>
+          <RichViewerImpl {...props} onReady={() => setReady(true)} />
+        </Suspense>
+      </div>
+    </div>
   );
 }
 
@@ -51,10 +70,10 @@ export function LazyRichViewer({
 
   return (
     <div ref={hostRef}>
-      {visible ? (
-        <Suspense fallback={<PlainFallback text={props.text} />}>
-          <RichViewerImpl {...props} />
-        </Suspense>
+      {visible || eager ? (
+        // Module load is only the first wait: keep the placeholder until
+        // Milkdown's asynchronous create has produced the rendered document.
+        <ReadyViewer key={props.text} {...props} />
       ) : (
         <PlainFallback text={props.text} />
       )}

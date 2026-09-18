@@ -224,10 +224,11 @@ async def users_for_groups(
     session: AsyncSession, group_ids: Iterable[uuid.UUID]
 ) -> set[uuid.UUID]:
     """Batched downward closure over several groups (team-member expansion)."""
-    out: set[uuid.UUID] = set()
-    for group_id in set(group_ids):
-        out |= await group_user_ids(session, group_id)
-    return out
+    ids = set(group_ids)
+    if not ids:
+        return set()
+    members = member_projection(select(Group.id).where(Group.id.in_(ids))).subquery()
+    return set(await session.scalars(select(members.c.user_id).distinct()))
 
 
 async def nesting_edges(

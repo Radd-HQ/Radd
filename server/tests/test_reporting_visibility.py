@@ -94,6 +94,14 @@ async def world(db):
 EXPECTED = {"anyone": 1, "member": 2, "admin": 3}
 
 
+async def test_velocity_validates_filter_with_no_completed_cycles(db, world):
+    from radd.modules.items.slq.errors import SlqError
+
+    assert (await reporting.velocity(db, 5, actor=world["admin"])).rows == []
+    with pytest.raises(SlqError):
+        await reporting.velocity(db, 5, actor=world["admin"], q="title =")
+
+
 @pytest.mark.parametrize("who", sorted(EXPECTED))
 async def test_throughput_and_flow_match_what_the_reader_can_list(db, world, who):
     actor, project = world[who], world["project"]

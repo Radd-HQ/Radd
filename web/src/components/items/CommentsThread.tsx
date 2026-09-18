@@ -82,7 +82,8 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
   const itemId = item.id;
   const user = useCurrentUser();
   // `/` quick actions in comment editors act on the thread's issue.
-  const quickActions = useIssueQuickActions(item, project.id);
+  const [actionsRequested, setActionsRequested] = useState(false);
+  const quickActions = useIssueQuickActions(item, project.id, actionsRequested);
   const perms = usePermissions();
   const canReadInternal = perms.project(project, Permission.commentReadInternal);
   // Whether the user may post at all (spec 07): gate the composer up front with a note rather than
@@ -157,7 +158,7 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
   const internalDraft = canReadInternal && visibility === CommentVisibility.internal;
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" onFocusCapture={() => setActionsRequested(true)}>
       {teamLabels.some(query => query.isError) && <div><QueryError label="comment team names" error={teamLabels.find(query => query.isError)?.error} /><Button size="sm" variant="ghost" onClick={() => void Promise.all(teamLabels.filter(query => query.isError).map(query => query.refetch()))}>Retry comment team names</Button></div>}
       <CommentHistory hasOlder={comments.hasNextPage} loading={comments.isFetchingNextPage}
         onOlder={() => comments.fetchNextPage()} error={comments.isFetchNextPageError ? errorMessage(comments.error) : undefined}>

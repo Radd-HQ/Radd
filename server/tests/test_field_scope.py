@@ -65,6 +65,9 @@ async def test_scope_resolution_global_single_and_multi(db):
     assert {f"g_{tag}", f"a_{tag}", f"ab_{tag}"} <= in_a
     assert f"g_{tag}" in in_b and f"ab_{tag}" in in_b
     assert f"a_{tag}" not in in_b
+    batch = await fields_service.definitions_for_projects(db, [a.id, b.id])
+    assert _keys(batch[a.id]) == in_a
+    assert _keys(batch[b.id]) == in_b
 
 
 async def test_widen_then_promote_to_global(db):

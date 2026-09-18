@@ -7,6 +7,7 @@ never depends on time logging — the plugin stays per-project-optional.
 import uuid
 from collections.abc import Iterable, Sequence
 from datetime import date, datetime
+from itertools import batched
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -159,12 +160,15 @@ async def logged_seconds_by_items(
     ids = set(item_ids)
     if not ids:
         return {}
-    rows = await session.execute(
-        select(Worklog.item_id, func.sum(Worklog.time_spent_seconds))
-        .where(Worklog.item_id.in_(ids))
-        .group_by(Worklog.item_id)
-    )
-    return {item_id: int(total or 0) for item_id, total in rows.all()}
+    out = {}
+    for batch in batched(ids, 1000):
+        rows = await session.execute(
+            select(Worklog.item_id, func.sum(Worklog.time_spent_seconds))
+            .where(Worklog.item_id.in_(batch))
+            .group_by(Worklog.item_id)
+        )
+        out.update((item_id, int(total or 0)) for item_id, total in rows.all())
+    return out
 
 
 async def estimate_seconds_by_items(
@@ -175,12 +179,15 @@ async def estimate_seconds_by_items(
     ids = set(item_ids)
     if not ids:
         return {}
-    rows = await session.execute(
-        select(ItemEstimate.item_id, ItemEstimate.original_estimate_seconds).where(
-            ItemEstimate.item_id.in_(ids)
+    out = {}
+    for batch in batched(ids, 1000):
+        rows = await session.execute(
+            select(ItemEstimate.item_id, ItemEstimate.original_estimate_seconds).where(
+                ItemEstimate.item_id.in_(batch)
+            )
         )
-    )
-    return {item_id: seconds for item_id, seconds in rows.all()}
+        out.update(rows.all())
+    return out
 
 
 async def timelog_batch(

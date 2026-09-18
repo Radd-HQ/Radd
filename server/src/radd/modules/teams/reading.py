@@ -1,5 +1,6 @@
 """Team roster windows over effective direct and directory-group membership."""
 import uuid
+from collections.abc import Sequence
 
 from sqlalchemy import case, func, null, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,13 +13,14 @@ from .models import Team, TeamMember, TeamManager
 from .schemas import TeamMemberRead, TeamPersonChoice, TeamStewardPerson, TeamStewardshipRead, TeamGroupRead, TeamGroupChoice
 
 
-def member_projection(team_id: uuid.UUID):
-    roots = select(TeamMember.group_id).where(TeamMember.team_id == team_id,
+def member_projection(team_id: uuid.UUID | Sequence[uuid.UUID]):
+    scope = TeamMember.team_id.in_([team_id] if isinstance(team_id, uuid.UUID) else team_id)
+    roots = select(TeamMember.group_id).where(scope,
                                              TeamMember.group_id.is_not(None))
     inherited = groups.member_projection(roots).subquery()
     people = union_all(
         select(TeamMember.user_id, null().label("via_group")).where(
-            TeamMember.team_id == team_id, TeamMember.user_id.is_not(None)),
+            scope, TeamMember.user_id.is_not(None)),
         select(inherited.c.user_id, groups.Group.name.label("via_group"))
         .join(groups.Group, groups.Group.id == inherited.c.root_id),
     ).subquery()

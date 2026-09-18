@@ -1,6 +1,7 @@
 import uuid
 from collections.abc import Iterable
 from dataclasses import dataclass
+from itertools import batched
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -65,11 +66,45 @@ async def items_by_ids(
     session: AsyncSession, ids: Iterable[uuid.UUID]
 ) -> dict[uuid.UUID, WorkItem]:
     """Batch fetch for stream/engine consumers (SLA evaluation, spec 30)."""
-    id_list = list(ids)
-    if not id_list:
-        return {}
-    result = await session.execute(select(WorkItem).where(WorkItem.id.in_(id_list)))
-    return {item.id: item for item in result.scalars()}
+    out = {}
+    for batch in batched(dict.fromkeys(ids), 1000):
+        result = await session.scalars(select(WorkItem).where(WorkItem.id.in_(batch)))
+        out.update((item.id, item) for item in result)
+    return out
+
+
+async def readable_item_ids(session: AsyncSession, actor, ids: Iterable[uuid.UUID]) -> set[uuid.UUID]:
+    """Authorize exact record interests, including archived detail records."""
+    from radd.modules.auth import authz
+    from .visibility import relation_read_clause
+
+    projects = await authz.readable_projects(session, actor)
+    if not projects:
+        return set()
+    clause = await relation_read_clause(session, actor, projects)
+    out = set()
+    for batch in batched(dict.fromkeys(ids), 1000):
+        query = select(WorkItem.id).where(WorkItem.id.in_(batch), WorkItem.project_id.in_(projects))
+        if clause is not None:
+            query = query.where(clause)
+        out.update(await session.scalars(query))
+    return out
+
+
+async def iter_project_items(session: AsyncSession, project_id: uuid.UUID):
+    """Bounded active-item batches for workers; no full-project ID list/IN."""
+    after = None
+    while True:
+        query = select(WorkItem).where(
+            WorkItem.project_id == project_id, WorkItem.archived_at.is_(None)
+        ).order_by(WorkItem.id).limit(500)
+        if after is not None:
+            query = query.where(WorkItem.id > after)
+        batch = list(await session.scalars(query))
+        if not batch:
+            return
+        after = batch[-1].id
+        yield batch
 
 
 @dataclass(frozen=True)
@@ -111,13 +146,15 @@ async def epics_for_items(
         .outerjoin(grandparent, grandparent.id == parent.parent_id)
         .join(epic, epic.id == nearest)
         .join(Project, Project.id == epic.project_id)
-        .where(child.id.in_(id_list))
     )
-    rows = (await session.execute(stmt)).all()
-    return {
-        child_id: EpicRef(id=epic_id, key=f"{project_key}-{number}", title=title)
-        for child_id, epic_id, project_key, number, title in rows
-    }
+    out = {}
+    for batch in batched(dict.fromkeys(id_list), 1000):
+        rows = await session.execute(stmt.where(child.id.in_(batch)))
+        out.update(
+            (child_id, EpicRef(id=epic_id, key=f"{project_key}-{number}", title=title))
+            for child_id, epic_id, project_key, number, title in rows
+        )
+    return out
 
 
 async def item_ids_for_projects(
@@ -184,12 +221,15 @@ async def estimate_points_by_ids(
     id_list = list(ids)
     if not id_list:
         return {}
-    rows = await session.execute(
-        select(WorkItem.id, WorkItem.estimate_points).where(
-            WorkItem.id.in_(id_list), WorkItem.estimate_points.is_not(None)
+    out = {}
+    for batch in batched(dict.fromkeys(id_list), 1000):
+        rows = await session.execute(
+            select(WorkItem.id, WorkItem.estimate_points).where(
+                WorkItem.id.in_(batch), WorkItem.estimate_points.is_not(None)
+            )
         )
-    )
-    return {item_id: float(points) for item_id, points in rows.all()}
+        out.update((item_id, float(points)) for item_id, points in rows.all())
+    return out
 
 
 async def cycle_item_ids_query(

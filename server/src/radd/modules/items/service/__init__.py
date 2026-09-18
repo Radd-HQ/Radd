@@ -49,6 +49,8 @@ from .queries import (
     find_item_by_key,
     item_ids_for_projects,
     items_by_ids,
+    iter_project_items,
+    readable_item_ids,
     require_item,
     require_readable_item,
 )
@@ -56,7 +58,7 @@ from .clone import clone_item
 from .convert import convert_item_kind
 from .merge import merge_items
 from .read import get_item, get_item_by_key
-from .refs import item_ref, ref_from
+from .refs import item_ref, item_refs, ref_from
 from .visibility import (
     denied_slq_fields,
     ensure_item_relation,
@@ -72,6 +74,9 @@ __all__ = [
     "merge_items",
     "add_item_link",
     "item_ref",
+    "item_refs",
+    "iter_project_items",
+    "readable_item_ids",
     "ref_from",
     "denied_slq_fields",
     "ensure_item_relation",

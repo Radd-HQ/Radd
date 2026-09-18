@@ -1,0 +1,90 @@
+[
+  {
+    "role": "admin",
+    "case": "cross_project_list",
+    "equal": true,
+    "before_sha256": "e0ec37b8c9f75352f990be6935cbea4ddb5608ab89eb3ae7fc758691c37cee27",
+    "after_sha256": "e0ec37b8c9f75352f990be6935cbea4ddb5608ab89eb3ae7fc758691c37cee27",
+    "compatible": true
+  },
+  {
+    "role": "admin",
+    "case": "key",
+    "equal": true,
+    "before_sha256": "fb009a45e55531f0596a14219b84008d41fd51b6fedfee70779ba76a67ae99f9",
+    "after_sha256": "fb009a45e55531f0596a14219b84008d41fd51b6fedfee70779ba76a67ae99f9",
+    "compatible": true
+  },
+  {
+    "role": "admin",
+    "case": "lowercase_key",
+    "equal": true,
+    "before_sha256": "fb009a45e55531f0596a14219b84008d41fd51b6fedfee70779ba76a67ae99f9",
+    "after_sha256": "fb009a45e55531f0596a14219b84008d41fd51b6fedfee70779ba76a67ae99f9",
+    "compatible": true
+  },
+  {
+    "role": "admin",
+    "case": "numeric_prefix",
+    "equal": true,
+    "before_sha256": "fb009a45e55531f0596a14219b84008d41fd51b6fedfee70779ba76a67ae99f9",
+    "after_sha256": "fb009a45e55531f0596a14219b84008d41fd51b6fedfee70779ba76a67ae99f9",
+    "compatible": true
+  },
+  {
+    "role": "admin",
+    "case": "common_word",
+    "equal": false,
+    "before_sha256": "239ccf854ba23ff300d1919d3ee8dc453636d8e1c5bae984be359620621ca1a0",
+    "after_sha256": "86b6c3d15f62cab568bb99e332db6d164670d3167ba6635bde2f780cd7ffe7f5",
+    "same_rows_unordered": false,
+    "same_item_set": false,
+    "same_rank_and_updated_order": true,
+    "shared_hits_identical": true,
+    "compatible": true
+  },
+  {
+    "role": "member",
+    "case": "cross_project_list",
+    "equal": true,
+    "before_sha256": "58e7dfc0d586df79bb396354c7bd99ed9bc2cfb51575d4078feb4b9201d7cad0",
+    "after_sha256": "58e7dfc0d586df79bb396354c7bd99ed9bc2cfb51575d4078feb4b9201d7cad0",
+    "compatible": true
+  },
+  {
+    "role": "member",
+    "case": "key",
+    "equal": true,
+    "before_sha256": "07b6b49efa32fe1407da23842f35777c6549bc454c9e4612c2f9ea5bcc2c840a",
+    "after_sha256": "07b6b49efa32fe1407da23842f35777c6549bc454c9e4612c2f9ea5bcc2c840a",
+    "compatible": true
+  },
+  {
+    "role": "member",
+    "case": "lowercase_key",
+    "equal": true,
+    "before_sha256": "07b6b49efa32fe1407da23842f35777c6549bc454c9e4612c2f9ea5bcc2c840a",
+    "after_sha256": "07b6b49efa32fe1407da23842f35777c6549bc454c9e4612c2f9ea5bcc2c840a",
+    "compatible": true
+  },
+  {
+    "role": "member",
+    "case": "numeric_prefix",
+    "equal": true,
+    "before_sha256": "07b6b49efa32fe1407da23842f35777c6549bc454c9e4612c2f9ea5bcc2c840a",
+    "after_sha256": "07b6b49efa32fe1407da23842f35777c6549bc454c9e4612c2f9ea5bcc2c840a",
+    "compatible": true
+  },
+  {
+    "role": "member",
+    "case": "common_word",
+    "equal": false,
+    "before_sha256": "40b1f72ee75520a4eb60c3befd117e616609ce5235bc20bc700dfe2d43a995f1",
+    "after_sha256": "a78af3e5588c617847c06cbc2cd80b9f32ce3b32b7a73b7118ff2e2647155ac3",
+    "same_rows_unordered": false,
+    "same_item_set": false,
+    "same_rank_and_updated_order": true,
+    "shared_hits_identical": true,
+    "compatible": true
+  }
+]

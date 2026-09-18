@@ -11,6 +11,7 @@ zeros included, so the client can distinguish "no children" from "not allowed".
 
 import uuid
 from collections.abc import Sequence
+from itertools import batched
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -64,17 +65,17 @@ async def rollup_items(
     }
     frontier: dict[uuid.UUID, set[uuid.UUID]] = {root: {root} for root in roots}
     while frontier:
-        children = (
-            await session.execute(
+        children = []
+        for batch in batched(frontier, 1000):
+            children.extend((await session.execute(
                 select(
                     WorkItem.id, WorkItem.parent_id, WorkItem.state_id, WorkItem.estimate_points
                 ).where(
-                    WorkItem.parent_id.in_(frontier),
+                    WorkItem.parent_id.in_(batch),
                     WorkItem.project_id.in_(readable),
                     *(() if relation_clause is None else (relation_clause,)),
                 )
-            )
-        ).all()
+            )).all())
         next_frontier: dict[uuid.UUID, set[uuid.UUID]] = {}
         for child_id, parent_id, state_id, points in children:
             new_roots = {root for root in frontier[parent_id] if child_id not in seen[root]}

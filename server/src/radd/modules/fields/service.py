@@ -419,6 +419,27 @@ async def definitions_for_project(session: AsyncSession, project: Project) -> li
     return list((await session.execute(query)).scalars())
 
 
+async def definitions_for_projects(
+    session: AsyncSession, project_ids: Sequence[uuid.UUID]
+) -> dict[uuid.UUID, list[FieldDefinition]]:
+    """Resolve a page's field scopes together, including global definitions."""
+    out: dict[uuid.UUID, list[FieldDefinition]] = {pid: [] for pid in project_ids}
+    if not out:
+        return out
+    rows = await session.execute(
+        select(FieldDefinition, FieldProject.project_id)
+        .outerjoin(FieldProject, FieldProject.field_id == FieldDefinition.id)
+        .where(FieldProject.project_id.is_(None) | FieldProject.project_id.in_(out))
+    )
+    for definition, project_id in rows:
+        if project_id is None:
+            for definitions in out.values():
+                definitions.append(definition)
+        else:
+            out[project_id].append(definition)
+    return out
+
+
 async def restricted_field_ids(session: AsyncSession, *, ids: list[str] | None = None) -> set[str]:
     """Field ids (as strings) carrying any grant — used for the `restricted` read flag."""
     return await access_service.resource_ids_with_grants(session, FIELD_RESOURCE, ids=ids)
@@ -578,18 +599,24 @@ async def build_field_ctx(
     user_id: uuid.UUID,
     has_manage: bool,
     subjects_lookup,
+    grants_by_field: Mapping[str, Sequence[AccessGrant]] | None = None,
+    builtin_grants: Mapping[str, Sequence[AccessGrant]] | None = None,
 ) -> FieldAccessContext:
     """Assemble a FieldAccessContext for a project: batch-load the fields' grants and,
     only if any grant exists, the actor's subjects. `subjects_lookup` is an async
     callable returning (role_ids, team_ids, group_ids) — passed in so items owns
     the authz call."""
-    grants_by_field = await access_service.grants_for_resources(
-        session, FIELD_RESOURCE, [str(d.id) for d in definitions]
-    )
+    if has_manage:
+        return FieldAccessContext(has_manage=True, project_id=project.id)
+    if grants_by_field is None:
+        grants_by_field = await access_service.grants_for_resources(
+            session, FIELD_RESOURCE, [str(d.id) for d in definitions]
+        )
     # Builtin read grants in the project's scope drive read-blanking (spec 92).
-    builtin_grants = await access_service.grants_for_resources(
-        session, BUILTIN_RESOURCE, sorted(_READ_RESTRICTABLE_NAMES)
-    )
+    if builtin_grants is None:
+        builtin_grants = await access_service.grants_for_resources(
+            session, BUILTIN_RESOURCE, sorted(_READ_RESTRICTABLE_NAMES)
+        )
     if not any(grants_by_field.values()) and not any(builtin_grants.values()):
         return FieldAccessContext(has_manage=has_manage, project_id=project.id)
     role_ids, team_ids, group_ids = await subjects_lookup()

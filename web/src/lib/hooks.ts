@@ -19,6 +19,9 @@ import {
   authStateQuery,
   capabilitiesQuery,
   fieldWritabilityQuery,
+  effectiveScreenQuery,
+  fieldsQuery,
+  statesQuery,
   instanceConfigQuery,
   itemByKeyQuery,
   pageSpaceSummaryQuery,
@@ -361,7 +364,7 @@ export function useItemWritability(
   item?: Pick<Item, "capabilities"> | null,
 ): ItemWritability {
   const perms = usePermissions();
-  const { data } = useQuery(fieldWritabilityQuery(project?.id));
+  const { data, isError } = useQuery(fieldWritabilityQuery(project?.id));
   const projectLevel = project ? perms.project(project, Permission.itemUpdate) : false;
   const verdict = item?.capabilities?.can_update;
   const canEdit = verdict !== undefined && verdict !== null ? verdict : projectLevel;
@@ -370,10 +373,12 @@ export function useItemWritability(
   return useMemo(
     () => ({
       canEdit,
-      fieldWritable: (name: string) => canEdit && !readonly.has(name),
+      fieldWritable: (name: string) => canEdit && data !== undefined && !readonly.has(name),
       restricted: (name: string) => readonly.has(name),
       reasonFor: (name: string) =>
-        readonly.has(name)
+        data === undefined && canEdit
+          ? isError ? "Could not check field permissions." : "Checking field permissions…"
+          : readonly.has(name)
           ? "This field is restricted — you don't have permission to edit it."
           : !canEdit
             ? rowDenied
@@ -381,7 +386,7 @@ export function useItemWritability(
               : "You don't have permission to edit this issue."
             : "",
     }),
-    [canEdit, rowDenied, readonly],
+    [canEdit, rowDenied, readonly, data, isError],
   );
 }
 
@@ -518,12 +523,22 @@ export function useItemByKey(itemKey: string): ItemByKey {
   const itemByKey = useQuery({ ...itemByKeyQuery(itemKey), enabled: itemKey !== "" });
   const item = itemByKey.data;
   const projectQuery = useQuery(projectByIdQuery(item?.project_id ?? ""));
+  // These determine the initial field layout and editability. Start alongside
+  // the project read, and mount the detail with a coherent set of controls.
+  // Shared query keys mean the body consumes these results without refetching.
+  const states = useQuery({ ...statesQuery(item?.project_id ?? ""), enabled: Boolean(item) });
+  const fields = useQuery({ ...fieldsQuery(), enabled: Boolean(item) });
+  const screen = useQuery({
+    ...effectiveScreenQuery(item?.project_id ?? "", item?.type?.id ?? null), enabled: Boolean(item),
+  });
+  const writability = useQuery(fieldWritabilityQuery(item?.project_id));
   const project = projectQuery.isError ? null : projectQuery.data;
 
   return {
     project,
     item: itemByKey.isError ? null : item,
-    isPending: itemByKey.isPending || (Boolean(item) && projectQuery.isPending),
+    isPending: itemByKey.isPending || (Boolean(item) &&
+      [projectQuery, states, fields, screen, writability].some(query => query.isPending)),
     isError: itemByKey.isError || projectQuery.isError,
   };
 }

@@ -119,7 +119,12 @@ async def _finish(
         occurred_at=occurred_at,
     )
     builtin_denied = await _builtin_read_denied(session, project, ctx)
-    return _filter_read(read, definitions, ctx, builtin_denied)
+    filtered = _filter_read(read, definitions, ctx, builtin_denied)
+    # Mutation responses seed the same full-detail cache as GET. Include the
+    # post-edit row capabilities too (e.g. handing ownership to another user).
+    return (await attach_capabilities(
+        session, actor, [filtered], {item.id: item}, {project.id: permissions}
+    ))[0]
 
 
 async def get_item(session: AsyncSession, item_id: uuid.UUID, actor: User) -> ItemRead:

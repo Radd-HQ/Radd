@@ -65,6 +65,12 @@ export type EntityTag = (typeof Entity)[keyof typeof Entity];
 interface EntityMeta extends Record<string, unknown> {
   entities: EntityTag[];
   projectId?: string;
+  itemId?: string;
+  itemDetail?: boolean;
+}
+
+export function itemEntityMeta(itemId: string, ...entities: EntityTag[]): EntityMeta {
+  return { entities, itemId };
 }
 
 /** Spread into a query's `meta` to declare which entities its data caches. */

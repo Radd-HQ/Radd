@@ -92,6 +92,33 @@ def test_project_subscriptions_target_only_interested_authorized_queries():
     assert query_targets(info, StubEvent("role")) == []
 
 
+def test_exact_interests_and_coalescing_preserve_each_changed_item():
+    from radd.modules.realtime.broadcaster import _coalesce
+    from radd.modules.realtime.hub import query_targets, validate_subscriptions
+
+    a, b = str(uuid.uuid4()), str(uuid.uuid4())
+    info = ClientInfo(USER, validate_subscriptions([
+        {"id": "a", "entities": ["item", "role"], "item_ids": [a]},
+        {"id": "b", "entities": ["item", "role"], "item_ids": [b]},
+        {"id": "collection", "entities": ["item"]},
+    ], set()))
+    events = []
+    for item_id in [a, a, b]:
+        change = StubEvent("item", {"item": {"id": item_id}, "changes": [{"field": "priority"}]})
+        change.event_type = "item.updated"
+        change.silent = False
+        events.append(change)
+    coalesced = _coalesce(events)
+    assert len(coalesced) == 1
+    assert query_targets(info, coalesced[0]) == ["a", "b", "collection"]
+    assert query_targets(info, events[0]) == ["a", "collection"]
+    assert query_targets(info, events[2]) == ["b", "collection"]
+    assert query_targets(info, StubEvent("role")) == ["a", "b"]
+    for field in ["parent", "links", "visibility", "assignee", "title", "description"]:
+        events[0].payload["changes"] = [{"field": field}]
+        assert query_targets(info, events[0]) == ["a", "b", "collection"]
+
+
 def test_two_socket_readers_receive_comment_changes_and_revocation(monkeypatch):
     """Real sessions, comment outbox rows and ASGI WebSockets share the delivery path."""
     import asyncio

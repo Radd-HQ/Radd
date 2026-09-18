@@ -12,7 +12,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "cd .. && node --test web/scripts/*.test.mjs",
-    "test:browser": "node scripts/browser-smoke.mjs && node scripts/browser-autocomplete.mjs",
+    "test:browser": "node scripts/browser-smoke.mjs && node scripts/browser-autocomplete.mjs && node scripts/browser-issue-performance.mjs",
     "build:all": "node scripts/build-all.mjs",
     "check": "npm run test && npm run build:all && npm run test:browser"
   },

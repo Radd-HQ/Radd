@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, Index, String, Text, func
+from sqlalchemy import ForeignKey, Index, String, Text, func, text
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -17,9 +17,11 @@ class SearchIndexRow(Base):
     """
 
     __tablename__ = "search_index"
-    # Key-prefix quick-open scans the table (ILIKE) — fine at studio row counts;
-    # only the tsv gets a real (GIN) index.
-    __table_args__ = (Index("ix_search_index_tsv", "tsv", postgresql_using="gin"),)
+    __table_args__ = (
+        Index("ix_search_index_tsv", "tsv", postgresql_using="gin"),
+        Index("ix_search_key_prefix", text("lower(key) text_pattern_ops")),
+        Index("ix_search_number_prefix", text("split_part(key, '-', 2) text_pattern_ops")),
+    )
 
     item_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("work_items.id", ondelete="CASCADE"), primary_key=True

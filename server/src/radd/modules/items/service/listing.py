@@ -10,8 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
+from radd.modules.access import service as access_service
 from radd.modules.fields import service as fields
-from radd.modules.fields.models import FieldDefinition
+from radd.modules.fields.types import READ_RESTRICTABLE_BUILTINS
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 
@@ -157,10 +158,11 @@ async def list_items(
         query = query.order_by(*ordering).limit(limit).offset(offset)
         items = list((await session.execute(query)).scalars())
 
-    for pid in {i.project_id for i in items} - projects.keys():
-        project = await projects_service.get_project(session, pid)
-        projects[pid] = project
-        permissions[pid] = await authz.effective_permissions(session, actor, project=project)
+    missing_projects = {i.project_id for i in items} - projects.keys()
+    if missing_projects:
+        for project in await session.scalars(select(Project).where(Project.id.in_(missing_projects))):
+            projects[project.id] = project
+            permissions[project.id] = readable[project.id]
     visible = [
         i for i in items if authz.holds_base(permissions[i.project_id], Permission.ITEM_READ)
     ]
@@ -174,13 +176,24 @@ async def list_items(
         relation_clause=await relation_read_clause(session, actor, readable_map),
     )
 
-    definitions: dict[uuid.UUID, Sequence[FieldDefinition]] = {}
+    definitions = await fields.definitions_for_projects(session, list({r.project_id for r in reads}))
+    grants_by_field = {}
+    builtin_grants = {}
+    if definitions and not await authz.is_admin(session, actor):
+        grants_by_field = await access_service.grants_for_resources(
+            session, fields.FIELD_RESOURCE,
+            {str(d.id) for project_defs in definitions.values() for d in project_defs},
+        )
+        builtin_grants = await access_service.grants_for_resources(
+            session, fields.BUILTIN_RESOURCE, sorted(READ_RESTRICTABLE_BUILTINS),
+        )
     ctxs: dict[uuid.UUID, fields.FieldAccessContext] = {}
     builtin_denied: dict[uuid.UUID, list[str]] = {}
     for pid in {r.project_id for r in reads}:
-        definitions[pid] = await fields.definitions_for_project(session, projects[pid])
         ctxs[pid] = await _field_ctx(
-            session, actor, projects[pid], permissions[pid], definitions[pid]
+            session, actor, projects[pid], permissions[pid], definitions[pid],
+            grants_by_field={str(d.id): grants_by_field.get(str(d.id), ()) for d in definitions[pid]},
+            builtin_grants=builtin_grants,
         )
         builtin_denied[pid] = await _builtin_read_denied(session, projects[pid], ctxs[pid])
     filtered = [

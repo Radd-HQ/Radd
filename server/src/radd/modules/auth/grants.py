@@ -618,8 +618,7 @@ async def users_entitled_to_project(
             team_ids.add(row.team_id)
         elif row.group_id is not None:
             group_ids.add(row.group_id)
-    for team_id in team_ids:
-        users |= {u.id for u, _via in await teams.member_users_with_via(session, team_id)}
+    users |= await teams.users_for_teams(session, team_ids)
     if group_ids:
         users |= await groups_service.users_for_groups(session, group_ids)
     return users

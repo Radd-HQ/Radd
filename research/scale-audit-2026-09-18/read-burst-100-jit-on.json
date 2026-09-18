@@ -1,0 +1,757 @@
+{
+  "concurrent_operations": 100,
+  "actor": "one existing restricted member",
+  "transaction_local_jit": "on",
+  "pool_size": 5,
+  "pool_overflow": 10,
+  "wall_seconds": 41.28,
+  "completed_per_second": 2.3,
+  "successful": 95,
+  "errors": {
+    "OperationalError": 5
+  },
+  "all_completion": {
+    "p50_ms": 15746.22,
+    "p95_ms": 34692.9,
+    "max_ms": 41271.39
+  },
+  "connection_acquisition": {
+    "p50_ms": 11856.0,
+    "p95_ms": 26556.01,
+    "max_ms": 28617.42
+  },
+  "event_loop_lag": {
+    "p50_ms": 2.04,
+    "p95_ms": 254.78,
+    "max_ms": 881.43
+  },
+  "process_max_rss_kib_linux": 399488,
+  "by_operation": {
+    "detail": {
+      "success": 50,
+      "p50_ms": 11882.79,
+      "p95_ms": 28616.92,
+      "max_ms": 29488.15
+    },
+    "list": {
+      "success": 30,
+      "p50_ms": 12658.88,
+      "p95_ms": 30758.98,
+      "max_ms": 31054.79
+    },
+    "search": {
+      "success": 10,
+      "p50_ms": 18507.35,
+      "p95_ms": 35734.45,
+      "max_ms": 35734.45
+    },
+    "summary": {
+      "success": 5,
+      "p50_ms": 37684.14,
+      "p95_ms": 41271.39,
+      "max_ms": 41271.39
+    }
+  },
+  "operations": [
+    {
+      "kind": "detail",
+      "ms": 1644.15,
+      "connection_acquisition_ms": 7.94,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 1842.9,
+      "connection_acquisition_ms": 28.39,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 1835.96,
+      "connection_acquisition_ms": 27.59,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 1856.54,
+      "connection_acquisition_ms": 29.48,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 1856.3,
+      "connection_acquisition_ms": 27.36,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 1923.88,
+      "connection_acquisition_ms": 29.4,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 1928.07,
+      "connection_acquisition_ms": 48.49,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 1924.78,
+      "connection_acquisition_ms": 33.25,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "search",
+      "ms": 5549.83,
+      "connection_acquisition_ms": 34.47,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "summary",
+      "ms": 15097.32,
+      "connection_acquisition_ms": 34.93,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 1894.88,
+      "connection_acquisition_ms": 28.41,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 1894.54,
+      "connection_acquisition_ms": 47.92,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 1916.3,
+      "connection_acquisition_ms": 47.63,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 1928.16,
+      "connection_acquisition_ms": 48.97,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 1893.99,
+      "connection_acquisition_ms": 47.6,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 5475.35,
+      "connection_acquisition_ms": 1644.57,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 5489.26,
+      "connection_acquisition_ms": 1840.29,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 5505.57,
+      "connection_acquisition_ms": 1854.16,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "search",
+      "ms": 9133.42,
+      "connection_acquisition_ms": 1861.83,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "summary",
+      "ms": 19257.97,
+      "connection_acquisition_ms": 1861.5,
+      "error": "OperationalError",
+      "error_reason": "canceling statement due to statement timeout"
+    },
+    {
+      "kind": "detail",
+      "ms": 5492.7,
+      "connection_acquisition_ms": 1911.51,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 5492.73,
+      "connection_acquisition_ms": 1911.91,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 5492.74,
+      "connection_acquisition_ms": 1912.17,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 5501.71,
+      "connection_acquisition_ms": 1918.09,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 5517.08,
+      "connection_acquisition_ms": 1923.22,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 5558.52,
+      "connection_acquisition_ms": 1927.0,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 5558.57,
+      "connection_acquisition_ms": 1927.99,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 5562.04,
+      "connection_acquisition_ms": 1930.48,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "search",
+      "ms": 15272.72,
+      "connection_acquisition_ms": 5489.4,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "summary",
+      "ms": 21877.54,
+      "connection_acquisition_ms": 5492.79,
+      "error": "OperationalError",
+      "error_reason": "canceling statement due to statement timeout"
+    },
+    {
+      "kind": "detail",
+      "ms": 9073.75,
+      "connection_acquisition_ms": 5495.53,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 9090.45,
+      "connection_acquisition_ms": 5496.57,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 9073.64,
+      "connection_acquisition_ms": 5497.03,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 9090.46,
+      "connection_acquisition_ms": 5502.37,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 9123.92,
+      "connection_acquisition_ms": 5527.42,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 9178.26,
+      "connection_acquisition_ms": 5527.95,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 9160.83,
+      "connection_acquisition_ms": 5553.01,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 9179.64,
+      "connection_acquisition_ms": 5558.93,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "search",
+      "ms": 18507.35,
+      "connection_acquisition_ms": 5559.28,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "summary",
+      "ms": 23011.66,
+      "connection_acquisition_ms": 5566.52,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 11858.56,
+      "connection_acquisition_ms": 9078.45,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 11758.49,
+      "connection_acquisition_ms": 9078.77,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 11882.75,
+      "connection_acquisition_ms": 9095.81,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 11858.39,
+      "connection_acquisition_ms": 9096.24,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 11882.79,
+      "connection_acquisition_ms": 9125.82,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 12534.89,
+      "connection_acquisition_ms": 9159.87,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 12540.27,
+      "connection_acquisition_ms": 9166.97,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 12658.88,
+      "connection_acquisition_ms": 9180.35,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "search",
+      "ms": 18507.14,
+      "connection_acquisition_ms": 9184.74,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "summary",
+      "ms": 28624.14,
+      "connection_acquisition_ms": 11856.0,
+      "error": "OperationalError",
+      "error_reason": "canceling statement due to statement timeout"
+    },
+    {
+      "kind": "detail",
+      "ms": 15104.91,
+      "connection_acquisition_ms": 11870.28,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 15146.51,
+      "connection_acquisition_ms": 11870.96,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 15200.19,
+      "connection_acquisition_ms": 11886.14,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 15149.07,
+      "connection_acquisition_ms": 11886.53,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 15629.25,
+      "connection_acquisition_ms": 12542.51,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 15746.22,
+      "connection_acquisition_ms": 12563.64,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 16017.14,
+      "connection_acquisition_ms": 12673.53,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 17786.76,
+      "connection_acquisition_ms": 15105.37,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "search",
+      "ms": 23584.91,
+      "connection_acquisition_ms": 15131.61,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "summary",
+      "ms": 31384.17,
+      "connection_acquisition_ms": 15150.96,
+      "error": "OperationalError",
+      "error_reason": "canceling statement due to statement timeout"
+    },
+    {
+      "kind": "detail",
+      "ms": 17665.67,
+      "connection_acquisition_ms": 15151.51,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 17700.88,
+      "connection_acquisition_ms": 15204.27,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 17783.86,
+      "connection_acquisition_ms": 15387.38,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 18232.18,
+      "connection_acquisition_ms": 15647.35,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 18336.4,
+      "connection_acquisition_ms": 15757.29,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 19411.11,
+      "connection_acquisition_ms": 16020.96,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 20727.49,
+      "connection_acquisition_ms": 17673.76,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 20835.65,
+      "connection_acquisition_ms": 17773.71,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "search",
+      "ms": 26667.42,
+      "connection_acquisition_ms": 17784.1,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "summary",
+      "ms": 34692.9,
+      "connection_acquisition_ms": 17787.93,
+      "error": "OperationalError",
+      "error_reason": "canceling statement due to statement timeout"
+    },
+    {
+      "kind": "detail",
+      "ms": 21637.15,
+      "connection_acquisition_ms": 18324.69,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 21697.52,
+      "connection_acquisition_ms": 18354.9,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 21715.33,
+      "connection_acquisition_ms": 19155.21,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 21711.31,
+      "connection_acquisition_ms": 19154.81,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 21733.36,
+      "connection_acquisition_ms": 19259.13,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 21932.84,
+      "connection_acquisition_ms": 19416.42,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 24140.86,
+      "connection_acquisition_ms": 20729.37,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 24520.01,
+      "connection_acquisition_ms": 20909.16,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "search",
+      "ms": 33047.41,
+      "connection_acquisition_ms": 21677.28,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "summary",
+      "ms": 37684.14,
+      "connection_acquisition_ms": 21710.53,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 25016.73,
+      "connection_acquisition_ms": 21718.48,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 25031.03,
+      "connection_acquisition_ms": 21719.51,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 25064.28,
+      "connection_acquisition_ms": 21736.28,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 25090.4,
+      "connection_acquisition_ms": 21893.36,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 25100.29,
+      "connection_acquisition_ms": 21940.06,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 26556.02,
+      "connection_acquisition_ms": 23091.47,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 26666.92,
+      "connection_acquisition_ms": 23826.44,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 28609.31,
+      "connection_acquisition_ms": 24150.56,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "search",
+      "ms": 35385.23,
+      "connection_acquisition_ms": 24520.14,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "summary",
+      "ms": 39600.01,
+      "connection_acquisition_ms": 25030.47,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 27964.89,
+      "connection_acquisition_ms": 25044.22,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 28608.36,
+      "connection_acquisition_ms": 25079.65,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 28624.61,
+      "connection_acquisition_ms": 25090.79,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 28616.92,
+      "connection_acquisition_ms": 25101.9,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 29488.15,
+      "connection_acquisition_ms": 26556.01,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 30758.98,
+      "connection_acquisition_ms": 26996.79,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 30605.58,
+      "connection_acquisition_ms": 26998.97,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 31054.79,
+      "connection_acquisition_ms": 27965.93,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "search",
+      "ms": 35734.45,
+      "connection_acquisition_ms": 28609.0,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "summary",
+      "ms": 41271.39,
+      "connection_acquisition_ms": 28617.42,
+      "error": null,
+      "error_reason": null
+    }
+  ]
+}

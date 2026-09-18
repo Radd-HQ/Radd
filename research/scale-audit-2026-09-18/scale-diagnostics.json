@@ -1,0 +1,38 @@
+{
+  "summary_jit_off": {
+    "ms": 648.2,
+    "queries": 14,
+    "result_sha256": "54099db4e28fe572cf2e23d1ee5fa2de5809dae4d20d095c368d5f72e53848a8",
+    "execution_ms": 338.69,
+    "planning_ms": 8.726,
+    "jit": null
+  },
+  "summary_jit_on": {
+    "ms": 7924.22,
+    "queries": 14,
+    "result_sha256": "54099db4e28fe572cf2e23d1ee5fa2de5809dae4d20d095c368d5f72e53848a8",
+    "execution_ms": 7880.246,
+    "planning_ms": 6.41,
+    "jit": {
+      "Functions": 7536,
+      "Options": {
+        "Inlining": true,
+        "Optimization": true,
+        "Expressions": true,
+        "Deforming": true
+      },
+      "Timing": {
+        "Generation": 227.878,
+        "Inlining": 643.72,
+        "Optimization": 12780.758,
+        "Emission": 8978.148,
+        "Total": 22630.505
+      }
+    }
+  },
+  "large_item_batch": {
+    "ids": 100864,
+    "error": "OperationalError",
+    "reason": "sending query and params failed: number of parameters must be between 0 and 65535"
+  }
+}

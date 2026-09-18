@@ -1,0 +1,114 @@
+{
+  "concurrent_operations": 10,
+  "actor": "one existing restricted member",
+  "pool_size": 5,
+  "pool_overflow": 10,
+  "wall_seconds": 9.26,
+  "completed_per_second": 1.08,
+  "successful": 10,
+  "errors": {},
+  "all_completion": {
+    "p50_ms": 1748.72,
+    "p95_ms": 9254.54,
+    "max_ms": 9254.54
+  },
+  "connection_acquisition": {
+    "p50_ms": 18.89,
+    "p95_ms": 29.27,
+    "max_ms": 29.27
+  },
+  "event_loop_lag": {
+    "p50_ms": 0.24,
+    "p95_ms": 9.03,
+    "max_ms": 607.45
+  },
+  "process_max_rss_kib_linux": 465332,
+  "by_operation": {
+    "detail": {
+      "success": 5,
+      "p50_ms": 1728.62,
+      "p95_ms": 1748.72,
+      "max_ms": 1748.72
+    },
+    "list": {
+      "success": 3,
+      "p50_ms": 1813.24,
+      "p95_ms": 1813.49,
+      "max_ms": 1813.49
+    },
+    "search": {
+      "success": 1,
+      "p50_ms": 3640.55,
+      "p95_ms": 3640.55,
+      "max_ms": 3640.55
+    },
+    "summary": {
+      "success": 1,
+      "p50_ms": 9254.54,
+      "p95_ms": 9254.54,
+      "max_ms": 9254.54
+    }
+  },
+  "operations": [
+    {
+      "kind": "detail",
+      "ms": 1554.46,
+      "connection_acquisition_ms": 2.86,
+      "error": null
+    },
+    {
+      "kind": "detail",
+      "ms": 1728.62,
+      "connection_acquisition_ms": 11.07,
+      "error": null
+    },
+    {
+      "kind": "detail",
+      "ms": 1728.6,
+      "connection_acquisition_ms": 15.8,
+      "error": null
+    },
+    {
+      "kind": "detail",
+      "ms": 1748.72,
+      "connection_acquisition_ms": 18.89,
+      "error": null
+    },
+    {
+      "kind": "detail",
+      "ms": 1742.27,
+      "connection_acquisition_ms": 28.25,
+      "error": null
+    },
+    {
+      "kind": "list",
+      "ms": 1796.22,
+      "connection_acquisition_ms": 18.0,
+      "error": null
+    },
+    {
+      "kind": "list",
+      "ms": 1813.24,
+      "connection_acquisition_ms": 29.27,
+      "error": null
+    },
+    {
+      "kind": "list",
+      "ms": 1813.49,
+      "connection_acquisition_ms": 28.59,
+      "error": null
+    },
+    {
+      "kind": "search",
+      "ms": 3640.55,
+      "connection_acquisition_ms": 28.29,
+      "error": null
+    },
+    {
+      "kind": "summary",
+      "ms": 9254.54,
+      "connection_acquisition_ms": 29.16,
+      "error": null
+    }
+  ]
+}

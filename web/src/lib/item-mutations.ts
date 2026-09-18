@@ -38,8 +38,22 @@ import type {
  * `meta.entities: [item]`, so any query (incl. ones added later by new modules)
  * is caught automatically. See lib/cache.ts.
  */
-function invalidateItemCaches(queryClient: QueryClient) {
-  void invalidateEntities(queryClient, Entity.item);
+function invalidateItemCaches(queryClient: QueryClient, authoritative?: Item) {
+  if (!authoritative) {
+    void invalidateEntities(queryClient, Entity.item);
+    return;
+  }
+  const supplied = new Set([
+    JSON.stringify(queryKeys.item(authoritative.id)),
+    JSON.stringify(queryKeys.itemByKey(authoritative.key)),
+  ]);
+  // The response already supplied these complete records. Collections still
+  // refresh for changed membership/order; websocket events remain independent
+  // so a concurrent writer can never be suppressed by a local time window.
+  void queryClient.invalidateQueries({ predicate: query => {
+    const entities = query.meta?.entities as string[] | undefined;
+    return Boolean(entities?.includes(Entity.item)) && !supplied.has(JSON.stringify(query.queryKey));
+  } });
 }
 
 /** Seed the freshly-returned item into both single-item caches (detail + panel)
@@ -87,7 +101,15 @@ export function useUpdateItem() {
     onSuccess: (updated) => {
       cacheItem(queryClient, updated);
     },
-    onSettled: () => invalidateItemCaches(queryClient),
+    onSettled: (updated, _error, { patch }) => {
+      // Changes to identity/visibility/relationships can remove read access or
+      // alter derived permissions. Preserve the authoritative GET for those,
+      // and for older servers that do not return row capabilities on PATCH.
+      const localFields = new Set(["title", "description", "priority", "flagged",
+        "estimate_points", "start_date", "target_date"]);
+      const complete = updated?.capabilities && Object.keys(patch).every(key => localFields.has(key));
+      invalidateItemCaches(queryClient, complete ? updated : undefined);
+    },
   });
 }
 

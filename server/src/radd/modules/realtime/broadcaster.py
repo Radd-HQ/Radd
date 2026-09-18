@@ -13,7 +13,7 @@ from radd.db import SessionLocal
 from radd.modules.events import service as events
 from radd.modules.events.service import Event
 
-from .hub import event_project_id, hub, query_targets, should_deliver
+from .hub import event_project_id, hub, query_targets, should_deliver, event_item_ids, InvalidationEvent
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ async def _fan_out(event: Event) -> None:
     )
 
 
-def _coalesce(batch: list[Event]) -> list[Event]:
+def _coalesce(batch: list[Event]) -> list[InvalidationEvent]:
     """Frames invalidate snapshots; repeated changes in one poll need one ping."""
     pending = {}
     for event in batch:
@@ -69,7 +69,16 @@ def _coalesce(batch: list[Event]) -> list[Event]:
                 if event.entity_type == "notification"
                 else None,
             )
-            pending[key] = event
+            item_ids = event_item_ids(event)
+            previous = pending.get(key)
+            if previous is not None:
+                # A broad event broadens the whole group. Otherwise retain
+                # every changed record while still sending one frame per poll.
+                item_ids = (previous.item_ids | item_ids
+                            if previous.item_ids is not None and item_ids is not None else None)
+            pending[key] = InvalidationEvent(
+                event.entity_type, getattr(event, "event_type", ""), event.payload or {}, item_ids
+            )
     return list(pending.values())
 
 

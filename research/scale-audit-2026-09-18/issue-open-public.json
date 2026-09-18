@@ -1,0 +1,354 @@
+{
+  "url": "/issues/PUBPRF-76",
+  "renderedIssue": true,
+  "metrics": {
+    "longTasks": [],
+    "shifts": [
+      {
+        "start": 626.8000000119209,
+        "value": 0.001252170380015432,
+        "recentInput": false
+      }
+    ],
+    "milestones": []
+  },
+  "resources": [
+    {
+      "path": "/api/v1/auth/me",
+      "start": 138,
+      "responseStart": 162,
+      "end": 163,
+      "duration": 26,
+      "bytes": 610
+    },
+    {
+      "path": "/assets/LazyRichEditor-DheCKLRI.js",
+      "start": 172,
+      "responseStart": 318,
+      "end": 320,
+      "duration": 148,
+      "bytes": 7033
+    },
+    {
+      "path": "/assets/LazyRichViewer-edds1dqS.js",
+      "start": 173,
+      "responseStart": 332,
+      "end": 334,
+      "duration": 162,
+      "bytes": 55311
+    },
+    {
+      "path": "/api/v1/projects/summary",
+      "start": 539,
+      "responseStart": 601,
+      "end": 603,
+      "duration": 64,
+      "bytes": 414
+    },
+    {
+      "path": "/api/v1/page-spaces/summary",
+      "start": 539,
+      "responseStart": 603,
+      "end": 604,
+      "duration": 65,
+      "bytes": 396
+    },
+    {
+      "path": "/api/v1/page-spaces?q=&limit=50&offset=0",
+      "start": 540,
+      "responseStart": 617,
+      "end": 618,
+      "duration": 77,
+      "bytes": 941
+    },
+    {
+      "path": "/api/v1/capabilities",
+      "start": 541,
+      "responseStart": 565,
+      "end": 569,
+      "duration": 28,
+      "bytes": 3000
+    },
+    {
+      "path": "/api/v1/views?include_global=true&global_only=true&exclude_type=queue&include_shares=false&q=&limit=50&offset=0",
+      "start": 541,
+      "responseStart": 619,
+      "end": 620,
+      "duration": 78,
+      "bytes": 1115
+    },
+    {
+      "path": "/api/v1/views?include_global=true&global_only=false&view_type=queue&include_shares=false&q=&limit=50&offset=0",
+      "start": 542,
+      "responseStart": 625,
+      "end": 626,
+      "duration": 84,
+      "bytes": 302
+    },
+    {
+      "path": "/api/v1/cycles?q=&limit=50&offset=0&include_completed=false&dated_only=false",
+      "start": 542,
+      "responseStart": 626,
+      "end": 628,
+      "duration": 86,
+      "bytes": 302
+    },
+    {
+      "path": "/api/v1/cycles/summary?q=",
+      "start": 542,
+      "responseStart": 628,
+      "end": 631,
+      "duration": 89,
+      "bytes": 302
+    },
+    {
+      "path": "/api/v1/projects?q=&limit=50&offset=0&hide_related=false",
+      "start": 543,
+      "responseStart": 652,
+      "end": 654,
+      "duration": 111,
+      "bytes": 581
+    },
+    {
+      "path": "/api/v1/items/by-key/PUBPRF-76",
+      "start": 543,
+      "responseStart": 717,
+      "end": 718,
+      "duration": 175,
+      "bytes": 1366
+    },
+    {
+      "path": "/api/v1/projects/2251eea0-e945-4d1a-afaf-ff26c283b1b7",
+      "start": 720,
+      "responseStart": 731,
+      "end": 732,
+      "duration": 12,
+      "bytes": 579
+    },
+    {
+      "path": "/api/v1/attachments?entity_type=item&entity_id=c8b5d0c7-4ff5-43b6-b4cf-93ac113527e3",
+      "start": 746,
+      "responseStart": 781,
+      "end": 782,
+      "duration": 37,
+      "bytes": 302
+    },
+    {
+      "path": "/api/v1/projects/summary",
+      "start": 746,
+      "responseStart": 778,
+      "end": 782,
+      "duration": 36,
+      "bytes": 414
+    },
+    {
+      "path": "/api/v1/page-spaces/summary",
+      "start": 746,
+      "responseStart": 779,
+      "end": 782,
+      "duration": 35,
+      "bytes": 396
+    },
+    {
+      "path": "/api/v1/users/directory",
+      "start": 747,
+      "responseStart": 757,
+      "end": 759,
+      "duration": 12,
+      "bytes": 330
+    },
+    {
+      "path": "/api/v1/states?project_id=2251eea0-e945-4d1a-afaf-ff26c283b1b7",
+      "start": 747,
+      "responseStart": 780,
+      "end": 782,
+      "duration": 35,
+      "bytes": 1958
+    },
+    {
+      "path": "/api/v1/labels",
+      "start": 747,
+      "responseStart": 778,
+      "end": 782,
+      "duration": 34,
+      "bytes": 302
+    },
+    {
+      "path": "/api/v1/automations/runnable",
+      "start": 748,
+      "responseStart": 776,
+      "end": 777,
+      "duration": 30,
+      "bytes": 330
+    },
+    {
+      "path": "/api/v1/items/c8b5d0c7-4ff5-43b6-b4cf-93ac113527e3/comments/feed?section=all&limit=50",
+      "start": 748,
+      "responseStart": 811,
+      "end": 812,
+      "duration": 64,
+      "bytes": 335
+    },
+    {
+      "path": "/api/v1/canned-responses",
+      "start": 749,
+      "responseStart": 793,
+      "end": 795,
+      "duration": 46,
+      "bytes": 330
+    },
+    {
+      "path": "/api/v1/issue-types?project_id=2251eea0-e945-4d1a-afaf-ff26c283b1b7",
+      "start": 749,
+      "responseStart": 810,
+      "end": 812,
+      "duration": 63,
+      "bytes": 1341
+    },
+    {
+      "path": "/api/v1/items/c8b5d0c7-4ff5-43b6-b4cf-93ac113527e3/mail-contacts",
+      "start": 750,
+      "responseStart": 794,
+      "end": 796,
+      "duration": 46,
+      "bytes": 330
+    },
+    {
+      "path": "/api/v1/items/c8b5d0c7-4ff5-43b6-b4cf-93ac113527e3/participants",
+      "start": 750,
+      "responseStart": 811,
+      "end": 812,
+      "duration": 63,
+      "bytes": 352
+    },
+    {
+      "path": "/api/v1/leave/current",
+      "start": 750,
+      "responseStart": 795,
+      "end": 796,
+      "duration": 46,
+      "bytes": 330
+    },
+    {
+      "path": "/api/v1/items/c8b5d0c7-4ff5-43b6-b4cf-93ac113527e3/csat",
+      "start": 750,
+      "responseStart": 806,
+      "end": 808,
+      "duration": 57,
+      "bytes": 330
+    },
+    {
+      "path": "/api/v1/auth/me",
+      "start": 751,
+      "responseStart": 837,
+      "end": 839,
+      "duration": 88,
+      "bytes": 610
+    },
+    {
+      "path": "/api/v1/items/c8b5d0c7-4ff5-43b6-b4cf-93ac113527e3/approvals",
+      "start": 751,
+      "responseStart": 808,
+      "end": 809,
+      "duration": 58,
+      "bytes": 330
+    },
+    {
+      "path": "/api/v1/users/directory?project_id=2251eea0-e945-4d1a-afaf-ff26c283b1b7",
+      "start": 751,
+      "responseStart": 826,
+      "end": 828,
+      "duration": 77,
+      "bytes": 330
+    },
+    {
+      "path": "/api/v1/users/directory?project_id=2251eea0-e945-4d1a-afaf-ff26c283b1b7&include_requesters=true",
+      "start": 752,
+      "responseStart": 827,
+      "end": 828,
+      "duration": 77,
+      "bytes": 330
+    },
+    {
+      "path": "/api/v1/releases?project_id=2251eea0-e945-4d1a-afaf-ff26c283b1b7",
+      "start": 752,
+      "responseStart": 848,
+      "end": 849,
+      "duration": 97,
+      "bytes": 302
+    },
+    {
+      "path": "/api/v1/items/c8b5d0c7-4ff5-43b6-b4cf-93ac113527e3/sla",
+      "start": 752,
+      "responseStart": 828,
+      "end": 829,
+      "duration": 76,
+      "bytes": 330
+    },
+    {
+      "path": "/api/v1/fields/writable?project_id=2251eea0-e945-4d1a-afaf-ff26c283b1b7",
+      "start": 753,
+      "responseStart": 859,
+      "end": 861,
+      "duration": 108,
+      "bytes": 322
+    },
+    {
+      "path": "/api/v1/items/c8b5d0c7-4ff5-43b6-b4cf-93ac113527e3/allowed-transitions",
+      "start": 753,
+      "responseStart": 861,
+      "end": 863,
+      "duration": 110,
+      "bytes": 893
+    },
+    {
+      "path": "/api/v1/scoped-settings/resolve?key=estimation_points&project_id=2251eea0-e945-4d1a-afaf-ff26c283b1b7",
+      "start": 753,
+      "responseStart": 860,
+      "end": 861,
+      "duration": 108,
+      "bytes": 341
+    },
+    {
+      "path": "/api/v1/screens/effective?project_id=2251eea0-e945-4d1a-afaf-ff26c283b1b7&issue_type_id=1d5236e4-4b99-40b1-b4c9-7062c758ad99",
+      "start": 754,
+      "responseStart": 862,
+      "end": 863,
+      "duration": 109,
+      "bytes": 3989
+    },
+    {
+      "path": "/api/v1/fields",
+      "start": 754,
+      "responseStart": 899,
+      "end": 901,
+      "duration": 147,
+      "bytes": 153517
+    },
+    {
+      "path": "/api/v1/projects/2251eea0-e945-4d1a-afaf-ff26c283b1b7/timelogging",
+      "start": 755,
+      "responseStart": 881,
+      "end": 882,
+      "duration": 127,
+      "bytes": 369
+    },
+    {
+      "path": "/api/v1/items/c8b5d0c7-4ff5-43b6-b4cf-93ac113527e3/web-links",
+      "start": 755,
+      "responseStart": 898,
+      "end": 901,
+      "duration": 146,
+      "bytes": 302
+    },
+    {
+      "path": "/api/v1/items/c8b5d0c7-4ff5-43b6-b4cf-93ac113527e3/pages",
+      "start": 755,
+      "responseStart": 900,
+      "end": 901,
+      "duration": 145,
+      "bytes": 302
+    }
+  ],
+  "errors": []
+}

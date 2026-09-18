@@ -21,6 +21,7 @@ import uuid
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime
+from itertools import batched
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -122,20 +123,18 @@ async def _item_events(
     ids = {str(item_id) for item_id in item_ids}
     if not ids:
         return {}
-    rows = (
-        await session.execute(
-            select(Event)
-            .where(
+    grouped: dict[uuid.UUID, list[Event]] = {}
+    for batch in batched(ids, 1000):
+        rows = await session.scalars(
+            select(Event).where(
                 Event.entity_type == str(ItemEntity.ITEM),
-                Event.entity_id.in_(ids),
+                Event.entity_id.in_(batch),
                 Event.event_type.in_((str(ItemEvent.CREATED), str(ItemEvent.UPDATED))),
             )
             .order_by(Event.id)
         )
-    ).scalars()
-    grouped: dict[uuid.UUID, list[Event]] = {}
-    for event in rows:
-        grouped.setdefault(uuid.UUID(event.entity_id), []).append(event)
+        for event in rows:
+            grouped.setdefault(uuid.UUID(event.entity_id), []).append(event)
     return grouped
 
 
@@ -143,8 +142,13 @@ async def build_item_timelines(
     session: AsyncSession, item_ids: Iterable[uuid.UUID]
 ) -> dict[uuid.UUID, ItemTimeline]:
     """The workhorse: per item, the full reconstructed timeline from its event history."""
-    grouped = await _item_events(session, item_ids)
-    return {item_id: _build(item_id, events) for item_id, events in grouped.items()}
+    # Release full event snapshots after each batch; retain only the compact
+    # timelines that report calculations actually need.
+    out = {}
+    for batch in batched(dict.fromkeys(item_ids), 1000):
+        grouped = await _item_events(session, batch)
+        out.update((item_id, _build(item_id, events)) for item_id, events in grouped.items())
+    return out
 
 
 async def item_state_timeline(

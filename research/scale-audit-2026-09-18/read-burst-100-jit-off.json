@@ -1,0 +1,755 @@
+{
+  "concurrent_operations": 100,
+  "actor": "one existing restricted member",
+  "transaction_local_jit": "off",
+  "pool_size": 5,
+  "pool_overflow": 10,
+  "wall_seconds": 18.22,
+  "completed_per_second": 5.49,
+  "successful": 100,
+  "errors": {},
+  "all_completion": {
+    "p50_ms": 9451.25,
+    "p95_ms": 17344.39,
+    "max_ms": 18214.56
+  },
+  "connection_acquisition": {
+    "p50_ms": 7015.89,
+    "p95_ms": 14784.5,
+    "max_ms": 15359.3
+  },
+  "event_loop_lag": {
+    "p50_ms": 46.33,
+    "p95_ms": 370.91,
+    "max_ms": 624.24
+  },
+  "process_max_rss_kib_linux": 399436,
+  "by_operation": {
+    "detail": {
+      "success": 50,
+      "p50_ms": 8791.02,
+      "p95_ms": 17008.89,
+      "max_ms": 17373.57
+    },
+    "list": {
+      "success": 30,
+      "p50_ms": 9445.84,
+      "p95_ms": 17387.08,
+      "max_ms": 17402.78
+    },
+    "search": {
+      "success": 10,
+      "p50_ms": 10148.22,
+      "p95_ms": 18214.56,
+      "max_ms": 18214.56
+    },
+    "summary": {
+      "success": 10,
+      "p50_ms": 8745.43,
+      "p95_ms": 17344.39,
+      "max_ms": 17344.39
+    }
+  },
+  "operations": [
+    {
+      "kind": "detail",
+      "ms": 2140.82,
+      "connection_acquisition_ms": 7.19,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 2219.2,
+      "connection_acquisition_ms": 20.13,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 2249.6,
+      "connection_acquisition_ms": 21.05,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 2230.43,
+      "connection_acquisition_ms": 21.08,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 2263.51,
+      "connection_acquisition_ms": 23.36,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 2326.3,
+      "connection_acquisition_ms": 45.38,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 2322.47,
+      "connection_acquisition_ms": 26.2,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 2325.8,
+      "connection_acquisition_ms": 46.1,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "search",
+      "ms": 3376.94,
+      "connection_acquisition_ms": 47.36,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "summary",
+      "ms": 2044.15,
+      "connection_acquisition_ms": 47.02,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 2269.96,
+      "connection_acquisition_ms": 46.01,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 2269.4,
+      "connection_acquisition_ms": 46.86,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 2274.23,
+      "connection_acquisition_ms": 46.91,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 2272.57,
+      "connection_acquisition_ms": 45.49,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 2272.36,
+      "connection_acquisition_ms": 47.69,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 4740.6,
+      "connection_acquisition_ms": 2078.24,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 4839.12,
+      "connection_acquisition_ms": 2156.81,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 4739.91,
+      "connection_acquisition_ms": 2228.4,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "search",
+      "ms": 6573.5,
+      "connection_acquisition_ms": 2243.39,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "summary",
+      "ms": 4341.74,
+      "connection_acquisition_ms": 2261.94,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 4678.32,
+      "connection_acquisition_ms": 2263.23,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 4678.42,
+      "connection_acquisition_ms": 2272.32,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 4681.69,
+      "connection_acquisition_ms": 2272.5,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 4678.43,
+      "connection_acquisition_ms": 2273.65,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 4714.15,
+      "connection_acquisition_ms": 2273.82,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 4918.09,
+      "connection_acquisition_ms": 2277.21,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 4941.61,
+      "connection_acquisition_ms": 2324.97,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 4927.88,
+      "connection_acquisition_ms": 2325.57,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "search",
+      "ms": 6838.48,
+      "connection_acquisition_ms": 2325.75,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "summary",
+      "ms": 6357.74,
+      "connection_acquisition_ms": 3376.63,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 6722.15,
+      "connection_acquisition_ms": 4413.33,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 6967.2,
+      "connection_acquisition_ms": 4683.22,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 6976.19,
+      "connection_acquisition_ms": 4682.9,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 7006.2,
+      "connection_acquisition_ms": 4682.34,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 7015.97,
+      "connection_acquisition_ms": 4714.09,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 7157.58,
+      "connection_acquisition_ms": 4727.53,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 7131.14,
+      "connection_acquisition_ms": 4740.18,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 7141.25,
+      "connection_acquisition_ms": 4756.82,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "search",
+      "ms": 8684.41,
+      "connection_acquisition_ms": 4838.8,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "summary",
+      "ms": 6943.89,
+      "connection_acquisition_ms": 4926.01,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 7139.33,
+      "connection_acquisition_ms": 4934.39,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 7146.0,
+      "connection_acquisition_ms": 4957.87,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 8627.59,
+      "connection_acquisition_ms": 6437.64,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 8755.33,
+      "connection_acquisition_ms": 6606.72,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 8791.02,
+      "connection_acquisition_ms": 6744.23,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 9293.4,
+      "connection_acquisition_ms": 6840.25,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 9445.81,
+      "connection_acquisition_ms": 6949.68,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 9445.84,
+      "connection_acquisition_ms": 6977.84,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "search",
+      "ms": 10148.22,
+      "connection_acquisition_ms": 6979.19,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "summary",
+      "ms": 8745.43,
+      "connection_acquisition_ms": 7015.89,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 9451.25,
+      "connection_acquisition_ms": 7037.71,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 10035.38,
+      "connection_acquisition_ms": 7139.41,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 10063.36,
+      "connection_acquisition_ms": 7141.06,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 10063.32,
+      "connection_acquisition_ms": 7145.74,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 10073.96,
+      "connection_acquisition_ms": 7149.32,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 10133.71,
+      "connection_acquisition_ms": 7160.33,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 10935.57,
+      "connection_acquisition_ms": 8628.21,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 10929.02,
+      "connection_acquisition_ms": 8684.56,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "search",
+      "ms": 11945.1,
+      "connection_acquisition_ms": 8755.27,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "summary",
+      "ms": 10769.28,
+      "connection_acquisition_ms": 8771.36,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 11765.82,
+      "connection_acquisition_ms": 8808.08,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 11924.33,
+      "connection_acquisition_ms": 9294.89,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 11929.05,
+      "connection_acquisition_ms": 9446.18,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 11929.09,
+      "connection_acquisition_ms": 9446.92,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 11948.35,
+      "connection_acquisition_ms": 9451.25,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 12095.34,
+      "connection_acquisition_ms": 10036.77,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 12120.47,
+      "connection_acquisition_ms": 10065.61,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 12120.51,
+      "connection_acquisition_ms": 10065.77,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "search",
+      "ms": 13931.94,
+      "connection_acquisition_ms": 10075.8,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "summary",
+      "ms": 12418.99,
+      "connection_acquisition_ms": 10134.53,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 12444.11,
+      "connection_acquisition_ms": 10155.31,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 13596.85,
+      "connection_acquisition_ms": 10822.6,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 13899.7,
+      "connection_acquisition_ms": 10935.33,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 13902.01,
+      "connection_acquisition_ms": 10978.26,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 14179.79,
+      "connection_acquisition_ms": 11823.47,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 14519.5,
+      "connection_acquisition_ms": 11928.85,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 14519.55,
+      "connection_acquisition_ms": 11942.51,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 14567.77,
+      "connection_acquisition_ms": 11942.75,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "search",
+      "ms": 14968.96,
+      "connection_acquisition_ms": 11948.13,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "summary",
+      "ms": 14194.69,
+      "connection_acquisition_ms": 11953.08,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 14783.99,
+      "connection_acquisition_ms": 12108.46,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 14837.88,
+      "connection_acquisition_ms": 12148.16,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 14804.02,
+      "connection_acquisition_ms": 12148.7,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 14924.19,
+      "connection_acquisition_ms": 12421.47,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 15000.39,
+      "connection_acquisition_ms": 12446.47,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 15943.77,
+      "connection_acquisition_ms": 13598.21,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 16218.65,
+      "connection_acquisition_ms": 13901.89,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 16218.7,
+      "connection_acquisition_ms": 13931.61,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "search",
+      "ms": 17000.6,
+      "connection_acquisition_ms": 13982.28,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "summary",
+      "ms": 16162.1,
+      "connection_acquisition_ms": 14184.2,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 16821.99,
+      "connection_acquisition_ms": 14225.81,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 17008.82,
+      "connection_acquisition_ms": 14523.8,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 17008.89,
+      "connection_acquisition_ms": 14523.99,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 17335.05,
+      "connection_acquisition_ms": 14577.99,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "detail",
+      "ms": 17373.57,
+      "connection_acquisition_ms": 14784.5,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 17381.89,
+      "connection_acquisition_ms": 14804.4,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 17387.08,
+      "connection_acquisition_ms": 14838.58,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "list",
+      "ms": 17402.78,
+      "connection_acquisition_ms": 14968.68,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "search",
+      "ms": 18214.56,
+      "connection_acquisition_ms": 14999.62,
+      "error": null,
+      "error_reason": null
+    },
+    {
+      "kind": "summary",
+      "ms": 17344.39,
+      "connection_acquisition_ms": 15359.3,
+      "error": null,
+      "error_reason": null
+    }
+  ]
+}

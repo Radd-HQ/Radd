@@ -91,6 +91,7 @@ async def _matching_ids(
     actor: User | None,
     q: str | None,
     project_id: uuid.UUID | None = None,
+    candidate_ids: list[uuid.UUID] | None = None,
 ) -> set[uuid.UUID] | None:
     """The item ids a report may range over. None = unfiltered (no actor).
 
@@ -109,7 +110,8 @@ async def _matching_ids(
     if actor is None:
         return None
     return await items_bulk.visible_matching_ids(
-        session, actor=actor, q=(q or "").strip() or None, project_id=project_id
+        session, actor=actor, q=(q or "").strip() or None, project_id=project_id,
+        candidate_ids=candidate_ids,
     )
 
 
@@ -259,8 +261,10 @@ async def velocity(
         # catalog atom is absent. Project-only readers still receive their
         # report scope without disclosure of cycle names or timeline data.
         return VelocityReport(rows=[], scope=await _scope_of(session, actor))
-    matches = await _matching_ids(session, actor, q)
     recent = await cycles_service.recent_completed_cycles(session, actor=actor, limit=last, today=date.today())
+    if not recent:
+        # Keep SLQ/field-access validation even for an empty cycle directory.
+        await _matching_ids(session, actor, q, candidate_ids=[])
     # A draft can be explicitly completed without planned dates. Use its actual
     # completion day for ordering, then creation as the final legacy fallback.
     def finished_on(cycle):
@@ -268,7 +272,9 @@ async def velocity(
 
     rows: list[VelocityRow] = []
     for cycle in sorted(recent, key=lambda cycle: (cycle.start_date or finished_on(cycle), cycle.id)):
-        item_ids = _keep(await timeline.item_ids_for_cycle(session, cycle.id), matches)
+        candidates = await timeline.item_ids_for_cycle(session, cycle.id)
+        matches = await _matching_ids(session, actor, q, candidate_ids=candidates)
+        item_ids = _keep(candidates, matches)
         timelines = await timeline.build_item_timelines(session, item_ids)
         points = await _points_measure(session, measure, item_ids)
         done_ids = [
@@ -305,8 +311,9 @@ async def burnup(
         raise ConflictError(
             CycleEntity.CYCLE, reason="burnup needs a scheduled cycle (set start and end dates)"
         )
-    matches = await _matching_ids(session, actor, q)
-    item_ids = _keep(await timeline.item_ids_for_cycle(session, cycle.id), matches)
+    candidates = await timeline.item_ids_for_cycle(session, cycle.id)
+    matches = await _matching_ids(session, actor, q, candidate_ids=candidates)
+    item_ids = _keep(candidates, matches)
     timelines = await timeline.build_item_timelines(session, item_ids)
     points = await _points_measure(session, measure, item_ids)
     series: list[BurnupPoint] = []
@@ -399,7 +406,8 @@ async def sla_report(
     rows = await sla_states.state_rows(
         session, project_id, since=datetime.combine(first_week, time.min)
     )
-    matches = await _matching_ids(session, actor, q, project_id)
+    matches = await _matching_ids(session, actor, q, project_id,
+                                  candidate_ids=list({row.item_id for row in rows}))
     if matches is not None:
         rows = [row for row in rows if row.item_id in matches]
     # An item may carry several bookkeeping rows (pre-spec-63 evaluate-all era):

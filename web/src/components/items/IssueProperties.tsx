@@ -612,15 +612,22 @@ function peopleOptions(users: UserSummary[]) {
 
 /** Assignee picker — the project-annotated directory (RADD-938). */
 function AssigneePicker({ item, onPatch }: PickerProps) {
-  const users = useQuery(projectDirectoryQuery(item.project_id));
+  const [requested, setRequested] = useState(false);
+  const users = useQuery({ ...projectDirectoryQuery(item.project_id), enabled: requested });
   return (
     <SelectField
       label="Assignee"
       value={item.assignee?.id ?? ""}
+      onOpen={() => { setRequested(true); if (users.isError) void users.refetch(); }}
       onChange={(event) => onPatch({ assignee_id: event.target.value || null })}
     >
       <option value="">Unassigned</option>
+      {item.assignee && !users.data?.some(user => user.id === item.assignee!.id && user.active !== false) && (
+        <option value={item.assignee.id}>{item.assignee.name}</option>
+      )}
       {peopleOptions(users.data ?? [])}
+      {users.isFetching && !users.data && <option disabled>Loading people…</option>}
+      {users.isError && <option disabled>Could not load people. Reopen to retry.</option>}
     </SelectField>
   );
 }
@@ -631,15 +638,24 @@ function AssigneePicker({ item, onPatch }: PickerProps) {
  * account, and it has to stay pickable here (`peopleOptions` marks it
  * "external" rather than letting it pass for a colleague). */
 function ReporterPicker({ item, onPatch }: PickerProps) {
-  const users = useQuery(projectDirectoryQuery(item.project_id, { includeRequesters: true }));
+  const [requested, setRequested] = useState(false);
+  const users = useQuery({
+    ...projectDirectoryQuery(item.project_id, { includeRequesters: true }), enabled: requested,
+  });
   return (
     <SelectField
       label="Reporter"
       value={item.reporter?.id ?? ""}
+      onOpen={() => { setRequested(true); if (users.isError) void users.refetch(); }}
       onChange={(event) => onPatch({ reporter_id: event.target.value || null })}
     >
       <option value="">Unknown</option>
+      {item.reporter && !users.data?.some(user => user.id === item.reporter!.id && user.active !== false) && (
+        <option value={item.reporter.id}>{item.reporter.name}</option>
+      )}
       {peopleOptions(users.data ?? [])}
+      {users.isFetching && !users.data && <option disabled>Loading people…</option>}
+      {users.isError && <option disabled>Could not load people. Reopen to retry.</option>}
     </SelectField>
   );
 }

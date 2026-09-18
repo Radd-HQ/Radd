@@ -1,0 +1,1206 @@
+{
+  "inventory": {
+    "largest_project_items": 100864,
+    "member_available": true,
+    "pool_size": 5,
+    "pool_overflow": 10
+  },
+  "results": [
+    {
+      "role": "admin",
+      "operation": "issue_detail",
+      "ms": 267.18,
+      "queries": 29,
+      "sql_ms": 26.84,
+      "max_parameters": 107,
+      "rows": null,
+      "error": null,
+      "slowest": [
+        {
+          "ms": 2.75,
+          "sql": "SELECT projects.id, projects.key FROM projects WHERE projects.id IN (%(id_1_1)s::UUID)",
+          "parameter_count": 1
+        },
+        {
+          "ms": 2.68,
+          "sql": "SELECT field_definitions.id, field_definitions.key, field_definitions.name, field_definitions.type, field_definitions.required, field_definitions.options, field_definitions.default_value, field_definitions.display, field_definitions.indexed, field_definitions.ai_visible, field_definitions.source, field_definitions.created_at, field_definitions.updated_at FROM field_definitions WHERE (field_definitions.id NOT IN (SELECT field_definition_projects.field_id FROM field_definition_projects)) OR field_definitions.id IN (SELECT field_definition_projects.field_id FROM field_definition_projects WHERE field_definition_projects.project_id = %(project_id_1)s::UUID)",
+          "parameter_count": 1
+        },
+        {
+          "ms": 2.34,
+          "sql": "SELECT work_items.id AS work_items_id, work_items.project_id AS work_items_project_id, work_items.number AS work_items_number, work_items.kind AS work_items_kind, work_items.type_id AS work_items_type_id, work_items.parent_id AS work_items_parent_id, work_items.title AS work_items_title, work_items.description AS work_items_description, work_items.state_id AS work_items_state_id, work_items.priority AS work_items_priority, work_items.assignee_id AS work_items_assignee_id, work_items.reporter_id AS work_items_reporter_id, work_items.team_id AS work_items_team_id, work_items.flagged AS work_items_flagged, work_items.visibility AS work_items_visibility, work_items.archived_at AS work_items_archived_at, work_items.rank AS work_items_rank, work_items.estimate_points AS work_items_estimate_points, work_items.start_date AS work_items_start_date, work_items.target_date AS work_items_target_date, work_items.cycle_id AS work_items_cycle_id, work_items.release_id AS work_items_release_id, work_items.custom_fields AS work_items_custom_fields, work_items.created_at AS work_items_created_at, work_items.updated_at AS work_items_updated_at FROM work_items WHERE work_items.id = %(pk_1)s::UUID",
+          "parameter_count": 1
+        },
+        {
+          "ms": 2.27,
+          "sql": "SELECT item_cycle_records.item_id, cycles.id, cycles.name, cycles.start_date, cycles.end_date, cycles.goal, cycles.completed_at, cycles.created_at, cycles.updated_at FROM item_cycle_records JOIN cycles ON cycles.id = item_cycle_records.cycle_id WHERE item_cycle_records.item_id IN (%(item_id_1_1)s::UUID) AND item_cycle_records.removed_at IS NOT NULL ORDER BY item_cycle_records.added_at ASC",
+          "parameter_count": 1
+        }
+      ],
+      "repeated_shapes": [
+        {
+          "count": 1,
+          "sql": "SELECT work_items.id, projects.id AS id_1, projects.key, projects.name, projects.description, projects.next_number, projects.created_at, projects.updated_at FROM work_items JOIN projects ON projects.id = work_items.project_id WHERE projects.key = %(key_1)s::VARCHAR AND work_items.number = %(number_1"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT work_items.id AS work_items_id, work_items.project_id AS work_items_project_id, work_items.number AS work_items_number, work_items.kind AS work_items_kind, work_items.type_id AS work_items_type_id, work_items.parent_id AS work_items_parent_id, work_items.title AS work_items_title, work_items."
+        },
+        {
+          "count": 1,
+          "sql": "SELECT group_members.group_id FROM group_members WHERE group_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT team_members.team_id FROM team_members WHERE team_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT field_definitions.id, field_definitions.key, field_definitions.name, field_definitions.type, field_definitions.required, field_definitions.options, field_definitions.default_value, field_definitions.display, field_definitions.indexed, field_definitions.ai_visible, field_definitions.source, fi"
+        }
+      ]
+    },
+    {
+      "role": "admin",
+      "operation": "project_list_25",
+      "ms": 89.71,
+      "queries": 30,
+      "sql_ms": 48.69,
+      "max_parameters": 131,
+      "rows": 25,
+      "error": null,
+      "slowest": [
+        {
+          "ms": 8.42,
+          "sql": "SELECT item_labels.item_id, item_labels.label_id FROM item_labels WHERE item_labels.item_id IN (%(item_id_1_1)s::UUID, %(item_id_1_2)s::UUID, %(item_id_1_3)s::UUID, %(item_id_1_4)s::UUID, %(item_id_1_5)s::UUID, %(item_id_1_6)s::UUID, %(item_id_1_7)s::UUID, %(item_id_1_8)s::UUID, %(item_id_1_9)s::UUID, %(item_id_1_10)s::UUID, %(item_id_1_11)s::UUID, %(item_id_1_12)s::UUID, %(item_id_1_13)s::UUID, %(item_id_1_14)s::UUID, %(item_id_1_15)s::UUID, %(item_id_1_16)s::UUID, %(item_id_1_17)s::UUID, %(item_id_1_18)s::UUID, %(item_id_1_19)s::UUID, %(item_id_1_20)s::UUID, %(item_id_1_21)s::UUID, %(item_id_1_22)s::UUID, %(item_id_1_23)s::UUID, %(item_id_1_24)s::UUID, %(item_id_1_25)s::UUID)",
+          "parameter_count": 25
+        },
+        {
+          "ms": 8.19,
+          "sql": "SELECT comments.entity_id, count(*) AS count_1 FROM comments WHERE comments.entity_type = %(entity_type_1)s::VARCHAR AND comments.entity_id IN (%(entity_id_1_1)s::UUID, %(entity_id_1_2)s::UUID, %(entity_id_1_3)s::UUID, %(entity_id_1_4)s::UUID, %(entity_id_1_5)s::UUID, %(entity_id_1_6)s::UUID, %(entity_id_1_7)s::UUID, %(entity_id_1_8)s::UUID, %(entity_id_1_9)s::UUID, %(entity_id_1_10)s::UUID, %(entity_id_1_11)s::UUID, %(entity_id_1_12)s::UUID, %(entity_id_1_13)s::UUID, %(entity_id_1_14)s::UUID, %(entity_id_1_15)s::UUID, %(entity_id_1_16)s::UUID, %(entity_id_1_17)s::UUID, %(entity_id_1_18)s::UUID, %(entity_id_1_19)s::UUID, %(entity_id_1_20)s::UUID, %(entity_id_1_21)s::UUID, %(entity_id_1_22)s::UUID, %(entity_id_1_23)s::UUID, %(entity_id_1_24)s::UUID, %(entity_id_1_25)s::UUID) GROUP BY comments.entity_id",
+          "parameter_count": 26
+        },
+        {
+          "ms": 6.11,
+          "sql": "SELECT work_items.id, work_items.project_id, work_items.number, work_items.kind, work_items.type_id, work_items.parent_id, work_items.title, work_items.description, work_items.state_id, work_items.priority, work_items.assignee_id, work_items.reporter_id, work_items.team_id, work_items.flagged, work_items.visibility, work_items.archived_at, work_items.rank, work_items.estimate_points, work_items.start_date, work_items.target_date, work_items.cycle_id, work_items.release_id, work_items.custom_fields, work_items.created_at, work_items.updated_at FROM work_items WHERE work_items.id IN (%(id_1_1)s::UUID, %(id_1_2)s::UUID, %(id_1_3)s::UUID, %(id_1_4)s::UUID, %(id_1_5)s::UUID, %(id_1_6)s::UUID, %(id_1_7)s::UUID)",
+          "parameter_count": 7
+        },
+        {
+          "ms": 5.77,
+          "sql": "SELECT work_items.parent_id, count(*) AS count_1 FROM work_items WHERE work_items.parent_id IN (%(parent_id_1_1)s::UUID, %(parent_id_1_2)s::UUID, %(parent_id_1_3)s::UUID, %(parent_id_1_4)s::UUID, %(parent_id_1_5)s::UUID, %(parent_id_1_6)s::UUID, %(parent_id_1_7)s::UUID, %(parent_id_1_8)s::UUID, %(parent_id_1_9)s::UUID, %(parent_id_1_10)s::UUID, %(parent_id_1_11)s::UUID, %(parent_id_1_12)s::UUID, %(parent_id_1_13)s::UUID, %(parent_id_1_14)s::UUID, %(parent_id_1_15)s::UUID, %(parent_id_1_16)s::UUID, %(parent_id_1_17)s::UUID, %(parent_id_1_18)s::UUID, %(parent_id_1_19)s::UUID, %(parent_id_1_20)s::UUID, %(parent_id_1_21)s::UUID, %(parent_id_1_22)s::UUID, %(parent_id_1_23)s::UUID, %(parent_id_1_24)s::UUID, %(parent_id_1_25)s::UUID) AND work_items.project_id IN (%(project_id_1_1)s::UUID, %(project_id_1_2)s::UUID, %(project_id_1_3)s::UUID, %(project_id_1_4)s::UUID, %(project_id_1_5)s::UUID, %(project_id_1_6)s::UUID, %(project_id_1_7)s::UUID, %(project_id_1_8)s::UUID, %(project_id_1_9)s::UUID, %(project_id_1_10)s::UUID, %(project_id_1_11)s::UUID, %(project_id_1_12)s::UUID, %(project_id_1_13)s::UUID, %(project_id_1_14)s::UUID, %(project_id_1_15)s::UUID, %(project_id_1_16)s::UUID, %(project_id_1_17)s::UUID, %(project_id_1_18)s::UUID, %(project_id_1_19)s::UUID, %(project_id_1_20)s::UUID, %(project_id_1_21)s::UUID, %(project_id_1_22)s::UUID, %(project_id_1_23)s::UUID, %(project_id_1_24)s::UUID, %(project_id_1_25)s::UUID, %(project_id_1_26)s::UUID, %(project_id_1_27)s::UUID, %(project_id_1_28)s::UUID, %(project_id_1_29)s::UUID, %(project_id_1_30)s::UUID, %(project_id_1_31)s::UUID, %(pro",
+          "parameter_count": 131
+        }
+      ],
+      "repeated_shapes": [
+        {
+          "count": 1,
+          "sql": "SELECT projects.id AS projects_id, projects.key AS projects_key, projects.name AS projects_name, projects.description AS projects_description, projects.next_number AS projects_next_number, projects.created_at AS projects_created_at, projects.updated_at AS projects_updated_at FROM projects WHERE proj"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT group_members.group_id FROM group_members WHERE group_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT team_members.team_id FROM team_members WHERE team_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT work_items.id, work_items.project_id, work_items.number, work_items.kind, work_items.type_id, work_items.parent_id, work_items.title, work_items.description, work_items.state_id, work_items.priority, work_items.assignee_id, work_items.reporter_id, work_items.team_id, work_items.flagged, work_"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT projects.id FROM projects"
+        }
+      ]
+    },
+    {
+      "role": "admin",
+      "operation": "cross_project_list_25",
+      "ms": 311.34,
+      "queries": 115,
+      "sql_ms": 180.61,
+      "max_parameters": 131,
+      "rows": 25,
+      "error": null,
+      "slowest": [
+        {
+          "ms": 21.21,
+          "sql": "SELECT work_items.parent_id, count(*) AS count_1 FROM work_items WHERE work_items.parent_id IN (%(parent_id_1_1)s::UUID, %(parent_id_1_2)s::UUID, %(parent_id_1_3)s::UUID, %(parent_id_1_4)s::UUID, %(parent_id_1_5)s::UUID, %(parent_id_1_6)s::UUID, %(parent_id_1_7)s::UUID, %(parent_id_1_8)s::UUID, %(parent_id_1_9)s::UUID, %(parent_id_1_10)s::UUID, %(parent_id_1_11)s::UUID, %(parent_id_1_12)s::UUID, %(parent_id_1_13)s::UUID, %(parent_id_1_14)s::UUID, %(parent_id_1_15)s::UUID, %(parent_id_1_16)s::UUID, %(parent_id_1_17)s::UUID, %(parent_id_1_18)s::UUID, %(parent_id_1_19)s::UUID, %(parent_id_1_20)s::UUID, %(parent_id_1_21)s::UUID, %(parent_id_1_22)s::UUID, %(parent_id_1_23)s::UUID, %(parent_id_1_24)s::UUID, %(parent_id_1_25)s::UUID) AND work_items.project_id IN (%(project_id_1_1)s::UUID, %(project_id_1_2)s::UUID, %(project_id_1_3)s::UUID, %(project_id_1_4)s::UUID, %(project_id_1_5)s::UUID, %(project_id_1_6)s::UUID, %(project_id_1_7)s::UUID, %(project_id_1_8)s::UUID, %(project_id_1_9)s::UUID, %(project_id_1_10)s::UUID, %(project_id_1_11)s::UUID, %(project_id_1_12)s::UUID, %(project_id_1_13)s::UUID, %(project_id_1_14)s::UUID, %(project_id_1_15)s::UUID, %(project_id_1_16)s::UUID, %(project_id_1_17)s::UUID, %(project_id_1_18)s::UUID, %(project_id_1_19)s::UUID, %(project_id_1_20)s::UUID, %(project_id_1_21)s::UUID, %(project_id_1_22)s::UUID, %(project_id_1_23)s::UUID, %(project_id_1_24)s::UUID, %(project_id_1_25)s::UUID, %(project_id_1_26)s::UUID, %(project_id_1_27)s::UUID, %(project_id_1_28)s::UUID, %(project_id_1_29)s::UUID, %(project_id_1_30)s::UUID, %(project_id_1_31)s::UUID, %(pro",
+          "parameter_count": 131
+        },
+        {
+          "ms": 17.47,
+          "sql": "SELECT comments.entity_id, count(*) AS count_1 FROM comments WHERE comments.entity_type = %(entity_type_1)s::VARCHAR AND comments.entity_id IN (%(entity_id_1_1)s::UUID, %(entity_id_1_2)s::UUID, %(entity_id_1_3)s::UUID, %(entity_id_1_4)s::UUID, %(entity_id_1_5)s::UUID, %(entity_id_1_6)s::UUID, %(entity_id_1_7)s::UUID, %(entity_id_1_8)s::UUID, %(entity_id_1_9)s::UUID, %(entity_id_1_10)s::UUID, %(entity_id_1_11)s::UUID, %(entity_id_1_12)s::UUID, %(entity_id_1_13)s::UUID, %(entity_id_1_14)s::UUID, %(entity_id_1_15)s::UUID, %(entity_id_1_16)s::UUID, %(entity_id_1_17)s::UUID, %(entity_id_1_18)s::UUID, %(entity_id_1_19)s::UUID, %(entity_id_1_20)s::UUID, %(entity_id_1_21)s::UUID, %(entity_id_1_22)s::UUID, %(entity_id_1_23)s::UUID, %(entity_id_1_24)s::UUID, %(entity_id_1_25)s::UUID) GROUP BY comments.entity_id",
+          "parameter_count": 26
+        },
+        {
+          "ms": 16.65,
+          "sql": "SELECT item_labels.item_id, item_labels.label_id FROM item_labels WHERE item_labels.item_id IN (%(item_id_1_1)s::UUID, %(item_id_1_2)s::UUID, %(item_id_1_3)s::UUID, %(item_id_1_4)s::UUID, %(item_id_1_5)s::UUID, %(item_id_1_6)s::UUID, %(item_id_1_7)s::UUID, %(item_id_1_8)s::UUID, %(item_id_1_9)s::UUID, %(item_id_1_10)s::UUID, %(item_id_1_11)s::UUID, %(item_id_1_12)s::UUID, %(item_id_1_13)s::UUID, %(item_id_1_14)s::UUID, %(item_id_1_15)s::UUID, %(item_id_1_16)s::UUID, %(item_id_1_17)s::UUID, %(item_id_1_18)s::UUID, %(item_id_1_19)s::UUID, %(item_id_1_20)s::UUID, %(item_id_1_21)s::UUID, %(item_id_1_22)s::UUID, %(item_id_1_23)s::UUID, %(item_id_1_24)s::UUID, %(item_id_1_25)s::UUID)",
+          "parameter_count": 25
+        },
+        {
+          "ms": 10.53,
+          "sql": "SELECT work_items.id, work_items.project_id, work_items.number, work_items.kind, work_items.type_id, work_items.parent_id, work_items.title, work_items.description, work_items.state_id, work_items.priority, work_items.assignee_id, work_items.reporter_id, work_items.team_id, work_items.flagged, work_items.visibility, work_items.archived_at, work_items.rank, work_items.estimate_points, work_items.start_date, work_items.target_date, work_items.cycle_id, work_items.release_id, work_items.custom_fields, work_items.created_at, work_items.updated_at FROM work_items WHERE work_items.project_id IN (%(project_id_1_1)s::UUID, %(project_id_1_2)s::UUID, %(project_id_1_3)s::UUID, %(project_id_1_4)s::UUID, %(project_id_1_5)s::UUID, %(project_id_1_6)s::UUID, %(project_id_1_7)s::UUID, %(project_id_1_8)s::UUID, %(project_id_1_9)s::UUID, %(project_id_1_10)s::UUID, %(project_id_1_11)s::UUID, %(project_id_1_12)s::UUID, %(project_id_1_13)s::UUID, %(project_id_1_14)s::UUID, %(project_id_1_15)s::UUID, %(project_id_1_16)s::UUID, %(project_id_1_17)s::UUID, %(project_id_1_18)s::UUID, %(project_id_1_19)s::UUID, %(project_id_1_20)s::UUID, %(project_id_1_21)s::UUID, %(project_id_1_22)s::UUID, %(project_id_1_23)s::UUID, %(project_id_1_24)s::UUID, %(project_id_1_25)s::UUID, %(project_id_1_26)s::UUID, %(project_id_1_27)s::UUID, %(project_id_1_28)s::UUID, %(project_id_1_29)s::UUID, %(project_id_1_30)s::UUID, %(project_id_1_31)s::UUID, %(project_id_1_32)s::UUID, %(project_id_1_33)s::UUID, %(project_id_1_34)s::UUID, %(project_id_1_35)s::UUID, %(project_id_1_36)s::UUID, %(project_id_1_37)s::UUID, %(project_id_",
+          "parameter_count": 108
+        }
+      ],
+      "repeated_shapes": [
+        {
+          "count": 13,
+          "sql": "SELECT projects.id AS projects_id, projects.key AS projects_key, projects.name AS projects_name, projects.description AS projects_description, projects.next_number AS projects_next_number, projects.created_at AS projects_created_at, projects.updated_at AS projects_updated_at FROM projects WHERE proj"
+        },
+        {
+          "count": 13,
+          "sql": "SELECT field_definitions.id, field_definitions.key, field_definitions.name, field_definitions.type, field_definitions.required, field_definitions.options, field_definitions.default_value, field_definitions.display, field_definitions.indexed, field_definitions.ai_visible, field_definitions.source, fi"
+        },
+        {
+          "count": 13,
+          "sql": "SELECT access_grants.id, access_grants.resource_type, access_grants.resource_id, access_grants.subject_type, access_grants.subject_id, access_grants.access, access_grants.effect, access_grants.expires_at, access_grants.granted_by, access_grants.project_id, access_grants.created_at, access_grants.upd"
+        },
+        {
+          "count": 13,
+          "sql": "SELECT access_restrictions.id, access_restrictions.resource_type, access_restrictions.resource_id, access_restrictions.access, access_restrictions.project_id FROM access_restrictions WHERE access_restrictions.resource_type = %(resource_type_1)s::VARCHAR AND access_restrictions.resource_id IN (%(reso"
+        },
+        {
+          "count": 13,
+          "sql": "SELECT access_grants.id, access_grants.resource_type, access_grants.resource_id, access_grants.subject_type, access_grants.subject_id, access_grants.access, access_grants.effect, access_grants.expires_at, access_grants.granted_by, access_grants.project_id, access_grants.created_at, access_grants.upd"
+        }
+      ]
+    },
+    {
+      "role": "admin",
+      "operation": "project_list_offset_20000",
+      "ms": 179.05,
+      "queries": 31,
+      "sql_ms": 149.41,
+      "max_parameters": 131,
+      "rows": 25,
+      "error": null,
+      "slowest": [
+        {
+          "ms": 115.17,
+          "sql": "SELECT work_items.id, work_items.project_id, work_items.number, work_items.kind, work_items.type_id, work_items.parent_id, work_items.title, work_items.description, work_items.state_id, work_items.priority, work_items.assignee_id, work_items.reporter_id, work_items.team_id, work_items.flagged, work_items.visibility, work_items.archived_at, work_items.rank, work_items.estimate_points, work_items.start_date, work_items.target_date, work_items.cycle_id, work_items.release_id, work_items.custom_fields, work_items.created_at, work_items.updated_at FROM work_items WHERE work_items.archived_at IS NULL AND work_items.project_id = %(project_id_1)s::UUID ORDER BY work_items.rank ASC, work_items.created_at DESC, work_items.id ASC LIMIT %(param_1)s::INTEGER OFFSET %(param_2)s::INTEGER",
+          "parameter_count": 3
+        },
+        {
+          "ms": 6.14,
+          "sql": "SELECT item_labels.item_id, item_labels.label_id FROM item_labels WHERE item_labels.item_id IN (%(item_id_1_1)s::UUID, %(item_id_1_2)s::UUID, %(item_id_1_3)s::UUID, %(item_id_1_4)s::UUID, %(item_id_1_5)s::UUID, %(item_id_1_6)s::UUID, %(item_id_1_7)s::UUID, %(item_id_1_8)s::UUID, %(item_id_1_9)s::UUID, %(item_id_1_10)s::UUID, %(item_id_1_11)s::UUID, %(item_id_1_12)s::UUID, %(item_id_1_13)s::UUID, %(item_id_1_14)s::UUID, %(item_id_1_15)s::UUID, %(item_id_1_16)s::UUID, %(item_id_1_17)s::UUID, %(item_id_1_18)s::UUID, %(item_id_1_19)s::UUID, %(item_id_1_20)s::UUID, %(item_id_1_21)s::UUID, %(item_id_1_22)s::UUID, %(item_id_1_23)s::UUID, %(item_id_1_24)s::UUID, %(item_id_1_25)s::UUID)",
+          "parameter_count": 25
+        },
+        {
+          "ms": 6.08,
+          "sql": "SELECT comments.entity_id, count(*) AS count_1 FROM comments WHERE comments.entity_type = %(entity_type_1)s::VARCHAR AND comments.entity_id IN (%(entity_id_1_1)s::UUID, %(entity_id_1_2)s::UUID, %(entity_id_1_3)s::UUID, %(entity_id_1_4)s::UUID, %(entity_id_1_5)s::UUID, %(entity_id_1_6)s::UUID, %(entity_id_1_7)s::UUID, %(entity_id_1_8)s::UUID, %(entity_id_1_9)s::UUID, %(entity_id_1_10)s::UUID, %(entity_id_1_11)s::UUID, %(entity_id_1_12)s::UUID, %(entity_id_1_13)s::UUID, %(entity_id_1_14)s::UUID, %(entity_id_1_15)s::UUID, %(entity_id_1_16)s::UUID, %(entity_id_1_17)s::UUID, %(entity_id_1_18)s::UUID, %(entity_id_1_19)s::UUID, %(entity_id_1_20)s::UUID, %(entity_id_1_21)s::UUID, %(entity_id_1_22)s::UUID, %(entity_id_1_23)s::UUID, %(entity_id_1_24)s::UUID, %(entity_id_1_25)s::UUID) GROUP BY comments.entity_id",
+          "parameter_count": 26
+        },
+        {
+          "ms": 5.16,
+          "sql": "SELECT work_items.parent_id, count(*) AS count_1 FROM work_items WHERE work_items.parent_id IN (%(parent_id_1_1)s::UUID, %(parent_id_1_2)s::UUID, %(parent_id_1_3)s::UUID, %(parent_id_1_4)s::UUID, %(parent_id_1_5)s::UUID, %(parent_id_1_6)s::UUID, %(parent_id_1_7)s::UUID, %(parent_id_1_8)s::UUID, %(parent_id_1_9)s::UUID, %(parent_id_1_10)s::UUID, %(parent_id_1_11)s::UUID, %(parent_id_1_12)s::UUID, %(parent_id_1_13)s::UUID, %(parent_id_1_14)s::UUID, %(parent_id_1_15)s::UUID, %(parent_id_1_16)s::UUID, %(parent_id_1_17)s::UUID, %(parent_id_1_18)s::UUID, %(parent_id_1_19)s::UUID, %(parent_id_1_20)s::UUID, %(parent_id_1_21)s::UUID, %(parent_id_1_22)s::UUID, %(parent_id_1_23)s::UUID, %(parent_id_1_24)s::UUID, %(parent_id_1_25)s::UUID) AND work_items.project_id IN (%(project_id_1_1)s::UUID, %(project_id_1_2)s::UUID, %(project_id_1_3)s::UUID, %(project_id_1_4)s::UUID, %(project_id_1_5)s::UUID, %(project_id_1_6)s::UUID, %(project_id_1_7)s::UUID, %(project_id_1_8)s::UUID, %(project_id_1_9)s::UUID, %(project_id_1_10)s::UUID, %(project_id_1_11)s::UUID, %(project_id_1_12)s::UUID, %(project_id_1_13)s::UUID, %(project_id_1_14)s::UUID, %(project_id_1_15)s::UUID, %(project_id_1_16)s::UUID, %(project_id_1_17)s::UUID, %(project_id_1_18)s::UUID, %(project_id_1_19)s::UUID, %(project_id_1_20)s::UUID, %(project_id_1_21)s::UUID, %(project_id_1_22)s::UUID, %(project_id_1_23)s::UUID, %(project_id_1_24)s::UUID, %(project_id_1_25)s::UUID, %(project_id_1_26)s::UUID, %(project_id_1_27)s::UUID, %(project_id_1_28)s::UUID, %(project_id_1_29)s::UUID, %(project_id_1_30)s::UUID, %(project_id_1_31)s::UUID, %(pro",
+          "parameter_count": 131
+        }
+      ],
+      "repeated_shapes": [
+        {
+          "count": 1,
+          "sql": "SELECT projects.id AS projects_id, projects.key AS projects_key, projects.name AS projects_name, projects.description AS projects_description, projects.next_number AS projects_next_number, projects.created_at AS projects_created_at, projects.updated_at AS projects_updated_at FROM projects WHERE proj"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT group_members.group_id FROM group_members WHERE group_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT team_members.team_id FROM team_members WHERE team_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT work_items.id, work_items.project_id, work_items.number, work_items.kind, work_items.type_id, work_items.parent_id, work_items.title, work_items.description, work_items.state_id, work_items.priority, work_items.assignee_id, work_items.reporter_id, work_items.team_id, work_items.flagged, work_"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT projects.id FROM projects"
+        }
+      ]
+    },
+    {
+      "role": "admin",
+      "operation": "project_state_summary",
+      "ms": 263.7,
+      "queries": 5,
+      "sql_ms": 256.46,
+      "max_parameters": 3,
+      "rows": null,
+      "error": null,
+      "slowest": [
+        {
+          "ms": 255.35,
+          "sql": "SELECT anon_1.col, anon_1.lane, count(*) AS count_1, coalesce(sum(anon_1.points), %(coalesce_2)s) AS coalesce_1 FROM (SELECT work_items.id AS id, CAST(work_items.state_id AS VARCHAR) AS col, %(param_1)s::VARCHAR AS lane, work_items.estimate_points AS points FROM work_items JOIN states ON states.id = work_items.state_id JOIN state_categories ON state_categories.key = states.category_key WHERE work_items.id IN (SELECT work_items.id FROM work_items WHERE work_items.archived_at IS NULL AND work_items.project_id = %(project_id_1)s::UUID)) AS anon_1 GROUP BY anon_1.col, anon_1.lane",
+          "parameter_count": 3
+        },
+        {
+          "ms": 0.34,
+          "sql": "SELECT group_members.group_id FROM group_members WHERE group_members.user_id = %(user_id_1)s::UUID",
+          "parameter_count": 1
+        },
+        {
+          "ms": 0.31,
+          "sql": "SELECT projects.id AS projects_id, projects.key AS projects_key, projects.name AS projects_name, projects.description AS projects_description, projects.next_number AS projects_next_number, projects.created_at AS projects_created_at, projects.updated_at AS projects_updated_at FROM projects WHERE projects.id = %(pk_1)s::UUID",
+          "parameter_count": 1
+        },
+        {
+          "ms": 0.24,
+          "sql": "SELECT team_members.team_id FROM team_members WHERE team_members.user_id = %(user_id_1)s::UUID",
+          "parameter_count": 1
+        }
+      ],
+      "repeated_shapes": [
+        {
+          "count": 2,
+          "sql": "SELECT projects.id AS projects_id, projects.key AS projects_key, projects.name AS projects_name, projects.description AS projects_description, projects.next_number AS projects_next_number, projects.created_at AS projects_created_at, projects.updated_at AS projects_updated_at FROM projects WHERE proj"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT group_members.group_id FROM group_members WHERE group_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT team_members.team_id FROM team_members WHERE team_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT anon_1.col, anon_1.lane, count(*) AS count_1, coalesce(sum(anon_1.points), %(coalesce_2)s) AS coalesce_1 FROM (SELECT work_items.id AS id, CAST(work_items.state_id AS VARCHAR) AS col, %(param_1)s::VARCHAR AS lane, work_items.estimate_points AS points FROM work_items JOIN states ON states.id ="
+        }
+      ]
+    },
+    {
+      "role": "admin",
+      "operation": "cross_project_state_summary",
+      "ms": 335.48,
+      "queries": 4,
+      "sql_ms": 321.05,
+      "max_parameters": 108,
+      "rows": null,
+      "error": null,
+      "slowest": [
+        {
+          "ms": 319.89,
+          "sql": "SELECT anon_1.col, anon_1.lane, count(*) AS count_1, coalesce(sum(anon_1.points), %(coalesce_2)s) AS coalesce_1 FROM (SELECT work_items.id AS id, states.name AS col, %(param_1)s::VARCHAR AS lane, work_items.estimate_points AS points FROM work_items JOIN states ON states.id = work_items.state_id JOIN state_categories ON state_categories.key = states.category_key WHERE work_items.id IN (SELECT work_items.id FROM work_items WHERE work_items.project_id IN (%(project_id_1_1)s::UUID, %(project_id_1_2)s::UUID, %(project_id_1_3)s::UUID, %(project_id_1_4)s::UUID, %(project_id_1_5)s::UUID, %(project_id_1_6)s::UUID, %(project_id_1_7)s::UUID, %(project_id_1_8)s::UUID, %(project_id_1_9)s::UUID, %(project_id_1_10)s::UUID, %(project_id_1_11)s::UUID, %(project_id_1_12)s::UUID, %(project_id_1_13)s::UUID, %(project_id_1_14)s::UUID, %(project_id_1_15)s::UUID, %(project_id_1_16)s::UUID, %(project_id_1_17)s::UUID, %(project_id_1_18)s::UUID, %(project_id_1_19)s::UUID, %(project_id_1_20)s::UUID, %(project_id_1_21)s::UUID, %(project_id_1_22)s::UUID, %(project_id_1_23)s::UUID, %(project_id_1_24)s::UUID, %(project_id_1_25)s::UUID, %(project_id_1_26)s::UUID, %(project_id_1_27)s::UUID, %(project_id_1_28)s::UUID, %(project_id_1_29)s::UUID, %(project_id_1_30)s::UUID, %(project_id_1_31)s::UUID, %(project_id_1_32)s::UUID, %(project_id_1_33)s::UUID, %(project_id_1_34)s::UUID, %(project_id_1_35)s::UUID, %(project_id_1_36)s::UUID, %(project_id_1_37)s::UUID, %(project_id_1_38)s::UUID, %(project_id_1_39)s::UUID, %(project_id_1_40)s::UUID, %(project_id_1_41)s::UUID, %(project_id_1_42)s::UUID, %(project_id_1_43)",
+          "parameter_count": 108
+        },
+        {
+          "ms": 0.55,
+          "sql": "SELECT group_members.group_id FROM group_members WHERE group_members.user_id = %(user_id_1)s::UUID",
+          "parameter_count": 1
+        },
+        {
+          "ms": 0.34,
+          "sql": "SELECT projects.id FROM projects",
+          "parameter_count": 0
+        },
+        {
+          "ms": 0.27,
+          "sql": "SELECT team_members.team_id FROM team_members WHERE team_members.user_id = %(user_id_1)s::UUID",
+          "parameter_count": 1
+        }
+      ],
+      "repeated_shapes": [
+        {
+          "count": 1,
+          "sql": "SELECT projects.id FROM projects"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT group_members.group_id FROM group_members WHERE group_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT team_members.team_id FROM team_members WHERE team_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT anon_1.col, anon_1.lane, count(*) AS count_1, coalesce(sum(anon_1.points), %(coalesce_2)s) AS coalesce_1 FROM (SELECT work_items.id AS id, states.name AS col, %(param_1)s::VARCHAR AS lane, work_items.estimate_points AS points FROM work_items JOIN states ON states.id = work_items.state_id JOIN"
+        }
+      ]
+    },
+    {
+      "role": "admin",
+      "operation": "cross_project_assignee_summary",
+      "ms": 387.15,
+      "queries": 5,
+      "sql_ms": 366.54,
+      "max_parameters": 1054,
+      "rows": null,
+      "error": null,
+      "slowest": [
+        {
+          "ms": 356.76,
+          "sql": "SELECT anon_1.col, anon_1.lane, count(*) AS count_1, coalesce(sum(anon_1.points), %(coalesce_2)s) AS coalesce_1 FROM (SELECT work_items.id AS id, coalesce(CAST(work_items.assignee_id AS VARCHAR), %(coalesce_3)s::VARCHAR) AS col, %(param_1)s::VARCHAR AS lane, work_items.estimate_points AS points FROM work_items JOIN states ON states.id = work_items.state_id JOIN state_categories ON state_categories.key = states.category_key WHERE work_items.id IN (SELECT work_items.id FROM work_items WHERE work_items.project_id IN (%(project_id_1_1)s::UUID, %(project_id_1_2)s::UUID, %(project_id_1_3)s::UUID, %(project_id_1_4)s::UUID, %(project_id_1_5)s::UUID, %(project_id_1_6)s::UUID, %(project_id_1_7)s::UUID, %(project_id_1_8)s::UUID, %(project_id_1_9)s::UUID, %(project_id_1_10)s::UUID, %(project_id_1_11)s::UUID, %(project_id_1_12)s::UUID, %(project_id_1_13)s::UUID, %(project_id_1_14)s::UUID, %(project_id_1_15)s::UUID, %(project_id_1_16)s::UUID, %(project_id_1_17)s::UUID, %(project_id_1_18)s::UUID, %(project_id_1_19)s::UUID, %(project_id_1_20)s::UUID, %(project_id_1_21)s::UUID, %(project_id_1_22)s::UUID, %(project_id_1_23)s::UUID, %(project_id_1_24)s::UUID, %(project_id_1_25)s::UUID, %(project_id_1_26)s::UUID, %(project_id_1_27)s::UUID, %(project_id_1_28)s::UUID, %(project_id_1_29)s::UUID, %(project_id_1_30)s::UUID, %(project_id_1_31)s::UUID, %(project_id_1_32)s::UUID, %(project_id_1_33)s::UUID, %(project_id_1_34)s::UUID, %(project_id_1_35)s::UUID, %(project_id_1_36)s::UUID, %(project_id_1_37)s::UUID, %(project_id_1_38)s::UUID, %(project_id_1_39)s::UUID, %(project_id_1_40)s::UUID, %(project",
+          "parameter_count": 109
+        },
+        {
+          "ms": 8.81,
+          "sql": "SELECT users.id, users.name FROM users WHERE users.id IN (%(id_1_1)s::UUID, %(id_1_2)s::UUID, %(id_1_3)s::UUID, %(id_1_4)s::UUID, %(id_1_5)s::UUID, %(id_1_6)s::UUID, %(id_1_7)s::UUID, %(id_1_8)s::UUID, %(id_1_9)s::UUID, %(id_1_10)s::UUID, %(id_1_11)s::UUID, %(id_1_12)s::UUID, %(id_1_13)s::UUID, %(id_1_14)s::UUID, %(id_1_15)s::UUID, %(id_1_16)s::UUID, %(id_1_17)s::UUID, %(id_1_18)s::UUID, %(id_1_19)s::UUID, %(id_1_20)s::UUID, %(id_1_21)s::UUID, %(id_1_22)s::UUID, %(id_1_23)s::UUID, %(id_1_24)s::UUID, %(id_1_25)s::UUID, %(id_1_26)s::UUID, %(id_1_27)s::UUID, %(id_1_28)s::UUID, %(id_1_29)s::UUID, %(id_1_30)s::UUID, %(id_1_31)s::UUID, %(id_1_32)s::UUID, %(id_1_33)s::UUID, %(id_1_34)s::UUID, %(id_1_35)s::UUID, %(id_1_36)s::UUID, %(id_1_37)s::UUID, %(id_1_38)s::UUID, %(id_1_39)s::UUID, %(id_1_40)s::UUID, %(id_1_41)s::UUID, %(id_1_42)s::UUID, %(id_1_43)s::UUID, %(id_1_44)s::UUID, %(id_1_45)s::UUID, %(id_1_46)s::UUID, %(id_1_47)s::UUID, %(id_1_48)s::UUID, %(id_1_49)s::UUID, %(id_1_50)s::UUID, %(id_1_51)s::UUID, %(id_1_52)s::UUID, %(id_1_53)s::UUID, %(id_1_54)s::UUID, %(id_1_55)s::UUID, %(id_1_56)s::UUID, %(id_1_57)s::UUID, %(id_1_58)s::UUID, %(id_1_59)s::UUID, %(id_1_60)s::UUID, %(id_1_61)s::UUID, %(id_1_62)s::UUID, %(id_1_63)s::UUID, %(id_1_64)s::UUID, %(id_1_65)s::UUID, %(id_1_66)s::UUID, %(id_1_67)s::UUID, %(id_1_68)s::UUID, %(id_1_69)s::UUID, %(id_1_70)s::UUID, %(id_1_71)s::UUID, %(id_1_72)s::UUID, %(id_1_73)s::UUID, %(id_1_74)s::UUID, %(id_1_75)s::UUID, %(id_1_76)s::UUID, %(id_1_77)s::UUID, %(id_1_78)s::UUID, %(id_1_79)s::UUID, %(id_1_80)s::UUID, %(id_1_81)s::UUID, %(id_1_82)s:",
+          "parameter_count": 1054
+        },
+        {
+          "ms": 0.35,
+          "sql": "SELECT projects.id FROM projects",
+          "parameter_count": 0
+        },
+        {
+          "ms": 0.35,
+          "sql": "SELECT group_members.group_id FROM group_members WHERE group_members.user_id = %(user_id_1)s::UUID",
+          "parameter_count": 1
+        }
+      ],
+      "repeated_shapes": [
+        {
+          "count": 1,
+          "sql": "SELECT projects.id FROM projects"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT group_members.group_id FROM group_members WHERE group_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT team_members.team_id FROM team_members WHERE team_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT anon_1.col, anon_1.lane, count(*) AS count_1, coalesce(sum(anon_1.points), %(coalesce_2)s) AS coalesce_1 FROM (SELECT work_items.id AS id, coalesce(CAST(work_items.assignee_id AS VARCHAR), %(coalesce_3)s::VARCHAR) AS col, %(param_1)s::VARCHAR AS lane, work_items.estimate_points AS points FROM"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT users.id, users.name FROM users WHERE users.id IN (%(id_1_1)s::UUID, %(id_1_2)s::UUID, %(id_1_3)s::UUID, %(id_1_4)s::UUID, %(id_1_5)s::UUID, %(id_1_6)s::UUID, %(id_1_7)s::UUID, %(id_1_8)s::UUID, %(id_1_9)s::UUID, %(id_1_10)s::UUID, %(id_1_11)s::UUID, %(id_1_12)s::UUID, %(id_1_13)s::UUID, %(id"
+        }
+      ]
+    },
+    {
+      "role": "admin",
+      "operation": "project_state_cell_25",
+      "ms": 0.06,
+      "queries": 0,
+      "sql_ms": 0,
+      "max_parameters": 0,
+      "rows": null,
+      "error": "FilterParseError",
+      "slowest": [],
+      "repeated_shapes": []
+    },
+    {
+      "role": "admin",
+      "operation": "all_visible_count",
+      "ms": 107.49,
+      "queries": 4,
+      "sql_ms": 96.8,
+      "max_parameters": 106,
+      "rows": null,
+      "error": null,
+      "slowest": [
+        {
+          "ms": 95.49,
+          "sql": "SELECT count(*) AS count_1 FROM (SELECT work_items.id AS id FROM work_items WHERE work_items.project_id IN (%(project_id_1_1)s::UUID, %(project_id_1_2)s::UUID, %(project_id_1_3)s::UUID, %(project_id_1_4)s::UUID, %(project_id_1_5)s::UUID, %(project_id_1_6)s::UUID, %(project_id_1_7)s::UUID, %(project_id_1_8)s::UUID, %(project_id_1_9)s::UUID, %(project_id_1_10)s::UUID, %(project_id_1_11)s::UUID, %(project_id_1_12)s::UUID, %(project_id_1_13)s::UUID, %(project_id_1_14)s::UUID, %(project_id_1_15)s::UUID, %(project_id_1_16)s::UUID, %(project_id_1_17)s::UUID, %(project_id_1_18)s::UUID, %(project_id_1_19)s::UUID, %(project_id_1_20)s::UUID, %(project_id_1_21)s::UUID, %(project_id_1_22)s::UUID, %(project_id_1_23)s::UUID, %(project_id_1_24)s::UUID, %(project_id_1_25)s::UUID, %(project_id_1_26)s::UUID, %(project_id_1_27)s::UUID, %(project_id_1_28)s::UUID, %(project_id_1_29)s::UUID, %(project_id_1_30)s::UUID, %(project_id_1_31)s::UUID, %(project_id_1_32)s::UUID, %(project_id_1_33)s::UUID, %(project_id_1_34)s::UUID, %(project_id_1_35)s::UUID, %(project_id_1_36)s::UUID, %(project_id_1_37)s::UUID, %(project_id_1_38)s::UUID, %(project_id_1_39)s::UUID, %(project_id_1_40)s::UUID, %(project_id_1_41)s::UUID, %(project_id_1_42)s::UUID, %(project_id_1_43)s::UUID, %(project_id_1_44)s::UUID, %(project_id_1_45)s::UUID, %(project_id_1_46)s::UUID, %(project_id_1_47)s::UUID, %(project_id_1_48)s::UUID, %(project_id_1_49)s::UUID, %(project_id_1_50)s::UUID, %(project_id_1_51)s::UUID, %(project_id_1_52)s::UUID, %(project_id_1_53)s::UUID, %(project_id_1_54)s::UUID, %(project_id_1_55)s::UUID, %(project_id_1_5",
+          "parameter_count": 106
+        },
+        {
+          "ms": 0.77,
+          "sql": "SELECT group_members.group_id FROM group_members WHERE group_members.user_id = %(user_id_1)s::UUID",
+          "parameter_count": 1
+        },
+        {
+          "ms": 0.31,
+          "sql": "SELECT team_members.team_id FROM team_members WHERE team_members.user_id = %(user_id_1)s::UUID",
+          "parameter_count": 1
+        },
+        {
+          "ms": 0.23,
+          "sql": "SELECT projects.id FROM projects",
+          "parameter_count": 0
+        }
+      ],
+      "repeated_shapes": [
+        {
+          "count": 1,
+          "sql": "SELECT projects.id FROM projects"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT group_members.group_id FROM group_members WHERE group_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT team_members.team_id FROM team_members WHERE team_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT count(*) AS count_1 FROM (SELECT work_items.id AS id FROM work_items WHERE work_items.project_id IN (%(project_id_1_1)s::UUID, %(project_id_1_2)s::UUID, %(project_id_1_3)s::UUID, %(project_id_1_4)s::UUID, %(project_id_1_5)s::UUID, %(project_id_1_6)s::UUID, %(project_id_1_7)s::UUID, %(project_"
+        }
+      ]
+    },
+    {
+      "role": "admin",
+      "operation": "search_issue_key",
+      "ms": 236.87,
+      "queries": 6,
+      "sql_ms": 215.45,
+      "max_parameters": 111,
+      "rows": 1,
+      "error": null,
+      "slowest": [
+        {
+          "ms": 169.54,
+          "sql": "SELECT search_index.item_id, search_index.project_id, search_index.reporter_id, search_index.assignee_id, search_index.team_id, search_index.visibility, search_index.key, search_index.title, search_index.description, search_index.comments_text, search_index.tsv, search_index.updated_at FROM search_index WHERE search_index.key ILIKE %(key_1)s::VARCHAR AND search_index.project_id IN (%(project_id_1_1)s::UUID, %(project_id_1_2)s::UUID, %(project_id_1_3)s::UUID, %(project_id_1_4)s::UUID, %(project_id_1_5)s::UUID, %(project_id_1_6)s::UUID, %(project_id_1_7)s::UUID, %(project_id_1_8)s::UUID, %(project_id_1_9)s::UUID, %(project_id_1_10)s::UUID, %(project_id_1_11)s::UUID, %(project_id_1_12)s::UUID, %(project_id_1_13)s::UUID, %(project_id_1_14)s::UUID, %(project_id_1_15)s::UUID, %(project_id_1_16)s::UUID, %(project_id_1_17)s::UUID, %(project_id_1_18)s::UUID, %(project_id_1_19)s::UUID, %(project_id_1_20)s::UUID, %(project_id_1_21)s::UUID, %(project_id_1_22)s::UUID, %(project_id_1_23)s::UUID, %(project_id_1_24)s::UUID, %(project_id_1_25)s::UUID, %(project_id_1_26)s::UUID, %(project_id_1_27)s::UUID, %(project_id_1_28)s::UUID, %(project_id_1_29)s::UUID, %(project_id_1_30)s::UUID, %(project_id_1_31)s::UUID, %(project_id_1_32)s::UUID, %(project_id_1_33)s::UUID, %(project_id_1_34)s::UUID, %(project_id_1_35)s::UUID, %(project_id_1_36)s::UUID, %(project_id_1_37)s::UUID, %(project_id_1_38)s::UUID, %(project_id_1_39)s::UUID, %(project_id_1_40)s::UUID, %(project_id_1_41)s::UUID, %(project_id_1_42)s::UUID, %(project_id_1_43)s::UUID, %(project_id_1_44)s::UUID, %(project_id_1_45)s::UUID, %(project",
+          "parameter_count": 108
+        },
+        {
+          "ms": 43.98,
+          "sql": "SELECT search_index.item_id, search_index.project_id, search_index.reporter_id, search_index.assignee_id, search_index.team_id, search_index.visibility, search_index.key, search_index.title, search_index.description, search_index.comments_text, search_index.tsv, search_index.updated_at, ts_headline(%(ts_headline_2)s::REGCONFIG, search_index.description || %(param_1)s::VARCHAR || search_index.comments_text, to_tsquery(%(to_tsquery_1)s::REGCONFIG, %(to_tsquery_2)s::VARCHAR), 'MaxWords=18, MinWords=6, MaxFragments=1') AS ts_headline_1 FROM search_index WHERE (search_index.tsv @@ to_tsquery(%(to_tsquery_1)s::REGCONFIG, %(to_tsquery_2)s::VARCHAR)) AND search_index.project_id IN (%(project_id_1_1)s::UUID, %(project_id_1_2)s::UUID, %(project_id_1_3)s::UUID, %(project_id_1_4)s::UUID, %(project_id_1_5)s::UUID, %(project_id_1_6)s::UUID, %(project_id_1_7)s::UUID, %(project_id_1_8)s::UUID, %(project_id_1_9)s::UUID, %(project_id_1_10)s::UUID, %(project_id_1_11)s::UUID, %(project_id_1_12)s::UUID, %(project_id_1_13)s::UUID, %(project_id_1_14)s::UUID, %(project_id_1_15)s::UUID, %(project_id_1_16)s::UUID, %(project_id_1_17)s::UUID, %(project_id_1_18)s::UUID, %(project_id_1_19)s::UUID, %(project_id_1_20)s::UUID, %(project_id_1_21)s::UUID, %(project_id_1_22)s::UUID, %(project_id_1_23)s::UUID, %(project_id_1_24)s::UUID, %(project_id_1_25)s::UUID, %(project_id_1_26)s::UUID, %(project_id_1_27)s::UUID, %(project_id_1_28)s::UUID, %(project_id_1_29)s::UUID, %(project_id_1_30)s::UUID, %(project_id_1_31)s::UUID, %(project_id_1_32)s::UUID, %(project_id_1_33)s::UUID, %(project_id_1_34)s::UUID, %(projec",
+          "parameter_count": 111
+        },
+        {
+          "ms": 0.56,
+          "sql": "SELECT projects.id FROM projects",
+          "parameter_count": 0
+        },
+        {
+          "ms": 0.54,
+          "sql": "SELECT projects.id, projects.key, projects.name, projects.description, projects.next_number, projects.created_at, projects.updated_at FROM projects ORDER BY projects.created_at",
+          "parameter_count": 0
+        }
+      ],
+      "repeated_shapes": [
+        {
+          "count": 1,
+          "sql": "SELECT projects.id, projects.key, projects.name, projects.description, projects.next_number, projects.created_at, projects.updated_at FROM projects ORDER BY projects.created_at"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT projects.id FROM projects"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT group_members.group_id FROM group_members WHERE group_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT team_members.team_id FROM team_members WHERE team_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT search_index.item_id, search_index.project_id, search_index.reporter_id, search_index.assignee_id, search_index.team_id, search_index.visibility, search_index.key, search_index.title, search_index.description, search_index.comments_text, search_index.tsv, search_index.updated_at FROM search_i"
+        }
+      ]
+    },
+    {
+      "role": "admin",
+      "operation": "search_word_render",
+      "ms": 2302.54,
+      "queries": 6,
+      "sql_ms": 2282.27,
+      "max_parameters": 111,
+      "rows": 20,
+      "error": null,
+      "slowest": [
+        {
+          "ms": 2109.54,
+          "sql": "SELECT search_index.item_id, search_index.project_id, search_index.reporter_id, search_index.assignee_id, search_index.team_id, search_index.visibility, search_index.key, search_index.title, search_index.description, search_index.comments_text, search_index.tsv, search_index.updated_at, ts_headline(%(ts_headline_2)s::REGCONFIG, search_index.description || %(param_1)s::VARCHAR || search_index.comments_text, to_tsquery(%(to_tsquery_1)s::REGCONFIG, %(to_tsquery_2)s::VARCHAR), 'MaxWords=18, MinWords=6, MaxFragments=1') AS ts_headline_1 FROM search_index WHERE (search_index.tsv @@ to_tsquery(%(to_tsquery_1)s::REGCONFIG, %(to_tsquery_2)s::VARCHAR)) AND search_index.project_id IN (%(project_id_1_1)s::UUID, %(project_id_1_2)s::UUID, %(project_id_1_3)s::UUID, %(project_id_1_4)s::UUID, %(project_id_1_5)s::UUID, %(project_id_1_6)s::UUID, %(project_id_1_7)s::UUID, %(project_id_1_8)s::UUID, %(project_id_1_9)s::UUID, %(project_id_1_10)s::UUID, %(project_id_1_11)s::UUID, %(project_id_1_12)s::UUID, %(project_id_1_13)s::UUID, %(project_id_1_14)s::UUID, %(project_id_1_15)s::UUID, %(project_id_1_16)s::UUID, %(project_id_1_17)s::UUID, %(project_id_1_18)s::UUID, %(project_id_1_19)s::UUID, %(project_id_1_20)s::UUID, %(project_id_1_21)s::UUID, %(project_id_1_22)s::UUID, %(project_id_1_23)s::UUID, %(project_id_1_24)s::UUID, %(project_id_1_25)s::UUID, %(project_id_1_26)s::UUID, %(project_id_1_27)s::UUID, %(project_id_1_28)s::UUID, %(project_id_1_29)s::UUID, %(project_id_1_30)s::UUID, %(project_id_1_31)s::UUID, %(project_id_1_32)s::UUID, %(project_id_1_33)s::UUID, %(project_id_1_34)s::UUID, %(projec",
+          "parameter_count": 111
+        },
+        {
+          "ms": 171.28,
+          "sql": "SELECT search_index.item_id, search_index.project_id, search_index.reporter_id, search_index.assignee_id, search_index.team_id, search_index.visibility, search_index.key, search_index.title, search_index.description, search_index.comments_text, search_index.tsv, search_index.updated_at FROM search_index WHERE search_index.key ILIKE %(key_1)s::VARCHAR AND search_index.project_id IN (%(project_id_1_1)s::UUID, %(project_id_1_2)s::UUID, %(project_id_1_3)s::UUID, %(project_id_1_4)s::UUID, %(project_id_1_5)s::UUID, %(project_id_1_6)s::UUID, %(project_id_1_7)s::UUID, %(project_id_1_8)s::UUID, %(project_id_1_9)s::UUID, %(project_id_1_10)s::UUID, %(project_id_1_11)s::UUID, %(project_id_1_12)s::UUID, %(project_id_1_13)s::UUID, %(project_id_1_14)s::UUID, %(project_id_1_15)s::UUID, %(project_id_1_16)s::UUID, %(project_id_1_17)s::UUID, %(project_id_1_18)s::UUID, %(project_id_1_19)s::UUID, %(project_id_1_20)s::UUID, %(project_id_1_21)s::UUID, %(project_id_1_22)s::UUID, %(project_id_1_23)s::UUID, %(project_id_1_24)s::UUID, %(project_id_1_25)s::UUID, %(project_id_1_26)s::UUID, %(project_id_1_27)s::UUID, %(project_id_1_28)s::UUID, %(project_id_1_29)s::UUID, %(project_id_1_30)s::UUID, %(project_id_1_31)s::UUID, %(project_id_1_32)s::UUID, %(project_id_1_33)s::UUID, %(project_id_1_34)s::UUID, %(project_id_1_35)s::UUID, %(project_id_1_36)s::UUID, %(project_id_1_37)s::UUID, %(project_id_1_38)s::UUID, %(project_id_1_39)s::UUID, %(project_id_1_40)s::UUID, %(project_id_1_41)s::UUID, %(project_id_1_42)s::UUID, %(project_id_1_43)s::UUID, %(project_id_1_44)s::UUID, %(project_id_1_45)s::UUID, %(project",
+          "parameter_count": 108
+        },
+        {
+          "ms": 0.41,
+          "sql": "SELECT group_members.group_id FROM group_members WHERE group_members.user_id = %(user_id_1)s::UUID",
+          "parameter_count": 1
+        },
+        {
+          "ms": 0.39,
+          "sql": "SELECT projects.id, projects.key, projects.name, projects.description, projects.next_number, projects.created_at, projects.updated_at FROM projects ORDER BY projects.created_at",
+          "parameter_count": 0
+        }
+      ],
+      "repeated_shapes": [
+        {
+          "count": 1,
+          "sql": "SELECT projects.id, projects.key, projects.name, projects.description, projects.next_number, projects.created_at, projects.updated_at FROM projects ORDER BY projects.created_at"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT projects.id FROM projects"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT group_members.group_id FROM group_members WHERE group_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT team_members.team_id FROM team_members WHERE team_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT search_index.item_id, search_index.project_id, search_index.reporter_id, search_index.assignee_id, search_index.team_id, search_index.visibility, search_index.key, search_index.title, search_index.description, search_index.comments_text, search_index.tsv, search_index.updated_at FROM search_i"
+        }
+      ]
+    },
+    {
+      "role": "admin",
+      "operation": "report_visible_id_universe",
+      "ms": 1561.58,
+      "queries": 4,
+      "sql_ms": 502.46,
+      "max_parameters": 106,
+      "rows": 501298,
+      "error": null,
+      "slowest": [
+        {
+          "ms": 500.36,
+          "sql": "SELECT work_items.id FROM work_items WHERE work_items.project_id IN (%(project_id_1_1)s::UUID, %(project_id_1_2)s::UUID, %(project_id_1_3)s::UUID, %(project_id_1_4)s::UUID, %(project_id_1_5)s::UUID, %(project_id_1_6)s::UUID, %(project_id_1_7)s::UUID, %(project_id_1_8)s::UUID, %(project_id_1_9)s::UUID, %(project_id_1_10)s::UUID, %(project_id_1_11)s::UUID, %(project_id_1_12)s::UUID, %(project_id_1_13)s::UUID, %(project_id_1_14)s::UUID, %(project_id_1_15)s::UUID, %(project_id_1_16)s::UUID, %(project_id_1_17)s::UUID, %(project_id_1_18)s::UUID, %(project_id_1_19)s::UUID, %(project_id_1_20)s::UUID, %(project_id_1_21)s::UUID, %(project_id_1_22)s::UUID, %(project_id_1_23)s::UUID, %(project_id_1_24)s::UUID, %(project_id_1_25)s::UUID, %(project_id_1_26)s::UUID, %(project_id_1_27)s::UUID, %(project_id_1_28)s::UUID, %(project_id_1_29)s::UUID, %(project_id_1_30)s::UUID, %(project_id_1_31)s::UUID, %(project_id_1_32)s::UUID, %(project_id_1_33)s::UUID, %(project_id_1_34)s::UUID, %(project_id_1_35)s::UUID, %(project_id_1_36)s::UUID, %(project_id_1_37)s::UUID, %(project_id_1_38)s::UUID, %(project_id_1_39)s::UUID, %(project_id_1_40)s::UUID, %(project_id_1_41)s::UUID, %(project_id_1_42)s::UUID, %(project_id_1_43)s::UUID, %(project_id_1_44)s::UUID, %(project_id_1_45)s::UUID, %(project_id_1_46)s::UUID, %(project_id_1_47)s::UUID, %(project_id_1_48)s::UUID, %(project_id_1_49)s::UUID, %(project_id_1_50)s::UUID, %(project_id_1_51)s::UUID, %(project_id_1_52)s::UUID, %(project_id_1_53)s::UUID, %(project_id_1_54)s::UUID, %(project_id_1_55)s::UUID, %(project_id_1_56)s::UUID, %(project_id_1_57)s::UUID, %",
+          "parameter_count": 106
+        },
+        {
+          "ms": 0.97,
+          "sql": "SELECT group_members.group_id FROM group_members WHERE group_members.user_id = %(user_id_1)s::UUID",
+          "parameter_count": 1
+        },
+        {
+          "ms": 0.82,
+          "sql": "SELECT team_members.team_id FROM team_members WHERE team_members.user_id = %(user_id_1)s::UUID",
+          "parameter_count": 1
+        },
+        {
+          "ms": 0.31,
+          "sql": "SELECT projects.id FROM projects",
+          "parameter_count": 0
+        }
+      ],
+      "repeated_shapes": [
+        {
+          "count": 1,
+          "sql": "SELECT projects.id FROM projects"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT group_members.group_id FROM group_members WHERE group_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT team_members.team_id FROM team_members WHERE team_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT work_items.id FROM work_items WHERE work_items.project_id IN (%(project_id_1_1)s::UUID, %(project_id_1_2)s::UUID, %(project_id_1_3)s::UUID, %(project_id_1_4)s::UUID, %(project_id_1_5)s::UUID, %(project_id_1_6)s::UUID, %(project_id_1_7)s::UUID, %(project_id_1_8)s::UUID, %(project_id_1_9)s::UUI"
+        }
+      ]
+    },
+    {
+      "role": "member",
+      "operation": "issue_detail",
+      "ms": 119.9,
+      "queries": 10,
+      "sql_ms": 5.3,
+      "max_parameters": 8,
+      "rows": null,
+      "error": "NotFoundError",
+      "slowest": [
+        {
+          "ms": 2.3,
+          "sql": "SELECT EXISTS (SELECT * FROM work_items WHERE work_items.id = %(id_1)s::UUID AND work_items.id IN (SELECT item_participants.item_id FROM item_participants WHERE item_participants.user_id = %(user_id_1)s::UUID OR item_participants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID))) AS anon_1",
+          "parameter_count": 5
+        },
+        {
+          "ms": 0.74,
+          "sql": "SELECT work_items.id, projects.id AS id_1, projects.key, projects.name, projects.description, projects.next_number, projects.created_at, projects.updated_at FROM work_items JOIN projects ON projects.id = work_items.project_id WHERE projects.key = %(key_1)s::VARCHAR AND work_items.number = %(number_1)s::INTEGER",
+          "parameter_count": 2
+        },
+        {
+          "ms": 0.42,
+          "sql": "SELECT DISTINCT global_role_grants.role_id FROM global_role_grants WHERE (global_role_grants.user_id IN (%(user_id_1_1)s::UUID, %(user_id_1_2)s::UUID, %(user_id_1_3)s::UUID) OR global_role_grants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID)) AND (global_role_grants.project_id IS NULL AND global_role_grants.space_id IS NULL OR global_role_grants.project_id = %(project_id_1)s::UUID) AND (global_role_grants.expires_at IS NULL OR global_role_grants.expires_at > %(expires_at_1)s::TIMESTAMP WITHOUT TIME ZONE)",
+          "parameter_count": 8
+        },
+        {
+          "ms": 0.36,
+          "sql": "SELECT work_items.id AS work_items_id, work_items.project_id AS work_items_project_id, work_items.number AS work_items_number, work_items.kind AS work_items_kind, work_items.type_id AS work_items_type_id, work_items.parent_id AS work_items_parent_id, work_items.title AS work_items_title, work_items.description AS work_items_description, work_items.state_id AS work_items_state_id, work_items.priority AS work_items_priority, work_items.assignee_id AS work_items_assignee_id, work_items.reporter_id AS work_items_reporter_id, work_items.team_id AS work_items_team_id, work_items.flagged AS work_items_flagged, work_items.visibility AS work_items_visibility, work_items.archived_at AS work_items_archived_at, work_items.rank AS work_items_rank, work_items.estimate_points AS work_items_estimate_points, work_items.start_date AS work_items_start_date, work_items.target_date AS work_items_target_date, work_items.cycle_id AS work_items_cycle_id, work_items.release_id AS work_items_release_id, work_items.custom_fields AS work_items_custom_fields, work_items.created_at AS work_items_created_at, work_items.updated_at AS work_items_updated_at FROM work_items WHERE work_items.id = %(pk_1)s::UUID",
+          "parameter_count": 1
+        }
+      ],
+      "repeated_shapes": [
+        {
+          "count": 2,
+          "sql": "SELECT DISTINCT global_role_grants.role_id FROM global_role_grants WHERE (global_role_grants.user_id IN (%(user_id_1_1)s::UUID, %(user_id_1_2)s::UUID, %(user_id_1_3)s::UUID) OR global_role_grants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID)) AND (global_role_grant"
+        },
+        {
+          "count": 2,
+          "sql": "SELECT roles.permissions FROM roles WHERE roles.id IN (%(id_1_1)s::UUID)"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT work_items.id, projects.id AS id_1, projects.key, projects.name, projects.description, projects.next_number, projects.created_at, projects.updated_at FROM work_items JOIN projects ON projects.id = work_items.project_id WHERE projects.key = %(key_1)s::VARCHAR AND work_items.number = %(number_1"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT group_members.group_id FROM group_members WHERE group_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT team_members.team_id FROM team_members WHERE team_members.user_id = %(user_id_1)s::UUID"
+        }
+      ]
+    },
+    {
+      "role": "member",
+      "operation": "project_list_25",
+      "ms": 310.5,
+      "queries": 37,
+      "sql_ms": 132.91,
+      "max_parameters": 1505,
+      "rows": 25,
+      "error": null,
+      "slowest": [
+        {
+          "ms": 52.84,
+          "sql": "SELECT work_items.id, work_items.project_id, work_items.number, work_items.kind, work_items.type_id, work_items.parent_id, work_items.title, work_items.description, work_items.state_id, work_items.priority, work_items.assignee_id, work_items.reporter_id, work_items.team_id, work_items.flagged, work_items.visibility, work_items.archived_at, work_items.rank, work_items.estimate_points, work_items.start_date, work_items.target_date, work_items.cycle_id, work_items.release_id, work_items.custom_fields, work_items.created_at, work_items.updated_at FROM work_items WHERE work_items.project_id = %(project_id_1)s::UUID AND (work_items.reporter_id = %(reporter_id_1)s::UUID OR work_items.id IN (SELECT item_participants.item_id FROM item_participants WHERE item_participants.user_id = %(user_id_1)s::UUID OR item_participants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID))) AND (work_items.visibility != %(visibility_1)s::VARCHAR OR work_items.reporter_id = %(reporter_id_2)s::UUID OR work_items.assignee_id = %(assignee_id_1)s::UUID OR work_items.id IN (SELECT item_participants.item_id FROM item_participants WHERE item_participants.user_id = %(user_id_2)s::UUID OR item_participants.team_id IN (%(team_id_2_1)s::UUID, %(team_id_2_2)s::UUID, %(team_id_2_3)s::UUID))) AND work_items.archived_at IS NULL AND work_items.project_id = %(project_id_2)s::UUID ORDER BY work_items.rank ASC, work_items.created_at DESC, work_items.id ASC LIMIT %(param_1)s::INTEGER OFFSET %(param_2)s::INTEGER",
+          "parameter_count": 16
+        },
+        {
+          "ms": 24.34,
+          "sql": "SELECT work_items.id, work_items.project_id, work_items.number, work_items.kind, work_items.type_id, work_items.parent_id, work_items.title, work_items.description, work_items.state_id, work_items.priority, work_items.assignee_id, work_items.reporter_id, work_items.team_id, work_items.flagged, work_items.visibility, work_items.archived_at, work_items.rank, work_items.estimate_points, work_items.start_date, work_items.target_date, work_items.cycle_id, work_items.release_id, work_items.custom_fields, work_items.created_at, work_items.updated_at FROM work_items WHERE work_items.id IN (%(id_1_1)s::UUID, %(id_1_2)s::UUID, %(id_1_3)s::UUID, %(id_1_4)s::UUID, %(id_1_5)s::UUID, %(id_1_6)s::UUID, %(id_1_7)s::UUID, %(id_1_8)s::UUID, %(id_1_9)s::UUID, %(id_1_10)s::UUID, %(id_1_11)s::UUID) AND (work_items.project_id = %(project_id_1)s::UUID AND (work_items.reporter_id = %(reporter_id_1)s::UUID OR work_items.id IN (SELECT item_participants.item_id FROM item_participants WHERE item_participants.user_id = %(user_id_1)s::UUID OR item_participants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID))) AND (work_items.visibility != %(visibility_1)s::VARCHAR OR work_items.reporter_id = %(reporter_id_2)s::UUID OR work_items.assignee_id = %(assignee_id_1)s::UUID OR work_items.id IN (SELECT item_participants.item_id FROM item_participants WHERE item_participants.user_id = %(user_id_2)s::UUID OR item_participants.team_id IN (%(team_id_2_1)s::UUID, %(team_id_2_2)s::UUID, %(team_id_2_3)s::UUID))) OR work_items.project_id = %(project_id_2)s::UUID AND (work_items.reporter_",
+          "parameter_count": 1385
+        },
+        {
+          "ms": 17.24,
+          "sql": "SELECT work_items.parent_id, count(*) AS count_1 FROM work_items WHERE work_items.parent_id IN (%(parent_id_1_1)s::UUID, %(parent_id_1_2)s::UUID, %(parent_id_1_3)s::UUID, %(parent_id_1_4)s::UUID, %(parent_id_1_5)s::UUID, %(parent_id_1_6)s::UUID, %(parent_id_1_7)s::UUID, %(parent_id_1_8)s::UUID, %(parent_id_1_9)s::UUID, %(parent_id_1_10)s::UUID, %(parent_id_1_11)s::UUID, %(parent_id_1_12)s::UUID, %(parent_id_1_13)s::UUID, %(parent_id_1_14)s::UUID, %(parent_id_1_15)s::UUID, %(parent_id_1_16)s::UUID, %(parent_id_1_17)s::UUID, %(parent_id_1_18)s::UUID, %(parent_id_1_19)s::UUID, %(parent_id_1_20)s::UUID, %(parent_id_1_21)s::UUID, %(parent_id_1_22)s::UUID, %(parent_id_1_23)s::UUID, %(parent_id_1_24)s::UUID, %(parent_id_1_25)s::UUID) AND work_items.project_id IN (%(project_id_1_1)s::UUID, %(project_id_1_2)s::UUID, %(project_id_1_3)s::UUID, %(project_id_1_4)s::UUID, %(project_id_1_5)s::UUID, %(project_id_1_6)s::UUID, %(project_id_1_7)s::UUID, %(project_id_1_8)s::UUID, %(project_id_1_9)s::UUID, %(project_id_1_10)s::UUID, %(project_id_1_11)s::UUID, %(project_id_1_12)s::UUID, %(project_id_1_13)s::UUID, %(project_id_1_14)s::UUID, %(project_id_1_15)s::UUID, %(project_id_1_16)s::UUID, %(project_id_1_17)s::UUID, %(project_id_1_18)s::UUID, %(project_id_1_19)s::UUID, %(project_id_1_20)s::UUID, %(project_id_1_21)s::UUID, %(project_id_1_22)s::UUID, %(project_id_1_23)s::UUID, %(project_id_1_24)s::UUID, %(project_id_1_25)s::UUID, %(project_id_1_26)s::UUID, %(project_id_1_27)s::UUID, %(project_id_1_28)s::UUID, %(project_id_1_29)s::UUID, %(project_id_1_30)s::UUID, %(project_id_1_31)s::UUID, %(pro",
+          "parameter_count": 1505
+        },
+        {
+          "ms": 9.92,
+          "sql": "SELECT comments.entity_id, count(*) AS count_1 FROM comments WHERE comments.entity_type = %(entity_type_1)s::VARCHAR AND comments.entity_id IN (%(entity_id_1_1)s::UUID, %(entity_id_1_2)s::UUID, %(entity_id_1_3)s::UUID, %(entity_id_1_4)s::UUID, %(entity_id_1_5)s::UUID, %(entity_id_1_6)s::UUID, %(entity_id_1_7)s::UUID, %(entity_id_1_8)s::UUID, %(entity_id_1_9)s::UUID, %(entity_id_1_10)s::UUID, %(entity_id_1_11)s::UUID, %(entity_id_1_12)s::UUID, %(entity_id_1_13)s::UUID, %(entity_id_1_14)s::UUID, %(entity_id_1_15)s::UUID, %(entity_id_1_16)s::UUID, %(entity_id_1_17)s::UUID, %(entity_id_1_18)s::UUID, %(entity_id_1_19)s::UUID, %(entity_id_1_20)s::UUID, %(entity_id_1_21)s::UUID, %(entity_id_1_22)s::UUID, %(entity_id_1_23)s::UUID, %(entity_id_1_24)s::UUID, %(entity_id_1_25)s::UUID) AND comments.visibility = %(visibility_1)s::VARCHAR GROUP BY comments.entity_id",
+          "parameter_count": 27
+        }
+      ],
+      "repeated_shapes": [
+        {
+          "count": 1,
+          "sql": "SELECT projects.id AS projects_id, projects.key AS projects_key, projects.name AS projects_name, projects.description AS projects_description, projects.next_number AS projects_next_number, projects.created_at AS projects_created_at, projects.updated_at AS projects_updated_at FROM projects WHERE proj"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT group_members.group_id FROM group_members WHERE group_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT team_members.team_id FROM team_members WHERE team_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT DISTINCT global_role_grants.role_id FROM global_role_grants WHERE (global_role_grants.user_id IN (%(user_id_1_1)s::UUID, %(user_id_1_2)s::UUID, %(user_id_1_3)s::UUID) OR global_role_grants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID)) AND (global_role_grant"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT roles.permissions FROM roles WHERE roles.id IN (%(id_1_1)s::UUID)"
+        }
+      ]
+    },
+    {
+      "role": "member",
+      "operation": "cross_project_list_25",
+      "ms": 333.31,
+      "queries": 66,
+      "sql_ms": 121.55,
+      "max_parameters": 1505,
+      "rows": 25,
+      "error": null,
+      "slowest": [
+        {
+          "ms": 37.11,
+          "sql": "SELECT work_items.id, work_items.project_id, work_items.number, work_items.kind, work_items.type_id, work_items.parent_id, work_items.title, work_items.description, work_items.state_id, work_items.priority, work_items.assignee_id, work_items.reporter_id, work_items.team_id, work_items.flagged, work_items.visibility, work_items.archived_at, work_items.rank, work_items.estimate_points, work_items.start_date, work_items.target_date, work_items.cycle_id, work_items.release_id, work_items.custom_fields, work_items.created_at, work_items.updated_at FROM work_items WHERE work_items.project_id IN (%(project_id_1_1)s::UUID, %(project_id_1_2)s::UUID, %(project_id_1_3)s::UUID, %(project_id_1_4)s::UUID, %(project_id_1_5)s::UUID, %(project_id_1_6)s::UUID, %(project_id_1_7)s::UUID, %(project_id_1_8)s::UUID, %(project_id_1_9)s::UUID, %(project_id_1_10)s::UUID, %(project_id_1_11)s::UUID, %(project_id_1_12)s::UUID, %(project_id_1_13)s::UUID, %(project_id_1_14)s::UUID, %(project_id_1_15)s::UUID, %(project_id_1_16)s::UUID, %(project_id_1_17)s::UUID, %(project_id_1_18)s::UUID, %(project_id_1_19)s::UUID, %(project_id_1_20)s::UUID, %(project_id_1_21)s::UUID, %(project_id_1_22)s::UUID, %(project_id_1_23)s::UUID, %(project_id_1_24)s::UUID, %(project_id_1_25)s::UUID, %(project_id_1_26)s::UUID, %(project_id_1_27)s::UUID, %(project_id_1_28)s::UUID, %(project_id_1_29)s::UUID, %(project_id_1_30)s::UUID, %(project_id_1_31)s::UUID, %(project_id_1_32)s::UUID, %(project_id_1_33)s::UUID, %(project_id_1_34)s::UUID, %(project_id_1_35)s::UUID, %(project_id_1_36)s::UUID, %(project_id_1_37)s::UUID, %(project_id_",
+          "parameter_count": 1482
+        },
+        {
+          "ms": 16.97,
+          "sql": "SELECT work_items.parent_id, count(*) AS count_1 FROM work_items WHERE work_items.parent_id IN (%(parent_id_1_1)s::UUID, %(parent_id_1_2)s::UUID, %(parent_id_1_3)s::UUID, %(parent_id_1_4)s::UUID, %(parent_id_1_5)s::UUID, %(parent_id_1_6)s::UUID, %(parent_id_1_7)s::UUID, %(parent_id_1_8)s::UUID, %(parent_id_1_9)s::UUID, %(parent_id_1_10)s::UUID, %(parent_id_1_11)s::UUID, %(parent_id_1_12)s::UUID, %(parent_id_1_13)s::UUID, %(parent_id_1_14)s::UUID, %(parent_id_1_15)s::UUID, %(parent_id_1_16)s::UUID, %(parent_id_1_17)s::UUID, %(parent_id_1_18)s::UUID, %(parent_id_1_19)s::UUID, %(parent_id_1_20)s::UUID, %(parent_id_1_21)s::UUID, %(parent_id_1_22)s::UUID, %(parent_id_1_23)s::UUID, %(parent_id_1_24)s::UUID, %(parent_id_1_25)s::UUID) AND work_items.project_id IN (%(project_id_1_1)s::UUID, %(project_id_1_2)s::UUID, %(project_id_1_3)s::UUID, %(project_id_1_4)s::UUID, %(project_id_1_5)s::UUID, %(project_id_1_6)s::UUID, %(project_id_1_7)s::UUID, %(project_id_1_8)s::UUID, %(project_id_1_9)s::UUID, %(project_id_1_10)s::UUID, %(project_id_1_11)s::UUID, %(project_id_1_12)s::UUID, %(project_id_1_13)s::UUID, %(project_id_1_14)s::UUID, %(project_id_1_15)s::UUID, %(project_id_1_16)s::UUID, %(project_id_1_17)s::UUID, %(project_id_1_18)s::UUID, %(project_id_1_19)s::UUID, %(project_id_1_20)s::UUID, %(project_id_1_21)s::UUID, %(project_id_1_22)s::UUID, %(project_id_1_23)s::UUID, %(project_id_1_24)s::UUID, %(project_id_1_25)s::UUID, %(project_id_1_26)s::UUID, %(project_id_1_27)s::UUID, %(project_id_1_28)s::UUID, %(project_id_1_29)s::UUID, %(project_id_1_30)s::UUID, %(project_id_1_31)s::UUID, %(pro",
+          "parameter_count": 1505
+        },
+        {
+          "ms": 14.74,
+          "sql": "SELECT work_items.id, work_items.project_id, work_items.number, work_items.kind, work_items.type_id, work_items.parent_id, work_items.title, work_items.description, work_items.state_id, work_items.priority, work_items.assignee_id, work_items.reporter_id, work_items.team_id, work_items.flagged, work_items.visibility, work_items.archived_at, work_items.rank, work_items.estimate_points, work_items.start_date, work_items.target_date, work_items.cycle_id, work_items.release_id, work_items.custom_fields, work_items.created_at, work_items.updated_at FROM work_items WHERE work_items.id IN (%(id_1_1)s::UUID, %(id_1_2)s::UUID, %(id_1_3)s::UUID, %(id_1_4)s::UUID, %(id_1_5)s::UUID, %(id_1_6)s::UUID, %(id_1_7)s::UUID, %(id_1_8)s::UUID, %(id_1_9)s::UUID, %(id_1_10)s::UUID) AND (work_items.project_id = %(project_id_1)s::UUID AND (work_items.reporter_id = %(reporter_id_1)s::UUID OR work_items.id IN (SELECT item_participants.item_id FROM item_participants WHERE item_participants.user_id = %(user_id_1)s::UUID OR item_participants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID))) AND (work_items.visibility != %(visibility_1)s::VARCHAR OR work_items.reporter_id = %(reporter_id_2)s::UUID OR work_items.assignee_id = %(assignee_id_1)s::UUID OR work_items.id IN (SELECT item_participants.item_id FROM item_participants WHERE item_participants.user_id = %(user_id_2)s::UUID OR item_participants.team_id IN (%(team_id_2_1)s::UUID, %(team_id_2_2)s::UUID, %(team_id_2_3)s::UUID))) OR work_items.project_id = %(project_id_2)s::UUID AND (work_items.reporter_id = %(reporter_id_",
+          "parameter_count": 1384
+        },
+        {
+          "ms": 12.43,
+          "sql": "SELECT work_items.id, work_items.project_id, work_items.number, work_items.kind, work_items.type_id, work_items.parent_id, work_items.title, work_items.description, work_items.state_id, work_items.priority, work_items.assignee_id, work_items.reporter_id, work_items.team_id, work_items.flagged, work_items.visibility, work_items.archived_at, work_items.rank, work_items.estimate_points, work_items.start_date, work_items.target_date, work_items.cycle_id, work_items.release_id, work_items.custom_fields, work_items.created_at, work_items.updated_at FROM work_items WHERE work_items.id IN (%(id_1_1)s::UUID) AND (work_items.project_id = %(project_id_1)s::UUID AND (work_items.reporter_id = %(reporter_id_1)s::UUID OR work_items.id IN (SELECT item_participants.item_id FROM item_participants WHERE item_participants.user_id = %(user_id_1)s::UUID OR item_participants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID))) AND (work_items.visibility != %(visibility_1)s::VARCHAR OR work_items.reporter_id = %(reporter_id_2)s::UUID OR work_items.assignee_id = %(assignee_id_1)s::UUID OR work_items.id IN (SELECT item_participants.item_id FROM item_participants WHERE item_participants.user_id = %(user_id_2)s::UUID OR item_participants.team_id IN (%(team_id_2_1)s::UUID, %(team_id_2_2)s::UUID, %(team_id_2_3)s::UUID))) OR work_items.project_id = %(project_id_2)s::UUID AND (work_items.reporter_id = %(reporter_id_3)s::UUID OR work_items.id IN (SELECT item_participants.item_id FROM item_participants WHERE item_participants.user_id = %(user_id_3)s::UUID OR item_participants.t",
+          "parameter_count": 1375
+        }
+      ],
+      "repeated_shapes": [
+        {
+          "count": 4,
+          "sql": "SELECT projects.id AS projects_id, projects.key AS projects_key, projects.name AS projects_name, projects.description AS projects_description, projects.next_number AS projects_next_number, projects.created_at AS projects_created_at, projects.updated_at AS projects_updated_at FROM projects WHERE proj"
+        },
+        {
+          "count": 4,
+          "sql": "SELECT DISTINCT global_role_grants.role_id FROM global_role_grants WHERE (global_role_grants.user_id IN (%(user_id_1_1)s::UUID, %(user_id_1_2)s::UUID, %(user_id_1_3)s::UUID) OR global_role_grants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID)) AND (global_role_grant"
+        },
+        {
+          "count": 4,
+          "sql": "SELECT field_definitions.id, field_definitions.key, field_definitions.name, field_definitions.type, field_definitions.required, field_definitions.options, field_definitions.default_value, field_definitions.display, field_definitions.indexed, field_definitions.ai_visible, field_definitions.source, fi"
+        },
+        {
+          "count": 4,
+          "sql": "SELECT access_grants.id, access_grants.resource_type, access_grants.resource_id, access_grants.subject_type, access_grants.subject_id, access_grants.access, access_grants.effect, access_grants.expires_at, access_grants.granted_by, access_grants.project_id, access_grants.created_at, access_grants.upd"
+        },
+        {
+          "count": 4,
+          "sql": "SELECT access_restrictions.id, access_restrictions.resource_type, access_restrictions.resource_id, access_restrictions.access, access_restrictions.project_id FROM access_restrictions WHERE access_restrictions.resource_type = %(resource_type_1)s::VARCHAR AND access_restrictions.resource_id IN (%(reso"
+        }
+      ]
+    },
+    {
+      "role": "member",
+      "operation": "project_list_offset_20000",
+      "ms": 150.65,
+      "queries": 20,
+      "sql_ms": 105.9,
+      "max_parameters": 1480,
+      "rows": 0,
+      "error": null,
+      "slowest": [
+        {
+          "ms": 93.55,
+          "sql": "SELECT work_items.id, work_items.project_id, work_items.number, work_items.kind, work_items.type_id, work_items.parent_id, work_items.title, work_items.description, work_items.state_id, work_items.priority, work_items.assignee_id, work_items.reporter_id, work_items.team_id, work_items.flagged, work_items.visibility, work_items.archived_at, work_items.rank, work_items.estimate_points, work_items.start_date, work_items.target_date, work_items.cycle_id, work_items.release_id, work_items.custom_fields, work_items.created_at, work_items.updated_at FROM work_items WHERE work_items.project_id = %(project_id_1)s::UUID AND (work_items.reporter_id = %(reporter_id_1)s::UUID OR work_items.id IN (SELECT item_participants.item_id FROM item_participants WHERE item_participants.user_id = %(user_id_1)s::UUID OR item_participants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID))) AND (work_items.visibility != %(visibility_1)s::VARCHAR OR work_items.reporter_id = %(reporter_id_2)s::UUID OR work_items.assignee_id = %(assignee_id_1)s::UUID OR work_items.id IN (SELECT item_participants.item_id FROM item_participants WHERE item_participants.user_id = %(user_id_2)s::UUID OR item_participants.team_id IN (%(team_id_2_1)s::UUID, %(team_id_2_2)s::UUID, %(team_id_2_3)s::UUID))) AND work_items.archived_at IS NULL AND work_items.project_id = %(project_id_2)s::UUID ORDER BY work_items.rank ASC, work_items.created_at DESC, work_items.id ASC LIMIT %(param_1)s::INTEGER OFFSET %(param_2)s::INTEGER",
+          "parameter_count": 16
+        },
+        {
+          "ms": 6.45,
+          "sql": "SELECT work_items.parent_id, count(*) AS count_1 FROM work_items WHERE work_items.parent_id IN (NULL) AND (1 != 1) AND work_items.project_id IN (%(project_id_1_1)s::UUID, %(project_id_1_2)s::UUID, %(project_id_1_3)s::UUID, %(project_id_1_4)s::UUID, %(project_id_1_5)s::UUID, %(project_id_1_6)s::UUID, %(project_id_1_7)s::UUID, %(project_id_1_8)s::UUID, %(project_id_1_9)s::UUID, %(project_id_1_10)s::UUID, %(project_id_1_11)s::UUID, %(project_id_1_12)s::UUID, %(project_id_1_13)s::UUID, %(project_id_1_14)s::UUID, %(project_id_1_15)s::UUID, %(project_id_1_16)s::UUID, %(project_id_1_17)s::UUID, %(project_id_1_18)s::UUID, %(project_id_1_19)s::UUID, %(project_id_1_20)s::UUID, %(project_id_1_21)s::UUID, %(project_id_1_22)s::UUID, %(project_id_1_23)s::UUID, %(project_id_1_24)s::UUID, %(project_id_1_25)s::UUID, %(project_id_1_26)s::UUID, %(project_id_1_27)s::UUID, %(project_id_1_28)s::UUID, %(project_id_1_29)s::UUID, %(project_id_1_30)s::UUID, %(project_id_1_31)s::UUID, %(project_id_1_32)s::UUID, %(project_id_1_33)s::UUID, %(project_id_1_34)s::UUID, %(project_id_1_35)s::UUID, %(project_id_1_36)s::UUID, %(project_id_1_37)s::UUID, %(project_id_1_38)s::UUID, %(project_id_1_39)s::UUID, %(project_id_1_40)s::UUID, %(project_id_1_41)s::UUID, %(project_id_1_42)s::UUID, %(project_id_1_43)s::UUID, %(project_id_1_44)s::UUID, %(project_id_1_45)s::UUID, %(project_id_1_46)s::UUID, %(project_id_1_47)s::UUID, %(project_id_1_48)s::UUID, %(project_id_1_49)s::UUID, %(project_id_1_50)s::UUID, %(project_id_1_51)s::UUID, %(project_id_1_52)s::UUID, %(project_id_1_53)s::UUID, %(project_id_1_54)s::UUID, %(proj",
+          "parameter_count": 1480
+        },
+        {
+          "ms": 1.12,
+          "sql": "SELECT projects.id FROM projects",
+          "parameter_count": 0
+        },
+        {
+          "ms": 0.7,
+          "sql": "SELECT global_role_grants.project_id, global_role_grants.role_id FROM global_role_grants WHERE (global_role_grants.user_id IN (%(user_id_1_1)s::UUID, %(user_id_1_2)s::UUID, %(user_id_1_3)s::UUID) OR global_role_grants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID)) AND global_role_grants.project_id IN (%(project_id_1_1)s::UUID, %(project_id_1_2)s::UUID, %(project_id_1_3)s::UUID, %(project_id_1_4)s::UUID, %(project_id_1_5)s::UUID, %(project_id_1_6)s::UUID, %(project_id_1_7)s::UUID, %(project_id_1_8)s::UUID, %(project_id_1_9)s::UUID, %(project_id_1_10)s::UUID, %(project_id_1_11)s::UUID, %(project_id_1_12)s::UUID, %(project_id_1_13)s::UUID, %(project_id_1_14)s::UUID, %(project_id_1_15)s::UUID, %(project_id_1_16)s::UUID, %(project_id_1_17)s::UUID, %(project_id_1_18)s::UUID, %(project_id_1_19)s::UUID, %(project_id_1_20)s::UUID, %(project_id_1_21)s::UUID, %(project_id_1_22)s::UUID, %(project_id_1_23)s::UUID, %(project_id_1_24)s::UUID, %(project_id_1_25)s::UUID, %(project_id_1_26)s::UUID, %(project_id_1_27)s::UUID, %(project_id_1_28)s::UUID, %(project_id_1_29)s::UUID, %(project_id_1_30)s::UUID, %(project_id_1_31)s::UUID, %(project_id_1_32)s::UUID, %(project_id_1_33)s::UUID, %(project_id_1_34)s::UUID, %(project_id_1_35)s::UUID, %(project_id_1_36)s::UUID, %(project_id_1_37)s::UUID, %(project_id_1_38)s::UUID, %(project_id_1_39)s::UUID, %(project_id_1_40)s::UUID, %(project_id_1_41)s::UUID, %(project_id_1_42)s::UUID, %(project_id_1_43)s::UUID, %(project_id_1_44)s::UUID, %(project_id_1_45)s::UUID, %(project_id_1_46)s::UUID, %(project_id_1_47)s::UUID, %(",
+          "parameter_count": 113
+        }
+      ],
+      "repeated_shapes": [
+        {
+          "count": 1,
+          "sql": "SELECT projects.id AS projects_id, projects.key AS projects_key, projects.name AS projects_name, projects.description AS projects_description, projects.next_number AS projects_next_number, projects.created_at AS projects_created_at, projects.updated_at AS projects_updated_at FROM projects WHERE proj"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT group_members.group_id FROM group_members WHERE group_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT team_members.team_id FROM team_members WHERE team_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT DISTINCT global_role_grants.role_id FROM global_role_grants WHERE (global_role_grants.user_id IN (%(user_id_1_1)s::UUID, %(user_id_1_2)s::UUID, %(user_id_1_3)s::UUID) OR global_role_grants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID)) AND (global_role_grant"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT roles.permissions FROM roles WHERE roles.id IN (%(id_1_1)s::UUID)"
+        }
+      ]
+    },
+    {
+      "role": "member",
+      "operation": "project_state_summary",
+      "ms": 208.01,
+      "queries": 16,
+      "sql_ms": 195.95,
+      "max_parameters": 63,
+      "rows": null,
+      "error": null,
+      "slowest": [
+        {
+          "ms": 190.87,
+          "sql": "SELECT anon_1.col, anon_1.lane, count(*) AS count_1, coalesce(sum(anon_1.points), %(coalesce_2)s) AS coalesce_1 FROM (SELECT work_items.id AS id, CAST(work_items.state_id AS VARCHAR) AS col, %(param_1)s::VARCHAR AS lane, work_items.estimate_points AS points FROM work_items JOIN states ON states.id = work_items.state_id JOIN state_categories ON state_categories.key = states.category_key WHERE work_items.id IN (SELECT work_items.id FROM work_items WHERE work_items.project_id = %(project_id_1)s::UUID AND (work_items.reporter_id = %(reporter_id_1)s::UUID OR work_items.id IN (SELECT item_participants.item_id FROM item_participants WHERE item_participants.user_id = %(user_id_1)s::UUID OR item_participants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID))) AND (work_items.visibility != %(visibility_1)s::VARCHAR OR work_items.reporter_id = %(reporter_id_2)s::UUID OR work_items.assignee_id = %(assignee_id_1)s::UUID OR work_items.id IN (SELECT item_participants.item_id FROM item_participants WHERE item_participants.user_id = %(user_id_2)s::UUID OR item_participants.team_id IN (%(team_id_2_1)s::UUID, %(team_id_2_2)s::UUID, %(team_id_2_3)s::UUID))) AND work_items.archived_at IS NULL AND work_items.project_id = %(project_id_2)s::UUID)) AS anon_1 GROUP BY anon_1.col, anon_1.lane",
+          "parameter_count": 16
+        },
+        {
+          "ms": 0.91,
+          "sql": "SELECT field_definitions.id, field_definitions.key, field_definitions.name, field_definitions.type, field_definitions.required, field_definitions.options, field_definitions.default_value, field_definitions.display, field_definitions.indexed, field_definitions.ai_visible, field_definitions.source, field_definitions.created_at, field_definitions.updated_at FROM field_definitions WHERE (field_definitions.id NOT IN (SELECT field_definition_projects.field_id FROM field_definition_projects)) OR field_definitions.id IN (SELECT field_definition_projects.field_id FROM field_definition_projects WHERE field_definition_projects.project_id = %(project_id_1)s::UUID)",
+          "parameter_count": 1
+        },
+        {
+          "ms": 0.59,
+          "sql": "SELECT field_definition_projects.field_id AS field_definition_projects_field_id, field_definition_projects.project_id AS field_definition_projects_project_id FROM field_definition_projects WHERE field_definition_projects.field_id IN (%(primary_keys_1)s::UUID, %(primary_keys_2)s::UUID, %(primary_keys_3)s::UUID, %(primary_keys_4)s::UUID, %(primary_keys_5)s::UUID, %(primary_keys_6)s::UUID, %(primary_keys_7)s::UUID, %(primary_keys_8)s::UUID, %(primary_keys_9)s::UUID, %(primary_keys_10)s::UUID, %(primary_keys_11)s::UUID, %(primary_keys_12)s::UUID, %(primary_keys_13)s::UUID, %(primary_keys_14)s::UUID, %(primary_keys_15)s::UUID, %(primary_keys_16)s::UUID, %(primary_keys_17)s::UUID, %(primary_keys_18)s::UUID, %(primary_keys_19)s::UUID, %(primary_keys_20)s::UUID, %(primary_keys_21)s::UUID, %(primary_keys_22)s::UUID, %(primary_keys_23)s::UUID, %(primary_keys_24)s::UUID, %(primary_keys_25)s::UUID, %(primary_keys_26)s::UUID, %(primary_keys_27)s::UUID, %(primary_keys_28)s::UUID, %(primary_keys_29)s::UUID, %(primary_keys_30)s::UUID, %(primary_keys_31)s::UUID, %(primary_keys_32)s::UUID, %(primary_keys_33)s::UUID, %(primary_keys_34)s::UUID, %(primary_keys_35)s::UUID, %(primary_keys_36)s::UUID, %(primary_keys_37)s::UUID, %(primary_keys_38)s::UUID, %(primary_keys_39)s::UUID, %(primary_keys_40)s::UUID, %(primary_keys_41)s::UUID, %(primary_keys_42)s::UUID, %(primary_keys_43)s::UUID, %(primary_keys_44)s::UUID, %(primary_keys_45)s::UUID, %(primary_keys_46)s::UUID, %(primary_keys_47)s::UUID, %(primary_keys_48)s::UUID, %(primary_keys_49)s::UUID, %(primary_keys_50)s::UUID, %(primary_keys_51)s::UUID",
+          "parameter_count": 61
+        },
+        {
+          "ms": 0.55,
+          "sql": "SELECT access_grants.id, access_grants.resource_type, access_grants.resource_id, access_grants.subject_type, access_grants.subject_id, access_grants.access, access_grants.effect, access_grants.expires_at, access_grants.granted_by, access_grants.project_id, access_grants.created_at, access_grants.updated_at FROM access_grants WHERE access_grants.resource_type = %(resource_type_1)s::VARCHAR AND access_grants.resource_id IN (%(resource_id_1_1)s::VARCHAR, %(resource_id_1_2)s::VARCHAR, %(resource_id_1_3)s::VARCHAR, %(resource_id_1_4)s::VARCHAR, %(resource_id_1_5)s::VARCHAR, %(resource_id_1_6)s::VARCHAR, %(resource_id_1_7)s::VARCHAR, %(resource_id_1_8)s::VARCHAR, %(resource_id_1_9)s::VARCHAR, %(resource_id_1_10)s::VARCHAR, %(resource_id_1_11)s::VARCHAR, %(resource_id_1_12)s::VARCHAR, %(resource_id_1_13)s::VARCHAR, %(resource_id_1_14)s::VARCHAR, %(resource_id_1_15)s::VARCHAR, %(resource_id_1_16)s::VARCHAR, %(resource_id_1_17)s::VARCHAR, %(resource_id_1_18)s::VARCHAR, %(resource_id_1_19)s::VARCHAR, %(resource_id_1_20)s::VARCHAR, %(resource_id_1_21)s::VARCHAR, %(resource_id_1_22)s::VARCHAR, %(resource_id_1_23)s::VARCHAR, %(resource_id_1_24)s::VARCHAR, %(resource_id_1_25)s::VARCHAR, %(resource_id_1_26)s::VARCHAR, %(resource_id_1_27)s::VARCHAR, %(resource_id_1_28)s::VARCHAR, %(resource_id_1_29)s::VARCHAR, %(resource_id_1_30)s::VARCHAR, %(resource_id_1_31)s::VARCHAR, %(resource_id_1_32)s::VARCHAR, %(resource_id_1_33)s::VARCHAR, %(resource_id_1_34)s::VARCHAR, %(resource_id_1_35)s::VARCHAR, %(resource_id_1_36)s::VARCHAR, %(resource_id_1_37)s::VARCHAR, %(resource_id_1_38)s::VARCHAR, %(res",
+          "parameter_count": 63
+        }
+      ],
+      "repeated_shapes": [
+        {
+          "count": 2,
+          "sql": "SELECT projects.id AS projects_id, projects.key AS projects_key, projects.name AS projects_name, projects.description AS projects_description, projects.next_number AS projects_next_number, projects.created_at AS projects_created_at, projects.updated_at AS projects_updated_at FROM projects WHERE proj"
+        },
+        {
+          "count": 2,
+          "sql": "SELECT DISTINCT global_role_grants.role_id FROM global_role_grants WHERE (global_role_grants.user_id IN (%(user_id_1_1)s::UUID, %(user_id_1_2)s::UUID, %(user_id_1_3)s::UUID) OR global_role_grants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID)) AND (global_role_grant"
+        },
+        {
+          "count": 2,
+          "sql": "SELECT roles.permissions FROM roles WHERE roles.id IN (%(id_1_1)s::UUID)"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT group_members.group_id FROM group_members WHERE group_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT team_members.team_id FROM team_members WHERE team_members.user_id = %(user_id_1)s::UUID"
+        }
+      ]
+    },
+    {
+      "role": "member",
+      "operation": "cross_project_state_summary",
+      "ms": 8218.36,
+      "queries": 14,
+      "sql_ms": 8118.55,
+      "max_parameters": 1482,
+      "rows": null,
+      "error": null,
+      "slowest": [
+        {
+          "ms": 8108.51,
+          "sql": "SELECT anon_1.col, anon_1.lane, count(*) AS count_1, coalesce(sum(anon_1.points), %(coalesce_2)s) AS coalesce_1 FROM (SELECT work_items.id AS id, states.name AS col, %(param_1)s::VARCHAR AS lane, work_items.estimate_points AS points FROM work_items JOIN states ON states.id = work_items.state_id JOIN state_categories ON state_categories.key = states.category_key WHERE work_items.id IN (SELECT work_items.id FROM work_items WHERE work_items.project_id IN (%(project_id_1_1)s::UUID, %(project_id_1_2)s::UUID, %(project_id_1_3)s::UUID, %(project_id_1_4)s::UUID, %(project_id_1_5)s::UUID, %(project_id_1_6)s::UUID, %(project_id_1_7)s::UUID, %(project_id_1_8)s::UUID, %(project_id_1_9)s::UUID, %(project_id_1_10)s::UUID, %(project_id_1_11)s::UUID, %(project_id_1_12)s::UUID, %(project_id_1_13)s::UUID, %(project_id_1_14)s::UUID, %(project_id_1_15)s::UUID, %(project_id_1_16)s::UUID, %(project_id_1_17)s::UUID, %(project_id_1_18)s::UUID, %(project_id_1_19)s::UUID, %(project_id_1_20)s::UUID, %(project_id_1_21)s::UUID, %(project_id_1_22)s::UUID, %(project_id_1_23)s::UUID, %(project_id_1_24)s::UUID, %(project_id_1_25)s::UUID, %(project_id_1_26)s::UUID, %(project_id_1_27)s::UUID, %(project_id_1_28)s::UUID, %(project_id_1_29)s::UUID, %(project_id_1_30)s::UUID, %(project_id_1_31)s::UUID, %(project_id_1_32)s::UUID, %(project_id_1_33)s::UUID, %(project_id_1_34)s::UUID, %(project_id_1_35)s::UUID, %(project_id_1_36)s::UUID, %(project_id_1_37)s::UUID, %(project_id_1_38)s::UUID, %(project_id_1_39)s::UUID, %(project_id_1_40)s::UUID, %(project_id_1_41)s::UUID, %(project_id_1_42)s::UUID, %(project_id_1_43)",
+          "parameter_count": 1482
+        },
+        {
+          "ms": 2.46,
+          "sql": "SELECT field_definition_projects.field_id AS field_definition_projects_field_id, field_definition_projects.project_id AS field_definition_projects_project_id FROM field_definition_projects WHERE field_definition_projects.field_id IN (%(primary_keys_1)s::UUID, %(primary_keys_2)s::UUID, %(primary_keys_3)s::UUID, %(primary_keys_4)s::UUID, %(primary_keys_5)s::UUID, %(primary_keys_6)s::UUID, %(primary_keys_7)s::UUID, %(primary_keys_8)s::UUID, %(primary_keys_9)s::UUID, %(primary_keys_10)s::UUID, %(primary_keys_11)s::UUID, %(primary_keys_12)s::UUID, %(primary_keys_13)s::UUID, %(primary_keys_14)s::UUID, %(primary_keys_15)s::UUID, %(primary_keys_16)s::UUID, %(primary_keys_17)s::UUID, %(primary_keys_18)s::UUID, %(primary_keys_19)s::UUID, %(primary_keys_20)s::UUID, %(primary_keys_21)s::UUID, %(primary_keys_22)s::UUID, %(primary_keys_23)s::UUID, %(primary_keys_24)s::UUID, %(primary_keys_25)s::UUID, %(primary_keys_26)s::UUID, %(primary_keys_27)s::UUID, %(primary_keys_28)s::UUID, %(primary_keys_29)s::UUID, %(primary_keys_30)s::UUID, %(primary_keys_31)s::UUID, %(primary_keys_32)s::UUID, %(primary_keys_33)s::UUID, %(primary_keys_34)s::UUID, %(primary_keys_35)s::UUID, %(primary_keys_36)s::UUID, %(primary_keys_37)s::UUID, %(primary_keys_38)s::UUID, %(primary_keys_39)s::UUID, %(primary_keys_40)s::UUID, %(primary_keys_41)s::UUID, %(primary_keys_42)s::UUID, %(primary_keys_43)s::UUID, %(primary_keys_44)s::UUID, %(primary_keys_45)s::UUID, %(primary_keys_46)s::UUID, %(primary_keys_47)s::UUID, %(primary_keys_48)s::UUID, %(primary_keys_49)s::UUID, %(primary_keys_50)s::UUID, %(primary_keys_51)s::UUID",
+          "parameter_count": 319
+        },
+        {
+          "ms": 1.64,
+          "sql": "SELECT field_definitions.id, field_definitions.key, field_definitions.name, field_definitions.type, field_definitions.required, field_definitions.options, field_definitions.default_value, field_definitions.display, field_definitions.indexed, field_definitions.ai_visible, field_definitions.source, field_definitions.created_at, field_definitions.updated_at FROM field_definitions ORDER BY field_definitions.created_at",
+          "parameter_count": 0
+        },
+        {
+          "ms": 1.47,
+          "sql": "SELECT access_grants.id, access_grants.resource_type, access_grants.resource_id, access_grants.subject_type, access_grants.subject_id, access_grants.access, access_grants.effect, access_grants.expires_at, access_grants.granted_by, access_grants.project_id, access_grants.created_at, access_grants.updated_at FROM access_grants WHERE access_grants.resource_type = %(resource_type_1)s::VARCHAR AND access_grants.resource_id IN (%(resource_id_1_1)s::VARCHAR, %(resource_id_1_2)s::VARCHAR, %(resource_id_1_3)s::VARCHAR, %(resource_id_1_4)s::VARCHAR, %(resource_id_1_5)s::VARCHAR, %(resource_id_1_6)s::VARCHAR, %(resource_id_1_7)s::VARCHAR, %(resource_id_1_8)s::VARCHAR, %(resource_id_1_9)s::VARCHAR, %(resource_id_1_10)s::VARCHAR, %(resource_id_1_11)s::VARCHAR, %(resource_id_1_12)s::VARCHAR, %(resource_id_1_13)s::VARCHAR, %(resource_id_1_14)s::VARCHAR, %(resource_id_1_15)s::VARCHAR, %(resource_id_1_16)s::VARCHAR, %(resource_id_1_17)s::VARCHAR, %(resource_id_1_18)s::VARCHAR, %(resource_id_1_19)s::VARCHAR, %(resource_id_1_20)s::VARCHAR, %(resource_id_1_21)s::VARCHAR, %(resource_id_1_22)s::VARCHAR, %(resource_id_1_23)s::VARCHAR, %(resource_id_1_24)s::VARCHAR, %(resource_id_1_25)s::VARCHAR, %(resource_id_1_26)s::VARCHAR, %(resource_id_1_27)s::VARCHAR, %(resource_id_1_28)s::VARCHAR, %(resource_id_1_29)s::VARCHAR, %(resource_id_1_30)s::VARCHAR, %(resource_id_1_31)s::VARCHAR, %(resource_id_1_32)s::VARCHAR, %(resource_id_1_33)s::VARCHAR, %(resource_id_1_34)s::VARCHAR, %(resource_id_1_35)s::VARCHAR, %(resource_id_1_36)s::VARCHAR, %(resource_id_1_37)s::VARCHAR, %(resource_id_1_38)s::VARCHAR, %(res",
+          "parameter_count": 321
+        }
+      ],
+      "repeated_shapes": [
+        {
+          "count": 1,
+          "sql": "SELECT projects.id FROM projects"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT group_members.group_id FROM group_members WHERE group_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT team_members.team_id FROM team_members WHERE team_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT DISTINCT global_role_grants.role_id FROM global_role_grants WHERE (global_role_grants.user_id IN (%(user_id_1_1)s::UUID, %(user_id_1_2)s::UUID, %(user_id_1_3)s::UUID) OR global_role_grants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID)) AND global_role_grants"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT global_role_grants.project_id, global_role_grants.role_id FROM global_role_grants WHERE (global_role_grants.user_id IN (%(user_id_1_1)s::UUID, %(user_id_1_2)s::UUID, %(user_id_1_3)s::UUID) OR global_role_grants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID)) "
+        }
+      ]
+    },
+    {
+      "role": "member",
+      "operation": "cross_project_assignee_summary",
+      "ms": 8021.38,
+      "queries": 15,
+      "sql_ms": 7917.71,
+      "max_parameters": 1483,
+      "rows": null,
+      "error": null,
+      "slowest": [
+        {
+          "ms": 7896.77,
+          "sql": "SELECT anon_1.col, anon_1.lane, count(*) AS count_1, coalesce(sum(anon_1.points), %(coalesce_2)s) AS coalesce_1 FROM (SELECT work_items.id AS id, coalesce(CAST(work_items.assignee_id AS VARCHAR), %(coalesce_3)s::VARCHAR) AS col, %(param_1)s::VARCHAR AS lane, work_items.estimate_points AS points FROM work_items JOIN states ON states.id = work_items.state_id JOIN state_categories ON state_categories.key = states.category_key WHERE work_items.id IN (SELECT work_items.id FROM work_items WHERE work_items.project_id IN (%(project_id_1_1)s::UUID, %(project_id_1_2)s::UUID, %(project_id_1_3)s::UUID, %(project_id_1_4)s::UUID, %(project_id_1_5)s::UUID, %(project_id_1_6)s::UUID, %(project_id_1_7)s::UUID, %(project_id_1_8)s::UUID, %(project_id_1_9)s::UUID, %(project_id_1_10)s::UUID, %(project_id_1_11)s::UUID, %(project_id_1_12)s::UUID, %(project_id_1_13)s::UUID, %(project_id_1_14)s::UUID, %(project_id_1_15)s::UUID, %(project_id_1_16)s::UUID, %(project_id_1_17)s::UUID, %(project_id_1_18)s::UUID, %(project_id_1_19)s::UUID, %(project_id_1_20)s::UUID, %(project_id_1_21)s::UUID, %(project_id_1_22)s::UUID, %(project_id_1_23)s::UUID, %(project_id_1_24)s::UUID, %(project_id_1_25)s::UUID, %(project_id_1_26)s::UUID, %(project_id_1_27)s::UUID, %(project_id_1_28)s::UUID, %(project_id_1_29)s::UUID, %(project_id_1_30)s::UUID, %(project_id_1_31)s::UUID, %(project_id_1_32)s::UUID, %(project_id_1_33)s::UUID, %(project_id_1_34)s::UUID, %(project_id_1_35)s::UUID, %(project_id_1_36)s::UUID, %(project_id_1_37)s::UUID, %(project_id_1_38)s::UUID, %(project_id_1_39)s::UUID, %(project_id_1_40)s::UUID, %(project",
+          "parameter_count": 1483
+        },
+        {
+          "ms": 10.34,
+          "sql": "SELECT users.id, users.name FROM users WHERE users.id IN (%(id_1_1)s::UUID, %(id_1_2)s::UUID, %(id_1_3)s::UUID, %(id_1_4)s::UUID, %(id_1_5)s::UUID, %(id_1_6)s::UUID, %(id_1_7)s::UUID, %(id_1_8)s::UUID, %(id_1_9)s::UUID, %(id_1_10)s::UUID, %(id_1_11)s::UUID, %(id_1_12)s::UUID, %(id_1_13)s::UUID, %(id_1_14)s::UUID, %(id_1_15)s::UUID, %(id_1_16)s::UUID, %(id_1_17)s::UUID, %(id_1_18)s::UUID, %(id_1_19)s::UUID, %(id_1_20)s::UUID, %(id_1_21)s::UUID, %(id_1_22)s::UUID, %(id_1_23)s::UUID, %(id_1_24)s::UUID, %(id_1_25)s::UUID, %(id_1_26)s::UUID, %(id_1_27)s::UUID, %(id_1_28)s::UUID, %(id_1_29)s::UUID, %(id_1_30)s::UUID, %(id_1_31)s::UUID, %(id_1_32)s::UUID, %(id_1_33)s::UUID, %(id_1_34)s::UUID, %(id_1_35)s::UUID, %(id_1_36)s::UUID, %(id_1_37)s::UUID, %(id_1_38)s::UUID, %(id_1_39)s::UUID, %(id_1_40)s::UUID, %(id_1_41)s::UUID, %(id_1_42)s::UUID, %(id_1_43)s::UUID, %(id_1_44)s::UUID, %(id_1_45)s::UUID, %(id_1_46)s::UUID, %(id_1_47)s::UUID, %(id_1_48)s::UUID, %(id_1_49)s::UUID, %(id_1_50)s::UUID, %(id_1_51)s::UUID, %(id_1_52)s::UUID, %(id_1_53)s::UUID, %(id_1_54)s::UUID, %(id_1_55)s::UUID, %(id_1_56)s::UUID, %(id_1_57)s::UUID, %(id_1_58)s::UUID, %(id_1_59)s::UUID, %(id_1_60)s::UUID, %(id_1_61)s::UUID, %(id_1_62)s::UUID, %(id_1_63)s::UUID, %(id_1_64)s::UUID, %(id_1_65)s::UUID, %(id_1_66)s::UUID, %(id_1_67)s::UUID, %(id_1_68)s::UUID, %(id_1_69)s::UUID, %(id_1_70)s::UUID, %(id_1_71)s::UUID, %(id_1_72)s::UUID, %(id_1_73)s::UUID, %(id_1_74)s::UUID, %(id_1_75)s::UUID, %(id_1_76)s::UUID, %(id_1_77)s::UUID, %(id_1_78)s::UUID, %(id_1_79)s::UUID, %(id_1_80)s::UUID, %(id_1_81)s::UUID, %(id_1_82)s:",
+          "parameter_count": 639
+        },
+        {
+          "ms": 2.73,
+          "sql": "SELECT field_definition_projects.field_id AS field_definition_projects_field_id, field_definition_projects.project_id AS field_definition_projects_project_id FROM field_definition_projects WHERE field_definition_projects.field_id IN (%(primary_keys_1)s::UUID, %(primary_keys_2)s::UUID, %(primary_keys_3)s::UUID, %(primary_keys_4)s::UUID, %(primary_keys_5)s::UUID, %(primary_keys_6)s::UUID, %(primary_keys_7)s::UUID, %(primary_keys_8)s::UUID, %(primary_keys_9)s::UUID, %(primary_keys_10)s::UUID, %(primary_keys_11)s::UUID, %(primary_keys_12)s::UUID, %(primary_keys_13)s::UUID, %(primary_keys_14)s::UUID, %(primary_keys_15)s::UUID, %(primary_keys_16)s::UUID, %(primary_keys_17)s::UUID, %(primary_keys_18)s::UUID, %(primary_keys_19)s::UUID, %(primary_keys_20)s::UUID, %(primary_keys_21)s::UUID, %(primary_keys_22)s::UUID, %(primary_keys_23)s::UUID, %(primary_keys_24)s::UUID, %(primary_keys_25)s::UUID, %(primary_keys_26)s::UUID, %(primary_keys_27)s::UUID, %(primary_keys_28)s::UUID, %(primary_keys_29)s::UUID, %(primary_keys_30)s::UUID, %(primary_keys_31)s::UUID, %(primary_keys_32)s::UUID, %(primary_keys_33)s::UUID, %(primary_keys_34)s::UUID, %(primary_keys_35)s::UUID, %(primary_keys_36)s::UUID, %(primary_keys_37)s::UUID, %(primary_keys_38)s::UUID, %(primary_keys_39)s::UUID, %(primary_keys_40)s::UUID, %(primary_keys_41)s::UUID, %(primary_keys_42)s::UUID, %(primary_keys_43)s::UUID, %(primary_keys_44)s::UUID, %(primary_keys_45)s::UUID, %(primary_keys_46)s::UUID, %(primary_keys_47)s::UUID, %(primary_keys_48)s::UUID, %(primary_keys_49)s::UUID, %(primary_keys_50)s::UUID, %(primary_keys_51)s::UUID",
+          "parameter_count": 319
+        },
+        {
+          "ms": 1.87,
+          "sql": "SELECT access_grants.id, access_grants.resource_type, access_grants.resource_id, access_grants.subject_type, access_grants.subject_id, access_grants.access, access_grants.effect, access_grants.expires_at, access_grants.granted_by, access_grants.project_id, access_grants.created_at, access_grants.updated_at FROM access_grants WHERE access_grants.resource_type = %(resource_type_1)s::VARCHAR AND access_grants.resource_id IN (%(resource_id_1_1)s::VARCHAR, %(resource_id_1_2)s::VARCHAR, %(resource_id_1_3)s::VARCHAR, %(resource_id_1_4)s::VARCHAR, %(resource_id_1_5)s::VARCHAR, %(resource_id_1_6)s::VARCHAR, %(resource_id_1_7)s::VARCHAR, %(resource_id_1_8)s::VARCHAR, %(resource_id_1_9)s::VARCHAR, %(resource_id_1_10)s::VARCHAR, %(resource_id_1_11)s::VARCHAR, %(resource_id_1_12)s::VARCHAR, %(resource_id_1_13)s::VARCHAR, %(resource_id_1_14)s::VARCHAR, %(resource_id_1_15)s::VARCHAR, %(resource_id_1_16)s::VARCHAR, %(resource_id_1_17)s::VARCHAR, %(resource_id_1_18)s::VARCHAR, %(resource_id_1_19)s::VARCHAR, %(resource_id_1_20)s::VARCHAR, %(resource_id_1_21)s::VARCHAR, %(resource_id_1_22)s::VARCHAR, %(resource_id_1_23)s::VARCHAR, %(resource_id_1_24)s::VARCHAR, %(resource_id_1_25)s::VARCHAR, %(resource_id_1_26)s::VARCHAR, %(resource_id_1_27)s::VARCHAR, %(resource_id_1_28)s::VARCHAR, %(resource_id_1_29)s::VARCHAR, %(resource_id_1_30)s::VARCHAR, %(resource_id_1_31)s::VARCHAR, %(resource_id_1_32)s::VARCHAR, %(resource_id_1_33)s::VARCHAR, %(resource_id_1_34)s::VARCHAR, %(resource_id_1_35)s::VARCHAR, %(resource_id_1_36)s::VARCHAR, %(resource_id_1_37)s::VARCHAR, %(resource_id_1_38)s::VARCHAR, %(res",
+          "parameter_count": 321
+        }
+      ],
+      "repeated_shapes": [
+        {
+          "count": 1,
+          "sql": "SELECT projects.id FROM projects"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT group_members.group_id FROM group_members WHERE group_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT team_members.team_id FROM team_members WHERE team_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT DISTINCT global_role_grants.role_id FROM global_role_grants WHERE (global_role_grants.user_id IN (%(user_id_1_1)s::UUID, %(user_id_1_2)s::UUID, %(user_id_1_3)s::UUID) OR global_role_grants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID)) AND global_role_grants"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT global_role_grants.project_id, global_role_grants.role_id FROM global_role_grants WHERE (global_role_grants.user_id IN (%(user_id_1_1)s::UUID, %(user_id_1_2)s::UUID, %(user_id_1_3)s::UUID) OR global_role_grants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID)) "
+        }
+      ]
+    },
+    {
+      "role": "member",
+      "operation": "project_state_cell_25",
+      "ms": 0.16,
+      "queries": 0,
+      "sql_ms": 0,
+      "max_parameters": 0,
+      "rows": null,
+      "error": "FilterParseError",
+      "slowest": [],
+      "repeated_shapes": []
+    },
+    {
+      "role": "member",
+      "operation": "all_visible_count",
+      "ms": 1125.75,
+      "queries": 8,
+      "sql_ms": 1055.22,
+      "max_parameters": 1480,
+      "rows": null,
+      "error": null,
+      "slowest": [
+        {
+          "ms": 1052.95,
+          "sql": "SELECT count(*) AS count_1 FROM (SELECT work_items.id AS id FROM work_items WHERE work_items.project_id IN (%(project_id_1_1)s::UUID, %(project_id_1_2)s::UUID, %(project_id_1_3)s::UUID, %(project_id_1_4)s::UUID, %(project_id_1_5)s::UUID, %(project_id_1_6)s::UUID, %(project_id_1_7)s::UUID, %(project_id_1_8)s::UUID, %(project_id_1_9)s::UUID, %(project_id_1_10)s::UUID, %(project_id_1_11)s::UUID, %(project_id_1_12)s::UUID, %(project_id_1_13)s::UUID, %(project_id_1_14)s::UUID, %(project_id_1_15)s::UUID, %(project_id_1_16)s::UUID, %(project_id_1_17)s::UUID, %(project_id_1_18)s::UUID, %(project_id_1_19)s::UUID, %(project_id_1_20)s::UUID, %(project_id_1_21)s::UUID, %(project_id_1_22)s::UUID, %(project_id_1_23)s::UUID, %(project_id_1_24)s::UUID, %(project_id_1_25)s::UUID, %(project_id_1_26)s::UUID, %(project_id_1_27)s::UUID, %(project_id_1_28)s::UUID, %(project_id_1_29)s::UUID, %(project_id_1_30)s::UUID, %(project_id_1_31)s::UUID, %(project_id_1_32)s::UUID, %(project_id_1_33)s::UUID, %(project_id_1_34)s::UUID, %(project_id_1_35)s::UUID, %(project_id_1_36)s::UUID, %(project_id_1_37)s::UUID, %(project_id_1_38)s::UUID, %(project_id_1_39)s::UUID, %(project_id_1_40)s::UUID, %(project_id_1_41)s::UUID, %(project_id_1_42)s::UUID, %(project_id_1_43)s::UUID, %(project_id_1_44)s::UUID, %(project_id_1_45)s::UUID, %(project_id_1_46)s::UUID, %(project_id_1_47)s::UUID, %(project_id_1_48)s::UUID, %(project_id_1_49)s::UUID, %(project_id_1_50)s::UUID, %(project_id_1_51)s::UUID, %(project_id_1_52)s::UUID, %(project_id_1_53)s::UUID, %(project_id_1_54)s::UUID, %(project_id_1_55)s::UUID, %(project_id_1_5",
+          "parameter_count": 1480
+        },
+        {
+          "ms": 0.59,
+          "sql": "SELECT global_role_grants.project_id, global_role_grants.role_id FROM global_role_grants WHERE (global_role_grants.user_id IN (%(user_id_1_1)s::UUID, %(user_id_1_2)s::UUID, %(user_id_1_3)s::UUID) OR global_role_grants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID)) AND global_role_grants.project_id IN (%(project_id_1_1)s::UUID, %(project_id_1_2)s::UUID, %(project_id_1_3)s::UUID, %(project_id_1_4)s::UUID, %(project_id_1_5)s::UUID, %(project_id_1_6)s::UUID, %(project_id_1_7)s::UUID, %(project_id_1_8)s::UUID, %(project_id_1_9)s::UUID, %(project_id_1_10)s::UUID, %(project_id_1_11)s::UUID, %(project_id_1_12)s::UUID, %(project_id_1_13)s::UUID, %(project_id_1_14)s::UUID, %(project_id_1_15)s::UUID, %(project_id_1_16)s::UUID, %(project_id_1_17)s::UUID, %(project_id_1_18)s::UUID, %(project_id_1_19)s::UUID, %(project_id_1_20)s::UUID, %(project_id_1_21)s::UUID, %(project_id_1_22)s::UUID, %(project_id_1_23)s::UUID, %(project_id_1_24)s::UUID, %(project_id_1_25)s::UUID, %(project_id_1_26)s::UUID, %(project_id_1_27)s::UUID, %(project_id_1_28)s::UUID, %(project_id_1_29)s::UUID, %(project_id_1_30)s::UUID, %(project_id_1_31)s::UUID, %(project_id_1_32)s::UUID, %(project_id_1_33)s::UUID, %(project_id_1_34)s::UUID, %(project_id_1_35)s::UUID, %(project_id_1_36)s::UUID, %(project_id_1_37)s::UUID, %(project_id_1_38)s::UUID, %(project_id_1_39)s::UUID, %(project_id_1_40)s::UUID, %(project_id_1_41)s::UUID, %(project_id_1_42)s::UUID, %(project_id_1_43)s::UUID, %(project_id_1_44)s::UUID, %(project_id_1_45)s::UUID, %(project_id_1_46)s::UUID, %(project_id_1_47)s::UUID, %(",
+          "parameter_count": 113
+        },
+        {
+          "ms": 0.45,
+          "sql": "SELECT projects.id FROM projects",
+          "parameter_count": 0
+        },
+        {
+          "ms": 0.38,
+          "sql": "SELECT DISTINCT global_role_grants.role_id FROM global_role_grants WHERE (global_role_grants.user_id IN (%(user_id_1_1)s::UUID, %(user_id_1_2)s::UUID, %(user_id_1_3)s::UUID) OR global_role_grants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID)) AND global_role_grants.project_id IS NULL AND global_role_grants.space_id IS NULL AND (global_role_grants.expires_at IS NULL OR global_role_grants.expires_at > %(expires_at_1)s::TIMESTAMP WITHOUT TIME ZONE)",
+          "parameter_count": 7
+        }
+      ],
+      "repeated_shapes": [
+        {
+          "count": 1,
+          "sql": "SELECT projects.id FROM projects"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT group_members.group_id FROM group_members WHERE group_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT team_members.team_id FROM team_members WHERE team_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT DISTINCT global_role_grants.role_id FROM global_role_grants WHERE (global_role_grants.user_id IN (%(user_id_1_1)s::UUID, %(user_id_1_2)s::UUID, %(user_id_1_3)s::UUID) OR global_role_grants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID)) AND global_role_grants"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT global_role_grants.project_id, global_role_grants.role_id FROM global_role_grants WHERE (global_role_grants.user_id IN (%(user_id_1_1)s::UUID, %(user_id_1_2)s::UUID, %(user_id_1_3)s::UUID) OR global_role_grants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID)) "
+        }
+      ]
+    },
+    {
+      "role": "member",
+      "operation": "search_issue_key",
+      "ms": 1118.86,
+      "queries": 19,
+      "sql_ms": 1018.97,
+      "max_parameters": 321,
+      "rows": 0,
+      "error": null,
+      "slowest": [
+        {
+          "ms": 989.19,
+          "sql": "SELECT search_index.item_id, search_index.project_id, search_index.reporter_id, search_index.assignee_id, search_index.team_id, search_index.visibility, search_index.key, search_index.title, search_index.description, search_index.comments_text, search_index.tsv, search_index.updated_at FROM search_index WHERE search_index.key ILIKE %(key_1)s::VARCHAR AND search_index.project_id IN (%(project_id_1_1)s::UUID, %(project_id_1_2)s::UUID, %(project_id_1_3)s::UUID, %(project_id_1_4)s::UUID, %(project_id_1_5)s::UUID, %(project_id_1_6)s::UUID, %(project_id_1_7)s::UUID, %(project_id_1_8)s::UUID, %(project_id_1_9)s::UUID, %(project_id_1_10)s::UUID, %(project_id_1_11)s::UUID, %(project_id_1_12)s::UUID, %(project_id_1_13)s::UUID, %(project_id_1_14)s::UUID, %(project_id_1_15)s::UUID, %(project_id_1_16)s::UUID, %(project_id_1_17)s::UUID, %(project_id_1_18)s::UUID, %(project_id_1_19)s::UUID, %(project_id_1_20)s::UUID, %(project_id_1_21)s::UUID, %(project_id_1_22)s::UUID, %(project_id_1_23)s::UUID, %(project_id_1_24)s::UUID, %(project_id_1_25)s::UUID, %(project_id_1_26)s::UUID, %(project_id_1_27)s::UUID, %(project_id_1_28)s::UUID, %(project_id_1_29)s::UUID, %(project_id_1_30)s::UUID, %(project_id_1_31)s::UUID, %(project_id_1_32)s::UUID, %(project_id_1_33)s::UUID, %(project_id_1_34)s::UUID, %(project_id_1_35)s::UUID, %(project_id_1_36)s::UUID, %(project_id_1_37)s::UUID, %(project_id_1_38)s::UUID, %(project_id_1_39)s::UUID, %(project_id_1_40)s::UUID, %(project_id_1_41)s::UUID, %(project_id_1_42)s::UUID, %(project_id_1_43)s::UUID, %(project_id_1_44)s::UUID, %(project_id_1_45)s::UUID, %(project",
+          "parameter_count": 227
+        },
+        {
+          "ms": 18.93,
+          "sql": "SELECT search_index.item_id, search_index.project_id, search_index.reporter_id, search_index.assignee_id, search_index.team_id, search_index.visibility, search_index.key, search_index.title, search_index.description, search_index.comments_text, search_index.tsv, search_index.updated_at, ts_headline(%(ts_headline_2)s::REGCONFIG, search_index.description || %(param_1)s::VARCHAR || search_index.comments_text, to_tsquery(%(to_tsquery_1)s::REGCONFIG, %(to_tsquery_2)s::VARCHAR), 'MaxWords=18, MinWords=6, MaxFragments=1') AS ts_headline_1 FROM search_index WHERE (search_index.tsv @@ to_tsquery(%(to_tsquery_1)s::REGCONFIG, %(to_tsquery_2)s::VARCHAR)) AND search_index.project_id IN (%(project_id_1_1)s::UUID, %(project_id_1_2)s::UUID, %(project_id_1_3)s::UUID, %(project_id_1_4)s::UUID, %(project_id_1_5)s::UUID, %(project_id_1_6)s::UUID, %(project_id_1_7)s::UUID, %(project_id_1_8)s::UUID, %(project_id_1_9)s::UUID, %(project_id_1_10)s::UUID, %(project_id_1_11)s::UUID, %(project_id_1_12)s::UUID, %(project_id_1_13)s::UUID, %(project_id_1_14)s::UUID, %(project_id_1_15)s::UUID, %(project_id_1_16)s::UUID, %(project_id_1_17)s::UUID, %(project_id_1_18)s::UUID, %(project_id_1_19)s::UUID, %(project_id_1_20)s::UUID, %(project_id_1_21)s::UUID, %(project_id_1_22)s::UUID, %(project_id_1_23)s::UUID, %(project_id_1_24)s::UUID, %(project_id_1_25)s::UUID, %(project_id_1_26)s::UUID, %(project_id_1_27)s::UUID, %(project_id_1_28)s::UUID, %(project_id_1_29)s::UUID, %(project_id_1_30)s::UUID, %(project_id_1_31)s::UUID, %(project_id_1_32)s::UUID, %(project_id_1_33)s::UUID, %(project_id_1_34)s::UUID, %(projec",
+          "parameter_count": 230
+        },
+        {
+          "ms": 3.1,
+          "sql": "SELECT field_definition_projects.field_id AS field_definition_projects_field_id, field_definition_projects.project_id AS field_definition_projects_project_id FROM field_definition_projects WHERE field_definition_projects.field_id IN (%(primary_keys_1)s::UUID, %(primary_keys_2)s::UUID, %(primary_keys_3)s::UUID, %(primary_keys_4)s::UUID, %(primary_keys_5)s::UUID, %(primary_keys_6)s::UUID, %(primary_keys_7)s::UUID, %(primary_keys_8)s::UUID, %(primary_keys_9)s::UUID, %(primary_keys_10)s::UUID, %(primary_keys_11)s::UUID, %(primary_keys_12)s::UUID, %(primary_keys_13)s::UUID, %(primary_keys_14)s::UUID, %(primary_keys_15)s::UUID, %(primary_keys_16)s::UUID, %(primary_keys_17)s::UUID, %(primary_keys_18)s::UUID, %(primary_keys_19)s::UUID, %(primary_keys_20)s::UUID, %(primary_keys_21)s::UUID, %(primary_keys_22)s::UUID, %(primary_keys_23)s::UUID, %(primary_keys_24)s::UUID, %(primary_keys_25)s::UUID, %(primary_keys_26)s::UUID, %(primary_keys_27)s::UUID, %(primary_keys_28)s::UUID, %(primary_keys_29)s::UUID, %(primary_keys_30)s::UUID, %(primary_keys_31)s::UUID, %(primary_keys_32)s::UUID, %(primary_keys_33)s::UUID, %(primary_keys_34)s::UUID, %(primary_keys_35)s::UUID, %(primary_keys_36)s::UUID, %(primary_keys_37)s::UUID, %(primary_keys_38)s::UUID, %(primary_keys_39)s::UUID, %(primary_keys_40)s::UUID, %(primary_keys_41)s::UUID, %(primary_keys_42)s::UUID, %(primary_keys_43)s::UUID, %(primary_keys_44)s::UUID, %(primary_keys_45)s::UUID, %(primary_keys_46)s::UUID, %(primary_keys_47)s::UUID, %(primary_keys_48)s::UUID, %(primary_keys_49)s::UUID, %(primary_keys_50)s::UUID, %(primary_keys_51)s::UUID",
+          "parameter_count": 319
+        },
+        {
+          "ms": 1.28,
+          "sql": "SELECT field_definitions.id, field_definitions.key, field_definitions.name, field_definitions.type, field_definitions.required, field_definitions.options, field_definitions.default_value, field_definitions.display, field_definitions.indexed, field_definitions.ai_visible, field_definitions.source, field_definitions.created_at, field_definitions.updated_at FROM field_definitions ORDER BY field_definitions.created_at",
+          "parameter_count": 0
+        }
+      ],
+      "repeated_shapes": [
+        {
+          "count": 2,
+          "sql": "SELECT DISTINCT global_role_grants.role_id FROM global_role_grants WHERE (global_role_grants.user_id IN (%(user_id_1_1)s::UUID, %(user_id_1_2)s::UUID, %(user_id_1_3)s::UUID) OR global_role_grants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID)) AND global_role_grants"
+        },
+        {
+          "count": 2,
+          "sql": "SELECT global_role_grants.project_id, global_role_grants.role_id FROM global_role_grants WHERE (global_role_grants.user_id IN (%(user_id_1_1)s::UUID, %(user_id_1_2)s::UUID, %(user_id_1_3)s::UUID) OR global_role_grants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID)) "
+        },
+        {
+          "count": 2,
+          "sql": "SELECT roles.id, roles.permissions FROM roles WHERE roles.id IN (%(id_1_1)s::UUID, %(id_1_2)s::UUID, %(id_1_3)s::UUID, %(id_1_4)s::UUID)"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT projects.id, projects.key, projects.name, projects.description, projects.next_number, projects.created_at, projects.updated_at FROM projects ORDER BY projects.created_at"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT group_members.group_id FROM group_members WHERE group_members.user_id = %(user_id_1)s::UUID"
+        }
+      ]
+    },
+    {
+      "role": "member",
+      "operation": "search_word_render",
+      "ms": 2445.53,
+      "queries": 19,
+      "sql_ms": 2359.03,
+      "max_parameters": 321,
+      "rows": 20,
+      "error": null,
+      "slowest": [
+        {
+          "ms": 1454.1,
+          "sql": "SELECT search_index.item_id, search_index.project_id, search_index.reporter_id, search_index.assignee_id, search_index.team_id, search_index.visibility, search_index.key, search_index.title, search_index.description, search_index.comments_text, search_index.tsv, search_index.updated_at, ts_headline(%(ts_headline_2)s::REGCONFIG, search_index.description || %(param_1)s::VARCHAR || search_index.comments_text, to_tsquery(%(to_tsquery_1)s::REGCONFIG, %(to_tsquery_2)s::VARCHAR), 'MaxWords=18, MinWords=6, MaxFragments=1') AS ts_headline_1 FROM search_index WHERE (search_index.tsv @@ to_tsquery(%(to_tsquery_1)s::REGCONFIG, %(to_tsquery_2)s::VARCHAR)) AND search_index.project_id IN (%(project_id_1_1)s::UUID, %(project_id_1_2)s::UUID, %(project_id_1_3)s::UUID, %(project_id_1_4)s::UUID, %(project_id_1_5)s::UUID, %(project_id_1_6)s::UUID, %(project_id_1_7)s::UUID, %(project_id_1_8)s::UUID, %(project_id_1_9)s::UUID, %(project_id_1_10)s::UUID, %(project_id_1_11)s::UUID, %(project_id_1_12)s::UUID, %(project_id_1_13)s::UUID, %(project_id_1_14)s::UUID, %(project_id_1_15)s::UUID, %(project_id_1_16)s::UUID, %(project_id_1_17)s::UUID, %(project_id_1_18)s::UUID, %(project_id_1_19)s::UUID, %(project_id_1_20)s::UUID, %(project_id_1_21)s::UUID, %(project_id_1_22)s::UUID, %(project_id_1_23)s::UUID, %(project_id_1_24)s::UUID, %(project_id_1_25)s::UUID, %(project_id_1_26)s::UUID, %(project_id_1_27)s::UUID, %(project_id_1_28)s::UUID, %(project_id_1_29)s::UUID, %(project_id_1_30)s::UUID, %(project_id_1_31)s::UUID, %(project_id_1_32)s::UUID, %(project_id_1_33)s::UUID, %(project_id_1_34)s::UUID, %(projec",
+          "parameter_count": 230
+        },
+        {
+          "ms": 888.21,
+          "sql": "SELECT search_index.item_id, search_index.project_id, search_index.reporter_id, search_index.assignee_id, search_index.team_id, search_index.visibility, search_index.key, search_index.title, search_index.description, search_index.comments_text, search_index.tsv, search_index.updated_at FROM search_index WHERE search_index.key ILIKE %(key_1)s::VARCHAR AND search_index.project_id IN (%(project_id_1_1)s::UUID, %(project_id_1_2)s::UUID, %(project_id_1_3)s::UUID, %(project_id_1_4)s::UUID, %(project_id_1_5)s::UUID, %(project_id_1_6)s::UUID, %(project_id_1_7)s::UUID, %(project_id_1_8)s::UUID, %(project_id_1_9)s::UUID, %(project_id_1_10)s::UUID, %(project_id_1_11)s::UUID, %(project_id_1_12)s::UUID, %(project_id_1_13)s::UUID, %(project_id_1_14)s::UUID, %(project_id_1_15)s::UUID, %(project_id_1_16)s::UUID, %(project_id_1_17)s::UUID, %(project_id_1_18)s::UUID, %(project_id_1_19)s::UUID, %(project_id_1_20)s::UUID, %(project_id_1_21)s::UUID, %(project_id_1_22)s::UUID, %(project_id_1_23)s::UUID, %(project_id_1_24)s::UUID, %(project_id_1_25)s::UUID, %(project_id_1_26)s::UUID, %(project_id_1_27)s::UUID, %(project_id_1_28)s::UUID, %(project_id_1_29)s::UUID, %(project_id_1_30)s::UUID, %(project_id_1_31)s::UUID, %(project_id_1_32)s::UUID, %(project_id_1_33)s::UUID, %(project_id_1_34)s::UUID, %(project_id_1_35)s::UUID, %(project_id_1_36)s::UUID, %(project_id_1_37)s::UUID, %(project_id_1_38)s::UUID, %(project_id_1_39)s::UUID, %(project_id_1_40)s::UUID, %(project_id_1_41)s::UUID, %(project_id_1_42)s::UUID, %(project_id_1_43)s::UUID, %(project_id_1_44)s::UUID, %(project_id_1_45)s::UUID, %(project",
+          "parameter_count": 227
+        },
+        {
+          "ms": 4.28,
+          "sql": "SELECT field_definition_projects.field_id AS field_definition_projects_field_id, field_definition_projects.project_id AS field_definition_projects_project_id FROM field_definition_projects WHERE field_definition_projects.field_id IN (%(primary_keys_1)s::UUID, %(primary_keys_2)s::UUID, %(primary_keys_3)s::UUID, %(primary_keys_4)s::UUID, %(primary_keys_5)s::UUID, %(primary_keys_6)s::UUID, %(primary_keys_7)s::UUID, %(primary_keys_8)s::UUID, %(primary_keys_9)s::UUID, %(primary_keys_10)s::UUID, %(primary_keys_11)s::UUID, %(primary_keys_12)s::UUID, %(primary_keys_13)s::UUID, %(primary_keys_14)s::UUID, %(primary_keys_15)s::UUID, %(primary_keys_16)s::UUID, %(primary_keys_17)s::UUID, %(primary_keys_18)s::UUID, %(primary_keys_19)s::UUID, %(primary_keys_20)s::UUID, %(primary_keys_21)s::UUID, %(primary_keys_22)s::UUID, %(primary_keys_23)s::UUID, %(primary_keys_24)s::UUID, %(primary_keys_25)s::UUID, %(primary_keys_26)s::UUID, %(primary_keys_27)s::UUID, %(primary_keys_28)s::UUID, %(primary_keys_29)s::UUID, %(primary_keys_30)s::UUID, %(primary_keys_31)s::UUID, %(primary_keys_32)s::UUID, %(primary_keys_33)s::UUID, %(primary_keys_34)s::UUID, %(primary_keys_35)s::UUID, %(primary_keys_36)s::UUID, %(primary_keys_37)s::UUID, %(primary_keys_38)s::UUID, %(primary_keys_39)s::UUID, %(primary_keys_40)s::UUID, %(primary_keys_41)s::UUID, %(primary_keys_42)s::UUID, %(primary_keys_43)s::UUID, %(primary_keys_44)s::UUID, %(primary_keys_45)s::UUID, %(primary_keys_46)s::UUID, %(primary_keys_47)s::UUID, %(primary_keys_48)s::UUID, %(primary_keys_49)s::UUID, %(primary_keys_50)s::UUID, %(primary_keys_51)s::UUID",
+          "parameter_count": 319
+        },
+        {
+          "ms": 2.5,
+          "sql": "SELECT field_definitions.id, field_definitions.key, field_definitions.name, field_definitions.type, field_definitions.required, field_definitions.options, field_definitions.default_value, field_definitions.display, field_definitions.indexed, field_definitions.ai_visible, field_definitions.source, field_definitions.created_at, field_definitions.updated_at FROM field_definitions ORDER BY field_definitions.created_at",
+          "parameter_count": 0
+        }
+      ],
+      "repeated_shapes": [
+        {
+          "count": 2,
+          "sql": "SELECT DISTINCT global_role_grants.role_id FROM global_role_grants WHERE (global_role_grants.user_id IN (%(user_id_1_1)s::UUID, %(user_id_1_2)s::UUID, %(user_id_1_3)s::UUID) OR global_role_grants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID)) AND global_role_grants"
+        },
+        {
+          "count": 2,
+          "sql": "SELECT global_role_grants.project_id, global_role_grants.role_id FROM global_role_grants WHERE (global_role_grants.user_id IN (%(user_id_1_1)s::UUID, %(user_id_1_2)s::UUID, %(user_id_1_3)s::UUID) OR global_role_grants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID)) "
+        },
+        {
+          "count": 2,
+          "sql": "SELECT roles.id, roles.permissions FROM roles WHERE roles.id IN (%(id_1_1)s::UUID, %(id_1_2)s::UUID, %(id_1_3)s::UUID, %(id_1_4)s::UUID)"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT projects.id, projects.key, projects.name, projects.description, projects.next_number, projects.created_at, projects.updated_at FROM projects ORDER BY projects.created_at"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT group_members.group_id FROM group_members WHERE group_members.user_id = %(user_id_1)s::UUID"
+        }
+      ]
+    },
+    {
+      "role": "member",
+      "operation": "report_visible_id_universe",
+      "ms": 1166.01,
+      "queries": 8,
+      "sql_ms": 1089.68,
+      "max_parameters": 1480,
+      "rows": 2859,
+      "error": null,
+      "slowest": [
+        {
+          "ms": 1086.67,
+          "sql": "SELECT work_items.id FROM work_items WHERE work_items.project_id IN (%(project_id_1_1)s::UUID, %(project_id_1_2)s::UUID, %(project_id_1_3)s::UUID, %(project_id_1_4)s::UUID, %(project_id_1_5)s::UUID, %(project_id_1_6)s::UUID, %(project_id_1_7)s::UUID, %(project_id_1_8)s::UUID, %(project_id_1_9)s::UUID, %(project_id_1_10)s::UUID, %(project_id_1_11)s::UUID, %(project_id_1_12)s::UUID, %(project_id_1_13)s::UUID, %(project_id_1_14)s::UUID, %(project_id_1_15)s::UUID, %(project_id_1_16)s::UUID, %(project_id_1_17)s::UUID, %(project_id_1_18)s::UUID, %(project_id_1_19)s::UUID, %(project_id_1_20)s::UUID, %(project_id_1_21)s::UUID, %(project_id_1_22)s::UUID, %(project_id_1_23)s::UUID, %(project_id_1_24)s::UUID, %(project_id_1_25)s::UUID, %(project_id_1_26)s::UUID, %(project_id_1_27)s::UUID, %(project_id_1_28)s::UUID, %(project_id_1_29)s::UUID, %(project_id_1_30)s::UUID, %(project_id_1_31)s::UUID, %(project_id_1_32)s::UUID, %(project_id_1_33)s::UUID, %(project_id_1_34)s::UUID, %(project_id_1_35)s::UUID, %(project_id_1_36)s::UUID, %(project_id_1_37)s::UUID, %(project_id_1_38)s::UUID, %(project_id_1_39)s::UUID, %(project_id_1_40)s::UUID, %(project_id_1_41)s::UUID, %(project_id_1_42)s::UUID, %(project_id_1_43)s::UUID, %(project_id_1_44)s::UUID, %(project_id_1_45)s::UUID, %(project_id_1_46)s::UUID, %(project_id_1_47)s::UUID, %(project_id_1_48)s::UUID, %(project_id_1_49)s::UUID, %(project_id_1_50)s::UUID, %(project_id_1_51)s::UUID, %(project_id_1_52)s::UUID, %(project_id_1_53)s::UUID, %(project_id_1_54)s::UUID, %(project_id_1_55)s::UUID, %(project_id_1_56)s::UUID, %(project_id_1_57)s::UUID, %",
+          "parameter_count": 1480
+        },
+        {
+          "ms": 1.06,
+          "sql": "SELECT global_role_grants.project_id, global_role_grants.role_id FROM global_role_grants WHERE (global_role_grants.user_id IN (%(user_id_1_1)s::UUID, %(user_id_1_2)s::UUID, %(user_id_1_3)s::UUID) OR global_role_grants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID)) AND global_role_grants.project_id IN (%(project_id_1_1)s::UUID, %(project_id_1_2)s::UUID, %(project_id_1_3)s::UUID, %(project_id_1_4)s::UUID, %(project_id_1_5)s::UUID, %(project_id_1_6)s::UUID, %(project_id_1_7)s::UUID, %(project_id_1_8)s::UUID, %(project_id_1_9)s::UUID, %(project_id_1_10)s::UUID, %(project_id_1_11)s::UUID, %(project_id_1_12)s::UUID, %(project_id_1_13)s::UUID, %(project_id_1_14)s::UUID, %(project_id_1_15)s::UUID, %(project_id_1_16)s::UUID, %(project_id_1_17)s::UUID, %(project_id_1_18)s::UUID, %(project_id_1_19)s::UUID, %(project_id_1_20)s::UUID, %(project_id_1_21)s::UUID, %(project_id_1_22)s::UUID, %(project_id_1_23)s::UUID, %(project_id_1_24)s::UUID, %(project_id_1_25)s::UUID, %(project_id_1_26)s::UUID, %(project_id_1_27)s::UUID, %(project_id_1_28)s::UUID, %(project_id_1_29)s::UUID, %(project_id_1_30)s::UUID, %(project_id_1_31)s::UUID, %(project_id_1_32)s::UUID, %(project_id_1_33)s::UUID, %(project_id_1_34)s::UUID, %(project_id_1_35)s::UUID, %(project_id_1_36)s::UUID, %(project_id_1_37)s::UUID, %(project_id_1_38)s::UUID, %(project_id_1_39)s::UUID, %(project_id_1_40)s::UUID, %(project_id_1_41)s::UUID, %(project_id_1_42)s::UUID, %(project_id_1_43)s::UUID, %(project_id_1_44)s::UUID, %(project_id_1_45)s::UUID, %(project_id_1_46)s::UUID, %(project_id_1_47)s::UUID, %(",
+          "parameter_count": 113
+        },
+        {
+          "ms": 0.5,
+          "sql": "SELECT DISTINCT global_role_grants.role_id FROM global_role_grants WHERE (global_role_grants.user_id IN (%(user_id_1_1)s::UUID, %(user_id_1_2)s::UUID, %(user_id_1_3)s::UUID) OR global_role_grants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID)) AND global_role_grants.project_id IS NULL AND global_role_grants.space_id IS NULL AND (global_role_grants.expires_at IS NULL OR global_role_grants.expires_at > %(expires_at_1)s::TIMESTAMP WITHOUT TIME ZONE)",
+          "parameter_count": 7
+        },
+        {
+          "ms": 0.35,
+          "sql": "SELECT group_members.group_id FROM group_members WHERE group_members.user_id = %(user_id_1)s::UUID",
+          "parameter_count": 1
+        }
+      ],
+      "repeated_shapes": [
+        {
+          "count": 1,
+          "sql": "SELECT projects.id FROM projects"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT group_members.group_id FROM group_members WHERE group_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT team_members.team_id FROM team_members WHERE team_members.user_id = %(user_id_1)s::UUID"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT DISTINCT global_role_grants.role_id FROM global_role_grants WHERE (global_role_grants.user_id IN (%(user_id_1_1)s::UUID, %(user_id_1_2)s::UUID, %(user_id_1_3)s::UUID) OR global_role_grants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID)) AND global_role_grants"
+        },
+        {
+          "count": 1,
+          "sql": "SELECT global_role_grants.project_id, global_role_grants.role_id FROM global_role_grants WHERE (global_role_grants.user_id IN (%(user_id_1_1)s::UUID, %(user_id_1_2)s::UUID, %(user_id_1_3)s::UUID) OR global_role_grants.team_id IN (%(team_id_1_1)s::UUID, %(team_id_1_2)s::UUID, %(team_id_1_3)s::UUID)) "
+        }
+      ]
+    }
+  ]
+}

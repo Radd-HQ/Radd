@@ -48,31 +48,23 @@ async def _evaluate_project(
     """First-match (spec 63): each open item is evaluated under ITS policy only —
     items whose matched policy differs are never evaluated under this one.
     `policies` is one project's enabled set, pre-ordered (position, created_at)."""
-    candidates = await items.item_ids_for_projects(session, [project_id])
-    if not candidates:
-        return 0
-    item_map = await items.items_by_ids(session, candidates)
-    # The canonical ref per candidate (RADD-922). One extra join each, on a loop
-    # that already loads every item — and it removes the four ways a consumer
-    # used to reconstruct the key from an SLA event.
-    item_refs = {item_id: await items.item_ref(session, item_id) for item_id in item_map}
-    grouped: dict[uuid.UUID, list[uuid.UUID]] = {}
     policy_by_id = {policy.id: policy for policy in policies}
-    for item_id, item in item_map.items():
-        policy = service.first_match(policies, item)
-        if policy is not None:
-            grouped.setdefault(policy.id, []).append(item_id)
     emitted = 0
-    for policy_id, group in grouped.items():
-        policy = policy_by_id[policy_id]
-        terminal = await evaluation.terminal_item_ids(session, policy, group)
-        open_ids = [item_id for item_id in group if item_id not in terminal]
-        if not open_ids:
-            continue
-        evaluated = await evaluation.evaluate_items(session, policy, open_ids)
-        emitted += await evaluation.sync_states(
-            session, policy, evaluated, item_refs
-        )
+    async for batch in items.iter_project_items(session, project_id):
+        grouped: dict[uuid.UUID, list[uuid.UUID]] = {}
+        for item in batch:
+            policy = service.first_match(policies, item)
+            if policy is not None:
+                grouped.setdefault(policy.id, []).append(item.id)
+        for policy_id, group in grouped.items():
+            policy = policy_by_id[policy_id]
+            terminal = await evaluation.terminal_item_ids(session, policy, group)
+            open_ids = [item_id for item_id in group if item_id not in terminal]
+            if not open_ids:
+                continue
+            evaluated = await evaluation.evaluate_items(session, policy, open_ids)
+            refs = await items.item_refs(session, evaluated)
+            emitted += await evaluation.sync_states(session, policy, evaluated, refs)
     return emitted
 
 

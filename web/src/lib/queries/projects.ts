@@ -2,7 +2,7 @@
 
 import { queryOptions } from "@tanstack/react-query";
 import { api, ApiError } from "../api";
-import { Entity, entityMeta, projectEntityMeta } from "../cache";
+import { Entity, entityMeta, projectEntityMeta, itemEntityMeta } from "../cache";
 import {
   ApiPath,
   apiItemAllowedTransitionsPath,
@@ -41,7 +41,8 @@ export const PROJECTS_PAGE_SIZE = 50;
 
 export const projectSummaryQuery = () => queryOptions({
   queryKey: queryKeys.projectSummary,
-  meta: entityMeta(Entity.project, Entity.role),
+  meta: entityMeta(Entity.project, Entity.role, Entity.team, Entity.group, Entity.member, Entity.accessGrant),
+  staleTime: 30_000,
   queryFn: ({ signal }) => api.get<ProjectSummary>(`${ApiPath.projects}/summary`, { signal }),
 });
 
@@ -66,9 +67,11 @@ async function readProject(path: string, signal: AbortSignal): Promise<Project |
 
 export const projectByIdQuery = (id: string) => queryOptions({
   queryKey: queryKeys.projectById(id),
-  meta: projectEntityMeta(id, Entity.project, Entity.role),
+  meta: projectEntityMeta(id, Entity.project, Entity.role, Entity.team, Entity.group,
+    Entity.member, Entity.accessGrant),
   queryFn: ({ signal }) => readProject(`${ApiPath.projects}/${encodeURIComponent(id)}`, signal),
   enabled: Boolean(id),
+  staleTime: 30_000,
 });
 
 export const projectByKeyQuery = (key: string) => queryOptions({
@@ -129,7 +132,8 @@ export const allowedTransitionsQuery = (itemId: string) =>
   queryOptions({
     queryKey: queryKeys.allowedTransitions(itemId),
     queryFn: ({ signal }) => api.get<AllowedTransitions>(apiItemAllowedTransitionsPath(itemId), { signal }),
-    meta: entityMeta(Entity.transition, Entity.item),
+    meta: itemEntityMeta(itemId, Entity.transition, Entity.item, Entity.role, Entity.team,
+      Entity.group, Entity.member, Entity.accessGrant),
   });
 
 /** The builtin names + custom field keys the current user CAN'T write in a project (spec 92) — so
@@ -137,7 +141,7 @@ export const allowedTransitionsQuery = (itemId: string) =>
 export const fieldWritabilityQuery = (projectId: string | null | undefined) =>
   queryOptions({
     queryKey: ["field-writability", projectId ?? ""] as const,
-    meta: entityMeta(Entity.field, Entity.role),
+    meta: entityMeta(Entity.field, Entity.role, Entity.team, Entity.group, Entity.member, Entity.accessGrant),
     queryFn: ({ signal }) =>
       api.get<{ readonly_fields: string[] }>("/fields/writable", {
         signal,

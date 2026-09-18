@@ -34,6 +34,8 @@ floor, guaranteed on all 31 item-scoped event types and enforced by
 from __future__ import annotations
 
 import uuid
+from collections.abc import Iterable
+from itertools import batched
 from typing import Any
 
 from sqlalchemy import select
@@ -78,6 +80,25 @@ async def item_ref(session: AsyncSession, item_id: uuid.UUID | str) -> dict[str,
         return None
     item, project, state, team, assignee = row
     return ref_from(item, project, state, team=team, assignee=assignee)
+
+
+async def item_refs(
+    session: AsyncSession, item_ids: Iterable[uuid.UUID]
+) -> dict[uuid.UUID, dict[str, Any]]:
+    """Canonical event refs in bounded batches, without per-item round trips."""
+    out = {}
+    for batch in batched(dict.fromkeys(item_ids), 1000):
+        rows = await session.execute(
+            select(WorkItem, Project, State, Team, User)
+            .join(Project, Project.id == WorkItem.project_id)
+            .join(State, State.id == WorkItem.state_id)
+            .outerjoin(Team, Team.id == WorkItem.team_id)
+            .outerjoin(User, User.id == WorkItem.assignee_id)
+            .where(WorkItem.id.in_(batch))
+        )
+        for item, project, state, team, assignee in rows:
+            out[item.id] = ref_from(item, project, state, team=team, assignee=assignee)
+    return out
 
 
 def ref_from(

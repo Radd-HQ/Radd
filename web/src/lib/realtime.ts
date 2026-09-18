@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { Entity, invalidateEntities, type EntityTag } from "./cache";
+import { itemInterests } from "./item-interests";
+import type { Item } from "./types";
 import {
   REALTIME_COALESCE_MS,
   REALTIME_RECONNECT_BASE_MS,
@@ -94,10 +96,13 @@ export function startRealtime(queryClient: QueryClient): () => void {
     subscriptionTimer = undefined;
     if (closed || socket?.readyState !== WebSocket.OPEN) return;
     const queries = queryClient.getQueryCache().getAll().filter(query => query.isActive()).flatMap(query => {
-      const meta = query.meta as {entities?: EntityTag[]; projectId?: string} | undefined;
+      const meta = query.meta as {entities?: EntityTag[]; projectId?: string; itemId?: string; itemDetail?: boolean} | undefined;
       if (!meta?.entities?.length || query.queryHash.length > 4096) return [];
       const entities = Object.entries(SERVER_ENTITY_TAGS).filter(([, tags]) => tags.some(tag => meta.entities!.includes(tag))).map(([entity]) => entity);
-      return entities.length ? [{id: query.queryHash, entities, project_id: meta.projectId ?? null}] : [];
+      const itemIds = meta.itemDetail ? itemInterests(query.state.data as Item | undefined)
+        : meta.itemId ? [meta.itemId] : undefined;
+      return entities.length ? [{id: query.queryHash, entities, project_id: meta.projectId ?? null,
+        item_ids: itemIds ?? null}] : [];
     });
     // A rare oversized plugin surface uses the legacy coarse subscription.
     let payload = JSON.stringify({queries: queries.length > 128 ? null : queries});

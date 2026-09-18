@@ -300,6 +300,15 @@ async def member_users_with_via(
     return [(user, via) for user, via in rows]
 
 
+async def users_for_teams(session: AsyncSession, team_ids: Iterable[uuid.UUID]) -> set[uuid.UUID]:
+    """Effective membership union in one query, including nested groups."""
+    ids = list(set(team_ids))
+    if not ids:
+        return set()
+    members = member_projection(ids).subquery()
+    return set(await session.scalars(select(members.c.user_id)))
+
+
 # --- ownership + delegated management (spec 87) ---
 
 

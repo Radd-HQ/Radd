@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from sqlalchemy import Select, func, literal, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import load_only
 
 from radd.config import settings
 from radd.modules.auth import authz
@@ -12,7 +13,6 @@ from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
 from radd.modules.fields import service as fields_service
 from radd.modules.items.enums import ItemVisibility
-from radd.modules.projects import service as projects_service
 
 from . import fusion
 from .models import SearchIndexRow
@@ -79,13 +79,7 @@ async def _readable_project_ids(session: AsyncSession, user: User) -> set[uuid.U
     """Projects where the caller may read items — one batched authz pass.
     `holds_base` (RADD-823): a relation-qualified reader still counts; WHICH
     rows they see inside the project is `_relation_index_clause`'s job."""
-    projects = await projects_service.list_projects(session)
-    permissions = await authz.permissions_for_projects(session, user, projects)
-    return {
-        project.id
-        for project in projects
-        if authz.holds_base(permissions.get(project.id, frozenset()), Permission.ITEM_READ)
-    }
+    return set(await authz.readable_projects(session, user))
 
 
 def _scope(stmt: Select, readable: set[uuid.UUID], relation_clause=None) -> Select:
@@ -222,9 +216,12 @@ async def _relation_index_clause(session: AsyncSession, user: User):
     unconstrained = [pid for pid in per_project if pid not in constrained]
     if unconstrained:
         arms.append(SearchIndexRow.project_id.in_(unconstrained))
+    by_relations: dict[frozenset[str], list[uuid.UUID]] = {}
     for pid, relations in constrained.items():
+        by_relations.setdefault(relations, []).append(pid)
+    for relations, project_ids in by_relations.items():
         if authz.RELATION_ANY in relations:
-            arms.append(and_(SearchIndexRow.project_id == pid, guard))
+            arms.append(and_(SearchIndexRow.project_id.in_(project_ids), guard))
             continue
         # The chain closure (any ⊃ team ⊃ own), same as the canonical resolvers.
         covered = [
@@ -232,7 +229,7 @@ async def _relation_index_clause(session: AsyncSession, user: User):
             for key, clause in clauses.items()
             if any(relation_contains(held, key) for held in relations)
         ]
-        arm = and_(SearchIndexRow.project_id == pid, or_(*covered) if covered else false())
+        arm = and_(SearchIndexRow.project_id.in_(project_ids), or_(*covered) if covered else false())
         arms.append(arm if guard is None else and_(arm, guard))
     return arms[0] if len(arms) == 1 else or_(*arms)
 
@@ -286,14 +283,26 @@ async def search(
 
     pattern = key_pattern(q)
     if pattern is not None:
+        # Project keys are ASCII; lower(key) + text_pattern_ops supports the
+        # same case-insensitive prefix semantics without scanning the index.
+        key_match = (
+            func.split_part(SearchIndexRow.key, "-", 2).like(f"{q}%")
+            if NUMBER_QUERY_RE.match(q)
+            else func.lower(SearchIndexRow.key).like(pattern.lower())
+        )
         stmt = _scope(
-            select(SearchIndexRow).where(SearchIndexRow.key.ilike(pattern)),
+            select(SearchIndexRow).options(load_only(
+                SearchIndexRow.item_id, SearchIndexRow.project_id, SearchIndexRow.key,
+                SearchIndexRow.title,
+            )).where(key_match),
             readable,
             relation_clause,
         ).order_by(func.length(SearchIndexRow.key), SearchIndexRow.key).limit(limit)
         for row in (await session.execute(stmt)).scalars():
             hits.append(_hit(row, snippet=None))
             seen.add(row.item_id)
+        if len(hits) >= limit:
+            return hits  # FTS cannot add a hit after the key section fills the page.
 
     fts_rows: list[tuple[SearchIndexRow, str | None]] = []
     tsquery_text = build_tsquery(q)
@@ -305,17 +314,27 @@ async def search(
             tsquery,
             text("'MaxWords=18, MinWords=6, MaxFragments=1'"),
         )
-        stmt = (
+        rank = func.ts_rank_cd(SearchIndexRow.tsv, tsquery)
+        candidates = (
             _scope(
-                select(SearchIndexRow, snippet).where(SearchIndexRow.tsv.op("@@")(tsquery)),
+                select(SearchIndexRow.item_id, rank.label("rank"), SearchIndexRow.updated_at)
+                .where(SearchIndexRow.tsv.op("@@")(tsquery)),
                 readable,
                 relation_clause,
             )
             .order_by(
-                func.ts_rank_cd(SearchIndexRow.tsv, tsquery).desc(),
+                rank.desc(),
                 SearchIndexRow.updated_at.desc(),
             )
             .limit(limit + len(seen))
+        ).cte("ranked_hits").prefix_with("MATERIALIZED")
+        # Rank first, then read large text and compute previews for only the
+        # winning rows. Never send tsv/comment bodies back to Python.
+        stmt = select(SearchIndexRow, snippet if snippets_allowed else literal(None)).options(
+            load_only(SearchIndexRow.item_id, SearchIndexRow.project_id,
+                      SearchIndexRow.key, SearchIndexRow.title)
+        ).join(candidates, candidates.c.item_id == SearchIndexRow.item_id).order_by(
+            candidates.c.rank.desc(), candidates.c.updated_at.desc(),
         )
         fts_rows = [(row, headline) for row, headline in (await session.execute(stmt)).all()]
 

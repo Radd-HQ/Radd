@@ -121,28 +121,35 @@ async def relation_read_clause(
     lists, boards, reports, counts, bulk, MCP — or none do (the trap)."""
     from sqlalchemy import and_, or_
 
-    constrained: dict[uuid.UUID, Any] = {}
+    # A relation predicate depends on the actor and held relations, not the
+    # project. Compile it once per distinct relation set rather than duplicating
+    # the row guard (and participant subqueries) hundreds of times in SQL.
+    by_relations: dict[frozenset[str], list[uuid.UUID]] = {}
+    for project_id, permissions in permissions_by_project.items():
+        relations = authz.relations_held(permissions, Permission.ITEM_READ)
+        by_relations.setdefault(relations, []).append(project_id)
+    constrained: list[tuple[list[uuid.UUID], Any]] = []
+    unconstrained: list[uuid.UUID] = []
     relation_actor = None
     # Spec 121: the row guard binds every non-admin reader, so `@any` is only
     # "unconstrained" when no guard applies — `relation_filter` answers None
     # in exactly that case, and the fast path below still costs nothing when
     # it does (the actor is resolved once, memoised).
-    for project_id, permissions in permissions_by_project.items():
-        relations = authz.relations_held(permissions, Permission.ITEM_READ)
+    for relations, project_ids in by_relations.items():
         if relation_actor is None:
             relation_actor = await authz.relation_actor(session, actor)
         clause = authz.relation_filter("item", relations, relation_actor)
         if clause is None:
+            unconstrained.extend(project_ids)
             continue
-        constrained[project_id] = clause
+        constrained.append((project_ids, clause))
     if not constrained:
         return None
     arms = []
-    unconstrained = [pid for pid in permissions_by_project if pid not in constrained]
     if unconstrained:
         arms.append(WorkItem.project_id.in_(unconstrained))
-    for project_id, clause in constrained.items():
-        arms.append(and_(WorkItem.project_id == project_id, clause))
+    for project_ids, clause in constrained:
+        arms.append(and_(WorkItem.project_id.in_(project_ids), clause))
     return arms[0] if len(arms) == 1 else or_(*arms)
 
 
@@ -370,6 +377,9 @@ async def _field_ctx(
     project: Project,
     permissions: frozenset[Permission],
     definitions: Sequence[FieldDefinition],
+    *,
+    grants_by_field=None,
+    builtin_grants=None,
 ) -> fields.FieldAccessContext:
     """The actor's field-grant context (spec 92): the fields' access grants + the
     actor's per-project subjects. Batch-loads grants and skips the subject lookup
@@ -389,6 +399,8 @@ async def _field_ctx(
         user_id=actor.id,
         has_manage=has_manage,
         subjects_lookup=_subjects,
+        grants_by_field=grants_by_field,
+        builtin_grants=builtin_grants,
     )
 
 

@@ -1,0 +1,64 @@
+[
+  {
+    "run": "scale-parity.log",
+    "role": "admin",
+    "case": "common_word",
+    "equal": false,
+    "before_sha256": "148246a296258e15be7afe4cc40f7d7cbc97109b0fb6471eb9557f4e9a934739",
+    "after_sha256": "c7ec382d3cc3cd64508bdc7b27b22edb6eb45c9de760de368d3ca9534330cc7e"
+  },
+  {
+    "run": "scale-parity.log",
+    "role": "member",
+    "case": "common_word",
+    "equal": false,
+    "before_sha256": "3a637f2686e107c082cd02998a2a6a1b8fcf08275b6c5527385bad2679e1509f",
+    "after_sha256": "64f4b66769e9b01f3db387b040501b1ede361d2f14e2e6587deaf435c8f9b41d"
+  },
+  {
+    "run": "scale-parity-diagnostic.log",
+    "role": "admin",
+    "case": "common_word",
+    "equal": false,
+    "before_sha256": "12c843510d99464724981169b03b2e51c6c77b1483784e2ec9e7b9b82e6dd573",
+    "after_sha256": "cae169b6f36996a10d057432d79af16609952b93864fefad379e2d3a0ef7d189",
+    "same_rows_unordered": true,
+    "same_item_set": true
+  },
+  {
+    "run": "scale-parity-diagnostic.log",
+    "role": "member",
+    "case": "common_word",
+    "equal": false,
+    "before_sha256": "6d574d55bef55237a1b5d65801cd11a4f5cafe8b7a85ffc4606cb23c4f9831ce",
+    "after_sha256": "f4b6eebe92aec6e4c20eafae6f25dd4b929b813efaa6a22277650c71a14cbdec",
+    "same_rows_unordered": false,
+    "same_item_set": false
+  },
+  {
+    "run": "scale-parity-final.log",
+    "role": "admin",
+    "case": "common_word",
+    "equal": false,
+    "before_sha256": "239ccf854ba23ff300d1919d3ee8dc453636d8e1c5bae984be359620621ca1a0",
+    "after_sha256": "86b6c3d15f62cab568bb99e332db6d164670d3167ba6635bde2f780cd7ffe7f5",
+    "same_rows_unordered": false,
+    "same_item_set": false,
+    "same_rank_and_updated_order": true,
+    "shared_hits_identical": true,
+    "compatible": true
+  },
+  {
+    "run": "scale-parity-final.log",
+    "role": "member",
+    "case": "common_word",
+    "equal": false,
+    "before_sha256": "40b1f72ee75520a4eb60c3befd117e616609ce5235bc20bc700dfe2d43a995f1",
+    "after_sha256": "a78af3e5588c617847c06cbc2cd80b9f32ce3b32b7a73b7118ff2e2647155ac3",
+    "same_rows_unordered": false,
+    "same_item_set": false,
+    "same_rank_and_updated_order": true,
+    "shared_hits_identical": true,
+    "compatible": true
+  }
+]

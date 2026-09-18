@@ -50,7 +50,8 @@ export interface PageSpaceSummary { total: number; permissions: string[] }
 export const PAGE_SPACES_PAGE_SIZE = 50;
 export const pageSpaceSummaryQuery = () => queryOptions({
   queryKey: [...queryKeys.pageSpaces, "summary"] as const,
-  meta: entityMeta(Entity.docSpace, Entity.role),
+  meta: entityMeta(Entity.docSpace, Entity.role, Entity.team, Entity.group, Entity.member, Entity.accessGrant),
+  staleTime: 30_000,
   queryFn: ({ signal }) => api.get<PageSpaceSummary>(`${ApiPath.pageSpaces}/summary`, { signal }),
 });
 export const pageSpacesPageQuery = (q = "", page = 0) => queryOptions({

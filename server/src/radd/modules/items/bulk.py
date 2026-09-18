@@ -14,6 +14,7 @@ children stay where they are unless also selected.
 import logging
 import uuid
 from collections.abc import Sequence
+from itertools import batched
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -408,6 +409,7 @@ async def visible_matching_ids(
     actor: User,
     q: str,
     project_id: uuid.UUID | None = None,
+    candidate_ids: Sequence[uuid.UUID] | None = None,
 ) -> set[uuid.UUID]:
     """EVERY visible item id matching the SLQ query — uncapped, ids only.
 
@@ -418,6 +420,11 @@ async def visible_matching_ids(
     """
     filters = ItemListFilters(project_id=project_id)
     query, _ = await visible_ids_query(session, actor=actor, filters=filters, q=q)
+    if candidate_ids is not None:
+        out = set()
+        for batch in batched(dict.fromkeys(candidate_ids), 1000):
+            out.update(await session.scalars(query.order_by(None).where(WorkItem.id.in_(batch))))
+        return out
     return set((await session.execute(query.order_by(None))).scalars())
 
 

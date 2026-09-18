@@ -32,12 +32,12 @@ export interface QuickAction {
  * action — the extensibility seam: rules created in settings, by extensions, or via
  * MCP all become slash actions with zero editor changes.
  */
-export function useIssueQuickActions(item: Item, projectId: string): QuickAction[] {
+export function useIssueQuickActions(item: Item, projectId: string, enabled = true): QuickAction[] {
   const me = useCurrentUser();
-  const users = useQuery(usersQuery);
-  const states = useQuery(statesQuery(projectId));
-  const labels = useQuery(labelsQuery());
-  const automations = useQuery(runnableAutomationsQuery());
+  const users = useQuery({ ...usersQuery, enabled });
+  const states = useQuery({ ...statesQuery(projectId), enabled });
+  const labels = useQuery({ ...labelsQuery(), enabled });
+  const automations = useQuery({ ...runnableAutomationsQuery(), enabled });
   const updateItem = useUpdateItem();
   const queryClient = useQueryClient();
 

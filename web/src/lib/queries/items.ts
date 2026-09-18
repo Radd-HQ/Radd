@@ -28,7 +28,8 @@ import type {
 export const itemByKeyQuery = (key: string) =>
   queryOptions({
     queryKey: queryKeys.itemByKey(key),
-    meta: entityMeta(Entity.item),
+    meta: { ...entityMeta(Entity.item, Entity.project, Entity.role, Entity.team,
+      Entity.group, Entity.member, Entity.field, Entity.accessGrant), itemDetail: true },
     queryFn: ({ signal }) => api.get<Item>(apiItemByKeyPath(key), { signal }),
     retry: false,
   });

@@ -27,7 +27,7 @@ alone does not establish which checkout revision a running process loaded.
 Read-only localhost HTTP samples, three sequential requests each, no network or
 CPU throttling, using an administrator's temporary token restricted to
 `item.read` and `cycle.read`. Dataset: 501,297 visible items. This is a broad
-local dataset, not a Cinesite deployment benchmark or a before/after regression
+local dataset, not a production deployment benchmark or a before/after regression
 comparison. Other local activity and cache warming were not controlled.
 
 | Request | Rows | Times (ms) | Response bytes |
