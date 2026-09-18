@@ -11,6 +11,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   BarChart3,
+  BookOpen,
   Clock,
   ConciergeBell,
   House,
@@ -52,6 +53,8 @@ const DESTINATIONS: RailDestination[] = [
   { to: RoutePath.starred, icon: Star, label: "Starred" },
   { to: RoutePath.portal, icon: ConciergeBell, label: "Submission Portal" },
   { to: RoutePath.projects, icon: Layers, label: "Projects", exact: true },
+  // RADD-1242: the wiki was only reachable by expanding the rail first.
+  { to: RoutePath.pages, icon: BookOpen, label: "Pages" },
   { to: RoutePath.reports, icon: BarChart3, label: "Reports" },
   { to: RoutePath.timesheet, icon: Clock, label: "Timesheet" },
 ];
