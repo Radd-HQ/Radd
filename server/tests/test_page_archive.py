@@ -109,3 +109,54 @@ async def test_restoring_a_page_under_an_archived_ancestor_restores_the_chain(db
         )
     ).scalars().all()
     assert set(restored) == {str(leaf.id), str(mid.id)}, "one restore event per page that changed"
+
+
+async def test_bulk_restore_and_delete_report_per_page(db):
+    """RADD-1249: a selection restores ancestors-first and deletes deepest-first,
+    and every page that could not be acted on says why instead of failing the
+    whole request."""
+    from radd.modules.pages import page_access
+    from radd.modules.pages.models import Page
+    from radd.modules.auth.types import Permission
+
+    admin = await _admin(db)
+    space, root, mid, leaf, other = await _tree(db, admin)
+
+    async def guard(permission):
+        async def _guard(page_id):
+            return await page_access.guard_page(db, admin, page_id, permission)
+        return _guard
+
+    # Archive Mid (hides Leaf) and Other; restore both Mid and Leaf in one go —
+    # Leaf is live under an archived ancestor, so it is "already live".
+    await pages_service.archive_page(db, mid.id, admin.id)
+    await pages_service.archive_page(db, other.id, admin.id)
+    done, skipped = await pages_service.bulk_restore_pages(
+        db, space.id, [leaf.id, mid.id, other.id], admin, await guard(Permission.PAGE_MANAGE)
+    )
+    assert set(done) == {mid.id, other.id}
+    assert skipped == [(leaf.id, "already live")]
+    assert (await db.get(Page, mid.id)).archived_at is None
+
+    # Archive Mid again: deleting it is refused (Leaf is live under it); deleting
+    # Other goes through; a live page is refused up front.
+    await pages_service.archive_page(db, mid.id, admin.id)
+    await pages_service.archive_page(db, other.id, admin.id)
+    done, skipped = await pages_service.bulk_delete_pages(
+        db, space.id, [mid.id, other.id, root.id], admin, await guard(Permission.PAGE_DELETE)
+    )
+    assert done == [other.id]
+    reasons = dict(skipped)
+    assert "non-archived child" in reasons[mid.id]
+    assert reasons[root.id] == "not archived — archive it first"
+    assert await db.get(Page, other.id) is None
+
+    # Deepest first: Leaf archived too, then Mid + Leaf selected together — both
+    # removed by their own request, nothing left under Root.
+    await pages_service.archive_page(db, leaf.id, admin.id)
+    done, skipped = await pages_service.bulk_delete_pages(
+        db, space.id, [mid.id, leaf.id], admin, await guard(Permission.PAGE_DELETE)
+    )
+    assert set(done) == {mid.id, leaf.id} and skipped == []
+    remaining = (await db.execute(select(Page.id).where(Page.space_id == space.id))).scalars().all()
+    assert remaining == [root.id]

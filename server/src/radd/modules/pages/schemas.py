@@ -333,3 +333,22 @@ class SpacePublicAccessUpdate(BaseModel):
     """PUT /page-spaces/{id}/public-access (spec 121 §5)."""
 
     public: bool
+
+
+class PageBulkRequest(BaseModel):
+    """RADD-1249: the archive browser's selection — restore or delete many."""
+
+    page_ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
+
+
+class PageBulkSkip(BaseModel):
+    id: uuid.UUID
+    reason: str
+
+
+class PageBulkResult(BaseModel):
+    """Per page, because a selection is many decisions: what went through and
+    what did not, with the reason the single-page path would have answered."""
+
+    done: list[uuid.UUID]
+    skipped: list[PageBulkSkip]

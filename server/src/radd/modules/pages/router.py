@@ -60,6 +60,9 @@ from .schemas import (
     PageVersionRead,
     ItemPageRef,
     SpacePublicAccessUpdate,
+    PageBulkRequest,
+    PageBulkResult,
+    PageBulkSkip,
 )
 
 router = APIRouter(tags=["pages"])
@@ -178,6 +181,37 @@ async def list_pages(
     return await service.list_pages(
         session, space_id, include_archived=include_archived, actor=user
     )
+
+
+@router.post("/page-spaces/{space_id}/archived/restore", response_model=PageBulkResult)
+async def bulk_restore_archived(
+    space_id: uuid.UUID, data: PageBulkRequest, session: Session, user: CurrentUser
+) -> PageBulkResult:
+    """RADD-1249: restore a selection of archived pages. Per-page gate
+    (`page.manage`, the single restore's atom); a refused page is skipped with
+    its reason, never a whole-request 403."""
+    await spaces.get_space(session, space_id)
+
+    async def guard(page_id: uuid.UUID):
+        return await page_access.guard_page(session, user, page_id, authz.Permission.PAGE_MANAGE)
+
+    done, skipped = await service.bulk_restore_pages(session, space_id, data.page_ids, user, guard)
+    return PageBulkResult(done=done, skipped=[PageBulkSkip(id=i, reason=r) for i, r in skipped])
+
+
+@router.post("/page-spaces/{space_id}/archived/delete", response_model=PageBulkResult)
+async def bulk_delete_archived(
+    space_id: uuid.UUID, data: PageBulkRequest, session: Session, user: CurrentUser
+) -> PageBulkResult:
+    """RADD-1249: delete a selection of archived pages permanently — the
+    single delete's atom (`page.delete`, implied by manage) per page."""
+    await spaces.get_space(session, space_id)
+
+    async def guard(page_id: uuid.UUID):
+        return await page_access.guard_page(session, user, page_id, authz.Permission.PAGE_DELETE)
+
+    done, skipped = await service.bulk_delete_pages(session, space_id, data.page_ids, user, guard)
+    return PageBulkResult(done=done, skipped=[PageBulkSkip(id=i, reason=r) for i, r in skipped])
 
 
 @router.post("/pages", response_model=PageRead, status_code=201)

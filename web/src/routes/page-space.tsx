@@ -269,7 +269,7 @@ export function PageSpacePage() {
                 <QueryError label="archived pages" error={archive.error} />
               </div>
             ) : (
-              <ArchivedPagesPanel spaceSlug={space.slug} rows={archive.data ?? []} />
+              <ArchivedPagesPanel spaceId={space.id} spaceSlug={space.slug} rows={archive.data ?? []} />
             )
           ) : (
             <div className="p-6">

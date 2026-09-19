@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd.exceptions import ConflictError, ForbiddenError, NotFoundError
+from radd.exceptions import ConflictError, ForbiddenError, NotFoundError, RaddError
 from radd.hooks import hooks
 from radd.modules.events import service as events
 from radd.modules.settings import service as settings_service
@@ -664,6 +664,73 @@ async def hard_delete_page(
     await comments_service.delete_for_parent(session, CommentParentType.PAGE.value, page.id)
     await session.delete(page)  # versions/links/archived subtree go via FK CASCADE
     await session.flush()
+
+
+async def _depths(session: AsyncSession, space_id: uuid.UUID) -> dict[uuid.UUID, int]:
+    """Page id -> depth in the space's tree (root = 0)."""
+    by_id = {row.id: row for row in await _space_rows(session, space_id)}
+    depths: dict[uuid.UUID, int] = {}
+    for page_id, row in by_id.items():
+        depth, cursor = 0, row
+        for _ in range(len(by_id) + 1):
+            if cursor.parent_id is None or cursor.parent_id not in by_id:
+                break
+            depth += 1
+            cursor = by_id[cursor.parent_id]
+        depths[page_id] = depth
+    return depths
+
+
+async def bulk_restore_pages(
+    session: AsyncSession, space_id: uuid.UUID, page_ids: list[uuid.UUID], actor, guard
+) -> tuple[list[uuid.UUID], list[tuple[uuid.UUID, str]]]:
+    """RADD-1249: restore a selection. Ancestors first, so a parent and its
+    child selected together restore once each and a child's chain-restore
+    (RADD-1228) never precedes its parent's own row. `guard(page_id)` is the
+    per-page gate the router supplies; a refusal skips that page with its
+    reason instead of failing the selection."""
+    depths = await _depths(session, space_id)
+    done: list[uuid.UUID] = []
+    skipped: list[tuple[uuid.UUID, str]] = []
+    for page_id in sorted(dict.fromkeys(page_ids), key=lambda pid: depths.get(pid, 0)):
+        try:
+            page = await guard(page_id)
+            if page.space_id != space_id:
+                raise NotFoundError(PageEntity.PAGE, page_id)
+            if page.archived_at is None:
+                skipped.append((page_id, "already live"))
+                continue
+            await unarchive_page(session, page_id, actor.id)
+            done.append(page_id)
+        except RaddError as error:
+            skipped.append((page_id, str(error)))
+    return done, skipped
+
+
+async def bulk_delete_pages(
+    session: AsyncSession, space_id: uuid.UUID, page_ids: list[uuid.UUID], actor, guard
+) -> tuple[list[uuid.UUID], list[tuple[uuid.UUID, str]]]:
+    """RADD-1249: delete a selection permanently. Deepest first, so a child
+    selected beside its parent is removed by its own request rather than by
+    the parent's FK cascade a moment later — the identity map would otherwise
+    still hold the child and try to delete a row that is gone. A page with
+    live children is refused per page (the single-page rule) and reported."""
+    depths = await _depths(session, space_id)
+    done: list[uuid.UUID] = []
+    skipped: list[tuple[uuid.UUID, str]] = []
+    for page_id in sorted(dict.fromkeys(page_ids), key=lambda pid: -depths.get(pid, 0)):
+        try:
+            page = await guard(page_id)
+            if page.space_id != space_id:
+                raise NotFoundError(PageEntity.PAGE, page_id)
+            if page.archived_at is None:
+                skipped.append((page_id, "not archived — archive it first"))
+                continue
+            await hard_delete_page(session, page_id, actor.id)
+            done.append(page_id)
+        except RaddError as error:
+            skipped.append((page_id, str(error)))
+    return done, skipped
 
 
 async def page_read(session: AsyncSession, page: Page) -> PageRead:

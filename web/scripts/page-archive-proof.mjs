@@ -12,6 +12,8 @@
  *   2. `?archived=1` lists exactly Mid and Other, with path + subpage count;
  *   3. opening Mid shows the archived banner and NO editing chrome (title
  *      read-only, no Edit / Archive / Change-URL), while Restore is offered;
+ *   6. search narrows the rows, select-all selects what is shown, bulk restore;
+ *   7. bulk delete removes what it may and reports the refused row (RADD-1249);
  *   4. Restore from the browser puts Mid AND Leaf back in the tree and the
  *      count drops to 1;
  *   5. archiving Leaf when Mid is archived too, then restoring Leaf, warns
@@ -177,6 +179,64 @@ async function main() {
     t = await session.eval(TREE);
     context.treeAfterChain = t;
     checks.chainRestored = t.titles?.includes("Mid") && t.titles?.includes("Leaf");
+
+    // 6. RADD-1249: search, select, restore many. Archive Leaf and (still) Other;
+    //    "Le" narrows to Leaf; select-all selects what is shown; bulk restore.
+    await session.eval(`(async () => { ${API} await api("DELETE", "/pages/${setup.leaf.id}"); })()`);
+    await session.navigate(spaceUrl + "?archived=1", 2500);
+    await session.eval(`(() => {
+      const el = document.querySelector("[data-archived-search]");
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, "Le");
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    })()`);
+    await sleep(300);
+    const searched = await session.eval(`[...document.querySelectorAll("[data-archived-page] a")].map((a) => a.textContent.trim())`);
+    context.searched = searched;
+    checks.searchNarrowsTheRows = searched.join(",") === "Leaf";
+    await session.click("[data-archived-select-all]", () => true);
+    await sleep(200);
+    const selectedCount = await session.eval(`document.querySelector("[data-archived-selected-count]")?.textContent?.trim() ?? null`);
+    context.selectedCount = selectedCount;
+    checks.selectAllSelectsTheShownRows = selectedCount === "1 selected";
+    await session.click("[data-archived-bulk-restore]", () => true);
+    await sleep(400);
+    await session.click('[role="dialog"] button', (text) => text.trim() === "Restore");
+    await sleep(1500);
+    // The search still narrows to "Le": with Leaf restored nothing matches, and
+    // clearing the box shows what is left — Other.
+    const noMatch = await session.eval(`Boolean(document.querySelector("[data-archived-no-match]"))`);
+    await session.eval(`(() => {
+      const el = document.querySelector("[data-archived-search]");
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, "");
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    })()`);
+    await sleep(300);
+    t = await session.eval(TREE);
+    context.afterBulkRestore = { noMatch, rows: t.rows };
+    checks.bulkRestoreRemovesTheRestoredRow = noMatch === true && t.rows?.map((r) => r.title).join(",") === "Other";
+
+    // 7. Bulk delete with a skip: Mid archived while Leaf is live under it is
+    //    refused per page; Other goes. The refused row says why and stays.
+    await session.eval(`(async () => { ${API} await api("DELETE", "/pages/${setup.mid.id}"); })()`);
+    await session.navigate(spaceUrl + "?archived=1", 2500);
+    await session.click("[data-archived-select-all]", () => true);
+    await sleep(200);
+    const twoSelected = await session.eval(`document.querySelector("[data-archived-selected-count]")?.textContent?.trim() ?? null`);
+    await session.click("[data-archived-bulk-delete]", () => true);
+    await sleep(400);
+    const deleteDialog = await session.eval(`document.querySelector('[role="dialog"]')?.textContent ?? ""`);
+    await session.click('[role="dialog"] button', (text) => text.trim() === "Delete");
+    await sleep(1500);
+    const afterDelete = await session.eval(`(async () => { ${API}
+      const rows = [...document.querySelectorAll("[data-archived-page]")].map((li) => ({ title: li.querySelector("a")?.textContent.trim(), skipped: li.querySelector("[data-archived-skipped]")?.textContent ?? null }));
+      const other = (await api("GET", "/pages/${setup.other.id}")).status;
+      const mid = (await api("GET", "/pages/${setup.mid.id}")).status;
+      return { rows, other, mid };
+    })()`);
+    context.afterBulkDelete = { twoSelected, deleteDialog: /permanently/.test(deleteDialog), ...afterDelete };
+    checks.bulkDeleteRemovesWhatItMayAndReportsTheRest =
+      twoSelected === "2 selected" && afterDelete.other === 404 && afterDelete.mid === 200 &&
+      afterDelete.rows.length === 1 && afterDelete.rows[0].title === "Mid" && /non-archived child/.test(afterDelete.rows[0].skipped ?? "");
   } finally {
     if (spaceId) {
       await session.eval(`(async () => { ${API} return (await api("DELETE", "/page-spaces/${spaceId}?force=true")).status; })()`).catch(() => null);
