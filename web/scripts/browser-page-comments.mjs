@@ -126,21 +126,27 @@ try {
   await s.send("Input.dispatchMouseEvent", {type: "mouseReleased", button: "left", clickCount: 1, ...point});
   await until(`document.querySelector('[data-comment-id="comment-0"]').classList.contains('border-strong')`);
   await until(`document.querySelector('[aria-label="Inline comment thread"]')?.textContent.includes('The original reply')`);
-  await s.click('[data-page-comment-popover] textarea');
+  // RADD-1246: the reply composer is the rich editor, not a textarea.
+  await until(`!!document.querySelector('[data-page-comment-popover] [data-reply-composer] .ProseMirror')`);
+  await s.click('[data-page-comment-popover] [data-reply-composer] .ProseMirror');
   await s.send("Input.insertText", {text: "My persistent reply"});
+  // The editor reports its markdown on its own tick: the Reply button enabling
+  // is the signal the draft reached state before the popover is dismissed.
+  await until(`document.querySelector('[data-page-comment-popover] button[type="submit"]')?.disabled === false`);
   await s.send("Input.dispatchKeyEvent", {type: "keyDown", key: "Escape", code: "Escape"});
   await until(`!document.querySelector('[data-page-comment-popover]')`);
   await s.send("Input.dispatchMouseEvent", {type: "mousePressed", button: "left", clickCount: 1, ...point});
   await s.send("Input.dispatchMouseEvent", {type: "mouseReleased", button: "left", clickCount: 1, ...point});
-  await until(`document.querySelector('[data-page-comment-popover] textarea')?.value === 'My persistent reply'`);
+  await until(`document.querySelector('[data-page-comment-popover] [data-reply-composer] .ProseMirror')?.textContent === 'My persistent reply'`);
   failReply = true;
   await s.click('[data-page-comment-popover] button[type="submit"]');
   await until(`document.querySelector('[data-page-comment-popover] [role="alert"]')?.textContent.includes('Try replying again')`);
-  assert.equal(await s.eval(`document.querySelector('[data-page-comment-popover] textarea').value`), "My persistent reply");
+  assert.equal(await s.eval(`document.querySelector('[data-page-comment-popover] [data-reply-composer] .ProseMirror').textContent`), "My persistent reply");
   failReply = false;
   await s.click('[data-page-comment-popover] button[type="submit"]');
-  await until(`document.querySelector('[data-page-comment-popover] textarea')?.value === '' && document.querySelector('[data-page-comment-popover]').textContent.includes('My persistent reply')`);
-  assert.equal(replies.filter(reply => reply.body === "My persistent reply").length, 1);
+  await until(`document.querySelector('[data-page-comment-popover] [data-reply-composer] .ProseMirror')?.textContent === '' && document.querySelector('[data-page-comment-popover]').textContent.includes('My persistent reply')`);
+  // The rich editor serialises a paragraph with a trailing newline.
+  assert.equal(replies.filter(reply => reply.body.trim() === "My persistent reply").length, 1);
   await s.screenshot('/tmp/radd-page-comment-thread.png');
   await s.click('[aria-label="Close inline comment"]');
   await s.click('[data-comment-id="comment-0"] button', text => text === "Resolve");
@@ -168,7 +174,7 @@ try {
   const mobilePoint = await s.eval(`(() => {const r = [...CSS.highlights.get('radd-inline-comment-focus')][0].getClientRects()[0]; return {x:r.left+5,y:r.top+r.height/2};})()`);
   await s.send("Input.dispatchMouseEvent", {type: "mousePressed", button: "left", clickCount: 1, ...mobilePoint});
   await s.send("Input.dispatchMouseEvent", {type: "mouseReleased", button: "left", clickCount: 1, ...mobilePoint});
-  await until(`!!document.querySelector('[aria-label="Inline comment thread"] textarea')`);
+  await until(`!!document.querySelector('[aria-label="Inline comment thread"] [data-reply-composer] .ProseMirror')`);
   assert(await s.eval(`(() => {const r=document.querySelector('[data-page-comment-popover]').getBoundingClientRect();return r.left>=0 && r.right<=innerWidth && r.top>=0 && r.bottom<=innerHeight;})()`));
   await s.screenshot('/tmp/radd-page-comment-thread-mobile.png');
   assert.equal(s.consoleErrors.filter(e => e.startsWith("EXCEPTION:")).length, 0, s.consoleErrors.join("\n"));
