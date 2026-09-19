@@ -117,6 +117,12 @@ export const apiAutomationRunsPath = (ruleId: string) =>
   `${ApiPath.automations}/${ruleId}/runs`;
 export const apiAutomationRunPath = (ruleId: string, runId: string) =>
   `${ApiPath.automations}/${ruleId}/runs/${runId}`;
+export const apiAutomationVersionsPath = (ruleId: string) =>
+  `${ApiPath.automations}/${ruleId}/versions`;
+export const apiAutomationVersionPath = (ruleId: string, version: number) =>
+  `${ApiPath.automations}/${ruleId}/versions/${version}`;
+export const apiAutomationRestorePath = (ruleId: string, version: number) =>
+  `${ApiPath.automations}/${ruleId}/versions/${version}/restore`;
 /** Intake form paths (spec 20). */
 export const apiFormPath = (formId: string) => `${ApiPath.forms}/${formId}`;
 export const apiFormSubmitPath = (formId: string) => `${ApiPath.forms}/${formId}/submit`;

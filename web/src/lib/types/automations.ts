@@ -341,8 +341,31 @@ export interface Rule {
    * its runs were swept. */
   last_run_at: string | null;
   last_run_status: string;
+  /** The current version's number (RADD-1268). */
+  version: number;
   created_at: string;
   updated_at: string;
+}
+
+/** One version of an automation (RADD-1268), as the history lists it. */
+export interface AutomationVersion {
+  id: string;
+  automation_id: string;
+  version: number;
+  name: string;
+  created_by_id: string | null;
+  created_by_name: string;
+  created_at: string;
+  note: string;
+  restored_from: number | null;
+  node_count: number;
+}
+
+/** A version with its graph — what the read-only preview draws. */
+export interface AutomationVersionDetail extends AutomationVersion {
+  nodes: AutomationNode[];
+  edges: AutomationEdge[];
+  orientation: "vertical" | "horizontal";
 }
 
 export interface RuleCreate {

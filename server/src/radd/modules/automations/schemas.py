@@ -548,6 +548,8 @@ class RuleCreate(BaseModel):
     # caller disagree with itself.
     nodes: list[NodeIn] = Field(min_length=1, max_length=MAX_GRAPH_NODES)
     edges: list[EdgeIn] = Field(default_factory=list, max_length=MAX_GRAPH_EDGES)
+    #: "Why" for the version this write makes (RADD-1268). Optional.
+    note: str = Field(default="", max_length=2000)
 
 
 class RuleUpdate(BaseModel):
@@ -559,6 +561,8 @@ class RuleUpdate(BaseModel):
     # other keeps the stored counterpart, and the pair is re-validated together.
     nodes: list[NodeIn] | None = Field(default=None, min_length=1, max_length=MAX_GRAPH_NODES)
     edges: list[EdgeIn] | None = Field(default=None, max_length=MAX_GRAPH_EDGES)
+    #: "Why" for the version this write makes, if it makes one (RADD-1268).
+    note: str = Field(default="", max_length=2000)
 
 
 class RuleRead(BaseModel):
@@ -583,6 +587,8 @@ class RuleRead(BaseModel):
     #: has never run, or its runs have been swept.
     last_run_at: UtcDatetime | None = None
     last_run_status: str = ""
+    #: The current version's number (RADD-1268).
+    version: int = 1
     created_at: UtcDatetime
     updated_at: UtcDatetime
 
@@ -916,3 +922,33 @@ class RunDetailRead(RunRead):
     renders a real run through the panel it already has."""
 
     report: RuleTestResult | None = None
+
+
+# --- versions (RADD-1268) ---
+
+
+class VersionRead(BaseModel):
+    """One version, as the history list shows it."""
+
+    id: uuid.UUID
+    automation_id: uuid.UUID
+    version: int
+    name: str
+    created_by_id: uuid.UUID | None = None
+    created_by_name: str = ""
+    created_at: UtcDatetime
+    note: str = ""
+    restored_from: int | None = None
+    node_count: int = 0
+
+
+class VersionDetailRead(VersionRead):
+    """The version with its graph — what the read-only preview draws."""
+
+    nodes: list[dict[str, Any]] = Field(default_factory=list)
+    edges: list[dict[str, Any]] = Field(default_factory=list)
+    orientation: GraphOrientation = GraphOrientation.VERTICAL
+
+
+class RestoreRequest(BaseModel):
+    note: str = Field(default="", max_length=2000)

@@ -15,7 +15,7 @@ from radd.modules.events import service as events_service
 from radd.modules.items import service as items_service
 from radd.modules.projects import service as projects_service
 
-from . import catalog, engine, samples, service, runs
+from . import catalog, engine, runs, samples, service, versions
 from .types import BUILTIN_OUTPUTS, AutomationEntity, AutomationTrigger
 from radd.kernel.registry import registries
 
@@ -38,8 +38,11 @@ from .schemas import (
     RuleTestRequest,
     RuleTestResult,
     RuleUpdate,
+    RestoreRequest,
     RunDetailRead,
     RunRead,
+    VersionDetailRead,
+    VersionRead,
     SchedulePreviewRead,
     SchedulePreviewRequest,
     RunnableRuleRead,
@@ -269,6 +272,39 @@ async def test_rule(
     rule = await service.get_rule(session, rule_id)
     await authz.require(session, user, _MANAGE)
     return await engine.preview(session, rule, data.item_id, data.trigger_node_id)
+
+
+@router.get("/{rule_id}/versions", response_model=list[VersionRead])
+async def list_versions(rule_id: uuid.UUID, session: Session, user: CurrentUser) -> list[VersionRead]:
+    """Every version, newest first (RADD-1268)."""
+    rule = await service.get_rule(session, rule_id)
+    await authz.require(session, user, _MANAGE)
+    return await service.version_reads(session, await versions.list_versions(session, rule.id))
+
+
+@router.get("/{rule_id}/versions/{version}", response_model=VersionDetailRead)
+async def get_version(
+    rule_id: uuid.UUID, version: int, session: Session, user: CurrentUser
+) -> VersionDetailRead:
+    """One version with its graph, for the read-only preview."""
+    rule = await service.get_rule(session, rule_id)
+    await authz.require(session, user, _MANAGE)
+    row = await versions.get_version(session, rule.id, version)
+    read = (await service.version_reads(session, [row]))[0]
+    return VersionDetailRead(
+        **read.model_dump(), nodes=row.nodes or [], edges=row.edges or [], orientation=row.orientation
+    )
+
+
+@router.post("/{rule_id}/versions/{version}/restore", response_model=RuleRead)
+async def restore_version(
+    rule_id: uuid.UUID, version: int, data: RestoreRequest, session: Session, user: CurrentUser
+) -> RuleRead:
+    """Make `version` current by writing a NEW version that copies it."""
+    await service.get_rule(session, rule_id)
+    await authz.require(session, user, _MANAGE)
+    rule = await service.restore_version(session, rule_id, version, user.id, note=data.note)
+    return (await service.rule_reads(session, [rule]))[0]
 
 
 @router.get("/{rule_id}/runs", response_model=list[RunRead])

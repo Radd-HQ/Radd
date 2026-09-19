@@ -35,6 +35,7 @@ import { GraphEditor, type Orientation } from "./GraphEditor";
 import { seededTrigger } from "../../lib/automation-nodes";
 import { RuleTestPanel } from "./RuleTestPanel";
 import { RunsPanel } from "./RunsPanel";
+import { VersionsPanel } from "./VersionsPanel";
 import { ChangeHistoryPanel } from "../history/ChangeHistoryPanel";
 
 interface RuleEditorProps {
@@ -56,7 +57,12 @@ export function RuleEditor({ rule, onDone }: RuleEditorProps) {
   // survive a node being selected — the whole point is to read the numbers while
   // clicking around the graph that produced them.
   const [run, setRun] = useState<RuleTestResult | null>(null);
-  const [panel, setPanel] = useState<"dry-run" | "runs">("dry-run");
+  const [panel, setPanel] = useState<"dry-run" | "runs" | "versions">("dry-run");
+  // "Why I changed this" — rides on the version the next save writes
+  // (RADD-1268). Cleared after a save; a note about the last change is not a
+  // note about the next one.
+  const [note, setNote] = useState("");
+  const [current, setCurrent] = useState<number>(rule?.version ?? 1);
   const [graph, setGraph] = useState<{ nodes: AutomationNode[]; edges: AutomationEdge[] }>({
     nodes: rule?.nodes ?? [seededTrigger()],
     edges: rule?.edges ?? [],
@@ -78,6 +84,7 @@ export function RuleEditor({ rule, onDone }: RuleEditorProps) {
         orientation,
         nodes: graph.nodes,
         edges: graph.edges,
+        note: note.trim(),
       };
       return persistedId
         ? api.patch<Rule>(apiAutomationPath(persistedId), payload satisfies RuleUpdate)
@@ -86,6 +93,8 @@ export function RuleEditor({ rule, onDone }: RuleEditorProps) {
     onSuccess: async (saved) => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.automations });
       setPersistedId(saved.id);
+      setCurrent(saved.version);
+      setNote("");
     },
   });
 
@@ -151,10 +160,19 @@ export function RuleEditor({ rule, onDone }: RuleEditorProps) {
         <p className="text-xs text-red-400">Rejected on save: {saveSlqError.message}</p>
       )}
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-end gap-2">
         <Button type="submit" disabled={!canSave || save.isPending}>
           {save.isPending ? "Saving…" : persistedId ? "Save changes" : "Create automation"}
         </Button>
+        <TextField
+          label="Why this change (optional)"
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          placeholder="Tightened the filter after Monday's run"
+          maxLength={2000}
+          className="max-w-md flex-1"
+        />
+        {persistedId && <span className="pb-2 text-[11px] text-fg-muted">v{current}</span>}
       </div>
 
       {persistedId ? (
@@ -163,7 +181,7 @@ export function RuleEditor({ rule, onDone }: RuleEditorProps) {
               and what it DID. Tabs rather than two stacked panels because both
               annotate the same canvas, and only one can at a time. */}
           <div role="tablist" aria-label="Automation reports" className="flex gap-1">
-            {(["dry-run", "runs"] as const).map((tab) => (
+            {(["dry-run", "runs", "versions"] as const).map((tab) => (
               <button
                 key={tab}
                 type="button"
@@ -174,7 +192,7 @@ export function RuleEditor({ rule, onDone }: RuleEditorProps) {
                   panel === tab ? "bg-elevated text-heading" : "text-fg-secondary hover:text-heading"
                 }`}
               >
-                {tab === "dry-run" ? "Dry run" : "Runs"}
+                {tab === "dry-run" ? "Dry run" : tab === "runs" ? "Runs" : "Versions"}
               </button>
             ))}
           </div>
@@ -185,8 +203,22 @@ export function RuleEditor({ rule, onDone }: RuleEditorProps) {
               nodes={graph.nodes}
               onResult={setRun}
             />
-          ) : (
+          ) : panel === "runs" ? (
             <RunsPanel ruleId={persistedId} nodes={graph.nodes} onResult={setRun} />
+          ) : (
+            <VersionsPanel
+              ruleId={persistedId}
+              current={current}
+              onRestored={(restored) => {
+                // The editor takes the restored content as its own working
+                // copy: what the canvas shows must be what is now current.
+                setName(restored.name);
+                setOrientation(restored.orientation as Orientation);
+                setGraph({ nodes: restored.nodes, edges: restored.edges });
+                setCurrent(restored.version);
+                setRun(null);
+              }}
+            />
           )}
         </div>
       ) : (

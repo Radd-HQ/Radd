@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import BigInteger, Boolean, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -45,6 +45,48 @@ class Automation(Base, TimestampMixin):
     created_by_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    #: The CURRENT version's number (RADD-1268). Every save that changes the
+    #: graph, the name or the orientation writes an `AutomationVersion` row and
+    #: moves this; a toggle of `enabled` does not.
+    version: Mapped[int] = mapped_column(Integer, default=1)
+
+
+class AutomationVersion(Base):
+    """One immutable version of an automation (RADD-1268, delivering RADD-1111).
+
+    The Drive model: every save that changes what the automation IS writes a
+    new row and moves `automations.version`; a restore writes a NEW row copying
+    an old one, so history never rewrites. The live row keeps the current
+    content too — the version rows are the ledger, not the storage — which is
+    what lets the engine keep reading `automations.nodes` without a join.
+
+    Unlike `page_versions`, which store the PREVIOUS content when a new version
+    lands, this stores every version including the current one: the list
+    someone browses is "what was this at v3", and answering that with "the
+    row after v3, minus one" is the kind of arithmetic that goes wrong.
+    """
+
+    __tablename__ = "automation_versions"
+    __table_args__ = (UniqueConstraint("automation_id", "version"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    automation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("automations.id", ondelete="CASCADE"), index=True
+    )
+    version: Mapped[int] = mapped_column(Integer)
+    name: Mapped[str] = mapped_column(String(200))
+    nodes: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list)
+    edges: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list)
+    orientation: Mapped[str] = mapped_column(String(16), default="vertical")
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime]  # naive UTC
+    #: "Why I changed this" — optional, and the one thing a diff cannot say.
+    note: Mapped[str] = mapped_column(Text, default="")
+    #: The version this one COPIED, when it was made by a restore; NULL for an
+    #: ordinary save. The list shows "restored from v3" from it.
+    restored_from: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class TriggerBinding(Base):

@@ -21,6 +21,7 @@ from radd import schedule as schedule_math
 from radd.clock import utcnow
 from . import graph
 from . import nodes as nodes_registry
+from . import versions
 from . import templating
 from .models import Automation, AutomationScheduleState, TriggerBinding, ValidationBinding
 from .executor import ACTION_TYPE_PREFIX
@@ -723,6 +724,10 @@ async def create_rule(
     await session.flush()
     await _sync_triggers(session, rule, triggers)
     await _sync_validations(session, rule, triggers)
+    # v1 (RADD-1268). `version` starts at 0 on the object so the first write
+    # lands on 1 — the column default would have said 1 before any row existed.
+    rule.version = 0
+    await versions.write(session, rule, actor_id=actor_id, note=data.note)
     await _emit(session, AutomationEvent.CREATED, rule, actor_id)
     return rule
 
@@ -732,6 +737,7 @@ async def update_rule(
 ) -> Automation:
     rule = await get_rule(session, rule_id)
     before = changes.snapshot(rule, RULE_FIELDS)
+    content_before = versions.content_of(rule)
     if data.name is not None:
         rule.name = data.name
     if data.enabled is not None:
@@ -757,6 +763,10 @@ async def update_rule(
     await session.flush()
     await _sync_triggers(session, rule, triggers)
     await _sync_validations(session, rule, triggers)
+    # A new version only when what the automation IS changed (RADD-1268):
+    # a toggle of `enabled` or a reorder writes none.
+    if versions.changed(rule, content_before):
+        await versions.write(session, rule, actor_id=actor_id, note=data.note)
     await _emit(
         session,
         AutomationEvent.UPDATED,
@@ -765,6 +775,70 @@ async def update_rule(
         changes.diff_object(rule, before, hidden=("nodes", "edges")),
     )
     return rule
+
+
+async def restore_version(
+    session: AsyncSession,
+    rule_id: uuid.UUID,
+    version: int,
+    actor_id: uuid.UUID | None = None,
+    note: str = "",
+) -> Automation:
+    """Make an old version current by writing a NEW version that copies it
+    (RADD-1268). History never rewrites: restoring v3 of an automation at v20
+    produces v21 with v3's content, and v4–v20 stay where they were.
+
+    The copied graph is re-validated as if it had been submitted: a node whose
+    plugin has since been uninstalled, or an SLQ over a deleted field, is a
+    409 on the restore rather than an automation that saves and fails at 3am.
+    """
+    rule = await get_rule(session, rule_id)
+    old = await versions.get_version(session, rule.id, version)
+    before = changes.snapshot(rule, RULE_FIELDS)
+    triggers = await _validate_graph(session, old.nodes, old.edges, actor_id)
+    rule.name = old.name
+    rule.nodes, rule.edges = old.nodes, old.edges
+    rule.orientation = old.orientation
+    await session.flush()
+    await _sync_triggers(session, rule, triggers)
+    await _sync_validations(session, rule, triggers)
+    await versions.write(session, rule, actor_id=actor_id, note=note, restored_from=version)
+    await _emit(
+        session,
+        AutomationEvent.UPDATED,
+        rule,
+        actor_id,
+        changes.diff_object(rule, before, hidden=("nodes", "edges")),
+    )
+    return rule
+
+
+async def version_reads(session: AsyncSession, rows: list) -> list:
+    """`VersionRead`s with the author's name, batch-hydrated."""
+    from radd.modules.auth import service as auth_service
+
+    from .schemas import VersionRead
+
+    ids = {row.created_by_id for row in rows if row.created_by_id is not None}
+    users = await auth_service.users_by_ids(session, list(ids)) if ids else {}
+    reads = []
+    for row in rows:
+        user = users.get(row.created_by_id) if row.created_by_id else None
+        reads.append(
+            VersionRead(
+                id=row.id,
+                automation_id=row.automation_id,
+                version=row.version,
+                name=row.name,
+                created_by_id=row.created_by_id,
+                created_by_name=user.name if user else "",
+                created_at=row.created_at,
+                note=row.note,
+                restored_from=row.restored_from,
+                node_count=len(row.nodes or []),
+            )
+        )
+    return reads
 
 
 async def get_rule(session: AsyncSession, rule_id: uuid.UUID) -> Automation:
@@ -897,7 +971,7 @@ def _trigger_events(rule: Automation) -> set[str]:
 
 #: What a rule edit can touch. The graph (nodes + edges) records only that it
 #: changed — its JSON is the rule's design, not a value an auditor compares.
-RULE_FIELDS: tuple[str, ...] = ("name", "enabled", "position", "orientation", "nodes", "edges")
+RULE_FIELDS: tuple[str, ...] = ("name", "enabled", "position", "orientation", "nodes", "edges", "version")
 
 
 async def _emit(

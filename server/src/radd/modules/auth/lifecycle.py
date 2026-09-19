@@ -58,6 +58,7 @@ _MERGE_REPOINT: tuple[tuple[str, str], ...] = (
     # do.
     ("automations", "created_by_id"),
     ("automation_runs", "actor_id"),  # RADD-1266: who a recorded run acted as
+    ("automation_versions", "created_by_id"),  # RADD-1268: who saved a version
     # RADD-726: who closed an inline thread. Plain attribution — a merge should
     # show the surviving identity as having resolved it, same as authorship.
     ("comments", "resolved_by"),

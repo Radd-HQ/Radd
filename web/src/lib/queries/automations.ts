@@ -6,6 +6,8 @@ import {
   ApiPath,
   apiAutomationRunPath,
   apiAutomationRunsPath,
+  apiAutomationVersionPath,
+  apiAutomationVersionsPath,
 } from "../constants";
 import { queryKeys } from "./shared";
 import {
@@ -14,6 +16,8 @@ import {
   type AutomationCatalog,
   type AutomationRun,
   type AutomationRunDetail,
+  type AutomationVersion,
+  type AutomationVersionDetail,
   type EventSample,
   type Rule,
   type RunnableRule,
@@ -83,6 +87,24 @@ export const automationRunQuery = (ruleId: string, runId: string) =>
     queryKey: [...queryKeys.automations, ruleId, "runs", runId] as const,
     queryFn: ({ signal }) =>
       api.get<AutomationRunDetail>(apiAutomationRunPath(ruleId, runId), { signal }),
+    staleTime: Infinity,
+    retry: false,
+  });
+
+/** Every version of one automation, newest first (RADD-1268). */
+export const automationVersionsQuery = (ruleId: string) =>
+  queryOptions({
+    queryKey: [...queryKeys.automations, ruleId, "versions"] as const,
+    queryFn: ({ signal }) => api.get<AutomationVersion[]>(apiAutomationVersionsPath(ruleId), { signal }),
+    retry: false,
+  });
+
+/** One version with its graph. Immutable, so cached for the session. */
+export const automationVersionQuery = (ruleId: string, version: number) =>
+  queryOptions({
+    queryKey: [...queryKeys.automations, ruleId, "versions", version] as const,
+    queryFn: ({ signal }) =>
+      api.get<AutomationVersionDetail>(apiAutomationVersionPath(ruleId, version), { signal }),
     staleTime: Infinity,
     retry: false,
   });
