@@ -17,7 +17,7 @@ from radd.modules.vcs import service as vcs
 from radd.modules.vcs.ids import branch_external_id, commit_external_id
 from radd.modules.vcs.types import VcsProvider
 
-from . import parsing, service
+from . import parsing, service, timelogs
 from .types import CiState, ForgejoEventKind
 
 logger = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ async def forgejo_webhook(
     x_gitea_signature: Annotated[str, Header()] = "",
     x_forgejo_event: Annotated[str, Header()] = "",
     x_gitea_event: Annotated[str, Header()] = "",
-) -> dict[str, int]:
+) -> dict[str, Any]:
     """Forgejo/Gitea webhook receiver (specs 47, 111). Auth = HMAC-SHA256 of the
     RAW body vs the signature header, checked against the secret of the CONNECTION
     this payload came from; the write path is the vcs connector seam, attributed
@@ -59,7 +59,7 @@ async def forgejo_webhook(
         # No active connection signed this. Covers three cases with one answer:
         # nothing configured, the wrong secret, and an inactive host.
         raise ForbiddenError("bad forgejo webhook signature")
-    _connection, _repo = resolved
+    connection, _repo = resolved
 
     kind = x_forgejo_event or x_gitea_event
     merged = False
@@ -104,7 +104,30 @@ async def forgejo_webhook(
     transitioned = 0
     if merged and referenced:
         transitioned = await _transition_merged(session, list(referenced.values()))
-    return {"linked": linked, "transitioned": transitioned}
+    result: dict[str, Any] = {"linked": linked, "transitioned": transitioned}
+
+    # RADD-1260: Forgejo has no tracked-time webhook, so EVERY pull_request
+    # delivery reconciles that PR's time. Needs a token; best-effort — the link
+    # half has already landed.
+    if kind == ForgejoEventKind.PULL_REQUEST and connection.api_token:
+        pull = payload.get("pull_request") or {}
+        full_name = str((payload.get("repository") or {}).get("full_name") or "")
+        try:
+            report = await timelogs.reconcile_pull_request(
+                session,
+                connection,
+                _repo,
+                full_name=full_name,
+                index=pull.get("number", ""),
+                title=str(pull.get("title") or ""),
+                head_branch=str((pull.get("head") or {}).get("ref") or ""),
+                body=str(pull.get("body") or ""),
+            )
+            result["worklogs"] = report.as_dict()
+        except Exception:
+            logger.exception("forgejo: tracked-time mirror failed for %s #%s", full_name, pull.get("number"))
+            result["worklogs"] = {"error": "tracked-time fetch failed; see the server log"}
+    return result
 
 
 _CI_STATES = {

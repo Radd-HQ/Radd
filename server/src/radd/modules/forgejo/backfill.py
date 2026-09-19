@@ -23,6 +23,7 @@ from radd.modules.vcs import service as vcs
 from radd.modules.vcs.ids import branch_external_id, commit_external_id, pr_external_id
 from radd.modules.vcs.types import VcsProvider, VcsRefType
 
+from . import timelogs
 from .models import ForgejoConnection, ForgejoRepo
 from .parsing import extract_keys
 from .types import PrStatus
@@ -37,6 +38,8 @@ class BackfillReport:
     commits: int = 0
     linked: int = 0
     unknown_keys: list[str] = field(default_factory=list)
+    #: RADD-1260: the tracked-time mirror totals across every PR walked.
+    worklogs: dict[str, Any] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -48,13 +51,22 @@ class BackfillReport:
             # scheme in an old message. Reported rather than silently dropped, so
             # a surprising zero has an explanation.
             "unknown_keys": sorted(set(self.unknown_keys))[:50],
+            "worklogs": self.worklogs,
         }
+
+    def absorb_time(self, report) -> None:
+        for key, value in report.as_dict().items():
+            if isinstance(value, int):
+                self.worklogs[key] = self.worklogs.get(key, 0) + value
+        if report.unmatched_authors:
+            names = set(self.worklogs.get("unmatched_authors", []))
+            self.worklogs["unmatched_authors"] = sorted(names | report.unmatched_authors)
 
 
 class ForgejoClient:
     """The read-only slice of the Forgejo API this needs."""
 
-    def __init__(self, connection: ForgejoConnection) -> None:
+    def __init__(self, connection: ForgejoConnection, transport: httpx.AsyncBaseTransport | None = None) -> None:
         self._base = connection.base_url.rstrip("/")
         headers = {"Accept": "application/json"}
         if connection.api_token:
@@ -63,6 +75,7 @@ class ForgejoClient:
             headers=headers,
             verify=connection.verify_ssl,
             timeout=settings.forgejo_http_timeout_seconds,
+            transport=transport,
         )
 
     async def __aenter__(self) -> "ForgejoClient":
@@ -126,8 +139,10 @@ async def run(
     repo: ForgejoRepo,
     *,
     max_commits: int | None = None,
+    transport: httpx.AsyncBaseTransport | None = None,
 ) -> BackfillReport:
-    """Branches, pull requests and default-branch commits, in that order.
+    """Branches, pull requests (+ their tracked time, RADD-1260) and
+    default-branch commits, in that order.
 
     The commit walk is bounded (`forgejo_backfill_max_commits`) because a
     repository's history is unbounded and the useful part is recent. PRs are
@@ -137,7 +152,7 @@ async def run(
     cap = max_commits if max_commits is not None else settings.forgejo_backfill_max_commits
     web_base = f"{connection.base_url.rstrip('/')}/{repo.full_name}"
 
-    async with ForgejoClient(connection) as client:
+    async with ForgejoClient(connection, transport) as client:
         async for branch in client.paged(f"/repos/{repo.full_name}/branches"):
             report.branches += 1
             name = str(branch.get("name") or "")
@@ -172,6 +187,24 @@ async def run(
                 url=str(pull.get("html_url") or f"{web_base}/pulls/{number}"),
                 status=str(status),
             )
+            # RADD-1260: the PR's tracked time — one paged GET each; the seam
+            # makes a repeat run a no-op.
+            try:
+                report.absorb_time(
+                    await timelogs.reconcile_pull_request(
+                        session,
+                        connection,
+                        repo,
+                        full_name=repo.full_name,
+                        index=number,
+                        title=str(pull.get("title") or ""),
+                        head_branch=head_ref,
+                        body=str(pull.get("body") or ""),
+                        transport=transport,
+                    )
+                )
+            except Exception:
+                logger.exception("forgejo backfill %s: tracked-time mirror failed for #%s", repo.full_name, number)
 
         async for commit in client.paged(
             f"/repos/{repo.full_name}/commits", {"sha": repo.default_branch}, cap=cap
