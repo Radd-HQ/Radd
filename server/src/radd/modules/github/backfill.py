@@ -33,17 +33,30 @@ class BackfillReport:
     commits: int = 0
     linked: int = 0
     unknown_keys: list[str] = field(default_factory=list)
+    #: RADD-1261: the `/spend` mirror totals across every PR walked.
+    worklogs: dict[str, Any] = field(default_factory=dict)
+    comments: int = 0
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "branches": self.branches,
             "pull_requests": self.pull_requests,
             "commits": self.commits,
+            "comments": self.comments,
             "linked": self.linked,
             # Keys that look like items but are not: usually another tracker's
             # scheme in an old message. Reported so a surprising zero has a reason.
             "unknown_keys": sorted(set(self.unknown_keys))[:50],
+            "worklogs": self.worklogs,
         }
+
+    def absorb_time(self, report) -> None:
+        for key, value in report.as_dict().items():
+            if isinstance(value, int):
+                self.worklogs[key] = self.worklogs.get(key, 0) + value
+        if report.unmatched_authors:
+            names = set(self.worklogs.get("unmatched_authors", []))
+            self.worklogs["unmatched_authors"] = sorted(names | report.unmatched_authors)
 
 
 def api_headers(connection: GithubConnection) -> dict[str, str]:
@@ -171,6 +184,32 @@ async def run(
                 url=str(pull.get("html_url") or f"{web_base}/pull/{number}"),
                 status=str(pr_status(pull)),
             )
+            # RADD-1261: the PR's comments (issue + review), replayed through the
+            # /spend convention as one whole-scope reconcile — only when it has
+            # comments at all, so a quiet PR costs nothing.
+            if int(pull.get("comments") or 0) + int(pull.get("review_comments") or 0) > 0 or "comments" not in pull:
+                comments: list[dict[str, Any]] = []
+                try:
+                    async for comment in client.paged(f"/repos/{name}/issues/{number}/comments", cap=settings.github_backfill_max_comments):
+                        comments.append(comment)
+                    async for comment in client.paged(f"/repos/{name}/pulls/{number}/comments", cap=settings.github_backfill_max_comments):
+                        comments.append(comment)
+                except httpx.HTTPStatusError as exc:  # comments locked/disabled: the links still count
+                    logger.info("github backfill %s: comments of #%s unreadable (%s)", name, number, exc.response.status_code)
+                report.comments += len(comments)
+                if comments:
+                    from . import timelogs
+
+                    try:
+                        report.absorb_time(
+                            await timelogs.reconcile_pull_request(
+                                session, connection, repo,
+                                repo_name=name, number=number, title=title, body=str(pull.get("body") or ""),
+                                head_branch=head_ref, comments=comments,
+                            )
+                        )
+                    except Exception:
+                        logger.exception("github backfill %s: /spend mirror failed for #%s", name, number)
 
         async for commit in client.paged(
             f"/repos/{name}/commits", {"sha": repo.default_branch}, cap=cap

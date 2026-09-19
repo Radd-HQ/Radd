@@ -24,8 +24,8 @@ from radd.modules.releases import pipeline
 from radd.modules.vcs import service as vcs
 from radd.modules.vcs.types import VcsProvider
 
-from . import parsing, service
-from .types import GithubEventKind
+from . import parsing, service, spend, timelogs
+from .types import CommentAction, GithubEventKind
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ async def github_webhook(
     x_hub_signature_256: Annotated[str, Header()] = "",
     x_github_event: Annotated[str, Header()] = "",
     x_github_delivery: Annotated[str, Header()] = "",
-) -> dict[str, int]:
+) -> dict[str, Any]:
     raw_body = await request.body()
     try:
         payload = json.loads(raw_body)
@@ -54,16 +54,28 @@ async def github_webhook(
     if resolved is None:
         # Nothing configured, the wrong secret, or an inactive host: one answer.
         raise ForbiddenError("bad github webhook signature")
-    _connection, repo = resolved
+    connection, repo = resolved
 
     kind = x_github_event
     merged = False
+    if kind in (
+        GithubEventKind.ISSUE_COMMENT,
+        GithubEventKind.PULL_REQUEST_REVIEW_COMMENT,
+        GithubEventKind.PULL_REQUEST_REVIEW,
+    ):
+        return await _handle_comment(session, connection, repo, kind, payload)
     if kind == GithubEventKind.PING:
         # GitHub sends one when the hook is created; answering 200 is what makes
         # the "recent deliveries" panel show a green tick.
         return {"linked": 0, "transitioned": 0}
     if kind == GithubEventKind.PUSH:
         planned = parsing.plan_push(payload)
+        # RADD-1261: commit-author emails are the one place GitHub pairs an
+        # email with a login — each match fills the identity map.
+        try:
+            await timelogs.record_commit_authors(session, connection, payload)
+        except Exception:
+            logger.exception("github: commit-author mapping failed")
     elif kind == GithubEventKind.PULL_REQUEST:
         planned, merged = parsing.plan_pull_request(payload)
     elif kind in (GithubEventKind.CHECK_RUN, GithubEventKind.CHECK_SUITE, GithubEventKind.WORKFLOW_RUN):
@@ -100,6 +112,48 @@ async def github_webhook(
         transitioned = await _transition_merged(session, list(referenced.values()))
     logger.debug("github delivery %s: %s linked, %s transitioned", x_github_delivery, linked, transitioned)
     return {"linked": linked, "transitioned": transitioned}
+
+
+async def _handle_comment(
+    session: AsyncSession, connection, repo, kind: str, payload: dict
+) -> dict[str, Any]:
+    """RADD-1261: a PR comment or review carrying `/spend` lines (or `/unspend`).
+    Comments on plain issues are ignored — the convention is for pull requests."""
+    result: dict[str, Any] = {"linked": 0, "transitioned": 0}
+    repo_name = str((payload.get("repository") or {}).get("full_name") or "")
+    action = str(payload.get("action") or "")
+    if kind == GithubEventKind.ISSUE_COMMENT:
+        issue = payload.get("issue") or {}
+        if not issue.get("pull_request"):
+            return result
+        number, title, body = issue.get("number", ""), str(issue.get("title") or ""), str(issue.get("body") or "")
+        comment = payload.get("comment") or {}
+    else:
+        pull = payload.get("pull_request") or {}
+        number, title, body = pull.get("number", ""), str(pull.get("title") or ""), str(pull.get("body") or "")
+        comment = payload.get("comment") or payload.get("review") or {}
+        if "created_at" not in comment and comment.get("submitted_at"):
+            comment = {**comment, "created_at": comment["submitted_at"]}
+    if not repo_name or number == "" or not comment.get("id"):
+        return result
+    login = str((comment.get("user") or {}).get("login") or "")
+    try:
+        if action == CommentAction.DELETED:
+            result["worklogs"] = await timelogs.remove_comment(
+                session, connection, repo_name=repo_name, number=number, comment_id=comment["id"]
+            )
+        elif spend.is_unspend(str(comment.get("body") or "")) and login:
+            result["worklogs"] = await timelogs.unspend(
+                session, connection, repo_name=repo_name, number=number, login=login
+            )
+        elif action in (CommentAction.CREATED, CommentAction.EDITED, CommentAction.SUBMITTED):
+            result["worklogs"] = await timelogs.reconcile_comment(
+                session, connection, repo, repo_name=repo_name, number=number, title=title, body=body, comment=comment
+            )
+    except Exception:
+        logger.exception("github: /spend mirror failed for %s #%s", repo_name, number)
+        result["worklogs"] = {"error": "spend mirror failed; see the server log"}
+    return result
 
 
 async def _handle_ci(session: AsyncSession, kind: str, payload: dict) -> dict[str, int]:

@@ -22,6 +22,20 @@ class GithubEventKind(StrEnum):
     # Branch/tag lifecycle — accepted, not acted on (parity with forgejo).
     CREATE = "create"
     DELETE = "delete"
+    # RADD-1261: the `/spend` convention rides PR comments and reviews.
+    ISSUE_COMMENT = "issue_comment"
+    PULL_REQUEST_REVIEW_COMMENT = "pull_request_review_comment"
+    PULL_REQUEST_REVIEW = "pull_request_review"
+
+
+class CommentAction(StrEnum):
+    """`action` values of the comment webhooks this connector reads."""
+
+    CREATED = "created"
+    EDITED = "edited"
+    DELETED = "deleted"
+    # pull_request_review sends `submitted`/`edited`/`dismissed`.
+    SUBMITTED = "submitted"
 
 
 class PrStatus(StrEnum):

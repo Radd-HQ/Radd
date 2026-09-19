@@ -369,6 +369,7 @@ class Settings(BaseSettings):
     github_base_url: str = ""  # seed only: https://github.com (default) or a GHES host
     github_repo: str = ""  # seed only: owner/repo to register with the seeded connection
     github_backfill_max_commits: int = 2000
+    github_backfill_max_comments: int = 2000  # per PR, issue + review comments (RADD-1261)
     github_api_page_size: int = 100  # GitHub's maximum
     github_http_timeout_seconds: float = 30.0
 

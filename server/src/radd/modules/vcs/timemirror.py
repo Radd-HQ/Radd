@@ -317,13 +317,16 @@ async def reconcile(
     entries: Sequence[SourceEntry],
     category_id: uuid.UUID | None,
     note_prefix: str,
+    id_prefix: str | None = None,
 ) -> MirrorReport:
     """Mirror the CURRENT time entries of one ref.
 
     `scope` is the ref's vcs external id (`pr:<repo>:<n>`), `ref_texts` the
     texts a key is looked for in (branch, title, description — in that order),
     `note_prefix` what a mirrored worklog's note starts with when the entry has
-    no summary of its own ("Logged on !41 Fix the farm").
+    no summary of its own ("Logged on !41 Fix the farm"). `id_prefix` narrows
+    deletion to one comment's rows (GitHub, RADD-1261) — see
+    `timelogging.external.reconcile_external_worklogs`.
     """
     report = MirrorReport()
     default_item = await target_item_id(session, *ref_texts)
@@ -374,18 +377,54 @@ async def reconcile(
 
     report.absorb(
         await timelog_external.reconcile_external_worklogs(
-            session, source=provider.value, scope=scope, entries=resolved
+            session, source=provider.value, scope=scope, entries=resolved, id_prefix=id_prefix
         )
     )
-    # Parked entries the source no longer has go too.
+    # Parked entries the source no longer has go too (under the same prefix rule).
     stale = delete(VcsPendingWorklog).where(
         VcsPendingWorklog.provider == provider.value,
         VcsPendingWorklog.external_scope == scope,
     )
-    if pending_ids:
-        stale = stale.where(VcsPendingWorklog.external_id.not_in(pending_ids))
+    if id_prefix is not None:
+        stale = stale.where(VcsPendingWorklog.external_id.like(id_prefix.replace("%", r"\%") + "%"))
+    keep_ids = pending_ids | {e.external_id for e in resolved}
+    if keep_ids:
+        stale = stale.where(VcsPendingWorklog.external_id.not_in(keep_ids))
     await session.execute(stale)
     return report
+
+
+async def remove_author_entries(
+    session: AsyncSession,
+    *,
+    provider: VcsProvider,
+    connection_id: uuid.UUID,
+    scope: str,
+    username: str,
+) -> int:
+    """GitHub's `/unspend`: forget this account's time on the ref — its mirrored
+    rows (when the account is mapped) and its parked ones."""
+    deleted = 0
+    user_id = await resolve_author(session, provider=provider, connection_id=connection_id, username=username)
+    if user_id is not None:
+        deleted += await timelog_external.delete_external_worklogs(
+            session, source=provider.value, scope=scope, author_id=user_id
+        )
+    result = await session.execute(
+        delete(VcsPendingWorklog).where(
+            VcsPendingWorklog.provider == provider.value,
+            VcsPendingWorklog.connection_id == connection_id,
+            VcsPendingWorklog.external_scope == scope,
+            VcsPendingWorklog.external_username == _norm(username),
+        )
+    )
+    return deleted + int(result.rowcount or 0)
+
+
+async def parse_duration(session: AsyncSession, text: str) -> int:
+    """Seconds for a duration typed at the host (`1h30`, `45m`, `1d`) under the
+    instance's hours-per-day — the one grammar Radd accepts everywhere."""
+    return await timelog_external.parse_duration_text(session, text)
 
 
 async def _park(

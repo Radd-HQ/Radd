@@ -168,6 +168,7 @@ async def reconcile_external_worklogs(
     source: str,
     scope: str,
     entries: Sequence[ExternalEntry],
+    id_prefix: str | None = None,
 ) -> ReconcileReport:
     """Make the mirrored worklogs for (`source`, `scope`) equal `entries`.
 
@@ -176,6 +177,11 @@ async def reconcile_external_worklogs(
     whose project has time logging disabled are skipped and counted — nothing
     is written for them, and their existing rows (if any, from before the
     switch was turned off) are left alone.
+
+    `id_prefix` narrows the DELETION to rows whose external id starts with it:
+    a source that reports one comment at a time (GitHub's `/spend` convention)
+    knows the current entries of THAT comment, not of the whole ref, so only
+    that comment's stale rows may go.
     """
     report = ReconcileReport()
     enabled_cache: dict[uuid.UUID, bool] = {}
@@ -193,11 +199,37 @@ async def reconcile_external_worklogs(
     for external_id, row in (await _existing_for_scope(session, source, scope)).items():
         if external_id in keep:
             continue
-        actor = row.author_id
-        await session.delete(row)
-        await session.flush()
-        await service._emit(session, WorklogEvent.DELETED, row, actor)
+        if id_prefix is not None and not external_id.startswith(id_prefix):
+            continue
+        await _delete_row(session, row)
         report.deleted += 1
 
     logger.debug("external worklogs %s %s: %s", source, scope, report.as_dict())
     return report
+
+
+async def _delete_row(session: AsyncSession, row: Worklog) -> None:
+    actor = row.author_id
+    await session.delete(row)
+    await session.flush()
+    await service._emit(session, WorklogEvent.DELETED, row, actor)
+
+
+async def delete_external_worklogs(
+    session: AsyncSession, *, source: str, scope: str, author_id: uuid.UUID | None = None
+) -> int:
+    """Remove every mirrored row under a scope — or only one author's (GitHub's
+    `/unspend`, which says "forget MY time on this PR"). Returns the count."""
+    deleted = 0
+    for row in (await _existing_for_scope(session, source, scope)).values():
+        if author_id is not None and row.author_id != author_id:
+            continue
+        await _delete_row(session, row)
+        deleted += 1
+    return deleted
+
+
+async def parse_duration_text(session: AsyncSession, text: str) -> int:
+    """`"1h30"` → seconds under the instance's hours-per-day, the same grammar the
+    UI and MCP accept. Raises DurationError (a ValueError) on garbage."""
+    return service._parse(text, await service._hours_per_day(session))

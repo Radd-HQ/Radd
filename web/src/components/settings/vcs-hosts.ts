@@ -54,7 +54,7 @@ const FORGEJO: VcsHostConfig = {
   title: "Forgejo",
   historyEntities: ["forgejo_connection", "forgejo_repo", "vcs_user_link"],
   description:
-    "Hosts whose pushes, branches and pull requests link themselves to issues by key. Map a repository to a project so its published releases create versions there. Time tracked on a pull request is mirrored into the linked issue.",
+    "Hosts whose pushes, branches and pull requests link themselves to issues by key. Map a repository to a project so its published releases create versions there. Time tracked on a pull request is mirrored into the linked issue, dated by when it was added.",
   webhookPath: "/api/v1/integrations/forgejo",
   namePlaceholder: "Forgejo",
   baseUrlPlaceholder: "https://git.example.com",
@@ -79,7 +79,7 @@ const GITHUB: VcsHostConfig = {
   title: "GitHub",
   historyEntities: ["github_connection", "github_repo", "vcs_user_link"],
   description:
-    "Repositories whose pushes, branches, pull requests and check runs link themselves to issues by key. Map a repository to a project so its published releases create versions there and ship the work waiting for them.",
+    "Repositories whose pushes, branches, pull requests and check runs link themselves to issues by key. Map a repository to a project so its published releases create versions there and ship the work waiting for them. GitHub has no time tracking, so a pull-request comment carries it: “/spend 1h30”, “/spend 45m 2026-09-18 note”, “/spend 1h KEY-12” to log to another issue, “/unspend” to forget yours on that PR — mirrored into the linked issue by the mapped account.",
   webhookPath:
     "/api/v1/integrations/github (content type application/json, events: push, pull requests, releases, check suites, workflow runs)",
   namePlaceholder: "GitHub",

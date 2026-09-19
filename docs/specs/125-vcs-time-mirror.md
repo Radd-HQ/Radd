@@ -59,6 +59,20 @@ reconcile brings the correction over.
 Mapping an unmatched account replays its parked entries into real worklogs by
 external id, so a later reconcile from the source finds the same rows.
 
+## Forgejo (RADD-1260) and GitHub (RADD-1261)
+
+Forgejo reconciles a PR's tracked time on every `pull_request` delivery and in
+the backfill — there is no webhook for tracked time. Entries are dated by when
+they were added (Forgejo has no "spent on"), and the note says so.
+
+GitHub's `/spend` convention is read from PR comments and reviews. Each comment
+owns its rows (`comment:<repo>:<id>:<n>`), so an edited comment updates the
+same rows and a deleted one removes them; the seam's `id_prefix` narrows the
+reconcile's deletion to that comment, because a single comment event cannot
+know the PR's other comments. `/unspend` forgets the author's rows on the PR.
+The identity map fills itself from push commit-author emails, the one place
+GitHub pairs an email with a login.
+
 ## Rejected
 
 - Attributing unmatched time to the connection's service identity: pollutes
@@ -83,12 +97,20 @@ external id, so a later reconcile from the source finds the same rows.
   → plain repoint; the unique key is the username, so no collision).
 - **GraphQL lives at `/api/graphql`**, not under `/api/v4` — the first probe
   404ed.
-- **GitLab writes a NEGATIVE timelog for `/remove_time_spent`** rather than
-  deleting rows; the mirror drops negative entries and lets the reconcile's
-  set difference do the removal.
-- **`spentAt` for `/spend 1h 2026-09-18` is midnight UTC on that date.** Taking
-  the date in any zone west of Greenwich would move it to the 17th. The date
-  part is taken as sent.
+- **GitLab writes a NEGATIVE timelog for `/remove_time_spent`** (and the REST
+  `reset_spent_time`) rather than deleting rows. The first live run dropped the
+  negatives and mirrored 2h35m onto an MR GitLab reported as 0. `net_entries`
+  now folds a negative into the most recent live entries before it (LIFO), in
+  CREATION order — not `spentAt` order, because a dated `/spend 45m 2026-09-18`
+  logged before a reset sorts earlier by date and would have let the reset eat
+  entries added after it. The fold sums to GitLab's own `totalTimeSpent`.
+- **`spentAt` for a dated `/spend 1h 2026-09-18` is NOON UTC on that date**
+  (18.4); an undated one is the moment it was typed. The date part is read in
+  UTC and never shifted — the timesheet buckets by calendar day.
+- **GitLab masks `X-Gitlab-Token` as `[REDACTED]` in its recorded hook
+  deliveries**, so a replay must carry the real secret. And this workstation's
+  ufw blocks inbound 8000, which is why GitLab's own deliveries never arrived;
+  the receiver was proven by replaying the recorded payloads.
 
 ## Settings (RADD-1262)
 
