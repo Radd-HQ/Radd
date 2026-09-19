@@ -1,0 +1,139 @@
+{
+ "object_kind": "merge_request",
+ "event_type": "merge_request",
+ "user": {
+  "id": 219,
+  "name": "Dev Person",
+  "username": "dev",
+  "avatar_url": "https://gitlab.example.com/uploads/-/system/user/avatar/219/avatar.png",
+  "email": "[REDACTED]"
+ },
+ "project": {
+  "id": 1174,
+  "name": "radd-connector-test",
+  "description": "Radd GitLab connector integration test (RADD-1252/1257). Safe to delete.",
+  "web_url": "https://gitlab.example.com/dev/radd-connector-test",
+  "avatar_url": null,
+  "git_ssh_url": "git@gitlab.example.com:dev/radd-connector-test.git",
+  "git_http_url": "https://gitlab.example.com/dev/radd-connector-test.git",
+  "namespace": "Dev Person",
+  "visibility_level": 0,
+  "path_with_namespace": "dev/radd-connector-test",
+  "default_branch": "main",
+  "ci_config_path": "",
+  "homepage": "https://gitlab.example.com/dev/radd-connector-test",
+  "url": "git@gitlab.example.com:dev/radd-connector-test.git",
+  "ssh_url": "git@gitlab.example.com:dev/radd-connector-test.git",
+  "http_url": "https://gitlab.example.com/dev/radd-connector-test.git"
+ },
+ "object_attributes": {
+  "assignee_id": null,
+  "author_id": 219,
+  "created_at": "2026-09-19 14:13:59 UTC",
+  "description": "Created by the RADD-1259 live proof.",
+  "draft": false,
+  "head_pipeline_id": null,
+  "id": 32587,
+  "iid": 1,
+  "last_edited_at": null,
+  "last_edited_by_id": null,
+  "merge_commit_sha": null,
+  "merge_error": null,
+  "merge_params": {
+   "force_remove_source_branch": null
+  },
+  "merge_status": "can_be_merged",
+  "merge_user_id": null,
+  "merge_when_pipeline_succeeds": false,
+  "milestone_id": null,
+  "source_branch": "GLT-1-connector-proof",
+  "source_project_id": 1174,
+  "state_id": 1,
+  "target_branch": "main",
+  "target_project_id": 1174,
+  "time_estimate": 0,
+  "title": "GLT-1 Connector proof MR",
+  "updated_at": "2026-09-19 14:14:40 UTC",
+  "updated_by_id": null,
+  "prepared_at": "2026-09-19 14:14:00 UTC",
+  "assignee_ids": [],
+  "blocking_discussions_resolved": true,
+  "detailed_merge_status": "mergeable",
+  "first_contribution": true,
+  "human_time_change": "1h 30m",
+  "human_time_estimate": null,
+  "human_total_time_spent": "1h 30m",
+  "labels": [],
+  "last_commit": {
+   "id": "035f27859ba315721572e3efb8a87741045fb79f",
+   "message": "[GLT-1] connector proof commit",
+   "title": "[GLT-1] connector proof commit",
+   "timestamp": "2026-09-19T14:13:58+00:00",
+   "url": "https://gitlab.example.com/dev/radd-connector-test/-/commit/035f27859ba315721572e3efb8a87741045fb79f",
+   "author": {
+    "name": "Dev Person",
+    "email": "[REDACTED]"
+   }
+  },
+  "reviewer_ids": [],
+  "source": {
+   "id": 1174,
+   "name": "radd-connector-test",
+   "description": "Radd GitLab connector integration test (RADD-1252/1257). Safe to delete.",
+   "web_url": "https://gitlab.example.com/dev/radd-connector-test",
+   "avatar_url": null,
+   "git_ssh_url": "git@gitlab.example.com:dev/radd-connector-test.git",
+   "git_http_url": "https://gitlab.example.com/dev/radd-connector-test.git",
+   "namespace": "Dev Person",
+   "visibility_level": 0,
+   "path_with_namespace": "dev/radd-connector-test",
+   "default_branch": "main",
+   "ci_config_path": "",
+   "homepage": "https://gitlab.example.com/dev/radd-connector-test",
+   "url": "git@gitlab.example.com:dev/radd-connector-test.git",
+   "ssh_url": "git@gitlab.example.com:dev/radd-connector-test.git",
+   "http_url": "https://gitlab.example.com/dev/radd-connector-test.git"
+  },
+  "state": "opened",
+  "target": {
+   "id": 1174,
+   "name": "radd-connector-test",
+   "description": "Radd GitLab connector integration test (RADD-1252/1257). Safe to delete.",
+   "web_url": "https://gitlab.example.com/dev/radd-connector-test",
+   "avatar_url": null,
+   "git_ssh_url": "git@gitlab.example.com:dev/radd-connector-test.git",
+   "git_http_url": "https://gitlab.example.com/dev/radd-connector-test.git",
+   "namespace": "Dev Person",
+   "visibility_level": 0,
+   "path_with_namespace": "dev/radd-connector-test",
+   "default_branch": "main",
+   "ci_config_path": "",
+   "homepage": "https://gitlab.example.com/dev/radd-connector-test",
+   "url": "git@gitlab.example.com:dev/radd-connector-test.git",
+   "ssh_url": "git@gitlab.example.com:dev/radd-connector-test.git",
+   "http_url": "https://gitlab.example.com/dev/radd-connector-test.git"
+  },
+  "time_change": 5400,
+  "total_time_spent": 5400,
+  "url": "https://gitlab.example.com/dev/radd-connector-test/-/merge_requests/1",
+  "work_in_progress": false,
+  "approval_rules": [],
+  "action": "update"
+ },
+ "changes": {
+  "total_time_spent": {
+   "previous": 0,
+   "current": 5400
+  },
+  "time_change": {
+   "previous": 5400,
+   "current": 5400
+  }
+ },
+ "repository": {
+  "name": "radd-connector-test",
+  "url": "git@gitlab.example.com:dev/radd-connector-test.git",
+  "description": "Radd GitLab connector integration test (RADD-1252/1257). Safe to delete.",
+  "homepage": "https://gitlab.example.com/dev/radd-connector-test"
+ }
+}

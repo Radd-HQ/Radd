@@ -40,12 +40,14 @@ async def test_storage_ai_sso_and_forgejo_capabilities_reflect_their_db_snapshot
     from radd.modules.ai import registry as ai_registry
     from radd.modules.attachments import hosts
     from radd.modules.forgejo import service as forgejo_service
+    from radd.modules.gitlab import service as gitlab_service
     from radd.modules.sso import registry as sso_registry
 
     await hosts.seed_from_env()  # empty table in a fresh test DB -> seeds one host
     await ai_registry.seed_from_env()  # inert without RADD_AI_PROVIDER; refreshes
     await sso_registry.seed_from_env()  # inert without RADD_OIDC_ISSUER; refreshes
     await forgejo_service.seed_from_env()  # inert without the env secret; refreshes
+    await gitlab_service.seed_from_env()  # RADD-1253: same rule
     cm = _map()
     default = hosts.default_snapshot()
     assert cm["storage"]["enabled"] == bool(default)
@@ -68,8 +70,10 @@ def test_connectors_derive_generically_from_the_connector_category():
     assert set(connectors) == {
         "gitlab", "forgejo", "github", "google_chat", "alertmanager", "email_intake",
     }
-    assert connectors["gitlab"] == bool(settings.gitlab_webhook_secret)
-    # forgejo is row-backed since spec 111 — asserted in the snapshot test above.
+    # gitlab is row-backed since RADD-1253, like forgejo (asserted in the snapshot test above).
+    from radd.modules.gitlab import service as gitlab_service
+
+    assert connectors["gitlab"] == (gitlab_service.active_connection_count() > 0)
     assert connectors["google_chat"] == bool(settings.googlechat_webhook_url)
     assert connectors["alertmanager"] == bool(settings.alertmanager_token)
     # email_intake is row-backed since RADD-958 — asserted against rows below.

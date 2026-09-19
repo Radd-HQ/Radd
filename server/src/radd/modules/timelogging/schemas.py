@@ -92,6 +92,11 @@ class WorklogRead(BaseModel):
     time_spent_seconds: int
     time_spent: str  # formatted (e.g. "1h 30m")
     note: str
+    # RADD-1258: '' = logged in Radd; a VcsProvider value = mirrored from time
+    # logged on a merge/pull request there (read-only here). `external_scope`
+    # is the ref's external id (`pr:<repo>:<n>`), so the UI can say which one.
+    external_source: str = ""
+    external_scope: str = ""
     created_at: UtcDatetime
     updated_at: UtcDatetime
 
@@ -163,6 +168,8 @@ class TimesheetEntry(BaseModel):
     project_key: str | None = None
     category: CategoryRef | None
     note: str
+    #: RADD-1258 — '' or the VcsProvider the entry was mirrored from.
+    external_source: str = ""
 
 
 class Timesheet(BaseModel):

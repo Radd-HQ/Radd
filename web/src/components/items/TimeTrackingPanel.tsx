@@ -28,6 +28,7 @@ import { Select } from "../Select";
 import { IconButton } from "../IconButton";
 import { ErrorText } from "../ErrorText";
 import { todayIso } from "../../lib/dates";
+import { MirroredBadge, sourceLabel } from "./MirroredBadge";
 
 interface Props {
   project: Project;
@@ -395,6 +396,11 @@ function WorklogRow({
     );
   }
 
+  // RADD-1258: a mirrored entry is corrected where it was logged. Spec-96
+  // treatment — the controls stay, disabled, with the reason on hover — rather
+  // than an edit that 409s.
+  const mirrored = Boolean(entry.external_source);
+  const mirroredReason = `Logged on ${sourceLabel(entry.external_source)}; change it there and it will follow.`;
   return (
     <li className="flex items-center gap-2 text-[13px]">
       <Clock size={12} className="shrink-0 text-fg-faint" aria-hidden />
@@ -406,15 +412,17 @@ function WorklogRow({
           {entry.category.name}
         </span>
       )}
+      {mirrored && <MirroredBadge source={entry.external_source} />}
       {entry.note && <span className="truncate text-fg-muted">— {entry.note}</span>}
       {canManage && (
-        <span className="ml-auto flex shrink-0 items-center gap-0.5">
+        <span className="ml-auto flex shrink-0 items-center gap-0.5" title={mirrored ? mirroredReason : undefined}>
           <IconButton
             onClick={() => {
               setTimeSpent(entry.time_spent);
               setNote(entry.note);
               setEditing(true);
             }}
+            disabled={mirrored}
             aria-label="Edit worklog"
           >
             <Pencil size={12} />
@@ -422,7 +430,7 @@ function WorklogRow({
           <IconButton
             danger
             onClick={() => remove.mutate()}
-            disabled={remove.isPending}
+            disabled={remove.isPending || mirrored}
             aria-label="Delete worklog"
           >
             <Trash2 size={12} />

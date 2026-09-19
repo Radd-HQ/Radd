@@ -3,16 +3,58 @@
 import { queryOptions } from "@tanstack/react-query";
 import { api } from "../api";
 import { Entity, entityMeta } from "../cache";
-import { ApiPath, apiServiceAccountKeysPath } from "../constants";
+import {
+  ApiPath,
+  apiServiceAccountKeysPath,
+  apiVcsIdentitiesPath,
+  apiVcsUnmatchedPath,
+} from "../constants";
 import { queryKeys } from "./shared";
 import type {
   ForgejoConnection,
   ForgejoRepo,
   GithubConnection,
   GithubRepo,
+  GitlabConnection,
+  GitlabRepo,
   ServiceAccount,
   ServiceAccountKey,
+  VcsUnmatchedAuthor,
+  VcsUserLink,
 } from "../types";
+
+/** RADD-1253: GitLab hosts and their projects (admin). */
+export const gitlabConnectionsQuery = () =>
+  queryOptions({
+    queryKey: queryKeys.gitlabConnections,
+    queryFn: ({ signal }) => api.get<GitlabConnection[]>(ApiPath.gitlabConnections, { signal }),
+    meta: entityMeta(Entity.gitlabConnection),
+  });
+
+export const gitlabReposQuery = () =>
+  queryOptions({
+    queryKey: queryKeys.gitlabRepos,
+    queryFn: ({ signal }) => api.get<GitlabRepo[]>(ApiPath.gitlabRepos, { signal }),
+    meta: entityMeta(Entity.gitlabRepo),
+  });
+
+/** RADD-1258: a connection's identity map (provider account → Radd user). */
+export const vcsIdentitiesQuery = (provider: string, connectionId: string) =>
+  queryOptions({
+    queryKey: queryKeys.vcsIdentities(provider, connectionId),
+    queryFn: ({ signal }) =>
+      api.get<VcsUserLink[]>(apiVcsIdentitiesPath(provider, connectionId), { signal }),
+    meta: entityMeta(Entity.vcsUserLink),
+  });
+
+/** RADD-1258: accounts whose time entries are parked for want of a mapping. */
+export const vcsUnmatchedQuery = (provider: string, connectionId: string) =>
+  queryOptions({
+    queryKey: queryKeys.vcsUnmatched(provider, connectionId),
+    queryFn: ({ signal }) =>
+      api.get<VcsUnmatchedAuthor[]>(apiVcsUnmatchedPath(provider, connectionId), { signal }),
+    meta: entityMeta(Entity.vcsUserLink, Entity.worklog),
+  });
 
 /** Spec 111: Forgejo hosts and their repositories (admin). */
 export const forgejoConnectionsQuery = () =>

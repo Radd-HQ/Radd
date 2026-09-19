@@ -95,6 +95,9 @@ export type ForgejoRepo = {
   project_id: string | null;
   default_branch: string;
   last_backfill_at: string | null;
+  /** RADD-1258: the work category a worklog mirrored from this repository's
+   *  MRs/PRs carries; null = the instance's Development. */
+  time_category_id: string | null;
   created_at: string;
 };
 
@@ -105,6 +108,12 @@ export type GithubConnection = ForgejoConnection;
 export type GithubRepo = ForgejoRepo;
 export type GithubConnectionTest = ForgejoConnectionTest;
 
+/** GitLab hosts and projects as rows (RADD-1253) — same wire shape again;
+ *  `full_name` is GitLab's `path_with_namespace`. */
+export type GitlabConnection = ForgejoConnection;
+export type GitlabRepo = ForgejoRepo;
+export type GitlabConnectionTest = ForgejoConnectionTest;
+
 export type ForgejoBackfillReport = {
   branches: number;
   pull_requests: number;
@@ -112,6 +121,41 @@ export type ForgejoBackfillReport = {
   linked: number;
   unknown_keys: string[];
 };
+
+/** RADD-1258 — how a provider account was tied to a Radd user. */
+export const VcsMatchedBy = { email: "email", manual: "manual" } as const;
+export type VcsMatchedByValue = (typeof VcsMatchedBy)[keyof typeof VcsMatchedBy];
+
+/** One row of a connection's identity map (`GET /vcs/{provider}/connections/{id}/identities`). */
+export interface VcsUserLink {
+  id: string;
+  provider: VcsProviderValue;
+  connection_id: string;
+  external_username: string;
+  user_id: string;
+  user_name: string;
+  matched_by: VcsMatchedByValue;
+  created_at: string;
+}
+
+/** A provider account whose time entries are parked because no Radd user
+ *  matched it — derived from the parked rows, so nothing to keep in sync. */
+export interface VcsUnmatchedAuthor {
+  external_username: string;
+  external_email: string;
+  pending_entries: number;
+  pending_seconds: number;
+  last_seen_at: string | null;
+}
+
+export interface VcsUserLinkSet {
+  external_username: string;
+  user_id: string;
+}
+
+export interface VcsReplayResult {
+  replayed: number;
+}
 
 
 // ---------------------------------------------------------------------------

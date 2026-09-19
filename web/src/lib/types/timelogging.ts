@@ -49,6 +49,11 @@ export interface Worklog {
   time_spent_seconds: number;
   time_spent: string; // server-formatted, e.g. "1h 30m"
   note: string;
+  /** RADD-1258: "" = logged in Radd; a VcsProvider value = mirrored from time
+   *  logged on a merge/pull request there. Mirrored rows are read-only here. */
+  external_source: string;
+  /** The ref's external id (`pr:<repo>:<n>`) when mirrored, else "". */
+  external_scope: string;
   created_at: string;
   updated_at: string;
 }
@@ -102,6 +107,8 @@ export interface TimesheetEntry {
   project_key: string | null;
   category: CategoryRef | null;
   note: string;
+  /** RADD-1258 — "" or the VcsProvider the entry was mirrored from. */
+  external_source: string;
 }
 
 /** GET /timesheet — entries the UI pivots into day/week/month grids. */

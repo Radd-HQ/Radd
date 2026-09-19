@@ -58,6 +58,8 @@ class RepoUpdate(BaseModel):
     # null = clear the mapping.
     project_id: uuid.UUID | None = None
     default_branch: str | None = Field(default=None, max_length=200)
+    # RADD-1258 — same idiom: omitted = unchanged, explicit null = back to the default.
+    time_category_id: uuid.UUID | None = None
 
 
 class RepoRead(BaseModel):
@@ -69,6 +71,7 @@ class RepoRead(BaseModel):
     project_id: uuid.UUID | None
     default_branch: str
     last_backfill_at: datetime | None
+    time_category_id: uuid.UUID | None = None
     created_at: UtcDatetime
 
 

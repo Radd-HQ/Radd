@@ -5,13 +5,14 @@ import { api, errorMessage } from "../../lib/api";
 import { invalidateEntities, type Entity } from "../../lib/cache";
 import { usePermissions } from "../../lib/hooks";
 import { useListFilter } from "../../lib/list-filter";
-import { projectsQuery } from "../../lib/queries";
+import { projectsQuery, workCategoriesQuery } from "../../lib/queries";
 import {
   Permission,
   type ForgejoBackfillReport,
   type ForgejoConnection,
   type ForgejoConnectionTest,
   type ForgejoRepo,
+  type VcsProviderValue,
 } from "../../lib/types";
 import { Button } from "../Button";
 import { EmptyState } from "../EmptyState";
@@ -20,18 +21,21 @@ import { QueryError } from "../QueryError";
 import { SelectField } from "../SelectField";
 import { TableSkeleton } from "../TableSkeleton";
 import { TextField } from "../TextField";
-import { SettingsPage } from "./SettingsPage";
+import { VcsIdentityMap } from "./VcsIdentityMap";
 
 /**
- * One settings page for every version-control host connector (Forgejo since
- * spec 111, GitHub since RADD-1129). The two APIs share a wire shape — hosts
+ * One body for every version-control host connector (Forgejo since spec 111,
+ * GitHub since RADD-1129, GitLab since RADD-1253), rendered as a tab of
+ * Settings → Version control (RADD-1262). The APIs share a wire shape — hosts
  * and repositories as rows, credentials write-only (`has_token`/`has_secret`),
- * an empty field on update keeping the stored value — so the page is
+ * an empty field on update keeping the stored value — so the body is
  * parameterised by paths and wording, not duplicated.
  */
 type EntityName = (typeof Entity)[keyof typeof Entity];
 
 export type VcsHostConfig = {
+  /** The VcsProvider this host kind writes links as — keys the identity map (RADD-1258). */
+  provider: VcsProviderValue;
   /** Entity types the page edits — its "Change history" footer link (spec 123). */
   historyEntities: string[];
   title: string;
@@ -65,6 +69,7 @@ export function VcsHostSettings({ config }: { config: VcsHostConfig }) {
   const connections = config.useConnections();
   const repos = config.useRepos();
   const projects = useQuery(projectsQuery());
+  const categories = useQuery(workCategoriesQuery());
   const queryClient = useQueryClient();
 
   const [adding, setAdding] = useState(false);
@@ -105,6 +110,12 @@ export function VcsHostSettings({ config }: { config: VcsHostConfig }) {
       api.patch<ForgejoRepo>(config.paths.repo(vars.id), { project_id: vars.projectId }),
     onSettled: refresh,
   });
+  // RADD-1258: the work category a worklog mirrored from this repo's MRs/PRs carries.
+  const setCategory = useMutation({
+    mutationFn: (vars: { id: string; categoryId: string | null }) =>
+      api.patch<ForgejoRepo>(config.paths.repo(vars.id), { time_category_id: vars.categoryId }),
+    onSettled: refresh,
+  });
   const removeRepo = useMutation({
     mutationFn: (id: string) => api.delete<void>(config.paths.repo(id)),
     onSettled: refresh,
@@ -122,7 +133,8 @@ export function VcsHostSettings({ config }: { config: VcsHostConfig }) {
     (repos.data ?? []).filter((repo) => repo.connection_id === connectionId);
 
   return (
-    <SettingsPage title={config.title} description={config.description} history={{ entities: config.historyEntities }}>
+    <div>
+      <p className="mb-4 text-[13px] text-fg-muted">{config.description}</p>
       {connections.isPending ? (
         <TableSkeleton rows={2} />
       ) : connections.isError ? (
@@ -228,6 +240,24 @@ export function VcsHostSettings({ config }: { config: VcsHostConfig }) {
                                   </option>
                                 ))}
                               </SelectField>
+                              <SelectField
+                                label=""
+                                ariaLabel={`Work category for time mirrored from ${repo.full_name}`}
+                                value={repo.time_category_id ?? ""}
+                                onChange={(event) =>
+                                  setCategory.mutate({ id: repo.id, categoryId: event.target.value || null })
+                                }
+                                disabled={!canManage}
+                              >
+                                <option value="">Development (default)</option>
+                                {(categories.data ?? [])
+                                  .filter((category) => !category.archived)
+                                  .map((category) => (
+                                    <option key={category.id} value={category.id}>
+                                      {category.name}
+                                    </option>
+                                  ))}
+                              </SelectField>
                               {canManage && (
                                 <>
                                   <Button
@@ -291,6 +321,9 @@ export function VcsHostSettings({ config }: { config: VcsHostConfig }) {
                       </>
                     )}
                   </RepoSearch>
+                  <div className="border-t border-subtle/60 p-3">
+                    <VcsIdentityMap provider={config.provider} connectionId={connection.id} canManage={canManage} />
+                  </div>
                 </section>
               ))}
             </div>
@@ -351,7 +384,7 @@ export function VcsHostSettings({ config }: { config: VcsHostConfig }) {
           )}
         </>
       )}
-    </SettingsPage>
+    </div>
   );
 }
 

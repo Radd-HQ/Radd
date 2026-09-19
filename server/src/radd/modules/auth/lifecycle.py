@@ -73,6 +73,10 @@ _MERGE_REPOINT: tuple[tuple[str, str], ...] = (
     ("events", "actor_id"),
     ("item_web_links", "created_by"),
     ("item_vcs_links", "created_by"),
+    # RADD-1258: a provider account mapped to the merged identity now maps to
+    # the survivor. Unique per (provider, connection, username), never per user,
+    # so a plain repoint cannot collide.
+    ("vcs_user_links", "user_id"),
     ("attachments", "created_by"),
     ("pages", "created_by"),
     ("page_versions", "author_id"),

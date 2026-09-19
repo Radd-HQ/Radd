@@ -127,6 +127,7 @@ async def build(
                 ),
                 category=CategoryRef(id=category.id, name=category.name) if category else None,
                 note=worklog.note,
+                external_source=worklog.external_source,
             )
         )
     return Timesheet(start=start, end=end, total_seconds=total, entries=entries)

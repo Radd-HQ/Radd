@@ -23,3 +23,19 @@ class VcsEvent(StrEnum):
 
 class VcsEntity(StrEnum):
     VCS_LINK = "vcs_link"
+    USER_LINK = "vcs_user_link"
+    PENDING_WORKLOG = "vcs_pending_worklog"
+
+
+class VcsMatchedBy(StrEnum):
+    """How a provider account was tied to a Radd user (RADD-1258)."""
+
+    EMAIL = "email"
+    MANUAL = "manual"
+
+
+class VcsUserLinkEvent(StrEnum):
+    """Spec 123: identity-map administration is audited; not a trigger."""
+
+    CREATED = "vcs_user_link.created"
+    DELETED = "vcs_user_link.deleted"

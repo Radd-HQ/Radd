@@ -1,7 +1,6 @@
 from radd.kernel import CapabilitySpec
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
-from radd.kernel import CrudResourceSpec
 
 from . import service
 from .admin_router import router as admin_router
@@ -19,13 +18,8 @@ def _admin_event(event_type: ForgejoEvent, label: str, entity: str) -> EventType
 
 plugin = RaddPlugin(
     name="forgejo",
-    # Spec 111: hosts and their repositories. No coarse verb of its own — the
-    # umbrella is global.manage, the dashboard precedent.
-    crud_resources=(
-        CrudResourceSpec(
-            "vcsconn", "global", "version-control connections", "global.manage"
-        ),
-    ),
+    # Spec 111 declared the `vcsconn.*` atoms here; RADD-1258 moved them to `vcs`
+    # (always loaded), since GitHub and GitLab gate on them too.
     core=False,  # optional plugin — disableable via the plugin manager
     description="Forgejo/Gitea connector (specs 47, 111): hosts and repositories as rows, a "
     "webhook receiver auto-linking branches/commits/PRs to items via the vcs seam, "

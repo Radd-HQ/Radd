@@ -3,6 +3,7 @@ import { Clock } from "lucide-react";
 import { errorMessage } from "../../lib/api";
 import { itemTimelogQuery } from "../../lib/queries";
 import { Spinner } from "../Spinner";
+import { MirroredBadge } from "./MirroredBadge";
 
 /**
  * The Work-log tab: the item's logged-work history (who logged what, when).
@@ -47,6 +48,7 @@ export function WorklogTab({ itemId }: { itemId: string }) {
                       {entry.category.name}
                     </span>
                   )}
+                  {entry.external_source && <MirroredBadge source={entry.external_source} />}
                 </p>
                 {entry.note && <p className="text-fg-muted">{entry.note}</p>}
               </div>

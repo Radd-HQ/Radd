@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -33,3 +34,38 @@ class VcsLinkRead(BaseModel):
     # Spec 111 — latest CI run for the ref ("" = never reported).
     ci_state: str = ""
     ci_url: str = ""
+
+
+# --- RADD-1258: the identity map + unmatched authors (Settings → Version control) ---
+
+
+class UserLinkRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    provider: VcsProvider
+    connection_id: uuid.UUID
+    external_username: str
+    user_id: uuid.UUID
+    user_name: str = ""
+    matched_by: str  # VcsMatchedBy
+    created_at: UtcDatetime
+
+
+class UserLinkSet(BaseModel):
+    """PUT: map a provider account to a Radd user by hand."""
+
+    external_username: str = Field(min_length=1, max_length=200)
+    user_id: uuid.UUID
+
+
+class UnmatchedAuthorRead(BaseModel):
+    external_username: str
+    external_email: str
+    pending_entries: int
+    pending_seconds: int
+    last_seen_at: datetime | None
+
+
+class ReplayResult(BaseModel):
+    replayed: int

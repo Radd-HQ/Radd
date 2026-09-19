@@ -65,3 +65,8 @@ class GithubRepo(Base, TimestampMixin):
     )
     default_branch: Mapped[str] = mapped_column(String(200), default="main")
     last_backfill_at: Mapped[datetime | None] = mapped_column(default=None)
+    # RADD-1258: the work category a worklog mirrored from this repository's
+    # merge/pull requests carries. NULL = the instance's `Development`.
+    time_category_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("work_categories.id", ondelete="SET NULL"), default=None
+    )

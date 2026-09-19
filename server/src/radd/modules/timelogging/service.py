@@ -256,6 +256,8 @@ async def hydrate(
                 time_spent_seconds=w.time_spent_seconds,
                 time_spent=_fmt(w.time_spent_seconds, hours_per_day),
                 note=w.note,
+                external_source=w.external_source,
+                external_scope=w.external_scope,
                 created_at=w.created_at,
                 updated_at=w.updated_at,
             )
@@ -354,6 +356,17 @@ async def authorize_mutation(session: AsyncSession, user, worklog, *, others) ->
     """
     from radd.modules.auth import authz
 
+    if worklog.external_source:
+        # RADD-1258: a mirrored entry is corrected where it was logged. Refusing
+        # here — not in the router — is what makes MCP `update_worklog` /
+        # `delete_worklog` and the SPA agree, admins included.
+        raise ConflictError(
+            TimelogEntity.WORKLOG,
+            reason=(
+                f"this entry mirrors time logged on {worklog.external_source}; "
+                "change it there and it will follow"
+            ),
+        )
     project = await worklog_scope(session, worklog)
     is_author = worklog.author_id == user.id
     if project is not None:

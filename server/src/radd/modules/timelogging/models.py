@@ -6,10 +6,12 @@ from sqlalchemy import (
     CheckConstraint,
     Date,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -76,6 +78,18 @@ class Worklog(Base, TimestampMixin):
             "item_id IS NOT NULL OR category_id IS NOT NULL",
             name="ck_worklogs_scope",
         ),
+        # RADD-1258: one row per SOURCE entry. A mirrored worklog carries the
+        # provider's own entry id, and this index — not the lookup — is what
+        # makes a backfill after a webhook, a re-delivered webhook, or two
+        # deliveries racing land on ONE row (the `uq_item_vcs_links_ref`
+        # precedent). Hand-logged rows carry no external id and stay out of it.
+        Index(
+            "uq_worklogs_external",
+            "external_source",
+            "external_id",
+            unique=True,
+            postgresql_where=text("external_id <> ''"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -93,3 +107,14 @@ class Worklog(Base, TimestampMixin):
     worked_on: Mapped[date] = mapped_column(Date, index=True)
     time_spent_seconds: Mapped[int] = mapped_column(Integer)
     note: Mapped[str] = mapped_column(Text, default="")
+    # RADD-1258 — provenance of a MIRRORED entry (time logged on a merge request
+    # or pull request at the provider and copied here). `external_source` is a
+    # VcsProvider value ('' = logged in Radd); `external_scope` names the ref the
+    # time was logged on (`pr:<repo>:<n>`, the vcs link's external id) so a
+    # reconcile can drop the entries that vanished at the source WITHOUT
+    # touching another MR's rows on the same item; `external_id` is the
+    # provider's own entry id. A row with a source is read-only in Radd — it
+    # is corrected where it was logged.
+    external_source: Mapped[str] = mapped_column(String(20), default="", server_default="")
+    external_scope: Mapped[str] = mapped_column(String(200), default="", server_default="")
+    external_id: Mapped[str] = mapped_column(String(200), default="", server_default="")

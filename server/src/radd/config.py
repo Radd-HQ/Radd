@@ -467,10 +467,18 @@ class Settings(BaseSettings):
     csat_poll_seconds: float = 5.0
     csat_batch: int = 200  # events read per sender iteration
 
-    # GitLab connector (see radd/modules/gitlab). Empty secret = endpoint disabled.
-    gitlab_webhook_secret: str = ""
-    # State NAME referenced items move to when their MR merges ("" = no transition).
-    gitlab_merge_transition_state: str = ""
+    # GitLab connector (see radd/modules/gitlab). RADD-1253: connections are rows
+    # (`gitlab_connections`), so these SEED one connection on first start when
+    # the table is empty — the spec-100/101 rule. Rotating a secret is a Settings
+    # edit, not a redeploy. The spec-31 merge-transition state name is gone: a
+    # merged MR moves the item to the project's waiting-for-release state.
+    gitlab_webhook_secret: str = ""  # seed only: the hook's "Secret token"
+    gitlab_base_url: str = ""  # seed only: https://gitlab.example.com (default gitlab.com)
+    gitlab_api_token: str = ""  # seed only: a read_api token (admin's = automatic author matching)
+    gitlab_repo: str = ""  # seed only: group/project to register with the seeded connection
+    gitlab_backfill_max_commits: int = 2000
+    gitlab_api_page_size: int = 100  # GitLab's maximum
+    gitlab_http_timeout_seconds: float = 30.0
 
     # Manual item ranking (see radd/modules/items) — gap between fractional rank
     # keys on create/rebalance; a wide gap allows many midpoint insertions.
@@ -547,13 +555,14 @@ class Settings(BaseSettings):
         "radd.modules.items",
         "radd.modules.comments",
         "radd.modules.weblinks",
-        "radd.modules.vcs",
         "radd.modules.webhooks",
         "radd.modules.views",
         "radd.modules.reporting",
         "radd.modules.forms",
         "radd.modules.automations",
         "radd.modules.timelogging",
+        # RADD-1258: vcs mirrors MR/PR time into worklogs, so it loads after timelogging.
+        "radd.modules.vcs",
         "radd.modules.audit",
         "radd.modules.backup",
         "radd.modules.notify",

@@ -70,6 +70,7 @@ _REPOINT: tuple[Repoint, ...] = (
     Repoint("worklogs", "item_id"),
     Repoint("item_web_links", "item_id"),
     Repoint("item_vcs_links", "item_id"),
+    Repoint("vcs_pending_worklogs", "item_id"),  # RADD-1258: parked MR time follows the survivor
     Repoint("item_cycle_records", "item_id"),
     Repoint("item_estimates", "item_id", ()),  # unique(item_id): target's row wins
     Repoint("csat_surveys", "item_id", ()),  # unique(item_id): target's survey wins

@@ -21,6 +21,8 @@ from radd.kernel import changes
 from radd.modules.events import service as events
 from radd.modules.projects import service as projects_service
 from radd.exceptions import ConflictError, NotFoundError
+from radd.modules.vcs import timemirror
+from radd.modules.vcs.types import VcsProvider
 from radd.snapshot import Snapshot
 
 from .models import GithubConnection, GithubRepo
@@ -89,6 +91,7 @@ async def _repo_snapshot(session: AsyncSession, repo: GithubRepo) -> dict:
         "full_name": repo.full_name,
         "project": ref["key"] if ref else None,
         "default_branch": repo.default_branch,
+        "time_category_id": str(repo.time_category_id) if repo.time_category_id else None,
     }
 
 
@@ -173,6 +176,10 @@ async def delete_connection(
 ) -> None:
     connection = await get_connection(session, connection_id)
     await _emit_connection(session, GithubEvent.CONNECTION_DELETED, connection, actor_id)
+    # RADD-1258: the identity map and parked time entries keyed by this connection.
+    await timemirror.forget_connection(
+        session, provider=VcsProvider.GITHUB, connection_id=connection.id
+    )
     await session.delete(connection)
     await session.flush()
     await refresh_connection_snapshot(session)
@@ -245,6 +252,8 @@ async def update_repo(
         repo.project_id = data.project_id
     if data.default_branch is not None:
         repo.default_branch = data.default_branch
+    if "time_category_id" in data.model_fields_set:  # explicit null = the default
+        repo.time_category_id = data.time_category_id
     await session.flush()
     diff = changes.diff(before, await _repo_snapshot(session, repo))
     await _emit_repo(session, GithubEvent.REPO_UPDATED, repo, actor_id, diff)

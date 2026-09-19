@@ -1,3 +1,9 @@
+> **Superseded in part (2026-09-19, RADD-1253/1254/1259):** connections are rows, ids are
+> canonical (`vcs/ids.py`), the merge transition targets the project's waiting-for-release
+> state, and time logged on an MR is mirrored into worklogs. `docs/modules.md` row `gitlab`
+> and `docs/specs/125-vcs-time-mirror.md` describe the current connector; this spec is the
+> historical record of the first version.
+
 # Spec 31 — GitLab connector (the `vcs` stub made real)
 
 Tier-2 item 6 from `docs/roadmap-ideas.md`: auto-linking MRs/branches/commits and

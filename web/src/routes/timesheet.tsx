@@ -54,6 +54,7 @@ import { Spinner } from "../components/Spinner";
 import { Table, TBody, Td, THead, Th } from "../components/Table";
 import { TextField } from "../components/TextField";
 import { ErrorText } from "../components/ErrorText";
+import { MirroredBadge } from "../components/items/MirroredBadge";
 import { formatIso, todayIso } from "../lib/dates";
 
 const PERIODS: { value: TimesheetPeriodValue; label: string }[] = [
@@ -641,6 +642,11 @@ function TimesheetGrid({
                     {entry.category && groupBy !== TimesheetGroupBy.category && (
                       <span className="ml-1.5 rounded bg-elevated px-1 py-px text-[10px] text-amber-200/80">
                         {entry.category.name}
+                      </span>
+                    )}
+                    {entry.external_source && (
+                      <span className="ml-1.5">
+                        <MirroredBadge source={entry.external_source} />
                       </span>
                     )}
                     {entry.note && <span className="ml-1.5 text-fg-faint">— {entry.note}</span>}
