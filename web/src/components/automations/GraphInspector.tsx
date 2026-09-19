@@ -53,6 +53,7 @@ import {
   CommentGateFields,
   PageSpaceFields,
   PayloadGateFields,
+  ProjectGateFields,
 } from "./GateFields";
 import type { PickerData } from "./ActionsBuilder";
 const ACTION_TYPE_PREFIX = "action.";
@@ -295,6 +296,9 @@ export function GraphInspector({
         </div>
       )}
 
+      {node.type === "gate.project" && (
+        <ProjectGateFields params={node.params} onChange={setParams} />
+      )}
       {node.type === "gate.payload" && (
         <PayloadGateFields
           params={node.params}

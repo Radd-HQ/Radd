@@ -31,10 +31,10 @@ plugin = RaddPlugin(
         # RADD-1168: emitted since spec 84/86 and never registered — no label
         # in the audit catalog, and outside the has_changes contract. Not
         # triggers (the automation catalog is a parity oracle).
-        EventTypeSpec(AuthEvent.USER_CREATED, "User created", "People", trigger=False, entity_type="user"),
+        EventTypeSpec(AuthEvent.USER_CREATED, "User created", "People", entity_type="user"),
         EventTypeSpec(
             AuthEvent.USER_UPDATED, "User updated", "People",
-            has_changes=True, trigger=False, entity_type="user",
+            has_changes=True, entity_type="user",
         ),
         EventTypeSpec(AuthEvent.USER_DELETED, "User deleted", "People", trigger=False, entity_type="user"),
         EventTypeSpec(AuthEvent.ROLE_CREATED, "Role created", "Admin", trigger=False, entity_type="role"),

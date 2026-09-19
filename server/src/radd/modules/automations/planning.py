@@ -38,7 +38,7 @@ from radd.modules.events.service import Event
 from radd.modules.fields import service as fields
 from radd.modules.fields.models import FieldDefinition
 from radd.modules.items import service as items, slq
-from radd.modules.items.enums import ItemEntity, ItemKind, Priority
+from radd.modules.items.enums import ItemEntity, ItemKind, ItemVisibility, Priority
 from radd.modules.items.models import WorkItem
 from radd.modules.items.schemas import ItemCreate, ItemUpdate
 from radd.modules.projects import service as projects_service
@@ -186,6 +186,16 @@ class _Plan:
     # ALONGSIDE the item_update, so the rotation advances in the same SAVEPOINT as
     # the assignment it describes. Read-only here — the write is `_apply_plan`'s.
     cursor_advance: tuple[uuid.UUID, uuid.UUID] | None = None
+    # RADD-1267 — the verbs that are not field writes, each applied through the
+    # owning module's service by `_apply_plan`:
+    # (target item id, link type key) for link_item.
+    link: tuple[uuid.UUID, str] | None = None
+    # True/False for archive_item.
+    archive: bool | None = None
+    # user id for add_watcher / add_participant.
+    person: uuid.UUID | None = None
+    # target project id for move_to_project.
+    move_to: uuid.UUID | None = None
     #: `{{token}}` -> what it rendered to on this invocation (spec 120). LAST in
     #: the field order because every other field is passed positionally by some
     #: branch below, and stamped by `_plan` after the planner returns — twenty
@@ -499,6 +509,16 @@ async def _current_labels(session: AsyncSession, item: WorkItem, system_user: Us
     return list(read.labels)
 
 
+async def _item_by_key(session: AsyncSession, key: str, actor: User) -> WorkItem | None:
+    """An item by `TD-42`, or None — the by-key seam raises, and a planner
+    answers with a skip rather than an exception."""
+    try:
+        read = await items.get_item_by_key(session, key.strip().upper(), actor)
+    except Exception:  # malformed, unknown or unreadable key: to a planner all three are "no item", a skip naming the key
+        return None
+    return await session.get(WorkItem, read.id)
+
+
 async def _project_by_key(session: AsyncSession, key: str) -> Project | None:
     for project in await projects_service.list_projects(session):
         if project.key.casefold() == key.strip().casefold():
@@ -781,6 +801,109 @@ async def _plan_action(
                 f"set_custom_field {key!r}",
                 ItemUpdate(custom_fields={key: resolved_value}),
             )
+        case ActionType.SET_PARENT:
+            key = text.line(params["parent"])
+            if _is_clear(key):
+                return _Plan(PlanKind.ITEM_UPDATE, "set_parent -> none", ItemUpdate(parent_id=None))
+            parent = await _item_by_key(session, key, system_user)
+            if parent is None:
+                return _Plan(PlanKind.SKIP, f"set_parent: no item {key!r}")
+            if parent.id == item.id:
+                return _Plan(PlanKind.SKIP, f"set_parent: {key} cannot be its own parent")
+            return _Plan(PlanKind.ITEM_UPDATE, f"set_parent -> {key}", ItemUpdate(parent_id=parent.id))
+        case ActionType.SET_TYPE:
+            name = text.line(params["type"])
+            types = await itemtypes_service.list_types(session, project.id)
+            issue_type = _named(types, name)
+            if issue_type is None:
+                return _Plan(
+                    PlanKind.SKIP,
+                    f"set_type: no issue type {name!r} in {project.key} "
+                    f"(types: {_vocabulary(t.name for t in types)})",
+                )
+            return _Plan(PlanKind.ITEM_UPDATE, f"set_type -> {name!r}", ItemUpdate(type_id=issue_type.id))
+        case ActionType.SET_REPORTER:
+            email = text.line(params["reporter"])
+            user = await auth.get_user_by_email(session, email)
+            if user is None:
+                return _Plan(PlanKind.SKIP, f"set_reporter: no user {email!r}")
+            return _Plan(PlanKind.ITEM_UPDATE, f"set_reporter -> {email}", ItemUpdate(reporter_id=user.id))
+        case ActionType.SET_DATES:
+            fields_: dict[str, Any] = {}
+            described: list[str] = []
+            for param, column in (("start", "start_date"), ("target", "target_date")):
+                raw = text.line(str(params.get(param) or ""))
+                if not raw:
+                    continue
+                if _is_clear(raw):
+                    fields_[column] = None
+                    described.append(f"{param} cleared")
+                    continue
+                resolved = _resolve_date(raw)
+                if resolved is None:
+                    return _Plan(PlanKind.SKIP, f"set_dates: {raw!r} is not a date (ISO, or today+3d)")
+                fields_[column] = resolved
+                described.append(f"{param} -> {resolved.isoformat()}")
+            if not fields_:
+                return _Plan(PlanKind.SKIP, "set_dates: nothing to set")
+            return _Plan(PlanKind.ITEM_UPDATE, f"set_dates {', '.join(described)}", ItemUpdate(**fields_))
+        case ActionType.SET_ESTIMATE:
+            raw = text.line(params["points"])
+            if _is_clear(raw):
+                return _Plan(PlanKind.ITEM_UPDATE, "set_estimate -> none", ItemUpdate(estimate_points=None))
+            try:
+                points = float(raw)
+            except ValueError:
+                return _Plan(PlanKind.SKIP, f"set_estimate: {raw!r} is not a number")
+            if not 0 <= points <= 999:
+                return _Plan(PlanKind.SKIP, f"set_estimate: {points} is outside 0–999")
+            return _Plan(PlanKind.ITEM_UPDATE, f"set_estimate -> {points:g}", ItemUpdate(estimate_points=points))
+        case ActionType.SET_FLAG:
+            flagged = bool(params.get("flagged", True))
+            return _Plan(PlanKind.ITEM_UPDATE, f"set_flag -> {'flagged' if flagged else 'unflagged'}", ItemUpdate(flagged=flagged))
+        case ActionType.SET_VISIBILITY:
+            visibility_ = ItemVisibility(str(params["visibility"]))
+            return _Plan(
+                PlanKind.ITEM_UPDATE, f"set_visibility -> {visibility_.value}", ItemUpdate(visibility=visibility_)
+            )
+        case ActionType.LINK_ITEM:
+            key = text.line(params["target"])
+            target_item = await _item_by_key(session, key, system_user)
+            if target_item is None:
+                return _Plan(PlanKind.SKIP, f"link_item: no item {key!r}")
+            if target_item.id == item.id:
+                return _Plan(PlanKind.SKIP, f"link_item: {key} cannot link to itself")
+            link_type = str(params["link_type"]).strip()
+            return _Plan(PlanKind.LINK, f"link_item {link_type} -> {key}", link=(target_item.id, link_type))
+        case ActionType.ARCHIVE_ITEM:
+            archived = bool(params.get("archived", True))
+            if bool(item.archived_at) == archived:
+                return _Plan(PlanKind.SKIP, f"archive_item: already {'archived' if archived else 'live'}")
+            return _Plan(PlanKind.ARCHIVE, "archive_item" if archived else "archive_item -> restore", archive=archived)
+        case ActionType.ADD_WATCHER | ActionType.ADD_PARTICIPANT:
+            verb = action_type.value
+            target_user = params["user"]
+            if is_role(target_user):
+                user_id = await resolve_user(session, target_user, item)
+                if user_id is None:
+                    return _Plan(PlanKind.SKIP, f"{verb}: no {target_user} on the target item")
+                who = target_user
+            else:
+                email = text.line(target_user)
+                user = await auth.get_user_by_email(session, email)
+                if user is None:
+                    return _Plan(PlanKind.SKIP, f"{verb}: no user {email!r}")
+                user_id, who = user.id, email
+            kind = PlanKind.WATCH if action_type is ActionType.ADD_WATCHER else PlanKind.PARTICIPANT
+            return _Plan(kind, f"{verb} {who}", person=user_id)
+        case ActionType.MOVE_TO_PROJECT:
+            key = text.line(params["project"])
+            target = await _project_by_key(session, key)
+            if target is None:
+                return _Plan(PlanKind.SKIP, f"move_to_project: no project {key!r}")
+            if target.id == project.id:
+                return _Plan(PlanKind.SKIP, f"move_to_project: already in {key}")
+            return _Plan(PlanKind.MOVE, f"move_to_project -> {key}", move_to=target.id)
         case ActionType.ADD_COMMENT:
             visibility = CommentVisibility(params.get("visibility", CommentVisibility.PUBLIC.value))
             # Templated like every other body of text an automation writes. It

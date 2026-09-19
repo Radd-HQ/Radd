@@ -26,6 +26,7 @@ from typing import Any, Mapping
 from .conditions import EventFacts, _payload_path, compare
 from .types import (
     TYPE_GATE_PAYLOAD,
+    TYPE_GATE_PROJECT,
     ConditionOperator,
     TYPE_GATE_CHANGED_BY,
     TYPE_GATE_COMMENT,
@@ -194,10 +195,32 @@ def payload_value_is(facts: EventFacts, params: Mapping[str, Any]) -> bool:
     return not hit if params.get("negate") else hit
 
 
+def project_is(facts: EventFacts, params: Mapping[str, Any]) -> bool:
+    """Is the event about a project in this set? (RADD-1267)
+
+    Reads the `project` ref the kernel writes for any event whose subjects
+    name one, and the item ref's own project for item-scoped events. Keys,
+    because that is what people write everywhere else (`project = TD`). An
+    event about no project answers False.
+    """
+    wanted = {str(v).strip().casefold() for v in (params.get("projects") or []) if str(v).strip()}
+    if not wanted:
+        return False
+    payload = facts.payload
+    ref = payload.get("project")
+    if not isinstance(ref, dict):
+        item = payload.get("item")
+        ref = item.get("project") if isinstance(item, dict) else None
+    key = ref.get("key") if isinstance(ref, dict) else None
+    hit = bool(key) and str(key).casefold() in wanted
+    return not hit if params.get("negate") else hit
+
+
 #: node type -> evaluator. The executor dispatches through this rather than an
 #: `if node.type == …` ladder, so a new gate is one entry plus its spec.
 GATE_EVALUATORS = {
     TYPE_GATE_PAYLOAD: payload_value_is,
+    TYPE_GATE_PROJECT: project_is,
     TYPE_GATE_FIELD_CHANGED: field_changed,
     TYPE_GATE_CHANGED_BY: changed_by,
     TYPE_GATE_STATE_CATEGORY: state_category_is,

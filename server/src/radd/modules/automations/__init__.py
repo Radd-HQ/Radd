@@ -108,7 +108,7 @@ plugin = RaddPlugin(
         "Spec 69 adds schedule-triggered rules fired by a scheduler clock."
     ),
     depends_on=("projects", "auth", "workflow", "labels", "cycles", "releases", "items", "comments", "teams", "events", "fields", "itemtypes",),
-    weak_depends=("mailintake", "notify", "leave"),
+    weak_depends=("mailintake", "notify", "leave", "participants"),
     routers=(router, intake_router),
     exception_handlers=(
         (ValidationBlocked, _validation_blocked_handler),

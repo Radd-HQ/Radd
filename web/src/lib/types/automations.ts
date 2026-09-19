@@ -179,6 +179,19 @@ export const ActionType = {
   setRelease: "set_release",
   setCustomField: "set_custom_field",
   addComment: "add_comment",
+  // RADD-1267: the rest of what an item can have done to it.
+  setParent: "set_parent",
+  setType: "set_type",
+  setReporter: "set_reporter",
+  setDates: "set_dates",
+  setEstimate: "set_estimate",
+  setFlag: "set_flag",
+  setVisibility: "set_visibility",
+  linkItem: "link_item",
+  archiveItem: "archive_item",
+  addWatcher: "add_watcher",
+  addParticipant: "add_participant",
+  moveToProject: "move_to_project",
   // Universal actions (spec 58b) — run with or without a target item; their
   // text params accept {{event_type}}/{{actor.*}}/{{payload.*}}/{{item.*}}.
   createItem: "create_item",

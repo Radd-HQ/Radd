@@ -283,6 +283,10 @@ function summarise(node: AutomationNode): string {
     return `${params.negate ? "not in " : "in "}${spaces.join(", ") || "…"}`;
   }
   if (node.type === "ai.classify") return String(params.prompt ?? "") || "ask a question…";
+  if (node.type === "gate.project") {
+    const projects = (params.projects as string[]) ?? [];
+    return `${params.negate ? "not " : ""}${projects.join(", ") || "…"}`;
+  }
   if (node.type === "gate.payload") {
     const value = Array.isArray(params.value) ? (params.value as string[]).join(", ") : String(params.value ?? "");
     return `${params.negate ? "not " : ""}${params.path || "…"} ${params.operator ?? "eq"} ${value}`.trim();

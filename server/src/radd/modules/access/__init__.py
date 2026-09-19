@@ -20,11 +20,11 @@ plugin = RaddPlugin(
     event_types=(
         EventTypeSpec(
             AccessEvent.GRANTED, "Access granted", "Admin",
-            trigger=False, entity_type="access_grant", subjects=("project",),
+            entity_type="access_grant", subjects=("project",),
         ),
         EventTypeSpec(
             AccessEvent.REVOKED, "Access revoked", "Admin",
-            trigger=False, entity_type="access_grant", subjects=("project",),
+            entity_type="access_grant", subjects=("project",),
         ),
     ),
     # RADD-820: expired grants are absent at resolution; this just buries them.

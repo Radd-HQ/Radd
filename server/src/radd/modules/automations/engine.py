@@ -43,7 +43,8 @@ from radd.modules.events import service as events
 from radd.modules.events.service import Event
 from radd.modules.items import service as items
 from radd.modules.items.models import WorkItem
-from radd.modules.items.schemas import ItemRead
+from radd.modules.items import bulk
+from radd.modules.items.schemas import ItemBulkMove, ItemLinkCreate, ItemRead
 from radd.modules.notify import service as notify_service
 from radd.modules.projects.models import Project
 from radd.modules.notify.types import NotificationType
@@ -181,6 +182,34 @@ async def _apply_plan(
             await round_robin.advance_cursor(session, *plan.cursor_advance)
     elif plan.kind is PlanKind.COMMENT and plan.comment is not None and item is not None:
         await comments.create_comment(session, item.id, plan.comment, actor=system_user)
+    elif plan.kind is PlanKind.LINK and plan.link is not None and item is not None:
+        target_id, link_type = plan.link
+        await items.add_item_link(
+            session, item.id, ItemLinkCreate(target_id=target_id, link_type=link_type), actor=system_user
+        )
+    elif plan.kind is PlanKind.ARCHIVE and plan.archive is not None and item is not None:
+        await items.set_archived(session, item.id, plan.archive, system_user)
+    elif plan.kind is PlanKind.WATCH and plan.person is not None and item is not None:
+        await notify_service.watch(session, item.id, plan.person)
+    elif plan.kind is PlanKind.PARTICIPANT and plan.person is not None and item is not None:
+        # Feature-detected like mailintake: participants is a service-desk
+        # module an instance may not load, and the seam must not import it
+        # at module load.
+        from .email_action import participants_service
+
+        participants = participants_service()
+        if participants is None:
+            logger.info("automations: add_participant skipped — the participants module is not loaded")
+            return None
+        await participants.add_participant(
+            session, item.id, participants.ParticipantAdd(user_id=plan.person), system_user
+        )
+    elif plan.kind is PlanKind.MOVE and plan.move_to is not None and item is not None:
+        result = await bulk.bulk_move_items(
+            session, ItemBulkMove(item_ids=[item.id], target_project_id=plan.move_to), system_user
+        )
+        if result.skipped:
+            raise RuntimeError(f"move_to_project: {result.skipped[0].reason}")
     elif plan.kind is PlanKind.CREATE_ITEM and plan.item_create is not None:
         # Emitted item.created is marked automation-caused — the loop guard skips
         # it, so a create_item node cannot retrigger its own graph.

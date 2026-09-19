@@ -54,6 +54,22 @@ async def outbound_available(session: AsyncSession) -> bool:
     return bool(await mail_service.outbound_configured(session))
 
 
+PARTICIPANTS_MODULE = "radd.modules.participants"
+
+
+def participants_service() -> ModuleType | None:
+    """The participants module's public seam, or None when it is not loaded
+    (RADD-1267: `add_participant` is feature-detected like the `contact` role).
+    The service module re-exports `ParticipantAdd` so the caller needs one name."""
+    if PARTICIPANTS_MODULE not in settings.modules:
+        return None
+    from radd.modules.participants import service as participants
+    from radd.modules.participants.schemas import ParticipantAdd
+
+    participants.ParticipantAdd = ParticipantAdd  # type: ignore[attr-defined]
+    return participants
+
+
 def _mailable(user: User | None) -> bool:
     """Is this account a mailbox a person reads? (RADD-983)
 

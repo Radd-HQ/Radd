@@ -66,7 +66,24 @@ def test_the_arity_table_reproduces_the_historical_item_action_split():
         ActionType.SET_CUSTOM_FIELD,
         ActionType.ADD_COMMENT,
     }
-    assert set(ITEM_ACTIONS) == historical
+    # RADD-1267 added the rest of what an item can have done to it — all item
+    # mutations, so all per item. Listed apart from the historical set so the
+    # invariant the test guards (the pre-RADD-918 split) stays legible.
+    added = {
+        ActionType.SET_PARENT,
+        ActionType.SET_TYPE,
+        ActionType.SET_REPORTER,
+        ActionType.SET_DATES,
+        ActionType.SET_ESTIMATE,
+        ActionType.SET_FLAG,
+        ActionType.SET_VISIBILITY,
+        ActionType.LINK_ITEM,
+        ActionType.ARCHIVE_ITEM,
+        ActionType.ADD_WATCHER,
+        ActionType.ADD_PARTICIPANT,
+        ActionType.MOVE_TO_PROJECT,
+    }
+    assert set(ITEM_ACTIONS) == historical | added
     assert ACTION_ARITY_DEFAULT.keys() == set(ActionType), "every action needs a default"
 
 

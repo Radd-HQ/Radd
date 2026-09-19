@@ -78,6 +78,32 @@ function defaultParams(type: ActionTypeValue): Record<string, CustomFieldValue> 
       return { user: "", message: "" };
     case ActionType.sendEmail:
       return { to: "", subject: "", body: "" };
+    // RADD-1267. Kept in step with `blankActionParams` in automation-nodes.ts,
+    // which is what the canvas palette drops.
+    case ActionType.setParent:
+      return { parent: "" };
+    case ActionType.setType:
+      return { type: "" };
+    case ActionType.setReporter:
+      return { reporter: "" };
+    case ActionType.setDates:
+      return { start: "", target: "" };
+    case ActionType.setEstimate:
+      return { points: "" };
+    case ActionType.setFlag:
+      return { flagged: true };
+    case ActionType.setVisibility:
+      return { visibility: "public" };
+    case ActionType.linkItem:
+      return { target: "", link_type: "relates" };
+    case ActionType.archiveItem:
+      return { archived: true };
+    case ActionType.addWatcher:
+      return { user: "assignee" };
+    case ActionType.addParticipant:
+      return { user: "" };
+    case ActionType.moveToProject:
+      return { project: "" };
   }
 }
 
@@ -128,6 +154,28 @@ export function isActionValid(action: RuleAction): boolean {
       return filled(p.key);
     case ActionType.addComment:
       return filled(p.body);
+    case ActionType.setParent:
+      return filled(p.parent);
+    case ActionType.setType:
+      return filled(p.type);
+    case ActionType.setReporter:
+      return filled(p.reporter);
+    case ActionType.setDates:
+      return filled(p.start) || filled(p.target);
+    case ActionType.setEstimate:
+      return filled(p.points);
+    case ActionType.setFlag:
+    case ActionType.archiveItem:
+      return true;
+    case ActionType.setVisibility:
+      return filled(p.visibility);
+    case ActionType.linkItem:
+      return filled(p.target) && filled(p.link_type);
+    case ActionType.addWatcher:
+    case ActionType.addParticipant:
+      return filled(p.user);
+    case ActionType.moveToProject:
+      return filled(p.project);
     case ActionType.createItem:
       return filled(p.project) && filled(p.title);
     case ActionType.sendWebhook:

@@ -58,6 +58,18 @@ function blankActionParams(actionType: string): Record<string, unknown> {
     case "set_release": return { release: "" };
     case "add_comment": return { body: "", visibility: "public" };
     case "set_custom_field": return { key: "", value: "" };
+    case "set_parent": return { parent: "" };
+    case "set_type": return { type: "" };
+    case "set_reporter": return { reporter: "" };
+    case "set_dates": return { start: "", target: "" };
+    case "set_estimate": return { points: "" };
+    case "set_flag": return { flagged: true };
+    case "set_visibility": return { visibility: "public" };
+    case "link_item": return { target: "", link_type: "relates" };
+    case "archive_item": return { archived: true };
+    case "add_watcher": return { user: "assignee" };
+    case "add_participant": return { user: "" };
+    case "move_to_project": return { project: "" };
     case "create_item": return { project: "", title: "" };
     case "send_webhook": return { url: "https://" };
     case "post_chat": return { webhook_url: "https://", message: "" };
@@ -210,6 +222,17 @@ export function nodeTemplates(catalog: AutomationCatalog | undefined): NodeTempl
     group: "Gates",
     keywords: "payload path value equals contains regex matches project release status any custom condition",
     params: { path: "", operator: "eq", value: "", negate: false },
+  });
+  // RADD-1267: the only way to narrow a non-item event (a release, a form, a
+  // cycle) by project — a filter can only see items.
+  templates.push({
+    key: "gate.project",
+    kind: NodeKind.gate,
+    type: "gate.project",
+    label: "Project is",
+    group: "Gates",
+    keywords: "project key in scope which project release cycle form",
+    params: { projects: [], negate: false },
   });
   templates.push({
     key: "gate.field_changed",

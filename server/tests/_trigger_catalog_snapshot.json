@@ -1,4 +1,16 @@
 {
+  "access.granted": {
+    "label": "Access granted",
+    "group": "Admin",
+    "item_scoped": false,
+    "has_changes": false
+  },
+  "access.revoked": {
+    "label": "Access revoked",
+    "group": "Admin",
+    "item_scoped": false,
+    "has_changes": false
+  },
   "approval.approved": {
     "label": "Approval granted",
     "group": "Service desk",
@@ -305,6 +317,12 @@
     "item_scoped": false,
     "has_changes": false
   },
+  "page_space.public_access_changed": {
+    "label": "Page space public access changed",
+    "group": "Pages",
+    "item_scoped": false,
+    "has_changes": true
+  },
   "page_space.updated": {
     "label": "Page space updated",
     "group": "Pages",
@@ -313,6 +331,12 @@
   },
   "project.created": {
     "label": "Project created",
+    "group": "Admin",
+    "item_scoped": false,
+    "has_changes": false
+  },
+  "project.deleted": {
+    "label": "Project deleted",
     "group": "Admin",
     "item_scoped": false,
     "has_changes": false
@@ -353,6 +377,24 @@
     "item_scoped": true,
     "has_changes": false
   },
+  "sla_policy.created": {
+    "label": "SLA policy created",
+    "group": "Service desk",
+    "item_scoped": false,
+    "has_changes": false
+  },
+  "sla_policy.deleted": {
+    "label": "SLA policy deleted",
+    "group": "Service desk",
+    "item_scoped": false,
+    "has_changes": false
+  },
+  "sla_policy.updated": {
+    "label": "SLA policy updated",
+    "group": "Service desk",
+    "item_scoped": false,
+    "has_changes": true
+  },
   "state.created": {
     "label": "Workflow state created",
     "group": "Admin",
@@ -374,6 +416,18 @@
   "team.updated": {
     "label": "Team updated",
     "group": "Admin",
+    "item_scoped": false,
+    "has_changes": true
+  },
+  "user.created": {
+    "label": "User created",
+    "group": "People",
+    "item_scoped": false,
+    "has_changes": false
+  },
+  "user.updated": {
+    "label": "User updated",
+    "group": "People",
     "item_scoped": false,
     "has_changes": true
   },
@@ -443,16 +497,16 @@
     "item_scoped": true,
     "has_changes": false
   },
+  "worklog.estimate_changed": {
+    "label": "Estimate changed",
+    "group": "Time logging",
+    "item_scoped": true,
+    "has_changes": true
+  },
   "worklog.updated": {
     "label": "Worklog edited",
     "group": "Time logging",
     "item_scoped": true,
     "has_changes": true
-  },
-  "project.deleted": {
-    "label": "Project deleted",
-    "group": "Admin",
-    "item_scoped": false,
-    "has_changes": false
   }
 }

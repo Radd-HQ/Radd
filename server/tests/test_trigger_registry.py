@@ -36,10 +36,12 @@ def test_trigger_registry_reproduces_the_catalog_exactly():
         assert current[et] == expected, f"{et}: {current[et]} != {expected}"
 
 
-def test_trigger_count_is_76():
+def test_trigger_count_is_85():
     # RADD-829 added the three group.* events (synced/missing/restored).
     # RADD-960 added the four mail.* events — the mail channel became something
     # a rule can see, rather than only the item/comment it happened to produce.
     # RADD-1009 added project.updated (rename/description, with a diff).
     # RADD-1174 added project.deleted.
-    assert len(_current_triggers()) == 76
+    # RADD-1267 switched on nine more: user.created/updated, the estimate change,
+    # access grants, a space's public-access flip and the SLA policies.
+    assert len(_current_triggers()) == 85

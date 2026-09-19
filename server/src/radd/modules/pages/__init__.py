@@ -25,9 +25,11 @@ from .page_access import _PAGE_SPEC
 
 # After the router chain on purpose: mcptools joins the loaded graph (RADD-889).
 from . import mcptools
+from .automation import COMMENT_NODE, MOVE_NODE  # RADD-1267: page actions for automations
 
 plugin = RaddPlugin(
     name="pages",
+    automation_nodes=(COMMENT_NODE, MOVE_NODE),
     # RADD-791: SPACE-scoped. They were global because a page had no scope to be
     # checked against, which made per-space access inexpressible.
     permissions=(
@@ -80,7 +82,7 @@ plugin = RaddPlugin(
         EventTypeSpec(PageEvent.SPACE_CREATED, "Page space created", "Pages"),
         EventTypeSpec(
             PageEvent.SPACE_PUBLIC_ACCESS_CHANGED, "Page space public access changed", "Pages",
-            has_changes=True, trigger=False, entity_type="page_space", subjects=("page_space",),
+            has_changes=True, entity_type="page_space", subjects=("page_space",),
         ),
         EventTypeSpec(PageEvent.SPACE_UPDATED, "Page space updated", "Pages", has_changes=True),
         EventTypeSpec(PageEvent.SPACE_DELETED, "Page space deleted", "Pages"),

@@ -4,7 +4,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
 from radd.modules.comments.types import CommentVisibility
-from radd.modules.items.enums import ItemKind, Priority
+from radd.modules.items.enums import ItemKind, ItemVisibility, Priority
 
 from radd import schedule as schedule_math
 
@@ -99,6 +99,68 @@ class SetCustomFieldParams(BaseModel):
 class AddCommentParams(BaseModel):
     body: str = Field(min_length=1)
     visibility: CommentVisibility = CommentVisibility.PUBLIC
+
+
+# --- RADD-1267: the rest of what an item can have done to it -----------------
+
+
+class SetParentParams(BaseModel):
+    parent: str = Field(min_length=1, max_length=64)  # item KEY, or "none" to clear
+
+
+class SetTypeParams(BaseModel):
+    type: str = Field(min_length=1, max_length=100)  # issue type NAME in the item's project
+
+
+class SetReporterParams(BaseModel):
+    reporter: str = Field(min_length=1, max_length=320)  # user email
+
+
+class SetDatesParams(BaseModel):
+    """Either date: an ISO date or a relative literal (`today+3d`), "none" to
+    clear, empty to leave alone."""
+
+    start: str = Field(default="", max_length=32)
+    target: str = Field(default="", max_length=32)
+
+    @model_validator(mode="after")
+    def _one_of(self) -> "SetDatesParams":
+        if not self.start.strip() and not self.target.strip():
+            raise ValueError("set at least one of start / target")
+        return self
+
+
+class SetEstimateParams(BaseModel):
+    points: str = Field(min_length=1, max_length=32)  # a number, "none", or a template
+
+
+class SetFlagParams(BaseModel):
+    flagged: bool = True
+
+
+class SetVisibilityParams(BaseModel):
+    visibility: ItemVisibility
+
+
+class LinkItemParams(BaseModel):
+    target: str = Field(min_length=1, max_length=64)  # item KEY, or a template
+    link_type: str = Field(min_length=1, max_length=30)  # link-type KEY (spec 91)
+
+
+class ArchiveItemParams(BaseModel):
+    archived: bool = True  # False restores
+
+
+class AddWatcherParams(BaseModel):
+    user: str = Field(min_length=1, max_length=320)  # email, or reporter/assignee
+
+
+class AddParticipantParams(BaseModel):
+    user: str = Field(min_length=1, max_length=320)  # email, or reporter/assignee
+
+
+class MoveToProjectParams(BaseModel):
+    project: str = Field(min_length=1, max_length=20)  # project KEY
 
 
 # --- universal actions (spec 58b) — `{{token}}` templates render per event ---
@@ -245,6 +307,66 @@ class AddCommentAction(BaseModel):
     params: AddCommentParams
 
 
+class SetParentAction(BaseModel):
+    type: Literal[ActionType.SET_PARENT]
+    params: SetParentParams
+
+
+class SetTypeAction(BaseModel):
+    type: Literal[ActionType.SET_TYPE]
+    params: SetTypeParams
+
+
+class SetReporterAction(BaseModel):
+    type: Literal[ActionType.SET_REPORTER]
+    params: SetReporterParams
+
+
+class SetDatesAction(BaseModel):
+    type: Literal[ActionType.SET_DATES]
+    params: SetDatesParams
+
+
+class SetEstimateAction(BaseModel):
+    type: Literal[ActionType.SET_ESTIMATE]
+    params: SetEstimateParams
+
+
+class SetFlagAction(BaseModel):
+    type: Literal[ActionType.SET_FLAG]
+    params: SetFlagParams
+
+
+class SetVisibilityAction(BaseModel):
+    type: Literal[ActionType.SET_VISIBILITY]
+    params: SetVisibilityParams
+
+
+class LinkItemAction(BaseModel):
+    type: Literal[ActionType.LINK_ITEM]
+    params: LinkItemParams
+
+
+class ArchiveItemAction(BaseModel):
+    type: Literal[ActionType.ARCHIVE_ITEM]
+    params: ArchiveItemParams
+
+
+class AddWatcherAction(BaseModel):
+    type: Literal[ActionType.ADD_WATCHER]
+    params: AddWatcherParams
+
+
+class AddParticipantAction(BaseModel):
+    type: Literal[ActionType.ADD_PARTICIPANT]
+    params: AddParticipantParams
+
+
+class MoveToProjectAction(BaseModel):
+    type: Literal[ActionType.MOVE_TO_PROJECT]
+    params: MoveToProjectParams
+
+
 class CreateItemAction(BaseModel):
     type: Literal[ActionType.CREATE_ITEM]
     params: CreateItemParams
@@ -282,6 +404,18 @@ Action = Annotated[
     | SetReleaseAction
     | SetCustomFieldAction
     | AddCommentAction
+    | SetParentAction
+    | SetTypeAction
+    | SetReporterAction
+    | SetDatesAction
+    | SetEstimateAction
+    | SetFlagAction
+    | SetVisibilityAction
+    | LinkItemAction
+    | ArchiveItemAction
+    | AddWatcherAction
+    | AddParticipantAction
+    | MoveToProjectAction
     | CreateItemAction
     | SendWebhookAction
     | PostChatAction

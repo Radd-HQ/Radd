@@ -5,7 +5,7 @@ import { CycleSelect } from "../cycles/CycleSelect";
 import { useState, type ReactNode } from "react";
 import { Braces } from "lucide-react";
 import { AUTOMATION_CLEAR_VALUE } from "../../lib/constants";
-import { COMMENT_VISIBILITY_LABELS, PRIORITY_META, PRIORITY_ORDER } from "../../lib/meta";
+import { COMMENT_VISIBILITY_LABELS, PRIORITY_META, PRIORITY_ORDER, VISIBILITY_META, VISIBILITY_ORDER } from "../../lib/meta";
 import {
   ActionType,
   CommentVisibility,
@@ -243,6 +243,137 @@ export function ActionParams({ action, pickers, listId, onParams }: ActionParams
       return <CustomFieldParams pickers={pickers} params={p} set={set} />;
     case ActionType.addComment:
       return <CommentParams params={p} set={set} str={str} />;
+    case ActionType.setParent:
+      return (
+        <TextField
+          label="Parent issue key"
+          value={str(p.parent)}
+          placeholder="TD-42"
+          hint={`An epic or issue key, a {{token}} such as {{followup.key}}, or "${AUTOMATION_CLEAR_VALUE}" to clear.`}
+          onChange={(event) => set({ parent: event.target.value })}
+        />
+      );
+    case ActionType.setType:
+      return (
+        <OptionTextField resource={OptionResource.issueType}
+          label="Issue type"
+          value={str(p.type)}
+          placeholder="Bug"
+          hint="A type name in the item's project, or a {{token}}."
+          onChange={value => set({ type: value })}
+        />
+      );
+    case ActionType.setReporter:
+      return (
+        <TokenizableField
+          key={`${listId}-reporter`}
+          label="Reporter"
+          value={str(p.reporter)}
+          placeholder="{{triage.owner}}"
+          onChange={(reporter) => set({ reporter })}
+        >
+          <OptionSelect resource={OptionResource.user} label="Reporter" value={str(p.reporter)}
+            canBrowse={pickers.canChoosePeople} onChange={reporter => set({ reporter })} />
+        </TokenizableField>
+      );
+    case ActionType.setDates:
+      return (
+        <div className="flex flex-col gap-2.5">
+          <TextField
+            label="Start date"
+            value={str(p.start)}
+            placeholder="today"
+            hint={`ISO date or a relative one (today+3d); "${AUTOMATION_CLEAR_VALUE}" clears; empty leaves it alone.`}
+            onChange={(event) => set({ start: event.target.value })}
+          />
+          <TextField
+            label="Target date"
+            value={str(p.target)}
+            placeholder="today+14d"
+            onChange={(event) => set({ target: event.target.value })}
+          />
+        </div>
+      );
+    case ActionType.setEstimate:
+      return (
+        <TextField
+          label="Estimate (points)"
+          value={str(p.points)}
+          placeholder="3"
+          hint={`A number, a {{token}}, or "${AUTOMATION_CLEAR_VALUE}" to clear.`}
+          onChange={(event) => set({ points: event.target.value })}
+        />
+      );
+    case ActionType.setFlag:
+      return (
+        <SelectField
+          label="Flag"
+          value={p.flagged === false ? "unflag" : "flag"}
+          onChange={(event) => set({ flagged: event.target.value === "flag" })}
+        >
+          <option value="flag">Flag the item</option>
+          <option value="unflag">Remove the flag</option>
+        </SelectField>
+      );
+    case ActionType.setVisibility:
+      return (
+        <SelectField
+          label="Visibility"
+          value={str(p.visibility) || "public"}
+          onChange={(event) => set({ visibility: event.target.value })}
+        >
+          {VISIBILITY_ORDER.map((value) => (
+            <option key={value} value={value}>
+              {VISIBILITY_META[value].label}
+            </option>
+          ))}
+        </SelectField>
+      );
+    case ActionType.linkItem:
+      return (
+        <div className="flex flex-col gap-2.5">
+          <TextField
+            label="Link to issue key"
+            value={str(p.target)}
+            placeholder="TD-42 or {{followup.key}}"
+            onChange={(event) => set({ target: event.target.value })}
+          />
+          <TextField
+            label="Link type"
+            value={str(p.link_type)}
+            placeholder="relates"
+            hint="A link-type key from Settings → Link types: relates, blocks, duplicates, or a custom one."
+            onChange={(event) => set({ link_type: event.target.value })}
+          />
+        </div>
+      );
+    case ActionType.archiveItem:
+      return (
+        <SelectField
+          label="Archive"
+          value={p.archived === false ? "restore" : "archive"}
+          onChange={(event) => set({ archived: event.target.value === "archive" })}
+        >
+          <option value="archive">Archive the item</option>
+          <option value="restore">Restore it from the archive</option>
+        </SelectField>
+      );
+    case ActionType.addWatcher:
+    case ActionType.addParticipant:
+      return (
+        <div className="flex flex-col gap-1">
+          <OptionSelect resource={OptionResource.user} label="Person" value={str(p.user)}
+            canBrowse={pickers.canChoosePeople}
+            presets={[{ value: "assignee", label: "Its assignee", hint: "" }, { value: "reporter", label: "Its reporter", hint: "" }]}
+            onChange={user => set({ user })} />
+          <p className="text-xs text-fg-muted">A role resolves against each item; an email names one person.</p>
+        </div>
+      );
+    case ActionType.moveToProject:
+      return (
+        <ProjectSelect label="Move to project" valueBy="key" value={str(p.project)}
+          onChange={project => set({ project })} />
+      );
     case ActionType.createItem:
       return (
         <div className="flex flex-col gap-2.5">

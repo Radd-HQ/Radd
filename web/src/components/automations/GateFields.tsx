@@ -443,3 +443,39 @@ export function PayloadGateFields({
     </div>
   );
 }
+
+
+/** "Project is" (RADD-1267) — the one way to narrow a NON-item event (a
+ * release, a form, a cycle) by project; a filter can only see items. Reads the
+ * project ref the kernel wrote on the event, or the item's own. */
+export function ProjectGateFields({
+  params,
+  onChange,
+}: {
+  params: Params;
+  onChange: (params: Params) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <Labelled label={params.negate ? "Project is NOT one of" : "Project is one of"}>
+        <TokenMultiSelect
+          value={(params.projects as string[]) ?? []}
+          onChange={(projects) => onChange({ ...params, projects: projects.map((key) => key.trim().toUpperCase()) })}
+          options={[]}
+          placeholder="Add a project key…"
+          ariaLabel="Project is one of"
+          allowCreate
+        />
+      </Labelled>
+      <label className="flex items-center gap-2 text-xs text-fg-secondary">
+        <input
+          type="checkbox"
+          checked={Boolean(params.negate)}
+          onChange={(event) => onChange({ ...params, negate: event.target.checked })}
+          className="size-3.5 cursor-pointer accent-[var(--accent-fill)]"
+        />
+        Invert — true when the project is NOT one of them
+      </label>
+    </div>
+  );
+}

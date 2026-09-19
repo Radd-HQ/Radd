@@ -100,6 +100,20 @@ class ActionType(StrEnum):
     SET_RELEASE = "set_release"
     SET_CUSTOM_FIELD = "set_custom_field"
     ADD_COMMENT = "add_comment"
+    # RADD-1267: the rest of what an item can have done to it. Every field
+    # `ItemUpdate` accepts, plus the verbs that are not field writes.
+    SET_PARENT = "set_parent"
+    SET_TYPE = "set_type"
+    SET_REPORTER = "set_reporter"
+    SET_DATES = "set_dates"
+    SET_ESTIMATE = "set_estimate"
+    SET_FLAG = "set_flag"
+    SET_VISIBILITY = "set_visibility"
+    LINK_ITEM = "link_item"
+    ARCHIVE_ITEM = "archive_item"
+    ADD_WATCHER = "add_watcher"
+    ADD_PARTICIPANT = "add_participant"
+    MOVE_TO_PROJECT = "move_to_project"
     # Universal actions (spec 58b) — run with or without a target item.
     CREATE_ITEM = "create_item"
     SEND_WEBHOOK = "send_webhook"
@@ -190,6 +204,18 @@ ACTION_ARITY_DEFAULT: dict[ActionType, NodeArity] = {
     ActionType.SET_RELEASE: NodeArity.ITEM,
     ActionType.SET_CUSTOM_FIELD: NodeArity.ITEM,
     ActionType.ADD_COMMENT: NodeArity.ITEM,
+    ActionType.SET_PARENT: NodeArity.ITEM,
+    ActionType.SET_TYPE: NodeArity.ITEM,
+    ActionType.SET_REPORTER: NodeArity.ITEM,
+    ActionType.SET_DATES: NodeArity.ITEM,
+    ActionType.SET_ESTIMATE: NodeArity.ITEM,
+    ActionType.SET_FLAG: NodeArity.ITEM,
+    ActionType.SET_VISIBILITY: NodeArity.ITEM,
+    ActionType.LINK_ITEM: NodeArity.ITEM,
+    ActionType.ARCHIVE_ITEM: NodeArity.ITEM,
+    ActionType.ADD_WATCHER: NodeArity.ITEM,
+    ActionType.ADD_PARTICIPANT: NodeArity.ITEM,
+    ActionType.MOVE_TO_PROJECT: NodeArity.ITEM,
     # Outward-facing actions. SET by default because that is what they did
     # before, and because one message about twelve items beats twelve messages.
     ActionType.CREATE_ITEM: NodeArity.SET,
@@ -296,6 +322,10 @@ PORTS_BY_KIND: dict[AutomationNodeKind, tuple[NodePort, ...]] = {
 #: hatch for whatever a named gate does not ask ("release status became
 #: released", "the form is the incident form").
 TYPE_GATE_PAYLOAD = "gate.payload"
+#: RADD-1267: "Project is" — reads the project ref off ANY event that carries
+#: one (an item's, a release's, a form's), which is what makes a non-item
+#: event narrowable by project at all.
+TYPE_GATE_PROJECT = "gate.project"
 TYPE_GATE_FIELD_CHANGED = "gate.field_changed"
 TYPE_GATE_CHANGED_BY = "gate.changed_by"
 TYPE_GATE_STATE_CATEGORY = "gate.state_category"
@@ -316,7 +346,7 @@ ACTION_TYPE_PREFIX = "action."
 #: looks configured. `gate.state_category` is NOT here — the draft has a state,
 #: and asking about it is a real question.
 EVENT_GATE_TYPES: frozenset[str] = frozenset(
-    {TYPE_GATE_FIELD_CHANGED, TYPE_GATE_CHANGED_BY, TYPE_GATE_COMMENT, TYPE_GATE_PAGE_SPACE}
+    {TYPE_GATE_FIELD_CHANGED, TYPE_GATE_CHANGED_BY, TYPE_GATE_COMMENT, TYPE_GATE_PAGE_SPACE, TYPE_GATE_PROJECT}
 )
 
 #: Spec 119: reaching this node records a FINDING against the draft being
@@ -384,6 +414,7 @@ BUILTIN_ARITY: dict[str, ArityRule] = {
     TYPE_VALIDATION_FAIL: ArityRule(NodeArity.SET, (NodeArity.SET,)),
     TYPE_SEARCH_SLQ: ArityRule(NodeArity.SET, (NodeArity.SET,)),
     TYPE_GATE_PAYLOAD: ArityRule(NodeArity.SET, (NodeArity.SET,)),
+    TYPE_GATE_PROJECT: ArityRule(NodeArity.SET, (NodeArity.SET,)),
     TYPE_GATE_FIELD_CHANGED: ArityRule(NodeArity.SET, (NodeArity.SET,)),
     TYPE_GATE_CHANGED_BY: ArityRule(NodeArity.SET, (NodeArity.SET,)),
     TYPE_GATE_STATE_CATEGORY: ArityRule(NodeArity.SET, (NodeArity.SET,)),
@@ -489,6 +520,12 @@ class PlanKind(StrEnum):
     ITEM_UPDATE = "item_update"
     COMMENT = "comment"
     CREATE_ITEM = "create_item"
+    # RADD-1267: verbs that are not field writes.
+    LINK = "link"
+    ARCHIVE = "archive"
+    WATCH = "watch"
+    PARTICIPANT = "participant"
+    MOVE = "move"
     HTTP = "http"
     NOTIFY = "notify"
     EMAIL = "email"
