@@ -8,6 +8,7 @@ import { ACTION_TYPE_LABELS } from "../../lib/meta";
 import { linkSearchQuery, firstProjectQuery } from "../../lib/queries";
 import type {
   ActionPreview,
+  ActionTypeValue,
   AutomationNode,
   NodeResult,
   RuleTestResult,
@@ -295,7 +296,9 @@ function ActionPreviewRow({ preview, applied = false }: { preview: ActionPreview
         >
           {chip}
         </span>
-        <span className="shrink-0 font-medium text-fg">{ACTION_TYPE_LABELS[preview.type]}</span>
+        <span className="shrink-0 font-medium text-fg">
+          {ACTION_TYPE_LABELS[preview.type as ActionTypeValue] ?? preview.type}
+        </span>
         {/* Which node, against which item — a graph runs the same action type
             from several nodes and, per item, once each. */}
         {preview.node_id && <span className="text-[11px] text-fg-faint">{preview.node_id}</span>}

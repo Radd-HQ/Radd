@@ -26,7 +26,7 @@ podman compose up -d          # db + app; app runs `alembic upgrade head` then s
 podman compose exec app python -m radd.seed --email you@example.com --password … --name "You"
 ```
 
-Attachments live on the `radd-data` volume (`RADD_ATTACHMENTS_DIR=/data/attachments`)
+The scripts plugin's managed interpreter lives on the same volume (`RADD_SCRIPTS_DIR=/data/scripts`, the SDK it installs from `RADD_SCRIPTS_SDK_SOURCE=/app/sdk`; a rebuild for a Python the image lacks needs network for uv to fetch it). Attachments live on the `radd-data` volume (`RADD_ATTACHMENTS_DIR=/data/attachments`)
 by default. The `RADD_ATTACHMENT_STORAGE*` env settings only SEED the FIRST
 storage-host row on first boot (spec 102) — afterwards Settings → Storage owns
 storage entirely (multiple hosts, routing, delivery; Garage is the blessed

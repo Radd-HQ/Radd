@@ -13,11 +13,12 @@ import {
   Clock,
   DatabaseBackup,
   DatabaseZap,
+  FolderTree,
   GitBranch,
   HardDrive,
-  Mail,
   KeyRound,
   Link2,
+  Mail,
   MessageSquareQuote,
   ScrollText,
   Server,
@@ -25,12 +26,12 @@ import {
   SlidersHorizontal,
   Sparkles,
   Tags,
+  Terminal,
   UserRoundCog,
-  FolderTree,
   UsersRound,
+  Webhook,
   Zap,
   type LucideIcon,
-  Webhook,
 } from "lucide-react";
 import { RoutePath } from "../../lib/constants";
 import { useCurrentUser, usePermissions } from "../../lib/hooks";
@@ -137,6 +138,14 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         label: "Automations",
         icon: Zap,
         show: (g) => g.ws(Permission.automationManage),
+      },
+      {
+        // RADD-1269: the scripts plugin's surface — withdrawn with the plugin.
+        to: RoutePath.settingsScripts,
+        label: "Scripts",
+        icon: Terminal,
+        plugin: "scripts",
+        show: (g) => g.ws(Permission.scriptManage),
       },
       {
         to: RoutePath.settingsCanned,

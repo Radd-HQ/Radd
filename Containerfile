@@ -118,6 +118,12 @@ COPY --from=web /build/web/dist /app/web/dist
 # ui/dist (registries.plugin_ui_dirs). The .py sources this overwrites are
 # byte-identical — both stages copy the same build context.
 COPY --from=web /build/server/src/radd/modules /app/server/src/radd/modules
+# The scripts plugin (RADD-1269) installs the Radd SDK client into the managed
+# interpreter it builds under /data/scripts; the SDK source travels in the image
+# so that install needs no network for it.
+COPY sdk /app/sdk
+ENV RADD_SCRIPTS_SDK_SOURCE=/app/sdk \
+    RADD_SCRIPTS_DIR=/data/scripts
 USER radd
 VOLUME /data /opt/radd/backups
 

@@ -827,7 +827,11 @@ class NodeResult(BaseModel):
 
 
 class ActionPreview(BaseModel):
-    type: ActionType
+    #: The action's NODE TYPE minus the `action.` prefix for built-ins, or the
+    #: full contributed key (`script.run`, `milestone.set_status`). Was the
+    #: `ActionType` enum, which is why every contributed action was silently
+    #: dropped from the dry run and the run history (RADD-1269).
+    type: str
     params: dict[str, Any]
     resolves: bool  # would the action's target(s) resolve at apply time?
     detail: str

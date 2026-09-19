@@ -83,6 +83,7 @@ class Permission(StrEnum):
     # an author's automations always act as the author; the field is not offered
     # in the editor at all, and the API refuses it, so the two agree.
     AUTOMATION_ACT_AS = "automation.act_as"
+    SCRIPT_MANAGE = "script.manage"  # RADD-1269: the scripts plugin — global scope
     # Per-entity manage actions (spec 36) — previously folded into project.manage /
     # global.manage; the umbrellas still imply them (IMPLIED_PERMISSIONS).
     STATE_MANAGE = "state.manage"  # project workflow states

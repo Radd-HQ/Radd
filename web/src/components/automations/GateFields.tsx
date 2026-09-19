@@ -14,7 +14,7 @@ import { OptionResource, type OptionResourceValue } from "../../lib/queries/opti
  */
 import type React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { pageSpacesQuery } from "../../lib/queries";
+import { pageSpacesQuery, scriptsQuery } from "../../lib/queries";
 import type { OperatorInfo } from "../../lib/types";
 import { TextField } from "../TextField";
 import { SelectField } from "../SelectField";
@@ -476,6 +476,64 @@ export function ProjectGateFields({
         />
         Invert — true when the project is NOT one of them
       </label>
+    </div>
+  );
+}
+
+
+/** The scripts plugin's two nodes (RADD-1269). Bespoke rather than generated
+ * from the schema because the script is chosen from the LIBRARY, and the
+ * ports / outputs are what the canvas redraws handles and offers tokens from. */
+export function ScriptNodeFields({
+  params,
+  decide,
+  onChange,
+}: {
+  params: Params;
+  /** True for `script.decide` (ports), false for `script.run` (outputs). */
+  decide: boolean;
+  onChange: (params: Params) => void;
+}) {
+  const scripts = useQuery(scriptsQuery);
+  const names = (params[decide ? "ports" : "outputs"] as string[]) ?? [];
+  return (
+    <div className="flex flex-col gap-2">
+      <SelectField
+        label="Script"
+        value={String(params.script ?? "")}
+        onChange={(event) => onChange({ ...params, script: event.target.value })}
+        hint="From Settings → Scripts. It runs out of process, as this automation's identity."
+      >
+        <option value="">Choose a script…</option>
+        {(scripts.data ?? []).map((script) => (
+          <option key={script.id} value={script.name}>
+            {script.name}
+          </option>
+        ))}
+      </SelectField>
+      <Labelled label={decide ? "Ports the script may name" : "Outputs the script returns"}>
+        <TokenMultiSelect
+          value={names}
+          onChange={(next) => onChange({ ...params, [decide ? "ports" : "outputs"]: next })}
+          options={[]}
+          placeholder={decide ? "Add a port…" : "Add an output…"}
+          ariaLabel={decide ? "Ports" : "Outputs"}
+          allowCreate
+        />
+      </Labelled>
+      <p className="text-xs text-fg-secondary">
+        {decide
+          ? "main(ctx) returns one of these names; anything else — or a failure — takes the unavailable port."
+          : "main(ctx) returns a dict; each declared key becomes a token downstream, {{name.key}}."}
+      </p>
+      <TextField
+        label="Timeout (seconds)"
+        type="number"
+        min={1}
+        max={600}
+        value={String(params.timeout ?? 60)}
+        onChange={(event) => onChange({ ...params, timeout: Number(event.target.value) || 60 })}
+      />
     </div>
   );
 }

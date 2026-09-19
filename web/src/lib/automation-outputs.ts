@@ -66,6 +66,13 @@ export function outputsOfNode(
       ? [field("answer", "The answer the model chose.", "enum", answers)]
       : [];
   }
+  if (node.type === "script.run") {
+    // RADD-1269: the outputs are the keys the author says the script returns.
+    const names = [
+      ...new Set(((node.params.outputs as string[]) ?? []).map((a) => String(a).trim()).filter(Boolean)),
+    ].slice(0, 20);
+    return names.map((name) => field(name, `\`${name}\` from the dict the script returns.`));
+  }
   const contributed = catalog?.contributed_nodes?.find((entry) => entry.key === node.type);
   if (contributed?.outputs?.length) return contributed.outputs;
   return catalog?.node_outputs?.find((entry) => entry.type === node.type)?.outputs ?? [];

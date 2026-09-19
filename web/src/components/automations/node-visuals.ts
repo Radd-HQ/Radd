@@ -119,5 +119,13 @@ export function portsOfNode(
       .filter(Boolean);
     return [...new Set(answers)].slice(0, 8).concat("unavailable");
   }
+  if (node.type === "script.decide") {
+    // RADD-1269: the ports are the names the author declares, plus the
+    // fallback — the same shape as the AI classifier's answers.
+    const ports = ((node.params.ports as string[]) ?? [])
+      .map((a) => String(a).trim())
+      .filter((a) => a && a !== "unavailable");
+    return [...new Set(ports)].slice(0, 8).concat("unavailable");
+  }
   return PORTS_BY_TYPE[node.type] ?? PORTS_BY_KIND[node.kind] ?? ["out"];
 }

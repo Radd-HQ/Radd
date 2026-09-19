@@ -54,6 +54,39 @@ async def create_api_token(
     return token, raw
 
 
+async def mint_ephemeral_token(
+    session: AsyncSession, user: User, *, name: str, ttl_seconds: int
+) -> tuple[ApiToken, str]:
+    """A short-lived UNSCOPED key for `user`, minted by the server for its own
+    subprocess (RADD-1269: an automation's script). No API principal is
+    involved, so the human-session rule does not apply; the caller deletes
+    the row when the run ends and the expiry covers the case where it cannot.
+    Unscoped means "exactly the account's rights" — a key can never exceed
+    its account (spec 113), which is the containment the caller relies on."""
+    from datetime import timedelta
+
+    from radd.clock import utcnow
+
+    raw = security.new_api_token()
+    token = ApiToken(
+        user_id=user.id,
+        name=name[:200],
+        token_hash=security.hash_token(raw),
+        prefix_display=raw[:PAT_PREFIX_DISPLAY_CHARS],
+        expires_at=utcnow() + timedelta(seconds=max(1, ttl_seconds)),
+        scopes=None,
+    )
+    session.add(token)
+    await session.flush()
+    return token, raw
+
+
+async def discard_token(session: AsyncSession, token: ApiToken) -> None:
+    """Delete a token the server minted for itself, whoever it belongs to."""
+    await session.delete(token)
+    await session.flush()
+
+
 async def list_api_tokens(session: AsyncSession, user: User) -> list[ApiToken]:
     require_account_session(user)
     result = await session.execute(

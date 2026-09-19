@@ -61,6 +61,8 @@ export const Permission = {
   slaUpdate: "sla.update",
   /** Spec 20: manage automation rules (global). */
   automationManage: "automation.manage",
+  /** RADD-1269: the scripts plugin — interpreter, packages, scripts, script nodes. */
+  scriptManage: "script.manage",
   stateManage: "state.manage",
   fieldManage: "field.manage",
   webhookManage: "webhook.manage",

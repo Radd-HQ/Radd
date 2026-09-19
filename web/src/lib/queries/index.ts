@@ -33,3 +33,4 @@ export * from "./jira";
 export * from "./confluence";
 export * from "./leave";
 export * from "./integrations";
+export * from "./scripts";

@@ -928,6 +928,7 @@ async def _run_contributed_action(
     )
     produced: dict[str, str] = {}
     for batch in batches:
+        recorded = len(report.plans)
         try:
             async with session.begin_nested():
                 ctx = _context(
@@ -955,10 +956,27 @@ async def _run_contributed_action(
                 # one answer. Per item there are N, and the bag has one slot.
                 if not per_item:
                     produced = dict(ctx.outputs)
-        except Exception:
+        except Exception as exc:
             logger.exception(
                 "automations: contributed action %s of %s failed", node.id, automation_name
             )
+            # Said in the report, not only the log (RADD-1269): a script that
+            # raised used to leave its plan entry reading "resolves", so the
+            # run history called it applied. The entry is rewritten the way a
+            # workflow refusal's is.
+            if len(report.plans) > recorded:
+                planned = report.plans[-1]
+                report.plans[-1] = replace(
+                    planned, resolves=False, detail=f"{planned.detail} — failed: {exc}"
+                )
+            else:
+                report.plans.append(
+                    PlannedAction(
+                        node_id=node.id, action_type=node.type, params=dict(node.params),
+                        item_id=batch[0] if batch else None, resolves=False,
+                        detail=f"{node.type}: failed before planning — {exc}",
+                    )
+                )
     return produced
 
 

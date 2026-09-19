@@ -61,6 +61,7 @@ const AuditSettingsPage = lazyRouteComponent(() => import("./routes/settings/aud
 const BackupsSettingsPage = lazyRouteComponent(() => import("./routes/settings/backups"), "BackupsSettingsPage");
 const PluginsSettingsPage = lazyRouteComponent(() => import("./routes/settings/plugins"), "PluginsSettingsPage");
 const CannedSettingsPage = lazyRouteComponent(() => import("./routes/settings/canned"), "CannedSettingsPage");
+const ScriptsSettingsPage = lazyRouteComponent(() => import("./routes/settings/scripts"), "ScriptsSettingsPage");
 const VcsSettingsPage = lazyRouteComponent(() => import("./routes/settings/vcs"), "VcsSettingsPage");
 const ServiceAccountsSettingsPage = lazyRouteComponent(() => import("./routes/settings/service-accounts"), "ServiceAccountsSettingsPage");
 const AiSettingsPage = lazyRouteComponent(() => import("./routes/settings/ai"), "AiSettingsPage");
@@ -559,6 +560,13 @@ const settingsPluginsRoute = createRoute({
   component: PluginsSettingsPage,
 });
 
+/** Scripts (RADD-1269): the managed interpreter, its packages, the script library. */
+const settingsScriptsRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: SettingsSection.scripts,
+  component: ScriptsSettingsPage,
+});
+
 /** Canned responses admin (spec 30). */
 const settingsCannedRoute = createRoute({
   getParentRoute: () => settingsRoute,
@@ -810,6 +818,7 @@ const routeTree = rootRoute.addChildren([
       settingsBackupsRoute,
       settingsPluginsRoute,
       settingsCannedRoute,
+      settingsScriptsRoute,
       settingsVcsRoute,
       settingsForgejoRoute,
       settingsGithubRoute,

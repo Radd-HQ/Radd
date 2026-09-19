@@ -113,3 +113,49 @@ manage its registration and permissions; do not delete its database tables by ha
 Initial declarative entity tables are created at boot. Table alterations and
 other schema upgrades need an explicit, reviewed deployment migration; this
 workflow does not run arbitrary plugin migrations or destructive downgrades.
+
+
+## Scripts: Python without a plugin (RADD-1269)
+
+Not every extension needs a plugin. Settings → Scripts holds admin-authored
+Python that an automation runs out of process, in a managed interpreter with
+its own packages, as the automation's identity.
+
+**The contract.** A script defines `main(ctx)`:
+
+```python
+def main(ctx):
+    ctx.event        # the event that fired (type, actor, payload) — None on a manual/scheduled run
+    ctx.items        # the issues this node is acting on, as full read models (list of dicts)
+    ctx.item         # the first of them, for the per-item case
+    ctx.vars         # values upstream nodes produced: ctx.vars["triage"]["priority"]
+    ctx.params       # this node's own params
+    ctx.client       # a ready radd_sdk.RaddClient, acting as the automation's identity
+    ctx.log("text")  # a line on the run's stderr, shown in the run report
+    return {"count": len(ctx.items)}
+```
+
+A **Run a script** node publishes the dict `main` returns: each key you
+declared as an output becomes `{{name.key}}` downstream. A **Decide with a
+script** node takes the port `main` names; a failure, a timeout or an unknown
+name takes `unavailable`.
+
+**What a script can and cannot do.** It runs in a subprocess of the managed
+interpreter with a minimal environment — no database URL, no server secrets —
+and a short-lived API key minted for the automation's identity, so whatever it
+does through `ctx.client` is exactly what that identity could do by hand, and is
+attributed to it. It is killed at its timeout. Its stdout and stderr are kept
+(tail-capped) on the run.
+
+**The interpreter.** One uv-built virtual environment per instance
+(`RADD_SCRIPTS_DIR`, `/data/scripts` in the image). Pick the Python version and
+Rebuild; the Radd SDK client (`sdk/`, shipped in the image at `/app/sdk`) is
+installed into it, then every package in the Packages list. A package is a
+name with optional extras and version specifiers (`requests>=2.31`); URLs,
+paths and options are refused, because "install from wherever this string
+points" is not something an admin should be able to do by accident.
+
+**Where it fits.** The out-of-process `sdk/` runner (`radd-runner`) is the same
+idea for code that lives OUTSIDE the instance and reacts to the event stream;
+scripts are for code that belongs to an automation and wants the packet the
+graph assembled. Both speak the same client.

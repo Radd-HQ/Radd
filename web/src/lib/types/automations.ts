@@ -391,7 +391,8 @@ export interface RuleUpdate {
 
 /** One action's dry-run outcome (POST /automations/{id}/test). */
 export interface ActionPreview {
-  type: ActionTypeValue;
+  /** A built-in action's name, or a contributed node's full key (`script.run`). */
+  type: ActionTypeValue | string;
   params: Record<string, unknown>;
   /** False when a named target no longer resolves (the engine would skip it). */
   resolves: boolean;

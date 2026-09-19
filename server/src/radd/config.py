@@ -82,6 +82,25 @@ class Settings(BaseSettings):
     automation_graph_max_item_actions: int = 2000
     #: How long recorded runs are kept (RADD-1266). 0 keeps them forever.
     automation_run_retention_days: int = 30
+
+    # --- scripts plugin (RADD-1269) — the managed interpreter and its runs ---
+    #: Where the venv lives. A persistent volume in production (the chart mounts /data).
+    scripts_dir: str = "var/scripts"
+    #: Where a run's temporary directory is made; empty = the system temp dir.
+    scripts_run_dir: str = ""
+    scripts_uv_path: str = "uv"
+    scripts_default_python: str = "3.12"
+    #: The Radd SDK client installed into every venv: a path (the image sets
+    #: /app/sdk) or a package name. Empty = the checkout's sdk/ when present,
+    #: else the `radd-sdk` package.
+    scripts_sdk_source: str = ""
+    #: Ceiling on a node's timeout param, and the default when it names none.
+    scripts_max_timeout_seconds: int = 300
+    scripts_default_timeout_seconds: int = 60
+    #: How long a uv invocation (venv, install) may take.
+    scripts_tool_timeout_seconds: int = 600
+    #: How many items a script is handed at once (the read models are wide).
+    scripts_max_items: int = 50
     # Intake validation (spec 119): the wall clock ONE verdict may spend, across
     # every graph governing the draft. The walk runs synchronously inside the
     # create's transaction — which holds the project's number lock — so this is
@@ -589,6 +608,7 @@ class Settings(BaseSettings):
         "radd.modules.csat",
         "radd.modules.approvals",
         "radd.modules.participants",
+        "radd.modules.scripts",  # RADD-1269: core=False, disableable
         "radd.modules.dashboards",
         "radd.modules.jiraimport",
         "radd.modules.confluenceimport",

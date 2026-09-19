@@ -50,6 +50,7 @@ export const SettingsSection = {
   pages: "pages",
   // Plugin manager (spec 93 / A4) — install/enable/disable non-core plugins. Admin.
   plugins: "plugins",
+  scripts: "scripts",
   // Backups (spec 99) — schedules, artifacts, restore. Instance admin only.
   backups: "backups",
   // AI provider registry + roles + feature toggles + presets (spec 101) — admin only.
@@ -174,6 +175,7 @@ export const RoutePath = {
   settingsNotifications: `${SETTINGS_SEGMENT}/${SettingsSection.notifications}`,
   /** Automation rules admin (spec 20, global, `automation.manage`). */
   settingsAutomations: `${SETTINGS_SEGMENT}/${SettingsSection.automations}`,
+  settingsScripts: `${SETTINGS_SEGMENT}/${SettingsSection.scripts}`,
   /** Work-categories admin (spec 22/50, global manage) — the shared category list. */
   settingsTimelogging: `${SETTINGS_SEGMENT}/${SettingsSection.timelogging}`,
   /** Audit log (admin): every attributable change across the server. */

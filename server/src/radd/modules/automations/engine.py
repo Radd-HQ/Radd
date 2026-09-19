@@ -654,10 +654,12 @@ async def _result_of(
     keys = await _keys_for(session, report)
     previews: list[ActionPreview] = []
     for planned in report.plans:
+        # A built-in's bare name, or a contributed node's full key — both are
+        # actions someone planned, and the report lists all of them.
         try:
-            action_type = ActionType(planned.action_type)
+            action_type = ActionType(planned.action_type).value
         except ValueError:
-            continue  # a node type this build does not know
+            action_type = planned.action_type
         previews.append(
             ActionPreview(
                 type=action_type,

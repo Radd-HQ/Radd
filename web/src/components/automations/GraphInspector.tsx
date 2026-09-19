@@ -54,6 +54,7 @@ import {
   PageSpaceFields,
   PayloadGateFields,
   ProjectGateFields,
+  ScriptNodeFields,
 } from "./GateFields";
 import type { PickerData } from "./ActionsBuilder";
 const ACTION_TYPE_PREFIX = "action.";
@@ -331,6 +332,9 @@ export function GraphInspector({
       {node.type === "ai.classify" && (
         <AiClassifyFields params={node.params} onChange={setParams} />
       )}
+      {(node.type === "script.run" || node.type === "script.decide") && (
+        <ScriptNodeFields params={node.params} decide={node.type === "script.decide"} onChange={setParams} />
+      )}
 
       {/* Routers that can read either way. Per item turns a gate into a
           PARTITION — each issue leaves by its own answer's port — which is what
@@ -346,7 +350,7 @@ export function GraphInspector({
       {/* A CONTRIBUTED node with no hardcoded editor gets a form generated from
           its own params_schema (RADD-923) — the promise AutomationNodeSpec made
           and nothing kept. `ai.classify` keeps its bespoke one above. */}
-      {contributed && node.type !== "ai.classify" && (
+      {contributed && node.type !== "ai.classify" && !node.type.startsWith("script.") && (
         <div className="flex flex-col gap-2">
           <p className="text-xs text-fg-secondary">{contributed.description}</p>
           {/* `ai.generate` earns a bespoke form: its central param is an array
