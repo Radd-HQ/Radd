@@ -86,7 +86,12 @@ async def run_once() -> int:
 
 async def _plan_reply(session: AsyncSession, event: Event) -> OutboundReply | None:
     payload = event.payload or {}
-    item_id = uuid.UUID(payload["item"]["id"])  # RADD-922: the canonical ref
+    item = payload.get("item")
+    if not item:
+        # RADD-1247: a page comment (or a reply on one) has no requester to
+        # mail — the parent is a page, so `item` is None by design.
+        return None
+    item_id = uuid.UUID(item["id"])  # RADD-922: the canonical ref
     item = await items.require_item(session, item_id)
     recipients = await recipients_for(session, item_id)
     if not should_reply(

@@ -240,7 +240,13 @@ async def sync_description_restriction(session: AsyncSession) -> None:
 
 async def _reindex_comments(session: AsyncSession, event: Event) -> None:
     payload = event.payload or {}
-    item_id = uuid.UUID((payload.get("item") or {})["id"])
+    item = payload.get("item")
+    if not item:
+        # RADD-1247: a PAGE comment's event carries `item: None` by design
+        # (RADD-922's canonical ref is null when the parent is not an item).
+        # Page bodies are indexed through the pages path; nothing to do here.
+        return
+    item_id = uuid.UUID(item["id"])
     row = await session.get(SearchIndexRow, item_id)
     if row is None:
         return  # item never indexed (shouldn't happen — created precedes comments)
