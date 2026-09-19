@@ -30,16 +30,28 @@ if TYPE_CHECKING:  # deferred: auth loads before pages
 
 
 async def page_ref(session: AsyncSession, page_id) -> dict | None:
-    """`{id, number, title, slug, version}` — what an inbox row renders and links without a join."""
+    """`{id, number, title, slug, version, path, space}` — what an inbox row
+    renders and links without a join. RADD-1248 added `path` (the readable
+    address's page part) and the SPACE ref, so an automation condition can say
+    "in space runbooks" and a template can name the page, from the ref alone."""
     page = await session.get(Page, page_id)
     if page is None:
         return None
+    segments, cursor, seen = [page.slug], page, {page.id}
+    while cursor.parent_id is not None and cursor.parent_id not in seen:
+        cursor = await session.get(Page, cursor.parent_id)
+        if cursor is None:
+            break
+        seen.add(cursor.id)
+        segments.append(cursor.slug)
     return {
         "id": str(page.id),
         "number": page.number,
         "title": page.title,
         "slug": page.slug,
         "version": page.version,
+        "path": "/".join(reversed(segments)),
+        "space": await space_ref(session, page.space_id),
     }
 
 

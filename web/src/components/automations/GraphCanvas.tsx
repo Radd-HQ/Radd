@@ -270,6 +270,15 @@ function summarise(node: AutomationNode): string {
   if (node.type === "gate.state_category") {
     return ((params.categories as string[]) ?? []).join(", ") || "any category";
   }
+  if (node.type === "gate.comment") {
+    const thread = params.thread === "reply" ? "a reply" : params.thread === "root" ? "a thread root" : "any comment";
+    const visibility = params.visibility === "internal" || params.visibility === "public" ? `, ${params.visibility}` : "";
+    return `${thread}${visibility}`;
+  }
+  if (node.type === "gate.page_space") {
+    const spaces = (params.spaces as string[]) ?? [];
+    return `${params.negate ? "not in " : "in "}${spaces.join(", ") || "…"}`;
+  }
   if (node.type === "ai.classify") return String(params.prompt ?? "") || "ask a question…";
   // The ABSTRACT gate, and only it. This read `node.kind === gate` until
   // RADD-1064, so every contributed gate — `ai.validate` included — described

@@ -311,6 +311,10 @@ TYPE_GATE_EVENT = "gate.event"  # pre-revision; still executed, no longer offere
 TYPE_GATE_FIELD_CHANGED = "gate.field_changed"
 TYPE_GATE_CHANGED_BY = "gate.changed_by"
 TYPE_GATE_STATE_CATEGORY = "gate.state_category"
+#: RADD-1248: "Comment is…" (root/reply, public/internal) and "Page is in
+#: space…" — the two questions a page or thread automation asks first.
+TYPE_GATE_COMMENT = "gate.comment"
+TYPE_GATE_PAGE_SPACE = "gate.page_space"
 TYPE_FILTER_SLQ = "filter.slq"
 TYPE_SEARCH_SLQ = "search.slq"
 ACTION_TYPE_PREFIX = "action."
@@ -324,7 +328,7 @@ ACTION_TYPE_PREFIX = "action."
 #: looks configured. `gate.state_category` is NOT here — the draft has a state,
 #: and asking about it is a real question.
 EVENT_GATE_TYPES: frozenset[str] = frozenset(
-    {TYPE_GATE_EVENT, TYPE_GATE_FIELD_CHANGED, TYPE_GATE_CHANGED_BY}
+    {TYPE_GATE_EVENT, TYPE_GATE_FIELD_CHANGED, TYPE_GATE_CHANGED_BY, TYPE_GATE_COMMENT, TYPE_GATE_PAGE_SPACE}
 )
 
 #: Spec 119: reaching this node records a FINDING against the draft being
@@ -395,6 +399,8 @@ BUILTIN_ARITY: dict[str, ArityRule] = {
     TYPE_GATE_FIELD_CHANGED: ArityRule(NodeArity.SET, (NodeArity.SET,)),
     TYPE_GATE_CHANGED_BY: ArityRule(NodeArity.SET, (NodeArity.SET,)),
     TYPE_GATE_STATE_CATEGORY: ArityRule(NodeArity.SET, (NodeArity.SET,)),
+    TYPE_GATE_COMMENT: ArityRule(NodeArity.SET, (NodeArity.SET,)),
+    TYPE_GATE_PAGE_SPACE: ArityRule(NodeArity.SET, (NodeArity.SET,)),
     **{f"{ACTION_TYPE_PREFIX}{action.value}": _action_arity(action) for action in ActionType},
 }
 

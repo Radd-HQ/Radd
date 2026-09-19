@@ -37,6 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.config import settings
 from radd.db import SessionLocal
 from radd.modules.auth.models import User
+from radd.modules.items.enums import ItemEntity
 from radd.modules.comments import service as comments
 from radd.modules.events import service as events
 from radd.modules.events.service import Event
@@ -207,6 +208,15 @@ async def _apply_plan(
 
 
 
+def _parent_is_not_an_item(event: Event) -> bool:
+    """RADD-1248: an item-scoped trigger (comments) fired for a parent that is
+    not an item — a page comment, a page discussion reply. That event never had
+    an item, so it takes spec 58's itemless path (event gates, universal
+    actions) rather than being dropped as "the item vanished"."""
+    parent = (event.payload or {}).get("entity_type")
+    return bool(parent) and parent != ItemEntity.ITEM.value
+
+
 def _subjects_of(event: Event) -> dict[str, tuple[uuid.UUID, ...]]:
     """Ids per entity type, read back out of the refs the kernel wrote (RADD-923).
 
@@ -258,7 +268,7 @@ async def apply_event(session: AsyncSession, event: Event) -> None:
         )
         return
     item = await _resolve_target_item(session, event)
-    if item is None and catalog.TRIGGERS[event.event_type].item_scoped:
+    if item is None and catalog.TRIGGERS[event.event_type].item_scoped and not _parent_is_not_an_item(event):
         return  # item vanished before the engine caught up
     facts = await _event_facts(session, event)
     subjects = _subjects_of(event)

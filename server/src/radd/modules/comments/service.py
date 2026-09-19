@@ -267,12 +267,23 @@ async def _emit(
             # The kernel resolves it; None when the parent is a page, not an item.
             "item": (
                 comment.entity_id if comment.entity_type == CommentParentType.ITEM else None
-            )
+            ),
+            # RADD-1248: and the PAGE when the parent is one — a ref with title,
+            # path and space, so an automation can condition on the space and a
+            # template can name the page, from the payload alone.
+            "page": (
+                comment.entity_id if comment.entity_type == CommentParentType.PAGE else None
+            ),
         },
         payload={
             # The polymorphic parent, which may be a page rather than an item.
             "entity_type": comment.entity_type,
             "entity_id": str(comment.entity_id),
+            # RADD-1248: null for a thread root — the one fact that tells a
+            # reply from a comment (RADD-1246 promised it and did not carry it).
+            "parent_comment_id": (
+                str(comment.parent_comment_id) if comment.parent_comment_id else None
+            ),
             # The canonical item ref (RADD-922), None when the parent is not an
             # item. It replaces the bare `item_id` that every consumer then had
             # to resolve into a key and a project of its own accord.

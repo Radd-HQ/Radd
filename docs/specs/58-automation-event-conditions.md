@@ -79,3 +79,28 @@ against the body; TD item created with templated title; inbox notification).
 - Rule-to-rule chaining stays impossible by design (single-hop system-actor guard).
 - Value pickers (user/state autocomplete) in the condition builder — free text v1.
 - Templates in ITEM action params (comment body etc.) — universal actions only for now.
+
+
+## Addendum (RADD-1248): page comments, discussion and replies
+
+The itemless path was designed for "cycles, docs, admin" events and worked for
+them, but the COMMENT events are declared item-scoped, and the engine read an
+item-scoped event with no resolvable item as "the item vanished" and dropped
+it — which is exactly the shape of a page comment (`item: None`, RADD-922's
+canonical ref is null when the parent is a page). So no page comment ever
+triggered an automation. Now a comment whose payload names a non-item parent
+takes the itemless path: event gates evaluate, universal actions run, item
+actions skip with the usual log.
+
+Once the event arrives a rule needs something to ask. Two named gates (the
+spec-116 style, one plain question each): **Comment is** — a thread root or a
+reply (the payload's new `parent_comment_id`), public or internal — and **Page
+is in space** — slugs, read from a page event's `page_space` ref or a page
+comment's `page.space`. The comment events declare `page` as a subject, so
+the kernel writes the page ref (title, path, space) on a page comment and
+None on an item comment; `{{page.title}}`, `{{page.path}}`, `{{page.space}}`,
+`{{page.url}}` and `{{comment.excerpt}}`, `{{comment.visibility}}`,
+`{{comment.parent_id}}` resolve from it in every universal action. Page-side
+actions (resolve a thread, label a page) were deliberately not added: the
+universal actions plus `create_item` cover "turn a page conversation into
+work", and a page arity waits for a concrete rule that needs one.

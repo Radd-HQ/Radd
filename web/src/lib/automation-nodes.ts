@@ -223,6 +223,25 @@ export function nodeTemplates(catalog: AutomationCatalog | undefined): NodeTempl
     keywords: "who actor person user did it made the change author",
     params: { users: [], negate: false },
   });
+  // RADD-1248: the two questions a page or thread automation asks first.
+  templates.push({
+    key: "gate.comment",
+    kind: NodeKind.gate,
+    type: "gate.comment",
+    label: "Comment is",
+    group: "Gates",
+    keywords: "comment reply root thread internal public discussion annotation",
+    params: { thread: "any", visibility: "any" },
+  });
+  templates.push({
+    key: "gate.page_space",
+    kind: NodeKind.gate,
+    type: "gate.page_space",
+    label: "Page is in space",
+    group: "Gates",
+    keywords: "page wiki space docs runbook in space",
+    params: { spaces: [], negate: false },
+  });
   templates.push({
     key: "gate.state_category",
     kind: NodeKind.gate,

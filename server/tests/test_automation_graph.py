@@ -263,7 +263,14 @@ def test_every_documented_token_actually_resolves():
         actor_id="11111111-1111-1111-1111-111111111111",
         actor_email="a@b.c",
         actor_name="Ada",
-        payload={"matched_count": 3, "changes": [{"field": "state"}]},
+        payload={
+            "matched_count": 3,
+            "changes": [{"field": "state"}],
+            # RADD-1248: the page/comment tokens read the kernel's `page` ref and
+            # the comment event's own fields; an event carrying both resolves all.
+            "page": {"id": "p", "number": 7, "title": "Laptops", "path": "onboarding/laptops", "space": {"slug": "runbooks"}},
+            "excerpt": "a remark", "visibility": "public", "parent_comment_id": "44444444-4444-4444-4444-444444444444",
+        },
     )
     item_ctx = {"key": "TD-42", "title": "A title", "id": "22222222-2222-2222-2222-222222222222"}
     # The set an action speaks for — the executor always supplies it, so a token

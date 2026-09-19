@@ -31,6 +31,23 @@ register_relation(COMMENT_OWN)
 # being read against the comment's own @own (the author) and refused.
 register_relation_domain("comment.write", "item")
 
+#: The comment's OWN payload data (the `item`/`page` refs are the kernel's).
+_COMMENT_PAYLOAD_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "entity_type": {"type": "string", "enum": ["item", "page"]},
+        "entity_id": {"type": "string"},
+        "parent_comment_id": {
+            "type": ["string", "null"],
+            "description": "The thread root's id when this comment is a REPLY; null for a root.",
+        },
+        "visibility": {"type": "string", "enum": ["public", "internal"]},
+        "excerpt": {"type": "string"},
+        "visible_to_teams": {"type": "array", "items": {"type": "string"}},
+    },
+}
+
+
 plugin = RaddPlugin(
     name="comments",
     permissions=(
@@ -59,10 +76,20 @@ plugin = RaddPlugin(
     routers=(router,),
 
     event_types=(
-        EventTypeSpec(CommentEvent.CREATED, "Comment added", "Comments", item_scoped=True),
+        # RADD-1248: `page` is a declared subject — a comment on a page carries
+        # the page ref (None on an item comment) and the engine runs such an
+        # event on the itemless path instead of dropping it as "item vanished".
         EventTypeSpec(
-            CommentEvent.UPDATED, "Comment edited", "Comments", item_scoped=True, has_changes=True
+            CommentEvent.CREATED, "Comment added", "Comments", item_scoped=True,
+            subjects=("page",), payload_schema=_COMMENT_PAYLOAD_SCHEMA,
         ),
-        EventTypeSpec(CommentEvent.DELETED, "Comment deleted", "Comments", item_scoped=True),
+        EventTypeSpec(
+            CommentEvent.UPDATED, "Comment edited", "Comments", item_scoped=True, has_changes=True,
+            subjects=("page",), payload_schema=_COMMENT_PAYLOAD_SCHEMA,
+        ),
+        EventTypeSpec(
+            CommentEvent.DELETED, "Comment deleted", "Comments", item_scoped=True,
+            subjects=("page",), payload_schema=_COMMENT_PAYLOAD_SCHEMA,
+        ),
     ),
 )

@@ -51,6 +51,8 @@ import {
   ChangedByFields,
   FieldChangedFields,
   StateCategoryFields,
+  CommentGateFields,
+  PageSpaceFields,
 } from "./GateFields";
 import type { PickerData } from "./ActionsBuilder";
 const ACTION_TYPE_PREFIX = "action.";
@@ -318,6 +320,12 @@ export function GraphInspector({
       )}
       {node.type === "gate.state_category" && (
         <StateCategoryFields params={node.params} onChange={setParams} />
+      )}
+      {node.type === "gate.comment" && (
+        <CommentGateFields params={node.params} onChange={setParams} />
+      )}
+      {node.type === "gate.page_space" && (
+        <PageSpaceFields params={node.params} onChange={setParams} />
       )}
       {node.type === "ai.classify" && (
         <AiClassifyFields params={node.params} onChange={setParams} />

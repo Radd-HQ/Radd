@@ -13,6 +13,8 @@ import { OptionResource, type OptionResourceValue } from "../../lib/queries/opti
  * to catch.
  */
 import type React from "react";
+import { useQuery } from "@tanstack/react-query";
+import { pageSpacesQuery } from "../../lib/queries";
 import { TextField } from "../TextField";
 import { SelectField } from "../SelectField";
 import { TokenMultiSelect } from "../TokenMultiSelect";
@@ -201,6 +203,75 @@ export function StateCategoryFields({
         ariaLabel="Category is one of"
       />
     </Labelled>
+  );
+}
+
+/** RADD-1248: "Comment is" — a root or a reply, public or internal. Asked of
+ * a comment event on either surface; anything else answers false. */
+export function CommentGateFields({
+  params,
+  onChange,
+}: {
+  params: Params;
+  onChange: (params: Params) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <SelectField
+        label="Thread"
+        value={String(params.thread ?? "any")}
+        onChange={(event) => onChange({ ...params, thread: event.target.value })}
+        hint="A reply sits under another comment; a root starts a thread."
+      >
+        <option value="any">Any comment</option>
+        <option value="root">A thread root</option>
+        <option value="reply">A reply</option>
+      </SelectField>
+      <SelectField
+        label="Visibility"
+        value={String(params.visibility ?? "any")}
+        onChange={(event) => onChange({ ...params, visibility: event.target.value })}
+      >
+        <option value="any">Public or internal</option>
+        <option value="public">Public</option>
+        <option value="internal">Internal</option>
+      </SelectField>
+    </div>
+  );
+}
+
+/** RADD-1248: "Page is in space" — for page events and page comments alike;
+ * an event about no page answers false. Slugs, the thing people read in the
+ * address bar; the directory supplies them as options. */
+export function PageSpaceFields({
+  params,
+  onChange,
+}: {
+  params: Params;
+  onChange: (params: Params) => void;
+}) {
+  const spaces = useQuery(pageSpacesQuery());
+  const options = (spaces.data ?? []).map((space) => ({ value: space.slug, label: `${space.name} (${space.slug})` }));
+  return (
+    <div className="flex flex-col gap-2">
+      <Labelled label={params.negate ? "Space is NOT one of" : "Space is one of"}>
+        <TokenMultiSelect
+          value={(params.spaces as string[]) ?? []}
+          onChange={(next) => onChange({ ...params, spaces: next })}
+          options={options}
+          placeholder="Add a space…"
+          ariaLabel="Space is one of"
+        />
+      </Labelled>
+      <label className="flex items-center gap-2 text-xs text-fg-secondary">
+        <input
+          type="checkbox"
+          checked={Boolean(params.negate)}
+          onChange={(event) => onChange({ ...params, negate: event.target.checked })}
+        />
+        Invert — every space except these
+      </label>
+    </div>
   );
 }
 
