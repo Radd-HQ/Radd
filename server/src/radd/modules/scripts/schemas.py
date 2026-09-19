@@ -15,75 +15,6 @@ REQUIREMENT_RE = re.compile(
     r"(?:\s*(?:[<>=!~]=?|===)\s*[A-Za-z0-9._*+!-]+(?:\s*,\s*(?:[<>=!~]=?|===)\s*[A-Za-z0-9._*+!-]+)*)?$"
 )
 PYTHON_VERSION_RE = re.compile(r"^3\.(1[0-9]|[89])(?:\.\d+)?$")
-NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_ .-]{0,99}$")
-
-
-class ScriptCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=100)
-    description: str = Field(default="", max_length=2000)
-    body: str = Field(default="", max_length=200_000)
-    note: str = Field(default="", max_length=2000)
-
-    @field_validator("name")
-    @classmethod
-    def _name(cls, value: str) -> str:
-        value = value.strip()
-        if not NAME_RE.match(value):
-            raise ValueError("a script name is letters, digits, spaces, dots, dashes or underscores")
-        return value
-
-
-class ScriptUpdate(BaseModel):
-    name: str | None = Field(default=None, min_length=1, max_length=100)
-    description: str | None = Field(default=None, max_length=2000)
-    body: str | None = Field(default=None, max_length=200_000)
-    note: str = Field(default="", max_length=2000)
-
-    @field_validator("name")
-    @classmethod
-    def _name(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        value = value.strip()
-        if not NAME_RE.match(value):
-            raise ValueError("a script name is letters, digits, spaces, dots, dashes or underscores")
-        return value
-
-
-class ScriptRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    name: str
-    description: str
-    body: str
-    version: int
-    updated_by_id: uuid.UUID | None = None
-    created_at: UtcDatetime
-    updated_at: UtcDatetime
-
-
-class ScriptSummary(BaseModel):
-    """The list row — no body."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    name: str
-    description: str
-    version: int
-    updated_at: UtcDatetime
-
-
-class ScriptVersionRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    version: int
-    body: str
-    note: str
-    created_by_id: uuid.UUID | None = None
-    created_at: UtcDatetime
 
 
 class PackageCreate(BaseModel):
@@ -141,13 +72,15 @@ class InterpreterRebuild(BaseModel):
 
 
 class RunRequest(BaseModel):
-    """A pasted packet for the Run now box: the same shape a node hands the
-    script, minus the client (which is real)."""
+    """The inspector's Test box (RADD-1272): a body, an optional item to seed
+    `ctx.items` with, and what upstream values to pretend exist. A dry run of
+    the automation never applies an action, so this is how a script is tried
+    before the automation is enabled. Runs as the caller, against the real API."""
 
-    items: list[dict[str, Any]] = Field(default_factory=list, max_length=50)
+    body: str = Field(min_length=1, max_length=200_000)
+    item_key: str = Field(default="", max_length=64)
     vars: dict[str, dict[str, str]] = Field(default_factory=dict)
     params: dict[str, Any] = Field(default_factory=dict)
-    event: dict[str, Any] | None = None
     timeout: int = Field(default=30, ge=1, le=600)
 
 

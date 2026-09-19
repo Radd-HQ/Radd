@@ -1,8 +1,6 @@
-"""Settings → Scripts (RADD-1269): the interpreter, the packages, the scripts.
-
-Literal paths (`/interpreter`, `/packages`) are declared BEFORE `/{script_id}`
-— Starlette matches in declaration order, and a literal declared after a
-parameter path answers a 422 about parsing the word as a UUID (RADD-761).
+"""Settings → Scripts (RADD-1269): the interpreter and its packages, plus the
+inspector's Test box. The script library went with RADD-1272: a script's body
+lives on its automation node.
 """
 
 from __future__ import annotations
@@ -25,13 +23,8 @@ from .schemas import (
     PackageRead,
     RunOutcomeRead,
     RunRequest,
-    ScriptCreate,
-    ScriptRead,
-    ScriptSummary,
-    ScriptUpdate,
-    ScriptVersionRead,
 )
-from .types import PERM_MANAGE, STARTER_SCRIPT
+from .types import PERM_MANAGE
 
 router = APIRouter(prefix="/scripts", tags=["scripts"])
 
@@ -73,56 +66,12 @@ async def remove_package(package_id: uuid.UUID, session: Session, user: CurrentU
     await service.remove_package(session, package_id, user.id)
 
 
-@router.get("/starter", response_model=dict)
-async def starter(session: Session, user: CurrentUser) -> dict:
-    """The author contract as a starter script, for the New script button."""
+@router.post("/run", response_model=RunOutcomeRead)
+async def run_script(data: RunRequest, session: Session, user: CurrentUser) -> RunOutcomeRead:
+    """The inspector's Test box: the body as typed, an optional seed item, the
+    real API, as the caller."""
     await _manage(session, user)
-    return {"body": STARTER_SCRIPT}
-
-
-@router.get("", response_model=list[ScriptSummary])
-async def list_scripts(session: Session, user: CurrentUser) -> list[ScriptSummary]:
-    await _manage(session, user)
-    return [ScriptSummary.model_validate(row) for row in await service.list_scripts(session)]
-
-
-@router.post("", response_model=ScriptRead, status_code=201)
-async def create_script(data: ScriptCreate, session: Session, user: CurrentUser) -> ScriptRead:
-    await _manage(session, user)
-    return ScriptRead.model_validate(await service.create_script(session, data, user.id))
-
-
-@router.get("/{script_id}", response_model=ScriptRead)
-async def get_script(script_id: uuid.UUID, session: Session, user: CurrentUser) -> ScriptRead:
-    await _manage(session, user)
-    return ScriptRead.model_validate(await service.get_script(session, script_id))
-
-
-@router.patch("/{script_id}", response_model=ScriptRead)
-async def update_script(script_id: uuid.UUID, data: ScriptUpdate, session: Session, user: CurrentUser) -> ScriptRead:
-    await _manage(session, user)
-    return ScriptRead.model_validate(await service.update_script(session, script_id, data, user.id))
-
-
-@router.delete("/{script_id}", status_code=204)
-async def delete_script(script_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
-    await _manage(session, user)
-    await service.delete_script(session, script_id, user.id)
-
-
-@router.get("/{script_id}/versions", response_model=list[ScriptVersionRead])
-async def list_versions(script_id: uuid.UUID, session: Session, user: CurrentUser) -> list[ScriptVersionRead]:
-    await _manage(session, user)
-    await service.get_script(session, script_id)
-    return [ScriptVersionRead.model_validate(row) for row in await service.list_versions(session, script_id)]
-
-
-@router.post("/{script_id}/run", response_model=RunOutcomeRead)
-async def run_script(script_id: uuid.UUID, data: RunRequest, session: Session, user: CurrentUser) -> RunOutcomeRead:
-    """Run now: the pasted packet, the real API, as the caller."""
-    await _manage(session, user)
-    script = await service.get_script(session, script_id)
-    outcome = await service.run_now(session, script, data, user)
+    outcome = await service.run_test(session, data, user)
     return RunOutcomeRead(
         ok=outcome.ok, result=outcome.result, stdout=outcome.stdout, stderr=outcome.stderr,
         error=outcome.error, duration_ms=outcome.duration_ms,

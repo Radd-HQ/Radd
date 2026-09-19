@@ -4,15 +4,11 @@ from enum import StrEnum
 
 
 class ScriptEntity(StrEnum):
-    SCRIPT = "script"
     PACKAGE = "script_package"
     INTERPRETER = "script_interpreter"
 
 
 class ScriptEvent(StrEnum):
-    CREATED = "script.created"
-    UPDATED = "script.updated"
-    DELETED = "script.deleted"
     PACKAGE_INSTALLED = "script_package.installed"
     PACKAGE_REMOVED = "script_package.removed"
     INTERPRETER_REBUILT = "script_interpreter.rebuilt"
@@ -49,7 +45,8 @@ UNAVAILABLE_PORT = "unavailable"
 HARNESS_FILE = "_radd_harness.py"
 SCRIPT_FILE = "radd_script.py"
 
-#: The author contract, shown on the settings page verbatim.
+#: The author contract — the body a freshly dropped node arrives with
+#: (RADD-1272: the script LIVES on the node, so the contract is its default).
 STARTER_SCRIPT = '''"""A Radd script. `main` receives the run's context and returns a value.
 
     ctx.event        the event that fired (type, actor, payload) — None on a manual/scheduled run

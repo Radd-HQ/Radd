@@ -2,9 +2,10 @@
 
 A `core=False` plugin: on by default, disableable from the plugin manager. It
 owns a managed interpreter (a uv-built venv with the Radd SDK client and the
-packages an admin asks for), a script library with versions, and two
-automation nodes — `script.run` (an action whose returned dict becomes tokens)
-and `script.decide` (a gate that takes the port the script names). Scripts
+packages an admin asks for) and two automation nodes — `script.run` (an action
+whose returned dict becomes tokens) and `script.decide` (a gate that takes the
+port the script names). The script's BODY lives on the node (RADD-1272), so the
+graph is the script and the graph's versions are its history. Scripts
 run OUT OF PROCESS with a short-lived key minted for the automation's
 identity, so a script can never exceed what the automation may already do.
 """
@@ -24,11 +25,6 @@ plugin = RaddPlugin(
     depends_on=("auth", "events", "projects", "items"),
     routers=(router,),
     event_types=(
-        EventTypeSpec(ScriptEvent.CREATED, "Script created", "Admin", trigger=False, entity_type="script"),
-        EventTypeSpec(
-            ScriptEvent.UPDATED, "Script updated", "Admin", has_changes=True, trigger=False, entity_type="script"
-        ),
-        EventTypeSpec(ScriptEvent.DELETED, "Script deleted", "Admin", trigger=False, entity_type="script"),
         EventTypeSpec(
             ScriptEvent.PACKAGE_INSTALLED, "Script package installed", "Admin",
             trigger=False, entity_type="script_package",

@@ -117,9 +117,11 @@ workflow does not run arbitrary plugin migrations or destructive downgrades.
 
 ## Scripts: Python without a plugin (RADD-1269)
 
-Not every extension needs a plugin. Settings → Scripts holds admin-authored
-Python that an automation runs out of process, in a managed interpreter with
-its own packages, as the automation's identity.
+Not every extension needs a plugin. A **Run a script** or **Decide with a
+script** automation node holds admin-authored Python right on the node, run
+out of process in a managed interpreter with its own packages, as the
+automation's identity. The automation's versions are the script's history;
+Settings → Scripts (under Server) owns the interpreter and the packages.
 
 **The contract.** A script defines `main(ctx)`:
 

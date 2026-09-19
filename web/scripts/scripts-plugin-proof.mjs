@@ -3,8 +3,8 @@
  *
  *   - Settings → Scripts builds the interpreter (uv, a real venv) and shows it
  *     ready; a package installs and lists with its resolved version;
- *   - a script is created from the starter, edited, saved (a new version), and
- *     Run now returns the dict it computes;
+ *   - the inspector's Test box runs a body as typed and returns the dict it
+ *     computes;
  *   - an automation with `script.run` after an item.updated trigger fires on a
  *     real update: the script calls `ctx.client.add_comment`, the comment lands
  *     attributed to the automation's identity, and the run history shows the
@@ -42,31 +42,24 @@ const built = before?.status === "ready"
   : parsed(await session.eval(api("POST", "/scripts/interpreter/rebuild", { python_version: "3.12" })));
 const pkg = parsed(await session.eval(api("POST", "/scripts/packages", { spec: "six>=1.16" })));
 
-// --- scripts ------------------------------------------------------------------
+// --- the bodies (RADD-1272: a script lives on its node) --------------------------
 const suffix = Math.random().toString(36).slice(2, 6);
-const COMMENTER = `Commenter ${suffix}`;
-const commenter = parsed(await session.eval(api("POST", "/scripts", {
-  name: COMMENTER,
-  body: [
-    "import six",
-    "def main(ctx):",
-    "    item = ctx.item",
-    "    ctx.client.add_comment(item['id'], f\"Scripted hello on {item['key']} (six {six.__version__})\")",
-    "    return {'greeted': item['key'], 'count': len(ctx.items)}",
-    "",
-  ].join("\n"),
-  note: "proof",
-})));
-const BROKEN = `Broken ${suffix}`;
-const broken = parsed(await session.eval(api("POST", "/scripts", { name: BROKEN, body: "def main(ctx):\n    raise ValueError('deliberate')\n" })));
-const ROUTER = `Router ${suffix}`;
-const router = parsed(await session.eval(api("POST", "/scripts", { name: ROUTER, body: "def main(ctx):\n    return 'left' if ctx.items and 'left' in ctx.items[0]['title'] else 'right'\n" })));
+const COMMENTER_BODY = [
+  "import six",
+  "def main(ctx):",
+  "    item = ctx.item",
+  "    ctx.client.add_comment(item['id'], f\"Scripted hello on {item['key']} (six {six.__version__})\")",
+  "    return {'greeted': item['key'], 'count': len(ctx.items)}",
+  "",
+].join("\n");
+const BROKEN_BODY = "def main(ctx):\n    raise ValueError('deliberate')\n";
+const ROUTER_BODY = "def main(ctx):\n    return 'left' if ctx.items and 'left' in ctx.items[0]['title'] else 'right'\n";
 
 // Run now, by API, with a pasted packet — the commenter needs a real item.
 const project = parsed(await session.eval(api("POST", "/projects", { key: `SP${suffix.toUpperCase()}`, name: `Scripts ${suffix}` })));
 const item = parsed(await session.eval(api("POST", "/items", { project_id: project?.id, title: "go left please" })));
-const itemRead = parsed(await session.eval(api("GET", `/items/${item?.id}`)));
-const runNow = parsed(await session.eval(api("POST", `/scripts/${commenter?.id}/run`, { items: [itemRead], vars: {}, params: {}, timeout: 60 })));
+// The inspector's Test box, by API: the body as typed, seeded by key.
+const runNow = parsed(await session.eval(api("POST", "/scripts/run", { body: COMMENTER_BODY, item_key: item?.key ?? "", timeout: 60 })));
 
 // --- an automation that runs it, decides with one, and hits the broken one ----
 const rule = parsed(await session.eval(api("POST", "/automations", {
@@ -74,10 +67,10 @@ const rule = parsed(await session.eval(api("POST", "/automations", {
   nodes: [
     { id: "trg1", kind: "trigger", type: "trigger.event", params: { event: "item.updated" } },
     { id: "flt1", kind: "filter", type: "filter.slq", params: { slq: `project = ${project?.key}` } },
-    { id: "dec1", kind: "gate", type: "script.decide", params: { script: ROUTER, ports: ["left", "right"], timeout: 60 } },
-    { id: "run1", kind: "action", type: "script.run", name: "hello", params: { script: COMMENTER, outputs: ["greeted", "count"], timeout: 60 } },
+    { id: "dec1", kind: "gate", type: "script.decide", params: { body: ROUTER_BODY, ports: ["left", "right"], timeout: 60 } },
+    { id: "run1", kind: "action", type: "script.run", name: "hello", params: { body: COMMENTER_BODY, outputs: ["greeted", "count"], timeout: 60 } },
     { id: "say1", kind: "action", type: "action.add_label", params: { label: "greeted-{{hello.count}}" } },
-    { id: "bad1", kind: "action", type: "script.run", params: { script: BROKEN, outputs: [], timeout: 60 } },
+    { id: "bad1", kind: "action", type: "script.run", params: { body: BROKEN_BODY, outputs: [], timeout: 60 } },
   ],
   edges: [
     { source: "trg1", port: "out", target: "flt1" },
@@ -100,30 +93,36 @@ const itemAfter = parsed(await session.eval(api("GET", `/items/${item?.id}`)));
 const nodeResult = (id) => detail?.report?.nodes?.find((n) => n.node_id === id);
 const actionOf = (id) => detail?.report?.would_apply?.find((a) => a.node_id === id);
 
-// --- the settings page, in the browser ------------------------------------------
+// --- the settings page and the inspector, in the browser -------------------------
 await session.navigate(`${baseUrl}/settings/scripts`, 3000);
-// The lists arrive after the page: wait for the library rows before reading.
-for (let attempt = 0; attempt < 10; attempt++) {
-  const rows = await session.eval(`document.querySelectorAll("[data-scripts-list] [data-script-row]").length`);
-  if (rows > 0) break;
-  await sleep(800);
-}
 const pageState = await session.eval(`(()=>({
   status: document.querySelector("[data-scripts-interpreter] [data-interpreter-status]")?.getAttribute("data-interpreter-status") ?? null,
   packages: [...document.querySelectorAll("[data-scripts-packages] [data-package]")].map(li=>li.getAttribute("data-package")+":"+li.querySelector("[data-package-status]")?.getAttribute("data-package-status")),
-  scripts: [...document.querySelectorAll("[data-scripts-list] [data-script-row]")].map(b=>b.getAttribute("data-script-row")),
+  contract: (document.querySelector("[data-scripts-contract]")?.innerText ?? "").includes("def main(ctx)"),
+  library: Boolean(document.querySelector("[data-scripts-library]")),
+  navGroupOfScripts: (()=>{const a=[...document.querySelectorAll("nav a, aside a")].find(x=>/^Scripts$/.test(x.textContent.trim())); let el=a; while(el&&!/Server|Issues|People|Account/.test(el.previousElementSibling?.textContent??"")&&el.parentElement) el=el.parentElement; return el?.previousElementSibling?.textContent?.trim() ?? null;})(),
+  navText: (document.querySelector("nav")||document.body).innerText.replace(/\s+/g," ").slice(0,400),
 }))()`);
-await session.eval(`(()=>{const b=document.querySelector('[data-script-row=${JSON.stringify(COMMENTER)}]'); if(b) b.click(); return !!b;})()`);
+// The inspector: open the proof automation, select the run node, see the editor + Test box.
+await session.navigate(`${baseUrl}/settings/automations`, 2500);
+await session.eval(
+  `(()=>{const el=[...document.querySelectorAll("button,a")].find(n=>` +
+    `n.closest("li")&&n.closest("li").innerText.includes(${JSON.stringify(`scripts proof ${suffix}`)}));if(el)el.click();return !!el;})()`,
+);
 await sleep(2500);
-const editorShown = await session.eval(`Boolean(document.querySelector("[data-script-editor] [data-python-editor] .cm-editor"))`);
-const editorText = await session.eval(`(document.querySelector("[data-script-editor] .cm-content")||{innerText:""}).innerText.includes("add_comment")`);
+await session.eval(`(()=>{const b=document.querySelector(".react-flow__controls-fitview"); if(b) b.click(); return !!b;})()`);
+await sleep(600);
+await session.click('[data-node-type="script.run"]', () => true);
+await sleep(1500);
+const editorShown = await session.eval(`Boolean(document.querySelector("[data-script-node] [data-python-editor] .cm-editor"))`);
+const editorText = await session.eval(`(document.querySelector("[data-script-node] .cm-content")||{innerText:""}).innerText.includes("add_comment")`);
+const testBoxShown = await session.eval(`Boolean(document.querySelector("[data-script-node] [data-script-test]"))`);
 
 const shot = await session.send("Page.captureScreenshot", { format: "png" });
 writeFileSync("/tmp/radd-scripts.png", Buffer.from(shot.data, "base64"));
 
 // --- cleanup -----------------------------------------------------------------------
 if (rule) await session.eval(api("DELETE", `/automations/${rule.id}`));
-for (const s of [commenter, broken, router]) if (s) await session.eval(api("DELETE", `/scripts/${s.id}`));
 if (item) await session.eval(api("DELETE", `/items/${item.id}`));
 if (pkg) await session.eval(api("DELETE", `/scripts/packages/${pkg.id}`));
 
@@ -148,6 +147,7 @@ const checks = {
   pageState,
   editorShown,
   editorText,
+  testBoxShown,
   screenshot: "/tmp/radd-scripts.png",
   consoleErrors,
 };
@@ -168,8 +168,8 @@ const ok =
   (itemAfter?.labels ?? []).includes("greeted-1") &&
   pageState.status === "ready" &&
   pageState.packages.includes("six:installed") &&
-  pageState.scripts.includes(COMMENTER) &&
-  editorShown && editorText &&
+  pageState.contract && !pageState.library &&
+  editorShown && editorText && testBoxShown &&
   consoleErrors.length === 0;
 report({ "scripts run from automations, out of process, as the automation's identity": ok }, "RADD-1269 — scripts plugin");
 

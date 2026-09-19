@@ -1,7 +1,7 @@
 /**
- * Settings → Scripts (RADD-1269): the managed interpreter, its packages, and
- * the script library — one page, three sections, because the three are one
- * thing: what runs when an automation says "run a script".
+ * Settings → Scripts (RADD-1269, reshaped by RADD-1272): the managed
+ * interpreter and its packages — what is instance-wide. The scripts
+ * themselves live on their automation nodes.
  */
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -9,34 +9,25 @@ import { Package, Play, Plus, RotateCcw, Terminal, Trash2 } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { relativeTime } from "../../lib/dates";
-import {
-  scriptInterpreterQuery,
-  scriptKeys,
-  scriptPackagesQuery,
-  scriptQuery,
-  scriptVersionsQuery,
-  scriptsQuery,
-} from "../../lib/queries";
-import type { Script, ScriptInterpreter, ScriptPackage, ScriptRunOutcome } from "../../lib/types";
+import { scriptInterpreterQuery, scriptKeys, scriptPackagesQuery } from "../../lib/queries";
+import type { ScriptInterpreter, ScriptPackage } from "../../lib/types";
 import { Button, ButtonVariant } from "../../components/Button";
 import { Callout, CalloutKind } from "../../components/Callout";
-import { useConfirm } from "../../components/ConfirmDialog";
 import { SelectField } from "../../components/SelectField";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { TextField } from "../../components/TextField";
-import { PythonEditor } from "../../components/scripts/PythonEditor";
 
 export function ScriptsSettingsPage() {
   return (
     <SettingsPage
-      history={{ entities: ["script", "script_package", "script_interpreter"] }}
+      history={{ entities: ["script_package", "script_interpreter"] }}
       title="Scripts"
-      description="Python that automations can run. Scripts execute in a managed interpreter of their own, out of process, with the Radd SDK client and the packages you install here — acting as the automation's identity, never beyond it."
+      description="The interpreter that automation script nodes run in: a managed Python of its own, out of process, with the Radd SDK client and the packages you install here. The scripts themselves live on their automation nodes."
     >
       <div className="flex flex-col gap-6">
         <InterpreterSection />
         <PackagesSection />
-        <LibrarySection />
+        <ContractSection />
       </div>
     </SettingsPage>
   );
@@ -200,194 +191,43 @@ function PackagesSection() {
   );
 }
 
-// --- the library --------------------------------------------------------------
+// --- the contract -------------------------------------------------------------
 
-function LibrarySection() {
-  const queryClient = useQueryClient();
-  const scripts = useQuery(scriptsQuery);
-  const [editing, setEditing] = useState<string | "new" | null>(null);
-  const create = useMutation({
-    mutationFn: async () => {
-      const starter = await api.get<{ body: string }>(`${ApiPath.scripts}/starter`);
-      const count = scripts.data?.length ?? 0;
-      return api.post<Script>(ApiPath.scripts, { name: `New script ${count + 1}`, body: starter.body, note: "created" });
-    },
-    onSuccess: async (script) => {
-      await queryClient.invalidateQueries({ queryKey: scriptKeys.all });
-      setEditing(script.id);
-    },
-  });
-
+/** Where the script itself lives is the automation node (RADD-1272). This
+ * page owns what is instance-wide; the contract is repeated here so an admin
+ * reads it where they set the interpreter up. */
+function ContractSection() {
   return (
-    <section data-scripts-library className="flex flex-col gap-3 rounded-[10px] border border-subtle bg-surface p-4">
+    <section data-scripts-contract className="flex flex-col gap-2 rounded-[10px] border border-subtle bg-surface p-4">
       <div className="flex items-center gap-2">
         <Play size={15} className="text-accent-text" aria-hidden />
-        <h2 className="text-sm font-medium text-heading">Scripts</h2>
-        <span className="text-[11px] text-fg-muted">
-          Each defines <code className="text-fg">main(ctx)</code>. A “Run a script” node publishes the dict it returns; a “Decide with a script” node takes the port it names.
-        </span>
-        <Button type="button" size="sm" className="ml-auto" disabled={create.isPending} onClick={() => create.mutate()}>
-          <Plus size={13} aria-hidden />
-          New script
-        </Button>
+        <h2 className="text-sm font-medium text-heading">Writing a script</h2>
       </div>
-      {create.isError && <p className="text-xs text-status-danger">{errorMessage(create.error)}</p>}
-      {scripts.data && scripts.data.length === 0 && (
-        <p className="text-xs text-fg-secondary">No scripts yet. New script starts you from the author contract.</p>
-      )}
-      {scripts.data && scripts.data.length > 0 && (
-        <ul className="flex flex-col gap-0.5" data-scripts-list>
-          {scripts.data.map((row) => (
-            <li key={row.id}>
-              <button
-                type="button"
-                data-script-row={row.name}
-                aria-expanded={editing === row.id}
-                onClick={() => setEditing(editing === row.id ? null : row.id)}
-                className={`flex w-full flex-wrap items-baseline gap-x-2 rounded border px-2.5 py-1.5 text-left text-xs cursor-pointer hover:bg-elevated ${
-                  editing === row.id ? "border-emphasis bg-elevated" : "border-subtle/80 bg-base/40"
-                }`}
-              >
-                <span className="font-medium text-fg">{row.name}</span>
-                <span className="text-[11px] text-fg-muted">v{row.version}</span>
-                {row.description && <span className="text-[11px] text-fg-secondary">{row.description}</span>}
-                <span className="ml-auto text-[11px] text-fg-faint">{relativeTime(row.updated_at)}</span>
-              </button>
-              {editing === row.id && <ScriptEditor id={row.id} onDeleted={() => setEditing(null)} />}
-            </li>
-          ))}
-        </ul>
-      )}
+      <p className="text-xs text-fg-secondary">
+        Drop a <strong className="font-medium text-fg">Run a script</strong> or{" "}
+        <strong className="font-medium text-fg">Decide with a script</strong> node on an automation; the
+        Python lives on the node, and the automation&rsquo;s versions are its history. A new node arrives
+        with this contract filled in:
+      </p>
+      <pre className="overflow-auto rounded-[8px] border border-subtle bg-base p-3 text-[12px] leading-5 text-fg">{CONTRACT}</pre>
+      <p className="text-xs text-fg-secondary">
+        A <em>Run a script</em> node publishes the dict <code className="text-fg">main</code> returns: each key
+        you declare as an output becomes a <code className="text-fg">{"{{name.key}}"}</code> token downstream.
+        A <em>Decide with a script</em> node takes the port <code className="text-fg">main</code> names; a
+        failure, a timeout or an unknown name takes <em>unavailable</em>. Scripts run out of process, with a
+        short-lived key for the automation&rsquo;s identity: whatever they do through{" "}
+        <code className="text-fg">ctx.client</code> is what that identity could do by hand.
+      </p>
     </section>
   );
 }
 
-function ScriptEditor({ id, onDeleted }: { id: string; onDeleted: () => void }) {
-  const queryClient = useQueryClient();
-  const script = useQuery(scriptQuery(id));
-  const versions = useQuery(scriptVersionsQuery(id));
-  const [draft, setDraft] = useState<{ name: string; description: string; body: string; note: string } | null>(null);
-  const [packet, setPacket] = useState('{"items": [], "vars": {}, "params": {}}');
-  const [confirmDialog, confirm] = useConfirm();
-  const current = draft ?? (script.data ? { name: script.data.name, description: script.data.description, body: script.data.body, note: "" } : null);
-
-  const save = useMutation({
-    mutationFn: () => api.patch<Script>(`${ApiPath.scripts}/${id}`, current),
-    onSuccess: async () => {
-      setDraft(null);
-      await queryClient.invalidateQueries({ queryKey: scriptKeys.all });
-      await queryClient.invalidateQueries({ queryKey: scriptKeys.one(id) });
-      await queryClient.invalidateQueries({ queryKey: scriptKeys.versions(id) });
-    },
-  });
-  const remove = useMutation({
-    mutationFn: () => api.delete<void>(`${ApiPath.scripts}/${id}`),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: scriptKeys.all });
-      onDeleted();
-    },
-  });
-  const run = useMutation({
-    mutationFn: () => {
-      let body: unknown = {};
-      try {
-        body = JSON.parse(packet || "{}");
-      } catch {
-        throw new Error("the packet is not valid JSON");
-      }
-      return api.post<ScriptRunOutcome>(`${ApiPath.scripts}/${id}/run`, body);
-    },
-  });
-
-  if (!current) return <p className="px-2 py-2 text-xs text-fg-muted">Loading…</p>;
-  const dirty = draft !== null;
-  return (
-    <div data-script-editor className="mt-1 flex flex-col gap-3 rounded border border-subtle bg-surface/60 p-3">
-      {confirmDialog}
-      <div className="flex flex-wrap items-end gap-2">
-        <TextField label="Name" value={current.name} onChange={(event) => setDraft({ ...current, name: event.target.value })} className="max-w-xs" />
-        <TextField label="Description" value={current.description} onChange={(event) => setDraft({ ...current, description: event.target.value })} className="min-w-[280px] flex-1" />
-      </div>
-      <PythonEditor value={current.body} onChange={(body) => setDraft({ ...current, body })} />
-      <div className="flex flex-wrap items-end gap-2">
-        <TextField label="Why this change (optional)" value={current.note} onChange={(event) => setDraft({ ...current, note: event.target.value })} className="min-w-[260px] flex-1" />
-        <Button type="button" disabled={!dirty || save.isPending} onClick={() => save.mutate()}>
-          {save.isPending ? "Saving…" : "Save"}
-        </Button>
-        <Button
-          type="button"
-          variant={ButtonVariant.dangerGhost}
-          disabled={remove.isPending}
-          onClick={async () => {
-            if (await confirm({ title: `Delete ${current.name}?`, message: "Automations that name this script will skip their script nodes.", confirmLabel: "Delete", danger: true })) remove.mutate();
-          }}
-        >
-          <Trash2 size={13} aria-hidden />
-          Delete
-        </Button>
-      </div>
-      {save.isError && <p className="text-xs text-status-danger">{errorMessage(save.error)}</p>}
-      {versions.data && versions.data.length > 1 && (
-        <details className="text-xs">
-          <summary className="cursor-pointer text-fg-secondary">{versions.data.length} versions</summary>
-          <ul className="mt-1 flex flex-col gap-0.5">
-            {versions.data.map((version) => (
-              <li key={version.id} className="flex items-baseline gap-2">
-                <span className="font-medium text-fg">v{version.version}</span>
-                <span className="text-fg-muted">{relativeTime(version.created_at)}</span>
-                {version.note && <span className="text-fg-secondary">{version.note}</span>}
-                {version.version !== script.data?.version && (
-                  <Button type="button" variant={ButtonVariant.ghost} size="sm" onClick={() => setDraft({ ...current, body: version.body, note: `Restored v${version.version}` })}>
-                    Load into editor
-                  </Button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
-      <div data-script-run className="flex flex-col gap-2 rounded border border-subtle bg-base/40 p-2">
-        <span className="text-[11px] uppercase tracking-wide text-fg-muted">Run now</span>
-        <textarea
-          aria-label="Packet"
-          value={packet}
-          onChange={(event) => setPacket(event.target.value)}
-          rows={3}
-          className="w-full rounded-[6px] border border-subtle bg-base p-2 font-mono text-[12px] text-fg"
-        />
-        <div className="flex items-center gap-2">
-          <Button type="button" size="sm" disabled={run.isPending || dirty} onClick={() => run.mutate()}>
-            <Play size={12} aria-hidden />
-            {run.isPending ? "Running…" : "Run"}
-          </Button>
-          {dirty && <span className="text-[11px] text-fg-muted">Save first — a run uses the saved body.</span>}
-          {run.isError && <span className="text-[11px] text-status-danger">{errorMessage(run.error)}</span>}
-        </div>
-        {run.data && <RunOutcomeView outcome={run.data} />}
-      </div>
-    </div>
-  );
-}
-
-function RunOutcomeView({ outcome }: { outcome: ScriptRunOutcome }) {
-  return (
-    <div data-run-outcome={outcome.ok ? "ok" : "failed"} className="flex flex-col gap-1 text-[11px]">
-      <div className="flex items-center gap-2">
-        <span className={`rounded px-1.5 py-px text-[10px] uppercase tracking-wide ${outcome.ok ? "bg-emerald-500/15 text-emerald-300" : "bg-status-danger/15 text-status-danger"}`}>
-          {outcome.ok ? "ok" : "failed"}
-        </span>
-        <span className="text-fg-muted">{outcome.duration_ms} ms</span>
-        {outcome.error && <span className="text-status-danger">{outcome.error}</span>}
-      </div>
-      {outcome.ok && (
-        <pre className="max-h-40 overflow-auto rounded border border-subtle bg-base p-2 text-fg">{JSON.stringify(outcome.result, null, 2)}</pre>
-      )}
-      {outcome.stderr && (
-        <pre className="max-h-40 overflow-auto rounded border border-subtle bg-base p-2 text-fg-secondary">{outcome.stderr}</pre>
-      )}
-      {outcome.stdout && (
-        <pre className="max-h-40 overflow-auto rounded border border-subtle bg-base p-2 text-fg-faint">{outcome.stdout}</pre>
-      )}
-    </div>
-  );
-}
+const CONTRACT = `def main(ctx):
+    ctx.event        # the event that fired (type, actor, payload) — None on a manual/scheduled run
+    ctx.items        # the issues this node is acting on, as full read models (list of dicts)
+    ctx.item         # the first of them, for the per-item case
+    ctx.vars         # values upstream nodes produced: ctx.vars["triage"]["priority"]
+    ctx.params       # this node's own params
+    ctx.client       # a ready radd_sdk.RaddClient, acting as the automation's identity
+    ctx.log("text")  # a line on the run's stderr, shown in the run report
+    return {"count": len(ctx.items)}`

@@ -134,20 +134,6 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         show: (g) => g.ws(Permission.globalManage),
       },
       {
-        to: RoutePath.settingsAutomations,
-        label: "Automations",
-        icon: Zap,
-        show: (g) => g.ws(Permission.automationManage),
-      },
-      {
-        // RADD-1269: the scripts plugin's surface — withdrawn with the plugin.
-        to: RoutePath.settingsScripts,
-        label: "Scripts",
-        icon: Terminal,
-        plugin: "scripts",
-        show: (g) => g.ws(Permission.scriptManage),
-      },
-      {
         to: RoutePath.settingsCanned,
         label: "Canned responses",
         icon: MessageSquareQuote,
@@ -273,6 +259,22 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         label: "Backups",
         icon: DatabaseBackup,
         show: (g) => g.instanceAdmin,
+      },
+      {
+        // RADD-1272: automations are instance machinery, not issue
+        // configuration — they moved here from the Issues group.
+        to: RoutePath.settingsAutomations,
+        label: "Automations",
+        icon: Zap,
+        show: (g) => g.ws(Permission.automationManage),
+      },
+      {
+        // RADD-1269: the scripts plugin's surface — withdrawn with the plugin.
+        to: RoutePath.settingsScripts,
+        label: "Scripts",
+        icon: Terminal,
+        plugin: "scripts",
+        show: (g) => g.ws(Permission.scriptManage),
       },
       {
         // Outbound webhooks (RADD-1096): endpoints, secrets, the delivery log.

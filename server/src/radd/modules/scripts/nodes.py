@@ -13,6 +13,7 @@ account (spec 113). The packet's items are read through that actor too.
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from dataclasses import dataclass, field
 from typing import Any
@@ -22,21 +23,23 @@ from radd.kernel.specs import OutputField
 from radd.sdk import AutomationNodeSpec
 
 from . import runner, service
-from .types import NODE_DECIDE, NODE_RUN, PERM_MANAGE, UNAVAILABLE_PORT
+from .types import NODE_DECIDE, NODE_RUN, PERM_MANAGE, STARTER_SCRIPT, UNAVAILABLE_PORT
 
 logger = logging.getLogger(__name__)
 
 #: Params the script sees as its own — everything but the node's wiring.
-_WIRING_PARAMS = frozenset({"script", "timeout", "outputs", "ports", "arity", "act_as"})
+_WIRING_PARAMS = frozenset({"body", "timeout", "outputs", "ports", "arity", "act_as"})
+#: A body must define this, or it can never be called.
+_MAIN_RE = re.compile(r"^\s*def\s+main\s*\(", re.MULTILINE)
 #: Outputs one node may declare; a token picker with fifty entries is a wall.
 MAX_OUTPUTS = 20
 MAX_PORTS = 8
 
 RUN_SCHEMA: dict[str, Any] = {
     "type": "object",
-    "required": ["script"],
+    "required": ["body"],
     "properties": {
-        "script": {"type": "string", "title": "Script", "minLength": 1, "maxLength": 100},
+        "body": {"type": "string", "title": "Script", "minLength": 1, "maxLength": 200000, "default": STARTER_SCRIPT},
         "outputs": {
             "type": "array",
             "title": "Outputs the script returns (keys of the dict main returns)",
@@ -55,9 +58,9 @@ RUN_SCHEMA: dict[str, Any] = {
 
 DECIDE_SCHEMA: dict[str, Any] = {
     "type": "object",
-    "required": ["script", "ports"],
+    "required": ["body", "ports"],
     "properties": {
-        "script": {"type": "string", "title": "Script", "minLength": 1, "maxLength": 100},
+        "body": {"type": "string", "title": "Script", "minLength": 1, "maxLength": 200000, "default": STARTER_SCRIPT},
         "ports": {
             "type": "array",
             "title": "Ports the script may name (it returns one of these)",
@@ -101,7 +104,16 @@ def _is_identifier(name: str) -> bool:
     return name.isidentifier()
 
 
+def _check_body(params: dict[str, Any]) -> None:
+    body = str(params.get("body") or "")
+    if not body.strip():
+        raise ValueError("the script is empty")
+    if not _MAIN_RE.search(body):
+        raise ValueError("the script must define main(ctx)")
+
+
 def check_run(params: dict[str, Any]) -> None:
+    _check_body(params)
     for name in _names(params.get("outputs"), MAX_OUTPUTS + 1):
         if not _is_identifier(name):
             raise ValueError(f"output {name!r} could never be a token — use letters, digits and underscores")
@@ -110,6 +122,7 @@ def check_run(params: dict[str, Any]) -> None:
 
 
 def check_decide(params: dict[str, Any]) -> None:
+    _check_body(params)
     ports = _names(params.get("ports"), MAX_PORTS + 1)
     if not ports:
         raise ValueError("a deciding script needs at least one port to name")
@@ -124,7 +137,6 @@ def check_decide(params: dict[str, Any]) -> None:
 class _Plan:
     detail: str
     resolves: bool = True
-    script_id: uuid.UUID | None = None
     body: str = ""
     timeout: float = 60.0
     outputs: list[str] = field(default_factory=list)
@@ -139,18 +151,15 @@ def _timeout(params: dict[str, Any]) -> float:
 
 
 async def _resolve(ctx: Any) -> _Plan:
-    name = str(ctx.node.params.get("script") or "").strip()
-    if not name:
-        return _Plan("script: no script chosen", False)
-    script = await service.script_by_name(ctx.session, name)
-    if script is None:
-        return _Plan(f"script: no script named {name!r}", False)
-    if not script.body.strip():
-        return _Plan(f"script: {name!r} is empty", False)
+    """The body is ON THE NODE (RADD-1272); resolving is checking it is there."""
+    body = str(ctx.node.params.get("body") or "")
+    if not body.strip():
+        return _Plan("script: the node has no script", False)
+    if not _MAIN_RE.search(body):
+        return _Plan("script: the script defines no main(ctx)", False)
     return _Plan(
-        f"script {name!r}",
-        script_id=script.id,
-        body=script.body,
+        "script",
+        body=body,
         timeout=_timeout(ctx.node.params),
         outputs=_names(ctx.node.params.get("outputs"), MAX_OUTPUTS),
     )
@@ -184,7 +193,7 @@ async def _execute(ctx: Any, plan: _Plan) -> runner.Outcome:
 async def plan_run(ctx: Any) -> _Plan:
     plan = await _resolve(ctx)
     if plan.resolves:
-        plan.detail = f"run {plan.detail} on {len(_ids(ctx))} item(s)"
+        plan.detail = f"run the script on {len(_ids(ctx))} item(s)"
     return plan
 
 
@@ -231,7 +240,7 @@ RUN_NODE = AutomationNodeSpec(
     kind="action",
     label="Run a script",
     description=(
-        "Run one of your Python scripts in the managed interpreter, with the items, "
+        "Run the Python on this node in the managed interpreter, with the items, "
         "the event and a Radd API client acting as this automation. The dict it "
         "returns becomes tokens downstream."
     ),

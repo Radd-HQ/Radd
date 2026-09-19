@@ -13,8 +13,15 @@ import { OptionResource, type OptionResourceValue } from "../../lib/queries/opti
  * to catch.
  */
 import type React from "react";
-import { useQuery } from "@tanstack/react-query";
-import { pageSpacesQuery, scriptsQuery } from "../../lib/queries";
+import { useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Play } from "lucide-react";
+import { pageSpacesQuery } from "../../lib/queries";
+import { api, errorMessage } from "../../lib/api";
+import { ApiPath } from "../../lib/constants";
+import type { ScriptRunOutcome } from "../../lib/types";
+import { Button } from "../Button";
+import { PythonEditor } from "../scripts/PythonEditor";
 import type { OperatorInfo } from "../../lib/types";
 import { TextField } from "../TextField";
 import { SelectField } from "../SelectField";
@@ -481,9 +488,12 @@ export function ProjectGateFields({
 }
 
 
-/** The scripts plugin's two nodes (RADD-1269). Bespoke rather than generated
- * from the schema because the script is chosen from the LIBRARY, and the
- * ports / outputs are what the canvas redraws handles and offers tokens from. */
+/** The scripts plugin's two nodes (RADD-1269, reshaped by RADD-1272): the
+ * Python lives ON THE NODE. Bespoke rather than generated from the schema
+ * because the body wants a code editor, the ports / outputs are what the
+ * canvas redraws handles and offers tokens from, and a Test box runs the body
+ * as typed — a dry run never applies an action, so this is how a script is
+ * tried before the automation is enabled. */
 export function ScriptNodeFields({
   params,
   decide,
@@ -494,23 +504,28 @@ export function ScriptNodeFields({
   decide: boolean;
   onChange: (params: Params) => void;
 }) {
-  const scripts = useQuery(scriptsQuery);
   const names = (params[decide ? "ports" : "outputs"] as string[]) ?? [];
+  const [seed, setSeed] = useState("");
+  const test = useMutation({
+    mutationFn: () =>
+      api.post<ScriptRunOutcome>(`${ApiPath.scripts}/run`, {
+        body: String(params.body ?? ""),
+        item_key: seed.trim(),
+        params: Object.fromEntries(
+          Object.entries(params).filter(([key]) => !["body", "timeout", "outputs", "ports", "arity", "act_as"].includes(key)),
+        ),
+        timeout: Math.min(Number(params.timeout) || 60, 120),
+      }),
+  });
   return (
-    <div className="flex flex-col gap-2">
-      <SelectField
-        label="Script"
-        value={String(params.script ?? "")}
-        onChange={(event) => onChange({ ...params, script: event.target.value })}
-        hint="From Settings → Scripts. It runs out of process, as this automation's identity."
-      >
-        <option value="">Choose a script…</option>
-        {(scripts.data ?? []).map((script) => (
-          <option key={script.id} value={script.name}>
-            {script.name}
-          </option>
-        ))}
-      </SelectField>
+    <div className="flex flex-col gap-2" data-script-node>
+      <Labelled label="Script">
+        <PythonEditor
+          value={String(params.body ?? "")}
+          onChange={(body) => onChange({ ...params, body })}
+          minHeight={220}
+        />
+      </Labelled>
       <Labelled label={decide ? "Ports the script may name" : "Outputs the script returns"}>
         <TokenMultiSelect
           value={names}
@@ -525,6 +540,7 @@ export function ScriptNodeFields({
         {decide
           ? "main(ctx) returns one of these names; anything else — or a failure — takes the unavailable port."
           : "main(ctx) returns a dict; each declared key becomes a token downstream, {{name.key}}."}
+        {" "}It runs out of process, in the interpreter from Settings → Scripts, as this automation's identity.
       </p>
       <TextField
         label="Timeout (seconds)"
@@ -534,6 +550,43 @@ export function ScriptNodeFields({
         value={String(params.timeout ?? 60)}
         onChange={(event) => onChange({ ...params, timeout: Number(event.target.value) || 60 })}
       />
+      <div data-script-test className="flex flex-col gap-2 rounded border border-subtle bg-base/40 p-2">
+        <div className="flex flex-wrap items-end gap-2">
+          <TextField
+            label="Test with item"
+            value={seed}
+            onChange={(event) => setSeed(event.target.value)}
+            placeholder="TD-42 (optional)"
+            className="max-w-[160px]"
+          />
+          <Button type="button" size="sm" disabled={test.isPending || !String(params.body ?? "").trim()} onClick={() => test.mutate()}>
+            <Play size={12} aria-hidden />
+            {test.isPending ? "Running…" : "Test"}
+          </Button>
+          {test.isError && <span className="text-[11px] text-status-danger">{errorMessage(test.error)}</span>}
+        </div>
+        {test.data && <ScriptOutcomeView outcome={test.data} />}
+      </div>
+    </div>
+  );
+}
+
+function ScriptOutcomeView({ outcome }: { outcome: ScriptRunOutcome }) {
+  return (
+    <div data-script-outcome={outcome.ok ? "ok" : "failed"} className="flex flex-col gap-1 text-[11px]">
+      <div className="flex items-center gap-2">
+        <span className={`rounded px-1.5 py-px text-[10px] uppercase tracking-wide ${outcome.ok ? "bg-emerald-500/15 text-emerald-300" : "bg-status-danger/15 text-status-danger"}`}>
+          {outcome.ok ? "ok" : "failed"}
+        </span>
+        <span className="text-fg-muted">{outcome.duration_ms} ms</span>
+        {outcome.error && <span className="text-status-danger">{outcome.error}</span>}
+      </div>
+      {outcome.ok && (
+        <pre className="max-h-40 overflow-auto rounded border border-subtle bg-base p-2 text-fg">{JSON.stringify(outcome.result, null, 2)}</pre>
+      )}
+      {outcome.stderr && (
+        <pre className="max-h-40 overflow-auto rounded border border-subtle bg-base p-2 text-fg-secondary">{outcome.stderr}</pre>
+      )}
     </div>
   );
 }

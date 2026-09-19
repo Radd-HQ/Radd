@@ -1,4 +1,5 @@
-"""Scripts, packages and the interpreter: the plugin's public seam (RADD-1269)."""
+"""Running a body, the interpreter and its packages: the plugin's public seam
+(RADD-1269; the script library went with RADD-1272 — a script lives on its node)."""
 
 from __future__ import annotations
 
@@ -12,139 +13,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.clock import utcnow
 from radd.config import settings
-from radd.exceptions import ConflictError, NotFoundError
-from radd.kernel import changes
+from radd.exceptions import NotFoundError
 from radd.modules.auth import service_tokens
 from radd.modules.auth.models import User
 from radd.modules.events import service as events
 from radd.modules.items import service as items
 
 from . import interpreter, runner
-from .models import Script, ScriptInterpreter, ScriptPackage, ScriptVersion
-from .schemas import (
-    InterpreterRead,
-    PackageCreate,
-    RunRequest,
-    ScriptCreate,
-    ScriptUpdate,
-)
+from .models import ScriptInterpreter, ScriptPackage
+from .schemas import InterpreterRead, PackageCreate, RunRequest
 from .types import InterpreterStatus, PackageStatus, ScriptEntity, ScriptEvent
 
 logger = logging.getLogger(__name__)
-
-SCRIPT_FIELDS: tuple[str, ...] = ("name", "description", "body", "version")
-
-
-# --- scripts -----------------------------------------------------------------
-
-
-async def list_scripts(session: AsyncSession) -> list[Script]:
-    return list((await session.execute(select(Script).order_by(Script.name))).scalars())
-
-
-async def get_script(session: AsyncSession, script_id: uuid.UUID) -> Script:
-    row = await session.get(Script, script_id)
-    if row is None:
-        raise NotFoundError(ScriptEntity.SCRIPT, script_id)
-    return row
-
-
-async def script_by_name(session: AsyncSession, name: str) -> Script | None:
-    return (
-        await session.execute(select(Script).where(Script.name == name.strip()))
-    ).scalar_one_or_none()
-
-
-async def _write_version(session: AsyncSession, script: Script, actor_id: uuid.UUID | None, note: str) -> None:
-    script.version = (script.version or 0) + 1
-    session.add(
-        ScriptVersion(
-            script_id=script.id,
-            version=script.version,
-            body=script.body,
-            note=(note or "")[:2000],
-            created_by_id=actor_id,
-            created_at=utcnow(),
-        )
-    )
-    await session.flush()
-
-
-async def create_script(session: AsyncSession, data: ScriptCreate, actor_id: uuid.UUID | None) -> Script:
-    if await script_by_name(session, data.name) is not None:
-        raise ConflictError(ScriptEntity.SCRIPT, reason=f"a script named {data.name!r} already exists")
-    script = Script(name=data.name, description=data.description, body=data.body, version=0, updated_by_id=actor_id)
-    session.add(script)
-    await session.flush()
-    await _write_version(session, script, actor_id, data.note)
-    await events.emit(
-        session,
-        event_type=ScriptEvent.CREATED,
-        entity_type=ScriptEntity.SCRIPT,
-        entity_id=script.id,
-        actor_id=actor_id,
-        payload={"name": script.name},
-    )
-    return script
-
-
-async def update_script(
-    session: AsyncSession, script_id: uuid.UUID, data: ScriptUpdate, actor_id: uuid.UUID | None
-) -> Script:
-    script = await get_script(session, script_id)
-    before = changes.snapshot(script, SCRIPT_FIELDS)
-    if data.name is not None and data.name != script.name:
-        if await script_by_name(session, data.name) is not None:
-            raise ConflictError(ScriptEntity.SCRIPT, reason=f"a script named {data.name!r} already exists")
-        script.name = data.name
-    if data.description is not None:
-        script.description = data.description
-    body_changed = data.body is not None and data.body != script.body
-    if body_changed:
-        script.body = data.body or ""
-    script.updated_by_id = actor_id
-    await session.flush()
-    if body_changed:
-        await _write_version(session, script, actor_id, data.note)
-    await events.emit(
-        session,
-        event_type=ScriptEvent.UPDATED,
-        entity_type=ScriptEntity.SCRIPT,
-        entity_id=script.id,
-        actor_id=actor_id,
-        payload={"name": script.name},
-        # The body is code, and a diff of it in the ledger would be the size of
-        # the script: "changed" is the honest record, the versions are the diff.
-        changes=changes.diff_object(script, before, hidden=("body",)),
-    )
-    return script
-
-
-async def delete_script(session: AsyncSession, script_id: uuid.UUID, actor_id: uuid.UUID | None) -> None:
-    script = await get_script(session, script_id)
-    await events.emit(
-        session,
-        event_type=ScriptEvent.DELETED,
-        entity_type=ScriptEntity.SCRIPT,
-        entity_id=script.id,
-        actor_id=actor_id,
-        payload={"name": script.name},
-    )
-    await session.delete(script)
-    await session.flush()
-
-
-async def list_versions(session: AsyncSession, script_id: uuid.UUID) -> list[ScriptVersion]:
-    return list(
-        (
-            await session.execute(
-                select(ScriptVersion)
-                .where(ScriptVersion.script_id == script_id)
-                .order_by(ScriptVersion.version.desc())
-            )
-        ).scalars()
-    )
-
 
 # --- running -----------------------------------------------------------------
 
@@ -220,17 +100,22 @@ async def run_body(
             logger.warning("scripts: could not discard the run key for %s; it expires anyway", label)
 
 
-async def run_now(session: AsyncSession, script: Script, data: RunRequest, actor: User) -> runner.Outcome:
-    """The settings page's Run now box: a pasted packet against the real API."""
+async def run_test(session: AsyncSession, data: RunRequest, actor: User) -> runner.Outcome:
+    """The inspector's Test box: the body as typed, seeded with one item when a
+    key is given, as the caller."""
+    loaded: list[dict[str, Any]] = []
+    if data.item_key.strip():
+        read = await items.get_item_by_key(session, data.item_key.strip().upper(), actor)
+        loaded.append(read.model_dump(mode="json"))
     payload = {
-        "event": data.event,
-        "items": data.items,
+        "event": None,
+        "items": loaded,
         "vars": data.vars,
         "params": data.params,
-        "subject_ids": [str(item.get("id")) for item in data.items if item.get("id")],
+        "subject_ids": [entry["id"] for entry in loaded],
         "actor": {"id": str(actor.id), "name": actor.name, "email": actor.email},
     }
-    return await run_body(session, script.body, payload, actor=actor, timeout=data.timeout, label=f"run now: {script.name}")
+    return await run_body(session, data.body, payload, actor=actor, timeout=data.timeout, label="test")
 
 
 # --- the interpreter ---------------------------------------------------------
