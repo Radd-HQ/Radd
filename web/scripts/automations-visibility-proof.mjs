@@ -92,7 +92,7 @@ await sleep(3000);
 
 // --- the trigger's payload panel --------------------------------------------
 await session.eval(
-  `(()=>{const n=[...document.querySelectorAll('[data-node-id]')].find(e=>/trigger\\.event/.test(e.innerText));
+  `(()=>{const n=document.querySelector('[data-node-type="trigger.event"]');
      if(n){n.dispatchEvent(new MouseEvent("mousedown",{bubbles:true,view:window}));n.click();} return !!n;})()`,
 );
 await sleep(1200);
@@ -127,7 +127,7 @@ const insertedFeedback = await session.eval(
 
 // --- the field-changed picker offers what the diff really names --------------
 await session.eval(
-  `(()=>{const n=[...document.querySelectorAll('[data-node-id]')].find(e=>/changed_by/.test(e.innerText));
+  `(()=>{const n=document.querySelector('[data-node-type="gate.changed_by"]');
      if(n){n.dispatchEvent(new MouseEvent("mousedown",{bubbles:true,view:window}));n.click();} return !!n;})()`,
 );
 await sleep(900);

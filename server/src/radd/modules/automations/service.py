@@ -526,7 +526,7 @@ def _check_validate_gates(
     """No EVENT gate downstream of a validate trigger (spec 119).
 
     There is no event: `validation.validate_facts` builds a synthetic packet
-    with the system actor, no diff and no changed fields, so `gate.event`,
+    with the system actor, no diff and no changed fields, so
     `gate.field_changed` and `gate.changed_by` each answer a constant — and the
     branch behind the port they never take is a check that looks configured and
     can never run. The same reasoning as the schedule rule above, which is where

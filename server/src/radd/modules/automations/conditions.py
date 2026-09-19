@@ -1,12 +1,13 @@
-"""Structured event conditions (spec 58): a nestable all/any/none tree evaluated
-against the triggering EVENT — who acted, which fields changed, old/new values,
-arbitrary payload paths. Complements the SLQ condition (which matches the item's
-CURRENT state); together: "state changed to something in the done category, by
-this user, on an item matching this query".
+"""The event-side vocabulary every gate reads (spec 58, cut down by RADD-1265).
 
-Pure module: `event_facts` extracts a plain-data view of an event, `matches`
-evaluates a stored condition tree against it. No session, no I/O — unit-tested
-in tests/test_automation_conditions.py.
+`EventFacts` is the plain-data view of one event the engine hands to every
+gate; `_payload_path` addresses into its payload (lists fan out); `compare`
+gives the operators their meaning. The nestable all/any/none CONDITION TREE
+that used to live here is gone: the graph composes booleans (chain = AND,
+fan-out = OR, the `false` port = NOT) and the named gates in `gates.py` each
+ask one plain question, so a second boolean vocabulary taught nothing.
+
+Pure module: no session, no I/O — unit-tested in tests/test_automation_gates.py.
 """
 
 from __future__ import annotations
@@ -15,12 +16,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from .types import ConditionOperator, ConditionSubject, GroupOp
+from .types import ConditionOperator
 
-# Guard rails for hostile/degenerate stored trees (validated on write, enforced
-# again on eval so a hand-crafted DB row can't wedge the engine).
-MAX_DEPTH = 5
-MAX_NODES = 50
 _REGEX_MAX = 200
 
 
@@ -81,34 +78,6 @@ def _change_entry(facts: EventFacts, field_name: str) -> dict[str, Any] | None:
         if _change_name(entry).casefold() == wanted:
             return entry
     return None
-
-
-def resolve_subject(
-    facts: EventFacts, subject: ConditionSubject, qualifier: str | None
-) -> list[Any]:
-    """The value(s) a subject stands for in this event; [] = nothing resolved."""
-    match subject:
-        case ConditionSubject.ACTOR:
-            return [v for v in (facts.actor_id, facts.actor_email, facts.actor_name) if v]
-        case ConditionSubject.CHANGED_FIELD:
-            return [name for entry in facts.changes if (name := _change_name(entry))]
-        case ConditionSubject.OLD_VALUE:
-            # Set-valued fields (labels, links) diff as added/removed, not from/to:
-            # "old value" naturally reads as what was removed.
-            entry = _change_entry(facts, qualifier or "")
-            if entry is None:
-                return []
-            return _payload_path(entry, "from") or _payload_path(entry, "removed")
-        case ConditionSubject.NEW_VALUE:
-            entry = _change_entry(facts, qualifier or "")
-            if entry is None:
-                return []
-            return _payload_path(entry, "to") or _payload_path(entry, "added")
-        case ConditionSubject.STATE_CATEGORY:
-            return _payload_path(facts.payload, "item.state.category")
-        case ConditionSubject.PAYLOAD:
-            return _payload_path(facts.payload, (qualifier or "").strip())
-    return []  # pragma: no cover — exhaustive over the enum
 
 
 # --- comparison ---
@@ -190,54 +159,3 @@ def compare(resolved: list[Any], operator: ConditionOperator, expected: Any) -> 
                 return any(n > want for n in numbers)
             return any(n < want for n in numbers)
     return False  # pragma: no cover — exhaustive over the enum
-
-
-# --- tree evaluation ---
-
-
-def _count_nodes(node: dict[str, Any]) -> int:
-    children = node.get("conditions")
-    if not isinstance(children, list):
-        return 1
-    return 1 + sum(_count_nodes(child) for child in children if isinstance(child, dict))
-
-
-def tree_depth(node: dict[str, Any]) -> int:
-    children = node.get("conditions")
-    if not isinstance(children, list):
-        return 1
-    return 1 + max(
-        (tree_depth(child) for child in children if isinstance(child, dict)), default=0
-    )
-
-
-def _eval_node(facts: EventFacts, node: dict[str, Any], depth: int) -> bool:
-    if depth > MAX_DEPTH:
-        return False
-    children = node.get("conditions")
-    if isinstance(children, list):  # group node
-        results = (
-            _eval_node(facts, child, depth + 1) for child in children if isinstance(child, dict)
-        )
-        match GroupOp(node.get("op", GroupOp.ALL.value)):
-            case GroupOp.ALL:
-                return all(results)
-            case GroupOp.ANY:
-                return any(results)
-            case GroupOp.NONE:
-                return not any(results)
-        return False  # pragma: no cover
-    resolved = resolve_subject(
-        facts, ConditionSubject(node["subject"]), node.get("qualifier")
-    )
-    return compare(resolved, ConditionOperator(node["operator"]), node.get("value"))
-
-
-def matches(facts: EventFacts, tree: dict[str, Any] | None) -> bool:
-    """Does the event satisfy the stored condition tree? None/empty = always.
-    Malformed nodes raise (the engine catches per rule and logs)."""
-    if not tree or not tree.get("conditions"):
-        return True
-    if _count_nodes(tree) > MAX_NODES:
-        return False
-    return _eval_node(facts, tree, 1)

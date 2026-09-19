@@ -27,7 +27,7 @@ def _node(node_id: str, kind: AutomationNodeKind, type_: str = "x") -> Node:
 
 TRIGGER = _node("t", AutomationNodeKind.TRIGGER, "trigger.event")
 FILTER = _node("f", AutomationNodeKind.FILTER, "filter.slq")
-GATE = _node("g", AutomationNodeKind.GATE, "gate.event")
+GATE = _node("g", AutomationNodeKind.GATE, "gate.payload")
 ACTION = _node("a", AutomationNodeKind.ACTION, "action.add_label")
 
 
@@ -264,7 +264,6 @@ def test_every_documented_token_actually_resolves():
         actor_email="a@b.c",
         actor_name="Ada",
         payload={
-            "matched_count": 3,
             "changes": [{"field": "state"}],
             # RADD-1248: the page/comment tokens read the kernel's `page` ref and
             # the comment event's own fields; an event carrying both resolves all.
@@ -272,7 +271,20 @@ def test_every_documented_token_actually_resolves():
             "excerpt": "a remark", "visibility": "public", "parent_comment_id": "44444444-4444-4444-4444-444444444444",
         },
     )
-    item_ctx = {"key": "TD-42", "title": "A title", "id": "22222222-2222-2222-2222-222222222222"}
+    from radd.modules.automations.planning import _item_ctx
+
+    class _Item:
+        id = "22222222-2222-2222-2222-222222222222"
+        number = 42
+        title = "A title"
+        priority = "high"
+
+    class _Project:
+        key = "TD"
+
+    # Built by the planner's own context builder (RADD-1265), so a token added
+    # to the catalogue without a key in the context fails here, not in prose.
+    item_ctx = _item_ctx(_Item(), _Project(), {"state": "Done", "state_category": "done", "assignee": "Ada", "reporter": "Bob", "type": "Bug", "labels": "a, b"})
     # The set an action speaks for — the executor always supplies it, so a token
     # that only resolves with items is still a resolving token.
     items = [item_ctx, {"key": "TD-43", "title": "Another", "id": "33333333-3333-3333-3333-333333333333"}]
@@ -295,4 +307,5 @@ def test_item_tokens_are_flagged_as_needing_an_item():
     from radd.modules.automations import templating
 
     needing = {info.token for info in templating.TOKENS if info.needs_item}
-    assert needing == {"{{item.key}}", "{{item.title}}", "{{item.id}}"}
+    assert needing == {info.token for info in templating.TOKENS if info.token.startswith("{{item.")}
+    assert {"{{item.key}}", "{{item.url}}", "{{item.state}}", "{{item.assignee}}"} <= needing

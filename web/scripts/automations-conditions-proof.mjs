@@ -102,7 +102,7 @@ await sleep(600);
 const addedAi = await session.eval(clickPanelRow("/ask the ai/i"));
 await sleep(1200);
 const portsBefore = await session.eval(
-  `(()=>{const n=[...document.querySelectorAll('[data-node-id]')].find(e=>/ai\\.classify/.test(e.innerText));
+  `(()=>{const n=document.querySelector('[data-node-type="ai.classify"]');
      return n ? n.parentElement.querySelectorAll(".react-flow__handle-bottom, .react-flow__handle-right").length : -1;})()`,
 );
 const typedAnswers = await session.eval(`(()=>{
@@ -117,7 +117,7 @@ const typedAnswers = await session.eval(`(()=>{
   return true;})()`);
 await sleep(1500);
 const portsAfter = await session.eval(
-  `(()=>{const n=[...document.querySelectorAll('[data-node-id]')].find(e=>/ai\\.classify/.test(e.innerText));
+  `(()=>{const n=document.querySelector('[data-node-type="ai.classify"]');
      return n ? n.parentElement.querySelectorAll(".react-flow__handle-bottom, .react-flow__handle-right").length : -1;})()`,
 );
 

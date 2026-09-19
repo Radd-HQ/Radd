@@ -48,7 +48,7 @@ from radd.modules.notify import service as notify_service
 from radd.modules.projects.models import Project
 from radd.modules.notify.types import NotificationType
 
-from . import catalog, conditions, executor, round_robin, search, service
+from . import catalog, conditions, executor, round_robin, service
 from .graph import GraphError, Packet
 from .models import Automation
 from .planning import (
@@ -80,7 +80,6 @@ from .schemas import (
 )
 from .types import (
     CONSUMER_NAME,
-    AutomationTrigger,
     SYSTEM_ACTOR_EMAIL,
     SYSTEM_ACTOR_ID,
     SYSTEM_ACTOR_NAME,
@@ -389,58 +388,26 @@ async def run_graph(
     )
 
 
-def _scheduled_facts(event: Event, matched_count: int | None = None) -> conditions.EventFacts:
+def _scheduled_facts(event: Event) -> conditions.EventFacts:
     """Facts for a scheduled run's templates: the system actor + the synthetic
-    payload, with `{{matched_count}}` merged in for the universal-action pass."""
-    payload = dict(event.payload or {})
-    if matched_count is not None:
-        payload["matched_count"] = matched_count
+    payload (`rule_id`, `node_id`, `scheduled_for`)."""
     return conditions.EventFacts(
         event_type=event.event_type,
         actor_id=str(SYSTEM_ACTOR_ID),
         actor_email=SYSTEM_ACTOR_EMAIL,
         actor_name=SYSTEM_ACTOR_NAME,
-        payload=payload,
-    )
-
-
-#: Re-exported: `_all_definitions` was defined here and is imported by tests and
-#: by anything compiling an unscoped query. It lives in `search` now, beside the
-#: only other caller — a schedule trigger's query and a search node's query are
-#: the same operation, and two copies of "compile, cap, log the truncation" would
-#: eventually cap differently.
-_all_definitions = search.all_definitions
-
-
-async def _scheduled_matches(
-    session: AsyncSession, rule: Automation, node_id: str = ""
-) -> list[uuid.UUID]:
-    """Active items matching the SCHEDULE TRIGGER's query, ordered by rank, capped
-    at settings.automation_schedule_max_items (truncation logged).
-
-    The query lives on the trigger node because a schedule produces its own item
-    set — filters downstream narrow it. No query means no items, which is a legal
-    graph: the universal actions still run. A SEARCH node does the same thing
-    under any trigger; this stays because an existing scheduled automation stores
-    its query on the trigger."""
-    _, _, triggers = await executor.load_graph(rule)
-    trigger = next((t for t in triggers if not node_id or t.id == node_id), None)
-    if trigger is None:
-        return []
-    return await search.find_items(
-        session,
-        str(trigger.params.get("query") or ""),
-        label=f"scheduled rule {rule.id}",
+        payload=dict(event.payload or {}),
     )
 
 
 async def apply_scheduled(session: AsyncSession, event: Event) -> None:
     """Execute the payload rule of one `automation.scheduled` event (spec 69).
-    Empty condition_slq -> universal actions once, itemless (item actions
-    skip+log). Non-empty -> ITEM actions per matching item (rank order, capped),
-    then universal actions once with `{{matched_count}}` available. Every
-    resulting item event carries the SYSTEM actor, so event rules still skip
-    them (the loop guard holds)."""
+
+    A schedule has no event and produces no items of its own (RADD-1265): the
+    trigger hands an EMPTY packet downstream, and a `search.slq` node wired
+    after it is what selects the items a run acts on — visible on the canvas
+    rather than buried in the trigger's form. Every resulting item event carries
+    the SYSTEM actor, so event rules still skip them (the loop guard holds)."""
     payload = event.payload or {}
     try:
         rule_id = uuid.UUID(str(payload.get("rule_id")))
@@ -459,16 +426,10 @@ async def apply_scheduled(session: AsyncSession, event: Event) -> None:
             event.id,
         )
         return
-    # A schedule has no event and so no target item: the TRIGGER produces the
-    # initial set from its own query. Without one the graph still runs, carrying
-    # an empty packet — item actions skip, universal actions fire, which is how
-    # "post to chat every Monday" works with no items involved at all.
-    try:
-        item_ids = await _scheduled_matches(session, rule, node_id)
-    except Exception:
-        logger.exception("automations: scheduled automation %s: query failed to compile", rule.id)
-        return
-    initial = Packet.of(_scheduled_facts(event, len(item_ids)), item=item_ids)
+    # An empty packet: item actions skip, universal actions fire, which is how
+    # "post to chat every Monday" works with no items involved at all, and a
+    # search node is how "every stale issue" gets its set.
+    initial = Packet.of(_scheduled_facts(event), item=())
     await run_graph(session, rule, initial, system_user, start_node_id=node_id or None)
 
 
@@ -551,8 +512,8 @@ async def preview(
     The seed item is optional (RADD-921). A graph fed by a search node or a
     schedule trigger has no triggering item, and requiring one made exactly those
     graphs — the ones with a query worth checking — the ones that could not be
-    dry-run. A schedule trigger seeds from its OWN query, which is what it does
-    when it fires; anything else starts from the given item, or from nothing.
+    dry-run. The walk starts from the given item, or from nothing, and a search
+    node produces what it would on a real run.
     """
     system_user = await session.get(User, SYSTEM_ACTOR_ID)
     try:
@@ -567,9 +528,6 @@ async def preview(
     seed: tuple[uuid.UUID, ...] = ()
     if item_id is not None:
         seed = ((await items.require_item(session, item_id)).id,)
-    elif trigger is not None and str(trigger.params.get("event")) == AutomationTrigger.SCHEDULE:
-        # What this trigger would actually hand downstream on a real tick.
-        seed = tuple(await _scheduled_matches(session, rule, trigger.id))
 
     report = await run_graph(
         session,

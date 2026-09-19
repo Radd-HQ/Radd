@@ -37,6 +37,23 @@ def mailintake_service() -> ModuleType | None:
     return mail_service
 
 
+async def outbound_available(session: AsyncSession) -> bool:
+    """Is there anywhere to send FROM? (RADD-1265)
+
+    The planner used to answer this from the environment alone — `if not
+    settings.smtp_host: skip` — which stopped being the question the moment
+    RADD-983 routed delivery through the mail module's transport, where the
+    DEFAULT `mail_senders` ROW comes first and the environment relay is the
+    fallback. A rows-only instance (Settings → Email configured, no
+    `RADD_SMTP_*`) sent every notification and skipped every automation email
+    as "smtp not configured". One question, asked of the one module that knows.
+    """
+    mail_service = mailintake_service()
+    if mail_service is None:
+        return False
+    return bool(await mail_service.outbound_configured(session))
+
+
 def _mailable(user: User | None) -> bool:
     """Is this account a mailbox a person reads? (RADD-983)
 

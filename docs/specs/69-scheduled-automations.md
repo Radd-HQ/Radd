@@ -1,5 +1,7 @@
 # Spec 69 — Scheduled automation triggers
 
+> **Superseded in part (RADD-1265, 2026-09-19):** the trigger's `condition_slq`/`query` is gone — a `search.slq` node wired after the schedule trigger selects the items — and `{{matched_count}}` was deleted in favour of `{{items.count}}`. The rest stands.
+
 Target-features wave, part 2. The automations engine gets a clock: rules can
 fire on a schedule (interval / daily / weekly) instead of an event, and a
 scheduled rule with a `condition_slq` runs its ITEM actions per matching item —

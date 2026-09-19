@@ -177,7 +177,7 @@ async def test_a_schedule_trigger_is_validated_when_the_automation_is_saved(db, 
                     "id": "t",
                     "kind": "trigger",
                     "type": "trigger.event",
-                    "params": {"event": "schedule", "schedule": schedule, "query": ""},
+                    "params": {"event": "schedule", "schedule": schedule},
                 }
             ],
             edges=[],

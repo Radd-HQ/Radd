@@ -10,7 +10,7 @@ is one nobody finds.
 
 Unknown tokens render as-is — visible in the output, debuggable, never an error.
 
-Pure module — tested in tests/test_automation_conditions.py.
+Pure module — tested in tests/test_automation_gates.py and test_automation_arity.py.
 """
 
 from __future__ import annotations
@@ -54,6 +54,15 @@ TOKENS: tuple[TokenInfo, ...] = (
     TokenInfo("{{actor.id}}", "Their user id."),
     TokenInfo("{{item.key}}", "The target item's key, e.g. TD-42.", needs_item=True),
     TokenInfo("{{item.title}}", "Its title.", needs_item=True),
+    TokenInfo("{{item.url}}", "A link to it.", needs_item=True),
+    TokenInfo("{{item.state}}", "Its workflow state's name.", needs_item=True),
+    TokenInfo("{{item.state_category}}", "That state's category — todo, in_progress, done…", needs_item=True),
+    TokenInfo("{{item.priority}}", "low, normal, high or blocker.", needs_item=True),
+    TokenInfo("{{item.assignee}}", "The assignee's name; blank when unassigned.", needs_item=True),
+    TokenInfo("{{item.reporter}}", "The reporter's name.", needs_item=True),
+    TokenInfo("{{item.project}}", "The project's key.", needs_item=True),
+    TokenInfo("{{item.type}}", "Its issue type's name.", needs_item=True),
+    TokenInfo("{{item.labels}}", "Its labels, comma-separated.", needs_item=True),
     TokenInfo("{{item.id}}", "Its id.", needs_item=True),
     # Set-shaped tokens (RADD-918). An action running ONCE over many items could
     # previously learn only how MANY there were: `{{matched_count}}` was the
@@ -63,11 +72,6 @@ TOKENS: tuple[TokenInfo, ...] = (
     TokenInfo("{{items.count}}", "How many items this action is acting on."),
     TokenInfo("{{items.keys}}", "Their keys, comma-separated — TD-42, TD-43."),
     TokenInfo("{{items.list}}", "One per line: `TD-42 — the title`. For chat and email bodies."),
-    TokenInfo(
-        "{{matched_count}}",
-        "How many items a scheduled run matched. Kept for automations written "
-        "before {{items.count}}, which is the same number under any trigger.",
-    ),
     # RADD-1248: the page a comment or page event is about, and the comment
     # itself. Resolved from the payload's refs, so they read the same on a page
     # event (`page` ref) and on a page comment (the same ref, as a subject).
@@ -86,11 +90,6 @@ TOKENS: tuple[TokenInfo, ...] = (
 )
 
 
-# Spec 69: scheduled runs surface their match count to universal-action
-# templates as a bare top-level token (merged into the facts payload).
-MATCHED_COUNT_TOKEN = "matched_count"
-
-
 @lru_cache(maxsize=1)
 def reserved_roots() -> frozenset[str]:
     """The first segment of every documented token — the words a node may NOT be
@@ -106,9 +105,7 @@ def reserved_roots() -> frozenset[str]:
     constant — recomputing a twelve-element frozenset inside a render loop over
     200 items is work with no answer attached to it.
     """
-    return frozenset(
-        token.token.strip("{} ").split(".", 1)[0] for token in TOKENS
-    ) | {MATCHED_COUNT_TOKEN}
+    return frozenset(token.token.strip("{} ").split(".", 1)[0] for token in TOKENS)
 
 
 def _resolve(
@@ -119,14 +116,6 @@ def _resolve(
 ) -> str | None:
     if token == "event_type":
         return facts.event_type
-    if token == MATCHED_COUNT_TOKEN:
-        # The payload's count when a scheduled run supplied one, else the set
-        # this action is acting on — so the token means the same thing under
-        # every trigger instead of being blank on all but one.
-        values = _payload_path(facts.payload, MATCHED_COUNT_TOKEN)
-        if values:
-            return str(values[0])
-        return str(len(items)) if items is not None else None
     if token.startswith("items."):
         return _resolve_items(token.removeprefix("items."), items)
     if token == "actor.id":

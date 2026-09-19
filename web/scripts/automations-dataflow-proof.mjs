@@ -397,11 +397,7 @@ async function openEditor() {
  * `clickAt` STRINGIFIES it into the page, where a closed-over variable does not
  * exist — an arrow function capturing `type` throws a ReferenceError that reads
  * like a product bug. */
-const selectNode = (type) =>
-  session.click(
-    "[data-node-id]",
-    new Function("text", `return text.includes(${JSON.stringify(type)})`),
-  );
+const selectNode = (type) => session.click(`[data-node-type="${type}"]`, () => true);
 
 // --- 1. drop the generate node and configure it -------------------------------
 
@@ -533,10 +529,7 @@ const referenceOnly = await session.eval(
 // The node on the UNAVAILABLE branch is downstream of the producer and must
 // still be offered nothing: that port is taken exactly when nothing was
 // published, so every token from it would resolve to a skip.
-await session.click(
-  "[data-node-id]",
-  new Function("text", "return text.includes('action.set_priority')"),
-);
+await session.click('[data-node-type="action.set_priority"]', () => true);
 await sleep(300);
 const offeredOnFallback = await session.eval(`(() => {
   const cards = [...document.querySelectorAll("[data-node-id]")];
@@ -616,9 +609,30 @@ writeFileSync("/tmp/radd-1073-builder.png", Buffer.from(shotLight.data, "base64"
 
 // --- 4. run it ----------------------------------------------------------------
 
+// The seed picker is project-scoped and search-driven (RADD-1115): choose
+// the fixture project in the picker dialog, search the seed by title, then
+// select it in the plain <select>.
+await session.eval(OPEN_LABELLED_SELECT("^project$"));
+await sleep(600);
+await session.eval(`(() => {
+  const input = [...document.querySelectorAll("input")].find((i) => /search projects/i.test(i.placeholder || ""));
+  if (!input) return false;
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+  setter.call(input, ${JSON.stringify(project?.key ?? "")});
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  return true;
+})()`);
+await sleep(900);
+const pickedProject = await session.eval(`(() => {
+  const row = [...document.querySelectorAll("button")].find((b) => (b.textContent || "").includes(${JSON.stringify(project?.key ?? "")}) && /Dataflow/.test(b.textContent || ""));
+  if (!row) return false; row.click(); return true;
+})()`);
+await sleep(600);
+await session.eval(SET_FIELD("find a seed issue", "checkout"));
+await sleep(1200);
 await session.eval(OPEN_LABELLED_SELECT("as if it fired for"));
 await sleep(500);
-const pickedItem = await session.eval(PICK_OPTION("checkout is down"));
+const pickedItem = pickedProject && (await session.eval(PICK_OPTION("checkout is down")));
 await sleep(500);
 const ran = await session.eval(RUN_TEST);
 await sleep(3500);

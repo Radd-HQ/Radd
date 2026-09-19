@@ -145,10 +145,10 @@ export function nodeTemplates(catalog: AutomationCatalog | undefined): NodeTempl
     label: "On a schedule",
     group: `${TRIGGER_GROUP} · Scheduled`,
     keywords: "schedule cron daily weekly interval recurring every",
-    // A schedule trigger PRODUCES its item set from `query` — it has no event and
-    // so no target item. An empty query is legal and means "no items": the
+    // A schedule has no event and produces no items of its own (RADD-1265): a
+    // Find issues node wired after it selects what each run acts on. With none,
     // universal actions still run, which is how "post to chat every Monday" works.
-    params: { event: SCHEDULE_TRIGGER, schedule: { kind: "interval", minutes: 30 }, query: "" },
+    params: { event: SCHEDULE_TRIGGER, schedule: { kind: "interval", minutes: 30 } },
   });
   templates.push({
     key: `trigger:${VALIDATE_TRIGGER}`,
@@ -199,6 +199,18 @@ export function nodeTemplates(catalog: AutomationCatalog | undefined): NodeTempl
   // the `false` port is NOT — so each node can be one plain question. The old
   // `gate.event` still executes for stored graphs but is no longer offered:
   // a node called "event conditions" taught nobody what it tested.
+  // RADD-1265: the one open-ended gate. A dotted path, an operator, a value —
+  // the escape hatch for whatever a named gate does not ask, and the only way
+  // to narrow a non-item event (a release, a cycle, a page) by what it carries.
+  templates.push({
+    key: "gate.payload",
+    kind: NodeKind.gate,
+    type: "gate.payload",
+    label: "Event value is",
+    group: "Gates",
+    keywords: "payload path value equals contains regex matches project release status any custom condition",
+    params: { path: "", operator: "eq", value: "", negate: false },
+  });
   templates.push({
     key: "gate.field_changed",
     kind: NodeKind.gate,
@@ -299,13 +311,80 @@ export function nodeTemplates(catalog: AutomationCatalog | undefined): NodeTempl
   return templates;
 }
 
-/** Templates by group, in the order the groups first appear. */
+/** The palette's order (RADD-1265). The registry lists event groups in load
+ * order, which put twenty admin triggers above Items; people reach for the
+ * work-shaped groups first, the on-demand starters, then the rest. A group not
+ * named here keeps its registry position after the named ones. */
+const GROUP_ORDER = [
+  `${TRIGGER_GROUP} · Items`,
+  `${TRIGGER_GROUP} · Comments`,
+  `${TRIGGER_GROUP} · Scheduled`,
+  `${TRIGGER_GROUP} · On demand`,
+  `${TRIGGER_GROUP} · Intake`,
+  `${TRIGGER_GROUP} · Service desk`,
+  `${TRIGGER_GROUP} · Pages`,
+  `${TRIGGER_GROUP} · Time logging`,
+  `${TRIGGER_GROUP} · Links`,
+  `${TRIGGER_GROUP} · Attachments`,
+  `${TRIGGER_GROUP} · Releases`,
+  `${TRIGGER_GROUP} · Cycles`,
+  `${TRIGGER_GROUP} · Email`,
+  `${TRIGGER_GROUP} · People`,
+  `${TRIGGER_GROUP} · Admin`,
+  "Sources",
+  "Filters",
+  "Gates",
+  "Actions",
+];
+
+/** Templates by group, in the palette's order. */
 export function groupTemplates(templates: NodeTemplate[]): [string, NodeTemplate[]][] {
   const grouped = new Map<string, NodeTemplate[]>();
   for (const template of templates) {
     grouped.set(template.group, [...(grouped.get(template.group) ?? []), template]);
   }
-  return [...grouped.entries()];
+  const rank = (group: string) => {
+    const index = GROUP_ORDER.indexOf(group);
+    // Unlisted trigger groups (a plugin's) sit after the listed triggers and
+    // before the node kinds; unlisted node groups (a plugin's actions) go last.
+    if (index >= 0) return index;
+    return group.startsWith(TRIGGER_GROUP) ? GROUP_ORDER.indexOf("Sources") - 0.5 : GROUP_ORDER.length;
+  };
+  return [...grouped.entries()].sort(([a], [b]) => rank(a) - rank(b));
+}
+
+/** What a node is CALLED on the canvas (RADD-1265): the palette label of its
+ * type, and for a trigger the event's label — never the wire key. Indexed once
+ * per catalog because the canvas asks for every node on every rebuild. */
+export function titleIndex(catalog: AutomationCatalog | undefined): Map<string, string> {
+  const index = new Map<string, string>();
+  for (const template of nodeTemplates(catalog)) index.set(template.key, template.label);
+  return index;
+}
+
+export function nodeTitle(
+  node: { kind: NodeKindValue; type: string; params: Record<string, unknown> },
+  titles: Map<string, string>,
+): string {
+  if (node.kind === NodeKind.trigger) {
+    const event = String(node.params.event ?? "");
+    return titles.get(`trigger:${event}`) ?? event ?? node.type;
+  }
+  return titles.get(node.type) ?? node.type;
+}
+
+/** A fresh automation's first node (RADD-1265): an "Item updated" trigger,
+ * placed and selected, so the editor opens on a question ("fires on…") rather
+ * than an empty canvas. */
+export function seededTrigger(): AutomationNode {
+  return {
+    id: "trg1",
+    kind: NodeKind.trigger,
+    type: "trigger.event",
+    params: { event: "item.updated" },
+    x: 0,
+    y: 0,
+  };
 }
 
 /** Case-insensitive match over label, group and keywords. */

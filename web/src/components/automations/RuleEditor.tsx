@@ -6,9 +6,11 @@
  * keeping it beside the canvas meant a bidirectional adapter and two sources of
  * truth for one automation.
  *
- * A new automation starts EMPTY rather than with a pre-made trigger. Everything
- * is a node, including the trigger, and the panel is where nodes come from —
- * seeding one would teach the opposite.
+ * A new automation opens on a placed, selected "Item updated" trigger
+ * (RADD-1265). It used to open empty on the theory that seeding a node would
+ * teach the wrong lesson about where nodes come from; what it taught instead
+ * was nothing, because the first thing a person met was a blank canvas. The
+ * trigger's inspector is the question the editor should open on: fires on…
  */
 import { useState, type FormEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -30,6 +32,7 @@ import { ErrorText } from "../ErrorText";
 import { TextField } from "../TextField";
 import { incompleteActionNodeIds } from "./ActionsBuilder";
 import { GraphEditor, type Orientation } from "./GraphEditor";
+import { seededTrigger } from "../../lib/automation-nodes";
 import { RuleTestPanel } from "./RuleTestPanel";
 import { ChangeHistoryPanel } from "../history/ChangeHistoryPanel";
 
@@ -53,7 +56,7 @@ export function RuleEditor({ rule, onDone }: RuleEditorProps) {
   // clicking around the graph that produced them.
   const [run, setRun] = useState<RuleTestResult | null>(null);
   const [graph, setGraph] = useState<{ nodes: AutomationNode[]; edges: AutomationEdge[] }>({
-    nodes: rule?.nodes ?? [],
+    nodes: rule?.nodes ?? [seededTrigger()],
     edges: rule?.edges ?? [],
   });
 
@@ -138,6 +141,7 @@ export function RuleEditor({ rule, onDone }: RuleEditorProps) {
         onChange={setGraph}
         onOrientationChange={setOrientation}
         run={run}
+        initialSelectedId={rule ? null : graph.nodes[0]?.id ?? null}
       />
 
       {save.isError && !saveSlqError && <ErrorText error={save.error} />}

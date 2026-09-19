@@ -6,9 +6,9 @@ plugin declares its triggerable events in its manifest (`event_types=…`), so a
 plugin's events appear here with **zero edits to this module** — the inversion of
 the old `_SPECS` list that imported 21 modules' event enums.
 
-Subjects, operators, and schedule kinds stay here: they are the condition-builder
-*grammar* (how a rule expresses a condition), not per-event data, so they are not
-plugin-contributed.
+Operators and schedule kinds stay here: they are the builder's *grammar* (how
+the "Event value is" gate and a schedule express themselves), not per-event data,
+so they are not plugin-contributed.
 
 `item_scoped` triggers resolve a target item (the event's entity, or the payload's
 `item_id`) — the SLQ condition and item actions apply to it. Rules on non-item
@@ -21,7 +21,7 @@ from radd.kernel import registries
 from radd.kernel.specs import EventTypeSpec
 
 from .nodes import arity_rule
-from .types import BUILTIN_ARITY, ArityRule, ConditionOperator, ConditionSubject, ScheduleKind
+from .types import BUILTIN_ARITY, ArityRule, ConditionOperator, ScheduleKind
 
 
 def triggers() -> dict[str, EventTypeSpec]:
@@ -57,44 +57,6 @@ def node_arities() -> dict[str, ArityRule]:
 
 
 # --- builder metadata (served by GET /automations/catalog for the UI) ---
-
-
-@dataclass(frozen=True)
-class SubjectSpec:
-    key: str
-    label: str
-    needs_qualifier: bool = False
-    qualifier_hint: str = ""
-    requires_changes: bool = False  # only meaningful when the trigger has a diff
-
-
-SUBJECTS: list[SubjectSpec] = [
-    SubjectSpec(ConditionSubject.ACTOR, "Actor (who did it)"),
-    SubjectSpec(
-        ConditionSubject.CHANGED_FIELD, "Changed field", requires_changes=True
-    ),
-    SubjectSpec(
-        ConditionSubject.OLD_VALUE,
-        "Old value of field…",
-        needs_qualifier=True,
-        qualifier_hint="field, e.g. state / assignee / cf key",
-        requires_changes=True,
-    ),
-    SubjectSpec(
-        ConditionSubject.NEW_VALUE,
-        "New value of field…",
-        needs_qualifier=True,
-        qualifier_hint="field, e.g. state / assignee / cf key",
-        requires_changes=True,
-    ),
-    SubjectSpec(ConditionSubject.STATE_CATEGORY, "Item state category"),
-    SubjectSpec(
-        ConditionSubject.PAYLOAD,
-        "Event payload path…",
-        needs_qualifier=True,
-        qualifier_hint="dotted path, e.g. visibility / labels / state.name",
-    ),
-]
 
 
 @dataclass(frozen=True)

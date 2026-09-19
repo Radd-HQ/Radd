@@ -2,7 +2,8 @@
 
 `gate.event` was one node holding a nestable all/any/none tree of
 subject/operator/value. It could express anything and taught nothing: opening it
-told you there were "event conditions" and nothing about what they were.
+told you there were "event conditions" and nothing about what they were. It is
+deleted (RADD-1265; a data migration converted stored trees).
 
 These replace it with NAMED single tests — "field changed", "changed by",
 "state category is" — each with a real form. The expressiveness is not lost,
@@ -22,8 +23,10 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from .conditions import EventFacts
+from .conditions import EventFacts, _payload_path, compare
 from .types import (
+    TYPE_GATE_PAYLOAD,
+    ConditionOperator,
     TYPE_GATE_CHANGED_BY,
     TYPE_GATE_COMMENT,
     TYPE_GATE_FIELD_CHANGED,
@@ -159,9 +162,42 @@ def page_space_is(facts: EventFacts, params: Mapping[str, Any]) -> bool:
     return not hit if params.get("negate") else hit
 
 
+#: Operators that take no value; the form hides the value box for them.
+VALUELESS_OPERATORS = frozenset({ConditionOperator.IS_SET, ConditionOperator.NOT_SET})
+#: Operators whose value is a LIST.
+LIST_OPERATORS = frozenset({ConditionOperator.IN, ConditionOperator.NOT_IN})
+
+
+def payload_value_is(facts: EventFacts, params: Mapping[str, Any]) -> bool:
+    """Does the value at `path` in the event payload satisfy `operator value`?
+    (RADD-1265 — "Event value is", the one open-ended gate.)
+
+    The only gate that reads the payload by ADDRESS rather than by name, which
+    is what makes it the escape hatch: `release.status` on a release event,
+    `form_id` on a validation run, `changes.field` on an update. A list at the
+    path fans out (`labels` → each label), so `contains` and `in` read naturally.
+    An empty path answers False: a half-filled form must not match everything.
+    """
+    path = str(params.get("path") or "").strip()
+    if not path:
+        return False
+    try:
+        operator = ConditionOperator(str(params.get("operator") or ConditionOperator.EQ))
+    except ValueError:
+        return False
+    value = params.get("value")
+    if operator in LIST_OPERATORS and not isinstance(value, list):
+        value = [v.strip() for v in str(value or "").split(",") if v.strip()]
+    if operator not in VALUELESS_OPERATORS and value in (None, "", []):
+        return False
+    hit = compare(_payload_path(facts.payload, path), operator, value)
+    return not hit if params.get("negate") else hit
+
+
 #: node type -> evaluator. The executor dispatches through this rather than an
 #: `if node.type == …` ladder, so a new gate is one entry plus its spec.
 GATE_EVALUATORS = {
+    TYPE_GATE_PAYLOAD: payload_value_is,
     TYPE_GATE_FIELD_CHANGED: field_changed,
     TYPE_GATE_CHANGED_BY: changed_by,
     TYPE_GATE_STATE_CATEGORY: state_category_is,

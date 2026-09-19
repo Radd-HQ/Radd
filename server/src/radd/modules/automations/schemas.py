@@ -8,7 +8,7 @@ from radd.modules.items.enums import ItemKind, Priority
 
 from radd import schedule as schedule_math
 
-from . import catalog, conditions
+from . import catalog
 from .templating import TOKEN_RE
 from .types import (
     MAX_GRAPH_EDGES,
@@ -18,54 +18,12 @@ from .types import (
     AutomationTrigger,
     GraphOrientation,
     ConditionOperator,
-    ConditionSubject,
-    GroupOp,
     NodeArity,
     NodePort,
     ScheduleKind,
 )
 from radd.apitypes import UtcDatetime
 
-
-# --- event-condition tree (spec 58) ---
-
-_VALUELESS = {ConditionOperator.IS_SET, ConditionOperator.NOT_SET}
-_QUALIFIED = {
-    ConditionSubject.OLD_VALUE,
-    ConditionSubject.NEW_VALUE,
-    ConditionSubject.PAYLOAD,
-}
-
-
-class EventCondition(BaseModel):
-    subject: ConditionSubject
-    # Field name (old/new value) or dotted payload path — required by those subjects.
-    qualifier: str | None = Field(default=None, max_length=200)
-    operator: ConditionOperator
-    # Scalar for most operators; a list for in/not_in.
-    value: str | int | float | bool | list[str] | None = None
-
-    @model_validator(mode="after")
-    def _check_shape(self) -> "EventCondition":
-        if self.subject in _QUALIFIED and not (self.qualifier or "").strip():
-            raise ValueError(f"subject {self.subject.value!r} needs a qualifier")
-        if self.operator not in _VALUELESS and self.value in (None, ""):
-            raise ValueError(f"operator {self.operator.value!r} needs a value")
-        return self
-
-
-class ConditionGroup(BaseModel):
-    op: GroupOp = GroupOp.ALL
-    conditions: list["ConditionGroup | EventCondition"] = Field(min_length=1)
-
-    @model_validator(mode="after")
-    def _check_size(self) -> "ConditionGroup":
-        tree = self.model_dump(mode="json")
-        if conditions._count_nodes(tree) > conditions.MAX_NODES:
-            raise ValueError(f"condition tree exceeds {conditions.MAX_NODES} nodes")
-        if conditions.tree_depth(tree) > conditions.MAX_DEPTH:
-            raise ValueError(f"condition tree exceeds depth {conditions.MAX_DEPTH}")
-        return self
 
 # --- action params + discriminated union (validated on rule write) ---
 
@@ -409,7 +367,7 @@ class NodeIn(BaseModel):
 
     `params` is deliberately untyped here: what a node accepts is the business of
     its TYPE, not of this envelope — a trigger takes `{event, schedule}`, a filter
-    `{slq}`, a gate `{conditions}`, an action whatever its action takes. Phase 2
+    `{slq}`, a gate its test, an action whatever its action takes. Phase 2
     makes that a `params_schema` on the node registry so a plugin's node validates
     the same way; until then the service validates the params it knows about
     (a filter's SLQ is compiled on write) and the rest are checked when planned.
@@ -512,14 +470,6 @@ class TriggerInfo(BaseModel):
     group: str
     item_scoped: bool
     has_changes: bool
-
-
-class SubjectInfo(BaseModel):
-    key: ConditionSubject
-    label: str
-    needs_qualifier: bool
-    qualifier_hint: str
-    requires_changes: bool
 
 
 class OperatorInfo(BaseModel):
@@ -650,7 +600,6 @@ class EventSampleRead(BaseModel):
 
 class CatalogRead(BaseModel):
     triggers: list[TriggerInfo]
-    subjects: list[SubjectInfo]
     operators: list[OperatorInfo]
     manual_trigger: str = AutomationTrigger.MANUAL.value
     # Spec 69: the "On a schedule" sentinel + the schedule kinds the builder offers.

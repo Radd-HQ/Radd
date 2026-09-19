@@ -26,7 +26,7 @@ from sqlalchemy import select
 
 from radd.kernel.registry import registries
 from radd.kernel.specs import AutomationNodeSpec, OutputField, OutputKind, valid_output_name
-from radd.modules.automations import executor, graph, nodes as nodes_registry, templating
+from radd.modules.automations import planning, executor, nodes as nodes_registry, templating
 from radd.modules.automations.conditions import EventFacts
 from radd.modules.automations.graph import Edge, Node, Packet
 from radd.modules.automations.types import AutomationNodeKind
@@ -37,6 +37,12 @@ FACTS = EventFacts(
 )
 
 TRIGGER = Node(id="t", kind=AutomationNodeKind.TRIGGER, type="trigger.event", params={})
+
+
+async def _no_facts(_session, _rows):
+    """The fake items below have no state or people; the executor's facts loader
+    (RADD-1265) would query for them."""
+    return {}
 
 
 class _Item:
@@ -160,12 +166,14 @@ async def test_a_named_producer_stamps_the_bag_and_an_action_reads_it(registered
         return [(_Item(i), object()) for i in item_ids]
 
     async def fake_one(
-        _session, node, stored, item, _project, _actor, packet, _scope, _name, _apply, _report
+        _session, node, stored, item, _project, _actor, packet, _scope, _name, _apply, _report,
+        _facts=None,
     ):
         seen.append({"node": node.id, "vars": dict(packet.vars)})
         return executor._Outcome()
 
     monkeypatch.setattr(executor, "_load", fake_load)
+    monkeypatch.setattr(planning, "load_item_facts", _no_facts)
     monkeypatch.setattr(executor, "_one", fake_one)
 
     item = uuid.uuid4()
@@ -190,6 +198,7 @@ async def test_an_unnamed_producer_still_runs_and_still_reports(registered, monk
         return [(_Item(i), object()) for i in item_ids]
 
     monkeypatch.setattr(executor, "_load", fake_load)
+    monkeypatch.setattr(planning, "load_item_facts", _no_facts)
     report = await _walk([TRIGGER, producer], [Edge("t", "out", "p")], item_ids=(uuid.uuid4(),))
     assert report.produced == {"p": {"priority": "high"}}
 
@@ -212,6 +221,7 @@ async def test_a_per_item_producer_publishes_nothing(registered, monkeypatch):
         return [(_Item(i), object()) for i in item_ids]
 
     monkeypatch.setattr(executor, "_load", fake_load)
+    monkeypatch.setattr(planning, "load_item_facts", _no_facts)
     report = await _walk(
         [TRIGGER, producer], [Edge("t", "out", "p")], item_ids=(uuid.uuid4(), uuid.uuid4())
     )
@@ -234,12 +244,14 @@ async def test_the_bag_does_not_leak_onto_a_branch_that_never_ran(registered, mo
         return [(_Item(i), object()) for i in item_ids]
 
     async def fake_one(
-        _session, node, _stored, _item, _project, _actor, packet, _scope, _name, _apply, _report
+        _session, node, _stored, _item, _project, _actor, packet, _scope, _name, _apply, _report,
+        _facts=None,
     ):
         seen[node.id] = dict(packet.vars)
         return executor._Outcome()
 
     monkeypatch.setattr(executor, "_load", fake_load)
+    monkeypatch.setattr(planning, "load_item_facts", _no_facts)
     monkeypatch.setattr(executor, "_one", fake_one)
 
     await _walk(
@@ -273,12 +285,14 @@ async def test_fan_in_merges_feeders_in_topological_order(registered, monkeypatc
         return [(_Item(i), object()) for i in item_ids]
 
     async def fake_one(
-        _session, _node, _stored, _item, _project, _actor, packet, _scope, _name, _apply, _report
+        _session, _node, _stored, _item, _project, _actor, packet, _scope, _name, _apply, _report,
+        _facts=None,
     ):
         seen.append(dict(packet.vars))
         return executor._Outcome()
 
     monkeypatch.setattr(executor, "_load", fake_load)
+    monkeypatch.setattr(planning, "load_item_facts", _no_facts)
     monkeypatch.setattr(executor, "_one", fake_one)
 
     await _walk(
@@ -367,7 +381,7 @@ def test_reserved_roots_are_derived_from_the_token_catalogue():
     """Not hand-listed: a root that stopped being reserved would let someone name
     a node `item` and shadow `{{item.key}}` everywhere in the graph."""
     roots = templating.reserved_roots()
-    assert {"item", "items", "actor", "payload", "event_type", "matched_count"} <= roots
+    assert {"item", "items", "actor", "payload", "event_type", "page", "comment"} <= roots
     for token in templating.TOKENS:
         assert token.token.strip("{} ").split(".", 1)[0] in roots
 
@@ -1054,7 +1068,6 @@ async def test_a_rendered_custom_field_value_the_registry_refuses_is_a_skip(db, 
     outside a select's options; before this it raised out of `_apply_plan` into
     the executor's generic handler — a dry run saying "Would apply", a live run
     logging a crash, and nothing recorded against the action."""
-    from radd.modules.automations.planning import _plan
     from radd.modules.fields import service as fields_service
     from radd.modules.fields.schemas import FieldDefinitionCreate
 

@@ -22,7 +22,6 @@ import {
   type AutomationCatalog,
   type AutomationEdge,
   type AutomationNode,
-  type ConditionGroup,
   type RuleAction,
   type RuleSchedule,
   type TriggerInfo,
@@ -53,13 +52,13 @@ import {
   StateCategoryFields,
   CommentGateFields,
   PageSpaceFields,
+  PayloadGateFields,
 } from "./GateFields";
 import type { PickerData } from "./ActionsBuilder";
 const ACTION_TYPE_PREFIX = "action.";
 import { Button, ButtonVariant } from "../Button";
 import { TextField } from "../TextField";
 import { SelectField } from "../SelectField";
-import { ConditionsBuilder } from "./ConditionsBuilder";
 import { ScheduleEditor, defaultSchedule } from "../ScheduleEditor";
 
 interface GraphInspectorProps {
@@ -240,7 +239,6 @@ export function GraphInspector({
               const params: Record<string, unknown> = { event: next };
               if (next === SCHEDULE_TRIGGER) {
                 params.schedule = node.params.schedule ?? defaultSchedule("interval");
-                params.query = node.params.query ?? "";
               }
               // The validate sentinel carries its BINDING, and the server
               // refuses a schedule on it — corrected here rather than 422ing.
@@ -252,7 +250,7 @@ export function GraphInspector({
             }}
             hint={
               node.params.event === SCHEDULE_TRIGGER
-                ? "Runs on a clock. Its query selects the items each run acts on."
+                ? "Runs on a clock, with no items of its own — wire a Find issues node after it to select what each run acts on."
                 : "The event that starts this automation."
             }
           >
@@ -289,23 +287,22 @@ export function GraphInspector({
           )}
 
           {node.params.event === SCHEDULE_TRIGGER && (
-            <>
-              <ScheduleEditor
-                value={(node.params.schedule as RuleSchedule) ?? defaultSchedule("interval")}
-                onChange={(schedule) => setParams({ ...node.params, schedule })}
-              />
-              <TextField
-                label="Items to act on (SLQ)"
-                value={String(node.params.query ?? "")}
-                onChange={(event) => setParams({ ...node.params, query: event.target.value })}
-                placeholder="state = Todo AND target <= today+3d"
-                hint="A schedule has no event, so the trigger SELECTS the items. Empty = no items; universal actions still run."
-              />
-            </>
+            <ScheduleEditor
+              value={(node.params.schedule as RuleSchedule) ?? defaultSchedule("interval")}
+              onChange={(schedule) => setParams({ ...node.params, schedule })}
+            />
           )}
         </div>
       )}
 
+      {node.type === "gate.payload" && (
+        <PayloadGateFields
+          params={node.params}
+          operators={catalog?.operators ?? []}
+          paths={upstreamSample.data?.paths.map((entry) => entry.path) ?? []}
+          onChange={setParams}
+        />
+      )}
       {node.type === "gate.field_changed" && (
         <FieldChangedFields
           params={node.params}
@@ -340,25 +337,6 @@ export function GraphInspector({
           value={effectiveArity(catalog, node)}
           onChange={(arity) => setParams({ ...node.params, arity })}
         />
-      )}
-
-      {node.kind === NodeKind.gate && node.type === "gate.event" && (
-        <div className="flex flex-col gap-2">
-          <p className="text-xs text-fg-secondary">
-            Routes the whole packet by a test on the EVENT — who acted, what changed. Items pass
-            through unchanged on whichever port matches.
-          </p>
-          {catalog ? (
-            <ConditionsBuilder
-              value={(node.params.conditions as ConditionGroup) ?? null}
-              onChange={(conditions) => setParams({ ...node.params, conditions })}
-              catalog={catalog}
-              trigger={trigger}
-            />
-          ) : (
-            <p className="text-xs text-fg-muted">Loading condition options…</p>
-          )}
-        </div>
       )}
 
       {/* A CONTRIBUTED node with no hardcoded editor gets a form generated from

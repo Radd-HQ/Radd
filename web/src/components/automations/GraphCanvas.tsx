@@ -40,7 +40,7 @@ import {
   type NodeResult,
   type RuleTestResult,
 } from "../../lib/types";
-import { arityOf, contributedPorts, effectiveArity } from "../../lib/automation-nodes";
+import { arityOf, contributedPorts, effectiveArity, nodeTitle, titleIndex } from "../../lib/automation-nodes";
 import {
   GRID_TONE,
   INLET_TONE,
@@ -54,6 +54,8 @@ import { layout, NODE_WIDTH } from "../../lib/automation-layout";
 
 interface NodeData extends Record<string, unknown> {
   node: AutomationNode;
+  /** The type's palette label (RADD-1265) — what a person calls this node. */
+  title: string;
   subtitle: string;
   orientation: Orientation;
   /** "item" when this node fans out — shown as a badge so the expensive part of
@@ -78,7 +80,7 @@ interface NodeData extends Record<string, unknown> {
  * what it is configured to do — the canvas answers "what is the shape of this
  * automation", and the detail panel answers "what exactly does this node do". */
 function GraphNode({ data, selected }: NodeProps) {
-  const { node, subtitle, orientation, arity, ports, run, feedback, wired } = data as NodeData;
+  const { node, title, subtitle, orientation, arity, ports, run, feedback, wired } = data as NodeData;
   // Flow enters the top and leaves the bottom when vertical; left/right when
   // horizontal. Getting this wrong draws every edge as a sideways loop.
   const inletSide = orientation === "vertical" ? Position.Top : Position.Left;
@@ -92,6 +94,7 @@ function GraphNode({ data, selected }: NodeProps) {
         selected ? "border-emphasis outline outline-2 outline-offset-1 outline-focus" : "border-strong"
       }`}
       data-node-kind={node.kind}
+      data-node-type={node.type}
       data-node-id={node.id}
     >
       {node.kind !== NodeKind.trigger && (
@@ -115,7 +118,7 @@ function GraphNode({ data, selected }: NodeProps) {
         )}
       </div>
       <div className="mt-0.5 flex items-baseline gap-1.5">
-        <span className="min-w-0 truncate text-[13px] font-medium text-heading">{node.type}</span>
+        <span className="min-w-0 truncate text-[13px] font-medium text-heading" title={node.type}>{title}</span>
         {/* A producer's NAME, because it is what every downstream token says
             (spec 120) — reading a graph means knowing which node `triage` is. */}
         {node.name && (
@@ -280,11 +283,10 @@ function summarise(node: AutomationNode): string {
     return `${params.negate ? "not in " : "in "}${spaces.join(", ") || "…"}`;
   }
   if (node.type === "ai.classify") return String(params.prompt ?? "") || "ask a question…";
-  // The ABSTRACT gate, and only it. This read `node.kind === gate` until
-  // RADD-1064, so every contributed gate — `ai.validate` included — described
-  // itself on the canvas as testing "event conditions", which is not a vague
-  // summary but a wrong one: it tests nothing of the kind.
-  if (node.type === "gate.event") return "event conditions";
+  if (node.type === "gate.payload") {
+    const value = Array.isArray(params.value) ? (params.value as string[]).join(", ") : String(params.value ?? "");
+    return `${params.negate ? "not " : ""}${params.path || "…"} ${params.operator ?? "eq"} ${value}`.trim();
+  }
   // The first param that says what the node DOES. `arity` and `act_as`
   // configure how it runs, not what it does, and either could sort first in a
   // stored params object — a card reading "arity: item" would be useless.
@@ -366,6 +368,7 @@ export default function GraphCanvas({
   //: cannot derive for itself. Empty until the catalog resolves, which the
   //: signature below accounts for.
   const declaredPorts = useMemo(() => contributedPorts(catalog), [catalog]);
+  const titles = useMemo(() => titleIndex(catalog), [catalog]);
   //: Which (node, port) pairs an edge actually leaves by — what tells an unwired
   //: feedback port from a wired one.
   const wiredPorts = useMemo(() => {
@@ -382,6 +385,7 @@ export default function GraphCanvas({
         position: { x: placed.x, y: placed.y },
         data: {
           node: placed.node,
+          title: nodeTitle(placed.node, titles),
           subtitle: summarise(placed.node),
           orientation,
           // Blank unless the type offers a CHOICE: the badge means "there is a
@@ -401,7 +405,7 @@ export default function GraphCanvas({
         } satisfies NodeData,
         draggable: !readOnly,
       })),
-    [nodes, edges, readOnly, orientation, catalog, declaredPorts, run, validationReach, wiredPorts],
+    [nodes, edges, readOnly, orientation, catalog, declaredPorts, titles, run, validationReach, wiredPorts],
   );
 
   const [flowNodes, setFlowNodes, onFlowNodesChange] = useNodesState<FlowNode>(build());

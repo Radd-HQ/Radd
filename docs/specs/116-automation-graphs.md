@@ -1,5 +1,7 @@
 # Spec 116 — Automations become graphs
 
+> **Revised (RADD-1265, 2026-09-19):** `gate.event` and the spec-58 condition tree are deleted, not merely unoffered; `gate.payload` ("Event value is") is the open-ended gate. A data migration converted stored trees.
+
 ## The problem
 
 An automation today is a **linear pipeline with one decision point**:

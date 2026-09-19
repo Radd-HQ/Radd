@@ -42,7 +42,6 @@ from .schemas import (
     SchedulePreviewRequest,
     RunnableRuleRead,
     ScheduleKindInfo,
-    SubjectInfo,
     TriggerInfo,
 )
 
@@ -85,16 +84,6 @@ async def get_catalog(session: Session, user: CurrentUser) -> CatalogRead:
                 has_changes=spec.has_changes,
             )
             for spec in catalog.TRIGGERS.values()
-        ],
-        subjects=[
-            SubjectInfo(
-                key=spec.key,
-                label=spec.label,
-                needs_qualifier=spec.needs_qualifier,
-                qualifier_hint=spec.qualifier_hint,
-                requires_changes=spec.requires_changes,
-            )
-            for spec in catalog.SUBJECTS
         ],
         operators=[
             OperatorInfo(

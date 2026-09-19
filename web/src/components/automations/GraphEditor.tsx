@@ -44,6 +44,9 @@ interface GraphEditorProps {
    * what left each port. Owned by the page, because the panel that produces it
    * sits outside the editor. */
   run?: RuleTestResult | null;
+  /** The node to open the inspector on (RADD-1265) — a fresh automation's
+   * seeded trigger, so the editor starts on "fires on…" rather than on nothing. */
+  initialSelectedId?: string | null;
 }
 
 export function GraphEditor({
@@ -53,8 +56,9 @@ export function GraphEditor({
   onChange,
   onOrientationChange,
   run,
+  initialSelectedId = null,
 }: GraphEditorProps) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
   const pickers = usePickerData();
   const catalog = useQuery(automationCatalogQuery);

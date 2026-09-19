@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from radd.config import settings
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
-from radd.modules.automations import engine
+from radd.modules.automations import engine, planning
 from radd.modules.automations.types import ActionType
 from radd.modules.canned import service as canned_service
 from radd.modules.canned.render import render_canned
@@ -70,6 +70,13 @@ def smtp_on(monkeypatch):
     sent: list[tuple[tuple, dict]] = []
     monkeypatch.setattr(settings, "smtp_host", "smtp.test")
     monkeypatch.setattr(smtp_util, "send_message", lambda *a, **k: sent.append((a, k)))
+
+    # The planner asks the mail module whether a sender exists (RADD-1265),
+    # and these tests plan with no session — answer for it.
+    async def configured(_session):
+        return True
+
+    monkeypatch.setattr(planning, "outbound_available", configured)
     return sent
 
 
@@ -141,10 +148,18 @@ def _plan_kwargs() -> dict:
     return {"facts": engine._manual_facts(), "rule_name": "r"}
 
 
-async def test_send_email_skips_without_smtp(monkeypatch):
-    monkeypatch.setattr(settings, "smtp_host", "")
+async def test_send_email_skips_without_a_sender(monkeypatch):
+    """No sender row and no env relay — the mail module says so, and the plan is
+    a skip that names Settings → Email rather than an env variable (RADD-1265:
+    the planner used to read `smtp_host` itself, and skipped every automation
+    email on an instance whose sender was a row)."""
+
+    async def unconfigured(_session):
+        return False
+
+    monkeypatch.setattr(planning, "outbound_available", unconfigured)
     plan = await engine._plan(None, _send_action("ext@example.com"), None, None, None, **_plan_kwargs())
-    assert plan.kind == "skip" and "smtp" in plan.detail
+    assert plan.kind == "skip" and "sender" in plan.detail
 
 
 async def test_send_email_literal_recipient_renders_templates(smtp_on):

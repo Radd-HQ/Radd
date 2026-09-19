@@ -248,8 +248,8 @@ def _target_clause(pairs: list[tuple[str, uuid.UUID]]):
 
 def validate_facts(item_id: uuid.UUID, scope: DraftScope) -> conditions.EventFacts:
     """Stand-in facts for a validation run — there is no event, exactly as there
-    is none for a manual run or a schedule. The scope rides in the payload so a
-    `gate.event` on `payload.form_id` can still say something useful."""
+    is none for a manual run or a schedule. The scope rides in the payload so an
+    "Event value is" gate on `form_id` can still say something useful."""
     return conditions.EventFacts(
         event_type=AutomationTrigger.VALIDATE.value,
         actor_id=str(SYSTEM_ACTOR_ID),

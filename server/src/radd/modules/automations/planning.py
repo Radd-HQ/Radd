@@ -54,7 +54,7 @@ from radd.modules.teams import service as teams_service
 from radd.modules.workflow import service as workflow
 
 from . import catalog, conditions, round_robin
-from .email_action import is_role, resolve_recipient, resolve_user
+from .email_action import is_role, outbound_available, resolve_recipient, resolve_user
 from .templating import Renderer
 from .types import (
     CLEAR_VALUE,
@@ -360,13 +360,102 @@ def _resolve_date(value: str) -> date | None:
         return None
 
 
-def _item_ctx(item: WorkItem | None, project: Project | None) -> dict[str, Any] | None:
+#: What `{{item.*}}` can say beyond the row itself (RADD-1265), per item id.
+#: Loaded ONCE per action node by `load_item_facts` — names, not ids, because a
+#: token exists to be read by a person and `{{item.assignee}}` rendering a uuid
+#: is the notification-shaped mistake RADD-922 removed from the payloads.
+ItemFacts = dict[str, Any]
+
+
+async def load_item_facts(
+    session: AsyncSession, rows: list[tuple[WorkItem, Project | None]]
+) -> dict[uuid.UUID, ItemFacts]:
+    """State, people, type and labels for every item in `rows`, in four batched
+    queries. Empty rows cost nothing."""
+    # Spine models may be READ directly (RADD-885); labels and issue types are
+    # not spine, so they answer through their services.
+    from radd.modules.items.models import ItemLabel
+    from radd.modules.labels import service as labels_service
+    from radd.modules.workflow.models import State
+
+    if not rows:
+        return {}
+    items_by_id = {item.id: item for item, _ in rows}
+    state_ids = {item.state_id for item in items_by_id.values() if item.state_id}
+    user_ids = {
+        uid
+        for item in items_by_id.values()
+        for uid in (item.assignee_id, item.reporter_id)
+        if uid is not None
+    }
+    type_ids = {item.type_id for item in items_by_id.values() if item.type_id}
+    states = {
+        row.id: row
+        for row in (await session.execute(select(State).where(State.id.in_(state_ids)))).scalars()
+    } if state_ids else {}
+    users = {
+        row.id: row
+        for row in (await session.execute(select(User).where(User.id.in_(user_ids)))).scalars()
+    } if user_ids else {}
+    types = await itemtypes_service.types_by_ids(session, type_ids)
+    attached = (
+        await session.execute(
+            select(ItemLabel.item_id, ItemLabel.label_id).where(ItemLabel.item_id.in_(items_by_id))
+        )
+    ).all()
+    label_rows = await labels_service.labels_by_ids(session, {label_id for _, label_id in attached}) if attached else {}
+    labels: dict[uuid.UUID, list[str]] = {}
+    for item_id, label_id in attached:
+        label = label_rows.get(label_id)
+        if label is not None:
+            labels.setdefault(item_id, []).append(label.name)
+    for names in labels.values():
+        names.sort()
+
+    facts: dict[uuid.UUID, ItemFacts] = {}
+    for item in items_by_id.values():
+        state = states.get(item.state_id)
+        assignee = users.get(item.assignee_id) if item.assignee_id else None
+        reporter = users.get(item.reporter_id) if item.reporter_id else None
+        issue_type = types.get(item.type_id) if item.type_id else None
+        facts[item.id] = {
+            "state": state.name if state else "",
+            "state_category": state.category if state else "",
+            "assignee": assignee.name if assignee else "",
+            "reporter": reporter.name if reporter else "",
+            "type": issue_type.name if issue_type else "",
+            "labels": ", ".join(labels.get(item.id, [])),
+        }
+    return facts
+
+
+def _item_ctx(
+    item: WorkItem | None, project: Project | None, facts: ItemFacts | None = None
+) -> dict[str, Any] | None:
     if item is None or project is None:
         return None
-    return {"key": f"{project.key}-{item.number}", "title": item.title, "id": str(item.id)}
+    key = f"{project.key}-{item.number}"
+    return {
+        "key": key,
+        "title": item.title,
+        "id": str(item.id),
+        "url": f"{settings.app_base_url.rstrip('/')}/issues/{key}",
+        "project": project.key,
+        "priority": str(item.priority or ""),
+        # Blank rather than absent: an unassigned item's `{{item.assignee}}`
+        # renders as nothing, not as the literal token.
+        **{
+            name: ""
+            for name in ("state", "state_category", "assignee", "reporter", "type", "labels")
+        },
+        **(facts or {}),
+    }
 
 
-def items_ctx(scope: list[tuple[WorkItem, Project | None]]) -> list[dict[str, Any]]:
+def items_ctx(
+    scope: list[tuple[WorkItem, Project | None]],
+    facts: dict[uuid.UUID, ItemFacts] | None = None,
+) -> list[dict[str, Any]]:
     """The set an action is speaking for, as template/webhook context.
 
     One shape for both arities (RADD-918): the whole packet when the action runs
@@ -374,7 +463,12 @@ def items_ctx(scope: list[tuple[WorkItem, Project | None]]) -> list[dict[str, An
     and the webhook's `items[]` read correctly in either mode without the planner
     knowing which one it is in.
     """
-    return [ctx for item, project in scope if (ctx := _item_ctx(item, project)) is not None]
+    facts = facts or {}
+    return [
+        ctx
+        for item, project in scope
+        if (ctx := _item_ctx(item, project, facts.get(item.id))) is not None
+    ]
 
 
 def _is_clear(value: str) -> bool:
@@ -423,6 +517,7 @@ async def _plan(
     rule_name: str,
     items: list[dict[str, Any]] | None = None,
     variables: Any = None,
+    item_facts: ItemFacts | None = None,
 ) -> _Plan:
     """Resolve one stored action — read-only. Returns the work to perform, or a
     'skip' plan when a named target no longer resolves (logged, not fatal).
@@ -440,7 +535,7 @@ async def _plan(
     """
     render = Renderer(
         facts=facts,
-        item_ctx=_item_ctx(item, project),
+        item_ctx=_item_ctx(item, project, item_facts),
         items=items,
         variables=variables or {},
     )
@@ -543,8 +638,11 @@ async def _plan_action(
                 notify=(user.id, text(params["message"])),
             )
         case ActionType.SEND_EMAIL:
-            if not settings.smtp_host:
-                return _Plan(PlanKind.SKIP, "send_email: smtp not configured (smtp_host empty)")
+            if not await outbound_available(session):
+                return _Plan(
+                    PlanKind.SKIP,
+                    "send_email: no outbound mail sender is configured (Settings → Email)",
+                )
             recipient = await resolve_recipient(session, text.line(params["to"]), item)
             if recipient is None:
                 return _Plan(PlanKind.SKIP, f"send_email: no recipient resolves for {params['to']!r}")

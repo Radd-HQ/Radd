@@ -28,7 +28,7 @@ import pytest
 
 from radd.kernel.registry import registries
 from radd.kernel.specs import AutomationNodeSpec
-from radd.modules.automations import executor, graph, nodes as nodes_registry, templating
+from radd.modules.automations import executor, graph, nodes as nodes_registry, planning, templating
 from radd.modules.automations.conditions import EventFacts
 from radd.modules.automations.graph import Edge, Node, Packet
 from radd.modules.automations.types import (
@@ -156,13 +156,6 @@ def test_set_tokens_name_the_items_not_just_how_many():
     )
 
 
-def test_matched_count_now_answers_under_every_trigger():
-    """It was merged into a SCHEDULED run's payload and blank everywhere else.
-    Automations written against it keep working and now mean the same thing on an
-    event-triggered run."""
-    assert templating.render_template("{{matched_count}}", FACTS, None, ITEMS) == "2"
-
-
 def test_an_empty_set_renders_empty_rather_than_verbatim():
     """A literal `{{items.keys}}` in a chat message reads as a broken automation;
     "0" and a blank list are the honest rendering of a run that matched nothing."""
@@ -186,8 +179,12 @@ def spy(monkeypatch):
     async def fake_load(_session, item_ids):
         return [(_Item(i), object()) for i in item_ids]
 
+    async def fake_facts(_session, _rows):
+        return {}
+
     async def fake_one(
-        _session, node, stored, item, _project, _actor, _packet, scope, _name, _apply, _report
+        _session, node, stored, item, _project, _actor, _packet, scope, _name, _apply, _report,
+        _facts=None,
     ):
         calls.append(
             {
@@ -209,6 +206,7 @@ def spy(monkeypatch):
 
     monkeypatch.setattr(executor, "_load", fake_load)
     monkeypatch.setattr(executor, "_one", fake_one)
+    monkeypatch.setattr(planning, "load_item_facts", fake_facts)
     return calls
 
 

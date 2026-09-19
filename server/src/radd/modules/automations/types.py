@@ -62,26 +62,10 @@ VALIDATION_MODE_RANK: dict[ValidationMode, int] = {
 ScheduleKind = ScheduleKind
 
 
-class GroupOp(StrEnum):
-    """Combinator of an event-condition group (spec 58) — nestable."""
-
-    ALL = "all"
-    ANY = "any"
-    NONE = "none"
-
-
-class ConditionSubject(StrEnum):
-    """What an event condition inspects — resolved against the triggering event."""
-
-    ACTOR = "actor"  # who caused it: matches user id, email, or name
-    CHANGED_FIELD = "changed_field"  # item.updated: names of fields that changed
-    OLD_VALUE = "old_value"  # qualifier = field name → the diff's "from"
-    NEW_VALUE = "new_value"  # qualifier = field name → the diff's "to"
-    STATE_CATEGORY = "state_category"  # item events: the item's state category NOW
-    PAYLOAD = "payload"  # qualifier = dotted path into the raw event payload
-
-
 class ConditionOperator(StrEnum):
+    """The operators of the one open-ended gate, `gate.payload` ("Event value
+    is"): a dotted path into the event payload, one of these, a value."""
+
     EQ = "eq"
     NEQ = "neq"
     IN = "in"
@@ -307,7 +291,11 @@ PORTS_BY_KIND: dict[AutomationNodeKind, tuple[NodePort, ...]] = {
 # and the SPA's catalogue all name these, and a node type spelled differently in
 # two of those places is a wire constant with no compiler behind it.
 
-TYPE_GATE_EVENT = "gate.event"  # pre-revision; still executed, no longer offered
+#: RADD-1265: the one open-ended gate — a dotted payload path, an operator and
+#: a value. It replaces the retired `gate.event` condition tree as the escape
+#: hatch for whatever a named gate does not ask ("release status became
+#: released", "the form is the incident form").
+TYPE_GATE_PAYLOAD = "gate.payload"
 TYPE_GATE_FIELD_CHANGED = "gate.field_changed"
 TYPE_GATE_CHANGED_BY = "gate.changed_by"
 TYPE_GATE_STATE_CATEGORY = "gate.state_category"
@@ -328,7 +316,7 @@ ACTION_TYPE_PREFIX = "action."
 #: looks configured. `gate.state_category` is NOT here — the draft has a state,
 #: and asking about it is a real question.
 EVENT_GATE_TYPES: frozenset[str] = frozenset(
-    {TYPE_GATE_EVENT, TYPE_GATE_FIELD_CHANGED, TYPE_GATE_CHANGED_BY, TYPE_GATE_COMMENT, TYPE_GATE_PAGE_SPACE}
+    {TYPE_GATE_FIELD_CHANGED, TYPE_GATE_CHANGED_BY, TYPE_GATE_COMMENT, TYPE_GATE_PAGE_SPACE}
 )
 
 #: Spec 119: reaching this node records a FINDING against the draft being
@@ -395,7 +383,7 @@ BUILTIN_ARITY: dict[str, ArityRule] = {
     # applies" rather than "always".
     TYPE_VALIDATION_FAIL: ArityRule(NodeArity.SET, (NodeArity.SET,)),
     TYPE_SEARCH_SLQ: ArityRule(NodeArity.SET, (NodeArity.SET,)),
-    TYPE_GATE_EVENT: ArityRule(NodeArity.SET, (NodeArity.SET,)),
+    TYPE_GATE_PAYLOAD: ArityRule(NodeArity.SET, (NodeArity.SET,)),
     TYPE_GATE_FIELD_CHANGED: ArityRule(NodeArity.SET, (NodeArity.SET,)),
     TYPE_GATE_CHANGED_BY: ArityRule(NodeArity.SET, (NodeArity.SET,)),
     TYPE_GATE_STATE_CATEGORY: ArityRule(NodeArity.SET, (NodeArity.SET,)),

@@ -1,7 +1,7 @@
 """Scheduled automation triggers + SLA due_soon (spec 69).
 
 Pure: next_run math (interval/daily/weekly, TZ, DST-adjacent), ScheduleConfig
-validation, relative-date literals, the due_soon predicate, {{matched_count}}.
+validation, relative-date literals, the due_soon predicate.
 DB-backed (compose Postgres, rolled back at teardown — the db fixture idiom from
 tests/test_bulk.py): schedule-state bookkeeping on rule writes, the scheduled
 engine path (SLQ-matched item actions, cap, loop guard), due_soon emit-once.
@@ -20,7 +20,6 @@ from radd.modules.automations import engine, service as automations
 from radd.modules.automations.models import AutomationScheduleState
 from radd.schedule import next_run
 from radd.modules.automations.schemas import RuleCreate, RuleUpdate, ScheduleConfig
-from radd.modules.automations.templating import render_template
 from radd.modules.automations.types import (
     SYSTEM_ACTOR_ID,
     AutomationEntity,
@@ -29,7 +28,6 @@ from radd.modules.automations.types import (
 )
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
-from radd.modules.automations.conditions import EventFacts
 from radd.modules.events.models import Event
 from radd.modules.items import service as items_service
 from radd.modules.items.enums import ItemEvent, Priority
@@ -154,21 +152,6 @@ def test_relative_date_literals():
     assert relative_date(Value("today+3x"), today) is None  # unknown unit
 
 
-# --- {{matched_count}} template token ---
-
-
-def test_matched_count_renders_in_universal_templates():
-    facts = EventFacts(
-        event_type=AutomationEvent.SCHEDULED.value,
-        actor_id=None,
-        actor_email=None,
-        actor_name=None,
-        payload={"matched_count": 7},
-    )
-    assert render_template("{{matched_count}} stale items", facts) == "7 stale items"
-    assert render_template("{{matched_count}}", engine._manual_facts()) == "{{matched_count}}"
-
-
 # --- due_soon predicate (pure) ---
 
 
@@ -206,35 +189,34 @@ async def _project(db, key_prefix="SC"):
 
 
 def _scheduled_rule_data(*, condition_slq="", enabled=True) -> RuleCreate:
-    """A scheduled automation as a graph (spec 116).
+    """A scheduled automation as a graph (spec 116, RADD-1265).
 
-    Note where the SLQ goes: on the TRIGGER as `query`, not on a filter node. A
-    schedule has no event and therefore no target item, so its trigger is what
-    PRODUCES the initial item set; filters downstream only narrow one. Putting it
-    on a filter would leave the automation filtering an empty set — running,
-    matching nothing, and looking perfectly healthy. The d116graphs migration
-    makes the same distinction for upgraded rows."""
+    A schedule has no event and therefore no target item, so the items a run
+    acts on come from a SEARCH node wired after the trigger — the trigger's own
+    `query` param is gone. Putting the SLQ on a filter would leave the
+    automation filtering an empty set — running, matching nothing, and looking
+    perfectly healthy."""
     trigger_params: dict = {
         "event": AutomationTrigger.SCHEDULE.value,
         "schedule": {"kind": "interval", "minutes": 30},
     }
+    nodes = [
+        {"id": "trigger", "kind": "trigger", "type": "trigger.event", "params": trigger_params},
+        {"id": "a0", "kind": "action", "type": "action.set_priority", "params": {"priority": "high"}},
+    ]
+    edges = [{"source": "trigger", "port": "out", "target": "a0"}]
     if condition_slq:
-        trigger_params["query"] = condition_slq
+        nodes.insert(
+            1,
+            {"id": "find", "kind": "source", "type": "search.slq",
+             "params": {"slq": condition_slq, "project": "", "mode": "replace"}},
+        )
+        edges = [
+            {"source": "trigger", "port": "out", "target": "find"},
+            {"source": "find", "port": "out", "target": "a0"},
+        ]
     return RuleCreate.model_validate(
-        {
-            "name": "nightly",
-            "enabled": enabled,
-            "nodes": [
-                {"id": "trigger", "kind": "trigger", "type": "trigger.event", "params": trigger_params},
-                {
-                    "id": "a0",
-                    "kind": "action",
-                    "type": "action.set_priority",
-                    "params": {"priority": "high"},
-                },
-            ],
-            "edges": [{"source": "trigger", "port": "out", "target": "a0"}],
-        }
+        {"name": "nightly", "enabled": enabled, "nodes": nodes, "edges": edges}
     )
 
 
@@ -313,13 +295,8 @@ async def test_schedule_consistency_409s(db, admin):
                     {
                         "id": "gate",
                         "kind": "gate",
-                        "type": "gate.event",
-                        "params": {
-                            "conditions": {
-                                "op": "all",
-                                "conditions": [{"subject": "actor", "operator": "is_set"}],
-                            }
-                        },
+                        "type": "gate.changed_by",
+                        "params": {"users": ["someone@example.com"], "negate": False},
                     }
                 ],
                 extra_edges=[{"source": "gate", "port": "true", "target": "a0"}],

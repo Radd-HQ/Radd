@@ -41,7 +41,7 @@ from radd.modules.workflow.guards import TransitionError
 
 from radd.kernel.specs import valid_output_name
 
-from . import conditions, graph
+from . import graph
 from .gates import GATE_EVALUATORS
 from .nodes import arity_of, needs_items, output_name, ports_of, spec_for
 from .graph import Edge, Node, Packet
@@ -52,7 +52,6 @@ from .graph import Edge, Node, Packet
 from .types import (  # noqa: F401 — re-exported for callers importing them here
     ACTION_TYPE_PREFIX,
     TYPE_FILTER_SLQ,
-    TYPE_GATE_EVENT,
     TYPE_SEARCH_SLQ,
     TYPE_VALIDATION_FAIL,
     AutomationNodeKind,
@@ -463,13 +462,12 @@ async def _route(
         return await _run_registered_gate(session, node, packet, actor, report)
 
     evaluator = GATE_EVALUATORS.get(node.type)
-    if evaluator is not None:
-        passed = evaluator(packet.facts, node.params)
-    else:
-        # `gate.event` — the pre-revision condition tree. Still executed so
-        # stored graphs keep working; no longer offered in the palette, because
-        # a node called "event conditions" taught nobody what it tested.
-        passed = conditions.matches(packet.facts, node.params.get("conditions"))
+    if evaluator is None:
+        # A gate this build does not know — most often a plugin that has been
+        # uninstalled. FALSE rather than a guess, and said out loud.
+        logger.error("automations: node %s: unknown gate type %r", node.id, node.type)
+        return NodePort.FALSE.value, {}
+    passed = evaluator(packet.facts, node.params)
     return (NodePort.TRUE if passed else NodePort.FALSE).value, {}
 
 
@@ -831,9 +829,15 @@ async def _run_action(
         budget.dropped.append(f"node {node.id!r} — unknown action type {node.type!r}")
         return [], {}
 
+    from .planning import load_item_facts
+
     stored = {"type": action_name, "params": node.params}
     actor = await _actor_for(session, node, system_user)
     loaded = await _load(session, packet.item_ids)
+    # What `{{item.*}}` can say (RADD-1265), fetched once for the whole node
+    # rather than per invocation: a per-item run over 200 issues is 200
+    # renders, not 800 queries.
+    facts = await load_item_facts(session, loaded)
 
     if arity_of(node) is NodeArity.SET:
         # ONE run for the whole packet — a digest webhook, a single triage
@@ -847,7 +851,7 @@ async def _run_action(
         item, project = loaded[0] if len(loaded) == 1 else (None, None)
         outcome = await _one(
             session, node, stored, item, project, actor, packet, loaded,
-            automation_name, apply, report,
+            automation_name, apply, report, facts,
         )
         made = [outcome.created_id] if outcome.created_id is not None else []
         return made, outcome.produced
@@ -868,7 +872,7 @@ async def _run_action(
     for item, project in loaded[:allowed]:
         outcome = await _one(
             session, node, stored, item, project, actor, packet, [(item, project)],
-            automation_name, apply, report,
+            automation_name, apply, report, facts,
         )
         if outcome.created_id is not None:
             created.append(outcome.created_id)
@@ -966,6 +970,7 @@ async def _one(
     automation_name: str,
     apply: bool,
     report: RunReport,
+    facts: dict[uuid.UUID, dict[str, Any]] | None = None,
 ) -> "_Outcome":
     """Plan one action, then apply it — inside a SAVEPOINT so a failure rolls back
     only itself. The plan is recorded either way, which is what lets a dry run
@@ -987,8 +992,9 @@ async def _one(
             plan = await _plan(
                 session, stored, item, project, actor,
                 facts=packet.facts, rule_name=automation_name,
-                items=items_ctx(scope),
+                items=items_ctx(scope, facts),
                 variables=packet.vars,
+                item_facts=(facts or {}).get(item.id) if item is not None else None,
             )
             report.plans.append(
                 PlannedAction(

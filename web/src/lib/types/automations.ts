@@ -86,45 +86,8 @@ export interface TriggerInfo {
   group: string;
   /** A target item resolves — the SLQ condition + item actions apply to it. */
   item_scoped: boolean;
-  /** The payload carries a field diff (changed-field/old/new subjects work). */
+  /** The payload carries a field diff (the field-changed gate can read it). */
   has_changes: boolean;
-}
-
-export const ConditionSubject = {
-  actor: "actor",
-  changedField: "changed_field",
-  oldValue: "old_value",
-  newValue: "new_value",
-  stateCategory: "state_category",
-  payload: "payload",
-} as const;
-export type ConditionSubjectValue = (typeof ConditionSubject)[keyof typeof ConditionSubject];
-
-export const ConditionGroupOp = { all: "all", any: "any", none: "none" } as const;
-export type ConditionGroupOpValue =
-  (typeof ConditionGroupOp)[keyof typeof ConditionGroupOp];
-
-/** One leaf condition on the triggering event (spec 58). */
-export interface EventCondition {
-  subject: ConditionSubjectValue;
-  /** Field name (old/new value) or dotted payload path — where the subject needs one. */
-  qualifier?: string | null;
-  operator: string;
-  value?: string | number | boolean | string[] | null;
-}
-
-/** A nestable all/any/none group of conditions. */
-export interface ConditionGroup {
-  op: ConditionGroupOpValue;
-  conditions: (ConditionGroup | EventCondition)[];
-}
-
-export interface SubjectInfo {
-  key: ConditionSubjectValue;
-  label: string;
-  needs_qualifier: boolean;
-  qualifier_hint: string;
-  requires_changes: boolean;
 }
 
 export interface OperatorInfo {
@@ -182,7 +145,6 @@ export interface NodeOutputsInfo {
 /** GET /automations/catalog — everything the rule builder renders from. */
 export interface AutomationCatalog {
   triggers: TriggerInfo[];
-  subjects: SubjectInfo[];
   operators: OperatorInfo[];
   manual_trigger: string;
   /** Spec 69: the "On a schedule" sentinel + the schedule kinds it offers. */

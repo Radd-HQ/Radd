@@ -15,6 +15,7 @@ import { OptionResource, type OptionResourceValue } from "../../lib/queries/opti
 import type React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { pageSpacesQuery } from "../../lib/queries";
+import type { OperatorInfo } from "../../lib/types";
 import { TextField } from "../TextField";
 import { SelectField } from "../SelectField";
 import { TokenMultiSelect } from "../TokenMultiSelect";
@@ -350,6 +351,95 @@ export function AiClassifyFields({
         the prompt says how many, so the model knows it is answering about a sample. The budget is
         the <code>RADD_AI_AUTOMATION_CONTEXT_CHARS</code> setting; size it to your model.
       </p>
+    </div>
+  );
+}
+
+
+/** "Event value is" (RADD-1265) — the one open-ended gate: a dotted path into
+ * the event payload, an operator, a value. The paths offered are the ones REAL
+ * recent events of the upstream trigger carried, so the picker cannot suggest
+ * an address nothing ever emits. */
+export function PayloadGateFields({
+  params,
+  operators,
+  paths,
+  onChange,
+}: {
+  params: Params;
+  operators: OperatorInfo[];
+  paths: string[];
+  onChange: (params: Params) => void;
+}) {
+  const operator = String(params.operator ?? "eq");
+  const info = operators.find((entry) => entry.key === operator);
+  const needsValue = info?.needs_value ?? true;
+  const listValue = info?.list_value ?? false;
+  const value = params.value;
+  const listId = "payload-gate-paths";
+  return (
+    <div className="flex flex-col gap-2">
+      <TextField
+        label="Value at"
+        value={String(params.path ?? "")}
+        onChange={(event) => onChange({ ...params, path: event.target.value })}
+        placeholder="item.state.name"
+        list={listId}
+        hint="A dotted path into the event's payload. Lists fan out, so `item.labels contains urgent` reads naturally."
+      />
+      <datalist id={listId}>
+        {paths.map((path) => (
+          <option key={path} value={path} />
+        ))}
+      </datalist>
+      <SelectField
+        label="Test"
+        value={operator}
+        onChange={(event) => {
+          const next = event.target.value;
+          const nextInfo = operators.find((entry) => entry.key === next);
+          onChange({
+            ...params,
+            operator: next,
+            value: nextInfo?.list_value ? (Array.isArray(value) ? value : []) : Array.isArray(value) ? "" : value,
+          });
+        }}
+      >
+        {operators.map((entry) => (
+          <option key={entry.key} value={entry.key}>
+            {entry.label}
+          </option>
+        ))}
+      </SelectField>
+      {needsValue && listValue && (
+        <Labelled label="Values">
+          <TokenMultiSelect
+            value={Array.isArray(value) ? (value as string[]) : []}
+            onChange={(next) => onChange({ ...params, value: next })}
+            options={[]}
+            placeholder="Add a value…"
+            ariaLabel="Values"
+            allowCreate
+          />
+        </Labelled>
+      )}
+      {needsValue && !listValue && (
+        <TextField
+          label="Value"
+          value={Array.isArray(value) ? "" : String(value ?? "")}
+          onChange={(event) => onChange({ ...params, value: event.target.value })}
+          placeholder="Done"
+        />
+      )}
+      <label className="flex w-fit cursor-pointer items-center gap-2 text-[13px] text-fg">
+        <input
+          type="checkbox"
+          checked={Boolean(params.negate)}
+          onChange={(event) => onChange({ ...params, negate: event.target.checked })}
+          className="size-3.5 cursor-pointer accent-[var(--accent-fill)]"
+        />
+        Invert — true when the test does NOT hold
+      </label>
     </div>
   );
 }

@@ -56,8 +56,8 @@ const readArity = `(()=>{
   }));})()`;
 
 /** Handles on the node currently matching a type, for the port count. */
-const handlesOf = (re) => `(()=>{
-  const n=[...document.querySelectorAll('[data-node-id]')].find(e=>${re}.test(e.innerText));
+const handlesOf = (type) => `(()=>{
+  const n=document.querySelector('[data-node-type="${type}"]');
   if(!n) return -1;
   return n.parentElement.querySelectorAll(".react-flow__handle-bottom, .react-flow__handle-right").length;})()`;
 
@@ -117,11 +117,10 @@ await session.eval(search("create item"));
 await sleep(600);
 const addedCreate = await session.eval(clickPanelRow("/create item/i"));
 await sleep(1400);
-const createPorts = await session.eval(handlesOf("/action\\.create_item/"));
+const createPorts = await session.eval(handlesOf("action.create_item"));
 const createArity = await session.eval(readArity);
 const badgeBefore = await session.eval(
-  `(()=>{const n=[...document.querySelectorAll('[data-node-id]')]
-     .find(e=>/action\\.create_item/.test(e.innerText));
+  `(()=>{const n=document.querySelector('[data-node-type="action.create_item"]');
    return n ? (n.querySelector("[data-node-arity]")||{}).textContent ?? null : null;})()`,
 );
 
@@ -132,8 +131,7 @@ const switched = await session.eval(`(()=>{
   if(!perItem) return false; perItem.click(); return true;})()`);
 await sleep(1200);
 const badgeAfter = await session.eval(
-  `(()=>{const n=[...document.querySelectorAll('[data-node-id]')]
-     .find(e=>/action\\.create_item/.test(e.innerText));
+  `(()=>{const n=document.querySelector('[data-node-type="action.create_item"]');
    return n ? (n.querySelector("[data-node-arity]")||{}).textContent ?? null : null;})()`,
 );
 
