@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2, Workflow, X, Zap } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { apiAutomationPath } from "../../lib/constants";
-import { shortDateTime } from "../../lib/dates";
+import { shortDateTime, relativeTime } from "../../lib/dates";
 import { usePermissions } from "../../lib/hooks";
 import { useListFilter } from "../../lib/list-filter";
 import { triggerLabel } from "../../lib/meta";
@@ -14,6 +14,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { ListSearchInput } from "../../components/ListSearchInput";
 import { TableSkeleton } from "../../components/TableSkeleton";
 import { RuleEditor } from "../../components/automations/RuleEditor";
+import { RunStatusChip } from "../../components/automations/RunsPanel";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { QueryError } from "../../components/QueryError";
 import { IconButton } from "../../components/IconButton";
@@ -152,6 +153,14 @@ function RuleRow({ rule, onEdit }: { rule: Rule; onEdit: () => void }) {
       </span>
       {nextRun && rule.enabled && (
         <span className="shrink-0 text-[11px] text-fg-muted">next {shortDateTime(nextRun)}</span>
+      )}
+      {/* The newest recorded run (RADD-1266): the one-glance answer to "is this
+          thing actually firing". */}
+      {rule.last_run_at && (
+        <span className="flex shrink-0 items-center gap-1 text-[11px] text-fg-muted" data-last-run>
+          <RunStatusChip status={rule.last_run_status} />
+          {relativeTime(rule.last_run_at)}
+        </span>
       )}
 
       <label className="ml-auto flex shrink-0 cursor-pointer items-center gap-1.5 text-[11px] text-fg-secondary">

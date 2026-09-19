@@ -445,6 +445,10 @@ class RuleRead(BaseModel):
     #: hold several triggers and a scalar could only describe one of them —
     #: silently, which is the worst way to be wrong about when something runs.
     triggers: list["TriggerRead"] = Field(default_factory=list)
+    #: The newest recorded run (RADD-1266), for the list's chip. Empty when it
+    #: has never run, or its runs have been swept.
+    last_run_at: UtcDatetime | None = None
+    last_run_status: str = ""
     created_at: UtcDatetime
     updated_at: UtcDatetime
 
@@ -687,6 +691,8 @@ class ActionPreview(BaseModel):
     params: dict[str, Any]
     resolves: bool  # would the action's target(s) resolve at apply time?
     detail: str
+    #: A workflow guard or the field registry refused it (RADD-1266).
+    refused: bool = False
     #: Which node planned it, and against which item. A graph runs the same
     #: action type from several nodes and, at per-item arity, once per item — a
     #: flat list of "would apply" could not say which was which.
@@ -745,3 +751,34 @@ class RuleRunResult(BaseModel):
     rule_id: uuid.UUID
     item_id: uuid.UUID
     ran: bool  # False = the item didn't match the rule's SLQ condition
+
+
+# --- run history (RADD-1266) ---
+
+
+class RunRead(BaseModel):
+    """One recorded run, as the list shows it."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    automation_id: uuid.UUID
+    trigger_node_id: str
+    source: str
+    event_id: int | None = None
+    event_type: str = ""
+    started_at: UtcDatetime
+    finished_at: UtcDatetime
+    status: str
+    actor_id: uuid.UUID | None = None
+    item_keys: list[str] = Field(default_factory=list)
+    actions_applied: int = 0
+    actions_skipped: int = 0
+    error: str = ""
+
+
+class RunDetailRead(RunRead):
+    """The run with its whole report — the dry run's shape, so the editor
+    renders a real run through the panel it already has."""
+
+    report: RuleTestResult | None = None

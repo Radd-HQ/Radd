@@ -78,6 +78,12 @@ plugin = RaddPlugin(
             AutomationEvent.SCHEDULED, "Automation scheduled run", "System",
             trigger=False, entity_type="automation", audited=False,
         ),
+        # RADD-1266: audited, never a trigger — an automation that reacts to
+        # automations failing is the loop guard's nightmare.
+        EventTypeSpec(
+            AutomationEvent.RUN_FAILED, "Automation run failed", "Admin",
+            trigger=False, entity_type="automation_rule",
+        ),
     ),
     consumer_names=(CONSUMER_NAME,),
     permissions=(

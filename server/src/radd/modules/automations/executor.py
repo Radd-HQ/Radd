@@ -146,6 +146,10 @@ class PlannedAction:
     #: params that actually CARRIED a token appear, so the dry run can show
     #: `{{triage.priority}} → high` without repeating every literal beside it.
     resolved: dict[str, str] = field(default_factory=dict)
+    #: True when the apply was REFUSED by a workflow guard or the field registry
+    #: (RADD-1266) — a skip with a different owner: the project's rules said no,
+    #: not the planner. The run history ranks it above "applied".
+    refused: bool = False
 
 
 @dataclass
@@ -1073,7 +1077,7 @@ def _record_refusal(report: RunReport, reason: str) -> None:
         return
     planned = report.plans[-1]
     report.plans[-1] = replace(
-        planned, resolves=False, detail=f"{planned.detail} — {reason}"
+        planned, resolves=False, refused=True, detail=f"{planned.detail} — {reason}"
     )
 
 

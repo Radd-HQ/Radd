@@ -34,6 +34,7 @@ import { incompleteActionNodeIds } from "./ActionsBuilder";
 import { GraphEditor, type Orientation } from "./GraphEditor";
 import { seededTrigger } from "../../lib/automation-nodes";
 import { RuleTestPanel } from "./RuleTestPanel";
+import { RunsPanel } from "./RunsPanel";
 import { ChangeHistoryPanel } from "../history/ChangeHistoryPanel";
 
 interface RuleEditorProps {
@@ -55,6 +56,7 @@ export function RuleEditor({ rule, onDone }: RuleEditorProps) {
   // survive a node being selected — the whole point is to read the numbers while
   // clicking around the graph that produced them.
   const [run, setRun] = useState<RuleTestResult | null>(null);
+  const [panel, setPanel] = useState<"dry-run" | "runs">("dry-run");
   const [graph, setGraph] = useState<{ nodes: AutomationNode[]; edges: AutomationEdge[] }>({
     nodes: rule?.nodes ?? [seededTrigger()],
     edges: rule?.edges ?? [],
@@ -156,12 +158,37 @@ export function RuleEditor({ rule, onDone }: RuleEditorProps) {
       </div>
 
       {persistedId ? (
-        <RuleTestPanel
-          ruleId={persistedId}
-          triggers={rule?.triggers ?? []}
-          nodes={graph.nodes}
-          onResult={setRun}
-        />
+        <div className="flex flex-col gap-2">
+          {/* One report renderer, two sources (RADD-1266): what it WOULD do
+              and what it DID. Tabs rather than two stacked panels because both
+              annotate the same canvas, and only one can at a time. */}
+          <div role="tablist" aria-label="Automation reports" className="flex gap-1">
+            {(["dry-run", "runs"] as const).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={panel === tab}
+                onClick={() => { setPanel(tab); setRun(null); }}
+                className={`rounded-[6px] px-2.5 py-1 text-xs cursor-pointer ${
+                  panel === tab ? "bg-elevated text-heading" : "text-fg-secondary hover:text-heading"
+                }`}
+              >
+                {tab === "dry-run" ? "Dry run" : "Runs"}
+              </button>
+            ))}
+          </div>
+          {panel === "dry-run" ? (
+            <RuleTestPanel
+              ruleId={persistedId}
+              triggers={rule?.triggers ?? []}
+              nodes={graph.nodes}
+              onResult={setRun}
+            />
+          ) : (
+            <RunsPanel ruleId={persistedId} nodes={graph.nodes} onResult={setRun} />
+          )}
+        </div>
       ) : (
         <p className="text-xs text-fg-muted">Save the automation to dry-run it.</p>
       )}

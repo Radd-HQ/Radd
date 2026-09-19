@@ -113,6 +113,10 @@ export const apiFieldOptionsPath = (fieldId: string) =>
 export const apiAutomationPath = (ruleId: string) => `${ApiPath.automations}/${ruleId}`;
 export const apiAutomationTestPath = (ruleId: string) =>
   `${ApiPath.automations}/${ruleId}/test`;
+export const apiAutomationRunsPath = (ruleId: string) =>
+  `${ApiPath.automations}/${ruleId}/runs`;
+export const apiAutomationRunPath = (ruleId: string, runId: string) =>
+  `${ApiPath.automations}/${ruleId}/runs/${runId}`;
 /** Intake form paths (spec 20). */
 export const apiFormPath = (formId: string) => `${ApiPath.forms}/${formId}`;
 export const apiFormSubmitPath = (formId: string) => `${ApiPath.forms}/${formId}/submit`;

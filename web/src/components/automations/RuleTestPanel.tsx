@@ -68,7 +68,6 @@ export function RuleTestPanel({ ruleId, triggers = [], nodes = [], onResult }: R
   });
 
   const result = test.data;
-  const byId = new Map(nodes.map((node) => [node.id, node]));
 
   return (
     <div className="flex flex-col gap-3 rounded-md border border-subtle bg-surface/40 p-3">
@@ -134,8 +133,28 @@ export function RuleTestPanel({ ruleId, triggers = [], nodes = [], onResult }: R
         {test.isError && <span className="text-xs text-red-400">{errorMessage(test.error)}</span>}
       </div>
 
-      {result && (
-        <div className="flex flex-col gap-2">
+      {result && <RunResultView result={result} nodes={nodes} />}
+    </div>
+  );
+}
+
+
+/** The report, rendered — shared by the dry run and the run history
+ * (RADD-1266), which is what makes "what would it do" and "what did it do"
+ * the same panel. `applied` flips the action chips from "Would apply" to
+ * "Applied": a recorded run's plans were carried out. */
+export function RunResultView({
+  result,
+  nodes = [],
+  applied = false,
+}: {
+  result: RuleTestResult;
+  nodes?: AutomationNode[];
+  applied?: boolean;
+}) {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  return (
+        <div className="flex flex-col gap-2" data-run-result>
           {result.dropped.length > 0 && (
             // Surfaced, never buried: a run that did less and a run that had
             // less to do are indistinguishable otherwise.
@@ -174,22 +193,24 @@ export function RuleTestPanel({ ruleId, triggers = [], nodes = [], onResult }: R
 
           {result.would_apply.length > 0 ? (
             <>
-              <p className="text-[11px] uppercase tracking-wide text-fg-muted">Would apply</p>
+              <p className="text-[11px] uppercase tracking-wide text-fg-muted">
+                {applied ? "Actions" : "Would apply"}
+              </p>
               <ul className="flex flex-col gap-1">
                 {result.would_apply.map((preview, index) => (
-                  <ActionPreviewRow key={index} preview={preview} />
+                  <ActionPreviewRow key={index} preview={preview} applied={applied} />
                 ))}
               </ul>
             </>
           ) : (
             <p className="flex items-center gap-1.5 text-[13px]">
               <CircleSlash size={14} className="text-fg-muted" aria-hidden />
-              <span className="text-fg-secondary">Nothing would apply on this run</span>
+              <span className="text-fg-secondary">
+                {applied ? "No action reached an item on this run" : "Nothing would apply on this run"}
+              </span>
             </p>
           )}
         </div>
-      )}
-    </div>
   );
 }
 
@@ -250,8 +271,11 @@ function NodeRow({ node, type }: { node: NodeResult; type?: string }) {
   );
 }
 
-function ActionPreviewRow({ preview }: { preview: ActionPreview }) {
+function ActionPreviewRow({ preview, applied = false }: { preview: ActionPreview; applied?: boolean }) {
   const resolved = Object.entries(preview.resolved ?? {});
+  const chip = preview.resolves
+    ? applied ? "Applied" : "Would apply"
+    : preview.refused ? "Refused" : "Skipped";
   return (
     <li
       data-action-preview={preview.node_id}
@@ -264,10 +288,12 @@ function ActionPreviewRow({ preview }: { preview: ActionPreview }) {
             "shrink-0 rounded px-1.5 py-px text-[10px] uppercase tracking-wide " +
             (preview.resolves
               ? "bg-emerald-500/15 text-emerald-300"
-              : "bg-amber-500/15 text-amber-300")
+              : preview.refused
+                ? "bg-status-danger/15 text-status-danger"
+                : "bg-amber-500/15 text-amber-300")
           }
         >
-          {preview.resolves ? "Would apply" : "Skipped"}
+          {chip}
         </span>
         <span className="shrink-0 font-medium text-fg">{ACTION_TYPE_LABELS[preview.type]}</span>
         {/* Which node, against which item — a graph runs the same action type

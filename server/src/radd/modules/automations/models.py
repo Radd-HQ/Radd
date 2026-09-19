@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String
+from sqlalchemy import BigInteger, Boolean, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -166,3 +166,55 @@ class AutomationScheduleState(Base):
     node_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     next_run_at: Mapped[datetime]  # naive UTC, like every engine timestamp
     last_run_at: Mapped[datetime | None]
+
+
+class AutomationRun(Base):
+    """One recorded run of an automation (RADD-1266).
+
+    The engine used to build a complete `RunReport` — per node what arrived and
+    what left, every planned action with its skip reason, budget drops — and
+    throw it away after logging. This keeps it, in the SAME shape the dry run
+    returns (`RuleTestResult`), so one renderer serves both and "what did it do
+    last night" is answered by the panel that already answers "what would it
+    do". Written in the run's own transaction; a dry run never writes one.
+
+    `report` is JSONB rather than columns per node because the graph's shape is
+    the automation's business, not the schema's — and the row is read whole.
+    """
+
+    __tablename__ = "automation_runs"
+    __table_args__ = (
+        Index("ix_automation_runs_automation_started", "automation_id", "started_at"),
+        Index("ix_automation_runs_started_at", "started_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    automation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("automations.id", ondelete="CASCADE"), index=True
+    )
+    #: Which trigger node the run started at — a graph may hold several.
+    trigger_node_id: Mapped[str] = mapped_column(String(64))
+    #: A `RunSource` value.
+    source: Mapped[str] = mapped_column(String(16))
+    #: The outbox event that started it, when one did; the scheduler's own
+    #: synthetic event for a schedule; NULL for a manual run.
+    event_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    event_type: Mapped[str] = mapped_column(String(100), default="")
+    started_at: Mapped[datetime]  # naive UTC, like every engine timestamp
+    finished_at: Mapped[datetime]
+    #: A `RunStatus` value.
+    status: Mapped[str] = mapped_column(String(16), index=True)
+    #: Who the actions ran as (the author, or the system actor for rows that
+    #: predate spec 116). SET NULL: a run outlives the account it acted as.
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    #: Keys of the items the trigger handed in, capped — the list view's answer
+    #: to "which issues", without opening the report.
+    item_keys: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    actions_applied: Mapped[int] = mapped_column(Integer, default=0)
+    actions_skipped: Mapped[int] = mapped_column(Integer, default=0)
+    #: The traceback's last line on a FAILED run; empty otherwise.
+    error: Mapped[str] = mapped_column(Text, default="")
+    #: The whole `RuleTestResult`, as JSON.
+    report: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)

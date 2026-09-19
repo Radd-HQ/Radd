@@ -80,6 +80,8 @@ class Settings(BaseSettings):
     # quietly did less is indistinguishable from a run that had less to do.
     automation_graph_max_node_runs: int = 200
     automation_graph_max_item_actions: int = 2000
+    #: How long recorded runs are kept (RADD-1266). 0 keeps them forever.
+    automation_run_retention_days: int = 30
     # Intake validation (spec 119): the wall clock ONE verdict may spend, across
     # every graph governing the draft. The walk runs synchronously inside the
     # create's transaction — which holds the project's number lock — so this is

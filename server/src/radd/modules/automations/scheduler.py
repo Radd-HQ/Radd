@@ -15,6 +15,7 @@ from radd.modules.events import service as events
 from radd.worker import PeriodicLoop
 
 from radd import schedule as schedule_math
+from . import runs
 from .models import Automation, AutomationScheduleState, TriggerBinding
 from .types import SYSTEM_ACTOR_ID, AutomationEntity, AutomationEvent
 from radd.clock import utcnow
@@ -71,6 +72,10 @@ async def run_once(session_factory=SessionLocal) -> int:
                 binding.schedule, now, settings.scheduler_tz
             )
             fired += 1
+        # The run-history sweep rides the same clock (RADD-1266): a tick a
+        # minute over an indexed column is nothing, and a second loop for it
+        # would be a second thing to start, stop and monitor.
+        await runs.sweep(session, now=now)
         await session.commit()
     return fired
 

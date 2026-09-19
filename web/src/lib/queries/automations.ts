@@ -4,12 +4,16 @@ import { queryOptions } from "@tanstack/react-query";
 import { api } from "../api";
 import {
   ApiPath,
+  apiAutomationRunPath,
+  apiAutomationRunsPath,
 } from "../constants";
 import { queryKeys } from "./shared";
 import {
   MANUAL_TRIGGER,
   SCHEDULE_TRIGGER,
   type AutomationCatalog,
+  type AutomationRun,
+  type AutomationRunDetail,
   type EventSample,
   type Rule,
   type RunnableRule,
@@ -59,5 +63,26 @@ export const runnableAutomationsQuery = () =>
     queryKey: [...queryKeys.automations, "runnable"] as const,
     queryFn: ({ signal }) => api.get<RunnableRule[]>(`${ApiPath.automations}/runnable`, { signal }),
     staleTime: 60_000,
+    retry: false,
+  });
+
+/** Recorded runs of one automation, newest first (RADD-1266). Refetched on a
+ * short interval while the panel is open, so a run that lands while someone is
+ * watching appears without a reload. */
+export const automationRunsQuery = (ruleId: string) =>
+  queryOptions({
+    queryKey: [...queryKeys.automations, ruleId, "runs"] as const,
+    queryFn: ({ signal }) => api.get<AutomationRun[]>(apiAutomationRunsPath(ruleId), { signal }),
+    refetchInterval: 15_000,
+    retry: false,
+  });
+
+/** One run with its report. Immutable once written, so cached for the session. */
+export const automationRunQuery = (ruleId: string, runId: string) =>
+  queryOptions({
+    queryKey: [...queryKeys.automations, ruleId, "runs", runId] as const,
+    queryFn: ({ signal }) =>
+      api.get<AutomationRunDetail>(apiAutomationRunPath(ruleId, runId), { signal }),
+    staleTime: Infinity,
     retry: false,
   });

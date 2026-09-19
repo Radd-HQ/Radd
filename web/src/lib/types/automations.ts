@@ -324,6 +324,10 @@ export interface Rule {
   /** Which way the canvas flows. Stored per automation, not per viewer. */
   orientation: "vertical" | "horizontal";
   triggers: RuleTrigger[];
+  /** The newest recorded run (RADD-1266); null/"" when it has never run or
+   * its runs were swept. */
+  last_run_at: string | null;
+  last_run_status: string;
   created_at: string;
   updated_at: string;
 }
@@ -355,6 +359,8 @@ export interface ActionPreview {
   params: Record<string, unknown>;
   /** False when a named target no longer resolves (the engine would skip it). */
   resolves: boolean;
+  /** A workflow guard or the field registry refused it (RADD-1266). */
+  refused: boolean;
   detail: string;
   /** Which node planned it, against which item — a graph runs the same action
    * type from several nodes, and once per item at per-item arity. */
@@ -497,4 +503,36 @@ export interface EventSample {
   /** The event's own DECLARED shape, beyond the refs. Present even when
    * `sampled` is 0 — sampling says what has happened, declaration what will. */
   declared_schema: Record<string, unknown>;
+}
+
+/** How a recorded run ended (mirror of the server's RunStatus, RADD-1266). */
+export const RunStatus = {
+  applied: "applied",
+  nothingToDo: "nothing_to_do",
+  refused: "refused",
+  failed: "failed",
+} as const;
+export type RunStatusValue = (typeof RunStatus)[keyof typeof RunStatus];
+
+/** One recorded run, as `GET /automations/{id}/runs` lists it. */
+export interface AutomationRun {
+  id: string;
+  automation_id: string;
+  trigger_node_id: string;
+  source: "event" | "schedule" | "manual";
+  event_id: number | null;
+  event_type: string;
+  started_at: string;
+  finished_at: string;
+  status: RunStatusValue;
+  actor_id: string | null;
+  item_keys: string[];
+  actions_applied: number;
+  actions_skipped: number;
+  error: string;
+}
+
+/** A run with its whole report — the dry run's shape. */
+export interface AutomationRunDetail extends AutomationRun {
+  report: RuleTestResult | null;
 }

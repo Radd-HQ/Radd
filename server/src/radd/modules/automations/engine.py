@@ -47,8 +47,9 @@ from radd.modules.items.schemas import ItemRead
 from radd.modules.notify import service as notify_service
 from radd.modules.projects.models import Project
 from radd.modules.notify.types import NotificationType
+from radd.clock import utcnow
 
-from . import catalog, conditions, executor, round_robin, service
+from . import catalog, conditions, executor, round_robin, runs, service
 from .graph import GraphError, Packet
 from .models import Automation
 from .planning import (
@@ -84,9 +85,12 @@ from .types import (
     SYSTEM_ACTOR_ID,
     SYSTEM_ACTOR_NAME,
     ActionType,
+    AutomationEntity,
     AutomationEvent,
     AutomationNodeKind,
     PlanKind,
+    RunSource,
+    RunStatus,
 )
 
 logger = logging.getLogger(__name__)
@@ -313,7 +317,10 @@ async def apply_event(session: AsyncSession, event: Event) -> None:
         # Start at the trigger that MATCHED. A graph may hold several, and the
         # others are separate entry points that this event did not fire — running
         # from all of them would apply the Monday branch to a create event.
-        await run_graph(session, rule, initial, system_user, start_node_id=node_id)
+        await run_graph(
+            session, rule, initial, system_user, start_node_id=node_id,
+            source=RunSource.EVENT, event=event,
+        )
 
 
 def _action_node_ids(rule) -> set[str]:
@@ -335,8 +342,18 @@ async def run_graph(
     apply: bool = True,
     start_node_id: str | None = None,
     deadline: float | None = None,
+    source: RunSource = RunSource.EVENT,
+    event: Event | None = None,
 ) -> executor.RunReport | None:
     """Execute one automation's graph over an initial packet.
+
+    An APPLYING walk is RECORDED (RADD-1266): the report the walk builds is
+    stored in the dry run's own shape, in the same transaction as the run, so
+    "what did it do" is answered by the panel that answers "what would it do".
+    A dry run (`apply=False`) writes nothing — a validation walk included. A
+    walk that RAISES is recorded as failed and emits `automation.run_failed`
+    rather than escaping into the consumer loop, so one broken automation does
+    not stall every other rule for the same event.
 
     Every entry point funnels through here — event, schedule and manual — so the
     branching semantics are defined once. Returns None when the stored graph will
@@ -374,18 +391,66 @@ async def run_graph(
             "automations: %s has no trigger node %r; skipping this run", rule.name, start_node_id
         )
         return None
-    return await executor.walk(
-        session,
-        nodes=nodes,
-        edges=edges,
-        trigger=trigger,
-        initial=initial,
-        system_user=author,
-        automation_name=rule.name,
-        budget=executor.new_budget(),
-        apply=apply,
-        deadline=deadline,
-    )
+    started_at = utcnow()
+    try:
+        report = await executor.walk(
+            session,
+            nodes=nodes,
+            edges=edges,
+            trigger=trigger,
+            initial=initial,
+            system_user=author,
+            automation_name=rule.name,
+            budget=executor.new_budget(),
+            apply=apply,
+            deadline=deadline,
+        )
+    except Exception as exc:
+        if not apply:
+            raise
+        logger.exception("automations: %s failed while running", rule.name)
+        error = f"{exc.__class__.__name__}: {exc}"
+        await runs.record(
+            session,
+            automation_id=rule.id,
+            trigger_node_id=trigger.id,
+            source=source,
+            event_id=getattr(event, "id", None),
+            event_type=getattr(event, "event_type", "") or "",
+            started_at=started_at,
+            actor_id=author.id,
+            status=RunStatus.FAILED,
+            result=None,
+            error=error,
+        )
+        await events.emit(
+            session,
+            event_type=AutomationEvent.RUN_FAILED,
+            entity_type=AutomationEntity.RULE,
+            entity_id=rule.id,
+            actor_id=SYSTEM_ACTOR_ID,
+            payload={"name": rule.name, "trigger_node_id": trigger.id, "error": error},
+        )
+        return None
+    if apply:
+        result = await _result_of(
+            session, rule, nodes, report, trigger, initial.item_ids[0] if initial.item_ids else None
+        )
+        keys = await _keys_for(session, report)
+        await runs.record(
+            session,
+            automation_id=rule.id,
+            trigger_node_id=trigger.id,
+            source=source,
+            event_id=getattr(event, "id", None),
+            event_type=getattr(event, "event_type", "") or "",
+            started_at=started_at,
+            actor_id=author.id,
+            status=runs.status_of(report),
+            result=result,
+            item_keys=[keys[i] for i in initial.item_ids if i in keys],
+        )
+    return report
 
 
 def _scheduled_facts(event: Event) -> conditions.EventFacts:
@@ -430,7 +495,10 @@ async def apply_scheduled(session: AsyncSession, event: Event) -> None:
     # "post to chat every Monday" works with no items involved at all, and a
     # search node is how "every stale issue" gets its set.
     initial = Packet.of(_scheduled_facts(event), item=())
-    await run_graph(session, rule, initial, system_user, start_node_id=node_id or None)
+    await run_graph(
+        session, rule, initial, system_user, start_node_id=node_id or None,
+        source=RunSource.SCHEDULE, event=event,
+    )
 
 
 async def run_manual(
@@ -457,6 +525,7 @@ async def run_manual(
         Packet.of(_manual_facts(), item=(item.id,)),
         system_user,
         start_node_id=start_node_id,
+        source=RunSource.MANUAL,
     )
     if report is None:
         return False
@@ -539,7 +608,20 @@ async def preview(
     )
     if report is None:
         return RuleTestResult(rule_id=rule.id, item_id=item_id, matched=False, would_apply=[])
+    return await _result_of(session, rule, nodes, report, trigger, item_id)
 
+
+async def _result_of(
+    session: AsyncSession,
+    rule: Automation,
+    nodes: list,
+    report: executor.RunReport,
+    trigger,
+    item_id: uuid.UUID | None,
+) -> RuleTestResult:
+    """The report as the API and the run history show it — ONE builder for the
+    dry run and the recorded run (RADD-1266), so the two cannot describe the
+    same walk differently."""
     keys = await _keys_for(session, report)
     previews: list[ActionPreview] = []
     for planned in report.plans:
@@ -552,6 +634,7 @@ async def preview(
                 type=action_type,
                 params=planned.params,
                 resolves=planned.resolves,
+                refused=planned.refused,
                 detail=planned.detail,
                 node_id=planned.node_id,
                 item_key=keys.get(planned.item_id, "") if planned.item_id else "",

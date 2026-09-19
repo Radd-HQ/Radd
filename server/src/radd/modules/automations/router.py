@@ -15,7 +15,7 @@ from radd.modules.events import service as events_service
 from radd.modules.items import service as items_service
 from radd.modules.projects import service as projects_service
 
-from . import catalog, engine, samples, service
+from . import catalog, engine, samples, service, runs
 from .types import BUILTIN_OUTPUTS, AutomationEntity, AutomationTrigger
 from radd.kernel.registry import registries
 
@@ -38,6 +38,8 @@ from .schemas import (
     RuleTestRequest,
     RuleTestResult,
     RuleUpdate,
+    RunDetailRead,
+    RunRead,
     SchedulePreviewRead,
     SchedulePreviewRequest,
     RunnableRuleRead,
@@ -267,6 +269,34 @@ async def test_rule(
     rule = await service.get_rule(session, rule_id)
     await authz.require(session, user, _MANAGE)
     return await engine.preview(session, rule, data.item_id, data.trigger_node_id)
+
+
+@router.get("/{rule_id}/runs", response_model=list[RunRead])
+async def list_runs(
+    rule_id: uuid.UUID,
+    session: Session,
+    user: CurrentUser,
+    limit: int = 50,
+    before: datetime | None = None,
+) -> list[RunRead]:
+    """Recorded runs, newest first (RADD-1266). `before` pages by `started_at`."""
+    rule = await service.get_rule(session, rule_id)
+    await authz.require(session, user, _MANAGE)
+    rows = await runs.list_runs(session, rule.id, limit=limit, before=before)
+    return [RunRead.model_validate(row) for row in rows]
+
+
+@router.get("/{rule_id}/runs/{run_id}", response_model=RunDetailRead)
+async def get_run(
+    rule_id: uuid.UUID, run_id: uuid.UUID, session: Session, user: CurrentUser
+) -> RunDetailRead:
+    """One run with its whole report — the dry run's shape."""
+    rule = await service.get_rule(session, rule_id)
+    await authz.require(session, user, _MANAGE)
+    row = await runs.get_run(session, rule.id, run_id)
+    read = RunDetailRead.model_validate(row)
+    read.report = RuleTestResult.model_validate(row.report) if row.report else None
+    return read
 
 
 @router.post("/{rule_id}/run", response_model=RuleRunResult)

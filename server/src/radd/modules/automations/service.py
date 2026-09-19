@@ -851,8 +851,12 @@ async def rule_reads(session: AsyncSession, rules: list[Automation]) -> list[Rul
         ).scalars():
             states[(state.automation_id, state.node_id)] = state
 
+    from . import runs as runs_module
+
+    latest = await runs_module.last_runs(session, ids)
     reads: list[RuleRead] = []
     for rule in rules:
+        last = latest.get(rule.id)
         triggers = []
         for binding in sorted(bindings.get(rule.id, []), key=lambda b: b.node_id):
             state = states.get((rule.id, binding.node_id))
@@ -865,7 +869,15 @@ async def rule_reads(session: AsyncSession, rules: list[Automation]) -> list[Rul
                     last_run_at=state.last_run_at if state else None,
                 )
             )
-        reads.append(RuleRead.model_validate(rule).model_copy(update={"triggers": triggers}))
+        reads.append(
+            RuleRead.model_validate(rule).model_copy(
+                update={
+                    "triggers": triggers,
+                    "last_run_at": last.started_at if last is not None else None,
+                    "last_run_status": last.status if last is not None else "",
+                }
+            )
+        )
     return reads
 
 

@@ -438,10 +438,36 @@ class AutomationEntity(StrEnum):
     AUTOMATION = "automation"
 
 
+class RunSource(StrEnum):
+    """What started a recorded run (RADD-1266). A dry run is never recorded."""
+
+    EVENT = "event"
+    SCHEDULE = "schedule"
+    MANUAL = "manual"
+
+
+class RunStatus(StrEnum):
+    """How a recorded run ended (RADD-1266).
+
+    Ranked in `runs.status_of`: a run with one refused action and three applied
+    ones reads as REFUSED, because the refusal is the thing someone opens the
+    row to find out about — "it mostly worked" is what the counts beside it say.
+    """
+
+    APPLIED = "applied"  # at least one action resolved and was applied
+    NOTHING_TO_DO = "nothing_to_do"  # the walk ran and no action resolved
+    REFUSED = "refused"  # a workflow guard or the field registry said no
+    FAILED = "failed"  # the walk itself raised
+
+
 class AutomationEvent(StrEnum):
     CREATED = "automation.created"
     UPDATED = "automation.updated"
     DELETED = "automation.deleted"
+    #: RADD-1266: the walk raised. Not a trigger — an automation reacting to
+    #: automations failing is the loop guard's nightmare — but audited, so the
+    #: ledger says an automation broke even after its run rows are swept.
+    RUN_FAILED = "automation.run_failed"
     # Spec 69: the scheduler's synthetic outbox event — payload
     # {rule_id, scheduled_for}. System-emitted by design; the engine
     # special-cases it BEFORE the loop-guard skip. Never subscribable.
