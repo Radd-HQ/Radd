@@ -64,9 +64,11 @@ interface SettingsNavItem {
    * the gate below withdraw the tab with the plugin.
    *
    * Only optional plugins need it: a core plugin cannot be disabled, so
-   * omitting it means "always mounted", not "unknown".
+   * omitting it means "always mounted", not "unknown". A LIST means the tab
+   * is a surface of several plugins and stays while any one is mounted
+   * (Version control, RADD-1262).
    */
-  plugin?: string;
+  plugin?: string | readonly string[];
 }
 
 /**
@@ -143,19 +145,13 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         show: (g) => g.ws(Permission.cannedUpdate),
       },
       {
-        // Spec 111 — version-control hosts and their repositories.
-        to: RoutePath.settingsForgejo,
-        label: "Forgejo",
+        // RADD-1262 — ONE entry for every version-control host kind (Forgejo
+        // since spec 111, GitHub since RADD-1129, GitLab since RADD-1253); the
+        // page holds a tab per kind. Shown while ANY of the three is mounted.
+        to: RoutePath.settingsVcs,
+        label: "Version control",
         icon: GitBranch,
-        plugin: "forgejo",
-        show: (g) => g.ws(Permission.globalManage),
-      },
-      {
-        // RADD-1129 — GitHub hosts and their repositories.
-        to: RoutePath.settingsGithub,
-        label: "GitHub",
-        icon: GitBranch,
-        plugin: "github",
+        plugin: ["forgejo", "github", "gitlab"],
         show: (g) => g.ws(Permission.globalManage),
       },
     ],
@@ -319,7 +315,9 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
 export function settingsPathForPlugin(name: string): { to: string; label: string } | null {
   if (name === "jiraimport" || name === "confluenceimport") return { to: RoutePath.settingsImportData, label: "Import data" };
   for (const group of SETTINGS_NAV_GROUPS) {
-    const match = group.items.find((item) => item.plugin === name);
+    const match = group.items.find((item) =>
+      typeof item.plugin === "string" ? item.plugin === name : (item.plugin ?? []).includes(name),
+    );
     if (match) return { to: match.to, label: match.label };
   }
   return null;
@@ -348,7 +346,9 @@ export function SettingsLayout() {
   // every gated tab is hidden, which is the right way round: a tab that appears
   // a beat late reads as loading, one that vanishes reads as a bug.
   const mounted = new Set(manifest?.plugins ?? []);
-  const isMounted = (item: SettingsNavItem) => !item.plugin || mounted.has(item.plugin);
+  const isMounted = (item: SettingsNavItem) =>
+    !item.plugin ||
+    (typeof item.plugin === "string" ? mounted.has(item.plugin) : item.plugin.some((name) => mounted.has(name)));
   const visibleGroups = SETTINGS_NAV_GROUPS.map((group) => ({
     label: group.label,
     items: group.items.filter((item) => item.show(gate) && isMounted(item)),
