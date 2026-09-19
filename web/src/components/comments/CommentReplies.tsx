@@ -7,6 +7,8 @@ import { chronologicalComments, type CommentPage } from "../../lib/queries/comme
 import { relativeTime } from "../../lib/dates";
 import { CommentVisibility, type Comment } from "../../lib/types";
 import { LazyRichViewer } from "../editor/LazyRichViewer";
+import { LazyRichEditor as RichEditor } from "../editor/LazyRichEditor";
+import type { QuickAction } from "../items/quick-actions";
 import { Button } from "../Button";
 import { CommentHistory } from "../CommentHistory";
 
@@ -19,6 +21,10 @@ import { CommentHistory } from "../CommentHistory";
  *   says so and sends nothing about visibility (the server inherits);
  * - `canInternal` — the thread is public and this reader may write internal
  *   comments, so the form offers an Internal switch per reply.
+ *
+ * The composer is the SAME rich editor a top-level comment gets — `@` people,
+ * `#` issues, `/` quick actions where there is an issue, the AI toolbar — a
+ * reply is a comment, not a lesser thing (Hussein, on the first cut's textarea).
  */
 export function CommentReplies({
   row,
@@ -27,6 +33,8 @@ export function CommentReplies({
   onDraft,
   canInternal = false,
   internalLocked = false,
+  onUploadImage,
+  quickActions,
 }: {
   row: Comment;
   canReply: boolean;
@@ -34,9 +42,15 @@ export function CommentReplies({
   onDraft: (value: string) => void;
   canInternal?: boolean;
   internalLocked?: boolean;
+  /** Image paste/insert → attachment URL; omit where the parent takes none. */
+  onUploadImage?: (file: File) => Promise<string>;
+  /** `/` actions on the issue in context; omit on pages. */
+  quickActions?: QuickAction[];
 }) {
   const client = useQueryClient();
   const [internal, setInternal] = useState(false);
+  // The rich editor is uncontrolled after mount — bump to clear it after posting.
+  const [composerKey, setComposerKey] = useState(0);
   const query = useInfiniteQuery(
     infiniteQueryOptions({
       queryKey: ["commentReplies", row.id],
@@ -60,6 +74,7 @@ export function CommentReplies({
     onSuccess: () => {
       onDraft("");
       setInternal(false);
+      setComposerKey((key) => key + 1);
     },
     onSettled: () => void invalidateEntities(client, Entity.comment),
   });
@@ -120,20 +135,23 @@ export function CommentReplies({
               if (draft.trim() && !post.isPending) post.mutate(draft);
             }}
           >
-            <textarea
-              aria-label={replyIsInternal ? "Write an internal reply" : "Write a reply"}
-              placeholder={replyIsInternal ? "Write an internal reply…" : "Write a reply…"}
-              rows={3}
-              value={draft}
-              disabled={post.isPending}
-              onChange={(event) => onDraft(event.target.value)}
-              className={
-                "w-full resize-y rounded-md border p-2 text-sm text-fg focus:outline-2 focus:outline-focus " +
-                (replyIsInternal
-                  ? "border-callout-warning-border/60 bg-callout-warning-fill"
-                  : "border-subtle bg-base")
-              }
-            />
+            <div data-reply-composer data-composer-key={composerKey}>
+              <RichEditor
+                key={composerKey}
+                value={draft}
+                onChange={onDraft}
+                placeholder={replyIsInternal ? "Write an internal reply…" : "Write a reply…"}
+                onSubmitShortcut={() => {
+                  if (draft.trim() && !post.isPending) post.mutate(draft);
+                }}
+                onUploadImage={onUploadImage}
+                quickActions={quickActions}
+                className={
+                  "[&_.ProseMirror]:min-h-[4rem]" +
+                  (replyIsInternal ? " !border-callout-warning-border/60 !bg-callout-warning-fill" : "")
+                }
+              />
+            </div>
             {post.isError && (
               <p role="alert" className="my-1 text-xs text-status-danger-ink">
                 {errorMessage(post.error)}

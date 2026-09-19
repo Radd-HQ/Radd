@@ -267,6 +267,8 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
                       // one may take an internal reply from someone who may write them.
                       internalLocked={internal}
                       canInternal={!internal && canReadInternal}
+                      onUploadImage={uploadCommentImage}
+                      quickActions={quickActions}
                     />
                   )}
                 </div>

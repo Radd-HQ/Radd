@@ -44,6 +44,16 @@ const API = `
 
 async function main() {
   const { session, close } = await openBrowser({ port: PORT, profile: PROFILE, width: 1500, height: 1000 });
+  // Lazy chunks (the rich editor) and the item page itself render on their own
+  // schedule: poll for a selector instead of trusting a fixed settle time.
+  const waitFor = async (selector, timeoutMs = 12000) => {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+      if (await session.eval(`Boolean(document.querySelector(${JSON.stringify(selector)}))`)) return true;
+      await sleep(250);
+    }
+    return false;
+  };
   const checks = {};
   const context = { key: KEY, slug: SLUG };
   let projectId = null;
@@ -67,6 +77,7 @@ async function main() {
 
     // --- 1 + 2: a reply, then an INTERNAL reply, under a public issue comment ----
     await session.navigate(`${baseUrl}/issues/${setup.item.key}`, 2500);
+    await waitFor(`[data-thread-toggle="${setup.publicRoot.id}"]`);
     const toggleBefore = await session.eval(`document.querySelector('[data-thread-toggle="${setup.publicRoot.id}"]')?.textContent?.trim() ?? null`);
     await session.click(`[data-thread-toggle="${setup.publicRoot.id}"]`, () => true);
     await sleep(800);
@@ -76,13 +87,33 @@ async function main() {
     })()`);
     context.publicForm = { toggleBefore, ...form };
     checks.publicThreadOffersAnInternalSwitch = toggleBefore === "Reply" && form.present && form.internalSwitch && !form.locked;
-    const typeReply = (rootId, text) => session.eval(`(() => {
-      const el = document.querySelector('[data-comment-replies="${rootId}"] textarea');
-      if (!el) return false;
-      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(el, ${JSON.stringify(text)});
-      el.dispatchEvent(new Event("input", { bubbles: true }));
-      return true;
+    // The reply composer is the rich editor: focus its document, then type.
+    const typeReply = async (rootId, text) => {
+      // A posted reply renders through a read-only ProseMirror as well, so the
+      // composer's editor must be addressed by its own wrapper, never "the
+      // first .ProseMirror in the box".
+      await waitFor(`[data-comment-replies="${rootId}"] [data-reply-composer] .ProseMirror`);
+      await session.click(`[data-comment-replies="${rootId}"] [data-reply-composer] .ProseMirror`, () => true);
+      await session.send("Input.insertText", { text });
+      // The editor reports its markdown on its own tick; the Reply button
+      // enabling is the signal the draft has reached React state.
+      await waitFor(`[data-comment-replies="${rootId}"] button[type="submit"]:not([disabled])`);
+    };
+    // Parity with the top-level composer: same editor, same affordances (the
+    // AI toolbar icon is the marker the render proofs already use).
+    await waitFor(`[data-comment-replies="${setup.publicRoot.id}"] [data-reply-composer] .ProseMirror`);
+    await sleep(300);
+    const parity = await session.eval(`(() => {
+      const reply = document.querySelector('[data-comment-replies="${setup.publicRoot.id}"] [data-reply-composer]');
+      const main = document.querySelector("form .ProseMirror")?.closest("form");
+      return {
+        replyEditor: Boolean(reply?.querySelector(".ProseMirror")),
+        replyAi: Boolean(reply?.querySelector(".radd-ai-toolbar-icon")),
+        mainAi: Boolean(main?.querySelector(".radd-ai-toolbar-icon")),
+      };
     })()`);
+    context.parity = parity;
+    checks.replyComposerIsTheRichEditorWithTheSameAiToolbar = parity.replyEditor && parity.replyAi === parity.mainAi;
     await typeReply(setup.publicRoot.id, "Answering in public");
     await session.click(`[data-comment-replies="${setup.publicRoot.id}"] button[type="submit"]`, () => true);
     await sleep(1500);
@@ -91,7 +122,9 @@ async function main() {
     await typeReply(setup.publicRoot.id, "Staff-only aside");
     const submitLabel = await session.eval(`document.querySelector('[data-comment-replies="${setup.publicRoot.id}"] button[type="submit"]')?.textContent?.trim()`);
     await session.click(`[data-comment-replies="${setup.publicRoot.id}"] button[type="submit"]`, () => true);
-    await sleep(1500);
+    // The list refetches after the post; poll for the second row rather than
+    // trusting a fixed delay (the rich editor's remount shares the same tick).
+    await waitFor(`[data-comment-replies="${setup.publicRoot.id}"] [data-reply-visibility="internal"]`);
     const replies = await session.eval(`[...document.querySelectorAll('[data-comment-replies="${setup.publicRoot.id}"] [data-reply-visibility]')].map((n) => [n.getAttribute("data-reply-visibility"), n.textContent.includes("Internal")])`);
     context.publicReplies = { submitLabel, replies };
     checks.publicAndInternalRepliesLandUnderThePublicThread =
@@ -145,6 +178,7 @@ async function main() {
 
     // --- 4: a page discussion comment takes a reply ----------------------------
     await session.navigate(`${baseUrl}/pages/${SLUG}/${setup.page.path}`, 2500);
+    await waitFor(`[data-thread-toggle="${setup.discussion.id}"]`);
     const pageToggle = await session.eval(`document.querySelector('[data-thread-toggle="${setup.discussion.id}"]')?.textContent?.trim() ?? null`);
     await session.click(`[data-thread-toggle="${setup.discussion.id}"]`, () => true);
     await sleep(800);
