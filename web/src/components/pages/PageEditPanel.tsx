@@ -1,6 +1,7 @@
 import { LazyRichEditor as RichEditor } from "../editor/LazyRichEditor";
 import type { AiRun } from "../editor/ai";
 import type { CollabSession } from "../editor/collab/useCollabSession";
+import type { InlineAnchorRef } from "../editor/detached-comments";
 import { Button } from "../Button";
 import { Callout } from "../Callout";
 import type { PageUpdate } from "../../lib/types";
@@ -33,6 +34,8 @@ export function PageEditPanel({
   onCancel,
   finishing,
   onDone,
+  inlineAnchors,
+  onDetachedComments,
 }: {
   draft: string;
   onDraft: (markdown: string) => void;
@@ -49,6 +52,9 @@ export function PageEditPanel({
   onCancel: () => void;
   finishing: boolean;
   onDone: () => void;
+  /** RADD-1274: the page's open inline comments, for the AI review's count. */
+  inlineAnchors: InlineAnchorRef[];
+  onDetachedComments: (ids: string[]) => void;
 }) {
   const room = collab.room;
   const saverName = collab.presence.people.find((person) =>
@@ -68,6 +74,8 @@ export function PageEditPanel({
             autoFocus
             placeholder={PLACEHOLDER}
             initialAiRun={pendingAiRun ?? undefined}
+            inlineAnchors={inlineAnchors}
+            onDetachedComments={onDetachedComments}
             collab={{
               doc: room.doc,
               provider: room.provider,
@@ -134,6 +142,8 @@ export function PageEditPanel({
         autoFocus
         placeholder={PLACEHOLDER}
         initialAiRun={pendingAiRun ?? undefined}
+        inlineAnchors={inlineAnchors}
+        onDetachedComments={onDetachedComments}
         className={EDITOR_CLASS}
       />
       <div className="flex gap-2">

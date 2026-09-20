@@ -248,6 +248,16 @@ def test_editor_sse_frame_shapes():
     assert editor.sse_frame({}, event="done") == "event: done\ndata: {}\n\n"
 
 
+def test_editor_system_prompt_carries_the_placeholder_rule():
+    from radd.modules.ai import editor
+
+    # RADD-1274: the SPA's mask/restore contract — the exact token shape the
+    # model is told to preserve. `web/src/components/editor/ai-protect.ts`
+    # emits it; changing one side alone silently un-protects every block.
+    assert "⟦keep-N⟧" in editor.EDITOR_SYSTEM
+    assert "never edit, wrap, or drop one" in editor.EDITOR_SYSTEM
+
+
 def test_editor_user_prompt_marks_the_selection():
     from radd.modules.ai import editor
 

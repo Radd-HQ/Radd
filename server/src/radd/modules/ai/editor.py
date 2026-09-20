@@ -26,12 +26,23 @@ from .types import (
     EditorActionKind,
 )
 
+# RADD-1274: the SPA masks every non-prose block (an embedded video, an image,
+# an attachment link, any `radd:*` extension) behind a placeholder before the
+# run and restores it after — the model never sees a line of syntax it would
+# rewrite or drop. The rule costs nothing when no placeholder is present.
+PROTECTED_PLACEHOLDER_RULE = (
+    "Tokens of the form ⟦keep-N⟧ stand for protected blocks (media, images, "
+    "attachments, embedded widgets): keep every one exactly as written, where it "
+    "belongs in the text, and never edit, wrap, or drop one."
+)
+
 EDITOR_SYSTEM = (
     "You are a writing assistant inside an issue tracker's markdown editor. "
     "You receive a document, optionally a selected portion, and an instruction. "
     "Apply the instruction to the SELECTION when one is given, otherwise to the "
     "whole document. Return ONLY the replacement markdown — no preamble, no "
-    "commentary, and no code fence wrapping the entire reply."
+    "commentary, and no code fence wrapping the entire reply. "
+    f"{PROTECTED_PLACEHOLDER_RULE}"
 )
 
 BUILTIN_ACTIONS: dict[EditorAction, tuple[str, str]] = {

@@ -9,6 +9,8 @@ import {
 import { ApiPath } from "../../lib/constants";
 import { streamSse } from "../../lib/sse";
 import { INSTRUCTION_ACTION_PREFIX, type AiRun } from "./ai";
+import { droppedCount, maskProtected, restoreProtected, type KeptBlock } from "./ai-protect";
+import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 
 /**
  * Running an AI transform, ours (RADD-753).
@@ -37,10 +39,16 @@ import { INSTRUCTION_ACTION_PREFIX, type AiRun } from "./ai";
 
 /** What the endpoint is told about where the run applies. */
 interface RunScope {
-  /** The whole document, as markdown. */
+  /** The whole document, as markdown — with every protected block masked
+   *  (RADD-1274): the model reads placeholders where the media, images and
+   *  extension blocks are, and never a line of syntax it could drop. */
   document: string;
-  /** The selected part, empty when the run is document-wide. */
+  /** The selected part, empty when the run is document-wide. Masked too, with
+   *  the document's ids, so context and target agree on what `⟦keep-3⟧` is. */
   selection: string;
+  /** The blocks masked out of the part the run REPLACES — what `restore`
+   *  puts back into the reply. */
+  kept: KeptBlock[];
   from: number;
   to: number;
 }
@@ -60,11 +68,16 @@ export function scopeOf(ctx: Ctx, range?: { from: number; to: number }): RunScop
   const from = range?.from ?? state.selection.from;
   const to = range?.to ?? state.selection.to;
   const empty = from >= to;
+  const document = maskProtected(serializer(state.doc));
+  // A selection is serialised by cutting the DOC, not by slicing text: a
+  // range spanning two list items is markdown, not a substring.
+  const selection = empty
+    ? { masked: "", kept: [] }
+    : maskProtected(serializer(state.doc.cut(from, to)), document.kept);
   return {
-    document: serializer(state.doc),
-    // A selection is serialised by cutting the DOC, not by slicing text: a
-    // range spanning two list items is markdown, not a substring.
-    selection: empty ? "" : serializer(state.doc.cut(from, to)),
+    document: document.masked,
+    selection: selection.masked,
+    kept: empty ? document.kept : selection.kept,
     from,
     to,
   };
@@ -95,9 +108,14 @@ export interface AiRunHandle {
   /** Resolves with the outcome once the stream ends and any diff is handed
    *  over; rejects only on a real failure (never on cancel). */
   done: Promise<AiRunOutcomeValue>;
-  /** Text so far, for the progress surface. */
+  /** Text so far, for the progress surface — protected blocks already restored. */
   onChunk: (listener: (text: string) => void) => void;
   cancel: () => void;
+  /** The document the open review proposes (RADD-1274), for chrome that wants
+   *  to say what accepting it would do — null until a review is open. */
+  proposed: () => ProseNode | null;
+  /** Protected blocks the model dropped, which `restore` appended at the end. */
+  dropped: () => number;
 }
 
 /**
@@ -124,12 +142,15 @@ export function runAi(
       }
     : { instruction: run.instruction, document: scope.document, selection: scope.selection };
 
+  let proposed: ProseNode | null = null;
+  let dropped = 0;
   const done = (async (): Promise<AiRunOutcomeValue> => {
     let text = "";
     try {
       for await (const chunk of streamSse(ApiPath.aiEditorStream, body, controller.signal)) {
         text += chunk;
-        for (const listener of listeners) listener(text);
+        const shown = restoreProtected(text, scope.kept);
+        for (const listener of listeners) listener(shown);
       }
     } catch (error) {
       // Cancelling is the only way the fetch can reject with the signal already
@@ -140,23 +161,30 @@ export function runAi(
     }
     if (controller.signal.aborted) return AiRunOutcome.aborted;
     if (!text.trim()) return AiRunOutcome.empty;
-    return applyAsDiff(ctx, scope, text) ? AiRunOutcome.review : AiRunOutcome.empty;
+    // The model's reply with the media, images and extension blocks back in
+    // their places — and any it dropped appended, never lost (RADD-1274).
+    dropped = droppedCount(text, scope.kept);
+    proposed = applyAsDiff(ctx, scope, restoreProtected(text, scope.kept));
+    return proposed ? AiRunOutcome.review : AiRunOutcome.empty;
   })();
 
   return {
     done,
     onChunk: (listener) => listeners.push(listener),
     cancel: () => controller.abort(),
+    proposed: () => proposed,
+    dropped: () => dropped,
   };
 }
 
-/** Splice the result over the selection and open the review. False when the
- *  reply parsed to nothing, so the caller can say so rather than go quiet. */
-function applyAsDiff(ctx: Ctx, scope: RunScope, replacement: string): boolean {
+/** Splice the result over the selection and open the review. Returns the
+ *  proposed document, or null when the reply parsed to nothing or changed
+ *  nothing, so the caller can say so rather than go quiet. */
+function applyAsDiff(ctx: Ctx, scope: RunScope, replacement: string): ProseNode | null {
   const view = ctx.get(editorViewCtx);
   const parser = ctx.get(parserCtx);
   const parsed = parser(replacement);
-  if (!parsed) return false;
+  if (!parsed) return null;
   const { state } = view;
   const newDoc =
     scope.selection === ""
@@ -168,12 +196,12 @@ function applyAsDiff(ctx: Ctx, scope: RunScope, replacement: string): boolean {
   const commands = ctx.get(commandsCtx);
   commands.call(startDiffReviewFromDocCmd.key, newDoc);
   const opened = diffPluginKey.getState(view.state);
-  if (opened && getPendingChanges(opened).length > 0) return true;
+  if (opened && getPendingChanges(opened).length > 0) return newDoc;
   // A rewrite that changed nothing still opens an ACTIVE review — `start` is the
   // one action the plugin's reducer does not run its "no pending changes" check
   // over. An active review blocks every document transaction (its
   // `filterTransaction`), so leaving one standing would answer "the AI changed
   // nothing" by making the editor read-only until a reload.
   if (opened) commands.call(clearDiffReviewCmd.key);
-  return false;
+  return null;
 }

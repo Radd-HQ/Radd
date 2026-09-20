@@ -57,6 +57,14 @@ interface AiRunPanelProps {
   onStop: () => void;
   onAcceptAll: () => void;
   onRejectAll: () => void;
+  /** RADD-1274: open inline comments whose passages the proposed document no
+   *  longer contains — what accepting it would detach. */
+  detached?: number;
+  /** Resolve those comments when the review ends with their passages gone. */
+  resolveDetached?: boolean;
+  onResolveDetachedChange?: (resolve: boolean) => void;
+  /** Protected blocks the model left out, restored at the end of the reply. */
+  dropped?: number;
 }
 
 export function AiRunPanel({
@@ -67,6 +75,10 @@ export function AiRunPanel({
   onStop,
   onAcceptAll,
   onRejectAll,
+  detached = 0,
+  resolveDetached = true,
+  onResolveDetachedChange,
+  dropped = 0,
 }: AiRunPanelProps) {
   const streaming = run.status === AiRunStatus.streaming;
   const previewRef = useRef<HTMLDivElement>(null);
@@ -159,10 +171,37 @@ export function AiRunPanel({
         // The diff plugin's filterTransaction drops every document transaction
         // while a review is open, so typing genuinely does nothing. Saying so
         // beats letting someone conclude the editor broke.
-        <p className="text-[11px] text-fg-muted">
-          Editing is paused until you accept or reject. Use the buttons beside a change to decide
-          that one on its own.
-        </p>
+        <div className="flex flex-col gap-1 text-[11px] text-fg-muted">
+          <p>
+            Editing is paused until you accept or reject. Use the buttons beside a change to decide
+            that one on its own.
+          </p>
+          {dropped > 0 && (
+            <p data-ai-dropped-blocks>
+              {dropped === 1
+                ? "The result left out 1 protected block (media, image or widget); it was kept at the end of the text."
+                : `The result left out ${dropped} protected blocks (media, images or widgets); they were kept at the end of the text.`}
+            </p>
+          )}
+          {detached > 0 && (
+            // RADD-1274: the review names the comments it is about to strand.
+            // Their passages go with the text; the comments do not — RADD-726
+            // never resolves one on anyone's behalf — unless the person says so
+            // here, in the same click that removes the passages.
+            <label data-ai-detached-comments className="flex items-center gap-1.5 text-fg">
+              <input
+                type="checkbox"
+                checked={resolveDetached}
+                onChange={(event) => onResolveDetachedChange?.(event.target.checked)}
+              />
+              <span>
+                {detached === 1
+                  ? "Replaces the passage of 1 open comment — resolve it when accepting"
+                  : `Replaces the passages of ${detached} open comments — resolve them when accepting`}
+              </span>
+            </label>
+          )}
+        </div>
       )}
     </div>
   );

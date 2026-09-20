@@ -48,6 +48,7 @@ import { NO_REVIEW, reviewStatePlugin, type ReviewState } from "./diff/review-st
 import { AiSelectionToolbar } from "./AiSelectionToolbar";
 import { AiRunPanel, AiRunStatus, type AiRunView } from "./AiRunPanel";
 import { AiRunOutcome, reviewPending, runAi } from "./ai-run";
+import { detachedComments, type InlineAnchorRef } from "./detached-comments";
 import { NO_SELECTION, selectionRectPlugin, type SelectionRect } from "./selection-state";
 import { makeEditor } from "./create-editor";
 import { cursorBuilder, selectionBuilder } from "./collab/cursors";
@@ -115,6 +116,12 @@ interface RichEditorProps {
    *  unavailable (a textarea cannot bind a CRDT), and `value` is the seed
    *  template. Fixed for the instance's life — a new room means a new `key`. */
   collab?: CollabConfig;
+  /** RADD-1274: the open inline comments anchored to this document, so an AI
+   *  review can say how many passages it is about to remove. Pages only. */
+  inlineAnchors?: InlineAnchorRef[];
+  /** Called when a review ends with those passages gone and the person chose
+   *  to resolve the comments that pointed at them. */
+  onDetachedComments?: (ids: string[]) => void;
   className?: string;
   autoFocus?: boolean;
 }
@@ -216,11 +223,26 @@ function RichEditorInner({
   anonymous = false,
   extensions = false,
   collab: collabConfig,
+  inlineAnchors,
+  onDetachedComments,
   className = "",
   autoFocus = false,
   onSourceChange,
 }: RichEditorProps & { onSourceChange: (markdown: string) => void }) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const inlineAnchorsRef = useRef(inlineAnchors ?? []);
+  inlineAnchorsRef.current = inlineAnchors ?? [];
+  const onDetachedRef = useRef(onDetachedComments);
+  onDetachedRef.current = onDetachedComments;
+  // RADD-1274: what the open review would detach, and whether to resolve it.
+  // `preReview` is the document as it stood when the review opened — the
+  // answer is decided when the review ENDS, against what was actually
+  // accepted, so a Reject all or a hand-picked partial accept never resolves
+  // a comment whose passage survived.
+  const preReviewDoc = useRef<ProseNode | null>(null);
+  const [detached, setDetached] = useState<string[]>([]);
+  const [resolveDetached, setResolveDetached] = useState(true);
+  const [dropped, setDropped] = useState(0);
   // Latest callbacks without recreating the editor (create-once, uncontrolled).
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -403,6 +425,12 @@ function RichEditorInner({
       handle.done
         .then((outcome) => {
           if (outcome === AiRunOutcome.review) {
+            const before = ctx.get(editorViewCtx).state.doc;
+            const proposed = handle.proposed();
+            preReviewDoc.current = before;
+            setDetached(proposed ? detachedComments(inlineAnchorsRef.current, before, proposed) : []);
+            setResolveDetached(true);
+            setDropped(handle.dropped());
             setAiRun((live) =>
               live === null ? live : { ...live, status: AiRunStatus.reviewing },
             );
@@ -452,8 +480,23 @@ function RichEditorInner({
     rootRef.current
       ?.querySelectorAll<HTMLElement>(DIFF_CONTROLS_SELECTOR)
       .forEach((node) => node.removeAttribute("data-current"));
-    if (!review.active)
+    if (!review.active) {
       setAiRun((live) => (live?.status === AiRunStatus.reviewing ? null : live));
+      // RADD-1274: the review is over — against what was ACTUALLY accepted,
+      // which comments lost their passage? Only those, and only when asked.
+      const before = preReviewDoc.current;
+      preReviewDoc.current = null;
+      const editor = editorRef.current;
+      if (before && editor && resolveDetached && inlineAnchorsRef.current.length > 0) {
+        editor.action((ctx) => {
+          const after = ctx.get(editorViewCtx).state.doc;
+          const ids = detachedComments(inlineAnchorsRef.current, before, after);
+          if (ids.length > 0) onDetachedRef.current?.(ids);
+        });
+      }
+      setDetached([]);
+      setDropped(0);
+    }
   }, [review.active, review.changes]);
 
   const users = useQuery({ ...usersQuery, enabled: mention?.type === "@" });
@@ -901,6 +944,10 @@ function RichEditorInner({
                   onStop={() => aiHandleRef.current?.cancel()}
                   onAcceptAll={() => run(acceptAllDiffsCmd.key)}
                   onRejectAll={() => run(clearDiffReviewCmd.key)}
+                  detached={detached.length}
+                  resolveDetached={resolveDetached}
+                  onResolveDetachedChange={setResolveDetached}
+                  dropped={dropped}
                 />
               )}
             </div>

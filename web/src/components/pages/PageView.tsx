@@ -1,6 +1,6 @@
 import { useCurrentUser, useIsAuthenticated } from "../../lib/hooks";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   Link2,
@@ -27,7 +27,10 @@ import { relativeTime } from "../../lib/dates";
 import { AccessGrantsEditor } from "../settings/AccessGrantsEditor";
 import { Modal } from "../Modal";
 import { PageBody } from "./PageBody";
-import { usersQuery } from "../../lib/queries";
+import { pageCommentFeedQuery, usersQuery } from "../../lib/queries";
+import { chronologicalComments, CommentSection } from "../../lib/queries/comment-feed";
+import { apiCommentPath } from "../../lib/constants";
+import type { InlineAnchorRef } from "../editor/detached-comments";
 import { AttachmentParentType, type Page, type PageUpdate } from "../../lib/types";
 import type { AiRun } from "../editor/ai";
 import { AiReadMenu } from "../editor/AiReadMenu";
@@ -131,6 +134,31 @@ export function PageView({
   useEffect(() => setTitle(page.title), [page.title]);
 
   const invalidate = () => void invalidateEntities(queryClient, Entity.page, Entity.docSpace);
+  // RADD-1274: the open inline comments, handed to the editor so an AI review
+  // can count the passages it removes. The same query the rail reads —
+  // react-query dedups it — and only while editing.
+  const inlineFeed = useInfiniteQuery({
+    ...pageCommentFeedQuery(page.id, CommentSection.inline),
+    enabled: editing,
+  });
+  const inlineAnchors = useMemo<InlineAnchorRef[]>(
+    () =>
+      chronologicalComments(inlineFeed.data?.pages)
+        .filter((comment) => comment.anchor && !comment.resolved_at)
+        .map((comment) => ({ id: comment.id, anchor: comment.anchor! })),
+    [inlineFeed.data],
+  );
+  const resolveDetached = useMutation({
+    mutationFn: (ids: string[]) =>
+      Promise.all(ids.map((id) => api.post(`${apiCommentPath(id)}/resolve`))),
+    onSuccess: (_result, ids) =>
+      pushToast(
+        ids.length === 1
+          ? "Resolved 1 comment whose passage was replaced."
+          : `Resolved ${ids.length} comments whose passages were replaced.`,
+      ),
+    onSettled: () => void invalidateEntities(queryClient, Entity.comment),
+  });
   // Spec 122: a visitor never joins (D9); a reader is an observer; Edit is
   // an editor. Each role change is a fresh session.
   const collab = useCollabSession({
@@ -443,6 +471,8 @@ export function PageView({
                     setPendingAiRun(null);
                   }}
                   finishing={finishing}
+                  inlineAnchors={inlineAnchors}
+                  onDetachedComments={(ids) => resolveDetached.mutate(ids)}
                   onDone={() => void done()}
                 />
               </div>
