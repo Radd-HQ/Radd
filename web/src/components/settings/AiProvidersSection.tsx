@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
@@ -35,6 +35,26 @@ const DEFAULT_BASE_URLS: Record<AiWireShapeValue, string> = {
   [AiWireShape.anthropic]: "https://api.anthropic.com",
   [AiWireShape.local]: "",
 };
+
+/** Keys the server refuses in request_params (mirror of RESERVED_REQUEST_PARAMS). */
+const RESERVED_REQUEST_PARAMS = ["messages", "stream"];
+
+/** The textarea's text as an object, or the message to show instead. "" = {}. */
+function parseRequestParams(text: string): Record<string, unknown> | string {
+  if (!text.trim()) return {};
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch (error) {
+    return `Not valid JSON: ${error instanceof Error ? error.message : String(error)}`;
+  }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return "Must be a JSON object of top-level request keys.";
+  }
+  const reserved = RESERVED_REQUEST_PARAMS.filter((key) => key in value);
+  if (reserved.length > 0) return `Cannot set ${reserved.join(", ")} — those are the request itself.`;
+  return value as Record<string, unknown>;
+}
 
 const sectionHeadClasses = "mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted";
 
@@ -122,6 +142,7 @@ export function AiProvidersSection() {
                 <Th>Endpoint</Th>
                 <Th>Default model</Th>
                 <Th>Key</Th>
+                <Th>Reasoning</Th>
                 <Th className="w-40" />
               </tr>
             </THead>
@@ -194,6 +215,24 @@ function ProviderRow({
         </Td>
         <Td>{provider.default_model || <span className="text-fg-faint">—</span>}</Td>
         <Td>{provider.has_api_key ? "Set" : <span className="text-fg-faint">—</span>}</Td>
+        <Td>
+          {provider.wire_shape === AiWireShape.local ? (
+            <span className="text-fg-faint">—</span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5">
+              {provider.reasoning ? "Model default" : "Off"}
+              {Object.keys(provider.request_params).length > 0 && (
+                <span
+                  className="rounded bg-elevated px-1.5 py-px text-[10px] text-fg-muted"
+                  title={JSON.stringify(provider.request_params)}
+                >
+                  +{Object.keys(provider.request_params).length} param
+                  {Object.keys(provider.request_params).length === 1 ? "" : "s"}
+                </span>
+              )}
+            </span>
+          )}
+        </Td>
         <Td className="whitespace-nowrap text-right">
           <Button size="sm" variant="ghost" onClick={onTest} disabled={probe === "pending"}>
             <Activity size={13} aria-hidden />
@@ -214,7 +253,7 @@ function ProviderRow({
       </tr>
       {probe && probe !== "pending" && (
         <tr>
-          <Td colSpan={6} className="py-1.5">
+          <Td colSpan={7} className="py-1.5">
             {probe.ok ? (
               <span className="text-xs text-emerald-400">
                 Reachable · {Math.round(probe.latency_ms ?? 0)} ms
@@ -237,6 +276,7 @@ function ProviderModal({
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
+  const requestParamsId = useId();
   const [name, setName] = useState(existing?.name ?? "");
   const [wireShape, setWireShape] = useState<AiWireShapeValue>(
     existing?.wire_shape ?? AiWireShape.openai,
@@ -253,6 +293,15 @@ function ProviderModal({
   const [baseUrl, setBaseUrl] = useState(existing?.base_url ?? "");
   const [apiKey, setApiKey] = useState("");
   const [defaultModel, setDefaultModel] = useState(existing?.default_model ?? "");
+  // RADD-1273: off for every new connection — Radd states its preference on
+  // each request instead of relying on the server's chat template.
+  const [reasoning, setReasoning] = useState(existing?.reasoning ?? false);
+  const [requestParams, setRequestParams] = useState(
+    existing && Object.keys(existing.request_params).length > 0
+      ? JSON.stringify(existing.request_params, null, 2)
+      : "",
+  );
+  const [paramsError, setParamsError] = useState<string | null>(null);
 
   const save = useMutation({
     mutationFn: (body: AiProviderPayload) =>
@@ -268,6 +317,12 @@ function ProviderModal({
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
     if (!name.trim()) return;
+    const parsed = parseRequestParams(requestParams);
+    if (typeof parsed === "string") {
+      setParamsError(parsed);
+      return;
+    }
+    setParamsError(null);
     save.mutate({
       name: name.trim(),
       wire_shape: wireShape,
@@ -275,6 +330,8 @@ function ProviderModal({
       // "" on update = keep the stored key (reads are redacted).
       api_key: apiKey,
       default_model: defaultModel.trim(),
+      reasoning,
+      request_params: parsed,
     });
   };
 
@@ -352,6 +409,54 @@ function ProviderModal({
               <option key={model} value={model} />
             ))}
           </datalist>
+        )}
+        {wireShape !== AiWireShape.local && (
+          <>
+            <label className="flex items-start gap-2 text-xs text-fg">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={reasoning}
+                onChange={(event) => setReasoning(event.target.checked)}
+              />
+              <span>
+                <span className="font-medium text-heading">Reasoning</span>
+                <span className="mt-0.5 block text-fg-muted">
+                  Off (the default) asks a thinking model not to think before it answers —
+                  every reply comes back in a fraction of the time and none of the token
+                  budget goes to a hidden monologue. On leaves the model to its own default.
+                  Sent as{" "}
+                  <code className="rounded bg-elevated px-1">
+                    {wireShape === AiWireShape.anthropic
+                      ? "thinking"
+                      : "chat_template_kwargs.enable_thinking"}
+                  </code>
+                  ; api.openai.com rejects that key, so an OpenAI-hosted provider keeps this on.
+                </span>
+              </span>
+            </label>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor={requestParamsId} className="text-xs font-medium text-fg-secondary">
+                Extra request parameters (JSON)
+              </label>
+              <textarea
+                id={requestParamsId}
+                value={requestParams}
+                onChange={(event) => setRequestParams(event.target.value)}
+                rows={3}
+                spellCheck={false}
+                placeholder={'{ "temperature": 0.2 }'}
+                aria-invalid={paramsError ? true : undefined}
+                className="rounded-md border border-strong bg-surface px-2.5 py-2 font-mono text-[12px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
+              />
+              <p className="text-[11px] text-fg-muted">
+                An object of top-level keys merged into every chat request after Radd's own
+                — a value here overrides Radd's choice, including the reasoning switch. Not
+                sent with embedding requests.
+              </p>
+              {paramsError && <p className="text-xs text-red-400">{paramsError}</p>}
+            </div>
+          </>
         )}
         <div className="mt-1 flex items-center justify-end gap-2">
           {save.isError && (

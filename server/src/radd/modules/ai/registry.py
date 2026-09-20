@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+import dataclasses
 from dataclasses import dataclass
 
 from sqlalchemy import select
@@ -56,6 +57,10 @@ class ResolvedModel:
     base_url: str
     api_key: str
     model: str
+    # RADD-1273: the provider's request preferences ride along so every
+    # caller of client.py inherits them without naming them.
+    reasoning: bool = False
+    request_params: dict = dataclasses.field(default_factory=dict)
 
 
 # --- providers ----------------------------------------------------------------
@@ -131,6 +136,8 @@ async def create_provider(
         api_key=data.api_key,
         default_model=data.default_model,
         source=source.value,
+        reasoning=data.reasoning,
+        request_params=dict(data.request_params),
     )
     session.add(provider)
     await session.flush()
@@ -163,6 +170,10 @@ async def update_provider(
         provider.api_key = fields["api_key"]
     if "default_model" in fields:
         provider.default_model = fields["default_model"]
+    if "reasoning" in fields and fields["reasoning"] is not None:
+        provider.reasoning = fields["reasoning"]
+    if "request_params" in fields and fields["request_params"] is not None:
+        provider.request_params = dict(fields["request_params"])
     await session.flush()
     await _emit_provider(
         session,
@@ -334,6 +345,8 @@ async def resolve_role(session: AsyncSession, role: AiRole) -> ResolvedModel | N
         base_url=provider.base_url,
         api_key=provider.api_key,
         model=model,
+        reasoning=bool(provider.reasoning),
+        request_params=dict(provider.request_params or {}),
     )
 
 

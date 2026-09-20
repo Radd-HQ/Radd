@@ -13,7 +13,16 @@ import json
 from collections.abc import Sequence
 from typing import Any
 
-from .types import ANTHROPIC_VERSION, DEFAULT_BASE_URLS, AiUpstreamError, AiWireShape
+from .types import (
+    ANTHROPIC_THINKING_ENABLED,
+    ANTHROPIC_THINKING_KEY,
+    ANTHROPIC_VERSION,
+    DEFAULT_BASE_URLS,
+    OPENAI_TEMPLATE_KWARGS_KEY,
+    OPENAI_THINKING_FLAG,
+    AiUpstreamError,
+    AiWireShape,
+)
 
 # The forced-tool name carrying structured output on the Anthropic shape.
 STRUCTURED_TOOL_NAME = "answer"
@@ -100,6 +109,67 @@ def choice_schema(choices: Sequence[str]) -> dict[str, Any]:
         "required": ["choice"],
         "additionalProperties": False,
     }
+
+
+# --- request options (RADD-1273) ---------------------------------------------
+
+
+def deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+    """`overlay` wins; nested objects merge key by key, anything else replaces.
+    Pure — returns a new dict, neither argument is touched."""
+    merged = dict(base)
+    for key, value in overlay.items():
+        current = merged.get(key)
+        if isinstance(current, dict) and isinstance(value, dict):
+            merged[key] = deep_merge(current, value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def with_reasoning(
+    payload: dict[str, Any],
+    shape: AiWireShape,
+    reasoning: bool,
+    *,
+    budget_tokens: int,
+) -> dict[str, Any]:
+    """Radd's reasoning preference expressed in the wire shape's own terms.
+
+    OFF on the OpenAI shape asks the chat template not to think (vLLM/sglang
+    honour it for Qwen3/DeepSeek; api.openai.com rejects the unknown key, which
+    the Test button surfaces — such a provider sets reasoning ON, i.e. "leave
+    the model to its default"). ON on the OpenAI shape sends NOTHING: the
+    model's default is what "on" means. OFF on Anthropic omits `thinking` (the
+    API default); ON enables it with `budget_tokens` and lifts `max_tokens` by
+    the same amount, since the budget must fit inside it — except under a
+    forced tool call, which the API refuses to combine with thinking.
+    """
+    if shape is AiWireShape.OPENAI:
+        if reasoning:
+            return payload
+        return deep_merge(payload, {OPENAI_TEMPLATE_KWARGS_KEY: {OPENAI_THINKING_FLAG: False}})
+    if shape is AiWireShape.ANTHROPIC and reasoning and "tool_choice" not in payload:
+        return {
+            **payload,
+            "max_tokens": payload["max_tokens"] + budget_tokens,
+            ANTHROPIC_THINKING_KEY: {"type": ANTHROPIC_THINKING_ENABLED, "budget_tokens": budget_tokens},
+        }
+    return payload
+
+
+def finish_payload(
+    payload: dict[str, Any],
+    shape: AiWireShape,
+    *,
+    reasoning: bool,
+    request_params: dict[str, Any],
+    reasoning_budget_tokens: int,
+) -> dict[str, Any]:
+    """The last word on a chat payload: Radd's reasoning preference, then the
+    admin's `request_params` merged LAST so they override anything above."""
+    composed = with_reasoning(payload, shape, reasoning, budget_tokens=reasoning_budget_tokens)
+    return deep_merge(composed, request_params) if request_params else composed
 
 
 # --- vision content parts -----------------------------------------------------

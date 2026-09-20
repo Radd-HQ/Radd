@@ -298,6 +298,11 @@ class Settings(BaseSettings):
     ai_max_tokens: int = 1024
     ai_timeout_seconds: float = 30.0
     ai_stream_timeout_seconds: float = 120.0  # editor-action SSE read timeout
+    # RADD-1273: the thinking budget an Anthropic-shape provider gets when its
+    # row says reasoning ON (added on top of the call's max_tokens, since the
+    # API requires the budget to fit inside it). OpenAI-shape providers leave
+    # the model's own default in charge when reasoning is on.
+    ai_reasoning_budget_tokens: int = 1024
     # Embedding indexer (spec 103): batch handed to one /embeddings call, loop
     # cadence, and the per-entity text cap fed to the model. The embedder loop
     # DRAINS (no sleep between full batches), so the interval only paces the

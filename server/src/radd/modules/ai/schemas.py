@@ -1,17 +1,34 @@
 """Registry + editor API shapes (specs 101/103). Spec-46 flow schemas stay in types.py."""
 
 import uuid
+from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
 from .types import (
     EDITOR_DOCUMENT_MAX_CHARS,
     EDITOR_INSTRUCTION_MAX_CHARS,
     EDITOR_SELECTION_MAX_CHARS,
+    RESERVED_REQUEST_PARAMS,
     AiRole,
     AiWireShape,
     EditorActionKind,
 )
+
+
+def _request_params(value: dict[str, Any]) -> dict[str, Any]:
+    """Extra request parameters are an OBJECT of top-level payload keys. The
+    structural keys stay Radd's: a `messages` or `stream` override would not
+    tune the call, it would replace it."""
+    reserved = RESERVED_REQUEST_PARAMS & set(value)
+    if reserved:
+        raise ValueError(
+            "request_params may not set " + ", ".join(sorted(reserved))
+        )
+    return value
+
+
+RequestParams = Annotated[dict[str, Any], AfterValidator(_request_params)]
 
 
 class AiProviderCreate(BaseModel):
@@ -20,6 +37,9 @@ class AiProviderCreate(BaseModel):
     base_url: str = Field(default="", max_length=500)  # "" = the shape's default
     api_key: str = ""
     default_model: str = Field(default="", max_length=200)
+    # RADD-1273: off by default on every new connection; see AiProviderRow.
+    reasoning: bool = False
+    request_params: RequestParams = Field(default_factory=dict)
 
 
 class AiProviderUpdate(BaseModel):
@@ -29,6 +49,8 @@ class AiProviderUpdate(BaseModel):
     # "" on update = keep the stored key (reads are redacted, forms round-trip "").
     api_key: str | None = None
     default_model: str | None = Field(default=None, max_length=200)
+    reasoning: bool | None = None
+    request_params: RequestParams | None = None
 
 
 class AiProviderRead(BaseModel):
@@ -41,6 +63,8 @@ class AiProviderRead(BaseModel):
     has_api_key: bool
     default_model: str
     source: str
+    reasoning: bool
+    request_params: dict[str, Any]
 
 
 class AiRoleAssign(BaseModel):

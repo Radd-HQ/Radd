@@ -56,6 +56,18 @@ DEFAULT_BASE_URLS: dict[AiWireShape, str] = {
 # Required header value on every Anthropic request.
 ANTHROPIC_VERSION = "2023-06-01"
 
+# RADD-1273: how a wire shape is asked NOT to reason. OpenAI-compatible servers
+# (vLLM, sglang) hand `chat_template_kwargs` to the model's chat template, and
+# `enable_thinking` is the switch Qwen3/DeepSeek templates honour. Anthropic
+# thinks only when a `thinking` block asks it to, so OFF there is silence.
+OPENAI_TEMPLATE_KWARGS_KEY = "chat_template_kwargs"
+OPENAI_THINKING_FLAG = "enable_thinking"
+ANTHROPIC_THINKING_KEY = "thinking"
+ANTHROPIC_THINKING_ENABLED = "enabled"
+
+# Payload keys an admin's `request_params` may not touch: they ARE the request.
+RESERVED_REQUEST_PARAMS: frozenset[str] = frozenset({"messages", "stream"})
+
 # Digest caps for the summarize prompt — keep the context small and predictable.
 # Summarize digest budgets: each section keeps its NEWEST entries whole until
 # the section's char budget runs out (`take_recent`), so long dogfood threads

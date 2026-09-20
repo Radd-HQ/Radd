@@ -13,6 +13,8 @@ from radd.modules.ai import prompts, provider, service, similar
 from radd.modules.ai.types import (
     ANTHROPIC_VERSION,
     NL_MAX_ATTEMPTS,
+    OPENAI_TEMPLATE_KWARGS_KEY,
+    OPENAI_THINKING_FLAG,
     AiWireShape,
     AiUpstreamError,
     NlOutcome,
@@ -393,6 +395,68 @@ def test_apply_rerank_clamps_and_rejects_unusable():
     # Nothing usable -> None, so the caller falls back to FTS order (reranked: false).
     assert service.apply_rerank([_candidate("TD-1")], [{"key": "TD-9", "score": 1}]) is None
     assert service.apply_rerank([_candidate("TD-1")], ["junk"]) is None
+
+
+# --- request options (RADD-1273) ---
+
+
+def _bare(**kw):
+    return provider.openai_payload("SYS", "USER", model="m", max_tokens=8, **kw)
+
+
+def test_reasoning_off_is_the_default_and_asks_the_template_not_to_think():
+    payload = provider.finish_payload(
+        _bare(), AiWireShape.OPENAI, reasoning=False, request_params={}, reasoning_budget_tokens=1024
+    )
+    assert payload[OPENAI_TEMPLATE_KWARGS_KEY] == {OPENAI_THINKING_FLAG: False}
+    # ...and touches nothing else: the base payload is intact and unmutated.
+    assert payload["messages"] == _bare()["messages"] and OPENAI_TEMPLATE_KWARGS_KEY not in _bare()
+
+
+def test_reasoning_on_leaves_an_openai_model_to_its_default():
+    payload = provider.finish_payload(
+        _bare(), AiWireShape.OPENAI, reasoning=True, request_params={}, reasoning_budget_tokens=1024
+    )
+    assert payload == _bare()
+
+
+def test_request_params_merge_last_and_win():
+    params = {"temperature": 0.2, OPENAI_TEMPLATE_KWARGS_KEY: {OPENAI_THINKING_FLAG: True, "x": 1}}
+    payload = provider.finish_payload(
+        _bare(), AiWireShape.OPENAI, reasoning=False, request_params=params, reasoning_budget_tokens=1024
+    )
+    assert payload["temperature"] == 0.2
+    # Nested objects merge key by key; the admin's value beats Radd's directive.
+    assert payload[OPENAI_TEMPLATE_KWARGS_KEY] == {OPENAI_THINKING_FLAG: True, "x": 1}
+
+
+def test_anthropic_reasoning_on_adds_thinking_inside_a_lifted_budget():
+    base = provider.anthropic_payload("SYS", "USER", model="c", max_tokens=8)
+    on = provider.finish_payload(
+        base, AiWireShape.ANTHROPIC, reasoning=True, request_params={}, reasoning_budget_tokens=1024
+    )
+    assert on["thinking"] == {"type": "enabled", "budget_tokens": 1024}
+    assert on["max_tokens"] == 8 + 1024
+    off = provider.finish_payload(
+        base, AiWireShape.ANTHROPIC, reasoning=False, request_params={}, reasoning_budget_tokens=1024
+    )
+    assert off == base  # the API's own default is no thinking
+    # A forced tool call cannot be combined with thinking — structured stays silent.
+    forced = provider.anthropic_payload("SYS", "USER", model="c", max_tokens=8, tool_schema={"type": "object"})
+    assert provider.finish_payload(
+        forced, AiWireShape.ANTHROPIC, reasoning=True, request_params={}, reasoning_budget_tokens=1024
+    ) == forced
+
+
+def test_request_params_cannot_replace_the_request_itself():
+    from pydantic import ValidationError
+
+    from radd.modules.ai.schemas import AiProviderCreate
+
+    with pytest.raises(ValidationError):
+        AiProviderCreate(name="x", wire_shape=AiWireShape.OPENAI, request_params={"messages": []})
+    with pytest.raises(ValidationError):
+        AiProviderCreate(name="x", wire_shape=AiWireShape.OPENAI, request_params=["not", "an", "object"])
 
 
 # --- NL->SLQ retry decision ---

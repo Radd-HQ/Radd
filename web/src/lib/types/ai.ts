@@ -63,6 +63,11 @@ export interface AiProviderRead {
   has_api_key: boolean;
   default_model: string;
   source: AiProviderSourceValue;
+  /** RADD-1273: off = Radd asks a thinking model not to think (the default);
+   *  on = the model's own default. */
+  reasoning: boolean;
+  /** Admin-supplied JSON object merged LAST into every chat payload. */
+  request_params: Record<string, unknown>;
 }
 
 /** POST /ai/providers body; PATCH sends a partial ("" api_key = keep stored). */
@@ -72,6 +77,8 @@ export interface AiProviderPayload {
   base_url?: string;
   api_key?: string;
   default_model?: string;
+  reasoning?: boolean;
+  request_params?: Record<string, unknown>;
 }
 
 /** One role assignment from GET /ai/roles (unassigned roles have no row). */

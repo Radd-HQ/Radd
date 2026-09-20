@@ -10,7 +10,8 @@ cascades its assignments away instead of leaving dangling references.
 
 import uuid
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, UniqueConstraint, true
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, UniqueConstraint, false, true
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from radd.db import Base, TimestampMixin
@@ -32,6 +33,13 @@ class AiProviderRow(Base, TimestampMixin):
     api_key: Mapped[str] = mapped_column(Text, default="")
     default_model: Mapped[str] = mapped_column(String(200), default="")
     source: Mapped[str] = mapped_column(String(10), default=AiProviderSource.USER.value)
+    # RADD-1273: Radd states its preference on every request rather than
+    # relying on the server's chat template. `reasoning` OFF (the default for
+    # every row) asks a thinking model not to think; `request_params` is an
+    # admin-supplied JSON object deep-merged LAST into every chat payload, so
+    # it can override anything Radd chose (temperature, vendor knobs).
+    reasoning: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    request_params: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
 
     @property
     def has_api_key(self) -> bool:

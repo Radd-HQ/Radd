@@ -52,6 +52,34 @@ def _create(name: str = "", **overrides) -> AiProviderCreate:
     return AiProviderCreate(**payload)
 
 
+# --- request preferences (RADD-1273) -------------------------------------------
+
+
+async def test_a_new_provider_has_reasoning_off_and_no_extra_params(db):
+    provider = await registry.create_provider(db, _create())
+    assert provider.reasoning is False and provider.request_params == {}
+    await registry.set_role(db, AiRole.CHAT, AiRoleAssign(provider_id=provider.id))
+    resolved = await registry.resolve_role(db, AiRole.CHAT)
+    assert resolved.reasoning is False and resolved.request_params == {}
+
+
+async def test_provider_preferences_round_trip_and_reach_the_resolved_model(db):
+    provider = await registry.create_provider(
+        db, _create(reasoning=True, request_params={"temperature": 0.1})
+    )
+    await registry.set_role(db, AiRole.CHAT, AiRoleAssign(provider_id=provider.id))
+    resolved = await registry.resolve_role(db, AiRole.CHAT)
+    assert resolved.reasoning is True and resolved.request_params == {"temperature": 0.1}
+    updated = await registry.update_provider(
+        db, provider.id, AiProviderUpdate(reasoning=False, request_params={})
+    )
+    assert updated.reasoning is False and updated.request_params == {}
+    # A partial update that names neither leaves both alone.
+    await registry.update_provider(db, provider.id, AiProviderUpdate(default_model="other"))
+    resolved = await registry.resolve_role(db, AiRole.CHAT)
+    assert resolved.reasoning is False and resolved.model == "other"
+
+
 # --- role resolution ----------------------------------------------------------
 
 

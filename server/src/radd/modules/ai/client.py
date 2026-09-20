@@ -39,7 +39,7 @@ def _completion_payload(
         raise AiConfigError("the built-in local backend only embeds")
     if resolved.wire_shape is AiWireShape.OPENAI:
         response_format = provider.json_schema_format(json_schema) if json_schema else None
-        return provider.openai_payload(
+        payload = provider.openai_payload(
             system,
             user,
             model=resolved.model,
@@ -47,13 +47,23 @@ def _completion_payload(
             response_format=response_format,
             stream=stream,
         )
-    return provider.anthropic_payload(
-        system,
-        user,
-        model=resolved.model,
-        max_tokens=max_tokens,
-        tool_schema=json_schema,
-        stream=stream,
+    else:
+        payload = provider.anthropic_payload(
+            system,
+            user,
+            model=resolved.model,
+            max_tokens=max_tokens,
+            tool_schema=json_schema,
+            stream=stream,
+        )
+    # RADD-1273: every chat request — plain, structured, streamed, the probe —
+    # carries the provider's reasoning preference and extra parameters.
+    return provider.finish_payload(
+        payload,
+        resolved.wire_shape,
+        reasoning=resolved.reasoning,
+        request_params=resolved.request_params,
+        reasoning_budget_tokens=settings.ai_reasoning_budget_tokens,
     )
 
 
