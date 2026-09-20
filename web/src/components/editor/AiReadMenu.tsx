@@ -28,6 +28,9 @@ interface AiReadMenuProps {
    * where the project logs time) via POST /items/{id}/ai/summarize, instead of
    * just this text — set on the description's menu. */
   summarizeItemId?: string;
+  /** RADD-1275: the entity whose image attachments the read-mode Summarize
+   *  may show a vision model (a page). Ignored by every transform. */
+  imagesOf?: { entity_type: string; entity_id: string };
   /** Present when the actor can rewrite this text — the pick opens the editor
    * with the transform streaming in as a reviewable diff. Leave out where the
    * actor has no write access: the menu then only offers query actions. */
@@ -50,6 +53,7 @@ export function AiReadMenu({
   text,
   similar,
   summarizeItemId,
+  imagesOf,
   onTransform,
   label,
   className = "",
@@ -126,7 +130,12 @@ export function AiReadMenu({
     try {
       const frames = streamSse(
         ApiPath.aiEditorStream,
-        { action_id: AiBuiltinEditorAction.summarize, document: text, selection: "" },
+        {
+          action_id: AiBuiltinEditorAction.summarize,
+          document: text,
+          selection: "",
+          ...(imagesOf ? { images_of: imagesOf } : {}),
+        },
         controller.signal,
       );
       for await (const chunk of frames) {

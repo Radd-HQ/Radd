@@ -112,10 +112,14 @@ async def complete(
     user: str,
     *,
     max_tokens: int | None = None,
+    images: Sequence[tuple[bytes, str]] = (),
 ) -> str:
-    """One round-trip: system + user prompt -> assistant text."""
+    """One round-trip: system + user prompt -> assistant text. `images`
+    (RADD-1275) ride as content parts before the text — the caller has
+    already chosen a role that can see them."""
     resolved = await registry.require_role(session, role)
-    data = await _completion_data(resolved, system, user, max_tokens=max_tokens)
+    content = provider.user_content_parts(resolved.wire_shape, user, images)
+    data = await _completion_data(resolved, system, content, max_tokens=max_tokens)
     return provider.extract_completion_text(resolved.wire_shape, data)
 
 
@@ -217,6 +221,7 @@ async def stream(
     user: str,
     *,
     max_tokens: int | None = None,
+    images: Sequence[tuple[bytes, str]] = (),
 ) -> AsyncIterator[str]:
     """Streamed completion: yields text deltas as they arrive.
 
@@ -224,8 +229,9 @@ async def stream(
     the SSE response), the httpx stream context closes the upstream connection.
     """
     resolved = await registry.require_role(session, role)
+    content = provider.user_content_parts(resolved.wire_shape, user, images)
     payload = _completion_payload(
-        resolved, system, user, max_tokens=max_tokens or settings.ai_max_tokens, stream=True
+        resolved, system, content, max_tokens=max_tokens or settings.ai_max_tokens, stream=True
     )
     url = provider.completions_url(resolved.wire_shape, resolved.base_url)
     request_headers = provider.headers(resolved.wire_shape, resolved.api_key)

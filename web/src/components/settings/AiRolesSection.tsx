@@ -27,7 +27,11 @@ const ROLE_ROWS: readonly { role: AiRoleValue; label: string; blurb: string }[] 
     blurb: "Editor actions, summarize, NL→SLQ, similar rerank",
   },
   { role: AiRole.embeddings, label: "Embeddings", blurb: "Semantic search" },
-  { role: AiRole.vision, label: "Vision", blurb: "Storage routing classification" },
+  {
+    role: AiRole.vision,
+    label: "Vision",
+    blurb: "Storage routing classification; issue and page summaries see attached images",
+  },
 ];
 
 const NOT_ASSIGNED = "";

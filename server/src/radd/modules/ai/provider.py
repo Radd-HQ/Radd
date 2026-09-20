@@ -203,6 +203,32 @@ def user_content(
     return builder(text, image_bytes, media_type or "image/png")
 
 
+def user_content_parts(
+    shape: AiWireShape, text: str, images: Sequence[tuple[bytes, str]]
+) -> UserContent:
+    """RADD-1275: `text` after any number of pictures — the one-image builders
+    generalised. No pictures = the plain string, so a text-only call's payload
+    is byte-identical to what it was before pictures existed."""
+    if not images:
+        return text
+    parts: list[dict[str, Any]] = []
+    for data, media_type in images:
+        encoded = base64.b64encode(data).decode("ascii")
+        if shape is AiWireShape.OPENAI:
+            parts.append(
+                {"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{encoded}"}}
+            )
+        else:
+            parts.append(
+                {
+                    "type": "image",
+                    "source": {"type": "base64", "media_type": media_type, "data": encoded},
+                }
+            )
+    parts.append({"type": "text", "text": text})
+    return parts
+
+
 # --- headers / URLs -----------------------------------------------------------
 
 

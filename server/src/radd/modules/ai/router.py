@@ -55,9 +55,12 @@ async def summarize_item_stream(
     setting). Gates + the digest build run before the stream starts, so a
     dormant feature or unreadable item fails as ordinary JSON."""
     user_prompt = await service.summarize_prompt(session, item_id, user)
+    # RADD-1275: the pictures are read here, with the actor, before the
+    # response starts — the body generator has no caller to check against.
+    pictures = await service.summarize_images(session, item_id, user)
     await commit_before_streaming(session)  # RADD-845: no idle tx behind the SSE
     return StreamingResponse(
-        service.summarize_stream_frames(session, user_prompt),
+        service.summarize_stream_frames(session, user_prompt, pictures),
         media_type="text/event-stream",
         headers=SSE_HEADERS,
     )

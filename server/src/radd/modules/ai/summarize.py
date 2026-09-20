@@ -12,13 +12,15 @@ from typing import TypeVar
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.modules.attachments.types import AttachmentParentType
 from radd.modules.auth.models import User
 from radd.modules.comments import service as comments_service
 from radd.modules.items import service as items_service
 from radd.modules.items.history import item_history
 from radd.modules.items.schemas import HistoryEntry
 
-from . import client, features, prompts
+from . import client, features, images, prompts
+from .images import ImagePart
 from .prose import prose
 from .editor import sse_frame
 from .types import (
@@ -171,28 +173,63 @@ async def summarize_prompt(session: AsyncSession, item_id: uuid.UUID, actor: Use
     return user_prompt
 
 
+async def summarize_images(
+    session: AsyncSession, item_id: uuid.UUID, actor: User
+) -> list[ImagePart]:
+    """RADD-1275: the item's image attachments this reader may show a vision
+    model — empty, without touching storage, when no vision role is assigned."""
+    return await images.entity_images(session, actor, AttachmentParentType.ITEM.value, item_id)
+
+
+def with_images(user_prompt: str, pictures: Sequence[ImagePart]) -> tuple[AiRole, str]:
+    """Which role answers and what the text part says: the vision role and a
+    filename roster when pictures ride along, the chat role and the prompt
+    untouched when none do (pure)."""
+    if not pictures:
+        return AiRole.CHAT, user_prompt
+    return AiRole.VISION, f"{user_prompt}\n\n{images.images_note(pictures)}"
+
+
 async def summarize_item(
     session: AsyncSession, item_id: uuid.UUID, actor: User
 ) -> SummarizeResponse:
     """Hand-off summary in one go (the Stream-AI-responses setting off)."""
     user_prompt = await summarize_prompt(session, item_id, actor)
-    summary = await client.complete(session, AiRole.CHAT, prompts.SUMMARIZE_SYSTEM, user_prompt)
+    pictures = await summarize_images(session, item_id, actor)
+    role, text = with_images(user_prompt, pictures)
+    summary = await client.complete(
+        session, role, prompts.SUMMARIZE_SYSTEM, text, images=_wire(pictures)
+    )
     return SummarizeResponse(summary=summary.strip())
 
 
-def summarize_stream_frames(session: AsyncSession, user_prompt: str) -> AsyncIterator[str]:
+def summarize_stream_frames(
+    session: AsyncSession, user_prompt: str, pictures: Sequence[ImagePart] = ()
+) -> AsyncIterator[str]:
     """SSE body for the streaming summarize (the editor's frame contract)."""
-    return _chat_stream_frames(session, prompts.SUMMARIZE_SYSTEM, user_prompt)
+    role, text = with_images(user_prompt, pictures)
+    return _chat_stream_frames(session, prompts.SUMMARIZE_SYSTEM, text, role=role, pictures=pictures)
+
+
+def _wire(pictures: Sequence[ImagePart]) -> list[tuple[bytes, str]]:
+    return [(picture.data, picture.media_type) for picture in pictures]
 
 
 async def _chat_stream_frames(
-    session: AsyncSession, system: str, user_prompt: str
+    session: AsyncSession,
+    system: str,
+    user_prompt: str,
+    *,
+    role: AiRole = AiRole.CHAT,
+    pictures: Sequence[ImagePart] = (),
 ) -> AsyncIterator[str]:
     """One chat completion as SSE frames — `data: {"t": …}` per token batch,
     then `event: done`; provider failures are in-band `event: error` frames
     (headers are already sent when the body generator runs)."""
     try:
-        async for chunk in client.stream(session, AiRole.CHAT, system, user_prompt):
+        async for chunk in client.stream(
+            session, role, system, user_prompt, images=_wire(pictures)
+        ):
             yield sse_frame({"t": chunk})
     except (AiUpstreamError, AiDisabledError) as exc:
         yield sse_frame({"detail": str(exc)}, event="error")

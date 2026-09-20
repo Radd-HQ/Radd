@@ -8,7 +8,7 @@ survive SSE framing; failures after headers are in-band `event: error` frames.
 
 import json
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +16,7 @@ from radd.exceptions import NotFoundError
 
 from . import client, registry
 from .schemas import EditorActionRead, EditorStreamRequest
+from .images import ImagePart, images_note
 from .types import (
     EDITOR_MAX_TOKENS,
     AiDisabledError,
@@ -36,13 +37,19 @@ PROTECTED_PLACEHOLDER_RULE = (
     "belongs in the text, and never edit, wrap, or drop one."
 )
 
+# RADD-1275: when the read-mode Summarize hands the page's pictures along.
+ATTACHED_IMAGES_RULE = (
+    "When images are attached they belong to the document: where one matters, "
+    "say what it shows and name it by its filename."
+)
+
 EDITOR_SYSTEM = (
     "You are a writing assistant inside an issue tracker's markdown editor. "
     "You receive a document, optionally a selected portion, and an instruction. "
     "Apply the instruction to the SELECTION when one is given, otherwise to the "
     "whole document. Return ONLY the replacement markdown — no preamble, no "
     "commentary, and no code fence wrapping the entire reply. "
-    f"{PROTECTED_PLACEHOLDER_RULE}"
+    f"{PROTECTED_PLACEHOLDER_RULE} {ATTACHED_IMAGES_RULE}"
 )
 
 BUILTIN_ACTIONS: dict[EditorAction, tuple[str, str]] = {
@@ -118,14 +125,30 @@ def sse_frame(data: dict, event: str | None = None) -> str:
 
 
 async def stream_frames(
-    session: AsyncSession, data: EditorStreamRequest, instruction: str
+    session: AsyncSession,
+    data: EditorStreamRequest,
+    instruction: str,
+    pictures: Sequence[ImagePart] = (),
 ) -> AsyncIterator[str]:
     """The SSE body. Headers are already sent when this runs, so every failure
-    is an in-band `event: error` frame, never an exception to the handler."""
+    is an in-band `event: error` frame, never an exception to the handler.
+
+    `pictures` (RADD-1275) are the entity's images the ROUTER read with the
+    actor before the stream; with any, the vision role answers instead of chat.
+    """
     prompt = user_prompt(data.document, data.selection, instruction)
+    role = AiRole.CHAT
+    if pictures:
+        role = AiRole.VISION
+        prompt = f"{prompt}\n\n{images_note(pictures)}"
     try:
         async for chunk in client.stream(
-            session, AiRole.CHAT, EDITOR_SYSTEM, prompt, max_tokens=EDITOR_MAX_TOKENS
+            session,
+            role,
+            EDITOR_SYSTEM,
+            prompt,
+            max_tokens=EDITOR_MAX_TOKENS,
+            images=[(picture.data, picture.media_type) for picture in pictures],
         ):
             yield sse_frame({"t": chunk})
     except (AiUpstreamError, AiDisabledError) as exc:

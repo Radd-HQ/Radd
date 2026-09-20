@@ -303,6 +303,12 @@ class Settings(BaseSettings):
     # API requires the budget to fit inside it). OpenAI-shape providers leave
     # the model's own default in charge when reasoning is on.
     ai_reasoning_budget_tokens: int = 1024
+    # RADD-1275: pictures a summary may show a vision model — how many of the
+    # entity's image attachments (newest first), the largest original it will
+    # read, and the width it is downscaled to before it is sent.
+    ai_vision_max_images: int = 4
+    ai_vision_max_image_bytes: int = 8_000_000
+    ai_vision_image_width: int = 1024
     # Embedding indexer (spec 103): batch handed to one /embeddings call, loop
     # cadence, and the per-entity text cap fed to the model. The embedder loop
     # DRAINS (no sleep between full batches), so the interval only paces the

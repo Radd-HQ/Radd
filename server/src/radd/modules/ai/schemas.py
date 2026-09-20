@@ -115,11 +115,22 @@ class EditorActionRead(BaseModel):
     kind: EditorActionKind
 
 
+class EntityRef(BaseModel):
+    """RADD-1275: the entity whose image attachments a run may look at."""
+
+    entity_type: str = Field(min_length=1, max_length=50)
+    entity_id: uuid.UUID
+
+
 class EditorStreamRequest(BaseModel):
     action_id: str | None = None
     instruction: str | None = Field(default=None, max_length=EDITOR_INSTRUCTION_MAX_CHARS)
     document: str = Field(max_length=EDITOR_DOCUMENT_MAX_CHARS)
     selection: str = Field(default="", max_length=EDITOR_SELECTION_MAX_CHARS)
+    # RADD-1275: set by the read-mode Summarize on a page (the text is the
+    # page body, the pictures are its attachments). Never by a transform — a
+    # rewrite has no use for pictures and would only pay for them.
+    images_of: EntityRef | None = None
 
     @model_validator(mode="after")
     def _exactly_one_of(self) -> "EditorStreamRequest":

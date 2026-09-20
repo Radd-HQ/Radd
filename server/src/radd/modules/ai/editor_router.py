@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.db import commit_before_streaming, get_session
 from radd.modules.auth.deps import CurrentUser
 
-from . import editor, features
+from . import editor, features, images
 from .schemas import EditorActionRead, EditorStreamRequest
 from .types import SSE_HEADERS, AiFeature
 
@@ -36,12 +36,21 @@ async def stream(data: EditorStreamRequest, session: Session, user: CurrentUser)
     """
     await features.require_feature(session, AiFeature.EDITOR_ACTIONS)
     instruction = await editor.resolve_instruction(session, data)
+    # RADD-1275: the pictures the READER may show a vision model, read here
+    # with the actor — the body generator has no caller to check against.
+    pictures = (
+        await images.entity_images(
+            session, user, data.images_of.entity_type, data.images_of.entity_id
+        )
+        if data.images_of
+        else []
+    )
     # RADD-845: end the request tx before the stream; the generator's own
     # provider-config read autobegins a short one, bounded by the engine's
     # idle-in-transaction timeout.
     await commit_before_streaming(session)
     return StreamingResponse(
-        editor.stream_frames(session, data, instruction),
+        editor.stream_frames(session, data, instruction, pictures),
         media_type="text/event-stream",
         headers=SSE_HEADERS,
     )

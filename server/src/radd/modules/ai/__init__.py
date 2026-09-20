@@ -116,6 +116,7 @@ plugin = RaddPlugin(
         "events",
         "pages",
         "timelogging",
+        "attachments",  # RADD-1275: a summary may show a vision model the entity's pictures
     ),
     # The classifier node (spec 116 phase 2). Contributed, not hardcoded in
     # `automations` — which is the whole point of the node registry: a module

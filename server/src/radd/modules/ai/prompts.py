@@ -211,8 +211,9 @@ SUMMARIZE_SYSTEM = (
     "over. Write a tight hand-off summary in markdown: what it is and why it matters, "
     "where it stands now, notable recent activity, and open questions or next steps. "
     "When a Time tracking section is present, include one line on effort — the total "
-    "logged and who spent it. Be concrete, do not invent facts, and stay under about "
-    "250 words."
+    "logged and who spent it. When images are attached, say what the ones that "
+    "matter show, naming each by its filename. Be concrete, do not invent facts, "
+    "and stay under about 250 words."
 )
 
 

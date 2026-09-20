@@ -50,6 +50,7 @@ from .summarize import (
     _chat_stream_frames as _chat_stream_frames,
     _worklog_digest as _worklog_digest,
     history_line as history_line,
+    summarize_images as summarize_images,
     summarize_item as summarize_item,
     summarize_prompt as summarize_prompt,
     summarize_stream_frames as summarize_stream_frames,

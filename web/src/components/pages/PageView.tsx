@@ -489,6 +489,7 @@ export function PageView({
                         <AiReadMenu
                           text={page.body}
                           similar={{ seedKey: page.id }}
+                          imagesOf={{ entity_type: AttachmentParentType.page, entity_id: page.id }}
                           onTransform={canWrite ? openEditor : undefined}
                           label="AI actions for this page"
                         />

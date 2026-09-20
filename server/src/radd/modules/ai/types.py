@@ -65,6 +65,13 @@ OPENAI_THINKING_FLAG = "enable_thinking"
 ANTHROPIC_THINKING_KEY = "thinking"
 ANTHROPIC_THINKING_ENABLED = "enabled"
 
+# RADD-1275: the media types a vision role is handed. The same four every
+# vision-capable chat API documents; anything else (a PDF, an SVG, a video) is
+# not a picture to the model even when it is one to a browser.
+VISION_IMAGE_TYPES: frozenset[str] = frozenset(
+    {"image/png", "image/jpeg", "image/webp", "image/gif"}
+)
+
 # Payload keys an admin's `request_params` may not touch: they ARE the request.
 RESERVED_REQUEST_PARAMS: frozenset[str] = frozenset({"messages", "stream"})
 
