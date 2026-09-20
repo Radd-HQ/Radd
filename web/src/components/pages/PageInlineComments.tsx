@@ -7,14 +7,15 @@ import { apiCommentPath, apiParentCommentsPath } from "../../lib/constants";
 import { pageCommentFeedQuery } from "../../lib/queries";
 import type { Comment } from "../../lib/types";
 import { useCurrentUser } from "../../lib/hooks";
-import { locateAnchor, makeAnchor, orderByAnchor, type TextAnchor } from "../../lib/anchoring";
+import { locateAnchor, makeAnchor, orderByAnchor, type AnchorLocation, type TextAnchor } from "../../lib/anchoring";
 import { offsetsForSelection, rangeForOffsets, renderedText, revealTextOffset, scrollRangeIntoView } from "../../lib/dom-text";
 import { CommentHistory } from "../CommentHistory";
 import { chronologicalComments, CommentSection } from "../../lib/queries/comment-feed";
 import { Button } from "../Button";
 import { LazyRichEditor as RichEditor } from "../editor/LazyRichEditor";
 
-import { PageCommentThread as Thread } from "./PageCommentThread";
+import { PageCommentThread as Thread, type OrphanReason } from "./PageCommentThread";
+import { useConfirm } from "../ConfirmDialog";
 import { PageCommentPopover } from "./PageCommentPopover";
 import { useCommentPointer, type CommentHit } from "./useCommentPointer";
 
@@ -98,8 +99,9 @@ export function PageInlineComments({
 
   // Locate every anchor against the current rendered text, in document order.
   const [located, setLocated] = useState<
-    { row: Comment; start: number | null }[]
+    { row: Comment; start: number | null; orphaned: OrphanReason | null }[]
   >([]);
+  const [confirmDialog, confirm] = useConfirm();
 
   const rescan = useCallback(() => {
     const root = anchorRoot();
@@ -110,6 +112,7 @@ export function PageInlineComments({
       ordered.map(({ row, location }) => ({
         row,
         start: location?.status === "located" ? location.start : null,
+        orphaned: orphanReason(location),
       })),
     );
 
@@ -196,9 +199,29 @@ export function PageInlineComments({
     onDraft: (value: string) => setReplyDrafts(previous => ({...previous, [row.id]: value})),
   });
 
-  const open = located.filter(({ row }) => !row.resolved_at);
+  const canResolveRow = (row: Comment) => canManage || (canComment && row.author?.id === user?.id);
+  // RADD-1276: three groups. Open comments that still point at the page, the
+  // ones whose passage is gone (a rewrite strands all of them at once — they
+  // stay, by RADD-726, until someone resolves them, so they get a place, a
+  // label and one action), and the resolved ones.
+  const open = located.filter(({ row, orphaned }) => !row.resolved_at && orphaned === null);
+  const detached = located.filter(({ row, orphaned }) => !row.resolved_at && orphaned !== null);
   const resolved = located.filter(({ row }) => row.resolved_at);
-  const orphans = open.filter(({ start }) => start === null);
+  const resolvableDetached = detached.filter(({ row }) => canResolveRow(row));
+  const resolveAllDetached = async () => {
+    const count = resolvableDetached.length;
+    const ok = await confirm({
+      title: "Resolve detached comments",
+      message:
+        count === 1
+          ? "Resolve this comment? The passage it was written about is no longer on the page. It keeps its quote under Resolved."
+          : `Resolve these ${count} comments? The passages they were written about are no longer on the page. They keep their quotes under Resolved.`,
+      confirmLabel: count === 1 ? "Resolve it" : `Resolve ${count}`,
+    });
+    if (!ok) return;
+    setFocusedId(null);
+    for (const { row } of resolvableDetached) resolve.mutate({ id: row.id, resolved: true });
+  };
 
   if (!inline.length && !canComment && !history.hasNextPage && !history.isError && !history.isPending) return null;
 
@@ -207,7 +230,7 @@ export function PageInlineComments({
       {floating.pointer && floatingRow && (
         <PageCommentPopover pointer={floating.pointer} onClose={floating.close} onKeep={floating.keep}
           onLeave={floating.leave} onPin={floating.pin}>
-          <Thread row={floatingRow} orphaned={false} focused canResolve={floating.pointer.pinned && (canManage || (canComment && floatingRow.author?.id === user?.id))}
+          <Thread row={floatingRow} orphaned={null} focused canResolve={floating.pointer.pinned && (canManage || (canComment && floatingRow.author?.id === user?.id))}
             onResolve={() => {floating.close(); setFocusedId(null); resolve.mutate({id: floatingRow.id, resolved: true});}}
             expanded={floating.pointer.pinned} onToggle={floating.pointer.pinned ? floating.close : floating.pin} {...replyProps(floatingRow)} />
         </PageCommentPopover>
@@ -233,10 +256,10 @@ export function PageInlineComments({
       <CommentHistory hasOlder={history.hasNextPage} loading={history.isFetchingNextPage}
         onOlder={() => history.fetchNextPage()} error={history.isError ? errorMessage(history.error) : undefined}>
       <section ref={railRef} className="flex flex-col gap-2" data-inline-comment-rail>
-        <h2 className="text-xs font-semibold text-heading">Inline comments ({open.length}{history.hasNextPage ? "+" : ""})</h2>
+        <h2 className="text-xs font-semibold text-heading">Inline comments ({open.length + detached.length}{history.hasNextPage ? "+" : ""})</h2>
         {resolve.isError && <p role="alert" className="text-xs text-status-danger-ink">{errorMessage(resolve.error)}</p>}
         {history.isPending && <p role="status" className="text-xs text-fg-muted">Loading comments…</p>}
-        {!history.isPending && !open.length && !draftAnchor && (
+        {!history.isPending && !open.length && !detached.length && !draftAnchor && (
           <p className="text-xs text-fg-muted">{canComment ? "Select a passage to comment on it." : "No open inline comments."}</p>
         )}
         {draftAnchor && (
@@ -264,16 +287,16 @@ export function PageInlineComments({
           </div>
         )}
 
-        {open.map(({ row, start }) => (
+        {open.map(({ row }) => (
           <Thread
             key={row.id}
             expanded={expandedId === row.id && !floating.pointer?.pinned}
             onToggle={() => {floating.close(); setExpandedId(expandedId === row.id ? null : row.id);}}
             {...replyProps(row)}
             row={row}
-            orphaned={start === null}
+            orphaned={null}
             focused={row.id === focusedId}
-            canResolve={canManage || (canComment && row.author?.id === user?.id)}
+            canResolve={canResolveRow(row)}
             onFocus={() => setFocusedId(row.id)}
             onNavigate={() => jumpToPassage(row)}
             onResolve={() => {
@@ -283,11 +306,41 @@ export function PageInlineComments({
           />
         ))}
 
-        {orphans.length > 0 && (
-          <p className="px-1 text-[11px] text-fg-faint">
-            {orphans.length} comment{orphans.length === 1 ? "" : "s"} above no longer match the
-            page text — the passage was edited or removed.
-          </p>
+        {detached.length > 0 && (
+          <section data-detached-comments className="flex flex-col gap-2 border-t border-subtle pt-2">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-[11px] font-semibold text-heading">Detached ({detached.length})</h3>
+              {resolvableDetached.length > 0 && (
+                <Button size="sm" variant="ghost" onClick={() => void resolveAllDetached()} disabled={resolve.isPending}>
+                  {resolvableDetached.length === detached.length
+                    ? "Resolve all"
+                    : `Resolve ${resolvableDetached.length} of ${detached.length}`}
+                </Button>
+              )}
+            </div>
+            <p className="text-[11px] text-fg-muted">
+              The passages these were written about were edited away, or now appear more than
+              once. They stay until someone resolves them; a resolved comment keeps its quote.
+            </p>
+            {detached.map(({ row, orphaned }) => (
+              <Thread
+                key={row.id}
+                expanded={expandedId === row.id && !floating.pointer?.pinned}
+                onToggle={() => {floating.close(); setExpandedId(expandedId === row.id ? null : row.id);}}
+                {...replyProps(row)}
+                row={row}
+                orphaned={orphaned}
+                focused={row.id === focusedId}
+                canResolve={canResolveRow(row)}
+                onFocus={() => setFocusedId(row.id)}
+                onNavigate={() => jumpToPassage(row)}
+                onResolve={() => {
+                  setFocusedId(null);
+                  resolve.mutate({ id: row.id, resolved: true });
+                }}
+              />
+            ))}
+          </section>
         )}
 
         {resolved.length > 0 && (
@@ -300,16 +353,16 @@ export function PageInlineComments({
               Resolved ({resolved.length})
             </button>
             {showResolved &&
-              resolved.map(({ row, start }) => (
+              resolved.map(({ row, orphaned }) => (
                 <Thread
                   key={row.id}
                   expanded={expandedId === row.id}
                   onToggle={() => setExpandedId(expandedId === row.id ? null : row.id)}
                   {...replyProps(row)}
                   row={row}
-                  orphaned={start === null}
+                  orphaned={orphaned}
                   focused={row.id === focusedId}
-                  canResolve={canManage || (canComment && row.author?.id === user?.id)}
+                  canResolve={canResolveRow(row)}
                   resolvedView
                   onFocus={() => setFocusedId(row.id)}
                   onNavigate={() => jumpToPassage(row)}
@@ -320,6 +373,13 @@ export function PageInlineComments({
         )}
       </section>
       </CommentHistory>
+      {confirmDialog}
     </>
   );
+}
+
+/** The rail's word for a location that is not "located" — null when it is. */
+function orphanReason(location: AnchorLocation | null): OrphanReason | null {
+  if (!location || location.status === "located") return null;
+  return location.status === "ambiguous" ? "ambiguous" : "removed";
 }
