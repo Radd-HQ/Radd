@@ -5,7 +5,7 @@ from .types import CONSUMER_NAME, AutomationEvent
 from radd.kernel import EventTypeSpec, RaddPlugin
 from radd.kernel import CrudResourceSpec, PermissionSpec
 
-from . import dispatcher, scheduler
+from . import dispatcher, mcptools, scheduler
 from . import subscribers  # noqa: F401 — registers the spec-119 item.creating hook
 from .intake import ValidationBlocked
 from .intake_router import router as intake_router
@@ -110,6 +110,7 @@ plugin = RaddPlugin(
     depends_on=("projects", "auth", "workflow", "labels", "cycles", "releases", "items", "comments", "teams", "events", "fields", "itemtypes",),
     weak_depends=("mailintake", "notify", "leave", "participants"),
     routers=(router, intake_router),
+    mcp_tools=mcptools.MCP_TOOLS,  # RADD-1271: the automation surface over MCP
     exception_handlers=(
         (ValidationBlocked, _validation_blocked_handler),
         (ValidationUnavailable, _validation_unavailable_handler),

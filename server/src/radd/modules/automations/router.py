@@ -15,22 +15,12 @@ from radd.modules.events import service as events_service
 from radd.modules.items import service as items_service
 from radd.modules.projects import service as projects_service
 
-from . import catalog, engine, runs, samples, service, versions
-from .types import BUILTIN_OUTPUTS, AutomationEntity, AutomationTrigger
-from radd.kernel.registry import registries
-
-from . import templating
-
+from . import catalog, catalog_read, engine, runs, samples, service, versions
+from .types import AutomationEntity, AutomationTrigger
 from .schemas import (
-    ContributedNodeInfo,
-    NodeOutputsInfo,
-    OutputFieldInfo,
     EventSampleRead,
-    NodeArityInfo,
     PayloadPathInfo,
-    TemplateTokenInfo,
     CatalogRead,
-    OperatorInfo,
     RuleCreate,
     RuleRead,
     RuleRunRequest,
@@ -46,8 +36,6 @@ from .schemas import (
     SchedulePreviewRead,
     SchedulePreviewRequest,
     RunnableRuleRead,
-    ScheduleKindInfo,
-    TriggerInfo,
 )
 
 router = APIRouter(prefix="/automations", tags=["automations"])
@@ -63,77 +51,12 @@ _MANAGE = authz.Permission.AUTOMATION_MANAGE
 _PREVIEW_RUNS = 5
 
 
-def _output_info(field) -> OutputFieldInfo:
-    """One `OutputField` on the wire (spec 120)."""
-    return OutputFieldInfo(
-        name=field.name,
-        label=field.label,
-        kind=field.kind,
-        choices=list(field.choices),
-        description=field.description,
-    )
-
-
 @router.get("/catalog", response_model=CatalogRead)
 async def get_catalog(session: Session, user: CurrentUser) -> CatalogRead:
     """The trigger/subject/operator catalog the rule builder renders from (spec 58).
-    Static per build — but served, not baked into the SPA, so extensions listing
-    it stay honest about what this server supports."""
-    return CatalogRead(
-        triggers=[
-            TriggerInfo(
-                event_type=spec.event_type,
-                label=spec.label,
-                group=spec.group,
-                item_scoped=spec.item_scoped,
-                has_changes=spec.has_changes,
-            )
-            for spec in catalog.TRIGGERS.values()
-        ],
-        operators=[
-            OperatorInfo(
-                key=spec.key,
-                label=spec.label,
-                needs_value=spec.needs_value,
-                list_value=spec.list_value,
-            )
-            for spec in catalog.OPERATORS
-        ],
-        schedule_kinds=[
-            ScheduleKindInfo(key=kind, label=label) for kind, label in catalog.SCHEDULE_KINDS
-        ],
-        contributed_nodes=[
-            ContributedNodeInfo(
-                key=spec.key,
-                kind=spec.kind,
-                label=spec.label,
-                description=spec.description,
-                group=spec.group,
-                params_schema=spec.params_schema,
-                ports=list(spec.ports),
-                default_ports=list(spec.ports_at({})),
-                outputs=[_output_info(field) for field in spec.outputs],
-                needs_items=spec.needs_items,
-                permission=spec.permission,
-            )
-            for spec in registries.automation_nodes.values()
-        ],
-        node_arity=[
-            NodeArityInfo(type=node_type, default=rule.default, options=list(rule.options))
-            for node_type, rule in catalog.node_arities().items()
-        ],
-        node_outputs=[
-            NodeOutputsInfo(type=node_type, outputs=[_output_info(f) for f in fields])
-            for node_type, fields in BUILTIN_OUTPUTS.items()
-        ],
-        can_act_as=await authz.holds(session, user, authz.Permission.AUTOMATION_ACT_AS),
-        tokens=[
-            TemplateTokenInfo(
-                token=info.token, description=info.description, needs_item=info.needs_item
-            )
-            for info in templating.TOKENS
-        ],
-    )
+    Composed in `catalog_read` since RADD-1271, so the MCP `automation_catalog`
+    tool answers with the same shape."""
+    return await catalog_read.build(session, user)
 
 
 @router.post("", response_model=RuleRead, status_code=201)
