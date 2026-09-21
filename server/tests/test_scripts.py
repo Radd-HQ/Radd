@@ -15,8 +15,8 @@ from radd.kernel import registries
 from radd.modules.auth.models import ApiToken, User
 from radd.modules.automations import service as automations
 from radd.modules.automations.schemas import RuleCreate
-from radd.modules.scripts import nodes, runner, service
-from radd.modules.scripts.schemas import PackageCreate, RunRequest
+from radd.modules.scripts import interpreter, nodes, runner, service
+from radd.modules.scripts.schemas import InterpreterSettings, PackageCreate, RunRequest
 from radd.modules.scripts.types import NODE_DECIDE, NODE_RUN, UNAVAILABLE_PORT
 
 PY = sys.executable
@@ -104,6 +104,57 @@ def test_package_specs_are_names_with_versions_never_urls_or_options():
         with pytest.raises(ValidationError):
             PackageCreate(spec=bad)
     assert service.package_name("Google_API.Client>=1") == "google-api-client"
+
+
+# --- where packages come from (RADD-1277) -------------------------------------
+
+
+async def test_the_build_is_offline_when_the_sdk_is_a_bundled_wheel(tmp_path, monkeypatch):
+    """The air-gap contract: with the SDK wheel in a wheelhouse, no uv call of
+    the rebuild may reach an index — no `--seed`, `--offline` on the install,
+    every wheelhouse on the command line. A package install then follows the
+    row: the admin's index, offline only when asked."""
+    house = tmp_path / "image-wheels"
+    house.mkdir()
+    (house / "radd_sdk-0.1.0-py3-none-any.whl").write_bytes(b"")
+    (tmp_path / "scripts" / "wheels").mkdir(parents=True)
+    monkeypatch.setattr(settings, "scripts_dir", str(tmp_path / "scripts"))
+    monkeypatch.setattr(settings, "scripts_find_links", str(house))
+    monkeypatch.setattr(settings, "scripts_sdk_source", "")
+    calls: list[tuple[str, ...]] = []
+
+    async def record(*args, timeout=None):
+        calls.append(args)
+        if args[1:2] == ("venv",):
+            (tmp_path / "scripts" / "venv" / "bin").mkdir(parents=True)
+            (tmp_path / "scripts" / "venv" / "bin" / "python").write_text("")
+        return interpreter.ToolResult(True, "3.12.0", 0)
+
+    monkeypatch.setattr(interpreter, "_run", record)
+    assert interpreter.sdk_is_bundled()
+    result = await interpreter.rebuild("3.12")
+    assert result.ok
+    venv, sdk = calls[0], calls[1]
+    assert "--seed" not in venv
+    assert "--offline" in sdk and sdk[-1].endswith("radd_sdk-0.1.0-py3-none-any.whl")
+    assert sdk.count("--find-links") == 2 and str(house) in sdk and str(tmp_path / "scripts" / "wheels") in sdk
+    assert "--index-url" not in sdk
+
+    calls.clear()
+    await interpreter.install("requests", index_url="https://pypi.example.com/simple", offline=False)
+    (package,) = calls
+    assert "--offline" not in package
+    assert package[package.index("--index-url") + 1] == "https://pypi.example.com/simple"
+
+
+def test_the_index_url_is_a_simple_index_and_its_password_is_masked():
+    for good in ("", "https://pypi.example.com/simple", "http://user:s3cret@mirror.local:8080/simple/"):
+        InterpreterSettings(index_url=good)
+    for bad in ("pypi.example.com", "ftp://x/y", "https://x y/simple"):
+        with pytest.raises(ValidationError):
+            InterpreterSettings(index_url=bad)
+    assert interpreter.masked_url("http://user:s3cret@mirror.local:8080/simple/") == "http://user:***@mirror.local:8080/simple/"
+    assert interpreter.masked_url("https://pypi.example.com/simple") == "https://pypi.example.com/simple"
 
 
 # --- the nodes ----------------------------------------------------------------

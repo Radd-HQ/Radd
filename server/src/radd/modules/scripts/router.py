@@ -19,6 +19,7 @@ from . import service
 from .schemas import (
     InterpreterRead,
     InterpreterRebuild,
+    InterpreterSettings,
     PackageCreate,
     PackageRead,
     RunOutcomeRead,
@@ -39,6 +40,13 @@ async def _manage(session: AsyncSession, user) -> None:
 async def get_interpreter(session: Session, user: CurrentUser) -> InterpreterRead:
     await _manage(session, user)
     return await service.interpreter_read(session)
+
+
+@router.put("/interpreter", response_model=InterpreterRead)
+async def update_interpreter(data: InterpreterSettings, session: Session, user: CurrentUser) -> InterpreterRead:
+    """Where packages resolve from: the admin's index and the offline switch (RADD-1277)."""
+    await _manage(session, user)
+    return await service.update_interpreter_settings(session, data, user.id)
 
 
 @router.post("/interpreter/rebuild", response_model=InterpreterRead)

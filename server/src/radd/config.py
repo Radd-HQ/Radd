@@ -90,10 +90,21 @@ class Settings(BaseSettings):
     scripts_run_dir: str = ""
     scripts_uv_path: str = "uv"
     scripts_default_python: str = "3.12"
-    #: The Radd SDK client installed into every venv: a path (the image sets
-    #: /app/sdk) or a package name. Empty = the checkout's sdk/ when present,
-    #: else the `radd-sdk` package.
+    #: The Radd SDK client installed into every venv: a wheel or source path, or
+    #: a package name. Empty = the newest `radd_sdk` wheel in a wheelhouse, else
+    #: the checkout's sdk/ when present, else the `radd-sdk` package.
     scripts_sdk_source: str = ""
+    #: Wheelhouses (RADD-1277): directories of wheels uv resolves from BEFORE
+    #: any index, comma-separated. The image sets /app/wheels (the SDK and its
+    #: closure, so the interpreter build never touches the network);
+    #: `<scripts_dir>/wheels` is always searched too, which is how an air-gapped
+    #: admin adds a package. The package index itself is an admin setting on
+    #: Settings → Scripts (a row, not env), since a mirror is instance policy.
+    scripts_find_links: str = ""
+    #: The URL a script's `ctx.client` calls; empty = `app_base_url`. The chart
+    #: sets the in-cluster service so a worker-pod script never hairpins
+    #: through the ingress.
+    scripts_api_url: str = ""
     #: Ceiling on a node's timeout param, and the default when it names none.
     scripts_max_timeout_seconds: int = 300
     scripts_default_timeout_seconds: int = 60

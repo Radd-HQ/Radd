@@ -20,6 +20,17 @@ export interface ScriptInterpreter {
   path: string;
   available: string[];
   sdk_source: string;
+  /** Where packages come from (RADD-1277): wheelhouses first, then the index. */
+  wheelhouses: string[];
+  operator_wheelhouse: string;
+  /** "" = PyPI; a password in the URL arrives masked. */
+  index_url: string;
+  offline: boolean;
+}
+
+export interface ScriptInterpreterSettings {
+  index_url: string;
+  offline: boolean;
 }
 
 export interface ScriptRunOutcome {

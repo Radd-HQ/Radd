@@ -12,6 +12,7 @@ class ScriptEvent(StrEnum):
     PACKAGE_INSTALLED = "script_package.installed"
     PACKAGE_REMOVED = "script_package.removed"
     INTERPRETER_REBUILT = "script_interpreter.rebuilt"
+    INTERPRETER_UPDATED = "script_interpreter.updated"
 
 
 class PackageStatus(StrEnum):

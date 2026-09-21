@@ -15,6 +15,9 @@ REQUIREMENT_RE = re.compile(
     r"(?:\s*(?:[<>=!~]=?|===)\s*[A-Za-z0-9._*+!-]+(?:\s*,\s*(?:[<>=!~]=?|===)\s*[A-Za-z0-9._*+!-]+)*)?$"
 )
 PYTHON_VERSION_RE = re.compile(r"^3\.(1[0-9]|[89])(?:\.\d+)?$")
+#: A package index: http(s), a host, no whitespace. Credentials in the userinfo
+#: are allowed (a mirror may want them); readers mask them.
+INDEX_URL_RE = re.compile(r"^https?://[^\s/]+(?:/\S*)?$")
 
 
 class PackageCreate(BaseModel):
@@ -57,6 +60,28 @@ class InterpreterRead(BaseModel):
     available: list[str] = Field(default_factory=list)
     #: The pinned SDK's origin — a path or a package name.
     sdk_source: str = ""
+    #: Where packages come from (RADD-1277): the wheelhouses that exist, the
+    #: admin's index (credentials masked; "" = PyPI), and whether uv is held
+    #: offline. `operator_wheelhouse` is the one an admin may drop wheels into.
+    wheelhouses: list[str] = Field(default_factory=list)
+    operator_wheelhouse: str = ""
+    index_url: str = ""
+    offline: bool = False
+
+
+class InterpreterSettings(BaseModel):
+    """The package-index half of the interpreter row: editable without a rebuild."""
+
+    index_url: str = Field(default="", max_length=500)
+    offline: bool = False
+
+    @field_validator("index_url")
+    @classmethod
+    def _index(cls, value: str) -> str:
+        value = value.strip()
+        if value and not INDEX_URL_RE.match(value):
+            raise ValueError("an index is an http(s) URL to a simple index, e.g. https://pypi.example.com/simple")
+        return value
 
 
 class InterpreterRebuild(BaseModel):

@@ -26,7 +26,7 @@ podman compose up -d          # db + app; app runs `alembic upgrade head` then s
 podman compose exec app python -m radd.seed --email you@example.com --password … --name "You"
 ```
 
-The scripts plugin's managed interpreter lives on the same volume (`RADD_SCRIPTS_DIR=/data/scripts`, the SDK it installs from `RADD_SCRIPTS_SDK_SOURCE=/app/sdk`; a rebuild for a Python the image lacks needs network for uv to fetch it). Attachments live on the `radd-data` volume (`RADD_ATTACHMENTS_DIR=/data/attachments`)
+The scripts plugin's managed interpreter lives on the same volume (`RADD_SCRIPTS_DIR=/data/scripts`). **It builds with no network** (RADD-1277): the image carries the Radd SDK and its dependency closure as wheels in `/app/wheels` (`RADD_SCRIPTS_FIND_LINKS`), and the build installs from there with uv held offline. Packages an admin adds resolve from the wheelhouses first, then the **package index named on Settings → Scripts** (empty = PyPI) — an air-gapped site points that at its mirror, or switches the interpreter **Offline** and drops wheels into `/data/scripts/wheels`, which is always searched. A rebuild for a Python the image lacks still needs uv to fetch one. `RADD_SCRIPTS_API_URL` is what a script's `ctx.client` calls; the chart sets it to the in-cluster Service so a worker-pod script does not hairpin through the ingress. Attachments live on the `radd-data` volume (`RADD_ATTACHMENTS_DIR=/data/attachments`)
 by default. The `RADD_ATTACHMENT_STORAGE*` env settings only SEED the FIRST
 storage-host row on first boot (spec 102) — afterwards Settings → Storage owns
 storage entirely (multiple hosts, routing, delivery; Garage is the blessed
@@ -433,6 +433,7 @@ Every setting lives in `server/src/radd/config.py` (env prefix `RADD_`,
 |---|---|---|
 | `RADD_DATABASE_URL` | localhost dev DB | SQLAlchemy Postgres URL (required in prod) |
 | `RADD_APP_BASE_URL` | `http://localhost:8000` | absolute links in emails/connectors |
+| `RADD_SCRIPTS_FIND_LINKS` / `RADD_SCRIPTS_API_URL` | `/app/wheels` (image) / `RADD_APP_BASE_URL` | script interpreter wheelhouses; the URL scripts call back (RADD-1277) |
 | `RADD_SESSION_COOKIE_SECURE` | `false` | set `true` behind HTTPS |
 | `RADD_RUN_WORKERS` | `true` | `false` = web-only process (worker split) |
 | `RADD_WEB_DIST` | repo `web/dist` | built SPA to serve |

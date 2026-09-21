@@ -37,6 +37,10 @@ plugin = RaddPlugin(
             ScriptEvent.INTERPRETER_REBUILT, "Script interpreter rebuilt", "Admin",
             trigger=False, entity_type="script_interpreter",
         ),
+        EventTypeSpec(
+            ScriptEvent.INTERPRETER_UPDATED, "Script package index changed", "Admin",
+            has_changes=True, trigger=False, entity_type="script_interpreter",
+        ),
     ),
     permissions=(
         PermissionSpec(

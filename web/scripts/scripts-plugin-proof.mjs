@@ -103,6 +103,25 @@ const pageState = await session.eval(`(()=>({
   navGroupOfScripts: (()=>{const a=[...document.querySelectorAll("nav a, aside a")].find(x=>/^Scripts$/.test(x.textContent.trim())); let el=a; while(el&&!/Server|Issues|People|Account/.test(el.previousElementSibling?.textContent??"")&&el.parentElement) el=el.parentElement; return el?.previousElementSibling?.textContent?.trim() ?? null;})(),
   navText: (document.querySelector("nav")||document.body).innerText.replace(/\s+/g," ").slice(0,400),
 }))()`);
+// The Package index form (RADD-1277): type a mirror with a password, tick Offline,
+// Save — the row holds it, the read model masks the password, the chip appears.
+const indexBefore = parsed(await session.eval(api("GET", "/scripts/interpreter")));
+const indexShown = await session.eval(`Boolean(document.querySelector("[data-scripts-index] input[type=checkbox]"))`);
+await session.eval(`(()=>{const i=document.querySelector("[data-scripts-index] input:not([type=checkbox])");` +
+  `const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set;set.call(i,"http://radd:hunter2@mirror.local/simple");` +
+  `i.dispatchEvent(new Event("input",{bubbles:true}));const c=document.querySelector("[data-scripts-index] input[type=checkbox]");c.click();return true;})()`);
+await sleep(300);
+await session.eval(`(()=>{document.querySelector("[data-scripts-index] button[type=submit]").click();return true;})()`);
+await sleep(1500);
+const indexState = await session.eval(`(()=>({
+  chip: document.querySelector("[data-scripts-index] [data-index-mode]")?.getAttribute("data-index-mode") ?? null,
+  url: document.querySelector("[data-scripts-index] input:not([type=checkbox])")?.value ?? null,
+  offline: document.querySelector("[data-scripts-index] input[type=checkbox]")?.checked ?? null,
+  wheelhouse: (document.querySelector("[data-scripts-index]")?.innerText ?? "").includes("/wheels"),
+}))()`);
+const indexAfter = parsed(await session.eval(api("GET", "/scripts/interpreter")));
+await session.eval(api("PUT", "/scripts/interpreter", { index_url: indexBefore?.index_url ?? "", offline: indexBefore?.offline ?? false }));
+
 // The inspector: open the proof automation, select the run node, see the editor + Test box.
 await session.navigate(`${baseUrl}/settings/automations`, 2500);
 await session.eval(
@@ -148,6 +167,9 @@ const checks = {
   editorShown,
   editorText,
   testBoxShown,
+  indexShown,
+  indexState,
+  indexAfter: indexAfter && { index_url: indexAfter.index_url, offline: indexAfter.offline, wheelhouses: indexAfter.wheelhouses },
   screenshot: "/tmp/radd-scripts.png",
   consoleErrors,
 };
@@ -170,6 +192,8 @@ const ok =
   pageState.packages.includes("six:installed") &&
   pageState.contract && !pageState.library &&
   editorShown && editorText && testBoxShown &&
+  indexShown && indexState.chip === "offline" && indexState.offline === true && indexState.wheelhouse &&
+  indexState.url === "http://radd:***@mirror.local/simple" && indexAfter?.index_url === "http://radd:***@mirror.local/simple" &&
   consoleErrors.length === 0;
 report({ "scripts run from automations, out of process, as the automation's identity": ok }, "RADD-1269 — scripts plugin");
 

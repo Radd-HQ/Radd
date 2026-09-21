@@ -151,11 +151,17 @@ attributed to it. It is killed at its timeout. Its stdout and stderr are kept
 
 **The interpreter.** One uv-built virtual environment per instance
 (`RADD_SCRIPTS_DIR`, `/data/scripts` in the image). Pick the Python version and
-Rebuild; the Radd SDK client (`sdk/`, shipped in the image at `/app/sdk`) is
+Rebuild; the Radd SDK client (`sdk/`, shipped in the image as a wheel under
+`/app/wheels` with its dependencies, so the build needs no network) is
 installed into it, then every package in the Packages list. A package is a
 name with optional extras and version specifiers (`requests>=2.31`); URLs,
 paths and options are refused, because "install from wherever this string
-points" is not something an admin should be able to do by accident.
+points" is not something an admin should be able to do by accident. Where a
+package comes FROM is the page's **Package index** (RADD-1277): the
+wheelhouses first (the image's, and `<RADD_SCRIPTS_DIR>/wheels` for wheels an
+operator drops in), then the index named there (empty = PyPI); **Offline**
+holds uv to the wheelhouses, so a site with no route out fails fast with
+uv's own message instead of waiting on a dropped connection.
 
 **Where it fits.** The out-of-process `sdk/` runner (`radd-runner`) is the same
 idea for code that lives OUTSIDE the instance and reacts to the event stream;

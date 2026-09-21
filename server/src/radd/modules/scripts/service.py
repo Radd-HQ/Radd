@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.clock import utcnow
 from radd.config import settings
 from radd.exceptions import NotFoundError
+from radd.kernel import changes
 from radd.modules.auth import service_tokens
 from radd.modules.auth.models import User
 from radd.modules.events import service as events
@@ -21,7 +22,7 @@ from radd.modules.items import service as items
 
 from . import interpreter, runner
 from .models import ScriptInterpreter, ScriptPackage
-from .schemas import InterpreterRead, PackageCreate, RunRequest
+from .schemas import InterpreterRead, InterpreterSettings, PackageCreate, RunRequest
 from .types import InterpreterStatus, PackageStatus, ScriptEntity, ScriptEvent
 
 logger = logging.getLogger(__name__)
@@ -88,7 +89,7 @@ async def run_body(
     try:
         return await runner.run(
             body,
-            {**payload, "radd_url": settings.app_base_url, "radd_token": raw},
+            {**payload, "radd_url": settings.scripts_api_url or settings.app_base_url, "radd_token": raw},
             timeout=timeout,
             python=python,
         )
@@ -144,14 +145,46 @@ async def interpreter_read(session: AsyncSession) -> InterpreterRead:
         path=str(interpreter.venv_dir()),
         available=await interpreter.available_versions(),
         sdk_source=interpreter.sdk_source(),
+        wheelhouses=[str(path) for path in interpreter.wheelhouses()],
+        operator_wheelhouse=str(interpreter.root() / interpreter.WHEELHOUSE_DIR),
+        index_url=interpreter.masked_url(row.index_url),
+        offline=row.offline,
     )
+
+
+_SETTINGS_FIELDS = ("index_url", "offline")
+
+
+async def update_interpreter_settings(
+    session: AsyncSession, data: InterpreterSettings, actor_id: uuid.UUID | None
+) -> InterpreterRead:
+    """Where packages resolve from. Takes effect on the next install; the ledger
+    shows the URL with its password masked, since a mirror may want one."""
+    row = await _interpreter_row(session)
+    before = changes.snapshot(row, _SETTINGS_FIELDS)
+    row.index_url = data.index_url
+    row.offline = data.offline
+    await session.flush()
+    after = changes.snapshot(row, _SETTINGS_FIELDS)
+    for side in (before, after):
+        side["index_url"] = interpreter.masked_url(side["index_url"])
+    await events.emit(
+        session,
+        event_type=ScriptEvent.INTERPRETER_UPDATED,
+        entity_type=ScriptEntity.INTERPRETER,
+        entity_id=uuid.UUID(int=1),
+        actor_id=actor_id,
+        payload={"index_url": after["index_url"], "offline": row.offline},
+        changes=changes.diff(before, after, labels={"index_url": "Package index", "offline": "Offline"}),
+    )
+    return await interpreter_read(session)
 
 
 async def rebuild_interpreter(session: AsyncSession, python_version: str, actor_id: uuid.UUID | None) -> InterpreterRead:
     """Rebuild the venv, then reinstall every package row into it."""
     row = await _interpreter_row(session)
     row.python_version = python_version
-    result = await interpreter.rebuild(python_version)
+    result = await interpreter.rebuild(python_version, index_url=row.index_url, offline=row.offline)
     row.log = result.output
     row.built_at = utcnow()
     if not result.ok:
@@ -163,7 +196,7 @@ async def rebuild_interpreter(session: AsyncSession, python_version: str, actor_
     row.resolved = await interpreter.resolved_python()
     await session.flush()
     for package in await list_packages(session):
-        await _install_row(session, package)
+        await _install_row(session, package, row)
     await events.emit(
         session,
         event_type=ScriptEvent.INTERPRETER_REBUILT,
@@ -191,8 +224,8 @@ async def list_packages(session: AsyncSession) -> list[ScriptPackage]:
     return list((await session.execute(select(ScriptPackage).order_by(ScriptPackage.name))).scalars())
 
 
-async def _install_row(session: AsyncSession, package: ScriptPackage) -> None:
-    result = await interpreter.install(package.spec)
+async def _install_row(session: AsyncSession, package: ScriptPackage, row: ScriptInterpreter) -> None:
+    result = await interpreter.install(package.spec, index_url=row.index_url, offline=row.offline)
     package.log = result.output
     if result.ok:
         package.status = PackageStatus.INSTALLED
@@ -214,7 +247,7 @@ async def add_package(session: AsyncSession, data: PackageCreate, actor_id: uuid
         package = ScriptPackage(name=name, spec=data.spec, status=PackageStatus.PENDING, created_at=utcnow())
         session.add(package)
         await session.flush()
-    await _install_row(session, package)
+    await _install_row(session, package, await _interpreter_row(session))
     await events.emit(
         session,
         event_type=ScriptEvent.PACKAGE_INSTALLED,

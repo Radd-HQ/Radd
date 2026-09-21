@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Integer, String, Text
+from sqlalchemy import Boolean, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from radd.db import Base
@@ -41,3 +41,9 @@ class ScriptInterpreter(Base):
     resolved: Mapped[str] = mapped_column(String(100), default="")
     log: Mapped[str] = mapped_column(Text, default="")
     built_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    #: Where packages resolve from (RADD-1277): a package index of the admin's
+    #: own ("" = PyPI) — an air-gapped site runs a mirror — and `offline`, which
+    #: resolves from the wheelhouses alone and fails fast instead of waiting on
+    #: a dropped route. The URL may carry credentials; readers mask them.
+    index_url: Mapped[str] = mapped_column(String(500), default="", server_default="")
+    offline: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")

@@ -119,10 +119,19 @@ COPY --from=web /build/web/dist /app/web/dist
 # byte-identical — both stages copy the same build context.
 COPY --from=web /build/server/src/radd/modules /app/server/src/radd/modules
 # The scripts plugin (RADD-1269) installs the Radd SDK client into the managed
-# interpreter it builds under /data/scripts; the SDK source travels in the image
-# so that install needs no network for it.
-COPY sdk /app/sdk
-ENV RADD_SCRIPTS_SDK_SOURCE=/app/sdk \
+# interpreter it builds under /data/scripts. The SDK and its dependency closure
+# travel as WHEELS (RADD-1277): `pip wheel` runs here, where the network is,
+# so the interpreter build on the instance resolves everything from disk —
+# no build backend, no index, no `--seed` — which is what an air-gapped site
+# needs (the image sets UV_NO_CACHE, so nothing is ever cached, and a dropped
+# route hangs uv rather than refusing it; the image python is named because
+# PATH puts the pip-less venv first). Copying the source tree instead
+# would need uv_build AND httpx from PyPI at rebuild time.
+COPY sdk /tmp/sdk
+RUN /usr/local/bin/python3 -m pip wheel --no-cache-dir --quiet --wheel-dir /app/wheels /tmp/sdk \
+ && rm -rf /tmp/sdk \
+ && ls /app/wheels
+ENV RADD_SCRIPTS_FIND_LINKS=/app/wheels \
     RADD_SCRIPTS_DIR=/data/scripts
 USER radd
 VOLUME /data /opt/radd/backups

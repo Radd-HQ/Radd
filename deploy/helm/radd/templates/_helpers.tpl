@@ -19,6 +19,13 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
   value: {{ $value | quote }}
 {{- end }}
 {{- end }}
+{{- /* A script's ctx.client (RADD-1277) calls the in-cluster Service rather
+       than hairpinning through the ingress — the worker pod may not be able
+       to reach the public name at all. `env.RADD_SCRIPTS_API_URL` overrides. */}}
+{{- if not .Values.env.RADD_SCRIPTS_API_URL }}
+- name: RADD_SCRIPTS_API_URL
+  value: {{ printf "http://%s:%v" .Release.Name .Values.service.port | quote }}
+{{- end }}
 {{- end }}
 
 {{- define "radd.envFrom" -}}

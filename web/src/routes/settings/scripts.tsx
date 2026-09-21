@@ -3,14 +3,14 @@
  * interpreter and its packages — what is instance-wide. The scripts
  * themselves live on their automation nodes.
  */
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Package, Play, Plus, RotateCcw, Terminal, Trash2 } from "lucide-react";
+import { Globe, Package, Play, Plus, RotateCcw, Terminal, Trash2 } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { relativeTime } from "../../lib/dates";
 import { scriptInterpreterQuery, scriptKeys, scriptPackagesQuery } from "../../lib/queries";
-import type { ScriptInterpreter, ScriptPackage } from "../../lib/types";
+import type { ScriptInterpreter, ScriptInterpreterSettings, ScriptPackage } from "../../lib/types";
 import { Button, ButtonVariant } from "../../components/Button";
 import { Callout, CalloutKind } from "../../components/Callout";
 import { SelectField } from "../../components/SelectField";
@@ -26,6 +26,7 @@ export function ScriptsSettingsPage() {
     >
       <div className="flex flex-col gap-6">
         <InterpreterSection />
+        <IndexSection />
         <PackagesSection />
         <ContractSection />
       </div>
@@ -109,6 +110,94 @@ function InterpreterSection() {
           {rebuild.data?.log || data?.log}
         </pre>
       )}
+    </section>
+  );
+}
+
+// --- where packages come from (RADD-1277) ------------------------------------
+
+function IndexSection() {
+  const queryClient = useQueryClient();
+  const interpreter = useQuery(scriptInterpreterQuery);
+  const data = interpreter.data;
+  const [indexUrl, setIndexUrl] = useState("");
+  const [offline, setOffline] = useState(false);
+  const [touched, setTouched] = useState(false);
+  // The form mirrors the row until the admin edits it; a masked password
+  // round-trips unchanged only if nobody touched the field.
+  useEffect(() => {
+    if (data && !touched) {
+      setIndexUrl(data.index_url);
+      setOffline(data.offline);
+    }
+  }, [data, touched]);
+  const save = useMutation({
+    mutationFn: (body: ScriptInterpreterSettings) => api.put<ScriptInterpreter>(`${ApiPath.scripts}/interpreter`, body),
+    onSuccess: async () => {
+      setTouched(false);
+      await queryClient.invalidateQueries({ queryKey: scriptKeys.interpreter });
+    },
+  });
+  return (
+    <section data-scripts-index className="flex flex-col gap-3 rounded-[10px] border border-subtle bg-surface p-4">
+      <div className="flex items-center gap-2">
+        <Globe size={15} className="text-accent-text" aria-hidden />
+        <h2 className="text-sm font-medium text-heading">Package index</h2>
+        {data?.offline && (
+          <span data-index-mode="offline" className="rounded bg-elevated px-1.5 py-px text-[10px] uppercase tracking-wide text-fg-secondary">
+            offline
+          </span>
+        )}
+      </div>
+      <p className="text-xs text-fg-secondary">
+        Packages resolve from the wheelhouses first, then from this index (empty means PyPI). A site with no route
+        out names its own mirror here, or goes offline and drops wheels into{" "}
+        <code className="text-fg">{data?.operator_wheelhouse ?? "…"}</code>, which is always searched.
+        {data && data.wheelhouses.length > 0 && (
+          <>
+            {" "}
+            Wheelhouses found: {data.wheelhouses.map((path) => (
+              <code key={path} className="mr-1 text-fg">
+                {path}
+              </code>
+            ))}
+          </>
+        )}
+      </p>
+      <form
+        className="flex flex-wrap items-end gap-3"
+        onSubmit={(event: FormEvent) => {
+          event.preventDefault();
+          save.mutate({ index_url: indexUrl.trim(), offline });
+        }}
+      >
+        <TextField
+          label="Index URL"
+          value={indexUrl}
+          placeholder="https://pypi.example.com/simple"
+          onChange={(event) => {
+            setTouched(true);
+            setIndexUrl(event.target.value);
+          }}
+          className="min-w-72"
+        />
+        <label className="flex items-center gap-2 pb-2 text-[13px] text-fg">
+          <input
+            type="checkbox"
+            checked={offline}
+            onChange={(event) => {
+              setTouched(true);
+              setOffline(event.target.checked);
+            }}
+            className="accent-accent"
+          />
+          Offline — wheelhouses only
+        </label>
+        <Button type="submit" disabled={save.isPending || !touched}>
+          {save.isPending ? "Saving…" : "Save"}
+        </Button>
+      </form>
+      {save.isError && <p className="text-xs text-status-danger">{errorMessage(save.error)}</p>}
     </section>
   );
 }
