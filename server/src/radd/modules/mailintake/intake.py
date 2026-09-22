@@ -44,6 +44,8 @@ from radd.modules.items import service as items
 from radd.modules.items.schemas import ItemCreate
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
+from radd.modules.settings import service as settings_service
+from radd.modules.settings.types import SettingKey
 
 from . import loops, parsing, quoting, routing, service, threading
 from .parsing import EmailPlan, MailAttachment
@@ -55,7 +57,6 @@ from .types import (
     EMAIL_LABEL,
     EMPTY_BODY_PLACEHOLDER,
     MAIL_DROPPED_ID_NAMESPACE,
-    MAIL_RAW_RETENTION_DAYS,
     MAX_ATTACHMENTS,
     NO_SUBJECT_TITLE,
     RAW_MESSAGE_CONTENT_TYPE,
@@ -729,15 +730,24 @@ async def _note_dropped_attachments(
 async def _retain_raw(session: AsyncSession, message_row, raw: bytes) -> None:
     """Persist the raw inbound bytes against their `mail_messages` row (RADD-1033).
 
-    Behind `MAIL_RAW_RETENTION_DAYS` and stored as one loose blob through the
-    spec-102 seam, keyed off the message row so a reader reaches it the way it
-    reaches an attachment — through the item's own gate. Every skip is silent and
-    the mail still lands: retention off (0), no row to key off (no Message-ID, or
-    a concurrent-retry duplicate `record` answered None), empty bytes (a test),
-    or no storage host configured. Keeping a copy of the mail must never be the
-    thing that costs the customer their ticket.
+    Behind the `mail_raw_retention_days` setting and stored as one loose blob
+    through the spec-102 seam, keyed off the message row so a reader reaches it
+    the way it reaches an attachment — through the item's own gate. Every skip is
+    silent and the mail still lands: retention off (0), no row to key off (no
+    Message-ID, or a concurrent-retry duplicate `record` answered None), empty
+    bytes (a test), or no storage host configured. Keeping a copy of the mail
+    must never be the thing that costs the customer their ticket.
+
+    RADD-1048 made the window a setting rather than a constant, and this is the
+    near edge of it: the same number `retention.sweep` reads at the far edge, so
+    turning retention off stops the next message being stored AND reclaims the
+    ones already kept. It costs one indexed SELECT per stored message, ordered
+    after the free guards so a message that was never going to be retained does
+    not pay for it.
     """
-    if message_row is None or MAIL_RAW_RETENTION_DAYS <= 0 or not raw:
+    if message_row is None or not raw:
+        return
+    if int(await settings_service.resolve(session, SettingKey.MAIL_RAW_RETENTION_DAYS)) <= 0:
         return
     upload = UploadFile(
         file=io.BytesIO(raw),

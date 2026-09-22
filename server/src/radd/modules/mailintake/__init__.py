@@ -79,6 +79,24 @@ plugin = RaddPlugin(
             ),
             section="email",
         ),
+        # RADD-1048: the window the retention sweep enforces. INSTANCE-only —
+        # whether customer mail is kept at rest is one installation's privacy
+        # policy, and a per-project override would mean a message's fate
+        # depended on which project a routing rule happened to send it to.
+        SettingSpec(
+            key="mail_raw_retention_days",
+            type="int",
+            scopes=("instance",),
+            label="Raw message retention (days)",
+            description=(
+                "How long the original bytes of an inbound email are kept, so an "
+                "over-eager quote strip or a capped attachment stays recoverable. "
+                "0 keeps nothing — and lowering this reclaims what is already "
+                "stored: the sweep deletes the bytes and forgets them within the "
+                "hour."
+            ),
+            section="email",
+        ),
     ),
     # Seed rows from env BEFORE the poller starts, or the first tick finds
     # no sources on a fresh instance (RADD-958).

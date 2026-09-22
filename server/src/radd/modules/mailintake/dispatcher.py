@@ -1,8 +1,9 @@
 """In-process loops, mirroring notify/dispatcher.py: the IMAP intake poller
-(spec 47) and the outbound reply consumer (spec 62). Both run whenever this
-process runs workers — the spec-48 split and nothing else.
+(spec 47), the outbound reply consumer (spec 62) and the raw-retention sweep
+(RADD-1048). All three run whenever this process runs workers — the spec-48
+split and nothing else.
 
-**Neither loop is gated on the environment (RADD-970).** The poller used to
+**No loop here is gated on the environment (RADD-970).** The poller used to
 start only when `RADD_MAIL_IMAP_HOST` was set, which survived RADD-958 moving
 mail into `mail_sources` rows and became the bug that made the move pointless:
 an admin adds a mailbox in Settings → Email on an instance with no mail env
@@ -20,7 +21,7 @@ consulted per tick), so this is the two halves agreeing rather than a new idea.
 from radd.config import settings
 from radd.worker import PeriodicLoop
 
-from . import outbound, poller
+from . import outbound, poller, retention
 
 _poll_loop = PeriodicLoop(
     poller.run_once,
@@ -34,13 +35,28 @@ _outbound_loop = PeriodicLoop(
     name="mailintake-outbound",
     enabled=lambda: settings.run_workers,  # web-only process skips (spec 48 worker split)
 )
+# RADD-1048: the far edge of the retention window. `drain` because shortening
+# the window (or setting it to 0) makes every stored message due at once, and
+# that backlog must clear in minutes rather than one batch an hour — while the
+# interval still paces the idle poll, which is what an instance with no mail
+# pays. Started unconditionally like the other two: whether there is anything
+# to sweep is a question about ROWS, and it is asked in `run_once`'s own query.
+_retention_loop = PeriodicLoop(
+    retention.run_once,
+    interval=lambda: settings.mail_raw_sweep_seconds,
+    name="mailintake-retention",
+    enabled=lambda: settings.run_workers,
+    drain=True,
+)
 
 
 async def start() -> None:
     await _poll_loop.start()
     await _outbound_loop.start()
+    await _retention_loop.start()
 
 
 async def stop() -> None:
     await _poll_loop.stop()
     await _outbound_loop.stop()
+    await _retention_loop.stop()
