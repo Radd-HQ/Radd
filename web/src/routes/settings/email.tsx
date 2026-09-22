@@ -5,6 +5,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { AckTemplatePanel } from "../../components/settings/email/AckTemplatePanel";
 import { AutomaticMessagesPanel } from "../../components/settings/email/AutomaticMessagesPanel";
 import { SendersPanel } from "../../components/settings/email/SendersPanel";
+import { RetentionPanel } from "../../components/settings/email/RetentionPanel";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { SourcesPanel } from "../../components/settings/email/SourcesPanel";
 
@@ -51,6 +52,7 @@ export function EmailSettingsPage() {
           <SendersPanel />
           <AutomaticMessagesPanel />
           <AckTemplatePanel />
+          <RetentionPanel />
         </div>
       )}
     </SettingsPage>

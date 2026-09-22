@@ -103,6 +103,9 @@ class SettingKey(StrEnum):
     # RADD-982: mail the ticket's external contacts when it resolves. Per
     # project, because one instance runs both a service desk and a dev project.
     MAIL_SEND_RESOLVED = "mail_send_resolved"
+    # RADD-1048: days of RAW inbound bytes kept. Instance-only, and read by both
+    # ends of the window — intake asks before storing, the sweep before deleting.
+    MAIL_RAW_RETENTION_DAYS = "mail_raw_retention_days"
     # Directory settings page + automatic user sync (spec 85) — instance-only.
     LDAP_URL = "ldap_url"
     LDAP_USER_DOMAIN = "ldap_user_domain"

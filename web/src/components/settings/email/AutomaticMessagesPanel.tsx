@@ -1,8 +1,10 @@
 import { ScopedSettingsEditor } from "../ScopedSettingsEditor";
 import { SettingScope, type ScopedSetting } from "../../../lib/types";
+import { RAW_RETENTION_KEY } from "./RetentionPanel";
 
-/** The one `email`-section row this page renders SOMEWHERE ELSE — see below. */
+/** The `email`-section rows this page renders SOMEWHERE ELSE — see below. */
 const ACK_BODY_KEY = "mail_ack_body";
+const ELSEWHERE = new Set<string>([ACK_BODY_KEY, RAW_RETENTION_KEY]);
 
 /**
  * The email section's switches (RADD-982): which messages the desk sends on its
@@ -15,9 +17,13 @@ const ACK_BODY_KEY = "mail_ack_body";
  * was therefore editable nowhere at instance scope: registered, resolving,
  * documented, and with no form anywhere in the product.
  *
- * So the rows are rendered generically and the ack body is excluded by KEY,
- * because `AckTemplatePanel` owns it (a paragraph of prose with `{{token}}`
- * variables wants a textarea, not the generic single-line input). The
+ * So the rows are rendered generically and the two rows another panel owns are
+ * excluded by KEY: the ack body (`AckTemplatePanel` — a paragraph of prose with
+ * `{{token}}` variables wants a textarea, not the generic single-line input)
+ * and the raw-retention window (`RetentionPanel` — what the desk KEEPS is not
+ * a message it sends, RADD-1048). Excluding by key rather than filtering the
+ * other way keeps the default for a new `email` setting at "renders here",
+ * which is the property this comment exists to protect. The
  * alternative — moving `mail_send_resolved` to another section — would have
  * put "does the desk tell customers their ticket is done" on the General page,
  * a screen away from every other thing about email.
@@ -37,7 +43,7 @@ export function AutomaticMessagesPanel() {
       <ScopedSettingsEditor
         scope={SettingScope.instance}
         section="email"
-        filter={(row: ScopedSetting) => row.key !== ACK_BODY_KEY}
+        filter={(row: ScopedSetting) => !ELSEWHERE.has(row.key)}
         emptyLabel="No automatic messages are configurable — the email plugin is disabled."
       />
     </section>

@@ -365,20 +365,26 @@ UNVERIFIED_REPLY_COMMENT_TEMPLATE = "{note}\n\nEmail reply from {sender}:\n\n{bo
 #: A demoted new issue's description: the body, then the warning and the claimed sender.
 UNVERIFIED_SENDER_NOTE_TEMPLATE = "{body}\n\n---\n{note}\nReceived by email from {sender}"
 
-# --- raw-message retention (RADD-1033) ---
+# --- raw-message retention (RADD-1033, swept by RADD-1048) ---
 
-#: How long a webhook/poller-ingested message's RAW bytes are kept, so an
-#: over-eager quote strip or a lost attachment is recoverable. `0` = do not
-#: retain (the privacy-conscious choice — some desks must not keep customer mail
-#: at rest). 30 days is longer than any provider's retry window and short enough
-#: that the blob store is not the archive of every message ever received. A
-#: retention SWEEP that deletes bytes past this age is a separate follow-up; this
-#: constant is what it will read.
-MAIL_RAW_RETENTION_DAYS = 30
+# How long a webhook/poller-ingested message's RAW bytes are kept — so an
+# over-eager quote strip or a lost attachment is recoverable — is the
+# `mail_raw_retention_days` scalar setting (Settings → Email, instance scope),
+# whose env/config default is `config.mail_raw_retention_days`. It was a
+# constant here until RADD-1048, which is the whole reason it could not be a
+# setting: "retention is 30 days" was a claim only a redeploy could change, and
+# the sweep that enforces the window has to be able to read a NEW value on its
+# next tick. `0` = keep nothing, and `retention.sweep` reads that as "reclaim
+# what is already stored" rather than merely "store no more".
 
 #: The raw message is stored as one loose blob through the spec-102 seam.
 RAW_MESSAGE_CONTENT_TYPE = "message/rfc822"
 RAW_MESSAGE_FILENAME = "message.eml"
+
+#: Messages one retention sweep strips per tick. The loop drains, so this paces
+#: a backlog rather than capping it; it is small because each row costs a
+#: round trip to a storage host, and a sweep must never monopolise one.
+RAW_SWEEP_BATCH = 200
 
 # --- dropped-message correlation (RADD-1035) ---
 

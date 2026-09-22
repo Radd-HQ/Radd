@@ -12,6 +12,7 @@ session, because the invariant is about what the WRITE PATH stored.
 """
 
 import uuid
+from datetime import timedelta
 from email.message import EmailMessage
 from types import SimpleNamespace
 
@@ -19,6 +20,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from radd.clock import utcnow
 from radd.config import settings
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
@@ -1029,6 +1031,25 @@ async def _default_host(db, tmp_path):
     )
 
 
+async def _set_retention(db, days: int) -> None:
+    """Write the instance-scope retention window. RADD-1048 made this a setting
+    rather than a module constant, so a test that wants a different window
+    writes the row the product writes — monkeypatching the old constant would
+    have stopped exercising the cascade both ends of the window now read."""
+    from radd.modules.settings import service as settings_service
+    from radd.modules.settings.types import SettingKey, SettingScope
+
+    await settings_service.set_value(
+        db, SettingKey.MAIL_RAW_RETENTION_DAYS, SettingScope.INSTANCE, None, days
+    )
+
+
+async def _age(db, row, days: int) -> None:
+    """Backdate a mail row. The window is measured in days; a test cannot wait."""
+    row.created_at = utcnow() - timedelta(days=days)
+    await db.flush()
+
+
 # --- raw retention (RADD-1033) ---------------------------------------------------
 
 
@@ -1053,12 +1074,12 @@ async def test_the_raw_message_is_retained_and_retrievable(db, world, tmp_path):
     assert fetched == raw
 
 
-async def test_retention_off_keeps_nothing(db, world, tmp_path, monkeypatch):
-    """`MAIL_RAW_RETENTION_DAYS = 0` is the privacy-conscious choice — a desk that
-    must not keep customer mail at rest. Nothing is stored, and the message still
+async def test_retention_off_keeps_nothing(db, world, tmp_path):
+    """A retention window of 0 is the privacy-conscious choice — a desk that must
+    not keep customer mail at rest. Nothing is stored, and the message still
     lands."""
     await _default_host(db, tmp_path)
-    monkeypatch.setattr(intake, "MAIL_RAW_RETENTION_DAYS", 0)
+    await _set_retention(db, 0)
     _, project, _ = world
     outcome = await _accept(db, raw_message(message_id="<noretain@ext>"), project.key)
     assert outcome.result is intake.Result.CREATED
@@ -1081,19 +1102,160 @@ async def test_the_raw_download_is_gated_and_serves_the_bytes(db, world, tmp_pat
     assert resp.media_type == "message/rfc822"
 
 
-async def test_the_raw_download_404s_when_nothing_was_retained(db, world, tmp_path, monkeypatch):
+async def test_the_raw_download_404s_when_nothing_was_retained(db, world, tmp_path):
     """Unknown id and retention-kept-nothing are the same 404 — a probe learns
     nothing about which."""
     from radd.exceptions import NotFoundError
     from radd.modules.mailintake.router import mail_message_raw
 
     await _default_host(db, tmp_path)
-    monkeypatch.setattr(intake, "MAIL_RAW_RETENTION_DAYS", 0)
+    await _set_retention(db, 0)
     actor, project, _ = world
     await _accept(db, raw_message(message_id="<none@ext>"), project.key)
     row = await db.scalar(select(MailMessage).where(MailMessage.message_id == "<none@ext>"))
     with pytest.raises(NotFoundError):
         await mail_message_raw(row.id, db, actor)
+
+
+# --- the retention window has a far edge (RADD-1048) -----------------------------
+
+
+async def _retain(db, project, message_id: str) -> tuple:
+    """Accept one message with retention on; return (row, its stored blob ref)."""
+    raw = raw_message(subject="keep me a while", message_id=message_id, body="original words")
+    await _accept(db, raw, project.key)
+    row = await db.scalar(select(MailMessage).where(MailMessage.message_id == message_id))
+    assert row.raw_storage_name, "the fixture must actually store something to sweep"
+    return row, (row.raw_storage_name, row.raw_host_id)
+
+
+async def test_the_sweep_deletes_the_bytes_and_forgets_them_past_the_window(
+    db, world, tmp_path
+):
+    """RADD-1048, the whole point. RADD-1033 declared a retention window and only
+    ever enforced its near edge, so raw customer mail accumulated forever while
+    the setting promised it would not. A message older than the window loses its
+    bytes AND its pointer on the next sweep."""
+    from radd.modules.attachments import service as attachments_service
+    from radd.modules.mailintake import retention
+
+    await _default_host(db, tmp_path)
+    _, project, _ = world
+    row, (storage_name, host_id) = await _retain(db, project, "<old@ext>")
+    await _age(db, row, 31)
+
+    assert await retention.sweep(db) == 1
+    await db.refresh(row)
+    assert row.raw_storage_name is None
+    assert row.raw_host_id is None
+    assert row.raw_size_bytes is None
+    with pytest.raises(FileNotFoundError):
+        await attachments_service.read_blob(db, storage_name, host_id=host_id)
+
+
+async def test_a_message_inside_the_window_is_left_alone(db, world, tmp_path):
+    """The far edge is an edge, not a purge: yesterday's mail is exactly what the
+    window exists to keep, and a sweep that took it would make the feature
+    useless rather than merely leaky."""
+    from radd.modules.attachments import service as attachments_service
+    from radd.modules.mailintake import retention
+
+    await _default_host(db, tmp_path)
+    _, project, _ = world
+    row, (storage_name, host_id) = await _retain(db, project, "<recent@ext>")
+    await _age(db, row, 1)
+
+    assert await retention.sweep(db) == 0
+    await db.refresh(row)
+    assert row.raw_storage_name == storage_name
+    assert await attachments_service.read_blob(db, storage_name, host_id=host_id)
+
+
+async def test_turning_retention_off_reclaims_what_is_already_stored(db, world, tmp_path):
+    """Lowering the window is retroactive, which is the reason it is a setting.
+    An admin who decides this desk must not keep customer mail gets the mail it
+    already kept deleted too — a switch that only governed the NEXT message
+    would leave the archive it was flipped because of."""
+    from radd.modules.mailintake import retention
+
+    await _default_host(db, tmp_path)
+    _, project, _ = world
+    row, _ref = await _retain(db, project, "<reclaim@ext>")  # stored under the default 30 days
+
+    await _set_retention(db, 0)
+    assert await retention.sweep(db) == 1
+    await db.refresh(row)
+    assert row.raw_storage_name is None
+
+
+async def test_a_host_that_refuses_the_delete_keeps_the_pointer(db, world, tmp_path, monkeypatch):
+    """The decided ordering, and the opposite of the attachments orphan-GC.
+
+    Bytes first, columns second: an unreachable host leaves the row exactly as it
+    was, so the message is swept again next tick. Nulling first would be the one
+    unrecoverable outcome — customer mail still on a host with nothing left
+    pointing at it and nothing that will ever collect it.
+    """
+    from radd.modules.attachments import service as attachments_service
+    from radd.modules.mailintake import retention
+
+    await _default_host(db, tmp_path)
+    _, project, _ = world
+    row, (storage_name, _host) = await _retain(db, project, "<unreachable@ext>")
+    await _age(db, row, 31)
+
+    async def _refuse(*_args, **_kwargs):
+        raise OSError("host unreachable")
+
+    monkeypatch.setattr(attachments_service, "remove_blob", _refuse)
+    assert await retention.sweep(db) == 0
+    await db.refresh(row)
+    assert row.raw_storage_name == storage_name
+
+    monkeypatch.undo()
+    assert await retention.sweep(db) == 1
+    await db.refresh(row)
+    assert row.raw_storage_name is None
+
+
+async def test_the_window_is_an_instance_only_setting_on_the_email_surface(db, world):
+    """What the Settings → Email panel depends on, asserted where a compiler
+    cannot: the key is listed at INSTANCE scope carrying `section="email"` (the
+    SPA matches that string exactly — a stray one lands the row on General), and
+    it refuses a project override. Per-project retention would make a message's
+    fate depend on which project a routing rule happened to send it to, while
+    the sweep — which reads one instance-wide number — deleted it anyway.
+    """
+    from radd.exceptions import ConflictError
+    from radd.modules.settings import service as settings_service
+    from radd.modules.settings.types import SettingKey, SettingScope
+
+    _, project, _ = world
+    rows = await settings_service.list_for_scope(db, SettingScope.INSTANCE, None)
+    row = next(r for r in rows if r["key"] == SettingKey.MAIL_RAW_RETENTION_DAYS.value)
+    assert row["section"] == "email"
+    assert row["type"] == "int"
+    assert row["value"] == settings.mail_raw_retention_days
+
+    with pytest.raises(ConflictError):
+        await settings_service.set_value(
+            db, SettingKey.MAIL_RAW_RETENTION_DAYS, SettingScope.PROJECT, project.id, 5
+        )
+
+
+async def test_the_sweep_is_idempotent(db, world, tmp_path):
+    """A stripped row can never match again — the predicate IS the pointer — so
+    a second pass over the same backlog is one empty query, not a second delete
+    against a host that no longer has the object."""
+    from radd.modules.mailintake import retention
+
+    await _default_host(db, tmp_path)
+    _, project, _ = world
+    row, _ref = await _retain(db, project, "<twice@ext>")
+    await _age(db, row, 31)
+
+    assert await retention.sweep(db) == 1
+    assert await retention.sweep(db) == 0
 
 
 # --- capped attachments leave a receipt (RADD-1035a) -----------------------------

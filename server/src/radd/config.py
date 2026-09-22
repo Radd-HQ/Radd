@@ -494,6 +494,15 @@ class Settings(BaseSettings):
         "the subject)."
     )
     mail_outbound_poll_seconds: float = 5.0
+    # RADD-1033/1048: the env/config default behind the `mail_raw_retention_days`
+    # scalar setting (Settings → Email, instance-only — keeping customer mail at
+    # rest is one instance's privacy policy, not a per-project preference). Days
+    # of RAW inbound bytes kept behind `GET /mail/messages/{id}/raw`; `0` keeps
+    # nothing, and lowering it reclaims what is already stored on the next sweep.
+    mail_raw_retention_days: int = 30
+    # How often that sweep runs. Hourly: the window is measured in days, so a
+    # tighter loop would only add queries to every instance that has no mail.
+    mail_raw_sweep_seconds: float = 3600.0
     # HTTPS ingest (RADD-953). The shared secret the Cloudflare Email Worker
     # signs each raw message with — `openssl rand -base64 32`. EMPTY REJECTS
     # EVERYTHING, the same safe default as forgejo_webhook_secret: an
