@@ -18,7 +18,10 @@ const page = {id: "page", number: 1, space_id: space.id, space, slug: "long-page
   body: `## Introduction\n\n${early}.\n\n` + Array.from({length: 45}, (_, i) => `## Section ${i + 1}\n\nA deliberately long document. Paragraph ${i + 1} keeps its own position while the comments stay available.\n\n`).join("") + `## Conclusion\n\n${late}.\n\nRepeated ambiguous phrase.\n\nRepeated ambiguous phrase.`};
 page.body += "\n\n```text\n" + Array.from({length: 100}, (_, i) => `configuration_line_${i}`).join("\n") + `\n${codeQuote}\n` + "```";
 let comments = [early, late, "Removed passage", "Repeated ambiguous phrase", codeQuote].map((quote, i) => ({id: `comment-${i}`, entity_type: "page", entity_id: page.id, author: user,
-  body: `Please review annotation ${i + 1}.`, visibility: "public", visible_to_teams: [], created_at: "2026-01-01", updated_at: "2026-01-01", anchor: {quote}, resolved_at: null, resolved_by: null}));
+  body: `Please review annotation ${i + 1}.`, visibility: "public", visible_to_teams: [], created_at: "2026-01-01", updated_at: "2026-01-01", anchor: {quote}, resolved_at: null, resolved_by: null,
+  // RADD-1282 moved Resolve onto the server's per-thread answer; without it the
+  // button never renders and the resolve step below can never pass.
+  can_resolve: true}));
 const requests = [];
 const replies = [{id: "reply-0", parent_comment_id: "comment-0", entity_type: "page", entity_id: page.id,
   author: {id: "colleague", name: "Fixture Colleague"}, body: "The original reply", created_at: "2026-01-02", updated_at: "2026-01-02", anchor: null, resolved_at: null}];
@@ -152,7 +155,7 @@ try {
   await s.click('[data-comment-id="comment-0"] button', text => text === "Resolve");
   await until(`document.body.innerText.includes('Resolved (1)')`);
   await s.click("button", text => text === "Resolved (1)");
-  await s.click('[data-comment-id="comment-0"] button', text => text === "Reopen");
+  await s.click('[data-comment-id="comment-0"] button', text => text === "Unresolve");
   await until(`!document.body.innerText.includes('Resolved (1)')`);
   await s.click('[aria-label="Edit page"]');
   await until(`!!document.querySelector('[contenteditable="true"].ProseMirror') && document.querySelector('[contenteditable="true"].ProseMirror').textContent.includes(${JSON.stringify(late)})`);
