@@ -5,7 +5,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { customFieldErrors, deniedCustomFieldKeys, errorMessage } from "../lib/api";
 import { RoutePath } from "../lib/constants";
-import { useArchiveItem, useCloneItem, useConvertItem, useDeleteItem, useToggleStarOnItem, useUpdateItem } from "../lib/item-mutations";
+import { useArchiveItem, useCloneItem, useConvertItem, useDeleteItem, useToggleDescriptionTask, useToggleStarOnItem, useUpdateItem } from "../lib/item-mutations";
 import { useItemWritability, usePermissions, usePointsEnabled, useIsAuthenticated } from "../lib/hooks";
 import { useCan } from "../lib/can";
 import {
@@ -84,6 +84,7 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
   const webLinks = useQuery(itemWebLinksQuery(item.id));
   const itemPages = useQuery(itemPagesQuery(item.id));
   const updateItem = useUpdateItem();
+  const toggleDescriptionTask = useToggleDescriptionTask();
   const toggleStar = useToggleStarOnItem();
   const perms = usePermissions();
   const can = useCan();
@@ -445,7 +446,12 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
               </div>
             ) : item.description ? (
               <div className="group/desc relative rounded-md border border-transparent px-1.5 py-1 hover:border-subtle">
-                <RichViewer text={item.description} />
+                <RichViewer
+                  text={item.description}
+                  onToggleTask={
+                    canEditDescription ? (toggle) => toggleDescriptionTask(item, toggle) : undefined
+                  }
+                />
                 <span className="absolute right-1 top-1 hidden items-center gap-1 group-hover/desc:flex">
                   {/* Read-mode AI (spec 103 follow-up): find-similar/summarize
                       for every reader; transforms only when writable. */}

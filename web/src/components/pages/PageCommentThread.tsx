@@ -2,6 +2,11 @@ import { Check, RotateCcw, Unlink } from "lucide-react";
 import { relativeTime } from "../../lib/dates";
 import type { Comment } from "../../lib/types";
 import { LazyRichViewer as RichViewer } from "../editor/LazyRichViewer";
+import { useQueryClient } from "@tanstack/react-query";
+import { Entity, invalidateEntities } from "../../lib/cache";
+import { apiCommentTasksPath } from "../../lib/constants";
+import { useCurrentUser } from "../../lib/hooks";
+import { sendTaskToggle } from "../../lib/task-toggle";
 import { CommentReplies, repliesLabel } from "../comments/CommentReplies";
 
 /** Why a comment no longer points at the page (RADD-1276): its passage was
@@ -43,6 +48,8 @@ export function PageCommentThread({
   draft: string;
   onDraft: (value: string) => void;
 }) {
+  const me = useCurrentUser();
+  const queryClient = useQueryClient();
   return (
     <div
       data-thread
@@ -75,7 +82,18 @@ export function PageCommentThread({
         </span>
       </p>
       <div className="mt-0.5">
-        <RichViewer text={row.body} />
+        <RichViewer
+          text={row.body}
+          // RADD-1296: the author ticks their own checklist in place.
+          onToggleTask={
+            row.author && row.author.id === me?.id
+              ? async (toggle) => {
+                  await sendTaskToggle(apiCommentTasksPath(row.id), toggle, row.body);
+                  await invalidateEntities(queryClient, Entity.comment);
+                }
+              : undefined
+          }
+        />
       </div>
       <button type="button" onClick={onToggle} aria-expanded={expanded}
         className="mt-2 text-xs text-fg-muted hover:text-fg hover:underline">

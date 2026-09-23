@@ -4,8 +4,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd import tasklists
 from radd.db import get_session
 from radd.exceptions import ConflictError
+from radd.tasklists import TaskToggle
 from radd.modules.auth.deps import Actor, CurrentUser
 from radd.modules.auth.throttle import WriteBucket, check_write
 from radd.modules.workflow.types import StateCategory
@@ -297,6 +299,21 @@ async def update_item(
     item_id: uuid.UUID, data: ItemUpdate, session: Session, user: CurrentUser
 ) -> ItemRead:
     return await service.update_item(session, item_id, data, actor=user)
+
+
+@router.post("/{item_id}/description/tasks", response_model=ItemRead)
+async def toggle_description_task(
+    item_id: uuid.UUID, data: TaskToggle, session: Session, user: CurrentUser
+) -> ItemRead:
+    """Tick or untick one checklist box in the description without editing it
+    (RADD-1296). Read first, so a stranger learns nothing from a 409; the write
+    is the ordinary description update, with its permission and field grants."""
+    current = await service.get_item(session, item_id, actor=user)
+    try:
+        body = tasklists.toggle(current.description or "", data)
+    except tasklists.TaskToggleConflict as exc:
+        raise ConflictError(ItemEntity.ITEM, reason=str(exc)) from exc
+    return await service.update_item(session, item_id, ItemUpdate(description=body), actor=user)
 
 
 @router.post("/{item_id}/clone", response_model=ItemRead, status_code=201)

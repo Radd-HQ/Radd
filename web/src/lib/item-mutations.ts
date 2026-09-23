@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import {
   useMutation,
   useQueryClient,
@@ -7,9 +8,11 @@ import {
 import { api, errorMessage } from "./api";
 import { Entity, invalidateEntities } from "./cache";
 import { pushToast } from "./toast";
+import { sendTaskToggle } from "./task-toggle";
 import {
   ApiPath,
   apiItemArchivePath,
+  apiItemDescriptionTasksPath,
   apiItemLinkPath,
   apiItemLinksPath,
   apiItemPath,
@@ -111,6 +114,27 @@ export function useUpdateItem() {
       invalidateItemCaches(queryClient, complete ? updated : undefined);
     },
   });
+}
+
+/**
+ * RADD-1296: tick one checklist box in an item's description from READ mode.
+ * The server rewrites the one marker (refusing if the text changed since it
+ * was rendered); the result lands in every cached copy of the item.
+ */
+export function useToggleDescriptionTask() {
+  const queryClient = useQueryClient();
+  return useCallback(
+    async (item: Pick<Item, "id" | "description">, toggle: { index: number; checked: boolean }) => {
+      const updated = await sendTaskToggle<Item>(
+        apiItemDescriptionTasksPath(item.id),
+        toggle,
+        item.description,
+      );
+      if (updated) cacheItem(queryClient, updated);
+      invalidateItemCaches(queryClient, updated?.capabilities ? updated : undefined);
+    },
+    [queryClient],
+  );
 }
 
 /** One PATCH of a roadmap gesture commit (spec 77). */

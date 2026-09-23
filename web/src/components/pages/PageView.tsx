@@ -29,7 +29,8 @@ import { Modal } from "../Modal";
 import { PageBody } from "./PageBody";
 import { pageCommentFeedQuery, usersQuery } from "../../lib/queries";
 import { chronologicalComments, CommentSection } from "../../lib/queries/comment-feed";
-import { apiCommentPath } from "../../lib/constants";
+import { apiCommentPath, apiPageTasksPath } from "../../lib/constants";
+import { sendTaskToggle } from "../../lib/task-toggle";
 import type { InlineAnchorRef } from "../editor/detached-comments";
 import { AttachmentParentType, type Page, type PageUpdate } from "../../lib/types";
 import type { AiRun } from "../editor/ai";
@@ -506,7 +507,20 @@ export function PageView({
                           </Button>
                         )}
                       </div>
-                      <PageBody text={page.body} onReady={() => setBodyVersion((v) => v + 1)} />
+                      <PageBody
+                        text={page.body}
+                        onReady={() => setBodyVersion((v) => v + 1)}
+                        // RADD-1296: tick a checklist box without opening the
+                        // editor — a versioned save the co-editing guard can refuse.
+                        onToggleTask={
+                          canWrite
+                            ? async (toggle) => {
+                                await sendTaskToggle(apiPageTasksPath(page.id), toggle, page.body);
+                                invalidate();
+                              }
+                            : undefined
+                        }
+                      />
                     </div>
                   ) : canWrite ? (
                     <button

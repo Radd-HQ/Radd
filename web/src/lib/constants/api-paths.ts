@@ -4,6 +4,8 @@ import { API_BASE, ApiPath } from "./api";
 
 /** Parameterized API paths (single source for interpolated URLs). */
 export const apiItemPath = (itemId: string) => `${ApiPath.items}/${itemId}`;
+/** RADD-1296: tick one checklist box in the description. */
+export const apiItemDescriptionTasksPath = (itemId: string) => `${apiItemPath(itemId)}/description/tasks`;
 /** Resolve an item by its canonical key (`TD-25`) — spec 21 backend resolver. */
 export const apiItemByKeyPath = (key: string) =>
   `${ApiPath.items}/by-key/${encodeURIComponent(key)}`;
@@ -12,6 +14,7 @@ export const apiItemCommentsPath = (itemId: string) => `${ApiPath.items}/${itemI
 export const apiParentCommentsPath = (entityType: string, entityId: string) =>
   `/${entityType}/${entityId}/comments`;
 export const apiCommentPath = (commentId: string) => `${ApiPath.comments}/${commentId}`;
+export const apiCommentTasksPath = (commentId: string) => `${apiCommentPath(commentId)}/tasks`;
 export const apiStatePath = (stateId: string) => `${ApiPath.states}/${stateId}`;
 export const apiTransitionPath = (transitionId: string) =>
   `${ApiPath.transitions}/${transitionId}`;
@@ -181,6 +184,7 @@ export const apiItemSlaPath = (itemId: string) => `${ApiPath.items}/${itemId}/sl
 export const apiPageSpacePath = (spaceId: string) => `${ApiPath.pageSpaces}/${spaceId}`;
 export const apiPageSpacePagesPath = (spaceId: string) => `${ApiPath.pageSpaces}/${spaceId}/pages`;
 export const apiPagePath = (pageId: string) => `${ApiPath.pages}/${pageId}`;
+export const apiPageTasksPath = (pageId: string) => `${apiPagePath(pageId)}/tasks`;
 export const apiPageUnarchivePath = (pageId: string) =>
   `${ApiPath.pages}/${pageId}/unarchive`;
 export const apiPageVersionsPath = (pageId: string) =>

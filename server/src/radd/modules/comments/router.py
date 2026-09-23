@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
+from radd.tasklists import TaskToggle
 from radd.modules.auth.deps import Actor, CurrentUser
 from radd.modules.auth.throttle import WriteBucket, check_write
 
@@ -78,6 +79,14 @@ async def update_comment(
     comment_id: uuid.UUID, data: CommentUpdate, session: Session, user: CurrentUser
 ) -> CommentRead:
     return await service.update_comment(session, comment_id, data, actor=user)
+
+
+@router.post("/comments/{comment_id}/tasks", response_model=CommentRead)
+async def toggle_comment_task(
+    comment_id: uuid.UUID, data: TaskToggle, session: Session, user: CurrentUser
+) -> CommentRead:
+    """Tick or untick one checklist box without editing the comment (RADD-1296)."""
+    return await service.toggle_task(session, comment_id, data, actor=user)
 
 
 @router.post("/comments/{comment_id}/resolve", response_model=CommentRead)

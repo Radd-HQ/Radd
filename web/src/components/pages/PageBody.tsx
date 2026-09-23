@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LazyRichViewer as RichViewer } from "../editor/LazyRichViewer";
+import type { TaskToggleRequest } from "../editor/RichViewer";
 import { MarkdownSourceCtx } from "../../lib/markdown";
 import { headingAnchorId } from "../../lib/markdown-outline";
 import "./extensions"; // side-effect: registers the first-party extensions
@@ -35,8 +36,12 @@ export function PageBody({
   // below the fold shows raw markdown, `radd:toc` links to heading ids that
   // were never assigned, and printing emits placeholder text.
   eager = true,
+  onToggleTask,
 }: {
   text: string;
+  /** RADD-1296: present when the reader may write the page — a tick in any
+   *  segment is indexed across the WHOLE body (this container is the scope). */
+  onToggleTask?: (toggle: TaskToggleRequest) => Promise<unknown>;
   className?: string;
   /** Fires once every segment has rendered — the print route waits on it. */
   onReady?: () => void;
@@ -54,6 +59,7 @@ export function PageBody({
   useEffect(() => setReadyCount(0), [text]);
 
   const markReady = useCallback(() => setReadyCount((count) => count + 1), []);
+  const taskScope = useCallback(() => containerRef.current, []);
 
   // Re-walk on EVERY readiness tick, not once all segments are ready. Prose runs
   // mount lazily as they near the viewport, so on a long page the tail may not
@@ -81,7 +87,7 @@ export function PageBody({
 
   return (
     <MarkdownSourceCtx.Provider value={text}>
-      <div ref={containerRef} data-page-body className={className}>
+      <div ref={containerRef} data-page-body data-task-scope className={className}>
         {segments.map((segment, index) =>
           segment.kind === "markdown" ? (
             <RichViewer
@@ -89,6 +95,8 @@ export function PageBody({
               text={segment.text}
               eager={eager}
               onReady={markReady}
+              onToggleTask={onToggleTask}
+              taskScope={taskScope}
             />
           ) : (
             <ExtensionBlock key={`ext-${index}`} name={segment.name} body={segment.body} />

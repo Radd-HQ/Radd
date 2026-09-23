@@ -5,6 +5,7 @@ from datetime import datetime
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd import tasklists
 from radd.exceptions import ConflictError, ForbiddenError, NotFoundError
 from radd.modules.auth import authz, service as auth
 from radd.modules.auth.authz import Permission
@@ -382,6 +383,25 @@ async def create_authorized_comment(
         occurred_at=occurred_at, visible_to_teams=stored_teams,
     )
     return _to_read(comment, await auth.get_user(session, author_id) if author_id else None, stored_teams)
+
+
+async def toggle_task(
+    session: AsyncSession, comment_id: uuid.UUID, data: "tasklists.TaskToggle", actor: User
+) -> CommentRead:
+    """Tick one checklist box in a comment (RADD-1296) — the SAME gate as
+    editing it, checked before the body is compared so a 409 tells a stranger
+    nothing. The write is an ordinary edit (history, events, audit)."""
+    comment = await _get(session, comment_id)
+    _binding, project = await _parent_scope(session, comment.entity_type, comment.entity_id)
+    permissions = await _require_author_or(
+        session, comment, actor, project, others=Permission.PROJECT_MANAGE
+    )
+    _check_internal(permissions, comment.visibility)
+    try:
+        body = tasklists.toggle(comment.body, data)
+    except tasklists.TaskToggleConflict as exc:
+        raise ConflictError(CommentEntity.COMMENT, reason=str(exc)) from exc
+    return await update_comment(session, comment_id, CommentUpdate(body=body), actor)
 
 
 async def update_comment(

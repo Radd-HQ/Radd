@@ -183,14 +183,23 @@ const components = {
     <ol className="my-1.5 flex list-decimal flex-col gap-0.5 pl-5">{children}</ol>
   ),
   li: ({ className, children }: { className?: string; children?: ReactNode }) => (
-    <li className={className?.includes("task-list-item") ? "list-none" : ""}>{children}</li>
+    <li
+      className={
+        className?.includes("task-list-item")
+          ? // RADD-1296: a done item reads as done — struck through, quieter.
+            "list-none [&:has(>input:checked)]:text-fg-muted [&:has(>input:checked)]:line-through"
+          : ""
+      }
+    >
+      {children}
+    </li>
   ),
   input: ({ checked }: { checked?: boolean }) => (
     <input
       type="checkbox"
       checked={Boolean(checked)}
       readOnly
-      className="mr-1.5 accent-accent align-middle"
+      className="mr-1.5 size-4 accent-accent align-[-3px]"
     />
   ),
   del: ({ children }: { children?: ReactNode }) => (

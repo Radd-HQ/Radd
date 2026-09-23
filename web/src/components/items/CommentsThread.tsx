@@ -2,10 +2,12 @@ import { useCallback, useState } from "react";
 import { useMutation, useQueries, useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { EyeOff, MessageSquare, MessagesSquare, Pencil, Send, Trash2 } from "lucide-react";
 import { ApiError, api, errorMessage } from "../../lib/api";
+import { sendTaskToggle } from "../../lib/task-toggle";
 import { useAttachmentUploader } from "../../lib/useAttachmentUploader";
 import {
   apiCannedRenderPath,
   apiCommentPath,
+  apiCommentTasksPath,
   apiItemCommentsPath,
   attachmentUrl,
 } from "../../lib/constants";
@@ -115,6 +117,12 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
   const [pendingAiRun, setPendingAiRun] = useState<AiRun | null>(null);
   const canManageProject = perms.project(project, Permission.projectManage);
   const uploadCommentImage = useCommentImageUploader(itemId);
+  // RADD-1296: tick a checklist box in a comment without opening its editor —
+  // offered exactly where editing the comment is.
+  const toggleCommentTask = async (comment: Comment, toggle: { index: number; checked: boolean }) => {
+    await sendTaskToggle<Comment>(apiCommentTasksPath(comment.id), toggle, comment.body);
+    await queryClient.invalidateQueries({ queryKey: queryKeys.comments(itemId) });
+  };
 
   const createComment = useMutation({
     mutationFn: (payload: CommentCreate) =>
@@ -255,7 +263,14 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
                     />
                   ) : (
                     <div className="mt-0.5">
-                      <RichViewer text={comment.body} />
+                      <RichViewer
+                        text={comment.body}
+                        onToggleTask={
+                          (!!comment.author && user?.id === comment.author.id) || canManageProject
+                            ? (toggle) => toggleCommentTask(comment, toggle)
+                            : undefined
+                        }
+                      />
                     </div>
                   )}
                   <div className="mt-1.5 flex flex-wrap items-center gap-3">

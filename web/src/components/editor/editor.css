@@ -302,3 +302,80 @@
 .radd-rich-editor .milkdown :is(milkdown-list-item-block, .milkdown-list-item-block) {
   margin: 2px 0;
 }
+
+/* RADD-1296 — task-list checkboxes you can read at a glance. The component
+   draws a literal ☑ / □ text glyph (13px, the same weight either way — "hard
+   to tell whether they're checked", GitHub #20). Hide the glyph and draw a
+   real 16px box: an outline when open, an accent fill with a check when done.
+   Same rules in the editor and the read-only viewer. */
+.radd-rich-editor .milkdown :is(milkdown-list-item-block, .milkdown-list-item-block) .label:is(.checked, .unchecked) {
+  display: inline-block;
+  position: relative;
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  vertical-align: -3px;
+  font-size: 0;
+  color: transparent;
+  /* fg-muted, not the `emphasis` border tier: a control needs 3:1 against the
+     page, and `emphasis` measured 2.61:1 in the light theme. */
+  border: 1.5px solid var(--color-fg-muted);
+  border-radius: 4px;
+  background: transparent;
+  transition: background-color 120ms, border-color 120ms;
+}
+.radd-rich-editor .milkdown :is(milkdown-list-item-block, .milkdown-list-item-block) .label.checked {
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+}
+.radd-rich-editor .milkdown :is(milkdown-list-item-block, .milkdown-list-item-block) .label.checked::after {
+  content: "";
+  position: absolute;
+  left: 4.5px;
+  top: 1.5px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+/* Beside its text, not under it. The item aligns label and text by BASELINE,
+   and an empty 16px box has no text baseline — it dropped a full line below
+   the words. Task items align to the top instead, with the box centred in a
+   wrapper exactly one line tall (`1lh` = the text's own line height). */
+.radd-rich-editor .milkdown :is(milkdown-list-item-block, .milkdown-list-item-block)
+  .list-item:has(> .label-wrapper > .label:is(.checked, .unchecked)) {
+  align-items: flex-start;
+}
+.radd-rich-editor .milkdown :is(milkdown-list-item-block, .milkdown-list-item-block)
+  .label-wrapper:has(> .label:is(.checked, .unchecked)) {
+  display: flex;
+  align-items: center;
+  height: 1lh;
+}
+.radd-rich-editor .milkdown :is(milkdown-list-item-block, .milkdown-list-item-block) .label:is(.checked, .unchecked) {
+  vertical-align: 0;
+}
+/* Clickable where a click does something: always while editing, and in the
+   viewer only when the surface passed a toggle (the reader may write). */
+.radd-rich-editor:not(.radd-rich-viewer) .milkdown .label:is(.checked, .unchecked),
+.radd-rich-viewer[data-task-toggle] .milkdown .label:is(.checked, .unchecked) {
+  cursor: pointer;
+}
+.radd-rich-editor:not(.radd-rich-viewer) .milkdown .label.unchecked:hover,
+.radd-rich-viewer[data-task-toggle] .milkdown .label.unchecked:hover {
+  border-color: var(--accent-fill);
+}
+.radd-rich-viewer[data-task-busy] .milkdown .label:is(.checked, .unchecked) {
+  opacity: 0.6;
+  cursor: progress;
+}
+/* A done item's OWN text is struck through and quieted. Only its paragraphs:
+   text-decoration propagates and cannot be undone below, so striking the whole
+   .children would strike its still-open nested subtasks too. */
+.radd-rich-editor .milkdown :is(milkdown-list-item-block, .milkdown-list-item-block)
+  .list-item:has(> .label-wrapper > .label.checked) > .children > .content-dom > p {
+  text-decoration: line-through;
+  color: var(--color-fg-muted);
+}
+

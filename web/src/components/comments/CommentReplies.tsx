@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { infiniteQueryOptions, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage } from "../../lib/api";
-import { apiCommentPath } from "../../lib/constants";
+import { apiCommentPath, apiCommentTasksPath } from "../../lib/constants";
+import { useCurrentUser } from "../../lib/hooks";
+import { sendTaskToggle } from "../../lib/task-toggle";
 import { Entity, entityMeta, invalidateEntities } from "../../lib/cache";
 import { chronologicalComments, type CommentPage } from "../../lib/queries/comment-feed";
 import { relativeTime } from "../../lib/dates";
@@ -51,6 +53,7 @@ export function CommentReplies({
   canResolve?: boolean;
 }) {
   const client = useQueryClient();
+  const me = useCurrentUser();
   const [internal, setInternal] = useState(false);
   // The rich editor is uncontrolled after mount — bump to clear it after posting.
   const [composerKey, setComposerKey] = useState(0);
@@ -128,7 +131,18 @@ export function CommentReplies({
                   </span>
                 )}
               </p>
-              <LazyRichViewer text={reply.body} />
+              <LazyRichViewer
+                text={reply.body}
+                // RADD-1296: a reply's author ticks its checklist in place.
+                onToggleTask={
+                  me && reply.author?.id === me.id
+                    ? async (toggle) => {
+                        await sendTaskToggle(apiCommentTasksPath(reply.id), toggle, reply.body);
+                        await client.invalidateQueries({ queryKey: ["commentReplies", row.id] });
+                      }
+                    : undefined
+                }
+              />
             </div>
           );
         })}

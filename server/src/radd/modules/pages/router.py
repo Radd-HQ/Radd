@@ -29,7 +29,9 @@ from . import (
     template_directory,
     watchers as page_watchers,
 )
-from radd.exceptions import NotFoundError
+from radd import tasklists
+from radd.exceptions import ConflictError, NotFoundError
+from radd.tasklists import TaskToggle
 
 from .models import PageTemplate
 from radd.modules.events import service as events
@@ -413,6 +415,24 @@ async def update_page(
 ) -> PageRead:
     await page_access.guard_page(session, user, page_id, authz.Permission.PAGE_WRITE)
     page = await service.update_page(session, page_id, data, user.id)
+    return await service.page_read(session, page)
+
+
+@router.post("/pages/{page_id}/tasks", response_model=PageRead)
+async def toggle_page_task(
+    page_id: uuid.UUID, data: TaskToggle, session: Session, user: CurrentUser
+) -> PageRead:
+    """Tick or untick one checklist box without opening the editor (RADD-1296).
+    An ordinary versioned save: page.write, `expected_version`, a history row,
+    and the spec-122 guard refuses it while someone is editing the page live."""
+    page = await page_access.guard_page(session, user, page_id, authz.Permission.PAGE_WRITE)
+    try:
+        body = tasklists.toggle(page.body or "", data)
+    except tasklists.TaskToggleConflict as exc:
+        raise ConflictError(PageEntity.PAGE, reason=str(exc)) from exc
+    page = await service.update_page(
+        session, page_id, PageUpdate(body=body, expected_version=page.version), user.id
+    )
     return await service.page_read(session, page)
 
 

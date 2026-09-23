@@ -5,7 +5,8 @@ import { ResolveThreadButton, ThreadBadge, ThreadFilter, threadRuleClass } from 
 import { MessageSquare, MessagesSquare, Send, Trash2 } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
-import { apiCommentPath, apiParentCommentsPath } from "../../lib/constants";
+import { apiCommentPath, apiCommentTasksPath, apiParentCommentsPath } from "../../lib/constants";
+import { sendTaskToggle } from "../../lib/task-toggle";
 import { relativeTime } from "../../lib/dates";
 import { pageCommentFeedQuery, usersQuery } from "../../lib/queries";
 import { useCurrentUser, useIsAuthenticated } from "../../lib/hooks";
@@ -123,7 +124,18 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
                   )}
                 </p>
                 <div className="mt-0.5 rounded-md border border-subtle bg-surface px-2 py-1">
-                  <RichViewer text={comment.body} />
+                  <RichViewer
+                    text={comment.body}
+                    // RADD-1296: the author ticks their own checklist in place.
+                    onToggleTask={
+                      comment.author && comment.author.id === user?.id
+                        ? async (toggle) => {
+                            await sendTaskToggle(apiCommentTasksPath(comment.id), toggle, comment.body);
+                            await invalidateEntities(queryClient, Entity.comment);
+                          }
+                        : undefined
+                    }
+                  />
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-3">
                   {user && (
