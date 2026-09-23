@@ -221,7 +221,7 @@ function SchedulesCard() {
       <header className="mb-2 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-heading">Schedules</h3>
         <Button size="sm" variant="secondary" onClick={() => setCreating(true)}>
-          Add schedule
+          New schedule
         </Button>
       </header>
       {schedules.isPending ? (

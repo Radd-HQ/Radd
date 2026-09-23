@@ -50,7 +50,7 @@ export function FormsSettingsPage({ projectId }: { projectId?: string }) {
   return (
     <SettingsPage history={{ entities: ["form"], projectId }}
       title="Intake forms"
-      description="Forms that create a work item from a title + selected registry fields."
+      description="Forms that create an issue from a title + selected registry fields."
       actions={
         canManage && project ? (
           <Button onClick={() => setEditing({ form: null })} className="self-end">

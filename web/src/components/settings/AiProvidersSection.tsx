@@ -116,7 +116,7 @@ export function AiProvidersSection() {
         <h2 className={`${sectionHeadClasses} mb-0`}>Providers</h2>
         <Button onClick={() => setAdding(true)}>
           <Plus size={14} aria-hidden />
-          Add provider
+          New provider
         </Button>
       </div>
       <p className="mb-3 text-xs text-fg-muted">
@@ -336,7 +336,7 @@ function ProviderModal({
   };
 
   return (
-    <Modal title={existing ? "Edit provider" : "Add provider"} onClose={onClose}>
+    <Modal title={existing ? "Edit provider" : "New provider"} onClose={onClose}>
       <form onSubmit={onSubmit} className="flex flex-col gap-3">
         <TextField
           label="Name"
@@ -466,7 +466,7 @@ function ProviderModal({
             Cancel
           </Button>
           <Button type="submit" disabled={save.isPending || !name.trim()}>
-            {save.isPending ? "Saving…" : existing ? "Save changes" : "Add provider"}
+            {save.isPending ? "Saving…" : existing ? "Save changes" : "Create provider"}
           </Button>
         </div>
       </form>

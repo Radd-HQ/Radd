@@ -89,7 +89,7 @@ export function BurnupCard({
               : null
         }
         empty={!cycleId || series.length === 0}
-        emptyMessage="No cycles to chart — create a cycle and assign items to it."
+        emptyMessage="No cycles to chart — create a cycle and assign issues to it."
       >
         {chart}
       </CardBody>

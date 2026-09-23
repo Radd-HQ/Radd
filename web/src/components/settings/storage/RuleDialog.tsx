@@ -120,7 +120,7 @@ export function RuleDialog({
   };
 
   return (
-    <Modal title={existing ? "Edit rule" : "Add routing rule"} onClose={onClose} wide>
+    <Modal title={existing ? "Edit rule" : "New routing rule"} onClose={onClose} wide>
       <form onSubmit={onSubmit} className="flex flex-col gap-3">
         <TextField
           label="Name"
@@ -312,7 +312,7 @@ export function RuleDialog({
             Cancel
           </Button>
           <Button type="submit" disabled={save.isPending || !name.trim()}>
-            {save.isPending ? "Saving…" : existing ? "Save changes" : "Add rule"}
+            {save.isPending ? "Saving…" : existing ? "Save changes" : "Create rule"}
           </Button>
         </div>
       </form>

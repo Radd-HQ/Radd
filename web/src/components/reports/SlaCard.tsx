@@ -111,7 +111,7 @@ export function SlaCard({
   return (
     <ReportCard
       title="Service desk"
-      description="SLA targets met vs breached, by the week the item was raised"
+      description="SLA targets met vs breached, by the week the issue was raised"
       note={<ScopeNote scope={query.data?.scope} />}
       controls={
         <label className="flex items-center gap-1.5 text-xs text-fg-muted">
@@ -133,7 +133,7 @@ export function SlaCard({
         pending={query.isPending}
         error={query.isError ? errorMessage(query.error) : null}
         empty={window.items === 0 && window.csatCount === 0}
-        emptyMessage="No SLA activity in this window — timers appear once a policy applies to items."
+        emptyMessage="No SLA activity in this window — timers appear once a policy applies to issues."
       >
         <div className="mb-4 grid grid-cols-4 gap-3">
           <Tile label="Breach rate" value={`${Math.round(window.breachRate * 100)}%`} />

@@ -110,7 +110,7 @@ export function HostsPanel() {
         <h2 className={`${sectionHeadClasses} mb-0`}>Hosts</h2>
         <Button onClick={() => setAdding(true)}>
           <Plus size={14} aria-hidden />
-          Add host
+          New host
         </Button>
       </div>
       <p className="mb-3 text-xs text-fg-muted">

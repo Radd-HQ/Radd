@@ -133,7 +133,7 @@ export function HostDialog({
   };
 
   return (
-    <Modal title={existing ? "Edit host" : "Add storage host"} onClose={onClose}>
+    <Modal title={existing ? "Edit host" : "New storage host"} onClose={onClose}>
       <form onSubmit={onSubmit} className="flex flex-col gap-3">
         <TextField
           label="Name"
@@ -267,7 +267,7 @@ export function HostDialog({
             Cancel
           </Button>
           <Button type="submit" disabled={save.isPending || !name.trim()}>
-            {save.isPending ? "Saving…" : existing ? "Save changes" : "Add host"}
+            {save.isPending ? "Saving…" : existing ? "Save changes" : "Create host"}
           </Button>
         </div>
         {existing && <ChangeHistoryPanel entityType="storage_host" entityId={existing.id} />}

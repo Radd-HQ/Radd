@@ -52,7 +52,7 @@ export function ReleasesSettingsPage({ projectId }: { projectId?: string }) {
   return (
     <SettingsPage history={{ entities: ["release"], projectId }}
       title="Releases"
-      description="Versions items can target. Mark a release as released when it ships."
+      description="Versions issues can target. Mark a release as released when it ships."
       actions={
         canManage && project ? (
           <Button onClick={() => setModal({ release: null })} className="self-end">
@@ -200,7 +200,7 @@ function ReleaseRow({
               size="sm"
               onClick={() => sweep.mutate()}
               disabled={sweep.isPending}
-              title="Ship every item waiting for release into this version"
+              title="Ship every issue waiting for release into this version"
             >
               <Ship size={12} aria-hidden />
               {sweep.isPending ? "Sweeping…" : "Sweep"}
@@ -217,7 +217,7 @@ function ReleaseRow({
             onClick={() =>
               void confirm({
                 title: `Delete ${release.version}?`,
-                message: "Items pointing at this release keep their history; the version itself goes.",
+                message: "Issues pointing at this release keep their history; the version itself goes.",
                 confirmLabel: "Delete",
                 danger: true,
               }).then((ok) => {

@@ -59,7 +59,7 @@ export function StatesSettingsPage({ projectId }: { projectId?: string }) {
       description="States grouped into fixed categories. New projects start with the default set."
       info={
         <>
-          States are the steps an item moves through (Backlog → In Progress → Done). Each maps to
+          States are the steps an issue moves through (Backlog → In Progress → Done). Each maps to
           a fixed <em>category</em> that drives reporting and board columns; the name is yours.
           Reorder them to control how they list on boards.
         </>
@@ -527,10 +527,10 @@ function DeleteStateDialog({
       <div className="flex flex-col gap-3">
         <p className="text-[13px] text-fg-secondary">
           {n === undefined
-            ? "Counting the items in this state…"
+            ? "Counting the issues in this state…"
             : n === 0
-              ? "No items are in this state."
-              : `${n} item${n === 1 ? "" : "s"} in this state will move to:`}
+              ? "No issues are in this state."
+              : `${n} issue${n === 1 ? "" : "s"} in this state will move to:`}
         </p>
         {(n === undefined || n > 0) && (
           <Select
@@ -543,7 +543,7 @@ function DeleteStateDialog({
           />
         )}
         <p className="text-xs text-fg-muted">
-          The move is recorded in each item&apos;s history. Transitions referencing this
+          The move is recorded in each issue&apos;s history. Transitions referencing this
           state are removed with it.
         </p>
         {remove.isError && <ErrorText error={remove.error} />}

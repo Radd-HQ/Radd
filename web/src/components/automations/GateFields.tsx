@@ -118,7 +118,7 @@ export function FieldChangedFields({
         label="Field"
         value={String(params.field ?? "")}
         onChange={(event) => set({ field: event.target.value })}
-        hint="Reads the event's own diff, so it matches the TRANSITION — not an item that was already in the target state."
+        hint="Reads the event's own diff, so it matches the TRANSITION — not an issue that was already in the target state."
       >
         {/* Fields the trigger's real events have been SEEN changing come first
             (RADD-921). The full list below includes every custom-field key,
@@ -301,7 +301,7 @@ export function AiClassifyFields({
         value={String(params.prompt ?? "")}
         onChange={(event) => onChange({ ...params, prompt: event.target.value })}
         placeholder="Is this a bug report, a feature request, or a question?"
-        hint="Asked once per run, with the item summaries appended."
+        hint="Asked once per run, with the issue summaries appended."
       />
       <Labelled label="Possible answers">
         <TokenMultiSelect
@@ -353,8 +353,8 @@ export function AiClassifyFields({
       </Labelled>
       <p className="text-xs text-fg-secondary">
         Sent to your configured AI provider. Reads run as the automation&rsquo;s identity, so the
-        prompt can only contain what it could already see. Items are sent <em>whole</em> — nothing
-        is clipped mid-sentence. If a run exceeds the prompt budget, later items are left out and
+        prompt can only contain what it could already see. Issues are sent <em>whole</em> — nothing
+        is clipped mid-sentence. If a run exceeds the prompt budget, later issues are left out and
         the prompt says how many, so the model knows it is answering about a sample. The budget is
         the <code>RADD_AI_AUTOMATION_CONTEXT_CHARS</code> setting; size it to your model.
       </p>
@@ -553,7 +553,7 @@ export function ScriptNodeFields({
       <div data-script-test className="flex flex-col gap-2 rounded border border-subtle bg-base/40 p-2">
         <div className="flex flex-wrap items-end gap-2">
           <TextField
-            label="Test with item"
+            label="Test with issue"
             value={seed}
             onChange={(event) => setSeed(event.target.value)}
             placeholder="TD-42 (optional)"

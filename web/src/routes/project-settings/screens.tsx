@@ -78,7 +78,7 @@ export function ScreensSettingsPage({ projectId }: { projectId: string | undefin
       info={
         <>
           A screen controls presentation only — hiding a field never deletes its value or
-          changes validation. Items whose type has no screen fall back to the project default.
+          changes validation. Issues whose type has no screen fall back to the project default.
         </>
       }
     >

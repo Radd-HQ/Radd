@@ -521,7 +521,7 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
 
             {/* Epic progress (spec 76) is now the HEADER of an expandable list
                 (RADD-655): the bar answers "how much is left", and one click
-                answers "which items" — previously that meant leaving the page
+                answers "which issues" — previously that meant leaving the page
                 and filtering a board by parent. Subtask children render as a
                 checklist instead of rows (RADD-660). */}
             {item.kind !== ItemKind.subtask && (

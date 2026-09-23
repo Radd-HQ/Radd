@@ -214,7 +214,7 @@ export function ActionsBuilder({ value, onChange }: ActionsBuilderProps) {
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-fg-secondary">Actions</span>
-        <span className="text-[11px] text-fg-faint">Applied in order to every matching item</span>
+        <span className="text-[11px] text-fg-faint">Applied in order to every matching issue</span>
       </div>
 
       {/* Shared suggestion lists for the free-text name/version fields. */}

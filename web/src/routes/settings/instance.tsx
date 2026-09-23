@@ -119,8 +119,8 @@ export function InstanceSettingsPage() {
   const status = useQuery(instanceStatusQuery);
   return (
     <SettingsPage history={{ entities: ["plugin", "scoped_setting"] }}
-      title="Server"
-      description="Deploy-level status. Secrets (auth, SMTP, connector tokens) are configured via environment variables only; product defaults live on the General tab."
+      title="Server status"
+      description="What this server is running and whether each piece is set up. Click a row to configure it; product defaults for every project live under General."
     >
       <section>
         <h2 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted">

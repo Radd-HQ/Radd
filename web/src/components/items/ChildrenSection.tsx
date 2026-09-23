@@ -118,7 +118,7 @@ export function ChildrenSection({
             <ErrorText error={children.error} />
           ) : childRows.length === 0 ? (
             <p className="text-[13px] text-fg-faint">
-              {isChecklist ? "No subtasks yet." : "No child items yet."}
+              {isChecklist ? "No subtasks yet." : "No child issues yet."}
             </p>
           ) : (
             <ChildList
@@ -207,7 +207,7 @@ function ChildRow({
           onClick={() => toggle.mutate()}
           disabled={!canWrite || toggle.isPending || states.isPending}
           // Spec 96: un-writable controls are DISABLED with a reason, not hidden.
-          title={canWrite ? (isDone ? "Mark as not done" : "Mark as done") : "You cannot edit items in this project"}
+          title={canWrite ? (isDone ? "Mark as not done" : "Mark as done") : "You cannot edit issues in this project"}
           aria-label={isDone ? `Reopen ${child.key}` : `Complete ${child.key}`}
           className="shrink-0 rounded p-0.5 text-fg-muted hover:text-fg cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
         >
@@ -287,8 +287,8 @@ function QuickAdd({
       <input
         value={title}
         onChange={(event) => setTitle(event.target.value)}
-        placeholder={childKind === ItemKind.subtask ? "Add a subtask…" : "Add a child item…"}
-        aria-label={childKind === ItemKind.subtask ? "Add a subtask" : "Add a child item"}
+        placeholder={childKind === ItemKind.subtask ? "Add a subtask…" : "Add a child issue…"}
+        aria-label={childKind === ItemKind.subtask ? "Add a subtask" : "Add a child issue"}
         className="h-7 flex-1 rounded-md border border-subtle bg-base px-2 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
       />
       {/* `errorMessage` speaks spec-119 findings, so a child refused by a

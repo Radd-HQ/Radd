@@ -324,10 +324,10 @@ export function IssueProperties({
         </ChipSelect>
 
         {/* Spec 121: who may read this issue. Labels follow the project: in a
-            private one public and internal are the same audience ("Normal"). */}
+            private one public and internal are the same audience ("Project members"). */}
         <ChipSelect
           chip={
-            <VisibilityChip visibility={item.visibility ?? ItemVisibility.public} isPublicProject={Boolean(project.public)} />
+            <VisibilityChip visibility={item.visibility ?? ItemVisibility.public} isPublicProject={Boolean(project.public)} iconOnly />
           }
         >
           <SelectField

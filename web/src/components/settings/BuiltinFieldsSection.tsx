@@ -33,7 +33,7 @@ export function BuiltinFieldsSection({ canManage, canManageProjects = false }: {
           Builtin fields
         </h3>
         <p className="mt-1 text-[13px] text-fg-muted">
-          Every item carries these. Expand a field to restrict who can change it — or, for most
+          Every issue carries these. Expand a field to restrict who can change it — or, for most
           fields, who can see it — global or per project.
         </p>
       </div>

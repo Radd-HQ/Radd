@@ -365,7 +365,7 @@ export function VcsHostSettings({ config }: { config: VcsHostConfig }) {
                   />
                   <div className="flex gap-2">
                     <Button type="submit" disabled={createConnection.isPending}>
-                      Add host
+                      New host
                     </Button>
                     <Button type="button" variant="ghost" onClick={() => setAdding(false)}>
                       Cancel

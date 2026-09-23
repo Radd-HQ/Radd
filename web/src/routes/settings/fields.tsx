@@ -31,8 +31,8 @@ export function FieldsSettingsPage() {
   // Keep a selected editor mounted across rail searches/pages and live refreshes.
   // An explicit selection may sit outside the current window.
   const selected = selectedId ?? fields.rows[0]?.id;
-  return <SettingsPage history={{ entities: ["field"] }} title="Fields" description="Builtin and custom item fields — scope, defaults, options, and access grants."
-    info={<>Custom fields add typed, searchable data to items. Availability controls which projects use a field; grants control who may read or change it.</>}>
+  return <SettingsPage history={{ entities: ["field"] }} title="Fields" description="Builtin and custom issue fields — scope, defaults, options, and access grants."
+    info={<>Custom fields add typed, searchable data to issues. Availability controls which projects use a field; grants control who may read or change it.</>}>
     <div className="flex flex-col gap-10">
       <section aria-labelledby="custom-fields-heading">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">

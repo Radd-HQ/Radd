@@ -60,10 +60,10 @@ export function LinkTypesSettingsPage() {
   return (
     <SettingsPage history={{ entities: ["link_type"] }}
       title="Link types"
-      description="The relationships items can have — each with its own directional names and scope."
+      description="The relationships issues can have — each with its own directional names and scope."
       info={
         <>
-          Link types describe how two items relate ("blocks", "duplicates", or your own). A{" "}
+          Link types describe how two issues relate ("blocks", "duplicates", or your own). A{" "}
           <strong>directed</strong> type reads differently each way ("blocks" / "is blocked by"); a{" "}
           <strong>symmetric</strong> one reads the same both ways ("relates to"). Scope a type{" "}
           <strong>global</strong> or to specific projects.

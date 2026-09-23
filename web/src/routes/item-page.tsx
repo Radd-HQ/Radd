@@ -43,9 +43,9 @@ export function ItemDetailPage() {
     <div className="flex h-full w-full flex-col">
       <div className="border-b border-subtle px-5 py-2.5">{backLink}</div>
       {isError || project === null ? (
-        <p className="p-6 text-sm text-fg-muted">Item {itemKey} not found.</p>
+        <p className="p-6 text-sm text-fg-muted">Issue {itemKey} not found.</p>
       ) : isPending || !project || !item ? (
-        <Spinner label="Loading item…" />
+        <Spinner label="Loading issue…" />
       ) : (
         <ItemDetailBody key={item.id} project={project} item={item} />
       )}

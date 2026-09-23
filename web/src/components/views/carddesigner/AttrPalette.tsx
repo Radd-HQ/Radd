@@ -8,7 +8,7 @@ import type { DesignerDrag } from "./layout-ops";
 
 /** Palette grouping — a scan order, not a taxonomy the model knows about. */
 const GROUPS: { label: string; ids: string[] }[] = [
-  { label: "Work item", ids: ["parent", "labels", "priority", "state", "points", "progress"] },
+  { label: "Issue", ids: ["parent", "labels", "priority", "state", "points", "progress"] },
   { label: "People", ids: ["assignee", "reporter", "team"] },
   { label: "Dates", ids: ["start_date", "target_date", "created", "updated"] },
   { label: "Delivery", ids: ["cycle", "release", "sla", "logged_time"] },

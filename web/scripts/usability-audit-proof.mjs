@@ -57,6 +57,24 @@ async function main() {
     checks["1286 enforcement says whose value it is"] = workflow.includes("Same as the instance default")
       || workflow.includes("This project only");
     checks["1286 workflow names what happens on done"] = workflow.includes("When work is done");
+
+    // --- RADD-1287: one vocabulary ------------------------------------------
+    const item = await api(`return (await call("POST", "/items", { project_id: "${world.projectId}", title: "Vocabulary" })).body;`);
+    await session.navigate(`${baseUrl}/issues/${item.key}`, 3000);
+    const chrome = await session.eval(`document.body.innerText`);
+    checks["1287 top bar says New issue"] = await session.eval(
+      `[...document.querySelectorAll("button, a")].some(b => b.textContent.trim() === "New issue")`);
+    checks["1287 no 'New item' anywhere"] = !chrome.includes("New item");
+    checks["1287 sidebar says Portal"] = await session.eval(
+      `[...document.querySelectorAll("aside a")].some(a => a.textContent.trim() === "Portal")`);
+    checks["1287 visibility says who, not 'Normal'"] = (await session.eval(
+      `[...document.querySelectorAll("label")].find(l => l.textContent.trim() === "Visibility")?.parentElement?.innerText ?? ""`))
+      .includes("Project members");
+    await session.navigate(`${baseUrl}/settings/instance`, 2000);
+    checks["1287 server page has one name"] = await session.eval(
+      `[...document.querySelectorAll("h1, h2")].some(h => h.textContent.trim() === "Server status")
+        && [...document.querySelectorAll("a")].some(a => a.textContent.trim() === "Server status")
+        && ![...document.querySelectorAll("a")].some(a => a.textContent.trim() === "Overview")`);
   } finally {
     if (world?.projectId) await api(`return (await call("DELETE", "/projects/${world.projectId}")).status;`).catch(() => null);
     await close();

@@ -215,11 +215,11 @@ export function ResourceAccessSection({ userId }: { userId: string }) {
       </p>
       {/* RADD-933: full reach and own-items-only reach are DIFFERENT answers.
           Counted together, an account holding nothing but the Baseline's
-          `item.read@own` reported "can read items in 97 of 97 projects", which
+          `item.read@own` reported "can read issues in 97 of 97 projects", which
           reads as "sees everything" and is why a correctly-revoked account
           looked like it was still leaking. */}
       <p className="text-xs text-fg-secondary">
-        Can read <strong>every item</strong> in {summary.readable_projects} and edit in{" "}
+        Can read <strong>every issue</strong> in {summary.readable_projects} and edit in{" "}
         {summary.updatable_projects} of {summary.total_projects} projects
         {summary.readable_spaces != null && summary.total_spaces != null ? (
           <>

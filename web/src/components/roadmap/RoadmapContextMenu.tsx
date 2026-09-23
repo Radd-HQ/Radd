@@ -118,7 +118,7 @@ export function RoadmapContextMenu({
     disabled: row.derived,
     hint: row.derived
       ? "The epic has no dates of its own — this span is derived from its children."
-      : "Remove both dates — the item returns to the Unscheduled tray.",
+      : "Remove both dates — the issue returns to the Unscheduled tray.",
     onSelect: () =>
       onPatch([
         {
@@ -182,7 +182,7 @@ export function RoadmapContextMenu({
       kind: "action",
       label: "Auto-schedule children",
       icon: Wand2,
-      hint: "Lay out ALL the epic's children from its start: estimates set bar lengths, blocks-links order them, and items sharing an assignee run one after another. The epic is fit to the result.",
+      hint: "Lay out ALL the epic's children from its start: estimates set bar lengths, blocks-links order them, and issues sharing an assignee run one after another. The epic is fit to the result.",
       onSelect: () => onAutoSchedule(row),
     });
 
@@ -228,7 +228,7 @@ export function RoadmapContextMenu({
         icon: isMember ? BookmarkX : BookmarkPlus,
         hint: isMember
           ? "Unpin — the Members toggle stops showing it."
-          : "Pin to this roadmap's curated set — the Members toggle shows only pinned items (an epic brings its children along).",
+          : "Pin to this roadmap's curated set — the Members toggle shows only pinned issues (an epic brings its children along).",
         onSelect: () => onToggleMember(item.id, !isMember),
       });
     }
@@ -246,7 +246,7 @@ export function RoadmapContextMenu({
         icon: isMember ? BookmarkX : BookmarkPlus,
         hint: isMember
           ? "Unpin — the Members toggle stops showing it."
-          : "Pin to this roadmap's curated set — the Members toggle shows only pinned items.",
+          : "Pin to this roadmap's curated set — the Members toggle shows only pinned issues.",
         onSelect: () => onToggleMember(item.id, !isMember),
       });
     }

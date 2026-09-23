@@ -76,8 +76,8 @@ export function CompleteCycleModal({ cycle, openCount, onClose }: Props) {
         <p className="text-[13px] text-fg-secondary">
           {openCount !== undefined
             ? `${openCount} open ${openCount === 1 ? "item" : "items"} (not done) will be moved.`
-            : "Open items (not done) will be moved."}{" "}
-          Completed items stay in this cycle for reporting.
+            : "Open issues (not done) will be moved."}{" "}
+          Completed issues stay in this cycle for reporting.
         </p>
 
         <TextField label="Find a destination cycle" value={directory.filter}
@@ -85,7 +85,7 @@ export function CompleteCycleModal({ cycle, openCount, onClose }: Props) {
           hint="Search starts with this series. Clear it to find other cycles; completed cycles are excluded." />
         {directory.isError && <ErrorText error={directory.error} />}
         <label className="flex flex-col gap-1 text-xs text-fg-secondary">
-          Move open items to
+          Move open issues to
           <Select
             value={target}
             aria-label="Destination cycle"

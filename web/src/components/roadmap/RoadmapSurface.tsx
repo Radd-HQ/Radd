@@ -704,7 +704,7 @@ export function RoadmapSurface({
             title={
               membersOnly
                 ? "Showing only this roadmap's pinned members (and their children) — click for everything."
-                : "Show only the items pinned to this roadmap."
+                : "Show only the issues pinned to this roadmap."
             }
             className={`flex h-7 items-center gap-1 rounded-md border px-2 text-xs cursor-pointer ${
               membersOnly
@@ -745,7 +745,7 @@ export function RoadmapSurface({
           type="button"
           onClick={onToggleShowClosed}
           aria-pressed={showClosed}
-          title="Done and canceled items are hidden — toggle to draw finished work alongside what is live."
+          title="Done and canceled issues are hidden — toggle to draw finished work alongside what is live."
           className={`flex h-7 items-center gap-1 rounded-md border px-2 text-xs cursor-pointer ${
             showClosed
               ? "border-accent/60 bg-accent/15 text-accent-text"
@@ -826,10 +826,10 @@ export function RoadmapSurface({
                 icon={GanttChartSquare}
                 message={
                   filtered
-                    ? "No scheduled items match this query."
+                    ? "No scheduled issues match this query."
                     : canUpdate
-                      ? "No scheduled items yet — set a start and target date on an item, or drop one here from the Unscheduled tray."
-                      : "No scheduled items yet — set a start and target date on an item to place it on the roadmap."
+                      ? "No scheduled issues yet — set a start and target date on an issue, or drop one here from the Unscheduled tray."
+                      : "No scheduled issues yet — set a start and target date on an issue to place it on the roadmap."
                 }
               />
             </div>

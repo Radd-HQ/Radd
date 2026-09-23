@@ -192,7 +192,7 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
       {
         // Deploy status (spec 50; status-only since spec 67).
         to: RoutePath.settingsInstance,
-        label: "Overview",
+        label: "Server status",
         icon: Server,
         show: (g) => g.instanceAdmin,
       },

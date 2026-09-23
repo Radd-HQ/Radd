@@ -134,7 +134,7 @@ export function ProvidersPanel() {
         </h2>
         <Button size="sm" variant="ghost" onClick={() => setAdding(true)}>
           <Plus className="size-3.5" />
-          Add provider
+          New provider
         </Button>
       </div>
 
@@ -147,7 +147,7 @@ export function ProvidersPanel() {
           action={
             <Button size="sm" onClick={() => setAdding(true)}>
               <Plus className="size-3.5" />
-              Add provider
+              New provider
             </Button>
           }
         />

@@ -135,7 +135,7 @@ function PanelBody({ itemKey }: { itemKey: string }) {
   useEffect(() => {
     if (isError) removeRecentItem(itemKey);
   }, [isError, itemKey]);
-  if (isPending) return <Spinner label="Loading item…" />;
+  if (isPending) return <Spinner label="Loading issue…" />;
   if (isError || !project || !item) {
     // Not readable as an ISSUE — but it may still be a request this person
     // filed, or one shared with their team (RADD-803). A requester holds no

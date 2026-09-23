@@ -32,7 +32,7 @@ export const TITLE_COLUMN_ID = "title";
 const TITLE_MAX_WIDTH = 880;
 export const TITLE_COLUMN: ColumnDef = {
   id: TITLE_COLUMN_ID,
-  label: "Item",
+  label: "Issue",
   width: 360,
   minWidth: 240,
 };

@@ -102,7 +102,7 @@ export function Sidebar() {
   // Spec 121: dashboards are an account's surface; a visitor's rail skips the fetch.
   const authenticated = useIsAuthenticated();
   const dashboards = useDashboardDirectory(authenticated);
-  /** Project the "New item" modal was opened for (from its sidebar row). */
+  /** Project the "New issue" modal was opened for (from its sidebar row). */
   const [newItemProject, setNewItemProject] = useState<Project | null>(null);
   const [viewModalScope, setViewModalScope] = useState<ViewModalScope | null>(null);
   // RADD-1133: on an instance with NO projects the section used to vanish, and
@@ -238,7 +238,7 @@ export function Sidebar() {
         {nav.portal && (
           <Link to={RoutePath.portal} className={navLinkClasses}>
             <ConciergeBell size={14} aria-hidden />
-            Submission Portal
+            Portal
           </Link>
         )}
 

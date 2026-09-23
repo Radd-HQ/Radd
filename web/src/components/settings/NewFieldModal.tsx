@@ -146,7 +146,7 @@ export function NewFieldModal({ onClose, allowGlobal, onCreated }: NewFieldModal
         </div>
 
         <p className="text-xs text-fg-muted">
-          New fields start open to everyone with item access — restrict them per role/team from
+          New fields start open to everyone with issue access — restrict them per role/team from
           the field’s Restricted on section after creating.
         </p>
 
@@ -178,7 +178,7 @@ export function NewFieldModal({ onClose, allowGlobal, onCreated }: NewFieldModal
               onChange={setDefaultValue}
             />
             <p className="mt-1 text-[11px] text-fg-faint">
-              Seeded onto new items when this field is left blank on create.
+              Seeded onto new issues when this field is left blank on create.
             </p>
           </div>
         )}

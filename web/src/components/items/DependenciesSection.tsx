@@ -160,7 +160,7 @@ function AddLinkRow({
     const numberPart = trimmed.includes("-") ? trimmed.slice(trimmed.lastIndexOf("-") + 1) : trimmed;
     const targetNumber = Number(numberPart);
     if (!Number.isInteger(targetNumber) || targetNumber <= 0) {
-      setLocalError("Enter an item number or key, e.g. 23 or TD-23.");
+      setLocalError("Enter an issue number or key, e.g. 23 or TD-23.");
       return;
     }
     submitBody({ target_number: targetNumber, link_type: activeType });

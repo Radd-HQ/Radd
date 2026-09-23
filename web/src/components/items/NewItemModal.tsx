@@ -323,7 +323,7 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
   };
 
   return (
-    <Modal title={`New item in ${project.key}`} onClose={onClose} wide>
+    <Modal title={`New issue in ${project.key}`} onClose={onClose} wide>
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
         <TextField
           label="Title"
@@ -636,7 +636,7 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
                 : "Creating…"
               : governed
                 ? "Validate & create"
-                : "Create item"}
+                : "Create issue"}
           </Button>
         </div>
       </form>

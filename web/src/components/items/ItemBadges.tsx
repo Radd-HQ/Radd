@@ -151,12 +151,23 @@ export function PublicProjectChip() {
 export function VisibilityChip({
   visibility,
   isPublicProject,
+  iconOnly = false,
 }: {
   visibility: ItemVisibilityValue;
   isPublicProject: boolean;
+  /** RADD-1287: beside a select that already names it, the chip is just the glyph
+   *  (like the rail's state/priority chips) — not a second copy of the same word. */
+  iconOnly?: boolean;
 }) {
   const meta = VISIBILITY_META[visibility];
   const Icon = meta.icon;
+  if (iconOnly) {
+    return (
+      <span title={meta.description} className="inline-flex size-5 items-center justify-center rounded-md border border-subtle bg-surface text-fg-secondary">
+        <Icon size={12} aria-hidden />
+      </span>
+    );
+  }
   return (
     <span
       title={meta.description}
@@ -272,7 +283,7 @@ export function StatePill({ state }: { state: StateRef }) {
   );
 }
 
-/** Target-date chip; tinted red once overdue (pass `overdue` from the item's state). */
+/** Target-date chip; tinted red once overdue (pass `overdue` from the issue's state). */
 export function DueBadge({ date, overdue }: { date: string; overdue: boolean }) {
   return (
     <span

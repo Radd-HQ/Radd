@@ -167,7 +167,7 @@ export function ProviderDialog({
     <Modal
       wide
       onClose={onClose}
-      title={editing ? `Edit ${existing.name}` : "Add a sign-in provider"}
+      title={editing ? `Edit ${existing.name}` : "New sign-in provider"}
     >
       <form onSubmit={submit} className="flex flex-col gap-4">
         {!editing && (
@@ -317,7 +317,7 @@ export function ProviderDialog({
             Cancel
           </Button>
           <Button type="submit" disabled={save.isPending}>
-            {save.isPending ? "Saving…" : editing ? "Save" : "Add provider"}
+            {save.isPending ? "Saving…" : editing ? "Save" : "Create provider"}
           </Button>
         </div>
         {existing && <ChangeHistoryPanel entityType="sso_provider" entityId={existing.id} />}

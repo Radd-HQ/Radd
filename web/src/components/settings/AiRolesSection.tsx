@@ -199,7 +199,7 @@ function RoleRow({
   );
 }
 
-/** The backfill's progress line ("2,314 / 2,400 items embedded"), admin-only. */
+/** The backfill's progress line ("2,314 / 2,400 issues embedded"), admin-only. */
 function EmbeddingCoverageLine({ assigned }: { assigned: boolean }) {
   const coverage = useQuery({
     queryKey: queryKeys.aiEmbeddingCoverage,

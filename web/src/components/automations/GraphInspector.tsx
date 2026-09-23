@@ -216,11 +216,11 @@ export function GraphInspector({
 
       {node.kind === NodeKind.filter && (
         <TextField
-          label="Match items where"
+          label="Match issues where"
           value={String(node.params.slq ?? "")}
           onChange={(event) => setParams({ ...node.params, slq: event.target.value })}
           placeholder="priority = high AND state != Done"
-          hint="SLQ. Items that match leave on the green port; the rest leave on the grey one."
+          hint="SLQ. Issues that match leave on the green port; the rest leave on the grey one."
         />
       )}
 
@@ -252,7 +252,7 @@ export function GraphInspector({
             }}
             hint={
               node.params.event === SCHEDULE_TRIGGER
-                ? "Runs on a clock, with no items of its own — wire a Find issues node after it to select what each run acts on."
+                ? "Runs on a clock, with no issues of its own — wire a Find issues node after it to select what each run acts on."
                 : "The event that starts this automation."
             }
           >

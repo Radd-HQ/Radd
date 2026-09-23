@@ -40,7 +40,7 @@ export function SourcesPanel() {
         </div>
         <Button onClick={() => setEditing("new")}>
           <Plus size={14} aria-hidden />
-          Add source
+          New source
         </Button>
       </div>
 

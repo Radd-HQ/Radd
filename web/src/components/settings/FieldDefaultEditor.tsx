@@ -45,7 +45,7 @@ export function FieldDefaultEditor({ field, canManage }: { field: FieldDef; canM
           : <CustomFieldControl field={control} value={draft} onChange={setDraft} />}
       </fieldset>
       <p className="mt-1 text-[11px] text-fg-faint">
-        Seeded onto new items when this field is left blank on create.
+        Seeded onto new issues when this field is left blank on create.
       </p>
       {canManage && (
         <div className="mt-2 flex items-center gap-2">

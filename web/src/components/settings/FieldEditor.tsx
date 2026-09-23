@@ -72,7 +72,7 @@ function FieldDetail({
             onClick={() =>
               void confirm({
                 title: "Delete field",
-                message: `Delete the "${field.name}" field? Its values stay on items but stop rendering.`,
+                message: `Delete the "${field.name}" field? Its values stay on issues but stop rendering.`,
                 confirmLabel: "Delete",
                 danger: true,
               }).then((ok) => {

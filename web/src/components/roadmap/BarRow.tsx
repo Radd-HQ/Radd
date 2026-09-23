@@ -313,7 +313,7 @@ export function BarRow({
             title={
               isMember
                 ? "Pinned to this roadmap — click to remove"
-                : "Pin to this roadmap (curated membership — the Members toggle shows only pinned items)"
+                : "Pin to this roadmap (curated membership — the Members toggle shows only pinned issues)"
             }
             className={`shrink-0 rounded p-px focus-visible:outline-2 focus-visible:outline-focus cursor-pointer ${
               isMember

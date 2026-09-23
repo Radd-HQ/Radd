@@ -7,7 +7,7 @@
  * from a list here: a default that disagrees with the engine is invisible,
  * because nothing fails to compile.
  *
- * The cost is stated because per-item is where it lands. "Once per item" on a
+ * The cost is stated because per-item is where it lands. "Once per issue" on a
  * scheduled run over a broad query is the difference between one Slack message
  * and two hundred, and nothing else on the canvas says so.
  */
@@ -27,8 +27,8 @@ interface ArityFieldProps {
 }
 
 const COPY: Record<NodeArityValue, { label: string; cost: string }> = {
-  [NodeArity.set]: { label: "Once for all items", cost: "one run" },
-  [NodeArity.item]: { label: "Once per item", cost: "one run each" },
+  [NodeArity.set]: { label: "Once for all issues", cost: "one run" },
+  [NodeArity.item]: { label: "Once per issue", cost: "one run each" },
 };
 
 export function ArityField({ rule, value, forced, onChange }: ArityFieldProps) {
@@ -71,7 +71,7 @@ export function ArityField({ rule, value, forced, onChange }: ArityFieldProps) {
       <p className="text-[11px] text-fg-muted">
         {forced?.reason ??
           (current === NodeArity.item
-            ? "Fires once for every item that reaches it — capped per run, and the dry run shows the real count."
+            ? "Fires once for every issue that reaches it — capped per run, and the dry run shows the real count."
             : "Fires once, however many items reach it. Item tokens are blank unless exactly one arrives; use {{items.keys}}.")}
       </p>
     </fieldset>

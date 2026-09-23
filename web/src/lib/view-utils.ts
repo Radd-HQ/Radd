@@ -251,7 +251,7 @@ export function groupItemsForView(
     case ViewAxis.epic:
       return groupByEpic(items);
     default:
-      return [{ key: axis, label: "All items", items }];
+      return [{ key: axis, label: "All issues", items }];
   }
 }
 

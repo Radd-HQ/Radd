@@ -42,10 +42,10 @@ export function IssueTypesSettingsPage({ projectId }: { projectId?: string }) {
   return (
     <SettingsPage history={{ entities: ["issue_type"], projectId }}
       title="Issue types"
-      description="The classification of an item (Bug, Task, Story…). Separate from the epic/issue/subtask hierarchy. New items get the default type."
+      description="The classification of an issue (Bug, Task, Story…). Separate from the epic/issue/subtask hierarchy. New issues get the default type."
       info={
         <>
-          Issue types classify <em>what an item is</em> — a Bug, a Task, a Story. They're a
+          Issue types classify <em>what an issue is</em> — a Bug, a Task, a Story. They're a
           separate axis from the epic/issue/subtask hierarchy, so a Bug and a Story can both be
           issues. Pick a color; it renders as a chip on boards, lists, and the issue view.
         </>
@@ -245,7 +245,7 @@ function TypeRow({
             </button>
           )}
           <span className="ml-auto text-[11px] text-fg-faint">
-            Markdown — prefilled into new items of this type.
+            Markdown — prefilled into new issues of this type.
           </span>
         </div>
       </div>

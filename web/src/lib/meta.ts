@@ -98,13 +98,15 @@ export interface VisibilityMeta {
 export const VISIBILITY_META: Record<ItemVisibilityValue, VisibilityMeta> = {
   [ItemVisibility.public]: {
     label: "Public",
-    privateLabel: "Normal",
+    // RADD-1287: in a private project public and members-only are the same
+    // audience — say who that is rather than inventing a third word.
+    privateLabel: "Project members",
     description: "Anyone who can read the project — the world, if the project is public.",
     icon: Globe,
   },
   [ItemVisibility.internal]: {
     label: "Members only",
-    privateLabel: "Normal",
+    privateLabel: "Project members",
     description: "Members of the project. Hidden from the world even in a public project.",
     icon: Users,
   },
@@ -222,7 +224,7 @@ export const NO_KIND_ICON: LucideIcon = CircleDashed;
  * Guarded = the transitions list adds checks to the moves it covers;
  * Strict = the list is the complete map of allowed moves. */
 export const TRANSITION_MODE_LABELS: Record<string, string> = {
-  off: "Off — anyone can move items to any state",
+  off: "Off — anyone can move issues to any state",
   guards: "Guarded — moves listed below must meet their conditions; other moves stay free",
   strict: "Strict — ONLY the moves listed below are possible, each meeting its conditions",
 };
@@ -232,6 +234,12 @@ export const TRANSITION_MODE_LABELS: Record<string, string> = {
  * `choices` carries the wire values). */
 export const SETTING_CHOICE_LABELS: Record<string, Record<string, string>> = {
   workflow_transition_mode: TRANSITION_MODE_LABELS,
+  // RADD-1287: the same words the issue view uses, not the wire values.
+  item_default_visibility: {
+    public: "Public — anyone who can read the project",
+    internal: "Members only — hidden from the world in a public project",
+    restricted: "Restricted — only the reporter, assignee and participants",
+  },
 };
 
 /** Field-type display labels + form ordering (settings/fields, spec 04 Phase 3). */
@@ -455,12 +463,12 @@ export const ACTION_TYPE_LABELS: Record<ActionTypeValue, string> = {
   [ActionType.setEstimate]: "Set estimate",
   [ActionType.setFlag]: "Flag / unflag",
   [ActionType.setVisibility]: "Set visibility",
-  [ActionType.linkItem]: "Link to item",
+  [ActionType.linkItem]: "Link to issue",
   [ActionType.archiveItem]: "Archive / restore",
   [ActionType.addWatcher]: "Add watcher",
   [ActionType.addParticipant]: "Add participant",
   [ActionType.moveToProject]: "Move to project",
-  [ActionType.createItem]: "Create item",
+  [ActionType.createItem]: "Create issue",
   [ActionType.sendWebhook]: "Send webhook",
   [ActionType.postChat]: "Post to chat",
   [ActionType.notifyUser]: "Notify user",

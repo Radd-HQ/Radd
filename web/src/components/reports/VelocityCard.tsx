@@ -53,7 +53,7 @@ export function VelocityCard({
       description={
         rows.length > 0
           ? `${inPoints ? "Points" : "Completed"} per cycle — avg ${average}`
-          : "Completed items per finished cycle"
+          : "Completed issues per finished cycle"
       }
       note={<ScopeNote scope={query.data?.scope} />}
       controls={

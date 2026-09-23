@@ -577,7 +577,7 @@ export function ViewPage() {
   const canCreate = Boolean(project) && perms.project(project, Permission.itemCreate);
   // Board quick-add (spec-24 axis semantics, reversed): the + / "Add issue"
   // affordances seed the modal with the column's bucket value. Cleared on
-  // every other entry path so a plain "New item" never inherits a column.
+  // every other entry path so a plain "New issue" never inherits a column.
   const [createInitial, setCreateInitial] = useState<BucketCreatePreset | undefined>();
   const openCreate = useCallback((initial?: BucketCreatePreset) => {
     setCreateInitial(initial);
@@ -680,7 +680,7 @@ export function ViewPage() {
 
   const columns: ViewGroup[] = useMemo(() => {
     if (!view) return [];
-    if (!columnAxis) return [{ key: FLAT_GROUP_KEY, label: "All items", items: orderedItems }];
+    if (!columnAxis) return [{ key: FLAT_GROUP_KEY, label: "All issues", items: orderedItems }];
     if (isPlanning) return planningGroups(planning, sprintItems.items, recoveryItems.items,
       pagedItems.data ?? [], historyItems.items, cycles.data, planningOptions,
       Boolean(fetchQueryView?.query.trim()), recoveryItems.total, totalCount ?? undefined,
@@ -766,7 +766,7 @@ export function ViewPage() {
       !projectScoped &&
       item.state.name !== bucket.key
     ) {
-      // Name-keyed drop that couldn't resolve: the item's project has no state
+      // Name-keyed drop that couldn't resolve: the issue's project has no state
       // of that name — say so instead of silently snapping the card back.
       pushToast(`${item.key.split("-")[0]} has no "${bucket.label}" state`);
     }
@@ -1179,7 +1179,7 @@ export function ViewPage() {
       {isPlanning && (itemsTotal.isError || openSprintCount.isError || recoveryItems.countError) && <p role="status" className="px-4 py-2 text-xs text-fg-muted">Some Planning counts are unavailable. Displayed rows may still be used.</p>}
       {isPlanning && updateBucketOrder.isError && <p role="alert" className="px-4 py-2 text-sm text-fg-muted">Could not save sprint visibility. {errorMessage(updateBucketOrder.error)}</p>}
       {items.isPending ? (
-        <Spinner label="Loading items…" />
+        <Spinner label="Loading issues…" />
       ) : items.isError ? (
         <div className="p-10">
           <QueryError label="items" error={items.error} />
@@ -1227,7 +1227,7 @@ export function ViewPage() {
         />
       ) : pageItems.length === 0 && !cycleGrouped && !isGrouped && !isBoard ? (
         <p className="p-10 text-center text-sm text-fg-faint">
-          {slqFilter.active ? "No items match this query." : "No items match this view."}
+          {slqFilter.active ? "No issues match this query." : "No issues match this view."}
         </p>
       ) : (
         // The scale slider zooms the whole item surface (rows/cards, not chrome).

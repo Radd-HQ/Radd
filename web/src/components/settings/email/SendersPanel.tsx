@@ -38,7 +38,7 @@ export function SendersPanel() {
         </div>
         <Button onClick={() => setEditing("new")}>
           <Plus size={14} aria-hidden />
-          Add sender
+          New sender
         </Button>
       </div>
 

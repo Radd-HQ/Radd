@@ -296,7 +296,7 @@ export function ScheduleEditor({
         <strong className="font-medium text-fg-secondary">
           A schedule can create issues:
         </strong>{" "}
-        add a <em>Create item</em> action and it runs once per occurrence — recurring maintenance
+        add a <em>Create issue</em> action and it runs once per occurrence — recurring maintenance
         tickets, periodic reviews, and the like. With a filter, item actions apply to every issue
         it matches (max 200, rank order).
       </p>

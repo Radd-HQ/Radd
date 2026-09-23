@@ -34,13 +34,13 @@ export function ThroughputCard({
   return (
     <ReportCard
       title="Throughput"
-      description={`Items completed per ${interval} — ${total} in range`}
+      description={`Issues completed per ${interval} — ${total} in range`}
     >
       <CardBody
         pending={query.isPending}
         error={query.isError ? errorMessage(query.error) : null}
         empty={total === 0}
-        emptyMessage="No items completed in this range."
+        emptyMessage="No issues completed in this range."
       >
         <BarChart data={data} color={CHART_ACCENT_COLOR} ariaLabel="Throughput per bucket" />
       </CardBody>

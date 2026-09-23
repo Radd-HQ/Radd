@@ -103,7 +103,7 @@ export function FieldOptionsSection({ field, canManage }: { field: ManagedField;
           </div>
           {add.isError && <ErrorText error={add.error} />}
           <p className="text-[11px] text-fg-faint">
-            Adding an option is always safe. Removing one asks where its items should go
+            Adding an option is always safe. Removing one asks where its issues should go
             first. Renaming is not offered — every saved view, automation and form that
             names the old value would keep compiling and match nothing.
           </p>
@@ -170,16 +170,16 @@ function RemoveOptionDialog({
       <div className="flex flex-col gap-3">
         <p className="text-[13px] text-fg-secondary">
           {usage.isError ? "The usage count could not be loaded. Retry before removing this option." : count === undefined
-            ? "Counting the items that use it…"
+            ? "Counting the issues that use it…"
             : count === 0
-              ? "No items use this option. A saved default using it will also be updated."
+              ? "No issues use this option. A saved default using it will also be updated."
               : multi
-                ? `${count} item${count === 1 ? "" : "s"} list this option. It will be removed from each of them; the rest of their selections stay.`
-                : `${count} item${count === 1 ? "" : "s"} hold this option. Choose where they go.`}
+                ? `${count} issue${count === 1 ? "" : "s"} list this option. It will be removed from each of them; the rest of their selections stay.`
+                : `${count} issue${count === 1 ? "" : "s"} hold this option. Choose where they go.`}
         </p>
 
         {!multi && (field.required || count !== 0) && <div className="space-y-2">
-          <p className="text-xs text-fg-secondary">Move those items to</p>
+          <p className="text-xs text-fg-secondary">Move those issues to</p>
           <Button variant="secondary" className="h-auto min-h-9 max-w-full" aria-haspopup="dialog" onClick={() => setChoosing(true)}>
             <span className="min-w-0 break-words [overflow-wrap:anywhere]">{replaceWith ?? (field.required ? "Choose replacement option" : "Leave empty")}</span>
           </Button>

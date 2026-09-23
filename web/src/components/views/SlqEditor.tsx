@@ -210,7 +210,7 @@ function ProbeStatusLine({ probe, compact }: { probe: SlqProbe; compact: boolean
     case SlqProbeStatus.idle:
       // The ad-hoc bar needs no hint while inactive; the modal editor does.
       return compact ? null : (
-        <p className="text-xs text-fg-faint">Empty query — matches every item in scope.</p>
+        <p className="text-xs text-fg-faint">Empty query — matches every issue in scope.</p>
       );
     case SlqProbeStatus.checking:
       return (
@@ -233,8 +233,8 @@ function ProbeStatusLine({ probe, compact }: { probe: SlqProbe; compact: boolean
           {probe.count === undefined
             ? "Query is valid"
             : probe.atCap
-              ? `${probe.count}+ items match`
-              : `${probe.count} ${probe.count === 1 ? "item matches" : "items match"}`}
+              ? `${probe.count}+ issues match`
+              : `${probe.count} ${probe.count === 1 ? "issue matches" : "issues match"}`}
         </p>
       );
     case SlqProbeStatus.invalid:

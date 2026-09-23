@@ -31,15 +31,15 @@ export const SLQ_BUILTIN_FIELDS: readonly SlqFieldHelp[] = [
   { field: "cycle", values: "cycle name | none", example: 'cycle = "PIPE - 115"' },
   {
     field: "past_cycle",
-    values: "cycle name | none (cycles the item LEFT — carryovers)",
+    values: "cycle name | none (cycles the issue LEFT — carryovers)",
     example: "past_cycle IS NOT EMPTY",
   },
   { field: "label", values: "label name (= has, != lacks, IN = has any)", example: "label IN (urgent, blocked)" },
   { field: "title", values: "text (~ = contains, case-insensitive)", example: 'title ~ "render farm"' },
-  { field: "key", values: "item key", example: "key = TD-12" },
+  { field: "key", values: "issue key", example: "key = TD-12" },
   { field: "parent", values: "parent key | none", example: "parent = TD-3" },
   { field: "epic", values: "epic key | none — an epic counts as its own (also epic.state/category/assignee/priority + the parent.* twins)", example: 'epic.state = "In Progress"' },
-  { field: "number", values: "item number", example: "number > 100" },
+  { field: "number", values: "issue number", example: "number > 100" },
   { field: "created", values: "YYYY-MM-DD | today±Nd/Nw", example: "created >= today-2w" },
   { field: "updated", values: "YYYY-MM-DD | today±Nd/Nw", example: "updated < 2026-07-01" },
   { field: "target", values: "YYYY-MM-DD | today±Nd/Nw", example: "target <= today+3d" },
@@ -67,7 +67,7 @@ export const SLQ_VALUE_NOTES: readonly string[] = [
   "Bare words need no quotes; use 'single' or \"double\" quotes for spaces.",
   "Keywords are case-insensitive; field names are case-sensitive.",
   "me = the current user (assignee); none = unset relation (≡ IS EMPTY).",
-  "!= and NOT IN on a relation (assignee, team, cycle, epic.…, parent.…) also match items that have none — = and != always split the set.",
+  "!= and NOT IN on a relation (assignee, team, cycle, epic.…, parent.…) also match issues that have none — = and != always split the set.",
 ];
 
 export const SLQ_EXAMPLES: readonly string[] = [

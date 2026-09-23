@@ -103,7 +103,7 @@ export function Pager({
         <ChevronLast size={13} aria-hidden />
       </button>
       {!compact && total != null && (
-        <span className="ml-2 text-xs text-fg-faint">{total.toLocaleString()} items</span>
+        <span className="ml-2 text-xs text-fg-faint">{total.toLocaleString()} issues</span>
       )}
       {!compact && pageSize !== undefined && pageSizes && onPageSize && (
         <span className="ml-2 flex items-center gap-1 text-xs text-fg-faint" data-page-size>

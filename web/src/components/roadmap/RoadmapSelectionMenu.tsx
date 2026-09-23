@@ -59,7 +59,7 @@ export function RoadmapSelectionMenu({
     kind: "action",
     label: `Clear dates on ${n} ${plural}`,
     icon: CalendarX,
-    hint: "Every selected item returns to the Unscheduled tray.",
+    hint: "Every selected issue returns to the Unscheduled tray.",
     onSelect: () =>
       onPatch(
         items.map((item) => ({

@@ -39,7 +39,7 @@ export function LabelsSettingsPage() {
   return (
     <SettingsPage history={{ entities: ["label"] }}
       title="Labels"
-      description="Global labels, shared by issues and pages. Items also auto-create one on first use, which is why this list grows on its own."
+      description="Global labels, shared by issues and pages. Issues also auto-create one on first use, which is why this list grows on its own."
     >
       {labels.isPending ? (
         <TableSkeleton rows={4} />
@@ -48,7 +48,7 @@ export function LabelsSettingsPage() {
       ) : (
         <>
           {all.length === 0 ? (
-            <EmptyState icon={Tags} message="No labels yet — create one below or add one to an item." />
+            <EmptyState icon={Tags} message="No labels yet — create one below or add one to an issue." />
           ) : (
             <>
               {all.length > 8 && (

@@ -35,7 +35,7 @@ interface RuleTestPanelProps {
  *
  * It used to report one boolean and a flat list of actions — the shape of a
  * linear rule. A graph branches, so the questions people actually have are
- * "which items came out of my filter" and "why is this branch empty", and
+ * "which issues came out of my filter" and "why is this branch empty", and
  * neither was answerable: you could see that six actions would apply and not
  * which node produced them, or against which item.
  *
@@ -104,9 +104,9 @@ export function RuleTestPanel({ ruleId, triggers = [], nodes = [], onResult }: R
           onChange={(event) => setItemId(event.target.value)}
           // A search- or schedule-fed graph produces its OWN items, so no seed
           // is the correct input rather than a missing one.
-          hint="Optional — leave empty for a graph that finds its own items"
+          hint="Optional — leave empty for a graph that finds its own issues"
         >
-          <option value="">No item</option>
+          <option value="">No issue</option>
           {(items.data ?? []).map((item) => (
             <option key={item.id} value={item.id}>
               {item.key} — {item.title}
@@ -207,7 +207,7 @@ export function RunResultView({
             <p className="flex items-center gap-1.5 text-[13px]">
               <CircleSlash size={14} className="text-fg-muted" aria-hidden />
               <span className="text-fg-secondary">
-                {applied ? "No action reached an item on this run" : "Nothing would apply on this run"}
+                {applied ? "No action reached an issue on this run" : "Nothing would apply on this run"}
               </span>
             </p>
           )}

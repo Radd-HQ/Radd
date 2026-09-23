@@ -108,7 +108,7 @@ export function RuleChainPanel() {
         <h2 className={`${sectionHeadClasses} mb-0`}>Routing rules</h2>
         <Button onClick={() => setAdding(true)}>
           <Plus size={14} aria-hidden />
-          Add rule
+          New rule
         </Button>
       </div>
       <p className="mb-3 text-xs text-fg-muted">

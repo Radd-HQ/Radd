@@ -200,7 +200,7 @@ export function nodeTemplates(catalog: AutomationCatalog | undefined): NodeTempl
     key: "filter.slq",
     kind: NodeKind.filter,
     type: "filter.slq",
-    label: "Filter items (SLQ)",
+    label: "Filter issues (SLQ)",
     group: "Filters",
     keywords: "slq query where narrow matched unmatched branch condition if",
     params: { slq: "" },

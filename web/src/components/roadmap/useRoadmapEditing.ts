@@ -244,7 +244,7 @@ export function useRoadmapEditing(
           if (cascade.cascadedCount > 0) {
             const count = cascade.cascadedCount;
             onSuccess = () =>
-              pushToast(`Rescheduled ${count} dependent item${count === 1 ? "" : "s"}`);
+              pushToast(`Rescheduled ${count} dependent issue${count === 1 ? "" : "s"}`);
           }
         }
         applyPatches(patches, onSuccess, `Move ${row.item.key} + children`);
@@ -274,7 +274,7 @@ export function useRoadmapEditing(
           if (plan.cascadedCount > 0) {
             const count = plan.cascadedCount;
             onSuccess = () =>
-              pushToast(`Rescheduled ${count} dependent item${count === 1 ? "" : "s"}`);
+              pushToast(`Rescheduled ${count} dependent issue${count === 1 ? "" : "s"}`);
           }
         }
       }

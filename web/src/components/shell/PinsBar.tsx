@@ -295,10 +295,10 @@ function NewWorkItemButton() {
     ? routeProject.data : null;
   return <>
     <Button size="sm" onClick={() => direct ? setCreating(direct) : setChoosing(true)}
-      title={direct ? `New item in ${direct.key}` : "Choose a project for a new item"}>
-      <Plus size={13} aria-hidden />New item
+      title={direct ? `New issue in ${direct.key}` : "Choose a project for a new issue"}>
+      <Plus size={13} aria-hidden />New issue
     </Button>
-    {choosing && <ProjectPicker title="New item — choose a project" permission={Permission.itemCreate}
+    {choosing && <ProjectPicker title="New issue — choose a project" permission={Permission.itemCreate}
       onClose={() => setChoosing(false)} onSelect={project => { setChoosing(false); setCreating(project); }} />}
     {creating && <NewItemModal project={creating} onClose={() => setCreating(null)} />}
   </>;

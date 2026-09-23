@@ -240,11 +240,11 @@ export function TransitionsSection({
     <section className="mt-8">
       <h3 className="text-sm font-medium text-heading">Transitions</h3>
       <p className="mt-1 text-xs text-fg-muted">
-        Optional guards on state changes: each transition lists the conditions an item must
+        Optional guards on state changes: each transition lists the conditions an issue must
         meet (and the approvals it needs) before it may move, and can be scoped to specific
         issues via &quot;Applies when&quot;. A transition without a &quot;from&quot; applies
         from every state. Rows are checked top-down — the FIRST transition whose
-        &quot;Applies when&quot; matches the item governs its move (so put specific rows
+        &quot;Applies when&quot; matches the issue governs its move (so put specific rows
         above general ones; a row with no conditions above a general one is an exemption).
       </p>
       {/* Mode read/write requires project.manage (the scoped-settings gate). */}
@@ -491,7 +491,7 @@ function TransitionRow({
         canManage={canManage}
         pending={patch.isPending}
         label="Conditions"
-        emptyText="None — the move is not gated on item data."
+        emptyText="None — the move is not gated on issue data."
         addPrompt="+ Add a condition…"
         onChange={(conditions) => patchRules(rebuildRules(conditions, approval, flags))}
       />

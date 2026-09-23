@@ -45,8 +45,8 @@ export function SidebarProjectRow({ project, expanded, permissions, onToggle, on
                       <button
                         type="button"
                         onClick={onNewItem}
-                        aria-label={`New item in ${project.key}`}
-                        title={`New item in ${project.key}`}
+                        aria-label={`New issue in ${project.key}`}
+                        title={`New issue in ${project.key}`}
                         className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-1 text-fg-faint opacity-0 transition-opacity hover:bg-overlay hover:text-fg focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-focus group-hover/project:opacity-100 cursor-pointer"
                       >
                         <Plus size={12} />

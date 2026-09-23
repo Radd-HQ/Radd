@@ -201,7 +201,7 @@ export function ActionParams({ action, pickers, listId, onParams }: ActionParams
       return (
         <div className="flex flex-col gap-1">
           <OptionSelect resource={OptionResource.team} label="Round-robin across team" value={str(p.team)} onChange={team => set({ team })} />
-          <p className="text-xs text-fg-muted">Each item goes to the next member in turn, skipping anyone inactive or away.</p>
+          <p className="text-xs text-fg-muted">Each issue goes to the next member in turn, skipping anyone inactive or away.</p>
         </div>
       );
     case ActionType.addLabel:
@@ -259,7 +259,7 @@ export function ActionParams({ action, pickers, listId, onParams }: ActionParams
           label="Issue type"
           value={str(p.type)}
           placeholder="Bug"
-          hint="A type name in the item's project, or a {{token}}."
+          hint="A type name in the issue's project, or a {{token}}."
           onChange={value => set({ type: value })}
         />
       );
@@ -311,7 +311,7 @@ export function ActionParams({ action, pickers, listId, onParams }: ActionParams
           value={p.flagged === false ? "unflag" : "flag"}
           onChange={(event) => set({ flagged: event.target.value === "flag" })}
         >
-          <option value="flag">Flag the item</option>
+          <option value="flag">Flag the issue</option>
           <option value="unflag">Remove the flag</option>
         </SelectField>
       );
@@ -354,7 +354,7 @@ export function ActionParams({ action, pickers, listId, onParams }: ActionParams
           value={p.archived === false ? "restore" : "archive"}
           onChange={(event) => set({ archived: event.target.value === "archive" })}
         >
-          <option value="archive">Archive the item</option>
+          <option value="archive">Archive the issue</option>
           <option value="restore">Restore it from the archive</option>
         </SelectField>
       );
@@ -366,7 +366,7 @@ export function ActionParams({ action, pickers, listId, onParams }: ActionParams
             canBrowse={pickers.canChoosePeople}
             presets={[{ value: "assignee", label: "Its assignee", hint: "" }, { value: "reporter", label: "Its reporter", hint: "" }]}
             onChange={user => set({ user })} />
-          <p className="text-xs text-fg-muted">A role resolves against each item; an email names one person.</p>
+          <p className="text-xs text-fg-muted">A role resolves against each issue; an email names one person.</p>
         </div>
       );
     case ActionType.moveToProject:
@@ -438,7 +438,7 @@ export function ActionParams({ action, pickers, listId, onParams }: ActionParams
             canBrowse={pickers.canChoosePeople}
             presets={[{ value: "assignee", label: "Its assignee", hint: "" }, { value: "reporter", label: "Its reporter", hint: "" }]}
             onChange={user => set({ user })} />
-          <p className="text-xs text-fg-muted">A role notifies whoever holds it on each item.</p>
+          <p className="text-xs text-fg-muted">A role notifies whoever holds it on each issue.</p>
           <TextField
             label="Message"
             value={str(p.message)}

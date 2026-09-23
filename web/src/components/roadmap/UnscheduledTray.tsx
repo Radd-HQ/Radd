@@ -145,7 +145,7 @@ export function UnscheduledTray({
               }
             }}
             placeholder="Search titles… (Enter)"
-            aria-label="Search unscheduled items"
+            aria-label="Search unscheduled issues"
             className="h-6 w-full rounded-md border border-subtle bg-base pl-6 pr-6 text-[11px] text-fg placeholder:text-fg-faint focus:outline-2 focus:outline-focus"
           />
           {(searchInput || search) && (
@@ -173,7 +173,7 @@ export function UnscheduledTray({
       ) : visible.length === 0 ? (
         <p className="px-4 py-3 text-xs text-fg-faint">
           {search
-            ? "No unscheduled items match."
+            ? "No unscheduled issues match."
             : filter === TrayFilter.epics
               ? "No unscheduled epics."
               : "Everything has dates."}

@@ -192,7 +192,7 @@ function SlqCountCard({
   const q = widgetQuery(widget, filterQuery);
   const query = useQuery(itemsCountQuery(slqScope(widget), q));
   if (query.isError) return <UnavailableCard title={widget.title} />;
-  const label = widget.config.label || widget.title || "Matching items";
+  const label = widget.config.label || widget.title || "Matching issues";
   return (
     <div className="rounded-xl border border-subtle bg-surface px-4 py-4 shadow-lift">
       <p className="truncate text-[11px] uppercase tracking-wide text-fg-muted">{label}</p>

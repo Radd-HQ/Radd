@@ -203,7 +203,7 @@ function ConnectionModal({
   });
 
   return (
-    <Modal title={connection ? "Edit connection" : "Add a Confluence"} onClose={onClose}>
+    <Modal title={connection ? "Edit connection" : "New Confluence connection"} onClose={onClose}>
       <div className="flex flex-col gap-3">
         {save.isError && <QueryError label="save connection" error={save.error}/>}
         <TextField

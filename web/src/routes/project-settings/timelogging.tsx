@@ -50,7 +50,7 @@ export function ProjectTimeloggingSettingsPage({ projectId }: { projectId?: stri
             <h3 className="text-[13px] font-semibold text-heading">Working days</h3>
             <p className="mb-3 mt-0.5 text-xs text-fg-muted">
               Which days count as worked here. The timesheet flags under- and over-logged
-              days against this, and business-day SLA targets resolve it per item project.
+              days against this, and business-day SLA targets use each issue's project.
             </p>
             <ScopedSettingsEditor
               scope={SettingScope.project}

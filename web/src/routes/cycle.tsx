@@ -180,12 +180,12 @@ export function CyclePage() {
 
       <div className="flex-1 overflow-y-auto px-6 py-5">
         {items.isPending ? (
-          <Spinner label="Loading items…" />
+          <Spinner label="Loading issues…" />
         ) : items.isError ? (
           <QueryError label="cycle items" error={items.error} />
         ) : visibleItems.length === 0 ? (
           <EmptyState icon={CalendarRange} message={slqFilter.committed || assigneeFilter || teamFilter
-            ? "No items match these filters." : "No items on this page. Assign items to this cycle from their detail page."} />
+            ? "No issues match these filters." : "No issues on this page. Assign issues to this cycle from their detail page."} />
         ) : (
           <div className="flex flex-col gap-6">
             {groups.map((group) => (

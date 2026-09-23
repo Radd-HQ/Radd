@@ -323,13 +323,13 @@ function BulkMoveDialog({
 }) {
   const [target, setTarget] = useState<Project | null>(null);
   return (
-    <Modal title={`Move ${count} item${count === 1 ? "" : "s"} to another project`} onClose={onClose}>
+    <Modal title={`Move ${count} issue${count === 1 ? "" : "s"} to another project`} onClose={onClose}>
       <div className="space-y-4">
         <p className="text-xs leading-relaxed text-fg-secondary">
-          Items are re-keyed by the target project's counter (old keys keep
+          Issues are re-keyed by the target project's counter (old keys keep
           redirecting). States and types map by name, releases are cleared, and
-          custom fields the target doesn't define are dropped. Items keep their
-          parent/child links — select sub-items too if they should move along.
+          custom fields the target doesn't define are dropped. Issues keep their
+          parent/child links — select subtasks too if they should move along.
         </p>
         <ProjectSelect label="Target project" value={target?.id ?? ""}
           onChange={(_id, project) => setTarget(project)} permission={Permission.itemCreate} disabled={pending} />
@@ -338,7 +338,7 @@ function BulkMoveDialog({
             Cancel
           </Button>
           <Button disabled={!target || pending} onClick={() => target && onMove(target)}>
-            {pending ? "Moving…" : "Move items"}
+            {pending ? "Moving…" : "Move issues"}
           </Button>
         </div>
       </div>

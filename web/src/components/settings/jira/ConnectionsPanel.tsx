@@ -96,7 +96,7 @@ export function ConnectionsPanel() {
           </p>
         </div>
         <Button size="sm" onClick={() => setAdding(true)}>
-          Add connection
+          New connection
         </Button>
       </header>
 
@@ -327,7 +327,7 @@ function ConnectionModal({
     (!isBasic || form.username.trim() !== "");
 
   return (
-    <Modal title={isEdit ? `Edit ${connection.name}` : "Add a Jira connection"} onClose={onClose}>
+    <Modal title={isEdit ? `Edit ${connection.name}` : "New Jira connection"} onClose={onClose}>
       <div className="flex flex-col gap-3">
         <TextField
           label="Name"
@@ -397,7 +397,7 @@ function ConnectionModal({
             Cancel
           </Button>
           <Button onClick={() => save.mutate()} disabled={!canSave || save.isPending}>
-            {save.isPending ? "Saving…" : isEdit ? "Save" : "Add connection"}
+            {save.isPending ? "Saving…" : isEdit ? "Save" : "Create connection"}
           </Button>
         </div>
       </div>

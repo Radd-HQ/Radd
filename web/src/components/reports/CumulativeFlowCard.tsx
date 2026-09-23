@@ -48,12 +48,12 @@ export function CumulativeFlowCard({
   const isEmpty = bars.every((bar) => bar.segments.every((segment) => segment.value === 0));
 
   return (
-    <ReportCard title="Cumulative flow" description={`Items by state category, per ${interval}`}>
+    <ReportCard title="Cumulative flow" description={`Issues by state category, per ${interval}`}>
       <CardBody
         pending={query.isPending}
         error={query.isError ? errorMessage(query.error) : null}
         empty={isEmpty}
-        emptyMessage="No item activity in this range."
+        emptyMessage="No issue activity in this range."
       >
         <StackedBarChart bars={bars} ariaLabel="Cumulative flow by category" />
         <div className="mt-3">

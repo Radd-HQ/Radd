@@ -31,7 +31,7 @@ interface GenerateFieldsProps {
   params: Record<string, unknown>;
   /** The node's own JSON Schema, for the prompt + include controls — those ARE
    * shapes `SchemaFields` renders well, and duplicating them here would be two
-   * copies of "which parts of the item does the model see". */
+   * copies of "which parts of the issue does the model see". */
   schema: Record<string, unknown>;
   onChange: (params: Record<string, unknown>) => void;
 }

@@ -108,12 +108,12 @@ function GraphNode({ data, selected }: NodeProps) {
             data-node-arity={arity}
             title={
               arity === "item"
-                ? "Runs once for every item that reaches it"
-                : "Runs once, however many items reach it"
+                ? "Runs once for every issue that reaches it"
+                : "Runs once, however many issues reach it"
             }
             className="ml-auto shrink-0 rounded-[4px] border border-subtle px-1 py-px text-[9px] uppercase tracking-wide text-fg-muted"
           >
-            {arity === "item" ? "per item" : "once"}
+            {arity === "item" ? "per issue" : "once"}
           </span>
         )}
       </div>

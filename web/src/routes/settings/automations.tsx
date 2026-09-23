@@ -44,7 +44,7 @@ export function AutomationsSettingsPage() {
   return (
     <SettingsPage history={{ entities: ["automation_rule"] }}
       title="Automations"
-      description="Global rules that react to an item event, match an SLQ condition, and apply actions."
+      description="Global rules that react to an issue event, match an SLQ condition, and apply actions."
       actions={
         canManage && (
           <Button onClick={() => setEditing({ rule: null })}>
@@ -66,7 +66,7 @@ export function AutomationsSettingsPage() {
       ) : all.length === 0 ? (
         <EmptyState
           icon={Zap}
-          message="No automation rules yet — create one to react to item events."
+          message="No automation rules yet — create one to react to issue events."
         />
       ) : (
         <>

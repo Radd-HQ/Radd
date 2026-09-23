@@ -6,7 +6,7 @@
  * keeping it beside the canvas meant a bidirectional adapter and two sources of
  * truth for one automation.
  *
- * A new automation opens on a placed, selected "Item updated" trigger
+ * A new automation opens on a placed, selected "Issue updated" trigger
  * (RADD-1265). It used to open empty on the theory that seeding a node would
  * teach the wrong lesson about where nodes come from; what it taught instead
  * was nothing, because the first thing a person met was a blank canvas. The
