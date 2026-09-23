@@ -9,10 +9,7 @@ plugin = RaddPlugin(
     name="leave",
     core=False,  # optional feature module — disableable via the plugin manager
     description=(
-        "Leave + team holidays: users record their own absences (team stewards "
-        "cover for members, admins define per-team public holidays); the "
-        "timesheet renders leave days, and one /leave/current query powers the "
-        "app-wide dimmed-avatar indicator."
+        "Leave and team holidays, shown on the timesheet and beside people's names."
     ),
     depends_on=("auth", "teams", "events"),
     routers=(router,),

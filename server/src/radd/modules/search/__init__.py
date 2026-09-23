@@ -10,10 +10,7 @@ from . import mcptools
 plugin = RaddPlugin(
     name="search",
     consumer_names=(CONSUMER_NAME,),
-    description="Postgres full-text search over items (key/title/description/public "
-    "comments), maintained by an outbox indexer; GET /search for the palette + "
-    "GET /search/deflect for KB deflection (spec 66 — docs is a deferred, "
-    "feature-detected seam: it loads after search).",
+    description="Search across issues and pages.",
     depends_on=("events", "projects", "auth", "workflow", "items", "comments", "access", "fields", "teams"),
     weak_depends=("ai", "pages"),
     routers=(router,),

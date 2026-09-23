@@ -12,12 +12,7 @@ plugin = RaddPlugin(
     # project-scoped), and a minted-but-unenforced atom is the dead class it deleted.
     crud_resources=(CrudResourceSpec("sla", "global", "SLA policies", "global.manage"),),
     core=False,  # optional plugin — disableable via the plugin manager
-    description="SLA policies + timers (specs 30/63): first-match policy "
-    "resolution (priority + issue-type filters, position order), "
-    "response/resolution targets computed from the event-log state timeline, "
-    "pause states, business-hours windows (holidays pause the clock through the "
-    "kernel's non-working-days socket), breach events, and the list/board batch "
-    "endpoint.",
+    description="Service levels: response and resolution targets with timers and breach alerts.",
     depends_on=(
         "events",
         "projects",

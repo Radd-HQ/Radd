@@ -15,8 +15,7 @@ plugin = RaddPlugin(
         ),
         EventTypeSpec(LinkTypeEvent.DELETED, "Link type deleted", "Admin", trigger=False),
     ),
-    description="User-definable, scopeable issue link types (spec 91) — the catalog "
-    "items resolves link labels + symmetry through.",
+    description="Issue link types (blocks, duplicates, relates, or your own).",
     depends_on=("projects", "events", "auth"),
     weak_depends=("items",),
     routers=(router,),

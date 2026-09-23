@@ -41,13 +41,7 @@ plugin = RaddPlugin(
     # wipes import-time registration, and the manifest is what survives it.
     access_resources=(_VIEW_SPEC,),
     description=(
-        "Saved views (spec 10): named boards/lists/planning/queues over an SLQ "
-        "query with group_by/swimlane_by axes; personal or workspace-shared; "
-        "every read carries the composed GET /items query_string. POST "
-        "/views/counts (spec 64) batches per-view membership counts for the "
-        "sidebar queue badges. Every project ships with three plain seeded "
-        "views (Board/List/Planning) created by the project-created hook — "
-        "ordinary views, editable and deletable like any other."
+        "Saved views: boards, lists, planning and roadmaps over a query."
     ),
     depends_on=("projects", "workflow", "items", "fields", "auth", "events", "access", "groups", "teams"),
     routers=(router,),

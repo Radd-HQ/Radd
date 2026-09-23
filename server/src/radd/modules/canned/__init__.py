@@ -21,8 +21,7 @@ plugin = RaddPlugin(
             actions=("create", "read", "update", "delete"),
         ),
     ),
-    description="Canned responses: globally-managed comment snippets for the "
-    "service-desk reply flow (spec 30) + per-item {{token}} rendering (spec 66).",
+    description="Canned responses: reusable reply snippets for service-desk comments, with placeholders.",
     depends_on=("events", "projects", "auth", "items"),
     routers=(router,),
 )

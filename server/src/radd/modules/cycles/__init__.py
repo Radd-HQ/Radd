@@ -14,9 +14,7 @@ plugin = RaddPlugin(
         ),
     ),
     description=(
-        "Global cycles (iterations) spanning projects, with recurring "
-        "series (per-label auto-provisioned drafts) and a Jira-style complete flow. "
-        "Status (draft/upcoming/active/completed) is derived, never stored."
+        "Cycles (sprints) with dates and optional recurring series."
     ),
     depends_on=("projects", "auth", "events", "settings", "teams"),
     weak_depends=("items", "timelogging"),

@@ -6,11 +6,7 @@ plugin = RaddPlugin(
     name="monitoring",
     core=False,  # optional — disable it and the endpoint disappears
     description=(
-        "Operator monitoring (admin-only): DB health + size, approximate entity "
-        "counts, every background consumer's event-stream lag, and outbound mail "
-        "health — the data behind Settings → Monitoring. Embedding coverage stays "
-        "on the ai module (it serves its own endpoint, so the page composes that "
-        "one client-side)."
+        "Server health for admins: database, background workers and search coverage."
     ),
     depends_on=("auth", "events"),
     # RADD-1036: `mail_health` is mailintake's own seam — the aggregation lives

@@ -17,8 +17,7 @@ plugin = RaddPlugin(
     project_purges=(
         ProjectPurgeSpec(name="itemtypes", tables=("issue_types",), order=75),
     ),
-    description="Per-project issue types (Bug/Task/Story/…) — the classification axis, "
-    "orthogonal to the epic/issue/subtask hierarchy; seeds defaults on project creation (spec 51).",
+    description="Issue types (Bug, Task, Story…) per project.",
     depends_on=("projects", "events", "auth"),
     routers=(router,),
     event_types=(

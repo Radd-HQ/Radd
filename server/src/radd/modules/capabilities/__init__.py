@@ -13,7 +13,7 @@ from .router import router
 
 plugin = RaddPlugin(
     name="capabilities",
-    description="Aggregates every plugin's capability/status descriptor for /capabilities.",
+    description="Reports which features are available and configured on this server.",
     depends_on=("auth",),
     routers=(router,),
     # The default TaskBackend socket provider (spec 93 / A8, §6). A `celery` plugin

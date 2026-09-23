@@ -6,9 +6,7 @@ from .types import GroupEvent
 plugin = RaddPlugin(
     name="groups",
     description=(
-        "Directory groups (RADD-829): AD objects mirrored with their nesting. "
-        "A group is never local and a team is never directory-mirrored — a "
-        "local grouping is a Team; the directory's truth is a Group."
+        "Directory groups mirrored from Active Directory or LDAP, for granting access to whole groups."
     ),
     depends_on=("events", "auth"),
     weak_depends=("teams",),

@@ -7,7 +7,7 @@ from .types import WebLinkEvent
 
 plugin = RaddPlugin(
     name="weblinks",
-    description="External/related URL links (docs, designs, references) attached to work items.",
+    description="Related links on issues: docs, designs and other references.",
     depends_on=("projects", "auth", "events", "items"),
     routers=(router,),
     # RADD-1239: the Related links panel over MCP (list/add/remove by URL).

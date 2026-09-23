@@ -8,7 +8,7 @@ from .types import PluginEvent
 
 plugin = RaddPlugin(
     name="pluginmgr",
-    description="Plugin lifecycle manager: install/enable/disable/uninstall + installed_plugins.",
+    description="Installs, enables and disables plugins.",
     depends_on=("auth", "events"),
     weak_depends=("access",),
     routers=(router,),

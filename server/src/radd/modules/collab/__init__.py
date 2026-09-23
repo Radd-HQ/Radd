@@ -16,9 +16,7 @@ from .router import router
 plugin = RaddPlugin(
     name="collab",
     description=(
-        "Live co-editing of wiki pages: a per-page Yjs room over the y-websocket "
-        "protocol, presence via awareness, persisted CRDT state tagged with the page "
-        "version, and a write guard so nothing publishes over live work."
+        "Live co-editing of wiki pages, with presence."
     ),
     core=False,
     depends_on=("auth", "pages"),

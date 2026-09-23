@@ -90,10 +90,7 @@ plugin = RaddPlugin(
     consumer_names=("ai.embedder",),
     core=False,  # optional plugin — disableable via the plugin manager
     description=(
-        "Optional provider-agnostic AI: item summarize, similar-item duplicate "
-        "candidates (FTS-first, LLM rerank), NL->SLQ (spec 46), plus the provider "
-        "registry (spec 101): DB provider rows + chat/embeddings/vision roles, "
-        "env-seeded once. Dormant (404) while a feature's role is unconfigured."
+        "AI features: summaries, similar-issue suggestions, natural-language search and editor actions, using the providers you configure."
     ),
     event_types=(
         _admin_event(AiEvent.PROVIDER_CREATED, "AI provider created", "ai_provider"),
@@ -231,11 +228,7 @@ plugin = RaddPlugin(
             scopes=("instance",),
             label="AI intake checks",
             description=(
-                "Lets the `AI check` automation node review a submission against "
-                "a quality bar and report what falls short (spec 119). Needs the "
-                "chat role assigned. Nothing runs until an admin puts the node in "
-                "a validation graph, so this is the kill switch rather than the "
-                "opt-in; off, the node takes its `unavailable` port."
+                "Lets the AI check step in an automation review a submission against your quality bar and say what falls short. Needs a chat model under Settings → AI. It does nothing until an automation uses it, so this switch is for turning it off everywhere at once."
             ),
         ),
         SettingSpec(
@@ -245,13 +238,7 @@ plugin = RaddPlugin(
             scopes=("instance",),
             label="AI value generation",
             description=(
-                "Lets the `Generate with AI` automation node work out named "
-                "values about an item — a priority, a team, a sentence of "
-                "advice — which downstream actions read as {{tokens}} (spec "
-                "120). Needs the chat role assigned. Nothing runs until an "
-                "admin puts the node in a graph, so this is the kill switch "
-                "rather than the opt-in; off, the node takes its `unavailable` "
-                "port and every token that would have read it skips its action."
+                "Lets the Generate with AI step in an automation work out values about an issue — a priority, a team, a sentence of advice — for later steps to use. Needs a chat model under Settings → AI. It does nothing until an automation uses it, so this switch is for turning it off everywhere at once."
             ),
         ),
         SettingSpec(

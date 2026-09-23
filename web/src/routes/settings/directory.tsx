@@ -87,7 +87,7 @@ export function DirectorySettingsPage() {
   return (
     <SettingsPage history={{ entities: ["group", "user", "scoped_setting"] }}
       title="Directory"
-      description="One place for the LDAP/AD directory: automatic user sync from a search base, and group import/links. Connection details and secrets stay in environment variables."
+      description="Your LDAP or Active Directory: the connection, automatic user sync from a search base, and which directory groups link to teams."
     >
       {/* Reached via the Server page's LDAP/AD status row — no nav tab. */}
       <Link

@@ -17,9 +17,7 @@ from . import mcptools
 plugin = RaddPlugin(
     name="auth",
     description=(
-        "Users, sessions, personal access tokens, and roles as data (builtin + custom "
-        "permission sets, direct project membership). Spec 86: instance_role is the "
-        "role ladder; builtin global roles are ensured on startup."
+        "People, sign-in sessions, API tokens and roles."
     ),
     depends_on=("events", "projects"),
     # Spec 123: the project's public/contributions switches, with old → new.

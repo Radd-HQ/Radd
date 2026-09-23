@@ -35,11 +35,7 @@ plugin = RaddPlugin(
     nav_facts=(NavFactSpec(key="portal", resolve=portal.nav_portal_visible),),
     project_purges=(ProjectPurgeSpec(name="forms", tables=("forms",), order=20),),
     description=(
-        "Template-scoped intake forms (spec 17): capture structured intake against the "
-        "field registry and create a work item with defaults applied. Spec 62 adds the "
-        "RADD-828 removed the tokened public path — email ingest provisions a requester account instead. "
-        "Spec 73 adds portal sharing (form_shares grant rows, PUT /forms/{id}/sharing) "
-        "and the authenticated requester-portal directory under /portal/forms."
+        "Intake forms that create issues from a structured request."
     ),
     depends_on=("projects", "auth", "teams", "fields", "workflow", "labels", "cycles", "releases", "items", "events", "comments", "itemtypes"),
     weak_depends=("attachments", "automations"),

@@ -50,7 +50,7 @@ export function ProfileSettingsPage() {
         <h2 className="mb-1 text-sm font-semibold text-fg">Leave</h2>
         <p className="mb-4 text-xs text-fg-muted">
           Your absences show on the timesheet and dim your avatar everywhere while you're
-          away. Team-wide holidays are defined under Settings → Holidays.
+          away. Team-wide holidays are set under Settings → Time logging.
         </p>
         <MyLeaveSection />
       </section>
@@ -174,7 +174,7 @@ function ProfileForm({ user }: { user: Me }) {
             id="avatar-emoji"
             value={emoji}
             onChange={(event) => setEmoji(event.target.value)}
-            placeholder="🦊"
+            placeholder="None — your initials show"
             maxLength={16}
             className="h-8 rounded-md border border-strong bg-surface px-2.5 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
           />

@@ -38,13 +38,7 @@ plugin = RaddPlugin(
     access_resources=(_DASHBOARD_SPEC,),
     core=False,  # optional plugin — disableable via the plugin manager
     description=(
-        "Composable dashboards (spec 75): user-assembled widget grids over data "
-        "surfaces that ALREADY exist — the /reports/* endpoints, SLQ counts/lists "
-        "(GET /items/count, GET /items?q=), and POST /views/counts. The module "
-        "owns layout + ownership/sharing (the spec-57 view idiom verbatim: "
-        "owner + viewer|editor|owner grants + global_access, non-visible → "
-        "404); every widget FETCHES through the existing read APIs at render "
-        "time, so RBAC/visibility filtering is inherited, not reimplemented."
+        "Dashboards: widgets that chart and list your issues."
     ),
     depends_on=("events", "projects", "auth", "teams", "items", "cycles", "views", "reporting", "access", "groups"),
     routers=(router,),

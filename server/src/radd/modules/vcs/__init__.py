@@ -8,10 +8,7 @@ from .types import VcsEvent, VcsUserLinkEvent
 plugin = RaddPlugin(
     name="vcs",
     description=(
-        "Version-control references (branches, commits, MRs/PRs) linked to work items; "
-        "connector-populated dev panel. RADD-1258: the provider-neutral time-mirror seam "
-        "(`timemirror.py`) the connectors call to copy time logged on an MR/PR into the "
-        "linked issue's worklogs, plus the per-connection identity map and parked entries."
+        "Links from issues to branches, commits and pull requests in your code hosts."
     ),
     # RADD-1258: the `vcsconn.*` atoms moved here from forgejo — every connector's
     # administration gates on them, and vcs is the module that is always loaded.

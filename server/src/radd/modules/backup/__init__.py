@@ -14,11 +14,7 @@ from .router import router
 
 plugin = RaddPlugin(
     name="backup",
-    description="Scheduled and on-demand backups (spec 99): pg_dump + attachments "
-    "packed into an AES-256-GCM artifact in RADD_BACKUP_DIR, with list/download/"
-    "delete/upload, verified-on-write, retention, and a maintenance-mode restore. "
-    "The engine is radd/backup (core) so `python -m radd.backup restore` works on "
-    "an empty database, when there is no running app to click a button in.",
+    description="Scheduled and on-demand encrypted backups of the database and attachments, with restore.",
     depends_on=("auth", "events"),
     routers=(router,),
     on_startup=(scheduler.start,),

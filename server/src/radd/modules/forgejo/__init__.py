@@ -21,9 +21,7 @@ plugin = RaddPlugin(
     # Spec 111 declared the `vcsconn.*` atoms here; RADD-1258 moved them to `vcs`
     # (always loaded), since GitHub and GitLab gate on them too.
     core=False,  # optional plugin — disableable via the plugin manager
-    description="Forgejo/Gitea connector (specs 47, 111): hosts and repositories as rows, a "
-    "webhook receiver auto-linking branches/commits/PRs to items via the vcs seam, "
-    "and merge transitions.",
+    description="Forgejo and Gitea integration: links branches, commits and pull requests to issues and ships releases.",
     depends_on=("events", "projects", "auth", "workflow", "items", "vcs", "automations", "releases"),
     event_types=(
         _admin_event(ForgejoEvent.CONNECTION_CREATED, "Forgejo connection created", "forgejo_connection"),

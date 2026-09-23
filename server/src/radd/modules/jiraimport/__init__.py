@@ -29,9 +29,7 @@ plugin = RaddPlugin(
         _admin_event(JiraEvent.CONNECTION_DELETED, "Jira connection deleted"),
     ),
     core=False,  # optional plugin — disableable via the plugin manager
-    description="Jira import wizard (specs 90, 100): admin-managed Jira Server/DC "
-    "connections — list projects, run JQL, infer an inbound schema, map fields to "
-    "local custom fields, and run staged background imports.",
+    description="Imports projects, issues and history from Jira Server or Data Center, reversibly.",
     depends_on=("auth", "projects", "fields", "items", "workflow", "comments", "cycles", "attachments", "events", "itemtypes", "linktypes", "notify", "releases", "timelogging", "weblinks", "teams"),
     # Deferred + feature-detected: `apply.py` suppresses spec-119 intake
     # validation around each item it writes, because an import is history rather

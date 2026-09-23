@@ -18,11 +18,7 @@ def _admin_event(event_type: GithubEvent, label: str, entity: str) -> EventTypeS
 plugin = RaddPlugin(
     name="github",
     core=False,  # optional plugin — disableable via the plugin manager
-    description="GitHub connector (RADD-1129): hosts and repositories as rows, an "
-    "X-Hub-Signature-256 webhook receiver auto-linking branches/commits/PRs to items via "
-    "the vcs seam, CI state from check runs, merge transitions, release sweeps and an "
-    "API backfill. Administration reuses the vcsconn.* atoms the forgejo connector "
-    "declares (one resource: version-control connections).",
+    description="GitHub integration: links branches, commits and pull requests to issues, shows CI status and ships releases.",
     depends_on=("events", "projects", "auth", "workflow", "items", "vcs", "automations", "releases"),
     event_types=(
         _admin_event(GithubEvent.CONNECTION_CREATED, "GitHub connection created", "github_connection"),

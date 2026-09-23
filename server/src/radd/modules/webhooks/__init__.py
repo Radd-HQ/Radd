@@ -17,7 +17,7 @@ plugin = RaddPlugin(
         ),
     ),
     crud_resources=(CrudResourceSpec("webhook", "global", "webhooks", "webhook.manage"),),
-    description="Standard-Webhooks dispatcher: signed deliveries with retries, fed by the outbox.",
+    description="Webhooks: signed event deliveries to your own endpoints, with retries.",
     depends_on=("projects", "events", "auth", "fields", "items"),
     routers=(router,),
     # RADD-1168: emitted since spec 25 and never registered. Not triggers.

@@ -13,12 +13,7 @@ plugin = RaddPlugin(
     name="mailintake",
     consumer_names=(OUTBOUND_CONSUMER_NAME,),
     core=False,  # optional plugin — disableable via the plugin manager
-    description="Email-to-issue intake (spec 47) + the requester loop (spec 62): an "
-    "IMAP poller turning unseen messages into items (or reply comments on a keyed "
-    "subject) as the system actor, mail_contacts for external requesters, ack "
-    "emails, an outbound consumer mailing public comments and resolution notices "
-    "back to the contact, and the `service.send_item_mail` transport every module "
-    "mails an issue through.",
+    description="Email in and out: turns incoming mail into issues and comments, and replies to requesters.",
     # attachments: mail parts become item attachments through the spec-102
     # polymorphic seam (RADD-956).
     # notify is GONE from this list (RADD-968): outbound used to mail notify's
@@ -72,10 +67,7 @@ plugin = RaddPlugin(
             scopes=("instance", "project"),
             label="Resolution emails",
             description=(
-                "Email the ticket's external contacts when it moves into a done "
-                "state (RADD-982). A project with CSAT surveys on sends the survey "
-                "instead — it already announces the resolution, and one message "
-                "beats two."
+                "Email an issue's external contacts when it moves into a done state. A project with CSAT surveys on sends the survey instead, which already says the issue is resolved."
             ),
             section="email",
         ),

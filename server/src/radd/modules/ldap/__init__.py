@@ -15,14 +15,7 @@ plugin = RaddPlugin(
         ),
     ),
     core=False,  # optional plugin — disableable via the plugin manager
-    description="LDAP/AD directory sign-in (spec 42): direct UPN bind (no "
-    "service account), nested-group admin mapping, SSO-only provisioning and "
-    "role sync on every login. Spec 84 depth: team↔AD-group links reconciled "
-    "on login / on demand / by the ldap.groupsync PeriodicLoop (bind-account "
-    "gated), group search + import, and directory-user import endpoints. "
-    "Spec 85: cascade-resolved search bases (Directory settings page), the "
-    "ldap-usersync PeriodicLoop (automatic provision/update/deactivate), and "
-    "the directory_sync_state status rows.",
+    description="Sign-in and user sync with Active Directory or LDAP.",
     depends_on=("events", "projects", "auth", "settings", "groups", "teams"),
     # Per-plugin deps (§14): AD/LDAP bind needs ldap3. Maps to the `radd[ldap]` extra.
     # RADD-891: the connection + sync tunables (RADD-846/848: env is seed-only,
@@ -36,9 +29,7 @@ plugin = RaddPlugin(
             scopes=("instance",),
             label="Server URL",
             description=(
-                "The directory server, e.g. ldaps://ad.example.com:636. Empty = "
-                "LDAP sign-in disabled. Applies without a restart (RADD-846); the "
-                "RADD_LDAP_URL env value is the default."
+                "The directory server, e.g. ldaps://ad.example.com:636. Leave empty to turn LDAP sign-in off. Changes take effect without a restart."
             ),
         ),
         SettingSpec(
@@ -95,10 +86,7 @@ plugin = RaddPlugin(
             scopes=("instance",),
             label="Group sync interval (seconds)",
             description=(
-                "How often mirrored groups re-ask the directory their transitive "
-                "member question — the worst-case window between an AD removal "
-                "and the grant stopping (a login updates that user sooner). "
-                "Applies from the next cycle, no restart (RADD-848)."
+                "How often mirrored groups are re-checked against the directory. This is the longest someone keeps access after being removed from a group in AD (signing in updates that person sooner). Takes effect from the next check."
             ),
         ),
         SettingSpec(
@@ -121,9 +109,7 @@ plugin = RaddPlugin(
             scopes=("instance",),
             label="Automatic user sync",
             description=(
-                "Periodically import every directory user under the search base and "
-                "keep names in sync (spec 85). Needs the bind account and background "
-                "workers; off = manual imports and 'Sync now' only."
+                "Regularly import every directory user under the search base and keep their names up to date. Needs the bind account and background workers; when off, import people by hand or with Sync now."
             ),
         ),
         SettingSpec(

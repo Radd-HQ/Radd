@@ -44,7 +44,7 @@ export function AutomationsSettingsPage() {
   return (
     <SettingsPage history={{ entities: ["automation_rule"] }}
       title="Automations"
-      description="Global rules that react to an issue event, match an SLQ condition, and apply actions."
+      description="Rules that react to events or run on a schedule, then change issues, notify people or call out to other systems."
       actions={
         canManage && (
           <Button onClick={() => setEditing({ rule: null })}>

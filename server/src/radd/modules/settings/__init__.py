@@ -6,7 +6,7 @@ from .types import SettingEvent
 
 plugin = RaddPlugin(
     name="settings",
-    description="Scalar settings that cascade project → instance → env default (specs 50/67).",
+    description="Settings that apply to every project, with per-project overrides.",
     depends_on=("events", "projects", "auth"),
     routers=(router,),
     # Spec 123: every effective setting change is an audit row with old → new.

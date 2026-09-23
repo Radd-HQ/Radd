@@ -75,6 +75,24 @@ async function main() {
       `[...document.querySelectorAll("h1, h2")].some(h => h.textContent.trim() === "Server status")
         && [...document.querySelectorAll("a")].some(a => a.textContent.trim() === "Server status")
         && ![...document.querySelectorAll("a")].some(a => a.textContent.trim() === "Overview")`);
+
+    // --- RADD-1289: copy for people -----------------------------------------
+    const leak = /\b(?:[Ss]pecs? \d+|RADD-\d+)\b/;
+    for (const path of [`/p/${world.key}/settings/general`, `/p/${world.key}/settings/sla`, "/settings/general",
+      "/settings/directory", "/settings/ai", "/settings/email", "/settings/plugins"]) {
+      await session.navigate(baseUrl + path, 2500);
+      const copy = await text(session);  // a blank page would pass vacuously — require real content
+      checks[`1289 no spec/ticket numbers on ${path.replace(world.key, "KEY")}`] = copy.length > 300 && !leak.test(copy);
+    }
+    await session.navigate(`${baseUrl}/settings/directory`, 2000);
+    checks["1289 directory no longer says secrets live in env"] = !(await text(session)).includes("stay in environment variables");
+    await session.navigate(`${baseUrl}/settings/automations`, 2000);
+    checks["1289 automations no longer describe SLQ conditions"] = !(await text(session)).includes("SLQ condition");
+    for (const path of ["workflow", "screens", "types", "sla"]) {
+      await session.navigate(`${baseUrl}/p/${world.key}/settings/${path}`, 2000);
+      checks[`1289 ${path} has no banner repeating the subtitle`] = (await text(session)).length > 300 && !(await session.eval(
+        `!!document.querySelector('main [role="note"], main button[aria-label="Dismiss"]')`));
+    }
   } finally {
     if (world?.projectId) await api(`return (await call("DELETE", "/projects/${world.projectId}")).status;`).catch(() => null);
     await close();

@@ -13,7 +13,7 @@ plugin = RaddPlugin(
             actions=("create", "read", "update", "delete"),
         ),
     ),
-    description="Global teams, team membership (users AND groups), and project↔team role attachments.",
+    description="Teams: groups of people you can give access to projects.",
     depends_on=("events", "projects", "auth", "groups"),
     weak_depends=("access", "items"),
     routers=(team_router,),

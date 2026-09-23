@@ -59,8 +59,7 @@ plugin = RaddPlugin(
         ),
     ),
     description=(
-        "Work items: CRUD, per-project keys (TD-42), epic/issue/subtask hierarchy, "
-        "assignee + team, custom fields inline everywhere, SLQ text queries (`q`)."
+        "Issues: projects' work items, with keys, hierarchy, assignees, dates and links."
     ),
     # RADD-891: the story-points opt-in (spec 70) — moved off `settings.types`'s
     # old hardcoded dict. Resolved directly by the SPA via
@@ -74,11 +73,7 @@ plugin = RaddPlugin(
             scopes=("instance", "project"),
             label="Default issue visibility",
             description=(
-                "What a new issue is unless the filer says otherwise (spec 121): "
-                "public (readable by anyone who can read the project — the world, "
-                "when the project is public), internal (members only), or "
-                "restricted (only the reporter, assignee and participants). An HR "
-                "project sets restricted; a public tracker keeps public."
+                "Who can see a new issue unless its reporter chooses otherwise. Public: anyone who can read the project (everyone, if the project is public). Members only: the project's members. Restricted: only the reporter, assignee and participants — useful for HR or security projects."
             ),
             choices=tuple(v.value for v in ItemVisibility),
         ),
@@ -88,9 +83,7 @@ plugin = RaddPlugin(
             scopes=("instance", "project"),
             label="Story points",
             description=(
-                "Estimate items in story points (0–999, one decimal) alongside time "
-                "tracking (spec 70). Off by default — a project that hasn't opted in "
-                "shows no points UI; velocity/burnup can then report in points."
+                "Estimate issues in story points (0–999, one decimal) alongside time. Off by default; when on, velocity and burnup can report in points."
             ),
         ),
     ),

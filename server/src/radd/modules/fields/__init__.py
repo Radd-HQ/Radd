@@ -37,7 +37,7 @@ plugin = RaddPlugin(
     # RADD-818: spec-92 resources ride the MANIFEST — the loader's clear()
     # wipes import-time registration, and the manifest is what survives it.
     access_resources=(_FIELD_SPEC, _BUILTIN_SPEC),
-    description="Field-definition registry: the single source of truth for dynamic schema.",
+    description="Custom fields: typed, searchable data on issues, scoped to projects.",
     depends_on=("projects", "events", "auth", "teams", "access"),  # access: grant resource
     # RADD-949: removing a select option rewrites the values items already store,
     # and `work_items.custom_fields` is items'. A DEFERRED reverse reach — items

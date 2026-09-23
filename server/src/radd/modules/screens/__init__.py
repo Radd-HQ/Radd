@@ -12,8 +12,7 @@ plugin = RaddPlugin(
             has_changes=True, trigger=False, subjects=("project",),
         ),
     ),
-    description="Field-layout (screen) config per (project, issue-type): which fields are "
-    "primary / secondary-collapsed / hidden in the issue view (presentation only).",
+    description="Screens: which fields an issue type shows, collapses or hides.",
     depends_on=("projects", "events", "auth", "fields", "itemtypes"),
     routers=(router,),
 )

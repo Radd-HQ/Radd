@@ -10,7 +10,7 @@ from . import mcptools
 
 plugin = RaddPlugin(
     name="projects",
-    description="Projects: global containers, keys, per-project item numbering.",
+    description="Projects: the containers issues live in.",
     depends_on=("events",),
     weak_depends=("auth", "settings"),
     routers=(project_router, instance_router),

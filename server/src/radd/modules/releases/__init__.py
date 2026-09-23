@@ -17,8 +17,7 @@ plugin = RaddPlugin(
     # an item's `release_id` is SET NULL, so items may still be standing.
     project_purges=(ProjectPurgeSpec(name="releases", tables=("releases",), order=30),),
     description=(
-        "Project-scoped releases/versions. Ordinary API resources a CI service-account "
-        "or the automations engine can POST to and assign — replaces the CI-writes-labels hack."
+        "Releases: versions of a project, and what shipped in each."
     ),
     depends_on=("projects", "auth", "events", "workflow"),
     weak_depends=("automations", "items"),

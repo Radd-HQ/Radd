@@ -42,14 +42,7 @@ export function IssueTypesSettingsPage({ projectId }: { projectId?: string }) {
   return (
     <SettingsPage history={{ entities: ["issue_type"], projectId }}
       title="Issue types"
-      description="The classification of an issue (Bug, Task, Story…). Separate from the epic/issue/subtask hierarchy. New issues get the default type."
-      info={
-        <>
-          Issue types classify <em>what an issue is</em> — a Bug, a Task, a Story. They're a
-          separate axis from the epic/issue/subtask hierarchy, so a Bug and a Story can both be
-          issues. Pick a color; it renders as a chip on boards, lists, and the issue view.
-        </>
-      }
+      description="What an issue is — a Bug, a Task, a Story — shown as a coloured chip on boards, lists and the issue view. Separate from the hierarchy: a Bug can be an epic, an issue or a subtask. New issues get the default type."
     >
       {(projectId && projectQuery.isPending) || (projectId && types.isPending) ? (
         <TableSkeleton rows={5} />

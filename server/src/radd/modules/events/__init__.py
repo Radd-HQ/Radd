@@ -21,6 +21,6 @@ plugin = RaddPlugin(
     consumer_names=("events.cascade",),
     depends_on=(),
     weak_depends=("auth",),
-    description="Transactional outbox: append-only event log, the spine every consumer reads.",
+    description="The event log every other feature reads from — history, notifications, webhooks and automations.",
     routers=(router,),
 )

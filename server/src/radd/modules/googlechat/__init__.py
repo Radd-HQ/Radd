@@ -9,8 +9,7 @@ plugin = RaddPlugin(
     name="googlechat",
     consumer_names=(CONSUMER_NAME,),
     core=False,  # optional plugin — disableable via the plugin manager
-    description="Google Chat notifier (spec 47): an outbox consumer posting compact "
-    "messages for selected events to an incoming webhook URL. Fire-and-forget.",
+    description="Posts selected events to a Google Chat space.",
     depends_on=("events", "projects", "auth"),
     on_startup=(dispatcher.start,),
     on_shutdown=(dispatcher.stop,),

@@ -103,9 +103,7 @@ plugin = RaddPlugin(
         CrudResourceSpec("automation", "global", "automation rules", "automation.manage"),
     ),
     description=(
-        "Event-driven rules engine (spec 15): match items by SLQ on item.created/updated, "
-        "apply actions through the target services as a system actor, with a loop guard. "
-        "Spec 69 adds schedule-triggered rules fired by a scheduler clock."
+        "Automations: rules that react to events or run on a schedule and change issues, notify people or call out."
     ),
     depends_on=("projects", "auth", "workflow", "labels", "cycles", "releases", "items", "comments", "teams", "events", "fields", "itemtypes",),
     weak_depends=("mailintake", "notify", "leave", "participants"),

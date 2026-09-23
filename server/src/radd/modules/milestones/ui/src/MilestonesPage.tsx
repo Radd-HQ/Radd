@@ -89,7 +89,7 @@ export function MilestonesPage() {
         Milestones
       </h1>
       <p style={{ color: tokens.textMuted, fontSize: 13, marginBottom: 20 }}>
-        Project milestones — a federated plugin page loaded at runtime.
+        Dates your projects are working toward.
       </p>
 
       <Card title="New milestone">

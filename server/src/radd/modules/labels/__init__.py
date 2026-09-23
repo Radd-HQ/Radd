@@ -15,7 +15,7 @@ plugin = RaddPlugin(
             actions=("create", "read", "update", "delete"),
         ),
     ),
-    description="Global labels: free-form tags, auto-created on first use (automation-friendly).",
+    description="Labels: shared free-form tags for issues and pages.",
     depends_on=("projects", "events", "auth"),
     routers=(router,),
     event_types=(

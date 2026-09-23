@@ -8,10 +8,7 @@ plugin = RaddPlugin(
     name="approvals",
     core=False,  # optional plugin — disableable via the plugin manager
     description=(
-        "JSM-style approvals on workflow transitions (spec 71): a require_approval "
-        "transition rule gates state moves; this module owns the request/vote "
-        "lifecycle (N-of-M, live team membership), auto-applies the move on the "
-        "deciding vote, and feeds the guard through deferred seams."
+        "Approvals on workflow transitions: a move can wait for named people or team members to approve it."
     ),
     depends_on=("events", "projects", "auth", "teams", "workflow", "items"),
     routers=(router,),

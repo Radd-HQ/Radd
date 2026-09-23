@@ -63,9 +63,7 @@ plugin = RaddPlugin(
     access_resources=(_PAGE_SPEC,),
     core=False,  # optional plugin — disableable via the plugin manager
     description=(
-        "Pages: page spaces + page trees (markdown bodies), optimistic-concurrency "
-        "edits with full version history + restore, issue↔page links, and live "
-        "Postgres FTS search over titles/bodies. Spec 74 adds opt-in PUBLIC " "a public space is the Public role granted to Anyone on it (spec 121)."
+        "The wiki: page spaces, page trees, version history and links to issues."
     ),
     depends_on=("events", "projects", "auth", "workflow", "items", "attachments", "labels", "comments", "notify", "access", "groups", "search", "teams", "settings"),
     weak_depends=("ai",),

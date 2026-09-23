@@ -11,10 +11,7 @@ plugin = RaddPlugin(
     name="csat",
     consumer_names=(CONSUMER_NAME,),
     core=False,  # optional plugin — disableable via the plugin manager
-    description="CSAT satisfaction surveys (spec 65): an outbox consumer emails the "
-    "requester (mail contact, else the reporter) a one-click rating survey when an "
-    "item resolves in a CSAT_ENABLED project; a tokened public page records the "
-    "rating, which surfaces on the item and in the service-desk report.",
+    description="Customer satisfaction surveys emailed to requesters when their issue is resolved.",
     depends_on=("projects", "auth", "items", "settings", "events", "mailintake", "workflow"),
     # RADD-891: the sender's per-project opt-in — moved off `settings.types`'s
     # old hardcoded dict.
@@ -25,9 +22,7 @@ plugin = RaddPlugin(
             scopes=("instance", "project"),
             label="CSAT surveys",
             description=(
-                "Email the requester a one-click satisfaction survey when their item "
-                "resolves (spec 65). Off by default — enable per service-desk project; "
-                "dev projects never send surveys."
+                "Email the requester a one-click satisfaction survey when their issue is resolved. Off by default; turn it on for service-desk projects."
             ),
             section="sla",
         ),

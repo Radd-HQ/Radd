@@ -85,14 +85,7 @@ export function ProjectSlaSettingsPage({ projectId }: { projectId?: string }) {
   return (
     <SettingsPage history={{ entities: ["sla_policy"], projectId }}
       title="SLAs"
-      description="Response and resolution targets for this project's service desk. Timers pause in the listed states; breaches notify the assignee and watchers."
-      info={
-        <>
-          Policies resolve <strong>first-match</strong>: for each item, the first enabled policy
-          (top to bottom) whose priority filter matches is the ONE policy that governs it. Put
-          specific tiers (P1 in 1 hour) above catch-alls (everything in 8 hours).
-        </>
-      }
+      description="Response and resolution targets for this project's service desk. For each issue, the first enabled policy from the top whose filters match is the one that applies — put specific tiers above catch-alls. Timers pause in a policy's pause states; breaches notify the assignee and watchers."
     >
       {!projectId || policies.isPending ? (
         <TableSkeleton rows={3} />

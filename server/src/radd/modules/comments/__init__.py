@@ -62,7 +62,7 @@ plugin = RaddPlugin(
     ),
     relations=(COMMENT_OWN,),
     relation_domains=(("comment.write", "item"),),
-    description="Comments on work items: CRUD + comment.* events; counts feed item hydration.",
+    description="Comments and threaded discussions on issues and pages.",
     # itemtypes: RADD-1283's resolution rules are scoped by issue type.
     depends_on=("items", "auth", "projects", "events", "teams", "itemtypes"),
     # `commented_by = me` on the ITEM dialect — see slq.py.

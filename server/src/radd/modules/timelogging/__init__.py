@@ -126,10 +126,7 @@ plugin = RaddPlugin(
         ),
     ),
     description=(
-        "Per-project time logging: worklogs (duration/day/work-category/note) + item "
-        "estimates, and a global timesheet for day/week/month reports filterable by "
-        "team or person. Estimates/worklogs are module-owned so items stays independent. "
-        "Default work categories seed on startup (ensure_seeded)."
+        "Time logging: worklogs, estimates and the timesheet."
     ),
     depends_on=("events", "projects", "auth", "teams", "items", "settings"),
     # `logged_by = me` on the ITEM dialect — see slq.py. Registered here rather

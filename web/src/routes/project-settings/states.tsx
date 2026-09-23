@@ -56,14 +56,7 @@ export function StatesSettingsPage({ projectId }: { projectId?: string }) {
   return (
     <SettingsPage history={{ entities: ["state", "workflow_transition"], projectId }}
       title="Workflow states"
-      description="States grouped into fixed categories. New projects start with the default set."
-      info={
-        <>
-          States are the steps an issue moves through (Backlog → In Progress → Done). Each maps to
-          a fixed <em>category</em> that drives reporting and board columns; the name is yours.
-          Reorder them to control how they list on boards.
-        </>
-      }
+      description="The steps an issue moves through (Backlog → In Progress → Done). Each state belongs to a category, which drives boards and reports; the names are yours. Order the states to set how they list on boards."
     >
       {(projectId && projectQuery.isPending) || (projectId && states.isPending) ? (
         <TableSkeleton rows={5} />

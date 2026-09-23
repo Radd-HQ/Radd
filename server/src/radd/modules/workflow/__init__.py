@@ -69,8 +69,7 @@ plugin = RaddPlugin(
         ),
     ),
     description=(
-        "Per-project named states within fixed categories; seeds defaults on project "
-        "creation. Optional transition graph with validation guards (spec 61)."
+        "Workflow: each project's states and the rules for moving between them."
     ),
     depends_on=("projects", "events", "auth", "settings", "teams"),
     weak_depends=("approvals", "comments", "fields", "items", "timelogging"),

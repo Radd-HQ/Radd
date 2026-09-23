@@ -74,13 +74,7 @@ export function ScreensSettingsPage({ projectId }: { projectId: string | undefin
   return (
     <SettingsPage history={{ entities: ["screen"], projectId }}
       title="Screens"
-      description="Arrange the issue view per issue type: show a field, collapse it under “More fields” in the compact peek, or hide it entirely. Core fields (state, type, priority) always show."
-      info={
-        <>
-          A screen controls presentation only — hiding a field never deletes its value or
-          changes validation. Issues whose type has no screen fall back to the project default.
-        </>
-      }
+      description="Arrange the issue view per issue type: show a field, collapse it under “More fields”, or hide it. Hiding never deletes a value or changes validation, and state, type and priority always show. A type without its own screen uses the project default."
     >
       <div className="mb-4 max-w-xs">
         <SelectField

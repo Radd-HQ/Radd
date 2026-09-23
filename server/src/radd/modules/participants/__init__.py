@@ -50,13 +50,7 @@ plugin = RaddPlugin(
     name="participants",
     core=False,  # optional plugin — disableable via the plugin manager
     description=(
-        "Request participants (spec 72): users + whole teams following an item. "
-        "Direct users are auto-watched, team rows resolve LIVE at notify "
-        "fan-out time; the reporter can share their own ticket (identity "
-        "check, not permission). Since RADD-844 a participant is a RELATION "
-        "on the item (`@participant`): the Baseline's item.read@participant + "
-        "comment.write@participant make a share confer exactly a second "
-        "reporter's reach — open that item, comment, be notified."
+        "Participants: people and teams who follow a request alongside its reporter."
     ),
     depends_on=("events", "projects", "auth", "teams", "items", "notify"),
     routers=(router,),

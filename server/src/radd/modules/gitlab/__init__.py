@@ -18,11 +18,7 @@ def _admin_event(event_type: GitlabEvent, label: str, entity: str) -> EventTypeS
 plugin = RaddPlugin(
     name="gitlab",
     core=False,  # optional plugin — disableable via the plugin manager
-    description="GitLab connector (spec 31, rebuilt RADD-1253): hosts and projects as rows, an "
-    "X-Gitlab-Token webhook receiver auto-linking branches/commits/MRs to items via the "
-    "vcs seam with canonical ids, merge → waiting-for-release, time logged on an MR "
-    "mirrored into the linked issue's worklogs (RADD-1259), and an API backfill that "
-    "imports history and its time. Administration gates on the vcsconn.* atoms.",
+    description="GitLab integration: links branches, commits and merge requests to issues and mirrors time spent on them.",
     depends_on=("events", "projects", "auth", "workflow", "items", "vcs", "automations", "releases"),
     event_types=(
         _admin_event(GitlabEvent.CONNECTION_CREATED, "GitLab connection created", "gitlab_connection"),

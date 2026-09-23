@@ -36,9 +36,7 @@ plugin = RaddPlugin(
     ),
     core=False,  # optional plugin — disableable via the plugin manager
     description=(
-        "Confluence import wizard (spec 117): admin-managed Confluence Server/DC "
-        "connections — download a space, a section or a set of pages once, map its "
-        "macros and principals, then run a staged, reversible import into the wiki."
+        "Imports spaces and pages from Confluence Server or Data Center."
     ),
     depends_on=(
         "auth",

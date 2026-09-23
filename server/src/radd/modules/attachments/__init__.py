@@ -84,9 +84,7 @@ plugin = RaddPlugin(
     # wipes import-time registration, and the manifest is what survives it.
     access_resources=(_ATTACHMENT_SPEC,),
     relations=(ATTACHMENT_OWN,),
-    description="File attachments on work items and wiki pages (spec 102): "
-    "multiple storage hosts (filesystem/S3) as DB rows, per-host proxy or "
-    "presigned delivery, routed uploads, blob API for other modules.",
+    description="File attachments on issues and pages, stored on the hosts you configure and routed by rules you set.",
     depends_on=("events", "projects", "auth", "items", "access", "groups", "teams"),
     weak_depends=("ai",),
     # Per-plugin deps (§14): the S3 backend needs the MinIO SDK. Maps to the

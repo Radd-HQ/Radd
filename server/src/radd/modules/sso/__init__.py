@@ -13,9 +13,7 @@ async def _startup() -> None:
 plugin = RaddPlugin(
     name="sso",
     core=False,  # optional plugin — disableable via the plugin manager
-    description="Single sign-on (spec 40 → 110): a registry of OIDC providers "
-    "(Google preset + generic issuers), code+PKCE flows, per-provider signup "
-    "domain allowlists, and federated identities linked to existing accounts.",
+    description="Single sign-on with Google, GitHub or any OpenID Connect provider.",
     depends_on=("events", "projects", "auth", "teams"),
     routers=(router, admin_router),
     on_startup=(_startup,),
