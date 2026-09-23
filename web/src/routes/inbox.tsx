@@ -15,6 +15,7 @@ import { EmptyState } from "../components/EmptyState";
 import { NotificationRow } from "../components/notifications/NotificationRow";
 import { Pager } from "../components/Pager";
 import { Spinner } from "../components/Spinner";
+import { Switch } from "../components/Switch";
 
 /** The personal notification Inbox (spec 26). */
 export function InboxPage() {
@@ -47,18 +48,15 @@ export function InboxPage() {
             {data.unread_count} unread
           </span>
         )}
-        <label className="ml-auto flex items-center gap-1.5 text-xs text-fg-secondary">
-          <input
-            type="checkbox"
-            checked={unreadOnly}
-            onChange={(event) => {
-              setUnreadOnly(event.target.checked);
-              setPage(1);
-            }}
-            className="accent-accent"
-          />
-          Unread only
-        </label>
+        <Switch
+          className="ml-auto"
+          label="Unread only"
+          checked={unreadOnly}
+          onChange={(next) => {
+            setUnreadOnly(next);
+            setPage(1);
+          }}
+        />
         <Button
           variant="secondary"
           size="sm"

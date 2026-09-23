@@ -48,3 +48,27 @@ export function formatHours(seconds: number): string {
   const hours = seconds / SECONDS_PER_HOUR;
   return `${Number.isInteger(hours) ? hours : hours.toFixed(2).replace(/\.?0+$/, "")}h`;
 }
+
+/**
+ * RADD-1288: a clock duration typed the way people say it — "90", "90m",
+ * "1h 30m", "8h", "2d" (a day here is 24 clock hours, as SLA targets count) —
+ * as whole minutes. Empty → null; anything else unparseable → NaN.
+ */
+export function parseClockMinutes(text: string): number | null {
+  const raw = text.trim().toLowerCase();
+  if (!raw) return null;
+  if (/^\d+$/.test(raw)) return Number(raw);
+  const units: Record<string, number> = { d: 24 * 60, h: 60, m: 1 };
+  let total = 0;
+  let rest = raw.replace(/\s+/g, "");
+  const part = /^(\d+(?:\.\d+)?)([dhm])/;
+  if (!part.test(rest)) return Number.NaN;
+  while (rest) {
+    const match = part.exec(rest);
+    if (!match) return Number.NaN;
+    total += Number(match[1]) * units[match[2]];
+    rest = rest.slice(match[0].length);
+  }
+  return Math.round(total);
+}
+

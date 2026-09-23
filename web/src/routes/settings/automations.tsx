@@ -18,6 +18,7 @@ import { RunStatusChip } from "../../components/automations/RunsPanel";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { QueryError } from "../../components/QueryError";
 import { IconButton } from "../../components/IconButton";
+import { Switch } from "../../components/Switch";
 
 /** Automation rules admin (spec 20) — global, gated on automation.manage. */
 export function AutomationsSettingsPage() {
@@ -163,16 +164,14 @@ function RuleRow({ rule, onEdit }: { rule: Rule; onEdit: () => void }) {
         </span>
       )}
 
-      <label className="ml-auto flex shrink-0 cursor-pointer items-center gap-1.5 text-[11px] text-fg-secondary">
-        <input
-          type="checkbox"
-          checked={rule.enabled}
-          disabled={toggle.isPending}
-          onChange={() => toggle.mutate()}
-          className="size-3.5 accent-accent"
-        />
-        {rule.enabled ? "Enabled" : "Disabled"}
-      </label>
+      <Switch
+        className="ml-auto"
+        label="Enabled"
+        checked={rule.enabled}
+        disabled={toggle.isPending}
+        onChange={() => toggle.mutate()}
+        data-rule-enabled={rule.id}
+      />
 
       {confirming ? (
         <span className="flex items-center gap-1">

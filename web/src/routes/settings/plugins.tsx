@@ -237,8 +237,14 @@ function PackageUpload() {
     <p className="font-medium text-heading">Upload a plugin package</p>
     <p className="mt-1">Choose a built Python wheel (.whl), up to 32 MiB. Code and UI are stored in the shared plugin directory; no new RADD image is needed.</p>
     <div className="mt-3 flex flex-wrap items-center gap-3">
-      <input ref={input} type="file" accept=".whl" aria-label="Plugin wheel" disabled={upload.isPending}
+      {/* RADD-1288: the native file input ("Choose File  No file chosen") stays, hidden,
+          behind a kit button and the chosen name. */}
+      <input ref={input} type="file" accept=".whl" aria-label="Plugin wheel" disabled={upload.isPending} className="sr-only"
         onChange={event => {upload.reset(); setFile(event.target.files?.[0] ?? null);}} />
+      <Button variant="secondary" disabled={upload.isPending} onClick={() => input.current?.click()} data-choose-wheel>
+        Choose a .whl file
+      </Button>
+      <span className="text-xs text-fg-muted" data-chosen-wheel>{file ? file.name : "No file chosen"}</span>
       <Button disabled={!file || upload.isPending || file.size > 32 * 1024 * 1024} onClick={() => {
         void confirm({title: "Install trusted plugin code?",
           message: "Plugins run server code with RADD's access. Only install packages from a source you trust. Upload validates and registers the package; activation is a separate action.",

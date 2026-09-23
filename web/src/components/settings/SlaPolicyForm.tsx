@@ -6,6 +6,7 @@ import { ApiPath } from "../../lib/constants";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { PRIORITY_META, PRIORITY_ORDER } from "../../lib/meta";
 import { issueTypesQuery, statesQuery } from "../../lib/queries";
+import { parseClockMinutes } from "../../lib/duration";
 import type { PriorityValue, SlaPolicy } from "../../lib/types";
 import { Button } from "../Button";
 import { TextField } from "../TextField";
@@ -53,7 +54,7 @@ export function NewSlaPolicyForm({
 }) {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
-  const [responseMinutes, setResponseMinutes] = useState("60");
+  const [responseMinutes, setResponseMinutes] = useState("1h");
   const [resolutionMinutes, setResolutionMinutes] = useState("");
   const [warningMinutes, setWarningMinutes] = useState("");
   // RADD-1286: picked from the project's states, never typed. Stored by NAME,
@@ -87,9 +88,9 @@ export function NewSlaPolicyForm({
       api.post<SlaPolicy>(ApiPath.slaPolicies, {
         project_id: projectId,
         name: name.trim(),
-        response_minutes: responseMinutes ? Number(responseMinutes) : null,
-        resolution_minutes: resolutionMinutes ? Number(resolutionMinutes) : null,
-        warning_minutes: warningMinutes ? Number(warningMinutes) : null,
+        response_minutes: parseClockMinutes(responseMinutes),
+        resolution_minutes: parseClockMinutes(resolutionMinutes),
+        warning_minutes: parseClockMinutes(warningMinutes),
         pause_state_names: pauseStates,
         work_week_only: workWeekOnly,
         priorities,
@@ -114,7 +115,15 @@ export function NewSlaPolicyForm({
   const windowInvalid =
     Boolean(windowStart) !== Boolean(windowEnd) ||
     (Boolean(windowStart) && Boolean(windowEnd) && windowStart >= windowEnd);
-  const valid = name.trim() && (responseMinutes || resolutionMinutes) && !windowInvalid;
+  // RADD-1288: durations take units ("1h 30m"); a bare number is minutes.
+  const parsed = [responseMinutes, resolutionMinutes, warningMinutes].map(parseClockMinutes);
+  const badDuration = parsed.some((minutes) => Number.isNaN(minutes));
+  const durationHint = (text: string, fallback?: string) => {
+    const minutes = parseClockMinutes(text);
+    if (minutes === null) return fallback;
+    return Number.isNaN(minutes) ? "Use minutes or units, e.g. 90, 1h 30m, 8h, 2d." : `= ${minutesLabel(minutes)}`;
+  };
+  const valid = name.trim() && (responseMinutes || resolutionMinutes) && !windowInvalid && !badDuration;
 
   return (
     <form
@@ -134,24 +143,28 @@ export function NewSlaPolicyForm({
         />
       </div>
       <TextField
-        label="Response target (minutes)"
+        label="Response target"
         value={responseMinutes}
-        onChange={(event) => setResponseMinutes(event.target.value.replace(/\D/g, ""))}
-        placeholder="60"
+        onChange={(event) => setResponseMinutes(event.target.value)}
+        placeholder="1h"
+        hint={durationHint(responseMinutes)}
+        data-duration="response"
       />
       <TextField
-        label="Resolution target (minutes)"
+        label="Resolution target"
         value={resolutionMinutes}
-        onChange={(event) => setResolutionMinutes(event.target.value.replace(/\D/g, ""))}
-        placeholder="480"
+        onChange={(event) => setResolutionMinutes(event.target.value)}
+        placeholder="8h"
+        hint={durationHint(resolutionMinutes)}
+        data-duration="resolution"
       />
       <div className="col-span-2">
         <TextField
-          label="Warn before breach (minutes)"
+          label="Warn before breach"
           value={warningMinutes}
-          onChange={(event) => setWarningMinutes(event.target.value.replace(/\D/g, ""))}
-          placeholder="30"
-          hint="Optional: fires an SLA due-soon alert (and the sla.due_soon automation trigger) once when this much time is left."
+          onChange={(event) => setWarningMinutes(event.target.value)}
+          placeholder="30m"
+          hint={durationHint(warningMinutes, "Optional: sends one due-soon alert (and fires the SLA due soon automation trigger) when this much time is left.")}
         />
       </div>
       <div className="col-span-2 flex flex-col gap-1.5">

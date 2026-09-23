@@ -93,6 +93,41 @@ async function main() {
       checks[`1289 ${path} has no banner repeating the subtitle`] = (await text(session)).length > 300 && !(await session.eval(
         `!!document.querySelector('main [role="note"], main button[aria-label="Dismiss"]')`));
     }
+
+    // --- RADD-1288: settings that behave -------------------------------------
+    await session.navigate(`${baseUrl}/settings/general`, 2500);
+    checks["1288 instance General has no Save buttons"] = (await text(session)).length > 300 && !(await session.eval(
+      `[...document.querySelectorAll("main button")].some(b => b.textContent.trim() === "Save")`));
+    await session.navigate(`${baseUrl}/p/${world.key}/settings/timelogging`, 2500);
+    checks["1288 working week is seven day toggles"] = await waitFor(session,
+      `document.querySelectorAll('[data-setting="work_week_days"] [data-day]').length === 7`);
+    await session.click('[data-setting="work_week_days"] [data-day="sat"]');
+    checks["1288 a day toggle saves itself"] = await waitFor(session,
+      `(async () => (await (await fetch("/api/v1/scoped-settings?scope=project&scope_id=${world.projectId}", {credentials:"include"})).json()).find(r => r.key === "work_week_days")?.value === "mon,tue,wed,thu,fri,sat")()`);
+    checks["1288 the row says Saved"] = await waitFor(session,
+      `document.querySelector('[data-setting="work_week_days"] [data-save-state]')?.textContent.includes("Saved")`, 20);
+    await waitFor(session, `!!document.querySelector('[data-setting="work_week_days"] button[title^="Reset"]')`);
+    await session.click('[data-setting="work_week_days"] button[title^="Reset"]');
+    checks["1288 Reset returns to inherited"] = await waitFor(session,
+      `(async () => (await (await fetch("/api/v1/scoped-settings?scope=project&scope_id=${world.projectId}", {credentials:"include"})).json()).find(r => r.key === "work_week_days")?.set_here === false)()`);
+    await session.navigate(`${baseUrl}/p/${world.key}/settings/sla`, 2500);
+    const typeInto = async (selector, value) => {
+      await session.eval(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); el.focus(); el.select(); return true; })()`);
+      await session.send("Input.insertText", { text: value });
+      await sleep(300);
+    };
+    await typeInto('input[data-duration="resolution"]', "2h 30m");
+    checks["1288 SLA durations take units"] = await waitFor(session,
+      `document.body.innerText.includes("= 150m") || document.body.innerText.includes("= 2h 30m")`, 12);
+    await typeInto('input[data-duration="resolution"]', "soon");
+    checks["1288 a nonsense duration is refused"] = await waitFor(session,
+      `document.body.innerText.includes("Use minutes or units")`, 12);
+    await session.navigate(`${baseUrl}/settings/automations`, 2500);
+    checks["1288 automations toggle is a switch"] = await session.eval(
+      `!document.querySelector('main input[type="checkbox"]') && document.querySelectorAll('main [role="switch"]').length > 0`);
+    await session.navigate(`${baseUrl}/settings/plugins`, 2500);
+    checks["1288 plugin upload uses a kit button"] = await session.eval(
+      `!!document.querySelector("[data-choose-wheel]") && document.querySelector('input[type="file"]')?.classList.contains("sr-only")`);
   } finally {
     if (world?.projectId) await api(`return (await call("DELETE", "/projects/${world.projectId}")).status;`).catch(() => null);
     await close();

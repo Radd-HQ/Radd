@@ -30,6 +30,13 @@ interface Milestone {
 }
 
 const STATUSES = ["open", "in_progress", "closed"];
+const STATUS_LABELS: Record<string, string> = { open: "Open", in_progress: "In progress", closed: "Closed" };
+
+/** "2026-08-19" → the reader's own short date (a date, so no timezone shift). */
+function dueLabel(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
 const listKey = ["radd-remote", "milestones"] as const;
 
 export function MilestonesPage() {
@@ -45,6 +52,8 @@ export function MilestonesPage() {
   const [dueOn, setDueOn] = useState("");
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // Delete asks first (RADD-1288): one click used to remove a milestone outright.
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   const refresh = () => void queryClient.invalidateQueries({ queryKey: listKey });
   const onError = (e: unknown) => setError(e instanceof Error ? e.message : "Something went wrong");
@@ -165,7 +174,7 @@ export function MilestonesPage() {
                 </span>
                 <span style={{ flex: 1, color: tokens.text, fontSize: 14 }}>{m.title}</span>
                 {m.due_on && (
-                  <span style={{ color: tokens.textFaint, fontSize: 12 }}>due {m.due_on}</span>
+                  <span style={{ color: tokens.textFaint, fontSize: 12 }}>Due {dueLabel(m.due_on)}</span>
                 )}
                 <Select
                   value={m.status}
@@ -173,13 +182,24 @@ export function MilestonesPage() {
                 >
                   {STATUSES.map((s) => (
                     <option key={s} value={s}>
-                      {s}
+                      {STATUS_LABELS[s] ?? s}
                     </option>
                   ))}
                 </Select>
-                <Button variant="ghost" small onClick={() => remove.mutate(m.id)}>
-                  Delete
-                </Button>
+                {confirmingId === m.id ? (
+                  <>
+                    <Button variant="ghost" small onClick={() => { setConfirmingId(null); remove.mutate(m.id); }}>
+                      Delete “{m.title}”
+                    </Button>
+                    <Button variant="ghost" small onClick={() => setConfirmingId(null)}>
+                      Keep
+                    </Button>
+                  </>
+                ) : (
+                  <Button variant="ghost" small onClick={() => setConfirmingId(m.id)}>
+                    Delete
+                  </Button>
+                )}
               </li>
             ))}
           </ul>
