@@ -32,9 +32,26 @@ series_router = APIRouter(prefix="/cycle-series", tags=["cycles"])
 Session = Annotated[AsyncSession, Depends(get_session)]
 
 
+async def _require_cycle_write(
+    session: AsyncSession, user, permission: authz.Permission, project_id: uuid.UUID | None
+) -> None:
+    """RADD-1291: the instance-wide cycle atom, OR managing the cycle's home
+    project — so a team lead can run their project's sprints without being a
+    cycle admin for the whole instance. An instance cycle needs the atom."""
+    if await authz.holds(session, user, permission):
+        return
+    if project_id is not None:
+        from radd.modules.projects import service as projects_service
+
+        project = await projects_service.get_project(session, project_id)
+        await authz.require(session, user, authz.Permission.PROJECT_MANAGE, project=project)
+        return
+    await authz.require(session, user, permission)
+
+
 @router.post("", response_model=CycleRead, status_code=201)
 async def create_cycle(data: CycleCreate, session: Session, user: CurrentUser) -> CycleRead:
-    await authz.require(session, user, authz.Permission.CYCLE_CREATE)
+    await _require_cycle_write(session, user, authz.Permission.CYCLE_CREATE, data.project_id)
     return await service.create_cycle(session, data, today=date.today(), actor_id=user.id)
 
 
@@ -51,6 +68,7 @@ async def list_cycles(
     exclude_id: uuid.UUID | None = None,
     dated_only: bool = False,
     recent_first: bool = False,
+    project_id: Annotated[uuid.UUID | None, Query(description="Only cycles homed in, or holding issues of, this project")] = None,
 ) -> list[CycleRead]:
     if not await authz.holds(session, user, authz.Permission.CYCLE_READ):
         response.headers[TOTAL_COUNT_HEADER] = "0"
@@ -59,7 +77,7 @@ async def list_cycles(
     cycles, teams_by_cycle, total = await directory.page(
         session, user, status=status, today=today, q=q, limit=limit, offset=offset,
         include_completed=include_completed, exclude_id=exclude_id,
-        dated_only=dated_only, recent_first=recent_first,
+        dated_only=dated_only, recent_first=recent_first, project_id=project_id,
     )
     response.headers[TOTAL_COUNT_HEADER] = str(total)
     return [service.to_read(cycle, today, teams_by_cycle.get(cycle.id, [])) for cycle in cycles]
@@ -95,9 +113,11 @@ async def update_cycle(
 ) -> CycleRead:
     cycle = await service.get_cycle(session, cycle_id)
     await _require_visible(session, cycle, user)
-    await authz.require(
-        session, user, authz.Permission.CYCLE_UPDATE
-    )
+    await _require_cycle_write(session, user, authz.Permission.CYCLE_UPDATE, cycle.project_id)
+    if "project_id" in data.model_fields_set and data.project_id != cycle.project_id:
+        # Re-homing moves a cycle into another project's hands: that project's
+        # managers (or a cycle admin) must agree too.
+        await _require_cycle_write(session, user, authz.Permission.CYCLE_UPDATE, data.project_id)
     return await service.update_cycle(session, cycle_id, data, today=date.today(), actor_id=user.id)
 
 
@@ -167,10 +187,8 @@ async def complete_cycle(
     the cycle is stamped completed, the target optionally starts today, and drafts
     are topped up per the `cycle_drafts_ahead` setting. Item moves run as the
     caller, so item.update is enforced per project by the items service."""
-    await service.get_cycle(session, cycle_id)
-    await authz.require(
-        session, user, authz.Permission.CYCLE_UPDATE
-    )
+    cycle = await service.get_cycle(session, cycle_id)
+    await _require_cycle_write(session, user, authz.Permission.CYCLE_UPDATE, cycle.project_id)
     return await service.complete_cycle(session, cycle_id, data, today=date.today(), actor=user)
 
 
@@ -178,9 +196,7 @@ async def complete_cycle(
 async def delete_cycle(cycle_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
     cycle = await service.get_cycle(session, cycle_id)
     await _require_visible(session, cycle, user)
-    await authz.require(
-        session, user, authz.Permission.CYCLE_DELETE
-    )
+    await _require_cycle_write(session, user, authz.Permission.CYCLE_DELETE, cycle.project_id)
     await service.delete_cycle(session, cycle_id, actor_id=user.id)
 
 

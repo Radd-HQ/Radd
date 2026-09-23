@@ -39,6 +39,8 @@ import { SettingsPage } from "../../components/settings/SettingsPage";
 import { QueryError } from "../../components/QueryError";
 import { IconButton } from "../../components/IconButton";
 import { ErrorText } from "../../components/ErrorText";
+import { ProjectSelect } from "../../components/projects/ProjectSelect";
+import { projectByIdQuery } from "../../lib/queries";
 
 /** Date range, or "Not scheduled" for a draft (dateless) staging cycle. */
 function dateRange(cycle: Cycle): string {
@@ -129,6 +131,7 @@ function CycleRow({
       <span className="rounded border border-strong px-1.5 py-px text-[10px] uppercase tracking-wide text-fg-secondary">
         {status.label}
       </span>
+      {cycle.project_id && <CycleProjectChip projectId={cycle.project_id} />}
       {cycle.team_ids.length > 0 && (
         <span
           title="Team-restricted — only the associated teams (and admins) see this cycle"
@@ -164,9 +167,14 @@ function CycleRow({
   );
 }
 
-function CycleModal({ cycle, onClose }: { cycle: Cycle | null; onClose: () => void }) {
+/** Create or edit a cycle. RADD-1291: `defaultProjectId` homes a new cycle
+ *  (Planning passes its project). */
+export function CycleModal({ cycle, onClose, defaultProjectId }: {
+  cycle: Cycle | null; onClose: () => void; defaultProjectId?: string;
+}) {
   const queryClient = useQueryClient();
   const editing = Boolean(cycle);
+  const [projectId, setProjectId] = useState(cycle?.project_id ?? defaultProjectId ?? "");
   const [name, setName] = useState(cycle?.name ?? "");
   const [startDate, setStartDate] = useState(cycle?.start_date ?? "");
   const [endDate, setEndDate] = useState(cycle?.end_date ?? "");
@@ -196,6 +204,7 @@ function CycleModal({ cycle, onClose }: { cycle: Cycle | null; onClose: () => vo
             end_date: endDate || null,
             goal,
             team_ids: teamIds,
+            project_id: projectId || null,
           } satisfies CycleUpdate)
         : api.post<Cycle>(ApiPath.cycles, {
             name: name.trim(),
@@ -208,6 +217,7 @@ function CycleModal({ cycle, onClose }: { cycle: Cycle | null; onClose: () => vo
             start_weekday: recurring && startWeekday !== "" ? Number(startWeekday) : null,
             duration_days: recurring && startWeekday !== "" ? durationDays : null,
             team_ids: teamIds,
+            project_id: projectId || null,
           } satisfies CycleCreate),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["cycles"] });
@@ -264,6 +274,13 @@ function CycleModal({ cycle, onClose }: { cycle: Cycle | null; onClose: () => vo
             ? "Set both dates, or leave both blank."
             : "Leave both blank for a draft (staging) cycle you can schedule later."}
         </p>
+        <ProjectSelect
+          label="Project"
+          value={projectId}
+          onChange={(id) => setProjectId(id)}
+          emptyLabel="None — shared by the whole instance"
+          hint="Who plans this cycle. It can still hold issues from any project."
+        />
         <TextField
           label="Goal (optional)"
           value={goal}
@@ -382,3 +399,16 @@ function CycleModal({ cycle, onClose }: { cycle: Cycle | null; onClose: () => vo
     </Modal>
   );
 }
+
+/** RADD-1291: a cycle's home project, as its key. */
+function CycleProjectChip({ projectId }: { projectId: string }) {
+  const project = useQuery(projectByIdQuery(projectId));
+  if (!project.data) return null;
+  return (
+    <span title={project.data.name} data-cycle-project={project.data.key}
+      className="rounded bg-elevated px-1.5 py-px font-mono text-[10px] text-fg-secondary">
+      {project.data.key}
+    </span>
+  );
+}
+

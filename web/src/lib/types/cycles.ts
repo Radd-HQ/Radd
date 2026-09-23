@@ -29,6 +29,8 @@ export interface Cycle {
   completed_at?: string | null;
   /** Spec 60 visibility: [] = public; non-empty = visible to those teams only. */
   team_ids: string[];
+  /** RADD-1291: the home project (who plans it); null = an instance cycle. */
+  project_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -51,6 +53,8 @@ export interface CycleCompleteResult {
 
 export interface CycleCreate {
   name: string;
+  /** RADD-1291: the home project; omit for an instance cycle. */
+  project_id?: string | null;
   /** Omit both (or send null) to create a draft (staging) cycle. */
   start_date?: string | null;
   end_date?: string | null;
@@ -109,6 +113,8 @@ export interface CycleUpdate {
   goal?: string;
   /** Spec 60: [] = make public; non-empty = those teams only; omit = unchanged. */
   team_ids?: string[];
+  /** RADD-1291: null = an instance cycle; omit = unchanged. */
+  project_id?: string | null;
 }
 
 /** Compact embed of the cycle an item is planned into (status derived). */

@@ -51,7 +51,7 @@ export function CyclePicker({
   const selected = item.cycle ?? null;
   return (
     <div className="flex flex-col gap-1.5">
-      <CycleSelect label="Cycle" value={selected?.id ?? ""} selectedLabel={selected?.name}
+      <CycleSelect label="Cycle" value={selected?.id ?? ""} selectedLabel={selected?.name} projectId={item.project_id}
         onChange={value => onPatch({ cycle_id: value || null })} />
       {/* Carryover trail (spec 56): cycles this item was in before — first-class
           data (SLQ `past_cycle`), not just an audit-log footnote. */}

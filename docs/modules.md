@@ -19,6 +19,14 @@ as the managers. SPA: `components/comments/ThreadResolution.tsx` (badge, resolve
 rule style) shared by `items/CommentsThread` and `pages/PageComments`;
 `settings/ThreadResolutionSection.tsx` under Project settings → Workflow.
 
+RADD-1291: **cycles have a home project** (`cycles.project_id`, nullable, SET NULL; migration
+`d1291cyclehome` backfills each cycle to the project holding most of its issues). Not a scope: a
+cycle still holds any project's issues. `GET /cycles?project_id=` = homed there OR holding its issues
+(`cycles.directory.for_project`); Planning, project Reports' burnup and the issue/new-issue cycle
+pickers ask for it (pickers switch to "All cycles"). Writes: the instance `cycle.*` atom OR
+`project.manage` on the home project (`router._require_cycle_write`); re-homing needs both sides.
+Series drafts inherit the latest cycle's home.
+
 RADD-1285: **shipping is a workflow transition.** `workflow_transitions.on_release`
 ("moves automatically when a release is published", needs a from-state, one per from-state)
 replaces spec 112's `release_waiting_state`/`release_shipped_state` settings (deleted, with their

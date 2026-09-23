@@ -11,6 +11,7 @@ import { ListSearchInput } from "../ListSearchInput";
 import { DirectoryPager } from "../DirectoryPager";
 import { QueryError } from "../QueryError";
 import { Spinner } from "../Spinner";
+import { Switch } from "../Switch";
 
 interface Props {
   value: string;
@@ -31,13 +32,16 @@ interface Props {
   id?: string;
   size?: "sm" | "md";
   className?: string;
+  /** RADD-1291: open on this project's cycles, with a switch to see all of them
+   *  (a cycle may still hold issues from any project). */
+  projectId?: string;
 }
 
 /** A closed selector resolves only its current value. Opening it mounts a
  * bounded directory; every name search reaches the whole authorized catalog. */
 export function CycleSelect({ value, onChange, valueBy = "id", selectedLabel, label, placeholder,
   emptyLabel = "No cycle", emptyValue = "", includeCompleted = true, datedOnly = false,
-  disabled, title, error, hint, id, size = "md", className = "",
+  disabled, title, error, hint, id, size = "md", className = "", projectId,
 }: Props) {
   const generatedId = useId();
   const triggerId = id ?? generatedId;
@@ -59,20 +63,26 @@ export function CycleSelect({ value, onChange, valueBy = "id", selectedLabel, la
     </Button>
     {(error || hint) && <p id={`${triggerId}-hint`} className={`text-xs ${error ? "text-status-danger-ink" : "text-fg-muted"}`}>{error ?? hint}</p>}
     {open && <CycleChoices value={value} valueBy={valueBy} emptyLabel={emptyLabel}
-      includeCompleted={includeCompleted} datedOnly={datedOnly} onClose={() => setOpen(false)}
+      includeCompleted={includeCompleted} datedOnly={datedOnly} projectId={projectId} onClose={() => setOpen(false)}
       onSelect={cycle => { setOpen(false); onChange(cycle ? cycle[valueBy] : emptyValue, cycle); }} />}
   </div>;
 }
 
 export function CycleChoices({ value = "", valueBy = "id", emptyLabel = "No cycle", includeCompleted = true,
-  datedOnly = false, onSelect, onClose,
+  datedOnly = false, onSelect, onClose, projectId,
 }: {
   value?: string; valueBy?: "id" | "name"; emptyLabel?: string | null;
-  includeCompleted?: boolean; datedOnly?: boolean;
+  includeCompleted?: boolean; datedOnly?: boolean; projectId?: string;
   onSelect: (cycle: Cycle | null) => void; onClose: () => void;
 }) {
-  const directory = useCycleDirectory({ includeCompleted, datedOnly });
+  const [allCycles, setAllCycles] = useState(!projectId);
+  const directory = useCycleDirectory({ includeCompleted, datedOnly, projectId: allCycles ? "" : projectId });
   return <Modal title="Choose a cycle" onClose={onClose}>
+    {projectId && (
+      <div className="mb-2 flex justify-end">
+        <Switch label="All cycles" checked={allCycles} onChange={setAllCycles} data-cycle-scope="all" />
+      </div>
+    )}
     <ListSearchInput value={directory.filter} onChange={directory.setFilter} placeholder="Search cycles by name…"
       total={directory.total} matched={directory.total} noun="cycles" />
     {emptyLabel && <Button variant="ghost" className="mt-2" onClick={() => onSelect(null)}>{emptyLabel}</Button>}

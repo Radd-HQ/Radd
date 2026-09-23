@@ -79,6 +79,7 @@ def to_read(
         status=_status(cycle, today),
         completed_at=cycle.completed_at,
         team_ids=list(team_ids),
+        project_id=cycle.project_id,
         created_at=cycle.created_at,
         updated_at=cycle.updated_at,
     )
@@ -234,6 +235,7 @@ async def create_cycle(
         start_date=start_date,
         end_date=end_date,
         goal=data.goal,
+        project_id=data.project_id,
     )
     session.add(cycle)
     await session.flush()
@@ -264,6 +266,8 @@ async def update_cycle(
         cycle.end_date = data.end_date
     if data.goal is not None:
         cycle.goal = data.goal
+    if "project_id" in data.model_fields_set:
+        cycle.project_id = data.project_id
     _check_dates(cycle.start_date, cycle.end_date)
     if data.team_ids is not None:  # [] = make public again; omitted = unchanged
         team_ids = await set_cycle_teams(session, cycle, data.team_ids)
@@ -570,6 +574,8 @@ async def ensure_series_drafts(
             name=name,
             start_date=window[0] if window else None,
             end_date=window[1] if window else None,
+            # RADD-1291: a series' drafts belong where its latest cycle does.
+            project_id=max(mine, key=lambda c: (c.created_at is not None, c.created_at)).project_id if mine else None,
         )
         session.add(draft)
         await session.flush()
@@ -595,6 +601,7 @@ async def _cycle_audit_state(session: AsyncSession, cycle: Cycle) -> dict:
         "end_date": cycle.end_date,
         "goal": cycle.goal,
         "teams": sorted(found[t].name if t in found else str(t) for t in team_ids),
+        "project": str(cycle.project_id) if cycle.project_id else None,
     }
 
 

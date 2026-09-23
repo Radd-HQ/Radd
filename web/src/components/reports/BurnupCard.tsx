@@ -21,7 +21,10 @@ export function BurnupCard({
   fixedCycleId,
   initialMeasure,
   q,
+  projectId,
 }: {
+  /** RADD-1291: on a project's Reports, default to and pick from its cycles. */
+  projectId?: string;
   /** Story points enabled in scope (spec 70) — offers the Count/Points toggle. */
   showPoints?: boolean;
   /** Pin the chart to ONE cycle and hide the picker (spec 75 dashboard widgets). */
@@ -31,7 +34,7 @@ export function BurnupCard({
   initialMeasure?: ReportMeasureValue;
 }) {
   const [picked, setPicked] = useState("");
-  const defaultCycle = useQuery({ ...defaultBurnupCycleQuery(), enabled: !fixedCycleId && !picked });
+  const defaultCycle = useQuery({ ...defaultBurnupCycleQuery(projectId), enabled: !fixedCycleId && !picked });
   const cycleId = fixedCycleId ?? (picked || defaultCycle.data?.[0]?.id || "");
   const [measure, setMeasure] = useState<ReportMeasureValue>(
     initialMeasure ?? ReportMeasure.count,
@@ -75,7 +78,7 @@ export function BurnupCard({
       controls={<>
         {showPoints && <Segmented ariaLabel="Burnup measure" value={measure}
           options={MEASURE_OPTIONS} onChange={setMeasure} />}
-        {!fixedCycleId && <CycleSelect value={cycleId} onChange={setPicked} datedOnly
+        {!fixedCycleId && <CycleSelect value={cycleId} onChange={setPicked} projectId={projectId} datedOnly
           emptyLabel={null} size="sm" className="max-w-56" />}
       </>}
     >

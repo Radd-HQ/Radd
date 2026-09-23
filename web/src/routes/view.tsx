@@ -18,7 +18,7 @@ import {
 } from "react";
 import { useNavigate, useParams, Link } from "@tanstack/react-router";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, BookmarkPlus, CalendarClock, Download, GanttChartSquare, Globe, List, ListOrdered, Pencil, Pin, Rocket, RotateCcw, SearchCode, SquareKanban, Trash2, UserRound, X } from "lucide-react";
+import { BarChart3, BookmarkPlus, CalendarClock, Download, GanttChartSquare, Globe, List, ListOrdered, Pencil, Pin, Plus, Rocket, RotateCcw, SearchCode, SquareKanban, Trash2, UserRound, X } from "lucide-react";
 import { Slot, SlotId, useDisabledMatches } from "@radd/plugin-sdk";
 import { MissingPluginType } from "../components/shell/MissingPluginType";
 import { api, errorMessage } from "../lib/api";
@@ -123,6 +123,7 @@ import { ViewModal } from "../components/views/ViewModal";
 import { ViewSwimlanes } from "../components/views/ViewSwimlanes";
 import { RoadmapSurface } from "../components/roadmap/RoadmapSurface";
 import { QueryError } from "../components/QueryError";
+import { CycleModal } from "./settings/cycles";
 
 /**
  * Saved-view page (specs 09/11): `/p/$projectKey/v/$viewId` and the
@@ -137,6 +138,7 @@ export function ViewPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const perms = usePermissions();
+  const [newCycle, setNewCycle] = useState(false);
   const currentUser = useCurrentUser();
 
   const views = useQuery(viewDefinitionQuery(viewId));
@@ -363,7 +365,8 @@ export function ViewPage() {
         : (view?.group_by ?? (view?.view_type === ViewType.board ? ViewAxis.state : null));
   const laneAxis = view?.view_type === ViewType.board ? view.swimlane_by : null;
   const isGrouped = Boolean(view && !isPlanning && !isRoadmap && view.view_type !== ViewType.queue && columnAxis);
-  const cycles = useQuery({ ...cyclesQuery(), enabled: Boolean(view) && (
+  // RADD-1291: a project view plans with ITS cycles (homed there or holding its issues).
+  const cycles = useQuery({ ...cyclesQuery(undefined, view?.project_id ?? undefined), enabled: Boolean(view) && (
     view?.view_type === ViewType.planning || view?.group_by === ViewAxis.cycle || view?.swimlane_by === ViewAxis.cycle
   ) });
   const planning = useMemo(() => planningQueries(fetchQueryView, cycles.data, {...planningOptions, search: backlogSearch}), [fetchQueryView, cycles.data, planningOptions, backlogSearch]);
@@ -1025,6 +1028,16 @@ export function ViewPage() {
               view + its loaded, permission-scoped items — it can compute over exactly what the user
               can see. */}
           <Slot id={SlotId.viewHeader} view={view} items={items.data ?? []} />
+          {/* RADD-1291: a project's managers plan its sprints from here, homed in it. */}
+          {isPlanning && project && (perms.global(Permission.cycleCreate) || perms.project(project, Permission.projectManage)) && (
+            <Button size="sm" variant="secondary" onClick={() => setNewCycle(true)} data-new-cycle>
+              <Plus size={13} aria-hidden />
+              New cycle
+            </Button>
+          )}
+          {newCycle && project && (
+            <CycleModal cycle={null} defaultProjectId={project.id} onClose={() => setNewCycle(false)} />
+          )}
           {/* Queues have a fixed column set (spec 64) and roadmaps their own
               knobs (spec 79) — no display config for either. */}
           {(hasUrlState() || activeFilters.size > 0 || slqFilter.draft !== "") && (

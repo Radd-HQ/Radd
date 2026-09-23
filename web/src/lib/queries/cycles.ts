@@ -19,33 +19,35 @@ import type {
 } from "../types";
 
 /** All cycles (spec 18); optional `status` filter (derived server-side). */
-export const cyclesQuery = (status?: CycleStatusValue) =>
+/** RADD-1291: `projectId` narrows to the cycles that project plans with —
+ *  homed in it, or holding its issues. */
+export const cyclesQuery = (status?: CycleStatusValue, projectId?: string) =>
   queryOptions({
-    queryKey: queryKeys.cycles(status),
+    queryKey: queryKeys.cycles(status, projectId),
     meta: entityMeta(Entity.cycle),
-    queryFn: ({ signal }) => api.get<Cycle[]>(ApiPath.cycles, { signal, query: { status } }),
+    queryFn: ({ signal }) => api.get<Cycle[]>(ApiPath.cycles, { signal, query: { status, project_id: projectId } }),
   });
 
 export const CYCLES_PAGE_SIZE = 50;
 export const cyclesPageQuery = (
-  q = "", page = 0, status?: CycleStatusValue, includeCompleted = true, excludeId = "", datedOnly = false,
+  q = "", page = 0, status?: CycleStatusValue, includeCompleted = true, excludeId = "", datedOnly = false, projectId = "",
 ) => queryOptions({
-  queryKey: queryKeys.cyclesPage(q.trim(), page, status, includeCompleted, excludeId, datedOnly),
+  queryKey: queryKeys.cyclesPage(q.trim(), page, status, includeCompleted, excludeId, datedOnly, projectId),
   meta: entityMeta(Entity.cycle, Entity.team, Entity.role),
   queryFn: ({ signal }) => api.getPaged<Cycle>(ApiPath.cycles, { signal, query: {
     q: q.trim(), limit: String(CYCLES_PAGE_SIZE), offset: String(page * CYCLES_PAGE_SIZE),
     status, include_completed: String(includeCompleted), exclude_id: excludeId || undefined,
-    dated_only: String(datedOnly),
+    dated_only: String(datedOnly), project_id: projectId || undefined,
   } }),
 });
 
 /** Prefer an active dated cycle, then the most recent dated cycle. The server
  * chooses from the whole visible catalog before limiting the result. */
-export const defaultBurnupCycleQuery = () => queryOptions({
-  queryKey: ["cycles", "default-burnup"] as const,
+export const defaultBurnupCycleQuery = (projectId = "") => queryOptions({
+  queryKey: ["cycles", "default-burnup", { projectId }] as const,
   meta: entityMeta(Entity.cycle, Entity.team, Entity.role),
   queryFn: ({ signal }) => api.get<Cycle[]>(ApiPath.cycles, { signal,
-    query: { limit: "1", dated_only: "true", recent_first: "true" } }),
+    query: { limit: "1", dated_only: "true", recent_first: "true", project_id: projectId || undefined } }),
 });
 
 export const cycleSummaryQuery = (q = "") => queryOptions({

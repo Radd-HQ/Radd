@@ -514,7 +514,7 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
 
           <TeamSelect label="Team" value={teamId} onChange={setTeamId} {...lock("team")} error={errorFor("team")} />
 
-          <CycleSelect label="Cycle" value={cycleId} onChange={setCycleId} {...lock("cycle")} error={errorFor("cycle")} />
+          <CycleSelect label="Cycle" value={cycleId} onChange={setCycleId} projectId={project.id} {...lock("cycle")} error={errorFor("cycle")} />
 
           <SelectField
             label="Release"

@@ -108,7 +108,7 @@ export function ReportsPage() {
 
           <ThroughputCard projectId={project.id} start={start} end={end} interval={interval} q={q} />
           <CumulativeFlowCard projectId={project.id} start={start} end={end} interval={interval} q={q} />
-          <BurnupCard showPoints={pointsEnabled} q={q} />
+          <BurnupCard showPoints={pointsEnabled} q={q} projectId={project.id} />
           <div className="grid gap-4 lg:grid-cols-2">
             <TimeInStateCard projectId={project.id} q={q} />
             <VelocityCard showPoints={pointsEnabled} q={q} />

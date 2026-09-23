@@ -9,6 +9,9 @@ from radd.apitypes import UtcDatetime
 
 class CycleCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
+    # RADD-1291: the home project; None = an instance cycle. A project's
+    # managers may create cycles homed in it.
+    project_id: uuid.UUID | None = None
     # Optional: omit both to create a DRAFT (staging) cycle; set both to schedule it.
     start_date: date | None = None
     end_date: date | None = None
@@ -38,6 +41,8 @@ class CycleUpdate(BaseModel):
     # Spec 60 visibility: [] = public (everyone), non-empty = those teams only;
     # omitted/None = unchanged.
     team_ids: list[uuid.UUID] | None = None
+    # RADD-1291: omitted = unchanged, explicit null = an instance cycle.
+    project_id: uuid.UUID | None = None
 
 
 class CycleRead(BaseModel):
@@ -50,6 +55,7 @@ class CycleRead(BaseModel):
     completed_at: UtcDatetime | None = None  # set by the explicit "Complete cycle" action
     # Spec 60 visibility: [] = public; non-empty = visible to those teams only.
     team_ids: list[uuid.UUID] = []
+    project_id: uuid.UUID | None = None  # RADD-1291: the home project, None = instance
     created_at: UtcDatetime
     updated_at: UtcDatetime
 

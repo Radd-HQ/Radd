@@ -67,11 +67,22 @@ async def recent_completed(session: AsyncSession, *, actor: User | None, limit: 
         .order_by(finished.desc(), Cycle.id.desc()).limit(limit)))
 
 
+def for_project(project_id: uuid.UUID):
+    """RADD-1291: the cycles a project plans with — homed in it, or holding any
+    of its issues (a cross-project sprint another project owns)."""
+    from radd.modules.items.models import WorkItem  # spine read (weak_depends items)
+
+    holds_its_issues = select(WorkItem.id).where(
+        WorkItem.cycle_id == Cycle.id, WorkItem.project_id == project_id
+    ).exists()
+    return or_(Cycle.project_id == project_id, holds_its_issues)
+
+
 async def page(
     session: AsyncSession, user: User, *, q: str = "", status: CycleStatus | None = None,
     include_completed: bool = True, limit: int | None = None, offset: int = 0,
     today: date | None = None, exclude_id: uuid.UUID | None = None,
-    dated_only: bool = False, recent_first: bool = False,
+    dated_only: bool = False, recent_first: bool = False, project_id: uuid.UUID | None = None,
 ):
     from .service import team_ids_by_cycle
 
@@ -85,6 +96,8 @@ async def page(
         query = query.where(pivot != CycleStatus.COMPLETED.value)
     if dated_only:
         query = query.where(Cycle.start_date.is_not(None), Cycle.end_date.is_not(None))
+    if project_id is not None:
+        query = query.where(for_project(project_id))
     total = await session.scalar(select(func.count()).select_from(query.subquery()))
     priority = case(
         (pivot == CycleStatus.ACTIVE.value, 0), (pivot == CycleStatus.UPCOMING.value, 1),

@@ -155,6 +155,28 @@ async function main() {
     })()`);
     checks["1290 issue header keeps destructive actions behind a menu"] =
       header.menu && !header.archiveButton && !header.cloneButton && !header.deleteButton;
+
+    // --- RADD-1291: cycles have a home project -------------------------------
+    const planningView = (await api(`return (await call("GET", "/views?project_id=${world.projectId}")).body;`))
+      .find((v) => v.view_type === "planning");
+    const stranger = await api(`return (await call("POST", "/cycles", { name: "Elsewhere ${world.key}", project_id: "4e6612fa-5d1f-4d9e-8161-73d990051964" })).body;`);
+    await session.navigate(`${baseUrl}/p/${world.key}/v/${planningView.id}`, 3500);
+    checks["1291 planning offers New cycle"] = await waitFor(session, `!!document.querySelector("[data-new-cycle]")`);
+    await session.click("[data-new-cycle]");
+    await waitFor(session, `!!document.querySelector('[role="dialog"] input')`);
+    await session.eval(`(() => { const el = document.querySelector('[role="dialog"] input'); el.focus(); return true; })()`);
+    await session.send("Input.insertText", { text: `Sprint ${world.key}` });
+    await session.click('[role="dialog"] button[type="submit"]');
+    checks["1291 the new cycle is homed in the project"] = await waitFor(session,
+      `(async () => (await (await fetch("/api/v1/cycles?project_id=${world.projectId}", {credentials:"include"})).json()).some(c => c.name === "Sprint ${world.key}" && c.project_id === "${world.projectId}"))()`);
+    checks["1291 planning lists it"] = await waitFor(session, `document.body.innerText.includes("Sprint ${world.key}")`);
+    // The sidebar lists every live cycle by design; Planning (main) is the project's.
+    checks["1291 another project's empty cycle stays out of Planning"] = !(await session.eval(
+      `(document.querySelector("main") ?? document.body).innerText.includes("Elsewhere ${world.key}")`))
+      && await session.eval(`!!document.querySelector("main")`);
+    await api(`await call("DELETE", "/cycles/${stranger.id}");
+      const mine = (await (await fetch("/api/v1/cycles?project_id=${world.projectId}", {credentials:"include"})).json());
+      for (const c of mine) await call("DELETE", "/cycles/" + c.id); return true;`);
   } finally {
     if (world?.projectId) await api(`return (await call("DELETE", "/projects/${world.projectId}")).status;`).catch(() => null);
     await close();

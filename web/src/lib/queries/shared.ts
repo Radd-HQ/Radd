@@ -71,9 +71,9 @@ export const queryKeys = {
   permissionsCatalog: ["permissionsCatalog"] as const,
   roles: ["roles"] as const,
   roleGlobalGrants: (roleId: string) => ["roles", roleId, "global-grants"] as const,
-  cycles: (status?: CycleStatusValue) => ["cycles", { status: status ?? null }] as const,
-  cyclesPage: (q: string, page: number, status: CycleStatusValue | undefined, includeCompleted: boolean, excludeId: string, datedOnly: boolean) =>
-    ["cycles", "page", { q, page, status, includeCompleted, excludeId, datedOnly }] as const,
+  cycles: (status?: CycleStatusValue, projectId?: string) => ["cycles", { status: status ?? null, projectId: projectId ?? null }] as const,
+  cyclesPage: (q: string, page: number, status: CycleStatusValue | undefined, includeCompleted: boolean, excludeId: string, datedOnly: boolean, projectId = "") =>
+    ["cycles", "page", { q, page, status, includeCompleted, excludeId, datedOnly, projectId }] as const,
   cycleSummary: (q: string) => ["cycles", "summary", q] as const,
   cycle: (cycleId: string) => ["cycle", { cycleId }] as const,
   cycleSeriesPage: (q: string, page: number) => ["cycle-series", "page", { q, page }] as const,

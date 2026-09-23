@@ -21,6 +21,13 @@ class Cycle(Base, TimestampMixin):
     end_date: Mapped[date | None] = mapped_column(Date)
     goal: Mapped[str] = mapped_column(Text, default="")
     completed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    #: RADD-1291: the project the cycle belongs to — who plans it and whose
+    #: Planning/Reports list it first. NOT a scope: a cycle still holds issues
+    #: from any project (cross-project sprints are why cycles were global).
+    #: NULL = an instance cycle. SET NULL when the project goes.
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="SET NULL"), index=True, nullable=True
+    )
 
 
 class CycleTeam(Base):
