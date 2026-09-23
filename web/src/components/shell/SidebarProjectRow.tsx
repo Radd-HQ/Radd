@@ -1,5 +1,5 @@
 import { Link, useParams } from "@tanstack/react-router";
-import { BarChart3, ChevronDown, ChevronRight, Plus, Settings } from "lucide-react";
+import { BarChart3, ChevronDown, ChevronRight, Plus, Rocket, Settings } from "lucide-react";
 import { RoutePath } from "../../lib/constants";
 import type { PermissionChecks } from "../../lib/hooks";
 import { Permission, ViewType, type Project } from "../../lib/types";
@@ -69,6 +69,16 @@ export function SidebarProjectRow({ project, expanded, permissions, onToggle, on
                       >
                         <BarChart3 size={12} aria-hidden />
                         Reports
+                      </Link>
+                    </li>
+                    <li>
+                      <Link
+                        to={RoutePath.projectReleases}
+                        params={{ projectKey: project.key }}
+                        className={subLinkClasses}
+                      >
+                        <Rocket size={12} aria-hidden />
+                        Releases
                       </Link>
                     </li>
                     {(permissions.project(project, Permission.stateManage) ||

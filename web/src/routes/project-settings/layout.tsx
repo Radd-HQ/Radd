@@ -3,7 +3,6 @@ import {
   ClipboardList,
   Clock,
   LayoutList,
-  Rocket,
   Shapes,
   SlidersHorizontal,
   Timer,
@@ -23,7 +22,6 @@ import { IssueTypesSettingsPage } from "./issue-types";
 import { ScreensSettingsPage } from "./screens";
 import { ProjectAccessSettingsPage } from "./projects";
 import { StatesSettingsPage } from "./states";
-import { ReleasesSettingsPage } from "./releases";
 import { FormsSettingsPage } from "./forms";
 import { ProjectTimeloggingSettingsPage } from "./timelogging";
 import { ProjectSlaSettingsPage } from "./sla";
@@ -83,12 +81,6 @@ const PROJECT_SETTINGS_NAV: readonly {
     // RADD-826 (D3): delegated access management — member.create in THIS
     // project opens the screen; revoke-only and global role managers also belong here.
     show: (perms, project) => perms.global(Permission.roleUpdate) || perms.project(project, Permission.memberCreate) || perms.project(project, Permission.memberDelete),
-  },
-  {
-    to: RoutePath.projectSettingsReleases,
-    label: "Releases",
-    icon: Rocket,
-    show: (perms, project) => perms.project(project, Permission.releaseUpdate),
   },
   {
     to: RoutePath.projectSettingsForms,
@@ -238,9 +230,10 @@ export function ProjectScreensSettings() {
   return <ScreensSettingsPage projectId={project?.id} />;
 }
 
+/** RADD-1290: releases are a project page now; the old settings address forwards. */
 export function ProjectReleasesSettings() {
-  const { project } = useUrlProject();
-  return <ReleasesSettingsPage projectId={project?.id} />;
+  const { projectKey = "" } = useParams({ strict: false });
+  return <Navigate to={RoutePath.projectReleases} params={{ projectKey }} replace />;
 }
 
 export function ProjectFormsSettings() {

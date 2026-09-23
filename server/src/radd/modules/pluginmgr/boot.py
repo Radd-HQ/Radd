@@ -53,7 +53,10 @@ def resolve_boot_paths() -> tuple[str, ...]:
     paths: list[str] = []
     # config.modules — core always; optional unless explicitly disabled
     for pid, (plugin, path) in discovery.core_plugins().items():
-        if plugin.core or states.get(pid) != PluginState.DISABLED.value:
+        state = states.get(pid)
+        if plugin.core or state == PluginState.ENABLED.value or (
+            state is None and plugin.enabled_by_default
+        ):
             paths.append(path)
     # installable — only when enabled
     for pid, (plugin, path) in discovery.installable_plugins().items():

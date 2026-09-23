@@ -68,7 +68,7 @@ async function main() {
     const refused = await api(`return await call("PATCH", "/items/${world.item}", { state_id: "${world.done}" });`);
     checks.handMoveRefusedWithoutRelease = refused.status >= 400 && JSON.stringify(refused.body).includes("a release is required");
 
-    await session.navigate(`${baseUrl}/p/${world.key}/settings/releases`, 2500);
+    await session.navigate(`${baseUrl}/p/${world.key}/releases`, 2500);
     checks.releasesPageNamesTheMove = await waitFor(session,
       `document.querySelector('[data-release-shipping]')?.textContent.includes("Waiting for release → Done")`);
     await session.screenshot(output + "/releases.png");

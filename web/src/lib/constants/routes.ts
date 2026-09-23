@@ -105,6 +105,8 @@ export const RoutePath = {
   roadmap: `${PROJECT_SEGMENT}/roadmap`,
   /** Reporting dashboards for a project (spec 19). */
   projectReports: `${PROJECT_SEGMENT}/reports`,
+  /** A project's releases and what shipped in each (RADD-1290) — a project page, not a setting. */
+  projectReleases: `${PROJECT_SEGMENT}/releases`,
   /** Server-wide reporting (velocity across cycles) (spec 19). */
   reports: "/reports",
   /** The timesheet — day/week/month time reports (spec 22). */

@@ -78,7 +78,7 @@ async def list_plugins(session: AsyncSession) -> list[PluginInfo]:
         if plugin.core:
             state, toggle = PluginState.ENABLED, False
         else:
-            disabled = row is not None and row.state == PluginState.DISABLED.value
+            disabled = (row.state == PluginState.DISABLED.value) if row is not None else not plugin.enabled_by_default
             state, toggle = (PluginState.DISABLED if disabled else PluginState.ENABLED), True
         infos.append(PluginInfo(plugin_id, plugin.name, plugin.version, plugin.core, state,
                                 plugin.description, can_toggle=toggle,

@@ -19,6 +19,7 @@ plugin = RaddPlugin(
     id="radd.milestones",
     version="1.0.0",
     core=False,
+    enabled_by_default=False,  # RADD-1290: the plugin-platform example, off on a fresh instance
     description="Milestones with a due date per project — an example plugin.",
     depends_on=("projects", "auth", "events"),
     entities=(SPEC,),

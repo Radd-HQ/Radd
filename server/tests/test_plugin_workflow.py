@@ -65,6 +65,21 @@ def test_external_boot_dependency_order(monkeypatch):
     assert boot.resolve_boot_paths() == ('pkg_a', 'pkg_b')
 
 
+def test_a_builtin_off_by_default_loads_only_when_enabled(monkeypatch):
+    """RADD-1290: an optional builtin that declares enabled_by_default=False (the
+    Milestones example) stays out of a fresh instance; an ENABLED row loads it,
+    and an ordinary optional builtin still loads with no row at all."""
+    example = RaddPlugin(name='example', core=False, enabled_by_default=False)
+    ordinary = RaddPlugin(name='ordinary', core=False)
+    monkeypatch.setattr(discovery, 'core_plugins',
+                        lambda: {'example': (example, 'pkg_example'), 'ordinary': (ordinary, 'pkg_ordinary')})
+    monkeypatch.setattr(discovery, 'installable_plugins', lambda: {})
+    monkeypatch.setattr(boot, 'plugin_states', lambda: {})
+    assert boot.resolve_boot_paths() == ('pkg_ordinary',)
+    monkeypatch.setattr(boot, 'plugin_states', lambda: {'example': 'enabled'})
+    assert set(boot.resolve_boot_paths()) == {'pkg_example', 'pkg_ordinary'}
+
+
 def test_boot_rejects_missing_dependency(monkeypatch):
     from radd.kernel.loader import PluginLoadError
     b = RaddPlugin(name='b', core=False, depends_on=('missing',))

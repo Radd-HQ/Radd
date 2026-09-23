@@ -14,6 +14,7 @@ import { authStateQuery } from "./lib/queries";
 const AppLayout = lazyRouteComponent(() => import("./routes/app-layout"), "AppLayout");
 import { PluginPage } from "./components/shell/PluginPage";
 import { SettingsPluginPage } from "./components/shell/SettingsPluginPage";
+import { ProjectReleasesPage } from "./routes/project-releases";
 const CyclePage = lazyRouteComponent(() => import("./routes/cycle"), "CyclePage");
 const FormSubmitPage = lazyRouteComponent(() => import("./routes/form-submit"), "FormSubmitPage");
 const ItemDetailPage = lazyRouteComponent(() => import("./routes/item-page"), "ItemDetailPage");
@@ -283,6 +284,13 @@ const projectReportsRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.projectReports,
   component: ReportsPage,
+});
+
+/** A project's releases (RADD-1290). */
+const projectReleasesRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: RoutePath.projectReleases,
+  component: ProjectReleasesPage,
 });
 
 /** Server-wide reporting — velocity across cycles (spec 19). */
@@ -772,6 +780,7 @@ const routeTree = rootRoute.addChildren([
     formSubmitRoute,
     roadmapRoute,
     projectReportsRoute,
+    projectReleasesRoute,
     globalReportsRoute,
     timesheetRoute,
     inboxRoute,

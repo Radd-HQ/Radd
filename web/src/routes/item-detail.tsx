@@ -51,6 +51,7 @@ import { AiResultsContext, type AiResultRequest } from "../components/items/ai-r
 import { RelatedLinksSection } from "../components/items/RelatedLinksSection";
 import { ItemPagesSection } from "../components/items/ItemPagesSection";
 import { Callout } from "../components/Callout";
+import { useConfirm } from "../components/ConfirmDialog";
 
 /** Debounce for text-ish custom-field edits before PATCHing. */
 const CUSTOM_FIELD_SAVE_DELAY_MS = 600;
@@ -112,7 +113,8 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
     entityId: item.id,
   });
   const navigate = useNavigate();
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // Delete asks through the kit dialog (RADD-1290), from the ⋯ menu.
+  const [deleteDialog, confirmDelete] = useConfirm();
   const archived = Boolean(item.archived_at);
   // Archiving is an item.update (RADD-778): `set_archived` gates on ITEM_UPDATE,
   // NOT item.delete — only the hard delete wants that, and its button already
@@ -259,80 +261,6 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
           <Star size={13} fill={item.starred ? "currentColor" : "none"} aria-hidden />
           {item.starred ? "Starred" : "Star"}
         </button>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => archiveItem.mutate({ itemId: item.id, archived: !archived })}
-          {...archiveGate.props}
-          title={
-            archiveGate.allowed
-              ? archived
-                ? "Unarchive"
-                : "Archive — hidden from lists until restored"
-              : archiveGate.reason
-          }
-        >
-          {archived ? <ArchiveRestore size={13} aria-hidden /> : <Archive size={13} aria-hidden />}
-          {archived ? "Unarchive" : "Archive"}
-        </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          disabled={cloneItem.isPending}
-          onClick={() =>
-            cloneItem.mutate(
-              { itemId: item.id },
-              {
-                onSuccess: (created) =>
-                  void navigate({ to: RoutePath.issue, params: { itemKey: created.key } }),
-              },
-            )
-          }
-          title="Clone — copies content and fields into a new issue; comments and history stay here"
-        >
-          <CopyPlus size={13} aria-hidden />
-          {cloneItem.isPending ? "Cloning…" : "Clone"}
-        </Button>
-        {cloneItem.isError && (
-          <span className="text-xs text-red-400">{errorMessage(cloneItem.error)}</span>
-        )}
-        {(deleteItem.isError || archiveItem.isError) && (
-          <span className="text-xs text-red-400">
-            {errorMessage(deleteItem.isError ? deleteItem.error : archiveItem.error)}
-          </span>
-        )}
-        {canManageProject &&
-          (confirmingDelete ? (
-            <span className="flex items-center gap-1.5">
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={() =>
-                  deleteItem.mutate(item.id, {
-                    onSuccess: () => {
-                      removeRecentItem(item.key);
-                      void navigate({ to: RoutePath.home, search: {} });
-                    },
-                  })
-                }
-              >
-                {deleteItem.isPending ? "Deleting…" : "Confirm delete"}
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => setConfirmingDelete(false)}>
-                Keep
-              </Button>
-            </span>
-          ) : (
-            <Button
-              variant="danger-ghost"
-              size="sm"
-              onClick={() => setConfirmingDelete(true)}
-              title="Delete permanently (audit history remains)"
-            >
-              <Trash2 size={13} aria-hidden />
-              Delete
-            </Button>
-          ))}
         <button
           type="button"
           // The spec-96 field gate decides; `data-needs` DECLARES the atom
@@ -362,6 +290,64 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
           <Flag size={13} fill={item.flagged ? "currentColor" : "none"} aria-hidden />
           {item.flagged ? "Flagged" : "Flag"}
         </button>
+        {/* RADD-1290: the toggles above are one weight; everything that changes the
+            issue's existence sits behind ⋯, with the destructive action last. */}
+        <DropdownMenu
+          label="Issue actions"
+          align="end"
+          items={[
+            {
+              kind: "action",
+              label: archived ? "Unarchive" : "Archive",
+              icon: archived ? ArchiveRestore : Archive,
+              disabled: !archiveGate.allowed,
+              onSelect: () => archiveItem.mutate({ itemId: item.id, archived: !archived }),
+            },
+            {
+              kind: "action",
+              label: cloneItem.isPending ? "Cloning…" : "Clone",
+              icon: CopyPlus,
+              disabled: cloneItem.isPending,
+              onSelect: () =>
+                cloneItem.mutate(
+                  { itemId: item.id },
+                  { onSuccess: (created) => void navigate({ to: RoutePath.issue, params: { itemKey: created.key } }) },
+                ),
+            },
+            ...(canManageProject
+              ? [
+                  { kind: "separator" as const },
+                  {
+                    kind: "action" as const,
+                    label: "Delete…",
+                    icon: Trash2,
+                    danger: true,
+                    onSelect: () =>
+                      void confirmDelete({
+                        title: `Delete ${item.key}?`,
+                        message: "The issue is deleted permanently. Its audit history remains.",
+                        confirmLabel: "Delete",
+                        danger: true,
+                      }).then((ok) => {
+                        if (!ok) return;
+                        deleteItem.mutate(item.id, {
+                          onSuccess: () => {
+                            removeRecentItem(item.key);
+                            void navigate({ to: RoutePath.home, search: {} });
+                          },
+                        });
+                      }),
+                  },
+                ]
+              : []),
+          ]}
+        />
+        {deleteDialog}
+        {(cloneItem.isError || deleteItem.isError || archiveItem.isError) && (
+          <span className="text-xs text-status-danger-ink">
+            {errorMessage(cloneItem.isError ? cloneItem.error : deleteItem.isError ? deleteItem.error : archiveItem.error)}
+          </span>
+        )}
           </>
         )}
         {/* Plugin-contributed header actions (spec 94): a plugin adds a button next to the title

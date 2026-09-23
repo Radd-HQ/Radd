@@ -88,7 +88,7 @@ const projectKey = (projects.body ?? [])[0]?.key;
 
 await session.navigate(`${baseUrl}/p/${projectKey}/settings/general`, 2400);
 const projectGeneral = await session.eval(SETTING_LABELS);
-await session.navigate(`${baseUrl}/p/${projectKey}/settings/releases`, 2400);
+await session.navigate(`${baseUrl}/p/${projectKey}/releases`, 2400);  // a project page since RADD-1290
 const projectReleases = await session.eval(SETTING_LABELS);
 await session.navigate(`${baseUrl}/p/${projectKey}/settings/timelogging`, 2400);
 const projectTimelogging = await session.eval(SETTING_LABELS);
@@ -204,9 +204,10 @@ const failed = report(
       !projectGeneral.includes("Waiting-for-release state"),
     "project General no longer holds the working week":
       !projectGeneral.includes("Working week"),
-    "Shipped state moved to the Releases tab": projectReleases.includes("Shipped state"),
-    "Waiting-for-release state moved with it":
-      projectReleases.includes("Waiting-for-release state"),
+    // RADD-1285: which states ship is a workflow transition now, so neither
+    // setting exists anywhere — not on General, not on Releases.
+    "no release state settings on Releases (shipping is a transition)":
+      !projectReleases.includes("Shipped state") && !projectReleases.includes("Waiting-for-release state"),
     "working week moved to the Time logging tab":
       projectTimelogging.includes("Working week"),
 

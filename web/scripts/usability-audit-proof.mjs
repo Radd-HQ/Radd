@@ -128,6 +128,33 @@ async function main() {
     await session.navigate(`${baseUrl}/settings/plugins`, 2500);
     checks["1288 plugin upload uses a kit button"] = await session.eval(
       `!!document.querySelector("[data-choose-wheel]") && document.querySelector('input[type="file"]')?.classList.contains("sr-only")`);
+
+    // --- RADD-1290: releases and reports are project pages -------------------
+    await api(`await call("POST", "/releases", { project_id: "${world.projectId}", name: "One", version: "1.0.0" });
+      const issue = (await call("POST", "/items", { project_id: "${world.projectId}", title: "In the release" })).body;
+      const rel = (await call("GET", "/releases?project_id=${world.projectId}")).body[0];
+      await call("PATCH", "/items/" + issue.id, { release_id: rel.id }); return true;`);
+    const views = await api(`return (await call("GET", "/views?project_id=${world.projectId}")).body;`);
+    await session.navigate(`${baseUrl}/p/${world.key}/v/${views[0].id}`, 3000);
+    checks["1290 a view links Reports"] = await waitFor(session, `!!document.querySelector('[data-view-link="reports"]')`);
+    checks["1290 a view links Releases"] = await session.eval(`!!document.querySelector('[data-view-link="releases"]')`);
+    await session.click('[data-view-link="releases"]');
+    checks["1290 releases is a project page"] = await waitFor(session,
+      `location.pathname === "/p/${world.key}/releases" && document.body.innerText.includes("· Releases")`);
+    await waitFor(session, `!!document.querySelector('[data-release="1.0.0"] button[aria-expanded]')`);
+    await session.click('[data-release="1.0.0"] button[aria-expanded]');
+    checks["1290 a release lists its issues"] = await waitFor(session,
+      `document.querySelector('[data-release-issues="1.0.0"]')?.textContent.includes("In the release")`);
+    await session.navigate(`${baseUrl}/p/${world.key}/settings/releases`, 2500);
+    checks["1290 the old settings address forwards"] = await waitFor(session, `location.pathname === "/p/${world.key}/releases"`);
+    await session.navigate(`${baseUrl}/issues/${item.key}`, 3000);
+    const header = await session.eval(`(() => {
+      const labels = [...document.querySelectorAll("header button")].map(b => b.textContent.trim());
+      return { archiveButton: labels.includes("Archive"), cloneButton: labels.includes("Clone"), deleteButton: labels.includes("Delete"),
+               menu: !!document.querySelector('header [aria-label="Issue actions"]') };
+    })()`);
+    checks["1290 issue header keeps destructive actions behind a menu"] =
+      header.menu && !header.archiveButton && !header.cloneButton && !header.deleteButton;
   } finally {
     if (world?.projectId) await api(`return (await call("DELETE", "/projects/${world.projectId}")).status;`).catch(() => null);
     await close();

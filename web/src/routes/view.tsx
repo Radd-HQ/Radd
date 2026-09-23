@@ -16,9 +16,9 @@ import {
   useState,
   type MouseEvent as ReactMouseEvent,
 } from "react";
-import { useNavigate, useParams } from "@tanstack/react-router";
+import { useNavigate, useParams, Link } from "@tanstack/react-router";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, BookmarkPlus, CalendarClock, Download, RotateCcw, GanttChartSquare, Globe, List, ListOrdered, Pencil, Pin, SearchCode, SquareKanban, Trash2, UserRound, X } from "lucide-react";
+import { BarChart3, BookmarkPlus, CalendarClock, Download, GanttChartSquare, Globe, List, ListOrdered, Pencil, Pin, Rocket, RotateCcw, SearchCode, SquareKanban, Trash2, UserRound, X } from "lucide-react";
 import { Slot, SlotId, useDisabledMatches } from "@radd/plugin-sdk";
 import { MissingPluginType } from "../components/shell/MissingPluginType";
 import { api, errorMessage } from "../lib/api";
@@ -1114,6 +1114,22 @@ export function ViewPage() {
             >
               {deleteView.isPending ? "Deleting…" : "Confirm delete?"}
             </Button>
+          )}
+          {/* RADD-1290: the project's other pages, one click from any of its
+              views — Reports used to hide behind ⋯, Releases behind settings. */}
+          {project && (
+            <nav aria-label="Project pages" className="flex items-center gap-0.5">
+              <Link to={RoutePath.projectReports} params={{ projectKey: project.key }} data-view-link="reports"
+                className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-fg-secondary hover:bg-overlay hover:text-heading focus-visible:outline-2 focus-visible:outline-focus">
+                <BarChart3 size={13} aria-hidden />
+                Reports
+              </Link>
+              <Link to={RoutePath.projectReleases} params={{ projectKey: project.key }} data-view-link="releases"
+                className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-fg-secondary hover:bg-overlay hover:text-heading focus-visible:outline-2 focus-visible:outline-focus">
+                <Rocket size={13} aria-hidden />
+                Releases
+              </Link>
+            </nav>
           )}
           {/* Secondary view actions fold behind ⋯ — the reference bar keeps
               row 1 to identity + the few always-used knobs. */}

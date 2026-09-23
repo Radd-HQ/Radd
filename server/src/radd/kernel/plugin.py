@@ -64,6 +64,10 @@ class RaddPlugin:
     version: str = "0.0.0"
     api_version: str = KERNEL_API_VERSION
     core: bool = True  # reclassified builtins are core (non-disableable); externals set False
+    #: RADD-1290: a non-core BUILTIN with no stored state loads when this is
+    #: True. An example plugin (milestones) sets False so a fresh instance's nav
+    #: carries only real features; enabling it writes an ENABLED row.
+    enabled_by_default: bool = True
     depends_on: tuple[str, ...] = ()  # other plugin names that must load first
     #: Cross-module imports the loader must NOT order by (RADD-885): deferred
     #: reverse reaches ("teams calls items.service after both loaded") and
