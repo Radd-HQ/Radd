@@ -63,7 +63,8 @@ plugin = RaddPlugin(
     relations=(COMMENT_OWN,),
     relation_domains=(("comment.write", "item"),),
     description="Comments on work items: CRUD + comment.* events; counts feed item hydration.",
-    depends_on=("items", "auth", "projects", "events", "teams"),
+    # itemtypes: RADD-1283's resolution rules are scoped by issue type.
+    depends_on=("items", "auth", "projects", "events", "teams", "itemtypes"),
     # `commented_by = me` on the ITEM dialect — see slq.py.
     slq_fields=(
         SlqFieldSpec(name="commented_by", label="Commented by", item_ids=commented_by_item_ids),
@@ -90,6 +91,11 @@ plugin = RaddPlugin(
         EventTypeSpec(
             CommentEvent.DELETED, "Comment deleted", "Comments", item_scoped=True,
             subjects=("page",), payload_schema=_COMMENT_PAYLOAD_SCHEMA,
+        ),
+        # RADD-1283: configuration, audited — not an automation trigger.
+        EventTypeSpec(
+            CommentEvent.RESOLUTION_POLICY_UPDATED, "Thread resolution rules changed", "Admin",
+            has_changes=True, trigger=False, subjects=("project",),
         ),
     ),
 )

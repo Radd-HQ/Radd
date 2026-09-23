@@ -26,11 +26,13 @@ from .types import (
     CommentVisibility,
 )
 from .reading import comment_page as comment_page, list_comments as list_comments
+from .threads import has_unresolved_threads as has_unresolved_threads
 from radd.clock import utcnow
 
 
 def _to_read(
-    comment: Comment, author: User | None, visible_to_teams: set[uuid.UUID] | None = None
+    comment: Comment, author: User | None, visible_to_teams: set[uuid.UUID] | None = None,
+    resolver: User | None = None,
 ) -> CommentRead:
     return CommentRead(
         id=comment.id,
@@ -43,6 +45,7 @@ def _to_read(
             avatar_emoji=author.avatar_emoji,
         ) if author else None,
         body=comment.body,
+        is_thread=comment.is_thread,
         visibility=CommentVisibility(comment.visibility),
         visible_to_teams=sorted(visible_to_teams or set()),
         created_at=comment.created_at,
@@ -50,6 +53,7 @@ def _to_read(
         anchor=CommentAnchor(**comment.anchor) if comment.anchor else None,
         resolved_at=comment.resolved_at,
         resolved_by=comment.resolved_by,
+        resolver_name=(resolver.name or resolver.email) if resolver and comment.resolved_at else None,
         parent_comment_id=comment.parent_comment_id,
     )
 
@@ -284,6 +288,7 @@ async def _emit(
             "parent_comment_id": (
                 str(comment.parent_comment_id) if comment.parent_comment_id else None
             ),
+            "is_thread": comment.is_thread,
             # The canonical item ref (RADD-922), None when the parent is not an
             # item. It replaces the bare `item_id` that every consumer then had
             # to resolve into a key and a project of its own accord.
@@ -307,6 +312,8 @@ async def create_comment(
     entity_type: str = CommentParentType.ITEM.value,
 ) -> CommentRead:
     binding, project = await _parent_scope(session, entity_type, entity_id)
+    if data.is_thread or data.anchor is not None:
+        await binding.require_read(session, actor, entity_id, project)
     permissions = await binding.require_write(session, actor, entity_id, project)
     return await create_authorized_comment(
         session, entity_id, data, actor, entity_type=entity_type, permissions=permissions
@@ -342,6 +349,11 @@ async def create_authorized_comment(
     notifications and watchers behave identically however the comment arrived.
     """
     _check_internal(permissions, data.visibility)
+    is_thread = parent_comment_id is None and (data.is_thread or data.anchor is not None)
+    if is_thread:
+        from .threads import lock_thread_parent
+
+        await lock_thread_parent(session, entity_type, entity_id)
     # Import overrides (author/timestamp) are honored only for a project manager.
     can_import = Permission.PROJECT_MANAGE in permissions
     # An IMPORT states the author explicitly; falling back to the actor there
@@ -355,6 +367,7 @@ async def create_authorized_comment(
         entity_id=entity_id,
         author_id=author_id,
         body=data.body,
+        is_thread=is_thread,
         anchor=data.anchor.model_dump() if data.anchor else None,
         visibility=data.visibility.value,
         parent_comment_id=parent_comment_id,
@@ -476,30 +489,40 @@ async def delete_for_parent(
 async def set_resolved(
     session: AsyncSession, comment_id: uuid.UUID, actor: User, *, resolved: bool
 ) -> CommentRead:
-    """Resolve or reopen an inline comment (RADD-726/729).
+    """Resolve or reopen a resolvable root (inline or general discussion).
 
     Same authorization as EDITING it — resolving is a statement about the
     conversation, not a destructive act, and anyone who could rewrite the comment
     can certainly close it. Idempotent: resolving a resolved comment is not an
     error, because two people clicking at once is ordinary.
     """
+    from .threads import lock_thread_parent, require_thread
+
     comment = await _get(session, comment_id)
     if comment.parent_comment_id:
         raise ConflictError(CommentEntity.COMMENT, reason="Resolve the thread, not an individual reply")
-    binding, project = await _parent_scope(session, comment.entity_type, comment.entity_id)
-    await _require_author_or(
-        session, comment, actor, project, others=binding.manage_permission
-    )
+    comment = await require_thread(session, comment_id, actor)
+    await lock_thread_parent(session, comment.entity_type, comment.entity_id)
+    comment = await require_thread(session, comment_id, actor, lock=True)
+    if not comment.is_thread:
+        raise ConflictError(CommentEntity.COMMENT, reason="Only a resolvable thread can be resolved")
+    from .resolution import require_resolvable
+
+    # RADD-1283: the parent's resolution rule decides, not a hardcoded author-or-manager.
+    await require_resolvable(session, comment, actor)
     was_resolved = comment.resolved_at is not None
-    comment.resolved_at = utcnow() if resolved else None
-    comment.resolved_by = actor.id if resolved else None
+    if was_resolved != resolved:
+        comment.resolved_at = utcnow() if resolved else None
+        comment.resolved_by = actor.id if resolved else None
     await session.flush()
+    stored_teams = (await _team_restrictions(session, [comment.id])).get(comment.id, set())
     if was_resolved != resolved:  # spec 123: resolving is an update to the record
-        stored_teams = (await _team_restrictions(session, [comment.id])).get(comment.id, set())
         await _emit(
             session, CommentEvent.UPDATED, comment, actor.id,
             visible_to_teams=stored_teams,
             diff=[{"field": "resolved", "from": was_resolved, "to": resolved}],
         )
     author = await auth.get_user(session, comment.author_id) if comment.author_id else None
-    return _to_read(comment, author)
+    return _to_read(comment, author, stored_teams, actor if resolved else None).model_copy(
+        update={"can_resolve": True}  # whoever just resolved it may unresolve it: same rule
+    )

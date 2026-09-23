@@ -44,11 +44,15 @@ async def audience(session, entity_id, actor, entity_type):
     return or_(*allowed)
 
 
-async def _read_query(session, entity_id, actor, entity_type, section, allowed=_EVERYTHING):
+async def _read_query(session, entity_id, actor, entity_type, section, allowed=_EVERYTHING, *, unresolved=False):
     if allowed is _EVERYTHING:
         allowed = await audience(session, entity_id, actor, entity_type)
     query = select(Comment).where(Comment.entity_type == entity_type, Comment.entity_id == entity_id,
                                   Comment.parent_comment_id.is_(None))
+    # RADD-1283: a filter, not a section — it composes with `discussion` (a page's
+    # Discussion) as well as `all` (an issue), without pulling annotations in.
+    if unresolved:
+        query = query.where(Comment.is_thread.is_(True), Comment.resolved_at.is_(None))
     if allowed is not None:
         query = query.where(allowed)
     # Historical JSONB nulls and SQL NULL both represent an ordinary discussion.
@@ -59,21 +63,38 @@ async def _read_query(session, entity_id, actor, entity_type, section, allowed=_
     return query
 
 
-async def _hydrate(session, rows, allowed=None):
+async def _hydrate(session, rows, allowed=None, actor=None, entity=None):
     """Reads for `rows`; `reply_count` counts the replies THIS actor may read
     (`allowed` is the audience clause), on every root — RADD-1246 made every
     comment a thread root, not only anchored ones."""
     from .service import _team_restrictions, _to_read
 
     restrictions = await _team_restrictions(session, [row.id for row in rows])
-    authors = await auth.users_by_ids(session, {row.author_id for row in rows if row.author_id is not None})
+    people = {row.author_id for row in rows if row.author_id is not None}
+    people |= {row.resolved_by for row in rows if row.resolved_by is not None}
+    authors = await auth.users_by_ids(session, people)
     roots = [row.id for row in rows if row.parent_comment_id is None]
     counting = select(Comment.parent_comment_id, func.count()).where(Comment.parent_comment_id.in_(roots))
     if allowed is not None:
         counting = counting.where(allowed)
     counts = dict((await session.execute(counting.group_by(Comment.parent_comment_id))).all()) if roots else {}
-    return [_to_read(row, authors.get(row.author_id), restrictions.get(row.id))
-            .model_copy(update={"reply_count": counts.get(row.id, 0)}) for row in rows]
+    # RADD-1283: the reader's reach under the parent's rule, once per parent.
+    reach = None
+    if actor is not None and entity is not None and any(row.is_thread for row in rows):
+        from .resolution import resolve_reach
+
+        reach = await resolve_reach(session, actor, *entity)
+    return [_to_read(row, authors.get(row.author_id), restrictions.get(row.id),
+                     authors.get(row.resolved_by) if row.resolved_by else None)
+            .model_copy(update={"reply_count": counts.get(row.id, 0),
+                                "can_resolve": reach is not None and _covers(reach, row, actor)})
+            for row in rows]
+
+
+def _covers(reach, row, actor) -> bool:
+    from .resolution import reach_covers
+
+    return reach_covers(reach, row, actor)
 
 
 def _cursor(row: Comment) -> str:
@@ -100,13 +121,13 @@ async def list_comments(
     allowed = await audience(session, entity_id, actor, entity_type)
     query = await _read_query(session, entity_id, actor, entity_type, CommentSlice.ALL, allowed)
     rows = list((await session.scalars(query.order_by(Comment.created_at, Comment.id))).all())
-    return await _hydrate(session, rows, allowed)
+    return await _hydrate(session, rows, allowed, actor, (entity_type, entity_id))
 
 
 async def comment_page(
     session: AsyncSession, entity_id: uuid.UUID, actor: User,
     entity_type: str = CommentParentType.ITEM.value, *, limit: int = 50,
-    before: str | None = None, section: CommentSlice = CommentSlice.ALL,
+    before: str | None = None, section: CommentSlice = CommentSlice.ALL, unresolved: bool = False,
 ) -> CommentPage:
     """Newest window in chronological order; older pages use an exclusive cursor.
 
@@ -116,7 +137,7 @@ async def comment_page(
     if not 1 <= limit <= 200:
         raise HTTPException(422, "Comment page limit must be between 1 and 200")
     allowed = await audience(session, entity_id, actor, entity_type)
-    query = await _read_query(session, entity_id, actor, entity_type, section, allowed)
+    query = await _read_query(session, entity_id, actor, entity_type, section, allowed, unresolved=unresolved)
     if before:
         query = query.where(tuple_(Comment.created_at, Comment.id) < tuple_(*_boundary(before)))
     query = query.order_by(Comment.created_at.desc(), Comment.id.desc()).limit(limit + 1)
@@ -124,7 +145,7 @@ async def comment_page(
     more = len(rows) > limit
     rows = rows[:limit]
     return CommentPage(
-        comments=await _hydrate(session, list(reversed(rows)), allowed),
+        comments=await _hydrate(session, list(reversed(rows)), allowed, actor, (entity_type, entity_id)),
         older_cursor=_cursor(rows[-1]) if more else None,
     )
 

@@ -35,6 +35,7 @@ export function CommentReplies({
   internalLocked = false,
   onUploadImage,
   quickActions,
+  canResolve = false,
 }: {
   row: Comment;
   canReply: boolean;
@@ -46,6 +47,8 @@ export function CommentReplies({
   onUploadImage?: (file: File) => Promise<string>;
   /** `/` actions on the issue in context; omit on pages. */
   quickActions?: QuickAction[];
+  /** May reopen this thread — offers "Reply and unresolve" once it is resolved. */
+  canResolve?: boolean;
 }) {
   const client = useQueryClient();
   const [internal, setInternal] = useState(false);
@@ -66,9 +69,10 @@ export function CommentReplies({
     }),
   );
   const post = useMutation({
-    mutationFn: (body: string) =>
+    mutationFn: ({ body, unresolve }: { body: string; unresolve: boolean }) =>
       api.post<Comment>(`${apiCommentPath(row.id)}/replies`, {
         body,
+        ...(unresolve ? { unresolve: true } : {}),
         ...(canInternal && internal ? { visibility: CommentVisibility.internal } : {}),
       }),
     onSuccess: () => {
@@ -79,6 +83,10 @@ export function CommentReplies({
     onSettled: () => void invalidateEntities(client, Entity.comment),
   });
   const replyIsInternal = internalLocked || (canInternal && internal);
+  const resolved = !!row.resolved_at;
+  const send = (unresolve = false) => {
+    if (draft.trim() && !post.isPending) post.mutate({ body: draft, unresolve });
+  };
   return (
     <div className="mt-3 space-y-3 border-t border-subtle pt-3" data-comment-replies={row.id}>
       <CommentHistory
@@ -125,14 +133,11 @@ export function CommentReplies({
           );
         })}
       </CommentHistory>
-      {canReply &&
-        (row.resolved_at ? (
-          <p className="text-xs text-fg-muted">Reopen this thread to reply.</p>
-        ) : (
+      {canReply && (
           <form
             onSubmit={(event) => {
               event.preventDefault();
-              if (draft.trim() && !post.isPending) post.mutate(draft);
+              send();
             }}
           >
             <div data-reply-composer data-composer-key={composerKey}>
@@ -141,9 +146,7 @@ export function CommentReplies({
                 value={draft}
                 onChange={onDraft}
                 placeholder={replyIsInternal ? "Write an internal reply…" : "Write a reply…"}
-                onSubmitShortcut={() => {
-                  if (draft.trim() && !post.isPending) post.mutate(draft);
-                }}
+                onSubmitShortcut={() => send()}
                 onUploadImage={onUploadImage}
                 quickActions={quickActions}
                 className={
@@ -161,6 +164,12 @@ export function CommentReplies({
               <Button type="submit" size="sm" disabled={!draft.trim() || post.isPending}>
                 {post.isPending ? "Replying…" : replyIsInternal ? "Reply internally" : "Reply"}
               </Button>
+              {resolved && canResolve && (
+                <Button type="button" size="sm" variant="secondary" data-reply-unresolve
+                  disabled={!draft.trim() || post.isPending} onClick={() => send(true)}>
+                  Reply and unresolve
+                </Button>
+              )}
               {internalLocked && (
                 <span className="text-[11px] text-fg-muted" data-reply-audience="locked">
                   Replies to an internal thread are internal.
@@ -179,7 +188,7 @@ export function CommentReplies({
               )}
             </div>
           </form>
-        ))}
+      )}
     </div>
   );
 }

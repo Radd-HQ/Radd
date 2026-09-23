@@ -6,7 +6,6 @@ import { Entity, invalidateEntities } from "../../lib/cache";
 import { apiCommentPath, apiParentCommentsPath } from "../../lib/constants";
 import { pageCommentFeedQuery } from "../../lib/queries";
 import type { Comment } from "../../lib/types";
-import { useCurrentUser } from "../../lib/hooks";
 import { locateAnchor, makeAnchor, orderByAnchor, type AnchorLocation, type TextAnchor } from "../../lib/anchoring";
 import { offsetsForSelection, rangeForOffsets, renderedText, revealTextOffset, scrollRangeIntoView } from "../../lib/dom-text";
 import { CommentHistory } from "../CommentHistory";
@@ -43,7 +42,6 @@ export function PageInlineComments({
   bodyVersion,
   editing = false,
   canComment,
-  canManage = false,
 }: {
   pageId: string;
   /** The element the page body renders into — the anchors' coordinate space. */
@@ -52,9 +50,7 @@ export function PageInlineComments({
   bodyVersion: number;
   editing?: boolean;
   canComment: boolean;
-  canManage?: boolean;
 }) {
-  const user = useCurrentUser();
   const queryClient = useQueryClient();
   const history = useInfiniteQuery(pageCommentFeedQuery(pageId, CommentSection.inline));
   const data = history.data;
@@ -199,7 +195,8 @@ export function PageInlineComments({
     onDraft: (value: string) => setReplyDrafts(previous => ({...previous, [row.id]: value})),
   });
 
-  const canResolveRow = (row: Comment) => canManage || (canComment && row.author?.id === user?.id);
+  // RADD-1283: the server's answer under the parent's resolution rule.
+  const canResolveRow = (row: Comment) => !!row.can_resolve;
   // RADD-1276: three groups. Open comments that still point at the page, the
   // ones whose passage is gone (a rewrite strands all of them at once — they
   // stay, by RADD-726, until someone resolves them, so they get a place, a
@@ -230,7 +227,7 @@ export function PageInlineComments({
       {floating.pointer && floatingRow && (
         <PageCommentPopover pointer={floating.pointer} onClose={floating.close} onKeep={floating.keep}
           onLeave={floating.leave} onPin={floating.pin}>
-          <Thread row={floatingRow} orphaned={null} focused canResolve={floating.pointer.pinned && (canManage || (canComment && floatingRow.author?.id === user?.id))}
+          <Thread row={floatingRow} orphaned={null} focused canResolve={floating.pointer.pinned && canResolveRow(floatingRow)}
             onResolve={() => {floating.close(); setFocusedId(null); resolve.mutate({id: floatingRow.id, resolved: true});}}
             expanded={floating.pointer.pinned} onToggle={floating.pointer.pinned ? floating.close : floating.pin} {...replyProps(floatingRow)} />
         </PageCommentPopover>

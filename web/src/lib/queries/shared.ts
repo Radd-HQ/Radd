@@ -20,6 +20,7 @@ export const queryKeys = {
   transitions: (projectId: string) => ["transitions", { projectId }] as const,
   allowedTransitions: (itemId: string) => ["allowedTransitions", { itemId }] as const,
   issueTypes: (projectId: string) => ["issue-types", { projectId }] as const,
+  threadResolution: (projectId: string) => ["thread-resolution", { projectId }] as const,
   validationContext: (projectId: string, typeId: string | null, formId: string | null) =>
     ["validation-context", { projectId, typeId, formId }] as const,
   effectiveScreen: (projectId: string, issueTypeId: string | null) =>

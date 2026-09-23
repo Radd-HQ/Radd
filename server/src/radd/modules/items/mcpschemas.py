@@ -153,6 +153,15 @@ def comment_item_schema() -> dict[str, Any]:
                 "description": "Reply under one of the item's comments — its id, as get_item "
                 "lists them. Replies are one level deep.",
             },
+            "is_thread": {
+                "type": "boolean",
+                "description": "Start a resolvable discussion instead of an ordinary comment. Not valid with reply_to.",
+            },
+            "unresolve": {
+                "type": "boolean",
+                "description": "With reply_to on a resolved thread: reopen it in the same write. "
+                "Without it, a reply leaves a resolved thread resolved.",
+            },
         },
         ["key", "body"],
     )

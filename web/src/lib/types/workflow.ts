@@ -68,6 +68,7 @@ export const WORKFLOW_TRANSITION_MODE_KEY = "workflow_transition_mode";
 export const TransitionCheck = {
   requireField: "require_field",
   requireApproval: "require_approval",
+  requireResolvedThreads: "require_resolved_threads",
 } as const;
 
 /** What a require_field condition addresses (spec 107). */
@@ -107,6 +108,7 @@ export interface ApproverEntry {
 }
 
 export type TransitionRule =
+  | { check: typeof TransitionCheck.requireResolvedThreads; params: Record<string, never> }
   | { check: typeof TransitionCheck.requireField; params: FieldConditionParams }
   | { check: typeof TransitionCheck.requireApproval; params: { approvers: ApproverEntry[] } };
 

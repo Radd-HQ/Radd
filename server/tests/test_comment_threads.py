@@ -78,14 +78,19 @@ async def test_reply_requires_both_read_and_write_and_hidden_roots_do_not_leak(w
 async def test_resolution_reopen_and_cascade_preserve_the_conversation(world):
     db, author, reader, page, root = world
     reply = await threads.create_reply(db, root.id, CommentReplyCreate(body="Keep this answer"), reader)
-    await service.set_resolved(db, root.id, author, resolved=True)
+    resolved = await service.set_resolved(db, root.id, author, resolved=True)
+    assert resolved.resolver_name == "Author"
     assert (await threads.reply_page(db, root.id, reader)).comments[0].id == reply.id
-    with pytest.raises(ConflictError):
-        await threads.create_reply(db, root.id, CommentReplyCreate(body="Closed"), reader)
+    # A resolved thread takes a reply and stays resolved (GitLab's plain "Reply")…
+    await threads.create_reply(db, root.id, CommentReplyCreate(body="After the fact"), reader)
+    listed = (await service.comment_page(db, page.id, author, entity_type="page")).comments
+    assert listed[0].resolved_at is not None and listed[0].resolver_name == "Author"
     with pytest.raises(ConflictError):
         await service.set_resolved(db, reply.id, reader, resolved=True)
-    await service.set_resolved(db, root.id, author, resolved=False)
-    await threads.create_reply(db, root.id, CommentReplyCreate(body="Open again"), reader)
+    # …and "Reply and unresolve" reopens it in the same write.
+    await threads.create_reply(db, root.id, CommentReplyCreate(body="Not done", unresolve=True), author)
+    reopened = (await service.comment_page(db, page.id, author, entity_type="page")).comments[0]
+    assert reopened.resolved_at is None and reopened.resolver_name is None and reopened.reply_count == 3
     # RADD-1246: a reply may be edited within its thread's audience — on a
     # public thread an empty team list is that audience, so this is allowed.
     edited = await service.update_comment(db, reply.id, CommentUpdate(body="Edited within audience", visible_to_teams=[]), reader)

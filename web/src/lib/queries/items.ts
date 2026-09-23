@@ -100,8 +100,8 @@ export const validationContextQuery = (
     retry: false,
   });
 
-export const itemCommentFeedQuery = (itemId: string) =>
-  commentFeedQuery(queryKeys.comments(itemId), apiItemCommentsPath(itemId), CommentSection.all);
+export const itemCommentFeedQuery = (itemId: string, unresolvedOnly = false) =>
+  commentFeedQuery(queryKeys.comments(itemId), apiItemCommentsPath(itemId), CommentSection.all, unresolvedOnly);
 
 /** Incremental direct-child reads; complete-relation callers retain childItemsQuery. */
 export const childItemPagesQuery = (parentId: string) => ({

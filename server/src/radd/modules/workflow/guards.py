@@ -52,6 +52,7 @@ class ItemSnapshot:
     # Spec 71: string state ids the item holds a CONSUMABLE approved request for
     # (resolved via the approvals module's deferred seam; module absent = empty).
     approved_to_state_ids: frozenset[str] = frozenset()
+    has_unresolved_threads: bool = False
 
 
 def is_empty(value: Any) -> bool:
@@ -207,6 +208,9 @@ def evaluate(
         elif check is TransitionCheck.REQUIRE_APPROVAL:
             if to_state_id is None or to_state_id not in snapshot.approved_to_state_ids:
                 approval_failures.append(_approval_failure(params))
+        elif check is TransitionCheck.REQUIRE_RESOLVED_THREADS:
+            if snapshot.has_unresolved_threads:
+                failures.append("all threads must be resolved (including internal threads)")
     return failures + approval_failures
 
 

@@ -64,6 +64,14 @@ def test_presence_conditions_keep_the_legacy_strings():
     assert evaluate(rules, satisfied) == []
 
 
+def test_resolved_threads_guard_composes_with_existing_conditions():
+    rules = [field_rule("assignee"), {"check": "require_resolved_threads", "params": {}}]
+    assert evaluate(rules, ItemSnapshot(builtin={"assignee": "u"})) == []
+    assert evaluate(rules, ItemSnapshot(has_unresolved_threads=True)) == [
+        "an assignee is required", "all threads must be resolved (including internal threads)"
+    ]
+
+
 def test_custom_set_uses_display_labels_and_blank_counts_as_missing():
     rules = [
         field_rule("severity", kind="custom"),
@@ -569,3 +577,84 @@ async def test_allowed_transitions_reports_targets(db, actor):
     blocked = by_state[states["In Progress"].id]
     assert not blocked.allowed and blocked.failures == ["an assignee is required"]
     assert by_state[states["Done"].id].allowed  # unmatched target stays open in guards
+
+
+async def test_resolvable_threads_gate_selected_states_and_preserve_regular_replies(db, actor):
+    from radd.modules.comments import service as comments, threads
+    from radd.modules.comments.schemas import CommentCreate, CommentReplyCreate
+    from radd.modules.comments.types import CommentVisibility
+
+    project, states = await _project_with_states(db)
+    await _set_mode(db, project, TransitionMode.GUARDS)
+    for target in ("Code Review", "Done"):
+        await transitions.create_transition(db, TransitionCreate(
+            project_id=project.id, to_state_id=states[target].id,
+            rules=[TransitionRule(check=TransitionCheck.REQUIRE_RESOLVED_THREADS)],
+        ))
+    item = await items.create_item(db, ItemCreate(project_id=project.id, title="Review discussion"), actor)
+    ordinary = await comments.create_comment(db, item.id, CommentCreate(body="FYI"), actor)
+    await threads.create_reply(db, ordinary.id, CommentReplyCreate(body="Thanks"), actor)
+    assert not ordinary.is_thread
+    assert not await comments.has_unresolved_threads(db, item.id)
+    with pytest.raises(ConflictError, match="resolvable thread"):
+        await comments.set_resolved(db, ordinary.id, actor, resolved=True)
+    await items.update_item(db, item.id, ItemUpdate(state_id=states["Code Review"].id), actor)
+    root = await comments.create_comment(db, item.id, CommentCreate(
+        body="Please address this", is_thread=True, visibility=CommentVisibility.INTERNAL), actor)
+    assert root.is_thread and root.resolved_at is None
+    assert await comments.has_unresolved_threads(db, item.id)
+    allowed = await transitions.allowed_transitions(db, project, await items.require_item(db, item.id))
+    done = next(t for t in allowed.targets if t.state_id == states["Done"].id)
+    assert not done.allowed and "all threads" in done.failures[0]
+    error = await _expect_blocked(db, item.id, ItemUpdate(state_id=states["Done"].id), actor)
+    assert "all threads" in error.errors[0]
+    await db.refresh(actor)
+    # An unprotected target remains reachable, and the second protected target fails too.
+    await items.update_item(db, item.id, ItemUpdate(state_id=states["In Progress"].id), actor)
+    await _expect_blocked(db, item.id, ItemUpdate(state_id=states["Code Review"].id), actor)
+    await db.refresh(actor)
+    reply = await threads.create_reply(db, root.id, CommentReplyCreate(body="Fixed"), actor)
+    assert not reply.is_thread
+    resolved = await comments.set_resolved(db, root.id, actor, resolved=True)
+    again = await comments.set_resolved(db, root.id, actor, resolved=True)
+    assert (again.resolved_at, again.resolved_by) == (resolved.resolved_at, resolved.resolved_by)
+    assert not await comments.has_unresolved_threads(db, item.id)
+    assert len((await threads.reply_page(db, root.id, actor)).comments) == 1
+    assert not (await comments.comment_page(db, item.id, actor, unresolved=True)).comments
+    await items.update_item(db, item.id, ItemUpdate(state_id=states["Code Review"].id), actor)
+    await comments.set_resolved(db, root.id, actor, resolved=False)
+    feed = await comments.comment_page(db, item.id, actor, unresolved=True)
+    assert [c.id for c in feed.comments] == [root.id]
+    await _expect_blocked(db, item.id, ItemUpdate(state_id=states["Done"].id), actor)
+    await db.refresh(actor)
+    await _set_mode(db, project, TransitionMode.OFF)
+    await items.update_item(db, item.id, ItemUpdate(state_id=states["Done"].id), actor)
+
+
+async def test_threads_gate_is_project_and_issue_type_scoped(db, actor):
+    from radd.modules.comments import service as comments
+    from radd.modules.comments.schemas import CommentCreate
+    from radd.modules.itemtypes import service as itemtypes
+
+    project, states = await _project_with_states(db)
+    types = await itemtypes.list_types(db, project.id)
+    selected = types[0]
+    await _set_mode(db, project, TransitionMode.GUARDS)
+    await transitions.create_transition(db, TransitionCreate(
+        project_id=project.id, to_state_id=states["Done"].id,
+        applies_when=[field_params("type", "is", values=[str(selected.id)])],
+        rules=[TransitionRule(check=TransitionCheck.REQUIRE_RESOLVED_THREADS)],
+    ))
+    for type_id, blocked in ((selected.id, True), (types[1].id, False)):
+        item = await items.create_item(db, ItemCreate(project_id=project.id, title="Scoped", type_id=type_id), actor)
+        await comments.create_comment(db, item.id, CommentCreate(body="Open", is_thread=True), actor)
+        if blocked:
+            await _expect_blocked(db, item.id, ItemUpdate(state_id=states["Done"].id), actor)
+            await db.refresh(actor)
+        else:
+            await items.update_item(db, item.id, ItemUpdate(state_id=states["Done"].id), actor)
+    other, other_states = await _project_with_states(db)
+    await _set_mode(db, other, TransitionMode.GUARDS)
+    item = await items.create_item(db, ItemCreate(project_id=other.id, title="Other project"), actor)
+    await comments.create_comment(db, item.id, CommentCreate(body="Open", is_thread=True), actor)
+    await items.update_item(db, item.id, ItemUpdate(state_id=other_states["Done"].id), actor)

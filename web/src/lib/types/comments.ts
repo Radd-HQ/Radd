@@ -26,15 +26,20 @@ export interface Comment {
   entity_id: string;
   author: UserRef | null;
   body: string;
+  is_thread?: boolean;
   visibility: CommentVisibilityValue;
   /** Spec 50: team ids an internal comment is narrowed to (empty = all readers). */
   visible_to_teams: string[];
   created_at: string;
   updated_at: string;
-  /** RADD-726. Null = an ordinary thread comment. */
+  /** RADD-726. Null = a general comment or discussion. */
   anchor: CommentAnchor | null;
   resolved_at: string | null;
   resolved_by: string | null;
+  /** Who resolved the thread, for "Resolved by …". */
+  resolver_name?: string | null;
+  /** RADD-1283: whether THIS reader may resolve/unresolve it, under the parent's rule. */
+  can_resolve?: boolean;
   parent_comment_id?: string | null;
   reply_count?: number;
 }
@@ -42,7 +47,23 @@ export interface Comment {
 /** The authenticated actor is the author; `internal` needs comment.read_internal. */
 export interface CommentCreate {
   body: string;
+  is_thread?: boolean;
   visibility?: CommentVisibilityValue;
   /** Spec 50: narrow an internal comment to these team ids (empty = all readers). */
   visible_to_teams?: string[];
+}
+
+/** RADD-1283: who may resolve or unresolve a thread. Managers always may, except
+ *  that `managers` is only them. A wire format — the server's `ThreadResolvers`. */
+export const ThreadResolvers = {
+  author: "author",
+  assignee: "assignee",
+  anyone: "anyone",
+  managers: "managers",
+} as const;
+export type ThreadResolversValue = (typeof ThreadResolvers)[keyof typeof ThreadResolvers];
+
+export interface ThreadResolutionPolicy {
+  default: ThreadResolversValue;
+  overrides: { issue_type_id: string; resolvers: ThreadResolversValue }[];
 }

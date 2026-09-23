@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 from radd.modules.items.schemas import UserRef
 
-from .types import CommentVisibility
+from .types import DEFAULT_THREAD_RESOLVERS, CommentVisibility, ThreadResolvers
 from radd.apitypes import UtcDatetime
 
 
@@ -23,6 +23,7 @@ class CommentAnchor(BaseModel):
 
 class CommentCreate(BaseModel):
     body: str = Field(min_length=1)
+    is_thread: bool = False
     # `internal` requires Permission.COMMENT_READ_INTERNAL on the item's project.
     visibility: CommentVisibility = CommentVisibility.PUBLIC
     # Spec 50: narrow an INTERNAL comment to specific teams (empty = all internal-readers).
@@ -50,6 +51,9 @@ class CommentReplyCreate(BaseModel):
     body: str = Field(min_length=1)
     visibility: CommentVisibility | None = None
     visible_to_teams: list[uuid.UUID] = Field(default_factory=list)
+    #: Reopen a resolved thread in the same write as the reply (GitLab's
+    #: "Reply and unresolve"). Without it a reply leaves a resolved thread resolved.
+    unresolve: bool = False
 
 
 class CommentRead(BaseModel):
@@ -58,14 +62,20 @@ class CommentRead(BaseModel):
     entity_id: uuid.UUID
     author: UserRef | None
     body: str
+    is_thread: bool = False
     visibility: CommentVisibility
     visible_to_teams: list[uuid.UUID] = Field(default_factory=list)  # spec 50
     created_at: UtcDatetime
     updated_at: UtcDatetime
-    # RADD-726. `anchor` null = an ordinary thread comment.
+    # RADD-726. Null anchor = a general comment or discussion.
     anchor: CommentAnchor | None = None
     resolved_at: UtcDatetime | None = None
     resolved_by: uuid.UUID | None = None
+    #: Who resolved it, for "Resolved by …" — the id alone names nobody.
+    resolver_name: str | None = None
+    #: RADD-1283: whether THIS reader may resolve/unresolve it, under the
+    #: parent's resolution rule. The server's answer, so no client restates it.
+    can_resolve: bool = False
     parent_comment_id: uuid.UUID | None = None
     reply_count: int = 0
 
@@ -73,3 +83,19 @@ class CommentRead(BaseModel):
 class CommentPage(BaseModel):
     comments: list[CommentRead]
     older_cursor: str | None = None
+
+
+class ThreadResolutionOverride(BaseModel):
+    """RADD-1283: the rule for one issue type, overriding the project default."""
+
+    issue_type_id: uuid.UUID
+    resolvers: ThreadResolvers
+
+
+class ThreadResolutionPolicy(BaseModel):
+    """A project's who-may-resolve rules. `default` covers every issue type
+    without an override; PUT replaces the whole policy."""
+
+    default: ThreadResolvers = DEFAULT_THREAD_RESOLVERS
+    overrides: list[ThreadResolutionOverride] = Field(default_factory=list)
+

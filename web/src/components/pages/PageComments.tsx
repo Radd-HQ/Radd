@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useMutation, useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { CommentReplies, repliesLabel } from "../comments/CommentReplies";
-import { MessageSquare, Trash2 } from "lucide-react";
+import { ResolveThreadButton, ThreadBadge, ThreadFilter, threadRuleClass } from "../comments/ThreadResolution";
+import { MessageSquare, MessagesSquare, Send, Trash2 } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { apiCommentPath, apiParentCommentsPath } from "../../lib/constants";
@@ -12,7 +13,7 @@ import { LazyRichEditor as RichEditor } from "../editor/LazyRichEditor";
 import { LazyRichViewer as RichViewer } from "../editor/LazyRichViewer";
 import { Avatar } from "../Avatar";
 import { CommentHistory } from "../CommentHistory";
-import { chronologicalComments } from "../../lib/queries/comment-feed";
+import { chronologicalComments, CommentSection } from "../../lib/queries/comment-feed";
 import { Button } from "../Button";
 import { useConfirm } from "../ConfirmDialog";
 
@@ -29,11 +30,17 @@ import { useConfirm } from "../ConfirmDialog";
  *
  * Page comments are public only. Internal visibility is a service-desk concept
  * that exists to hide a comment from a REQUESTER, and a page has no requester.
+ *
+ * RADD-1283: resolvable threads work here as on an issue — Start thread, the
+ * status chip and rule, Resolve/Unresolve, Reply and unresolve, and the
+ * Unresolved filter — sharing `comments/ThreadResolution`. Who may resolve is
+ * the server's `can_resolve`; a page has no project rule, so it is the default.
  */
 export function PageComments({ pageId, canComment }: { pageId: string; canComment: boolean }) {
   const user = useCurrentUser();
   const queryClient = useQueryClient();
-  const history = useInfiniteQuery(pageCommentFeedQuery(pageId));
+  const [unresolvedOnly, setUnresolvedOnly] = useState(false);
+  const history = useInfiniteQuery(pageCommentFeedQuery(pageId, CommentSection.discussion, unresolvedOnly));
   const comments = chronologicalComments(history.data?.pages);
   const { data: users } = useQuery({ ...usersQuery, enabled: useIsAuthenticated() });
   const [body, setBody] = useState("");
@@ -46,7 +53,7 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
   const invalidate = () => void invalidateEntities(queryClient, Entity.comment);
 
   const post = useMutation({
-    mutationFn: () => api.post(apiParentCommentsPath("page", pageId), { body }),
+    mutationFn: (isThread: boolean) => api.post(apiParentCommentsPath("page", pageId), { body, is_thread: isThread }),
     onSuccess: () => {
       setBody("");
       setComposerKey((key) => key + 1); // the editor is uncontrolled — remount to clear
@@ -59,7 +66,7 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
   });
 
   return (
-    <section className="mt-6 border-t border-subtle pt-4">
+    <section className="mt-6 border-t border-subtle pt-4" data-page-discussion>
       <h3 className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">
         <MessageSquare size={12} aria-hidden />
         Discussion
@@ -69,15 +76,26 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
           </span>
         ) : null}
       </h3>
+      <div className="mb-3 flex">
+        <ThreadFilter unresolvedOnly={unresolvedOnly} onChange={setUnresolvedOnly} />
+      </div>
 
       <CommentHistory hasOlder={history.hasNextPage} loading={history.isFetchingNextPage}
         onOlder={() => history.fetchNextPage()} error={history.isError ? errorMessage(history.error) : undefined}>
       {history.isPending && <p role="status" className="text-xs text-fg-muted">Loading comments…</p>}
+      {!history.isPending && comments.length === 0 && (
+        <p className="text-xs text-fg-faint">
+          {unresolvedOnly ? "No unresolved threads visible to you." : "No comments yet."}
+        </p>
+      )}
       <ul className="flex flex-col gap-4">
         {comments?.map((comment) => {
           const author = users?.find((u) => u.id === comment.author?.id);
           return (
-            <li data-comment-id={comment.id} key={comment.id} className="flex gap-2">
+            <li data-comment-id={comment.id} key={comment.id}
+              data-thread={comment.is_thread ? (comment.resolved_at ? "resolved" : "unresolved") : undefined}
+              className={"flex gap-2" + (comment.is_thread
+                ? " -mx-2 rounded-md border border-subtle bg-surface px-2 py-1.5" + threadRuleClass(comment) : "")}>
               <Avatar user={author ?? comment.author ?? { id: "", name: "Unknown author" }} size="sm" />
               <div className="min-w-0 flex-1">
                 <p className="flex items-baseline gap-2 text-[12px]">
@@ -85,6 +103,7 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
                   <span className="text-fg-faint" title={comment.created_at}>
                     {relativeTime(comment.created_at)}
                   </span>
+                  <ThreadBadge comment={comment} />
                   {(!!comment.author && comment.author.id === user?.id) && (
                     <button
                       type="button"
@@ -106,23 +125,27 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
                 <div className="mt-0.5 rounded-md border border-subtle bg-surface px-2 py-1">
                   <RichViewer text={comment.body} />
                 </div>
-                {user && (
-                  <button
-                    type="button"
-                    onClick={() => setOpenThread(openThread === comment.id ? null : comment.id)}
-                    aria-expanded={openThread === comment.id}
-                    data-thread-toggle={comment.id}
-                    className="mt-1 text-xs text-fg-muted hover:text-fg hover:underline cursor-pointer"
-                  >
-                    {repliesLabel(comment, openThread === comment.id, canComment)}
-                  </button>
-                )}
+                <div className="mt-1 flex flex-wrap items-center gap-3">
+                  {user && (
+                    <button
+                      type="button"
+                      onClick={() => setOpenThread(openThread === comment.id ? null : comment.id)}
+                      aria-expanded={openThread === comment.id}
+                      data-thread-toggle={comment.id}
+                      className="text-xs text-fg-muted hover:text-fg hover:underline cursor-pointer"
+                    >
+                      {repliesLabel(comment, openThread === comment.id, canComment)}
+                    </button>
+                  )}
+                  {comment.can_resolve && <ResolveThreadButton comment={comment} />}
+                </div>
                 {openThread === comment.id && (
                   <CommentReplies
                     row={comment}
                     canReply={canComment}
                     draft={replyDrafts[comment.id] ?? ""}
                     onDraft={(value) => setReplyDrafts((drafts) => ({ ...drafts, [comment.id]: value }))}
+                    canResolve={!!comment.can_resolve}
                   />
                 )}
               </div>
@@ -141,13 +164,19 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
             placeholder="Add to the discussion…"
             className="[&_.ProseMirror]:min-h-[5rem]"
           />
-          <div className="flex items-center gap-2">
-            <Button size="sm" onClick={() => post.mutate()} disabled={!body.trim() || post.isPending}>
+          <div className="flex items-center justify-end gap-2">
+            {post.isError && (
+              <span className="mr-auto text-xs text-status-danger-ink">{errorMessage(post.error)}</span>
+            )}
+            <Button size="sm" variant="secondary" data-start-thread
+              onClick={() => post.mutate(true)} disabled={!body.trim() || post.isPending}>
+              <MessagesSquare size={13} aria-hidden />
+              Start thread
+            </Button>
+            <Button size="sm" onClick={() => post.mutate(false)} disabled={!body.trim() || post.isPending}>
+              <Send size={13} aria-hidden />
               {post.isPending ? "Posting…" : "Comment"}
             </Button>
-            {post.isError && (
-              <span className="text-xs text-red-400">{errorMessage(post.error)}</span>
-            )}
           </div>
         </div>
       ) : (

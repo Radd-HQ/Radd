@@ -175,3 +175,53 @@ async def test_mcp_comment_item_replies_under_a_comment_of_the_same_item(db):
         await tools.call_tool(
             db, manager, "comment_item", {"key": stranger.key, "body": "wrong item", "reply_to": str(root.id)}
         )
+
+
+async def test_resolvable_thread_requires_live_read_and_resolution_permission(db):
+    from radd.exceptions import ForbiddenError
+
+    manager = await _admin(db, "Manager")
+    reader = await _admin(db, "Reader", scope=["item.read", "comment.write"])
+    item = await _item(db, manager)
+    root = await service.create_comment(db, item.id, CommentCreate(
+        body="Restricted review", visibility=INTERNAL, is_thread=True), manager)
+    assert await service.has_unresolved_threads(db, item.id)
+    assert not (await service.comment_page(db, item.id, reader, unresolved=True)).comments
+    with pytest.raises(NotFoundError):
+        await service.set_resolved(db, root.id, reader, resolved=True)
+    public = await service.create_comment(db, item.id, CommentCreate(body="Public review", is_thread=True), manager)
+    with pytest.raises(ForbiddenError):
+        await service.set_resolved(db, public.id, reader, resolved=True)
+    own = await service.create_comment(db, item.id, CommentCreate(body="My review", is_thread=True), reader)
+    assert (await service.set_resolved(db, own.id, reader, resolved=True)).resolved_by == reader.id
+    reader.token_scope = parse_scope({"global": ["item.read"]})
+    with pytest.raises(ForbiddenError):
+        await service.set_resolved(db, own.id, reader, resolved=False)
+
+
+async def test_thread_migration_preserves_sql_and_json_null_comments(db):
+    """Ordinary JSONB anchors are JSON null, not SQL NULL: never backfill them."""
+    import importlib.util
+    from pathlib import Path
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+    from sqlalchemy import text
+
+    path = Path(__file__).parents[1] / "migrations/versions/d1282threads_resolvable_discussions.py"
+    spec = importlib.util.spec_from_file_location("thread_migration", path)
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    await db.execute(text("CREATE TEMP TABLE comments (id integer, entity_type text, entity_id uuid, anchor jsonb, resolved_at timestamp, parent_comment_id integer) ON COMMIT DROP"))
+    await db.execute(text("""INSERT INTO comments (id, anchor, resolved_at, parent_comment_id) VALUES
+        (1, NULL, NULL, NULL), (2, 'null', NULL, NULL),
+        (3, '{"quote":"passage"}', NULL, NULL), (4, 'null', now(), NULL),
+        (5, 'null', NULL, 3)"""))
+    connection = await db.connection()
+    def upgrade(sync_connection):
+        with Operations.context(MigrationContext.configure(sync_connection)):
+            migration.upgrade()
+    await connection.run_sync(upgrade)
+    rows = (await db.execute(text("SELECT id, is_thread FROM comments ORDER BY id"))).all()
+    assert rows == [(1, False), (2, False), (3, True), (4, True), (5, False)]
+    await db.execute(text("INSERT INTO comments (id) VALUES (6)"))
+    assert await db.scalar(text("SELECT is_thread FROM comments WHERE id = 6")) is False

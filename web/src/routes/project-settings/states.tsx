@@ -27,6 +27,7 @@ import { TableSkeleton } from "../../components/TableSkeleton";
 import { TextField } from "../../components/TextField";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { TransitionsSection } from "../../components/settings/TransitionsSection";
+import { ThreadResolutionSection } from "../../components/settings/ThreadResolutionSection";
 import { QueryError } from "../../components/QueryError";
 import { IconButton } from "../../components/IconButton";
 import { ErrorText } from "../../components/ErrorText";
@@ -95,6 +96,7 @@ export function StatesSettingsPage({ projectId }: { projectId?: string }) {
             canManage={isInstanceAdmin}
           />
           <TransitionsSection project={project} states={sorted} canManage={canManage} />
+          {canManage && <ThreadResolutionSection project={project} />}
         </>
       )}
     </SettingsPage>

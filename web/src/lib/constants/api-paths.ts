@@ -17,6 +17,9 @@ export const apiTransitionPath = (transitionId: string) =>
   `${ApiPath.transitions}/${transitionId}`;
 export const apiProjectTransitionsPath = (projectId: string) =>
   `${ApiPath.projects}/${projectId}/transitions`;
+/** RADD-1283: who may resolve a thread — a default plus per-issue-type rules (`GET`/`PUT`). */
+export const apiProjectThreadResolutionPath = (projectId: string) =>
+  `${ApiPath.projects}/${projectId}/thread-resolution`;
 /** RADD-1009: one project by id — `PATCH` renames/describes it. */
 export const apiProjectPath = (projectId: string) => `${ApiPath.projects}/${projectId}`;
 /** RADD-1174: what deleting the project destroys + what blocks it (`GET`);

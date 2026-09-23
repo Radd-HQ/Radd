@@ -1,5 +1,24 @@
 # Module map
 
+RADD-1282: issue comments distinguish ordinary comments from resolvable threads
+(`comments.is_thread`). Workflow's `require_resolved_threads` check calls the
+comments service's audience-independent existence query. The existing project
+transitions, issue-type conditions and target states define where it applies.
+Comment changes refresh the UI's allowed transitions. See [resolvable threads](resolvable-threads.md).
+
+RADD-1283: who may resolve a thread is `comments.thread_resolution_rules` (project → optional
+issue type → `ThreadResolvers` author|assignee|anyone|managers; migration `d1283threadpolicy`,
+both FKs CASCADE), served at `GET/PUT /projects/{id}/thread-resolution` (project.manage, full
+replace, audited as `comment.resolution_policy_updated`, not a trigger). `comments/resolution.py`
+is the ONE answer: `resolve_reach` (any|own|none, once per parent) — `set_resolved` enforces it
+and every comment read carries `can_resolve`, so the SPA no longer restates the rule. `comments`
+now `depends_on` `itemtypes` (override validation). Feeds take `unresolved=true` as a FILTER that
+composes with `section` (a page's Discussion is `section=discussion&unresolved=true`); a reply may
+carry `unresolve: true`. Pages (no project, no type) always use the default rule with page.manage
+as the managers. SPA: `components/comments/ThreadResolution.tsx` (badge, resolve button, filter,
+rule style) shared by `items/CommentsThread` and `pages/PageComments`;
+`settings/ThreadResolutionSection.tsx` under Project settings → Workflow.
+
 RADD-1202: Planning uses active/upcoming/draft sprint sections, a separate open historical-work rescheduling section, an independently paged/searched/sorted backlog and explicitly opened per-sprint history. `planning-query.ts` / `PlanningControls.tsx` own these controls; `cycle.status` delegates to the cycle directory’s lifecycle expression. See [Planning workflow](planning-pagination.md).
 
 

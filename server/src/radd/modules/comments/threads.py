@@ -24,6 +24,29 @@ from .schemas import CommentCreate, CommentPage
 from .types import CommentEntity, CommentSlice, CommentVisibility
 
 
+async def lock_thread_parent(session, entity_type, entity_id):
+    """Serialize thread lifecycle writes with issue state updates (parent first)."""
+    from radd.modules.items.models import WorkItem
+    from .types import CommentParentType
+
+    if entity_type == CommentParentType.ITEM.value:
+        await session.scalar(select(WorkItem.id).where(WorkItem.id == entity_id).with_for_update())
+
+
+async def has_unresolved_threads(session, item_id):
+    """Workflow invariant across ALL audiences, never an actor-filtered count."""
+    from .types import CommentParentType
+
+    query = select(Comment.id).where(
+        Comment.entity_type == CommentParentType.ITEM.value,
+        Comment.entity_id == item_id,
+        Comment.parent_comment_id.is_(None),
+        Comment.is_thread.is_(True),
+        Comment.resolved_at.is_(None),
+    )
+    return bool(await session.scalar(select(query.exists())))
+
+
 def reply_audience(
     root: Comment,
     root_teams: set[uuid.UUID],
@@ -80,14 +103,18 @@ async def reply_page(session, comment_id, actor, *, limit=50, before=None):
 
 
 async def create_reply(session, comment_id, data, actor):
-    from .service import _team_restrictions, create_authorized_comment
+    from .service import _team_restrictions, create_authorized_comment, set_resolved
 
+    # A resolved thread takes replies and stays resolved, as in GitLab; `unresolve`
+    # reopens it in the same transaction. Reopening FIRST keeps set_resolved's lock
+    # order (parent, then root) — taking the root lock below first would invert it.
+    root = await require_thread(session, comment_id, actor)
+    if data.unresolve and root.is_thread and root.resolved_at:
+        await set_resolved(session, comment_id, actor, resolved=False)
     root = await require_thread(session, comment_id, actor, lock=True)
     binding = binding_for(root.entity_type)
     project = await binding.project_of(session, root.entity_id)
     permissions = await binding.require_write(session, actor, root.entity_id, project)
-    if root.resolved_at:
-        raise ConflictError(CommentEntity.COMMENT, reason="Reopen this thread before replying")
     if not data.body.strip():
         raise HTTPException(422, "Reply must not be blank")
     root_teams = (await _team_restrictions(session, [root.id])).get(root.id, set())

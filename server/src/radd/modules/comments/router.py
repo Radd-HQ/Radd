@@ -8,8 +8,13 @@ from radd.db import get_session
 from radd.modules.auth.deps import Actor, CurrentUser
 from radd.modules.auth.throttle import WriteBucket, check_write
 
-from . import service, threads
-from .schemas import CommentCreate, CommentPage, CommentRead, CommentReplyCreate, CommentUpdate
+from radd.modules.auth import authz
+from radd.modules.projects import service as projects_service
+
+from . import resolution, service, threads
+from .schemas import (
+    CommentCreate, CommentPage, CommentRead, CommentReplyCreate, CommentUpdate, ThreadResolutionPolicy,
+)
 from .types import CommentSlice
 
 # No prefix: routes span two roots (/items/{id}/comments for the collection,
@@ -79,8 +84,7 @@ async def update_comment(
 async def resolve_comment(
     comment_id: uuid.UUID, session: Session, user: CurrentUser
 ) -> CommentRead:
-    """Close an inline thread (RADD-726). Resolve, never delete: a resolved
-    comment leaves the rail and the highlight layer but stays readable."""
+    """Resolve a discussion or inline annotation while preserving its replies."""
     return await service.set_resolved(session, comment_id, actor=user, resolved=True)
 
 
@@ -101,8 +105,11 @@ async def item_comment_page(
     entity_id: uuid.UUID, session: Session, user: Actor,
     limit: int = Query(50, ge=1, le=200), before: str | None = Query(None, max_length=256),
     section: CommentSlice = CommentSlice.ALL,
+    unresolved: bool = Query(False, description="Only resolvable threads that are still unresolved."),
 ) -> CommentPage:
-    return await service.comment_page(session, entity_id, user, limit=limit, before=before, section=section)
+    return await service.comment_page(
+        session, entity_id, user, limit=limit, before=before, section=section, unresolved=unresolved
+    )
 
 
 @router.get("/{entity_type}/{entity_id}/comments/feed", response_model=CommentPage)
@@ -110,7 +117,30 @@ async def parent_comment_page(
     entity_type: str, entity_id: uuid.UUID, session: Session, user: Actor,
     limit: int = Query(50, ge=1, le=200), before: str | None = Query(None, max_length=256),
     section: CommentSlice = CommentSlice.ALL,
+    unresolved: bool = Query(False, description="Only resolvable threads that are still unresolved."),
 ) -> CommentPage:
     return await service.comment_page(
-        session, entity_id, user, entity_type, limit=limit, before=before, section=section
+        session, entity_id, user, entity_type, limit=limit, before=before, section=section,
+        unresolved=unresolved,
     )
+
+
+# --- RADD-1283: who may resolve a thread, per project and issue type ------------
+
+
+@router.get("/projects/{project_id}/thread-resolution", response_model=ThreadResolutionPolicy)
+async def get_thread_resolution(project_id: uuid.UUID, session: Session, user: CurrentUser) -> ThreadResolutionPolicy:
+    project = await projects_service.get_project(session, project_id)
+    await authz.require(session, user, authz.Permission.PROJECT_MANAGE, project=project)
+    return await resolution.get_policy(session, project_id)
+
+
+@router.put("/projects/{project_id}/thread-resolution", response_model=ThreadResolutionPolicy)
+async def put_thread_resolution(
+    project_id: uuid.UUID, data: ThreadResolutionPolicy, session: Session, user: CurrentUser
+) -> ThreadResolutionPolicy:
+    """Replace the project's rules: a default plus per-issue-type overrides."""
+    project = await projects_service.get_project(session, project_id)
+    await authz.require(session, user, authz.Permission.PROJECT_MANAGE, project=project)
+    return await resolution.set_policy(session, project_id, data, user)
+

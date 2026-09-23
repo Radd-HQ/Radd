@@ -79,6 +79,7 @@ class TransitionCheck(StrEnum):
     # Passes iff the item holds a consumable APPROVED request for the target
     # state (resolved via the approvals module's deferred seam).
     REQUIRE_APPROVAL = "require_approval"
+    REQUIRE_RESOLVED_THREADS = "require_resolved_threads"
 
 
 class ConditionKind(StrEnum):

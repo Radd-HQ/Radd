@@ -7,6 +7,7 @@ import {
   ApiPath,
   apiItemAllowedTransitionsPath,
   apiProjectContentPath,
+  apiProjectThreadResolutionPath,
   apiProjectTransitionsPath,
 } from "../constants";
 import { queryKeys } from "./shared";
@@ -20,6 +21,7 @@ import type {
   PermissionValue,
   State,
   StateCategoryRow,
+  ThreadResolutionPolicy,
   Transition,
 } from "../types";
 
@@ -132,7 +134,7 @@ export const allowedTransitionsQuery = (itemId: string) =>
   queryOptions({
     queryKey: queryKeys.allowedTransitions(itemId),
     queryFn: ({ signal }) => api.get<AllowedTransitions>(apiItemAllowedTransitionsPath(itemId), { signal }),
-    meta: itemEntityMeta(itemId, Entity.transition, Entity.item, Entity.role, Entity.team,
+    meta: itemEntityMeta(itemId, Entity.transition, Entity.item, Entity.comment, Entity.role, Entity.team,
       Entity.group, Entity.member, Entity.accessGrant),
   });
 
@@ -149,6 +151,14 @@ export const fieldWritabilityQuery = (projectId: string | null | undefined) =>
       }),
     enabled: Boolean(projectId),
     staleTime: 60_000,
+  });
+
+/** RADD-1283: the project's thread-resolution rules (project.manage). */
+export const threadResolutionQuery = (projectId: string) =>
+  queryOptions({
+    queryKey: queryKeys.threadResolution(projectId),
+    queryFn: ({ signal }) =>
+      api.get<ThreadResolutionPolicy>(apiProjectThreadResolutionPath(projectId), { signal }),
   });
 
 export const issueTypesQuery = (projectId: string) =>

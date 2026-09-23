@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { useMutation, useQueries, useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { EyeOff, MessageSquare, Pencil, Send, Trash2 } from "lucide-react";
+import { EyeOff, MessageSquare, MessagesSquare, Pencil, Send, Trash2 } from "lucide-react";
 import { ApiError, api, errorMessage } from "../../lib/api";
 import { useAttachmentUploader } from "../../lib/useAttachmentUploader";
 import {
@@ -33,6 +33,7 @@ import { Spinner } from "../Spinner";
 import { TeamAudience, CommentAudienceNames, COMMENT_TEAM_PREVIEW_SIZE } from "../teams/TeamAudience";
 import { QueryError } from "../QueryError";
 import { CommentReplies, repliesLabel } from "../comments/CommentReplies";
+import { ResolveThreadButton, ThreadBadge, ThreadFilter, threadRuleClass } from "../comments/ThreadResolution";
 
 import type { AiRun } from "../editor/ai";
 import { AiReadMenu } from "../editor/AiReadMenu";
@@ -91,7 +92,8 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
   // showing an editor that 403s on submit.
   const canComment = perms.project(project, Permission.commentWrite);
   const queryClient = useQueryClient();
-  const comments = useInfiniteQuery(itemCommentFeedQuery(itemId));
+  const [unresolvedOnly, setUnresolvedOnly] = useState(false);
+  const comments = useInfiniteQuery(itemCommentFeedQuery(itemId, unresolvedOnly));
   const { data: canned } = useQuery(cannedResponsesQuery());
   const list = chronologicalComments(comments.data?.pages);
   const labelIds = [...new Set(list.flatMap(comment => comment.visible_to_teams.slice(0, COMMENT_TEAM_PREVIEW_SIZE)))];
@@ -125,15 +127,17 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.comments(itemId) });
       // comment_count lives on the item (spec 02) — refresh it too.
       void queryClient.invalidateQueries({ queryKey: queryKeys.item(itemId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.allowedTransitions(itemId) });
     },
   });
 
-  const submitComment = () => {
+  const submitComment = (isThread = false) => {
     const trimmed = body.trim();
-    if (!trimmed) return;
+    if (!trimmed || createComment.isPending) return;
     const internal = visibility === CommentVisibility.internal;
     createComment.mutate({
       body: trimmed,
+      is_thread: isThread,
       visibility,
       visible_to_teams: internal ? visibleTeams : [],
     });
@@ -163,24 +167,31 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
 
   return (
     <div className="flex flex-col gap-3" onFocusCapture={() => setActionsRequested(true)}>
+      <ThreadFilter unresolvedOnly={unresolvedOnly} onChange={setUnresolvedOnly} />
       {teamLabels.some(query => query.isError) && <div><QueryError label="comment team names" error={teamLabels.find(query => query.isError)?.error} /><Button size="sm" variant="ghost" onClick={() => void Promise.all(teamLabels.filter(query => query.isError).map(query => query.refetch()))}>Retry comment team names</Button></div>}
       <CommentHistory hasOlder={comments.hasNextPage} loading={comments.isFetchingNextPage}
         onOlder={() => comments.fetchNextPage()} error={comments.isFetchNextPageError ? errorMessage(comments.error) : undefined}>
       {list.length === 0 ? (
-        <p className="text-xs text-fg-faint">No comments yet.</p>
+        <p className="text-xs text-fg-faint">{unresolvedOnly ? "No unresolved threads visible to you." : "No comments yet."}</p>
       ) : (
         <ul className="flex flex-col gap-3">
           {list.map((comment) => {
             const internal = comment.visibility === CommentVisibility.internal;
+            const thread = !!comment.is_thread;
+            const canResolve = !!comment.can_resolve; // RADD-1283: the server applies the project's rule
             return (
               <li
                 key={comment.id}
                 data-comment-id={comment.id}
+                data-thread={thread ? (comment.resolved_at ? "resolved" : "unresolved") : undefined}
                 className={
                   "flex gap-2.5" +
                   (internal
                     ? " -mx-2 rounded-md border border-amber-400/20 bg-amber-500/5 px-2 py-1.5"
-                    : "")
+                    : thread
+                      ? " -mx-2 rounded-md border border-subtle bg-surface px-2 py-1.5"
+                      : "") +
+                  threadRuleClass(comment)
                 }
               >
                 <Avatar user={comment.author ?? { id: "", name: "Unknown author" }} size="sm" className="mt-0.5" />
@@ -194,6 +205,7 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
                       <span className="text-fg-faint">(edited)</span>
                     )}
                     {internal && <InternalBadge />}
+                    <ThreadBadge comment={comment} />
                     {internal && comment.visible_to_teams.length > 0 && (
                       <span className="text-[10px] text-amber-300/80">
                         · <CommentAudienceNames ids={comment.visible_to_teams} names={teamNames} />
@@ -246,17 +258,20 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
                       <RichViewer text={comment.body} />
                     </div>
                   )}
+                  <div className="mt-1.5 flex flex-wrap items-center gap-3">
                   {user && (
                     <button
                       type="button"
                       onClick={() => setOpenThread(openThread === comment.id ? null : comment.id)}
                       aria-expanded={openThread === comment.id}
                       data-thread-toggle={comment.id}
-                      className="mt-1.5 text-xs text-fg-muted hover:text-fg hover:underline cursor-pointer"
+                      className="text-xs text-fg-muted hover:text-fg hover:underline cursor-pointer"
                     >
                       {repliesLabel(comment, openThread === comment.id, canComment)}
                     </button>
                   )}
+                  {thread && canResolve && <ResolveThreadButton comment={comment} />}
+                  </div>
                   {openThread === comment.id && (
                     <CommentReplies
                       row={comment}
@@ -269,6 +284,7 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
                       canInternal={!internal && canReadInternal}
                       onUploadImage={uploadCommentImage}
                       quickActions={quickActions}
+                      canResolve={thread && canResolve}
                     />
                   )}
                 </div>
@@ -363,7 +379,7 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
             onChange={setBody}
             onUploadImage={uploadCommentImage}
             placeholder={internalDraft ? "Write an internal note…" : "Write a comment…"}
-            onSubmitShortcut={submitComment}
+            onSubmitShortcut={() => submitComment()}
             quickActions={quickActions}
             // Callout-warning tokens, computed per theme (RADD-900): the old
             // amber-950/30 wash had no light remap — a near-black brown behind
@@ -375,7 +391,13 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
           {createComment.isError && (
             <p className="text-xs text-status-danger-ink">{errorMessage(createComment.error)}</p>
           )}
-          <div className="flex justify-end">
+          <div className="flex items-center justify-end gap-2">
+            <Button type="button" variant="secondary" data-start-thread
+              disabled={createComment.isPending || body.trim() === ""}
+              onClick={() => submitComment(true)}>
+              <MessagesSquare size={13} aria-hidden />
+              {internalDraft ? "Start internal thread" : "Start thread"}
+            </Button>
             <Button type="submit" disabled={createComment.isPending || body.trim() === ""}>
               <Send size={13} aria-hidden />
               {createComment.isPending

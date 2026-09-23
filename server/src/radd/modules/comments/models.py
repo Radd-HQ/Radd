@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Text, UniqueConstraint, false, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,6 +16,8 @@ class Comment(Base, TimestampMixin):
     __table_args__ = (
         Index("ix_comments_parent_order", "entity_type", "entity_id", "created_at", "id"),
         Index("ix_comments_thread_order", "parent_comment_id", "created_at", "id"),
+        Index("ix_comments_unresolved_threads", "entity_type", "entity_id",
+              postgresql_where=text("is_thread AND resolved_at IS NULL AND parent_comment_id IS NULL")),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -29,7 +31,9 @@ class Comment(Base, TimestampMixin):
     entity_id: Mapped[uuid.UUID] = mapped_column(index=True)
     author_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
     body: Mapped[str] = mapped_column(Text)
-    # Flat conversation under an anchored root; deleting it removes its replies.
+    # Explicitly resolvable discussions; ordinary comments may still have replies.
+    is_thread: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    # Flat conversation under a root; deleting it removes its replies.
     parent_comment_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("comments.id", ondelete="CASCADE"), nullable=True
     )
@@ -37,8 +41,8 @@ class Comment(Base, TimestampMixin):
     visibility: Mapped[str] = mapped_column(String(10), default=CommentVisibility.PUBLIC)
 
     # --- RADD-726: inline, anchored, resolvable -------------------------------
-    #: NULL = an ordinary thread comment, which is every comment that exists
-    #: today. Set = inline: `{"quote", "prefix", "suffix"}`, a TEXT-QUOTE
+    #: NULL = a general comment or discussion. Set = inline:
+    #: `{"quote", "prefix", "suffix"}`, a TEXT-QUOTE
     #: selector rather than a character offset. An offset is invalidated by the
     #: first edit made anywhere above it, so one inserted paragraph would slide
     #: every comment on the page onto the wrong sentence; a quote is re-located
@@ -66,3 +70,28 @@ class CommentVisibilityTeam(Base):
     team_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("teams.id", ondelete="CASCADE"), primary_key=True
     )
+
+
+class ThreadResolutionRule(Base, TimestampMixin):
+    """Who may resolve a thread in one project, optionally for one issue type
+    (RADD-1283). The row with `issue_type_id` set beats the project's row
+    (NULL); no row at all means `DEFAULT_THREAD_RESOLVERS`. Both FKs cascade,
+    so deleting a project or an issue type takes its rules with it."""
+
+    __tablename__ = "thread_resolution_rules"
+    __table_args__ = (
+        UniqueConstraint(
+            "project_id", "issue_type_id",
+            name="uq_thread_resolution_rules_scope", postgresql_nulls_not_distinct=True,
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    issue_type_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("issue_types.id", ondelete="CASCADE"), nullable=True
+    )
+    resolvers: Mapped[str] = mapped_column(String(16))  # ThreadResolvers
+

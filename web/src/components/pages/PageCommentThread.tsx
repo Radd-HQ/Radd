@@ -81,7 +81,7 @@ export function PageCommentThread({
         className="mt-2 text-xs text-fg-muted hover:text-fg hover:underline">
         {repliesLabel(row, expanded, canReply)}
       </button>
-      {expanded && <CommentReplies row={row} canReply={canReply} draft={draft} onDraft={onDraft} />}
+      {expanded && <CommentReplies row={row} canReply={canReply} draft={draft} onDraft={onDraft} canResolve={canResolve} />}
       {canResolve && (
         <button
           type="button"
@@ -89,7 +89,7 @@ export function PageCommentThread({
           className="mt-1 flex items-center gap-1 rounded px-1 text-[11px] text-fg-muted hover:text-fg cursor-pointer"
         >
           {resolvedView ? <RotateCcw size={10} aria-hidden /> : <Check size={10} aria-hidden />}
-          {resolvedView ? "Reopen" : "Resolve"}
+          {resolvedView ? "Unresolve" : "Resolve"}
         </button>
       )}
     </div>

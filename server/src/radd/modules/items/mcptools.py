@@ -276,6 +276,8 @@ async def _comment_item(session: AsyncSession, actor: User, args: Mapping[str, A
 
     current = await items_service.get_item_by_key(session, str(args["key"]), actor=actor)
     if args.get("reply_to"):
+        if args.get("is_thread"):
+            raise ValueError("A reply cannot start a separate resolvable thread")
         # RADD-1246: a reply under one of the item's comments. `internal`
         # unset means "the thread's own audience"; an internal thread makes
         # the reply internal regardless.
@@ -293,6 +295,7 @@ async def _comment_item(session: AsyncSession, actor: User, args: Mapping[str, A
             CommentReplyCreate(
                 body=str(args["body"]),
                 visibility=CommentVisibility.INTERNAL if args.get("internal") else None,
+                unresolve=bool(args.get("unresolve", False)),
             ),
             actor,
         )
@@ -301,7 +304,7 @@ async def _comment_item(session: AsyncSession, actor: User, args: Mapping[str, A
     comment = await comments_service.create_comment(
         session,
         current.id,
-        CommentCreate(body=str(args["body"]), visibility=visibility),
+        CommentCreate(body=str(args["body"]), visibility=visibility, is_thread=bool(args.get("is_thread", False))),
         actor=actor,
     )
     # RADD-861: the body just came FROM the agent — never echo it back.

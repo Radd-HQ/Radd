@@ -134,6 +134,8 @@ async def _validate_rules(
             _validate_field_rule(rule.params, definitions)
         elif rule.check is TransitionCheck.REQUIRE_APPROVAL:
             await _validate_approval_rule(session, rule.params)
+        elif rule.check is TransitionCheck.REQUIRE_RESOLVED_THREADS and rule.params:
+            raise _rule_error("all threads must be resolved takes no parameters")
     for condition in applies_when:
         _validate_field_rule(condition, definitions)
 
@@ -505,8 +507,14 @@ async def _snapshot(
             approved_to_state_ids = frozenset(
                 await approvals_service.approved_target_state_ids(session, item.id)
             )
+    unresolved_threads = False
+    if TransitionCheck.REQUIRE_RESOLVED_THREADS in guards.checks_in(rules):
+        from radd.modules.comments import service as comments
+
+        unresolved_threads = await comments.has_unresolved_threads(session, item.id)
     return ItemSnapshot(
         builtin=builtin,
+        has_unresolved_threads=unresolved_threads,
         custom_fields=item.custom_fields or {},
         field_labels=field_labels,
         approved_to_state_ids=approved_to_state_ids,

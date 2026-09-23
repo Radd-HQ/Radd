@@ -551,7 +551,6 @@ export function PageView({
               bodyVersion={bodyVersion}
               editing={editing}
               canComment={canComment}
-              canManage={canManage}
             />
           </aside>
         </div>

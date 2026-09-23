@@ -22,6 +22,7 @@ import {
   fieldsQuery,
   issueTypesQuery,
   labelsQuery,
+  queryKeys,
   releasesQuery,
   scopedSettingsQuery,
   teamsQuery,
@@ -192,8 +193,10 @@ const conditionsOf = (rules: TransitionRule[]): FieldConditionParams[] =>
 const rebuildRules = (
   conditions: FieldConditionParams[],
   approval: ApproverEntry[] | null | undefined,
+  resolvedThreads: boolean,
 ): TransitionRule[] => [
   ...conditions.map((params) => ({ check: TransitionCheck.requireField, params })),
+  ...(resolvedThreads ? [{ check: TransitionCheck.requireResolvedThreads, params: {} }] : []),
   ...(approval && approval.length > 0
     ? [{ check: TransitionCheck.requireApproval, params: { approvers: approval } }]
     : []),
@@ -369,6 +372,13 @@ function TransitionRow({
   const patch = useMutation({
     mutationFn: (body: TransitionUpdate) =>
       api.patch<Transition>(apiTransitionPath(transition.id), body),
+    // Write the server's answer into the list BEFORE the controls re-enable.
+    // Waiting for the refetch left a window where the row was enabled but still
+    // showed the pre-save rules, so a second click rebuilt its PATCH from stale
+    // rules and re-sent the first change (unticking a rule twice, never re-ticking).
+    onSuccess: (saved) =>
+      queryClient.setQueryData<Transition[]>(queryKeys.transitions(project.id),
+        (rows) => rows?.map((row) => (row.id === saved.id ? saved : row))),
     onSettled: () => invalidateEntities(queryClient, Entity.transition),
   });
   const remove = useMutation({
@@ -386,6 +396,7 @@ function TransitionRow({
 
   const patchRules = (rules: TransitionRule[]) => patch.mutate({ rules });
   const approval = approvalEntriesOf(transition.rules);
+  const resolvedThreads = transition.rules.some(rule => rule.check === TransitionCheck.requireResolvedThreads);
 
   return (
     <li className="border-b border-subtle/60 px-4 py-3 last:border-b-0">
@@ -469,8 +480,23 @@ function TransitionRow({
         label="Conditions"
         emptyText="None — the move is not gated on item data."
         addPrompt="+ Add a condition…"
-        onChange={(conditions) => patchRules(rebuildRules(conditions, approval))}
+        onChange={(conditions) => patchRules(rebuildRules(conditions, approval, resolvedThreads))}
       />
+
+      <label className="mt-2 flex items-center gap-1.5 text-xs text-fg">
+        <input
+          type="checkbox"
+          checked={resolvedThreads}
+          onChange={event => patchRules(rebuildRules(conditionsOf(transition.rules), approval, event.target.checked))}
+          disabled={!canManage || patch.isPending}
+          className="size-3.5 accent-accent"
+        />
+        All threads must be resolved
+      </label>
+      <p className="mt-1 text-[11px] text-fg-muted">
+        Includes internal threads. Ordinary comments do not block the move.
+        Use Applies when to limit this rule to issue types; add it to each status you want to protect.
+      </p>
 
       <label className="mt-2 flex items-center gap-1.5 text-xs text-fg">
         <input
@@ -484,6 +510,7 @@ function TransitionRow({
                   ? null
                   : // Seed with the configuring user (server 409s on empty).
                     [{ kind: "user", id: me.id, name: me.name }],
+                resolvedThreads,
               ),
             )
           }
@@ -498,7 +525,7 @@ function TransitionRow({
           canManage={canManage}
           pending={patch.isPending}
           onChange={(entries) =>
-            patchRules(rebuildRules(conditionsOf(transition.rules), entries))
+            patchRules(rebuildRules(conditionsOf(transition.rules), entries, resolvedThreads))
           }
         />
       )}
