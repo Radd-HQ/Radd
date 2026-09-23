@@ -210,6 +210,7 @@ async def _me_read(session: AsyncSession, user: User) -> MeRead:
         permissions=sorted(await authz.effective_permissions(session, user)),
         avatar_color=user.avatar_color,
         avatar_emoji=user.avatar_emoji,
+        avatar_url=user.avatar_url,
         timezone=user.timezone,
     )
 

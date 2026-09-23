@@ -19,6 +19,7 @@ export interface Me {
   manages_teams?: boolean;
   avatar_color?: string | null;
   avatar_emoji?: string | null;
+  avatar_url?: string | null;
   timezone?: string;
   /** RADD-836 U1: set while an admin previews this account read-only — the
    * rest of the payload describes the TARGET, which is the point. */
@@ -153,6 +154,7 @@ export interface User {
   active: boolean;
   avatar_color?: string | null;
   avatar_emoji?: string | null;
+  avatar_url?: string | null;
   timezone?: string;
   source: UserSourceValue;
   last_login_at: string | null;
@@ -180,6 +182,7 @@ export interface UserSummary {
   source: string;
   avatar_color?: string | null;
   avatar_emoji?: string | null;
+  avatar_url?: string | null;
   /** RADD-938 — only when the row was fetched with a `project_id`: does this
    *  person hold item.read on THAT project through a grant? `undefined`/`null`
    *  means the question was not asked, which must not render as a warning. */

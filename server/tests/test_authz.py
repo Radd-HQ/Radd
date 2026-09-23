@@ -529,6 +529,11 @@ def test_user_directory_entry_exposes_no_administrative_fields():
     emailed the desk") instead of handing the SPA the `email` sentinel to
     hardcode. It defaults False and is only ever True on rows the caller opted
     into via `include_requesters=true` (see `test_user_directory.py`).
+
+    REVISED AGAIN (RADD-1295): `avatar_url` joined it for the reason
+    `avatar_color`/`avatar_emoji` are here — it is what a picker DRAWS. It is
+    the person's chosen picture (or their sign-in provider's), served at a
+    versioned URL, not an administrative fact about the account.
     """
     from radd.modules.auth.schemas import UserDirectoryEntry, UserRead
 
@@ -540,6 +545,7 @@ def test_user_directory_entry_exposes_no_administrative_fields():
         "source",
         "avatar_color",
         "avatar_emoji",
+        "avatar_url",
         "has_access",
         "external",
     }

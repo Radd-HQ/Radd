@@ -81,6 +81,7 @@ export interface UserRef {
   /** Avatar (spec 34): colored initials circle, optional emoji override. */
   avatar_color?: string | null;
   avatar_emoji?: string | null;
+  avatar_url?: string | null;
 }
 
 export interface TeamRef {

@@ -284,6 +284,11 @@ async def provision(session: AsyncSession, provider: SsoProvider, claims: dict) 
 
     identity.email = email or identity.email
     identity.claims = {k: claims[k] for k in ("hd", "picture", "name") if k in claims}
+    # RADD-1295: the provider's picture is the fallback avatar (an upload wins).
+    # Only a provider that SENT one overwrites it — a second provider without a
+    # picture must not erase the first one's.
+    if claims.get("picture"):
+        await auth_service.set_idp_picture(session, user, str(claims["picture"]))
     if user.source == UserSource.EMAIL:
         # RADD-828: an email-provisioned requester who signs in with the same
         # verified address JOINS their account (keeping their tickets) and

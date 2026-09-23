@@ -108,6 +108,7 @@ class UserRef(BaseModel):
     # Avatar (spec 34) — colored initials circle, optional emoji override.
     avatar_color: str | None = None
     avatar_emoji: str | None = None
+    avatar_url: str | None = None  # RADD-1295: uploaded, else the IdP's, else none
 
 
 class TeamRef(BaseModel):

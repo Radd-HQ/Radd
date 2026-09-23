@@ -87,6 +87,7 @@ def _user_ref(user: User | None) -> UserRef | None:
         name=user.name,
         avatar_color=user.avatar_color,
         avatar_emoji=user.avatar_emoji,
+        avatar_url=user.avatar_url,
     )
 
 

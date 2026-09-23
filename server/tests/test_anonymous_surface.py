@@ -51,6 +51,8 @@ ANONYMOUS_ROUTES: frozenset[tuple[str, str]] = frozenset(
         ("GET", "/api/v1/items/{item_id}/vcs-links"),
         ("GET", "/api/v1/attachments"),
         ("GET", "/api/v1/attachments/{attachment_id}"),
+        # RADD-1295: a face beside a name a public visitor can already read.
+        ("GET", "/api/v1/users/{user_id}/avatar"),
         ("GET", "/api/v1/views"),
         ("GET", "/api/v1/views/summary"),
         ("GET", "/api/v1/views/{view_id}"),

@@ -81,6 +81,7 @@ class UserRead(BaseModel):
     active: bool
     avatar_color: str | None = None
     avatar_emoji: str | None = None
+    avatar_url: str | None = None  # RADD-1295: see User.avatar_url
     timezone: str = ""
     # Spec 84 user administration: where the account came from + last sign-in.
     source: UserSource
@@ -126,6 +127,7 @@ class UserDirectoryEntry(BaseModel):
     source: str
     avatar_color: str | None = None
     avatar_emoji: str | None = None
+    avatar_url: str | None = None  # RADD-1295: see User.avatar_url
     #: RADD-938 — only when the caller passed `project_id`: does this person hold
     #: item.read on THAT project through a grant? `None` means the question was
     #: not asked, which is different from "no" and must not render as a warning.
@@ -370,6 +372,7 @@ class MeRead(BaseModel):
     nav: dict[str, bool] = Field(default_factory=dict)
     avatar_color: str | None = None
     avatar_emoji: str | None = None
+    avatar_url: str | None = None  # RADD-1295: see User.avatar_url
     timezone: str = ""
 
 

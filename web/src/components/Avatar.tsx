@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { initials } from "../lib/meta";
 import { leaveTitle, useOnLeave } from "./PersonName";
 
@@ -40,6 +41,8 @@ export interface AvatarUser {
   name: string;
   avatar_color?: string | null;
   avatar_emoji?: string | null;
+  /** RADD-1295: an uploaded picture, else the identity provider's (server-decided). */
+  avatar_url?: string | null;
 }
 
 export function Avatar({
@@ -55,22 +58,40 @@ export function Avatar({
 }) {
   const background = user.avatar_color || fallbackColor(user.id);
   const onLeave = useOnLeave(user.id);
+  // A picture that fails to load (an IdP URL that expired, a removed blob)
+  // falls back to the colour/emoji rather than a broken-image glyph.
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const picture = user.avatar_url && user.avatar_url !== failedUrl ? user.avatar_url : null;
   // The badge is positioned INSIDE the circle element (no wrapper): a wrapper
   // span stretched with flex parents, which slid the badge to the bottom of
   // whatever row hosted the avatar (the comment thread found this).
   return (
     <span
       title={onLeave ? leaveTitle(user.name, onLeave) : (title ?? user.name)}
-      style={user.avatar_emoji ? undefined : { backgroundColor: background }}
+      style={picture || user.avatar_emoji ? undefined : { backgroundColor: background }}
       className={
         `relative flex shrink-0 select-none items-center justify-center rounded-full font-semibold text-white ${SIZES[size]} ` +
-        (user.avatar_emoji ? "bg-elevated " : "") +
+        (picture || user.avatar_emoji ? "bg-elevated " : "") +
         className
       }
+      data-avatar={picture ? "picture" : user.avatar_emoji ? "emoji" : "initials"}
     >
-      <span className={onLeave ? "opacity-50" : ""}>
-        {user.avatar_emoji || initials(user.name)}
-      </span>
+      {picture ? (
+        <img
+          src={picture}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          draggable={false}
+          onError={() => setFailedUrl(picture)}
+          className={"size-full rounded-full object-cover " + (onLeave ? "opacity-50" : "")}
+        />
+      ) : (
+        <span className={onLeave ? "opacity-50" : ""}>
+          {user.avatar_emoji || initials(user.name)}
+        </span>
+      )}
       {onLeave && (
         <span
           aria-label="On leave"

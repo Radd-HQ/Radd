@@ -18,6 +18,7 @@ import { TextField } from "../../components/TextField";
 import { MyLeaveSection } from "../../components/settings/LeaveSections";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { TotpPanel } from "../../components/settings/TotpPanel";
+import { ProfilePicture } from "../../components/settings/ProfilePicture";
 import { ErrorText } from "../../components/ErrorText";
 import { browserTimeZone } from "../../lib/dates";
 
@@ -128,6 +129,7 @@ function ProfileForm({ user }: { user: Me }) {
     name: name || user.name,
     avatar_color: color || null,
     avatar_emoji: emoji || null,
+    avatar_url: user.avatar_url ?? null,
   };
 
   const timezones: string[] =
@@ -152,8 +154,12 @@ function ProfileForm({ user }: { user: Me }) {
           <p className="text-sm font-medium text-fg">{user.name}</p>
           <p>{user.email}</p>
           <p className="mt-1">
-            Your avatar shows your initials on the chosen color — or an emoji if you set one.
+            Your picture, if you add one. Otherwise your initials on the chosen color — or an
+            emoji if you set one.
           </p>
+          <div className="mt-2">
+            <ProfilePicture user={user} />
+          </div>
         </div>
       </div>
 

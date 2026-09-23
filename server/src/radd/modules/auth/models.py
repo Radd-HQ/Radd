@@ -14,6 +14,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
+from radd.config import settings
 from radd.db import Base, TimestampMixin
 
 from .types import InstanceRole, UserSource
@@ -47,10 +48,28 @@ class User(Base, TimestampMixin):
     # emoji override; timezone is an IANA name ("" = use the browser's).
     avatar_color: Mapped[str | None] = mapped_column(String(7))
     avatar_emoji: Mapped[str | None] = mapped_column(String(16))
+    # RADD-1295: a real picture. `avatar_blob` names an uploaded image, already
+    # normalised (square, 256px, WebP) and stored through the attachments blob
+    # API by the `avatars` module on `avatar_blob_host_id` (a plain id, no FK:
+    # auth sits below attachments). `avatar_idp_url` is the identity provider's
+    # picture, recorded at SSO login. `avatar_url` below picks between them.
+    avatar_blob: Mapped[str | None] = mapped_column(String(64))
+    avatar_blob_host_id: Mapped[uuid.UUID | None] = mapped_column()
+    avatar_idp_url: Mapped[str | None] = mapped_column(String(1024))
     timezone: Mapped[str] = mapped_column(String(64), default="", server_default="")
     # Generic per-user preferences (spec 94) — a JSON dict any plugin/feature can stash small,
     # cross-browser per-user prefs in (e.g. which plugin contributions the user disabled).
     preferences: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")
+
+    @property
+    def avatar_url(self) -> str | None:
+        """RADD-1295 — the ONE place a person's picture URL is decided: an
+        uploaded image, else the identity provider's, else None (the SPA draws
+        the colour/emoji). The blob name in `v` makes the URL change whenever
+        the picture does, so it can be cached forever."""
+        if self.avatar_blob:
+            return f"{settings.api_prefix}/users/{self.id}/avatar?v={self.avatar_blob[:12]}"
+        return self.avatar_idp_url or None
 
 
 class UserTotp(Base, TimestampMixin):

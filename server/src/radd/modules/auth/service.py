@@ -479,6 +479,39 @@ async def authenticate_with_totp(
     raise UnauthorizedError(BAD_CREDENTIALS)
 
 
+async def set_avatar_blob(
+    session: AsyncSession, user: User, blob: str | None, host_id: uuid.UUID | None
+) -> tuple[str | None, uuid.UUID | None]:
+    """RADD-1295: record (or clear) the uploaded picture — the `avatars` module
+    owns the bytes, auth owns the row. Returns the PREVIOUS blob so the caller
+    can remove its bytes. Audited like any profile edit; the image itself is
+    only ever "changed"."""
+    previous = (user.avatar_blob, user.avatar_blob_host_id)
+    user.avatar_blob = blob
+    user.avatar_blob_host_id = host_id if blob else None
+    await session.flush()
+    await events.emit(
+        session,
+        event_type=AuthEvent.USER_UPDATED,
+        entity_type=AuthEntity.USER,
+        entity_id=user.id,
+        actor_id=user.id,
+        payload={"action": UserChange.PROFILE_UPDATED},
+        changes=[changes.hidden_change("avatar")],
+    )
+    return previous
+
+
+async def set_idp_picture(session: AsyncSession, user: User, url: str | None) -> None:
+    """RADD-1295: the identity provider's picture, refreshed at every SSO login.
+    Not audited — it is the provider's fact, not a person's edit — and only
+    https URLs are kept, so a provider can never hand the SPA a script URL."""
+    clean = url if url and url.startswith("https://") and len(url) <= 1024 else None
+    if user.avatar_idp_url != clean:
+        user.avatar_idp_url = clean
+        await session.flush()
+
+
 async def update_profile(session: AsyncSession, user: User, data: ProfileUpdate) -> User:
     """Self-service profile edit (spec 34): name, avatar, timezone. Email and
     roles are NOT editable here (user.manage endpoints own those)."""

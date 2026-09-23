@@ -9,6 +9,8 @@ export const ApiPath = {
   loginTotp: "/auth/login/totp",
   logout: "/auth/logout",
   me: "/auth/me",
+  // RADD-1295: PUT (multipart `file`) / DELETE your uploaded picture.
+  myAvatar: "/auth/me/avatar",
   /** POST starts / DELETE ends a read-only admin preview (RADD-836 U1). */
   viewAs: "/auth/view-as",
   // TOTP two-factor (spec 48): GET status / DELETE {code}; setup + confirm below.

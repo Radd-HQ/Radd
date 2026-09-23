@@ -44,6 +44,7 @@ def _to_read(
             name=author.name,
             avatar_color=author.avatar_color,
             avatar_emoji=author.avatar_emoji,
+            avatar_url=author.avatar_url,
         ) if author else None,
         body=comment.body,
         is_thread=comment.is_thread,

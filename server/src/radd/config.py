@@ -297,6 +297,9 @@ class Settings(BaseSettings):
     require_mfa: bool = False
     # How long the enrolment ticket a refused login receives stays usable.
     mfa_enrollment_ticket_minutes: int = 15
+    # RADD-1295: the largest source image a profile-picture upload accepts
+    # (it is stored as a 256px WebP, so this bounds decode work, not storage).
+    avatar_max_upload_bytes: int = 8 * 1024 * 1024
 
     # Proxies allowed to speak X-Forwarded-For (comma-separated IPs/CIDRs, e.g.
     # your ingress/LB range). "" = the header is ignored and the socket peer is
@@ -619,6 +622,7 @@ class Settings(BaseSettings):
         "radd.modules.realtime",
         "radd.modules.search",
         "radd.modules.attachments",
+        "radd.modules.avatars",  # RADD-1295: above attachments (the blob API)
         "radd.modules.canned",
         "radd.modules.slas",
         "radd.modules.gitlab",
