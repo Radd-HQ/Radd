@@ -212,7 +212,7 @@ async def _emit(
 
 # Re-export: the items-module enforcement seam (spec 61) — modules talk through
 # public service functions, and items already imports workflow.service.
-from .transitions import check_transition  # noqa: E402, F401
+from .transitions import check_transition, release_transitions  # noqa: E402, F401
 
 
 

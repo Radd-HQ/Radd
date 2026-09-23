@@ -28,11 +28,11 @@ from radd.modules.releases.schemas import ReleaseCreate, ReleaseUpdate
 from radd.modules.releases.types import ReleaseStatus
 from radd.modules.reporting import service as reporting, timeline
 from radd.modules.reporting.types import ReportInterval
-from radd.modules.settings import service as settings_service
-from radd.modules.settings.types import SettingKey, SettingScope
+from radd.exceptions import ConflictError
 from radd.modules.workflow import service as workflow
-from radd.modules.workflow.schemas import StateCreate
-from radd.modules.workflow.types import StateCategory
+from radd.modules.workflow import transitions
+from radd.modules.workflow.schemas import StateCreate, StateUpdate, TransitionCreate, TransitionRule
+from radd.modules.workflow.types import StateCategory, TransitionCheck
 
 WAITING = "Waiting for release"
 SHIPPED = "Done"
@@ -67,9 +67,10 @@ async def project(db):
     )
 
 
-async def _configure(db, project, *, waiting: str = WAITING, shipped: str = SHIPPED) -> None:
+async def _configure(db, project, *, waiting: str = WAITING, shipped: str = SHIPPED):
     """The waiting state sits in the DONE category — that is the design decision
-    the whole spec turns on."""
+    the whole spec turns on. RADD-1285: shipping is an on-release transition
+    waiting → shipped, not two settings."""
     states = await workflow.list_states(db, project.id)
     if waiting and not any(s.name == waiting for s in states):
         await workflow.create_state(
@@ -81,13 +82,11 @@ async def _configure(db, project, *, waiting: str = WAITING, shipped: str = SHIP
                 position=len(states) + 1,
             ),
         )
-    for key, value in (
-        (SettingKey.RELEASE_WAITING_STATE, waiting),
-        (SettingKey.RELEASE_SHIPPED_STATE, shipped),
-    ):
-        await settings_service.set_value(
-            db, key, scope=SettingScope.PROJECT, scope_id=project.id, value=value
-        )
+    by_name = {s.name: s for s in await workflow.list_states(db, project.id)}
+    return await transitions.create_transition(db, TransitionCreate(
+        project_id=project.id, from_state_id=by_name[waiting].id,
+        to_state_id=by_name[shipped].id, on_release=True,
+    ))
 
 
 async def _item_in_waiting(db, project, admin, title="work"):
@@ -150,7 +149,7 @@ async def test_an_already_shipped_item_keeps_its_original_release(db, project, a
     assert read.release.version == "1.5.0"  # not repointed by a later release
 
 
-async def test_a_project_without_the_settings_is_untouched(db, project, admin):
+async def test_a_project_without_an_on_release_transition_is_untouched(db, project, admin):
     """No opt-in, no behaviour. The pipeline must not act on projects that never
     asked for it."""
     states = {s.name: s for s in await workflow.list_states(db, project.id)}
@@ -168,13 +167,55 @@ async def test_a_project_without_the_settings_is_untouched(db, project, admin):
     assert read.state.id == target.id and read.release is None
 
 
-async def test_a_state_named_in_settings_but_missing_is_survivable(db, project, admin):
-    """A renamed state is a settings problem; it must not raise."""
-    await _configure(db, project, waiting="Nowhere")
-    release = await releases_service.create_release(
-        db, ReleaseCreate(project_id=project.id, name="x", version="8.8.8")
-    )
-    assert await pipeline.sweep(db, project, release) == 0
+async def test_renaming_the_waiting_state_keeps_the_pipeline(db, project, admin):
+    """RADD-1285: the old settings held state NAMES, so a rename switched the
+    pipeline off. A transition holds ids — rename away."""
+    await _configure(db, project)
+    item = await _item_in_waiting(db, project, admin)
+    waiting = next(s for s in await workflow.list_states(db, project.id) if s.name == WAITING)
+    await workflow.update_state(db, waiting.id, StateUpdate(name="Merged, not shipped"))
+    assert await pipeline.waiting_state_id(db, project) == waiting.id
+    release, moved = await pipeline.on_release_published(db, project, version="7.0.0")
+    assert moved == 1
+    assert (await items_service.get_item(db, item.id, admin)).release.version == "7.0.0"
+
+
+async def test_on_release_needs_one_named_from_state(db, project, admin):
+    """A release moves work OUT of a state, so "Any state" cannot ship; and one
+    state cannot ship to two places."""
+    row = await _configure(db, project)
+    with pytest.raises(ConflictError):
+        await transitions.create_transition(db, TransitionCreate(
+            project_id=project.id, from_state_id=None, to_state_id=row.to_state_id, on_release=True))
+    other = next(s for s in await workflow.list_states(db, project.id) if s.id not in (row.from_state_id, row.to_state_id))
+    with pytest.raises(ConflictError):
+        await transitions.create_transition(db, TransitionCreate(
+            project_id=project.id, from_state_id=row.from_state_id, to_state_id=other.id, on_release=True))
+
+
+async def test_requires_a_release_refuses_until_one_is_set_and_the_sweep_satisfies_it(db, project, admin):
+    """The named check replaces the hand-built require_field(release, set): a
+    person cannot move work into the shipped state without a release, and the
+    sweep can, because it sets the release in the same patch."""
+    row = await _configure(db, project)
+    # A wildcard gate above it. The on-release row is an EXACT-from row, so it
+    # governs Waiting → Done over this — which is why it carries the gate itself.
+    await transitions.create_transition(db, TransitionCreate(
+        project_id=project.id, from_state_id=None, to_state_id=row.to_state_id,
+        rules=[TransitionRule(check=TransitionCheck.REQUIRE_RELEASE)], position=0))
+    from radd.modules.settings import service as settings_service
+    from radd.modules.settings.types import SettingKey, SettingScope
+    await settings_service.set_value(db, SettingKey.WORKFLOW_TRANSITION_MODE,
+                                     scope=SettingScope.PROJECT, scope_id=project.id, value="guards")
+    item = await _item_in_waiting(db, project, admin)
+    # Asked the way the state picker asks (a refused update would leave its
+    # half-applied state in this test's session; a real request rolls back).
+    model = await items_service.require_item(db, item.id)
+    allowed = await transitions.allowed_transitions(db, project, model)
+    target = next(t for t in allowed.targets if t.state_id == row.to_state_id)
+    assert not target.allowed and target.failures == ["a release is required"]
+    _release, moved = await pipeline.on_release_published(db, project, version="6.0.0")
+    assert moved == 1
 
 
 # --- what the reports say ---

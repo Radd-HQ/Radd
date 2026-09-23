@@ -190,13 +190,20 @@ const conditionsOf = (rules: TransitionRule[]): FieldConditionParams[] =>
 
 /** Rebuild the rules array from the two edited halves (approval sorts last —
  * evaluation puts its failure last anyway). */
+/** The named on/off checks a row can carry (no params). */
+interface Flags {
+  resolvedThreads: boolean;
+  release: boolean;
+}
+
 const rebuildRules = (
   conditions: FieldConditionParams[],
   approval: ApproverEntry[] | null | undefined,
-  resolvedThreads: boolean,
+  flags: Flags,
 ): TransitionRule[] => [
   ...conditions.map((params) => ({ check: TransitionCheck.requireField, params })),
-  ...(resolvedThreads ? [{ check: TransitionCheck.requireResolvedThreads, params: {} }] : []),
+  ...(flags.resolvedThreads ? [{ check: TransitionCheck.requireResolvedThreads, params: {} }] : []),
+  ...(flags.release ? [{ check: TransitionCheck.requireRelease, params: {} }] : []),
   ...(approval && approval.length > 0
     ? [{ check: TransitionCheck.requireApproval, params: { approvers: approval } }]
     : []),
@@ -396,7 +403,10 @@ function TransitionRow({
 
   const patchRules = (rules: TransitionRule[]) => patch.mutate({ rules });
   const approval = approvalEntriesOf(transition.rules);
-  const resolvedThreads = transition.rules.some(rule => rule.check === TransitionCheck.requireResolvedThreads);
+  const flags: Flags = {
+    resolvedThreads: transition.rules.some(rule => rule.check === TransitionCheck.requireResolvedThreads),
+    release: transition.rules.some(rule => rule.check === TransitionCheck.requireRelease),
+  };
 
   return (
     <li className="border-b border-subtle/60 px-4 py-3 last:border-b-0">
@@ -480,14 +490,14 @@ function TransitionRow({
         label="Conditions"
         emptyText="None — the move is not gated on item data."
         addPrompt="+ Add a condition…"
-        onChange={(conditions) => patchRules(rebuildRules(conditions, approval, resolvedThreads))}
+        onChange={(conditions) => patchRules(rebuildRules(conditions, approval, flags))}
       />
 
       <label className="mt-2 flex items-center gap-1.5 text-xs text-fg">
         <input
           type="checkbox"
-          checked={resolvedThreads}
-          onChange={event => patchRules(rebuildRules(conditionsOf(transition.rules), approval, event.target.checked))}
+          checked={flags.resolvedThreads}
+          onChange={event => patchRules(rebuildRules(conditionsOf(transition.rules), approval, { ...flags, resolvedThreads: event.target.checked }))}
           disabled={!canManage || patch.isPending}
           className="size-3.5 accent-accent"
         />
@@ -496,6 +506,37 @@ function TransitionRow({
       <p className="mt-1 text-[11px] text-fg-muted">
         Includes internal threads. Ordinary comments do not block the move.
         Use Applies when to limit this rule to issue types; add it to each status you want to protect.
+      </p>
+
+      {/* RADD-1285: shipping is a transition. An on-release row always requires a
+          release (the server adds it), so its "Requires a release" is shown on and fixed. */}
+      <label className="mt-2 flex items-center gap-1.5 text-xs text-fg">
+        <input
+          type="checkbox"
+          checked={flags.release || transition.on_release}
+          onChange={event => patchRules(rebuildRules(conditionsOf(transition.rules), approval, { ...flags, release: event.target.checked }))}
+          disabled={!canManage || patch.isPending || transition.on_release}
+          className="size-3.5 accent-accent"
+          data-transition-requires-release
+        />
+        Requires a release
+      </label>
+      <label className="mt-2 flex items-center gap-1.5 text-xs text-fg"
+        title={transition.from_state_id ? undefined : "Choose a From state: a release moves work out of one state."}>
+        <input
+          type="checkbox"
+          checked={transition.on_release}
+          onChange={event => patch.mutate({ on_release: event.target.checked })}
+          disabled={!canManage || patch.isPending || (!transition.from_state_id && !transition.on_release)}
+          className="size-3.5 accent-accent"
+          data-transition-on-release
+        />
+        Moves automatically when a release is published
+      </label>
+      <p className="mt-1 text-[11px] text-fg-muted">
+        Publishing a release — here, over the API, or from GitHub, GitLab or Forgejo — moves every
+        issue in the From state along this transition and records the release on it. Merged pull
+        requests move their issues into the From state. Needs a From state other than Any state.
       </p>
 
       <label className="mt-2 flex items-center gap-1.5 text-xs text-fg">
@@ -510,7 +551,7 @@ function TransitionRow({
                   ? null
                   : // Seed with the configuring user (server 409s on empty).
                     [{ kind: "user", id: me.id, name: me.name }],
-                resolvedThreads,
+                flags,
               ),
             )
           }
@@ -525,7 +566,7 @@ function TransitionRow({
           canManage={canManage}
           pending={patch.isPending}
           onChange={(entries) =>
-            patchRules(rebuildRules(conditionsOf(transition.rules), entries, resolvedThreads))
+            patchRules(rebuildRules(conditionsOf(transition.rules), entries, flags))
           }
         />
       )}

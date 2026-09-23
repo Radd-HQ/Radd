@@ -1,7 +1,7 @@
 import uuid
 from typing import Any
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, Integer, String, UniqueConstraint, false
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -73,3 +73,7 @@ class WorkflowTransition(Base, TimestampMixin):
         JSONB, default=list, server_default="[]"
     )
     position: Mapped[int] = mapped_column(Integer)
+    # RADD-1285: publishing a release performs this move for every item sitting
+    # in `from_state_id`, recording the release — the spec-112 sweep, stated as
+    # a transition instead of two typed-in state names. Requires a from-state.
+    on_release: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())

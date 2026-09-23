@@ -80,6 +80,9 @@ class TransitionCheck(StrEnum):
     # state (resolved via the approvals module's deferred seam).
     REQUIRE_APPROVAL = "require_approval"
     REQUIRE_RESOLVED_THREADS = "require_resolved_threads"
+    # RADD-1285: the item has a release. The named form of what spec 112 had
+    # people hand-build as a require_field on the Release builtin.
+    REQUIRE_RELEASE = "require_release"
 
 
 class ConditionKind(StrEnum):

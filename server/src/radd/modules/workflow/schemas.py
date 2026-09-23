@@ -75,6 +75,8 @@ class TransitionCreate(BaseModel):
     # Empty = the row governs every item making this move (spec 107 follow-up).
     applies_when: list[TransitionCondition] = Field(default_factory=list)
     position: int | None = None  # None = append
+    # RADD-1285: performed automatically when a release is published.
+    on_release: bool = False
 
 
 class TransitionUpdate(BaseModel):
@@ -85,6 +87,7 @@ class TransitionUpdate(BaseModel):
     rules: list[TransitionRule] | None = None
     applies_when: list[TransitionCondition] | None = None
     position: int | None = None
+    on_release: bool | None = None
 
 
 class TransitionRead(BaseModel):
@@ -97,6 +100,7 @@ class TransitionRead(BaseModel):
     rules: list[TransitionRule]
     applies_when: list[TransitionCondition]
     position: int
+    on_release: bool = False
     created_at: UtcDatetime
 
 

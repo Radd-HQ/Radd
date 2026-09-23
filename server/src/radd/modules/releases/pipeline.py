@@ -1,13 +1,16 @@
-"""The release pipeline (spec 112): work finishes once, ships later.
+"""The release pipeline (spec 112, restated as workflow by RADD-1285).
 
 `Done` answers the developer's question. The person who filed the issue is asking
 a different one — is it running yet. So work lands in a WAITING state (category
-`done`, because it IS finished) and a published version sweeps everything waiting
-into the shipped state with the release recorded.
+`done`, because it IS finished) and a published version moves everything waiting
+on, with the release recorded.
 
-Two settings name the states per project. Both empty means the project does not
-use the pipeline, and every function here becomes a no-op — a project that never
-opted in is never touched.
+What moves where is a WORKFLOW fact: a transition row marked `on_release`
+("Moves automatically when a release is published"). The pipeline reads those
+rows; a project with none does not ship through releases, and every function
+here is a no-op for it. (Until RADD-1285 this was two settings holding typed-in
+state NAMES, at instance and project scope — a rename or a typo switched the
+pipeline off with nothing but a log line to say so.)
 """
 
 import logging
@@ -20,8 +23,6 @@ from radd.modules.auth import service as auth_service
 from radd.modules.items.models import WorkItem
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
-from radd.modules.settings import service as settings_service
-from radd.modules.settings.types import SettingKey
 from radd.modules.workflow import service as workflow_service
 
 from . import service as releases_service
@@ -32,30 +33,12 @@ from .types import ReleaseStatus
 logger = logging.getLogger(__name__)
 
 
-async def _state_id_by_setting(
-    session: AsyncSession, project: Project, key: SettingKey
-) -> uuid.UUID | None:
-    name = str(await settings_service.resolve(session, key, project_id=project.id) or "").strip()
-    if not name:
-        return None
-    states = await workflow_service.list_states(session, project.id)
-    match = next((s for s in states if s.name.lower() == name.lower()), None)
-    if match is None:
-        # A renamed state is a settings problem, not a crash: say so and do nothing.
-        logger.warning(
-            "release pipeline: project %s names state %r for %s, which does not exist",
-            project.key, name, key.value,
-        )
-        return None
-    return match.id
-
-
 async def waiting_state_id(session: AsyncSession, project: Project) -> uuid.UUID | None:
-    return await _state_id_by_setting(session, project, SettingKey.RELEASE_WAITING_STATE)
-
-
-async def shipped_state_id(session: AsyncSession, project: Project) -> uuid.UUID | None:
-    return await _state_id_by_setting(session, project, SettingKey.RELEASE_SHIPPED_STATE)
+    """Where finished-but-unshipped work waits: the from-state of the project's
+    first on-release transition. The VCS connectors move a merged pull request's
+    items here."""
+    rows = await workflow_service.release_transitions(session, project.id)
+    return rows[0].from_state_id if rows else None
 
 
 async def create_release(
@@ -97,39 +80,36 @@ async def update_release(
 
 
 async def sweep(session: AsyncSession, project: Project, release: Release) -> int:
-    """Move every waiting item in the project to the shipped state, recording the
-    release. Idempotent: items already shipped are not in the waiting state, so a
-    second run finds nothing and repoints nothing.
+    """Perform every on-release transition: each item in a row's from-state moves
+    to its to-state with the release recorded. Idempotent — shipped items are no
+    longer in a from-state, so a second run finds nothing.
 
-    This is deliberately "everything waiting" rather than "the items whose commits
-    are in the tag range" — see the spec's simplifications. Deriving the latter
-    needs a tag-to-tag commit walk and is only correct if every merge went through
-    a linked PR.
+    Deliberately "everything waiting" rather than "the items whose commits are in
+    the tag range" (spec 112's simplification): the latter needs a tag-to-tag
+    commit walk and is only right if every merge went through a linked PR.
     """
     from radd.modules.automations.types import SYSTEM_ACTOR_ID
 
-    waiting = await waiting_state_id(session, project)
-    shipped = await shipped_state_id(session, project)
-    if waiting is None or shipped is None:
-        return 0
-    rows = await session.execute(
-        select(WorkItem.id).where(WorkItem.project_id == project.id, WorkItem.state_id == waiting)
-    )
-    item_ids = list(rows.scalars())
-    if not item_ids:
+    rows = await workflow_service.release_transitions(session, project.id)
+    if not rows:
         return 0
     actor = await auth_service.get_user(session, SYSTEM_ACTOR_ID)
     moved = 0
-    for item_id in item_ids:
-        try:
-            # Release and state in ONE patch: transition guards are checked after
-            # every field in the request is applied, so a project that requires a
-            # release to enter its shipped state is satisfied by this call rather
-            # than blocked by it.
-            await _ship_item(session, item_id, shipped, release.id, actor)
-            moved += 1
-        except Exception:
-            logger.exception("release sweep: %s could not be shipped", item_id)
+    for row in rows:
+        item_ids = list((await session.execute(
+            select(WorkItem.id).where(
+                WorkItem.project_id == project.id, WorkItem.state_id == row.from_state_id
+            )
+        )).scalars())
+        for item_id in item_ids:
+            try:
+                # Release and state in ONE patch: guards are checked after every
+                # field in the request is applied, so "Requires a release" on the
+                # target is satisfied by this call rather than blocking it.
+                await _ship_item(session, item_id, row.to_state_id, release.id, actor)
+                moved += 1
+            except Exception:
+                logger.exception("release sweep: %s could not be shipped", item_id)
     logger.info("release sweep: %s items -> %s in %s", moved, release.version, project.key)
     return moved
 

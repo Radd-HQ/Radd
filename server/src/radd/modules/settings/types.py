@@ -8,7 +8,7 @@ registered as a `kernel.SettingSpec` (below via the live registry), not by
 being a member of an enum.
 
 RADD-891: `SettingKey` used to be BOTH the catalog and the alias — every
-feature's tunables (`AI_*`, `LDAP_*`, `CSAT_ENABLED`, `RELEASE_*`,
+feature's tunables (`AI_*`, `LDAP_*`, `CSAT_ENABLED`,
 `WORKFLOW_TRANSITION_MODE`, `ESTIMATION_POINTS`, the timesheet keys) lived in
 one hardcoded `SETTINGS_REGISTRY` dict here, while the kernel `SettingSpec` /
 `RaddPlugin.settings_keys` fields that exist for exactly this (mirroring
@@ -126,10 +126,6 @@ class SettingKey(StrEnum):
     AI_VALIDATION = "ai_validation"  # spec 119 — the ai.validate automation node
     AI_GENERATION = "ai_generation"  # spec 120 — the ai.generate automation node
     AI_STREAM_RESPONSES = "ai_stream_responses"
-    # Spec 112 — the release pipeline. Both empty = the pipeline is off for
-    # the project, and neither the merge transition nor the sweep does anything.
-    RELEASE_WAITING_STATE = "release_waiting_state"
-    RELEASE_SHIPPED_STATE = "release_shipped_state"
 
 
 class SettingsEntity(StrEnum):

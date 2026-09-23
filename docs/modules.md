@@ -19,6 +19,16 @@ as the managers. SPA: `components/comments/ThreadResolution.tsx` (badge, resolve
 rule style) shared by `items/CommentsThread` and `pages/PageComments`;
 `settings/ThreadResolutionSection.tsx` under Project settings → Workflow.
 
+RADD-1285: **shipping is a workflow transition.** `workflow_transitions.on_release`
+("moves automatically when a release is published", needs a from-state, one per from-state)
+replaces spec 112's `release_waiting_state`/`release_shipped_state` settings (deleted, with their
+config defaults; migration `d1285releaseflow` converted every resolvable pair into an on-release row
+and rewrote hand-built `require_field(release, set)` into the named `require_release` check).
+`releases.pipeline.sweep` performs each on-release row; `waiting_state_id` (the VCS connectors'
+merged-PR target) is the first row's from-state; `workflow.release_transitions` is the seam. An
+on-release row ALWAYS requires a release (`transitions.effective_rules`): as an exact-from row it
+outranks an "Any → shipped" guard, so without it a person could hand-move work past the gate.
+
 RADD-1202: Planning uses active/upcoming/draft sprint sections, a separate open historical-work rescheduling section, an independently paged/searched/sorted backlog and explicitly opened per-sprint history. `planning-query.ts` / `PlanningControls.tsx` own these controls; `cycle.status` delegates to the cycle directory’s lifecycle expression. See [Planning workflow](planning-pagination.md).
 
 

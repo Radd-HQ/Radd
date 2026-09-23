@@ -285,6 +285,7 @@ async def create_transition(
         for condition in data.applies_when
     ]
     await _validate_rules(session, project, data.rules, applies_when)
+    await _validate_on_release(session, project.id, data.on_release, data.from_state_id)
     if data.position is None:
         max_position = await session.scalar(
             select(func.max(WorkflowTransition.position)).where(
@@ -301,6 +302,7 @@ async def create_transition(
         rules=[rule.model_dump(mode="json") for rule in data.rules],
         applies_when=applies_when,
         position=position,
+        on_release=data.on_release,
     )
     session.add(transition)
     await session.flush()
@@ -337,6 +339,11 @@ async def update_transition(
         ]
         await _validate_rules(session, project, [], applies_when)
         transition.applies_when = applies_when
+    on_release = data.on_release if data.on_release is not None else transition.on_release
+    await _validate_on_release(
+        session, project.id, on_release, from_state_id, exclude_id=transition.id
+    )
+    transition.on_release = on_release
     transition.from_state_id = from_state_id
     transition.to_state_id = to_state_id
     if data.position is not None:
@@ -354,6 +361,54 @@ async def update_transition(
         ),
     )
     return transition
+
+
+async def _validate_on_release(
+    session: AsyncSession,
+    project_id: uuid.UUID,
+    on_release: bool,
+    from_state_id: uuid.UUID | None,
+    *,
+    exclude_id: uuid.UUID | None = None,
+) -> None:
+    """RADD-1285: a release moves items OUT of a named state, so the row needs
+    one; and one state cannot ship to two places, so at most one such row per
+    from-state."""
+    if not on_release:
+        return
+    if from_state_id is None:
+        raise ConflictError(
+            TransitionEntity.TRANSITION,
+            reason="A transition that happens on release needs a from state, not Any state",
+        )
+    query = select(WorkflowTransition.id).where(
+        WorkflowTransition.project_id == project_id,
+        WorkflowTransition.from_state_id == from_state_id,
+        WorkflowTransition.on_release.is_(True),
+    )
+    if exclude_id is not None:
+        query = query.where(WorkflowTransition.id != exclude_id)
+    if await session.scalar(query) is not None:
+        raise ConflictError(
+            TransitionEntity.TRANSITION,
+            reason="Another transition from this state already happens on release",
+        )
+
+
+async def release_transitions(
+    session: AsyncSession, project_id: uuid.UUID
+) -> list[WorkflowTransition]:
+    """The moves a published release performs in this project, in list order
+    (RADD-1285). Empty = the project does not ship through releases."""
+    return list((await session.scalars(
+        select(WorkflowTransition)
+        .where(
+            WorkflowTransition.project_id == project_id,
+            WorkflowTransition.on_release.is_(True),
+            WorkflowTransition.from_state_id.is_not(None),
+        )
+        .order_by(WorkflowTransition.position)
+    )).all())
 
 
 async def delete_transition(
@@ -398,6 +453,17 @@ def edge_candidates(
     return exact + wildcards
 
 
+def effective_rules(row: WorkflowTransition) -> list[dict]:
+    """The rules a row enforces. An on-release row always requires a release
+    (RADD-1285): that move IS shipping, and as an exact-from row it outranks any
+    "Any state → shipped" guard, so without this a person could hand-move work
+    past the release gate. The sweep sets the release in the same patch."""
+    rules = list(row.rules or [])
+    if row.on_release and not any(r.get("check") == TransitionCheck.REQUIRE_RELEASE for r in rules):
+        rules.append({"check": TransitionCheck.REQUIRE_RELEASE.value, "params": {}})
+    return rules
+
+
 def governing_row(
     candidates: Sequence[WorkflowTransition], snapshot: ItemSnapshot
 ) -> WorkflowTransition | None:
@@ -416,7 +482,7 @@ async def snapshot_for(
 ) -> ItemSnapshot:
     """The item snapshot covering every candidate row's needs — applies_when
     scoping AND rule evaluation (public: approvals resolves through it)."""
-    all_rules = [rule for row in rows for rule in (row.rules or [])]
+    all_rules = [rule for row in rows for rule in effective_rules(row)]
     all_conditions = [
         condition for row in rows for condition in (row.applies_when or [])
     ]
@@ -570,9 +636,10 @@ async def check_transition(
                 to_name,
             )
         return
-    if not row.rules:
+    rules = effective_rules(row)
+    if not rules:
         return
-    failures = guards.evaluate(row.rules, snapshot, to_state_id=str(new_state_id))
+    failures = guards.evaluate(rules, snapshot, to_state_id=str(new_state_id))
     if failures:
         names = await _state_names(session, {old_state_id, new_state_id})
         raise TransitionError(
@@ -616,7 +683,7 @@ async def allowed_transitions(
             else:
                 failures = []
         else:
-            failures = guards.evaluate(row.rules, snapshot, to_state_id=str(state.id))
+            failures = guards.evaluate(effective_rules(row), snapshot, to_state_id=str(state.id))
         targets.append(
             AllowedTarget(state_id=state.id, allowed=not failures, failures=failures)
         )
@@ -638,6 +705,7 @@ async def _transition_audit_state(
         "rules": transition.rules,
         "applies_when": transition.applies_when,
         "position": transition.position,
+        "on_release": transition.on_release,
     }
 
 

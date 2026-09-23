@@ -211,6 +211,9 @@ def evaluate(
         elif check is TransitionCheck.REQUIRE_RESOLVED_THREADS:
             if snapshot.has_unresolved_threads:
                 failures.append("all threads must be resolved (including internal threads)")
+        elif check is TransitionCheck.REQUIRE_RELEASE:
+            if is_empty(snapshot.builtin.get(BuiltinField.RELEASE.value)):
+                failures.append("a release is required")
     return failures + approval_failures
 
 

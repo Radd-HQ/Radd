@@ -85,7 +85,6 @@ export const INSTANCE_HOMED_SECTIONS: readonly string[] = [
   "email",
 ];
 export const PROJECT_HOMED_SECTIONS: readonly string[] = [
-  "releases",
   "timelogging",
   "sla",
   "workflow",

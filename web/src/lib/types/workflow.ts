@@ -69,6 +69,8 @@ export const TransitionCheck = {
   requireField: "require_field",
   requireApproval: "require_approval",
   requireResolvedThreads: "require_resolved_threads",
+  // RADD-1285: the item has a release (named form of require_field release set).
+  requireRelease: "require_release",
 } as const;
 
 /** What a require_field condition addresses (spec 107). */
@@ -109,6 +111,7 @@ export interface ApproverEntry {
 
 export type TransitionRule =
   | { check: typeof TransitionCheck.requireResolvedThreads; params: Record<string, never> }
+  | { check: typeof TransitionCheck.requireRelease; params: Record<string, never> }
   | { check: typeof TransitionCheck.requireField; params: FieldConditionParams }
   | { check: typeof TransitionCheck.requireApproval; params: { approvers: ApproverEntry[] } };
 
@@ -123,6 +126,8 @@ export interface Transition {
   rules: TransitionRule[];
   applies_when: FieldConditionParams[];
   position: number;
+  /** RADD-1285: performed automatically when a release is published (needs a from state). */
+  on_release: boolean;
   created_at: string;
 }
 
@@ -133,6 +138,7 @@ export interface TransitionCreate {
   rules?: TransitionRule[];
   applies_when?: FieldConditionParams[];
   position?: number;
+  on_release?: boolean;
 }
 
 /** PATCH /transitions/{id} — explicit `from_state_id: null` = the wildcard. */
@@ -142,6 +148,7 @@ export interface TransitionUpdate {
   rules?: TransitionRule[];
   applies_when?: FieldConditionParams[];
   position?: number;
+  on_release?: boolean;
 }
 
 /** GET /items/{id}/allowed-transitions — per-target allow/deny + failure list. */

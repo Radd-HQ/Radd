@@ -7,13 +7,13 @@ import { formatDate } from "../../lib/dates";
 import { usePermissions } from "../../lib/hooks";
 import { useListFilter } from "../../lib/list-filter";
 import { RELEASE_STATUS_META } from "../../lib/meta";
-import { projectByIdQuery, queryKeys, releasesQuery } from "../../lib/queries";
+import { projectByIdQuery, queryKeys, releasesQuery, statesQuery, transitionsQuery } from "../../lib/queries";
+import { RoutePath } from "../../lib/constants";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { pushToast, ToastKind } from "../../lib/toast";
 import {
   Permission,
   ReleaseStatus,
-  SettingScope,
   type Release,
   type ReleaseCreate,
   type ReleaseSweepResult,
@@ -26,7 +26,7 @@ import { ListSearchInput } from "../../components/ListSearchInput";
 import { Modal } from "../../components/Modal";
 import { TableSkeleton } from "../../components/TableSkeleton";
 import { TextField } from "../../components/TextField";
-import { ScopedSettingsEditor } from "../../components/settings/ScopedSettingsEditor";
+import { Link } from "@tanstack/react-router";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { QueryError } from "../../components/QueryError";
 import { IconButton } from "../../components/IconButton";
@@ -106,28 +106,9 @@ export function ReleasesSettingsPage({ projectId }: { projectId?: string }) {
         </>
       )}
 
-      {/* RADD-930: the two states that DRIVE the list above (spec 112), on the
-          page that uses them. They used to sit on project → General, where
-          "Shipped state" read as trivia with nothing nearby saying what moves
-          work there. */}
-      {project && (
-        <section aria-label="Release pipeline" className="mt-8">
-          <h3 className="text-[13px] font-semibold text-heading">Release pipeline</h3>
-          <p className="mb-3 mt-0.5 text-xs text-fg-muted">
-            Marking a version released — here, over the API, or by a published GitHub or
-            Forgejo release — <strong>sweeps</strong> every item sitting in the waiting state
-            into the shipped state and records the release on each one. Work that reaches the
-            waiting state afterwards ships with the next <em>Sweep</em>. Both are state names,
-            resolved within this project — renaming a state is a settings edit here, not a
-            broken pipeline. Leave either empty to turn that half off.
-          </p>
-          <ScopedSettingsEditor
-            scope={SettingScope.project}
-            scopeId={project.id}
-            section="releases"
-          />
-        </section>
-      )}
+      {/* RADD-1285: what a published release moves is a workflow fact — the
+          on-release transitions — shown here and edited in Workflow. */}
+      {project && <ShippingSummary projectId={project.id} projectKey={project.key} />}
 
       {modal && project && (
         <ReleaseModal
@@ -346,3 +327,46 @@ function ReleaseModal({
     </Modal>
   );
 }
+
+
+/** Which moves a published release performs in this project (RADD-1285). */
+function ShippingSummary({ projectId, projectKey }: { projectId: string; projectKey: string }) {
+  const transitions = useQuery(transitionsQuery(projectId));
+  const states = useQuery(statesQuery(projectId));
+  const name = new Map((states.data ?? []).map((state) => [state.id, state.name]));
+  const shipping = (transitions.data ?? []).filter((row) => row.on_release && row.from_state_id);
+  return (
+    <section aria-label="How releases ship" className="mt-8" data-release-shipping>
+      <h3 className="text-[13px] font-semibold text-heading">How releases ship</h3>
+      {shipping.length === 0 ? (
+        <p className="mt-0.5 text-xs text-fg-muted">
+          Publishing a release records it but moves nothing. To ship finished work automatically,
+          mark a transition <em>Moves automatically when a release is published</em> in{" "}
+          <Link to={RoutePath.projectSettingsWorkflow} params={{ projectKey }} className="text-accent-text hover:underline">
+            Workflow
+          </Link>.
+        </p>
+      ) : (
+        <>
+          <p className="mt-0.5 text-xs text-fg-muted">
+            Publishing a release — here, over the API, or from GitHub, GitLab or Forgejo — moves:
+          </p>
+          <ul className="mt-2 flex flex-col gap-1 text-[13px] text-fg">
+            {shipping.map((row) => (
+              <li key={row.id} data-release-move={row.id}>
+                {name.get(row.from_state_id ?? "") ?? "?"} → {name.get(row.to_state_id) ?? "?"}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-fg-muted">
+            Change this in{" "}
+            <Link to={RoutePath.projectSettingsWorkflow} params={{ projectKey }} className="text-accent-text hover:underline">
+              Workflow
+            </Link>.
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
+
