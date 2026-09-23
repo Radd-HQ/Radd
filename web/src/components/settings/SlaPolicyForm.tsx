@@ -5,7 +5,7 @@ import { api, errorMessage } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { PRIORITY_META, PRIORITY_ORDER } from "../../lib/meta";
-import { issueTypesQuery } from "../../lib/queries";
+import { issueTypesQuery, statesQuery } from "../../lib/queries";
 import type { PriorityValue, SlaPolicy } from "../../lib/types";
 import { Button } from "../Button";
 import { TextField } from "../TextField";
@@ -56,7 +56,9 @@ export function NewSlaPolicyForm({
   const [responseMinutes, setResponseMinutes] = useState("60");
   const [resolutionMinutes, setResolutionMinutes] = useState("");
   const [warningMinutes, setWarningMinutes] = useState("");
-  const [pauseStates, setPauseStates] = useState("");
+  // RADD-1286: picked from the project's states, never typed. Stored by NAME,
+  // which is how SLA policies have always resolved them.
+  const [pauseStates, setPauseStates] = useState<string[]>([]);
   const [workWeekOnly, setWorkWeekOnly] = useState(false);
   const [priorities, setPriorities] = useState<PriorityValue[]>([]);
   const [issueTypeIds, setIssueTypeIds] = useState<string[]>([]);
@@ -74,6 +76,7 @@ export function NewSlaPolicyForm({
   // entry, one staleTime) — a filter over types must not disagree with the
   // pickers that assign them.
   const issueTypes = useQuery(issueTypesQuery(projectId));
+  const states = useQuery(statesQuery(projectId));
   const typeOptions = useMemo(
     () => (issueTypes.data ?? []).map((type) => ({ value: type.id, label: type.name })),
     [issueTypes.data],
@@ -87,10 +90,7 @@ export function NewSlaPolicyForm({
         response_minutes: responseMinutes ? Number(responseMinutes) : null,
         resolution_minutes: resolutionMinutes ? Number(resolutionMinutes) : null,
         warning_minutes: warningMinutes ? Number(warningMinutes) : null,
-        pause_state_names: pauseStates
-          .split(",")
-          .map((state) => state.trim())
-          .filter(Boolean),
+        pause_state_names: pauseStates,
         work_week_only: workWeekOnly,
         priorities,
         issue_type_ids: issueTypeIds,
@@ -100,7 +100,7 @@ export function NewSlaPolicyForm({
       }),
     onSuccess: () => {
       setName("");
-      setPauseStates("");
+      setPauseStates([]);
       setPriorities([]);
       setIssueTypeIds([]);
       setWindowStart("");
@@ -221,11 +221,13 @@ export function NewSlaPolicyForm({
         </span>
       </div>
       <div className="col-span-2">
-        <TextField
-          label="Pause in states (comma-separated names)"
+        <span className="mb-1 block text-xs font-medium text-fg-secondary">Pause the clock in these states</span>
+        <TokenMultiSelect
           value={pauseStates}
-          onChange={(event) => setPauseStates(event.target.value)}
-          placeholder="Backlog, Waiting for artist"
+          onChange={setPauseStates}
+          options={(states.data ?? []).map((state) => ({ value: state.name, label: state.name }))}
+          placeholder="Add a state…"
+          ariaLabel="Pause the clock in these states"
         />
       </div>
       <label className="col-span-2 flex items-center gap-2 text-xs text-fg-secondary">

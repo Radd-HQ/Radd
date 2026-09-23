@@ -315,7 +315,7 @@ function ModeSetting({ projectId }: { projectId: string }) {
     <div className="mt-3">
       <div className="flex items-end gap-2">
         <SelectField
-          label="Enforcement"
+          label="Enforcement in this project"
           value={String(row.value)}
           onChange={(event) => save.mutate(event.target.value)}
           disabled={save.isPending}
@@ -332,7 +332,10 @@ function ModeSetting({ projectId }: { projectId: string }) {
             (row.set_here ? "bg-accent/15 text-accent-text" : "text-fg-faint")
           }
         >
-          {row.set_here ? "Set here" : "Inherited"}
+          {/* RADD-1286: say whose value this is — the instance default lives on Settings → General. */}
+          {row.set_here
+            ? `This project only · default: ${TRANSITION_MODE_LABELS[String(row.default)]?.split(" — ")[0] ?? String(row.default)}`
+            : "Same as the instance default"}
         </span>
         {row.set_here && (
           <Button

@@ -1,4 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
+import { Link } from "@tanstack/react-router";
+import { RoutePath } from "../../lib/constants";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Check, Pencil, Plus, Trash2, Workflow, X } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
@@ -97,6 +99,7 @@ export function StatesSettingsPage({ projectId }: { projectId?: string }) {
           />
           <TransitionsSection project={project} states={sorted} canManage={canManage} />
           {canManage && <ThreadResolutionSection project={project} />}
+          <DoneSideEffects projectKey={project.key} />
         </>
       )}
     </SettingsPage>
@@ -374,12 +377,18 @@ function StateCategoriesCard({
 
   return (
     <section className="mt-6" aria-label="State categories">
-      <h2 className="mb-1 text-sm font-medium text-heading">Categories</h2>
+      <h2 className="mb-1 flex items-center gap-2 text-sm font-medium text-heading">
+        Categories
+        <span className="rounded bg-elevated px-1.5 py-px text-[10px] font-medium text-fg-secondary">
+          Shared by every project
+        </span>
+      </h2>
       <p className="mb-2 text-xs text-fg-muted">
-        The tier boards group by and states are classified under — instance-wide, and the
-        vocabulary is yours. Each category <em>behaves as</em> one of six fixed behaviours
-        (triage, backlog, todo, in&nbsp;progress, done, canceled), which is what keeps reports,
-        sweeps and guards correct whatever you name things.
+        The groups boards and reports sort states into. They are the same for every project, so
+        a change here changes all of them{canManage ? "" : " — only instance admins can edit them"}.
+        Each category <em>behaves as</em> one of six fixed kinds (triage, backlog, to do,
+        in&nbsp;progress, done, canceled), which keeps reports and guards correct whatever you
+        name things.
       </p>
       <ul className="rounded-lg border border-subtle">
         {sorted.map((row, index) => (
@@ -552,5 +561,24 @@ function DeleteStateDialog({
         </div>
       </div>
     </Modal>
+  );
+}
+
+
+/** RADD-1286: what else happens when work reaches a done state — configured on
+ *  the project's General page, named here so the workflow page tells the whole story. */
+function DoneSideEffects({ projectKey }: { projectKey: string }) {
+  return (
+    <section className="mt-8" aria-label="When work is done">
+      <h3 className="text-sm font-medium text-heading">When work is done</h3>
+      <p className="mt-1 text-xs text-fg-muted">
+        Moving an issue into a done state can also email its requesters and send them a
+        satisfaction survey. Both are set under{" "}
+        <Link to={RoutePath.projectSettingsGeneral} params={{ projectKey }} className="text-accent-text hover:underline">
+          General
+        </Link>{" "}
+        (Resolution emails, CSAT surveys).
+      </p>
+    </section>
   );
 }
