@@ -18,6 +18,7 @@ from radd.modules.fields import service as fields
 from radd.modules.fields.models import FieldDefinition, FieldProject
 from radd.modules.fields.schemas import FieldDefinitionCreate
 from radd.modules.projects.models import Project
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture
@@ -56,7 +57,7 @@ async def scope_world():
         async def override():
             yield db
         app.dependency_overrides[get_session] = override
-        cookie = await auth.create_session(db, actor)
+        cookie = await auth.create_session(db, actor, method=LoginMethod.PASSWORD)
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test",
                                      cookies={"radd_session": cookie}) as client:
             yield db, client, projects, definitions, scoped_key, global_key

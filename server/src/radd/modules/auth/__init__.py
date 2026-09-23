@@ -1,4 +1,4 @@
-from radd.kernel import EventTypeSpec, RaddPlugin
+from radd.kernel import EventTypeSpec, RaddPlugin, SettingSpec
 
 from . import subscribers
 from . import entityhost  # noqa: F401 — installs the kernel's EntityHost (RADD-892)
@@ -10,6 +10,8 @@ from .roles_router import (
     role_router,
 )
 from .router import auth_router, service_account_router, token_router, user_router
+from .mfa_router import mfa_admin_router, mfa_enrollment_router
+from . import mfa_policy
 
 # After the router chain on purpose: mcptools joins the loaded graph (RADD-889).
 from . import mcptools
@@ -49,6 +51,31 @@ plugin = RaddPlugin(
             AuthEvent.VIEW_AS_ENDED, "Impersonation ended", "Sign-in",
             trigger=False, entity_type="user",
         ),
+        # RADD-1279: an admin removed someone's two-factor enrolment.
+        EventTypeSpec(
+            AuthEvent.MFA_RESET, "Two-factor reset", "Sign-in",
+            trigger=False, entity_type="user",
+        ),
+    ),
+    # RADD-1279: the instance MFA policy. Enforced in `create_session`; the
+    # guard refuses turning it on for an admin who is not enrolled themselves.
+    settings_keys=(
+        SettingSpec(
+            key="require_mfa",
+            section="signin.mfa",
+            type="bool",
+            scopes=("instance",),
+            label="Require two-factor authentication",
+            description=(
+                "People who sign in with a Radd password must use an authenticator app. "
+                "Anyone not yet set up is taken through setup at their next sign-in, "
+                "before they get in; people already signed in are asked at their next "
+                "sign-in. Accounts that sign in through Active Directory, Google, GitHub "
+                "or another SSO provider are NOT covered: require two-factor at that "
+                "identity provider instead."
+            ),
+            guard=mfa_policy.guard_require_mfa,
+        ),
     ),
     # RADD-892: forms/pages/timelogging are gone — auth no longer reaches into
     # the features it outranks for nav facts or wiki-space names; they register
@@ -57,7 +84,9 @@ plugin = RaddPlugin(
     # because `global_role_grants` has a `team_id` and a `group_id` COLUMN: the
     # subject set is closed by auth's own schema, so a registry would advertise
     # an extensibility no column list can honour.
-    weak_depends=("access", "groups", "teams"),
+    # `settings` (RADD-1279): mfa_policy reads `require_mfa` through a deferred
+    # import — settings itself depends_on auth.
+    weak_depends=("access", "groups", "teams", "settings"),
     routers=(
         auth_router,
         user_router,
@@ -66,6 +95,8 @@ plugin = RaddPlugin(
         role_router,
         role_grant_router,
         permission_router,
+        mfa_enrollment_router,
+        mfa_admin_router,
         ),
     # RADD-889: the directory/service-account tools of the spec-114 MCP catalog
     # live with their owner.

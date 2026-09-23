@@ -109,6 +109,8 @@ async def set_value(
             "scoped_setting", reason="instance scope takes no id; project scope requires one"
         )
     coerced = _coerce(spec, value)
+    if spec.guard is not None:
+        await spec.guard(session, coerced, actor_id)
     existing = await session.scalar(
         select(ScopedSetting).where(
             ScopedSetting.scope == scope.value,

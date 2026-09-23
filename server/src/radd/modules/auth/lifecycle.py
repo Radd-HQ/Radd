@@ -166,7 +166,9 @@ _MERGE_DEDUPE: tuple[tuple[str, tuple[str, ...], str], ...] = (
 )
 # Credentials/preferences are identity-private — the target keeps its own.
 _MERGE_PURGE: tuple[str, ...] = (
-    "sessions", "api_tokens", "user_totp", "totp_recovery_codes", "notification_prefs"
+    "sessions", "api_tokens", "user_totp", "totp_recovery_codes", "notification_prefs",
+    # RADD-1279: a pending enrolment hand-off is a credential like a session.
+    "mfa_enrollment_tickets",
 )
 
 # RADD-784: what dies with the account on a HARD DELETE, successor or not.

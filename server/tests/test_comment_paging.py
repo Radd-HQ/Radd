@@ -18,6 +18,7 @@ from radd.modules.items import service as items
 from radd.modules.items.schemas import ItemCreate
 from radd.modules.projects import service as projects
 from radd.modules.projects.schemas import ProjectCreate
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture
@@ -136,7 +137,7 @@ async def test_http_feed_is_bounded_and_rejects_invalid_pagination(world):
     for i in range(51):
         db.add(Comment(entity_type="item", entity_id=item.id, author_id=author.id,
                        body=f"row {i}", visibility="public"))
-    cookie = await auth.create_session(db, reader)
+    cookie = await auth.create_session(db, reader, method=LoginMethod.PASSWORD)
     await db.commit()
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=create_app()), base_url="http://test",
                                  cookies={SESSION_COOKIE_NAME: cookie}) as client:

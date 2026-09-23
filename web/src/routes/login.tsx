@@ -2,10 +2,11 @@ import { useState, type FormEvent } from "react";
 import { resetAccountSession } from "../lib/account-session";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, errorMessage } from "../lib/api";
-import { isTotpRequired, ldapLogin, login, totpLogin, safeNextPath } from "../lib/auth";
+import { enrollmentTicket, isTotpRequired, ldapLogin, login, totpLogin, safeNextPath } from "../lib/auth";
 import { On401, RoutePath } from "../lib/constants";
 import { Button } from "../components/Button";
 import { RaddTile } from "../components/RaddMark";
+import { MfaEnrollment } from "../components/MfaEnrollment";
 import { SsoButtons } from "../components/SsoButtons";
 import { TextField } from "../components/TextField";
 
@@ -28,6 +29,9 @@ export function LoginPage() {
   // and reroutes the submit through /auth/login/totp.
   const [totpRequired, setTotpRequired] = useState(false);
   const [code, setCode] = useState("");
+  // RADD-1279: the instance requires two-factor and this account has none —
+  // the refused login carried a ticket, and enrolment replaces the form.
+  const [ticket, setTicket] = useState<string | null>(null);
 
   const optionsQuery = useQuery({
     queryKey: ["loginOptions"],
@@ -51,12 +55,10 @@ export function LoginPage() {
         : totpRequired
           ? totpLogin({ email: email.trim().toLowerCase(), password, code: code.trim() })
           : login({ email: email.trim().toLowerCase(), password }),
-    onSuccess: async () => {
-      await resetAccountSession(queryClient);
-      window.location.assign(next ?? RoutePath.home);
-    },
+    onSuccess: () => enterApp(),
     onError: (error) => {
       if (isTotpRequired(error)) setTotpRequired(true);
+      setTicket(enrollmentTicket(error));
     },
   });
 
@@ -76,7 +78,12 @@ export function LoginPage() {
   // reading). Same-origin paths only.
   const [next] = useState(() => safeNextPath(new URLSearchParams(window.location.search).get("next")));
 
-  const error = submit.error;
+  async function enterApp() {
+    await resetAccountSession(queryClient);
+    window.location.assign(next ?? RoutePath.home);
+  }
+
+  const error = ticket ? null : submit.error;
   const authMissing = error instanceof ApiError && error.status === 404;
   // "totp_required" isn't a failure to show — the revealed code field is the
   // message. Any other 401 keeps the mode's invalid-credentials text; once the
@@ -119,7 +126,18 @@ export function LoginPage() {
             <button type="button" className="underline" onClick={() => void optionsQuery.refetch()}>Retry</button>
           </p>
         )}
-        {(directory || localOpen) && <form
+        {ticket && (
+          <MfaEnrollment
+            ticket={ticket}
+            onSignedIn={() => void enterApp()}
+            onRestart={() => {
+              setTicket(null);
+              setPassword("");
+              submit.reset();
+            }}
+          />
+        )}
+        {!ticket && (directory || localOpen) && <form
           onSubmit={onSubmit}
           className="flex flex-col gap-4 rounded-lg border border-subtle bg-surface/40 p-5"
         >
@@ -180,12 +198,12 @@ export function LoginPage() {
           </Button>
         </form>}
 
-        <button type="button" disabled={submit.isPending} aria-expanded={localOpen}
+        {!ticket && <button type="button" disabled={submit.isPending} aria-expanded={localOpen}
           className="mt-4 block w-full text-center text-xs text-fg-muted underline hover:text-fg"
           onClick={toggleLocal}>
           {localOpen ? "Close local account sign-in" : "Sign in with a local account"}
-        </button>
-        <SsoButtons next={next} />
+        </button>}
+        {!ticket && <SsoButtons next={next} />}
       </div>
     </main>
   );

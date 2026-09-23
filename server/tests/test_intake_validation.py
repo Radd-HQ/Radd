@@ -47,6 +47,7 @@ from radd.modules.itemtypes import service as itemtypes_service
 from radd.modules.itemtypes.schemas import IssueTypeCreate
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture
@@ -1350,7 +1351,7 @@ async def http_world():
         )
         session.add(admin)
         await session.flush()
-        cookie = await auth_service.create_session(session, admin)
+        cookie = await auth_service.create_session(session, admin, method=LoginMethod.PASSWORD)
         project = await projects_service.create_project(
             session,
             ProjectCreate(key=f"IH{uuid.uuid4().hex[:4].upper()}", name="Intake HTTP"),

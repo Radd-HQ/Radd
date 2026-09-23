@@ -15,6 +15,7 @@ from radd.db import get_session
 from radd.modules.auth import account_directory, mcptools, service as auth
 from radd.modules.auth.models import ApiToken, User
 from radd.modules.auth.schemas import TokenCreate
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture
@@ -70,7 +71,7 @@ async def world():
             yield db
 
         app.dependency_overrides[get_session] = override
-        cookie = await auth.create_session(db, admin)
+        cookie = await auth.create_session(db, admin, method=LoginMethod.PASSWORD)
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app),
             base_url="http://test",
@@ -203,7 +204,7 @@ async def test_key_permission_vocabulary_without_issue_readership(world):
     db.add_all([manager, role])
     await db.flush()
     db.add(GlobalRoleGrant(user_id=manager.id, role_id=role.id))
-    cookie = await auth.create_session(db, manager)
+    cookie = await auth.create_session(db, manager, method=LoginMethod.PASSWORD)
     client.cookies.set("radd_session", cookie)
     db.info.clear()
     assert (await client.get("/api/v1/projects")).json() == []

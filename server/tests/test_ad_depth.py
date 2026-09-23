@@ -24,6 +24,7 @@ from radd.modules.groups.models import GroupMember
 from radd.modules.ldap import groups, groupsync, service as ldap_service
 from radd.modules.ldap.types import DirectoryGroup, DirectoryUser
 from radd.modules.teams import service as teams_service
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture
@@ -110,7 +111,7 @@ async def test_deactivate_revokes_sessions_and_blocks_self(db, admin):
         ),
     )
     assert victim.source == UserSource.LOCAL
-    await auth_service.create_session(db, victim)
+    await auth_service.create_session(db, victim, method=LoginMethod.PASSWORD)
     assert victim.last_login_at is not None  # stamped by the one login seam
     await auth_service.update_user_admin(
         db, victim.id, UserAdminUpdate(active=False, name="Renamed Victim"), admin

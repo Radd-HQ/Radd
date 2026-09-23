@@ -292,6 +292,12 @@ class Settings(BaseSettings):
     # the tracker with dead users. Overridable per instance in Settings → Directory.
     ldap_exclude_disabled: bool = True
 
+    # RADD-1279: refuse a session to a password login with no second factor.
+    # Seed/fallback only — Settings → Sign-in owns it (the `require_mfa` row).
+    require_mfa: bool = False
+    # How long the enrolment ticket a refused login receives stays usable.
+    mfa_enrollment_ticket_minutes: int = 15
+
     # Proxies allowed to speak X-Forwarded-For (comma-separated IPs/CIDRs, e.g.
     # your ingress/LB range). "" = the header is ignored and the socket peer is
     # the client IP. Storage CIDR routing rules (spec 102) depend on this being

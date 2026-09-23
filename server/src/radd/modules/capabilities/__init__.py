@@ -34,11 +34,5 @@ plugin = RaddPlugin(
             category="infra",
             check=lambda: {"enabled": bool(settings.smtp_host)},
         ),
-        CapabilitySpec(
-            key="mfa",
-            label="Multi-factor auth (TOTP)",
-            category="auth",
-            check=lambda: {"enabled": True},
-        ),
     ),
 )

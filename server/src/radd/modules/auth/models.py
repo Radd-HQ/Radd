@@ -83,6 +83,27 @@ class TotpRecoveryCode(Base, TimestampMixin):
     used_at: Mapped[datetime | None] = mapped_column()
 
 
+class MfaEnrollmentTicket(Base, TimestampMixin):
+    """RADD-1279: the credential a password login receives INSTEAD of a session
+    when `require_mfa` is on and the account has no confirmed TOTP row.
+
+    Not a session on purpose — a second kind of session is something every
+    guard would have to learn to refuse. A ticket opens exactly two endpoints
+    (TOTP setup + confirm, `/auth/mfa-enrollment/*`), expires in minutes, and is
+    burned by the confirm that finally mints the session. Only its SHA-256 is
+    stored, like every other bearer secret here."""
+
+    __tablename__ = "mfa_enrollment_tickets"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    expires_at: Mapped[datetime] = mapped_column()
+    used_at: Mapped[datetime | None] = mapped_column()
+
+
 class UserSession(Base):
     """Browser session. The cookie carries the raw token; only its sha256 is stored."""
 

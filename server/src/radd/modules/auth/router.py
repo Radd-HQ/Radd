@@ -2,6 +2,7 @@ import uuid
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
@@ -12,7 +13,7 @@ from radd.exceptions import ForbiddenError, UnauthorizedError
 from radd.kernel import registries
 
 from . import account_directory, authz, grants, roles as roles_service, service, service_accounts, totp
-from . import principals
+from . import mfa_policy, principals
 from .deps import Actor, CurrentUser
 from .models import User
 from .principals import require_account_session
@@ -57,6 +58,7 @@ from .types import (
     SESSION_COOKIE_NAME,
     GrantScopeKind,
     InstanceRole,
+    LoginMethod,
     UserSource,
     relations_held,
 )
@@ -83,14 +85,28 @@ def _set_session_cookie(response: Response, token: str) -> None:
     )
 
 
-@auth_router.post("/login", status_code=204)
-async def login(data: LoginRequest, session: Session, response: Response, request: Request) -> None:
+@auth_router.post("/login", status_code=204, response_model=None)
+async def login(
+    data: LoginRequest, session: Session, response: Response, request: Request
+) -> Response | None:
     check_login_attempt(request, data.email)
     user = await service.authenticate(session, data.email, data.password)
     if await service.totp_required(session, user):
         # No cookie yet — the client repeats via /login/totp with a code.
         raise UnauthorizedError(TOTP_REQUIRED)
-    _set_session_cookie(response, await service.create_session(session, user))
+    try:
+        token = await service.create_session(session, user, method=LoginMethod.PASSWORD)
+    except mfa_policy.MfaEnrollmentRequired:
+        # RADD-1279: the instance requires a second factor this account lacks.
+        # RETURNED, not raised — the ticket row must commit with the refusal.
+        return JSONResponse(
+            status_code=401,
+            content={
+                "detail": mfa_policy.MFA_ENROLLMENT_REQUIRED,
+                "enrollment_ticket": await mfa_policy.issue_ticket(session, user),
+            },
+        )
+    _set_session_cookie(response, token)
 
 
 @auth_router.post("/login/totp", status_code=204)
@@ -98,7 +114,9 @@ async def login_totp(data: TotpLoginRequest, session: Session, response: Respons
     """Second MFA step (spec 48): stateless — password re-verified with the code."""
     check_login_attempt(request, data.email)
     user = await service.authenticate_with_totp(session, data.email, data.password, data.code)
-    _set_session_cookie(response, await service.create_session(session, user))
+    _set_session_cookie(
+        response, await service.create_session(session, user, method=LoginMethod.PASSWORD_TOTP)
+    )
 
 
 @auth_router.get("/totp", response_model=TotpStatusRead)
@@ -601,7 +619,16 @@ async def list_users(
         response.headers[TOTAL_COUNT_HEADER] = str(
             await service.count_users(session, q=q, source=source, active=active)
         )
-    return [UserRead.model_validate(u) for u in users]
+    return await _user_reads(session, users)
+
+
+async def _user_reads(session: AsyncSession, users: list[User]) -> list[UserRead]:
+    """`UserRead` rows with RADD-1279's `mfa_enabled` — one query for the page."""
+    enrolled = await mfa_policy.enrolled_ids(session, [u.id for u in users])
+    return [
+        UserRead.model_validate(u).model_copy(update={"mfa_enabled": u.id in enrolled})
+        for u in users
+    ]
 
 
 def _require_instance_admin(actor: User, action: str) -> None:
@@ -615,7 +642,7 @@ async def list_duplicate_users(session: Session, actor: CurrentUser) -> list[Dup
     case-insensitive name. A heuristic feed for the merge UI — never auto-merges."""
     _require_instance_admin(actor, "duplicate detection")
     return [
-        DuplicateUserGroup(kind=kind, key=key, users=[UserRead.model_validate(u) for u in users])
+        DuplicateUserGroup(kind=kind, key=key, users=await _user_reads(session, users))
         for kind, key, users in await service.duplicate_user_groups(session)
     ]
 
@@ -637,7 +664,8 @@ async def update_user(
     await authz.require(session, actor, authz.Permission.USER_UPDATE)
     if data.instance_role is not None:
         _require_instance_admin(actor, "changing a user's instance role")
-    return UserRead.model_validate(await service.update_user_admin(session, user_id, data, actor))
+    updated = await service.update_user_admin(session, user_id, data, actor)
+    return (await _user_reads(session, [updated]))[0]
 
 
 @user_router.get("/{user_id}/content", response_model=UserContentSummary)
@@ -704,7 +732,7 @@ async def merge_user(
     if not authz.is_instance_admin(actor):
         raise ForbiddenError("user merge requires an instance admin")
     target = await service.merge_users(session, user_id, data.into_user_id, actor_id=actor.id)
-    return UserRead.model_validate(target)
+    return (await _user_reads(session, [target]))[0]
 
 
 @token_router.post("", response_model=TokenCreated, status_code=201)

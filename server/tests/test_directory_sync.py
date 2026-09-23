@@ -22,6 +22,7 @@ from radd.modules.ldap.router import directory_sync_status
 from radd.modules.ldap.types import DirectoryUser, SyncKind
 from radd.modules.settings import service as settings_service
 from radd.modules.settings.types import SettingKey, SettingScope
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture
@@ -135,7 +136,7 @@ async def test_user_sync_deactivates_missing_only_ldap_when_toggled(
             email=f"gone-local-{marker}@dir85.example.com", name="Gone Local", password="password-123"
         ),
     )
-    await auth_service.create_session(db, gone_ldap)
+    await auth_service.create_session(db, gone_ldap, method=LoginMethod.PASSWORD)
 
     _stub_directory(monkeypatch, [_directory_user("present")])
     await settings_service.set_value(

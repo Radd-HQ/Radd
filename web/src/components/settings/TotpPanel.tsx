@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Copy, ShieldCheck, ShieldOff } from "lucide-react";
+import { ShieldCheck, ShieldOff } from "lucide-react";
 import { ApiError, api, errorMessage } from "../../lib/api";
 import { ApiPath, On401 } from "../../lib/constants";
 import { queryKeys, totpStatusQuery } from "../../lib/queries";
@@ -8,7 +8,7 @@ import type { TotpRecoveryCodes, TotpSetup, TotpStatus } from "../../lib/types";
 import { Button } from "../Button";
 import { TextField } from "../TextField";
 import { ErrorText } from "../ErrorText";
-import { CopyValue } from "./CopyValue";
+import { RecoveryCodesOnce, TotpEnrolmentStep } from "./TotpEnrolment";
 
 const INVALID_CODE_MESSAGE = "Invalid code.";
 
@@ -21,8 +21,8 @@ function codeError(error: unknown): string | null {
 
 /**
  * Two-factor authentication panel on the Profile page (spec 48). Disabled:
- * Enable → shows the new secret + otpauth URI (QR-less — paste into an
- * authenticator app) with a confirm-code input. Enabled: green badge + a
+ * Enable → the shared enrolment step (QR + secret, RADD-1298) with a
+ * confirm-code input. Enabled: green badge + a
  * disable flow that requires a current code (DELETE /auth/totp {code}).
  */
 export function TotpPanel() {
@@ -49,7 +49,6 @@ export function TotpPanel() {
 function SetupPanel({ pending }: { pending: boolean }) {
   const queryClient = useQueryClient();
   const [setup, setSetup] = useState<TotpSetup | null>(null);
-  const [confirmCode, setConfirmCode] = useState("");
   const [minted, setMinted] = useState<string[] | null>(null);
 
   const start = useMutation({
@@ -63,7 +62,6 @@ function SetupPanel({ pending }: { pending: boolean }) {
       api.post<TotpRecoveryCodes>(ApiPath.totpConfirm, { code }, { on401: On401.throw }),
     onSuccess: (result) => {
       setSetup(null);
-      setConfirmCode("");
       setMinted(result.recovery_codes);
       void queryClient.invalidateQueries({ queryKey: queryKeys.totp });
     },
@@ -94,37 +92,13 @@ function SetupPanel({ pending }: { pending: boolean }) {
     );
   }
 
-  const onConfirm = (event: FormEvent) => {
-    event.preventDefault();
-    if (confirmCode.trim()) confirm.mutate(confirmCode.trim());
-  };
-
   return (
-    <div className="flex max-w-xl flex-col gap-4 rounded-lg border border-subtle bg-surface/40 p-4">
-      <p className="text-[13px] text-fg">
-        Add this secret to your authenticator app (Google Authenticator, 1Password, Aegis, …) —
-        paste the secret as a time-based (TOTP) entry, or use the full otpauth URI. Then enter a
-        generated code below to turn two-factor on.
-      </p>
-      <CopyValue label="Secret" value={setup.secret} secret mono size="md" />
-      <CopyValue label="otpauth URI" value={setup.otpauth_uri} secret size="md" />
-      <form onSubmit={onConfirm} className="flex items-end gap-3">
-        <TextField
-          label="Confirm code"
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          maxLength={6}
-          value={confirmCode}
-          onChange={(event) => setConfirmCode(event.target.value)}
-          placeholder="123456"
-          error={codeError(confirm.error) ?? undefined}
-        />
-        <Button type="submit" disabled={confirm.isPending || !confirmCode.trim()}>
-          <ShieldCheck size={14} aria-hidden />
-          {confirm.isPending ? "Confirming…" : "Confirm and enable"}
-        </Button>
-      </form>
-    </div>
+    <TotpEnrolmentStep
+      setup={setup}
+      confirming={confirm.isPending}
+      error={codeError(confirm.error) ?? undefined}
+      onConfirm={(code) => confirm.mutate(code)}
+    />
   );
 }
 
@@ -266,61 +240,6 @@ function EnabledPanel({ status }: { status: TotpStatus }) {
         </Button>
       )}
     </div>
-  );
-}
-
-/** The freshly-minted recovery codes — plaintext exists only in this render
- * (only hashes are stored), so the panel holds the user here until they say
- * they've saved them. */
-function RecoveryCodesOnce({ codes, onDone }: { codes: string[]; onDone: () => void }) {
-  return (
-    <div className="flex max-w-xl flex-col gap-3 rounded-lg border border-subtle bg-surface/40 p-4">
-      <p className="flex items-center gap-2 text-[13px] font-medium text-heading">
-        <ShieldCheck size={15} className="shrink-0 text-emerald-400" aria-hidden />
-        Save your recovery codes
-      </p>
-      <p className="text-xs text-fg-secondary">
-        Each code signs you in once if your authenticator is gone. They are shown{" "}
-        <strong>only now</strong> — store them with your passwords or print them.
-      </p>
-      <div className="grid grid-cols-2 gap-x-6 gap-y-1 rounded-md border border-strong bg-base px-4 py-3 font-mono text-[13px] text-heading">
-        {codes.map((recoveryCode) => (
-          <span key={recoveryCode}>{recoveryCode}</span>
-        ))}
-      </div>
-      <div className="flex items-center gap-2">
-        <CopyAllButton value={codes.join("\n")} />
-        <Button onClick={onDone}>I saved them</Button>
-      </div>
-    </div>
-  );
-}
-
-function CopyAllButton({ value }: { value: string }) {
-  const [copied, setCopied] = useState(false);
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard unavailable — the codes stay selectable above.
-    }
-  };
-  return (
-    <Button variant="ghost" className="border border-strong" onClick={() => void copy()}>
-      {copied ? (
-        <>
-          <Check size={14} className="text-emerald-400" aria-hidden />
-          Copied
-        </>
-      ) : (
-        <>
-          <Copy size={14} aria-hidden />
-          Copy all
-        </>
-      )}
-    </Button>
   );
 }
 

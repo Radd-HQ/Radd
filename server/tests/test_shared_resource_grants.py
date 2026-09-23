@@ -22,6 +22,7 @@ from radd.modules.teams import service as teams
 from radd.modules.teams.schemas import TeamCreate
 from radd.modules.views import service as views
 from radd.modules.views.schemas import ViewCreate
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture
@@ -61,7 +62,7 @@ async def test_share_expiry_and_denies_reach_http_consumers(db, monkeypatch, res
     expires = now + timedelta(hours=1)
     temporary = await grants.add_grant(db, resource, str(created.id), subject_type=subject,
                                       subject_id=subject_id, access="owner", expires_at=expires)
-    cookie = await auth.create_session(db, reader)
+    cookie = await auth.create_session(db, reader, method=LoginMethod.PASSWORD)
     app = create_app()
     async def session_override():
         yield db

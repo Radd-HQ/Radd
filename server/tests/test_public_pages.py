@@ -33,6 +33,7 @@ from radd.modules.pages import (
 )
 from radd.modules.pages.models import PageSpace
 from radd.modules.pages.schemas import PageCreate, PageSpaceCreate
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture
@@ -131,7 +132,7 @@ async def test_http_the_world_reads_a_public_space_and_not_a_private_one(db, adm
     private_space = await _space(db, admin, public=False, name="Internal")
     shown = await _page(db, admin, public_space, "Welcome", "hello world")
     hidden = await _page(db, admin, private_space, "Plans", "not for you")
-    admin_cookie = await auth.create_session(db, admin)
+    admin_cookie = await auth.create_session(db, admin, method=LoginMethod.PASSWORD)
 
     async def session_override():
         yield db

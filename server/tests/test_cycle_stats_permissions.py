@@ -17,6 +17,7 @@ from radd.modules.items.schemas import ItemCreate
 from radd.modules.projects import service as projects
 from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.timelogging.models import ItemEstimate, Worklog
+from radd.modules.auth.types import LoginMethod
 
 
 async def test_http_totals_use_item_project_and_relation_visibility():
@@ -47,7 +48,7 @@ async def test_http_totals_use_item_project_and_relation_visibility():
                 db.add(ItemEstimate(item_id=item.id, original_estimate_seconds=estimate))
             db.add(Worklog(item_id=item.id, author_id=admin.id, worked_on=date.today(),
                           time_spent_seconds=logged, note="Aggregate test"))
-        cookie = await auth.create_session(db, reader)
+        cookie = await auth.create_session(db, reader, method=LoginMethod.PASSWORD)
         from radd.db import get_session
         async def session_override():
             yield db

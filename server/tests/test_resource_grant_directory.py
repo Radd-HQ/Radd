@@ -15,6 +15,7 @@ from radd.modules.fields import service as fields
 from radd.modules.fields.schemas import FieldDefinitionCreate
 from radd.modules.projects.models import Project
 from test_space_access_directory import access_world  # noqa: F401
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture
@@ -70,7 +71,7 @@ async def test_resource_guard_name_search_and_credential_limits(world):
     manager=Role(key=prefix+'field',name='Field manager',permissions=['field.manage'])
     db.add_all([delegate,manager]);await db.flush()
     db.add(GlobalRoleGrant(user_id=delegate.id,role_id=manager.id));await db.flush();db.info.clear()
-    client.cookies.set('radd_session',await auth.create_session(db,delegate))
+    client.cookies.set('radd_session',await auth.create_session(db,delegate, method=LoginMethod.PASSWORD))
     definitions=await client.get('/api/v1/fields',params={'q':field.name,'limit':50})
     assert definitions.status_code==200 and [r['id'] for r in definitions.json()]==[str(field.id)]
     response=await client.get('/api/v1/grants/directory',params={**params,'limit':200});assert response.status_code==200,response.text

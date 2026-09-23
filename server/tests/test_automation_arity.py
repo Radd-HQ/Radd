@@ -31,6 +31,7 @@ from radd.kernel.specs import AutomationNodeSpec
 from radd.modules.automations import executor, graph, nodes as nodes_registry, planning, templating
 from radd.modules.automations.conditions import EventFacts
 from radd.modules.automations.graph import Edge, Node, Packet
+from radd.modules.auth.types import LoginMethod
 from radd.modules.automations.types import (
     ACTION_ARITY_CONFIGURABLE,
     ACTION_ARITY_DEFAULT,
@@ -666,7 +667,7 @@ async def manual_world():
         )
         session.add(admin)
         await session.flush()
-        cookie = await auth_service.create_session(session, admin)
+        cookie = await auth_service.create_session(session, admin, method=LoginMethod.PASSWORD)
         key = f"MN{uuid.uuid4().hex[:4].upper()}"
         project = await projects_service.create_project(
             session, ProjectCreate(key=key, name="Manual Test"), actor_id=admin.id

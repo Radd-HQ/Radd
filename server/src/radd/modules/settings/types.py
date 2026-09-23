@@ -115,6 +115,8 @@ class SettingKey(StrEnum):
     LDAP_USER_SYNC_DEACTIVATE_MISSING = "ldap_user_sync_deactivate_missing"
     LDAP_GROUP_SEARCH_BASE = "ldap_group_search_base"
     LDAP_EXCLUDE_DISABLED = "ldap_exclude_disabled"
+    # RADD-1279 — instance-only, owned by auth, rendered on Settings → Sign-in.
+    REQUIRE_MFA = "require_mfa"
     # AI feature toggles (spec 101) — instance-only, owned by Settings → AI.
     AI_EDITOR_ACTIONS = "ai_editor_actions"
     AI_SEMANTIC_SEARCH = "ai_semantic_search"

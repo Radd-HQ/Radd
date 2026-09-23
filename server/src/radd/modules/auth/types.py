@@ -799,10 +799,28 @@ class AuthEvent(StrEnum):
     # names both parties, so the trail survives either account's deletion.
     VIEW_AS_STARTED = "auth.view_as_started"
     VIEW_AS_ENDED = "auth.view_as_ended"
+    # RADD-1279: an admin removed someone's TOTP enrolment (lost authenticator
+    # AND recovery codes). The payload names both parties.
+    MFA_RESET = "auth.mfa_reset"
     # Spec 123: the spec-121 switches as the event an auditor looks for. The
     # grant rows underneath emit role.updated too; this one says "made the
     # project public" in the project's own history, with old → new.
     PROJECT_PUBLIC_ACCESS_CHANGED = "project.public_access_changed"
+
+
+class LoginMethod(StrEnum):
+    """RADD-1279: HOW a session is being minted — a required argument of
+    `create_session`, so every login path states it and the MFA policy is
+    enforced at the one seam they all pass through.
+
+    `PASSWORD` is a password with no second factor; `PASSWORD_TOTP` a password
+    plus a TOTP/recovery code (or an enrolment just confirmed); `LDAP`/`SSO`
+    are the directory and identity-provider logins, whose IdP owns MFA."""
+
+    PASSWORD = "password"
+    PASSWORD_TOTP = "password_totp"
+    LDAP = "ldap"
+    SSO = "sso"
 
 
 class AuthEntity(StrEnum):

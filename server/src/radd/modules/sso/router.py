@@ -19,7 +19,7 @@ from radd.config import settings
 from radd.db import get_session
 from radd.exceptions import ForbiddenError, RaddError
 from radd.modules.auth import service as auth_service
-from radd.modules.auth.types import SESSION_COOKIE_NAME
+from radd.modules.auth.types import SESSION_COOKIE_NAME, LoginMethod
 
 from . import registry, service
 from .models import SsoProvider
@@ -108,7 +108,7 @@ async def oidc_callback(code: str, state: str, request: Request, session: Sessio
         logger.exception("sso: callback failed")
         return _refused("Sign-in failed. Contact an administrator if it continues.")
 
-    token = await auth_service.create_session(session, user)
+    token = await auth_service.create_session(session, user, method=LoginMethod.SSO)
     response = RedirectResponse(service.safe_next_path(flow.get("next")) or "/", status_code=307)
     response.delete_cookie(OIDC_FLOW_COOKIE)
     response.set_cookie(

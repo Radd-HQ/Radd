@@ -11,6 +11,7 @@ from radd.modules.auth import service as auth
 from radd.modules.auth.models import User
 from radd.modules.auth.schemas import TokenCreate
 from radd.modules.teams.models import Team
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.mark.parametrize('resource,permission', [('users','user.manage'),('teams','team.read')])
@@ -23,7 +24,7 @@ async def test_people_option_window_privacy_and_credentials(resource,permission)
         db.add_all([owner,member]);await db.flush()
         _,token=await auth.create_api_token(db,owner,TokenCreate(name='Vocabulary',scopes={'global':[permission]}))
         _,empty=await auth.create_api_token(db,owner,TokenCreate(name='No vocabulary',scopes={}))
-        cookie=await auth.create_session(db,member)
+        cookie=await auth.create_session(db,member, method=LoginMethod.PASSWORD)
         rows=[]
         for i in range(126):
             name=f'{prefix} choice {i:03}'

@@ -23,6 +23,7 @@ from radd.config import settings
 from radd.modules.auth import service as auth_service
 from radd.modules.auth.models import User
 from radd.modules.auth.types import SESSION_COOKIE_NAME, InstanceRole, UserSource
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture(scope="module")
@@ -62,8 +63,8 @@ async def world():
         )
         session.add_all([member, admin, stranger, service_acct])
         await session.flush()
-        member_cookie = await auth_service.create_session(session, member)
-        admin_cookie = await auth_service.create_session(session, admin)
+        member_cookie = await auth_service.create_session(session, member, method=LoginMethod.PASSWORD)
+        admin_cookie = await auth_service.create_session(session, admin, method=LoginMethod.PASSWORD)
         payload = {
             "member_id": str(member.id),
             "admin_id": str(admin.id),

@@ -156,6 +156,8 @@ export interface User {
   timezone?: string;
   source: UserSourceValue;
   last_login_at: string | null;
+  /** RADD-1279: holds a confirmed TOTP enrolment (admin user list only). */
+  mfa_enabled?: boolean;
 }
 
 /**

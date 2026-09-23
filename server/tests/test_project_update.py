@@ -22,6 +22,7 @@ from radd.modules.events import service as events
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate, ProjectUpdate
 from radd.modules.projects.types import ProjectEntity, ProjectEvent
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture
@@ -94,8 +95,8 @@ async def test_http_admin_renames_member_is_refused_key_unchanged(db, project):
     member_role = await auth_roles.role_by_key(db, BuiltinRoleKey.MEMBER)
     db.add(GlobalRoleGrant(role_id=member_role.id, user_id=member.id, project_id=project.id))
     await db.flush()
-    admin_cookie = await auth.create_session(db, admin)
-    member_cookie = await auth.create_session(db, member)
+    admin_cookie = await auth.create_session(db, admin, method=LoginMethod.PASSWORD)
+    member_cookie = await auth.create_session(db, member, method=LoginMethod.PASSWORD)
     await db.commit()
 
     path = f"/api/v1/projects/{project.id}"

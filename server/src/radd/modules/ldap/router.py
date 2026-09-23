@@ -11,7 +11,7 @@ from radd.exceptions import ConflictError, ForbiddenError, RaddError
 from radd.modules.auth import authz, service as auth_service
 from radd.modules.auth.deps import CurrentUser
 from radd.modules.auth.models import User
-from radd.modules.auth.types import SESSION_COOKIE_NAME
+from radd.modules.auth.types import SESSION_COOKIE_NAME, LoginMethod
 from radd.modules.groups import service as groups_service
 from radd.modules.teams import service as teams_service
 
@@ -61,7 +61,7 @@ async def ldap_login(data: LdapLoginRequest, session: Session, response: Respons
     )
     user = await service.provision(session, directory_user)
     await groupsync.sync_login_membership(session, user, mirrored, directory_user.team_group_dns)
-    token = await auth_service.create_session(session, user)
+    token = await auth_service.create_session(session, user, method=LoginMethod.LDAP)
     response.set_cookie(
         SESSION_COOKIE_NAME,
         token,

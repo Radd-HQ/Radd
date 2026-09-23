@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, ChevronDown, ChevronRight, Lock, UserRound } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { ApiError, api } from "../../lib/api";
-import { ApiPath, RoutePath, SEARCH_DEBOUNCE_MS, apiUserPath } from "../../lib/constants";
+import { ApiPath, RoutePath, SEARCH_DEBOUNCE_MS, apiUserPath, apiUserTotpPath } from "../../lib/constants";
 import { useCurrentUser, useDebounced, usePermissions } from "../../lib/hooks";
 import { INSTANCE_ROLE_LABELS } from "../../lib/meta";
 import { USERS_PAGE_SIZE, queryKeys, usersAdminPageQuery, usersAdminQuery } from "../../lib/queries";
@@ -16,6 +16,7 @@ import {
   type UserAdminUpdate,
 } from "../../lib/types";
 import { EmptyState } from "../../components/EmptyState";
+import { useConfirm } from "../../components/ConfirmDialog";
 import { SelectField } from "../../components/SelectField";
 import { Pager } from "../../components/Pager";
 import { TableSkeleton } from "../../components/TableSkeleton";
@@ -85,6 +86,28 @@ export function UsersSettingsPage() {
       await queryClient.invalidateQueries({ queryKey: queryKeys.userDuplicates });
     },
   });
+
+  // RADD-1279: the account that lost its authenticator AND its recovery codes.
+  const [confirmDialog, confirm] = useConfirm();
+  const resetMfa = useMutation({
+    mutationFn: (userId: string) => api.delete<void>(apiUserTotpPath(userId)),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["usersAdmin"] }),
+  });
+  const onResetMfa = async (user: User) => {
+    const ok = await confirm({
+      title: `Reset two-factor for ${user.name}?`,
+      message: (
+        <>
+          Their authenticator and recovery codes stop working. At their next password
+          sign-in they set up two-factor again — or, if this server does not require it,
+          sign in with their password alone. Use this when they have lost both.
+        </>
+      ),
+      confirmLabel: "Reset two-factor",
+      danger: true,
+    });
+    if (ok) resetMfa.mutate(user.id);
+  };
 
   const forbidden = users.error instanceof ApiError && users.error.status === 403;
   const list = users.data?.rows ?? [];
@@ -158,7 +181,8 @@ export function UsersSettingsPage() {
               onChangeRole={(userId, role) =>
                 patchUser.mutate({ userId, body: { instance_role: role } })
               }
-              busy={patchUser.isPending}
+              busy={patchUser.isPending || resetMfa.isPending}
+              onResetMfa={(user) => void onResetMfa(user)}
               onDelete={setDeleting}
               onViewAs={async (user) => {
                 // RADD-836 U1: a full reload swaps every client cache to the
@@ -181,6 +205,8 @@ export function UsersSettingsPage() {
           {patchUser.isError && (
             <ErrorText className="mt-2" error={patchUser.error} />
           )}
+          {resetMfa.isError && <ErrorText className="mt-2" error={resetMfa.error} />}
+          {confirmDialog}
           {isInstanceAdmin && <DuplicatesSection />}
           {deleting && (
             <DeleteUserDialog
@@ -203,6 +229,7 @@ function UsersTable({
   onChangeRole,
   onDelete,
   onViewAs,
+  onResetMfa,
   busy,
 }: {
   users: User[];
@@ -212,6 +239,7 @@ function UsersTable({
   onChangeRole: (userId: string, role: InstanceRoleValue) => void;
   onDelete: (user: User) => void;
   onViewAs: (user: User) => Promise<void>;
+  onResetMfa: (user: User) => void;
   busy: boolean;
 }) {
   // Which person's roles are open. One at a time: the grants editor fetches
@@ -229,6 +257,7 @@ function UsersTable({
             <Th>Source</Th>
             <Th>Instance access</Th>
             <Th>Status</Th>
+            <Th>Two-factor</Th>
             <Th>Last login</Th>
             {isInstanceAdmin && <Th />}
           </tr>
@@ -309,6 +338,14 @@ function UsersTable({
                   )}
                 </Td>
                 <Td>
+                  <TwoFactorCell
+                    user={user}
+                    canReset={isInstanceAdmin && !self}
+                    busy={busy}
+                    onReset={() => onResetMfa(user)}
+                  />
+                </Td>
+                <Td>
                   {user.last_login_at ? (
                     formatDateTime(user.last_login_at)
                   ) : (
@@ -362,7 +399,7 @@ function UsersTable({
               </tr>
               {open && (
                 <tr>
-                  <Td colSpan={isInstanceAdmin ? 7 : 6} className="bg-surface/40">
+                  <Td colSpan={isInstanceAdmin ? 9 : 8} className="bg-surface/40">
                     <div className="flex flex-col gap-3 px-2 py-3">
                       <p className="text-xs text-fg-muted">
                         Roles this person holds, each applying instance-wide or on the projects
@@ -392,6 +429,49 @@ function UsersTable({
   );
 }
 
+/**
+ * RADD-1279: whether the person's PASSWORD sign-in has a second factor.
+ * Directory and SSO accounts get theirs from the identity provider, which
+ * Radd cannot see — said plainly instead of reading as "Off".
+ */
+function TwoFactorCell({
+  user,
+  canReset,
+  busy,
+  onReset,
+}: {
+  user: User;
+  canReset: boolean;
+  busy: boolean;
+  onReset: () => void;
+}) {
+  if (user.mfa_enabled) {
+    return (
+      <span className="inline-flex items-center gap-1.5" data-mfa-cell="on">
+        <span className="text-fg">On</span>
+        {canReset && (
+          <button
+            type="button"
+            onClick={onReset}
+            disabled={busy}
+            className="rounded border border-strong px-2 py-0.5 text-[11px] text-fg-secondary hover:border-red-500/50 hover:text-red-400 cursor-pointer disabled:opacity-50"
+            title="For someone who lost both their authenticator and their recovery codes"
+          >
+            Reset
+          </button>
+        )}
+      </span>
+    );
+  }
+  if (user.source === UserSource.ldap || user.source === UserSource.oidc) {
+    return (
+      <span className="text-fg-faint" title="Set at the identity provider" data-mfa-cell="idp">
+        Identity provider
+      </span>
+    );
+  }
+  return <span className="text-fg-muted" data-mfa-cell="off">Off</span>;
+}
 
 // EffectivePermissions / ResourceAccessSection moved to
 // components/settings/AccessInspector.tsx (RADD-809): the atom half gained a

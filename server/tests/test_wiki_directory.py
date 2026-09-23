@@ -18,6 +18,7 @@ from radd.modules.auth.schemas import TokenCreate
 from radd.modules.auth.types import BuiltinRoleKey
 from radd.modules.pages import directory, spaces as space_service
 from radd.modules.pages.models import Page, PageSpace
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture
@@ -90,7 +91,7 @@ async def world():
 
 async def test_wiki_windows_counts_summary_and_direct_identity(world):
     db, actor, visible, hidden, engine, prefix = world
-    cookie = await auth.create_session(db, actor)
+    cookie = await auth.create_session(db, actor, method=LoginMethod.PASSWORD)
 
     async def override():
         yield db

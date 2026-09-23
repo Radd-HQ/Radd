@@ -17,6 +17,7 @@ from radd.modules.groups.service import Group
 from radd.modules.pages.models import PageSpace
 from radd.modules.projects.models import Project
 from radd.modules.teams.models import Team
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture
@@ -45,7 +46,7 @@ async def access_world():
         grants.append(GlobalRoleGrant(role_id=read_role.id, space_id=space.id, user_id=reader.id, created_at=start))
         db.add_all([*grants,GlobalRoleGrant(role_id=roles[0].id,space_id=hidden.id,user_id=admin.id),GlobalRoleGrant(role_id=roles[1].id,user_id=admin.id)])
         await db.flush();db.info.clear()
-        admin_cookie=await auth.create_session(db,admin);reader_cookie=await auth.create_session(db,reader)
+        admin_cookie=await auth.create_session(db,admin, method=LoginMethod.PASSWORD);reader_cookie=await auth.create_session(db,reader, method=LoginMethod.PASSWORD)
         app=create_app()
         async def override():yield db
         app.dependency_overrides[get_session]=override

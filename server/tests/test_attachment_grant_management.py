@@ -9,6 +9,7 @@ from radd.modules.auth import service as auth
 from radd.modules.auth.models import GlobalRoleGrant
 from radd.modules.auth.schemas import TokenCreate
 from test_attachment_acl import db, setup  # noqa: F401
+from radd.modules.auth.types import LoginMethod
 
 
 async def test_uploader_grants_require_parent_and_writable_credential(db,setup):
@@ -18,7 +19,7 @@ async def test_uploader_grants_require_parent_and_writable_credential(db,setup):
     app.dependency_overrides[get_session]=override
     params={'resource_type':'attachment','resource_id':str(attachment.id)}
     body={**params,'subject_type':'user','subject_id':str(member.id),'access':'read'}
-    cookie=await auth.create_session(db,admin)
+    cookie=await auth.create_session(db,admin, method=LoginMethod.PASSWORD)
     keys=[]
     for scopes in [{},{'projects':{str(item.project_id):['item.read']}},{'projects':{str(item.project_id):['item.read','attachment.create']}}]:
         _,key=await auth.create_api_token(db,admin,TokenCreate(name='scoped',scopes=scopes));keys.append(key)
@@ -41,7 +42,7 @@ async def test_uploader_grants_require_parent_and_writable_credential(db,setup):
         attachment.created_by=member.id
         await db.execute(delete(GlobalRoleGrant).where(GlobalRoleGrant.user_id==member.id))
         await db.flush();db.info.clear()
-        client.cookies.set('radd_session',await auth.create_session(db,member))
+        client.cookies.set('radd_session',await auth.create_session(db,member, method=LoginMethod.PASSWORD))
         assert not await acl.attachment_readable(db,member,attachment)
         assert (await client.get('/api/v1/grants/directory',params=params)).status_code==403
         assert (await client.delete('/api/v1/grants/'+(await access.list_for_resource(db,'attachment',str(attachment.id)))[0].id.hex)).status_code==403

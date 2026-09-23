@@ -16,6 +16,7 @@ from radd.modules.notify.models import NotificationRule
 from radd.modules.pages.models import PageSpace
 from radd.modules.projects.models import Project
 from radd.modules.teams.models import Team
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture
@@ -39,7 +40,7 @@ async def world():
             db.add_all([NotificationRule(user_id=admin.id, scope=scope, scope_id=row.id,
                                        channels={'page_created' if scope=='space' else 'created':'inbox'}) for row in entries[:50]])
         await db.flush();db.info.clear()
-        cookie=await auth.create_session(db, admin);reader_cookie=await auth.create_session(db, reader)
+        cookie=await auth.create_session(db, admin, method=LoginMethod.PASSWORD);reader_cookie=await auth.create_session(db, reader, method=LoginMethod.PASSWORD)
         app=create_app()
         async def override():yield db
         app.dependency_overrides[get_session]=override

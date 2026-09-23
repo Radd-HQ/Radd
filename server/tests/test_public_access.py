@@ -19,6 +19,7 @@ from radd.modules.auth.schemas import UserCreate
 from radd.modules.auth.types import SESSION_COOKIE_NAME, BuiltinRoleKey, InstanceRole
 from radd.modules.projects import service as projects
 from radd.modules.projects.schemas import ProjectCreate
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture
@@ -98,8 +99,8 @@ async def test_http_switches_are_the_grants_the_world_reads_by(db):
     project = await _project(db)
     admin = await _person(db, role=InstanceRole.ADMIN)
     outsider = await _person(db)
-    admin_cookie = await auth.create_session(db, admin)
-    outsider_cookie = await auth.create_session(db, outsider)
+    admin_cookie = await auth.create_session(db, admin, method=LoginMethod.PASSWORD)
+    outsider_cookie = await auth.create_session(db, outsider, method=LoginMethod.PASSWORD)
 
     async def session_override():
         yield db

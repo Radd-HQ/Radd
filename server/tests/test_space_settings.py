@@ -15,6 +15,7 @@ from radd.modules.auth.models import GlobalRoleGrant, Role, User
 from radd.modules.auth.schemas import TokenCreate
 from radd.modules.auth.types import BuiltinRoleKey
 from radd.modules.pages.models import Page, PageSpace, PageTemplate
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture
@@ -38,8 +39,8 @@ async def settings_world():
                      for i in range(126)]
         hidden = PageTemplate(name=prefix + " hidden", body="Do not leak", space_id=spaces[2].id, created_by=admin.id)
         db.add_all([*templates, hidden]); await db.flush(); db.info.clear()
-        cookie = await auth.create_session(db, manager)
-        admin_cookie = await auth.create_session(db, admin)
+        cookie = await auth.create_session(db, manager, method=LoginMethod.PASSWORD)
+        admin_cookie = await auth.create_session(db, admin, method=LoginMethod.PASSWORD)
         app = create_app()
         async def override():
             yield db

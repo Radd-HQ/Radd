@@ -12,6 +12,7 @@ from radd.modules.auth.models import User, Role, GlobalRoleGrant
 from radd.modules.auth.types import SESSION_COOKIE_NAME
 from radd.modules.auth.schemas import TokenCreate
 from radd.modules.cycles.models import CycleSeries
+from radd.modules.auth.types import LoginMethod
 
 
 async def test_series_windows_search_and_admission():
@@ -26,7 +27,7 @@ async def test_series_windows_search_and_admission():
         rows = [CycleSeries(label=f"{prefix} {i:03}", drafts_ahead=0, next_number=i+1) for i in range(126)]
         literal = CycleSeries(label=prefix + " %_", drafts_ahead=0, next_number=1)
         db.add_all([*rows, literal])
-        cookie = await auth.create_session(db, reader)
+        cookie = await auth.create_session(db, reader, method=LoginMethod.PASSWORD)
         _, limited_token = await auth.create_api_token(db, reader, TokenCreate(name="No cycle access", scopes={}))
         await db.flush()
         async def session_override():

@@ -11,6 +11,7 @@ from radd.modules.auth import service
 from radd.modules.auth.models import User
 from radd.modules.auth.schemas import TokenCreate
 from radd.modules.auth.types import SESSION_COOKIE_NAME
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture
@@ -21,7 +22,7 @@ async def credentials():
         robot = User(email=f"audit-{uuid.uuid4()}@example.com", name="Robot", source="service")
         db.add_all([admin, robot])
         await db.flush()
-        cookie = await service.create_session(db, admin)
+        cookie = await service.create_session(db, admin, method=LoginMethod.PASSWORD)
         tokens = []
         for user, scope in ((admin, {}), (admin, {"global": ["item.read"]}), (robot, {})):
             _, raw = await service.create_api_token(

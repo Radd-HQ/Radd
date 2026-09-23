@@ -14,6 +14,7 @@ from radd.modules.groups.service import Group
 from radd.modules.sso import registry, service
 from radd.modules.sso.schemas import SsoProviderUpdate
 from test_sso_providers import db, _provider  # noqa: F401
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture
@@ -28,7 +29,7 @@ async def world(db):
     app=create_app()
     async def override():yield db
     app.dependency_overrides[get_session]=override
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://test',cookies={'radd_session':await auth.create_session(db,admin)}) as client:
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://test',cookies={'radd_session':await auth.create_session(db,admin, method=LoginMethod.PASSWORD)}) as client:
         yield db,client,admin,provider,roles,projects,teams,prefix
 
 

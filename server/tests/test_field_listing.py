@@ -19,6 +19,7 @@ from radd.db import get_session
 from radd.modules.auth import authz, service as auth
 from radd.modules.auth.schemas import UserCreate
 from radd.modules.auth.types import SESSION_COOKIE_NAME, InstanceRole
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture
@@ -53,8 +54,8 @@ async def test_admin_sees_the_field_it_created_with_zero_projects(db, monkeypatc
 
     admin = await _person(db, InstanceRole.ADMIN)
     member = await _person(db, InstanceRole.MEMBER)
-    admin_cookie = await auth.create_session(db, admin)
-    member_cookie = await auth.create_session(db, member)
+    admin_cookie = await auth.create_session(db, admin, method=LoginMethod.PASSWORD)
+    member_cookie = await auth.create_session(db, member, method=LoginMethod.PASSWORD)
 
     async def session_override():
         yield db

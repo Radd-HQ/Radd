@@ -20,15 +20,19 @@ from radd.modules.events import service as events
 
 from . import security
 from .models import User, UserSession
-from .types import AuthEntity, AuthEvent, UserSource
+from .types import AuthEntity, AuthEvent, LoginMethod, UserSource
 
 
-async def create_session(session: AsyncSession, user: User) -> str:
+async def create_session(session: AsyncSession, user: User, *, method: LoginMethod) -> str:
     """Returns the raw session token (goes into the cookie; only its hash is stored).
 
     Also stamps `last_login_at` (spec 84): sessions are minted exclusively by
     the login endpoints (local + TOTP, LDAP, OIDC), so this one seam covers
-    every successful sign-in path."""
+    every successful sign-in path.
+
+    `method` is REQUIRED (RADD-1279) so every path states how the person
+    proved who they are; the MFA policy is enforced here, not in `/login`,
+    for the same reason the service-account refusal is."""
     # Spec 113: a service account authenticates by API key and nothing else.
     # Refusing here covers local, TOTP, LDAP and OIDC at once, because every one
     # of those paths mints its session through this function. RADD-828: an
@@ -44,6 +48,13 @@ async def create_session(session: AsyncSession, user: User) -> str:
     if user.source == UserSource.PRINCIPAL:
         # Spec 121: Anyone / Signed-in users are grant subjects, not accounts.
         raise UnauthorizedError("a principal is not an account and cannot sign in")
+    if method is LoginMethod.PASSWORD:
+        # Deferred: mfa_policy imports this module's siblings; keeps the
+        # service.py re-export cycle (see the module docstring) untouched.
+        from . import mfa_policy
+
+        if await mfa_policy.required(session):
+            raise mfa_policy.MfaEnrollmentRequired(user)
     token = security.new_session_token()
     session.add(
         UserSession(

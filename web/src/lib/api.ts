@@ -142,6 +142,9 @@ async function errorDetail(response: Response): Promise<unknown> {
     // (spec 119) — the third vocabulary. Kept whole so `validationFindings`
     // can split the field-addressed ones from the general ones.
     if (Array.isArray((payload as { findings?: unknown }).findings)) return payload;
+    // RADD-1279: a login refused under `require_mfa` carries the enrolment
+    // ticket beside its detail — kept whole so `lib/auth` can read it.
+    if (typeof (payload as { enrollment_ticket?: unknown }).enrollment_ticket === "string") return payload;
     return payload.detail ?? payload;
   } catch {
     return response.statusText;

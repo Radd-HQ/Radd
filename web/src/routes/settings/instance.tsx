@@ -78,7 +78,9 @@ function StatusGrid({ status }: { status: InstanceStatus }) {
         on={status.smtp_configured}
         to={RoutePath.settingsEmail}
       />
-      <StatusPill label="TOTP MFA" on={status.mfa_available} />
+      {/* RADD-1279: the "TOTP MFA" pill is gone — it reported that the feature
+          ships, which read like enforcement. The policy switch and who is
+          enrolled live on Settings → Sign-in and Settings → Users. */}
       {/* Clicking opens Settings → AI (spec 101) — providers/roles/toggles live there. */}
       <StatusPill
         label="AI provider"

@@ -34,6 +34,7 @@ from radd.modules.items.enums import ItemVisibility
 from radd.modules.items.schemas import ItemCreate, ItemUpdate
 from radd.modules.projects import service as projects
 from radd.modules.projects.schemas import ProjectCreate
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture
@@ -242,7 +243,7 @@ async def test_http_world_sees_public_rows_only(db, world):
 
     project, rows = world["project"], world["rows"]
     member = world["actors"]["member"]
-    cookie = await auth.create_session(db, member)
+    cookie = await auth.create_session(db, member, method=LoginMethod.PASSWORD)
 
     async def session_override():
         yield db

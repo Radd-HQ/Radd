@@ -22,6 +22,7 @@ from radd.modules.views.schemas import ViewCreate
 from radd.modules.views.types import ViewType
 from test_view_sharing import _member
 from test_global_grants import _role
+from radd.modules.auth.types import LoginMethod
 
 
 async def test_expiring_last_allow_keeps_attachment_restricted(db, setup):
@@ -178,7 +179,7 @@ async def test_restricted_wiki_page_hides_attachments(db, setup, monkeypatch):
         yield db
 
     app.dependency_overrides[get_session] = override
-    cookie = await auth.create_session(db, reader)
+    cookie = await auth.create_session(db, reader, method=LoginMethod.PASSWORD)
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://test",

@@ -16,6 +16,7 @@ from radd.exceptions import UnauthorizedError
 from radd.modules.auth import authz, grants, service as auth
 from radd.modules.auth.roles import role_by_key
 from radd.modules.auth.types import BuiltinRoleKey, Permission, UserSource
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture
@@ -41,7 +42,7 @@ async def test_email_source_cannot_log_in(db):
     # create_session is the one seam every login path (local, TOTP, LDAP,
     # OIDC) mints through — refusing there refuses them all at once.
     with pytest.raises(UnauthorizedError, match="sign in with SSO"):
-        await auth.create_session(db, user)
+        await auth.create_session(db, user, method=LoginMethod.PASSWORD)
 
 
 async def test_email_floor_is_requester_not_baseline(db):

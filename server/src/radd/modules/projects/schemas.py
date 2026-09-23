@@ -32,7 +32,6 @@ class InstanceStatusRead(BaseModel):
     # import + team-sync affordances in the admin UI.
     ldap_bind_account: bool
     smtp_configured: bool
-    mfa_available: bool  # TOTP MFA ships enabled (spec 48)
     ai_provider: str  # "" = AI off
     attachment_storage: str  # "filesystem" | "s3"
     workers_enabled: bool

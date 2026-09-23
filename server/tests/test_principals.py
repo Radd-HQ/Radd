@@ -27,6 +27,7 @@ from radd.modules.auth.types import (
 )
 from radd.modules.projects import service as projects
 from radd.modules.projects.schemas import ProjectCreate
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture
@@ -79,7 +80,7 @@ async def test_principals_are_seeded_and_cannot_sign_in(db):
     assert anyone is not None and anyone.source == UserSource.PRINCIPAL.value
     assert signed_in is not None and signed_in.active
     with pytest.raises(UnauthorizedError, match="principal"):
-        await auth.create_session(db, anyone)
+        await auth.create_session(db, anyone, method=LoginMethod.PASSWORD)
 
 
 async def test_anyone_holds_no_floor(db):
@@ -183,7 +184,7 @@ async def test_http_a_fresh_account_contributes_only_where_signed_in_users_may(d
     await _grant(db, BuiltinRoleKey.PUBLIC, principals.ANYONE_ID, public)
     await _grant(db, BuiltinRoleKey.CONTRIBUTOR, principals.SIGNED_IN_ID, public)
     person = await _person(db)
-    cookie = await auth.create_session(db, person)
+    cookie = await auth.create_session(db, person, method=LoginMethod.PASSWORD)
 
     async def session_override():
         yield db

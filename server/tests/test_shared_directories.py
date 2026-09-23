@@ -21,6 +21,7 @@ from radd.modules.teams import service as teams
 from radd.modules.teams.schemas import TeamCreate
 from radd.modules.views import service as views
 from radd.modules.views.models import View
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture
@@ -97,7 +98,7 @@ async def test_visibility_precedes_directory_window(db, resource, monkeypatch):
         hydrated.append(len(candidates))
         return await original_hydrate(session, actor, candidates, **options)
     monkeypatch.setattr(service, "_hydrate", capture)
-    cookie = await auth.create_session(db, reader)
+    cookie = await auth.create_session(db, reader, method=LoginMethod.PASSWORD)
     app = create_app()
     async def override():
         yield db

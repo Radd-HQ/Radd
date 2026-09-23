@@ -32,6 +32,7 @@ from radd.modules.reporting import service as reporting
 from radd.modules.reporting.types import ReportInterval
 from radd.modules.workflow import service as workflow
 from radd.modules.workflow.types import StateCategory
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture
@@ -121,7 +122,7 @@ async def test_http_the_world_reads_a_public_projects_reports(db, world):
     private = await projects.create_project(
         db, ProjectCreate(key=f"RP{uuid.uuid4().hex[:6].upper()}", name="Private")
     )
-    member_cookie = await auth.create_session(db, world["member"])
+    member_cookie = await auth.create_session(db, world["member"], method=LoginMethod.PASSWORD)
 
     async def session_override():
         yield db

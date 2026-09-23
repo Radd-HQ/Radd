@@ -53,6 +53,7 @@ from radd.modules.pages import service as pages_service, spaces
 from radd.modules.pages.models import PageSpace, PageVersion
 from radd.modules.pages.router import router as pages_router
 from radd.modules.pages.schemas import PageCreate, PageSpaceCreate
+from radd.modules.auth.types import LoginMethod
 
 API = settings.api_prefix
 
@@ -107,7 +108,7 @@ async def _stage() -> dict:
             RoleCreate(key=f"cl-{uuid.uuid4().hex[:8]}", name="Reader", permissions=[str(Permission.PAGE_READ)]),
         )
         await role_grants.create_grant(db, reader_role.id, user_id=people["reader"].id, space_id=space.id)
-        cookies = {key: await auth.create_session(db, user) for key, user in people.items()}
+        cookies = {key: await auth.create_session(db, user, method=LoginMethod.PASSWORD) for key, user in people.items()}
         await db.commit()
         page_id, space_id, role_id = page.id, space.id, reader_role.id
     await engine.dispose()

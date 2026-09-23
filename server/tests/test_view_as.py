@@ -21,6 +21,7 @@ from radd.modules.auth.models import User
 from radd.modules.auth.schemas import TokenCreate
 from radd.modules.auth.types import SESSION_COOKIE_NAME, InstanceRole
 from radd.modules.events.models import Event
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture(scope="module")
@@ -41,8 +42,8 @@ async def world():
         )
         session.add_all([admin, member])
         await session.flush()
-        admin_cookie = await auth_service.create_session(session, admin)
-        member_cookie = await auth_service.create_session(session, member)
+        admin_cookie = await auth_service.create_session(session, admin, method=LoginMethod.PASSWORD)
+        member_cookie = await auth_service.create_session(session, member, method=LoginMethod.PASSWORD)
         _, admin_pat = await auth_service.create_api_token(
             session, admin, TokenCreate(name="va")
         )

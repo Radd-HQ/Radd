@@ -7,7 +7,6 @@ export interface InstanceStatus {
    * group/user import + team-sync affordances. */
   ldap_bind_account: boolean;
   smtp_configured: boolean;
-  mfa_available: boolean;
   ai_provider: string;
   attachment_storage: string;
   workers_enabled: boolean;
@@ -83,6 +82,7 @@ export const INSTANCE_HOMED_SECTIONS: readonly string[] = [
   "ai",
   "timelogging",
   "email",
+  "signin", // RADD-1279: require_mfa lives on Settings → Sign-in
 ];
 export const PROJECT_HOMED_SECTIONS: readonly string[] = [
   "timelogging",

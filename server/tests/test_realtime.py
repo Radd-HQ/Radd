@@ -10,6 +10,7 @@ exercised by connecting a browser (or wscat) to a running server.
 import uuid
 
 from radd.modules.realtime.hub import ClientInfo, should_deliver
+from radd.modules.auth.types import LoginMethod
 
 USER = uuid.uuid4()
 OTHER = uuid.uuid4()
@@ -161,7 +162,7 @@ def test_two_socket_readers_receive_comment_changes_and_revocation(monkeypatch):
                 actor_id=user.id,
             )
             item = await items.create_item(db, ItemCreate(project_id=project.id, title="Thread"), actor=user)
-            cookies = [await auth.create_session(db, user) for _ in range(2)]
+            cookies = [await auth.create_session(db, user, method=LoginMethod.PASSWORD) for _ in range(2)]
             await db.commit()
             return user.id, item.id, cookies
 

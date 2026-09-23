@@ -16,7 +16,7 @@ def _map():
 def test_all_expected_capabilities_registered():
     keys = set(_map())
     assert {
-        "sso", "ldap", "ai", "storage", "mfa", "smtp", "workers",
+        "sso", "ldap", "ai", "storage", "smtp", "workers",
         "gitlab", "forgejo", "google_chat", "alertmanager", "email_intake",
     } <= keys
 
@@ -30,7 +30,9 @@ def test_capability_checks_match_the_old_inline_logic():
         settings.ldap_url and settings.ldap_bind_dn and settings.ldap_bind_password
     )
     assert cm["smtp"]["enabled"] == bool(settings.smtp_host)
-    assert cm["mfa"]["enabled"] is True
+    # RADD-1279: the "mfa" capability is GONE — it reported that TOTP ships,
+    # which read like enforcement. The policy is the `require_mfa` setting.
+    assert "mfa" not in cm
     assert cm["workers"]["enabled"] == settings.run_workers
 
 

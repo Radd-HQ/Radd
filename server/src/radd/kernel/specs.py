@@ -767,6 +767,11 @@ class SettingSpec:
     # can never make a setting unreachable — the reason it is computed by
     # subtraction rather than given a section name of its own.
     section: str = ""
+    # RADD-1279: the owner may REFUSE a write — `guard(session, value, actor_id)`
+    # raises a domain error (409/403) to veto it, after coercion and before the
+    # row is written. Mechanism only: what counts as a bad value is the owning
+    # plugin's policy (e.g. `require_mfa` refuses to lock out the admin flipping it).
+    guard: Callable[[Any, Any, "uuid.UUID | None"], Awaitable[None]] | None = None
 
     @property
     def default(self) -> Any:

@@ -15,6 +15,7 @@ from radd.modules.cycles.models import Cycle, CycleTeam
 from radd.modules.cycles.types import CycleStatus, cycle_status
 from radd.modules.teams import service as teams
 from radd.modules.teams.schemas import TeamCreate
+from radd.modules.auth.types import LoginMethod
 
 TODAY = date(2026, 9, 10)
 
@@ -94,7 +95,7 @@ async def test_http_bounds_and_hidden_cycle_writes(world):
     db.add(role)
     await db.flush()
     db.add(GlobalRoleGrant(user_id=actor.id, role_id=role.id))
-    cookie = await auth.create_session(db, actor)
+    cookie = await auth.create_session(db, actor, method=LoginMethod.PASSWORD)
     from radd.db import get_session
     async def session_override():
         yield db
@@ -164,7 +165,7 @@ async def test_cycle_reports_do_not_disclose_hidden_cycles(world):
     db.add(role)
     await db.flush()
     db.add(GlobalRoleGrant(user_id=actor.id, role_id=role.id))
-    cookie = await auth.create_session(db, actor)
+    cookie = await auth.create_session(db, actor, method=LoginMethod.PASSWORD)
     async def session_override():
         yield db
     app = create_app()

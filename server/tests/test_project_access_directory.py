@@ -6,6 +6,7 @@ from radd.modules.auth import service as auth
 from radd.modules.auth.models import GlobalRoleGrant, Role, User
 from radd.modules.projects.models import Project
 from test_space_access_directory import access_world  # noqa: F401
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture
@@ -54,7 +55,7 @@ async def test_project_delegate_and_revoke_only_preserve_scope_and_coverage(proj
     db.add_all([delegate,revoker,can_grant,can_revoke,too_broad]);await db.flush()
     db.add_all([GlobalRoleGrant(user_id=delegate.id,role_id=can_grant.id,project_id=project.id),GlobalRoleGrant(user_id=revoker.id,role_id=can_revoke.id,project_id=project.id)])
     await db.flush();db.info.clear()
-    client.cookies.set('radd_session',await auth.create_session(db,delegate))
+    client.cookies.set('radd_session',await auth.create_session(db,delegate, method=LoginMethod.PASSWORD))
     original={row.id for row in grants};created=[]
     for subject in [{'user_id':str(people[-1].id)},{'team_id':str(teams[-1].id)},{'group_id':str(groups[-1].id)}]:
         r=await client.post('/api/v1/role-grants',json={'role_id':str(roles[-1].id),'project_ids':[str(project.id)],**subject})
@@ -62,7 +63,7 @@ async def test_project_delegate_and_revoke_only_preserve_scope_and_coverage(proj
     for body in [{'role_id':str(too_broad.id),'project_ids':[str(project.id)]},{'role_id':str(roles[-1].id),'project_ids':[str(hidden.id)]},{'role_id':str(roles[-1].id),'project_ids':[]}]:
         r=await client.post('/api/v1/role-grants',json={**body,'user_id':str(people[-1].id)})
         assert r.status_code==403,r.text
-    client.cookies.set('radd_session',await auth.create_session(db,revoker));db.info.clear()
+    client.cookies.set('radd_session',await auth.create_session(db,revoker, method=LoginMethod.PASSWORD));db.info.clear()
     r=await client.post('/api/v1/role-grants',json={'role_id':str(roles[0].id),'project_ids':[str(project.id)],'user_id':str(people[-1].id)})
     assert r.status_code==403
     for id in created:assert (await client.delete('/api/v1/role-grants/'+id)).status_code==204

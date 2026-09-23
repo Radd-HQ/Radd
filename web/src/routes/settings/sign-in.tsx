@@ -4,6 +4,8 @@ import { InstanceRole } from "../../lib/types";
 import { EmptyState } from "../../components/EmptyState";
 import { ProvidersPanel } from "../../components/settings/signin/ProvidersPanel";
 import { SettingsPage } from "../../components/settings/SettingsPage";
+import { ScopedSettingsEditor } from "../../components/settings/ScopedSettingsEditor";
+import { SettingScope } from "../../lib/types";
 
 /**
  * Settings → Sign-in (spec 110) — instance admins only (the API 403s otherwise).
@@ -14,7 +16,7 @@ export function SignInSettingsPage() {
   const isInstanceAdmin = me?.instance_role === InstanceRole.admin;
 
   return (
-    <SettingsPage history={{ entities: ["sso_provider"] }}
+    <SettingsPage history={{ entities: ["sso_provider", "scoped_setting"] }}
       title="Sign-in"
       description="The identity providers people can sign in with, and which email domains may create an account."
       info={
@@ -30,7 +32,18 @@ export function SignInSettingsPage() {
       {!isInstanceAdmin ? (
         <EmptyState icon={Lock} message="Only instance admins can manage sign-in." />
       ) : (
-        <ProvidersPanel />
+        <div className="flex flex-col gap-8">
+          <ProvidersPanel />
+          {/* RADD-1279: the instance MFA policy. Covers Radd PASSWORD sign-ins
+              only — the setting's own description says so, and turning it on
+              is refused while you are not enrolled yourself. */}
+          <section data-mfa-policy>
+            <h2 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted">
+              Two-factor authentication
+            </h2>
+            <ScopedSettingsEditor scope={SettingScope.instance} section="signin.mfa" />
+          </section>
+        </div>
       )}
     </SettingsPage>
   );

@@ -48,6 +48,16 @@ class TotpRecoveryCodesRead(BaseModel):
     recovery_codes: list[str]
 
 
+class MfaEnrollmentTicketRequest(BaseModel):
+    """RADD-1279: the ticket a login refused under `require_mfa` received."""
+
+    ticket: str = Field(min_length=16, max_length=200)
+
+
+class MfaEnrollmentConfirm(MfaEnrollmentTicketRequest):
+    code: str = Field(min_length=6, max_length=10)
+
+
 class UserMergeRequest(BaseModel):
     """POST /users/{id}/merge — fold the path user (the duplicate) into this one."""
 
@@ -75,6 +85,9 @@ class UserRead(BaseModel):
     # Spec 84 user administration: where the account came from + last sign-in.
     source: UserSource
     last_login_at: UtcDatetime | None = None
+    # RADD-1279: holds a CONFIRMED TOTP enrolment. Filled by the router in one
+    # query per page (`mfa_policy.enrolled_ids`), never per row.
+    mfa_enabled: bool = False
 
 
 class UserDirectoryEntry(BaseModel):

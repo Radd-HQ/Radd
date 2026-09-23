@@ -16,6 +16,7 @@ from radd.modules.auth.scopes import parse_scope
 from radd.modules.auth.types import Permission, SESSION_COOKIE_NAME
 from radd.modules.projects import directory
 from radd.modules.projects.models import Project
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture
@@ -84,7 +85,7 @@ async def test_project_summary_does_not_load_every_project_body(world):
 
 async def test_http_page_contract_and_direct_resolution(world):
     db, actor, rows, engine = world
-    cookie = await auth.create_session(db, actor)
+    cookie = await auth.create_session(db, actor, method=LoginMethod.PASSWORD)
     await db.commit()
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=create_app()), base_url="http://test",
                                 cookies={SESSION_COOKIE_NAME: cookie}) as client:

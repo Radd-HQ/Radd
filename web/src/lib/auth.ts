@@ -1,7 +1,7 @@
 import { setStorageAccount } from "./account-storage";
 import { api, ApiError, setAnonymousMode } from "./api";
 import { ApiPath, On401 } from "./constants";
-import type { LoginRequest, Me, TotpLoginRequest } from "./types";
+import type { LoginRequest, Me, TotpLoginRequest, TotpRecoveryCodes, TotpSetup } from "./types";
 import { setReaderTimeZone } from "./dates";
 
 /** Authentication fails closed when the backend is missing or unavailable. */
@@ -72,6 +72,31 @@ export function isTotpRequired(error: unknown): boolean {
   return (
     error instanceof ApiError && error.status === 401 && error.detail === TOTP_REQUIRED_DETAIL
   );
+}
+
+/**
+ * RADD-1279: the instance requires two-factor and this account has none. No
+ * cookie was set; the 401 carries a short-lived ticket that opens enrolment
+ * (and nothing else) — confirming a code there is what signs the person in.
+ */
+export const MFA_ENROLLMENT_REQUIRED_DETAIL = "mfa_enrollment_required";
+
+/** The enrolment ticket a refused login carries, or null for any other error. */
+export function enrollmentTicket(error: unknown): string | null {
+  if (!(error instanceof ApiError) || error.status !== 401) return null;
+  const payload = error.detail as { detail?: unknown; enrollment_ticket?: unknown } | null;
+  return payload?.detail === MFA_ENROLLMENT_REQUIRED_DETAIL && typeof payload.enrollment_ticket === "string"
+    ? payload.enrollment_ticket
+    : null;
+}
+
+export function mfaEnrollmentSetup(ticket: string): Promise<TotpSetup> {
+  return api.post<TotpSetup>(ApiPath.mfaEnrollmentSetup, { ticket }, { on401: On401.throw });
+}
+
+/** Confirms the code, burns the ticket, sets the session cookie. */
+export function mfaEnrollmentConfirm(ticket: string, code: string): Promise<TotpRecoveryCodes> {
+  return api.post<TotpRecoveryCodes>(ApiPath.mfaEnrollmentConfirm, { ticket, code }, { on401: On401.throw });
 }
 
 /** POST /auth/login/totp (spec 48) — email + password + code, 204 + cookie. */

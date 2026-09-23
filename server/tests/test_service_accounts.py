@@ -19,6 +19,7 @@ from radd.modules.auth.schemas import ServiceAccountCreate, TokenCreate
 from radd.modules.auth.types import InstanceRole, Permission, UserSource
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture
@@ -148,7 +149,7 @@ async def test_service_accounts_cannot_log_in(db):
     # create_session is the seam every login path mints through — local, TOTP,
     # LDAP and OIDC alike — so one refusal covers all of them.
     with pytest.raises(UnauthorizedError):
-        await service.create_session(db, account)
+        await service.create_session(db, account, method=LoginMethod.PASSWORD)
 
 
 async def test_keys_are_mintable_by_an_admin_and_carry_their_scope(db, project):

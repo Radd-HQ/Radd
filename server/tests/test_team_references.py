@@ -19,6 +19,7 @@ from radd.modules.comments.models import Comment, CommentVisibilityTeam
 from radd.modules.groups.models import Group, GroupMember, GroupParent
 from radd.modules.teams import service as teams
 from radd.modules.teams.models import Team, TeamMember
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture
@@ -212,7 +213,7 @@ async def test_reference_get_remains_available_during_read_only_preview(world):
     )
     db.add(target)
     await db.flush()
-    cookie = await auth.create_session(db, actor)
+    cookie = await auth.create_session(db, actor, method=LoginMethod.PASSWORD)
 
     async def override():
         yield db

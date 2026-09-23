@@ -22,6 +22,7 @@ from radd.modules.items import service as items
 from radd.modules.items.schemas import ItemCreate
 from radd.modules.items.enums import ItemVisibility
 from test_page_restriction import _admin, _user, _space, _page, _grant_space_read, _restrict
+from radd.modules.auth.types import LoginMethod
 
 
 @asynccontextmanager
@@ -32,7 +33,7 @@ async def client_for(db, user=None, key=None):
         yield db
 
     app.dependency_overrides[get_session] = override
-    cookies = {SESSION_COOKIE_NAME: await auth.create_session(db, user)} if user else {}
+    cookies = {SESSION_COOKIE_NAME: await auth.create_session(db, user, method=LoginMethod.PASSWORD)} if user else {}
     headers = {"Authorization": "Bearer " + key} if key else {}
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),

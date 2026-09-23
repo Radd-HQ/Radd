@@ -29,6 +29,7 @@ from radd.modules.projects import service as projects
 from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.views import service as views
 from radd.modules.views.schemas import ViewCreate, ViewTransfer
+from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture(params=['view', 'dashboard'])
@@ -73,7 +74,7 @@ async def client_for(db, actor):
         db.info.clear()  # match a fresh request session, including authorization memoization
         yield db
     app.dependency_overrides[get_session] = override
-    cookie = await auth.create_session(db, actor)
+    cookie = await auth.create_session(db, actor, method=LoginMethod.PASSWORD)
     return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test',
                              cookies={SESSION_COOKIE_NAME: cookie})
 
