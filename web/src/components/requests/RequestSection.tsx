@@ -101,7 +101,8 @@ function Section({
 
   return (
     <div className="flex flex-col gap-2">
-      <ListSection icon={Icon} title={label} count={shown.length} badge={waiting || undefined}>
+      <ListSection icon={Icon} title={label} count={rows.length} badge={waiting || undefined}
+        badgeLabel={(n) => `${n} need${n === 1 ? "s" : ""} your reply`}>
         {shown.map((request) => (
           <RequestRow key={request.key} request={request} onOpen={onOpen} />
         ))}

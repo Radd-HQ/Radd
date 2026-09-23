@@ -190,7 +190,6 @@ export function ViewBoard({
                   <span className={`size-2 rounded-full ${group.dotClassName}`} aria-hidden />
                 )}
                 <h2 className="truncate text-[13px] font-semibold text-fg">{group.label}</h2>
-                {group.total !== undefined && group.items.length < group.total && <span className="text-xs text-fg-muted">{group.items.length} loaded /</span>}
                 <ColumnCount count={group.total ?? group.items.length} limit={limit} />
                 {showPoints && points > 0 && (
                   <span className="text-xs text-fg-muted" title={group.totalPoints === undefined ? "Story points in loaded cards" : "Story points in all matching column issues"}>

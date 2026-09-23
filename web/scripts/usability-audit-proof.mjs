@@ -197,6 +197,18 @@ async function main() {
     await session.send("Input.dispatchKeyEvent", { type: "rawKeyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
     const csat = await api(`const r = await fetch("/api/v1/items/${item.id}/csat", {credentials:"include"}); return { status: r.status, body: await r.text() };`);
     checks["1292 no survey is an answer, not a 404"] = csat.status === 200 && csat.body === "null";
+
+    // --- RADD-1293: counts say what they count --------------------------------
+    const board = views.find((v) => v.view_type === "board") ?? views[0];
+    await session.navigate(`${baseUrl}/p/${world.key}/v/${board.id}`, 3000);
+    await waitFor(session, `/\\d+ issues/.test((document.querySelector("main") ?? document.body).innerText)`, 20);
+    const boardText = await text(session);
+    checks["1293 board header counts issues, not loaded pages"] = /\d+ issues/.test(boardText) && !/\bloaded\b/.test(boardText);
+    await session.navigate(`${baseUrl}/`, 3000);
+    const home = await text(session);
+    checks["1293 My Work never says '0 shown'"] = home.length > 100 && !/\b0 shown\b/.test(home);
+    checks["1293 a request badge says what it counts"] = await session.eval(
+      `[...document.querySelectorAll("[data-section-badge]")].every(b => /reply|new/.test(b.textContent))`);
   } finally {
     if (world?.projectId) await api(`return (await call("DELETE", "/projects/${world.projectId}")).status;`).catch(() => null);
     await close();

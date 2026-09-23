@@ -1013,12 +1013,14 @@ export function ViewPage() {
         <div className="ml-auto flex items-center gap-2">
           <span className="text-xs text-fg-faint">
             {isGrouped
-              ? `${(isBoard ? boardItems.items : groupedItems.items).length.toLocaleString()} loaded · ${Object.values((isBoard ? boardItems.first : groupedItems.first)?.column_totals ?? {}).reduce((a,b)=>a+b,0).toLocaleString()} matching items`
+              ? // RADD-1293: the total, not paging internals ("100 loaded · … matching items").
+                `${Object.values((isBoard ? boardItems.first : groupedItems.first)?.column_totals ?? {}).reduce((a,b)=>a+b,0).toLocaleString()} issues`
               : isPlanning
               ? `${planning.cycleCount ? openSprintCount.data?.total.toLocaleString() ?? "…" : "0"} open sprint issues · ${totalCount?.toLocaleString() ?? "…"} backlog · ${recoveryItems.total?.toLocaleString() ?? "…"} need rescheduling`
               : isRoadmap
-              ? // Roadmap auto-stream (spec 79): the count ticks while pages load.
-                `${pageItems.length} items${itemPages.hasNextPage ? "…" : ""}`
+              ? // RADD-1293: the roadmap's own toolbar counts what is scheduled;
+                // a second count here said the same thing in other words.
+                ""
               : totalCount !== null
                 ? `${totalCount.toLocaleString()} items`
                 : `${pageItems.length} items`}

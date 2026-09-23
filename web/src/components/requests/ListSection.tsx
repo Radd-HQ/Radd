@@ -19,6 +19,7 @@ export function ListSection({
   title,
   count,
   badge,
+  badgeLabel = (n) => `${n} new`,
   empty,
   action,
   children,
@@ -28,6 +29,9 @@ export function ListSection({
   count: number;
   /** A number that needs attention (unread replies) — accented, not neutral. */
   badge?: number;
+  /** What the badge counts, said in words (RADD-1293: a bare "1" over 11 rows
+   *  read as the total). Defaults to "{n} new". */
+  badgeLabel?: (n: number) => string;
   /** Shown instead of the list when `count` is 0. Omit to render nothing at
    *  all: a requester's page should not be a column of "nothing here" boxes. */
   empty?: string;
@@ -42,13 +46,12 @@ export function ListSection({
         <h2 className="text-[11px] font-semibold uppercase tracking-wide text-fg-muted">
           {title}
         </h2>
+        {count > 0 && <span className="text-[11px] text-fg-faint" data-section-count>{count}</span>}
         {badge ? (
-          <span className="rounded-full bg-accent px-1.5 text-[10px] font-medium text-black">
-            {badge}
+          <span className="rounded-full bg-accent px-1.5 text-[10px] font-medium text-black" data-section-badge>
+            {badgeLabel(badge)}
           </span>
-        ) : (
-          count > 0 && <span className="text-[11px] text-fg-faint">{count}</span>
-        )}
+        ) : null}
         {action && <span className="ml-auto">{action}</span>}
       </header>
       {count === 0 ? (

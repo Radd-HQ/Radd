@@ -273,7 +273,9 @@ function WorkPreview({icon, title, q, limit, showDue = false, empty}: {
   return <Section icon={icon} title={title} count={count.data?.total ?? rows.length}
     empty={query.isPending ? "Loading…" : query.isError ? "Could not load issues." : empty}
     action={<span className="flex items-center gap-2 text-xs text-fg-muted">
-      {query.isPending ? "Loading…" : `${rows.length} shown`}
+      {/* RADD-1293: only when the list is a slice of the total — "0 shown" above an
+          empty state, or "5 shown" beside a 5, said nothing. */}
+      {query.isPending ? "Loading…" : count.data && rows.length > 0 && rows.length < count.data.total ? `${rows.length} of ${count.data.total} shown` : ""}
       {count.isError ? " · Total unavailable" : !count.data ? " · Counting…" : ""}
       {query.isError && <button className="underline" onClick={() => void query.refetch()}>Retry</button>}
       {query.hasNextPage && <button className="text-accent-text underline" disabled={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()}>{query.isFetchingNextPage ? "Loading…" : "Show more"}</button>}
