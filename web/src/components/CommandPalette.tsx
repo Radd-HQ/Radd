@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -28,6 +28,7 @@ import {
   projectsQuery,
   searchQuery,
   semanticSearchQuery,
+  projectByKeyQuery,
 } from "../lib/queries";
 import {
   AiFeature,
@@ -39,6 +40,7 @@ import {
   type SemanticItem,
 } from "../lib/types";
 import { NewItemModal } from "./items/NewItemModal";
+import { listRecentItems } from "../lib/recent";
 
 /**
  * Cmd-K command palette (spec 28): quick-open issues via the search module +
@@ -124,7 +126,19 @@ export function CommandPalette() {
   const navigate = useNavigate();
   const perms = usePermissions();
 
-  const { data: projects } = useQuery({ ...projectsQuery(), enabled: open });
+  const { data: projectList } = useQuery({ ...projectsQuery(), enabled: open });
+  // The palette mounts above the routes that own `projectKey`, so read the
+  // current project off the address: /p/KEY/… or an issue's KEY-123.
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const currentProjectKey =
+    /^\/p\/([^/]+)/.exec(pathname)?.[1] ?? /^\/issues\/(.+)-\d+$/.exec(pathname)?.[1];
+  // The projects list is capped; the project you are in must never fall off it.
+  const { data: currentProject } = useQuery({ ...projectByKeyQuery(currentProjectKey ?? ""), enabled: open && Boolean(currentProjectKey) });
+  const projects = useMemo(
+    () => (currentProject && !(projectList ?? []).some((p) => p.id === currentProject.id)
+      ? [...(projectList ?? []), currentProject] : projectList),
+    [projectList, currentProject],
+  );
   const { data: searchData } = useQuery(
     searchQuery(open && mode === PaletteMode.search ? debounced : "", PALETTE_SEARCH_LIMIT),
   );
@@ -210,11 +224,14 @@ export function CommandPalette() {
     ]);
     // RADD-843: the palette IS the nav — same predicate as sidebar/rail/pins.
     const gated = STATIC_GOTOS.filter((entry) => navFacts.forPath(entry.to));
-    const all = [...gated, ...projectEntries];
     const needle = query.trim().toLowerCase();
-    if (!needle) return all;
-    return all.filter((entry) => entry.label.toLowerCase().includes(needle));
-  }, [projects, query, navFacts]);
+    // RADD-1294: an empty palette offers the nav and the CURRENT project, not two
+    // rows for every project on the instance — typing reaches the rest.
+    if (!needle) {
+      return [...gated, ...projectEntries.filter((entry) => entry.params?.projectKey === currentProjectKey)];
+    }
+    return [...gated, ...projectEntries].filter((entry) => entry.label.toLowerCase().includes(needle));
+  }, [projects, query, navFacts, currentProjectKey]);
 
   const issueEntries: PaletteEntry[] = (searchData?.results ?? []).map((result) => ({
     kind: "issue",
@@ -226,14 +243,24 @@ export function CommandPalette() {
   }));
   // Quick actions (spec 37): "New issue in <PROJECT>" for creatable projects.
   const needle = query.trim().toLowerCase();
+  // RADD-1294: with nothing typed, only the project you are in (the palette used
+  // to open on 123 of these); typing "new" or a key reaches every project.
   const actionEntries: PaletteEntry[] = (projects ?? [])
     .filter((project) => perms.project(project, Permission.itemCreate))
+    .filter((project) => needle || project.key === currentProjectKey)
     .map((project) => ({
       kind: "action" as const,
       label: `New issue in ${project.key}`,
       project,
     }))
     .filter((entry) => !needle || entry.label.toLowerCase().includes(needle));
+  // Recently viewed issues lead the empty palette: what you most likely want next.
+  const recentEntries: PaletteEntry[] = needle
+    ? []
+    : listRecentItems().slice(0, 6).map((recent) => ({
+        kind: "issue" as const,
+        result: { item_id: "", project_id: "", key: recent.key, title: recent.title, snippet: null },
+      }));
   const gotoEntries: PaletteEntry[] = gotos.map((entry) => ({ kind: "goto", entry }));
   // The Ask entry point trails the search-mode list whenever there's a query.
   const askEntries: PaletteEntry[] =
@@ -249,7 +276,7 @@ export function CommandPalette() {
   const entries: PaletteEntry[] =
     mode === PaletteMode.ask
       ? [...semanticItemEntries, ...semanticDocEntries]
-      : [...issueEntries, ...docEntries, ...actionEntries, ...gotoEntries, ...askEntries];
+      : [...recentEntries, ...issueEntries, ...docEntries, ...actionEntries, ...gotoEntries, ...askEntries];
   const clamped = Math.min(selected, Math.max(entries.length - 1, 0));
 
   const choose = (entry: PaletteEntry) => {

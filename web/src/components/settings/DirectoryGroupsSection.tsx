@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, UsersRound } from "lucide-react";
 import { api } from "../../lib/api";
@@ -17,6 +17,7 @@ import { TextField } from "../TextField";
 import { ImportGroupsDialog } from "./DirectoryImportDialogs";
 import { settingsTableClasses } from "./SettingsPage";
 import { ErrorText } from "../ErrorText";
+import { Pager } from "../Pager";
 
 const rowActionClasses =
   "rounded border border-strong px-2 py-0.5 text-[11px] text-fg-secondary cursor-pointer " +
@@ -31,6 +32,8 @@ const rowActionClasses =
  * row is the directory's truth, and removing it from a team is the team
  * panel's job.
  */
+const GROUPS_PAGE_SIZE = 50;
+
 export function DirectoryGroupsSection({ directoryReady }: { directoryReady: boolean }) {
   const [q, setQ] = useState("");
   const debounced = useDebounced(q, SEARCH_DEBOUNCE_MS);
@@ -51,13 +54,19 @@ export function DirectoryGroupsSection({ directoryReady }: { directoryReady: boo
     });
   };
 
-  const list = groups.data ?? [];
-  const selectedGroups = list.filter((group) => selected.has(group.dn));
+  const all = groups.data ?? [];
+  const selectedGroups = all.filter((group) => selected.has(group.dn));
+  // RADD-1294: a real AD returned ~4,400 groups and every one rendered with its
+  // own checkbox. Page them; searching narrows the set.
+  const [page, setPage] = useState(1);
+  useEffect(() => setPage(1), [debounced]);
+  const pageCount = Math.max(1, Math.ceil(all.length / GROUPS_PAGE_SIZE));
+  const list = all.slice((page - 1) * GROUPS_PAGE_SIZE, page * GROUPS_PAGE_SIZE);
 
   if (!directoryReady) {
     return (
       <p className="text-xs text-fg-muted">
-        Configure the bind account (RADD_LDAP_BIND_DN / _PASSWORD) to browse directory groups.
+        Set the bind account on the Connection tab to browse directory groups.
       </p>
     );
   }
@@ -87,7 +96,7 @@ export function DirectoryGroupsSection({ directoryReady }: { directoryReady: boo
         <TableSkeleton rows={4} />
       ) : groups.isError ? (
         <QueryError label="directory groups" error={groups.error} />
-      ) : list.length === 0 ? (
+      ) : all.length === 0 ? (
         <EmptyState icon={UsersRound} message="No directory groups match." />
       ) : (
         <div className="overflow-x-auto rounded-lg border border-subtle">
@@ -161,6 +170,11 @@ export function DirectoryGroupsSection({ directoryReady }: { directoryReady: boo
               })}
             </tbody>
           </table>
+        </div>
+      )}
+      {all.length > GROUPS_PAGE_SIZE && (
+        <div data-groups-pager>
+          <Pager page={page} pageCount={pageCount} total={all.length} onPage={setPage} noun="groups" compact />
         </div>
       )}
       {importing && (

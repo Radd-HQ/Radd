@@ -16,6 +16,7 @@ import { NotificationRow } from "../components/notifications/NotificationRow";
 import { Pager } from "../components/Pager";
 import { Spinner } from "../components/Spinner";
 import { Switch } from "../components/Switch";
+import { groupNotificationBursts } from "../lib/notification-bursts";
 
 /** The personal notification Inbox (spec 26). */
 export function InboxPage() {
@@ -81,9 +82,20 @@ export function InboxPage() {
       )}
 
       <ul className="divide-y divide-subtle/70 overflow-hidden rounded-lg border border-subtle">
-        {(data?.notifications ?? []).map((notification) => (
-          <li key={notification.id}>
-            <NotificationRow notification={notification} onOpen={open} />
+        {groupNotificationBursts(data?.notifications ?? []).map((burst) => (
+          <li key={burst.lead.id} data-burst={burst.members.length}>
+            <NotificationRow
+              notification={burst.lead}
+              onOpen={(lead) => {
+                // Opening a burst reads all of it: they are one fact.
+                const unread = burst.members.filter((member) => !member.read).map((member) => member.id);
+                if (unread.length > 1) markRead.mutate(unread);
+                open(lead);
+              }}
+            />
+            {burst.members.length > 1 && (
+              <BurstMore burst={burst.members} onOpen={open} />
+            )}
           </li>
         ))}
       </ul>
@@ -100,3 +112,27 @@ export function InboxPage() {
     </div>
   );
 }
+
+/** "×14 — show all": the rest of a collapsed burst, on demand. */
+function BurstMore({ burst, onOpen }: { burst: Notification[]; onOpen: (notification: Notification) => void }) {
+  const [open, setOpen] = useState(false);
+  const rest = burst.slice(1);
+  return (
+    <div className="px-4 pb-2 pl-11">
+      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} data-burst-toggle
+        className="text-xs text-fg-muted hover:text-fg hover:underline cursor-pointer">
+        {open ? "Hide" : `${burst.length} times — show the other ${rest.length}`}
+      </button>
+      {open && (
+        <ul className="mt-1 flex flex-col divide-y divide-subtle/50 rounded-md border border-subtle/60">
+          {rest.map((notification) => (
+            <li key={notification.id}>
+              <NotificationRow notification={notification} onOpen={onOpen} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+

@@ -21,6 +21,8 @@ import { Avatar } from "../components/Avatar";
 import { ItemKeyLink } from "../components/items/ItemBadges";
 import { TopBarQuery } from "../components/shell/TopBarSlot";
 import { QueryBar } from "../components/views/QueryBar";
+import { groupNotificationBursts } from "../lib/notification-bursts";
+import { notificationSummary } from "../components/notifications/NotificationRow";
 
 /** Days ahead the "Due soon" section looks. */
 const DUE_SOON_DAYS = 7;
@@ -76,8 +78,9 @@ export function MyWorkPage() {
 
         <section>
           <header className="mb-2 flex items-center gap-2">
-            <Inbox size={14} className="text-fg-muted" aria-hidden />
-            <h2 className="text-sm font-semibold text-fg">Inbox</h2>
+            <Inbox size={12} className="text-fg-muted" aria-hidden />
+            {/* RADD-1294: the same heading as every other My Work section. */}
+            <h2 className="text-[11px] font-semibold uppercase tracking-wide text-fg-muted">Inbox</h2>
             {(notifications.data?.unread_count ?? 0) > 0 && (
               <span className="rounded-full bg-accent/20 px-1.5 py-px text-[10px] font-medium text-accent-text">
                 {notifications.data?.unread_count}
@@ -96,14 +99,16 @@ export function MyWorkPage() {
             </p>
           ) : (
             <ul className="overflow-hidden rounded-lg border border-subtle">
-              {(notifications.data?.notifications ?? []).slice(0, 5).map((notification) => (
+              {groupNotificationBursts(notifications.data?.notifications ?? []).slice(0, 5).map(({ lead: notification, members }) => (
                 <li
                   key={notification.id}
                   className="flex items-baseline gap-2 border-b border-subtle/60 px-4 py-2 text-xs last:border-b-0"
                 >
                   {notification.item_key && <ItemKeyLink itemKey={notification.item_key} />}
+                  {/* RADD-1294: the inbox's own sentence, not the raw type name. */}
                   <span className="truncate text-fg">
-                    {notification.actor?.name ?? "System"} · {notification.type.replace("_", " ")}
+                    {notificationSummary(notification)}
+                    {members.length > 1 && <span className="text-fg-muted"> · {members.length} times</span>}
                   </span>
                   <span className="ml-auto shrink-0 truncate text-fg-faint">
                     {notification.item_title}

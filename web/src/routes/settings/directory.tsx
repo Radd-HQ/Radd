@@ -47,7 +47,11 @@ function lastRunLine(state: DirectorySyncState | null | undefined): string {
  * The Users page keeps ACCOUNT administration; the per-team picker on Teams
  * stays for contextual linking.
  */
+const DIRECTORY_TABS = [["connection", "Connection"], ["users", "User sync"], ["groups", "Groups"]] as const;
+type DirectoryTab = (typeof DIRECTORY_TABS)[number][0];
+
 export function DirectorySettingsPage() {
+  const [tab, setTab] = useState<DirectoryTab>("connection");
   const me = useCurrentUser();
   const isInstanceAdmin = me?.instance_role === InstanceRole.admin;
   const queryClient = useQueryClient();
@@ -116,6 +120,19 @@ export function DirectorySettingsPage() {
             )}
           </section>
 
+          {/* RADD-1294: one page held the connection, user sync and every
+              directory group at once (4,439 checkboxes on a real AD). */}
+          <div role="tablist" aria-label="Directory" className="-mb-4 flex gap-1 border-b border-subtle">
+            {DIRECTORY_TABS.map(([key, label]) => (
+              <button key={key} type="button" role="tab" aria-selected={tab === key} data-directory-tab={key}
+                onClick={() => setTab(key)}
+                className={"-mb-px border-b-2 px-2.5 py-2 text-[13px] cursor-pointer " +
+                  (tab === key ? "border-accent-hover text-heading" : "border-transparent text-fg-muted hover:text-fg")}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {tab === "connection" && (
           <section>
             <h2 className={sectionHeadClasses}>Connection</h2>
             {/* RADD-846: the connection is editable here — deliberately NOT
@@ -131,7 +148,8 @@ export function DirectorySettingsPage() {
               />
             </div>
           </section>
-
+          )}
+          {tab === "users" && (
           <section>
             <div className="mb-2 flex items-center justify-between gap-2">
               <h2 className={`${sectionHeadClasses} mb-0`}>User sync</h2>
@@ -156,7 +174,7 @@ export function DirectorySettingsPage() {
             {!directoryReady && (
               <p className="mb-3 text-xs text-amber-400/90">
                 No bind account is configured — directory searches and sync are unavailable
-                until the Connection section above (or the deploy&apos;s RADD_LDAP_* env)
+                until the Connection tab (or the deploy&apos;s RADD_LDAP_* env)
                 sets one.
               </p>
             )}
@@ -172,7 +190,8 @@ export function DirectorySettingsPage() {
               {syncStatus.isPending ? "Loading last run…" : lastRunLine(syncStatus.data?.user_sync)}
             </p>
           </section>
-
+          )}
+          {tab === "groups" && (
           <section>
             <div className="mb-2 flex items-center justify-between gap-2">
               <h2 className={`${sectionHeadClasses} mb-0`}>Groups</h2>
@@ -203,6 +222,7 @@ export function DirectorySettingsPage() {
                 : `Linked-team reconcile — ${lastRunLine(syncStatus.data?.group_sync)}`}
             </p>
           </section>
+          )}
         </div>
       )}
       {importingUsers && <ImportUsersDialog onClose={() => setImportingUsers(false)} />}

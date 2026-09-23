@@ -209,6 +209,33 @@ async function main() {
     checks["1293 My Work never says '0 shown'"] = home.length > 100 && !/\b0 shown\b/.test(home);
     checks["1293 a request badge says what it counts"] = await session.eval(
       `[...document.querySelectorAll("[data-section-badge]")].every(b => /reply|new/.test(b.textContent))`);
+
+    // --- RADD-1294: things that scale -----------------------------------------
+    await session.navigate(`${baseUrl}/settings/directory`, 3000);
+    checks["1294 directory is split into tabs"] = await session.eval(
+      `document.querySelectorAll("[data-directory-tab]").length === 3`);
+    await session.click('[data-directory-tab="groups"]');
+    await sleep(3000);
+    const boxes = await session.eval(`document.querySelectorAll('input[type="checkbox"]').length`);
+    checks["1294 directory groups render a page, not the whole directory"] = boxes < 200;
+    await session.navigate(`${baseUrl}/p/${world.key}/v/${board.id}`, 3000);
+    await session.send("Input.dispatchKeyEvent", { type: "rawKeyDown", key: "k", code: "KeyK", modifiers: 2, windowsVirtualKeyCode: 75 });
+    await session.send("Input.dispatchKeyEvent", { type: "keyUp", key: "k", code: "KeyK", modifiers: 2 });
+    await waitFor(session, `!!document.querySelector('input[placeholder^="Search issues"]')`);
+    const palette = await session.eval(`(() => {
+      const rows = [...document.querySelectorAll('[role="dialog"] button, [role="listbox"] [role="option"]')].map(b => b.textContent.trim());
+      return { newIssue: rows.filter(r => r.startsWith("New issue in")), total: rows.length };
+    })()`);
+    checks["1294 empty palette offers New issue in THIS project only"] =
+      palette.newIssue.length === 1 && palette.newIssue[0] === `New issue in ${world.key}`;
+    checks["1294 empty palette fits a screen"] = palette.total < 40;
+    await session.send("Input.dispatchKeyEvent", { type: "rawKeyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+    await session.navigate(`${baseUrl}/inbox`, 3000);
+    const inbox = await session.eval(`(() => {
+      const rows = [...document.querySelectorAll("li[data-burst]")].map(li => Number(li.dataset.burst));
+      return { rows: rows.length, largest: Math.max(0, ...rows) };
+    })()`);
+    checks["1294 inbox collapses a burst into one row"] = inbox.rows > 0 && inbox.largest > 1;
   } finally {
     if (world?.projectId) await api(`return (await call("DELETE", "/projects/${world.projectId}")).status;`).catch(() => null);
     await close();

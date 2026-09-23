@@ -33,7 +33,10 @@ export function Pager({
   pageSize,
   pageSizes,
   onPageSize,
+  noun = "issues",
 }: {
+  /** What the total counts (default "issues"). */
+  noun?: string;
   /** 1-based current page. */
   page: number;
   /** Total pages, or null while unknown (count still loading). */
@@ -103,7 +106,7 @@ export function Pager({
         <ChevronLast size={13} aria-hidden />
       </button>
       {!compact && total != null && (
-        <span className="ml-2 text-xs text-fg-faint">{total.toLocaleString()} issues</span>
+        <span className="ml-2 text-xs text-fg-faint">{total.toLocaleString()} {noun}</span>
       )}
       {!compact && pageSize !== undefined && pageSizes && onPageSize && (
         <span className="ml-2 flex items-center gap-1 text-xs text-fg-faint" data-page-size>
