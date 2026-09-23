@@ -225,7 +225,10 @@ async def _send(
     payload = notification.payload or {}
     key = payload.get("item_key") or ""
     item = mailrender.ItemMail(
-        key=key, title=payload.get("item_title") or "", base_url=settings.app_base_url
+        key=key,
+        title=payload.get("item_title") or "",
+        base_url=settings.app_base_url,
+        comment=payload.get("comment_id") or None,
     )
     reason = lines.MAIL_REASON_TEMPLATE.format(key=key or "this issue")
     # RADD-985: every USER-addressed message says how to stop it — a footer link

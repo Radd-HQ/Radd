@@ -14,7 +14,7 @@ from radd.modules.projects import service as projects_service
 
 from . import resolution, service, threads
 from .schemas import (
-    CommentCreate, CommentPage, CommentRead, CommentReplyCreate, CommentUpdate, ThreadResolutionPolicy,
+    CommentCreate, CommentLocation, CommentPage, CommentRead, CommentReplyCreate, CommentUpdate, ThreadResolutionPolicy,
 )
 from .types import CommentSlice
 
@@ -81,6 +81,13 @@ async def update_comment(
     return await service.update_comment(session, comment_id, data, actor=user)
 
 
+@router.get("/comments/{comment_id}/locate", response_model=CommentLocation)
+async def locate_comment(comment_id: uuid.UUID, session: Session, user: Actor) -> CommentLocation:
+    """Where a linked comment lives (RADD-1297): its thread root and parent.
+    404 for a comment this reader cannot see — never a hint that it exists."""
+    return await service.locate(session, comment_id, user)
+
+
 @router.post("/comments/{comment_id}/tasks", response_model=CommentRead)
 async def toggle_comment_task(
     comment_id: uuid.UUID, data: TaskToggle, session: Session, user: CurrentUser
@@ -115,9 +122,11 @@ async def item_comment_page(
     limit: int = Query(50, ge=1, le=200), before: str | None = Query(None, max_length=256),
     section: CommentSlice = CommentSlice.ALL,
     unresolved: bool = Query(False, description="Only resolvable threads that are still unresolved."),
+    through: uuid.UUID | None = Query(None, description="Widen the newest window to include this comment (RADD-1297)."),
 ) -> CommentPage:
     return await service.comment_page(
-        session, entity_id, user, limit=limit, before=before, section=section, unresolved=unresolved
+        session, entity_id, user, limit=limit, before=before, section=section, unresolved=unresolved,
+        through=through,
     )
 
 
@@ -127,10 +136,11 @@ async def parent_comment_page(
     limit: int = Query(50, ge=1, le=200), before: str | None = Query(None, max_length=256),
     section: CommentSlice = CommentSlice.ALL,
     unresolved: bool = Query(False, description="Only resolvable threads that are still unresolved."),
+    through: uuid.UUID | None = Query(None, description="Widen the newest window to include this comment (RADD-1297)."),
 ) -> CommentPage:
     return await service.comment_page(
         session, entity_id, user, entity_type, limit=limit, before=before, section=section,
-        unresolved=unresolved,
+        unresolved=unresolved, through=through,
     )
 
 

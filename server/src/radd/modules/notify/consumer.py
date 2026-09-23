@@ -251,7 +251,9 @@ async def _handle_comment_created(
     audience = await item_audience(
         session, item_id, subject, own=own_of(item, payload)
     )
-    plan = planner.plan_comment_created(payload, event.actor_id, audience, mention_ids)
+    plan = planner.plan_comment_created(
+        payload, event.actor_id, audience, mention_ids, comment_id=str(event.entity_id)
+    )
     await _apply(
         session,
         plan,

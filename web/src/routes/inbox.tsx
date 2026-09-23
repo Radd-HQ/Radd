@@ -32,12 +32,18 @@ export function InboxPage() {
   const open = (notification: Notification) => {
     if (!notification.read) markRead.mutate([notification.id]);
     if (notification.item_key) {
-      void navigate({ to: RoutePath.issue, params: { itemKey: notification.item_key } });
+      // RADD-1297: a comment notification opens ON the comment.
+      const comment = notification.detail.comment_id;
+      void navigate({
+        to: RoutePath.issue,
+        params: { itemKey: notification.item_key },
+        ...(comment ? { search: { comment } } : {}),
+      });
       return;
     }
     // RADD-1233: a page notification opens the page's permalink.
     const pageKey = notification.detail.page_number;
-    if (pageKey) void navigate(pagePermalink(pageKey));
+    if (pageKey) void navigate(pagePermalink(pageKey, notification.detail.comment_id));
   };
 
   return (

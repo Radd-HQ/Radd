@@ -4,6 +4,7 @@ import { api, errorMessage } from "../../lib/api";
 import { apiCommentPath, apiCommentTasksPath } from "../../lib/constants";
 import { useCurrentUser } from "../../lib/hooks";
 import { sendTaskToggle } from "../../lib/task-toggle";
+import { CopyCommentLink } from "./CopyCommentLink";
 import { Entity, entityMeta, invalidateEntities } from "../../lib/cache";
 import { chronologicalComments, type CommentPage } from "../../lib/queries/comment-feed";
 import { relativeTime } from "../../lib/dates";
@@ -38,6 +39,7 @@ export function CommentReplies({
   onUploadImage,
   quickActions,
   canResolve = false,
+  linkFor,
 }: {
   row: Comment;
   canReply: boolean;
@@ -51,6 +53,8 @@ export function CommentReplies({
   quickActions?: QuickAction[];
   /** May reopen this thread — offers "Reply and unresolve" once it is resolved. */
   canResolve?: boolean;
+  /** RADD-1297: the link that lands on one reply; omit to offer none. */
+  linkFor?: (commentId: string) => string;
 }) {
   const client = useQueryClient();
   const me = useCurrentUser();
@@ -130,6 +134,7 @@ export function CommentReplies({
                     Internal
                   </span>
                 )}
+                {linkFor && <CopyCommentLink href={linkFor(reply.id)} className="ml-1.5 align-middle" />}
               </p>
               <LazyRichViewer
                 text={reply.body}

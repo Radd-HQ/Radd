@@ -80,6 +80,18 @@ class CommentRead(BaseModel):
     reply_count: int = 0
 
 
+class CommentLocation(BaseModel):
+    """RADD-1297: what a `?comment=` link needs to land — the thread to open
+    (`root_id`, itself for a top-level comment), its parent, and whether it is
+    an inline annotation (the page rail) or a discussion comment."""
+
+    id: uuid.UUID
+    root_id: uuid.UUID
+    entity_type: str
+    entity_id: uuid.UUID
+    anchored: bool
+
+
 class CommentPage(BaseModel):
     comments: list[CommentRead]
     older_cursor: str | None = None

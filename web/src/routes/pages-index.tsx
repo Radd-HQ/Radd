@@ -18,20 +18,25 @@ import { QueryError } from "../components/QueryError";
 /** The readable wiki directory; only one search window is mounted. Also the
  *  permalink resolver: `/pages?pageId=<number>` lands here (RADD-1233). */
 export function PagesIndexPage() {
-  const { pageId } = useSearch({ strict: false }) as { pageId?: string | number };
-  if (pageId !== undefined && pageId !== "") return <PagePermalink pageId={String(pageId)} />;
+  const { pageId, comment } = useSearch({ strict: false }) as { pageId?: string | number; comment?: string };
+  if (pageId !== undefined && pageId !== "") return <PagePermalink pageId={String(pageId)} comment={comment} />;
   return <PagesDirectory />;
 }
 
 /** Resolve a permalink and REPLACE it with the page's readable address — the
  *  key survives every rename and move, the path is what people read. */
-function PagePermalink({ pageId }: { pageId: string }) {
+function PagePermalink({ pageId, comment }: { pageId: string; comment?: string }) {
   const navigate = useNavigate();
   const page = useQuery(pageByKeyQuery(pageId));
   useEffect(() => {
     if (!page.data) return;
-    void navigate({ ...pageLink(page.data.space.slug, page.data.path), replace: true });
-  }, [page.data, navigate]);
+    void navigate({
+      ...pageLink(page.data.space.slug, page.data.path),
+      // RADD-1297: a comment link survives the redirect.
+      ...(comment ? { search: { comment } } : {}),
+      replace: true,
+    });
+  }, [page.data, navigate, comment]);
   if (page.isError) {
     return (
       <div className="p-6">

@@ -1,5 +1,6 @@
 import { useIsAuthenticated } from "../../lib/hooks";
-import { useState, type ReactNode } from "react";
+import { useState, type ReactNode, useEffect } from "react";
+import { useLinkedCommentId } from "../../lib/comment-links";
 import { Clock, GitBranch, History, MessageSquare, type LucideIcon } from "lucide-react";
 import { useSlot, SlotId } from "@radd/plugin-sdk";
 import type { Item, Project } from "../../lib/types";
@@ -39,6 +40,11 @@ export function ActivityPanel({
   timeloggingEnabled: boolean;
 }) {
   const [tab, setTab] = useState<string>(ActivityTab.comments);
+  // RADD-1297: a link to a comment brings the Comments tab forward.
+  const linkedComment = useLinkedCommentId();
+  useEffect(() => {
+    if (linkedComment) setTab(ActivityTab.comments);
+  }, [linkedComment]);
   const authenticated = useIsAuthenticated();
 
   // Plugin-contributed Activity tabs (spec 94): a plugin adds a tab next to VCS by registering an

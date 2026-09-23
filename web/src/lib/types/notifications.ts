@@ -114,6 +114,8 @@ export interface Notification {
   /** Type-specific extras: excerpt, from/to state names, source, visibility, SLA info. */
   detail: {
     excerpt?: string;
+    /** RADD-1297: the comment a commented/mentioned row is about — opens ON it. */
+    comment_id?: string;
     from?: string | null;
     to?: string | null;
     source?: string;

@@ -245,7 +245,8 @@ async def handle_page_comment(
     mention_ids = await mentions.comment_mentions(session, event, payload)
     audience = await _page_audience(session, page_id, space_id)
     plan = planner.plan_comment_created(
-        payload, event.actor_id, audience, mention_ids, follow_actor=False
+        payload, event.actor_id, audience, mention_ids, follow_actor=False,
+        comment_id=str(event.entity_id),
     )
     await _apply_page(
         session,

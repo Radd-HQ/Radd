@@ -53,14 +53,17 @@ def site(base_url: str) -> str:
     return (base_url or "").rstrip("/")
 
 
-def issue_url(base_url: str, key: str) -> str:
-    return f"{site(base_url)}{ISSUE_PATH}/{key}"
+def issue_url(base_url: str, key: str, *, comment: str | None = None) -> str:
+    """`comment` (RADD-1297) lands the reader ON that comment."""
+    url = f"{site(base_url)}{ISSUE_PATH}/{key}"
+    return f"{url}?comment={comment}" if comment else url
 
 
-def page_url(base_url: str, page_key: str | int) -> str:
+def page_url(base_url: str, page_key: str | int, *, comment: str | None = None) -> str:
     """The PERMALINK (RADD-1233): a page's number (or id) survives every rename
     and move, which a path assembled from slugs at send time did not."""
-    return f"{site(base_url)}{PAGE_PATH}?pageId={page_key}"
+    url = f"{site(base_url)}{PAGE_PATH}?pageId={page_key}"
+    return f"{url}&comment={comment}" if comment else url
 
 
 def inbox_url(base_url: str) -> str:
@@ -117,10 +120,12 @@ class ItemMail:
     key: str
     title: str
     base_url: str
+    #: RADD-1297: the comment this message is about — the link lands on it.
+    comment: str | None = None
 
     @property
     def url(self) -> str:
-        return issue_url(self.base_url, self.key)
+        return issue_url(self.base_url, self.key, comment=self.comment)
 
     @property
     def label(self) -> str:

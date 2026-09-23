@@ -64,13 +64,13 @@ export function InboxPeek() {
       // The issue peek takes over (it renders AFTER this drawer, so it would
       // paint on top anyway) — close the inbox so Esc/backdrop behave sanely.
       setOpen(false);
-      peek.open(notification.item_key);
+      peek.open(notification.item_key, notification.detail.comment_id);
       return;
     }
     const pageKey = notification.detail.page_number;
     if (pageKey) {
       setOpen(false);
-      void navigate(pagePermalink(pageKey));
+      void navigate(pagePermalink(pageKey, notification.detail.comment_id));
     }
   };
 

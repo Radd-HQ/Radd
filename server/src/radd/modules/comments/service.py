@@ -26,7 +26,7 @@ from .types import (
     CommentParentType,
     CommentVisibility,
 )
-from .reading import comment_page as comment_page, list_comments as list_comments
+from .reading import comment_page as comment_page, list_comments as list_comments, locate as locate
 from .threads import has_unresolved_threads as has_unresolved_threads
 from radd.clock import utcnow
 

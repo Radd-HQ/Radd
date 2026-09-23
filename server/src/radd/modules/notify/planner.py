@@ -330,8 +330,12 @@ def plan_comment_created(
     mention_ids: frozenset[uuid.UUID],
     *,
     follow_actor: bool = True,
+    comment_id: str | None = None,
 ) -> Plan:
     """A comment on an issue — or, since spec 118, on a PAGE.
+
+    `comment_id` (RADD-1297) rides in every row's detail so the inbox and the
+    mail can link to the COMMENT rather than the top of its issue or page.
 
     `follow_actor` is off for a page comment: `item_watchers` is keyed by item
     and a page has none, so auto-watching through this plan would try to write a
@@ -344,19 +348,20 @@ def plan_comment_created(
         plan.follow(actor_id)
     excerpt = payload.get("excerpt", "")
     visibility = payload.get("visibility", "public")
+    located = {"comment_id": comment_id} if comment_id else {}
     for user_id in mention_ids:
         if user_id != actor_id:
             plan._add(
                 user_id,
                 NotificationType.MENTIONED,
-                {"source": "comment", "excerpt": excerpt, "visibility": visibility},
+                {"source": "comment", "excerpt": excerpt, "visibility": visibility, **located},
             )
     for user_id in audience.everyone():
         if user_id != actor_id:
             plan._add(
                 user_id,
                 NotificationType.COMMENTED,
-                {"excerpt": excerpt, "visibility": visibility},
+                {"excerpt": excerpt, "visibility": visibility, **located},
                 audience.relation_of(user_id),
             )
     return plan

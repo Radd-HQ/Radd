@@ -224,11 +224,22 @@ const projectRoute = createRoute({
   component: ProjectHomePage,
 });
 
+/** RADD-1297: `?comment=<id>` on the issue and page routes. Every OTHER key
+ *  passes through untouched — `?peek=` rides on whatever route is showing,
+ *  and a validator that returned only `comment` would strip it. */
+function withCommentLink(search: Record<string, unknown>): Record<string, unknown> & { comment?: string } {
+  return {
+    ...search,
+    comment: typeof search.comment === "string" && search.comment ? search.comment : undefined,
+  };
+}
+
 /** Canonical, key-addressed issue page (`/issues/TD-1234`) — spec 21. */
 const issueRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.issue,
   component: ItemDetailPage,
+  validateSearch: withCommentLink,
 });
 
 /**
@@ -346,13 +357,15 @@ const docsIndexRoute = createRoute({
   // `?pageId=<number>` is the page PERMALINK (RADD-1233): the index resolves
   // it and redirects to the page's current path. The OPTIONAL key keeps
   // `search` optional on every plain link to the index.
-  validateSearch: (search: Record<string, unknown>): { pageId?: string | number } => ({
+  validateSearch: (search: Record<string, unknown>): { pageId?: string | number; comment?: string } => ({
     pageId:
       typeof search.pageId === "number"
         ? search.pageId
         : typeof search.pageId === "string" && search.pageId
           ? search.pageId
           : undefined,
+    // RADD-1297: forwarded to the readable address the permalink redirects to.
+    comment: typeof search.comment === "string" && search.comment ? search.comment : undefined,
   }),
 });
 
@@ -375,6 +388,7 @@ const pageRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.page,
   component: PageSpacePage,
+  validateSearch: withCommentLink,
 });
 
 /** RADD-733. Parented to the ROOT, not the app layout: the top bar, pins bar,

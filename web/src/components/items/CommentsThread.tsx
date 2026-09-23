@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useMutation, useQueries, useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { EyeOff, MessageSquare, MessagesSquare, Pencil, Send, Trash2 } from "lucide-react";
 import { ApiError, api, errorMessage } from "../../lib/api";
@@ -35,6 +35,8 @@ import { Spinner } from "../Spinner";
 import { TeamAudience, CommentAudienceNames, COMMENT_TEAM_PREVIEW_SIZE } from "../teams/TeamAudience";
 import { QueryError } from "../QueryError";
 import { CommentReplies, repliesLabel } from "../comments/CommentReplies";
+import { CopyCommentLink } from "../comments/CopyCommentLink";
+import { issueCommentHref, useLandOnComment, useLinkedComment } from "../../lib/comment-links";
 import { ResolveThreadButton, ThreadBadge, ThreadFilter, threadRuleClass } from "../comments/ThreadResolution";
 
 import type { AiRun } from "../editor/ai";
@@ -95,7 +97,10 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
   const canComment = perms.project(project, Permission.commentWrite);
   const queryClient = useQueryClient();
   const [unresolvedOnly, setUnresolvedOnly] = useState(false);
-  const comments = useInfiniteQuery(itemCommentFeedQuery(itemId, unresolvedOnly));
+  // RADD-1297: `?comment=` — widen the first window through the linked
+  // comment's thread, open that thread if the link is to a reply, land on it.
+  const linked = useLinkedComment(itemId);
+  const comments = useInfiniteQuery(itemCommentFeedQuery(itemId, unresolvedOnly, linked?.root_id));
   const { data: canned } = useQuery(cannedResponsesQuery());
   const list = chronologicalComments(comments.data?.pages);
   const labelIds = [...new Set(list.flatMap(comment => comment.visible_to_teams.slice(0, COMMENT_TEAM_PREVIEW_SIZE)))];
@@ -112,6 +117,10 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
   // RADD-1246: which thread is open, and each thread's unsent reply draft.
   const [openThread, setOpenThread] = useState<string | null>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (linked && linked.id !== linked.root_id) setOpenThread(linked.root_id);
+  }, [linked]);
+  useLandOnComment(linked?.id);
   // A read-mode AI transform pending for the comment being opened for edit —
   // handed to the editor as its initial whole-document run.
   const [pendingAiRun, setPendingAiRun] = useState<AiRun | null>(null);
@@ -221,6 +230,10 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
                     )}
                     {editingId !== comment.id && (
                       <span className="ml-auto flex items-center gap-1">
+                        <CopyCommentLink
+                          href={issueCommentHref(item.key, comment.id)}
+                          className="opacity-0 transition-opacity group-hover/comment:opacity-100"
+                        />
                         {/* Read-mode AI (spec 103 follow-up): query actions for
                             every reader; transforms only where edit is allowed. */}
                         <AiReadMenu
@@ -300,6 +313,7 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
                       onUploadImage={uploadCommentImage}
                       quickActions={quickActions}
                       canResolve={thread && canResolve}
+                      linkFor={(id) => issueCommentHref(item.key, id)}
                     />
                   )}
                 </div>

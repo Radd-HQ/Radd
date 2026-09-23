@@ -126,9 +126,11 @@ export function usePeek() {
     // `to: "."` = the current route (preserves path params); only the search
     // changes, so the panel overlays the current view. (Omitting `to` targets
     // the root route, which would navigate away.)
-    open: (itemKey: string) =>
-      void navigate({ to: ".", search: (prev) => ({ ...prev, peek: itemKey }) }),
-    close: () => void navigate({ to: ".", search: (prev) => ({ ...prev, peek: undefined }) }),
+    // `comment` (RADD-1297): open the peek ON one of the issue's comments.
+    open: (itemKey: string, comment?: string) =>
+      void navigate({ to: ".", search: (prev) => ({ ...prev, peek: itemKey, comment }) }),
+    close: () =>
+      void navigate({ to: ".", search: (prev) => ({ ...prev, peek: undefined, comment: undefined }) }),
     // Replace the transient panel history entry so Back from the full page
     // returns to the clean view rather than reopening the panel.
     expand: (itemKey: string) =>

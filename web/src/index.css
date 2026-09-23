@@ -550,3 +550,14 @@ html.compact body {
   background-color: var(--callout-warning-border);
   color: var(--color-zinc-950);
 }
+
+/* RADD-1297: the comment a `?comment=` link landed on — ringed for a few
+   seconds so the eye finds it in a long thread. Outline, not a fill: it must
+   not fight the internal-comment tint or the thread card beneath it. */
+[data-comment-linked] {
+  outline: 2px solid var(--accent-focus);
+  outline-offset: 3px;
+  border-radius: 8px;
+  transition: outline-color 600ms;
+}
+

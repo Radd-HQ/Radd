@@ -53,6 +53,9 @@ ANONYMOUS_ROUTES: frozenset[tuple[str, str]] = frozenset(
         ("GET", "/api/v1/attachments/{attachment_id}"),
         # RADD-1295: a face beside a name a public visitor can already read.
         ("GET", "/api/v1/users/{user_id}/avatar"),
+        # RADD-1297: a public comment's link resolves for a visitor; anything
+        # they cannot read is the same 404 as a comment that does not exist.
+        ("GET", "/api/v1/comments/{comment_id}/locate"),
         ("GET", "/api/v1/views"),
         ("GET", "/api/v1/views/summary"),
         ("GET", "/api/v1/views/{view_id}"),

@@ -7,6 +7,8 @@ import { Entity, invalidateEntities } from "../../lib/cache";
 import { apiCommentTasksPath } from "../../lib/constants";
 import { useCurrentUser } from "../../lib/hooks";
 import { sendTaskToggle } from "../../lib/task-toggle";
+import { commentHref } from "../../lib/comment-links";
+import { CopyCommentLink } from "../comments/CopyCommentLink";
 import { CommentReplies, repliesLabel } from "../comments/CommentReplies";
 
 /** Why a comment no longer points at the page (RADD-1276): its passage was
@@ -75,11 +77,12 @@ export function PageCommentThread({
           {ORPHAN_LABEL[orphaned]}
         </p>
       )}
-      <p className="text-[12px]">
+      <p className="flex items-baseline gap-1 text-[12px]">
         <span className="font-medium text-heading">{row.author?.name ?? "Unknown author"}</span>{" "}
         <span className="text-fg-faint" title={row.created_at}>
           {relativeTime(row.created_at)}
         </span>
+        <CopyCommentLink href={commentHref(row.id)} className="ml-auto" />
       </p>
       <div className="mt-0.5">
         <RichViewer
@@ -99,7 +102,7 @@ export function PageCommentThread({
         className="mt-2 text-xs text-fg-muted hover:text-fg hover:underline">
         {repliesLabel(row, expanded, canReply)}
       </button>
-      {expanded && <CommentReplies row={row} canReply={canReply} draft={draft} onDraft={onDraft} canResolve={canResolve} />}
+      {expanded && <CommentReplies row={row} canReply={canReply} draft={draft} onDraft={onDraft} canResolve={canResolve} linkFor={commentHref} />}
       {canResolve && (
         <button
           type="button"

@@ -116,14 +116,18 @@ def entry(notification: Notification, actor_names: dict[uuid.UUID, str]) -> mail
     type_ = NotificationType(notification.type)
     line = headline(type_, actor_name(notification, actor_names), payload)
     base = settings.app_base_url
-    if type_ in _PAGE_KINDS:
+    # RADD-1297: a notification about a comment links to the COMMENT.
+    comment = payload.get("comment_id") or None
+    if type_ in _PAGE_KINDS or (payload.get("page_number") and not payload.get("item_key")):
         # RADD-1233: the permalink. Every row carries the number — the
-        # migration wrote it into the rows that predate page numbering.
+        # migration wrote it into the rows that predate page numbering. A page
+        # COMMENT (commented/mentioned with a page payload) is a page line too;
+        # before RADD-1297 it fell through to the issue branch with no link.
         key = payload.get("page_number")
         return mailrender.DigestEntry(
             headline=line,
             subject=payload.get("title") or "",
-            url=mailrender.page_url(base, key) if key else "",
+            url=mailrender.page_url(base, key, comment=comment) if key else "",
         )
     key = payload.get("item_key") or ""
     title = payload.get("item_title") or ""
@@ -135,5 +139,5 @@ def entry(notification: Notification, actor_names: dict[uuid.UUID, str]) -> mail
         # Item-scoped rules have carried the pair since RADD-972.
         subject=f"[{key}] {title}".strip() if key else "",
         excerpt=payload.get("excerpt") or "",
-        url=mailrender.issue_url(base, key) if key else "",
+        url=mailrender.issue_url(base, key, comment=comment) if key else "",
     )

@@ -16,11 +16,17 @@ from radd.modules.teams import service as teams
 
 from .models import Comment, CommentVisibilityTeam
 from .parents import binding_for
-from .schemas import CommentPage, CommentRead
+from radd.exceptions import ForbiddenError, NotFoundError, UnauthorizedError
+
+from .schemas import CommentLocation, CommentPage, CommentRead
 from .types import CommentParentType, CommentSlice, CommentVisibility
 
 
 _EVERYTHING = object()  # sentinel: "compute the audience here"
+
+#: RADD-1297: how far back a `through` window may reach to include a linked
+#: comment. Past this the link lands on the thread without the comment in view.
+THROUGH_MAX = 1000
 
 
 async def audience(session, entity_id, actor, entity_type):
@@ -128,6 +134,7 @@ async def comment_page(
     session: AsyncSession, entity_id: uuid.UUID, actor: User,
     entity_type: str = CommentParentType.ITEM.value, *, limit: int = 50,
     before: str | None = None, section: CommentSlice = CommentSlice.ALL, unresolved: bool = False,
+    through: uuid.UUID | None = None,
 ) -> CommentPage:
     """Newest window in chronological order; older pages use an exclusive cursor.
 
@@ -140,6 +147,20 @@ async def comment_page(
     query = await _read_query(session, entity_id, actor, entity_type, section, allowed, unresolved=unresolved)
     if before:
         query = query.where(tuple_(Comment.created_at, Comment.id) < tuple_(*_boundary(before)))
+    elif through is not None:
+        # RADD-1297: a link to one comment — widen the NEWEST window just far
+        # enough to include it, however old it is. Counted on the same
+        # audience-filtered query, so the widening itself reveals nothing.
+        target = await session.get(Comment, through)
+        if target is not None and target.entity_id == entity_id and target.entity_type == entity_type:
+            newer = await session.scalar(
+                select(func.count()).select_from(
+                    query.where(
+                        tuple_(Comment.created_at, Comment.id) >= tuple_(target.created_at, target.id)
+                    ).subquery()
+                )
+            )
+            limit = max(limit, min(newer or 0, THROUGH_MAX))
     query = query.order_by(Comment.created_at.desc(), Comment.id.desc()).limit(limit + 1)
     rows = list((await session.scalars(query)).all())
     more = len(rows) > limit
@@ -147,6 +168,29 @@ async def comment_page(
     return CommentPage(
         comments=await _hydrate(session, list(reversed(rows)), allowed, actor, (entity_type, entity_id)),
         older_cursor=_cursor(rows[-1]) if more else None,
+    )
+
+
+async def locate(session: AsyncSession, comment_id: uuid.UUID, actor: User) -> CommentLocation:
+    """RADD-1297: where a linked comment lives — its thread root, parent, and
+    whether it is an inline annotation. A comment the reader cannot see is
+    NOT FOUND, exactly like one that does not exist."""
+    comment = await session.get(Comment, comment_id)
+    try:
+        readable = comment is not None and await can_read_comment(session, comment_id, actor)
+    except (NotFoundError, ForbiddenError, UnauthorizedError, HTTPException):
+        # The parent's own refusal (a restricted issue, a private page) is a
+        # "no" too — and answered the same way as a comment that never existed.
+        readable = False
+    if not readable:
+        raise NotFoundError("comment", comment_id)
+    root = await session.get(Comment, comment.parent_comment_id) if comment.parent_comment_id else comment
+    return CommentLocation(
+        id=comment.id,
+        root_id=root.id,
+        entity_type=root.entity_type,
+        entity_id=root.entity_id,
+        anchored=root.anchor is not None,
     )
 
 

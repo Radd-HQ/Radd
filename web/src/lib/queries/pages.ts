@@ -218,8 +218,8 @@ export const pageSearchQuery = (q: string, limit: number) =>
   });
 
 export const pageCommentFeedQuery = (
-  pageId: string, section: CommentSectionValue = CommentSection.discussion, unresolvedOnly = false,
-) => commentFeedQuery(queryKeys.pageComments(pageId), apiParentCommentsPath("page", pageId), section, unresolvedOnly);
+  pageId: string, section: CommentSectionValue = CommentSection.discussion, unresolvedOnly = false, through?: string,
+) => commentFeedQuery(queryKeys.pageComments(pageId), apiParentCommentsPath("page", pageId), section, unresolvedOnly, through);
 
 
 export type PageTemplateSummary = Omit<PageTemplate, "body"> & { space_name: string | null };

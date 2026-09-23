@@ -23,18 +23,19 @@ export interface PageLinkProps {
 
 export interface PagePermalinkProps {
   to: typeof RoutePath.pages;
-  search: { pageId: string | number };
+  search: { pageId: string | number; comment?: string };
 }
 
 export function pageLink(spaceSlug: string, path: string): PageLinkProps {
   return { to: RoutePath.page, params: { spaceSlug, _splat: path } };
 }
 
-export function pagePermalink(key: string | number): PagePermalinkProps {
+export function pagePermalink(key: string | number, comment?: string): PagePermalinkProps {
   // A NUMBER, not its string: the router JSON-encodes search values, and a
   // string "113" would land in the bar as `?pageId=%22113%22`.
   const numeric = typeof key === "number" ? key : /^\d+$/.test(key) ? Number(key) : key;
-  return { to: RoutePath.pages, search: { pageId: numeric } };
+  // RADD-1297: a comment link rides through the permalink's redirect.
+  return { to: RoutePath.pages, search: { pageId: numeric, ...(comment ? { comment } : {}) } };
 }
 
 /** The readable address as a plain href — for `window.open`, footers, copy. */

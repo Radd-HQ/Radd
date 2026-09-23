@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { commentHref, useLandOnComment, useLinkedComment } from "../../lib/comment-links";
+import { CopyCommentLink } from "../comments/CopyCommentLink";
 import { useMutation, useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { CommentReplies, repliesLabel } from "../comments/CommentReplies";
 import { ResolveThreadButton, ThreadBadge, ThreadFilter, threadRuleClass } from "../comments/ThreadResolution";
@@ -41,7 +43,12 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
   const user = useCurrentUser();
   const queryClient = useQueryClient();
   const [unresolvedOnly, setUnresolvedOnly] = useState(false);
-  const history = useInfiniteQuery(pageCommentFeedQuery(pageId, CommentSection.discussion, unresolvedOnly));
+  // RADD-1297: a link to a discussion comment widens the feed through it.
+  const linked = useLinkedComment(pageId);
+  const linkedDiscussion = linked && !linked.anchored ? linked : null;
+  const history = useInfiniteQuery(
+    pageCommentFeedQuery(pageId, CommentSection.discussion, unresolvedOnly, linkedDiscussion?.root_id),
+  );
   const comments = chronologicalComments(history.data?.pages);
   const { data: users } = useQuery({ ...usersQuery, enabled: useIsAuthenticated() });
   const [body, setBody] = useState("");
@@ -50,6 +57,10 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
   // RADD-1246: a discussion comment is a thread like an annotation is.
   const [openThread, setOpenThread] = useState<string | null>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (linkedDiscussion && linkedDiscussion.id !== linkedDiscussion.root_id) setOpenThread(linkedDiscussion.root_id);
+  }, [linkedDiscussion]);
+  useLandOnComment(linkedDiscussion?.id);
 
   const invalidate = () => void invalidateEntities(queryClient, Entity.comment);
 
@@ -105,6 +116,7 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
                     {relativeTime(comment.created_at)}
                   </span>
                   <ThreadBadge comment={comment} />
+                  <CopyCommentLink href={commentHref(comment.id)} className="ml-auto" />
                   {(!!comment.author && comment.author.id === user?.id) && (
                     <button
                       type="button"
@@ -117,7 +129,7 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
                         }).then((ok) => ok && remove.mutate(comment.id))
                       }
                       aria-label="Delete comment"
-                      className="ml-auto rounded p-0.5 text-fg-faint hover:text-red-400 cursor-pointer"
+                      className="rounded p-0.5 text-fg-faint hover:text-red-400 cursor-pointer"
                     >
                       <Trash2 size={11} aria-hidden />
                     </button>
@@ -158,6 +170,7 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
                     draft={replyDrafts[comment.id] ?? ""}
                     onDraft={(value) => setReplyDrafts((drafts) => ({ ...drafts, [comment.id]: value }))}
                     canResolve={!!comment.can_resolve}
+                    linkFor={commentHref}
                   />
                 )}
               </div>

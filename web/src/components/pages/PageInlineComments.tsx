@@ -1,3 +1,4 @@
+import { useLandOnComment, useLinkedComment } from "../../lib/comment-links";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { MessageSquarePlus } from "lucide-react";
@@ -52,7 +53,10 @@ export function PageInlineComments({
   canComment: boolean;
 }) {
   const queryClient = useQueryClient();
-  const history = useInfiniteQuery(pageCommentFeedQuery(pageId, CommentSection.inline));
+  // RADD-1297: a link to an inline comment widens the rail's feed through it.
+  const linked = useLinkedComment(pageId);
+  const linkedInline = linked?.anchored ? linked : null;
+  const history = useInfiniteQuery(pageCommentFeedQuery(pageId, CommentSection.inline, false, linkedInline?.root_id));
   const data = history.data;
   const [draftAnchor, setDraftAnchor] = useState<TextAnchor | null>(null);
   const [draftBody, setDraftBody] = useState("");
@@ -189,6 +193,16 @@ export function PageInlineComments({
   const floatingRow = inline.find(row => row.id === floating.pointer?.id && !row.resolved_at);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  // RADD-1297: focus the linked thread (its passage lights up), show the
+  // resolved group if that is where it lives, open it for a reply, land on it.
+  const linkedRootResolved = !!linkedInline && inline.some((row) => row.id === linkedInline.root_id && row.resolved_at);
+  useEffect(() => {
+    if (!linkedInline) return;
+    setFocusedId(linkedInline.root_id);
+    if (linkedRootResolved) setShowResolved(true);
+    if (linkedInline.id !== linkedInline.root_id) setExpandedId(linkedInline.root_id);
+  }, [linkedInline, linkedRootResolved]);
+  useLandOnComment(linkedInline?.id);
   const replyProps = (row: Comment) => ({
     canReply: canComment,
     draft: replyDrafts[row.id] ?? "",
