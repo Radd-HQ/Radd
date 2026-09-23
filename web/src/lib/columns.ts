@@ -57,7 +57,7 @@ export function columnWidth(column: ColumnDef, widths: Record<string, number>): 
 /** Builtin columns, in the picker's order. Ids reuse the CardSlot vocabulary
  * where a slot exists (type/labels/…/state) so defaults map 1:1. */
 const BUILTIN_COLUMNS: ColumnDef[] = [
-  { id: "type", label: "Issue type", width: 96, minWidth: COLUMN_MIN_WIDTH },
+  { id: "type", label: "Issue type", width: 128, minWidth: COLUMN_MIN_WIDTH },
   { id: "parent", label: "Parent", width: 128, minWidth: COLUMN_MIN_WIDTH },
   { id: "labels", label: "Labels", width: 224, minWidth: 96 },
   { id: "cycle", label: "Cycle", width: 112, minWidth: COLUMN_MIN_WIDTH },
@@ -65,7 +65,7 @@ const BUILTIN_COLUMNS: ColumnDef[] = [
   { id: "start_date", label: "Start date", width: 96, minWidth: COLUMN_MIN_WIDTH },
   { id: "target_date", label: "Target date", width: 96, minWidth: COLUMN_MIN_WIDTH },
   { id: "team", label: "Team", width: 112, minWidth: COLUMN_MIN_WIDTH },
-  { id: "priority", label: "Priority", width: 64, minWidth: COLUMN_MIN_WIDTH },
+  { id: "priority", label: "Priority", width: 96, minWidth: COLUMN_MIN_WIDTH },
   { id: "visibility", label: "Visibility", width: 96, minWidth: COLUMN_MIN_WIDTH },
   { id: "assignee", label: "Assignee", width: 72, minWidth: COLUMN_MIN_WIDTH },
   { id: "reporter", label: "Reporter", width: 128, minWidth: COLUMN_MIN_WIDTH },

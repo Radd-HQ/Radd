@@ -1,6 +1,6 @@
 import { TeamSelect } from "../teams/TeamSelect";
 import { CycleSelect } from "../cycles/CycleSelect";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import {
@@ -31,12 +31,14 @@ import {
   statesQuery,
   usersQuery,
   validationContextQuery,
+  effectiveScreenQuery,
 } from "../../lib/queries";
 import {
   ItemVisibility,
   type ItemVisibilityValue,
   IntakeCommit,
   ItemKind,
+  ScreenPlacement,
   Priority,
   type CustomFieldValue,
   type CustomFields,
@@ -60,6 +62,7 @@ import { LabelsEditor } from "./LabelsEditor";
 import { LazyRichEditor as RichEditor } from "../editor/LazyRichEditor";
 import { IconButton } from "../IconButton";
 import { ErrorText } from "../ErrorText";
+import { CollapsibleCard } from "../CollapsibleCard";
 
 interface NewItemModalProps {
   project: Project;
@@ -163,6 +166,13 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
   const [insertedTemplate, setInsertedTemplate] = useState<string | null>(null);
   const [editorSeed, setEditorSeed] = useState(0);
   const effectiveTypeId = typeId || defaultTypeId;
+  // RADD-1292: the create form follows the type's screen like the issue view
+  // does — hidden fields stay out, secondary ones sit under "More fields". A
+  // field with a finding against it always shows: you cannot fix what you
+  // cannot see.
+  const screen = useQuery(effectiveScreenQuery(project.id, effectiveTypeId || null));
+  const placementOf = (field: string) =>
+    screen.data?.fields.find((row) => row.field === field)?.placement ?? ScreenPlacement.primary;
   useEffect(() => {
     const template =
       types.data?.find((issueType) => issueType.id === effectiveTypeId)?.description_template ??
@@ -322,6 +332,22 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
     submit(IntakeCommit.pass);
   };
 
+  // RADD-1292: screen placement for the optional fields (see placementOf).
+  const secondary: ReactNode[] = [];
+  const place = (field: string, node: ReactNode) => {
+    // Until the screen is known, hold the optional fields back rather than show
+    // ones it may hide a moment later (a failed lookup falls back to showing all).
+    if (screen.isPending) return null;
+    const placement = placementOf(field);
+    if (errorFor(field) || placement === ScreenPlacement.primary) return node;
+    if (placement === ScreenPlacement.secondary) secondary.push(<Fragment key={field}>{node}</Fragment>);
+    return null;
+  };
+  const customPlacement = (key: string) =>
+    fieldErrors[key] || customFieldFindings[key] ? ScreenPlacement.primary : placementOf(`cf:${key}`);
+  const shownFields = screen.isPending ? [] : projectFields.filter((field) => customPlacement(field.key) === ScreenPlacement.primary);
+  const moreFields = projectFields.filter((field) => customPlacement(field.key) === ScreenPlacement.secondary);
+
   return (
     <Modal title={`New issue in ${project.key}`} onClose={onClose} wide>
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
@@ -360,6 +386,8 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
         <div className="grid grid-cols-2 gap-3">
           <SelectField
             label="Kind"
+            // RADD-1292 (kind vs type stays, 2026-09-23 — explained, not merged).
+            hint="Where it sits: an epic holds issues, an issue holds subtasks. Type says what it is."
             value={kind}
             onChange={(event) => {
               setKind(event.target.value as ItemKindValue);
@@ -495,7 +523,7 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
             </div>
           )}
 
-          <SelectField
+          {place("assignee", <SelectField
             label="Assignee"
             value={assigneeId}
             {...lock("assignee")}
@@ -510,13 +538,13 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
                   <PersonName user={user} />
                 </option>
               ))}
-          </SelectField>
+          </SelectField>)}
 
-          <TeamSelect label="Team" value={teamId} onChange={setTeamId} {...lock("team")} error={errorFor("team")} />
+          {place("team", <TeamSelect label="Team" value={teamId} onChange={setTeamId} {...lock("team")} error={errorFor("team")} />)}
 
-          <CycleSelect label="Cycle" value={cycleId} onChange={setCycleId} projectId={project.id} {...lock("cycle")} error={errorFor("cycle")} />
+          {place("cycle", <CycleSelect label="Cycle" value={cycleId} onChange={setCycleId} projectId={project.id} {...lock("cycle")} error={errorFor("cycle")} />)}
 
-          <SelectField
+          {place("release", <SelectField
             label="Release"
             value={releaseId}
             {...lock("release")}
@@ -530,9 +558,9 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
                 {release.version}
               </option>
             ))}
-          </SelectField>
+          </SelectField>)}
 
-          <TextField
+          {place("start_date", <TextField
             label="Start date"
             type="date"
             value={startDate}
@@ -540,9 +568,9 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
             error={errorFor("start_date")}
             onChange={(event) => setStartDate(event.target.value)}
             className="[color-scheme:dark]"
-          />
+          />)}
 
-          <TextField
+          {place("target_date", <TextField
             label="Target date"
             type="date"
             value={targetDate}
@@ -550,9 +578,9 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
             error={errorFor("target_date")}
             onChange={(event) => setTargetDate(event.target.value)}
             className="[color-scheme:dark]"
-          />
+          />)}
 
-          {pointsEnabled && (
+          {pointsEnabled && place("points",
             <TextField
               label="Points"
               type="number"
@@ -567,7 +595,7 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
           )}
         </div>
 
-        <div className="flex flex-col gap-1.5" data-field="labels">
+        {place("labels", <div className="flex flex-col gap-1.5" data-field="labels">
           <LabelsEditor
             value={labels}
             onChange={setLabels}
@@ -580,13 +608,13 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
           {errorFor("labels") && (
             <p className="text-xs text-status-danger-ink">{errorFor("labels")}</p>
           )}
-        </div>
+        </div>)}
 
-        {projectFields.length > 0 && (
+        {shownFields.length > 0 && (
           <fieldset className="flex flex-col gap-3 rounded-md border border-subtle p-3">
             <legend className="px-1 text-xs font-medium text-fg-muted">Custom fields</legend>
             <CustomFieldsForm
-              fields={projectFields}
+              fields={shownFields}
               values={customFields}
               // `cf.<key>` is how a finding names a custom field; the form keys
               // by the bare key, and that is the only translation between them.
@@ -595,6 +623,25 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
               lockFor={(key) => ({ locked: writ.restricted(key), reason: writ.reasonFor(key) })}
             />
           </fieldset>
+        )}
+
+        {(secondary.length > 0 || moreFields.length > 0) && (
+          <div data-more-fields>
+            <CollapsibleCard title="More fields" count={secondary.length + moreFields.length}>
+              <div className="grid grid-cols-2 gap-3">{secondary}</div>
+              {moreFields.length > 0 && (
+                <div className="mt-3">
+                  <CustomFieldsForm
+                    fields={moreFields}
+                    values={customFields}
+                    errors={{ ...fieldErrors, ...customFieldFindings }}
+                    onChange={setCustomField}
+                    lockFor={(key) => ({ locked: writ.restricted(key), reason: writ.reasonFor(key) })}
+                  />
+                </div>
+              )}
+            </CollapsibleCard>
+          </div>
         )}
 
         {/* Every finding, including ones already against a control: one may be

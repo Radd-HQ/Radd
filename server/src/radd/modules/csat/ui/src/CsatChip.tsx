@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { api, ApiError, tokens } from "@radd/plugin-sdk";
+import { api, tokens } from "@radd/plugin-sdk";
 import { Star } from "lucide-react";
 
 /**
@@ -20,17 +20,11 @@ const RATING_STARS = [1, 2, 3, 4, 5];
 const itemCsatKey = (itemId: string) => ["radd-remote", "csat", itemId] as const;
 
 export function CsatChip({ itemId }: { itemId: string }) {
-  // GET /items/{id}/csat — 404-quiet: server 404s both "never surveyed" and "not answered yet".
+  // GET /items/{id}/csat — null until the requester answers (RADD-1292: it
+  // used to 404, which logged a failed request on every issue view).
   const { data: csat } = useQuery({
     queryKey: itemCsatKey(itemId),
-    queryFn: async ({ signal }): Promise<ItemCsat | null> => {
-      try {
-        return await api.get<ItemCsat>(`/items/${itemId}/csat`, { signal });
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 404) return null;
-        throw error;
-      }
-    },
+    queryFn: ({ signal }) => api.get<ItemCsat | null>(`/items/${itemId}/csat`, { signal }),
     retry: false,
   });
   if (!csat) return null; // no survey, or not answered yet

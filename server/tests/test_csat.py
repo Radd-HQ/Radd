@@ -390,9 +390,13 @@ async def test_public_flow_latest_wins_responded_stamped_once(db, admin, project
     rendered = await csat_service.public_survey(db, survey.token)
     assert rendered.item_key == item.key and rendered.item_title == item.title
     assert rendered.rating is None and rendered.responded_at is None
-    # Unanswered → the item-scoped read stays 404-quiet.
+    # Unanswered → the service says so, and the ROUTE answers null rather than
+    # a 404 every issue view would log (RADD-1292).
     with pytest.raises(NotFoundError):
         await csat_service.responded_survey(db, item.id)
+    import importlib
+    csat_router = importlib.import_module("radd.modules.csat.router")
+    assert await csat_router.item_csat(item.id, db, admin) is None
 
     first = await csat_service.record_response(
         db, survey.token, PublicCsatSubmit(rating=4, comment="great")
@@ -408,6 +412,7 @@ async def test_public_flow_latest_wins_responded_stamped_once(db, admin, project
 
     answered = await csat_service.responded_survey(db, item.id)
     assert answered.rating == 2 and answered.comment == "on reflection…"
+    assert (await csat_router.item_csat(item.id, db, admin)).rating == 2
 
     responded = await events_service.query_events(
         db,

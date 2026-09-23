@@ -33,6 +33,7 @@ import {
 } from "../items/ItemBadges";
 import { RollupRowBar } from "../items/RollupBar";
 import { SlaRowChip } from "../items/SlaChips";
+import { PRIORITY_META } from "../../lib/meta";
 
 /**
  * The list table's column machinery (spec 108): one aligned header row with
@@ -253,7 +254,8 @@ function CellContent({
   }
   switch (column.id) {
     case "type":
-      return item.type ? <TypeChip type={item.type} /> : <Dash />;
+      // RADD-1292: the name beside the chip — a lone "T" said nothing.
+      return item.type ? <TypeChip type={item.type} withLabel /> : <Dash />;
     case "parent":
       return item.parent ? <ParentTag parent={item.parent} /> : <Dash />;
     case "labels":
@@ -277,7 +279,13 @@ function CellContent({
     case "team":
       return item.team ? <TeamBadge team={item.team} /> : <Dash />;
     case "priority":
-      return <PriorityIcon priority={item.priority} size={13} />;
+      // RADD-1292: glyph AND word — the bars alone needed a legend.
+      return (
+        <span className="inline-flex min-w-0 items-center gap-1" data-priority={item.priority}>
+          <PriorityIcon priority={item.priority} size={13} />
+          <span className="truncate text-xs text-fg-secondary">{PRIORITY_META[item.priority].label}</span>
+        </span>
+      );
     case "assignee":
       return item.assignee ? <AssigneeAvatar assignee={item.assignee} /> : <UnassignedSlot />;
     case "reporter":

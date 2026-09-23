@@ -177,6 +177,26 @@ async function main() {
     await api(`await call("DELETE", "/cycles/${stranger.id}");
       const mine = (await (await fetch("/api/v1/cycles?project_id=${world.projectId}", {credentials:"include"})).json());
       for (const c of mine) await call("DELETE", "/cycles/" + c.id); return true;`);
+
+    // --- RADD-1292: the create form follows Screens; CSAT stops 404ing --------
+    await api(`return (await call("PUT", "/screens", { project_id: "${world.projectId}", fields: [
+      { field: "release", placement: "hidden" }, { field: "cycle", placement: "secondary" } ] }));`);
+    await session.navigate(`${baseUrl}/p/${world.key}/v/${views[0].id}`, 3000);
+    await session.eval(`[...document.querySelectorAll("button")].find(b => b.textContent.trim() === "New issue")?.click() || true`);
+    await waitFor(session, `!!document.querySelector('[role="dialog"]') && [...document.querySelectorAll('[role="dialog"] label')].some(l => l.textContent.trim() === "Assignee")`);
+    const form = await session.eval(`(() => {
+      const d = document.querySelector('[role="dialog"]');
+      const labels = [...d.querySelectorAll("label")].map(l => l.textContent.trim());
+      return { release: labels.includes("Release"), assignee: labels.includes("Assignee"),
+               more: !!d.querySelector("[data-more-fields]"), text: d.innerText };
+    })()`);
+    checks["1292 a hidden field is not on the create form"] = form.assignee && !form.release;
+    // innerText honours the card title's CSS uppercase — match case-insensitively.
+    checks["1292 a secondary field sits under More fields"] = form.more && /more fields/i.test(form.text);
+    checks["1292 kind is explained"] = form.text.includes("Where it sits");
+    await session.send("Input.dispatchKeyEvent", { type: "rawKeyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+    const csat = await api(`const r = await fetch("/api/v1/items/${item.id}/csat", {credentials:"include"}); return { status: r.status, body: await r.text() };`);
+    checks["1292 no survey is an answer, not a 404"] = csat.status === 200 && csat.body === "null";
   } finally {
     if (world?.projectId) await api(`return (await call("DELETE", "/projects/${world.projectId}")).status;`).catch(() => null);
     await close();
