@@ -201,7 +201,7 @@ async def project_content(project_id: uuid.UUID, session: Session, user: Current
 async def delete_project(project_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
     """RADD-1174: hard-delete the project and everything in it. `project.delete`
     is a GLOBAL atom on purpose — `PROJECT_PERMISSIONS` feeds the builtin
-    project Admin role, and a delegated project admin must not be able to
+    project Manager role (was Admin), and a delegated project admin must not be able to
     destroy the project. A blocker (mail still routed here) is a 409 naming it."""
     project = await service.get_project(session, project_id)
     await authz.require(session, user, authz.Permission.PROJECT_DELETE)

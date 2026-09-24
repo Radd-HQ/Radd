@@ -112,13 +112,12 @@ def builtin_role(key):
 
 
 
-def test_builtin_admin_holds_every_project_scoped_permission():
-    admin = set(builtin_role(BuiltinRoleKey.ADMIN).permissions)
-    # Every project-scoped atom, plus dashboard.create as a global-scoped rider
-    # (spec 75 — the page.write-on-member precedent). Spec 87 dropped the
-    # update/delete riders with their atoms: dashboards decide those by
-    # ownership, so no atom was ever consulted.
-    assert admin == set(PROJECT_PERMISSIONS) | {Permission.DASHBOARD_CREATE}
+def test_builtin_manager_holds_every_project_scoped_permission():
+    admin = set(builtin_role(BuiltinRoleKey.MANAGER).permissions)
+    # Every project-scoped atom, page.manage for the SPACE side of the ladder
+    # (RADD-1302), and dashboard.create as the global rider an instance-wide
+    # grant delivers (spec 75).
+    assert admin == set(PROJECT_PERMISSIONS) | {Permission.PAGE_MANAGE, Permission.DASHBOARD_CREATE}
     assert {
         Permission.PROJECT_MANAGE,
         Permission.VIEW_CREATE,
@@ -139,12 +138,14 @@ def test_builtin_member_and_viewer_sets():
         Permission.VIEW_CREATE,
         Permission.VIEW_UPDATE,  # RADD-816: view.manage's job, as its triple
         Permission.VIEW_DELETE,
-        Permission.FORM_MANAGE,  # members author intake forms (spec 36)
-        Permission.PAGE_WRITE,  # members write docs (spec 43)
+        # RADD-1302: form.manage moved to Manager (project configuration), and
+        # Member now includes Viewer's page.read so the ladder is a superset.
+        Permission.PAGE_READ,
+        Permission.PAGE_WRITE,  # on a space: write pages
     }
     assert set(builtin_role(BuiltinRoleKey.VIEWER).permissions) == {
         Permission.ITEM_READ,
-        Permission.PAGE_READ,  # the wiki-read floor rider (spec 43)
+        Permission.PAGE_READ,  # on a space: read its pages (RADD-1302)
     }
 
 
@@ -199,17 +200,18 @@ def test_manage_umbrellas_expand_to_crud_atoms_transitively():
 
 
 def test_builtin_sets_are_strictly_nested():
-    # Nesting holds over the PROJECT-scoped permissions. The doc permissions
-    # (spec 43) are global-scoped riders on viewer/member — they feed the
-    # member floor/scope sets, not the project hierarchy — so they're
-    # excluded here and pinned separately.
+    # RADD-1302: the ladder nests AS A WHOLE now — the page atoms included —
+    # because the same role is granted on projects (item atoms apply) and on
+    # spaces (page atoms apply). Before, it only nested with page.* removed.
     doc = {Permission.PAGE_READ, Permission.PAGE_WRITE, Permission.PAGE_MANAGE}
     viewer = set(builtin_role(BuiltinRoleKey.VIEWER).permissions)
     member = set(builtin_role(BuiltinRoleKey.MEMBER).permissions)
-    admin = set(builtin_role(BuiltinRoleKey.ADMIN).permissions)
-    assert (viewer - doc) < (member - doc) < (admin - doc)
+    manager = set(builtin_role(BuiltinRoleKey.MANAGER).permissions)
+    assert viewer < member
+    assert (member - doc) < (manager - doc)
     assert viewer & doc == {Permission.PAGE_READ}
-    assert member & doc == {Permission.PAGE_WRITE}
+    assert member & doc == {Permission.PAGE_READ, Permission.PAGE_WRITE}
+    assert manager & doc == {Permission.PAGE_MANAGE}  # ⇒ write ⇒ read (RADD-1305)
 
 
 def test_every_builtin_key_is_defined_once():

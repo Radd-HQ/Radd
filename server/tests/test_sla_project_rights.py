@@ -35,7 +35,7 @@ async def world():
     engine = create_async_engine(settings.database_url)
     async with async_sessionmaker(engine, expire_on_commit=False)() as db:
         await roles.ensure_builtin_roles(db)
-        manager_role = await db.scalar(select(Role).where(Role.key == BuiltinRoleKey.ADMIN.value))
+        manager_role = await db.scalar(select(Role).where(Role.key == BuiltinRoleKey.MANAGER.value))
         person = User(email=f"slr-{uuid.uuid4().hex[:8]}@example.com", name="Project manager", instance_role="member")
         db.add(person)
         await db.flush()

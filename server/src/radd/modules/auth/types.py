@@ -614,7 +614,9 @@ class BuiltinRoleKey(StrEnum):
     #: (RADD-773). Undeletable like the others, but its permission set is the
     #: one an admin may change.
     BASELINE = "baseline"
-    ADMIN = "admin"
+    #: RADD-1302: was "admin" — renamed so the project/space role no longer
+    #: reads as the instance "Administrator" flag beside it.
+    MANAGER = "manager"
     MEMBER = "member"
     VIEWER = "viewer"
     #: RADD-828 (Q1): the INTERNET-facing floor — what an email-provisioned
@@ -707,25 +709,41 @@ BUILTIN_ROLES: tuple[BuiltinRole, ...] = (
         ),
         position=-1,
     ),
+    # --- RADD-1302: ONE ladder, Viewer ⊂ Member ⊂ Manager, at BOTH scopes. -----
+    # A role granted on a PROJECT applies its item atoms; granted on a wiki
+    # SPACE it applies its page atoms (page.* resolve at space scope only);
+    # granted instance-wide, both. The Public role already worked this way.
+    # Before, Member lacked Viewer's page.read and Admin lacked Member's
+    # page.write, so neither step of the ladder was a superset.
     BuiltinRole(
-        key=BuiltinRoleKey.ADMIN,
-        name="Admin",
-        description="Full control of the project, including settings, views, and internal comments.",
-        # Every project-scoped atom, plus dashboard.create as a global-scoped
-        # rider (spec 75 — the page.write-on-member precedent; display parity
-        # with the migration backfill, mirrored into stored rows by 75's
-        # migration). Spec 87 dropped the update/delete riders along with the
-        # atoms. Since spec 87 a global rider is no longer inert: an
-        # instance-wide grant of this role delivers it.
-        permissions=PROJECT_PERMISSIONS + (Permission.DASHBOARD_CREATE,),
+        key=BuiltinRoleKey.MANAGER,
+        name="Manager",
+        description=(
+            "Runs a project or a wiki space. On a project: everything a Member does, "
+            "plus its settings — workflow, fields, issue types, members, releases, "
+            "SLAs and intake forms. On a space: edit, delete and restore its pages."
+        ),
+        # Every project-scoped atom (which since RADD-1303/1304 includes the
+        # SLA atoms and participant.manage) + page.manage (⇒ page.write ⇒
+        # page.read). dashboard.create stays as the one global rider: it does
+        # nothing on a project grant, but an INSTANCE-WIDE grant of this role
+        # has always let the holder create dashboards, and removing it would
+        # take that away silently.
+        permissions=PROJECT_PERMISSIONS + (Permission.PAGE_MANAGE, Permission.DASHBOARD_CREATE),
         position=0,
     ),
     BuiltinRole(
         key=BuiltinRoleKey.MEMBER,
         name="Member",
-        description="Day-to-day work: read, create, and update items; comment; manage views.",
+        description=(
+            "Day-to-day work. On a project: create and edit issues, comment (internal "
+            "notes too), log time and keep views. On a space: write pages."
+        ),
+        # Viewer's atoms + the day-to-day writes. form.manage LEFT for Manager
+        # (RADD-1302): intake forms are project configuration.
         permissions=(
             Permission.ITEM_READ,
+            Permission.PAGE_READ,
             Permission.ITEM_CREATE,
             Permission.ITEM_UPDATE,
             Permission.WORKLOG_WRITE,
@@ -734,17 +752,16 @@ BUILTIN_ROLES: tuple[BuiltinRole, ...] = (
             Permission.VIEW_CREATE,
             Permission.VIEW_UPDATE,
             Permission.VIEW_DELETE,
-            Permission.FORM_MANAGE,
-            Permission.PAGE_WRITE,  # members write docs (spec 43; global-scoped rider)
+            Permission.PAGE_WRITE,
         ),
         position=1,
     ),
     BuiltinRole(
         key=BuiltinRoleKey.VIEWER,
         name="Viewer",
-        description="Read-only access to the project's items.",
-        # page.read rides on the viewer set so it flows into the member floor
-        # (spec 43) — any active user can read the wiki.
+        description=(
+            "Read-only. On a project: its issues. On a space: its pages."
+        ),
         permissions=(Permission.ITEM_READ, Permission.PAGE_READ),
         position=2,
     ),

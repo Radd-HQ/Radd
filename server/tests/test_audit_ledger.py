@@ -156,7 +156,7 @@ async def test_project_manager_reads_only_their_project(db, admin, project, item
     other = await projects_service.create_project(
         db, ProjectCreate(key=f"OT{uuid.uuid4().hex[:4].upper()}", name="Other"), actor_id=admin.id
     )
-    role = await role_by_key(db, BuiltinRoleKey.ADMIN.value)
+    role = await role_by_key(db, BuiltinRoleKey.MANAGER.value)
     await grants.create_grant(db, role.id, user_id=manager.id, project_id=project.id, actor_id=admin.id)
 
     with pytest.raises(ForbiddenError):

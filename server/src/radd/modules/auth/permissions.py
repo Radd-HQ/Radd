@@ -47,7 +47,7 @@ AUTH_PERMISSIONS: tuple[PermissionSpec, ...] = (
     ),
     # RADD-1174: GLOBAL, deliberately, like `project.create`. Were it
     # project-scoped it would join `PROJECT_PERMISSIONS`, which is the builtin
-    # project Admin role's grant set — and a delegated project admin must not be
+    # project Manager role's grant set — and a delegated project admin must not be
     # able to destroy the project they were handed. Rides `global.manage`.
     PermissionSpec(
         key="project.delete",

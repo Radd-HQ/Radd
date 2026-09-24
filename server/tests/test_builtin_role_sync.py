@@ -77,3 +77,30 @@ def test_umbrellas_imply_what_they_administer():
     assert "page.read" in expand_permissions({"page.write"})
     assert "item.read" in expand_permissions({"project.manage"})
     assert {"project.create", "project.delete"} <= expand_permissions({"global.manage"})
+
+
+def _effective(key: BuiltinRoleKey) -> frozenset[str]:
+    return expand_permissions({str(p) for p in _spec(key).permissions})
+
+
+def _scope(atoms: frozenset[str], prefix: str) -> frozenset[str]:
+    return frozenset(a for a in atoms if a.startswith(prefix))
+
+
+def test_the_ladder_is_a_superset_chain_at_both_scopes():
+    """RADD-1302: Viewer ⊂ Member ⊂ Manager — as a whole, AND separately for
+    the atoms a project grant applies (item/...) and a space grant applies
+    (page.*). Before, Member lacked Viewer's page.read and Admin lacked
+    Member's page.write."""
+    viewer, member, manager = (_effective(k) for k in (
+        BuiltinRoleKey.VIEWER, BuiltinRoleKey.MEMBER, BuiltinRoleKey.MANAGER))
+    assert viewer < member < manager
+    pages = [_scope(r, "page.") for r in (viewer, member, manager)]
+    assert pages[0] < pages[1] < pages[2]  # read ⊂ write ⊂ manage on a space
+    assert "form.manage" not in member and "form.manage" in manager
+    assert {"sla.update", "participant.manage", "page.manage"} <= manager
+
+
+def test_the_manager_is_not_called_admin():
+    assert _spec(BuiltinRoleKey.MANAGER).name == "Manager"
+    assert all(spec.key.value != "admin" for spec in BUILTIN_ROLES)

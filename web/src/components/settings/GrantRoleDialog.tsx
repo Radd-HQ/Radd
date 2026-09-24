@@ -68,7 +68,7 @@ export function GrantRoleDialog({ subject, onClose, onGranted }: {
       <div className="flex flex-wrap gap-1">
         <Preset roleKey="viewer" label="Viewer" onSelect={setRole} />
         <Preset roleKey="member" label="Member" onSelect={setRole} />
-        <Preset roleKey="admin" label="Admin" onSelect={setRole} />
+        <Preset roleKey="manager" label="Manager" onSelect={setRole} />
       </div>
       <div className="min-w-0 space-y-1">
         <p className="text-xs font-medium text-fg-secondary">Role</p>

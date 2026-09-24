@@ -11,7 +11,7 @@ export const Permission = {
   projectCreate: "project.create",
   projectManage: "project.manage",
   /** RADD-1174: delete a project outright. GLOBAL on purpose — never part of
-   * the builtin project Admin role, so a delegated admin cannot destroy the
+   * the builtin project Manager role (RADD-1302: was Admin), so a delegated admin cannot destroy the
    * project they were handed. `global.manage` implies it. */
   projectDelete: "project.delete",
   /**
