@@ -39,7 +39,10 @@ plugin = RaddPlugin(
     name="items",
     # RADD-890: the work-item atoms are declared where they are enforced.
     permissions=(
-        PermissionSpec("item.read", "project", "See the project's work items."),
+        # RADD-1305: managing a project means seeing its issues.
+        PermissionSpec(
+            "item.read", "project", "See the project's work items.", implied_by=("project.manage",)
+        ),
         PermissionSpec("item.create", "project", "Create work items in the project."),
         PermissionSpec(
             "item.update",

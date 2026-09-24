@@ -139,7 +139,9 @@ def test_umbrellas_expand_through_the_registry():
     assert {"state.manage", "field.manage", "release.create", "member.delete"} <= implied_map()[
         "project.manage"
     ]
-    assert implied_map()["page.manage"] == frozenset({"page.delete"})
+    # RADD-1305: an umbrella implies what it administers — manage ⇒ write
+    # (⇒ read, transitively via page.write's own edge).
+    assert implied_map()["page.manage"] == frozenset({"page.delete", "page.write"})
     assert {"attachment.create", "attachment.delete@own"} <= expand_permissions({"item.update"})
     # …and the qualified form is an implication, never a catalog atom.
     assert "attachment.delete@own" not in all_permission_keys()

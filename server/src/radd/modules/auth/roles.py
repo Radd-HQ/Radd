@@ -53,24 +53,51 @@ def ensure_deletable(role: Role, *, referenced: bool) -> None:
 
 
 async def ensure_builtin_roles(session: AsyncSession) -> None:
-    """Idempotently seed the builtin roles (startup ensure + seed both call this)."""
-    existing = set(
-        (await session.execute(select(Role.key).where(Role.is_builtin))).scalars()
-    )
+    """Seed the builtin roles, and CONVERGE the immutable ones on the code
+    (startup ensure + seed both call this).
+
+    RADD-1305: this used to insert missing roles and never touch an existing
+    one, so a builtin row drifted from its definition the first time the
+    definition changed — live Admin was found missing two atoms. The immutable
+    builtins are now re-synced (permissions, name, description, position) and
+    each correction is audited as `role.updated` with its diff, so drift is
+    visible rather than silent.
+
+    Baseline is the exception: it exists to be edited (RADD-773), so an
+    existing row is never overwritten — a change to its DEFAULT reaches
+    existing instances only through a migration that states it.
+    """
+    existing = {
+        role.key: role
+        for role in (await session.execute(select(Role).where(Role.is_builtin))).scalars()
+    }
     for spec in BUILTIN_ROLES:
-        if spec.key in existing:
+        wanted = [str(permission) for permission in spec.permissions]
+        role = existing.get(spec.key)
+        if role is None:
+            role = Role(
+                key=spec.key,
+                name=spec.name,
+                description=spec.description,
+                permissions=wanted,
+                is_builtin=True,
+                position=spec.position,
+            )
+            session.add(role)
+            await session.flush()
+            await _emit_role(session, AuthEvent.ROLE_CREATED, role, actor_id=None)
             continue
-        role = Role(
-            key=spec.key,
-            name=spec.name,
-            description=spec.description,
-            permissions=[str(permission) for permission in spec.permissions],
-            is_builtin=True,
-            position=spec.position,
-        )
-        session.add(role)
-        await session.flush()
-        await _emit_role(session, AuthEvent.ROLE_CREATED, role, actor_id=None)
+        if spec.key == BuiltinRoleKey.BASELINE:
+            continue
+        before = changes.snapshot(role, ROLE_FIELDS)
+        role.permissions = wanted
+        role.name = spec.name
+        role.description = spec.description
+        role.position = spec.position
+        diff = changes.diff_object(role, before, collections=("permissions",))
+        if diff:
+            await session.flush()
+            await _emit_role(session, AuthEvent.ROLE_UPDATED, role, actor_id=None, changes=diff)
 
 
 async def list_roles(session: AsyncSession) -> list[Role]:

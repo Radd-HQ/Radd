@@ -33,9 +33,15 @@ plugin = RaddPlugin(
     # RADD-791: SPACE-scoped. They were global because a page had no scope to be
     # checked against, which made per-space access inexpressible.
     permissions=(
-        PermissionSpec("page.read", "space", "Read a wiki space and its pages."),
+        # RADD-1305: an umbrella implies what it administers — manage ⇒ write ⇒
+        # read (transitive), so a role holding only `page.manage` can see the
+        # space it manages, and a writer can read what they write.
         PermissionSpec(
-            "page.write", "space", "Create and edit pages in a space; link them to issues."
+            "page.read", "space", "Read a wiki space and its pages.", implied_by=("page.write",)
+        ),
+        PermissionSpec(
+            "page.write", "space", "Create and edit pages in a space; link them to issues.",
+            implied_by=("page.manage",),
         ),
         PermissionSpec(
             "page.manage", "space", "Manage a space; hard-delete and restore its pages."

@@ -36,6 +36,9 @@ AUTH_PERMISSIONS: tuple[PermissionSpec, ...] = (
         key="project.create",
         scope="global",
         description="Create projects (global).",
+        # RADD-1305: `global.manage` already implied project.DELETE; creating
+        # one is the smaller power, so leaving it out was an incoherent line.
+        implied_by=("global.manage",),
     ),
     PermissionSpec(
         key="project.manage",
