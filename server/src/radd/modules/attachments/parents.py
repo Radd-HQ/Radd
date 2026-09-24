@@ -77,9 +77,12 @@ async def _item_guard(
     session: AsyncSession, user: User, item_id: uuid.UUID, permission: Permission
 ) -> None:
     # RADD-823: read-resolution through THE item seam; other atoms layer on top.
-    _item, project, _perms = await items_service.require_readable_item(session, item_id, user)
+    item, project, _perms = await items_service.require_readable_item(session, item_id, user)
     if permission is not Permission.ITEM_READ:
-        await authz.require(session, user, permission, project=project)
+        permissions = await authz.require(session, user, permission, project=project)
+        # RADD-1304: a relation-qualified grant (`attachment.create@own` on the
+        # Baseline) holds only on the rows its relation names.
+        await items_service.ensure_item_relation(session, user, item, permissions, permission)
 
 
 async def _item_read(session: AsyncSession, user: User, item_id: uuid.UUID) -> None:

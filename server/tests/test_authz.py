@@ -67,7 +67,9 @@ TRIAGER = [Permission.ITEM_READ, Permission.ITEM_UPDATE, Permission.COMMENT_WRIT
 #: read as "the role's atoms plus what they imply" rather than a magic pair.
 # RADD-816: item.update implies attaching + deleting YOUR OWN attachments —
 # the unqualified delete verb means anyone's now and rides project.manage.
-ATTACHING = {Permission.ATTACHMENT_CREATE, "attachment.delete@own"}
+# What `item.update` implies: attaching (RADD-790/816) and, since RADD-1304,
+# managing the issue's participants.
+ATTACHING = {Permission.ATTACHMENT_CREATE, "attachment.delete@own", Permission.PARTICIPANT_MANAGE}
 
 
 def patch_lookups(monkeypatch, *, permission_sets=(), global_permission_sets=(), baseline=None):
@@ -253,6 +255,11 @@ def test_baseline_is_seeded_read_only():
         "comment.delete@own",
         "worklog.delete@own",
         "attachment.delete@own",
+        # RADD-1304: the rest of the shared own-ticket set — attach to your
+        # ticket (and one shared with you), and share it.
+        "attachment.create@own",
+        "attachment.create@participant",
+        "participant.manage@own",
         Permission.LABEL_READ,
         Permission.CYCLE_READ,
         Permission.CANNED_READ,

@@ -84,6 +84,10 @@ plugin = RaddPlugin(
     # wipes import-time registration, and the manifest is what survives it.
     access_resources=(_ATTACHMENT_SPEC,),
     relations=(ATTACHMENT_OWN,),
+    # RADD-1304: `attachment.create@own` means "on issues they reported" — the
+    # file does not exist yet, so its own author relation cannot qualify it.
+    # (`attachment.delete@own` keeps the attachment's relation: files they uploaded.)
+    relation_domains=(("attachment.create", "item"),),
     description="File attachments on issues and pages, stored on the hosts you configure and routed by rules you set.",
     depends_on=("events", "projects", "auth", "items", "access", "groups", "teams"),
     weak_depends=("ai",),

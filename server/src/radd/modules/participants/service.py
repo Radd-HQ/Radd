@@ -24,7 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError, ForbiddenError, NotFoundError
-from radd.modules.auth import service as auth
+from radd.modules.auth import authz, service as auth
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
 from radd.modules.events import service as events
@@ -71,12 +71,18 @@ async def _item_project(
     return await items_service.require_readable_item(session, item_id, actor)
 
 
-def _can_manage(
-    permissions: frozenset[Permission], actor: User, item: WorkItem
-) -> bool:
-    """item.update OR the item's REPORTER (identity, not permission — spec 72's
-    point: a requester shares their own ticket)."""
-    return Permission.ITEM_UPDATE in permissions or actor.id == item.reporter_id
+async def _require_manage(
+    session: AsyncSession, actor: User, item: WorkItem, permissions: frozenset[Permission]
+) -> None:
+    """RADD-1304: `participant.manage` in the project, for THIS row. The
+    Baseline's `@own` is what lets a reporter share their own ticket — the
+    rule that used to be `actor.id == item.reporter_id` here, now a grant the
+    REST gate, the `can_manage` flag and the MCP catalog all read the same way."""
+    manage = Permission.PARTICIPANT_MANAGE
+    if not authz.holds_base(permissions, manage):
+        raise ForbiddenError("adding or removing participants needs participant.manage on this project")
+    await items_service.ensure_item_relation(session, actor, item, permissions, manage)
+    await require_key_item_permission(session, actor, item, manage)
 
 
 def _user_ref(user: User | None) -> UserRef | None:
@@ -158,9 +164,9 @@ async def list_participants(
 ) -> ItemParticipantsRead:
     item, project, permissions = await _item_project(session, item_id, actor)
     reads = await _reads(session, await _rows(session, item_id))
-    can_manage = _can_manage(permissions, actor, item)
     try:
-        await require_key_item_permission(session, actor, item, Permission.ITEM_UPDATE)
+        await _require_manage(session, actor, item, permissions)
+        can_manage = True
     except ForbiddenError:
         can_manage = False
     return ItemParticipantsRead(
@@ -175,11 +181,7 @@ async def add_participant(
     session: AsyncSession, item_id: uuid.UUID, data: ParticipantAdd, actor: User
 ) -> ParticipantRow:
     item, project, permissions = await _item_project(session, item_id, actor)
-    await require_key_item_permission(session, actor, item, Permission.ITEM_UPDATE)
-    if not _can_manage(permissions, actor, item):
-        raise ForbiddenError(
-            "adding participants requires item.update or being the item's reporter"
-        )
+    await _require_manage(session, actor, item, permissions)
     if data.user_id is not None:
         await _validate_user_subject(session, data.user_id)
         dupe = ItemParticipant.user_id == data.user_id
@@ -222,14 +224,12 @@ async def remove_participant(
     if is_self_leave:
         item = await items_service.require_item(session, item_id)
         project = await projects_service.get_project(session, item.project_id)
+        # A scoped key still obeys its own scope on an intrinsic action (the
+        # access hardening); an ordinary session passes through untouched.
+        await require_key_item_permission(session, actor, item, Permission.PARTICIPANT_MANAGE)
     else:
         item, project, permissions = await _item_project(session, item_id, actor)
-        await require_key_item_permission(session, actor, item, Permission.ITEM_UPDATE)
-        if not _can_manage(permissions, actor, item):
-            raise ForbiddenError(
-                "removing participants requires item.update or being the item's reporter"
-            )
-    await require_key_item_permission(session, actor, item, Permission.ITEM_UPDATE)
+        await _require_manage(session, actor, item, permissions)
     read = (await _reads(session, [row]))[0]
     await session.delete(row)
     await session.flush()

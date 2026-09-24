@@ -7,10 +7,13 @@ does) and the person by EMAIL or the team by NAME: the identity forms an agent
 already holds from `list_users` and `update_item`, never a participant row id
 it would first have to fetch.
 
-Enforcement is the service's own (`item.update` OR being the item's reporter —
-the identity path REST takes too), so `kernel_enforced=False`: a blanket
-`item.update` gate here would refuse the reporter the feature exists for.
-`item.update` remains the spec-114 catalog FLOOR.
+RADD-1304: managing the roster is `participant.manage` — implied by
+`item.update`, and held `@own` on the Baseline so a reporter shares their own
+ticket. It used to be an identity check in the service (`item.update` OR the
+reporter), which the catalog could not see: the tools were listed by
+`item.update` and hidden from the reporter they existed for. Now the catalog,
+the dispatcher and the service read one rule. `remove_participant` alone stays
+service-enforced, because leaving an issue yourself needs no permission.
 """
 
 from collections.abc import Mapping
@@ -29,6 +32,7 @@ from radd.modules.teams import service as teams_service
 from radd.modules.teams.types import TeamEntity
 
 from . import service
+from .types import PARTICIPANT_MANAGE
 from .schemas import ParticipantAdd, ParticipantRow
 
 _SUBJECT_PROPERTIES: dict[str, Any] = {
@@ -105,7 +109,8 @@ LIST_PARTICIPANTS = McpToolSpec(
     name="list_participants",
     description="Who follows an item: the people and teams added as participants "
     "(watchers), distinct from the assignee. `can_manage` says whether YOU may "
-    "add or remove them (item.update, or being the item's reporter).",
+    "add or remove them (participant.manage — anyone who can edit the issue, and "
+    "its reporter).",
     input_schema=object_schema({"key": _SUBJECT_PROPERTIES["key"]}, ["key"]),
     handler=_list_participants,
     permission=Permission.ITEM_READ,
@@ -120,9 +125,10 @@ ADD_PARTICIPANT = McpToolSpec(
     "follows with its CURRENT members. Already-present answers a conflict.",
     input_schema=object_schema(dict(_SUBJECT_PROPERTIES), ["key"]),
     handler=_add_participant,
-    permission=Permission.ITEM_UPDATE,
+    # RADD-1304: the grant the service checks — catalog and enforcement read
+    # one rule, so the dispatcher's own check applies (kernel-enforced).
+    permission=PARTICIPANT_MANAGE,
     project_scoped=True,
-    kernel_enforced=False,
 )
 
 REMOVE_PARTICIPANT = McpToolSpec(
@@ -131,8 +137,10 @@ REMOVE_PARTICIPANT = McpToolSpec(
     "an item. Removing yourself needs no permission at all.",
     input_schema=object_schema(dict(_SUBJECT_PROPERTIES), ["key"]),
     handler=_remove_participant,
-    permission=Permission.ITEM_UPDATE,
+    permission=PARTICIPANT_MANAGE,
     project_scoped=True,
+    # Self-leave needs no permission at all (RADD-844), so the service — which
+    # knows whose row it is — enforces, not the dispatcher.
     kernel_enforced=False,
 )
 

@@ -77,6 +77,10 @@ class Permission(StrEnum):
     COMMENT_WRITE = "comment.write"
     COMMENT_READ_INTERNAL = "comment.read_internal"
     FORM_MANAGE = "form.manage"  # project-scoped; create/edit/delete intake forms (spec 17)
+    # RADD-1304: add/remove an issue's participants — implied by item.update,
+    # held @own on the Baseline (a reporter shares their own ticket). Declared
+    # by the participants plugin; named here so Python can say it.
+    PARTICIPANT_MANAGE = "participant.manage"
     USER_MANAGE = "user.manage"
     AUTOMATION_MANAGE = "automation.manage"  # manage automation rules — global scope (spec 15)
     # Build automations whose actions run as SOMEONE ELSE (spec 116). Without it
@@ -276,6 +280,7 @@ _PROJECT_SCOPED: frozenset[str] = frozenset({
     # RADD-1303: SLA policies belong to a project (spec 67), so managing them
     # is a project right — held by the project's Manager via project.manage.
     "sla.create", "sla.update", "sla.delete",
+    "participant.manage",  # RADD-1304
 })
 
 #: Atoms checked against a WIKI SPACE (RADD-791). They were global because a
@@ -635,6 +640,28 @@ class BuiltinRole:
     position: int
 
 
+#: RADD-1304 — what anyone may do on a ticket THEY reported: the ONE set the
+#: three floors (Baseline, Requester, Contributor) share, so a staff member, a
+#: stranger who emailed the desk and a public contributor have the same rights
+#: over their own tickets. The floors differ only in what they can READ.
+#: `@own` names the ITEM's relation for comment.write / attachment.create /
+#: participant.manage (their declared relation domain), and the row's AUTHOR
+#: for the two deletes.
+OWN_TICKET: tuple[str, ...] = (
+    "comment.write@own",
+    "attachment.create@own",
+    "participant.manage@own",
+    "comment.delete@own",
+    "attachment.delete@own",
+)
+
+#: Shared into someone else's ticket (RADD-844): follow it and talk on it, like
+#: a second reporter — but not reshape its roster.
+SHARED_TICKET: tuple[str, ...] = (
+    "comment.write@participant",
+    "attachment.create@participant",
+)
+
 BUILTIN_ROLES: tuple[BuiltinRole, ...] = (
     BuiltinRole(
         key=BuiltinRoleKey.BASELINE,
@@ -663,13 +690,12 @@ BUILTIN_ROLES: tuple[BuiltinRole, ...] = (
             # item binding), so @own here is "on issues they reported" — the
             # first reporter gets the same discussion right the second one does.
             "item.read@participant",
-            "comment.write@own",
-            "comment.write@participant",
-            # RADD-816 (Q4): the author-own rights, as grants — explainable in
-            # the inspector and REVOCABLE, which the hardcoded checks never were.
-            "comment.delete@own",
+            # RADD-1304: the shared own-ticket set (comment, attach, share,
+            # delete your own) + the second-reporter set. RADD-816 (Q4) made
+            # the author-own rights grants — explainable and REVOCABLE.
+            *OWN_TICKET,
+            *SHARED_TICKET,
             "worklog.delete@own",
-            "attachment.delete@own",
             # RADD-816 (F6): the catalog reads everyone had via the member
             # floor, now deliverable atoms — same day-one behaviour, revocable.
             Permission.LABEL_READ,
@@ -735,11 +761,13 @@ BUILTIN_ROLES: tuple[BuiltinRole, ...] = (
         # and comment.write/attachment.create only reach items they can read.
         # @participant (RADD-844): a requester shared into a colleague's ticket
         # follows it like a second reporter — same floor shape as the Baseline.
+        # RADD-1304: the same own-ticket set as the Baseline (it could attach
+        # but not delete its own comments; staff could delete but not attach).
         permissions=(
             "item.read@own",
             "item.read@participant",
-            Permission.COMMENT_WRITE,
-            Permission.ATTACHMENT_CREATE,
+            *OWN_TICKET,
+            *SHARED_TICKET,
         ),
         position=3,
     ),
@@ -777,11 +805,14 @@ BUILTIN_ROLES: tuple[BuiltinRole, ...] = (
             "comment, attach, and edit what they filed. Reading comes from Public. "
             "Granted to Signed-in users by the contributions switch."
         ),
+        # Discussion is open on a public project (comment/attach on any public
+        # issue); RADD-1304 adds the rest of the own-ticket set on top.
         permissions=(
             Permission.ITEM_CREATE,
             "item.update@own",
             Permission.COMMENT_WRITE,
             Permission.ATTACHMENT_CREATE,
+            *(atom for atom in OWN_TICKET if atom.split("@")[0] not in ("comment.write", "attachment.create")),
         ),
         position=5,
     ),

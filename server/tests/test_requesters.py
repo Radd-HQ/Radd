@@ -48,10 +48,12 @@ async def test_email_source_cannot_log_in(db):
 async def test_email_floor_is_requester_not_baseline(db):
     user, _ = await _email_user(db)
     perms = await authz.effective_permissions(db, user)
-    # The Requester trio…
+    # Their own tickets — read, and (RADD-1304) the shared own-ticket set,
+    # relation-qualified like the Baseline's rather than bare atoms that only
+    # happened to be narrowed by what a requester can read.
     assert "item.read@own" in perms
-    assert Permission.COMMENT_WRITE in perms
-    assert Permission.ATTACHMENT_CREATE in perms
+    assert {"comment.write@own", "attachment.create@own", "participant.manage@own"} <= perms
+    assert Permission.COMMENT_WRITE not in perms
     # …and none of the Baseline's staff surface.
     assert Permission.ITEM_READ not in perms
     assert Permission.PAGE_READ not in perms

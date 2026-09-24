@@ -1,6 +1,6 @@
 from sqlalchemy import false, or_, select
 
-from radd.kernel import EventTypeSpec, PluginUiManifest, ProjectRelationSpec
+from radd.kernel import EventTypeSpec, PermissionSpec, PluginUiManifest, ProjectRelationSpec
 from radd.kernel import RaddPlugin
 from radd.kernel.registry import register_relation
 from radd.kernel.specs import RelationSpec
@@ -9,7 +9,7 @@ from radd.modules.items.models import WorkItem
 from .models import ItemParticipant
 from . import mcptools, service
 from .router import router
-from .types import ParticipantEvent
+from .types import PARTICIPANT_MANAGE, ParticipantEvent
 
 # RADD-844: being shared into an item is a RELATION on it — the second-reporter
 # model. `item.read@participant` + `comment.write@participant` (seeded on the
@@ -57,6 +57,17 @@ plugin = RaddPlugin(
     # RADD-1236: the roster over MCP — by item key, person by email, team by name.
     mcp_tools=mcptools.MCP_TOOLS,
     relations=(ITEM_PARTICIPANT,),
+    # RADD-1304: sharing an issue is a grant, not an identity check. `@own`
+    # means "issues they reported" — the atom takes the ITEM's relations.
+    permissions=(
+        PermissionSpec(
+            PARTICIPANT_MANAGE,
+            "project",
+            "Add and remove an issue's participants.",
+            implied_by=("item.update",),
+        ),
+    ),
+    relation_domains=((PARTICIPANT_MANAGE, "item"),),
     event_types=(
         EventTypeSpec(ParticipantEvent.ADDED, "Participant added", "Service desk", item_scoped=True),
         EventTypeSpec(ParticipantEvent.REMOVED, "Participant removed", "Service desk", item_scoped=True),
