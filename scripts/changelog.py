@@ -72,6 +72,9 @@ class Entry:
     key: str | None
     subject: str
     sha: str
+    #: RADD-1306: every commit that names this key, first one first — an issue
+    #: fixed in two commits is ONE entry, not two.
+    shas: tuple[str, ...] = ()
     title: str = ""
     category: str = "Uncategorized"
     #: Extra facts the tracker knows and a commit subject cannot say (RADD-725).
@@ -210,16 +213,42 @@ def previous_tag(tag: str) -> str:
 
 
 def commits(previous: str, tag: str) -> list[Entry]:
-    raw = git("log", "--no-merges", "--format=%H%x1f%s", f"{previous}..{tag}")
+    """One entry per ISSUE the range shipped (RADD-1306).
+
+    The subject's key is the commit's primary issue. A key written in brackets
+    in the BODY (`[RADD-1283] carries the follow-up…`) is a secondary issue
+    whose code rode in this commit — the convention for one change that
+    interleaves two issues' hunks — so it is listed too; a prose mention
+    ("Part of RADD-1301") is not, which keeps epics out. Repeat keys merge into
+    one entry carrying every sha. Keyless commits stay one entry each.
+    """
+    raw = git("log", "--no-merges", "--format=%H%x1f%s%x1f%b%x1e", f"{previous}..{tag}")
+    by_key: dict[str, Entry] = {}
     entries: list[Entry] = []
-    for line in raw.splitlines():
-        if not line.strip():
+    for record in raw.split("\x1e"):
+        if not record.strip():
             continue
-        sha, _, subject = line.partition("\x1f")
+        sha, _, rest = record.strip().partition("\x1f")
+        subject, _, body = rest.partition("\x1f")
+        short = sha[:8]
         match = KEY_RE.search(subject)
-        entries.append(
-            Entry(key=match.group(1) if match else None, subject=subject, sha=sha[:8])
-        )
+        keys = [match.group(1)] if match else []
+        keys += [key for key in KEY_RE.findall(body) if key not in keys]
+        if not keys:
+            entries.append(Entry(key=None, subject=subject, sha=short, shas=(short,)))
+            continue
+        for index, key in enumerate(keys):
+            if key in by_key:
+                existing = by_key[key]
+                if short not in existing.shas:
+                    existing.shas = (*existing.shas, short)
+                continue
+            # A secondary key has no subject of its own; its title comes from
+            # the tracker, and this is only the offline fallback.
+            label = subject if index == 0 else f"[{key}] (in {short}: {KEY_RE.sub('', subject, count=1).strip()})"
+            entry = Entry(key=key, subject=label, sha=short, shas=(short,))
+            by_key[key] = entry
+            entries.append(entry)
     return entries
 
 
@@ -323,8 +352,8 @@ def _entry_lines(entry: Entry, base_url: str, repo_url: str) -> list[str]:
         meta.append(" ".join(f"`{label}`" for label in sorted(entry.labels)))
     if entry.points:
         meta.append(f"{entry.points:g} pts")
-    commit = f"[`{entry.sha}`]({repo_url}/commit/{entry.sha})" if repo_url else f"`{entry.sha}`"
-    meta.append(commit)
+    for sha in entry.shas or (entry.sha,):
+        meta.append(f"[`{sha}`]({repo_url}/commit/{sha})" if repo_url else f"`{sha}`")
     # Provenance LAST: the claim is what a reader is here for, and the sha is
     # what they reach for once they believe it.
     lines = [head]
