@@ -1,5 +1,6 @@
+import { Fragment, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronUp, Timer, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Pencil, Timer, Trash2 } from "lucide-react";
 import { api } from "../../lib/api";
 import { apiSlaPolicyPath } from "../../lib/constants";
 import { Entity, invalidateEntities } from "../../lib/cache";
@@ -11,7 +12,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { TableSkeleton } from "../../components/TableSkeleton";
 import { ScopedSettingsEditor } from "../../components/settings/ScopedSettingsEditor";
 import { SettingsPage } from "../../components/settings/SettingsPage";
-import { NewSlaPolicyForm, minutesLabel, windowLabel } from "../../components/settings/SlaPolicyForm";
+import { SlaPolicyForm, minutesLabel, windowLabel } from "../../components/settings/SlaPolicyForm";
 import { metRuleSummary } from "../../components/settings/SlaMetOnField";
 import { QueryError } from "../../components/QueryError";
 
@@ -37,6 +38,8 @@ export function ProjectSlaSettingsPage({ projectId }: { projectId?: string }) {
   const names = (ids: string[]) => ids.map((id) => stateName.get(id) ?? "?");
   const queryClient = useQueryClient();
   const invalidate = () => invalidateEntities(queryClient, Entity.slaPolicy);
+  // RADD-1300: the one policy being edited in place (null = none).
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const remove = useMutation({
     mutationFn: (policyId: string) => api.delete<void>(apiSlaPolicyPath(policyId)),
@@ -110,8 +113,9 @@ export function ProjectSlaSettingsPage({ projectId }: { projectId?: string }) {
           ) : (
             <ul className="rounded-lg border border-subtle">
               {list.map((policy, index) => (
+                <Fragment key={policy.id}>
                 <li
-                  key={policy.id}
+                  data-sla-policy={policy.name}
                   className="flex items-center gap-3 border-b border-subtle/60 px-4 py-2.5 last:border-b-0"
                 >
                   {canManage && (
@@ -158,6 +162,17 @@ export function ProjectSlaSettingsPage({ projectId }: { projectId?: string }) {
                       >
                         {policy.enabled ? "Enabled" : "Disabled"}
                       </button>
+                      {/* RADD-1300: edit in place — same id, same position, so the
+                          policy's per-issue bookkeeping and history survive. */}
+                      <button
+                        type="button"
+                        onClick={() => setEditingId(editingId === policy.id ? null : policy.id)}
+                        aria-label={`Edit ${policy.name}`}
+                        aria-expanded={editingId === policy.id}
+                        className="rounded p-1 text-fg-muted hover:bg-elevated hover:text-fg cursor-pointer"
+                      >
+                        <Pencil size={13} aria-hidden />
+                      </button>
                       <button
                         type="button"
                         onClick={() => remove.mutate(policy.id)}
@@ -173,10 +188,24 @@ export function ProjectSlaSettingsPage({ projectId }: { projectId?: string }) {
                     )
                   )}
                 </li>
+                {editingId === policy.id && (
+                  <li className="border-b border-subtle/60 px-4 py-3 last:border-b-0">
+                    <SlaPolicyForm
+                      projectId={projectId}
+                      nextPosition={list.length}
+                      policy={policy}
+                      onDone={() => {
+                        setEditingId(null);
+                        void invalidate();
+                      }}
+                    />
+                  </li>
+                )}
+                </Fragment>
               ))}
             </ul>
           )}
-          {canManage && <NewSlaPolicyForm projectId={projectId} nextPosition={list.length} />}
+          {canManage && editingId === null && <SlaPolicyForm projectId={projectId} nextPosition={list.length} />}
 
           {/* RADD-930: CSAT arrived here from project → General. It is the other
               half of the service-desk loop these policies open — the survey
