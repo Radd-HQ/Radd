@@ -15,6 +15,7 @@ import {
 } from "../lib/constants";
 import { formatDuration } from "../lib/duration";
 import { useDurationConfig, usePeek, usePermissions } from "../lib/hooks";
+import { useCan } from "../lib/can";
 import {
   instanceConfigQuery,
   leaveCalendarQuery,
@@ -163,6 +164,10 @@ export function TimesheetPage() {
     return map;
   }, [leaveCal.data, start, end]);
   const [logging, setLogging] = useState(false);
+  // General time needs worklog.write on SOME project (`can_log_general`), so
+  // the question is cross-project. A read-only viewer reaches this page and
+  // was offered a form whose save answered 403 (RADD-778).
+  const logGate = useCan()(Permission.worklogWrite, { anyProject: true, verb: "log time" });
 
   return (
     <div className="flex h-full flex-col">
@@ -227,7 +232,7 @@ export function TimesheetPage() {
             {formatDuration(timesheet.data?.total_seconds ?? 0, durationConfig)}
           </span>
         </span>
-        <Button onClick={() => setLogging(true)}>
+        <Button onClick={() => setLogging(true)} {...logGate.props}>
           <Plus size={14} aria-hidden />
           Log time
         </Button>

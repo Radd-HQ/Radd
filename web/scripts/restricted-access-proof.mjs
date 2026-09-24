@@ -23,12 +23,22 @@
  * The account is seeded by the proof, so it does not depend on the dev database
  * happening to contain a suitable user, and it is REMOVED afterwards.
  *
- * Usage: node scripts/restricted-access-proof.mjs <baseUrl> <adminEmail> <adminPassword>
+ * The ROLE is a parameter (RADD-778). The default, the builtin Member, holds
+ * almost every item atom, so over it the enabled-control check has little to
+ * catch; the builtin **viewer** (item.read + page.read, nothing else) is the
+ * persona every write affordance must refuse, and is the run that bites.
+ *
+ * Besides asserting, the run prints `unclaimed`: every ENABLED control on each
+ * stop that declares no atom at all. That list is not a failure — a Star
+ * button needs no permission — it is the sweep's work list, produced by the
+ * app rather than written by hand.
+ *
+ * Usage: node scripts/restricted-access-proof.mjs <baseUrl> <adminEmail> <adminPassword> [member|viewer]
  */
 import { resolve } from "node:path";
 import { HOVER_CAPABLE_PROBE, openBrowser, report, sleep } from "./lib/cdp.mjs";
 
-const [baseUrl, adminEmail, adminPassword] = process.argv.slice(2);
+const [baseUrl, adminEmail, adminPassword, roleKey = "member"] = process.argv.slice(2);
 const PORT = 9475;
 const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-restricted-proof");
 
@@ -60,6 +70,21 @@ const RECORDER = `(() => {
 })()`;
 
 /**
+ * Every enabled control that declares NO atom — the work list. A control
+ * counts as claimed when it or an ancestor carries `data-needs` (a menu
+ * trigger wrapped by its gate is claimed). Hidden elements are skipped: a
+ * control the actor cannot see is not a control that lies to them.
+ */
+const UNCLAIMED = `(() => {
+  const sel = "button, input:not([type=hidden]), textarea, select, [contenteditable=true], [role=menuitem]";
+  return [...document.querySelectorAll(sel)]
+    .filter((el) => !el.closest("[data-needs]"))
+    .filter((el) => !el.matches(":disabled") && el.getAttribute("aria-disabled") !== "true")
+    .filter((el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; })
+    .map((el) => (el.getAttribute("aria-label") || el.textContent || el.getAttribute("placeholder") || el.getAttribute("title") || el.tagName).trim().replace(/\\s+/g, " ").slice(0, 40));
+})()`;
+
+/**
  * Every control that declares an atom, and whether it is enabled.
  *
  * `disabled` is read off the element AND its computed pointer-events, because a
@@ -70,7 +95,10 @@ const CLAIMS = `(() => {
   return [...document.querySelectorAll("[data-needs]")].map((el) => ({
     needs: el.getAttribute("data-needs"),
     project: el.getAttribute("data-needs-project") || null,
-    enabled: !el.disabled && getComputedStyle(el).pointerEvents !== "none",
+    anyProject: el.getAttribute("data-needs-scope") === "any",
+    // ":disabled", not ".disabled": the property ignores an ancestor
+    // fieldset[disabled] (the issue rail gate); the pseudo-class does not.
+    enabled: !el.matches(":disabled") && getComputedStyle(el).pointerEvents !== "none",
     label: (el.textContent || el.getAttribute("aria-label") || "").trim().slice(0, 40),
   }));
 })()`;
@@ -92,7 +120,7 @@ async function main() {
         body: JSON.stringify(${JSON.stringify({ ...ACCOUNT, instance_role: "member" })}),
       })).json();
     }
-    // Give it the builtin Member role on ONE project, scoped.
+    // Give it the builtin role under test (Member by default) on ONE project, scoped.
     //
     // Not a bare account: a member with no project role never renders the
     // editors at all, so a walk finds nothing and passes vacuously — the exact
@@ -101,13 +129,13 @@ async function main() {
     // project.manage, item.delete and every admin atom, which is what makes the
     // enabled-control check bite.
     const roles = await (await fetch("/api/v1/roles", {credentials:"include"})).json();
-    const memberRole = roles.find((r) => r.key === "member");
+    const grantedRole = roles.find((r) => r.key === ${JSON.stringify(roleKey)});
     const projects = await (await fetch("/api/v1/projects", {credentials:"include"})).json();
     const project = projects[0];
-    if (memberRole && project) {
+    if (grantedRole && project) {
       await fetch("/api/v1/role-grants", {
         method: "POST", credentials: "include", headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ role_id: memberRole.id, user_id: user.id, project_ids: [project.id] }),
+        body: JSON.stringify({ role_id: grantedRole.id, user_id: user.id, project_ids: [project.id] }),
       });
     }
     return { id: user.id, projectKey: project ? project.key : null };
@@ -139,7 +167,8 @@ async function main() {
     await sleep(settle);
     const denied = await session.eval(`(window.__denied || [])`);
     const seen = await session.eval(CLAIMS);
-    stops.push({ label, path, denied, controls: seen.length });
+    const unclaimed = await session.eval(UNCLAIMED);
+    stops.push({ label, path, denied, controls: seen.length, unclaimed });
     for (const claim of seen) claims.push({ ...claim, at: label });
   }
 
@@ -190,6 +219,11 @@ async function main() {
 
   // A control lies when it is enabled and the actor does not hold its atom.
   const holds = (claim) => {
+    // A cross-project question (`useCan` with `anyProject`) is answered by the
+    // global set OR any project's — the same union the SPA resolves.
+    if (claim.anyProject) {
+      return [actor.global, ...Object.values(actor.byProject)].some((set) => set.includes(claim.needs));
+    }
     const set = claim.project ? actor.byProject[claim.project] || [] : actor.global;
     return set.includes(claim.needs);
   };
@@ -220,6 +254,7 @@ async function main() {
 
   return report(checks, {
     actor: { global: actor.global, projects: Object.keys(actor.byProject).length },
+    role: roleKey,
     stops: stops.map((s) => ({ ...s, denied: s.denied.length })),
     deniedDetail: denied.slice(0, 10),
     claimCount: claims.length,

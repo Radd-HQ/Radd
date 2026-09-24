@@ -48,6 +48,10 @@ export interface Gate {
     title: string | undefined;
     "data-needs": string;
     "data-needs-project": string | undefined;
+    /** `any` when the question was asked across projects (`anyProject`) —
+     *  without it the proof would judge a cross-project claim against the
+     *  GLOBAL set and call a correct gate a liar (RADD-778). */
+    "data-needs-scope": "any" | undefined;
   };
 }
 
@@ -106,6 +110,7 @@ export function useCan(): CanFn {
           title: allowed ? undefined : reason,
           "data-needs": permission,
           "data-needs-project": project?.id,
+          "data-needs-scope": !project && !space && anyProject ? "any" : undefined,
         },
       };
     },

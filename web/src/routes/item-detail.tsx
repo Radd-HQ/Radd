@@ -122,6 +122,17 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
     project,
     verb: archived ? "unarchive this issue" : "archive this issue",
   });
+  // Clone creates a NEW issue in this project (RADD-778): `clone_item` gates
+  // on item.create, which a read-only viewer lacks while every other header
+  // button they see is theirs to press (watch, star).
+  const cloneGate = can(Permission.itemCreate, { project, verb: "clone issues in this project" });
+  // Converting rewrites the kind, an item.update on THIS row — so the per-row
+  // verdict (`writ.canEdit`, RADD-842) rides along as the extra condition.
+  const convertGate = can(Permission.itemUpdate, {
+    project,
+    verb: "convert this issue",
+    unless: { when: !writ.canEdit, reason: writ.reasonFor("kind") },
+  });
   // Epic progress (spec 76): the rollup batch for just this item. Fetched for
   // ANY item that has children, not only epics — the subtask checklist shows
   // "2/5 done" and without the rollup it could only ever say 0 (RADD-660).
@@ -219,8 +230,13 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
                 ref={ref}
                 onClick={toggle}
                 aria-expanded={open}
-                title="Convert kind — a refusal names what blocks it"
-                className="cursor-pointer rounded-md outline-focus hover:opacity-80"
+                {...convertGate.props}
+                title={
+                  convertGate.allowed
+                    ? "Convert kind — a refusal names what blocks it"
+                    : convertGate.reason
+                }
+                className="cursor-pointer rounded-md outline-focus hover:opacity-80 disabled:cursor-default disabled:hover:opacity-100"
               >
                 <KindBadge kind={item.kind} withLabel />
               </button>
@@ -278,7 +294,8 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
         <Button
           variant="secondary"
           size="sm"
-          disabled={cloneItem.isPending}
+          {...cloneGate.props}
+          disabled={cloneGate.props.disabled || cloneItem.isPending}
           onClick={() =>
             cloneItem.mutate(
               { itemId: item.id },
@@ -288,7 +305,11 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
               },
             )
           }
-          title="Clone — copies content and fields into a new issue; comments and history stay here"
+          title={
+            cloneGate.allowed
+              ? "Clone — copies content and fields into a new issue; comments and history stay here"
+              : cloneGate.reason
+          }
         >
           <CopyPlus size={13} aria-hidden />
           {cloneItem.isPending ? "Cloning…" : "Clone"}
