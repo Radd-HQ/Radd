@@ -88,7 +88,7 @@ export function SidebarProjectRow({ project, expanded, permissions, onToggle, on
                       permissions.project(project, Permission.memberCreate) ||
                       permissions.project(project, Permission.memberDelete) ||
                       permissions.global(Permission.roleUpdate) ||
-                      permissions.global(Permission.slaUpdate)) && (
+                      permissions.project(project, Permission.slaUpdate)) && (
                       <li>
                         <Link
                           to={RoutePath.projectSettings}

@@ -6,7 +6,7 @@ import { apiSlaPolicyPath } from "../../lib/constants";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { usePermissions } from "../../lib/hooks";
 import { PRIORITY_META } from "../../lib/meta";
-import { issueTypesQuery, slaPoliciesQuery, statesQuery } from "../../lib/queries";
+import { issueTypesQuery, projectByIdQuery, slaPoliciesQuery, statesQuery } from "../../lib/queries";
 import { Permission, SettingScope, type SlaPolicy } from "../../lib/types";
 import { EmptyState } from "../../components/EmptyState";
 import { TableSkeleton } from "../../components/TableSkeleton";
@@ -18,11 +18,12 @@ import { QueryError } from "../../components/QueryError";
 
 /** SLA policies for one project (specs 30/63; project-level since spec 67):
  * targets, priority tiers, business hours, and first-match ordering (up/down,
- * same idiom as the config editors). Editing stays gated on the global-scope
- * `sla.manage` permission, same as the old global-settings page. */
+ * same idiom as the config editors). Editing is the project's own right
+ * (`sla.*`, project-scoped since RADD-1303 — the Manager role holds it). */
 export function ProjectSlaSettingsPage({ projectId }: { projectId?: string }) {
   const perms = usePermissions();
-  const canManage = perms.global(Permission.slaUpdate);
+  const project = useQuery(projectByIdQuery(projectId ?? "")).data;
+  const canManage = perms.project(project, Permission.slaUpdate);
   const policies = useQuery({
     ...slaPoliciesQuery(projectId ?? ""),
     enabled: Boolean(projectId),

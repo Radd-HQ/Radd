@@ -45,10 +45,10 @@ async def list_policies(
 
 @router.post("/sla-policies", response_model=PolicyRead, status_code=201)
 async def create_policy(data: PolicyCreate, session: Session, user: CurrentUser) -> PolicyRead:
-    # SLA_* atoms stay global-scoped (admins) — resolved via the policy's
-    # project's workspace membership (spec 67).
-    await projects_service.get_project(session, data.project_id)
-    await authz.require(session, user, Permission.SLA_CREATE)
+    # RADD-1303: checked against the policy's OWN project — a project's
+    # Manager manages its SLAs, and no one else's.
+    project = await projects_service.get_project(session, data.project_id)
+    await authz.require(session, user, Permission.SLA_CREATE, project=project)
     return PolicyRead.model_validate(await service.create_policy(session, data, actor_id=user.id))
 
 
@@ -56,8 +56,9 @@ async def create_policy(data: PolicyCreate, session: Session, user: CurrentUser)
 async def update_policy(
     policy_id: uuid.UUID, data: PolicyUpdate, session: Session, user: CurrentUser
 ) -> PolicyRead:
-    await service.get_policy(session, policy_id)
-    await authz.require(session, user, Permission.SLA_UPDATE)
+    policy = await service.get_policy(session, policy_id)
+    project = await projects_service.get_project(session, policy.project_id)
+    await authz.require(session, user, Permission.SLA_UPDATE, project=project)
     return PolicyRead.model_validate(
         await service.update_policy(session, policy_id, data, actor_id=user.id)
     )
@@ -65,8 +66,9 @@ async def update_policy(
 
 @router.delete("/sla-policies/{policy_id}", status_code=204)
 async def delete_policy(policy_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
-    await service.get_policy(session, policy_id)
-    await authz.require(session, user, Permission.SLA_DELETE)
+    policy = await service.get_policy(session, policy_id)
+    project = await projects_service.get_project(session, policy.project_id)
+    await authz.require(session, user, Permission.SLA_DELETE, project=project)
     await service.delete_policy(session, policy_id, actor_id=user.id)
 
 

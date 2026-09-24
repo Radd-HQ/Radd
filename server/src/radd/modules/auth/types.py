@@ -273,6 +273,9 @@ _PROJECT_SCOPED: frozenset[str] = frozenset({
     "form.create", "form.update", "form.delete", "view.create", "view.update", "view.delete",
     "member.create", "member.update", "member.delete", "issue_type.create",
     "issue_type.update", "issue_type.delete",
+    # RADD-1303: SLA policies belong to a project (spec 67), so managing them
+    # is a project right — held by the project's Manager via project.manage.
+    "sla.create", "sla.update", "sla.delete",
 })
 
 #: Atoms checked against a WIKI SPACE (RADD-791). They were global because a

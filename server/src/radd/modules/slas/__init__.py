@@ -10,7 +10,8 @@ plugin = RaddPlugin(
     name="slas",
     # RADD-816: no sla.read — policy reads ride the project's item.read (the list is
     # project-scoped), and a minted-but-unenforced atom is the dead class it deleted.
-    crud_resources=(CrudResourceSpec("sla", "global", "SLA policies", "global.manage"),),
+    # RADD-1303: project-scoped under project.manage — policies are per project.
+    crud_resources=(CrudResourceSpec("sla", "project", "SLA policies", "project.manage"),),
     core=False,  # optional plugin — disableable via the plugin manager
     description="Service levels: response and resolution targets with timers and breach alerts.",
     depends_on=(

@@ -40,8 +40,8 @@ const navLinkClasses =
 /**
  * Project-settings sub-nav (spec 50). Each tab's `show` predicate gets the
  * permission checks + the URL's project; a tab is hidden when the viewer can't
- * manage it. Most tabs gate on a per-project permission — SLAs (spec 67) keeps
- * its global-scope `sla.manage` gate (policies are admin config). The
+ * manage it. Every tab gates on a per-project permission — SLAs too, since
+ * RADD-1303 (policies belong to the project). The
  * project key/name is shown in the header; an unresolved key renders empty.
  */
 const PROJECT_SETTINGS_NAV: readonly {
@@ -98,7 +98,8 @@ const PROJECT_SETTINGS_NAV: readonly {
     to: RoutePath.projectSettingsSla,
     label: "SLAs",
     icon: Timer,
-    show: (perms) => perms.global(Permission.slaUpdate),
+    // RADD-1303: a project's Manager manages its SLAs.
+    show: (perms, project) => perms.project(project, Permission.slaUpdate),
   },
 ];
 
