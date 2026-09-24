@@ -5,13 +5,14 @@ import { apiSlaPolicyPath } from "../../lib/constants";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { usePermissions } from "../../lib/hooks";
 import { PRIORITY_META } from "../../lib/meta";
-import { issueTypesQuery, slaPoliciesQuery } from "../../lib/queries";
+import { issueTypesQuery, slaPoliciesQuery, statesQuery } from "../../lib/queries";
 import { Permission, SettingScope, type SlaPolicy } from "../../lib/types";
 import { EmptyState } from "../../components/EmptyState";
 import { TableSkeleton } from "../../components/TableSkeleton";
 import { ScopedSettingsEditor } from "../../components/settings/ScopedSettingsEditor";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { NewSlaPolicyForm, minutesLabel, windowLabel } from "../../components/settings/SlaPolicyForm";
+import { metRuleSummary } from "../../components/settings/SlaMetOnField";
 import { QueryError } from "../../components/QueryError";
 
 /** SLA policies for one project (specs 30/63; project-level since spec 67):
@@ -30,6 +31,10 @@ export function ProjectSlaSettingsPage({ projectId }: { projectId?: string }) {
     enabled: Boolean(projectId),
   });
   const typeName = new Map((issueTypes.data ?? []).map((t) => [t.id, t.name]));
+  // RADD-1299: state names for the "met on leaving Triage" summaries.
+  const states = useQuery({ ...statesQuery(projectId ?? ""), enabled: Boolean(projectId) });
+  const stateName = new Map((states.data ?? []).map((state) => [state.id, state.name]));
+  const names = (ids: string[]) => ids.map((id) => stateName.get(id) ?? "?");
   const queryClient = useQueryClient();
   const invalidate = () => invalidateEntities(queryClient, Entity.slaPolicy);
 
@@ -68,8 +73,15 @@ export function ProjectSlaSettingsPage({ projectId }: { projectId?: string }) {
       policy.issue_type_ids.length > 0
         ? policy.issue_type_ids.map((id) => typeName.get(id) ?? "?").join("/")
         : "any type",
-      `response ${minutesLabel(policy.response_minutes)}`,
-      `resolution ${minutesLabel(policy.resolution_minutes)}`,
+      policy.reporter_team_ids.length > 0
+        ? `reporter in ${policy.reporter_team_ids.length} team${policy.reporter_team_ids.length === 1 ? "" : "s"}`
+        : null,
+      policy.response_minutes !== null
+        ? `response ${minutesLabel(policy.response_minutes)} (${metRuleSummary(policy.response_met_on, names(policy.response_state_ids), policy.response_team_ids.length)})`
+        : "response —",
+      policy.resolution_minutes !== null
+        ? `resolution ${minutesLabel(policy.resolution_minutes)} (${metRuleSummary(policy.resolution_met_on, names(policy.resolution_state_ids), policy.resolution_team_ids.length)})`
+        : "resolution —",
       policy.warning_minutes !== null
         ? `warn ${minutesLabel(policy.warning_minutes)} before`
         : null,

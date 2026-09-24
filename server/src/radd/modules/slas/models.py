@@ -49,6 +49,22 @@ class SlaPolicy(Base, TimestampMixin):
     # Spec 69: emit sla.due_soon when a timer's remaining active time drops to
     # this many minutes (NULL = no pre-breach warning).
     warning_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # RADD-1299: the reporter must belong to one of these teams (ids as
+    # strings; [] = anyone) — a third first-match filter beside priority/type.
+    reporter_team_ids: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")
+    # RADD-1299: what satisfies each target (`SlaMetOn`) and its arguments —
+    # state ids for the state modes, team ids for `reply_by_teams`. Ids, not
+    # names (the pause-state names break on a rename; these do not).
+    response_met_on: Mapped[str] = mapped_column(
+        String(32), default="first_reply", server_default="first_reply"
+    )
+    response_state_ids: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")
+    response_team_ids: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")
+    resolution_met_on: Mapped[str] = mapped_column(
+        String(32), default="done", server_default="done"
+    )
+    resolution_state_ids: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")
+    resolution_team_ids: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")
 
 
 class SlaItemState(Base):

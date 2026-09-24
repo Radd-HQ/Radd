@@ -2,7 +2,7 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from .types import SlaKind
+from .types import SlaKind, SlaMetOn
 from radd.apitypes import UtcDatetime
 from radd.modules.items.enums import Priority
 
@@ -32,6 +32,15 @@ class PolicyCreate(BaseModel):
     business_end_minute: int | None = Field(default=None, ge=0, le=BUSINESS_MINUTE_MAX)
     # Spec 69: sla.due_soon fires when remaining time drops to this (None = off).
     warning_minutes: int | None = Field(default=None, ge=1)
+    # RADD-1299: applies only when the reporter is in one of these teams ([] = anyone).
+    reporter_team_ids: list[uuid.UUID] = Field(default_factory=list)
+    # RADD-1299: what satisfies each target, plus the states / teams its mode names.
+    response_met_on: SlaMetOn = SlaMetOn.FIRST_REPLY
+    response_state_ids: list[uuid.UUID] = Field(default_factory=list)
+    response_team_ids: list[uuid.UUID] = Field(default_factory=list)
+    resolution_met_on: SlaMetOn = SlaMetOn.DONE
+    resolution_state_ids: list[uuid.UUID] = Field(default_factory=list)
+    resolution_team_ids: list[uuid.UUID] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _at_least_one_target(self) -> "PolicyCreate":
@@ -57,6 +66,14 @@ class PolicyUpdate(BaseModel):
     business_end_minute: int | None = Field(default=None, ge=0, le=BUSINESS_MINUTE_MAX)
     # Explicit null turns the pre-breach warning off (model_fields_set idiom).
     warning_minutes: int | None = Field(default=None, ge=1)
+    # RADD-1299 — omitted = unchanged; `[]` clears a list.
+    reporter_team_ids: list[uuid.UUID] | None = None
+    response_met_on: SlaMetOn | None = None
+    response_state_ids: list[uuid.UUID] | None = None
+    response_team_ids: list[uuid.UUID] | None = None
+    resolution_met_on: SlaMetOn | None = None
+    resolution_state_ids: list[uuid.UUID] | None = None
+    resolution_team_ids: list[uuid.UUID] | None = None
 
 
 class PolicyRead(BaseModel):
@@ -76,6 +93,13 @@ class PolicyRead(BaseModel):
     business_start_minute: int | None
     business_end_minute: int | None
     warning_minutes: int | None
+    reporter_team_ids: list[uuid.UUID]
+    response_met_on: SlaMetOn
+    response_state_ids: list[uuid.UUID]
+    response_team_ids: list[uuid.UUID]
+    resolution_met_on: SlaMetOn
+    resolution_state_ids: list[uuid.UUID]
+    resolution_team_ids: list[uuid.UUID]
     created_at: UtcDatetime
     updated_at: UtcDatetime
 

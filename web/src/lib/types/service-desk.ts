@@ -48,9 +48,29 @@ export interface SlaPolicy {
   business_end_minute: number | null;
   /** Spec 69: emit sla.due_soon when remaining time drops to this (null = off). */
   warning_minutes: number | null;
+  /** RADD-1299: applies only when the reporter is in one of these teams ([] = anyone). */
+  reporter_team_ids: string[];
+  /** RADD-1299: what satisfies each target, and the states/teams its mode names. */
+  response_met_on: SlaMetOnValue;
+  response_state_ids: string[];
+  response_team_ids: string[];
+  resolution_met_on: SlaMetOnValue;
+  resolution_state_ids: string[];
+  resolution_team_ids: string[];
   created_at: string;
   updated_at: string;
 }
+
+/** RADD-1299 — what satisfies an SLA target (mirror of `slas.types.SlaMetOn`). */
+export const SlaMetOn = {
+  firstReply: "first_reply",
+  replyByTeams: "reply_by_teams",
+  replyByAssignedTeam: "reply_by_assigned_team",
+  done: "done",
+  entersStates: "enters_states",
+  leavesStates: "leaves_states",
+} as const;
+export type SlaMetOnValue = (typeof SlaMetOn)[keyof typeof SlaMetOn];
 
 /** GET /instance (+ /instance/login-options) — safe instance-level config
  * (specs 35/67): the work week plus the timelog day/week lengths that back

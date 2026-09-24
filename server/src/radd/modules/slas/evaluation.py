@@ -15,7 +15,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
-from radd.modules.automations.types import SYSTEM_ACTOR_ID
 from radd.modules.comments import service as comments
 from radd.modules.events import service as events
 from radd.modules.items import service as items
@@ -23,14 +22,15 @@ from radd.modules.items.enums import ItemEntity
 from radd.modules.reporting import timeline as reporting_timeline
 from radd.modules.settings import service as settings_service
 from radd.modules.settings.types import SettingKey
+from radd.modules.teams import service as teams
 from radd.modules.workflow import service as workflow
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 
-from . import calendar, service, timers
+from . import calendar, metrules, service, timers
 from .models import SlaItemState, SlaPolicy
 from .schemas import BatchTimerRead
-from .types import SlaEvent, SlaKind
+from .types import REPLY_MODES, STATE_MODES, SlaEvent, SlaKind, SlaMetOn
 from radd.clock import utcnow
 
 FULL_DAY_MINUTES = 24 * 60
@@ -65,17 +65,10 @@ async def evaluate_items(
     states = await workflow.states_by_ids(session, state_ids)
     pause_names = {str(name) for name in (policy.pause_state_names or [])}
 
-    # First qualifying response per item: a public comment by someone other than
-    # the reporter or the automation system actor.
-    responses: dict[uuid.UUID, datetime] = {}
-    if policy.response_minutes is not None:
-        for item_id, author_id, at in await comments.public_comment_times(session, id_list):
-            item = item_map.get(item_id)
-            if item is None or item_id in responses:
-                continue
-            if author_id is None or author_id == item.reporter_id or author_id == SYSTEM_ACTOR_ID:
-                continue
-            responses[item_id] = at
+    # RADD-1299: what satisfies each target, and the facts its mode needs —
+    # gathered ONCE per batch, then resolved per item by `metrules`.
+    targets = _targets(policy)
+    met = await _met_resolver(session, policy, targets, item_map, timelines)
 
     # Work-week-only policies (spec 35): non-working days pause the clock.
     # Spec 50/67: the work week resolves per item project (project→instance→env).
@@ -145,31 +138,82 @@ async def evaluate_items(
                     )
                 )
         per_kind: dict[SlaKind, tuple[int, timers.TimerStatus]] = {}
-        if policy.response_minutes is not None:
-            per_kind[SlaKind.RESPONSE] = (
-                policy.response_minutes,
+        for kind, (minutes, _mode, _states, _teams) in targets.items():
+            per_kind[kind] = (
+                minutes,
                 timers.evaluate(
                     started_at=started,
-                    target_seconds=policy.response_minutes * 60,
+                    target_seconds=minutes * 60,
                     pauses=pauses,
-                    met_at=responses.get(item_id),
-                    now=now,
-                ),
-            )
-        if policy.resolution_minutes is not None:
-            done_at = tl.done_entries[0].at if tl and tl.done_entries else None
-            per_kind[SlaKind.RESOLUTION] = (
-                policy.resolution_minutes,
-                timers.evaluate(
-                    started_at=started,
-                    target_seconds=policy.resolution_minutes * 60,
-                    pauses=pauses,
-                    met_at=done_at,
+                    met_at=met(kind, item),
                     now=now,
                 ),
             )
         results[item_id] = per_kind
     return results
+
+
+# --- RADD-1299: what satisfies a target ---
+
+#: {kind: (target minutes, mode, state ids, team ids)} for the targets a policy sets.
+Targets = dict[SlaKind, tuple[int, SlaMetOn, frozenset[str], frozenset[str]]]
+
+
+def _targets(policy: SlaPolicy) -> Targets:
+    out: Targets = {}
+    if policy.response_minutes is not None:
+        out[SlaKind.RESPONSE] = (
+            policy.response_minutes,
+            SlaMetOn(policy.response_met_on or SlaMetOn.FIRST_REPLY),
+            frozenset(str(s) for s in policy.response_state_ids or []),
+            frozenset(str(t) for t in policy.response_team_ids or []),
+        )
+    if policy.resolution_minutes is not None:
+        out[SlaKind.RESOLUTION] = (
+            policy.resolution_minutes,
+            SlaMetOn(policy.resolution_met_on or SlaMetOn.DONE),
+            frozenset(str(s) for s in policy.resolution_state_ids or []),
+            frozenset(str(t) for t in policy.resolution_team_ids or []),
+        )
+    return out
+
+
+async def _met_resolver(session, policy, targets: Targets, item_map, timelines):
+    """A `met(kind, item) -> datetime | None` over facts fetched once: public
+    comment times only if a reply mode is in play, and each needed team's
+    effective members (nested groups included) once."""
+    modes = {mode for _minutes, mode, _states, _teams in targets.values()}
+    replies: dict[uuid.UUID, list[tuple[uuid.UUID | None, datetime]]] = {}
+    if modes & REPLY_MODES:
+        for item_id, author_id, at in await comments.public_comment_times(session, list(item_map)):
+            replies.setdefault(item_id, []).append((author_id, at))
+    chosen: dict[SlaKind, frozenset[uuid.UUID]] = {}
+    for kind, (_minutes, mode, _states, team_ids) in targets.items():
+        if mode is SlaMetOn.REPLY_BY_TEAMS:
+            chosen[kind] = frozenset(
+                await teams.users_for_teams(session, [uuid.UUID(t) for t in team_ids])
+            )
+    by_team: dict[uuid.UUID, frozenset[uuid.UUID]] = {}
+    if SlaMetOn.REPLY_BY_ASSIGNED_TEAM in modes:
+        for team_id in {item.team_id for item in item_map.values() if item.team_id}:
+            by_team[team_id] = frozenset(await teams.users_for_teams(session, [team_id]))
+
+    def met(kind: SlaKind, item) -> datetime | None:
+        _minutes, mode, state_ids, _teams = targets[kind]
+        tl = timelines.get(item.id)
+        if mode is SlaMetOn.DONE:
+            return tl.done_entries[0].at if tl and tl.done_entries else None
+        if mode in STATE_MODES:
+            stays = [metrules.Stay(s.state_id, s.entered_at) for s in tl.segments] if tl else []
+            return metrules.state_met_at(mode, state_ids, stays)
+        responders: frozenset[uuid.UUID] | None = None
+        if mode is SlaMetOn.REPLY_BY_TEAMS:
+            responders = chosen[kind]
+        elif mode is SlaMetOn.REPLY_BY_ASSIGNED_TEAM and item.team_id:
+            responders = by_team.get(item.team_id, frozenset())
+        return metrules.reply_met_at(replies.get(item.id, []), item.reporter_id, responders)
+
+    return met
 
 
 # --- batch endpoint compute (spec 63: list/board chips) ---

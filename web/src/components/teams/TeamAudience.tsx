@@ -18,8 +18,10 @@ const COMMENT_COPY = {
 /** Complete audience IDs stay in the draft; only one window of labels/counts mounts.
  * The copy defaults to the internal-note audience; another surface (a cycle's
  * visibility, RADD-1115) passes its own. */
-export function TeamAudience({ value, onChange, emptyText = COMMENT_COPY.empty, hint = COMMENT_COPY.hint }: {
+export function TeamAudience({ value, onChange, emptyText = COMMENT_COPY.empty, hint = COMMENT_COPY.hint, addLabel = "Add audience team" }: {
   value: string[]; onChange?: (ids: string[]) => void; emptyText?: string; hint?: string;
+  /** The add button's words — "audience" is the comment surface's noun (RADD-1299). */
+  addLabel?: string;
 }) {
   const [page, setPage] = useState(0);
   const [choosing, setChoosing] = useState(false);
@@ -44,7 +46,7 @@ export function TeamAudience({ value, onChange, emptyText = COMMENT_COPY.empty, 
       <p className="text-[11px] text-fg-muted">{hint}</p>
     </>}
     {references.isError && <div><QueryError label="audience teams" error={references.error} /><Button variant="ghost" size="sm" onClick={() => void references.refetch()}>Retry audience teams</Button></div>}
-    {onChange && <Button variant="secondary" size="sm" aria-haspopup="dialog" onClick={() => setChoosing(true)}>Add audience team</Button>}
+    {onChange && <Button variant="secondary" size="sm" aria-haspopup="dialog" onClick={() => setChoosing(true)}>{addLabel}</Button>}
     {choosing && <AudienceChoices value={value} onClose={() => setChoosing(false)} onApply={ids => { onChange?.(ids); setChoosing(false); }} />}
   </div>;
 }

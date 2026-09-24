@@ -23,6 +23,8 @@ plugin = RaddPlugin(
         "comments",
         "automations",
         "reporting",
+        # RADD-1299: reporter-team filter + team reply modes (effective membership).
+        "teams",
     ),
     routers=(router,),
     on_startup=(engine.start,),

@@ -9,7 +9,7 @@ Timer evaluation lives in `evaluation.py`.
 """
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 
 from sqlalchemy import select
@@ -20,6 +20,9 @@ from radd.kernel import changes
 from radd.modules.events import service as events
 from radd.modules.items.models import WorkItem
 from radd.modules.projects import service as projects_service
+from radd.modules.teams import service as teams
+
+from . import validation
 
 from .models import SlaPolicy
 from .schemas import PolicyCreate, PolicyUpdate
@@ -42,6 +45,15 @@ POLICY_FIELDS: tuple[str, ...] = (
     "name", "enabled", "response_minutes", "resolution_minutes", "pause_state_names",
     "work_week_only", "priorities", "issue_type_ids", "position", "business_start_minute",
     "business_end_minute", "warning_minutes",
+    # RADD-1299
+    "reporter_team_ids", "response_met_on", "response_state_ids", "response_team_ids",
+    "resolution_met_on", "resolution_state_ids", "resolution_team_ids",
+)
+
+#: RADD-1299: the list-valued rule fields, stored as id strings.
+_ID_LISTS: tuple[str, ...] = (
+    "reporter_team_ids", "response_state_ids", "response_team_ids",
+    "resolution_state_ids", "resolution_team_ids",
 )
 
 
@@ -84,7 +96,11 @@ async def create_policy(
         business_start_minute=data.business_start_minute,
         business_end_minute=data.business_end_minute,
         warning_minutes=data.warning_minutes,
+        response_met_on=data.response_met_on.value,
+        resolution_met_on=data.resolution_met_on.value,
+        **{field: [str(v) for v in getattr(data, field)] for field in _ID_LISTS},
     )
+    await validation.validate_rules(session, policy)
     session.add(policy)
     await session.flush()
     await _emit_policy(session, SlaEvent.POLICY_CREATED, policy, actor_id)
@@ -138,6 +154,15 @@ async def update_policy(
         policy.business_end_minute = data.business_end_minute
     if "warning_minutes" in fields_set:
         policy.warning_minutes = data.warning_minutes
+    if data.response_met_on is not None:
+        policy.response_met_on = data.response_met_on.value
+    if data.resolution_met_on is not None:
+        policy.resolution_met_on = data.resolution_met_on.value
+    for field in _ID_LISTS:
+        value = getattr(data, field)
+        if value is not None:
+            setattr(policy, field, [str(v) for v in value])
+    await validation.validate_rules(session, policy)
     if policy.response_minutes is None and policy.resolution_minutes is None:
         raise ConflictError(SlaEntity.POLICY, reason="a policy needs at least one target")
     _validate_business_window(policy.business_start_minute, policy.business_end_minute)
@@ -148,7 +173,7 @@ async def update_policy(
         policy,
         actor_id,
         changes.diff_object(
-            policy, before, collections=("pause_state_names", "priorities", "issue_type_ids")
+            policy, before, collections=("pause_state_names", "priorities", "issue_type_ids", *_ID_LISTS)
         ),
     )
     return policy
@@ -166,7 +191,11 @@ async def delete_policy(
 # --- first-match resolution (specs 63/67, replaces spec 30's evaluate-all) ---
 
 
-def first_match(policies: Sequence[SlaPolicy], item: WorkItem) -> SlaPolicy | None:
+def first_match(
+    policies: Sequence[SlaPolicy],
+    item: WorkItem,
+    reporters: Mapping[uuid.UUID, frozenset[uuid.UUID]] | None = None,
+) -> SlaPolicy | None:
     """The FIRST policy (pre-ordered by position, created_at) that is enabled,
     belongs to the item's project, and whose filters match the item. Pure —
     unit-tested without a database.
@@ -176,6 +205,11 @@ def first_match(policies: Sequence[SlaPolicy], item: WorkItem) -> SlaPolicy | No
     — a filter names the types it covers, and "untyped" is not one of them.
     Ordering is untouched: the filters decide whether a policy is a candidate,
     position decides which candidate wins.
+
+    RADD-1299's third filter, the reporter's team: `reporters` maps a policy id
+    to the effective members of its reporter teams, fetched by the caller
+    (`reporter_members`) so this stays pure. A policy with the filter and no
+    entry does not match — a filter never widens by being unanswered.
     """
     for policy in policies:
         if not policy.enabled:
@@ -188,6 +222,8 @@ def first_match(policies: Sequence[SlaPolicy], item: WorkItem) -> SlaPolicy | No
             item.type_id is None
             or str(item.type_id) not in {str(t) for t in policy.issue_type_ids}
         ):
+            continue
+        if policy.reporter_team_ids and item.reporter_id not in (reporters or {}).get(policy.id, frozenset()):
             continue
         return policy
     return None
@@ -203,10 +239,25 @@ async def enabled_policies(session: AsyncSession, project_id: uuid.UUID) -> list
     return list(result.scalars())
 
 
+async def reporter_members(
+    session: AsyncSession, policies: Sequence[SlaPolicy]
+) -> dict[uuid.UUID, frozenset[uuid.UUID]]:
+    """RADD-1299: {policy id: effective members of its reporter teams} for the
+    policies that filter on it — one query per such policy, none otherwise."""
+    return {
+        policy.id: frozenset(
+            await teams.users_for_teams(session, [uuid.UUID(str(t)) for t in policy.reporter_team_ids])
+        )
+        for policy in policies
+        if policy.reporter_team_ids
+    }
+
+
 async def matched_policy(session: AsyncSession, item: WorkItem) -> SlaPolicy | None:
     """The one policy governing this item, or None (spec 63 first-match against
     the item's project's policies — spec 67)."""
-    return first_match(await enabled_policies(session, item.project_id), item)
+    policies = await enabled_policies(session, item.project_id)
+    return first_match(policies, item, await reporter_members(session, policies))
 
 
 async def matched_policies(
@@ -220,9 +271,13 @@ async def matched_policies(
             policies_by_project[item.project_id] = await enabled_policies(
                 session, item.project_id
             )
+    members = {
+        project_id: await reporter_members(session, policies)
+        for project_id, policies in policies_by_project.items()
+    }
     matched: dict[uuid.UUID, SlaPolicy] = {}
     for item in items:
-        policy = first_match(policies_by_project[item.project_id], item)
+        policy = first_match(policies_by_project[item.project_id], item, members[item.project_id])
         if policy is not None:
             matched[item.id] = policy
     return matched

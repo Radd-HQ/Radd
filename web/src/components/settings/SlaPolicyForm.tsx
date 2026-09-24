@@ -7,7 +7,9 @@ import { Entity, invalidateEntities } from "../../lib/cache";
 import { PRIORITY_META, PRIORITY_ORDER } from "../../lib/meta";
 import { issueTypesQuery, statesQuery } from "../../lib/queries";
 import { parseClockMinutes } from "../../lib/duration";
-import type { PriorityValue, SlaPolicy } from "../../lib/types";
+import { SlaMetOn, type PriorityValue, type SlaPolicy } from "../../lib/types";
+import { SlaMetOnField, metRuleValid, type MetRule } from "./SlaMetOnField";
+import { TeamAudience } from "../teams/TeamAudience";
 import { Button } from "../Button";
 import { TextField } from "../TextField";
 import { TokenMultiSelect } from "../TokenMultiSelect";
@@ -65,6 +67,10 @@ export function NewSlaPolicyForm({
   const [issueTypeIds, setIssueTypeIds] = useState<string[]>([]);
   const [windowStart, setWindowStart] = useState("");
   const [windowEnd, setWindowEnd] = useState("");
+  // RADD-1299: what satisfies each target, and the reporter-team filter.
+  const [responseRule, setResponseRule] = useState<MetRule>({ metOn: SlaMetOn.firstReply, stateIds: [], teamIds: [] });
+  const [resolutionRule, setResolutionRule] = useState<MetRule>({ metOn: SlaMetOn.done, stateIds: [], teamIds: [] });
+  const [reporterTeamIds, setReporterTeamIds] = useState<string[]>([]);
 
   const togglePriority = (priority: PriorityValue) =>
     setPriorities((current) =>
@@ -98,6 +104,13 @@ export function NewSlaPolicyForm({
         position: nextPosition,
         business_start_minute: timeToMinutes(windowStart),
         business_end_minute: timeToMinutes(windowEnd),
+        reporter_team_ids: reporterTeamIds,
+        response_met_on: responseRule.metOn,
+        response_state_ids: responseRule.stateIds,
+        response_team_ids: responseRule.teamIds,
+        resolution_met_on: resolutionRule.metOn,
+        resolution_state_ids: resolutionRule.stateIds,
+        resolution_team_ids: resolutionRule.teamIds,
       }),
     onSuccess: () => {
       setName("");
@@ -107,6 +120,9 @@ export function NewSlaPolicyForm({
       setWindowStart("");
       setWindowEnd("");
       setWarningMinutes("");
+      setResponseRule({ metOn: SlaMetOn.firstReply, stateIds: [], teamIds: [] });
+      setResolutionRule({ metOn: SlaMetOn.done, stateIds: [], teamIds: [] });
+      setReporterTeamIds([]);
     },
     onSettled: () => invalidateEntities(queryClient, Entity.slaPolicy),
   });
@@ -123,7 +139,11 @@ export function NewSlaPolicyForm({
     if (minutes === null) return fallback;
     return Number.isNaN(minutes) ? "Use minutes or units, e.g. 90, 1h 30m, 8h, 2d." : `= ${minutesLabel(minutes)}`;
   };
-  const valid = name.trim() && (responseMinutes || resolutionMinutes) && !windowInvalid && !badDuration;
+  // A rule only matters for a target that is set; an incomplete one blocks save.
+  const rulesValid =
+    (!responseMinutes || metRuleValid(responseRule)) && (!resolutionMinutes || metRuleValid(resolutionRule));
+  const valid = name.trim() && (responseMinutes || resolutionMinutes) && !windowInvalid && !badDuration && rulesValid;
+  const stateOptions = (states.data ?? []).map((state) => ({ id: state.id, name: state.name }));
 
   return (
     <form
@@ -158,6 +178,17 @@ export function NewSlaPolicyForm({
         hint={durationHint(resolutionMinutes)}
         data-duration="resolution"
       />
+      {/* RADD-1299: what satisfies each target — shown for the targets that are set. */}
+      <div>
+        {responseMinutes && (
+          <SlaMetOnField target="response" rule={responseRule} onChange={setResponseRule} states={stateOptions} />
+        )}
+      </div>
+      <div>
+        {resolutionMinutes && (
+          <SlaMetOnField target="resolution" rule={resolutionRule} onChange={setResolutionRule} states={stateOptions} />
+        )}
+      </div>
       <div className="col-span-2">
         <TextField
           label="Warn before breach"
@@ -204,6 +235,16 @@ export function NewSlaPolicyForm({
           placeholder={typeOptions.length === 0 ? "No issue types in this project" : "Add a type…"}
           disabled={typeOptions.length === 0}
           ariaLabel="Applies to issue types"
+        />
+      </div>
+      <div className="col-span-2 flex flex-col gap-1.5" data-reporter-teams>
+        <span className="text-xs font-medium text-fg-secondary">Applies when the reporter is in these teams</span>
+        <TeamAudience
+          value={reporterTeamIds}
+          onChange={setReporterTeamIds}
+          emptyText="Any reporter."
+          hint="Membership is read live, including members through linked directory groups."
+          addLabel="Add reporter team"
         />
       </div>
       <div className="col-span-2 flex flex-wrap items-end gap-3">

@@ -49,11 +49,12 @@ async def _evaluate_project(
     items whose matched policy differs are never evaluated under this one.
     `policies` is one project's enabled set, pre-ordered (position, created_at)."""
     policy_by_id = {policy.id: policy for policy in policies}
+    members = await service.reporter_members(session, policies)  # RADD-1299
     emitted = 0
     async for batch in items.iter_project_items(session, project_id):
         grouped: dict[uuid.UUID, list[uuid.UUID]] = {}
         for item in batch:
-            policy = service.first_match(policies, item)
+            policy = service.first_match(policies, item, members)
             if policy is not None:
                 grouped.setdefault(policy.id, []).append(item.id)
         for policy_id, group in grouped.items():
