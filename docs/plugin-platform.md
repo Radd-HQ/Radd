@@ -540,8 +540,7 @@ Disabled browsing does not authorize fetching; server permission checks remain
 necessary for every request. Query failures have explicit retry controls.
 
 This migrates option providers, not the host features that consume them. The
-independent TeamSelect reference lookup, automation forms and settings/access
-page ownership remain in the complete audit inventory.
+automation forms and settings/access page ownership remain in the complete audit inventory.
 
 ### Owner-provided project and cycle pickers (RADD-1358)
 
@@ -563,6 +562,26 @@ backend core-module requirements. Remaining host navigation and page queries,
 query/type re-exports and directory hooks are transitional migration debt, not
 approved final architecture. Tests distinguish picker queries from those existing
 host navigation consumers rather than claiming all feature requests have stopped.
+
+### Owner-provided team relationships (RADD-1359)
+
+Teams contributes `teams.relationship.select`, `teams.relationship.choices` and
+`teams.relationship.audience`. Its public contracts preserve ID values, supplied
+labels, size/error/disabled props, staged selections and modal footers. The owner
+resolves names through `/teams/references`; audience labels are requested in
+windows of at most 50 IDs. Editable audiences request member counts; read-only
+views do not. The caller retains the complete ID list and supplies the meaning
+of the selection, including comment/cycle/SLA-specific explanations.
+
+Saved-reference queries use mounted-consumer identities, abort signals and no
+unused cache retention. Owner withdrawal unmounts controls and internal modals,
+cancels requests and discards unapplied additions. Re-enabling restores the
+caller's applied values with fresh labels. Host adapters retain unavailable
+fallbacks, and standalone pickers remain dismissible. No new SDK version is
+needed: Teams continues to use the SDK 1.6 contribution and option contracts.
+
+The query compatibility export and comment-list batching remain transitional;
+this stage does not certify all comment, Teams settings or roster ownership.
 
 ### Original frontend design
 

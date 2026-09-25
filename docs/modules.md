@@ -1,5 +1,13 @@
 # Module map
 
+RADD-1359: Teams contributes ID-valued relationship selection, standalone choices
+and the paged audience editor. It owns saved-reference transport and optional
+member counts; the controls cancel requests on withdrawal and resolve fresh names
+on reactivation. Comment-specific audience wording and preview presentation stay
+with the comment UI, while cycle/SLA callers supply their own semantics. Host team
+control files are slot adapters. Comment-list label batching and the remaining
+Teams settings/roster pages are still migration work.
+
 RADD-1358: Projects and Cycles now contribute their selectors and modal pickers
 from their own UI bundles (SDK 1.7). The owners hold directory queries, saved-value
 resolution, public row/prop contracts, query keys and cycle status presentation.
@@ -15,8 +23,7 @@ forms; Pages spaces; Groups directory groups. These eight remotes require UI SDK
 1.6 and register `directory.options` contributions. The SDK supplies only generic
 text/reference/multiple-value controls, paging and lifetime-scoped queries.
 Host option aliases remain transitional call-site names with no transport logic.
-The separate TeamSelect reference lookup and remaining feature pages are still
-tracked migration work. See `research/plugin-isolation/README.md`.
+The remaining feature pages are still tracked migration work. See `research/plugin-isolation/README.md`.
 
 RADD-1282: issue comments distinguish ordinary comments from resolvable threads
 (`comments.is_thread`). Workflow's `require_resolved_threads` check calls the

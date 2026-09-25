@@ -35,7 +35,8 @@ import { chronologicalComments } from "../../lib/queries/comment-feed";
 import { Button } from "../Button";
 import { Select } from "../Select";
 import { Spinner } from "../Spinner";
-import { TeamAudience, CommentAudienceNames, COMMENT_TEAM_PREVIEW_SIZE } from "../teams/TeamAudience";
+import { TeamAudience } from "../teams/TeamAudience";
+import { CommentAudienceNames, COMMENT_TEAM_PREVIEW_SIZE, COMMENT_AUDIENCE_COPY } from "./CommentAudienceNames";
 import { QueryError } from "../QueryError";
 import { CommentReplies, repliesLabel } from "../comments/CommentReplies";
 import { CopyCommentLink } from "../comments/CopyCommentLink";
@@ -375,7 +376,7 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
               })}
             </div>
           )}
-          {internalDraft && <TeamAudience value={visibleTeams} onChange={setVisibleTeams} />}
+          {internalDraft && <TeamAudience value={visibleTeams} onChange={setVisibleTeams} {...COMMENT_AUDIENCE_COPY} />}
           {(canned ?? []).length > 0 && (
             <Select
               value=""

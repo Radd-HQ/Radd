@@ -25,6 +25,7 @@ Refresh with `python scripts/plugin_inventory.py`. `review.json` records ownersh
 | RADD-1356 | Domain-independent schema and code controls | Verified; Waiting for release |
 | RADD-1357 | Owner-contributed option directories | Verified; Waiting for release |
 | RADD-1358 | Owner-contributed project/cycle pickers | Verified; Waiting for release |
+| RADD-1359 | Owner-contributed team relationships/audiences | Verified; Waiting for release |
 | RADD-1347 | Issue, automation and editor integrations | In progress |
 | RADD-1348 | Pages, dashboards, widgets and navigation | Pending |
 | RADD-1349 | Backend public seams, dependencies and background lifecycle | Pending |
@@ -87,7 +88,7 @@ Declared core status is recorded, not accepted as an exemption. Every module mus
 | settings | default | 0 | events, projects, auth | Pending |
 | slas | False | 0 | events, projects, auth, settings, workflow, items, comments, automations, reporting, teams | Pending |
 | sso | False | 0 | events, projects, auth, teams | Pending |
-| teams | default | 2 | events, projects, auth, groups | Option contributions verified (RADD-1357); remaining review pending |
+| teams | default | 6 | events, projects, auth, groups | Option and relationship contributions verified (RADD-1357/1359); remaining review pending |
 | timelogging | default | 0 | events, projects, auth, teams, items, settings | Pending |
 | vcs | default | 0 | projects, auth, events, items, timelogging | Pending |
 | views | default | 0 | projects, workflow, items, fields, auth, events, access, groups, teams | Pending |
@@ -318,3 +319,46 @@ absence assertions target picker-owned queries explicitly. Core-plugin withdrawa
 in fixtures proves frontend lifecycle handling, not backend disable permission.
 Automation forms, TeamSelect's saved-reference query and all other partial or
 unreviewed inventory entries remain work under the full goal.
+
+## RADD-1359 verification
+
+Teams now owns relationship selectors, standalone choices and the audience editor,
+including saved-reference requests, optional counts, paging and staged additions.
+Host team files contain only slot adapters and unavailable fallbacks. Comment
+preview presentation and policy wording moved beside the comment UI; other callers
+retain their own explanations. The shared selection summary says “N selected
+teams” because a selection does not always restrict visibility (SLA rules use it
+too). Unapplied additions are discarded on cancellation or owner withdrawal;
+complete applied ID arrays remain in the caller.
+
+Evidence: host + 21 remotes build; final Teams bundle typecheck/build after the
+summary wording change; 55 frontend tests; 39 backend team-reference/directory,
+comment-reply-audience, capability, module-contract and kernel tests. Existing
+cancellation/realtime tests now load the actual owner reference query, retaining
+key normalization, count-mode separation and entity-invalidation assertions.
+A boundary test prevents state/query logic returning to the team adapters or
+comment-specific policy copy entering Teams.
+
+The actual-bundle relationship proof passes 13 grouped checks (31 requests, three
+observed aborts): initial absence, direct saved-ID resolution, preloaded labels,
+error/disabled props, permission refusal/retry, missing references, withdrawal
+mid-reference and mid-browse, fresh re-enable, 125-row search/paging, empty choice,
+125-ID audience windows, optional member counts, read-only controls, removal
+without losing off-page IDs, staged additions across searches, duplicate prevention,
+cancel/withdraw semantics, failed-bundle recovery, and standalone dismissal.
+Option-directory (11) and Auth/Teams directory (10) regression groups also pass.
+The new proof is in `test:browser`; picker and audience screenshots were inspected.
+
+The running local app serves the new Teams bundle. An authenticated read-only
+probe verified all three contributed controls in the served asset, ID-valued
+options, a real saved team's name and optional member counts. Plugin enablement
+was unchanged (Leave/GitHub/Forgejo disabled), and its temporary token was removed.
+No backend restart was needed for this UI-only stage; nothing was published.
+
+Remaining scope: CommentsThread still batches preview labels using the owner query
+through a transitional host re-export. Its lifecycle/ownership must be handled in
+the full comments migration without replacing batching with one request per row.
+The new comment preview file is correctly identified as Comments-owned but still
+host-located; it is partial, not approved final architecture. Teams settings,
+rosters, automation forms, navigation and all other partial/unreviewed artifacts
+remain in the complete goal.

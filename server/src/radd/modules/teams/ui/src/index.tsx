@@ -1,3 +1,6 @@
+import { TeamSelect as RelationshipSelect, TeamChoices } from "./RelationshipSelect";
+import { TeamAudience } from "./TeamAudience";
+import { TEAM_SELECT_SLOT, TEAM_CHOICES_SLOT, TEAM_AUDIENCE_SLOT, type TeamSelectProps, type TeamChoicesProps, type TeamAudienceProps } from "./relationship-contract";
 import { optionContributions } from "./options";
 import { definePlugin, DIRECTORY_SELECT_SLOT, PagedDirectorySelect, api, type DirectoryChoice, type DirectorySelectProps } from "@radd/plugin-sdk";
 
@@ -23,6 +26,9 @@ function CandidateSelect(props: DirectorySelectProps) {
 }
 
 export default definePlugin({ contributions: [...optionContributions,
+  { id: "relationship-select", slot: TEAM_SELECT_SLOT, toggleable: false, render: props => <RelationshipSelect {...(props as unknown as TeamSelectProps)} /> },
+  { id: "relationship-choices", slot: TEAM_CHOICES_SLOT, toggleable: false, render: props => <TeamChoices {...(props as unknown as TeamChoicesProps)} /> },
+  { id: "relationship-audience", slot: TEAM_AUDIENCE_SLOT, toggleable: false, render: props => <TeamAudience {...(props as unknown as TeamAudienceProps)} /> },
   { id: "team-select", slot: DIRECTORY_SELECT_SLOT, match: "teams.teams", toggleable: false, render: props => <TeamSelect {...(props as unknown as DirectorySelectProps)} /> },
   { id: "candidate-select", slot: DIRECTORY_SELECT_SLOT, match: "teams.candidates", toggleable: false, render: props => <CandidateSelect {...(props as unknown as DirectorySelectProps)} /> },
 ] });

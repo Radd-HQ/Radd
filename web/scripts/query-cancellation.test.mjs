@@ -38,7 +38,7 @@ const ai=evaluate(source('queries/ai-search.ts'),imports,['searchQuery','similar
 const provisioning=evaluate(source('queries/provisioning.ts'),imports,['provisioningReferencesQuery']);
 const fieldSettings=evaluate(source('queries/field-settings.ts'),imports,['fieldDirectoryQuery','managedFieldQuery','fieldProjectChoicesQuery','fieldProjectReferencesQuery','fieldOptionsQuery']);
 const formSharing=evaluate(source('queries/forms.ts'),{...imports,apiFormPath:id=>'/forms/'+id},['formSharingQuery','formShareCandidatesQuery']);
-const teams=evaluate(source('queries/users.ts'),{...imports,ApiPath:{teams:'/teams'}},['teamReferencesQuery']);
+const teams=evaluate(readFileSync(new URL('../../server/src/radd/modules/teams/ui/src/references.ts',import.meta.url),'utf8'),{...imports,ApiPath:{teams:'/teams'}},['teamReferencesQuery']);
 const serviceAccounts=evaluate(source('queries/integrations.ts'),{...imports,apiServiceAccountKeysPath:id=>'/service-accounts/'+id+'/keys'},['serviceAccountDirectoryQuery','serviceAccountQuery','serviceKeyDirectoryQuery']);
 const resourceGrants=evaluate(source('queries/fields.ts'),imports,['resourceGrantsPageQuery']);
 const activity=evaluate(source('queries/activity.ts'),imports,['linkSearchQuery']);

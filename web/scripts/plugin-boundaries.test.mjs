@@ -143,3 +143,15 @@ test('project and cycle picker host paths contain only contribution adapters',()
     assert(!nodes(file).some(n=>n.type==='StringLiteral'&&/^\/(?:projects|cycles)/.test(n.value)));
   }
 });
+
+
+test('team relationship adapters own no reference queries, selection state or feature copy',()=>{
+  for(const file of ['web/src/components/teams/TeamSelect.tsx','web/src/components/teams/TeamAudience.tsx']) {
+    const ast=nodes(file);
+    assert(ast.filter(n=>n.type==='ImportDeclaration').every(n=>n.source.value==='@radd/plugin-sdk'||n.source.value.endsWith('/relationship-contract')),file);
+    assert(!ast.some(n=>n.type==='CallExpression'&&['useQuery','useQueries','useState'].includes(n.callee?.name)),file);
+  }
+  for(const file of files('server/src/radd/modules/teams/ui/src')) {
+    assert(!readFileSync(file,'utf8').includes('internal notes'),file+' must not own comment policy copy');
+  }
+});

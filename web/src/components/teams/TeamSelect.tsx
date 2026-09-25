@@ -1,36 +1,11 @@
-import { OptionChoices } from "@radd/plugin-sdk";
-import { useId, useState, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { ChevronDown } from "lucide-react";
-import { teamReferencesQuery } from "../../lib/queries/users";
-import { Button } from "../Button";
-import { QueryError } from "../QueryError";
-
-/** ID-valued team relationships resolve the saved value without a catalog. */
-export function TeamSelect({ value, onChange, label, selectedLabel, placeholder, emptyLabel = "None", disabled, title, error, size = "md" }: {
-  value: string; onChange: (id: string) => void; label?: string; selectedLabel?: string;
-  placeholder?: string; emptyLabel?: string; disabled?: boolean; title?: string; error?: string; size?: "sm" | "md";
-}) {
-  const id = useId();
-  const [open, setOpen] = useState(false);
-  const selected = useQuery({ ...teamReferencesQuery(value ? [value] : []), enabled: Boolean(value) && !selectedLabel });
-  const text = value ? selectedLabel ?? selected.data?.find(row => row.id === value)?.name ?? (selected.isPending ? "Loading team…" : "Unavailable team") : placeholder ?? emptyLabel;
-  return <div className="flex min-w-0 flex-col gap-1.5">
-    {label && <label htmlFor={id} className="text-xs font-medium text-fg-secondary">{label}</label>}
-    <Button id={id} variant="secondary" size={size} disabled={disabled} title={title} className="w-full justify-between"
-      aria-label={label ? undefined : placeholder ?? "Team"} aria-haspopup="dialog" aria-invalid={Boolean(error)} aria-describedby={error ? `${id}-error` : undefined} onClick={() => setOpen(true)}>
-      <span className="truncate">{text}</span><ChevronDown size={12} className="shrink-0" aria-hidden />
-    </Button>
-    {selected.isError && !selectedLabel && <div><QueryError label="selected team" error={selected.error} /><Button size="sm" variant="ghost" onClick={() => void selected.refetch()}>Retry team name</Button></div>}
-    {error && <p id={`${id}-error`} role="alert" className="text-xs text-status-danger-ink">{error}</p>}
-    {open && <TeamChoices selected={value ? [value] : []} emptyLabel={emptyLabel} onClose={() => setOpen(false)} onSelect={id => { onChange(id); setOpen(false); }} />}
-  </div>;
+import { Slot, Button, Modal } from "@radd/plugin-sdk";
+import { TEAM_SELECT_SLOT, TEAM_CHOICES_SLOT, type TeamSelectProps, type TeamChoicesProps } from "../../../../server/src/radd/modules/teams/ui/src/relationship-contract";
+/** Transitional adapters; Teams owns saved-reference queries and editing. */
+export function TeamSelect(props: TeamSelectProps) {
+  const fallback = <Button disabled variant="secondary" size={props.size} aria-label={props.label ?? props.placeholder}>Selection unavailable{props.selectedLabel || props.value ? ` · ${props.selectedLabel || props.value}` : ""}</Button>;
+  return <Slot id={TEAM_SELECT_SLOT} {...props} fallback={fallback} errorFallback={fallback} />;
 }
-
-export function TeamChoices({ selected = [], emptyLabel, onSelect, onClose, footer }: {
-  selected?: string[]; emptyLabel?: string; onSelect: (id: string) => void; onClose: () => void; footer?: ReactNode;
-}) {
-  return <OptionChoices resource="teams/directory" title="Choose a team" selectedValues={selected}
-    presets={emptyLabel ? [{ value: "", label: emptyLabel, hint: "" }] : []}
-    onSelect={row => onSelect(row.value)} onClose={onClose} footer={footer} />;
+export function TeamChoices(props: TeamChoicesProps) {
+  const fallback = <Modal title="Selection unavailable" onClose={props.onClose}><p>This picker is unavailable. Saved values are preserved.</p>{props.footer}</Modal>;
+  return <Slot id={TEAM_CHOICES_SLOT} {...props} fallback={fallback} errorFallback={fallback} />;
 }

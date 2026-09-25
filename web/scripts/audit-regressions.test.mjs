@@ -264,7 +264,7 @@ for (const entity of ["user", "role", "team", "group"]) {
 }
 assert.deepEqual(accountCalls, accountOptions.map(() => 5), "account and key directories refresh on identity/authority frames");
 stopAccountLive(); stopAccounts.forEach(stop => stop()); client.clear();
-const teamRefs = evaluate(source("queries/shared.ts") + "\n" + source("queries/users.ts"), {
+const teamRefs = evaluate(readFileSync(new URL("../../server/src/radd/modules/teams/ui/src/references.ts", import.meta.url), "utf8"), {
   ...ownerKeys, queryOptions: x => x, api: {}, Entity, entityMeta, keepPreviousData: undefined,
 }, ["teamReferencesQuery"]);
 assert.deepEqual(teamRefs.teamReferencesQuery(["b", "a", "a"]).queryKey, teamRefs.teamReferencesQuery(["a", "b"]).queryKey);

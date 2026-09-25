@@ -326,18 +326,4 @@ export const tokensQuery = queryOptions({
 });
 
 
-export interface TeamReference { id: string; name: string; member_count: number | null }
-/** Names/counts only, using GET so read-only account previews remain supported. */
-export const teamReferencesQuery = (ids: string[], includeCounts = false) => {
-  const identifiers = [...new Set(ids)].sort();
-  return queryOptions({
-    queryKey: [...queryKeys.teams, "references", identifiers, includeCounts] as const,
-    meta: entityMeta(Entity.team, Entity.role, Entity.member, Entity.group),
-    enabled: identifiers.length > 0,
-    queryFn: ({ signal }) => {
-      const query = new URLSearchParams({ include_counts: String(includeCounts) });
-      identifiers.forEach(id => query.append("ids", id));
-      return api.get<TeamReference[]>(`${ApiPath.teams}/references?${query}`, { signal });
-    },
-  });
-};
+export { teamReferencesQuery, type TeamReference } from "../../../../server/src/radd/modules/teams/ui/src/references";

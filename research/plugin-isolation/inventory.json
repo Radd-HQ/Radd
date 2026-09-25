@@ -1337,8 +1337,12 @@
         "event_types": "(EventTypeSpec(TeamEvent.CREATED, 'Team created', 'Admin', subjects=('team',)), EventTypeSpec(TeamEvent.UPDATED, 'Team updated', 'Admin', has_changes=True, subjects=('team',)), EventTypeSpec(TeamEvent.DELETED, 'Team deleted', 'Admin', trigger=False, subjects=('team',)))"
       },
       "ui_sources": [
+        "server/src/radd/modules/teams/ui/src/RelationshipSelect.tsx",
+        "server/src/radd/modules/teams/ui/src/TeamAudience.tsx",
         "server/src/radd/modules/teams/ui/src/index.tsx",
-        "server/src/radd/modules/teams/ui/src/options.ts"
+        "server/src/radd/modules/teams/ui/src/options.ts",
+        "server/src/radd/modules/teams/ui/src/references.ts",
+        "server/src/radd/modules/teams/ui/src/relationship-contract.ts"
       ]
     },
     "timelogging": {
@@ -1867,7 +1871,7 @@
         "build": "tsc -b && vite build",
         "preview": "vite preview",
         "test": "cd .. && node --test web/scripts/*.test.mjs",
-        "test:browser": "node scripts/browser-smoke.mjs && node scripts/browser-autocomplete.mjs && node scripts/browser-issue-performance.mjs && node scripts/browser-login.mjs && node scripts/browser-page-comments.mjs && node scripts/browser-resolvable-threads.mjs && node scripts/browser-plugin-availability.mjs && node scripts/browser-plugin-pages.mjs && node scripts/browser-settings-ownership.mjs && node scripts/browser-directory-contributions.mjs && node scripts/browser-leave-availability.mjs && node scripts/browser-automation-canvas.mjs && node scripts/browser-shared-controls.mjs && node scripts/browser-option-contributions.mjs && node scripts/browser-picker-contributions.mjs",
+        "test:browser": "node scripts/browser-smoke.mjs && node scripts/browser-autocomplete.mjs && node scripts/browser-issue-performance.mjs && node scripts/browser-login.mjs && node scripts/browser-page-comments.mjs && node scripts/browser-resolvable-threads.mjs && node scripts/browser-plugin-availability.mjs && node scripts/browser-plugin-pages.mjs && node scripts/browser-settings-ownership.mjs && node scripts/browser-directory-contributions.mjs && node scripts/browser-leave-availability.mjs && node scripts/browser-automation-canvas.mjs && node scripts/browser-shared-controls.mjs && node scripts/browser-option-contributions.mjs && node scripts/browser-picker-contributions.mjs && node scripts/browser-team-relationships.mjs",
         "build:all": "node scripts/build-all.mjs",
         "check": "npm run test && npm run build:all && npm run test:browser"
       }
@@ -2317,7 +2321,7 @@
       "imports": []
     },
     "docs/modules.md": {
-      "sha256": "a9d3ef36e91353910fc09fb2fa93e8b00fc425d869c9397ef097199e6c9f2cd5",
+      "sha256": "2e8457d48b93de478d0106df206dcccc074d030440902de3299cea715aa4e965",
       "module_directory": null,
       "role": "documentation",
       "imports": []
@@ -2353,7 +2357,7 @@
       "imports": []
     },
     "docs/plugin-platform.md": {
-      "sha256": "803d421a8f147b01f162d4fb7e192f1d7244df21d6625ca4a49ee2822fd8bdd1",
+      "sha256": "2788cc8cd8c7cb4396330f4c2a8224b6a6f5ee2e7e0ab2e42daeb5177c47987e",
       "module_directory": null,
       "role": "documentation",
       "imports": []
@@ -3937,7 +3941,7 @@
       "imports": []
     },
     "research/plugin-isolation/README.md": {
-      "sha256": "102dbb6ca540aeb5912a7fed9ec1cd402c1570ab01f716c5545d1d652deab199",
+      "sha256": "5c6972974b715d8c4e75d62bd7a40b3b5840bbac6bf660a0386ca76a499d6758",
       "module_directory": null,
       "role": "documentation",
       "imports": []
@@ -66728,17 +66732,95 @@
       "role": "configuration",
       "imports": []
     },
-    "server/src/radd/modules/teams/ui/src/index.tsx": {
-      "sha256": "97ce9a8e021bcd230f7fbec4e6c3abbe6fc8cd58d11045290e8499412b27c192",
+    "server/src/radd/modules/teams/ui/src/RelationshipSelect.tsx": {
+      "sha256": "0eeb509f7d8bc0ccc7652e4ff5e5b49265d87ba428651f3f85fd93c02e4cdf27",
       "module_directory": "teams",
       "role": "runtime_source",
       "imports": [
         {
           "line": 1,
-          "module": "./options"
+          "module": "@radd/plugin-sdk"
         },
         {
           "line": 2,
+          "module": "react"
+        },
+        {
+          "line": 3,
+          "module": "@tanstack/react-query"
+        },
+        {
+          "line": 4,
+          "module": "lucide-react"
+        },
+        {
+          "line": 5,
+          "module": "./references"
+        },
+        {
+          "line": 6,
+          "module": "./relationship-contract"
+        }
+      ]
+    },
+    "server/src/radd/modules/teams/ui/src/TeamAudience.tsx": {
+      "sha256": "7d182a316706f0c1bdf7f52bd159b41e9259cfd93b74ff22e9c74ffb9ba67ba5",
+      "module_directory": "teams",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "react"
+        },
+        {
+          "line": 2,
+          "module": "@tanstack/react-query"
+        },
+        {
+          "line": 3,
+          "module": "lucide-react"
+        },
+        {
+          "line": 4,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 5,
+          "module": "./references"
+        },
+        {
+          "line": 6,
+          "module": "./RelationshipSelect"
+        },
+        {
+          "line": 7,
+          "module": "./relationship-contract"
+        }
+      ]
+    },
+    "server/src/radd/modules/teams/ui/src/index.tsx": {
+      "sha256": "7fbf0e14f6bb7503da58ccff5e8e57f73d7cc3d137bfea016cdc9a30ced0624a",
+      "module_directory": "teams",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "./RelationshipSelect"
+        },
+        {
+          "line": 2,
+          "module": "./TeamAudience"
+        },
+        {
+          "line": 3,
+          "module": "./relationship-contract"
+        },
+        {
+          "line": 4,
+          "module": "./options"
+        },
+        {
+          "line": 5,
           "module": "@radd/plugin-sdk"
         }
       ]
@@ -66751,6 +66833,28 @@
         {
           "line": 1,
           "module": "@radd/plugin-sdk"
+        }
+      ]
+    },
+    "server/src/radd/modules/teams/ui/src/references.ts": {
+      "sha256": "7de3313c9a782966e76e3c13bfdfb8efd2bddb7f9ab114acf9c34bea4e6809fa",
+      "module_directory": "teams",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@radd/plugin-sdk"
+        }
+      ]
+    },
+    "server/src/radd/modules/teams/ui/src/relationship-contract.ts": {
+      "sha256": "f97e4fc3fb2369626b5beae464ae41759e83ca3f63ae9bdfeebd023f9b97bfd3",
+      "module_directory": "teams",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "react"
         }
       ]
     },
@@ -109582,7 +109686,7 @@
       "imports": []
     },
     "web/package.json": {
-      "sha256": "a319755351eb5730b32a796e186038bda4d21cf2c7ea68176c5f813091f70101",
+      "sha256": "5d9bb3c95861758f020ab488ab0ae4564f8cecfdba1b9fe056990184d053776b",
       "module_directory": null,
       "role": "configuration",
       "imports": []
@@ -110290,7 +110394,7 @@
       ]
     },
     "web/scripts/audit-regressions.test.mjs": {
-      "sha256": "5323cab2f596f2fd0ac7a0416053193ae8430781b76b51267d8226a704844027",
+      "sha256": "f0f3cc2df512758d70475cac656c17099e560389d4a018f01d848ea88765c808",
       "module_directory": null,
       "role": "test",
       "imports": [
@@ -111235,6 +111339,45 @@
         {
           "line": 8,
           "module": "./lib/cdp.mjs"
+        }
+      ]
+    },
+    "web/scripts/browser-team-relationships.mjs": {
+      "sha256": "5b213c17cc66182edf0264d2079097cb155465f7801c54d5c84f96661221f910",
+      "module_directory": null,
+      "role": "tooling_source",
+      "imports": [
+        {
+          "line": 2,
+          "module": "node:assert/strict"
+        },
+        {
+          "line": 3,
+          "module": "node:http"
+        },
+        {
+          "line": 4,
+          "module": "node:fs"
+        },
+        {
+          "line": 5,
+          "module": "node:fs/promises"
+        },
+        {
+          "line": 6,
+          "module": "node:path"
+        },
+        {
+          "line": 7,
+          "module": "./lib/cdp.mjs"
+        },
+        {
+          "line": 11,
+          "module": "react"
+        },
+        {
+          "line": 11,
+          "module": "@radd/plugin-sdk"
         }
       ]
     },
@@ -112408,7 +112551,7 @@
       ]
     },
     "web/scripts/plugin-boundaries.test.mjs": {
-      "sha256": "7dffd066441e54f410ae9b73ecfa77b07577bfa10f87b46014b59b75872a17e2",
+      "sha256": "d72a17f65dd5ba46196e1da25989064d008e50514300d5361bbc8b6db04b9b3f",
       "module_directory": null,
       "role": "test",
       "imports": [
@@ -112610,7 +112753,7 @@
       ]
     },
     "web/scripts/query-cancellation.test.mjs": {
-      "sha256": "1db930dad92618fde6d5309d68dfd57e65c8b59abcf0f13d77f07eb1a6cdc010",
+      "sha256": "84d581cec2efa24ebeb75b546f6bc7438e846f90f0432427f3d0b2e9f9490967",
       "module_directory": null,
       "role": "test",
       "imports": [
@@ -118051,8 +118194,27 @@
         }
       ]
     },
+    "web/src/components/items/CommentAudienceNames.tsx": {
+      "sha256": "4bc9d1b83289608d11819beafcdde96ed8400d2680ed8e59c54e8e6f37ab1bda",
+      "module_directory": null,
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "react"
+        },
+        {
+          "line": 2,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 3,
+          "module": "../teams/TeamAudience"
+        }
+      ]
+    },
     "web/src/components/items/CommentsThread.tsx": {
-      "sha256": "f328040a3504f394c0f744d3140533be815f22e61d2830a78038e01af8e27c65",
+      "sha256": "5ed476f883931d34dd246dd39e45b27589359a6be6eb4e775c85e55aca660fbd",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -118146,38 +118308,42 @@
         },
         {
           "line": 39,
-          "module": "../QueryError"
+          "module": "./CommentAudienceNames"
         },
         {
           "line": 40,
-          "module": "../comments/CommentReplies"
+          "module": "../QueryError"
         },
         {
           "line": 41,
-          "module": "../comments/CopyCommentLink"
+          "module": "../comments/CommentReplies"
         },
         {
           "line": 42,
-          "module": "../../lib/comment-links"
+          "module": "../comments/CopyCommentLink"
         },
         {
           "line": 43,
+          "module": "../../lib/comment-links"
+        },
+        {
+          "line": 44,
           "module": "../comments/ThreadResolution"
         },
         {
-          "line": 45,
+          "line": 46,
           "module": "../editor/ai"
         },
         {
-          "line": 46,
+          "line": 47,
           "module": "../editor/AiReadMenu"
         },
         {
-          "line": 47,
+          "line": 48,
           "module": "../editor/LazyRichEditor"
         },
         {
-          "line": 48,
+          "line": 49,
           "module": "../../lib/dates"
         }
       ]
@@ -127852,50 +128018,7 @@
       ]
     },
     "web/src/components/teams/TeamAudience.tsx": {
-      "sha256": "56c9c5a1eedb04d003f4db50306616f786be91858553638e2a7b2ba0c1927780",
-      "module_directory": null,
-      "role": "runtime_source",
-      "imports": [
-        {
-          "line": 1,
-          "module": "react"
-        },
-        {
-          "line": 2,
-          "module": "@tanstack/react-query"
-        },
-        {
-          "line": 3,
-          "module": "lucide-react"
-        },
-        {
-          "line": 4,
-          "module": "../../lib/queries/users"
-        },
-        {
-          "line": 5,
-          "module": "../Button"
-        },
-        {
-          "line": 6,
-          "module": "../DirectoryPager"
-        },
-        {
-          "line": 7,
-          "module": "../Modal"
-        },
-        {
-          "line": 8,
-          "module": "../QueryError"
-        },
-        {
-          "line": 9,
-          "module": "./TeamSelect"
-        }
-      ]
-    },
-    "web/src/components/teams/TeamSelect.tsx": {
-      "sha256": "9c5e807e1314c2bc7fda598a9da038dd1e299052adaa070270b3998d6dfca4e9",
+      "sha256": "7d55eb8fb8ac2afb681165fea48c2330c866dcc8dbd911e74a5b2d474f17547f",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -127905,27 +128028,22 @@
         },
         {
           "line": 2,
-          "module": "react"
+          "module": "../../../../server/src/radd/modules/teams/ui/src/relationship-contract"
+        }
+      ]
+    },
+    "web/src/components/teams/TeamSelect.tsx": {
+      "sha256": "9e20176e35872d6ad38be55a3a2f436800eb258dc87a21305cd5c3c47bfbe8b6",
+      "module_directory": null,
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@radd/plugin-sdk"
         },
         {
-          "line": 3,
-          "module": "@tanstack/react-query"
-        },
-        {
-          "line": 4,
-          "module": "lucide-react"
-        },
-        {
-          "line": 5,
-          "module": "../../lib/queries/users"
-        },
-        {
-          "line": 6,
-          "module": "../Button"
-        },
-        {
-          "line": 7,
-          "module": "../QueryError"
+          "line": 2,
+          "module": "../../../../server/src/radd/modules/teams/ui/src/relationship-contract"
         }
       ]
     },
@@ -131140,7 +131258,7 @@
       ]
     },
     "web/src/lib/queries/users.ts": {
-      "sha256": "e40990d112522eccd99556ef8ecf5b309a46e46eaa1885fbcb2fac61dd400b5e",
+      "sha256": "3800a31aa495ab2bf8cffbe4095c55f06c612f331d9e501d97deca83890f9b93",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -131171,6 +131289,10 @@
         {
           "line": 37,
           "module": "../types"
+        },
+        {
+          "line": 329,
+          "module": "../../../../server/src/radd/modules/teams/ui/src/references"
         }
       ]
     },
