@@ -2,7 +2,6 @@ import { Inbox } from "lucide-react";
 import { usePermissions } from "../../lib/hooks";
 import { Permission } from "../../lib/types";
 import { EmptyState } from "../../components/EmptyState";
-import { AckTemplatePanel } from "../../components/settings/email/AckTemplatePanel";
 import { AutomaticMessagesPanel } from "../../components/settings/email/AutomaticMessagesPanel";
 import { SendersPanel } from "../../components/settings/email/SendersPanel";
 import { SettingsPage } from "../../components/settings/SettingsPage";
@@ -50,7 +49,6 @@ export function EmailSettingsPage() {
           <SourcesPanel />
           <SendersPanel />
           <AutomaticMessagesPanel />
-          <AckTemplatePanel />
         </div>
       )}
     </SettingsPage>

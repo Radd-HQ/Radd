@@ -4,14 +4,11 @@ A public comment on a ticket that came in by email is mailed back to the person
 who raised it, in a message their client threads under the original rather than
 stacking as a new conversation.
 
-**Two messages since RADD-982, one consumer.** The comment reply (`reply.py`)
-and the resolution notice (`resolved.py`) are the same job — tell the external
-contact something that happened on their ticket — read off the same stream with
-the same at-most-once cursor, so a second consumer would have been a second copy
-of every property below for no gain. What differs between them is the PLAN, and
-the plan answers for itself: `recipients`, `subject`, `comment_id`,
-`pin_subject` and `render(recipient)` are the whole interface `_deliver` reads
-(`OutboundPlan`), so adding a third message is a planner and a line in `_plan`.
+**One message since RADD-1318.** The resolution notice (RADD-982) shared this
+consumer until it became an automation template — the desk sends nothing on its
+own that nobody switched on. The plan still answers for itself through
+`OutboundPlan` (`recipients`, `subject`, `comment_id`, `pin_subject`,
+`render(recipient)`), so a second message is a planner and a line in `_plan`.
 
 Cursor idiom = the shared head-seeded scaffold (`events.runner.run_head_seeded`):
 consumer offset `mailintake.outbound`, first start seeds AT THE STREAM HEAD (a
@@ -40,19 +37,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd import mailrender
 from radd.config import settings
 from radd.db import SessionLocal
-from radd.modules.automations.types import SYSTEM_ACTOR_ID
 from radd.modules.comments import service as comments
-from radd.modules.comments.types import CommentEvent, CommentVisibility
+from radd.modules.comments.types import CommentEvent, CommentOrigin, CommentVisibility
 from radd.modules.events import runner
 from radd.modules.events.service import Event
 from radd.modules.items import service as items
-from radd.modules.items.enums import ItemEvent
 from radd.modules.projects import service as projects_service
 
-from . import resolved, service
+from . import service
 from .reply import OutboundReply, Recipient, recipients_for
 from .transport import MailAttachment
-from .types import OUTBOUND_BATCH, OUTBOUND_CONSUMER_NAME, REPLY_SUBJECT_TEMPLATE
+from .types import OUTBOUND_BATCH, OUTBOUND_CONSUMER_NAME, REPLY_SUBJECT_TEMPLATE, SentMailKind
 
 logger = logging.getLogger(__name__)
 
@@ -88,11 +83,16 @@ class OutboundPlan(Protocol):
     def render(self, recipient: Recipient) -> mailrender.RenderedMail: ...
 
 
-def should_reply(*, has_recipients: bool, visibility: str, actor_id: uuid.UUID | None) -> bool:
-    """Pure send decision: someone to mail AND the comment is PUBLIC AND a real
-    (non-SYSTEM) author. The SYSTEM gate is what stops inbound-mail comments and
-    automation comments from echoing straight back out — the first half of a
-    mail loop, closed here rather than left to the RADD-957 guards.
+def should_reply(*, has_recipients: bool, visibility: str, origin: str | None) -> bool:
+    """Pure send decision: someone to mail AND the comment is PUBLIC AND it did
+    not come FROM the requester's mail. That last gate is what stops an inbound
+    message echoing straight back out — the first half of a mail loop, closed
+    here rather than left to the RADD-957 guards.
+
+    It used to be "the author is not SYSTEM" (RADD-1318), which also swallowed
+    every automation's comment: "on Email received, reply 'we're on it'" wrote
+    the comment and never mailed it. Deciding by ORIGIN relays an automation's
+    public comment like anyone else's, and refuses exactly the inbound echo.
 
     The PUBLIC gate is also what keeps an internal comment away from the
     customer: notify mails internal comments to the users whose notification
@@ -102,9 +102,7 @@ def should_reply(*, has_recipients: bool, visibility: str, actor_id: uuid.UUID |
         return False
     if visibility != CommentVisibility.PUBLIC.value:
         return False
-    if actor_id is None or actor_id == SYSTEM_ACTOR_ID:
-        return False
-    return True
+    return origin != CommentOrigin.INBOUND_MAIL
 
 
 async def _plan(session: AsyncSession, event: Event) -> OutboundPlan | None:
@@ -118,8 +116,6 @@ async def _plan(session: AsyncSession, event: Event) -> OutboundPlan | None:
         return None  # unconfigured = advance silently, plan nothing
     if event.event_type == CommentEvent.CREATED.value:
         return await _plan_reply(session, event)
-    if event.event_type == ItemEvent.UPDATED.value:
-        return await resolved.plan(session, event)
     return None
 
 
@@ -142,7 +138,7 @@ async def _plan_reply(session: AsyncSession, event: Event) -> OutboundReply | No
     if not should_reply(
         has_recipients=bool(recipients),
         visibility=payload.get("visibility", CommentVisibility.PUBLIC.value),
-        actor_id=event.actor_id,
+        origin=payload.get("origin"),
     ):
         return None
     project = await projects_service.get_project(session, item.project_id)
@@ -193,5 +189,6 @@ async def _deliver(plan: OutboundPlan) -> None:
                 comment_id=prepared.comment_id,
                 pin_subject=prepared.pin_subject,
                 attachments=images,
+                kind=SentMailKind.REPLY,
             )
         await session.commit()

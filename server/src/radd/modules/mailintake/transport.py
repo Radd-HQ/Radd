@@ -64,6 +64,7 @@ from .types import (
     MailEntity,
     MailEvent,
     MailFailureReport,
+    SentMailKind,
     MailSenderKind,
 )
 
@@ -76,7 +77,7 @@ class _EnvSender:
 
     A seed-era instance has no sender row — `seeding.seed_from_env` only writes
     one when `RADD_SMTP_HOST` is set at first boot, and an instance that gained
-    SMTP later has none at all. `send_ack` has always had this fallback; without
+    SMTP later has none at all. The old receipt always had this fallback; without
     it here, upgrading would SILENTLY stop every notification email on exactly
     those instances. A frozen dataclass rather than a detached `MailSender`, so
     nothing can flush a synthetic row into the table.
@@ -235,6 +236,7 @@ async def send_item_mail(
     attachments: tuple[MailAttachment, ...] = (),
     failure: MailFailureReport = MailFailureReport.REPORT,
     headers: Mapping[str, str] | None = None,
+    kind: SentMailKind,
 ) -> str | None:
     """Mail one person about one issue. Returns the Message-ID that went on the
     wire, or None when nothing was sent (no relay, no address, a failure).
@@ -307,6 +309,7 @@ async def send_item_mail(
             comment_id=comment_id,
             failure=failure,
             attachments=attachments,
+            kind=kind,
         )
 
 
@@ -320,6 +323,7 @@ async def send_plain_mail(
     html: str = "",
     failure: MailFailureReport = MailFailureReport.REPORT,
     headers: Mapping[str, str] | None = None,
+    kind: SentMailKind,
 ) -> str | None:
     """Mail one person about NO issue in particular (RADD-983). Returns the
     Message-ID that went on the wire, or None when nothing was sent.
@@ -368,6 +372,7 @@ async def send_plain_mail(
             headers=dict(headers or {}),
             comment_id=None,
             failure=failure,
+            kind=kind,
         )
 
 
@@ -384,6 +389,7 @@ async def _deliver(
     headers: dict[str, str],
     comment_id: uuid.UUID | None,
     failure: MailFailureReport,
+    kind: SentMailKind,
     attachments: tuple[MailAttachment, ...] = (),
 ) -> str | None:
     """One message onto one relay, and the report of what happened to it.
@@ -422,6 +428,7 @@ async def _deliver(
                 MailEvent.FAILED,
                 to_address,
                 subject,
+                kind=kind,
                 error=_error_text(exc),
                 given_up=failure is MailFailureReport.TERMINAL,
             )
@@ -435,7 +442,7 @@ async def _deliver(
             subject=subject,
             comment_id=comment_id,
         )
-    await _emit_outcome(session, item_id, MailEvent.SENT, to_address, subject)
+    await _emit_outcome(session, item_id, MailEvent.SENT, to_address, subject, kind=kind)
     return sent
 
 
@@ -457,6 +464,7 @@ async def _emit_outcome(
     address: str,
     subject: str,
     *,
+    kind: SentMailKind,
     error: str = "",
     given_up: bool = False,
 ) -> None:
@@ -481,6 +489,8 @@ async def _emit_outcome(
         "recipients": [address],
         "recipient_count": 1,
         "subject": subject,
+        # RADD-1318: what this mail WAS — a reply, a digest, an automation's.
+        "kind": kind.value,
         # No body, for the reason in intake._mail_facts.
     }
     if event_type is MailEvent.FAILED:

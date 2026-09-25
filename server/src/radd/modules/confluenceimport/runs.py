@@ -25,6 +25,7 @@ from radd.modules.attachments import AttachmentTooLarge, service as attachments_
 from radd.modules.auth.models import User
 from radd.modules.comments import service as comments_service
 from radd.modules.comments.schemas import CommentCreate
+from radd.modules.comments.types import CommentOrigin
 from radd.modules.events import service as events
 from radd.modules.pages import labels as page_labels, spaces as page_spaces
 from radd.modules.pages.schemas import PageSpaceCreate
@@ -572,6 +573,7 @@ async def _comments(
                 # The import-friendly door: author and timestamp are honored only
                 # for a caller holding PROJECT_MANAGE, which is what this says.
                 permissions=frozenset({Permission.PROJECT_MANAGE}),
+                origin=CommentOrigin.IMPORT,
             )
             _bump(run, "comments")
         await session.commit()

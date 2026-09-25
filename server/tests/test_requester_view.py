@@ -278,6 +278,7 @@ async def test_the_requesters_own_emailed_reply_does_not_light_the_marker(db, ad
     """
     from radd.modules.automations.types import SYSTEM_ACTOR_ID
     from radd.modules.auth import service as auth_service
+    from radd.modules.comments.types import CommentOrigin
 
     requester = await _member(db)
     project = await _project(db)
@@ -292,6 +293,9 @@ async def test_the_requesters_own_emailed_reply_does_not_light_the_marker(db, ad
                       visibility=CommentVisibility.PUBLIC),
         system,
         entity_type=CommentParentType.ITEM.value,
+        # What intake stamps on mail no account stands behind (RADD-1318): the
+        # marker reads the ORIGIN now, not "the author is SYSTEM".
+        origin=CommentOrigin.INBOUND_MAIL,
     )
     [row] = [r for r in await requests_service.list_my_requests(db, requester) if r.key == filed.key]
     assert row.awaiting_requester is False

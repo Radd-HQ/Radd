@@ -45,6 +45,22 @@ class MailEvent(StrEnum):
     RULE_DELETED = "mail_rule.deleted"
 
 
+class SentMailKind(StrEnum):
+    """WHAT a sent mail was, carried as `kind` on `mail.sent`/`mail.failed`
+    (RADD-1318). Not `MailKindPreset`, which is about PROVIDERS.
+
+    Required of every caller, so a new sender cannot forget to say: a rule on
+    "Email sent" that means "we replied to the customer" should not also fire on
+    the nightly digest.
+    """
+
+    REPLY = "reply"  # a public comment relayed to the requester
+    NOTIFICATION = "notification"  # one notification mailed to a user
+    DIGEST = "digest"  # a batch of notifications
+    SURVEY = "survey"  # a CSAT survey
+    AUTOMATION = "automation"  # an automation's Send email
+
+
 class MailFailureReport(StrEnum):
     """What the transport should do with a delivery failure (RADD-997/1036).
 
@@ -423,52 +439,8 @@ OUTBOUND_CONSUMER_NAME = "mailintake.outbound"
 # Events read per outbound poll iteration (mirrors googlechat's batch).
 OUTBOUND_BATCH = 200
 
-# Acknowledgment sent when intake/public-form submission creates an item with a
-# contact. The bracketed key in the subject is what threads the requester's
-# replies back onto the item (parsing.extract_reply_key) — which is why the
-# SUBJECT stays a fixed wire constant here. The BODY used to live beside it in
-# `radd.mailrender` as a second constant (RADD-967); since RADD-1045 it is the
-# `mail_ack_body` scalar-cascade setting (Settings → Email, default text on
-# `config.Settings.mail_ack_body`) — policy this module owns and resolves in
-# `service.send_ack`, not a rendering decision `mailrender` gets to make.
-ACK_SUBJECT_TEMPLATE = "[{key}] {title}"
-
 # Outbound reply to the contact when an agent leaves a PUBLIC comment.
 REPLY_SUBJECT_TEMPLATE = "Re: [{key}] {title}"
-
-# --- the resolution notice (RADD-982) ---
-
-# The `changes` diff token for a state move (`items/changes.py`'s `scalar("state", …)`).
-# Copied rather than imported, exactly as `csat.types` copies it: `items` exports no
-# name for it, and a second reader of the diff should not be the reason it gains one.
-STATE_CHANGE_FIELD = "state"
-
-#: Its own sentence, not a `Re:` on the requester's — the resolution OPENS a topic
-#: the way the CSAT survey does, so `send_item_mail` is asked to pin it. Threading
-#: is untouched: In-Reply-To/References still come from the message store, so a
-#: client still files this under the ticket's conversation.
-RESOLVED_SUBJECT_TEMPLATE = "[{key}] Your request has been resolved"
-
-#: What the notice says. `{state}` is the state it actually landed in, because a
-#: desk with "Resolved" and "Closed" means two different things by them and the
-#: requester is the one person who cannot look the difference up.
-RESOLVED_BODY_TEMPLATE = (
-    "Your request {key} — {title} — has been marked {state}.\n"
-    "\n"
-    "If it isn't sorted, reply to this email and the ticket picks up where it "
-    "left off."
-)
-
-#: The notice's footer — the same "why am I getting this" wording as a reply,
-#: pointed at the end of the conversation rather than the middle of it.
-RESOLVED_REASON_TEMPLATE = (
-    "You are receiving this because you contacted us about {key}."
-)
-
-#: The csat plugin's id in the kernel registry. mailintake reaches it DEFERRED and
-#: feature-detected (`weak_depends`), so a disabled or uninstalled csat means "not
-#: announcing" rather than an ImportError — the `ai` seam's shape (RADD-961).
-CSAT_PLUGIN_ID = "csat"
 
 # Why each recipient is being written to — the footer of an outbound reply.
 REPLY_REASON_TEMPLATES = {

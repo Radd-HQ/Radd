@@ -23,6 +23,7 @@ from .types import (
     EXCERPT_MAX_CHARS,
     CommentEntity,
     CommentEvent,
+    CommentOrigin,
     CommentParentType,
     CommentVisibility,
 )
@@ -156,14 +157,16 @@ async def public_comments_for_item(
 
 async def public_comment_times(
     session: AsyncSession, item_ids: Iterable[uuid.UUID]
-) -> list[tuple[uuid.UUID, uuid.UUID | None, datetime]]:
-    """(item_id, author_id, created_at) for every PUBLIC comment on the items,
-    oldest first — the SLA first-response seam (spec 30)."""
+) -> list[tuple[uuid.UUID, uuid.UUID | None, datetime, str | None]]:
+    """(item_id, author_id, created_at, origin) for every PUBLIC comment on the
+    items, oldest first — the SLA first-response seam (spec 30). `origin`
+    (RADD-1318) is what tells a person's answer from inbound mail or an
+    automation."""
     ids = list(item_ids)
     if not ids:
         return []
     result = await session.execute(
-        select(Comment.entity_id, Comment.author_id, Comment.created_at)
+        select(Comment.entity_id, Comment.author_id, Comment.created_at, Comment.origin)
         .where(
             Comment.entity_type == CommentParentType.ITEM,
             Comment.entity_id.in_(ids),
@@ -291,6 +294,8 @@ async def _emit(
                 str(comment.parent_comment_id) if comment.parent_comment_id else None
             ),
             "is_thread": comment.is_thread,
+            # RADD-1318: where it came from when no person typed it (null = a person).
+            "origin": comment.origin,
             # The canonical item ref (RADD-922), None when the parent is not an
             # item. It replaces the bare `item_id` that every consumer then had
             # to resolve into a key and a project of its own accord.
@@ -312,13 +317,16 @@ async def create_comment(
     data: CommentCreate,
     actor: User,
     entity_type: str = CommentParentType.ITEM.value,
+    *,
+    origin: CommentOrigin | None = None,
 ) -> CommentRead:
     binding, project = await _parent_scope(session, entity_type, entity_id)
     if data.is_thread or data.anchor is not None:
         await binding.require_read(session, actor, entity_id, project)
     permissions = await binding.require_write(session, actor, entity_id, project)
     return await create_authorized_comment(
-        session, entity_id, data, actor, entity_type=entity_type, permissions=permissions
+        session, entity_id, data, actor, entity_type=entity_type, permissions=permissions,
+        origin=origin,
     )
 
 
@@ -331,6 +339,7 @@ async def create_authorized_comment(
     entity_type: str = CommentParentType.ITEM.value,
     permissions: frozenset[Permission] = frozenset(),
     parent_comment_id: uuid.UUID | None = None,
+    origin: CommentOrigin | None = None,
 ) -> CommentRead:
     """Write a comment whose authorisation the CALLER has already decided.
 
@@ -373,6 +382,8 @@ async def create_authorized_comment(
         anchor=data.anchor.model_dump() if data.anchor else None,
         visibility=data.visibility.value,
         parent_comment_id=parent_comment_id,
+        # RADD-1318: an automation's comment is DERIVED, whoever it acts as.
+        origin=(origin or (CommentOrigin.AUTOMATION if events.is_automated() else None)),
     )
     if occurred_at is not None:
         comment.created_at = occurred_at.replace(tzinfo=None)

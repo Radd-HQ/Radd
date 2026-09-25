@@ -88,6 +88,7 @@ _DETAIL_KEYS = (
     "sender",  # mail.received: who wrote in
     "error",  # mail.failed: one line an operator can act on
     "given_up",  # mail.failed: the retry ladder ran out — nobody will hear from us
+    "kind",  # mail.sent/failed (RADD-1318): reply | notification | digest | survey | automation
 )
 
 

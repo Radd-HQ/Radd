@@ -39,6 +39,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd import mailrender
 from radd.config import settings
 from radd.db import SessionLocal
 from radd.modules.auth.models import User
@@ -102,7 +103,13 @@ logger = logging.getLogger(__name__)
 
 
 async def _send_email(
-    session: AsyncSession, to_address: str, to_name: str, subject: str, body: str
+    session: AsyncSession,
+    to_address: str,
+    to_name: str,
+    subject: str,
+    body: str,
+    *,
+    thread_on: WorkItem | None = None,
 ) -> None:
     """The send_email action's delivery, through the ONE transport (RADD-983).
 
@@ -144,9 +151,32 @@ async def _send_email(
             to_address,
         )
         return
-    sent = await mail_service.send_plain_mail(
-        session, to_address=to_address, to_name=to_name, subject=subject, text=body
-    )
+    kind = mail_service.SentMailKind.AUTOMATION
+    if thread_on is None:
+        sent = await mail_service.send_plain_mail(
+            session, to_address=to_address, to_name=to_name, subject=subject, text=body, kind=kind
+        )
+    else:
+        # RADD-1318 — the opt-in the receipt needed: ON the issue's thread, in
+        # the desk's shape, subject pinned (the `[KEY]` is the threading
+        # fallback), outbound Message-ID recorded so a reply comes back here.
+        project = await session.get(Project, thread_on.project_id)
+        key = f"{project.key}-{thread_on.number}" if project is not None else ""
+        rendered = mailrender.contact_notice(
+            mailrender.ItemMail(key=key, title=thread_on.title, base_url=settings.app_base_url),
+            body=body,
+        )
+        sent = await mail_service.send_item_mail(
+            session,
+            item_id=thread_on.id,
+            to_address=to_address,
+            to_name=to_name,
+            subject=subject,
+            text=rendered.text,
+            html=rendered.html,
+            pin_subject=True,
+            kind=kind,
+        )
     if sent is None:
         logger.warning("automations: send_email to %s was not delivered", to_address)
 
@@ -227,8 +257,10 @@ async def _apply_plan(
             )
             response.raise_for_status()
     elif plan.kind is PlanKind.EMAIL and plan.email is not None:
-        to_address, to_name, subject, body = plan.email
-        await _send_email(session, to_address, to_name, subject, body)
+        to_address, to_name, subject, body, thread = plan.email
+        await _send_email(
+            session, to_address, to_name, subject, body, thread_on=item if thread else None
+        )
     elif plan.kind is PlanKind.NOTIFY and plan.notify is not None:
         user_id, message = plan.notify
         await notify_service.create_notification(

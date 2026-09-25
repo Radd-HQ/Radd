@@ -166,7 +166,7 @@ async def test_send_email_literal_recipient_renders_templates(smtp_on):
     plan = await engine._plan(None, _send_action("Ext@Example.com "), None, None, None, **_plan_kwargs())
     assert plan.kind == "email"
     # Literal addresses pass through trimmed (case preserved); templates render.
-    assert plan.email == ("Ext@Example.com", "", "s manual", "b")
+    assert plan.email == ("Ext@Example.com", "", "s manual", "b", False)
 
 
 async def test_send_email_role_needs_a_target_item(smtp_on):
@@ -183,7 +183,7 @@ async def test_send_email_resolves_roles_from_the_item(db, admin, project, smtp_
         db, _send_action("reporter", subject="Re: {{item.key}}"), row, project, None, **_plan_kwargs()
     )
     assert plan.kind == "email"
-    assert plan.email == (admin.email, admin.name, f"Re: {item.key}", "b")
+    assert plan.email == (admin.email, admin.name, f"Re: {item.key}", "b", False)
 
     plan = await engine._plan(db, _send_action("contact"), row, project, None, **_plan_kwargs())
     assert plan.kind == "email" and plan.email[0] == "ext@example.com" and plan.email[1] == "Ext"

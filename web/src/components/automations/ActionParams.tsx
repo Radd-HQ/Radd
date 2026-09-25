@@ -536,6 +536,23 @@ function SendEmailParams({
           className="rounded-md border border-strong bg-surface px-2.5 py-1.5 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
         />
       </div>
+      {/* RADD-1318: the old receipt's shape, as an opt-in — on the ticket's
+          email thread, so the requester's reply lands back on the issue. */}
+      <label className="flex cursor-pointer items-start gap-2 text-[13px] text-fg">
+        <input
+          type="checkbox"
+          data-send-email-thread
+          checked={Boolean(params.thread)}
+          onChange={(event) => set({ thread: event.target.checked })}
+          className="mt-0.5 size-3.5 cursor-pointer accent-[var(--accent-fill)]"
+        />
+        <span>
+          Send on the issue's email thread
+          <span className="block text-[11px] text-fg-muted">
+            Replies come back to the issue, and the message reads as from the desk. Keep [{"{{item.key}}"}] in the subject.
+          </span>
+        </span>
+      </label>
     </div>
   );
 }

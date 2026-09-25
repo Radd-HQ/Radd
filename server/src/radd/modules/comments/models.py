@@ -39,6 +39,8 @@ class Comment(Base, TimestampMixin):
     )
     # CommentVisibility; internal comments require Permission.COMMENT_READ_INTERNAL.
     visibility: Mapped[str] = mapped_column(String(10), default=CommentVisibility.PUBLIC)
+    #: RADD-1318: a `CommentOrigin`, NULL for a person. Server-set only.
+    origin: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     # --- RADD-726: inline, anchored, resolvable -------------------------------
     #: NULL = a general comment or discussion. Set = inline:

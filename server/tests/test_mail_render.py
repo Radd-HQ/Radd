@@ -55,8 +55,6 @@ from radd.modules.notify.models import Notification
 from radd.modules.notify.types import NotificationType
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
-from radd.modules.settings import service as settings_service
-from radd.modules.settings.types import SettingKey, SettingScope
 
 BASE_URL = "https://radd.example.com"
 
@@ -727,7 +725,13 @@ def test_send_message_without_html_stays_a_single_plain_part(monkeypatch):
     assert _FakeSmtp.sent[-1].get_content_type() == "text/plain"
 
 
-# --- the acknowledgement, on the same transport (RADD-970) --------------------
+# --- mail on the issue's thread: the receipt's shape, now an automation's ------
+#
+# RADD-1318 deleted the built-in receipt (`send_ack`, `mail_send_ack`, the
+# `mail_ack_body` setting). What it guaranteed — the default sender row, the env
+# fallback, `[KEY]` pinned, In-Reply-To from the store, its own Message-ID
+# recorded so a reply threads back — is now the Send email action's `thread`
+# option, and these tests hold that path to the same bar.
 
 
 @pytest.fixture
@@ -767,8 +771,7 @@ def _row_relay(db) -> MailSender:
 
 
 async def _requester_wrote(db, item, *, subject="my printer is on fire") -> str:
-    """The inbound message intake recorded before the ack fires — on BOTH call
-    paths, which commit the intake transaction first for exactly this reason."""
+    """The inbound message intake recorded before any automation reads it."""
     message_id = f"<{uuid.uuid4().hex}@vip.example>"
     await threading.record(
         db,
@@ -781,81 +784,56 @@ async def _requester_wrote(db, item, *, subject="my printer is on fire") -> str:
     return message_id
 
 
-def test_the_ack_carries_the_issue_link_in_both_parts():
-    """RADD-977. RADD-967 left the link out on purpose — "the requester has no
-    account, so the link is a login page" — and that reasoning is stale twice
-    over: intake PROVISIONS an account for an unknown sender (RADD-828), and on
-    an SSO instance the sender is very often a colleague who is already signed
-    in. A receipt with no way to look at the thing it acknowledges is a dead end
-    for both; a login page is recoverable.
+async def _thread_mail(db, item, *, to="cass@vip.example.com", name="Cass Customer", body="Received."):
+    """An automation's Send email with `thread` on — the engine's own delivery."""
+    from radd.modules.automations import engine
 
-    What must NOT change is which instruction leads. Reply-by-email is the
-    interface that works for every requester whether they can sign in or not, so
-    it stays first in both parts and the link follows it — asserted by position,
-    because "the link is present" is true of a version that buries the sentence.
-    """
+    project = await projects_service.get_project(db, item.project_id)
+    key = f"{project.key}-{item.number}"
+    await engine._send_email(db, to, name, f"[{key}] {item.title}", body, thread_on=item)
+    return key
+
+
+def test_a_contact_notice_carries_the_issue_link_in_both_parts():
+    """RADD-977's rule, on the renderer the threaded automation email uses: a
+    message to a requester links the issue in both parts, after the prose."""
     item = mailrender.ItemMail(key="MR-1", title="Printer on fire", base_url=BASE_URL + "/")
-    # The default template, {{key}} substituted by hand — mailrender no longer
-    # renders the ack's prose itself (RADD-1045), only wraps what it is given.
-    body = settings.mail_ack_body.replace("{{key}}", item.key)
-    message = mailrender.acknowledgement(item, body=body)
+    message = mailrender.contact_notice(item, body="Reply to this message to add details.")
     url = f"{BASE_URL}/issues/MR-1"
 
     assert url in message.text
     assert f'href="{url}"' in message.html
-    assert mailrender.ACK_LINK_LABEL in message.text
-    assert mailrender.ACK_LINK_LABEL in message.html
+    assert mailrender.TICKET_LINK_LABEL in message.text
+    assert mailrender.TICKET_LINK_LABEL in message.html
     for part in (message.text, message.html):
-        assert part.index("reply to this message") < part.index(url), "the link led"
-    # The subject mechanics are untouched: the bracketed key is what
-    # `parsing.extract_reply_key` threads a header-less reply on.
-    assert f"[{item.key}] in the subject" in message.text
+        assert part.index("Reply to this message") < part.index(url), "the link led"
 
 
-async def test_the_ack_leaves_through_the_default_sender_row(
+async def test_a_threaded_automation_email_leaves_through_the_default_sender_row(
     db, world, relay, no_senders, monkeypatch
 ):
-    """The ack used to dial `radd.smtp` straight off `RADD_SMTP_*`, which meant
-    an admin who configured a sender in Settings → Email and set no environment
-    got replies and notifications and no receipts — the one message a requester
-    always expects.
-
-    With no env relay configured at all, the ROW is what gets dialled, and the
-    headers come from the message store rather than a parameter carried by hand.
-    """
-    _agent, project, item = world
-    key = f"{project.key}-{item.number}"
+    """The receipt's guarantees, on the path that replaced it: the ROW is dialled
+    with no env relay at all, the `[KEY]` subject is pinned (the stored thread
+    subject is the requester's own, with no key), and the thread headers come
+    from the message store."""
+    _agent, _project, item = world
     monkeypatch.setattr(settings, "smtp_host", "")  # nothing to fall back to
     _row_relay(db)
     inbound_id = await _requester_wrote(db, item)
 
-    await mail_service.send_ack(
-        db,
-        item_id=item.id,
-        email="cass@vip.example.com",
-        name="Cass Customer",
-        item_key=key,
-        title=item.title,
-    )
+    key = await _thread_mail(db, item)
 
     assert relay.dialled == [("smtp.rowrelay.test", 2525)]
     sent = relay.sent[-1]
-    # The bracketed key SURVIVES: it is the subject-line threading fallback, and
-    # the stored thread subject at this moment is the requester's own, which has
-    # no key in it. `pin_subject` exists for this one message.
     assert str(sent["Subject"]) == f"[{key}] {item.title}"
     assert str(sent["In-Reply-To"]) == inbound_id
     assert str(sent["References"]) == inbound_id
     assert str(sent["Reply-To"]) == "help@radd-hq.com"
     assert "Cass Customer" in str(sent["To"])
-    assert sent.get_content_type() == "multipart/alternative"  # text + html, as ever
-    # RADD-977: the receipt the requester actually receives carries the link.
+    assert sent.get_content_type() == "multipart/alternative"  # the desk's shape
     assert f"{BASE_URL}/issues/{key}" in sent.get_body(("plain",)).get_content()
-    assert f'href="{BASE_URL}/issues/{key}"' in sent.get_body(("html",)).get_content()
-    # RADD-985: requester-facing mail says nothing about notification settings —
-    # the conversation is their ticket, and there is no matrix to link.
+    # RADD-985: requester-facing mail says nothing about notification settings.
     assert sent.get(mailrender.LIST_UNSUBSCRIBE_HEADER) is None
-    assert mailrender.NOTIFICATION_SETTINGS_LABEL not in sent.get_body(("plain",)).get_content()
 
 
 async def test_pinning_the_subject_changes_nothing_a_client_threads_on(db, world):
@@ -864,8 +842,8 @@ async def test_pinning_the_subject_changes_nothing_a_client_threads_on(db, world
 
     Its sibling `test_the_thread_subject_survives_a_rename` pins the unpinned
     behaviour the reply consumer depends on — one `Re: ` over the stored subject
-    — and this asserts the two differ in exactly that field, so pinning the ack
-    cannot quietly become a second threading rule.
+    — and this asserts the two differ in exactly that field, so pinning a threaded
+    automation email cannot quietly become a second threading rule.
     """
     _agent, _project, item = world
     inbound_id = await _requester_wrote(db, item, subject="Printer on fire again")
@@ -887,13 +865,11 @@ async def test_pinning_the_subject_changes_nothing_a_client_threads_on(db, world
     }
 
 
-async def test_the_ack_still_goes_out_through_the_env_relay_when_no_row_exists(
+async def test_a_threaded_automation_email_falls_back_to_the_env_relay(
     db, world, relay, no_senders, monkeypatch
 ):
-    """A seed-era instance has no sender row — `seeding` only writes one when
-    `RADD_SMTP_HOST` was set at first boot. `send_ack` has always had this
-    fallback, and moving it onto the transport must not quietly drop it."""
-    _agent, project, item = world
+    """A seed-era instance has no sender row; the env relay still carries it."""
+    _agent, _project, item = world
     monkeypatch.setattr(settings, "smtp_host", "relay.env.test")
     monkeypatch.setattr(settings, "smtp_port", 1025)
     monkeypatch.setattr(settings, "smtp_starttls", False)
@@ -901,244 +877,63 @@ async def test_the_ack_still_goes_out_through_the_env_relay_when_no_row_exists(
     monkeypatch.setattr(settings, "smtp_from_address", "Radd <agent@radd-hq.com>")
     monkeypatch.setattr(settings, "email_ingest_address", "help@radd-hq.com")
 
-    await mail_service.send_ack(
-        db,
-        item_id=item.id,
-        email="cass@vip.example.com",
-        name="Cass",
-        item_key=f"{project.key}-{item.number}",
-        title=item.title,
-    )
+    await _thread_mail(db, item)
 
     assert relay.dialled == [("relay.env.test", 1025)]
     assert str(relay.sent[-1]["Reply-To"]) == "help@radd-hq.com"
 
 
-async def test_a_reply_to_the_ack_threads_back_onto_the_issue(
+async def test_a_reply_to_a_threaded_automation_email_threads_back_onto_the_issue(
     db, world, relay, no_senders, monkeypatch
 ):
-    """Why recording the ack's own Message-ID matters.
-
-    The receipt is the only message most requesters ever get from Radd, so it is
-    the one they hit Reply on. Its id previously went nowhere, and the reply fell
-    through to the subject key — which a client that rewrites the subject, or a
-    person who edits it, does not carry. This subject deliberately has no key in
-    it, so nothing but the recorded header can resolve it.
-    """
+    """Why the threaded send records its own Message-ID: the receipt is what a
+    requester hits Reply on, and this subject has no key, so nothing but the
+    recorded header can resolve the reply."""
     _agent, project, item = world
     monkeypatch.setattr(settings, "smtp_host", "")
     _row_relay(db)
     await _requester_wrote(db, item)
 
-    await mail_service.send_ack(
-        db,
-        item_id=item.id,
-        email="cass@vip.example.com",
-        name="Cass",
-        item_key=f"{project.key}-{item.number}",
-        title=item.title,
-    )
-    ack_id = str(relay.sent[-1]["Message-ID"])
+    await _thread_mail(db, item)
+    sent_id = str(relay.sent[-1]["Message-ID"])
 
     stored = await db.execute(
-        select(MailMessage.message_id, MailMessage.direction).where(
-            MailMessage.item_id == item.id
-        )
+        select(MailMessage.message_id, MailMessage.direction).where(MailMessage.item_id == item.id)
     )
-    assert (ack_id, MailDirection.OUTBOUND.value) in set(stored.all())
+    assert (sent_id, MailDirection.OUTBOUND.value) in set(stored.all())
 
     incoming = EmailMessage()
     incoming["Subject"] = "thanks!"  # no key at all
     incoming["From"] = "Cass <cass@vip.example.com>"
     incoming["To"] = "help@radd-hq.com"
     incoming["Message-ID"] = f"<{uuid.uuid4().hex}@vip.example>"
-    incoming["In-Reply-To"] = ack_id
+    incoming["In-Reply-To"] = sent_id
     incoming.set_content("That fixed it.")
     raw = incoming.as_bytes()
 
     outcome = await intake.accept(
-        db,
-        parsing.parse_email(raw),
-        raw=raw,
-        default_project_key=project.key,
-        own_addresses=set(),
+        db, parsing.parse_email(raw), raw=raw, default_project_key=project.key, own_addresses=set(),
     )
 
     assert outcome.result is intake.Result.APPENDED
     assert outcome.item_id == item.id
 
 
-async def test_a_user_sender_receives_the_receipt_end_to_end(
+async def test_an_unthreaded_automation_email_stays_off_the_issues_thread(
     db, world, relay, no_senders, monkeypatch
 ):
-    """RADD-995, driven through the whole path rather than the plan alone.
+    """`thread` is opt-in: without it the action's mail is the rule's own text,
+    itemless, and never filed into the customer's conversation."""
+    from radd.modules.automations import engine
 
-    Intake plans it, the caller acks post-commit, and what leaves the relay is
-    the same `[KEY] title` receipt with the issue link a contact has had since
-    RADD-977 — which matters most for exactly this sender, since a recognised
-    user CAN follow that link.
-    """
-    agent, project, _ = world
-    monkeypatch.setattr(settings, "smtp_host", "")  # nothing to fall back to
+    _agent, _project, item = world
+    monkeypatch.setattr(settings, "smtp_host", "")
     _row_relay(db)
+    await _requester_wrote(db, item)
 
-    incoming = EmailMessage()
-    incoming["Subject"] = "my laptop will not charge"
-    incoming["From"] = f"Ada Agent <{agent.email}>"
-    incoming["To"] = "help@radd-hq.com"
-    incoming["Message-ID"] = f"<{uuid.uuid4().hex}@example.com>"
-    incoming.set_content("It stopped overnight.")
-    raw = incoming.as_bytes()
-    outcome = await intake.accept(
-        db,
-        parsing.parse_email(raw),
-        raw=raw,
-        default_project_key=project.key,
-        own_addresses={"help@radd-hq.com"},
-    )
-    assert outcome.ack is not None, "a recognised user got no receipt at all — the RADD-995 bug"
-
-    await mail_service.send_ack(
-        db,
-        item_id=outcome.ack.item_id,
-        email=outcome.ack.email,
-        name=outcome.ack.name,
-        item_key=outcome.ack.item_key,
-        title=outcome.ack.title,
-    )
+    await engine._send_email(db, "ops@example.com", "", "Heads up", "Something happened.")
 
     sent = relay.sent[-1]
-    assert agent.email in str(sent["To"])
-    assert str(sent["Subject"]) == f"[{outcome.item_key}] my laptop will not charge"
-    # In-Reply-To comes off the inbound row intake recorded, as it does for a contact.
-    assert str(sent["In-Reply-To"]) == str(incoming["Message-ID"])
-    assert f"{BASE_URL}/issues/{outcome.item_key}" in sent.get_body(("plain",)).get_content()
-
-
-async def test_the_ack_toggle_still_silences_it(db, world, relay, no_senders, monkeypatch):
-    """`RADD_MAIL_SEND_ACK` survives the move — it is a product decision (some
-    desks do not want a receipt), not a piece of the env configuration that
-    RADD-958 replaced with rows."""
-    _agent, project, item = world
-    monkeypatch.setattr(settings, "mail_send_ack", False)
-    monkeypatch.setattr(settings, "smtp_host", "relay.env.test")
-    _row_relay(db)
-    await db.flush()
-
-    await mail_service.send_ack(
-        db,
-        item_id=item.id,
-        email="cass@vip.example.com",
-        name="Cass",
-        item_key=f"{project.key}-{item.number}",
-        title=item.title,
-    )
-
-    assert relay.sent == [] and relay.dialled == []
-
-
-# --- the ack body is a scalar setting now (RADD-1045) -------------------------
-
-
-async def test_an_unset_ack_setting_sends_todays_default_wording(
-    db, world, relay, no_senders, monkeypatch
-):
-    """No override row at all — the cascade falls back to `config.Settings.
-    mail_ack_body`, so a fresh instance's receipt is byte-identical to before
-    the setting existed."""
-    _agent, project, item = world
-    monkeypatch.setattr(settings, "smtp_host", "")
-    _row_relay(db)
-    key = f"{project.key}-{item.number}"
-
-    await mail_service.send_ack(
-        db, item_id=item.id, email="cass@vip.example.com", name="Cass",
-        item_key=key, title=item.title,
-    )
-
-    # A punctuation-free slice of the default wording: the html part escapes
-    # the apostrophe in "We'll" to `&#x27;` (RADD-967's "nothing survives as
-    # markup" rule applying to the DEFAULT template exactly like a custom one),
-    # so an exact-string check there would be pinning HTML escaping, not the
-    # substitution this test is actually about.
-    expected = f"tracked as {key}"
-    sent = relay.sent[-1]
-    assert expected in sent.get_body(("plain",)).get_content()
-    assert expected in sent.get_body(("html",)).get_content()
-    assert settings.mail_ack_body.replace("{{key}}", key) in sent.get_body(("plain",)).get_content()
-
-
-async def test_an_explicitly_blank_ack_override_also_falls_back(
-    db, world, relay, no_senders, monkeypatch
-):
-    """An admin who saves an empty template is a real row, not a missing one —
-    the cascade's own "no row" fallback would not catch this; `send_ack` checks
-    blankness itself."""
-    _agent, project, item = world
-    monkeypatch.setattr(settings, "smtp_host", "")
-    _row_relay(db)
-    key = f"{project.key}-{item.number}"
-    await settings_service.set_value(
-        db, SettingKey.MAIL_ACK_BODY, SettingScope.INSTANCE, None, "   "
-    )
-    await db.flush()
-
-    await mail_service.send_ack(
-        db, item_id=item.id, email="cass@vip.example.com", name="Cass",
-        item_key=key, title=item.title,
-    )
-
-    expected = settings.mail_ack_body.replace("{{key}}", key)
-    assert expected in relay.sent[-1].get_body(("plain",)).get_content()
-
-
-async def test_a_custom_ack_template_changes_both_parts(
-    db, world, relay, no_senders, monkeypatch
-):
-    """Editing Settings → Email's ack template changes the NEXT ack sent — text
-    and html both, every offered token substituted."""
-    _agent, project, item = world
-    monkeypatch.setattr(settings, "smtp_host", "")
-    _row_relay(db)
-    key = f"{project.key}-{item.number}"
-    await settings_service.set_value(
-        db, SettingKey.MAIL_ACK_BODY, SettingScope.INSTANCE, None,
-        "Hi {{requester_name}}, {{title}} is tracked as {{key}}. Track it: {{link}}",
-    )
-    await db.flush()
-
-    await mail_service.send_ack(
-        db, item_id=item.id, email="cass@vip.example.com", name="Cass Customer",
-        item_key=key, title=item.title,
-    )
-
-    expected = (
-        f"Hi Cass Customer, {item.title} is tracked as {key}. "
-        f"Track it: {BASE_URL}/issues/{key}"
-    )
-    sent = relay.sent[-1]
-    assert expected in sent.get_body(("plain",)).get_content()
-    assert expected in sent.get_body(("html",)).get_content()
-
-
-async def test_an_unknown_ack_token_stays_verbatim(db, world, relay, no_senders, monkeypatch):
-    """Same failure mode as `canned.render.render_canned`: a token nobody
-    registered is not an error, it is left exactly as written so the admin can
-    see and fix the typo."""
-    _agent, project, item = world
-    monkeypatch.setattr(settings, "smtp_host", "")
-    _row_relay(db)
-    key = f"{project.key}-{item.number}"
-    await settings_service.set_value(
-        db, SettingKey.MAIL_ACK_BODY, SettingScope.INSTANCE, None,
-        "Ticket {{key}}, ref {{bogus_token}}.",
-    )
-    await db.flush()
-
-    await mail_service.send_ack(
-        db, item_id=item.id, email="cass@vip.example.com", name="Cass",
-        item_key=key, title=item.title,
-    )
-
-    expected = f"Ticket {key}, ref " + "{{bogus_token}}."
-    assert expected in relay.sent[-1].get_body(("plain",)).get_content()
+    assert sent["In-Reply-To"] is None
+    stored = await db.execute(select(MailMessage.direction).where(MailMessage.item_id == item.id))
+    assert MailDirection.OUTBOUND.value not in set(stored.scalars())

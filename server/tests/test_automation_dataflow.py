@@ -1167,7 +1167,7 @@ async def test_a_newline_in_a_rendered_header_is_collapsed(db, admin):
         config_settings.smtp_host = original
 
     assert plan.kind is PlanKind.EMAIL
-    _address, _name, subject, body = plan.email
+    _address, _name, subject, body, _thread = plan.email
     assert "\n" not in subject and subject == "[urgent X-Injected: yes] a report"
     # The BODY keeps every newline — its own two, plus the one inside the token.
     # Collapsing there would ruin every multi-line message, and a body is not a

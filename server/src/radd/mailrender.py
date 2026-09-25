@@ -266,12 +266,13 @@ def comment_reply(
     return RenderedMail(text=text, html=_document(content, footer=footer))
 
 
-#: The receipt's link affordance, one label for both parts. Deliberately SECOND
-#: to the body in both renderings — see `acknowledgement`.
-ACK_LINK_LABEL = "View the ticket"
+#: The link affordance on a message to an external contact.
+TICKET_LINK_LABEL = "View the ticket"
 
 
-def _contact_notice(item: ItemMail, *, body: str, reason: str, link_label: str) -> RenderedMail:
+def contact_notice(
+    item: ItemMail, *, body: str, reason: str = "", link_label: str = TICKET_LINK_LABEL
+) -> RenderedMail:
     """The shape every message to an EXTERNAL contact takes: the ticket named in
     plain text, the prose, then the link (RADD-982 named it; RADD-967 built it).
 
@@ -281,10 +282,10 @@ def _contact_notice(item: ItemMail, *, body: str, reason: str, link_label: str) 
     LABEL rather than an anchor and the link is an affordance at the end rather
     than the subject of the sentence.
 
-    It is a private composer rather than one renderer serving both messages,
-    because the ack and the resolution notice are different messages that
-    happen to look alike today — sharing the chrome is reuse, sharing the
-    function would make the next divergence an edit to both callers' meaning.
+    Public since RADD-1318: the receipt and the resolution notice that used to
+    call it are automation templates now, and an automation's `send_email` to
+    the item's `contact` renders through here so it still reads like the desk.
+    `body` arrives already rendered and is escaped like a comment.
 
     **`reason` rides BOTH halves** (RADD-982). It used to be passed only to
     `_document`, so the "why am I getting this" line existed in the html and
@@ -301,57 +302,6 @@ def _contact_notice(item: ItemMail, *, body: str, reason: str, link_label: str) 
         f'<div style="margin-top:18px;">{_button(item.url, link_label)}</div>'
     )
     return RenderedMail(text=text, html=_document(content, footer=_esc(reason)))
-
-
-def acknowledgement(item: ItemMail, *, body: str, reason: str = "") -> RenderedMail:
-    """The receipt an external requester gets when their mail opens a ticket.
-
-    **`body` arrives already rendered** — since RADD-1045 the ack's prose is an
-    admin-editable instance setting (`mail_ack_body`, Settings → Email) with
-    `{{token}}` variables, and substituting those is `mailintake.service.
-    send_ack`'s job, not this module's: this file "reads no settings" by
-    charter (see the module docstring), so the caller resolves the template and
-    hands over plain text. It is wrapped exactly like any other body — escaped
-    like a comment, line breaks preserved, never interpreted as markup — which
-    is what makes an admin-authored template as safe as one nobody can edit.
-
-    **It carries the issue URL in both parts (RADD-977).** RADD-967 deliberately
-    left it out — "the requester has no account, so the link is a login page" —
-    and that reasoning is now stale twice over: intake PROVISIONS an account for
-    an unknown sender (RADD-828), and on an instance with SSO the sender is very
-    often a colleague who is already signed in. A receipt with no way to look at
-    the thing it acknowledges is a dead end for both of them, and a login page is
-    a recoverable one.
-
-    Reply-by-email stays the PRIMARY wording in the shipped default text: it is
-    the interface that works for every requester, signed in or not. The
-    `[{key}]` SUBJECT mechanics (`ACK_SUBJECT_TEMPLATE`, pinned verbatim by
-    `send_item_mail`) are untouched by any of this — an admin can reword or
-    drop the bracket mention from the body and replies still thread, because the
-    subject line is what `parsing.extract_reply_key` actually reads.
-    """
-    return _contact_notice(item, body=body, reason=reason, link_label=ACK_LINK_LABEL)
-
-
-#: The resolution notice's link affordance. The same words as the ack's today —
-#: named separately because it answers a different question ("what happened?"
-#: rather than "did you get this?") and will not always agree with it.
-RESOLVED_LINK_LABEL = "View the ticket"
-
-
-def resolution(item: ItemMail, *, body: str, reason: str = "") -> RenderedMail:
-    """The notice an external contact gets when their ticket resolves (RADD-982).
-
-    The last message of the lifecycle, and until now the only one that did not
-    exist: a requester's ticket went ack → replies → silence, because the one
-    message that said "resolved" was the CSAT survey, which is per-project
-    opt-in and off by default.
-
-    `body` arrives already rendered, `acknowledgement`'s contract and for its
-    reason: the wording is `mailintake`'s policy (`RESOLVED_BODY_TEMPLATE`),
-    and this module reads no settings and owns no vocabulary about states.
-    """
-    return _contact_notice(item, body=body, reason=reason, link_label=RESOLVED_LINK_LABEL)
 
 
 def digest_line(entry: DigestEntry, *, divider: bool = True) -> RenderedMail:

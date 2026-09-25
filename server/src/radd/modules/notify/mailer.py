@@ -63,7 +63,7 @@ from radd.modules.auth.models import User
 from radd.modules.comments import service as comments
 from radd.modules.comments.types import CommentEvent
 from radd.modules.events import service as events
-from radd.modules.mailintake.types import MailFailureReport
+from radd.modules.mailintake.types import MailFailureReport, SentMailKind
 
 from . import lines, retry, service
 from .authorization import notification_readable
@@ -280,6 +280,7 @@ async def _send(
             comment_id=await _comment_id(session, notification),
             failure=failure,
             headers=headers,
+            kind=SentMailKind.NOTIFICATION,
         )
     )
 
@@ -370,6 +371,7 @@ async def send_plain(
             html=message.html,
             failure=failure,
             headers=headers,
+            kind=SentMailKind.DIGEST,
         )
     )
 

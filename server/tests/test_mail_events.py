@@ -20,6 +20,8 @@ import uuid
 from email.message import EmailMessage
 
 import pytest
+
+from radd.modules.mailintake.types import SentMailKind
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -235,7 +237,8 @@ async def test_a_delivery_failure_is_visible_on_the_items_history(db, world, rel
     monkeypatch.setattr(relay, "send_message", explode)
     assert (
         await transport.send_item_mail(
-            db, item_id=item.id, to_address="jane@vip-customer.com", subject="[X] re", text="t"
+            db, item_id=item.id, to_address="jane@vip-customer.com", subject="[X] re", text="t",
+            kind=SentMailKind.REPLY,
         )
         is None
     )
@@ -249,6 +252,7 @@ async def test_a_delivery_failure_is_visible_on_the_items_history(db, world, rel
     # or call someone — the reason `error` is on the payload at all.
     assert "550 mailbox unavailable" in detail["error"]
     assert detail["given_up"] is False  # nobody is retrying a reply; it is simply over
+    assert detail["kind"] == SentMailKind.REPLY.value  # RADD-1318: what it WAS
 
 
 async def test_a_sent_message_and_an_inbound_one_both_reach_the_history(db, world, relay):
@@ -257,12 +261,16 @@ async def test_a_sent_message_and_an_inbound_one_both_reach_the_history(db, worl
     actor, project, _ = world
     outcome = await _accept(db, raw(message_id="<feed@ext>"), project.key)
     await transport.send_item_mail(
-        db, item_id=outcome.item_id, to_address="jane@vip-customer.com", subject="s", text="t"
+        db, item_id=outcome.item_id, to_address="jane@vip-customer.com", subject="s", text="t",
+        kind=SentMailKind.REPLY,
     )
 
     types = await _history_types(db, outcome.item_id, actor)
     assert MailEvent.RECEIVED.value in types
     assert MailEvent.SENT.value in types
+    sent = next(e for e in (await item_history(db, outcome.item_id, actor)).entries if e.type == MailEvent.SENT.value)
+    # RADD-1318: a rule on "Email sent" can tell a reply from a digest or its own mail.
+    assert (sent.detail or {})["kind"] == SentMailKind.REPLY.value
     entries = (await item_history(db, outcome.item_id, actor)).entries
     received = next(e for e in entries if e.type == MailEvent.RECEIVED.value)
     assert (received.detail or {})["sender"] == "jane@vip-customer.com"

@@ -183,10 +183,10 @@ async def _met_resolver(session, policy, targets: Targets, item_map, timelines):
     comment times only if a reply mode is in play, and each needed team's
     effective members (nested groups included) once."""
     modes = {mode for _minutes, mode, _states, _teams in targets.values()}
-    replies: dict[uuid.UUID, list[tuple[uuid.UUID | None, datetime]]] = {}
+    replies: dict[uuid.UUID, list[tuple[uuid.UUID | None, datetime, str | None]]] = {}
     if modes & REPLY_MODES:
-        for item_id, author_id, at in await comments.public_comment_times(session, list(item_map)):
-            replies.setdefault(item_id, []).append((author_id, at))
+        for item_id, author_id, at, origin in await comments.public_comment_times(session, list(item_map)):
+            replies.setdefault(item_id, []).append((author_id, at, origin))
     chosen: dict[SlaKind, frozenset[uuid.UUID]] = {}
     for kind, (_minutes, mode, _states, team_ids) in targets.items():
         if mode is SlaMetOn.REPLY_BY_TEAMS:

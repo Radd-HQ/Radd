@@ -555,22 +555,22 @@ def test_mail_message_id_captured_verbatim():
 
 
 def test_should_reply_happy_path_and_full_refusal_matrix():
-    import uuid
-
-    from radd.modules.automations.types import SYSTEM_ACTOR_ID
+    from radd.modules.comments.types import CommentOrigin
     from radd.modules.mailintake.outbound import should_reply
 
-    agent = uuid.uuid4()
     # RADD-955 widened the gate from "has a mail contact" to "has anyone to
     # mail": recipients are now the item's participants, so an issue with no
     # external requester still mails its watchers.
-    ok = dict(has_recipients=True, visibility="public", actor_id=agent)
+    ok = dict(has_recipients=True, visibility="public", origin=None)
     assert should_reply(**ok) is True
     # Nobody to mail — nothing to send.
     assert should_reply(**{**ok, "has_recipients": False}) is False
     # Internal notes never leave the building.
     assert should_reply(**{**ok, "visibility": "internal"}) is False
-    # SYSTEM actor = inbound-mail comments / automation comments — no echo loop.
-    assert should_reply(**{**ok, "actor_id": SYSTEM_ACTOR_ID}) is False
-    # Actorless events (engine clocks) don't speak for anyone.
-    assert should_reply(**{**ok, "actor_id": None}) is False
+    # The requester's own mail is never echoed back — the loop's first half.
+    assert should_reply(**{**ok, "origin": CommentOrigin.INBOUND_MAIL.value}) is False
+    # RADD-1318: an automation's public comment IS relayed. The old gate ("the
+    # author is not SYSTEM") dropped every one, so "reply on Email received"
+    # wrote a comment the customer never got.
+    assert should_reply(**{**ok, "origin": CommentOrigin.AUTOMATION.value}) is True
+    assert should_reply(**{**ok, "origin": CommentOrigin.PORTAL.value}) is True

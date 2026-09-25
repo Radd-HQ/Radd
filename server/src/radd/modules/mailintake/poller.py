@@ -25,7 +25,7 @@ import uuid
 from radd.db import SessionLocal
 from radd.modules.events import service as events
 
-from . import intake, parsing, registry, resolve, service
+from . import intake, parsing, registry, resolve
 from .models import MailSource
 from .types import (
     DEFAULT_IMAP_FOLDER,
@@ -135,7 +135,7 @@ async def _drain(source: MailSource, default_project_id, own: set[str]) -> int:
             continue
         try:
             async with SessionLocal() as session:
-                outcome = await intake.accept(
+                await intake.accept(
                     session,
                     plan,
                     raw=raw,
@@ -150,17 +150,6 @@ async def _drain(source: MailSource, default_project_id, own: set[str]) -> int:
                     default_project_id=default_project_id,
                 )
                 await session.commit()
-            # Post-commit: never ack a rolled-back item — and, since RADD-970,
-            # also what puts the inbound Message-ID in the store before the ack
-            # reads it back out as In-Reply-To.
-            if outcome.ack is not None:
-                await service.send_ack(
-                    item_id=outcome.ack.item_id,
-                    email=outcome.ack.email,
-                    name=outcome.ack.name,
-                    item_key=outcome.ack.item_key,
-                    title=outcome.ack.title,
-                )
         except Exception:
             # Flagged `\\Seen` anyway below — a poison message must not wedge
             # the poll. Unlike the webhook, there is nobody to hand a 5xx to.

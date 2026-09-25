@@ -43,9 +43,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ForbiddenError, NotFoundError
 from radd.modules.auth.models import User
-from radd.modules.automations.types import SYSTEM_ACTOR_ID
 from radd.modules.comments import service as comments_service
-from radd.modules.comments.types import CommentParentType, CommentVisibility
+from radd.modules.comments.types import CommentOrigin, CommentParentType, CommentVisibility
 from radd.modules.items.models import WorkItem
 from radd.modules.projects import service as projects_service
 from radd.modules.teams import service as teams_service
@@ -125,11 +124,19 @@ async def _comment_signals(
     counts: dict[uuid.UUID, int] = {}
     mine: dict[uuid.UUID, object] = {}
     theirs: dict[uuid.UUID, object] = {}
-    for entity_id, author_id, created_at in rows:
+    for entity_id, author_id, created_at, origin in rows:
         counts[entity_id] = counts.get(entity_id, 0) + 1
-        if author_id is None or author_id == SYSTEM_ACTOR_ID:
+        # RADD-1318: decided by ORIGIN, not "the author is SYSTEM". An
+        # automation's comment is not an answer whoever it acts as; the
+        # requester's own mail IS their reply even when no account backs it.
+        if origin == CommentOrigin.AUTOMATION:
             continue  # neither bucket: it is not the requester, and it is not an answer
-        bucket = mine if author_id == reporters.get(entity_id) else theirs
+        if origin == CommentOrigin.INBOUND_MAIL or author_id == reporters.get(entity_id):
+            bucket = mine
+        elif author_id is None:
+            continue
+        else:
+            bucket = theirs
         current = bucket.get(entity_id)
         if current is None or created_at > current:
             bucket[entity_id] = created_at
@@ -315,6 +322,7 @@ async def add_request_comment(
         CommentCreate(body=body, visibility=CommentVisibility.PUBLIC),
         actor,
         entity_type=CommentParentType.ITEM.value,
+        origin=CommentOrigin.PORTAL,
     )
     return PortalRequestComment(
         id=created.id,

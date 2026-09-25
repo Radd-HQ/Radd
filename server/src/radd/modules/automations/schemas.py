@@ -250,6 +250,10 @@ class SendEmailParams(BaseModel):
     to: str = Field(min_length=1, max_length=320)
     subject: str = Field(min_length=1, max_length=500)  # template
     body: str = Field(min_length=1, max_length=10_000)  # template
+    #: RADD-1318: send it ON the issue's email thread — the conversation the
+    #: requester's mail opened — so their reply threads back onto the ticket and
+    #: the message reads like the desk (the old receipt's shape). Needs an issue.
+    thread: bool = False
 
 
 class SetStateAction(BaseModel):

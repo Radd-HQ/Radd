@@ -23,6 +23,8 @@ from datetime import timedelta
 from email.message import EmailMessage
 
 import pytest
+
+from radd.modules.mailintake.types import SentMailKind
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -47,7 +49,6 @@ from radd.modules.mailintake import (
     resolve,
     seeding,
     senders,
-    service as mail_service,
     threading as mail_threading,
     transport as mail_transport,
 )
@@ -379,11 +380,10 @@ async def test_the_poller_polls_a_row_configured_instance_with_no_env(
 
     dialled: list[str] = []
     flagged: list[tuple[str, list[str]]] = []
-    acked: list[dict] = []
 
     def fake_fetch(row):
         dialled.append(resolve.source_host(row))
-        # A sender nobody else committed, so the contact (and therefore the ack)
+        # A sender nobody else committed, so the contact
         # is this test's own rather than whatever the account table already held.
         return [("42", message(sender=f"jane-{uuid.uuid4().hex[:8]}@customer.example",
                                subject="Printer on fire"))]
@@ -391,12 +391,8 @@ async def test_the_poller_polls_a_row_configured_instance_with_no_env(
     def fake_mark_seen(row, uids):
         flagged.append((row.name, list(uids)))
 
-    async def fake_send_ack(session=None, **kwargs):
-        acked.append(kwargs)
-
     monkeypatch.setattr(poller, "fetch_unseen", fake_fetch)
     monkeypatch.setattr(poller, "mark_seen", fake_mark_seen)
-    monkeypatch.setattr(mail_service, "send_ack", fake_send_ack)
 
     assert await poller.run_once() == 1
     assert dialled == ["imap.rowsonly.test"], "the ROW's host, with no env to fall back on"
@@ -408,9 +404,6 @@ async def test_the_poller_polls_a_row_configured_instance_with_no_env(
         select(WorkItem).where(WorkItem.project_id == default.id)
     )
     assert [item.title for item in rows.scalars()] == ["Printer on fire"]
-    # The ack carries the item it acknowledges (RADD-970) — In-Reply-To is read
-    # back out of the message store, so the id is no longer passed by hand.
-    assert acked and acked[0]["item_id"] is not None
 
 
 async def test_the_poller_does_nothing_at_all_with_no_polled_sources(
@@ -755,6 +748,7 @@ async def test_a_hostless_preset_row_is_what_the_transport_sends_through(db, wor
     sent = await transport.send_item_mail(
         db, item_id=item.id, to_address="jane@customer.example",
         subject="[MC-1] Hello", text="body",
+        kind=SentMailKind.REPLY,
     )
 
     assert sent == "<sent@gmail>"
@@ -927,7 +921,8 @@ async def test_the_ack_and_the_reply_both_leave_from_the_source_they_arrived_at(
     requester wrote to never appeared on anything Radd sent back. The fix is ONE
     resolution point inside the transport — which is exactly why proving it for
     the acknowledgement and the reply says something about notification mail
-    too, and why the third leg is driven for real in `test_notify_mailer.py`
+    too (RADD-1318: the "acknowledgement" leg is an automation's threaded Send
+    email now — the same transport call), and why the third leg is driven for real in `test_notify_mailer.py`
     rather than re-implemented here.
     """
     actor, project, _ = world
@@ -950,13 +945,12 @@ async def test_the_ack_and_the_reply_both_leave_from_the_source_they_arrived_at(
     await db.flush()
     item_id = await _arrived(db, source, project, sender_email=departed.email)
 
-    await mail_service.send_ack(
-        db,
-        item_id=item_id,
-        email=departed.email,
-        name="Cass Customer",
-        item_key=f"{project.key}-1",
-        title="Printer on fire",
+    from radd.modules.automations import engine
+    from radd.modules.items import service as items_service
+
+    await engine._send_email(
+        db, departed.email, "Cass Customer", f"[{project.key}-1] Printer on fire", "Received.",
+        thread_on=await items_service.require_item(db, item_id),
     )
 
     comment = await comments_service.create_comment(
@@ -1012,7 +1006,8 @@ async def test_a_source_that_binds_nothing_still_answers_from_the_default_sender
     )
 
     assert await mail_transport.send_item_mail(
-        db, item_id=item_id, to_address="cass@vip.example.com", subject="hello", text="hi"
+        db, item_id=item_id, to_address="cass@vip.example.com", subject="hello", text="hi",
+        kind=SentMailKind.REPLY,
     )
 
     assert relay.dialled == [("smtp.house.test", 25)]
@@ -1036,7 +1031,8 @@ async def test_an_item_that_never_arrived_by_mail_uses_the_default_sender(
     )
 
     await mail_transport.send_item_mail(
-        db, item_id=item.id, to_address="wanda@example.com", subject="hello", text="hi"
+        db, item_id=item.id, to_address="wanda@example.com", subject="hello", text="hi",
+        kind=SentMailKind.REPLY,
     )
 
     assert relay.dialled == [("smtp.house.test", 25)]
@@ -1061,7 +1057,8 @@ async def test_a_paused_relay_falls_through_instead_of_silencing_its_sources(
     )
 
     await mail_transport.send_item_mail(
-        db, item_id=item_id, to_address="cass@vip.example.com", subject="hello", text="hi"
+        db, item_id=item_id, to_address="cass@vip.example.com", subject="hello", text="hi",
+        kind=SentMailKind.REPLY,
     )
 
     assert relay.dialled == [("smtp.house.test", 25)]
@@ -1090,7 +1087,8 @@ async def test_deleting_the_bound_sender_nulls_the_binding_and_not_the_source(
     assert source.sender_id is None
     await registry.save_source(db, source)  # and the form still saves the row
     await mail_transport.send_item_mail(
-        db, item_id=item_id, to_address="cass@vip.example.com", subject="hello", text="hi"
+        db, item_id=item_id, to_address="cass@vip.example.com", subject="hello", text="hi",
+        kind=SentMailKind.REPLY,
     )
 
     assert relay.dialled == [("smtp.house.test", 25)]

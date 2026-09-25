@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
-from radd.modules.automations.types import SYSTEM_ACTOR_ID
+from radd.modules.comments.types import CommentOrigin
 
 from .types import SlaMetOn
 
@@ -35,16 +35,23 @@ def state_met_at(mode: SlaMetOn, state_ids: frozenset[str], stays: Sequence[Stay
     return None
 
 
+#: Comments that are never a human answer, whoever they are attributed to
+#: (RADD-1318): the requester's own mail, and anything an automation wrote —
+#: including under `act_as`, which is why the author cannot decide this.
+NOT_A_RESPONSE = frozenset({CommentOrigin.INBOUND_MAIL.value, CommentOrigin.AUTOMATION.value})
+
+
 def reply_met_at(
-    replies: Sequence[tuple[uuid.UUID | None, datetime]],
+    replies: Sequence[tuple[uuid.UUID | None, datetime, str | None]],
     reporter_id: uuid.UUID | None,
     responders: frozenset[uuid.UUID] | None,
 ) -> datetime | None:
-    """The first public reply (oldest first) by someone who counts:
-    never the reporter or the automation actor; `responders` None = anyone
-    else, otherwise only those people."""
-    for author_id, at in replies:
-        if author_id is None or author_id == reporter_id or author_id == SYSTEM_ACTOR_ID:
+    """The first public reply (oldest first) by someone who counts: never the
+    reporter, never inbound mail or an automation (by ORIGIN, RADD-1318 — it was
+    "not the SYSTEM user", which an `act_as` automation passed); `responders`
+    None = anyone else, otherwise only those people."""
+    for author_id, at, origin in replies:
+        if author_id is None or author_id == reporter_id or origin in NOT_A_RESPONSE:
             continue
         if responders is not None and author_id not in responders:
             continue

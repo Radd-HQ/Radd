@@ -17,6 +17,7 @@ from radd.exceptions import ConflictError
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.automations.types import SYSTEM_ACTOR_ID
+from radd.modules.comments.types import CommentOrigin
 from radd.modules.comments import service as comments
 from radd.modules.comments.schemas import CommentCreate
 from radd.modules.items import service as items_service
@@ -51,10 +52,14 @@ def test_entering_is_the_first_arrival_and_bouncing_back_does_not_reopen():
     assert metrules.state_met_at(SlaMetOn.ENTERS_STATES, chosen, _stays(TRIAGE, CANCELED)) is None
 
 
-def test_replies_never_count_the_reporter_or_automation():
+def test_replies_never_count_the_reporter_inbound_mail_or_automation():
+    """RADD-1318: by ORIGIN. An automation acting AS a real agent (`act_as`)
+    is still not a response, which the old "author is SYSTEM" test let through."""
     reporter, outsider, agent = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
-    replies = [(reporter, T0), (SYSTEM_ACTOR_ID, T0 + timedelta(minutes=1)),
-               (outsider, T0 + timedelta(minutes=2)), (agent, T0 + timedelta(minutes=3))]
+    replies = [(reporter, T0, None),
+               (SYSTEM_ACTOR_ID, T0 + timedelta(seconds=20), CommentOrigin.INBOUND_MAIL.value),
+               (agent, T0 + timedelta(seconds=40), CommentOrigin.AUTOMATION.value),  # act_as
+               (outsider, T0 + timedelta(minutes=2), None), (agent, T0 + timedelta(minutes=3), None)]
     assert metrules.reply_met_at(replies, reporter, None) == T0 + timedelta(minutes=2)
     assert metrules.reply_met_at(replies, reporter, frozenset({agent})) == T0 + timedelta(minutes=3)
     assert metrules.reply_met_at(replies, reporter, frozenset()) is None

@@ -217,8 +217,9 @@ async def test_a_message_matching_no_rule_falls_to_the_sources_default(db, world
     plan = parsing.parse_email(message(to="help@radd-hq.com"))
     assert (await routing.decide(db, plan, source_id=source.id)).project_id is None
     # …and intake resolves that None to the source's default.
-    project = await intake._target_project(db, plan, "", source.id)
+    project, matched_rule = await intake._target_project(db, plan, "", source.id)
     assert project.id == default.id
+    assert matched_rule == ""  # a fallback placed it, and `mail.received` says so
 
 
 async def test_the_first_matching_rule_wins_by_position(db, world):
@@ -303,7 +304,7 @@ async def test_a_rule_that_matches_but_names_no_project_says_so(db, world):
     assert decision.project_id is None
     assert decision.outcomes[0].status is MailRuleStatus.MATCHED
     assert "names no project" in decision.reason
-    assert (await intake._target_project(db, parsing.parse_email(message()), "", source.id)).id == default.id
+    assert (await intake._target_project(db, parsing.parse_email(message()), "", source.id))[0].id == default.id
 
 
 # --- sender and subject ----------------------------------------------------------
@@ -379,7 +380,7 @@ async def test_the_model_is_always_offered_a_none_of_these_answer(
     # A verdict, not a breakage — and intake resolves it to the source default.
     assert decision.outcomes[-1].status is MailRuleStatus.DECLINED
     assert NO_MATCH_ANSWER in decision.outcomes[-1].detail
-    assert (await intake._target_project(db, plan, "", source.id)).id == default.id
+    assert (await intake._target_project(db, plan, "", source.id))[0].id == default.id
 
 
 async def test_the_feature_being_off_declines_rather_than_erroring(

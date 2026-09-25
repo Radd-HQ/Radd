@@ -30,6 +30,8 @@ from datetime import timedelta
 from email.message import EmailMessage
 
 import pytest
+
+from radd.modules.mailintake.types import SentMailKind
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -360,7 +362,8 @@ async def test_an_automations_own_mail_event_cannot_retrigger_it(db, sender_row,
     # The control: the same event outside the scope is a perfectly good trigger,
     # so the guard is the scope and not the event type being unmatchable.
     await transport.send_plain_mail(
-        db, to_address="human@example.com", subject="Hand-sent", text="hi"
+        db, to_address="human@example.com", subject="Hand-sent", text="hi",
+        kind=SentMailKind.DIGEST,
     )
     await db.flush()
     human = [
@@ -416,7 +419,8 @@ async def test_mail_health_is_quiet_until_something_fails(db, world, sender_row,
     reads nothing at all"."""
     _agent, _project, item = world
     await transport.send_item_mail(
-        db, item_id=item.id, to_address="ok@example.com", subject="[MT-1] hi", text="hi"
+        db, item_id=item.id, to_address="ok@example.com", subject="[MT-1] hi", text="hi",
+        kind=SentMailKind.REPLY,
     )
     await db.flush()
 
@@ -439,7 +443,8 @@ async def test_mail_health_reports_the_count_the_last_error_and_the_give_ups(
     rows_only.fail = True
 
     await transport.send_item_mail(
-        db, item_id=item.id, to_address="one@example.com", subject="[MT-1] hi", text="hi"
+        db, item_id=item.id, to_address="one@example.com", subject="[MT-1] hi", text="hi",
+        kind=SentMailKind.REPLY,
     )
     await transport.send_item_mail(
         db,
@@ -448,6 +453,7 @@ async def test_mail_health_reports_the_count_the_last_error_and_the_give_ups(
         subject="[MT-1] hi",
         text="hi",
         failure=MailFailureReport.TERMINAL,
+        kind=SentMailKind.REPLY,
     )
     # A retrying caller's middle attempt is deliberately NOT reported — the
     # incident that produced the ladder wrote one of these every five seconds.
@@ -458,6 +464,7 @@ async def test_mail_health_reports_the_count_the_last_error_and_the_give_ups(
         subject="[MT-1] hi",
         text="hi",
         failure=MailFailureReport.SILENT,
+        kind=SentMailKind.REPLY,
     )
     await db.flush()
 
@@ -486,7 +493,8 @@ async def test_mail_health_ignores_failures_older_than_its_window(
     _agent, _project, item = world
     rows_only.fail = True
     await transport.send_item_mail(
-        db, item_id=item.id, to_address="old@example.com", subject="[MT-1] hi", text="hi"
+        db, item_id=item.id, to_address="old@example.com", subject="[MT-1] hi", text="hi",
+        kind=SentMailKind.REPLY,
     )
     await db.flush()
     assert (await mail_service.mail_health(db)).failures == 1

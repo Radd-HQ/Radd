@@ -20,6 +20,28 @@ class CommentVisibility(StrEnum):
     INTERNAL = "internal"
 
 
+class CommentOrigin(StrEnum):
+    """WHERE a comment came from when no person typed it (RADD-1318). NULL is a
+    person — the app, the API, MCP. Set by the SERVER only, never by a request
+    body: a client that could claim `inbound_mail` could stop its own comment
+    reaching the customer.
+
+    It replaced "the author is the SYSTEM user" as the test for "not a real
+    reply", which was wrong both ways: an automation's comment is SYSTEM-authored
+    yet meant for the customer (the relay dropped it), and the same comment with
+    `act_as` is a person's yet is still not a human answer (the SLA counted it).
+    """
+
+    #: Mail NO account stands behind — the requester's own words, filed by
+    #: intake under the system user. A recognised person's mailed reply is that
+    #: person's comment (NULL), exactly as if they had typed it: an agent who
+    #: answers by email is relayed and counts as a response.
+    INBOUND_MAIL = "inbound_mail"
+    PORTAL = "portal"  # a requester writing through the portal
+    AUTOMATION = "automation"  # written while an automation ran (derived)
+    IMPORT = "import"  # carried over by an importer
+
+
 class CommentEvent(StrEnum):
     CREATED = "comment.created"
     UPDATED = "comment.updated"

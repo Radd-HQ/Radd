@@ -40,6 +40,7 @@ from radd.modules.automations.types import SYSTEM_ACTOR_ID
 from radd.modules.comments import service as comments
 from radd.modules.events import service as events
 from radd.modules.comments.schemas import CommentCreate
+from radd.modules.comments.types import CommentOrigin
 from radd.modules.items import service as items
 from radd.modules.items.schemas import ItemCreate
 from radd.modules.projects import service as projects_service
@@ -74,7 +75,7 @@ from .types import (
 logger = logging.getLogger(__name__)
 
 
-def _mail_facts(plan: EmailPlan) -> dict:
+def _mail_facts(plan: EmailPlan, *, mailbox: str = "", matched_rule: str = "") -> dict:
     """What a rule may condition on — and deliberately not the body (RADD-960).
 
     Event payloads are readable by anything that can read the stream, and an
@@ -85,6 +86,11 @@ def _mail_facts(plan: EmailPlan) -> dict:
     `sender_domain` is split out because "from a VIP domain" is the condition
     people actually write, and asking every rule author to re-derive it from the
     address means half of them get it wrong.
+
+    RADD-1318 added where it ARRIVED: `recipients` (every address it was
+    delivered to — the only place `help@` vs `billing@` is visible when aliases
+    share a mailbox), `mailbox` (the source's name) and `matched_rule` (the
+    routing rule that placed a new issue, "" when a fallback did).
     """
     _, _, domain = plan.sender_email.partition("@")
     return {
@@ -95,6 +101,9 @@ def _mail_facts(plan: EmailPlan) -> dict:
         "message_id": plan.message_id,
         "html_derived": plan.html_derived,
         "attachment_count": len(plan.attachments),
+        "recipients": list(plan.recipients),
+        "mailbox": mailbox,
+        "matched_rule": matched_rule,
     }
 
 
@@ -113,28 +122,6 @@ class Outcome:
     item_id: uuid.UUID | None = None
     item_key: str = ""
     reason: str = ""
-    #: Set when a NEW item with an external contact was created — the caller
-    #: sends the ack AFTER the transaction commits, never before.
-    ack: "AckPlan | None" = None
-
-
-@dataclass(frozen=True)
-class AckPlan:
-    """Everything one acknowledgement needs, so a caller reads `outcome.ack` and
-    nothing else.
-
-    `item_id` replaced `message_id` (RADD-970). The ack is mailed by the same
-    transport as everything else now, and that resolves In-Reply-To from
-    `mail_messages` — which already holds the inbound id recorded a few lines
-    above, in the transaction the caller commits before acking. Carrying the id
-    onward as well would be a second copy of a fact the store owns.
-    """
-
-    item_id: uuid.UUID
-    email: str
-    name: str
-    item_key: str
-    title: str
 
 
 @dataclass(frozen=True)
@@ -424,7 +411,9 @@ async def _reply_comment(
         )
     else:
         text = REPLY_COMMENT_TEMPLATE.format(sender=_sender(plan), body=body)
-    comment = await comments.create_comment(session, item_id, CommentCreate(body=text), system)
+    comment = await comments.create_comment(
+        session, item_id, CommentCreate(body=text), system, origin=CommentOrigin.INBOUND_MAIL
+    )
     return comment, system
 
 
@@ -476,7 +465,7 @@ async def _append(
         entity_type=MailEntity.MAIL,
         entity_id=item_id,
         subjects={"item": item_id},
-        payload={**_mail_facts(plan), "created_item": False},
+        payload={**_mail_facts(plan, mailbox=await _mailbox_name(session, source_id)), "created_item": False},
     )
     return Outcome(Result.APPENDED, item_id=item_id, item_key=await _key(session, item))
 
@@ -493,7 +482,7 @@ async def _create(
     sender_auth: SenderAuth = SenderAuth(None),
 ) -> Outcome:
     actor = await auth.get_user(session, SYSTEM_ACTOR_ID)
-    project = await _target_project(
+    project, matched_rule = await _target_project(
         session, plan, default_project_key, source_id, default_project_id
     )
     sender = await _sender_user(session, plan)
@@ -555,7 +544,10 @@ async def _create(
         entity_type=MailEntity.MAIL,
         entity_id=created.id,
         subjects={"item": created.id},
-        payload={**_mail_facts(plan), "created_item": True},
+        payload={
+            **_mail_facts(plan, mailbox=await _mailbox_name(session, source_id), matched_rule=matched_rule),
+            "created_item": True,
+        },
     )
 
     await _capture_contacts(session, created.id, plan, own_addresses=own_addresses or set())
@@ -563,39 +555,6 @@ async def _create(
         Result.CREATED,
         item_id=created.id,
         item_key=created.key,
-        # RADD-995: the receipt is a property of the MESSAGE, not of the sender's
-        # account status — see `_ack_plan`.
-        ack=_ack_plan(plan, created, own_addresses or set()),
-    )
-
-
-def _ack_plan(plan: EmailPlan, created, own_addresses: set[str]) -> "AckPlan | None":
-    """The acknowledgement for a mail-born issue, or None (RADD-995).
-
-    **It used to be a contact feature**, and that was the bug: the ack was
-    planned only on the branch that captured a `mail_contact`, so an ordinary
-    recognised user — an OIDC colleague mailing the desk — became the reporter,
-    got no contact row, and received nothing at all. Silently, because every
-    other part of that path worked.
-
-    A receipt answers a MESSAGE. Whoever sent it gets one, account or not; the
-    only refusals are an address we cannot answer (no `From:`) and one of our
-    own, which would be a mail loop with a friendly subject line. The loop
-    guards already dropped that message before `_create` ran — this is the same
-    judgment restated at the point that would compose the reply, so the ack can
-    never become the one path that re-opens the loop.
-
-    Still gated on `mail_send_ack` inside `send_ack`, and still only on CREATE:
-    an ack per reply would be an autoresponder.
-    """
-    if not plan.sender_email or _is_ours(plan.sender_email, own_addresses):
-        return None
-    return AckPlan(
-        item_id=created.id,
-        email=plan.sender_email,
-        name=plan.sender_name,
-        item_key=created.key,
-        title=created.title,
     )
 
 
@@ -716,7 +675,9 @@ async def _note_dropped_attachments(
         max_mb=ATTACHMENTS_MAX_BYTES // (1024 * 1024),
     )
     try:
-        await comments.create_comment(session, item_id, CommentCreate(body=text), system)
+        await comments.create_comment(
+            session, item_id, CommentCreate(body=text), system, origin=CommentOrigin.INBOUND_MAIL
+        )
     except Exception:  # noqa: BLE001 — the receipt is best-effort, the ticket is not
         logger.warning(
             "mailintake: could not note %d dropped attachment(s) on %s",
@@ -852,8 +813,10 @@ async def _target_project(
     default_key: str,
     source_id: uuid.UUID | None = None,
     default_project_id: uuid.UUID | None = None,
-) -> Project:
-    """Where a NEW issue opens, in precedence order (RADD-958/961):
+) -> tuple[Project, str]:
+    """Where a NEW issue opens, and the name of the routing rule that decided it
+    ("" when a fallback did — RADD-1318 carries it on `mail.received`), in
+    precedence order (RADD-958/961):
 
         1. the source's rule chain — alias, sender, subject, then the AI classifier
         2. a plus-address tag (`support+td@`), the spec-62 convention
@@ -872,14 +835,14 @@ async def _target_project(
             logger.info(
                 "mailintake: %s → %s (%s)", plan.message_id, project.key, decision.reason
             )
-            return project
+            return project, decision.matched_rule_name or ""
         # A rule naming a deleted project must not swallow the message.
         logger.warning("mailintake: rule %r names a missing project", decision.matched_rule_name)
     projects = await projects_service.list_projects(session)
     if plan.project_key is not None:
         tagged = next((p for p in projects if p.key == plan.project_key), None)
         if tagged is not None:
-            return tagged
+            return tagged, ""
     if default_project_id is None and source_id is not None:
         from .models import MailSource
 
@@ -888,11 +851,21 @@ async def _target_project(
     if default_project_id is not None:
         fallback = next((p for p in projects if p.id == default_project_id), None)
         if fallback is not None:
-            return fallback
+            return fallback, ""
     key = (default_key or "").upper()
     if not key:
         raise ConflictError(MailEntity.MAIL, reason="no default project configured for mail")
     project = next((p for p in projects if p.key == key), None)
     if project is None:
         raise ConflictError(MailEntity.MAIL, reason=f"no project with key {key}")
-    return project
+    return project, ""
+
+
+async def _mailbox_name(session: AsyncSession, source_id: uuid.UUID | None) -> str:
+    """The name of the source a message arrived through, "" for the env webhook."""
+    if source_id is None:
+        return ""
+    from .models import MailSource
+
+    source = await session.get(MailSource, source_id)
+    return source.name if source is not None else ""

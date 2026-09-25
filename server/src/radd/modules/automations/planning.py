@@ -199,8 +199,9 @@ class _Plan:
     http: tuple[str, dict[str, Any], dict[str, str]] | None = None
     # (user_id, message) for notify_user.
     notify: tuple[uuid.UUID, str] | None = None
-    # (to_address, to_name, subject, body) for send_email (spec 66).
-    email: tuple[str, str, str, str] | None = None
+    # (to_address, to_name, subject, body, thread) for send_email (spec 66;
+    # `thread` RADD-1318 — send on the issue's email thread).
+    email: tuple[str, str, str, str, bool] | None = None
     # (team_id, assigned_user_id) for assign_round_robin (RADD-1044): applied
     # ALONGSIDE the item_update, so the rotation advances in the same SAVEPOINT as
     # the assignment it describes. Read-only here — the write is `_apply_plan`'s.
@@ -694,10 +695,11 @@ async def _plan_action(
             if recipient is None:
                 return _Plan(PlanKind.SKIP, f"send_email: no recipient resolves for {params['to']!r}")
             address, name = recipient
+            thread = bool(params.get("thread")) and item is not None
             return _Plan(
                 PlanKind.EMAIL,
-                f"send_email -> {address}",
-                email=(address, name, text.line(params["subject"]), text(params["body"])),
+                f"send_email -> {address}" + (" (on the issue's thread)" if thread else ""),
+                email=(address, name, text.line(params["subject"]), text(params["body"]), thread),
             )
         case ActionType.SET_STATE:
             # Every named target below renders as a TEMPLATE first (spec 120), so

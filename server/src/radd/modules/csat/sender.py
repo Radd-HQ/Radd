@@ -48,6 +48,7 @@ from radd.modules.items import service as items_service
 from radd.modules.items.enums import ItemEvent
 from radd.modules.items.models import WorkItem
 from radd.modules.mailintake import service as mail_service
+from radd.modules.mailintake.types import SentMailKind
 from radd.modules.settings import service as settings_service
 from radd.modules.settings.types import SettingKey
 from radd.modules.workflow.types import StateCategory
@@ -195,7 +196,7 @@ async def _deliver(email: SurveyEmail, session: AsyncSession | None = None) -> N
     `csat.requested` are already committed by this point (at-most-once, by
     design), so there is no transaction left to join and the transport opens
     what it needs — the outbound consumer's own posture. A caller inside a
-    transaction (a test) hands over its own, which is `send_ack`'s shape and
+    transaction (a test) hands over its own, which is the transport's own contract and
     the only way the send can be exercised against rows nobody committed.
 
     Still no retry queue and still never raises: a survey is a nicety, the
@@ -211,6 +212,7 @@ async def _deliver(email: SurveyEmail, session: AsyncSession | None = None) -> N
         subject=email.subject,
         text=email.body,
         pin_subject=True,
+        kind=SentMailKind.SURVEY,
     )
     if sent is None:
         logger.warning("csat: survey to %s was not sent", email.email)

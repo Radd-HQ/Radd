@@ -859,10 +859,10 @@ async def test_unknown_comment_author_and_bad_comment_do_not_abort_import(db, mo
     ])
     plan = await _plan_for(db, snapshot, key)
     original = comments.create_comment
-    async def failing(session, item_id, data, user):
+    async def failing(session, item_id, data, user, **kwargs):
         if data.body == 'bad comment':
             await session.execute(text('SELECT 1/0'))
-        return await original(session, item_id, data, user)
+        return await original(session, item_id, data, user, **kwargs)
     monkeypatch.setattr(comments, 'create_comment', failing)
     try:
         run = await _run(db, plan, actor, RunKind.IMPORT)

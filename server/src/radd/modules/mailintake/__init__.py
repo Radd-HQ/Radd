@@ -1,12 +1,12 @@
 from radd.kernel import CapabilitySpec, EventTypeSpec, PluginUiManifest
 from radd.kernel import RaddPlugin
-from radd.kernel import SettingSpec
 
 from . import dispatcher, registry, seeding
 from .config_router import router as config_router
 from .router import router
 from . import subscribers  # noqa: F401 — RADD-1174: the project-teardown hooks
 from .rules_router import router as rules_router
+from .templates import TEMPLATES
 from .types import MailEvent, OUTBOUND_CONSUMER_NAME
 
 plugin = RaddPlugin(
@@ -20,58 +20,18 @@ plugin = RaddPlugin(
     # watcher set, a second fan-out beside the one deciding the inbox. Users are
     # mailed by notify now, which reaches this module the other way — a deferred,
     # feature-detected call to `service.send_item_mail`.
-    # workflow joined the list in RADD-982: the resolution notice fires on
-    # ENTERING the done category, and the diff records the previous state by
-    # NAME, so `list_states` is what turns that name back into a category.
     depends_on=(
         "projects", "auth", "items", "comments", "automations", "events",
-        "attachments", "settings", "workflow",
+        "attachments",
     ),
     # RADD-961: the AI routing rule reaches `ai` DEFERRED and feature-detected —
     # the module is optional and disableable, and a missing one must fall through
     # to the next rule rather than cost a customer their email. Same edge
     # `attachments` declares for its own LLM storage rule.
-    # csat is the second (RADD-982): it depends_on THIS module, so the
-    # resolution notice's "yield to the survey" question can only be asked the
-    # deferred way — and an uninstalled or disabled csat answering by absence
-    # is exactly the right answer.
-    weak_depends=("ai", "csat"),
+    weak_depends=("ai",),
     routers=(router, config_router, rules_router),
-    # RADD-1045: the ack's plain-text body, instance-only — a service desk's
-    # wording is instance policy, not per-project. Writing it goes through the
-    # generic `/scoped-settings` API, gated on literal instance-admin
-    # (`settings.router._authorize`) rather than `config_router`'s
-    # `global.manage` — the same split every other instance-scope SettingSpec
-    # already lives with (ai/ldap/csat's instance defaults, etc). `section=
-    # "email"` is RADD-930's placement convention — it lands the row on
-    # Settings → Email instead of the General catch-all.
-    settings_keys=(
-        SettingSpec(
-            key="mail_ack_body",
-            type="string",
-            scopes=("instance",),
-            label="Acknowledgement email",
-            description=(
-                "Plain-text body of the receipt sent when an email opens a ticket. "
-                "Tokens: {{key}}, {{title}}, {{link}}, {{requester_name}} — an "
-                "unrecognised token is sent verbatim. Empty sends the default wording."
-            ),
-            section="email",
-        ),
-        # RADD-982: per PROJECT as well as instance, because one installation
-        # runs a service desk and a dev project, and only one of them has
-        # customers to tell. ON by default — see `config.mail_send_resolved`.
-        SettingSpec(
-            key="mail_send_resolved",
-            type="bool",
-            scopes=("instance", "project"),
-            label="Resolution emails",
-            description=(
-                "Email an issue's external contacts when it moves into a done state. A project with CSAT surveys on sends the survey instead, which already says the issue is resolved."
-            ),
-            section="email",
-        ),
-    ),
+    # RADD-1318: the receipt and the resolution notice, as opt-in automations.
+    automation_templates=TEMPLATES,
     # Seed rows from env BEFORE the poller starts, or the first tick finds
     # no sources on a fresh instance (RADD-958).
     on_startup=(seeding.seed_from_env, dispatcher.start),

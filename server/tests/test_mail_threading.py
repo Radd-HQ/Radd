@@ -13,7 +13,6 @@ session, because the invariant is about what the WRITE PATH stored.
 
 import uuid
 from email.message import EmailMessage
-from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select
@@ -748,19 +747,28 @@ async def test_an_agent_raised_issue_gains_its_requester_when_they_write_in(db, 
     assert await _contacts(db, item.id) == {"cass@vip.example.com": True}
 
 
-# --- the acknowledgement (RADD-995) ----------------------------------------------
+# --- what a receipt automation reads (RADD-995, RADD-1318) ---------------------
+#
+# The built-in receipt is gone; the "Acknowledge new email tickets" template
+# answers `mail.received` with created_item=true, addressed to
+# `{{payload.sender}}`. RADD-995's rule — a receipt answers a MESSAGE, account
+# or not — therefore lives in what the event carries.
 
 
-async def test_a_recognised_user_mailing_the_desk_gets_a_receipt(db, world):
-    """Caught live. A colleague signed in with Google mailed the desk, became the
-    reporter of a real ticket, and heard nothing back — because the ack was
-    planned on the branch that captured a `mail_contact`, and a recognised user
-    never gets one. Every other part of that path worked, so there was nothing
-    to notice.
+async def _received(db, item_id) -> dict:
+    from radd.modules.events import service as events_service
+    from radd.modules.mailintake.types import MailEvent
 
-    A receipt answers a MESSAGE. The two facts are independent now: this item
-    has an ack and no contact.
-    """
+    [event] = await events_service.query_events(
+        db, entity_id=str(item_id), event_types=[MailEvent.RECEIVED.value], limit=1
+    )
+    return event.payload
+
+
+async def test_a_recognised_user_mailing_the_desk_is_the_receipts_address(db, world):
+    """Caught live (RADD-995): a colleague signed in with Google mailed the desk,
+    became the reporter, and heard nothing — the receipt was planned only for a
+    captured contact. The event names the SENDER either way."""
     actor, project, _ = world
     outcome = await _accept(
         db,
@@ -769,15 +777,13 @@ async def test_a_recognised_user_mailing_the_desk_gets_a_receipt(db, world):
     )
 
     assert outcome.result is intake.Result.CREATED
-    assert outcome.ack is not None
-    assert outcome.ack.email == actor.email
-    assert outcome.ack.item_key == outcome.item_key
+    payload = await _received(db, outcome.item_id)
+    assert payload["created_item"] is True
+    assert payload["sender"] == actor.email
     assert await _contacts(db, outcome.item_id) == {}, "a user is not a contact"
 
 
-async def test_a_contact_still_gets_the_same_receipt(db, world):
-    """The path that always worked, pinned beside the one that did not — the
-    change must be additive, not a swap."""
+async def test_a_contact_is_the_receipts_address_too(db, world):
     _, project, _ = world
     outcome = await _accept(
         db,
@@ -785,31 +791,21 @@ async def test_a_contact_still_gets_the_same_receipt(db, world):
         project.key,
     )
 
-    assert outcome.ack is not None and outcome.ack.email == "cass@vip.example.com"
+    payload = await _received(db, outcome.item_id)
+    assert payload["created_item"] is True and payload["sender"] == "cass@vip.example.com"
+    # RADD-1318: where it arrived, for rules that answer help@ and billing@ differently.
+    assert "recipients" in payload and "mailbox" in payload and "matched_rule" in payload
     assert await _contacts(db, outcome.item_id) == {"cass@vip.example.com": True}
 
 
-async def test_nothing_addressed_to_ourselves_is_ever_acked(db, world):
-    """Two guards, and the second is the one RADD-995 had to state. The loop
-    check drops our own mail before an item exists at all; `_ack_plan` refuses
-    the same address independently, so widening the ack from "senders with a
-    contact" to "every sender" cannot become the one path that re-opens the
-    loop.
-    """
+async def test_our_own_mail_never_reaches_a_receipt_rule(db, world):
+    """The loop guard drops our own mail before an item — or a `mail.received`
+    a receipt rule could answer — exists at all."""
     _, project, _ = world
     dropped = await _accept(
         db, raw_message(sender="Radd <radd@radd-hq.com>", message_id="<u3@ext>"), project.key
     )
-    assert dropped.result is intake.Result.IGNORED and dropped.ack is None
-
-    created = SimpleNamespace(id=uuid.uuid4(), key="MT-1", title="t")
-    ours = parsing.parse_email(raw_message(sender="Radd <radd@radd-hq.com>", message_id="<u4@ext>"))
-    assert intake._ack_plan(ours, created, {"radd@radd-hq.com"}) is None
-    assert intake._ack_plan(ours, created, set()) is not None, "the guard, not an empty plan"
-
-    # No `From:` at all: nowhere to send a receipt to.
-    anonymous = parsing.parse_email(raw_message(sender="", message_id="<u5@ext>"))
-    assert intake._ack_plan(anonymous, created, set()) is None
+    assert dropped.result is intake.Result.IGNORED and dropped.item_id is None
 
 
 # --- idempotency -----------------------------------------------------------------
